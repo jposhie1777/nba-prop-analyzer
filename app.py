@@ -191,60 +191,137 @@ def compute_metrics_for_row(stats_df, player, stat_key, line):
         "z_line": z_score(line, vals.tail(20)),
     }
 
-def build_props_table(stats_df, odds_df, games_df, date_filter, game_pick, player_pick, stat_pick, books, odds_range, min_ev, min_hit, min_kelly):
-    # Games for selected date
+def build_props_table(
+    stats_df, odds_df, games_df, date_filter,
+    game_pick, player_pick, stat_pick, books,
+    odds_range, min_ev, min_hit, min_kelly
+):
+    """Builds the main Props Overview table with full metrics and guaranteed columns."""
     g_day = games_df.query("game_date == @date_filter").copy()
-    if g_day.empty: return pd.DataFrame()
+    if g_day.empty:
+        return pd.DataFrame(columns=[
+            "Player", "Stat", "Bookmaker", "Side", "Line", "Price (Am)",
+            "L5 Avg", "L10 Avg", "L20 Avg", "2025 Avg",
+            "Hit5", "Hit10", "Hit20", "Hit Season",
+            "EV", "Kelly %", "Edge (Season-Line)", "Trend r"
+        ])
 
-    # Optional game filter
     if game_pick and " vs " in game_pick:
         home, away = game_pick.split(" vs ", 1)
         g_day = g_day.query("home_team == @home and visitor_team == @away")
 
     teams_today = set(g_day["home_team"]) | set(g_day["visitor_team"])
 
-    # Odds: keep all books, filter to teams in today's games
     o = odds_df.copy()
     o = o[o["market_norm"] != ""]
     o = o[o["bookmaker"].isin(books)]
-    o = o[o["home_team"].isin(teams_today) | o["away_team"].isin(teams_today)]
-    if stat_pick:
+
+    if "home_team" in o.columns and "away_team" in o.columns:
+        o = o[o["home_team"].isin(teams_today) | o["away_team"].isin(teams_today)]
+
+    if stat_pick and stat_pick != "All Stats":
         o = o[o["market_norm"] == stat_pick]
     if player_pick and player_pick != "All players":
         o = o[o["description"] == player_pick]
+
     o = o[o["price"].between(odds_range[0], odds_range[1])]
-    if o.empty: return pd.DataFrame()
+
+    if o.empty:
+        st.warning("⚠️ No odds matched your filters.")
+        return pd.DataFrame(columns=[
+            "Player", "Stat", "Bookmaker", "Side", "Line", "Price (Am)",
+            "L5 Avg", "L10 Avg", "L20 Avg", "2025 Avg",
+            "Hit5", "Hit10", "Hit20", "Hit Season",
+            "EV", "Kelly %", "Edge (Season-Line)", "Trend r"
+        ])
 
     rows = []
     for _, r in o.iterrows():
-        player = r["description"]; stat_key = r["market_norm"]
-        line = r["point"]; book = r["bookmaker"]; price = r["price"]
-        if not player or pd.isna(line) or not stat_key: continue
-        m = compute_metrics_for_row(stats_df, player, stat_key, line)
-        p_hit = m["hit10"] if not np.isnan(m["hit10"]) else m["hit_season"]
+        player = r.get("description", "")
+        stat_key = r.get("market_norm", "")
+        line = r.get("point", np.nan)
+        book = r.get("bookmaker", "")
+        price = r.get("price", np.nan)
+        side = str(r.get("side", "")).lower().strip()
+
+        if not player or pd.isna(line) or not stat_key:
+            continue
+
+        s = series_for_player_stat(stats_df, player, stat_key)
+        if s.empty:
+            # no data for this player/stat combination
+            continue
+        vals = s["stat"].astype(float)
+
+        # --- calculate hit rates safely ---
+        hit5 = hit_rate(vals, line, 5)
+        hit10 = hit_rate(vals, line, 10)
+        hit20 = hit_rate(vals, line, 20)
+        hit_season = hit_rate(vals, line, None)
+
+        # --- calculate probability for EV / Kelly ---
+        if side == "over":
+            p_hit = hit10
+        elif side == "under":
+            p_hit = 1 - hit10
+        else:
+            p_hit = hit10
+
         dec = american_to_decimal(price)
-        ev = np.nan if (np.isnan(p_hit) or np.isnan(dec)) else p_hit*(dec-1) - (1-p_hit)
-        kelly = np.nan if (np.isnan(p_hit) or np.isnan(dec)) else kelly_fraction(p_hit, dec)
+        ev = np.nan if np.isnan(p_hit) or np.isnan(dec) else p_hit * (dec - 1) - (1 - p_hit)
+        kelly = np.nan if np.isnan(p_hit) or np.isnan(dec) else kelly_fraction(p_hit, dec)
+
+        m = compute_metrics_for_row(stats_df, player, stat_key, line)
 
         rows.append({
             "Player": player,
             "Stat": STAT_LABELS.get(stat_key, stat_key),
             "Stat_key": stat_key,
             "Bookmaker": book,
+            "Side": side.title() if side else "—",
             "Line": line,
             "Price (Am)": price,
-            "L5 Avg": m["L5"], "L10 Avg": m["L10"], "L20 Avg": m["L20"], "2025 Avg": m["Season"],
-            "Hit5": m["hit5"], "Hit10": m["hit10"], "Hit20": m["hit20"], "Hit Season": m["hit_season"],
-            "Trend r": m["trend_r"], "Edge (Season-Line)": m["edge"], "RMSE10": m["rmse10"], "Z(Line)": m["z_line"],
-            "EV": ev, "Kelly %": kelly,
+            "L5 Avg": m.get("L5", np.nan),
+            "L10 Avg": m.get("L10", np.nan),
+            "L20 Avg": m.get("L20", np.nan),
+            "2025 Avg": m.get("Season", np.nan),
+            "Hit5": hit5,
+            "Hit10": hit10,
+            "Hit20": hit20,
+            "Hit Season": hit_season,
+            "Trend r": m.get("trend_r", np.nan),
+            "Edge (Season-Line)": m.get("edge", np.nan),
+            "EV": ev,
+            "Kelly %": kelly,
         })
 
-    df = pd.DataFrame(rows)
-    if df.empty: return df
-    if min_ev is not None:    df = df[df["EV"] >= min_ev]
-    if min_hit is not None:   df = df[df["Hit10"] >= min_hit]
-    if min_kelly is not None: df = df[df["Kelly %"] >= min_kelly]
-    df = df.sort_values(["EV","Hit10","Kelly %"], ascending=[False, False, False], na_position="last").reset_index(drop=True)
+    # --- Build DataFrame with guaranteed columns ---
+    df = pd.DataFrame(rows, columns=[
+        "Player", "Stat", "Bookmaker", "Side", "Line", "Price (Am)",
+        "L5 Avg", "L10 Avg", "L20 Avg", "2025 Avg",
+        "Hit5", "Hit10", "Hit20", "Hit Season",
+        "EV", "Kelly %", "Edge (Season-Line)", "Trend r"
+    ])
+
+    # --- Debug preview (for one run only) ---
+    st.write("🧠 Debug Preview:", df.head(10))
+
+    if df.empty:
+        return df
+
+    # --- numeric conversion ---
+    for col in ["EV", "Hit10", "Kelly %", "Hit5", "Hit20", "Hit Season"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    # --- filter ---
+    if min_ev is not None:
+        df = df[df["EV"] >= min_ev]
+    if min_hit is not None:
+        df = df[df["Hit10"] >= min_hit]
+    if min_kelly is not None:
+        df = df[df["Kelly %"] >= min_kelly]
+
+    df = df.sort_values(["EV", "Hit10", "Kelly %"], ascending=[False, False, False], na_position="last").reset_index(drop=True)
     return df
 
 def plot_trend(stats_df, player, stat_key, line):

@@ -6,6 +6,16 @@ import streamlit as st
 from google.oauth2 import service_account
 from google.cloud import bigquery
 import gspread
+import json
+
+
+PROJECT_ID = st.secrets["PROJECT_ID"]
+SPREADSHEET_ID = st.secrets["SPREADSHEET_ID"]
+ODDS_SHEET_NAME = st.secrets["ODDS_SHEET_NAME"]
+
+creds_dict = json.loads(st.secrets["GCP_SERVICE_ACCOUNT"])
+credentials = service_account.Credentials.from_service_account_info(creds_dict)
+
 
 # ----------------------------
 # PAGE CONFIG

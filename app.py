@@ -1,4 +1,6 @@
+import os
 import math
+import json
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -6,15 +8,25 @@ import streamlit as st
 from google.oauth2 import service_account
 from google.cloud import bigquery
 import gspread
-import json
 
+# -----------------------------------------
+# ENVIRONMENT VARIABLES (from Render)
+# -----------------------------------------
+PROJECT_ID = os.environ["PROJECT_ID"]
+SPREADSHEET_ID = os.environ["SPREADSHEET_ID"]
+ODDS_SHEET_NAME = os.environ["ODDS_SHEET_NAME"]
 
-PROJECT_ID = st.secrets["PROJECT_ID"]
-SPREADSHEET_ID = st.secrets["SPREADSHEET_ID"]
-ODDS_SHEET_NAME = st.secrets["ODDS_SHEET_NAME"]
-
-creds_dict = json.loads(st.secrets["GCP_SERVICE_ACCOUNT"])
+# Load GCP credentials (as JSON string)
+creds_dict = json.loads(os.environ["GCP_SERVICE_ACCOUNT"])
 credentials = service_account.Credentials.from_service_account_info(creds_dict)
+
+# -----------------------------------------
+# STREAMLIT PAGE CONFIG
+# -----------------------------------------
+st.set_page_config(page_title="NBA Prop Analyzer", layout="wide")
+
+# Optional: confirm variables loaded
+st.write("✅ Environment variables loaded successfully!")
 
 
 # ----------------------------

@@ -1,7 +1,33 @@
-streamlit==1.38.0
-pandas==2.2.2
+# Core libraries
 numpy==1.26.4
+pandas==2.2.3
+mathparse==0.1.2
+
+# Streamlit framework
+streamlit==1.40.0
+
+# Visualization
 plotly==5.24.1
+
+# Google Cloud + BigQuery
 google-cloud-bigquery==3.25.0
-google-auth==2.34.0
+google-auth==2.35.0
+google-auth-oauthlib==1.2.1
+google-api-python-client==2.154.0
+
+# Google Sheets integration
 gspread==6.1.2
+oauth2client==4.1.3
+
+# Database (if you later connect PostgreSQL for user data)
+SQLAlchemy==2.0.36
+psycopg2-binary==2.9.9
+
+# Authentication helper (optional for user logins)
+streamlit-authenticator==0.3.2
+
+# Data utilities
+requests==2.32.3
+python-dateutil==2.9.0.post0
+
+db-dtypes==1.4.3

@@ -4,10 +4,10 @@ import json
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-import streamlit as st
 from google.oauth2 import service_account
 from google.cloud import bigquery
 import gspread
+import streamlit as st  # 👈 keep this import here
 
 # ------------------------------------------------------
 # MUST BE FIRST STREAMLIT COMMAND
@@ -26,9 +26,12 @@ creds_dict = json.loads(os.environ["GCP_SERVICE_ACCOUNT"])
 credentials = service_account.Credentials.from_service_account_info(creds_dict)
 
 # ------------------------------------------------------
-# OPTIONAL TEST OUTPUT (you can remove later)
+# REST OF YOUR APP BELOW
 # ------------------------------------------------------
-st.write("✅ Streamlit page config set and environment loaded")
+st.title("NBA Prop Analyzer 🏀")
+
+# Example: check that credentials and env vars loaded
+st.write("✅ Environment loaded successfully!")
 
 
 

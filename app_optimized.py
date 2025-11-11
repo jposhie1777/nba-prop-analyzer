@@ -543,10 +543,30 @@ def toggle_save(row):
 # ------------------------------------------------------
 with st.spinner("⏳ Loading data..."):
     player_stats = load_player_stats()
-    st.write("✅ Player stats sample:")
+    st.sidebar.write("🧩 Columns:", list(player_stats.columns))
     st.dataframe(player_stats.head())
     games_df = load_games()
     odds_df = load_odds_sheet()
+
+# ------------------------------------------------------
+# ✅ DEBUG: Confirm data is loading properly
+# ------------------------------------------------------
+st.sidebar.markdown("### 🧠 Data Load Debug")
+
+# Player stats check
+st.sidebar.write("👀 Player stats shape:", player_stats.shape)
+
+# Games table check
+st.sidebar.write("🎮 Games loaded:", len(games_df))
+if not games_df.empty:
+    st.sidebar.write("📅 Sample game dates:", games_df["game_date"].drop_duplicates().sort_values().tail(5).tolist())
+else:
+    st.sidebar.warning("⚠️ games_df is empty — check your BigQuery dataset names")
+
+# Odds sheet check
+st.sidebar.write("💰 Odds rows:", len(odds_df))
+st.sidebar.write("🪙 Odds columns:", list(odds_df.columns))
+
 
 # ------------------------------------------------------
 # 7️⃣ SIDEBAR FILTERS

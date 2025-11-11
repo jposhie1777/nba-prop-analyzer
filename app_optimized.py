@@ -167,6 +167,94 @@ def load_player_stats():
 
     return df
 
+@st.cache_data(ttl=86400, show_spinner=True)
+def load_games():
+    """Fetch NBA games schedule from BigQuery."""
+    try:
+        query = f"""
+            SELECT
+                DATE(game_date) AS game_date,
+                home_team,
+                visitor_team
+            FROM `{PROJECT_ID}.nba_data.games`
+            UNION ALL
+            SELECT
+                DATE(game_date) AS game_date,
+                home_team,
+                visitor_team
+            FROM `{PROJECT_ID}.nba_data_2024_2025.games`
+            ORDER BY game_date DESC
+        """
+        df = bq_client.query(query).to_dataframe()
+
+        if df.empty:
+            st.warning("⚠️ No games data returned from BigQuery.")
+        else:
+            st.sidebar.success(f"✅ Loaded {len(df):,} games from BigQuery")
+            st.sidebar.write(
+                "📅 Recent sample:",
+                df.head(3).to_dict(orient="records"),
+            )
+
+        # 🧩 Make sure date comparison works with Python date
+        df["game_date"] = pd.to_datetime(df["game_date"]).dt.date
+        return df
+
+    except Exception as e:
+        st.error(f"❌ Failed to load games data: {e}")
+        return pd.DataFrame(columns=["game_date", "home_team", "visitor_team"])
+
+@st.cache_data(ttl=3600, show_spinner=True)
+def load_odds_sheet():
+    """Load the latest odds sheet from Google Sheets."""
+    import pandas as pd
+
+    if not SPREADSHEET_ID or not ODDS_SHEET_NAME:
+        st.warning("⚠️ Missing SPREADSHEET_ID or ODDS_SHEET_NAME env vars.")
+        return pd.DataFrame()
+
+    try:
+        # Use gspread client to read the sheet
+        sh = gc.open_by_key(SPREADSHEET_ID)
+        ws = sh.worksheet(ODDS_SHEET_NAME)
+        data = ws.get_all_records()
+        df = pd.DataFrame(data)
+
+        if df.empty:
+            st.warning("⚠️ Odds sheet is empty.")
+            return df
+
+        # 🧩 Normalize columns for compatibility with build_props_table
+        df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
+
+        # Add normalized versions expected by app
+        if "market" in df.columns:
+            df["market_norm"] = (
+                df["market"]
+                .str.replace("player_", "")
+                .str.replace("_alternate", "")
+                .str.strip()
+                .str.lower()
+            )
+
+        if "label" in df.columns and "side" not in df.columns:
+            df["side"] = df["label"].str.strip().str.lower()
+
+        df["price"] = pd.to_numeric(df.get("price"), errors="coerce")
+        df["point"] = pd.to_numeric(df.get("point"), errors="coerce")
+
+        # Clean strings
+        for col in ["bookmaker", "home_team", "away_team", "description"]:
+            if col in df.columns:
+                df[col] = df[col].astype(str).str.strip()
+
+        st.sidebar.success(f"✅ Loaded {len(df):,} odds rows from Google Sheets")
+        return df
+
+    except Exception as e:
+        st.error(f"❌ Failed to load odds sheet: {e}")
+        return pd.DataFrame()
+
 # ------------------------------------------------------
 # 4️⃣ REFRESH + CACHE CONTROL
 # ------------------------------------------------------

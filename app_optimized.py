@@ -207,17 +207,16 @@ def load_odds_sheet():
         return pd.DataFrame()
 
     try:
-        # Use gspread client from get_gcp_clients()
+        # --- Load sheet ---
         sh = gc.open_by_key(SPREADSHEET_ID)
         ws = sh.worksheet(ODDS_SHEET_NAME)
 
-        # Safely get all rows (avoids duplicate header issues)
         rows = ws.get_all_values()
         if not rows:
             st.warning("⚠️ Odds sheet appears empty.")
             return pd.DataFrame()
 
-        # Handle potential duplicate headers gracefully
+        # --- Handle duplicate headers ---
         headers = rows[0]
         unique_headers = []
         for h in headers:
@@ -227,42 +226,41 @@ def load_odds_sheet():
             else:
                 unique_headers.append(h)
 
-        # Build DataFrame
         df = pd.DataFrame(rows[1:], columns=unique_headers)
-        df = df.dropna(how="all")  # remove blank rows
+        df = df.dropna(how="all")
         df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
 
-    # 🧩 Normalize key columns for consistency with build_props_table()
-    if "market" in df.columns:
-        df["market_norm"] = (
-            df["market"]
-            .str.replace("player_", "", regex=False)
-            .str.replace("_alternate", "", regex=False)
-            .str.strip()
-            .str.lower()
-        )
+        # --- Normalize market names ---
+        if "market" in df.columns:
+            df["market_norm"] = (
+                df["market"]
+                .str.replace("player_", "", regex=False)
+                .str.replace("_alternate", "", regex=False)
+                .str.strip()
+                .str.lower()
+            )
 
-        # Map to app's expected stat keys (STAT_MAP)
-        market_map = {
-            "points": "points",
-            "rebounds": "rebounds",
-            "assists": "assists",
-            "points_rebounds": "points_rebounds",
-            "points_assists": "points_assists",
-            "rebounds_assists": "rebounds_assists",
-            "points_rebounds_assists": "points_rebounds_assists",
-        }
-        df["market_norm"] = df["market_norm"].map(market_map).fillna(df["market_norm"])
+            market_map = {
+                "points": "points",
+                "rebounds": "rebounds",
+                "assists": "assists",
+                "points_rebounds": "points_rebounds",
+                "points_assists": "points_assists",
+                "rebounds_assists": "rebounds_assists",
+                "points_rebounds_assists": "points_rebounds_assists",
+            }
+            df["market_norm"] = df["market_norm"].map(market_map).fillna(df["market_norm"])
 
+        # --- Add side column from 'label' ---
         if "label" in df.columns:
             df["side"] = df["label"].str.strip().str.lower()
 
-        # Convert numeric columns
+        # --- Convert numeric columns ---
         for col in ["price", "point"]:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
 
-        # Strip whitespace from strings
+        # --- Clean text columns ---
         for col in ["bookmaker", "home_team", "away_team", "description"]:
             if col in df.columns:
                 df[col] = df[col].astype(str).str.strip()
@@ -274,7 +272,6 @@ def load_odds_sheet():
     except Exception as e:
         st.error(f"❌ Failed to load odds sheet: {e}")
         return pd.DataFrame()
-
 
 # ------------------------------------------------------
 # 4️⃣ REFRESH + CACHE CONTROL

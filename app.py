@@ -1,5 +1,4 @@
 import os
-import math
 import json
 import numpy as np
 import pandas as pd
@@ -10,28 +9,37 @@ import gspread
 import streamlit as st  # 👈 keep this import here
 
 # ------------------------------------------------------
-# MUST BE FIRST STREAMLIT COMMAND
+# STREAMLIT CONFIG (must be first Streamlit command)
 # ------------------------------------------------------
 st.set_page_config(page_title="NBA Prop Analyzer", layout="wide")
 
 # ------------------------------------------------------
 # ENVIRONMENT VARIABLES (from Render)
 # ------------------------------------------------------
-PROJECT_ID = os.environ["PROJECT_ID"]
-SPREADSHEET_ID = os.environ["SPREADSHEET_ID"]
-ODDS_SHEET_NAME = os.environ["ODDS_SHEET_NAME"]
+PROJECT_ID = os.getenv("PROJECT_ID", "")
+SPREADSHEET_ID = os.getenv("SPREADSHEET_ID", "")
+ODDS_SHEET_NAME = os.getenv("ODDS_SHEET_NAME", "")
+GCP_SERVICE_ACCOUNT = os.getenv("GCP_SERVICE_ACCOUNT", "")
 
-# Load GCP credentials (as JSON string)
-creds_dict = json.loads(os.environ["GCP_SERVICE_ACCOUNT"])
-credentials = service_account.Credentials.from_service_account_info(creds_dict)
+if not PROJECT_ID or not GCP_SERVICE_ACCOUNT:
+    st.error("❌ Missing environment variables — check Render settings.")
+    st.stop()
 
 # ------------------------------------------------------
-# REST OF YOUR APP BELOW
+# LOAD GCP CREDENTIALS
+# ------------------------------------------------------
+try:
+    creds_dict = json.loads(GCP_SERVICE_ACCOUNT)
+    credentials = service_account.Credentials.from_service_account_info(creds_dict)
+    st.write("✅ Environment loaded successfully!")
+except Exception as e:
+    st.error(f"❌ Failed to load Google credentials: {e}")
+    st.stop()
+
+# ------------------------------------------------------
+# STREAMLIT APP HEADER
 # ------------------------------------------------------
 st.title("NBA Prop Analyzer 🏀")
-
-# Example: check that credentials and env vars loaded
-st.write("✅ Environment loaded successfully!")
 
 # ---- SCOPES ----
 SCOPES = [
@@ -41,24 +49,28 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive.readonly",
 ]
 
-# ---- CLIENTS ----
+# ------------------------------------------------------
+# INITIALIZE CLIENTS
+# ------------------------------------------------------
 try:
-    bq_client = bigquery.Client(project=PROJECT_ID, credentials=creds)
+    bq_client = bigquery.Client(project=PROJECT_ID, credentials=credentials)
     st.sidebar.success("✅ Connected to BigQuery")
 except Exception as e:
     st.sidebar.error(f"❌ BigQuery connection failed: {e}")
     st.stop()
 
 try:
-    gc = gspread.authorize(creds)
-except Exception as e:
-    st.sidebar.warning(f"⚠️ Could not connect to Google Sheets: {e}")
-
-try:
-    _ = gc.open_by_key(SPREADSHEET_ID)  # probe access
+    gc = gspread.authorize(credentials)
+    _ = gc.open_by_key(SPREADSHEET_ID)
     st.sidebar.success("✅ Connected to Google Sheets")
 except Exception as e:
-    st.sidebar.warning("⚠️ Google Sheets not connected (using empty Odds until fixed)")
+    st.sidebar.warning(f"⚠️ Google Sheets connection failed: {e}")
+
+# ------------------------------------------------------
+# APP READY
+# ------------------------------------------------------
+st.sidebar.info("🏀 Environment setup complete — ready to query data!")
+
 
 # ----------------------------
 # SQL (UNION across seasons; force compatible types)

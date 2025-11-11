@@ -153,6 +153,10 @@ def _normalize_market(s: str) -> str:
     if pd.isna(s):
         return ""
     m = str(s).lower().strip()
+
+    # handle alternates
+    m = m.replace("_alternate", "").replace(" alternate", "")
+
     mapping = {
         "player_points_rebounds_assists": "points_rebounds_assists",
         "player_points_rebounds": "points_rebounds",
@@ -163,7 +167,7 @@ def _normalize_market(s: str) -> str:
         "player_assists": "assists",
         "player_steals": "steals",
         "player_blocks": "blocks",
-        # common variants
+        # common non-prefixed variants
         "points_rebounds_assists": "points_rebounds_assists",
         "points_rebounds": "points_rebounds",
         "points_assists": "points_assists",
@@ -174,10 +178,12 @@ def _normalize_market(s: str) -> str:
         "steals": "steals",
         "blocks": "blocks",
     }
+
     for k, v in mapping.items():
         if k in m:
             return v
     return ""
+
 
 @st.cache_data(ttl=21600)
 def load_odds_sheet():

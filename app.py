@@ -9,9 +9,14 @@ from google.oauth2 import service_account
 from google.cloud import bigquery
 import gspread
 
-# -----------------------------------------
+# ------------------------------------------------------
+# MUST BE FIRST STREAMLIT COMMAND
+# ------------------------------------------------------
+st.set_page_config(page_title="NBA Prop Analyzer", layout="wide")
+
+# ------------------------------------------------------
 # ENVIRONMENT VARIABLES (from Render)
-# -----------------------------------------
+# ------------------------------------------------------
 PROJECT_ID = os.environ["PROJECT_ID"]
 SPREADSHEET_ID = os.environ["SPREADSHEET_ID"]
 ODDS_SHEET_NAME = os.environ["ODDS_SHEET_NAME"]
@@ -20,13 +25,11 @@ ODDS_SHEET_NAME = os.environ["ODDS_SHEET_NAME"]
 creds_dict = json.loads(os.environ["GCP_SERVICE_ACCOUNT"])
 credentials = service_account.Credentials.from_service_account_info(creds_dict)
 
-# -----------------------------------------
-# STREAMLIT PAGE CONFIG
-# -----------------------------------------
-st.set_page_config(page_title="NBA Prop Analyzer", layout="wide")
+# ------------------------------------------------------
+# OPTIONAL TEST OUTPUT (you can remove later)
+# ------------------------------------------------------
+st.write("✅ Streamlit page config set and environment loaded")
 
-# Optional: confirm variables loaded
-st.write("✅ Environment variables loaded successfully!")
 
 
 # ----------------------------

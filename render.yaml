@@ -4,7 +4,6 @@ services:
     env: python
     buildCommand: pip install -r requirements.txt && python preload_data.py
     startCommand: streamlit run app_optimized.py --server.port $PORT
-
     disk:
       name: data
       mountPath: /data

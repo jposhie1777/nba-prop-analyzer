@@ -158,9 +158,17 @@ if "last_updated" in st.session_state:
     st.sidebar.info(f"🕒 **Data last updated:** {last_updated_str}")
 
 
-# ----------------------------
-# SQL (UNION across seasons; force compatible types)
-# ----------------------------
+#-------------------------------------------------------
+# Num Py Warnings
+#-------------------------------------------------------
+import warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+
+
+# ------------------------------------------------------
+# SQL QUERIES
+# ------------------------------------------------------
+
 PLAYER_STATS_SQL = f"""
 WITH stats AS (
   SELECT

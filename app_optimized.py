@@ -5,10 +5,14 @@ import os, json, time, datetime, math, warnings
 import numpy as np
 import pandas as pd
 import streamlit as st
+import plotly.graph_objects as go
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 st.set_page_config(page_title="NBA Prop Analyzer", layout="wide")
 
+# ------------------------------------------------------
+# ENVIRONMENT VARIABLES
+# ------------------------------------------------------
 PROJECT_ID = os.getenv("PROJECT_ID", "")
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID", "")
 ODDS_SHEET_NAME = os.getenv("ODDS_SHEET_NAME", "")
@@ -43,7 +47,7 @@ bq_client, gc = get_gcp_clients()
 st.sidebar.success("✅ GCP clients initialized")
 
 # ------------------------------------------------------
-# 3️⃣ CACHED DATA LOADERS
+# 3️⃣ CACHE SETUP
 # ------------------------------------------------------
 CACHE_DIR = "/data" if os.path.exists("/data") else "/tmp"
 PLAYER_CACHE = f"{CACHE_DIR}/player_stats.parquet"
@@ -73,7 +77,6 @@ def load_games():
 
 @st.cache_data(ttl=21600)
 def load_odds_sheet():
-    import gspread
     if os.path.exists(ODDS_CACHE):
         return pd.read_json(ODDS_CACHE)
     sheet = gc.open_by_key(SPREADSHEET_ID).worksheet(ODDS_SHEET_NAME)
@@ -82,47 +85,324 @@ def load_odds_sheet():
     return df
 
 if st.sidebar.button("🔄 Refresh Data"):
-    st.cache_data.clear()
-    for f in [PLAYER_CACHE, ODDS_CACHE]:
-        if os.path.exists(f): os.remove(f)
-    st.experimental_rerun()
+    with st.sidebar:
+        progress_bar = st.progress(0)
+        status = st.empty()
+        for pct in range(0, 101, 25):
+            time.sleep(0.2)
+            progress_bar.progress(pct)
+            status.text(f"Reloading... {pct}%")
+        st.cache_data.clear()
+        for f in [PLAYER_CACHE, ODDS_CACHE]:
+            if os.path.exists(f): os.remove(f)
+        progress_bar.empty()
+        status.text("✅ Reload complete!")
+        st.rerun()
 
 # ------------------------------------------------------
-# 4️⃣ ANALYTICS HELPERS (your full original functions)
+# 4️⃣ ANALYTICS HELPERS
 # ------------------------------------------------------
-STAT_MAP = {...}
-STAT_LABELS = {...}
+STAT_MAP = {
+    "points": "pts", "rebounds": "reb", "assists": "ast",
+    "steals": "stl", "blocks": "blk", "points_rebounds": "pts_reb",
+    "points_assists": "pts_ast", "rebounds_assists": "reb_ast",
+    "points_rebounds_assists": "pra",
+}
 
-def american_to_decimal(odds): ...
-def hit_rate(series, line, n=None): ...
-def format_percentage(value, decimals=1): ...
-def kelly_fraction(p, dec_odds): ...
-def trend_pearson_r(series_last20): ...
-def rmse_to_line(series, line, n=None): ...
-def build_props_table(...): ...
-def plot_trend(...): ...
-# (Paste all your helper functions exactly as they were here)
+STAT_LABELS = {
+    "points": "Pts", "rebounds": "Reb", "assists": "Ast",
+    "steals": "Stl", "blocks": "Blk",
+    "points_rebounds": "Pts+Reb", "points_assists": "Pts+Ast",
+    "rebounds_assists": "Reb+Ast", "points_rebounds_assists": "PRA",
+}
+
+def american_to_decimal(odds):
+    try:
+        o = float(odds)
+    except Exception:
+        return np.nan
+    return 1 + (o / 100.0) if o > 0 else 1 + (100.0 / abs(o))
+
+def hit_rate(series, line, n=None):
+    s = series if n is None else series.tail(n)
+    return np.nan if len(s) == 0 else (s > line).mean()
+
+def format_percentage(value, decimals=1):
+    try:
+        val = float(value)
+        if pd.isna(val): return "—"
+        return f"{val * 100:.{decimals}f}%"
+    except (ValueError, TypeError):
+        return "—"
+
+def format_ratio(value, total):
+    try:
+        val = float(value); tot = int(total)
+        if pd.isna(val) or tot == 0: return "—"
+        hits = int(round(val * tot))
+        return f"{hits}/{tot}"
+    except (ValueError, TypeError):
+        return "—"
+
+def format_moneyline(value):
+    try:
+        val = float(value)
+        if pd.isna(val): return "—"
+        v = int(val)
+        return f"+{v}" if v > 0 else str(v)
+    except (ValueError, TypeError):
+        return "—"
+
+def kelly_fraction(p, dec_odds):
+    if np.isnan(p) or np.isnan(dec_odds): return np.nan
+    b = dec_odds - 1.0; q = 1 - p
+    k = (b * p - q) / b
+    return max(0.0, min(1.0, k))
+
+def trend_pearson_r(series_last20):
+    if len(series_last20) < 3: return np.nan
+    x = np.arange(1, len(series_last20) + 1)
+    return pd.Series(series_last20).corr(pd.Series(x))
+
+def rmse_to_line(series, line, n=None):
+    s = series if n is None else series.tail(n)
+    return np.nan if len(s) == 0 else math.sqrt(np.mean((s - line) ** 2))
+
+def z_score(value, sample):
+    if len(sample) < 2: return np.nan
+    mu = sample.mean(); sd = sample.std(ddof=1)
+    return 0.0 if sd == 0 else (value - mu) / sd
+
+def series_for_player_stat(stats_df, player, stat_key):
+    col = STAT_MAP.get(stat_key)
+    if not col: return pd.DataFrame(columns=["game_date", "stat"])
+    s = (
+        stats_df.loc[stats_df["player_name"] == player, ["game_date", col]]
+        .dropna().sort_values("game_date").copy()
+    )
+    s.rename(columns={col: "stat"}, inplace=True)
+    return s
+
+def compute_metrics_for_row(stats_df, player, stat_key, line):
+    s = series_for_player_stat(stats_df, player, stat_key)
+    if s.empty:
+        return dict(L5=np.nan, L10=np.nan, L20=np.nan, Season=np.nan,
+                    hit5=np.nan, hit10=np.nan, hit20=np.nan, hit_season=np.nan,
+                    trend_r=np.nan, edge=np.nan, rmse10=np.nan, z_line=np.nan)
+    vals = s["stat"].astype(float)
+    season_avg = vals.mean()
+    return {
+        "L5": vals.tail(5).mean(),
+        "L10": vals.tail(10).mean(),
+        "L20": vals.tail(20).mean(),
+        "Season": season_avg,
+        "hit5": hit_rate(vals, line, 5),
+        "hit10": hit_rate(vals, line, 10),
+        "hit20": hit_rate(vals, line, 20),
+        "hit_season": hit_rate(vals, line, None),
+        "trend_r": trend_pearson_r(vals.tail(20)),
+        "edge": season_avg - line,
+        "rmse10": rmse_to_line(vals, line, 10),
+        "z_line": z_score(line, vals.tail(20)),
+    }
 
 # ------------------------------------------------------
-# 5️⃣ SIDEBAR FILTERS
+# BUILD PROPS TABLE
+# ------------------------------------------------------
+def build_props_table(
+    stats_df, odds_df, games_df, date_filter,
+    game_pick, player_pick, stat_pick, books,
+    odds_range, min_ev, min_hit, min_kelly
+):
+    g_day = games_df.query("game_date == @date_filter").copy()
+    if g_day.empty:
+        return pd.DataFrame()
+
+    if game_pick and " vs " in game_pick:
+        home, away = game_pick.split(" vs ", 1)
+        g_day = g_day.query("home_team == @home and visitor_team == @away")
+
+    teams_today = set(g_day["home_team"]) | set(g_day["visitor_team"])
+
+    o = odds_df.copy()
+    o = o[o["market_norm"] != ""] if "market_norm" in o.columns else o
+    o = o[o["bookmaker"].isin(books)] if "bookmaker" in o.columns else o
+
+    if "home_team" in o.columns and "away_team" in o.columns:
+        o = o[o["home_team"].isin(teams_today) | o["away_team"].isin(teams_today)]
+
+    if stat_pick and stat_pick != "All Stats":
+        o = o[o["market_norm"] == stat_pick]
+    if player_pick and player_pick != "All players":
+        o = o[o["description"] == player_pick]
+
+    if "price" in o.columns:
+        o = o[o["price"].between(odds_range[0], odds_range[1])]
+    if o.empty:
+        return pd.DataFrame()
+
+    rows = []
+    for _, r in o.iterrows():
+        player = r.get("description", "").strip()
+        stat_key = str(r.get("market_norm", "")).strip().lower()
+        line = r.get("point", np.nan)
+        book = str(r.get("bookmaker", "")).strip()
+        price = r.get("price", np.nan)
+        side_raw = str(r.get("side", "")).strip().lower()
+
+        if side_raw in ["o", "over"]:
+            side = "over"
+        elif side_raw in ["u", "under"]:
+            side = "under"
+        else:
+            side = "—"
+
+        if not player or pd.isna(line) or not stat_key:
+            continue
+
+        m = compute_metrics_for_row(stats_df, player, stat_key, line)
+        vals = series_for_player_stat(stats_df, player, stat_key)["stat"]
+        if vals.empty:
+            continue
+
+        hit10 = hit_rate(vals, line, 10)
+        if side == "under":
+            p_hit = 1 - hit10 if not np.isnan(hit10) else np.nan
+        elif side == "over":
+            p_hit = hit10
+        else:
+            p_hit = np.nan
+
+        dec = american_to_decimal(price)
+        ev = np.nan if (np.isnan(p_hit) or np.isnan(dec)) else p_hit * (dec - 1) - (1 - p_hit)
+        kelly = np.nan if (np.isnan(p_hit) or np.isnan(dec)) else kelly_fraction(p_hit, dec)
+
+        rows.append({
+            "Player": player,
+            "Stat": STAT_LABELS.get(stat_key, stat_key),
+            "Stat_key": stat_key,
+            "Bookmaker": book,
+            "Side": side.title() if side in ["over", "under"] else "—",
+            "Line": line,
+            "Price (Am)": price,
+            "L5 Avg": m["L5"], "L10 Avg": m["L10"], "L20 Avg": m["L20"], "2025 Avg": m["Season"],
+            "Hit5": m["hit5"], "Hit10": m["hit10"], "Hit20": m["hit20"], "Hit Season": m["hit_season"],
+            "Trend r": m["trend_r"], "Edge (Season-Line)": m["edge"], "RMSE10": m["rmse10"], "Z(Line)": m["z_line"],
+            "EV": ev, "Kelly %": kelly,
+        })
+
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return df
+    if min_ev is not None: df = df[df["EV"] >= min_ev]
+    if min_hit is not None: df = df[df["Hit10"] >= min_hit]
+    if min_kelly is not None: df = df[df["Kelly %"] >= min_kelly]
+    return df.sort_values(["EV", "Hit10", "Kelly %"], ascending=[False, False, False]).reset_index(drop=True)
+
+# ------------------------------------------------------
+# PLOT TREND
+# ------------------------------------------------------
+def plot_trend(stats_df, player, stat_key, line):
+    s = series_for_player_stat(stats_df, player, stat_key)
+    if s.empty:
+        st.info("No stat history found.")
+        return
+
+    s = s.dropna(subset=["game_date", "stat"]).sort_values("game_date").tail(20)
+    season_avg = s["stat"].mean()
+    colors = np.where(s["stat"] > line, "#21c36b", "#e45757")
+
+    fig = go.Figure()
+    fig.add_bar(x=s["game_date"].astype(str), y=s["stat"], marker_color=colors)
+    fig.add_scatter(x=s["game_date"].astype(str), y=[line]*len(s),
+                    name=f"Line ({line})", mode="lines", line=dict(color="#d9534f", dash="dash"))
+    fig.add_scatter(x=s["game_date"].astype(str), y=[season_avg]*len(s),
+                    name=f"Season Avg ({season_avg:.1f})", mode="lines", line=dict(color="#5cb85c"))
+
+    fig.update_layout(
+        height=420,
+        margin=dict(l=20, r=20, t=60, b=20),
+        legend=dict(orientation="h", yanchor="bottom", y=1.08,
+                    xanchor="center", x=0.5, font=dict(size=12)),
+        xaxis=dict(title="Game Date", categoryorder="category ascending"),
+        yaxis_title=STAT_LABELS.get(stat_key, stat_key).upper(),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+# ------------------------------------------------------
+# 5️⃣ SESSION STATE
+# ------------------------------------------------------
+if "saved_bets" not in st.session_state:
+    st.session_state.saved_bets = []
+
+def _bet_key(row):
+    return f"{row.get('Player','')}|{row.get('Stat_key','')}|{row.get('Bookmaker','')}|{row.get('Line','')}|{row.get('Price (Am)','')}"
+
+def toggle_save(row):
+    key = _bet_key(row)
+    exists = any(_bet_key(x) == key for x in st.session_state.saved_bets)
+    if exists:
+        st.session_state.saved_bets = [x for x in st.session_state.saved_bets if _bet_key(x) != key]
+        st.success("Removed from Saved Bets.")
+    else:
+        st.session_state.saved_bets.append(row.to_dict())
+        st.success("Saved!")
+
+# ------------------------------------------------------
+# 6️⃣ LOAD DATA
+# ------------------------------------------------------
+with st.spinner("Loading data..."):
+    player_stats = load_player_stats()
+    games_df = load_games()
+    odds_df = load_odds_sheet()
+
+# ------------------------------------------------------
+# 7️⃣ SIDEBAR FILTERS
 # ------------------------------------------------------
 st.sidebar.header("⚙️ Filters")
+
 today = pd.Timestamp.today().normalize()
 sel_date = st.sidebar.date_input("Game date", today)
-games_df = load_games()
 
-day_games = games_df.query("game_date == @sel_date")[["home_team","visitor_team"]]
+day_games = games_df.query("game_date == @sel_date")[["home_team", "visitor_team"]]
 day_games["matchup"] = day_games["home_team"] + " vs " + day_games["visitor_team"]
 sel_game = st.sidebar.selectbox("Game", ["All games"] + day_games["matchup"].tolist())
 
-with st.spinner("Loading data..."):
-    player_stats = load_player_stats()
-    odds_df = load_odds_sheet()
+players_today = sorted(player_stats["player_name"].unique().tolist())
+sel_player = st.sidebar.selectbox("Player", ["All players"] + players_today)
+
+stat_options = ["All Stats"] + list(STAT_MAP.keys())
+sel_stat = st.sidebar.selectbox("Stat Type (matches odds sheet)", stat_options, index=0)
+if sel_stat == "All Stats": sel_stat = None
+
+st.sidebar.markdown("---")
+st.sidebar.header("🎲 Odds Filters")
+
+odds_threshold = st.sidebar.number_input("Filter: Show Only Odds Above", min_value=-2000, max_value=2000, value=-600, step=50)
+books_available = sorted(odds_df["bookmaker"].dropna().unique().tolist()) if not odds_df.empty else []
+sel_books = st.sidebar.multiselect("Bookmakers", books_available, default=books_available)
+
+if not odds_df.empty:
+    odds_min = int(pd.to_numeric(odds_df["price"], errors="coerce").min())
+    odds_max = int(pd.to_numeric(odds_df["price"], errors="coerce").max())
+else:
+    odds_min, odds_max = -1000, 2000
+sel_odds_range = st.sidebar.slider("American odds range", odds_min, odds_max, (odds_min, odds_max))
+
+st.sidebar.markdown("---")
+st.sidebar.header("📈 Analytical Filters")
+sel_min_ev = st.sidebar.slider("Minimum EV", -1.0, 1.0, 0.0, 0.01)
+sel_min_hit10 = st.sidebar.slider("Minimum Hit Rate (L10)", 0.0, 1.0, 0.5, 0.01)
+sel_min_kelly = st.sidebar.slider("Minimum Kelly %", 0.0, 1.0, 0.0, 0.01)
+
+st.sidebar.markdown("---")
+show_hit_counts = st.sidebar.checkbox("Show Hit Counts (e.g. 8/10)", value=False)
 
 st.sidebar.info("🏀 Environment ready")
 
 # ------------------------------------------------------
-# 6️⃣ MAIN UI TABS (your original tab logic)
+# 8️⃣ MAIN UI
 # ------------------------------------------------------
 tab1, tab2, tab3, tab4 = st.tabs([
     "🧮 Props Overview", "📈 Trend Analysis", "📋 Saved Bets", "📊 Prop Analytics"
@@ -136,7 +416,7 @@ with tab1:
 
     # --- Build the props table ---
     df = build_props_table(
-        stats_df,
+        player_stats,
         odds_df,
         games_df,
         pd.to_datetime(sel_date).date(),

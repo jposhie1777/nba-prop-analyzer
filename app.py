@@ -33,13 +33,6 @@ st.title("NBA Prop Analyzer 🏀")
 # Example: check that credentials and env vars loaded
 st.write("✅ Environment loaded successfully!")
 
-
-
-# ----------------------------
-# PAGE CONFIG
-# ----------------------------
-st.set_page_config(page_title="NBA Prop Analyzer", layout="wide")
-
 # ----------------------------
 # SECRETS / CONFIG
 # ----------------------------

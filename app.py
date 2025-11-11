@@ -33,13 +33,6 @@ st.title("NBA Prop Analyzer 🏀")
 # Example: check that credentials and env vars loaded
 st.write("✅ Environment loaded successfully!")
 
-# ----------------------------
-# SECRETS / CONFIG
-# ----------------------------
-PROJECT_ID = st.secrets["general"]["PROJECT_ID"]
-SPREADSHEET_ID = st.secrets["general"]["SPREADSHEET_ID"]
-ODDS_SHEET_NAME = st.secrets["general"]["ODDS_SHEET_NAME"]
-
 # ---- SCOPES ----
 SCOPES = [
     "https://www.googleapis.com/auth/cloud-platform",
@@ -47,12 +40,6 @@ SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets.readonly",
     "https://www.googleapis.com/auth/drive.readonly",
 ]
-
-# ---- SERVICE ACCOUNT ----
-creds = service_account.Credentials.from_service_account_info(
-    st.secrets["gcp_service_account"],
-    scopes=SCOPES,
-)
 
 # ---- CLIENTS ----
 try:

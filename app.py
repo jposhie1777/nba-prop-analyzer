@@ -78,6 +78,85 @@ except Exception as e:
 # ------------------------------------------------------
 st.sidebar.info("🏀 Environment setup complete — ready to query data!")
 
+# ------------------------------------------------------
+# IMPORTS
+# ------------------------------------------------------
+import datetime
+import time  # 👈 for simulating progress bar
+import pandas as pd
+import streamlit as st
+
+# ------------------------------------------------------
+# CACHED DATA LOADERS
+# ------------------------------------------------------
+
+@st.cache_data(ttl=86400)  # Cache for 24 hours (1 day)
+def load_player_stats(bq_client, query):
+    """Fetch player stats from BigQuery and cache results."""
+    df = bq_client.query(query).to_dataframe()
+    return df
+
+@st.cache_data(ttl=86400)
+def load_odds_sheet(gc, spreadsheet_id, sheet_name):
+    """Fetch odds data from Google Sheets and cache results."""
+    try:
+        sheet = gc.open_by_key(spreadsheet_id).worksheet(sheet_name)
+        data = sheet.get_all_records()
+        df = pd.DataFrame(data)
+        return df
+    except Exception as e:
+        st.warning(f"⚠️ Could not load sheet '{sheet_name}': {e}")
+        return pd.DataFrame()
+
+# ------------------------------------------------------
+# REFRESH BUTTON + PROGRESS BAR
+# ------------------------------------------------------
+
+refresh_clicked = st.sidebar.button("🔄 Refresh Data")
+
+if refresh_clicked:
+    st.sidebar.info("♻️ Refreshing data... please wait.")
+    
+    progress_bar = st.sidebar.progress(0)
+    status_text = st.sidebar.empty()
+
+    for percent_complete in range(0, 101, 20):
+        time.sleep(0.3)  # simulate refresh progress
+        progress_bar.progress(percent_complete)
+        status_text.text(f"Reloading... {percent_complete}%")
+
+    st.cache_data.clear()
+    st.session_state.clear()
+
+    progress_bar.empty()
+    status_text.text("✅ Reload complete! Fetching fresh data...")
+    st.experimental_rerun()
+
+# ------------------------------------------------------
+# LOAD DATA INTO SESSION (only once per session)
+# ------------------------------------------------------
+
+if "player_stats" not in st.session_state:
+    with st.spinner("⏳ Loading player stats from BigQuery..."):
+        st.session_state.player_stats = load_player_stats(bq_client, PLAYER_STATS_SQL)
+        st.session_state.last_updated = datetime.datetime.now()
+
+if "odds_df" not in st.session_state:
+    with st.spinner("📊 Loading odds data from Google Sheets..."):
+        st.session_state.odds_df = load_odds_sheet(gc, SPREADSHEET_ID, ODDS_SHEET_NAME)
+        st.session_state.last_updated = datetime.datetime.now()
+
+# Retrieve cached session data
+player_stats = st.session_state.player_stats
+odds_df = st.session_state.odds_df
+
+# ------------------------------------------------------
+# SHOW LAST UPDATED TIMESTAMP
+# ------------------------------------------------------
+if "last_updated" in st.session_state:
+    last_updated_str = st.session_state.last_updated.strftime("%Y-%m-%d %I:%M %p")
+    st.sidebar.info(f"🕒 **Data last updated:** {last_updated_str}")
+
 
 # ----------------------------
 # SQL (UNION across seasons; force compatible types)

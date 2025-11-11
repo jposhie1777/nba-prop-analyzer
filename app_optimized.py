@@ -8,7 +8,7 @@ import time
 import datetime
 import math
 import warnings
-
+import psutil  # 🟢 RENDER OPTIMIZATION
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -31,7 +31,7 @@ if not PROJECT_ID or not GCP_SERVICE_ACCOUNT:
     st.error("❌ Missing environment variables — check Render settings.")
     st.stop()
 
-# Optional quick env debug toggle
+# 🟢 RENDER OPTIMIZATION: Optional quick server debug info
 if st.sidebar.checkbox("🔍 Show env debug", value=False):
     st.sidebar.json(
         {
@@ -41,6 +41,10 @@ if st.sidebar.checkbox("🔍 Show env debug", value=False):
             "GCP_SERVICE_ACCOUNT_present": bool(GCP_SERVICE_ACCOUNT),
         }
     )
+
+st.sidebar.markdown("### 🖥️ Server Info (Render)")
+mem = psutil.virtual_memory()
+st.sidebar.text(f"RAM: {mem.total / 1e6:.0f} MB | Used: {mem.percent}%")
 
 # ------------------------------------------------------
 # 2️⃣ GCP CLIENTS (CACHED)
@@ -68,43 +72,44 @@ def get_gcp_clients():
     gc = gspread.authorize(credentials)
     return bq, gc
 
+# 🟢 Lazy GCP connection check
+if st.sidebar.checkbox("⚡ Connect to GCP Now", value=True):
+    bq_client, gc = get_gcp_clients()
+    st.sidebar.success("✅ GCP clients initialized")
 
-bq_client, gc = get_gcp_clients()
-st.sidebar.success("✅ GCP clients initialized")
+    try:
+        bq_client.query("SELECT 1").result()
+        st.sidebar.success("✅ Connected to BigQuery")
+    except Exception as e:
+        st.sidebar.error(f"❌ BigQuery connection failed: {e}")
+        st.stop()
 
-# ✅ Verify connections early with clear messages
-try:
-    bq_client.query("SELECT 1").result()
-    st.sidebar.success("✅ Connected to BigQuery")
-except Exception as e:
-    st.sidebar.error(f"❌ BigQuery connection failed: {e}")
+    try:
+        if SPREADSHEET_ID:
+            gc.open_by_key(SPREADSHEET_ID)
+            st.sidebar.success("✅ Connected to Google Sheets")
+        else:
+            st.sidebar.warning("⚠️ SPREADSHEET_ID is empty — odds will not load.")
+    except Exception as e:
+        st.sidebar.warning(f"⚠️ Google Sheets connection failed: {e}")
+else:
+    st.warning("⏸️ GCP connections paused until you toggle 'Connect to GCP Now'.")
     st.stop()
 
-try:
-    if SPREADSHEET_ID:
-        gc.open_by_key(SPREADSHEET_ID)  # sanity access
-        st.sidebar.success("✅ Connected to Google Sheets")
-    else:
-        st.sidebar.warning("⚠️ SPREADSHEET_ID is empty — odds will not load.")
-except Exception as e:
-    st.sidebar.warning(f"⚠️ Google Sheets connection failed: {e}")
 # ------------------------------------------------------
 # 3️⃣ CACHE SETUP
 # ------------------------------------------------------
 
-CACHE_DIR = "/data" if os.path.exists("/data") else "/tmp"
+# 🟢 RENDER OPTIMIZATION: Prefer /tmp (always available)
+CACHE_DIR = "/tmp"
 PLAYER_CACHE = f"{CACHE_DIR}/player_stats.parquet"
 ODDS_CACHE = f"{CACHE_DIR}/odds_cache.json"
 
 st.sidebar.info(f"💾 Cache dir: {CACHE_DIR}")
 
-
 @st.cache_data(ttl=86400, show_spinner=True)
 def load_player_stats():
-    """
-    Fetch player stats from BigQuery (both historical and current seasons),
-    cache them for 24 hours, and store locally as a parquet file.
-    """
+    """Fetch player stats from BigQuery and cache for 24 hours."""
     if os.path.exists(PLAYER_CACHE):
         df = pd.read_parquet(PLAYER_CACHE)
         if not df.empty:
@@ -152,174 +157,18 @@ def load_player_stats():
             st.warning("⚠️ BigQuery returned no player stats — check dataset names.")
         else:
             st.sidebar.success(f"✅ Loaded {len(df):,} player rows from BigQuery")
-            df.to_parquet(PLAYER_CACHE)
+            # 🟢 RENDER OPTIMIZATION: Compress parquet for memory safety
+            df.to_parquet(PLAYER_CACHE, compression="snappy")
+            # 🟢 Light sanity sample display
+            st.sidebar.write("🔹 Sample:", df.sample(min(3, len(df))).to_dict(orient="records"))
     except Exception as e:
         st.error(f"❌ Failed to load player stats: {e}")
         df = pd.DataFrame()
 
     return df
 
-
-@st.cache_data(ttl=86400)
-def load_games():
-    """Load all NBA games (historical + current season) from BigQuery."""
-    query = f"""
-        WITH g AS (
-            SELECT
-                CAST(DATE(date) AS DATE) AS game_date,
-                home_team,
-                visitor_team,
-                status
-            FROM {PROJECT_ID}.nba_data.games
-            UNION ALL
-            SELECT
-                CAST(DATE(date) AS DATE) AS game_date,
-                home_team,
-                visitor_team,
-                status
-            FROM {PROJECT_ID}.nba_data_2024_2025.games
-        )
-        SELECT * FROM g
-    """
-    return bq_client.query(query).to_dataframe()
-
-
-def _normalize_market(s: str) -> str:
-    """Normalize market name text to a consistent key."""
-    if pd.isna(s):
-        return ""
-    m = str(s).lower().strip()
-    mapping = {
-        "player_points_rebounds_assists": "points_rebounds_assists",
-        "player_points_rebounds": "points_rebounds",
-        "player_points_assists": "points_assists",
-        "player_rebounds_assists": "rebounds_assists",
-        "player_points": "points",
-        "player_rebounds": "rebounds",
-        "player_assists": "assists",
-        "player_steals": "steals",
-        "player_blocks": "blocks",
-        # common variants
-        "points_rebounds_assists": "points_rebounds_assists",
-        "points_rebounds": "points_rebounds",
-        "points_assists": "points_assists",
-        "rebounds_assists": "rebounds_assists",
-        "points": "points",
-        "rebounds": "rebounds",
-        "assists": "assists",
-        "steals": "steals",
-        "blocks": "blocks",
-    }
-    for k, v in mapping.items():
-        if k in m:
-            return v
-    return ""
-
-
-@st.cache_data(ttl=21600)
-def load_odds_sheet():
-    """
-    Load and normalize the odds sheet from Google Sheets.
-    Falls back to cached JSON if available.
-    """
-    if os.path.exists(ODDS_CACHE):
-        try:
-            return pd.read_json(ODDS_CACHE)
-        except Exception:
-            pass
-
-    if not SPREADSHEET_ID or not ODDS_SHEET_NAME:
-        st.sidebar.warning("⚠️ SPREADSHEET_ID or ODDS_SHEET_NAME is missing.")
-        return pd.DataFrame()
-
-    try:
-        sh = gc.open_by_key(SPREADSHEET_ID)
-        ws = sh.worksheet(ODDS_SHEET_NAME)
-        records = ws.get_all_records()
-        if not records:
-            st.warning("⚠️ Odds sheet is empty.")
-            return pd.DataFrame()
-        df = pd.DataFrame(records)
-    except Exception as e:
-        st.sidebar.warning(f"⚠️ Could not load Odds sheet: {e}")
-        return pd.DataFrame()
-
-    # Normalize columns
-    df.columns = [c.lower().strip() for c in df.columns]
-
-    # Identify the market source column
-    market_source_col = None
-    for candidate in ["market", "market_name", "bet_type", "selection", "description"]:
-        if candidate in df.columns:
-            market_source_col = candidate
-            break
-
-    # Apply normalization
-    if market_source_col:
-        df["market_norm"] = df[market_source_col].apply(_normalize_market)
-    else:
-        df["market_norm"] = ""
-
-    # Convert numeric columns
-    for col in ["point", "price"]:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-
-    # Ensure 'side' column exists and attempt inference
-    if "side" not in df.columns:
-        df["side"] = ""
-
-    if df["side"].eq("").all():
-        import re
-
-        possible_cols = [
-            "label",
-            "selection",
-            "bet_name",
-            "market_name",
-            "description",
-        ]
-        detected = False
-        for col in possible_cols:
-            if col in df.columns:
-                temp = df[col].astype(str).str.lower().fillna("")
-                if temp.str.contains("over").any() or temp.str.contains("under").any():
-                    df["side"] = temp.apply(
-                        lambda x: (
-                            "over"
-                            if ("over" in x and "under" not in x)
-                            else "under"
-                            if ("under" in x and "over" not in x)
-                            else "over"
-                            if re.search(r"\bover\b", x)
-                            else "under"
-                            if re.search(r"\bunder\b", x)
-                            else ""
-                        )
-                    )
-                    detected = True
-                    break
-        if not detected:
-            pass  # leave as empty; downstream handles
-
-    # Guarantee essential columns exist
-    for col in ["bookmaker", "description"]:
-        if col not in df.columns:
-            df[col] = ""
-
-    # Cache locally
-    try:
-        df.to_json(ODDS_CACHE, orient="records")
-    except Exception:
-        pass
-
-    # Optional preview
-    st.write("🟢 Sample Odds:", df[["description", "market_norm", "side", "point", "price"]].head(10))
-    return df
-
-
 # ------------------------------------------------------
-# REFRESH BUTTON (CACHE CLEAR)
+# 4️⃣ REFRESH + CACHE CONTROL
 # ------------------------------------------------------
 
 if st.sidebar.button("🔄 Refresh Data"):
@@ -330,7 +179,6 @@ if st.sidebar.button("🔄 Refresh Data"):
             time.sleep(0.2)
             progress_bar.progress(pct)
             status.text(f"Reloading... {pct}%")
-
         st.cache_data.clear()
         for f in [PLAYER_CACHE, ODDS_CACHE]:
             try:
@@ -338,10 +186,42 @@ if st.sidebar.button("🔄 Refresh Data"):
                     os.remove(f)
             except Exception:
                 pass
-
         progress_bar.empty()
         status.text("✅ Reload complete!")
         st.rerun()
+
+# 🟢 RENDER OPTIMIZATION: Add a hard cache reset option
+if st.sidebar.button("🧹 Clear Cache & Restart"):
+    st.cache_data.clear()
+    st.cache_resource.clear()
+    st.experimental_rerun()
+
+# ------------------------------------------------------
+# 5️⃣ LOAD DATA (Lazy Mode)
+# ------------------------------------------------------
+
+# 🟢 RENDER OPTIMIZATION: Delay heavy loading until user confirms
+lazy_load = st.sidebar.checkbox("🚀 Load Full Data Now", value=True)
+
+if lazy_load:
+    with st.spinner("⏳ Loading data..."):
+        player_stats = load_player_stats()
+        games_df = load_games()
+        odds_df = load_odds_sheet()
+else:
+    st.warning("⚠️ Data not loaded yet — enable 'Load Full Data Now' to start.")
+    st.stop()
+
+# ------------------------------------------------------
+# 6️⃣ DEBUG MODE TOGGLE (to avoid rendering giant tables)
+# ------------------------------------------------------
+
+debug_mode = st.sidebar.checkbox("🐞 Enable Debug Data Preview", value=False)
+if debug_mode:
+    st.sidebar.write("🧩 Columns:", list(player_stats.columns))
+    st.dataframe(player_stats.head())
+else:
+    st.sidebar.info("Debug mode is OFF (faster on Render)")
 # ------------------------------------------------------
 # 4️⃣ ANALYTICS HELPERS
 # ------------------------------------------------------

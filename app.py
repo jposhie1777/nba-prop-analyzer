@@ -6,52 +6,57 @@ import plotly.graph_objects as go
 from google.oauth2 import service_account
 from google.cloud import bigquery
 import gspread
-import streamlit as st  # 👈 keep this import here
+import streamlit as st  # 👈 must be first Streamlit import
 
 # ------------------------------------------------------
-# STREAMLIT CONFIG (must be first Streamlit command)
+# STREAMLIT PAGE CONFIG
 # ------------------------------------------------------
 st.set_page_config(page_title="NBA Prop Analyzer", layout="wide")
 
 # ------------------------------------------------------
-# ENVIRONMENT VARIABLES (from Render)
+# ENVIRONMENT VARIABLES (from Render dashboard)
 # ------------------------------------------------------
 PROJECT_ID = os.getenv("PROJECT_ID", "")
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID", "")
 ODDS_SHEET_NAME = os.getenv("ODDS_SHEET_NAME", "")
 GCP_SERVICE_ACCOUNT = os.getenv("GCP_SERVICE_ACCOUNT", "")
 
+# Validate environment
 if not PROJECT_ID or not GCP_SERVICE_ACCOUNT:
     st.error("❌ Missing environment variables — check Render settings.")
     st.stop()
 
 # ------------------------------------------------------
-# LOAD GCP CREDENTIALS
+# LOAD GCP SERVICE ACCOUNT CREDENTIALS
 # ------------------------------------------------------
 try:
     creds_dict = json.loads(GCP_SERVICE_ACCOUNT)
-    credentials = service_account.Credentials.from_service_account_info(creds_dict)
-    st.write("✅ Environment loaded successfully!")
+    base_credentials = service_account.Credentials.from_service_account_info(creds_dict)
+
+    # ✅ Apply required API scopes
+    SCOPES = [
+        "https://www.googleapis.com/auth/cloud-platform",
+        "https://www.googleapis.com/auth/bigquery",
+        "https://www.googleapis.com/auth/spreadsheets.readonly",
+        "https://www.googleapis.com/auth/drive.readonly",
+    ]
+    credentials = base_credentials.with_scopes(SCOPES)
+
+    st.write("✅ Environment variables and credentials loaded successfully!")
+
 except Exception as e:
     st.error(f"❌ Failed to load Google credentials: {e}")
     st.stop()
 
 # ------------------------------------------------------
-# STREAMLIT APP HEADER
+# APP HEADER
 # ------------------------------------------------------
-st.title("NBA Prop Analyzer 🏀")
-
-# ---- SCOPES ----
-SCOPES = [
-    "https://www.googleapis.com/auth/cloud-platform",
-    "https://www.googleapis.com/auth/bigquery",
-    "https://www.googleapis.com/auth/spreadsheets.readonly",
-    "https://www.googleapis.com/auth/drive.readonly",
-]
+st.title("🏀 NBA Prop Analyzer")
 
 # ------------------------------------------------------
 # INITIALIZE CLIENTS
 # ------------------------------------------------------
+# ---- BigQuery ----
 try:
     bq_client = bigquery.Client(project=PROJECT_ID, credentials=credentials)
     st.sidebar.success("✅ Connected to BigQuery")
@@ -59,15 +64,16 @@ except Exception as e:
     st.sidebar.error(f"❌ BigQuery connection failed: {e}")
     st.stop()
 
+# ---- Google Sheets ----
 try:
     gc = gspread.authorize(credentials)
-    _ = gc.open_by_key(SPREADSHEET_ID)
+    _ = gc.open_by_key(SPREADSHEET_ID)  # probe access
     st.sidebar.success("✅ Connected to Google Sheets")
 except Exception as e:
     st.sidebar.warning(f"⚠️ Google Sheets connection failed: {e}")
 
 # ------------------------------------------------------
-# APP READY
+# APP STATUS
 # ------------------------------------------------------
 st.sidebar.info("🏀 Environment setup complete — ready to query data!")
 

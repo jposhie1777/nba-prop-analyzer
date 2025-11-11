@@ -232,15 +232,27 @@ def load_odds_sheet():
         df = df.dropna(how="all")  # remove blank rows
         df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
 
-        # 🧩 Normalize key columns for consistency with build_props_table()
-        if "market" in df.columns:
-            df["market_norm"] = (
-                df["market"]
-                .str.replace("player_", "")
-                .str.replace("_alternate", "")
-                .str.strip()
-                .str.lower()
-            )
+    # 🧩 Normalize key columns for consistency with build_props_table()
+    if "market" in df.columns:
+        df["market_norm"] = (
+            df["market"]
+            .str.replace("player_", "", regex=False)
+            .str.replace("_alternate", "", regex=False)
+            .str.strip()
+            .str.lower()
+        )
+
+        # Map to app's expected stat keys (STAT_MAP)
+        market_map = {
+            "points": "points",
+            "rebounds": "rebounds",
+            "assists": "assists",
+            "points_rebounds": "points_rebounds",
+            "points_assists": "points_assists",
+            "rebounds_assists": "rebounds_assists",
+            "points_rebounds_assists": "points_rebounds_assists",
+        }
+        df["market_norm"] = df["market_norm"].map(market_map).fillna(df["market_norm"])
 
         if "label" in df.columns:
             df["side"] = df["label"].str.strip().str.lower()

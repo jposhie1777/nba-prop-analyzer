@@ -8,7 +8,6 @@ import time
 import datetime
 import math
 import warnings
-import psutil  # 🟢 RENDER OPTIMIZATION
 import numpy as np
 import pandas as pd
 import streamlit as st

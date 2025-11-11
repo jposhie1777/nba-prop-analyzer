@@ -424,7 +424,8 @@ def build_props_table(
         o = o[o["market_norm"] == stat_pick]
     if player_pick and player_pick != "All players":
         if "description" in o.columns:
-            o = o[o["description"] == player_pick]
+            o = o[o["description"].str.lower() == str(player_pick).lower()]
+
 
     if "price" in o.columns and isinstance(odds_range, (list, tuple)):
         o = o[o["price"].between(odds_range[0], odds_range[1])]
@@ -631,6 +632,17 @@ tab1, tab2, tab3, tab4 = st.tabs([
 # ----------------------------
 with tab1:
     st.subheader("Props Overview")
+    st.sidebar.write("🧩 Filter Debug", {
+        "Selected date": str(sel_date),
+        "Game": sel_game,
+        "Player": sel_player,
+        "Stat": sel_stat,
+        "Books": sel_books,
+        "Odds range": sel_odds_range,
+        "Min EV": sel_min_ev,
+        "Min Hit10": sel_min_hit10,
+        "Min Kelly": sel_min_kelly,
+    })
 
     df = build_props_table(
         player_stats,
@@ -648,7 +660,10 @@ with tab1:
     )
 
     if df.empty:
-        st.info("No props match your filters.")
+        st.warning("⚠️ No props matched filters — showing sample of filtered odds_df.")
+        st.dataframe(odds_df.head(20))
+        st.stop()
+
     else:
         price_col = "Price (Am)" if "Price (Am)" in df.columns else "Price"
         edge_col = "Edge (Season-Line)" if "Edge (Season-Line)" in df.columns else "Edge"

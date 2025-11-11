@@ -41,9 +41,6 @@ if st.sidebar.checkbox("🔍 Show env debug", value=False):
         }
     )
 
-st.sidebar.markdown("### 🖥️ Server Info (Render)")
-mem = psutil.virtual_memory()
-st.sidebar.text(f"RAM: {mem.total / 1e6:.0f} MB | Used: {mem.percent}%")
 
 # ------------------------------------------------------
 # 2️⃣ GCP CLIENTS (CACHED)

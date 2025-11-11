@@ -133,39 +133,6 @@ if refresh_clicked:
     st.experimental_rerun()
 
 # ------------------------------------------------------
-# LOAD DATA INTO SESSION (only once per session)
-# ------------------------------------------------------
-
-if "player_stats" not in st.session_state:
-    with st.spinner("⏳ Loading player stats from BigQuery..."):
-        st.session_state.player_stats = load_player_stats(bq_client, PLAYER_STATS_SQL)
-        st.session_state.last_updated = datetime.datetime.now()
-
-if "odds_df" not in st.session_state:
-    with st.spinner("📊 Loading odds data from Google Sheets..."):
-        st.session_state.odds_df = load_odds_sheet(gc, SPREADSHEET_ID, ODDS_SHEET_NAME)
-        st.session_state.last_updated = datetime.datetime.now()
-
-# Retrieve cached session data
-player_stats = st.session_state.player_stats
-odds_df = st.session_state.odds_df
-
-# ------------------------------------------------------
-# SHOW LAST UPDATED TIMESTAMP
-# ------------------------------------------------------
-if "last_updated" in st.session_state:
-    last_updated_str = st.session_state.last_updated.strftime("%Y-%m-%d %I:%M %p")
-    st.sidebar.info(f"🕒 **Data last updated:** {last_updated_str}")
-
-
-#-------------------------------------------------------
-# Num Py Warnings
-#-------------------------------------------------------
-import warnings
-warnings.filterwarnings("ignore", category=RuntimeWarning)
-
-
-# ------------------------------------------------------
 # SQL QUERIES
 # ------------------------------------------------------
 
@@ -226,6 +193,38 @@ WITH g AS (
 )
 SELECT * FROM g
 """
+
+# ------------------------------------------------------
+# LOAD DATA INTO SESSION (only once per session)
+# ------------------------------------------------------
+
+if "player_stats" not in st.session_state:
+    with st.spinner("⏳ Loading player stats from BigQuery..."):
+        st.session_state.player_stats = load_player_stats(bq_client, PLAYER_STATS_SQL)
+        st.session_state.last_updated = datetime.datetime.now()
+
+if "odds_df" not in st.session_state:
+    with st.spinner("📊 Loading odds data from Google Sheets..."):
+        st.session_state.odds_df = load_odds_sheet(gc, SPREADSHEET_ID, ODDS_SHEET_NAME)
+        st.session_state.last_updated = datetime.datetime.now()
+
+# Retrieve cached session data
+player_stats = st.session_state.player_stats
+odds_df = st.session_state.odds_df
+
+# ------------------------------------------------------
+# SHOW LAST UPDATED TIMESTAMP
+# ------------------------------------------------------
+if "last_updated" in st.session_state:
+    last_updated_str = st.session_state.last_updated.strftime("%Y-%m-%d %I:%M %p")
+    st.sidebar.info(f"🕒 **Data last updated:** {last_updated_str}")
+
+
+#-------------------------------------------------------
+# Num Py Warnings
+#-------------------------------------------------------
+import warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 # ----------------------------
 # HELPERS

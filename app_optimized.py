@@ -80,58 +80,59 @@ PLAYER_CACHE = f"{CACHE_DIR}/player_stats.parquet"
 ODDS_CACHE = f"{CACHE_DIR}/odds_cache.json"
 st.sidebar.info(f"💾 Cache dir: {CACHE_DIR}")
 
-@st.cache_data(ttl=86400)
+@st.cache_data(ttl=86400, show_spinner=True)
 def load_player_stats():
-    # Use cached parquet if present
+    """
+    Fetch player stats from BigQuery (both historical and current seasons),
+    cache them for 24h, and store locally as a parquet file.
+    """
     if os.path.exists(PLAYER_CACHE):
-        try:
-            return pd.read_parquet(PLAYER_CACHE)
-        except Exception:
-            pass
+        df = pd.read_parquet(PLAYER_CACHE)
+        if not df.empty:
+            st.sidebar.info(f"📦 Loaded {len(df):,} player rows from cache")
+            return df
 
-    # Use the same UNION logic as legacy.py and bring back all needed columns
+    # 🔹 Combined query for both old and current season data
     query = f"""
     WITH stats AS (
-        SELECT
-            player AS player_name, team, CAST(DATE(game_date) AS DATE) AS game_date,
-            CAST(min AS FLOAT64) AS minutes,
-            CAST(pts AS FLOAT64) AS pts,
-            CAST(reb AS FLOAT64) AS reb,
-            CAST(ast AS FLOAT64) AS ast,
-            CAST(stl AS FLOAT64) AS stl,
-            CAST(blk AS FLOAT64) AS blk,
-            CAST(pts_reb AS FLOAT64) AS pts_reb,
-            CAST(pts_ast AS FLOAT64) AS pts_ast,
-            CAST(reb_ast AS FLOAT64) AS reb_ast,
-            CAST(pts_reb_ast AS FLOAT64) AS pra
+        SELECT player AS player_name, team, DATE(game_date) AS game_date,
+               CAST(pts AS FLOAT64) AS pts,
+               CAST(reb AS FLOAT64) AS reb,
+               CAST(ast AS FLOAT64) AS ast,
+               CAST(stl AS FLOAT64) AS stl,
+               CAST(blk AS FLOAT64) AS blk,
+               CAST(pts_reb AS FLOAT64) AS pts_reb,
+               CAST(pts_ast AS FLOAT64) AS pts_ast,
+               CAST(reb_ast AS FLOAT64) AS reb_ast,
+               CAST(pts_reb_ast AS FLOAT64) AS pra
         FROM `{PROJECT_ID}.nba_data.player_stats`
         UNION ALL
-        SELECT
-            player AS player_name, team, CAST(DATE(game_date) AS DATE) AS game_date,
-            CAST(min AS FLOAT64) AS minutes,
-            CAST(pts AS FLOAT64) AS pts,
-            CAST(reb AS FLOAT64) AS reb,
-            CAST(ast AS FLOAT64) AS ast,
-            CAST(stl AS FLOAT64) AS stl,
-            CAST(blk AS FLOAT64) AS blk,
-            CAST(pts_reb AS FLOAT64) AS pts_reb,
-            CAST(pts_ast AS FLOAT64) AS pts_ast,
-            CAST(reb_ast AS FLOAT64) AS reb_ast,
-            CAST(pts_reb_ast AS FLOAT64) AS pra
+        SELECT player AS player_name, team, DATE(game_date) AS game_date,
+               CAST(pts AS FLOAT64) AS pts,
+               CAST(reb AS FLOAT64) AS reb,
+               CAST(ast AS FLOAT64) AS ast,
+               CAST(stl AS FLOAT64) AS stl,
+               CAST(blk AS FLOAT64) AS blk,
+               CAST(pts_reb AS FLOAT64) AS pts_reb,
+               CAST(pts_ast AS FLOAT64) AS pts_ast,
+               CAST(reb_ast AS FLOAT64) AS reb_ast,
+               CAST(pts_reb_ast AS FLOAT64) AS pra
         FROM `{PROJECT_ID}.nba_data_2024_2025.player_stats`
     )
     SELECT * FROM stats
     """
-    df = bq_client.query(query).to_dataframe()
-    # Make sure numeric columns are numeric
-    for c in ["minutes","pts","reb","ast","stl","blk","pts_reb","pts_ast","reb_ast","pra"]:
-        if c in df.columns:
-            df[c] = pd.to_numeric(df[c], errors="coerce")
-    # Try to persist cache (best-effort)
+
     try:
-        df.to_parquet(PLAYER_CACHE)
-    except Exception:
-        pass
+        df = bq_client.query(query).to_dataframe()
+        if df.empty:
+            st.warning("⚠️ BigQuery returned no player stats — check dataset names.")
+        else:
+            st.sidebar.success(f"✅ Loaded {len(df):,} player rows from BigQuery")
+            df.to_parquet(PLAYER_CACHE)
+    except Exception as e:
+        st.error(f"❌ Failed to load player stats: {e}")
+        df = pd.DataFrame()
+
     return df
 
 @st.cache_data(ttl=86400)
@@ -542,6 +543,8 @@ def toggle_save(row):
 # ------------------------------------------------------
 with st.spinner("⏳ Loading data..."):
     player_stats = load_player_stats()
+    st.write("✅ Player stats sample:")
+    st.dataframe(player_stats.head())
     games_df = load_games()
     odds_df = load_odds_sheet()
 

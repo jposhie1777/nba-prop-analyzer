@@ -14,24 +14,32 @@ import gspread
 from google.oauth2 import service_account
 from google.cloud import bigquery
 import warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 # ------------------------------------------------------
 # STREAMLIT PAGE CONFIG
 # ------------------------------------------------------
 st.set_page_config(page_title="NBA Prop Analyzer", layout="wide")
-warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 # ------------------------------------------------------
-# ENVIRONMENT VARIABLES (from Render dashboard)
+# ENVIRONMENT VARIABLES (Render, Streamlit Cloud, or local .env)
 # ------------------------------------------------------
 PROJECT_ID = os.getenv("PROJECT_ID", "")
+BIGQUERY_DATASET = os.getenv("BIGQUERY_DATASET", "nba")
+ODDS_TABLE = os.getenv("ODDS_TABLE", "nba_odds")
+
+# Optional player stats datasets
+PLAYER_STATS_DATASET = os.getenv("PLAYER_STATS_DATASET", "nba_data")
+PLAYER_STATS_DATASET_2 = os.getenv("PLAYER_STATS_DATASET_2", "nba_data_2024_2025")
+
+# Optional: keep Sheets around (commented odds loader below)
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID", "")
 ODDS_SHEET_NAME = os.getenv("ODDS_SHEET_NAME", "")
 GCP_SERVICE_ACCOUNT = os.getenv("GCP_SERVICE_ACCOUNT", "")
 
-# Validate environment
+# Validate required environment
 if not PROJECT_ID or not GCP_SERVICE_ACCOUNT:
-    st.error("❌ Missing environment variables — check Render settings.")
+    st.error("❌ Missing critical environment variables — check PROJECT_ID and GCP_SERVICE_ACCOUNT.")
     st.stop()
 
 # ------------------------------------------------------
@@ -49,7 +57,6 @@ try:
     ]
     credentials = base_credentials.with_scopes(SCOPES)
     st.write("✅ Environment variables and credentials loaded successfully!")
-
 except Exception as e:
     st.error(f"❌ Failed to load Google credentials: {e}")
     st.stop()
@@ -66,7 +73,8 @@ except Exception as e:
 
 try:
     gc = gspread.authorize(credentials)
-    _ = gc.open_by_key(SPREADSHEET_ID)  # test access
+    if SPREADSHEET_ID:
+        _ = gc.open_by_key(SPREADSHEET_ID)  # test access (safe)
     st.sidebar.success("✅ Connected to Google Sheets")
 except Exception as e:
     st.sidebar.warning(f"⚠️ Google Sheets connection failed: {e}")
@@ -92,7 +100,7 @@ WITH stats AS (
     CAST(pts_ast AS FLOAT64) AS pts_ast,
     CAST(reb_ast AS FLOAT64) AS reb_ast,
     CAST(pts_reb_ast AS FLOAT64) AS pra
-  FROM {PROJECT_ID}.nba_data.player_stats
+  FROM `{PROJECT_ID}.{PLAYER_STATS_DATASET}.player_stats`
   UNION ALL
   SELECT
     player AS player_name,
@@ -108,7 +116,7 @@ WITH stats AS (
     CAST(pts_ast AS FLOAT64) AS pts_ast,
     CAST(reb_ast AS FLOAT64) AS reb_ast,
     CAST(pts_reb_ast AS FLOAT64) AS pra
-  FROM {PROJECT_ID}.nba_data_2024_2025.player_stats
+  FROM `{PROJECT_ID}.{PLAYER_STATS_DATASET_2}.player_stats`
 )
 SELECT * FROM stats
 """
@@ -121,7 +129,7 @@ WITH g AS (
     home_team,
     visitor_team,
     status
-  FROM {PROJECT_ID}.nba_data.games
+  FROM `{PROJECT_ID}.{PLAYER_STATS_DATASET}.games`
   UNION ALL
   SELECT
     CAST(game_id AS STRING) AS game_id,
@@ -129,90 +137,31 @@ WITH g AS (
     home_team,
     visitor_team,
     status
-  FROM {PROJECT_ID}.nba_data_2024_2025.games
+  FROM `{PROJECT_ID}.{PLAYER_STATS_DATASET_2}.games`
 )
 SELECT * FROM g
 """
 
-# ------------------------------------------------------
-# CACHED DATA LOADERS (using underscore-prefixed args)
-# ------------------------------------------------------
-
-@st.cache_data(ttl=86400, show_spinner=True)
-def load_player_stats(_bq_client, query):
-    """Fetch player stats from BigQuery and cache for 24h."""
-    df = _bq_client.query(query).to_dataframe()
-    return df
-
-
-@st.cache_data(ttl=86400, show_spinner=True)
-def load_odds_sheet(_gc, spreadsheet_id, sheet_name):
-    """Fetch odds data from Google Sheets and cache for 24h."""
-    try:
-        sheet = _gc.open_by_key(spreadsheet_id).worksheet(sheet_name)
-        data = sheet.get_all_records()
-        df = pd.DataFrame(data)
-        return df
-    except Exception as e:
-        st.warning(f"⚠️ Could not load sheet '{sheet_name}': {e}")
-        return pd.DataFrame()
+ODDS_SQL = f"""
+SELECT
+  CAST(game_id AS STRING) AS game_id,
+  CAST(commence_time AS TIMESTAMP) AS commence_time,
+  in_play,
+  bookmaker,
+  last_update,
+  home_team,
+  away_team,
+  market,
+  label,
+  description,
+  CAST(price AS FLOAT64) AS price,
+  CAST(point AS FLOAT64) AS point
+FROM `{PROJECT_ID}.{BIGQUERY_DATASET}.{ODDS_TABLE}`
+"""
 
 # ------------------------------------------------------
-# REFRESH BUTTON + PROGRESS BAR
-# ------------------------------------------------------
-refresh_clicked = st.sidebar.button("🔄 Refresh Data")
-
-if refresh_clicked:
-    st.sidebar.info("♻️ Refreshing data... please wait.")
-    progress_bar = st.sidebar.progress(0)
-    status_text = st.sidebar.empty()
-
-    for pct in range(0, 101, 20):
-        time.sleep(0.3)
-        progress_bar.progress(pct)
-        status_text.text(f"Reloading... {pct}%")
-
-    st.cache_data.clear()
-    st.session_state.clear()
-
-    progress_bar.empty()
-    status_text.text("✅ Reload complete! Fetching fresh data...")
-    st.rerun()
-
-# ------------------------------------------------------
-# LOAD DATA INTO SESSION (only once per session)
-# ------------------------------------------------------
-if "player_stats" not in st.session_state:
-    with st.spinner("⏳ Loading player stats from BigQuery..."):
-        st.session_state.player_stats = load_player_stats(bq_client, PLAYER_STATS_SQL)
-        st.session_state.last_updated = datetime.datetime.now()
-
-if "odds_df" not in st.session_state:
-    with st.spinner("📊 Loading odds data from Google Sheets..."):
-        st.session_state.odds_df = load_odds_sheet(gc, SPREADSHEET_ID, ODDS_SHEET_NAME)
-        st.session_state.last_updated = datetime.datetime.now()
-
-# Retrieve cached session data
-player_stats = st.session_state.player_stats
-odds_df = st.session_state.odds_df
-
-# ------------------------------------------------------
-# SHOW LAST UPDATED TIMESTAMP
-# ------------------------------------------------------
-if "last_updated" in st.session_state:
-    last_updated_str = st.session_state.last_updated.strftime("%Y-%m-%d %I:%M %p")
-    st.sidebar.info(f"🕒 **Data last updated:** {last_updated_str}")
-
-
-#-------------------------------------------------------
-# Num Py Warnings
-#-------------------------------------------------------
-import warnings
-warnings.filterwarnings("ignore", category=RuntimeWarning)
-
-# ----------------------------
 # HELPERS
-# ----------------------------
+# ------------------------------------------------------
 STAT_MAP = {
     "points": "pts",
     "rebounds": "reb",
@@ -237,6 +186,36 @@ STAT_LABELS = {
     "points_rebounds_assists": "PRA",
 }
 
+def normalize_market(market_str):
+    if pd.isna(market_str):
+        return ""
+    s = str(market_str).lower().strip()
+    mapping = {
+        "player_points_rebounds_assists": "points_rebounds_assists",
+        "player_points_rebounds": "points_rebounds",
+        "player_points_assists": "points_assists",
+        "player_rebounds_assists": "rebounds_assists",
+        "player_points": "points",
+        "player_rebounds": "rebounds",
+        "player_assists": "assists",
+        "player_steals": "steals",
+        "player_blocks": "blocks",
+        # common variations
+        "points_rebounds_assists": "points_rebounds_assists",
+        "points_rebounds": "points_rebounds",
+        "points_assists": "points_assists",
+        "rebounds_assists": "rebounds_assists",
+        "points": "points",
+        "rebounds": "rebounds",
+        "assists": "assists",
+        "steals": "steals",
+        "blocks": "blocks",
+    }
+    for k, v in mapping.items():
+        if k in s:
+            return v
+    return ""
+
 def american_to_decimal(odds):
     try:
         o = float(odds)
@@ -249,7 +228,6 @@ def hit_rate(series, line, n=None):
     return np.nan if len(s) == 0 else (s > line).mean()
 
 def format_percentage(value, decimals=1):
-    """Safely format any numeric-like value as a percentage."""
     try:
         val = float(value)
         if pd.isna(val):
@@ -258,9 +236,7 @@ def format_percentage(value, decimals=1):
     except (ValueError, TypeError):
         return "—"
 
-
 def format_ratio(value, total):
-    """Safely format hit ratio as 'x/y'. Accepts NaNs or bad input."""
     try:
         val = float(value)
         tot = int(total)
@@ -271,9 +247,7 @@ def format_ratio(value, total):
     except (ValueError, TypeError):
         return "—"
 
-
 def format_moneyline(value):
-    """Safely format American odds. Works even if input is string or NaN."""
     try:
         val = float(value)
         if pd.isna(val):
@@ -308,180 +282,6 @@ def z_score(value, sample):
     sd = sample.std(ddof=1)
     return 0.0 if sd == 0 else (value - mu) / sd
 
-def normalize_market(market_str):
-    if pd.isna(market_str):
-        return ""
-    m = str(market_str).lower()
-    mapping = {
-        "player_points_rebounds_assists": "points_rebounds_assists",
-        "player_points_rebounds": "points_rebounds",
-        "player_points_assists": "points_assists",
-        "player_rebounds_assists": "rebounds_assists",
-        "player_points": "points",
-        "player_rebounds": "rebounds",
-        "player_assists": "assists",
-        "player_steals": "steals",
-        "player_blocks": "blocks",
-    }
-    for k, v in mapping.items():
-        if k in m:
-            return v
-    return ""
-
-    import warnings
-
-    # Suppress harmless runtime warnings (NumPy correlation/variance issues)
-    warnings.filterwarnings("ignore", category=RuntimeWarning)
-
-# ----------------------------
-# LOADERS (cached)
-# ----------------------------
-@st.cache_data(ttl=300, show_spinner=False)
-def load_player_stats():
-    df = bq_client.query(PLAYER_STATS_SQL).to_dataframe()
-    for c in ["minutes", "pts", "reb", "ast", "stl", "blk", "pts_reb", "pts_ast", "reb_ast", "pra"]:
-        df[c] = pd.to_numeric(df[c], errors="coerce")
-    return df
-
-@st.cache_data(ttl=300, show_spinner=False)
-def load_games():
-    return bq_client.query(GAMES_SQL).to_dataframe()
-
-@st.cache_data(ttl=120, show_spinner=False)
-def load_odds_sheet():
-    """Load odds from Google Sheets, normalizing market + side columns robustly."""
-    try:
-        if not SPREADSHEET_ID:
-            raise ValueError("SPREADSHEET_ID is not set in secrets.toml")
-
-        sh = gc.open_by_key(SPREADSHEET_ID)
-        ws = sh.worksheet(ODDS_SHEET_NAME)
-        records = ws.get_all_records()
-
-        if not records:
-            st.warning("⚠️ Odds sheet is empty.")
-            return pd.DataFrame()
-
-        # Convert to DataFrame + clean columns
-        odds = pd.DataFrame(records)
-        odds.columns = [c.lower().strip() for c in odds.columns]
-
-        # --- Convert numeric columns safely ---
-        for col in ["point", "price"]:
-            if col in odds.columns:
-                odds[col] = pd.to_numeric(odds[col], errors="coerce")
-
-        # --- Normalize market column to match your stat keys (no pretty renaming) ---
-        def normalize_market(m):
-            if pd.isna(m):
-                return ""
-            s = str(m).lower().strip()
-            mapping = {
-                "player_points_rebounds_assists": "points_rebounds_assists",
-                "player_points_rebounds": "points_rebounds",
-                "player_points_assists": "points_assists",
-                "player_rebounds_assists": "rebounds_assists",
-                "player_points": "points",
-                "player_rebounds": "rebounds",
-                "player_assists": "assists",
-                "player_steals": "steals",
-                "player_blocks": "blocks",
-                # common variations
-                "points_rebounds_assists": "points_rebounds_assists",
-                "points_rebounds": "points_rebounds",
-                "points_assists": "points_assists",
-                "rebounds_assists": "rebounds_assists",
-                "points": "points",
-                "rebounds": "rebounds",
-                "assists": "assists",
-                "steals": "steals",
-                "blocks": "blocks",
-            }
-            for k, v in mapping.items():
-                if k in s:
-                    return v
-            return ""
-
-        # Choose best column for market source
-        market_source_col = None
-        for candidate in ["market", "market_name", "bet_type", "selection", "description"]:
-            if candidate in odds.columns:
-                market_source_col = candidate
-                break
-
-        if not market_source_col:
-            raise ValueError("No valid market column found in odds sheet.")
-
-        odds["market_norm"] = odds[market_source_col].apply(normalize_market)
-
-        # --- Robust Over/Under detection ---
-        odds["side"] = ""
-        possible_cols = ["label", "selection", "bet_name", "market_name", "description"]
-
-        import re
-        detected = False
-        for col in possible_cols:
-            if col in odds.columns:
-                temp = odds[col].astype(str).str.lower().fillna("")
-                if temp.str.contains("over").any() or temp.str.contains("under").any():
-                    odds["side"] = temp.apply(
-                        lambda x: (
-                            "over" if "over" in x and "under" not in x
-                            else "under" if "under" in x and "over" not in x
-                            else "under" if re.search(r"\bunder\b", x)
-                            else "over" if re.search(r"\bover\b", x)
-                            else ""
-                        )
-                    )
-                    detected = True
-                    break
-
-        # Fallback: regex shorthand O / U
-        if not detected or odds["side"].eq("").all():
-            desc = odds["description"].astype(str).str.lower().fillna("")
-            odds["side"] = desc.apply(
-                lambda x: (
-                    "over" if re.search(r"\b(o|over)\b", x)
-                    else "under" if re.search(r"\b(u|under)\b", x)
-                    else ""
-                )
-            )
-
-        # Normalize and clean
-        odds["side"] = odds["side"].str.strip().str.lower().replace({"o": "over", "u": "under"})
-
-        # --- Ensure all expected columns exist ---
-        for col in ["bookmaker", "description", "market_norm", "side"]:
-            if col not in odds.columns:
-                odds[col] = ""
-            odds[col] = odds[col].fillna("").astype(str)
-
-        # --- Debug preview ---
-        st.write("🟢 Sample Odds:", odds[["description", "market_norm", "side", "point", "price"]].head(10))
-
-        # --- Check for unknown markets ---
-        known_stats = set(STAT_MAP.keys())
-        found_markets = set(odds["market_norm"].dropna().unique())
-        unknown_markets = found_markets - known_stats
-        if unknown_markets:
-            st.warning(
-                f"⚠️ Unknown stat markets found in odds sheet: {unknown_markets}. "
-                "These may not match your player stats columns and could cause blank hit rates."
-            )
-
-        # --- Guarantee side column exists ---
-        if "side" not in odds.columns:
-            odds["side"] = ""
-
-        return odds
-
-    except Exception as e:
-        st.sidebar.error(f"⚠️ Could not load Odds sheet: {e}")
-        return pd.DataFrame()
-
-# ----------------------------
-# (Your original analysis helpers)
-# ----------------------------
 def series_for_player_stat(stats_df, player, stat_key):
     col = STAT_MAP.get(stat_key)
     if not col:
@@ -503,7 +303,6 @@ def compute_metrics_for_row(stats_df, player, stat_key, line):
             hit5=np.nan, hit10=np.nan, hit20=np.nan, hit_season=np.nan,
             trend_r=np.nan, edge=np.nan, rmse10=np.nan, z_line=np.nan
         )
-
     vals = s["stat"].astype(float)
     season_avg = vals.mean()
     return {
@@ -521,30 +320,190 @@ def compute_metrics_for_row(stats_df, player, stat_key, line):
         "z_line": z_score(line, vals.tail(20)),
     }
 
+# ------------------------------------------------------
+# CACHED LOADERS
+# ------------------------------------------------------
+@st.cache_data(ttl=86400, show_spinner=True)
+def load_player_stats_cached(_bq_client, query):
+    df = _bq_client.query(query).to_dataframe()
+    # enforce numeric types
+    for c in ["minutes", "pts", "reb", "ast", "stl", "blk", "pts_reb", "pts_ast", "reb_ast", "pra"]:
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
+    return df
+
+@st.cache_data(ttl=86400, show_spinner=True)
+def load_games_cached(_bq_client, query):
+    return _bq_client.query(query).to_dataframe()
+
+@st.cache_data(ttl=300, show_spinner=False)
+def load_odds_bq():
+    """Load odds from BigQuery (primary source)."""
+    try:
+        df = bq_client.query(ODDS_SQL).to_dataframe()
+        df.columns = [c.lower().strip() for c in df.columns]
+        # numeric
+        for col in ["point", "price"]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+        # market normalization
+        df["market_norm"] = df.get("market", "").apply(normalize_market)
+
+        # robust side detection (Over/Under)
+        import re
+        df["side"] = ""
+        if "label" in df.columns:
+            lab = df["label"].astype(str).str.lower().fillna("")
+            df["side"] = lab.apply(lambda x: "over" if "over" in x else ("under" if "under" in x else ""))
+        if "description" in df.columns:
+            desc = df["description"].astype(str).str.lower().fillna("")
+            df.loc[df["side"] == "", "side"] = desc.apply(
+                lambda x: "over" if re.search(r"\bover\b", x) else ("under" if re.search(r"\bunder\b", x) else "")
+            )
+
+        st.write("🟢 Sample Odds (BigQuery):", df[["description", "market_norm", "side", "point", "price"]].head(10))
+        return df
+    except Exception as e:
+        st.sidebar.error(f"⚠️ Could not load odds from BigQuery: {e}")
+        return pd.DataFrame()
+
+# ------------------------------------------------------
+# OPTIONAL: Google Sheets odds loader (COMMENTED OUT)
+# ------------------------------------------------------
+"""
+@st.cache_data(ttl=300, show_spinner=False)
+def load_odds_sheet():
+    # Load odds from Google Sheets (legacy). Keep for reference/fallback.
+    try:
+        if not SPREADSHEET_ID:
+            raise ValueError("SPREADSHEET_ID is not set.")
+        sh = gc.open_by_key(SPREADSHEET_ID)
+        ws = sh.worksheet(ODDS_SHEET_NAME)
+        records = ws.get_all_records()
+        if not records:
+            st.warning("⚠️ Odds sheet is empty.")
+            return pd.DataFrame()
+        odds = pd.DataFrame(records)
+        odds.columns = [c.lower().strip() for c in odds.columns]
+        for col in ["point", "price"]:
+            if col in odds.columns:
+                odds[col] = pd.to_numeric(odds[col], errors="coerce")
+        # Add normalized market + side
+        odds["market_norm"] = odds.get("market", "").apply(normalize_market)
+
+        import re
+        odds["side"] = ""
+        for candidate in ["label", "selection", "bet_name", "market_name", "description"]:
+            if candidate in odds.columns:
+                temp = odds[candidate].astype(str).str.lower().fillna("")
+                if temp.str.contains("over").any() or temp.str.contains("under").any():
+                    odds["side"] = temp.apply(
+                        lambda x: "over" if "over" in x and "under" not in x
+                        else ("under" if "under" in x and "over" not in x else "")
+                    )
+                    break
+        if "side" in odds.columns:
+            desc = odds.get("description", "").astype(str).str.lower().fillna("")
+            odds.loc[odds["side"] == "", "side"] = desc.apply(
+                lambda x: "over" if re.search(r"\\bover\\b", x) else ("under" if re.search(r"\\bunder\\b", x) else "")
+            )
+
+        st.write("🟡 Sample Odds (Sheets):", odds[["description", "market_norm", "side", "point", "price"]].head(10))
+        return odds
+    except Exception as e:
+        st.sidebar.error(f"⚠️ Could not load Odds sheet: {e}")
+        return pd.DataFrame()
+"""
+
+# ------------------------------------------------------
+# REFRESH BUTTON + PROGRESS
+# ------------------------------------------------------
+refresh_clicked = st.sidebar.button("🔄 Refresh Data")
+if refresh_clicked:
+    st.sidebar.info("♻️ Refreshing data... please wait.")
+    progress_bar = st.sidebar.progress(0)
+    status_text = st.sidebar.empty()
+    for pct in range(0, 101, 20):
+        time.sleep(0.25)
+        progress_bar.progress(pct)
+        status_text.text(f"Reloading... {pct}%")
+    st.cache_data.clear()
+    st.session_state.clear()
+    progress_bar.empty()
+    status_text.text("✅ Reload complete!")
+    st.rerun()
+
+# ------------------------------------------------------
+# LOAD DATA INTO SESSION (only once per session)
+# ------------------------------------------------------
+if "player_stats" not in st.session_state:
+    with st.spinner("⏳ Loading player stats from BigQuery..."):
+        st.session_state.player_stats = load_player_stats_cached(bq_client, PLAYER_STATS_SQL)
+        st.session_state.last_updated = datetime.datetime.now()
+
+if "games_df" not in st.session_state:
+    with st.spinner("📅 Loading games from BigQuery..."):
+        st.session_state.games_df = load_games_cached(bq_client, GAMES_SQL)
+        st.session_state.last_updated = datetime.datetime.now()
+
+if "odds_df" not in st.session_state:
+    with st.spinner("📊 Loading odds data from BigQuery..."):
+        st.session_state.odds_df = load_odds_bq()
+        st.session_state.last_updated = datetime.datetime.now()
+
+# Retrieve cached session data
+player_stats = st.session_state.player_stats
+games_df = st.session_state.games_df
+odds_df = st.session_state.odds_df
+
+# Show last updated
+if "last_updated" in st.session_state:
+    last_updated_str = st.session_state.last_updated.strftime("%Y-%m-%d %I:%M %p")
+    st.sidebar.info(f"🕒 **Data last updated:** {last_updated_str}")
+
+# ------------------------------------------------------
+# DEBUG (optional)
+# ------------------------------------------------------
+with st.sidebar.expander("🔧 Environment Debug Info"):
+    st.write(f"Project: {PROJECT_ID}")
+    st.write(f"Dataset: {BIGQUERY_DATASET}")
+    st.write(f"Odds Table: {ODDS_TABLE}")
+    st.write(f"Sheets ID: {SPREADSHEET_ID or '—'}")
+
+# ------------------------------------------------------
+# BUILD PROPS TABLE
+# ------------------------------------------------------
 def build_props_table(
     stats_df, odds_df, games_df, date_filter,
     game_pick, player_pick, stat_pick, books,
     odds_range, min_ev, min_hit, min_kelly
 ):
-    """Builds the main Props Overview table with full metrics and guaranteed columns."""
-def build_props_table(stats_df, odds_df, games_df, date_filter, game_pick, player_pick, stat_pick, books, odds_range, min_ev, min_hit, min_kelly):
-    """Builds the main Props Overview table with full metrics and safe fallbacks."""
-    g_day = games_df.query("game_date == @date_filter").copy()
-    if g_day.empty: return pd.DataFrame()
+    """Build the main Props Overview table with full metrics and safe fallbacks."""
+    if games_df is None or games_df.empty:
+        return pd.DataFrame()
 
-    # Optional game filter
-    if game_pick and " vs " in game_pick:
+    g_day = games_df.query("game_date == @date_filter").copy()
+    if g_day.empty:
+        return pd.DataFrame()
+
+    # Optional single-game filter
+    if game_pick and isinstance(game_pick, str) and " vs " in game_pick:
         home, away = game_pick.split(" vs ", 1)
         g_day = g_day.query("home_team == @home and visitor_team == @away")
 
     teams_today = set(g_day["home_team"]) | set(g_day["visitor_team"])
 
     # --- Filter odds by markets and teams ---
+    if odds_df is None or odds_df.empty:
+        return pd.DataFrame()
+
     o = odds_df.copy()
     o = o[o["market_norm"] != ""]
-    o = o[o["bookmaker"].isin(books)]
+    if books:
+        o = o[o["bookmaker"].isin(books)]
 
-    if "home_team" in o.columns and "away_team" in o.columns:
+    # Limit to teams in today's slate (if columns exist)
+    if "home_team" in o.columns and "away_team" in o.columns and len(teams_today) > 0:
         o = o[o["home_team"].isin(teams_today) | o["away_team"].isin(teams_today)]
 
     if stat_pick and stat_pick != "All Stats":
@@ -552,15 +511,15 @@ def build_props_table(stats_df, odds_df, games_df, date_filter, game_pick, playe
     if player_pick and player_pick != "All players":
         o = o[o["description"] == player_pick]
 
-    o = o[o["price"].between(odds_range[0], odds_range[1])]
-    if o.empty: return pd.DataFrame()
+    # Odds range
+    if "price" in o.columns:
+        o = o[pd.to_numeric(o["price"], errors="coerce").between(odds_range[0], odds_range[1])]
+
+    if o.empty:
+        return pd.DataFrame()
 
     rows = []
-
     for _, r in o.iterrows():
-        player = r["description"]; stat_key = r["market_norm"]
-        line = r["point"]; book = r["bookmaker"]; price = r["price"]
-        if not player or pd.isna(line) or not stat_key: continue
         player = str(r.get("description", "")).strip()
         stat_key = str(r.get("market_norm", "")).strip().lower()
         line = r.get("point", np.nan)
@@ -568,31 +527,26 @@ def build_props_table(stats_df, odds_df, games_df, date_filter, game_pick, playe
         price = r.get("price", np.nan)
         side_raw = str(r.get("side", "")).strip().lower()
 
-        # Normalize side values
-        if side_raw in ["o", "over"]:
-            side = "over"
-        elif side_raw in ["u", "under"]:
-            side = "under"
-        else:
-            side = "—"
+        # Normalize side
+        side = "over" if side_raw in ["o", "over"] else ("under" if side_raw in ["u", "under"] else "—")
 
         # Skip if critical info is missing
         if not player or pd.isna(line) or not stat_key:
             continue
 
-        # --- Compute metrics for player/stat ---
+        # Compute metrics for player/stat
         m = compute_metrics_for_row(stats_df, player, stat_key, line)
         vals = series_for_player_stat(stats_df, player, stat_key)["stat"]
         if vals.empty:
             continue
 
-        # --- Compute hit rates ---
+        # Hit rates
         hit5 = hit_rate(vals, line, 5)
         hit10 = hit_rate(vals, line, 10)
         hit20 = hit_rate(vals, line, 20)
         hit_season = hit_rate(vals, line, None)
 
-        # --- Compute probability based on side ---
+        # Probability based on side
         if side == "under":
             p_hit = 1 - hit10 if not np.isnan(hit10) else np.nan
         elif side == "over":
@@ -600,12 +554,11 @@ def build_props_table(stats_df, odds_df, games_df, date_filter, game_pick, playe
         else:
             p_hit = np.nan
 
-        # --- Calculate EV and Kelly % ---
+        # EV and Kelly
         dec = american_to_decimal(price)
-        ev = np.nan if (np.isnan(p_hit) or np.isnan(dec)) else p_hit*(dec-1) - (1-p_hit)
+        ev = np.nan if (np.isnan(p_hit) or np.isnan(dec)) else p_hit * (dec - 1) - (1 - p_hit)
         kelly = np.nan if (np.isnan(p_hit) or np.isnan(dec)) else kelly_fraction(p_hit, dec)
 
-        # --- Add to rows ---
         rows.append({
             "Player": player,
             "Stat": STAT_LABELS.get(stat_key, stat_key),
@@ -615,23 +568,31 @@ def build_props_table(stats_df, odds_df, games_df, date_filter, game_pick, playe
             "Line": line,
             "Price (Am)": price,
             "L5 Avg": m["L5"], "L10 Avg": m["L10"], "L20 Avg": m["L20"], "2025 Avg": m["Season"],
-            "Hit5": m["hit5"], "Hit10": m["hit10"], "Hit20": m["hit20"], "Hit Season": m["hit_season"],
+            "Hit5": hit5, "Hit10": hit10, "Hit20": hit20, "Hit Season": hit_season,
             "Trend r": m["trend_r"], "Edge (Season-Line)": m["edge"], "RMSE10": m["rmse10"], "Z(Line)": m["z_line"],
             "EV": ev, "Kelly %": kelly,
         })
 
-    # --- Combine rows into DataFrame ---
     df = pd.DataFrame(rows)
-    if df.empty: return df
-    if min_ev is not None:    df = df[df["EV"] >= min_ev]
-    if min_hit is not None:   df = df[df["Hit10"] >= min_hit]
-    if min_kelly is not None: df = df[df["Kelly %"] >= min_kelly]
-    df = df.sort_values(["EV","Hit10","Kelly %"], ascending=[False, False, False], na_position="last").reset_index(drop=True)
+    if df.empty:
+        return df
+
+    # Apply analytical filters
+    if min_ev is not None:
+        df = df[df["EV"] >= min_ev]
+    if min_hit is not None:
+        df = df[df["Hit10"] >= min_hit]
+    if min_kelly is not None:
+        df = df[df["Kelly %"] >= min_kelly]
+
+    df = df.sort_values(["EV", "Hit10", "Kelly %"], ascending=[False, False, False], na_position="last").reset_index(drop=True)
     return df
 
-
-def plot_trend(stats_df, player, stat_key, line):
-    """Plot trend chart for a player's stat, with odds and Save Bet buttons centered above."""
+# ------------------------------------------------------
+# TREND PLOT
+# ------------------------------------------------------
+def plot_trend(stats_df, player, stat_key, line, odds_df_local):
+    """Plot last 20 trend with current odds display and save buttons."""
     s = series_for_player_stat(stats_df, player, stat_key)
     if s.empty:
         st.info("No stat history found.")
@@ -641,15 +602,15 @@ def plot_trend(stats_df, player, stat_key, line):
     s = s.sort_values("game_date").tail(20)
     season_avg = s["stat"].mean()
 
-    # --- Colors for bars: green = hit, red = miss ---
+    # Colors for bars
     colors = np.where(s["stat"] > line, "#21c36b", "#e45757")
 
-    # --- Fetch current odds for both Over and Under ---
-    price_rows = odds_df[
-        (odds_df["description"] == player)
-        & (odds_df["market_norm"] == stat_key)
-        & (abs(odds_df["point"] - line) < 0.01)
-    ]
+    # Current odds for both sides at this exact line
+    price_rows = odds_df_local[
+        (odds_df_local["description"].str.lower() == player.lower())
+        & (odds_df_local["market_norm"] == stat_key)
+        & (abs(odds_df_local["point"] - line) < 0.01)
+    ].copy()
 
     over_price = under_price = None
     book_over = book_under = None
@@ -658,13 +619,13 @@ def plot_trend(stats_df, player, stat_key, line):
         over_rows = price_rows[price_rows["side"].str.lower() == "over"]
         under_rows = price_rows[price_rows["side"].str.lower() == "under"]
         if not over_rows.empty:
-            over_price = int(over_rows.iloc[0]["price"])
+            over_price = int(pd.to_numeric(over_rows.iloc[0]["price"], errors="coerce"))
             book_over = over_rows.iloc[0].get("bookmaker", "")
         if not under_rows.empty:
-            under_price = int(under_rows.iloc[0]["price"])
+            under_price = int(pd.to_numeric(under_rows.iloc[0]["price"], errors="coerce"))
             book_under = under_rows.iloc[0].get("bookmaker", "")
 
-    # --- Centered odds display above chart ---
+    # Centered odds display
     st.markdown("### 💰 Current Odds", unsafe_allow_html=True)
     odds_text = ""
     if over_price is not None:
@@ -685,7 +646,7 @@ def plot_trend(stats_df, player, stat_key, line):
             unsafe_allow_html=True
         )
 
-    # --- Add Save Bet buttons side by side ---
+    # Save Bet buttons
     c1, c2, c3 = st.columns([3, 2, 2])
     c1.write("")  # spacer
     if over_price is not None:
@@ -717,7 +678,7 @@ def plot_trend(stats_df, player, stat_key, line):
             }
             toggle_save(pd.Series(row_data))
 
-    # --- Plotly chart ---
+    # Plotly chart
     fig = go.Figure()
     fig.add_bar(
         x=s["game_date"].astype(str),
@@ -739,50 +700,18 @@ def plot_trend(stats_df, player, stat_key, line):
         mode="lines",
         line=dict(color="#5cb85c"),
     )
-
-    # --- Legend above chart ---
     fig.update_layout(
         height=420,
         margin=dict(l=20, r=20, t=80, b=20),
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.08,
-            xanchor="center",
-            x=0.5,
-            font=dict(size=12)
-        ),
-        xaxis=dict(
-            title="Game Date",
-            categoryorder="category ascending",
-            type="category",
-        ),
+        legend=dict(orientation="h", yanchor="bottom", y=1.08, xanchor="center", x=0.5, font=dict(size=12)),
+        xaxis=dict(title="Game Date", categoryorder="category ascending", type="category"),
         yaxis_title=STAT_LABELS.get(stat_key, stat_key).upper(),
     )
-
     st.plotly_chart(fig, use_container_width=True)
 
-    # --- Display current odds for this line ---
-    odds_row = odds_df[
-        (odds_df["description"].str.lower() == player.lower())
-        & (odds_df["market_norm"] == stat_key)
-        & (abs(odds_df["point"] - line) < 0.01)
-    ]
-
-    if not odds_row.empty:
-        over_price = odds_row["price"].iloc[0]
-        under_price = odds_row["price"].iloc[-1] if len(odds_row) > 1 else None
-        bookmaker = odds_row["bookmaker"].iloc[0]
-        st.markdown(
-            f"**Current Odds:** {bookmaker} — Over {over_price:+}, Under {under_price or 'N/A'}"
-        )
-    else:
-        st.caption("No odds found for this line.")
-
-
-# ----------------------------
+# ------------------------------------------------------
 # SESSION STATE (Saved Bets)
-# ----------------------------
+# ------------------------------------------------------
 if "saved_bets" not in st.session_state:
     st.session_state.saved_bets = []  # list of dicts
 
@@ -799,71 +728,58 @@ def toggle_save(row):
         st.session_state.saved_bets.append(row.to_dict())
         st.success("Saved!")
 
-# ----------------------------
-# LOAD DATA
-# ----------------------------
-stats_df = load_player_stats()
-games_df = load_games()
-odds_df = load_odds_sheet()
-
-# ----------------------------
-# SIDEBAR FILTERS (RAW STAT KEYS, ORIGINAL FORMATTING)
-# ----------------------------
+# ------------------------------------------------------
+# SIDEBAR FILTERS
+# ------------------------------------------------------
 st.sidebar.header("⚙️ Filters")
 
-# --- Date Selector ---
+# Date selector
 today = pd.Timestamp.today().normalize()
 sel_date = st.sidebar.date_input("Game date", today)
 
-# --- Game Selector ---
+# Game selector
 if not games_df.empty and "game_date" in games_df.columns:
     day_games = games_df.query("game_date == @sel_date")[["home_team", "visitor_team"]].copy()
-    day_games["matchup"] = day_games["home_team"] + " vs " + day_games["visitor_team"]
-    game_options = ["All games"] + day_games["matchup"].tolist()
+    if not day_games.empty:
+        day_games["matchup"] = day_games["home_team"] + " vs " + day_games["visitor_team"]
+        game_options = ["All games"] + day_games["matchup"].tolist()
+    else:
+        game_options = ["All games"]
 else:
     game_options = ["All games"]
 
 sel_game = st.sidebar.selectbox("Game", game_options)
 
-# --- Player Selector ---
-if not stats_df.empty and "team" in stats_df.columns:
+# Player selector
+if not player_stats.empty and "team" in player_stats.columns:
     if sel_game != "All games" and " vs " in sel_game:
         home, away = sel_game.split(" vs ", 1)
         teams = [home, away]
-        players_today = sorted(stats_df.query("team in @teams")["player_name"].unique().tolist())
+        players_today = sorted(player_stats.query("team in @teams")["player_name"].unique().tolist())
     else:
-        players_today = sorted(stats_df["player_name"].unique().tolist())
+        players_today = sorted(player_stats["player_name"].unique().tolist())
 else:
     players_today = []
 
 player_options = ["All players"] + players_today
 sel_player = st.sidebar.selectbox("Player", player_options)
 
-# --- Stat Filter (Raw keys only, matches odds sheet exactly) ---
+# Stat filter (raw keys)
 st.sidebar.markdown("---")
 st.sidebar.header("🎯 Stat Type")
-
 stat_options = ["All Stats"] + list(STAT_MAP.keys())
-
-# Default to "points_rebounds_assists" if it exists; otherwise use the first option
 default_key = "points_rebounds_assists" if "points_rebounds_assists" in STAT_MAP else stat_options[0]
 try:
     default_index = stat_options.index(default_key)
 except ValueError:
     default_index = 0
+sel_stat_display = st.sidebar.selectbox("Stat Type (matches odds)", stat_options, index=default_index)
+sel_stat = None if sel_stat_display == "All Stats" else sel_stat_display
 
-sel_stat = st.sidebar.selectbox("Stat Type (matches odds sheet)", stat_options, index=default_index)
-
-# Convert "All Stats" to None so build_props_table() includes all props
-if sel_stat == "All Stats":
-    sel_stat = None
-
-# --- Table Display Options ---
+# Table Display Options
 st.sidebar.markdown("---")
 st.sidebar.header("📊 Table Display Options")
-
 show_hit_counts = st.sidebar.checkbox("Show Hit Counts (e.g. 8/10)", value=False)
-
 all_columns = [
     "Player", "Stat", "Bookmaker", "Side", "Line", "Price (Am)",
     "L5 Avg", "L10 Avg", "L20 Avg", "2025 Avg",
@@ -871,64 +787,45 @@ all_columns = [
     "EV", "Kelly %", "Edge (Season-Line)", "Trend r"
 ]
 default_cols = ["Player", "Stat", "Bookmaker", "Side", "Line", "Price (Am)", "EV", "Hit10", "Kelly %", "2025 Avg"]
+selected_columns = st.sidebar.multiselect("Columns to Display", all_columns, default=default_cols)
 
-selected_columns = st.sidebar.multiselect(
-    "Columns to Display",
-    all_columns,
-    default=default_cols
-)
-
-# --- Odds Filter Inputs ---
+# Odds filters
 st.sidebar.markdown("---")
 st.sidebar.header("🎲 Odds Filters")
 
-odds_threshold = st.sidebar.number_input(
-    "Filter: Show Only Odds Above",
-    min_value=-2000,
-    max_value=2000,
-    value=-600,
-    step=50
-)
-
-books_available = sorted(odds_df["bookmaker"].dropna().unique().tolist()) if not odds_df.empty else []
+books_available = sorted(odds_df["bookmaker"].dropna().unique().tolist()) if not odds_df.empty and "bookmaker" in odds_df.columns else []
 sel_books = st.sidebar.multiselect("Bookmakers", books_available, default=books_available)
 
-if not odds_df.empty:
+if not odds_df.empty and "price" in odds_df.columns:
     odds_min = int(pd.to_numeric(odds_df["price"], errors="coerce").min())
     odds_max = int(pd.to_numeric(odds_df["price"], errors="coerce").max())
 else:
     odds_min, odds_max = -1000, 2000
 
 sel_odds_range = st.sidebar.slider("American odds range", odds_min, odds_max, (odds_min, odds_max))
+odds_threshold = st.sidebar.number_input("Filter: Show Only Odds Above", min_value=-2000, max_value=2000, value=-600, step=50)
 
-# --- Analytical Filters ---
+# Analytical filters
 st.sidebar.markdown("---")
 st.sidebar.header("📈 Analytical Filters")
-
 sel_min_ev = st.sidebar.slider("Minimum EV", -1.0, 1.0, 0.0, 0.01)
 sel_min_hit10 = st.sidebar.slider("Minimum Hit Rate (L10)", 0.0, 1.0, 0.5, 0.01)
 sel_min_kelly = st.sidebar.slider("Minimum Kelly %", 0.0, 1.0, 0.0, 0.01)
 
-
-# --- Debug info (optional) ---
-# st.sidebar.write("DEBUG", sel_stat, sel_game, sel_player)
-
-
-# ----------------------------
+# ------------------------------------------------------
 # TABS
-# ----------------------------
+# ------------------------------------------------------
 tab_labels = ["🧮 Props Overview", "📈 Trend Analysis", "📋 Saved Bets", "📊 Prop Analytics"]
 tab1, tab2, tab3, tab4 = st.tabs(tab_labels)
 
-# ----------------------------
+# ------------------------------------------------------
 # TAB 1 – PROPS OVERVIEW
-# ----------------------------
+# ------------------------------------------------------
 with tab1:
     st.subheader("Props Overview")
 
-    # --- Build the props table ---
     df = build_props_table(
-        stats_df,
+        player_stats,
         odds_df,
         games_df,
         pd.to_datetime(sel_date).date(),
@@ -945,10 +842,8 @@ with tab1:
     if df.empty:
         st.info("No props match your filters.")
     else:
-        # --- Format and sanitize numeric data ---
+        # Sanitize numeric and apply threshold
         price_col = "Price (Am)" if "Price (Am)" in df.columns else "Price"
-        edge_col = "Edge (Season-Line)" if "Edge (Season-Line)" in df.columns else "Edge"
-
         df[f"{price_col}_num"] = pd.to_numeric(df[price_col], errors="coerce")
         df = df.dropna(subset=[f"{price_col}_num"])
         df = df[df[f"{price_col}_num"] >= odds_threshold]
@@ -957,16 +852,18 @@ with tab1:
         df["Price (Am)"] = df[f"{price_col}_num"].apply(format_moneyline)
         df["Kelly %"] = df["Kelly %"].apply(lambda x: format_percentage(x, 1))
         df["EV"] = pd.to_numeric(df["EV"], errors="coerce").apply(lambda x: f"{x:.3f}" if pd.notna(x) else "—")
-        df["Edge (Season-Line)"] = pd.to_numeric(df.get(edge_col, np.nan), errors="coerce")
+        if "Edge (Season-Line)" in df.columns:
+            df["Edge (Season-Line)"] = pd.to_numeric(df["Edge (Season-Line)"], errors="coerce")
 
         # Hit rate formatting
-        for col, n in zip(["Hit5", "Hit10", "Hit20", "Hit Season"], [5, 10, 20, len(df)]):
-            if show_hit_counts:
-                df[col] = df[col].apply(lambda v: f"{format_percentage(v)} ({format_ratio(v, n)})")
-            else:
-                df[col] = df[col].apply(format_percentage)
+        for col, n in zip(["Hit5", "Hit10", "Hit20", "Hit Season"], [5, 10, 20, 20]):
+            if col in df.columns:
+                if show_hit_counts:
+                    df[col] = df[col].apply(lambda v: f"{format_percentage(v)} ({format_ratio(v, n)})")
+                else:
+                    df[col] = df[col].apply(format_percentage)
 
-        # --- Add Save Bet checkbox column ---
+        # Save Bet column
         df["Save Bet"] = False
         for i, row in df.iterrows():
             key = _bet_key(row)
@@ -976,40 +873,24 @@ with tab1:
         if "Stat_key" not in df.columns:
             df["Stat_key"] = ""
 
-        # --- Default column order ---
+        # Default column order
         ordered_cols = [
             "Save Bet",
-            "Player",
-            "Stat",
-            "Side",
-            "Line",
-            "Price (Am)",
-            "Bookmaker",
-            "Hit Season",
-            "Hit20",
-            "L20 Avg",
-            "Hit10",
-            "L10 Avg",
-            "Hit5",
-            "L5 Avg",
+            "Player", "Stat", "Side", "Line", "Price (Am)", "Bookmaker",
+            "Hit Season", "Hit20", "L20 Avg", "Hit10", "L10 Avg", "Hit5", "L5 Avg",
+            "EV", "Kelly %", "Edge (Season-Line)", "Trend r"
         ]
-
         visible_cols = [c for c in ordered_cols if c in df.columns]
         df_display = df[visible_cols + ["Stat_key"]].copy()
 
-        # --- Force refresh of layout on schema change ---
-        if "column_order" in st.session_state:
-            del st.session_state["column_order"]
-        st.session_state["column_order"] = visible_cols
-
-        # --- Display title + reset ---
+        # Reset columns button
         st.markdown("### 📊 Player Props")
         cols_reset = st.columns([1, 6])
         with cols_reset[0]:
             if st.button("🔄 Reset Columns"):
-                st.session_state["column_order"] = visible_cols
+                pass  # Streamlit editor can be rearranged; no persistent state needed here
 
-        st.caption("💡 Drag & drop columns to reorder — layout persists for your session. Check or uncheck 'Save Bet' to track favorites.")
+        st.caption("💡 Drag & drop columns to reorder. Check 'Save Bet' to track favorites.")
 
         from streamlit import column_config
         col_cfg = {
@@ -1027,6 +908,10 @@ with tab1:
             "L10 Avg": column_config.NumberColumn(format="%.1f", width="auto"),
             "Hit5": column_config.TextColumn(width="auto"),
             "L5 Avg": column_config.NumberColumn(format="%.1f", width="auto"),
+            "EV": column_config.TextColumn(width="auto"),
+            "Kelly %": column_config.TextColumn(width="auto"),
+            "Edge (Season-Line)": column_config.NumberColumn(format="%.2f", width="auto"),
+            "Trend r": column_config.NumberColumn(format="%.2f", width="auto"),
         }
 
         edited_df = st.data_editor(
@@ -1035,15 +920,10 @@ with tab1:
             hide_index=True,
             key="props_editor",
             column_config=col_cfg,
-            column_order=st.session_state["column_order"],
         )
 
-        # --- Save column order ---
-        new_order = [c for c in edited_df.columns if c != "Stat_key"]
-        st.session_state["column_order"] = new_order
-
-        # --- Sync Save Bet state ---
-        for i, row in edited_df.iterrows():
+        # Sync Save Bet state
+        for _, row in edited_df.iterrows():
             key = _bet_key(row)
             checked = row.get("Save Bet", False)
             exists = any(_bet_key(x) == key for x in st.session_state.saved_bets)
@@ -1052,100 +932,78 @@ with tab1:
             elif not checked and exists:
                 st.session_state.saved_bets = [x for x in st.session_state.saved_bets if _bet_key(x) != key]
 
-# ----------------------------
-# TAB 2 – TREND ANALYSIS (Single Stat, Dynamic Line)
-# ----------------------------
+# ------------------------------------------------------
+# TAB 2 – TREND ANALYSIS
+# ------------------------------------------------------
 with tab2:
     st.subheader("Trend Analysis")
 
-    # Handle potential missing odds column
-    if "side" not in odds_df.columns:
-        odds_df["side"] = ""
-
-    pre_p = st.session_state.get("trend_player")
-    pre_k = st.session_state.get("trend_stat_key")
-    pre_l = st.session_state.get("trend_line")
-
-    if df is None or df.empty:
-        st.info("Load props in the Overview tab first.")
+    if odds_df is None or odds_df.empty:
+        st.info("No odds available to analyze.")
         st.stop()
 
-    # --- Player dropdown ---
-    players_in_df = ["(choose)"] + sorted(df["Player"].unique().tolist())
-    p_pick = st.selectbox(
-        "Player",
-        players_in_df,
-        index=(players_in_df.index(pre_p) if pre_p in players_in_df else 0)
-    )
+    # Build base df for player/stat selections from current props overview candidates if possible
+    # Fallback to all players/stats
+    players_in_df = ["(choose)"] + sorted(odds_df["description"].dropna().unique().tolist())
+    p_pick = st.selectbox("Player", players_in_df, index=0)
     if p_pick == "(choose)":
         st.stop()
 
-    # --- Stat type dropdown (single stat at a time) ---
-    player_stats_available = df.loc[df["Player"] == p_pick, ["Stat", "Stat_key"]].drop_duplicates()
-    if player_stats_available.empty:
-        st.warning("No available stats for this player in your current filters.")
+    stat_list = sorted(odds_df.loc[odds_df["description"] == p_pick, "market_norm"].dropna().unique().tolist())
+    if not stat_list:
+        st.warning("No available stats for this player in the odds data.")
         st.stop()
+    stat_pick = st.selectbox("Stat Type (matches odds)", stat_list, index=0)
 
-    stat_list = player_stats_available["Stat_key"].tolist()
-    stat_pick = st.selectbox(
-        "Stat Type (matches odds sheet)",
-        stat_list,
-        index=(stat_list.index(pre_k) if pre_k in stat_list else 0)
-    )
-
-    # --- Line dropdown (dynamic based on selected stat) ---
-    lines = sorted(df[(df["Player"] == p_pick) & (df["Stat_key"] == stat_pick)]["Line"].dropna().unique().tolist())
+    lines = sorted(pd.to_numeric(
+        odds_df.loc[(odds_df["description"] == p_pick) & (odds_df["market_norm"] == stat_pick), "point"],
+        errors="coerce"
+    ).dropna().unique().tolist())
     if not lines:
         st.warning("No available lines for this stat.")
         st.stop()
+    line_pick = st.selectbox("Book line (threshold)", lines, index=0)
 
-    default_line_idx = lines.index(pre_l) if (pre_l in lines) else 0
-    line_pick = st.selectbox("Book line (threshold)", lines, index=default_line_idx)
-
-    # --- Bet side toggle ---
     side_pick = st.selectbox("Bet side", ["Over", "Under"], index=0)
 
-    # --- Show current odds for that stat/line ---
+    # Show current prices
     price_rows = odds_df[
         (odds_df["description"] == p_pick)
         & (odds_df["market_norm"] == stat_pick)
         & (abs(odds_df["point"] - line_pick) < 0.01)
     ]
-
     if not price_rows.empty:
         over_price = price_rows.loc[price_rows["side"].str.lower() == "over", "price"].dropna()
         under_price = price_rows.loc[price_rows["side"].str.lower() == "under", "price"].dropna()
         msg = []
         if len(over_price):
-            msg.append(f"**Over {line_pick}**: {int(over_price.iloc[0])}")
+            msg.append(f"**Over {line_pick}**: {int(pd.to_numeric(over_price.iloc[0], errors='coerce'))}")
         if len(under_price):
-            msg.append(f"**Under {line_pick}**: {int(under_price.iloc[0])}")
+            msg.append(f"**Under {line_pick}**: {int(pd.to_numeric(under_price.iloc[0], errors='coerce'))}")
         st.markdown("💰 Current Prices: " + " | ".join(msg))
     else:
         st.markdown("_No recent odds found for this player/stat/line._")
 
-    # --- Chart ---
     st.markdown(f"**Chart:** {p_pick} – {stat_pick} ({side_pick} {line_pick})")
-    plot_trend(stats_df, p_pick, stat_pick, line_pick)
+    plot_trend(player_stats, p_pick, stat_pick, line_pick, odds_df)
 
-# ----------------------------
+# ------------------------------------------------------
 # TAB 3 – SAVED BETS
-# ----------------------------
+# ------------------------------------------------------
 with tab3:
     st.subheader("Saved Bets")
 
     saved_bets = st.session_state.get("saved_bets", [])
     if not saved_bets:
-        st.info("No bets saved yet. Use the ✅ Save Bet checkbox in the Overview tab.")
+        st.info("No bets saved yet. Use the ⭐ Save buttons or checkbox in the Overview tab.")
     else:
         saved_df = pd.DataFrame(saved_bets)
         if "Stat_key" in saved_df.columns:
             saved_df = saved_df.drop(columns=["Stat_key"], errors="ignore")
 
-        # Display ordered columns cleanly
         preferred = [
             "Player", "Stat", "Side", "Line", "Price (Am)", "Bookmaker",
-            "Hit10", "L10 Avg", "Hit20", "L20 Avg", "Hit Season", "Hit5", "L5 Avg"
+            "Hit10", "L10 Avg", "Hit20", "L20 Avg", "Hit Season", "Hit5", "L5 Avg", "EV", "Kelly %"
         ]
         cols = [c for c in preferred if c in saved_df.columns] + [c for c in saved_df.columns if c not in preferred]
         st.dataframe(saved_df[cols], use_container_width=True, hide_index=True)
@@ -1153,14 +1011,14 @@ with tab3:
         csv = saved_df.to_csv(index=False).encode("utf-8")
         st.download_button("⬇️ Download Saved Bets CSV", data=csv, file_name="saved_bets.csv", mime="text/csv")
 
-# ----------------------------
+# ------------------------------------------------------
 # TAB 4 – PROP ANALYTICS
-# ----------------------------
+# ------------------------------------------------------
 with tab4:
     st.subheader("Prop Analytics")
 
     df = build_props_table(
-        stats_df,
+        player_stats,
         odds_df,
         games_df,
         pd.to_datetime(sel_date).date(),
@@ -1177,39 +1035,26 @@ with tab4:
     if df.empty:
         st.info("No props match your filters.")
     else:
-        # --- Format core data ---
+        # Format core data
         df["Price (Am)"] = pd.to_numeric(df.get("Price (Am)", np.nan), errors="coerce").apply(format_moneyline)
         df["EV"] = pd.to_numeric(df.get("EV", np.nan), errors="coerce").apply(lambda x: f"{x:.3f}" if pd.notna(x) else "—")
         df["Edge"] = pd.to_numeric(df.get("Edge (Season-Line)", np.nan), errors="coerce").apply(lambda x: f"{x:.2f}" if pd.notna(x) else "—")
         df["Kelly %"] = df["Kelly %"].apply(lambda x: format_percentage(x, 1))
 
-        # --- Add Save Bet ---
+        # Add Save Bet column
         df["Save Bet"] = False
         for i, row in df.iterrows():
             key = _bet_key(row)
             if any(_bet_key(x) == key for x in st.session_state.saved_bets):
                 df.at[i, "Save Bet"] = True
 
-        # --- Desired layout ---
+        # Desired layout
         ordered_cols = [
-            "Save Bet",
-            "Player",
-            "Stat",
-            "Side",
-            "Line",
-            "Price (Am)",
-            "Bookmaker",
-            "EV",
-            "Edge",
-            "Trend r",
-            "Kelly %",
+            "Save Bet", "Player", "Stat", "Side", "Line", "Price (Am)", "Bookmaker",
+            "EV", "Edge", "Trend r", "Kelly %"
         ]
-
         visible_cols = [c for c in ordered_cols if c in df.columns]
         df_display = df[visible_cols].copy()
-
-        if "analytics_order" not in st.session_state:
-            st.session_state["analytics_order"] = visible_cols
 
         from streamlit import column_config
         col_cfg = {
@@ -1232,11 +1077,10 @@ with tab4:
             hide_index=True,
             key="analytics_editor",
             column_config=col_cfg,
-            column_order=st.session_state["analytics_order"],
         )
 
-        # Sync Save Bets between tabs
-        for i, row in edited_df.iterrows():
+        # Sync Save Bets
+        for _, row in edited_df.iterrows():
             key = _bet_key(row)
             checked = row.get("Save Bet", False)
             exists = any(_bet_key(x) == key for x in st.session_state.saved_bets)

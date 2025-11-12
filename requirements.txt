@@ -1,34 +1,35 @@
-# Core libraries
-numpy==1.26.4
+# Core App
+streamlit==1.39.0
 pandas==2.2.3
-mathparse==0.1.2
-
-# Streamlit framework
-streamlit==1.40.0
-
-# Visualization
+numpy==1.26.4
 plotly==5.24.1
 
-# Google Cloud + BigQuery
+# Google Cloud / BigQuery
 google-cloud-bigquery==3.25.0
-google-cloud-bigquery-storage>=2.25.0
+google-cloud-core==2.4.1
 google-auth==2.35.0
 google-auth-oauthlib==1.2.1
-google-api-python-client==2.154.0
+google-api-python-client==2.147.0
+google-cloud-storage==2.18.2
+db-dtypes==1.3.0
 
-# Google Sheets integration
+# Math expression parsing
+mathparse==0.1.2
+
+# Google Sheets
 gspread==6.1.2
 oauth2client==4.1.3
 
-# Database (if you later connect PostgreSQL for user data)
-SQLAlchemy==2.0.36
-psycopg2-binary==2.9.9
+# Data manipulation / math
+scipy==1.14.1
 
-# Authentication helper (optional for user logins)
-streamlit-authenticator==0.3.2
-
-# Data utilities
+# Optional utilities
+python-dotenv==1.0.1
 requests==2.32.3
-python-dateutil==2.9.0.post0
 
-db-dtypes==1.4.3
+# Needed for BigQuery protobuf deserialization
+protobuf==5.28.2
+
+# Render-specific
+gunicorn==23.0.0
+

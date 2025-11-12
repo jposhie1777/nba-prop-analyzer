@@ -371,8 +371,8 @@ def load_odds_bq():
 # OPTIONAL: Google Sheets odds loader (COMMENTED OUT)
 # ------------------------------------------------------
 """
-@st.cache_data(ttl=300, show_spinner=False)
-def load_odds_sheet():
+#@st.cache_data(ttl=300, show_spinner=False)
+#def load_odds_sheet():
     # Load odds from Google Sheets (legacy). Keep for reference/fallback.
     try:
         if not SPREADSHEET_ID:

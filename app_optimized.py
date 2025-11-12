@@ -177,7 +177,7 @@ if refresh_clicked:
 
     progress_bar.empty()
     status_text.text("✅ Reload complete! Fetching fresh data...")
-    st.experimental_rerun()
+    st.rerun()
 
 # ------------------------------------------------------
 # LOAD DATA INTO SESSION (only once per session)

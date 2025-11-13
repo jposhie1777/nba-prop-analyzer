@@ -148,11 +148,10 @@ WITH g AS (
 )
 SELECT * FROM g
 """
-
 ODDS_SQL = f"""
 SELECT
   CAST(game_id AS STRING) AS game_id,
-  CAST(commence_time AS TIMESTAMP) AS commence_time,
+  SAFE.PARSE_TIMESTAMP('%m/%d/%Y %I:%M %p', commence_time) AS commence_time,
   in_play,
   bookmaker,
   last_update,
@@ -165,6 +164,7 @@ SELECT
   CAST(point AS FLOAT64) AS point
 FROM `{PROJECT_ID}.{BIGQUERY_DATASET}.{ODDS_TABLE}`
 """
+
 
 # ------------------------------------------------------
 # HELPERS
@@ -359,6 +359,11 @@ def load_odds_bq():
     try:
         df = bq_client.query(ODDS_SQL).to_dataframe()
         df.columns = [c.lower().strip() for c in df.columns]
+
+        # Ensure commence_time is parsed safely
+        if "commence_time" in df.columns:
+            df["commence_time"] = pd.to_datetime(df["commence_time"], errors="coerce")
+
 
         # numeric
         for col in ["point", "price"]:

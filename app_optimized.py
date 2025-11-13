@@ -151,7 +151,10 @@ SELECT * FROM g
 ODDS_SQL = f"""
 SELECT
   CAST(game_id AS STRING) AS game_id,
-  SAFE.PARSE_TIMESTAMP('%m/%d/%Y %I:%M %p', commence_time) AS commence_time,
+
+  -- Parse MM/DD/YYYY into a valid timestamp
+  TIMESTAMP( PARSE_DATETIME('%m/%d/%Y', commence_time) ) AS commence_time,
+
   in_play,
   bookmaker,
   last_update,

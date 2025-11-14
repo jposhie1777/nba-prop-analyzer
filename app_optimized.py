@@ -171,13 +171,11 @@ def load_props_cached(_bq_client, query):
     df = _bq_client.query(query).to_dataframe()
     df.columns = [c.strip() for c in df.columns]
 
-    # Normalize string columns a bit
     if "market" in df.columns:
         df["market"] = df["market"].astype(str).str.strip()
     if "player" in df.columns:
         df["player"] = df["player"].astype(str).str.strip()
 
-    # Ensure numeric types where relevant
     numeric_cols = [
         "line", "price",
         "hit_rate_last5", "hit_rate_last10", "hit_rate_last20",
@@ -191,7 +189,7 @@ def load_props_cached(_bq_client, query):
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
-    # Pre-compute fractional hit rates (0–1) for filtering
+    # Fractional hit rates for filtering/sorting
     for src, dst in [
         ("hit_rate_last5", "hit5_frac"),
         ("hit_rate_last10", "hit10_frac"),
@@ -200,7 +198,6 @@ def load_props_cached(_bq_client, query):
         if src in df.columns:
             df[dst] = df[src] / 100.0
 
-    # Add dynamic averages based on market
     df = add_dynamic_averages(df)
     return df
 
@@ -252,7 +249,6 @@ if "game_logs_df" not in st.session_state:
 props_df = st.session_state.props_df
 game_logs_df = st.session_state.game_logs_df
 
-# Show last updated
 if "last_updated" in st.session_state:
     last_updated_str = st.session_state.last_updated.strftime("%Y-%m-%d %I:%M %p")
     st.sidebar.info(f"🕒 **Data last updated:** {last_updated_str}")
@@ -261,13 +257,12 @@ if "last_updated" in st.session_state:
 # SESSION STATE (Saved Bets)
 # ------------------------------------------------------
 if "saved_bets" not in st.session_state:
-    st.session_state.saved_bets = []  # list of dicts
+    st.session_state.saved_bets = []
 
 def _bet_key(row):
     return f"{row['Player']}|{row['Market']}|{row['Bookmaker']}|{row['Line']}|{row['Price (Am)']}"
 
 def sync_saved_bets_from_editor(edited_df):
-    """Update session_state.saved_bets based on a data_editor result with a Save Bet column."""
     for _, row in edited_df.iterrows():
         key = _bet_key(row)
         checked = row.get("Save Bet", False)
@@ -282,11 +277,9 @@ def sync_saved_bets_from_editor(edited_df):
 # ------------------------------------------------------
 st.sidebar.header("⚙️ Filters")
 
-# Date selector (kept for UI parity)
 today = pd.Timestamp.today().normalize()
 sel_date = st.sidebar.date_input("Game date", today)
 
-# Game selector (from props_df home/visitor team)
 if not props_df.empty and "home_team" in props_df.columns and "visitor_team" in props_df.columns:
     day_games = props_df[["home_team", "visitor_team"]].dropna().drop_duplicates()
     if not day_games.empty:
@@ -300,7 +293,6 @@ else:
 
 sel_game = st.sidebar.selectbox("Game", game_options)
 
-# Player selector
 if not props_df.empty and "player" in props_df.columns:
     players_filtered = props_df.copy()
     if sel_game != "All games" and " vs " in sel_game:
@@ -316,7 +308,6 @@ else:
 player_options = ["All players"] + players_today
 sel_player = st.sidebar.selectbox("Player", player_options)
 
-# Market filter (default: All Stats)
 st.sidebar.markdown("---")
 st.sidebar.header("🎯 Stat / Market Type")
 
@@ -329,17 +320,14 @@ stat_options = ["All Stats"] + market_list
 sel_stat_display = st.sidebar.selectbox("Market (matches odds)", stat_options, index=0)
 sel_stat = None if sel_stat_display == "All Stats" else sel_stat_display
 
-# Table Display Options
 st.sidebar.markdown("---")
 st.sidebar.header("📊 Table Display Options")
-# You requested this default set:
 default_cols = [
     "Player", "Market", "Line", "Price (Am)", "Bookmaker",
     "Hit L5", "Hit L10", "Hit L20", "L5 Avg", "L10 Avg", "L20 Avg",
 ]
-selected_columns = default_cols  # could add multiselect here if desired
+selected_columns = default_cols
 
-# Odds filters
 st.sidebar.markdown("---")
 st.sidebar.header("🎲 Odds Filters")
 
@@ -365,15 +353,13 @@ odds_threshold = st.sidebar.number_input(
     step=50,
 )
 
-# Analytical filters
 st.sidebar.markdown("---")
 st.sidebar.header("📈 Analytical Filters")
 sel_min_ev = st.sidebar.slider("Minimum EV", -1.0, 1.0, 0.0, 0.01)
 sel_min_hit10 = st.sidebar.slider("Minimum Hit Rate (L10)", 0.0, 1.0, 0.5, 0.01)
-# Kelly % removed (no Kelly in new table)
 
 # ------------------------------------------------------
-# BUILD PROPS TABLE FROM PRECOMPUTED BIGQUERY DATA
+# BUILD PROPS TABLE
 # ------------------------------------------------------
 @st.cache_data(ttl=120, show_spinner=False)
 def build_props_table(
@@ -391,42 +377,33 @@ def build_props_table(
 
     df = props_df.copy()
 
-    # Game filter
     if game_pick and isinstance(game_pick, str) and game_pick != "All games" and " vs " in game_pick:
         home, away = game_pick.split(" vs ", 1)
         df = df[(df["home_team"] == home) & (df["visitor_team"] == away)]
 
-    # Player filter
     if player_pick and player_pick != "All players":
         df = df[df["player"] == player_pick]
 
-    # Market filter
     if stat_pick:
         df = df[df["market"] == stat_pick]
 
-    # Book filter
     if books:
         df = df[df["bookmaker"].isin(books)]
 
-    # Odds range filter
     if "price" in df.columns:
         df["price"] = pd.to_numeric(df["price"], errors="coerce")
         df = df[df["price"].between(odds_range[0], odds_range[1])]
 
-    # EV filter
     if "expected_value" in df.columns:
         df = df[df["expected_value"] >= min_ev]
 
-    # Hit L10 threshold (use fractional hit rate)
     if "hit10_frac" in df.columns:
         df = df[df["hit10_frac"] >= min_hit10]
 
     if df.empty:
         return df
 
-    # Build display DataFrame
     df_display = pd.DataFrame()
-
     df_display["Player"] = df["player"]
     df_display["Market"] = df["market"]
     df_display["Line"] = df["line"]
@@ -443,10 +420,9 @@ def build_props_table(
 
     df_display["EV"] = df.get("expected_value", np.nan)
 
-    # Keep raw fractions for later logic if needed
-    df_display["hit5_frac"] = df.get("hit5_frac", np.nan)
-    df_display["hit10_frac"] = df.get("hit10_frac", np.nan)
-    df_display["hit20_frac"] = df.get("hit20_frac", np.nan)
+    df_display["hit5_frac"] = df_display["Hit L5"]
+    df_display["hit10_frac"] = df_display["Hit L10"]
+    df_display["hit20_frac"] = df_display["Hit L20"]
 
     return df_display.reset_index(drop=True)
 
@@ -473,7 +449,7 @@ def get_props_table_cached(
     )
 
 # ------------------------------------------------------
-# TREND PLOT (GAME LOGS)
+# TREND PLOT
 # ------------------------------------------------------
 @st.cache_data(ttl=600, show_spinner=False)
 def get_player_game_log(game_logs_df, player, market):
@@ -561,7 +537,7 @@ def plot_trend(game_logs_df, player, market, line_value):
     st.plotly_chart(fig, use_container_width=True)
 
 # ------------------------------------------------------
-# DEBUG (optional)
+# DEBUG
 # ------------------------------------------------------
 with st.sidebar.expander("🔧 Environment Debug Info"):
     st.write(f"Project: {PROJECT_ID}")
@@ -601,16 +577,17 @@ with tab1:
         if df.empty:
             st.info("No props remain after applying odds threshold.")
         else:
+            # ✅ Default sort: Hit L10 descending (100% → 0%)
+            if "Hit L10" in df.columns:
+                df = df.sort_values("Hit L10", ascending=False, na_position="last")
+
             df["Price (Am)"] = df["Price_raw"].apply(format_moneyline)
             df["EV"] = pd.to_numeric(df["EV"], errors="coerce").apply(
                 lambda x: f"{x:.3f}" if pd.notna(x) else "—"
             )
 
-            df["Hit L5"] = df["Hit L5"].apply(lambda x: format_percentage(x, assume_fraction=True))
-            df["Hit L10"] = df["Hit L10"].apply(lambda x: format_percentage(x, assume_fraction=True))
-            df["Hit L20"] = df["Hit L20"].apply(lambda x: format_percentage(x, assume_fraction=True))
+            # Keep hit rates numeric; use NumberColumn with % formatting
 
-            # Save Bet column
             df["Save Bet"] = False
             for i, row in df.iterrows():
                 key = _bet_key(row)
@@ -628,7 +605,7 @@ with tab1:
             df_display = df[visible_cols].copy()
 
             st.markdown("### 📊 Player Props")
-            st.caption("💡 Use the filters on the left to narrow props by game, player, market, odds, and EV.")
+            st.caption("💡 Sorted by Hit Rate L10 (highest first). Click headers to resort.")
 
             from streamlit import column_config
             col_cfg = {
@@ -638,9 +615,10 @@ with tab1:
                 "Line": column_config.NumberColumn(format="%.1f", width="auto"),
                 "Price (Am)": column_config.TextColumn(help="American odds", width="auto"),
                 "Bookmaker": column_config.TextColumn(width="auto"),
-                "Hit L5": column_config.TextColumn(width="auto"),
-                "Hit L10": column_config.TextColumn(width="auto"),
-                "Hit L20": column_config.TextColumn(width="auto"),
+                # ✅ numeric percent columns
+                "Hit L5": column_config.NumberColumn(format="0.0%", width="auto"),
+                "Hit L10": column_config.NumberColumn(format="0.0%", width="auto"),
+                "Hit L20": column_config.NumberColumn(format="0.0%", width="auto"),
                 "L5 Avg": column_config.NumberColumn(format="%.1f", width="auto"),
                 "L10 Avg": column_config.NumberColumn(format="%.1f", width="auto"),
                 "L20 Avg": column_config.NumberColumn(format="%.1f", width="auto"),
@@ -776,14 +754,15 @@ with tab4:
         if df.empty:
             st.info("No props remain after applying odds threshold.")
         else:
+            if "Hit L10" in df.columns:
+                df = df.sort_values("Hit L10", ascending=False, na_position="last")
+
             df["Price (Am)"] = df["Price_raw"].apply(format_moneyline)
             df["EV"] = pd.to_numeric(df["EV"], errors="coerce").apply(
                 lambda x: f"{x:.3f}" if pd.notna(x) else "—"
             )
 
-            df["Hit L10"] = df["Hit L10"].apply(lambda x: format_percentage(x, assume_fraction=True))
-            df["Hit L20"] = df["Hit L20"].apply(lambda x: format_percentage(x, assume_fraction=True))
-
+            # Hit L10/L20 kept numeric, show as %
             df["Save Bet"] = False
             for i, row in df.iterrows():
                 key = _bet_key(row)
@@ -808,8 +787,8 @@ with tab4:
                 "Price (Am)": column_config.TextColumn(help="American odds", width="auto"),
                 "Bookmaker": column_config.TextColumn(width="auto"),
                 "EV": column_config.TextColumn(help="Expected Value", width="auto"),
-                "Hit L10": column_config.TextColumn(width="auto"),
-                "Hit L20": column_config.TextColumn(width="auto"),
+                "Hit L10": column_config.NumberColumn(format="0.0%", width="auto"),
+                "Hit L20": column_config.NumberColumn(format="0.0%", width="auto"),
                 "L10 Avg": column_config.NumberColumn(format="%.1f", width="auto"),
                 "L20 Avg": column_config.NumberColumn(format="%.1f", width="auto"),
             }

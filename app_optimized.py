@@ -23,7 +23,6 @@ st.set_page_config(page_title="NBA Prop Analyzer", layout="wide")
 # ------------------------------------------------------
 PROJECT_ID = os.getenv("PROJECT_ID", "")
 
-# Dataset/table config for new architecture
 PROP_ANALYZER_DATASET = os.getenv("PROP_ANALYZER_DATASET", "nba_prop_analyzer")
 TODAYS_PROPS_TABLE = os.getenv("TODAYS_PROPS_TABLE", "todays_props_with_hit_rates")
 GAME_LOGS_TABLE = os.getenv("GAME_LOGS_TABLE", "todays_props_game_logs")
@@ -85,21 +84,6 @@ FROM `{PROJECT_ID}.{PROP_ANALYZER_DATASET}.{GAME_LOGS_TABLE}`
 # ------------------------------------------------------
 # HELPERS
 # ------------------------------------------------------
-def format_percentage(value, decimals=1, assume_fraction=True):
-    """
-    assume_fraction=True -> input is 0-1
-    assume_fraction=False -> input is 0-100
-    """
-    try:
-        val = float(value)
-        if pd.isna(val):
-            return "—"
-        if not assume_fraction:
-            val = val / 100.0
-        return f"{val * 100:.{decimals}f}%"
-    except (ValueError, TypeError):
-        return "—"
-
 def format_moneyline(value):
     try:
         val = float(value)
@@ -112,11 +96,12 @@ def format_moneyline(value):
 
 def get_stat_base_from_market(market: str) -> str:
     """
-    Detect stat category (pts, reb, ast, pra) from a market like:
-    - player_points_alternate
-    - player_rebounds
-    - player_assists_alternate
-    - player_points_rebounds_assists_alternate
+    Detect stat category (pts, reb, ast, pra) from a market string.
+    Handles things like:
+      - player_points_alternate
+      - player_rebounds
+      - player_assists_alternate
+      - player_points_rebounds_assists_alternate
     """
     m = (market or "").lower().strip()
 
@@ -169,13 +154,15 @@ def add_dynamic_averages(df: pd.DataFrame) -> pd.DataFrame:
 @st.cache_data(ttl=600, show_spinner=True)
 def load_props_cached(_bq_client, query):
     df = _bq_client.query(query).to_dataframe()
+    # Normalize column names / strip
     df.columns = [c.strip() for c in df.columns]
 
-    if "market" in df.columns:
-        df["market"] = df["market"].astype(str).str.strip()
-    if "player" in df.columns:
-        df["player"] = df["player"].astype(str).str.strip()
+    # Strip string columns
+    for col in ["player", "market", "bookmaker", "player_team", "opponent_team", "home_team", "visitor_team"]:
+        if col in df.columns:
+            df[col] = df[col].astype(str).str.strip()
 
+    # Ensure numeric types where relevant
     numeric_cols = [
         "line", "price",
         "hit_rate_last5", "hit_rate_last10", "hit_rate_last20",
@@ -189,7 +176,7 @@ def load_props_cached(_bq_client, query):
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
-    # Fractional hit rates for filtering/sorting
+    # Fractional hit rates for filtering/sorting (0–1)
     for src, dst in [
         ("hit_rate_last5", "hit5_frac"),
         ("hit_rate_last10", "hit10_frac"),
@@ -198,6 +185,7 @@ def load_props_cached(_bq_client, query):
         if src in df.columns:
             df[dst] = df[src] / 100.0
 
+    # Add dynamic averages based on market
     df = add_dynamic_averages(df)
     return df
 
@@ -214,10 +202,9 @@ def load_game_logs_cached(_bq_client, query):
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
-    if "market" in df.columns:
-        df["market"] = df["market"].astype(str).str.strip()
-    if "player" in df.columns:
-        df["player"] = df["player"].astype(str).str.strip()
+    for col in ["player", "market", "team", "opponent_team"]:
+        if col in df.columns:
+            df[col] = df[col].astype(str).str.strip()
 
     return df
 
@@ -280,10 +267,10 @@ st.sidebar.header("⚙️ Filters")
 today = pd.Timestamp.today().normalize()
 sel_date = st.sidebar.date_input("Game date", today)
 
+# Game selector from home/visitor
 if not props_df.empty and "home_team" in props_df.columns and "visitor_team" in props_df.columns:
     day_games = props_df[["home_team", "visitor_team"]].dropna().drop_duplicates()
     if not day_games.empty:
-        day_games = day_games.copy()
         day_games["matchup"] = day_games["home_team"] + " vs " + day_games["visitor_team"]
         game_options = ["All games"] + day_games["matchup"].tolist()
     else:
@@ -293,6 +280,7 @@ else:
 
 sel_game = st.sidebar.selectbox("Game", game_options)
 
+# Player selector
 if not props_df.empty and "player" in props_df.columns:
     players_filtered = props_df.copy()
     if sel_game != "All games" and " vs " in sel_game:
@@ -308,6 +296,7 @@ else:
 player_options = ["All players"] + players_today
 sel_player = st.sidebar.selectbox("Player", player_options)
 
+# Market filter (default All Stats)
 st.sidebar.markdown("---")
 st.sidebar.header("🎯 Stat / Market Type")
 
@@ -320,6 +309,7 @@ stat_options = ["All Stats"] + market_list
 sel_stat_display = st.sidebar.selectbox("Market (matches odds)", stat_options, index=0)
 sel_stat = None if sel_stat_display == "All Stats" else sel_stat_display
 
+# Table display defaults
 st.sidebar.markdown("---")
 st.sidebar.header("📊 Table Display Options")
 default_cols = [
@@ -328,6 +318,7 @@ default_cols = [
 ]
 selected_columns = default_cols
 
+# Odds filters
 st.sidebar.markdown("---")
 st.sidebar.header("🎲 Odds Filters")
 
@@ -353,6 +344,7 @@ odds_threshold = st.sidebar.number_input(
     step=50,
 )
 
+# Analytical filters
 st.sidebar.markdown("---")
 st.sidebar.header("📈 Analytical Filters")
 sel_min_ev = st.sidebar.slider("Minimum EV", -1.0, 1.0, 0.0, 0.01)
@@ -377,32 +369,40 @@ def build_props_table(
 
     df = props_df.copy()
 
+    # Game filter
     if game_pick and isinstance(game_pick, str) and game_pick != "All games" and " vs " in game_pick:
         home, away = game_pick.split(" vs ", 1)
         df = df[(df["home_team"] == home) & (df["visitor_team"] == away)]
 
+    # Player filter
     if player_pick and player_pick != "All players":
         df = df[df["player"] == player_pick]
 
+    # Market filter
     if stat_pick:
         df = df[df["market"] == stat_pick]
 
+    # Book filter
     if books:
         df = df[df["bookmaker"].isin(books)]
 
+    # Odds range filter
     if "price" in df.columns:
         df["price"] = pd.to_numeric(df["price"], errors="coerce")
         df = df[df["price"].between(odds_range[0], odds_range[1])]
 
+    # EV filter
     if "expected_value" in df.columns:
         df = df[df["expected_value"] >= min_ev]
 
+    # Hit10 filter (fractional)
     if "hit10_frac" in df.columns:
         df = df[df["hit10_frac"] >= min_hit10]
 
     if df.empty:
         return df
 
+    # Build display df
     df_display = pd.DataFrame()
     df_display["Player"] = df["player"]
     df_display["Market"] = df["market"]
@@ -420,6 +420,7 @@ def build_props_table(
 
     df_display["EV"] = df.get("expected_value", np.nan)
 
+    # Keep raw fractional columns if needed later
     df_display["hit5_frac"] = df_display["Hit L5"]
     df_display["hit10_frac"] = df_display["Hit L10"]
     df_display["hit20_frac"] = df_display["Hit L20"]
@@ -571,13 +572,14 @@ with tab1:
     if df.empty:
         st.info("No props match your filters.")
     else:
+        # Apply odds threshold
         df["Price_raw"] = pd.to_numeric(df["Price (Am)"], errors="coerce")
         df = df[df["Price_raw"] >= odds_threshold]
 
         if df.empty:
             st.info("No props remain after applying odds threshold.")
         else:
-            # ✅ Default sort: Hit L10 descending (100% → 0%)
+            # Default sort: Hit L10 descending
             if "Hit L10" in df.columns:
                 df = df.sort_values("Hit L10", ascending=False, na_position="last")
 
@@ -586,8 +588,12 @@ with tab1:
                 lambda x: f"{x:.3f}" if pd.notna(x) else "—"
             )
 
-            # Keep hit rates numeric; use NumberColumn with % formatting
+            # Ensure hit rates are numeric for % display & proper sorting
+            for col in ["Hit L5", "Hit L10", "Hit L20"]:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors="coerce")
 
+            # Save Bet column
             df["Save Bet"] = False
             for i, row in df.iterrows():
                 key = _bet_key(row)
@@ -615,7 +621,7 @@ with tab1:
                 "Line": column_config.NumberColumn(format="%.1f", width="auto"),
                 "Price (Am)": column_config.TextColumn(help="American odds", width="auto"),
                 "Bookmaker": column_config.TextColumn(width="auto"),
-                # ✅ numeric percent columns
+                # numeric 0–1 values shown as %
                 "Hit L5": column_config.NumberColumn(format="0.0%", width="auto"),
                 "Hit L10": column_config.NumberColumn(format="0.0%", width="auto"),
                 "Hit L20": column_config.NumberColumn(format="0.0%", width="auto"),
@@ -754,6 +760,7 @@ with tab4:
         if df.empty:
             st.info("No props remain after applying odds threshold.")
         else:
+            # Sort by Hit L10 as well
             if "Hit L10" in df.columns:
                 df = df.sort_values("Hit L10", ascending=False, na_position="last")
 
@@ -762,7 +769,11 @@ with tab4:
                 lambda x: f"{x:.3f}" if pd.notna(x) else "—"
             )
 
-            # Hit L10/L20 kept numeric, show as %
+            # Ensure hit columns numeric
+            for col in ["Hit L10", "Hit L20"]:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors="coerce")
+
             df["Save Bet"] = False
             for i, row in df.iterrows():
                 key = _bet_key(row)

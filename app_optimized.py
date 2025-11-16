@@ -255,6 +255,52 @@ def pick_def_allowed(row):
     return row.get(col, np.nan)
 
 
+# --------- MEMORY OPT HELPERS (1 & 2) -----------------
+def optimize_numeric_dtypes(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Downcast numeric columns to smaller dtypes:
+      - float64 -> float32
+      - int64   -> int16
+      - *rank* integer columns -> int8
+      - hit*_frac -> float16
+    """
+    if df is None or df.empty:
+        return df
+
+    # General float64 -> float32
+    float_cols = df.select_dtypes(include=["float64"]).columns
+    for col in float_cols:
+        df[col] = df[col].astype("float32")
+
+    # General int64 -> int16
+    int_cols = df.select_dtypes(include=["int64"]).columns
+    for col in int_cols:
+        # rank columns are very small (1–30)
+        if "rank" in col.lower():
+            df[col] = df[col].astype("int8")
+        else:
+            df[col] = df[col].astype("int16")
+
+    # Hit fractions can be even smaller: float16
+    for col in ["hit5_frac", "hit10_frac", "hit20_frac"]:
+        if col in df.columns:
+            df[col] = df[col].astype("float16")
+
+    return df
+
+
+def optimize_string_dtypes(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Convert object/string columns to category to save memory.
+    """
+    if df is None or df.empty:
+        return df
+    obj_cols = df.select_dtypes(include=["object"]).columns
+    for col in obj_cols:
+        df[col] = df[col].astype("category")
+    return df
+
+
 # ------------------------------------------------------
 # CACHED LOADERS (BigQuery only)
 # ------------------------------------------------------
@@ -315,6 +361,11 @@ def load_props_cached(_bq_client, query):
 
     # Add dynamic averages based on market
     df = add_dynamic_averages(df)
+
+    # Memory optimizations
+    df = optimize_numeric_dtypes(df)
+    df = optimize_string_dtypes(df)
+
     return df
 
 
@@ -349,6 +400,10 @@ def load_game_logs_cached(_bq_client, query):
     for col in ["player", "market", "team", "opponent_team", "player_position", "depth_role"]:
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip()
+
+    # Memory optimizations
+    df = optimize_numeric_dtypes(df)
+    df = optimize_string_dtypes(df)
 
     return df
 
@@ -462,6 +517,10 @@ if props_df is not None and not props_df.empty:
     ]
     props_df = props_df[[c for c in needed_cols if c in props_df.columns]]
 
+    # Re-apply memory optimization after trimming
+    props_df = optimize_numeric_dtypes(props_df)
+    props_df = optimize_string_dtypes(props_df)
+
 # write back trimmed df
 st.session_state.props_df = props_df
 
@@ -512,7 +571,7 @@ sel_game = st.sidebar.selectbox("Game", game_options)
 
 # Player selector
 if not props_df.empty and "player" in props_df.columns:
-    players_filtered = props_df.copy()
+    players_filtered = props_df
     if sel_game != "All games" and " vs " in sel_game:
         home, away = sel_game.split(" vs ", 1)
         players_filtered = players_filtered[
@@ -732,7 +791,7 @@ def get_player_game_log(game_logs_df, player, market):
     if game_logs_df is None or game_logs_df.empty:
         return pd.DataFrame()
 
-    df = game_logs_df.copy()
+    df = game_logs_df
     df = df[(df["player"] == player) & (df["market"] == market)]
     df = df.dropna(subset=["game_date"]).sort_values("game_date")
     return df.tail(20)

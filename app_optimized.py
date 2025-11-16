@@ -96,7 +96,6 @@ def format_moneyline(value):
 
 def detect_stat(market):
     m = (market or "").lower()
-
     if "p+r+a" in m or "pra" in m:
         return "pra"
     if "assist" in m or "ast" in m:
@@ -153,6 +152,7 @@ def add_defensive_matchups(df):
     ]
 
     df["Matchup Difficulty"] = df.get("matchup_difficulty_score", np.nan)
+
     return df
 
 # ---------------------------------------------------------
@@ -175,9 +175,44 @@ def apply_defense_color(val):
     else:
         return "background-color: #5cb85c; color: white;"   # green
 
-# ------------------------------------------------------
+# ---------------------------------------------------------
+# CENTER TEXT
+# ---------------------------------------------------------
+def center_cells(val):
+    return "text-align: center;"
+
+# ---------------------------------------------------------
+# FORMAT TABLE FIELDS (difficulty, hit rates, averages)
+# ---------------------------------------------------------
+def format_overview_fields(df):
+    df = df.copy()
+
+    # Format matchup difficulty (whole number)
+    if "Matchup Difficulty" in df.columns:
+        df["Matchup Difficulty"] = df["Matchup Difficulty"].apply(
+            lambda x: f"{int(round(x))}" if pd.notna(x) else ""
+        )
+
+    # Format hit rates (percent, no decimals)
+    hit_cols = ["hit_rate_last5", "hit_rate_last10", "hit_rate_last20"]
+    for col in hit_cols:
+        if col in df.columns:
+            df[col] = df[col].apply(
+                lambda x: f"{int(round(x * 100))}%" if pd.notna(x) else ""
+            )
+
+    # Format averages (one decimal place)
+    for col in ["L5 Avg", "L10 Avg", "L20 Avg"]:
+        if col in df.columns:
+            df[col] = df[col].apply(
+                lambda x: f"{x:.1f}" if pd.notna(x) else ""
+            )
+
+    return df
+
+# ---------------------------------------------------------
 # LOAD DATA
-# ------------------------------------------------------
+# ---------------------------------------------------------
 @st.cache_data(show_spinner=True)
 def load_props():
     df = bq_client.query(PROPS_SQL).to_dataframe()
@@ -195,9 +230,9 @@ def load_historical():
 props_df = load_props()
 historical_df = load_historical()
 
-# ------------------------------------------------------
-# SIDEBAR + SESSION
-# ------------------------------------------------------
+# ---------------------------------------------------------
+# SIDEBAR + SESSION STATE
+# ---------------------------------------------------------
 if "saved_bets" not in st.session_state:
     st.session_state.saved_bets = []
 
@@ -224,11 +259,12 @@ sel_odds = st.sidebar.slider("Odds Range", min_odds, max_odds, (min_odds, max_od
 
 sel_hit10 = st.sidebar.slider("Min Hit Rate L10", 0.0, 1.0, 0.5)
 
-# ------------------------------------------------------
+# ---------------------------------------------------------
 # FILTER FUNCTION
-# ------------------------------------------------------
+# ---------------------------------------------------------
 def filter_props(df):
     d = df.copy()
+
     if sel_game != "All games":
         home, away = sel_game.split(" vs ")
         d = d[(d["home_team"] == home) & (d["visitor_team"] == away)]
@@ -242,18 +278,20 @@ def filter_props(df):
     d = d[d["bookmaker"].isin(sel_books)]
     d = d[d["price"].between(sel_odds[0], sel_odds[1])]
     d = d[d["hit_rate_last10"] >= sel_hit10]
+
     return d
 
-# ------------------------------------------------------
+# ---------------------------------------------------------
 # TABS
-# ------------------------------------------------------
+# ---------------------------------------------------------
 tab1, tab2, tab3 = st.tabs(["🧮 Props Overview", "📈 Trend Analysis", "📋 Saved Bets"])
 
-# ------------------------------------------------------
-# TAB 1 – PROPS OVERVIEW
-# ------------------------------------------------------
+# ---------------------------------------------------------
+# TAB 1 — PROPS OVERVIEW
+# ---------------------------------------------------------
 with tab1:
     st.subheader("Props Overview")
+
     d = filter_props(props_df)
 
     if d.empty:
@@ -261,9 +299,14 @@ with tab1:
     else:
         d = get_dynamic_averages(d)
         d = add_defensive_matchups(d)
+
+        d["Price"] = d["price"].apply(format_moneyline)
+
+        # Format hit rates & averages & difficulty
+        d = format_overview_fields(d)
+
         d = d.sort_values("hit_rate_last10", ascending=False)
 
-        # Display columns
         display_cols = [
             "player", "market", "line", "Price", "bookmaker",
             "Pos Def Rank", "Overall Def Rank", "Matchup Difficulty",
@@ -271,18 +314,19 @@ with tab1:
             "L5 Avg", "L10 Avg", "L20 Avg"
         ]
 
-        d["Price"] = d["price"].apply(format_moneyline)
-
-        styled = d[display_cols].style.applymap(
-            apply_defense_color,
-            subset=["Pos Def Rank", "Overall Def Rank", "Matchup Difficulty"]
+        styled = (
+            d[display_cols]
+            .style
+            .applymap(apply_defense_color,
+                      subset=["Pos Def Rank", "Overall Def Rank", "Matchup Difficulty"])
+            .applymap(center_cells)
         )
 
         st.dataframe(styled, use_container_width=True)
 
-# ------------------------------------------------------
-# TAB 2 – TREND ANALYSIS (FULLY UPDATED)
-# ------------------------------------------------------
+# ---------------------------------------------------------
+# TAB 2 — TREND ANALYSIS (UPDATED)
+# ---------------------------------------------------------
 with tab2:
     st.subheader("Trend Analysis")
 
@@ -302,7 +346,7 @@ with tab2:
 
         stat = detect_stat(m)
 
-        # Pull correct prop row for defense data
+        # Get defense data
         prop_row = props_df[
             (props_df["player"] == p) &
             (props_df["market"] == m) &
@@ -311,7 +355,7 @@ with tab2:
 
         overall_def_rank = prop_row[f"opp_overall_{stat}_rank"]
 
-        # Background shade based on defense
+        # Defensive shading background
         if overall_def_rank <= 5:
             def_bg = "#662222"
         elif overall_def_rank <= 15:
@@ -369,9 +413,9 @@ with tab2:
 
         st.plotly_chart(fig, use_container_width=True)
 
-# ------------------------------------------------------
-# TAB 3 – SAVED BETS
-# ------------------------------------------------------
+# ---------------------------------------------------------
+# TAB 3 — SAVED BETS
+# ---------------------------------------------------------
 with tab3:
     st.subheader("Saved Bets")
 
@@ -383,4 +427,3 @@ with tab3:
 
         csv = df_save.to_csv(index=False).encode("utf-8")
         st.download_button("Download CSV", csv, "saved_bets.csv", "text/csv")
-

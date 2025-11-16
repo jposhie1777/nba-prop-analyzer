@@ -94,6 +94,7 @@ def format_moneyline(value):
     except (ValueError, TypeError):
         return "—"
 
+
 def get_stat_base_from_market(market: str) -> str:
     """
     Detect stat category (pts, reb, ast, pra) from a market string.
@@ -123,6 +124,7 @@ def get_stat_base_from_market(market: str) -> str:
 
     return ""
 
+
 def add_dynamic_averages(df: pd.DataFrame) -> pd.DataFrame:
     """
     Add L5/L10/L20 Avg columns for each row,
@@ -148,6 +150,112 @@ def add_dynamic_averages(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
+
+# NBA team abbreviations (Option A: auto-generate)
+TEAM_ABBREVIATIONS = {
+    "Atlanta Hawks": "ATL",
+    "Boston Celtics": "BOS",
+    "Brooklyn Nets": "BKN",
+    "Charlotte Hornets": "CHA",
+    "Chicago Bulls": "CHI",
+    "Cleveland Cavaliers": "CLE",
+    "Dallas Mavericks": "DAL",
+    "Denver Nuggets": "DEN",
+    "Detroit Pistons": "DET",
+    "Golden State Warriors": "GSW",
+    "Houston Rockets": "HOU",
+    "Indiana Pacers": "IND",
+    "Los Angeles Clippers": "LAC",
+    "Los Angeles Lakers": "LAL",
+    "Memphis Grizzlies": "MEM",
+    "Miami Heat": "MIA",
+    "Milwaukee Bucks": "MIL",
+    "Minnesota Timberwolves": "MIN",
+    "New Orleans Pelicans": "NOP",
+    "New York Knicks": "NYK",
+    "Oklahoma City Thunder": "OKC",
+    "Orlando Magic": "ORL",
+    "Philadelphia 76ers": "PHI",
+    "Phoenix Suns": "PHX",
+    "Portland Trail Blazers": "POR",
+    "Sacramento Kings": "SAC",
+    "San Antonio Spurs": "SAS",
+    "Toronto Raptors": "TOR",
+    "Utah Jazz": "UTA",
+    "Washington Wizards": "WAS",
+}
+
+
+def get_team_abbrev(team_name: str) -> str:
+    t = (team_name or "").strip()
+    if not t:
+        return ""
+    if t in TEAM_ABBREVIATIONS:
+        return TEAM_ABBREVIATIONS[t]
+    # Fallback: first 3 letters uppercased
+    return t[:3].upper()
+
+
+def defense_color_emoji(rank):
+    """
+    Simple red → orange → yellow → green gradient using emojis,
+    1 is toughest (red), 30 is easiest (green).
+    """
+    if pd.isna(rank):
+        return ""
+    try:
+        r = int(rank)
+    except (TypeError, ValueError):
+        return ""
+    if r <= 5:
+        return "🟥"
+    elif r <= 10:
+        return "🟧"
+    elif r <= 20:
+        return "🟨"
+    else:
+        return "🟩"
+
+
+def format_def_matchup_cell(row):
+    """
+    Build a text cell for defensive matchup:
+    e.g. '🟥 3\\nNYK'
+    """
+    market = row.get("market", "")
+    base = get_stat_base_from_market(market)
+    if not base:
+        return ""
+
+    rank_col = f"opp_pos_{base}_rank"
+    rank_val = row.get(rank_col, np.nan)
+    if pd.isna(rank_val):
+        return ""
+
+    team = row.get("opponent_team", "")
+    abbr = get_team_abbrev(team)
+    color_symbol = defense_color_emoji(rank_val)
+    try:
+        r_int = int(rank_val)
+    except (TypeError, ValueError):
+        return f"{color_symbol} ?\n{abbr}"
+
+    # multi-line string: rank on top, abbr under it
+    return f"{color_symbol} {r_int}\n{abbr}"
+
+
+def pick_def_allowed(row):
+    """
+    Pick the correct opponent allowed metric based on the stat base (pts/reb/ast/pra).
+    """
+    market = row.get("market", "")
+    base = get_stat_base_from_market(market)
+    if not base:
+        return np.nan
+    col = f"opp_pos_{base}_allowed"
+    return row.get(col, np.nan)
+
+
 # ------------------------------------------------------
 # CACHED LOADERS
 # ------------------------------------------------------
@@ -158,19 +266,41 @@ def load_props_cached(_bq_client, query):
     df.columns = [c.strip() for c in df.columns]
 
     # Strip string columns
-    for col in ["player", "market", "bookmaker", "player_team", "opponent_team", "home_team", "visitor_team"]:
+    for col in [
+        "player",
+        "market",
+        "bookmaker",
+        "player_team",
+        "opponent_team",
+        "home_team",
+        "visitor_team",
+    ]:
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip()
 
     # Ensure numeric types where relevant
     numeric_cols = [
-        "line", "price",
-        "hit_rate_last5", "hit_rate_last10", "hit_rate_last20",
-        "pts_last5", "reb_last5", "ast_last5", "pra_last5",
-        "pts_last10", "reb_last10", "ast_last10", "pra_last10",
-        "pts_last20", "reb_last20", "ast_last20", "pra_last20",
-        "stat_stddev_last20", "stat_mean_last20",
-        "decimal_odds", "expected_value",
+        "line",
+        "price",
+        "hit_rate_last5",
+        "hit_rate_last10",
+        "hit_rate_last20",
+        "pts_last5",
+        "reb_last5",
+        "ast_last5",
+        "pra_last5",
+        "pts_last10",
+        "reb_last10",
+        "ast_last10",
+        "pra_last10",
+        "pts_last20",
+        "reb_last20",
+        "ast_last20",
+        "pra_last20",
+        "stat_stddev_last20",
+        "stat_mean_last20",
+        "decimal_odds",
+        "expected_value",
     ]
     for c in numeric_cols:
         if c in df.columns:
@@ -189,6 +319,7 @@ def load_props_cached(_bq_client, query):
     df = add_dynamic_averages(df)
     return df
 
+
 @st.cache_data(ttl=600, show_spinner=True)
 def load_game_logs_cached(_bq_client, query):
     df = _bq_client.query(query).to_dataframe()
@@ -197,16 +328,40 @@ def load_game_logs_cached(_bq_client, query):
     if "game_date" in df.columns:
         df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
 
-    numeric_cols = ["line", "pts", "reb", "ast", "pra", "season_avg"]
+    numeric_cols = [
+        "line",
+        "pts",
+        "reb",
+        "ast",
+        "pra",
+        "season_avg",
+        "opp_pos_pts_allowed",
+        "opp_pos_reb_allowed",
+        "opp_pos_ast_allowed",
+        "opp_pos_pra_allowed",
+        "opp_pos_pts_rank",
+        "opp_pos_reb_rank",
+        "opp_pos_ast_rank",
+        "opp_pos_pra_rank",
+        "opp_overall_pts_allowed",
+        "opp_overall_reb_allowed",
+        "opp_overall_ast_allowed",
+        "opp_overall_pra_allowed",
+        "opp_overall_pts_rank",
+        "opp_overall_reb_rank",
+        "opp_overall_ast_rank",
+        "opp_overall_pra_rank",
+    ]
     for c in numeric_cols:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
-    for col in ["player", "market", "team", "opponent_team"]:
+    for col in ["player", "market", "team", "opponent_team", "player_position", "depth_role"]:
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip()
 
     return df
+
 
 # ------------------------------------------------------
 # REFRESH BUTTON
@@ -241,13 +396,63 @@ if "last_updated" in st.session_state:
     st.sidebar.info(f"🕒 **Data last updated:** {last_updated_str}")
 
 # ------------------------------------------------------
+# MERGE DEFENSIVE METRICS INTO PROPS DF
+# ------------------------------------------------------
+def merge_defense_metrics(props_df, game_logs_df):
+    """
+    Merge player position + opponent defensive metrics from todays_props_game_logs
+    into the props dataframe for today's props.
+    """
+    if props_df is None or props_df.empty or game_logs_df is None or game_logs_df.empty:
+        return props_df
+
+    defense_cols = [
+        "player",
+        "market",
+        "line",
+        "opponent_team",
+        "player_position",
+        "depth_role",
+        "opp_pos_pts_allowed",
+        "opp_pos_reb_allowed",
+        "opp_pos_ast_allowed",
+        "opp_pos_pra_allowed",
+        "opp_pos_pts_rank",
+        "opp_pos_reb_rank",
+        "opp_pos_ast_rank",
+        "opp_pos_pra_rank",
+        "opp_overall_pts_allowed",
+        "opp_overall_reb_allowed",
+        "opp_overall_ast_allowed",
+        "opp_overall_pra_allowed",
+        "opp_overall_pts_rank",
+        "opp_overall_reb_rank",
+        "opp_overall_ast_rank",
+        "opp_overall_pra_rank",
+    ]
+
+    gl = game_logs_df[[c for c in defense_cols if c in game_logs_df.columns]].drop_duplicates()
+
+    merged = props_df.merge(
+        gl,
+        on=["player", "market", "line", "opponent_team"],
+        how="left",
+    )
+    return merged
+
+
+props_df = merge_defense_metrics(props_df, game_logs_df)
+
+# ------------------------------------------------------
 # SESSION STATE (Saved Bets)
 # ------------------------------------------------------
 if "saved_bets" not in st.session_state:
     st.session_state.saved_bets = []
 
+
 def _bet_key(row):
     return f"{row['Player']}|{row['Market']}|{row['Bookmaker']}|{row['Line']}|{row['Price (Am)']}"
+
 
 def sync_saved_bets_from_editor(edited_df):
     for _, row in edited_df.iterrows():
@@ -257,7 +462,10 @@ def sync_saved_bets_from_editor(edited_df):
         if checked and not exists:
             st.session_state.saved_bets.append(row.to_dict())
         elif not checked and exists:
-            st.session_state.saved_bets = [x for x in st.session_state.saved_bets if _bet_key(x) != key]
+            st.session_state.saved_bets = [
+                x for x in st.session_state.saved_bets if _bet_key(x) != key
+            ]
+
 
 # ------------------------------------------------------
 # SIDEBAR FILTERS
@@ -286,8 +494,8 @@ if not props_df.empty and "player" in props_df.columns:
     if sel_game != "All games" and " vs " in sel_game:
         home, away = sel_game.split(" vs ", 1)
         players_filtered = players_filtered[
-            (players_filtered["home_team"] == home) &
-            (players_filtered["visitor_team"] == away)
+            (players_filtered["home_team"] == home)
+            & (players_filtered["visitor_team"] == away)
         ]
     players_today = sorted(players_filtered["player"].dropna().unique().tolist())
 else:
@@ -313,10 +521,19 @@ sel_stat = None if sel_stat_display == "All Stats" else sel_stat_display
 st.sidebar.markdown("---")
 st.sidebar.header("📊 Table Display Options")
 default_cols = [
-    "Player", "Market", "Line", "Price (Am)", "Bookmaker",
-    "Hit L5", "Hit L10", "Hit L20", "L5 Avg", "L10 Avg", "L20 Avg",
+    "Player",
+    "Market",
+    "Line",
+    "Price (Am)",
+    "Bookmaker",
+    "Hit L5",
+    "Hit L10",
+    "Hit L20",
+    "L5 Avg",
+    "L10 Avg",
+    "L20 Avg",
 ]
-selected_columns = default_cols
+selected_columns = default_cols  # Reserved for future manual column picker
 
 # Odds filters
 st.sidebar.markdown("---")
@@ -324,7 +541,8 @@ st.sidebar.header("🎲 Odds Filters")
 
 books_available = (
     sorted(props_df["bookmaker"].dropna().unique().tolist())
-    if not props_df.empty and "bookmaker" in props_df.columns else []
+    if not props_df.empty and "bookmaker" in props_df.columns
+    else []
 )
 sel_books = st.sidebar.multiselect("Bookmakers", books_available, default=books_available)
 
@@ -370,7 +588,12 @@ def build_props_table(
     df = props_df.copy()
 
     # Game filter
-    if game_pick and isinstance(game_pick, str) and game_pick != "All games" and " vs " in game_pick:
+    if (
+        game_pick
+        and isinstance(game_pick, str)
+        and game_pick != "All games"
+        and " vs " in game_pick
+    ):
         home, away = game_pick.split(" vs ", 1)
         df = df[(df["home_team"] == home) & (df["visitor_team"] == away)]
 
@@ -405,6 +628,7 @@ def build_props_table(
     # Build display df
     df_display = pd.DataFrame()
     df_display["Player"] = df["player"]
+    df_display["Pos"] = df.get("player_position", "")
     df_display["Market"] = df["market"]
     df_display["Line"] = df["line"]
     df_display["Price (Am)"] = df["price"]
@@ -420,12 +644,17 @@ def build_props_table(
 
     df_display["EV"] = df.get("expected_value", np.nan)
 
+    # Defensive metrics based on stat / position
+    df_display["Def Allowed"] = df.apply(pick_def_allowed, axis=1)
+    df_display["Def Matchup"] = df.apply(format_def_matchup_cell, axis=1)
+
     # Keep raw fractional columns if needed later
     df_display["hit5_frac"] = df_display["Hit L5"]
     df_display["hit10_frac"] = df_display["Hit L10"]
     df_display["hit20_frac"] = df_display["Hit L20"]
 
     return df_display.reset_index(drop=True)
+
 
 @st.cache_data(ttl=120, show_spinner=False)
 def get_props_table_cached(
@@ -449,6 +678,7 @@ def get_props_table_cached(
         sel_min_hit10,
     )
 
+
 # ------------------------------------------------------
 # TREND PLOT
 # ------------------------------------------------------
@@ -460,6 +690,7 @@ def get_player_game_log(game_logs_df, player, market):
     df = df[(df["player"] == player) & (df["market"] == market)]
     df = df.dropna(subset=["game_date"]).sort_values("game_date")
     return df.tail(20)
+
 
 def plot_trend(game_logs_df, player, market, line_value):
     s = get_player_game_log(game_logs_df, player, market)
@@ -537,6 +768,7 @@ def plot_trend(game_logs_df, player, market, line_value):
     )
     st.plotly_chart(fig, use_container_width=True)
 
+
 # ------------------------------------------------------
 # DEBUG
 # ------------------------------------------------------
@@ -593,6 +825,10 @@ with tab1:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors="coerce")
 
+            # Ensure Def Allowed numeric formatting
+            if "Def Allowed" in df.columns:
+                df["Def Allowed"] = pd.to_numeric(df["Def Allowed"], errors="coerce")
+
             # Save Bet column
             df["Save Bet"] = False
             for i, row in df.iterrows():
@@ -602,33 +838,62 @@ with tab1:
 
             ordered_cols = [
                 "Save Bet",
-                "Player", "Market", "Line", "Price (Am)", "Bookmaker",
-                "Hit L5", "Hit L10", "Hit L20",
-                "L5 Avg", "L10 Avg", "L20 Avg",
+                "Player",
+                "Pos",
+                "Market",
+                "Line",
+                "Price (Am)",
+                "Bookmaker",
+                "Def Matchup",
+                "Def Allowed",
+                "Hit L5",
+                "Hit L10",
+                "Hit L20",
+                "L5 Avg",
+                "L10 Avg",
+                "L20 Avg",
                 "EV",
             ]
             visible_cols = [c for c in ordered_cols if c in df.columns]
             df_display = df[visible_cols].copy()
 
             st.markdown("### 📊 Player Props")
-            st.caption("💡 Sorted by Hit Rate L10 (highest first). Click headers to resort.")
+            st.caption(
+                "💡 Sorted by Hit Rate L10 (highest first). "
+                "Def Matchup uses a red→green gradient (1 = toughest, 30 = easiest)."
+            )
 
             from streamlit import column_config
+
             col_cfg = {
-                "Save Bet": column_config.CheckboxColumn(help="Save or unsave this bet", width="auto"),
+                "Save Bet": column_config.CheckboxColumn(
+                    help="Save or unsave this bet", width="auto"
+                ),
                 "Player": column_config.TextColumn(width="auto"),
+                "Pos": column_config.TextColumn(help="Player position", width="small"),
                 "Market": column_config.TextColumn(width="auto"),
-                "Line": column_config.NumberColumn(format="%.1f", width="auto"),
-                "Price (Am)": column_config.TextColumn(help="American odds", width="auto"),
+                "Line": column_config.NumberColumn(format="%.1f", width="small"),
+                "Price (Am)": column_config.TextColumn(
+                    help="American odds", width="small"
+                ),
                 "Bookmaker": column_config.TextColumn(width="auto"),
+                "Def Matchup": column_config.TextColumn(
+                    help="Opponent defense vs this position & stat (🟥 = toughest, 🟩 = easiest)",
+                    width="small",
+                ),
+                "Def Allowed": column_config.NumberColumn(
+                    format="%.1f",
+                    help="Opponent allowed to this position for this stat",
+                    width="small",
+                ),
                 # numeric 0–1 values shown as %
-                "Hit L5": column_config.NumberColumn(format="0.0%", width="auto"),
-                "Hit L10": column_config.NumberColumn(format="0.0%", width="auto"),
-                "Hit L20": column_config.NumberColumn(format="0.0%", width="auto"),
-                "L5 Avg": column_config.NumberColumn(format="%.1f", width="auto"),
-                "L10 Avg": column_config.NumberColumn(format="%.1f", width="auto"),
-                "L20 Avg": column_config.NumberColumn(format="%.1f", width="auto"),
-                "EV": column_config.TextColumn(width="auto"),
+                "Hit L5": column_config.NumberColumn(format="0.0%", width="small"),
+                "Hit L10": column_config.NumberColumn(format="0.0%", width="small"),
+                "Hit L20": column_config.NumberColumn(format="0.0%", width="small"),
+                "L5 Avg": column_config.NumberColumn(format="%.1f", width="small"),
+                "L10 Avg": column_config.NumberColumn(format="%.1f", width="small"),
+                "L20 Avg": column_config.NumberColumn(format="%.1f", width="small"),
+                "EV": column_config.TextColumn(width="small"),
             }
 
             edited_df = st.data_editor(
@@ -652,13 +917,18 @@ with tab2:
     elif game_logs_df is None or game_logs_df.empty:
         st.info("No game logs available for trend analysis.")
     else:
-        players_in_props = ["(choose)"] + sorted(props_df["player"].dropna().unique().tolist())
+        players_in_props = ["(choose)"] + sorted(
+            props_df["player"].dropna().unique().tolist()
+        )
         p_pick = st.selectbox("Player", players_in_props, index=0)
         if p_pick == "(choose)":
             st.stop()
 
         markets_for_player = sorted(
-            props_df.loc[props_df["player"] == p_pick, "market"].dropna().unique().tolist()
+            props_df.loc[props_df["player"] == p_pick, "market"]
+            .dropna()
+            .unique()
+            .tolist()
         )
         if not markets_for_player:
             st.warning("No markets available for this player.")
@@ -669,8 +939,8 @@ with tab2:
         lines_for_combo = sorted(
             pd.to_numeric(
                 props_df.loc[
-                    (props_df["player"] == p_pick) &
-                    (props_df["market"] == stat_pick),
+                    (props_df["player"] == p_pick)
+                    & (props_df["market"] == stat_pick),
                     "line",
                 ],
                 errors="coerce",
@@ -686,9 +956,9 @@ with tab2:
         line_pick = st.selectbox("Book line (threshold)", lines_for_combo, index=0)
 
         current_rows = props_df[
-            (props_df["player"] == p_pick) &
-            (props_df["market"] == stat_pick) &
-            (abs(props_df["line"] - line_pick) < 0.01)
+            (props_df["player"] == p_pick)
+            & (props_df["market"] == stat_pick)
+            & (abs(props_df["line"] - line_pick) < 0.01)
         ]
         if not current_rows.empty:
             snippets = []
@@ -716,9 +986,20 @@ with tab3:
         saved_df = pd.DataFrame(saved_bets)
 
         preferred = [
-            "Player", "Market", "Line", "Price (Am)", "Bookmaker",
-            "Hit L5", "Hit L10", "Hit L20",
-            "L5 Avg", "L10 Avg", "L20 Avg",
+            "Player",
+            "Pos",
+            "Market",
+            "Line",
+            "Price (Am)",
+            "Bookmaker",
+            "Def Matchup",
+            "Def Allowed",
+            "Hit L5",
+            "Hit L10",
+            "Hit L20",
+            "L5 Avg",
+            "L10 Avg",
+            "L20 Avg",
             "EV",
         ]
         cols = [c for c in preferred if c in saved_df.columns] + [
@@ -774,6 +1055,9 @@ with tab4:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors="coerce")
 
+            if "Def Allowed" in df.columns:
+                df["Def Allowed"] = pd.to_numeric(df["Def Allowed"], errors="coerce")
+
             df["Save Bet"] = False
             for i, row in df.iterrows():
                 key = _bet_key(row)
@@ -782,26 +1066,55 @@ with tab4:
 
             ordered_cols = [
                 "Save Bet",
-                "Player", "Market", "Line", "Price (Am)", "Bookmaker",
-                "EV", "Hit L10", "Hit L20",
-                "L10 Avg", "L20 Avg",
+                "Player",
+                "Pos",
+                "Market",
+                "Line",
+                "Price (Am)",
+                "Bookmaker",
+                "Def Matchup",
+                "Def Allowed",
+                "EV",
+                "Hit L10",
+                "Hit L20",
+                "L10 Avg",
+                "L20 Avg",
             ]
             visible_cols = [c for c in ordered_cols if c in df.columns]
             df_display = df[visible_cols].copy()
 
             from streamlit import column_config
+
             col_cfg = {
-                "Save Bet": column_config.CheckboxColumn(help="Save or unsave bet", width="auto"),
+                "Save Bet": column_config.CheckboxColumn(
+                    help="Save or unsave bet", width="auto"
+                ),
                 "Player": column_config.TextColumn(width="auto"),
+                "Pos": column_config.TextColumn(help="Player position", width="small"),
                 "Market": column_config.TextColumn(width="auto"),
-                "Line": column_config.NumberColumn(format="%.1f", width="auto"),
-                "Price (Am)": column_config.TextColumn(help="American odds", width="auto"),
+                "Line": column_config.NumberColumn(format="%.1f", width="small"),
+                "Price (Am)": column_config.TextColumn(
+                    help="American odds", width="small"
+                ),
                 "Bookmaker": column_config.TextColumn(width="auto"),
-                "EV": column_config.TextColumn(help="Expected Value", width="auto"),
-                "Hit L10": column_config.NumberColumn(format="0.0%", width="auto"),
-                "Hit L20": column_config.NumberColumn(format="0.0%", width="auto"),
-                "L10 Avg": column_config.NumberColumn(format="%.1f", width="auto"),
-                "L20 Avg": column_config.NumberColumn(format="%.1f", width="auto"),
+                "Def Matchup": column_config.TextColumn(
+                    help="Opponent defense vs this position & stat (🟥 = toughest, 🟩 = easiest)",
+                    width="small",
+                ),
+                "Def Allowed": column_config.NumberColumn(
+                    format="%.1f",
+                    help="Opponent allowed to this position for this stat",
+                    width="small",
+                ),
+                "EV": column_config.TextColumn(help="Expected Value", width="small"),
+                "Hit L10": column_config.NumberColumn(
+                    format="0.0%", width="small"
+                ),
+                "Hit L20": column_config.NumberColumn(
+                    format="0.0%", width="small"
+                ),
+                "L10 Avg": column_config.NumberColumn(format="%.1f", width="small"),
+                "L20 Avg": column_config.NumberColumn(format="%.1f", width="small"),
             }
 
             edited_df = st.data_editor(

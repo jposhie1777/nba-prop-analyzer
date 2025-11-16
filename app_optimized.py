@@ -150,7 +150,7 @@ def add_dynamic_averages(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# NBA team abbreviations (Option A: auto-generate)
+# NBA team abbreviations
 TEAM_ABBREVIATIONS = {
     "Atlanta Hawks": "ATL",
     "Boston Celtics": "BOS",
@@ -269,7 +269,6 @@ def load_props_cached(_bq_client, query):
         "player",
         "market",
         "bookmaker",
-        "player_team",
         "opponent_team",
         "home_team",
         "visitor_team",
@@ -342,14 +341,6 @@ def load_game_logs_cached(_bq_client, query):
         "opp_pos_reb_rank",
         "opp_pos_ast_rank",
         "opp_pos_pra_rank",
-        "opp_overall_pts_allowed",
-        "opp_overall_reb_allowed",
-        "opp_overall_ast_allowed",
-        "opp_overall_pra_allowed",
-        "opp_overall_pts_rank",
-        "opp_overall_reb_rank",
-        "opp_overall_ast_rank",
-        "opp_overall_pra_rank",
     ]
     for c in numeric_cols:
         if c in df.columns:
@@ -369,7 +360,7 @@ refresh_clicked = st.sidebar.button("🔄 Refresh Data")
 if refresh_clicked:
     st.sidebar.info("♻️ Refreshing data... please wait.")
     st.cache_data.clear()
-    for key in ["props_df", "game_logs_df", "last_updated", "props_table_cache", "game_log_cache"]:
+    for key in ["props_df", "game_logs_df", "last_updated", "props_table_cache"]:
         st.session_state.pop(key, None)
     st.sidebar.success("✅ Reload complete!")
     st.rerun()
@@ -395,7 +386,7 @@ if "last_updated" in st.session_state:
     st.sidebar.info(f"🕒 **Data last updated:** {last_updated_str}")
 
 # ------------------------------------------------------
-# MERGE DEFENSIVE METRICS INTO PROPS DF
+# MERGE DEFENSIVE METRICS INTO PROPS DF + ONE-TIME DERIVED COLS
 # ------------------------------------------------------
 def merge_defense_metrics(props_df, game_logs_df):
     """
@@ -420,14 +411,6 @@ def merge_defense_metrics(props_df, game_logs_df):
         "opp_pos_reb_rank",
         "opp_pos_ast_rank",
         "opp_pos_pra_rank",
-        "opp_overall_pts_allowed",
-        "opp_overall_reb_allowed",
-        "opp_overall_ast_allowed",
-        "opp_overall_pra_allowed",
-        "opp_overall_pts_rank",
-        "opp_overall_reb_rank",
-        "opp_overall_ast_rank",
-        "opp_overall_pra_rank",
     ]
 
     gl = game_logs_df[[c for c in defense_cols if c in game_logs_df.columns]].drop_duplicates()
@@ -441,6 +424,46 @@ def merge_defense_metrics(props_df, game_logs_df):
 
 
 props_df = merge_defense_metrics(props_df, game_logs_df)
+
+# Compute Def Allowed / Def Matchup ONCE, then drop unused columns
+if props_df is not None and not props_df.empty:
+    props_df["Def Allowed"] = props_df.apply(pick_def_allowed, axis=1)
+    props_df["Def Matchup"] = props_df.apply(format_def_matchup_cell, axis=1)
+
+    # Keep only necessary columns to reduce memory
+    needed_cols = [
+        "player",
+        "player_position",
+        "depth_role",
+        "market",
+        "line",
+        "price",
+        "bookmaker",
+        "home_team",
+        "visitor_team",
+        "opponent_team",
+        "hit5_frac",
+        "hit10_frac",
+        "hit20_frac",
+        "L5 Avg",
+        "L10 Avg",
+        "L20 Avg",
+        "expected_value",
+        "opp_pos_pts_allowed",
+        "opp_pos_reb_allowed",
+        "opp_pos_ast_allowed",
+        "opp_pos_pra_allowed",
+        "opp_pos_pts_rank",
+        "opp_pos_reb_rank",
+        "opp_pos_ast_rank",
+        "opp_pos_pra_rank",
+        "Def Allowed",
+        "Def Matchup",
+    ]
+    props_df = props_df[[c for c in needed_cols if c in props_df.columns]]
+
+# write back trimmed df
+st.session_state.props_df = props_df
 
 # ------------------------------------------------------
 # SESSION STATE (Saved Bets)
@@ -568,7 +591,7 @@ sel_min_ev = st.sidebar.slider("Minimum EV", -1.0, 1.0, 0.0, 0.01)
 sel_min_hit10 = st.sidebar.slider("Minimum Hit Rate (L10)", 0.0, 1.0, 0.5, 0.01)
 
 # ------------------------------------------------------
-# BUILD PROPS TABLE (no Streamlit caching; use session_state)
+# BUILD PROPS TABLE (no Streamlit caching; use session_state for light cache)
 # ------------------------------------------------------
 def build_props_table(
     props_df,
@@ -583,7 +606,7 @@ def build_props_table(
     if props_df is None or props_df.empty:
         return pd.DataFrame()
 
-    df = props_df.copy()
+    df = props_df
 
     # Game filter
     if (
@@ -609,6 +632,7 @@ def build_props_table(
 
     # Odds range filter
     if "price" in df.columns:
+        df = df.copy()
         df["price"] = pd.to_numeric(df["price"], errors="coerce")
         df = df[df["price"].between(odds_range[0], odds_range[1])]
 
@@ -624,7 +648,7 @@ def build_props_table(
         return df
 
     # Build display df
-    df_display = pd.DataFrame()
+    df_display = pd.DataFrame(index=df.index)
     df_display["Player"] = df["player"]
     df_display["Pos"] = df.get("player_position", "")
     df_display["Market"] = df["market"]
@@ -632,19 +656,19 @@ def build_props_table(
     df_display["Price (Am)"] = df["price"]
     df_display["Bookmaker"] = df["bookmaker"]
 
-    df_display["Hit L5"] = df.get("hit5_frac", df.get("hit_rate_last5", np.nan))
-    df_display["Hit L10"] = df.get("hit10_frac", df.get("hit_rate_last10", np.nan))
-    df_display["Hit L20"] = df.get("hit20_frac", df.get("hit_rate_last20", np.nan))
+    df_display["Hit L5"] = df.get("hit5_frac", np.nan)
+    df_display["Hit L10"] = df.get("hit10_frac", np.nan)
+    df_display["Hit L20"] = df.get("hit20_frac", np.nan)
 
-    df_display["L5 Avg"] = df["L5 Avg"]
-    df_display["L10 Avg"] = df["L10 Avg"]
-    df_display["L20 Avg"] = df["L20 Avg"]
+    df_display["L5 Avg"] = df.get("L5 Avg", np.nan)
+    df_display["L10 Avg"] = df.get("L10 Avg", np.nan)
+    df_display["L20 Avg"] = df.get("L20 Avg", np.nan)
 
     df_display["EV"] = df.get("expected_value", np.nan)
 
-    # Defensive metrics based on stat / position
-    df_display["Def Allowed"] = df.apply(pick_def_allowed, axis=1)
-    df_display["Def Matchup"] = df.apply(format_def_matchup_cell, axis=1)
+    # Defensive metrics already computed on props_df
+    df_display["Def Allowed"] = df.get("Def Allowed", np.nan)
+    df_display["Def Matchup"] = df.get("Def Matchup", "")
 
     # Keep raw fractional columns if needed later
     df_display["hit5_frac"] = df_display["Hit L5"]
@@ -699,30 +723,19 @@ def get_props_table_cached(
 
 
 # ------------------------------------------------------
-# TREND PLOT (no Streamlit caching; use session_state)
+# TREND PLOT (no caching)
 # ------------------------------------------------------
 def get_player_game_log(game_logs_df, player, market):
     """
-    Use session_state to avoid recomputing same player/market slice repeatedly.
+    Simple slice of game_logs_df for Trend Analysis.
     """
     if game_logs_df is None or game_logs_df.empty:
         return pd.DataFrame()
 
-    cache_key = "game_log_cache"
-    last_updated = st.session_state.get("last_updated", None)
-    signature = (player, market, last_updated)
-
-    if cache_key in st.session_state:
-        cached_sig, cached_df = st.session_state[cache_key]
-        if cached_sig == signature:
-            return cached_df.copy()
-
     df = game_logs_df.copy()
     df = df[(df["player"] == player) & (df["market"] == market)]
     df = df.dropna(subset=["game_date"]).sort_values("game_date")
-    df = df.tail(20)
-    st.session_state[cache_key] = (signature, df.copy())
-    return df
+    return df.tail(20)
 
 
 def plot_trend(game_logs_df, player, market, line_value):

@@ -12,7 +12,7 @@ from google.oauth2 import service_account
 from google.cloud import bigquery
 
 # ------------------------------------------------------
-# CONFIG
+# STREAMLIT CONFIG
 # ------------------------------------------------------
 st.set_page_config(page_title="NBA Prop Analyzer", layout="wide")
 
@@ -54,9 +54,10 @@ except Exception as e:
     st.stop()
 
 # ------------------------------------------------------
-# SQL
+# SQL QUERIES
 # ------------------------------------------------------
 PROPS_SQL = f"SELECT * FROM `{PROJECT_ID}.{DATASET}.{PROPS_TABLE}`"
+
 HISTORICAL_SQL = f"""
 SELECT player, player_team, home_team, visitor_team,
        game_date, opponent_team, home_away,
@@ -112,6 +113,27 @@ def load_hist():
 
 props_df = load_props()
 hist_df = load_hist()
+
+# ------------------------------------------------------
+# FIX: MAKE ALL NUMERIC COLUMNS TRUE NUMBERS
+# ------------------------------------------------------
+numeric_cols = [
+    "price", "line",
+    "hit_rate_last5", "hit_rate_last10", "hit_rate_last20",
+    "pts_last5", "pts_last10", "pts_last20",
+    "reb_last5", "reb_last10", "reb_last20",
+    "ast_last5", "ast_last10", "ast_last20",
+    "pra_last5", "pra_last10", "pra_last20",
+    "season_avg"
+]
+
+for col in numeric_cols:
+    if col in props_df.columns:
+        props_df[col] = pd.to_numeric(props_df[col], errors="coerce")
+
+for col in ["pts", "reb", "ast", "pra"]:
+    if col in hist_df.columns:
+        hist_df[col] = pd.to_numeric(hist_df[col], errors="coerce")
 
 # ------------------------------------------------------
 # SAVED BETS
@@ -210,7 +232,7 @@ with tab2:
 
         stat = detect_stat(m)
 
-        # Only games actually played
+        # Only include played games
         df_hist = (
             hist_df[(hist_df["player"] == p) &
                    ((hist_df["pts"].notna()) |
@@ -251,7 +273,7 @@ with tab2:
 
             fig.update_layout(
                 height=450,
-                xaxis=dict(type="category"),  # ← prevents offseason gaps
+                xaxis=dict(type="category"),  # removes offseason gaps
                 xaxis_title="Game Date",
                 yaxis_title=stat.upper(),
                 showlegend=True,

@@ -30,7 +30,6 @@ PROJECT_ID = os.getenv("PROJECT_ID", "")
 DATASET = "nba_prop_analyzer"
 PROPS_TABLE = "todays_props_with_hit_rates"
 HISTORICAL_TABLE = "historical_player_stats_for_trends"
-
 GCP_SERVICE_ACCOUNT = os.getenv("GCP_SERVICE_ACCOUNT", "")
 
 if not PROJECT_ID or not GCP_SERVICE_ACCOUNT:
@@ -41,7 +40,7 @@ if not PROJECT_ID or not GCP_SERVICE_ACCOUNT:
 # SQL QUERIES
 # ------------------------------------------------------
 PROPS_SQL = f"""
-SELECT * 
+SELECT *
 FROM `{PROJECT_ID}.{DATASET}.{PROPS_TABLE}`
 """
 
@@ -143,62 +142,65 @@ def detect_stat(m):
     return ""
 
 def get_dynamic_averages(df):
-    df=df.copy()
-    def pick(row,n):
-        stat=detect_stat(row["market"])
-        col=f"{stat}_last{n}"
-        return row.get(col,np.nan)
-    df["L5 Avg"]=df.apply(lambda r:pick(r,5),axis=1)
-    df["L10 Avg"]=df.apply(lambda r:pick(r,10),axis=1)
-    df["L20 Avg"]=df.apply(lambda r:pick(r,20),axis=1)
+    df = df.copy()
+    def pick(row, n):
+        stat = detect_stat(row["market"])
+        col = f"{stat}_last{n}"
+        return row.get(col, np.nan)
+    df["L5 Avg"] = df.apply(lambda r: pick(r, 5), axis=1)
+    df["L10 Avg"] = df.apply(lambda r: pick(r,10), axis=1)
+    df["L20 Avg"] = df.apply(lambda r: pick(r,20), axis=1)
     return df
 
 def apply_defense_color(v):
-    if v in ("",None) or pd.isna(v):
+    if v in ("", None) or pd.isna(v):
         return "background-color:#444;color:white;"
-    v=int(v)
-    if v<=5:  return "background-color:#d9534f;color:white;"
-    if v<=15: return "background-color:#f0ad4e;color:black;"
-    if v<=25: return "background-color:#ffd500;color:black;"
+    v = int(v)
+    if v <= 5:  return "background-color:#d9534f;color:white;"
+    if v <= 15: return "background-color:#f0ad4e;color:black;"
+    if v <= 25: return "background-color:#ffd500;color:black;"
     return "background-color:#5cb85c;color:white;"
 
 def add_defensive_matchups(df):
-    df=df.copy()
-    stat=df["market"].apply(detect_stat)
-    pos_map={"pts":"opp_pos_pts_rank","reb":"opp_pos_reb_rank","ast":"opp_pos_ast_rank","pra":"opp_pos_pra_rank"}
-    ov_map={"pts":"opp_overall_pts_rank","reb":"opp_overall_reb_rank","ast":"opp_overall_ast_rank","pra":"opp_overall_pra_rank"}
+    df = df.copy()
+    stat = df["market"].apply(detect_stat)
 
-    df["Pos Def Rank"]=[df.loc[i,pos_map.get(stat[i])] if pos_map.get(stat[i]) in df.columns else "" for i in df.index]
-    df["Overall Def Rank"]=[df.loc[i,ov_map.get(stat[i])] if ov_map.get(stat[i]) in df.columns else "" for i in df.index]
-    df["Matchup Difficulty"]=df.get("matchup_difficulty_score",np.nan)
+    pos = {"pts":"opp_pos_pts_rank","reb":"opp_pos_reb_rank","ast":"opp_pos_ast_rank","pra":"opp_pos_pra_rank"}
+    over= {"pts":"opp_overall_pts_rank","reb":"opp_overall_reb_rank","ast":"opp_overall_ast_rank","pra":"opp_overall_pra_rank"}
+
+    df["Pos Def Rank"]=[df.loc[i,pos.get(stat[i])] if pos.get(stat[i]) in df.columns else "" for i in df.index]
+    df["Overall Def Rank"]=[df.loc[i,over.get(stat[i])] if over.get(stat[i]) in df.columns else "" for i in df.index]
+    df["Matchup Difficulty"] = df.get("matchup_difficulty_score", np.nan)
     return df
 
 def format_overview_fields(df):
-    df=df.copy()
+    df = df.copy()
 
-    df["Matchup Difficulty"]=df["Matchup Difficulty"].apply(lambda x:f"{int(round(x))}" if pd.notna(x) else "")
+    df["Matchup Difficulty"] = df["Matchup Difficulty"].apply(
+        lambda x: f"{int(round(x))}" if pd.notna(x) else ""
+    )
 
     for col in ["hit_rate_last5","hit_rate_last10","hit_rate_last20"]:
         def fmt(x):
             if pd.isna(x): return ""
-            if 0<=x<=1: return f"{int(round(x*100))}%"
+            if 0 <= x <= 1: return f"{int(round(x*100))}%"
             return f"{int(round(x))}%"
-        df[col]=df[col].apply(fmt)
+        df[col] = df[col].apply(fmt)
 
     for col in ["L5 Avg","L10 Avg","L20 Avg"]:
-        df[col]=df[col].apply(lambda x:f"{x:.1f}" if pd.notna(x) else "")
+        df[col] = df[col].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "")
 
     return df
 
 # ------------------------------------------------------
-# LOAD DATA (ALL DATES TO EST)
+# LOAD DATA (EST conversion)
 # ------------------------------------------------------
 @st.cache_data(show_spinner=True)
 def load_props():
-    df=bq_client.query(PROPS_SQL).to_dataframe()
-    df.columns=df.columns.str.strip()
-    df["game_date"]=(
-        pd.to_datetime(df["game_date"],errors="coerce")
+    df = bq_client.query(PROPS_SQL).to_dataframe()
+    df.columns = df.columns.str.strip()
+    df["game_date"] = (
+        pd.to_datetime(df["game_date"], errors="coerce")
         .dt.tz_localize("UTC")
         .dt.tz_convert(EST)
     )
@@ -206,10 +208,10 @@ def load_props():
 
 @st.cache_data(show_spinner=True)
 def load_historical():
-    df=bq_client.query(HISTORICAL_SQL).to_dataframe()
-    df.columns=df.columns.str.strip()
-    df["game_date"]=(
-        pd.to_datetime(df["game_date"],errors="coerce")
+    df = bq_client.query(HISTORICAL_SQL).to_dataframe()
+    df.columns = df.columns.str.strip()
+    df["game_date"] = (
+        pd.to_datetime(df["game_date"], errors="coerce")
         .dt.tz_localize("UTC")
         .dt.tz_convert(EST)
     )
@@ -222,44 +224,53 @@ historical_df = load_historical()
 # SIDEBAR FILTERS
 # ------------------------------------------------------
 if "saved_bets" not in st.session_state:
-    st.session_state.saved_bets=[]
+    st.session_state.saved_bets = []
 
 st.sidebar.header("Filters")
 
-games=["All games"]+sorted((props_df["home_team"]+" vs "+props_df["visitor_team"]).unique())
-sel_game=st.sidebar.selectbox("Game",games)
+games = ["All games"] + sorted((props_df["home_team"]+" vs "+props_df["visitor_team"]).unique())
+sel_game = st.sidebar.selectbox("Game", games)
 
-players=["All players"]+sorted(props_df["player"].unique())
-sel_player=st.sidebar.selectbox("Player",players)
+players = ["All players"] + sorted(props_df["player"].unique())
+sel_player = st.sidebar.selectbox("Player", players)
 
-markets=["All Stats"]+sorted(props_df["market"].unique())
-sel_market=st.sidebar.selectbox("Market",markets)
+markets = ["All Stats"] + sorted(props_df["market"].unique())
+sel_market = st.sidebar.selectbox("Market", markets)
 
-books=sorted(props_df["bookmaker"].unique())
-default_books=[b for b in books if b.lower() in ("draftkings","fanduel")] or books
-sel_books=st.sidebar.multiselect("Bookmaker",books,default=default_books)
+books = sorted(props_df["bookmaker"].unique())
+default_books = [b for b in books if b.lower() in ("draftkings","fanduel")] or books
+sel_books = st.sidebar.multiselect("Bookmaker", books, default=default_books)
 
-od_min=int(props_df["price"].min())
-od_max=int(props_df["price"].max())
-sel_odds=st.sidebar.slider("Odds Range",od_min,od_max,(od_min,od_max))
+od_min = int(props_df["price"].min())
+od_max = int(props_df["price"].max())
+sel_odds = st.sidebar.slider("Odds Range", od_min, od_max, (od_min, od_max))
 
-sel_hit10=st.sidebar.slider("Min Hit Rate L10",0.0,1.0,0.5)
+sel_hit10 = st.sidebar.slider("Min Hit Rate L10", 0.0, 1.0, 0.5)
 
 # ------------------------------------------------------
-# FILTER PROPS
+# FILTER PROPS (MAIN FIX APPLIED HERE)
 # ------------------------------------------------------
 def filter_props(df):
-    d=df.copy()
-    if sel_game!="All games":
-        home,away=sel_game.split(" vs ")
-        d=d[(d["home_team"]==home)&(d["visitor_team"]==away)]
-    if sel_player!="All players":
-        d=d[d["player"]==sel_player]
-    if sel_market!="All Stats":
-        d=d[d["market"]==sel_market]
-    d=d[d["bookmaker"].isin(sel_books)]
-    d=d[d["price"].between(sel_odds[0],sel_odds[1])]
-    d=d[d["hit_rate_last10"]>=sel_hit10]
+    d = df.copy()
+
+    # 🔥 FIX: ensure hit_rate_last10 stays numeric BEFORE filtering
+    d["hit_rate_last10"] = pd.to_numeric(d["hit_rate_last10"], errors="coerce")
+
+    if sel_game != "All games":
+        home, away = sel_game.split(" vs ")
+        d = d[(d["home_team"] == home) & (d["visitor_team"] == away)]
+
+    if sel_player != "All players":
+        d = d[d["player"] == sel_player]
+
+    if sel_market != "All Stats":
+        d = d[d["market"] == sel_market]
+
+    d = d[d["bookmaker"].isin(sel_books)]
+    d = d[d["price"].between(sel_odds[0], sel_odds[1])]
+
+    d = d[d["hit_rate_last10"] >= sel_hit10]
+
     return d
 
 # ------------------------------------------------------
@@ -277,32 +288,33 @@ tab1, tab2, tab3, tab4 = st.tabs([
 # ------------------------------------------------------
 with tab1:
     st.subheader("Props Overview")
-    d=filter_props(props_df)
+    d = filter_props(props_df)
 
     if d.empty:
         st.info("No props match your filters.")
     else:
-        d=get_dynamic_averages(d)
-        d=add_defensive_matchups(d)
-        d["Price"]=d["price"].apply(format_moneyline)
-        d=format_overview_fields(d)
-        d["Opponent Logo"]=d["opponent_team"].apply(lambda t:TEAM_LOGOS.get(t,""))
-        d=d.sort_values("hit_rate_last10",ascending=False)
+        d = get_dynamic_averages(d)
+        d = add_defensive_matchups(d)
+        d["Price"] = d["price"].apply(format_moneyline)
+        d = format_overview_fields(d)
+        d["Opponent Logo"] = d["opponent_team"].apply(lambda t: TEAM_LOGOS.get(t, ""))
+        d = d.sort_values("hit_rate_last10", ascending=False)
 
-        cols=[
+        cols = [
             "player","market","line","Price","bookmaker",
             "Pos Def Rank","Overall Def Rank","Matchup Difficulty",
             "hit_rate_last5","hit_rate_last10","hit_rate_last20",
             "L5 Avg","L10 Avg","L20 Avg"
         ]
 
+        # HTML table
         html="<table style='width:100%;border-collapse:collapse;'>"
         html+="<tr>"
         for c in cols+["Opponent Logo"]:
             html+=f"<th style='padding:6px;text-align:center;border-bottom:1px solid #444'>{c}</th>"
         html+="</tr>"
 
-        for _,row in d.iterrows():
+        for _, row in d.iterrows():
             html+="<tr>"
             for c in cols:
                 val=row[c]; style=""
@@ -314,7 +326,7 @@ with tab1:
             html+="</tr>"
         html+="</table>"
 
-        st.markdown(html,unsafe_allow_html=True)
+        st.markdown(html, unsafe_allow_html=True)
 
 # ------------------------------------------------------
 # TAB 2 — TREND ANALYSIS
@@ -323,7 +335,7 @@ with tab2:
     st.subheader("Trend Analysis")
 
     players_list=["(select)"]+sorted(props_df["player"].unique())
-    p=st.selectbox("Player",players_list)
+    p=st.selectbox("Player", players_list)
 
     if p!="(select)":
 
@@ -380,14 +392,13 @@ with tab2:
             font=dict(color="white")
         )
 
-        st.plotly_chart(fig,use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True)
 
 # ------------------------------------------------------
 # TAB 3 — SAVED BETS
 # ------------------------------------------------------
 with tab3:
     st.subheader("Saved Bets")
-
     if not st.session_state.saved_bets:
         st.info("No saved bets yet.")
     else:
@@ -416,7 +427,7 @@ with tab4:
             st.error("❌ EV column missing from BigQuery table.")
             st.stop()
 
-        # 🔥 FIX: force EV to numeric
+        # 🔥 FIX: Ensure EV is numeric before sorting
         d["ev"] = pd.to_numeric(d["ev"], errors="coerce")
 
         d["Hit Rate 10"] = d["hit_rate_last10"]
@@ -450,6 +461,4 @@ with tab4:
 # LAST UPDATED
 # ------------------------------------------------------
 now_est = datetime.now(EST)
-st.sidebar.markdown(
-    f"**Last Updated:** {now_est.strftime('%b %d, %I:%M %p')} ET"
-)
+st.sidebar.markdown(f"**Last Updated:** {now_est.strftime('%b %d, %I:%M %p')} ET")

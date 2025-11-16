@@ -25,7 +25,9 @@ PROJECT_ID = os.getenv("PROJECT_ID", "")
 
 PROP_ANALYZER_DATASET = os.getenv("PROP_ANALYZER_DATASET", "nba_prop_analyzer")
 TODAYS_PROPS_TABLE = os.getenv("TODAYS_PROPS_TABLE", "todays_props_with_hit_rates")
-GAME_LOGS_TABLE = os.getenv("GAME_LOGS_TABLE", "todays_props_game_logs")
+HISTORICAL_STATS_TABLE = os.getenv(
+    "HISTORICAL_STATS_TABLE", "historical_player_stats_with_trends"
+)
 
 GCP_SERVICE_ACCOUNT = os.getenv("GCP_SERVICE_ACCOUNT", "")
 
@@ -64,28 +66,72 @@ except Exception as e:
 st.sidebar.info("🏀 Environment setup complete — ready to query data!")
 
 # ------------------------------------------------------
-# REDUCED-COLUMN SQL QUERIES
+# SQL QUERIES (ONLY PULL WHAT WE USE)
 # ------------------------------------------------------
 PROPS_SQL = f"""
 SELECT
-  player, market, line, price, bookmaker,
-  player_team, opponent_team, home_team, visitor_team,
-  hit_rate_last5, hit_rate_last10, hit_rate_last20,
-  pts_last5, reb_last5, ast_last5, pra_last5,
+  player,
+  market,
+  line,
+  price,
+  bookmaker,
+  team,
+  opponent_team,
+  home_team,
+  visitor_team,
+  game_date,
+  minutes,
+  pts,
+  reb,
+  ast,
+  pra,
+  season_avg,
+  hit_flag,
+  pts_last5,  reb_last5,  ast_last5,  pra_last5,
   pts_last10, reb_last10, ast_last10, pra_last10,
   pts_last20, reb_last20, ast_last20, pra_last20,
-  stat_stddev_last20, stat_mean_last20,
-  decimal_odds, expected_value
+  hit_rate_last5,
+  hit_rate_last10,
+  hit_rate_last20,
+  cleaned_player,
+  player_short,
+  player_position,
+  depth_role,
+  opp_pos_pts_allowed,
+  opp_pos_reb_allowed,
+  opp_pos_ast_allowed,
+  opp_pos_pra_allowed,
+  opp_pos_pts_rank,
+  opp_pos_reb_rank,
+  opp_pos_ast_rank,
+  opp_pos_pra_rank,
+  opp_overall_pts_allowed,
+  opp_overall_reb_allowed,
+  opp_overall_ast_allowed,
+  opp_overall_pra_allowed,
+  opp_overall_pts_rank,
+  opp_overall_reb_rank,
+  opp_overall_ast_rank,
+  opp_overall_pra_rank,
+  matchup_difficulty_score
 FROM `{PROJECT_ID}.{PROP_ANALYZER_DATASET}.{TODAYS_PROPS_TABLE}`
 """
 
-GAME_LOGS_SQL = f"""
+HISTORICAL_SQL = f"""
 SELECT
-  player, market, game_date,
-  pts, reb, ast, pra,
-  line, season_avg,
-  team, opponent_team
-FROM `{PROJECT_ID}.{PROP_ANALYZER_DATASET}.{GAME_LOGS_TABLE}`
+  player,
+  player_team,
+  home_team,
+  visitor_team,
+  game_date,
+  opponent_team,
+  home_away,
+  pts,
+  reb,
+  ast,
+  pra
+FROM `{PROJECT_ID}.{PROP_ANALYZER_DATASET}.{HISTORICAL_STATS_TABLE}`
+ORDER BY game_date
 """
 
 # ------------------------------------------------------
@@ -126,7 +172,11 @@ def get_stat_base_from_market(market: str) -> str:
 
 
 def add_dynamic_averages(df: pd.DataFrame) -> pd.DataFrame:
-    """Add L5/L10/L20 Avg columns for each row, based on market type."""
+    """
+    Add L5/L10/L20 Avg columns for each row, based on market type.
+    NOTE: This does NOT compute new stats; it just selects from
+    precomputed BigQuery columns like pts_last5, reb_last5, etc.
+    """
     if df.empty:
         df["L5 Avg"] = np.nan
         df["L10 Avg"] = np.nan
@@ -151,44 +201,74 @@ def add_dynamic_averages(df: pd.DataFrame) -> pd.DataFrame:
 # ------------------------------------------------------
 # DATA LOADERS (NO STREAMLIT CACHING)
 # ------------------------------------------------------
-
 def load_props(_bq_client, query: str) -> pd.DataFrame:
     df = _bq_client.query(query).to_dataframe()
-    # Normalize column names / strip
     df.columns = [c.strip() for c in df.columns]
 
     # Strip string columns
-    for col in ["player", "market", "bookmaker", "player_team", "opponent_team", "home_team", "visitor_team"]:
+    for col in [
+        "player",
+        "market",
+        "bookmaker",
+        "team",
+        "opponent_team",
+        "home_team",
+        "visitor_team",
+        "cleaned_player",
+        "player_short",
+        "player_position",
+        "depth_role",
+    ]:
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip()
 
     # Ensure numeric types where relevant
     numeric_cols = [
-        "line", "price",
-        "hit_rate_last5", "hit_rate_last10", "hit_rate_last20",
-        "pts_last5", "reb_last5", "ast_last5", "pra_last5",
+        "line",
+        "price",
+        "minutes",
+        "pts",
+        "reb",
+        "ast",
+        "pra",
+        "season_avg",
+        "hit_flag",
+        "pts_last5",  "reb_last5",  "ast_last5",  "pra_last5",
         "pts_last10", "reb_last10", "ast_last10", "pra_last10",
         "pts_last20", "reb_last20", "ast_last20", "pra_last20",
-        "stat_stddev_last20", "stat_mean_last20",
-        "decimal_odds", "expected_value",
+        "hit_rate_last5",
+        "hit_rate_last10",
+        "hit_rate_last20",
+        "opp_pos_pts_allowed",
+        "opp_pos_reb_allowed",
+        "opp_pos_ast_allowed",
+        "opp_pos_pra_allowed",
+        "opp_pos_pts_rank",
+        "opp_pos_reb_rank",
+        "opp_pos_ast_rank",
+        "opp_pos_pra_rank",
+        "opp_overall_pts_allowed",
+        "opp_overall_reb_allowed",
+        "opp_overall_ast_allowed",
+        "opp_overall_pra_allowed",
+        "opp_overall_pts_rank",
+        "opp_overall_reb_rank",
+        "opp_overall_ast_rank",
+        "opp_overall_pra_rank",
+        "matchup_difficulty_score",
     ]
     for c in numeric_cols:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
-    # Fractional hit rates for filtering/sorting (0–1)
-    for src, dst in [
-        ("hit_rate_last5", "hit5_frac"),
-        ("hit_rate_last10", "hit10_frac"),
-        ("hit_rate_last20", "hit20_frac"),
-    ]:
-        if src in df.columns:
-            df[dst] = df[src] / 100.0
+    # Dates
+    if "game_date" in df.columns:
+        df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
 
-    # Add dynamic averages based on market
+    # Add dynamic averages based on market using precomputed columns
     df = add_dynamic_averages(df)
-    return df
 
+    return df
 
 
 def load_game_logs(_bq_client, query: str) -> pd.DataFrame:
@@ -198,12 +278,12 @@ def load_game_logs(_bq_client, query: str) -> pd.DataFrame:
     if "game_date" in df.columns:
         df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
 
-    numeric_cols = ["line", "pts", "reb", "ast", "pra", "season_avg"]
+    numeric_cols = ["pts", "reb", "ast", "pra"]
     for c in numeric_cols:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
-    for col in ["player", "market", "team", "opponent_team"]:
+    for col in ["player", "player_team", "home_team", "visitor_team", "opponent_team", "home_away"]:
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip()
 
@@ -231,8 +311,8 @@ if "props_df" not in st.session_state:
         st.session_state.last_updated = datetime.datetime.now()
 
 if "game_logs_df" not in st.session_state:
-    with st.spinner("📈 Loading game logs from BigQuery..."):
-        st.session_state.game_logs_df = load_game_logs(bq_client, GAME_LOGS_SQL)
+    with st.spinner("📈 Loading historical player stats from BigQuery..."):
+        st.session_state.game_logs_df = load_game_logs(bq_client, HISTORICAL_SQL)
         st.session_state.last_updated = datetime.datetime.now()
 
 props_df = st.session_state.props_df
@@ -241,7 +321,6 @@ game_logs_df = st.session_state.game_logs_df
 if "last_updated" in st.session_state:
     last_updated_str = st.session_state.last_updated.strftime("%Y-%m-%d %I:%M %p")
     st.sidebar.info(f"🕒 **Data last updated:** {last_updated_str}")
-
 
 # ------------------------------------------------------
 # SESSION STATE (Saved Bets)
@@ -262,7 +341,9 @@ def sync_saved_bets_from_editor(edited_df):
         if checked and not exists:
             st.session_state.saved_bets.append(row.to_dict())
         elif not checked and exists:
-            st.session_state.saved_bets = [x for x in st.session_state.saved_bets if _bet_key(x) != key]
+            st.session_state.saved_bets = [
+                x for x in st.session_state.saved_bets if _bet_key(x) != key
+            ]
 
 
 # ------------------------------------------------------
@@ -270,7 +351,7 @@ def sync_saved_bets_from_editor(edited_df):
 # ------------------------------------------------------
 st.sidebar.header("⚙️ Filters")
 
-# Date (not currently used for filtering but kept for UI)
+# Date (UI only at the moment)
 today = pd.Timestamp.today().normalize()
 sel_date = st.sidebar.date_input("Game date", today)
 
@@ -354,14 +435,13 @@ odds_threshold = st.sidebar.number_input(
 # Analytical filters
 st.sidebar.markdown("---")
 st.sidebar.header("📈 Analytical Filters")
-sel_min_ev = st.sidebar.slider("Minimum EV", -1.0, 1.0, 0.0, 0.01)
+# Hit rates are stored directly in BigQuery as 0–1 fractions
 sel_min_hit10 = st.sidebar.slider("Minimum Hit Rate (L10)", 0.0, 1.0, 0.5, 0.01)
 
 
 # ------------------------------------------------------
 # BUILD PROPS TABLE (NO CACHE)
 # ------------------------------------------------------
-
 def build_props_table(
     props_df,
     game_pick,
@@ -369,7 +449,6 @@ def build_props_table(
     stat_pick,
     books,
     odds_range,
-    min_ev,
     min_hit10,
 ):
     if props_df is None or props_df.empty:
@@ -399,13 +478,9 @@ def build_props_table(
         df["price"] = pd.to_numeric(df["price"], errors="coerce")
         df = df[df["price"].between(odds_range[0], odds_range[1])]
 
-    # EV filter
-    if "expected_value" in df.columns:
-        df = df[df["expected_value"] >= min_ev]
-
-    # Hit10 filter (fractional)
-    if "hit10_frac" in df.columns:
-        df = df[df["hit10_frac"] >= min_hit10]
+    # Hit10 filter (fractional 0–1 directly from BigQuery)
+    if "hit_rate_last10" in df.columns:
+        df = df[df["hit_rate_last10"] >= min_hit10]
 
     if df.empty:
         return df
@@ -418,20 +493,15 @@ def build_props_table(
     df_display["Price (Am)"] = df["price"]
     df_display["Bookmaker"] = df["bookmaker"]
 
-    df_display["Hit L5"] = df.get("hit5_frac", df.get("hit_rate_last5", np.nan))
-    df_display["Hit L10"] = df.get("hit10_frac", df.get("hit_rate_last10", np.nan))
-    df_display["Hit L20"] = df.get("hit20_frac", df.get("hit_rate_last20", np.nan))
+    # Hit rates (already 0–1 from BQ)
+    df_display["Hit L5"] = df.get("hit_rate_last5", np.nan)
+    df_display["Hit L10"] = df.get("hit_rate_last10", np.nan)
+    df_display["Hit L20"] = df.get("hit_rate_last20", np.nan)
 
-    df_display["L5 Avg"] = df["L5 Avg"]
-    df_display["L10 Avg"] = df["L10 Avg"]
-    df_display["L20 Avg"] = df["L20 Avg"]
-
-    df_display["EV"] = df.get("expected_value", np.nan)
-
-    # Keep raw fractional columns if needed later
-    df_display["hit5_frac"] = df_display["Hit L5"]
-    df_display["hit10_frac"] = df_display["Hit L10"]
-    df_display["hit20_frac"] = df_display["Hit L20"]
+    # Averages from precomputed *_lastN columns
+    df_display["L5 Avg"] = df.get("L5 Avg", np.nan)
+    df_display["L10 Avg"] = df.get("L10 Avg", np.nan)
+    df_display["L20 Avg"] = df.get("L20 Avg", np.nan)
 
     return df_display.reset_index(drop=True)
 
@@ -443,7 +513,6 @@ def get_props_table(
     sel_stat,
     sel_books,
     sel_odds_range,
-    sel_min_ev,
     sel_min_hit10,
 ):
     return build_props_table(
@@ -453,20 +522,22 @@ def get_props_table(
         sel_stat,
         sel_books,
         sel_odds_range,
-        sel_min_ev,
         sel_min_hit10,
     )
 
 
 # ------------------------------------------------------
-# TREND PLOT (NO CACHE)
+# TREND PLOT (NO EXTRA CALCS)
 # ------------------------------------------------------
-
 def get_player_game_log(game_logs_df, player, market):
+    """
+    Historical table does not have market; we filter by player only.
+    Market is used just to select which stat column to plot.
+    """
     if game_logs_df is None or game_logs_df.empty:
         return pd.DataFrame()
     df = game_logs_df.copy()
-    df = df[(df["player"] == player) & (df["market"] == market)]
+    df = df[df["player"] == player]
     df = df.dropna(subset=["game_date"]).sort_values("game_date")
     return df.tail(20)
 
@@ -474,7 +545,7 @@ def get_player_game_log(game_logs_df, player, market):
 def plot_trend(game_logs_df, player, market, line_value):
     s = get_player_game_log(game_logs_df, player, market)
     if s.empty:
-        st.info("No game logs found for this player/market.")
+        st.info("No historical stats found for this player.")
         return
 
     stat_base = get_stat_base_from_market(market)
@@ -492,11 +563,16 @@ def plot_trend(game_logs_df, player, market, line_value):
     y_vals = s[stat_col].astype(float)
     dates = s["game_date"].dt.date.astype(str)
 
-    if "season_avg" in s.columns:
-        season_avg = float(s["season_avg"].iloc[-1])
-    else:
-        season_avg = float(y_vals.mean())
+    # Optional: season average line from today's props table if available
+    season_avg = None
+    try:
+        mask = (props_df["player"] == player) & (props_df["market"] == market)
+        if "season_avg" in props_df.columns and not props_df.loc[mask].empty:
+            season_avg = float(props_df.loc[mask, "season_avg"].iloc[0])
+    except Exception:
+        season_avg = None
 
+    # Color bars relative to the book line if supplied
     if line_value is not None and not pd.isna(line_value):
         colors = np.where(y_vals > line_value, "#21c36b", "#e45757")
     else:
@@ -510,6 +586,7 @@ def plot_trend(game_logs_df, player, market, line_value):
         marker_color=colors,
     )
 
+    # Line at current prop line
     if line_value is not None and not pd.isna(line_value):
         fig.add_scatter(
             x=dates,
@@ -519,13 +596,15 @@ def plot_trend(game_logs_df, player, market, line_value):
             line=dict(color="#d9534f", dash="dash"),
         )
 
-    fig.add_scatter(
-        x=dates,
-        y=[season_avg] * len(dates),
-        name=f"Season Avg ({season_avg:.1f})",
-        mode="lines",
-        line=dict(color="#5cb85c"),
-    )
+    # Line at season average (from props table)
+    if season_avg is not None:
+        fig.add_scatter(
+            x=dates,
+            y=[season_avg] * len(dates),
+            name=f"Season Avg ({season_avg:.1f})",
+            mode="lines",
+            line=dict(color="#5cb85c"),
+        )
 
     fig.update_layout(
         height=420,
@@ -555,13 +634,12 @@ with st.sidebar.expander("🔧 Environment Debug Info"):
     st.write(f"Project: {PROJECT_ID}")
     st.write(f"Dataset: {PROP_ANALYZER_DATASET}")
     st.write(f"Props Table: {TODAYS_PROPS_TABLE}")
-    st.write(f"Game Logs Table: {GAME_LOGS_TABLE}")
+    st.write(f"Historical Table: {HISTORICAL_STATS_TABLE}")
 
 
 # ------------------------------------------------------
-# TABS (Prop Analytics TAB REMOVED)
+# TABS
 # ------------------------------------------------------
-
 tab_labels = ["🧮 Props Overview", "📈 Trend Analysis", "📋 Saved Bets"]
 tab1, tab2, tab3 = st.tabs(tab_labels)
 
@@ -579,7 +657,6 @@ with tab1:
         sel_stat,
         sel_books,
         sel_odds_range,
-        sel_min_ev,
         sel_min_hit10,
     )
 
@@ -598,9 +675,6 @@ with tab1:
                 df = df.sort_values("Hit L10", ascending=False, na_position="last")
 
             df["Price (Am)"] = df["Price_raw"].apply(format_moneyline)
-            df["EV"] = pd.to_numeric(df["EV"], errors="coerce").apply(
-                lambda x: f"{x:.3f}" if pd.notna(x) else "—"
-            )
 
             # Ensure hit rates are numeric for % display & proper sorting
             for col in ["Hit L5", "Hit L10", "Hit L20"]:
@@ -619,7 +693,6 @@ with tab1:
                 "Player", "Market", "Line", "Price (Am)", "Bookmaker",
                 "Hit L5", "Hit L10", "Hit L20",
                 "L5 Avg", "L10 Avg", "L20 Avg",
-                "EV",
             ]
             visible_cols = [c for c in ordered_cols if c in df.columns]
             df_display = df[visible_cols].copy()
@@ -643,7 +716,6 @@ with tab1:
                 "L5 Avg": column_config.NumberColumn(format="%.1f", width="auto"),
                 "L10 Avg": column_config.NumberColumn(format="%.1f", width="auto"),
                 "L20 Avg": column_config.NumberColumn(format="%.1f", width="auto"),
-                "EV": column_config.TextColumn(width="auto"),
             }
 
             edited_df = st.data_editor(
@@ -666,7 +738,7 @@ with tab2:
     if props_df is None or props_df.empty:
         st.info("No props data available.")
     elif game_logs_df is None or game_logs_df.empty:
-        st.info("No game logs available for trend analysis.")
+        st.info("No historical stats available for trend analysis.")
     else:
         players_in_props = ["(choose)"] + sorted(props_df["player"].dropna().unique().tolist())
         p_pick = st.selectbox("Player", players_in_props, index=0)
@@ -682,6 +754,7 @@ with tab2:
 
         stat_pick = st.selectbox("Market (matches odds)", markets_for_player, index=0)
 
+        # Determine possible lines for this player/market from today's props
         lines_for_combo = sorted(
             pd.to_numeric(
                 props_df.loc[
@@ -736,7 +809,6 @@ with tab3:
             "Player", "Market", "Line", "Price (Am)", "Bookmaker",
             "Hit L5", "Hit L10", "Hit L20",
             "L5 Avg", "L10 Avg", "L20 Avg",
-            "EV",
         ]
         cols = [c for c in preferred if c in saved_df.columns] + [
             c for c in saved_df.columns if c not in preferred

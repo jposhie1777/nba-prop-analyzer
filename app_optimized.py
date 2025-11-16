@@ -113,7 +113,7 @@ def get_dynamic_averages(df):
         col = f"{stat}_last{horizon}"
         return row.get(col, np.nan)
 
-    df["L5 Avg"] = df.apply(lambda r: pick(r, 5), axis=1)
+    df["L5 Avg"]  = df.apply(lambda r: pick(r, 5),  axis=1)
     df["L10 Avg"] = df.apply(lambda r: pick(r, 10), axis=1)
     df["L20 Avg"] = df.apply(lambda r: pick(r, 20), axis=1)
     return df
@@ -141,13 +141,13 @@ def add_defensive_matchups(df):
 
     df["Pos Def Rank"] = [
         df.loc[i, pos_map.get(stat[i], None)]
-        if pos_map.get(stat[i], None) in df.columns else np.nan
+        if pos_map.get(stat[i], None) in df.columns else ""
         for i in df.index
     ]
 
     df["Overall Def Rank"] = [
         df.loc[i, overall_map.get(stat[i], None)]
-        if overall_map.get(stat[i], None) in df.columns else np.nan
+        if overall_map.get(stat[i], None) in df.columns else ""
         for i in df.index
     ]
 
@@ -159,21 +159,18 @@ def add_defensive_matchups(df):
 # DEFENSE COLOR CODING
 # ---------------------------------------------------------
 def apply_defense_color(val):
-    if pd.isna(val):
+    if pd.isna(val) or val == "":
         return "background-color: #444444; color: white;"
-    try:
-        v = int(val)
-    except:
-        return ""
 
+    v = int(val)
     if v <= 5:
-        return "background-color: #d9534f; color: white;"   # red
+        return "background-color: #d9534f; color: white;"   # tough red
     elif v <= 15:
         return "background-color: #f0ad4e; color: black;"   # orange
     elif v <= 25:
         return "background-color: #ffd500; color: black;"   # yellow
     else:
-        return "background-color: #5cb85c; color: white;"   # green
+        return "background-color: #5cb85c; color: white;"   # green (easy)
 
 # ---------------------------------------------------------
 # CENTER TEXT
@@ -182,26 +179,25 @@ def center_cells(val):
     return "text-align: center;"
 
 # ---------------------------------------------------------
-# FORMAT TABLE FIELDS (difficulty, hit rates, averages)
+# FORMAT TABLE FIELDS
 # ---------------------------------------------------------
 def format_overview_fields(df):
     df = df.copy()
 
-    # Format matchup difficulty (whole number)
+    # Difficulty → whole number
     if "Matchup Difficulty" in df.columns:
         df["Matchup Difficulty"] = df["Matchup Difficulty"].apply(
             lambda x: f"{int(round(x))}" if pd.notna(x) else ""
         )
 
-    # Format hit rates (percent, no decimals)
-    hit_cols = ["hit_rate_last5", "hit_rate_last10", "hit_rate_last20"]
-    for col in hit_cols:
+    # Hit rates → percentage, 0 decimals
+    for col in ["hit_rate_last5", "hit_rate_last10", "hit_rate_last20"]:
         if col in df.columns:
             df[col] = df[col].apply(
                 lambda x: f"{int(round(x * 100))}%" if pd.notna(x) else ""
             )
 
-    # Format averages (one decimal place)
+    # Averages → 1 decimal
     for col in ["L5 Avg", "L10 Avg", "L20 Avg"]:
         if col in df.columns:
             df[col] = df[col].apply(
@@ -231,7 +227,7 @@ props_df = load_props()
 historical_df = load_historical()
 
 # ---------------------------------------------------------
-# SIDEBAR + SESSION STATE
+# SIDEBAR + STATE
 # ---------------------------------------------------------
 if "saved_bets" not in st.session_state:
     st.session_state.saved_bets = []
@@ -302,7 +298,7 @@ with tab1:
 
         d["Price"] = d["price"].apply(format_moneyline)
 
-        # Format hit rates & averages & difficulty
+        # Formatting
         d = format_overview_fields(d)
 
         d = d.sort_values("hit_rate_last10", ascending=False)
@@ -325,7 +321,7 @@ with tab1:
         st.dataframe(styled, use_container_width=True)
 
 # ---------------------------------------------------------
-# TAB 2 — TREND ANALYSIS (UPDATED)
+# TAB 2 — TREND ANALYSIS (DEFENSE REMOVED)
 # ---------------------------------------------------------
 with tab2:
     st.subheader("Trend Analysis")
@@ -346,25 +342,6 @@ with tab2:
 
         stat = detect_stat(m)
 
-        # Get defense data
-        prop_row = props_df[
-            (props_df["player"] == p) &
-            (props_df["market"] == m) &
-            (props_df["line"] == line_pick)
-        ].iloc[0]
-
-        overall_def_rank = prop_row[f"opp_overall_{stat}_rank"]
-
-        # Defensive shading background
-        if overall_def_rank <= 5:
-            def_bg = "#662222"
-        elif overall_def_rank <= 15:
-            def_bg = "#664400"
-        elif overall_def_rank <= 25:
-            def_bg = "#665500"
-        else:
-            def_bg = "#335533"
-
         df_hist = (
             historical_df[(historical_df["player"] == p) & (historical_df[stat].notna())]
             .sort_values("game_date")
@@ -374,11 +351,7 @@ with tab2:
         df_hist["color"] = np.where(df_hist[stat] > line_pick, "green", "red")
 
         hover_text = [
-            f"Date: {d.strftime('%b %d')}<br>"
-            f"{stat.upper()}: {v}<br>"
-            f"Pos Def Rank: {prop_row[f'opp_pos_{stat}_rank']}<br>"
-            f"Overall Def Rank: {overall_def_rank}<br>"
-            f"Difficulty Score: {prop_row['matchup_difficulty_score']}"
+            f"Date: {d.strftime('%b %d')}<br>{stat.upper()}: {v}"
             for d, v in zip(df_hist["game_date"], df_hist[stat])
         ]
 
@@ -390,7 +363,7 @@ with tab2:
             marker_color=df_hist["color"],
             hovertext=hover_text,
             hoverinfo="text",
-            name=stat.upper()
+            name=stat.upper(),
         )
 
         fig.add_hline(
@@ -406,7 +379,7 @@ with tab2:
             xaxis_title="Game Date",
             yaxis_title=stat.upper(),
             xaxis=dict(type="category"),
-            plot_bgcolor=def_bg,
+            plot_bgcolor="#222222",
             paper_bgcolor="#222222",
             font=dict(color="white"),
         )

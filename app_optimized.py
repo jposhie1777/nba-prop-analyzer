@@ -38,10 +38,10 @@ if not PROJECT_ID or not GCP_SERVICE_ACCOUNT:
     st.stop()
 
 # ------------------------------------------------------
-# SQL QUERIES (REQUIRED)
+# SQL QUERIES
 # ------------------------------------------------------
 PROPS_SQL = f"""
-SELECT *
+SELECT * 
 FROM `{PROJECT_ID}.{DATASET}.{PROPS_TABLE}`
 """
 
@@ -67,8 +67,8 @@ ORDER BY game_date
 # ------------------------------------------------------
 try:
     creds_dict = json.loads(GCP_SERVICE_ACCOUNT)
-    base_creds = service_account.Credentials.from_service_account_info(creds_dict)
-    credentials = base_creds.with_scopes([
+    base = service_account.Credentials.from_service_account_info(creds_dict)
+    credentials = base.with_scopes([
         "https://www.googleapis.com/auth/cloud-platform",
         "https://www.googleapis.com/auth/bigquery",
     ])
@@ -125,7 +125,7 @@ TEAM_LOGOS = {
 }
 
 # ------------------------------------------------------
-# HELPER FUNCTIONS
+# FORMATTING FUNCTIONS
 # ------------------------------------------------------
 def format_moneyline(v):
     try:
@@ -157,9 +157,9 @@ def apply_defense_color(v):
     if v in ("",None) or pd.isna(v):
         return "background-color:#444;color:white;"
     v=int(v)
-    if v<=5: return "background-color:#d9534f;color:white;"
-    if v<=15:return "background-color:#f0ad4e;color:black;"
-    if v<=25:return "background-color:#ffd500;color:black;"
+    if v<=5:  return "background-color:#d9534f;color:white;"
+    if v<=15: return "background-color:#f0ad4e;color:black;"
+    if v<=25: return "background-color:#ffd500;color:black;"
     return "background-color:#5cb85c;color:white;"
 
 def add_defensive_matchups(df):
@@ -175,15 +175,19 @@ def add_defensive_matchups(df):
 
 def format_overview_fields(df):
     df=df.copy()
+
     df["Matchup Difficulty"]=df["Matchup Difficulty"].apply(lambda x:f"{int(round(x))}" if pd.notna(x) else "")
+
     for col in ["hit_rate_last5","hit_rate_last10","hit_rate_last20"]:
         def fmt(x):
             if pd.isna(x): return ""
             if 0<=x<=1: return f"{int(round(x*100))}%"
             return f"{int(round(x))}%"
         df[col]=df[col].apply(fmt)
+
     for col in ["L5 Avg","L10 Avg","L20 Avg"]:
         df[col]=df[col].apply(lambda x:f"{x:.1f}" if pd.notna(x) else "")
+
     return df
 
 # ------------------------------------------------------
@@ -317,12 +321,15 @@ with tab1:
 # ------------------------------------------------------
 with tab2:
     st.subheader("Trend Analysis")
+
     players_list=["(select)"]+sorted(props_df["player"].unique())
     p=st.selectbox("Player",players_list)
 
     if p!="(select)":
+
         markets=sorted(props_df[props_df["player"]==p]["market"].unique())
         m=st.selectbox("Market",markets)
+
         lines=sorted(props_df[(props_df["player"]==p)&(props_df["market"]==m)]["line"])
         line_pick=st.selectbox("Select Line",lines)
 
@@ -341,6 +348,7 @@ with tab2:
         ]
 
         fig=go.Figure()
+
         fig.add_bar(
             x=df_hist["date"],
             y=df_hist[stat],
@@ -352,7 +360,7 @@ with tab2:
         fig.update_xaxes(
             tickvals=df_hist["date"],
             ticktext=[
-                f"<img src='{TEAM_LOGOS.get(t,'')}' width='24'>" 
+                f"<img src='{TEAM_LOGOS.get(t,'')}' width='24'>"
                 for t in df_hist["opponent_team"]
             ]
         )
@@ -379,6 +387,7 @@ with tab2:
 # ------------------------------------------------------
 with tab3:
     st.subheader("Saved Bets")
+
     if not st.session_state.saved_bets:
         st.info("No saved bets yet.")
     else:
@@ -388,7 +397,7 @@ with tab3:
         st.download_button("Download CSV",csv,"saved_bets.csv","text/csv")
 
 # ------------------------------------------------------
-# TAB 4 — PROP ANALYTICS (EV-SORTED)
+# TAB 4 — PROP ANALYTICS (EV SORTED)
 # ------------------------------------------------------
 with tab4:
     st.subheader("Prop Analytics")
@@ -406,6 +415,9 @@ with tab4:
         if "ev" not in d.columns:
             st.error("❌ EV column missing from BigQuery table.")
             st.stop()
+
+        # 🔥 FIX: force EV to numeric
+        d["ev"] = pd.to_numeric(d["ev"], errors="coerce")
 
         d["Hit Rate 10"] = d["hit_rate_last10"]
 
@@ -435,7 +447,7 @@ with tab4:
         st.markdown(html, unsafe_allow_html=True)
 
 # ------------------------------------------------------
-# LAST UPDATED (EST)
+# LAST UPDATED
 # ------------------------------------------------------
 now_est = datetime.now(EST)
 st.sidebar.markdown(

@@ -46,7 +46,6 @@ try:
 
     credentials = base_credentials.with_scopes(SCOPES)
     st.write("✅ Credentials loaded successfully!")
-
 except Exception as e:
     st.error(f"❌ Failed to load Google credentials: {e}")
     st.stop()
@@ -115,14 +114,11 @@ def detect_stat(market: str) -> str:
 
 
 def get_dynamic_averages(df):
-    """
-    Add L5/L10/L20 Avg columns based on market type.
-    Uses the correct *_lastX fields from BigQuery.
-    """
+    """Add L5/L10/L20 avg columns using correct stat."""
     df = df.copy()
 
     def pick(row, horizon):
-        stat = detect_stat(row["market"])  # pts, reb, ast, pra
+        stat = detect_stat(row["market"])
         col = f"{stat}_last{horizon}"
         return row.get(col, np.nan)
 
@@ -165,37 +161,27 @@ if "saved_bets" not in st.session_state:
 # ------------------------------------------------------
 st.sidebar.header("⚙ Filters")
 
-# Game filter
-games = sorted(
+games = ["All games"] + sorted(
     (props_df["home_team"] + " vs " + props_df["visitor_team"])
     .dropna()
     .unique()
 )
-games = ["All games"] + games
 sel_game = st.sidebar.selectbox("Game", games)
 
-# Player filter
 players = ["All players"] + sorted(props_df["player"].dropna().unique())
 sel_player = st.sidebar.selectbox("Player", players)
 
-# Market filter
 markets = ["All Stats"] + sorted(props_df["market"].dropna().unique())
 sel_market = st.sidebar.selectbox("Market", markets)
 
-# Bookmaker filter (default DK + FD)
 books = sorted(props_df["bookmaker"].dropna().unique())
-default_books = [b for b in books if b.lower() in ("draftkings", "fanduel")]
-if not default_books:
-    default_books = books
-
+default_books = [b for b in books if b.lower() in ("draftkings", "fanduel")] or books
 sel_books = st.sidebar.multiselect("Bookmaker", books, default=default_books)
 
-# Odds filter
 min_odds = int(props_df["price"].min())
 max_odds = int(props_df["price"].max())
 sel_odds = st.sidebar.slider("Odds Range", min_odds, max_odds, (min_odds, max_odds))
 
-# Hit rate filter
 sel_hit10 = st.sidebar.slider("Min Hit Rate L10", 0.0, 1.0, 0.5)
 
 # ------------------------------------------------------
@@ -230,19 +216,14 @@ tab1, tab2, tab3 = st.tabs(["🧮 Props Overview", "📈 Trend Analysis", "📋 
 # ------------------------------------------------------
 with tab1:
     st.subheader("Props Overview")
-
     d = filter_props(props_df)
 
     if d.empty:
         st.info("No props match your filters.")
     else:
-        # Add dynamic stat averages (fix)
         d = get_dynamic_averages(d)
-
-        # Sort by hit rate 10 (descending)
         d = d.sort_values("hit_rate_last10", ascending=False)
 
-        # Format & display
         d["Price"] = d["price"].apply(format_moneyline)
         d["Hit L5"] = d["hit_rate_last5"]
         d["Hit L10"] = d["hit_rate_last10"]
@@ -257,13 +238,13 @@ with tab1:
         st.dataframe(d[display_cols], use_container_width=True)
 
 # ------------------------------------------------------
-# TAB 2 – TREND ANALYSIS
+# TAB 2 – TREND ANALYSIS (UPDATED)
 # ------------------------------------------------------
 with tab2:
     st.subheader("Trend Analysis")
 
-    players = ["(select)"] + sorted(props_df["player"].unique())
-    p = st.selectbox("Player", players)
+    players_list = ["(select)"] + sorted(props_df["player"].unique())
+    p = st.selectbox("Player", players_list)
 
     if p != "(select)":
         markets = sorted(props_df[props_df["player"] == p]["market"].unique())
@@ -277,18 +258,41 @@ with tab2:
         line_pick = st.selectbox("Select Line", line_values)
 
         stat = detect_stat(m)
-        df_hist = historical_df[historical_df["player"] == p].sort_values("game_date").tail(20)
+
+        # Filter games with real stats only
+        df_hist = (
+            historical_df[(historical_df["player"] == p) & (historical_df[stat].notna())]
+            .sort_values("game_date")
+            .tail(20)
+        )
+
+        # Color coding for over/under
+        df_hist["color"] = np.where(df_hist[stat] > line_pick, "green", "red")
 
         fig = go.Figure()
+
         fig.add_bar(
             x=df_hist["game_date"].dt.strftime("%Y-%m-%d"),
             y=df_hist[stat],
-            name=stat.upper()
+            marker_color=df_hist["color"],
+            name=stat.upper(),
         )
 
-        fig.add_hline(y=line_pick, line_dash="dash", line_color="red")
+        fig.add_hline(
+            y=line_pick,
+            line_dash="dash",
+            line_color="white",
+            annotation_text=f"Line: {line_pick}",
+            annotation_position="top left"
+        )
 
-        fig.update_layout(height=450, xaxis_title="Game Date", yaxis_title=stat.upper())
+        fig.update_layout(
+            height=450,
+            xaxis_title="Game Date",
+            yaxis_title=stat.upper(),
+            xaxis=dict(type="category"),  # prevents gaps
+        )
+
         st.plotly_chart(fig, use_container_width=True)
 
 # ------------------------------------------------------

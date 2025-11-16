@@ -3,8 +3,6 @@
 # ------------------------------------------------------
 import os
 import json
-import datetime
-
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -96,9 +94,7 @@ def format_moneyline(value):
     except:
         return "—"
 
-
-def detect_stat(market: str) -> str:
-    """Identify pts/reb/ast/pra based on market name."""
+def detect_stat(market):
     m = (market or "").lower()
 
     if "p+r+a" in m or "pra" in m:
@@ -109,14 +105,10 @@ def detect_stat(market: str) -> str:
         return "reb"
     if "pt" in m or "point" in m:
         return "pts"
-
     return ""
 
-
 def get_dynamic_averages(df):
-    """Add L5/L10/L20 avg columns using correct stat."""
     df = df.copy()
-
     def pick(row, horizon):
         stat = detect_stat(row["market"])
         col = f"{stat}_last{horizon}"
@@ -125,8 +117,63 @@ def get_dynamic_averages(df):
     df["L5 Avg"] = df.apply(lambda r: pick(r, 5), axis=1)
     df["L10 Avg"] = df.apply(lambda r: pick(r, 10), axis=1)
     df["L20 Avg"] = df.apply(lambda r: pick(r, 20), axis=1)
-
     return df
+
+# ---------------------------------------------------------
+# DEFENSIVE MATCHUP COLUMNS
+# ---------------------------------------------------------
+def add_defensive_matchups(df):
+    df = df.copy()
+    stat = df["market"].apply(detect_stat)
+
+    pos_map = {
+        "pts": "opp_pos_pts_rank",
+        "reb": "opp_pos_reb_rank",
+        "ast": "opp_pos_ast_rank",
+        "pra": "opp_pos_pra_rank",
+    }
+
+    overall_map = {
+        "pts": "opp_overall_pts_rank",
+        "reb": "opp_overall_reb_rank",
+        "ast": "opp_overall_ast_rank",
+        "pra": "opp_overall_pra_rank",
+    }
+
+    df["Pos Def Rank"] = [
+        df.loc[i, pos_map.get(stat[i], None)]
+        if pos_map.get(stat[i], None) in df.columns else np.nan
+        for i in df.index
+    ]
+
+    df["Overall Def Rank"] = [
+        df.loc[i, overall_map.get(stat[i], None)]
+        if overall_map.get(stat[i], None) in df.columns else np.nan
+        for i in df.index
+    ]
+
+    df["Matchup Difficulty"] = df.get("matchup_difficulty_score", np.nan)
+    return df
+
+# ---------------------------------------------------------
+# DEFENSE COLOR CODING
+# ---------------------------------------------------------
+def apply_defense_color(val):
+    if pd.isna(val):
+        return "background-color: #444444; color: white;"
+    try:
+        v = int(val)
+    except:
+        return ""
+
+    if v <= 5:
+        return "background-color: #d9534f; color: white;"   # red
+    elif v <= 15:
+        return "background-color: #f0ad4e; color: black;"   # orange
+    elif v <= 25:
+        return "background-color: #ffd500; color: black;"   # yellow
+    else:
+        return "background-color: #5cb85c; color: white;"   # green
 
 # ------------------------------------------------------
 # LOAD DATA
@@ -138,7 +185,6 @@ def load_props():
     df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
     return df
 
-
 @st.cache_data(show_spinner=True)
 def load_historical():
     df = bq_client.query(HISTORICAL_SQL).to_dataframe()
@@ -146,25 +192,19 @@ def load_historical():
     df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
     return df
 
-
 props_df = load_props()
 historical_df = load_historical()
 
 # ------------------------------------------------------
-# SAVED BETS
+# SIDEBAR + SESSION
 # ------------------------------------------------------
 if "saved_bets" not in st.session_state:
     st.session_state.saved_bets = []
 
-# ------------------------------------------------------
-# SIDEBAR FILTERS
-# ------------------------------------------------------
 st.sidebar.header("⚙ Filters")
 
 games = ["All games"] + sorted(
-    (props_df["home_team"] + " vs " + props_df["visitor_team"])
-    .dropna()
-    .unique()
+    (props_df["home_team"] + " vs " + props_df["visitor_team"]).dropna().unique()
 )
 sel_game = st.sidebar.selectbox("Game", games)
 
@@ -185,11 +225,10 @@ sel_odds = st.sidebar.slider("Odds Range", min_odds, max_odds, (min_odds, max_od
 sel_hit10 = st.sidebar.slider("Min Hit Rate L10", 0.0, 1.0, 0.5)
 
 # ------------------------------------------------------
-# FILTER PROPS
+# FILTER FUNCTION
 # ------------------------------------------------------
 def filter_props(df):
     d = df.copy()
-
     if sel_game != "All games":
         home, away = sel_game.split(" vs ")
         d = d[(d["home_team"] == home) & (d["visitor_team"] == away)]
@@ -203,7 +242,6 @@ def filter_props(df):
     d = d[d["bookmaker"].isin(sel_books)]
     d = d[d["price"].between(sel_odds[0], sel_odds[1])]
     d = d[d["hit_rate_last10"] >= sel_hit10]
-
     return d
 
 # ------------------------------------------------------
@@ -222,23 +260,28 @@ with tab1:
         st.info("No props match your filters.")
     else:
         d = get_dynamic_averages(d)
+        d = add_defensive_matchups(d)
         d = d.sort_values("hit_rate_last10", ascending=False)
 
-        d["Price"] = d["price"].apply(format_moneyline)
-        d["Hit L5"] = d["hit_rate_last5"]
-        d["Hit L10"] = d["hit_rate_last10"]
-        d["Hit L20"] = d["hit_rate_last20"]
-
+        # Display columns
         display_cols = [
             "player", "market", "line", "Price", "bookmaker",
-            "Hit L5", "Hit L10", "Hit L20",
+            "Pos Def Rank", "Overall Def Rank", "Matchup Difficulty",
+            "hit_rate_last5", "hit_rate_last10", "hit_rate_last20",
             "L5 Avg", "L10 Avg", "L20 Avg"
         ]
 
-        st.dataframe(d[display_cols], use_container_width=True)
+        d["Price"] = d["price"].apply(format_moneyline)
+
+        styled = d[display_cols].style.applymap(
+            apply_defense_color,
+            subset=["Pos Def Rank", "Overall Def Rank", "Matchup Difficulty"]
+        )
+
+        st.dataframe(styled, use_container_width=True)
 
 # ------------------------------------------------------
-# TAB 2 – TREND ANALYSIS (UPDATED)
+# TAB 2 – TREND ANALYSIS (FULLY UPDATED)
 # ------------------------------------------------------
 with tab2:
     st.subheader("Trend Analysis")
@@ -259,23 +302,51 @@ with tab2:
 
         stat = detect_stat(m)
 
-        # Filter games with real stats only
+        # Pull correct prop row for defense data
+        prop_row = props_df[
+            (props_df["player"] == p) &
+            (props_df["market"] == m) &
+            (props_df["line"] == line_pick)
+        ].iloc[0]
+
+        overall_def_rank = prop_row[f"opp_overall_{stat}_rank"]
+
+        # Background shade based on defense
+        if overall_def_rank <= 5:
+            def_bg = "#662222"
+        elif overall_def_rank <= 15:
+            def_bg = "#664400"
+        elif overall_def_rank <= 25:
+            def_bg = "#665500"
+        else:
+            def_bg = "#335533"
+
         df_hist = (
             historical_df[(historical_df["player"] == p) & (historical_df[stat].notna())]
             .sort_values("game_date")
             .tail(20)
         )
 
-        # Color coding for over/under
         df_hist["color"] = np.where(df_hist[stat] > line_pick, "green", "red")
+
+        hover_text = [
+            f"Date: {d.strftime('%b %d')}<br>"
+            f"{stat.upper()}: {v}<br>"
+            f"Pos Def Rank: {prop_row[f'opp_pos_{stat}_rank']}<br>"
+            f"Overall Def Rank: {overall_def_rank}<br>"
+            f"Difficulty Score: {prop_row['matchup_difficulty_score']}"
+            for d, v in zip(df_hist["game_date"], df_hist[stat])
+        ]
 
         fig = go.Figure()
 
         fig.add_bar(
-            x=df_hist["game_date"].dt.strftime("%Y-%m-%d"),
+            x=df_hist["game_date"].dt.strftime("%b %d"),
             y=df_hist[stat],
             marker_color=df_hist["color"],
-            name=stat.upper(),
+            hovertext=hover_text,
+            hoverinfo="text",
+            name=stat.upper()
         )
 
         fig.add_hline(
@@ -290,7 +361,10 @@ with tab2:
             height=450,
             xaxis_title="Game Date",
             yaxis_title=stat.upper(),
-            xaxis=dict(type="category"),  # prevents gaps
+            xaxis=dict(type="category"),
+            plot_bgcolor=def_bg,
+            paper_bgcolor="#222222",
+            font=dict(color="white"),
         )
 
         st.plotly_chart(fig, use_container_width=True)
@@ -310,6 +384,3 @@ with tab3:
         csv = df_save.to_csv(index=False).encode("utf-8")
         st.download_button("Download CSV", csv, "saved_bets.csv", "text/csv")
 
-# ------------------------------------------------------
-# END OF SCRIPT
-# ------------------------------------------------------

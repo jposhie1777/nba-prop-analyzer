@@ -108,6 +108,7 @@ def detect_stat(market):
 
 def get_dynamic_averages(df):
     df = df.copy()
+
     def pick(row, horizon):
         stat = detect_stat(row["market"])
         col = f"{stat}_last{horizon}"
@@ -164,45 +165,41 @@ def apply_defense_color(val):
 
     v = int(val)
     if v <= 5:
-        return "background-color: #d9534f; color: white;"   # tough red
+        return "background-color: #d9534f; color: white;"   # hard
     elif v <= 15:
-        return "background-color: #f0ad4e; color: black;"   # orange
+        return "background-color: #f0ad4e; color: black;"   # strong
     elif v <= 25:
-        return "background-color: #ffd500; color: black;"   # yellow
+        return "background-color: #ffd500; color: black;"   # average
     else:
-        return "background-color: #5cb85c; color: white;"   # green (easy)
+        return "background-color: #5cb85c; color: white;"   # easy
 
 # ---------------------------------------------------------
-# CENTER TEXT
-# ---------------------------------------------------------
-def center_cells(val):
-    return "text-align: center;"
-
-# ---------------------------------------------------------
-# FORMAT TABLE FIELDS
+# FORMAT TABLE FIELDS (CORRECTED)
 # ---------------------------------------------------------
 def format_overview_fields(df):
     df = df.copy()
 
-    # Difficulty → whole number
-    if "Matchup Difficulty" in df.columns:
-        df["Matchup Difficulty"] = df["Matchup Difficulty"].apply(
-            lambda x: f"{int(round(x))}" if pd.notna(x) else ""
-        )
+    # Difficulty: whole number
+    df["Matchup Difficulty"] = df["Matchup Difficulty"].apply(
+        lambda x: f"{int(round(x))}" if pd.notna(x) else ""
+    )
 
-    # Hit rates → percentage, 0 decimals
+    # Hit Rates — FIXED (detect decimal vs integer)
     for col in ["hit_rate_last5", "hit_rate_last10", "hit_rate_last20"]:
         if col in df.columns:
-            df[col] = df[col].apply(
-                lambda x: f"{int(round(x * 100))}%" if pd.notna(x) else ""
-            )
+            def fmt(x):
+                if pd.isna(x):
+                    return ""
+                # Decimal case: 0.82 → 82%
+                if 0 <= x <= 1:
+                    return f"{int(round(x * 100))}%"
+                # Integer case: 82 → 82%
+                return f"{int(round(x))}%"
+            df[col] = df[col].apply(fmt)
 
-    # Averages → 1 decimal
+    # Averages to 1 decimal
     for col in ["L5 Avg", "L10 Avg", "L20 Avg"]:
-        if col in df.columns:
-            df[col] = df[col].apply(
-                lambda x: f"{x:.1f}" if pd.notna(x) else ""
-            )
+        df[col] = df[col].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "")
 
     return df
 
@@ -227,7 +224,7 @@ props_df = load_props()
 historical_df = load_historical()
 
 # ---------------------------------------------------------
-# SIDEBAR + STATE
+# SIDEBAR
 # ---------------------------------------------------------
 if "saved_bets" not in st.session_state:
     st.session_state.saved_bets = []
@@ -256,7 +253,7 @@ sel_odds = st.sidebar.slider("Odds Range", min_odds, max_odds, (min_odds, max_od
 sel_hit10 = st.sidebar.slider("Min Hit Rate L10", 0.0, 1.0, 0.5)
 
 # ---------------------------------------------------------
-# FILTER FUNCTION
+# FILTER PROPS
 # ---------------------------------------------------------
 def filter_props(df):
     d = df.copy()
@@ -295,13 +292,10 @@ with tab1:
     else:
         d = get_dynamic_averages(d)
         d = add_defensive_matchups(d)
-
         d["Price"] = d["price"].apply(format_moneyline)
-
-        # Formatting
         d = format_overview_fields(d)
 
-        d = d.sort_values("hit_rate_last10", ascending=False)
+        d = d.sort_values(by="hit_rate_last10", ascending=False)
 
         display_cols = [
             "player", "market", "line", "Price", "bookmaker",
@@ -315,7 +309,7 @@ with tab1:
             .style
             .applymap(apply_defense_color,
                       subset=["Pos Def Rank", "Overall Def Rank", "Matchup Difficulty"])
-            .applymap(center_cells)
+            .set_properties(**{"text-align": "center"})
         )
 
         st.dataframe(styled, use_container_width=True)

@@ -51,9 +51,8 @@ except Exception as e:
     st.stop()
 
 # ------------------------------------------------------
-# INITIALIZE BIGQUERY CLIENT
+# INITIALIZE BIGQUERY CLIENT (no caching)
 # ------------------------------------------------------
-@st.cache_resource
 def get_bq_client():
     return bigquery.Client(project=PROJECT_ID, credentials=credentials)
 
@@ -198,7 +197,7 @@ def get_team_abbrev(team_name: str) -> str:
 
 def defense_color_emoji(rank):
     """
-    Simple red → orange → yellow → green gradient using emojis,
+    Red → orange → yellow → green tiers.
     1 is toughest (red), 30 is easiest (green).
     """
     if pd.isna(rank):
@@ -257,7 +256,7 @@ def pick_def_allowed(row):
 
 
 # ------------------------------------------------------
-# CACHED LOADERS
+# CACHED LOADERS (BigQuery only)
 # ------------------------------------------------------
 @st.cache_data(ttl=600, show_spinner=True)
 def load_props_cached(_bq_client, query):
@@ -370,7 +369,7 @@ refresh_clicked = st.sidebar.button("🔄 Refresh Data")
 if refresh_clicked:
     st.sidebar.info("♻️ Refreshing data... please wait.")
     st.cache_data.clear()
-    for key in ["props_df", "game_logs_df", "last_updated"]:
+    for key in ["props_df", "game_logs_df", "last_updated", "props_table_cache", "game_log_cache"]:
         st.session_state.pop(key, None)
     st.sidebar.success("✅ Reload complete!")
     st.rerun()
@@ -533,7 +532,7 @@ default_cols = [
     "L10 Avg",
     "L20 Avg",
 ]
-selected_columns = default_cols  # Reserved for future manual column picker
+selected_columns = default_cols  # reserved for future manual picker
 
 # Odds filters
 st.sidebar.markdown("---")
@@ -569,9 +568,8 @@ sel_min_ev = st.sidebar.slider("Minimum EV", -1.0, 1.0, 0.0, 0.01)
 sel_min_hit10 = st.sidebar.slider("Minimum Hit Rate (L10)", 0.0, 1.0, 0.5, 0.01)
 
 # ------------------------------------------------------
-# BUILD PROPS TABLE
+# BUILD PROPS TABLE (no Streamlit caching; use session_state)
 # ------------------------------------------------------
-@st.cache_data(ttl=120, show_spinner=False)
 def build_props_table(
     props_df,
     game_pick,
@@ -656,7 +654,6 @@ def build_props_table(
     return df_display.reset_index(drop=True)
 
 
-@st.cache_data(ttl=120, show_spinner=False)
 def get_props_table_cached(
     props_df,
     sel_game,
@@ -667,29 +664,65 @@ def get_props_table_cached(
     sel_min_ev,
     sel_min_hit10,
 ):
-    return build_props_table(
-        props_df,
+    """
+    Lightweight manual cache using session_state:
+    recompute only when filters change.
+    """
+    cache_key = "props_table_cache"
+    # normalize books + odds range for hashing
+    books_tuple = tuple(sorted(sel_books)) if sel_books else tuple()
+    odds_tuple = (sel_odds_range[0], sel_odds_range[1])
+    signature = (
         sel_game,
         sel_player,
         sel_stat,
-        sel_books,
-        sel_odds_range,
-        sel_min_ev,
-        sel_min_hit10,
+        books_tuple,
+        odds_tuple,
+        float(sel_min_ev),
+        float(sel_min_hit10),
     )
 
+    if cache_key not in st.session_state or st.session_state[cache_key]["signature"] != signature:
+        tbl = build_props_table(
+            props_df,
+            sel_game,
+            sel_player,
+            sel_stat,
+            sel_books,
+            sel_odds_range,
+            sel_min_ev,
+            sel_min_hit10,
+        )
+        st.session_state[cache_key] = {"signature": signature, "data": tbl}
+
+    return st.session_state[cache_key]["data"]
+
 
 # ------------------------------------------------------
-# TREND PLOT
+# TREND PLOT (no Streamlit caching; use session_state)
 # ------------------------------------------------------
-@st.cache_data(ttl=600, show_spinner=False)
 def get_player_game_log(game_logs_df, player, market):
+    """
+    Use session_state to avoid recomputing same player/market slice repeatedly.
+    """
     if game_logs_df is None or game_logs_df.empty:
         return pd.DataFrame()
+
+    cache_key = "game_log_cache"
+    last_updated = st.session_state.get("last_updated", None)
+    signature = (player, market, last_updated)
+
+    if cache_key in st.session_state:
+        cached_sig, cached_df = st.session_state[cache_key]
+        if cached_sig == signature:
+            return cached_df.copy()
+
     df = game_logs_df.copy()
     df = df[(df["player"] == player) & (df["market"] == market)]
     df = df.dropna(subset=["game_date"]).sort_values("game_date")
-    return df.tail(20)
+    df = df.tail(20)
+    st.session_state[cache_key] = (signature, df.copy())
+    return df
 
 
 def plot_trend(game_logs_df, player, market, line_value):

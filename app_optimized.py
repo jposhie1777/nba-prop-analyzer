@@ -9,17 +9,16 @@ import plotly.graph_objects as go
 import streamlit as st
 import pytz
 from datetime import datetime
-
 from google.oauth2 import service_account
 from google.cloud import bigquery
 
 # ------------------------------------------------------
-# GLOBAL TIMEZONE — FORCE EVERYTHING TO EST
+# TIMEZONE (EST)
 # ------------------------------------------------------
 EST = pytz.timezone("America/New_York")
 
 # ------------------------------------------------------
-# STREAMLIT PAGE CONFIG
+# STREAMLIT CONFIG
 # ------------------------------------------------------
 st.set_page_config(page_title="NBA Prop Analyzer", layout="wide")
 
@@ -30,14 +29,14 @@ PROJECT_ID = os.getenv("PROJECT_ID", "")
 DATASET = "nba_prop_analyzer"
 PROPS_TABLE = "todays_props_with_hit_rates"
 HISTORICAL_TABLE = "historical_player_stats_for_trends"
-GCP_SERVICE_ACCOUNT = os.getenv("GCP_SERVICE_ACCOUNT", "")
+SERVICE_JSON = os.getenv("GCP_SERVICE_ACCOUNT", "")
 
-if not PROJECT_ID or not GCP_SERVICE_ACCOUNT:
-    st.error("❌ Missing PROJECT_ID or GCP_SERVICE_ACCOUNT.")
+if not PROJECT_ID or not SERVICE_JSON:
+    st.error("❌ Missing PROJECT_ID or GCP_SERVICE_ACCOUNT environment variables.")
     st.stop()
 
 # ------------------------------------------------------
-# SQL QUERIES
+# SQL STATEMENTS
 # ------------------------------------------------------
 PROPS_SQL = f"""
 SELECT *
@@ -62,33 +61,35 @@ ORDER BY game_date
 """
 
 # ------------------------------------------------------
-# LOAD GOOGLE CREDENTIALS
+# AUTHENTICATION
 # ------------------------------------------------------
 try:
-    creds_dict = json.loads(GCP_SERVICE_ACCOUNT)
-    base = service_account.Credentials.from_service_account_info(creds_dict)
-    credentials = base.with_scopes([
-        "https://www.googleapis.com/auth/cloud-platform",
-        "https://www.googleapis.com/auth/bigquery",
-    ])
-    st.write("✅ Credentials loaded successfully!")
+    creds_dict = json.loads(SERVICE_JSON)
+    creds = service_account.Credentials.from_service_account_info(
+        creds_dict,
+        scopes=[
+            "https://www.googleapis.com/auth/cloud-platform",
+            "https://www.googleapis.com/auth/bigquery",
+        ],
+    )
+    st.write("✅ Credentials loaded.")
 except Exception as e:
-    st.error(f"❌ Failed to load Google credentials: {e}")
+    st.error(f"❌ Credential error: {e}")
     st.stop()
 
 # ------------------------------------------------------
 # BIGQUERY CLIENT
 # ------------------------------------------------------
 try:
-    bq_client = bigquery.Client(project=PROJECT_ID, credentials=credentials)
+    bq_client = bigquery.Client(credentials=creds, project=PROJECT_ID)
     _ = bq_client.query("SELECT 1").result()
-    st.sidebar.success("✅ Connected to BigQuery")
+    st.sidebar.success("Connected to BigQuery")
 except Exception as e:
-    st.sidebar.error(f"❌ BigQuery connection failed: {e}")
+    st.sidebar.error(f"BigQuery connection failed: {e}")
     st.stop()
 
 # ------------------------------------------------------
-# TEAM LOGOS
+# LOGOS (STATIC)
 # ------------------------------------------------------
 TEAM_LOGOS = {
     "ATL":"https://a.espncdn.com/i/teamlogos/nba/500/atl.png",
@@ -124,98 +125,124 @@ TEAM_LOGOS = {
 }
 
 # ------------------------------------------------------
-# FORMATTING FUNCTIONS
+# UTILITY FUNCTIONS
 # ------------------------------------------------------
 def format_moneyline(v):
     try:
-        v = int(round(float(v)))
+        v = float(v)
+        v = int(round(v))
         return f"+{v}" if v > 0 else str(v)
     except:
         return "—"
 
-def detect_stat(m):
-    m = (m or "").lower()
-    if "p+r+a" in m or "pra" in m: return "pra"
+def detect_stat(market):
+    m = (market or "").lower()
+    if "p+r+a" in m: return "pra"
     if "assist" in m or "ast" in m: return "ast"
     if "reb" in m: return "reb"
-    if "pt" in m or "point" in m: return "pts"
+    if "pt" in m: return "pts"
     return ""
 
 def get_dynamic_averages(df):
     df = df.copy()
-    def pick(row, n):
+    def pull(row, n):
         stat = detect_stat(row["market"])
         col = f"{stat}_last{n}"
         return row.get(col, np.nan)
-    df["L5 Avg"] = df.apply(lambda r: pick(r,5), axis=1)
-    df["L10 Avg"] = df.apply(lambda r: pick(r,10), axis=1)
-    df["L20 Avg"] = df.apply(lambda r: pick(r,20), axis=1)
+    df["L5 Avg"] = df.apply(lambda r: pull(r, 5), axis=1)
+    df["L10 Avg"] = df.apply(lambda r: pull(r,10), axis=1)
+    df["L20 Avg"] = df.apply(lambda r: pull(r,20), axis=1)
     return df
 
-def apply_defense_color(v):
-    if v in ("",None) or pd.isna(v):
+def defense_color(v):
+    if pd.isna(v) or v == "": 
         return "background-color:#444;color:white;"
-    v=int(v)
-    if v<=5:  return "background-color:#d9534f;color:white;"
-    if v<=15: return "background-color:#f0ad4e;color:black;"
-    if v<=25: return "background-color:#ffd500;color:black;"
+    v = int(v)
+    if v <= 5: return "background-color:#d9534f;color:white;"
+    if v <= 15:return "background-color:#f0ad4e;color:black;"
+    if v <= 25:return "background-color:#ffd500;color:black;"
     return "background-color:#5cb85c;color:white;"
 
-def add_defensive_matchups(df):
-    df = df.copy()
-    stat = df["market"].apply(detect_stat)
+def add_defense(df):
+    df=df.copy()
+    stat=df["market"].apply(detect_stat)
 
-    pos_map={"pts":"opp_pos_pts_rank","reb":"opp_pos_reb_rank","ast":"opp_pos_ast_rank","pra":"opp_pos_pra_rank"}
-    ov_map={"pts":"opp_overall_pts_rank","reb":"opp_overall_reb_rank","ast":"opp_overall_ast_rank","pra":"opp_overall_pra_rank"}
+    pos = {
+        "pts":"opp_pos_pts_rank",
+        "reb":"opp_pos_reb_rank",
+        "ast":"opp_pos_ast_rank",
+        "pra":"opp_pos_pra_rank"
+    }
+    overall = {
+        "pts":"opp_overall_pts_rank",
+        "reb":"opp_overall_reb_rank",
+        "ast":"opp_overall_ast_rank",
+        "pra":"opp_overall_pra_rank"
+    }
 
-    df["Pos Def Rank"]=[df.loc[i,pos_map.get(stat[i])] if pos_map.get(stat[i]) in df.columns else "" for i in df.index]
-    df["Overall Def Rank"]=[df.loc[i,ov_map.get(stat[i])] if ov_map.get(stat[i]) in df.columns else "" for i in df.index]
+    df["Pos Def Rank"]=[df.loc[i,pos.get(stat[i])] if pos.get(stat[i]) in df.columns else "" for i in df.index]
+    df["Overall Def Rank"]=[df.loc[i,overall.get(stat[i])] if overall.get(stat[i]) in df.columns else "" for i in df.index]
+    df["Matchup Difficulty"]=df.get("matchup_difficulty_score", np.nan)
 
-    df["Matchup Difficulty"]=df.get("matchup_difficulty_score",np.nan)
     return df
 
-def format_overview_fields(df):
-    df=df.copy()
+def format_display(df):
+    df = df.copy()
 
-    df["Matchup Difficulty"]=df["Matchup Difficulty"].apply(
+    # matchup difficulty (0 decimals)
+    df["Matchup Difficulty"] = df["Matchup Difficulty"].apply(
         lambda x: f"{int(round(x))}" if pd.notna(x) else ""
     )
 
+    # hit rate percent formatting
     for col in ["hit_rate_last5","hit_rate_last10","hit_rate_last20"]:
         def fmt(x):
             if pd.isna(x): return ""
-            if 0<=x<=1: return f"{int(round(x*100))}%"
-            return f"{int(round(x))}%"
-        df[col]=df[col].apply(fmt)
+            if 0 <= x <= 1:
+                return f"{int(x*100)}%"
+            return f"{int(x)}%"
+        df[col] = df[col].apply(fmt)
 
+    # averages -> 1 decimal place
     for col in ["L5 Avg","L10 Avg","L20 Avg"]:
-        df[col]=df[col].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "")
+        df[col] = df[col].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "")
 
     return df
 
 # ------------------------------------------------------
-# LOAD DATA (EST)
+# LOAD DATA (EST-CONVERTED)
 # ------------------------------------------------------
-@st.cache_data(show_spinner=True)
+@st.cache_data
 def load_props():
-    df=bq_client.query(PROPS_SQL).to_dataframe()
-    df.columns=df.columns.str.strip()
-    df["game_date"]=(
+    df = bq_client.query(PROPS_SQL).to_dataframe()
+    df.columns = df.columns.str.strip()
+
+    df["game_date"] = (
         pd.to_datetime(df["game_date"], errors="coerce")
         .dt.tz_localize("UTC")
         .dt.tz_convert(EST)
     )
+
+    # 🔥 Convert team names to strings (prevents TypeError)
+    df["home_team"] = df["home_team"].fillna("").astype(str)
+    df["visitor_team"] = df["visitor_team"].fillna("").astype(str)
+    df["opponent_team"] = df["opponent_team"].fillna("").astype(str)
+
     return df
 
-@st.cache_data(show_spinner=True)
+@st.cache_data
 def load_historical():
-    df=bq_client.query(HISTORICAL_SQL).to_dataframe()
+    df = bq_client.query(HISTORICAL_SQL).to_dataframe()
     df.columns=df.columns.str.strip()
+
     df["game_date"]=(
-        pd.to_datetime(df["game_date"], errors="coerce")
+        pd.to_datetime(df["game_date"],errors="coerce")
         .dt.tz_localize("UTC")
         .dt.tz_convert(EST)
     )
+
+    df["opponent_team"]=df["opponent_team"].fillna("").astype(str)
+
     return df
 
 props_df = load_props()
@@ -225,56 +252,54 @@ historical_df = load_historical()
 # SIDEBAR FILTERS
 # ------------------------------------------------------
 if "saved_bets" not in st.session_state:
-    st.session_state.saved_bets=[]
+    st.session_state.saved_bets = []
 
 st.sidebar.header("Filters")
 
-games=["All games"]+sorted((props_df["home_team"]+" vs "+props_df["visitor_team"]).unique())
-sel_game=st.sidebar.selectbox("Game",games)
+games_list = (props_df["home_team"] + " vs " + props_df["visitor_team"]).astype(str)
+games = ["All games"] + sorted(games_list.unique())
+sel_game = st.sidebar.selectbox("Game", games)
 
-players=["All players"]+sorted(props_df["player"].unique())
-sel_player=st.sidebar.selectbox("Player",players)
+players = ["All players"] + sorted(props_df["player"].fillna("").astype(str).unique())
+sel_player = st.sidebar.selectbox("Player", players)
 
-markets=["All Stats"]+sorted(props_df["market"].unique())
-sel_market=st.sidebar.selectbox("Market",markets)
+markets = ["All Stats"] + sorted(props_df["market"].fillna("").astype(str).unique())
+sel_market = st.sidebar.selectbox("Market", markets)
 
-books=sorted(props_df["bookmaker"].unique())
-default_books=[b for b in books if b.lower() in ("draftkings","fanduel")] or books
-sel_books=st.sidebar.multiselect("Bookmaker",books,default=default_books)
+books = sorted(props_df["bookmaker"].fillna("").astype(str).unique())
+default_books = [b for b in books if b.lower() in ("draftkings","fanduel")] or books
+sel_books = st.sidebar.multiselect("Bookmaker", books, default=default_books)
 
-od_min=int(props_df["price"].min())
-od_max=int(props_df["price"].max())
-sel_odds=st.sidebar.slider("Odds Range",od_min,od_max,(od_min,od_max))
+props_df["price"] = pd.to_numeric(props_df["price"], errors="coerce")  # enforce numeric early
+od_min = int(props_df["price"].min())
+od_max = int(props_df["price"].max())
+sel_odds = st.sidebar.slider("Odds Range", od_min, od_max, (od_min, od_max))
 
-sel_hit10=st.sidebar.slider("Min Hit Rate L10",0.0,1.0,0.5)
+sel_hit10 = st.sidebar.slider("Min Hit Rate L10", 0.0, 1.0, 0.5)
 
 # ------------------------------------------------------
-# FILTER PROPS — FULL FIX APPLIED HERE
+# FILTER FUNCTION WITH ALL NUMERIC FIXES
 # ------------------------------------------------------
 def filter_props(df):
     d = df.copy()
 
-    # 🔥 Ensure numeric before any comparisons
+    # 🔥 enforce numeric
     d["price"] = pd.to_numeric(d["price"], errors="coerce")
     d["hit_rate_last10"] = pd.to_numeric(d["hit_rate_last10"], errors="coerce")
 
-    if sel_game!="All games":
-        home,away=sel_game.split(" vs ")
-        d=d[(d["home_team"]==home)&(d["visitor_team"]==away)]
+    if sel_game != "All games":
+        home, away = sel_game.split(" vs ")
+        d = d[(d["home_team"] == home) & (d["visitor_team"] == away)]
 
-    if sel_player!="All players":
-        d=d[d["player"]==sel_player]
+    if sel_player != "All players":
+        d = d[d["player"] == sel_player]
 
-    if sel_market!="All Stats":
-        d=d[d["market"]==sel_market]
+    if sel_market != "All Stats":
+        d = d[d["market"] == sel_market]
 
-    d=d[d["bookmaker"].isin(sel_books)]
-
-    # SAFE because price is numeric
-    d=d[d["price"].between(sel_odds[0],sel_odds[1])]
-
-    # SAFE because hit rate numeric
-    d=d[d["hit_rate_last10"]>=sel_hit10]
+    d = d[d["bookmaker"].isin(sel_books)]
+    d = d[d["price"].between(sel_odds[0], sel_odds[1])]
+    d = d[d["hit_rate_last10"] >= sel_hit10]
 
     return d
 
@@ -285,7 +310,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "🧮 Props Overview",
     "📈 Trend Analysis",
     "📋 Saved Bets",
-    "📊 Prop Analytics"
+    "📊 Prop Analytics",
 ])
 
 # ------------------------------------------------------
@@ -299,39 +324,42 @@ with tab1:
     if d.empty:
         st.info("No props match your filters.")
     else:
-        d=get_dynamic_averages(d)
-        d=add_defensive_matchups(d)
-        d["Price"]=d["price"].apply(format_moneyline)
-        d=format_overview_fields(d)
-        d["Opponent Logo"]=d["opponent_team"].apply(lambda t:TEAM_LOGOS.get(t,""))
-        d=d.sort_values("hit_rate_last10",ascending=False)
+        d = get_dynamic_averages(d)
+        d = add_defense(d)
+        d["Price"] = d["price"].apply(format_moneyline)
+        d = format_display(d)
 
-        cols=[
+        d["Opponent Logo"] = d["opponent_team"].apply(lambda t: TEAM_LOGOS.get(t, ""))
+
+        d = d.sort_values("hit_rate_last10", ascending=False)
+
+        cols = [
             "player","market","line","Price","bookmaker",
             "Pos Def Rank","Overall Def Rank","Matchup Difficulty",
             "hit_rate_last5","hit_rate_last10","hit_rate_last20",
             "L5 Avg","L10 Avg","L20 Avg"
         ]
 
-        html="<table style='width:100%;border-collapse:collapse;'>"
-        html+="<tr>"
-        for c in cols+["Opponent Logo"]:
-            html+=f"<th style='padding:6px;text-align:center;border-bottom:1px solid #444'>{c}</th>"
-        html+="</tr>"
+        html = "<table style='width:100%;border-collapse:collapse;'>"
+        html += "<tr>"
+        for c in cols + ["Opponent Logo"]:
+            html += f"<th style='text-align:center;padding:6px;border-bottom:1px solid #444'>{c}</th>"
+        html += "</tr>"
 
-        for _,row in d.iterrows():
-            html+="<tr>"
+        for _, row in d.iterrows():
+            html += "<tr>"
             for c in cols:
-                val=row[c]; style=""
+                val = row[c]
+                style = ""
                 if c in ["Pos Def Rank","Overall Def Rank","Matchup Difficulty"]:
-                    style=apply_defense_color(val)
-                html+=f"<td style='padding:6px;text-align:center;{style}'>{val}</td>"
-            logo=TEAM_LOGOS.get(row["opponent_team"],"")
-            html+=f"<td style='text-align:center;'><img src='{logo}' width='32'></td>"
-            html+="</tr>"
-        html+="</table>"
+                    style = defense_color(val)
+                html += f"<td style='text-align:center;padding:6px;{style}'>{val}</td>"
+            logo = TEAM_LOGOS.get(row["opponent_team"], "")
+            html += f"<td style='text-align:center;'><img src='{logo}' width='32'></td>"
+            html += "</tr>"
 
-        st.markdown(html,unsafe_allow_html=True)
+        html += "</table>"
+        st.markdown(html, unsafe_allow_html=True)
 
 # ------------------------------------------------------
 # TAB 2 — TREND ANALYSIS
@@ -339,81 +367,82 @@ with tab1:
 with tab2:
     st.subheader("Trend Analysis")
 
-    players_list=["(select)"]+sorted(props_df["player"].unique())
-    p=st.selectbox("Player",players_list)
+    p = st.selectbox("Player", ["(select)"] + sorted(props_df["player"].unique()))
+    if p == "(select)":
+        st.stop()
 
-    if p!="(select)":
+    markets = sorted(props_df[props_df["player"] == p]["market"].unique())
+    m = st.selectbox("Market", markets)
 
-        markets=sorted(props_df[props_df["player"]==p]["market"].unique())
-        m=st.selectbox("Market",markets)
+    lines = sorted(props_df[(props_df["player"] == p) & (props_df["market"] == m)]["line"].unique())
+    line_pick = st.selectbox("Select Line", lines)
 
-        lines=sorted(props_df[(props_df["player"]==p)&(props_df["market"]==m)]["line"])
-        line_pick=st.selectbox("Select Line",lines)
+    stat = detect_stat(m)
 
-        stat=detect_stat(m)
+    df_hist = historical_df[
+        (historical_df["player"] == p) & (historical_df[stat].notna())
+    ].sort_values("game_date").tail(20)
 
-        df_hist=historical_df[
-            (historical_df["player"]==p)&(historical_df[stat].notna())
-        ].sort_values("game_date").tail(20)
+    df_hist["date"] = df_hist["game_date"].dt.strftime("%b %d")
+    df_hist["color"] = np.where(df_hist[stat] > line_pick, "green", "red")
 
-        df_hist["date"]=df_hist["game_date"].dt.strftime("%b %d")
-        df_hist["color"]=np.where(df_hist[stat]>line_pick,"green","red")
+    hover = [
+        f"<b>{d}</b><br>{stat.upper()}: {v}<br>Opponent: {opp}"
+        for d, opp, v in zip(df_hist["date"], df_hist["opponent_team"], df_hist[stat])
+    ]
 
-        hover=[
-            f"<b>{d}</b><br>{stat.upper()}: {v}<br>Opponent: {opp}"
-            for d,opp,v in zip(df_hist["date"],df_hist["opponent_team"],df_hist[stat])
+    fig = go.Figure()
+
+    fig.add_bar(
+        x=df_hist["date"],
+        y=df_hist[stat],
+        marker_color=df_hist["color"],
+        hovertext=hover,
+        hoverinfo="text"
+    )
+
+    fig.update_xaxes(
+        tickvals=df_hist["date"],
+        ticktext=[
+            f"<img src='{TEAM_LOGOS.get(t, '')}' width='24'>"
+            for t in df_hist["opponent_team"]
         ]
+    )
 
-        fig=go.Figure()
+    fig.add_hline(
+        y=line_pick,
+        line_dash="dash",
+        line_color="white",
+        annotation_text=f"Line: {line_pick}",
+        annotation_position="top left"
+    )
 
-        fig.add_bar(
-            x=df_hist["date"],
-            y=df_hist[stat],
-            marker_color=df_hist["color"],
-            hovertext=hover,
-            hoverinfo="text"
-        )
+    fig.update_layout(
+        height=450,
+        plot_bgcolor="#222",
+        paper_bgcolor="#222",
+        font=dict(color="white")
+    )
 
-        fig.update_xaxes(
-            tickvals=df_hist["date"],
-            ticktext=[
-                f"<img src='{TEAM_LOGOS.get(t,'')}' width='24'>"
-                for t in df_hist["opponent_team"]
-            ]
-        )
-
-        fig.add_hline(
-            y=line_pick,
-            line_dash="dash",
-            line_color="white",
-            annotation_text=f"Line: {line_pick}",
-            annotation_position="top left"
-        )
-
-        fig.update_layout(
-            height=450,
-            plot_bgcolor="#222222",
-            paper_bgcolor="#222222",
-            font=dict(color="white")
-        )
-
-        st.plotly_chart(fig,use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True)
 
 # ------------------------------------------------------
 # TAB 3 — SAVED BETS
 # ------------------------------------------------------
 with tab3:
     st.subheader("Saved Bets")
+
     if not st.session_state.saved_bets:
         st.info("No saved bets yet.")
     else:
-        df_save=pd.DataFrame(st.session_state.saved_bets)
-        st.dataframe(df_save,use_container_width=True)
-        csv=df_save.to_csv(index=False).encode("utf-8")
-        st.download_button("Download CSV",csv,"saved_bets.csv","text/csv")
+        df_save = pd.DataFrame(st.session_state.saved_bets)
+        st.dataframe(df_save, use_container_width=True)
+
+        csv = df_save.to_csv(index=False).encode("utf-8")
+        st.download_button("Download CSV", csv, "saved_bets.csv", "text/csv")
 
 # ------------------------------------------------------
-# TAB 4 — PROP ANALYTICS (EV SORTED)
+# TAB 4 — PROP ANALYTICS
 # ------------------------------------------------------
 with tab4:
     st.subheader("Prop Analytics")
@@ -424,12 +453,12 @@ with tab4:
         st.info("No props match your filters.")
     else:
         d = get_dynamic_averages(d)
-        d = add_defensive_matchups(d)
-        d = format_overview_fields(d)
+        d = add_defense(d)
+        d = format_display(d)
         d["Price"] = d["price"].apply(format_moneyline)
 
         if "ev" not in d.columns:
-            st.error("❌ EV column missing from BigQuery table.")
+            st.error("❌ EV column missing from the database.")
             st.stop()
 
         d["ev"] = pd.to_numeric(d["ev"], errors="coerce")
@@ -437,33 +466,30 @@ with tab4:
 
         d = d.sort_values("ev", ascending=False)
 
-        cols = [
-            "player","market","line","Price","bookmaker",
-            "ev","Matchup Difficulty","Hit Rate 10","L10 Avg"
-        ]
+        cols = ["player","market","line","Price","bookmaker",
+                "ev","Matchup Difficulty","Hit Rate 10","L10 Avg"]
 
-        html="<table style='width:100%;border-collapse:collapse;'>"
-        html+="<tr>"
+        html = "<table style='width:100%;border-collapse:collapse;'>"
+        html += "<tr>"
         for c in cols:
-            html+=f"<th style='padding:6px;text-align:center;border-bottom:1px solid #444'>{c}</th>"
-        html+="</tr>"
+            html += f"<th style='text-align:center;padding:6px;border-bottom:1px solid #444'>{c}</th>"
+        html += "</tr>"
 
-        for _,row in d.iterrows():
-            html+="<tr>"
+        for _, row in d.iterrows():
+            html += "<tr>"
             for c in cols:
-                val=row[c]; style=""
-                if c=="Matchup Difficulty":
-                    style=apply_defense_color(val)
-                html+=f"<td style='padding:6px;text-align:center;{style}'>{val}</td>"
-            html+="</tr>"
-        html+="</table>"
+                v = row[c]
+                style = ""
+                if c == "Matchup Difficulty":
+                    style = defense_color(v)
+                html += f"<td style='text-align:center;padding:6px;{style}'>{v}</td>"
+            html += "</tr>"
 
+        html += "</table>"
         st.markdown(html, unsafe_allow_html=True)
 
 # ------------------------------------------------------
-# LAST UPDATED (EST)
+# LAST UPDATED
 # ------------------------------------------------------
-now_est = datetime.now(EST)
-st.sidebar.markdown(
-    f"**Last Updated:** {now_est.strftime('%b %d, %I:%M %p')} ET"
-)
+now = datetime.now(EST)
+st.sidebar.markdown(f"**Last Updated:** {now.strftime('%b %d, %I:%M %p')} ET")

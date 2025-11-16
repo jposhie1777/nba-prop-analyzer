@@ -14,12 +14,12 @@ from google.oauth2 import service_account
 from google.cloud import bigquery
 
 # ------------------------------------------------------
-# STREAMLIT PAGE CONFIG
+# STREAMLIT CONFIG
 # ------------------------------------------------------
 st.set_page_config(page_title="NBA Prop Analyzer", layout="wide")
 
 # ------------------------------------------------------
-# ENVIRONMENT VARIABLES
+# ENV VARIABLES
 # ------------------------------------------------------
 PROJECT_ID = os.getenv("PROJECT_ID", "")
 DATASET = "nba_prop_analyzer"
@@ -33,7 +33,7 @@ if not PROJECT_ID or not GCP_SERVICE_ACCOUNT:
     st.stop()
 
 # ------------------------------------------------------
-# LOAD GOOGLE CREDENTIALS
+# GOOGLE CREDENTIALS
 # ------------------------------------------------------
 try:
     creds_dict = json.loads(GCP_SERVICE_ACCOUNT)
@@ -56,7 +56,7 @@ except Exception as e:
 # ------------------------------------------------------
 try:
     bq_client = bigquery.Client(project=PROJECT_ID, credentials=credentials)
-    _ = bq_client.query("SELECT 1").result()
+    bq_client.query("SELECT 1").result()
     st.sidebar.success("✅ Connected to BigQuery")
 except Exception as e:
     st.sidebar.error(f"❌ BigQuery connection failed: {e}")
@@ -88,7 +88,7 @@ ORDER BY game_date
 """
 
 # ------------------------------------------------------
-# HELPER FUNCTIONS
+# HELPERS
 # ------------------------------------------------------
 def format_moneyline(value):
     try:
@@ -99,7 +99,6 @@ def format_moneyline(value):
 
 
 def detect_stat(market: str) -> str:
-    """Identify pts/reb/ast/pra based on market name."""
     m = (market or "").lower()
 
     if "p+r+a" in m or "pra" in m:
@@ -110,19 +109,14 @@ def detect_stat(market: str) -> str:
         return "reb"
     if "pt" in m or "point" in m:
         return "pts"
-
     return ""
 
 
 def get_dynamic_averages(df):
-    """
-    Add L5/L10/L20 Avg columns based on market type.
-    Uses the correct *_lastX fields from BigQuery.
-    """
     df = df.copy()
 
     def pick(row, horizon):
-        stat = detect_stat(row["market"])  # pts, reb, ast, pra
+        stat = detect_stat(row["market"])
         col = f"{stat}_last{horizon}"
         return row.get(col, np.nan)
 
@@ -133,7 +127,7 @@ def get_dynamic_averages(df):
     return df
 
 # ------------------------------------------------------
-# LOAD DATA
+# LOAD DATA (CACHED)
 # ------------------------------------------------------
 @st.cache_data(show_spinner=True)
 def load_props():
@@ -152,7 +146,7 @@ def load_historical():
 
 
 props_df = load_props()
-historical_df = load_historical()
+hist_df = load_historical()
 
 # ------------------------------------------------------
 # SAVED BETS
@@ -165,37 +159,27 @@ if "saved_bets" not in st.session_state:
 # ------------------------------------------------------
 st.sidebar.header("⚙ Filters")
 
-# Game filter
-games = sorted(
-    (props_df["home_team"] + " vs " + props_df["visitor_team"])
-    .dropna()
-    .unique()
-)
+games = sorted((props_df["home_team"] + " vs " + props_df["visitor_team"]).unique())
 games = ["All games"] + games
 sel_game = st.sidebar.selectbox("Game", games)
 
-# Player filter
-players = ["All players"] + sorted(props_df["player"].dropna().unique())
+players = ["All players"] + sorted(props_df["player"].unique())
 sel_player = st.sidebar.selectbox("Player", players)
 
-# Market filter
-markets = ["All Stats"] + sorted(props_df["market"].dropna().unique())
+markets = ["All Stats"] + sorted(props_df["market"].unique())
 sel_market = st.sidebar.selectbox("Market", markets)
 
-# Bookmaker filter (default DK + FD)
-books = sorted(props_df["bookmaker"].dropna().unique())
+books = sorted(props_df["bookmaker"].unique())
 default_books = [b for b in books if b.lower() in ("draftkings", "fanduel")]
 if not default_books:
     default_books = books
 
-sel_books = st.sidebar.multiselect("Bookmaker", books, default=default_books)
+sel_books = st.sidebar.multiselect("Bookmaker", books, default_books)
 
-# Odds filter
 min_odds = int(props_df["price"].min())
 max_odds = int(props_df["price"].max())
 sel_odds = st.sidebar.slider("Odds Range", min_odds, max_odds, (min_odds, max_odds))
 
-# Hit rate filter
 sel_hit10 = st.sidebar.slider("Min Hit Rate L10", 0.0, 1.0, 0.5)
 
 # ------------------------------------------------------
@@ -226,7 +210,7 @@ def filter_props(df):
 tab1, tab2, tab3 = st.tabs(["🧮 Props Overview", "📈 Trend Analysis", "📋 Saved Bets"])
 
 # ------------------------------------------------------
-# TAB 1 – PROPS OVERVIEW
+# TAB 1 — PROPS OVERVIEW
 # ------------------------------------------------------
 with tab1:
     st.subheader("Props Overview")
@@ -236,13 +220,9 @@ with tab1:
     if d.empty:
         st.info("No props match your filters.")
     else:
-        # Add dynamic stat averages (fix)
         d = get_dynamic_averages(d)
-
-        # Sort by hit rate 10 (descending)
         d = d.sort_values("hit_rate_last10", ascending=False)
 
-        # Format & display
         d["Price"] = d["price"].apply(format_moneyline)
         d["Hit L5"] = d["hit_rate_last5"]
         d["Hit L10"] = d["hit_rate_last10"]
@@ -257,7 +237,7 @@ with tab1:
         st.dataframe(d[display_cols], use_container_width=True)
 
 # ------------------------------------------------------
-# TAB 2 – TREND ANALYSIS
+# TAB 2 — TREND ANALYSIS
 # ------------------------------------------------------
 with tab2:
     st.subheader("Trend Analysis")
@@ -270,29 +250,45 @@ with tab2:
         m = st.selectbox("Market", markets)
 
         line_values = sorted(
-            props_df[(props_df["player"] == p) & (props_df["market"] == m)]["line"]
-            .dropna()
-            .unique()
+            props_df[(props_df["player"] == p) & (props_df["market"] == m)]["line"].unique()
         )
         line_pick = st.selectbox("Select Line", line_values)
 
         stat = detect_stat(m)
-        df_hist = historical_df[historical_df["player"] == p].sort_values("game_date").tail(20)
 
-        fig = go.Figure()
-        fig.add_bar(
-            x=df_hist["game_date"].dt.strftime("%Y-%m-%d"),
-            y=df_hist[stat],
-            name=stat.upper()
+        # 🔥 **FIX: Only include games the player actually played**
+        df_hist = (
+            hist_df[(hist_df["player"] == p) &
+                    ((hist_df["pts"].notna()) |
+                     (hist_df["reb"].notna()) |
+                     (hist_df["ast"].notna()) |
+                     (hist_df["pra"].notna()))]
+            .sort_values("game_date")
+            .tail(20)
         )
 
-        fig.add_hline(y=line_pick, line_dash="dash", line_color="red")
+        if df_hist.empty:
+            st.info("No historical games found for this player.")
+        else:
+            fig = go.Figure()
+            fig.add_bar(
+                x=df_hist["game_date"].dt.strftime("%Y-%m-%d"),
+                y=df_hist[stat],
+                name=stat.upper()
+            )
 
-        fig.update_layout(height=450, xaxis_title="Game Date", yaxis_title=stat.upper())
-        st.plotly_chart(fig, use_container_width=True)
+            fig.add_hline(y=line_pick, line_dash="dash", line_color="red")
+
+            fig.update_layout(
+                height=450,
+                xaxis_title="Game Date",
+                yaxis_title=stat.upper(),
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
 
 # ------------------------------------------------------
-# TAB 3 – SAVED BETS
+# TAB 3 — SAVED BETS
 # ------------------------------------------------------
 with tab3:
     st.subheader("Saved Bets")

@@ -8,7 +8,7 @@ import datetime
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-import streamlit as st  # must be first Streamlit import
+import streamlit as st
 
 from google.oauth2 import service_account
 from google.cloud import bigquery
@@ -33,7 +33,7 @@ if not PROJECT_ID or not GCP_SERVICE_ACCOUNT:
     st.stop()
 
 # ------------------------------------------------------
-# LOAD GCP SERVICE ACCOUNT CREDENTIALS
+# LOAD GOOGLE CREDENTIALS
 # ------------------------------------------------------
 try:
     creds_dict = json.loads(GCP_SERVICE_ACCOUNT)
@@ -43,14 +43,16 @@ try:
         "https://www.googleapis.com/auth/cloud-platform",
         "https://www.googleapis.com/auth/bigquery",
     ]
+
     credentials = base_credentials.with_scopes(SCOPES)
     st.write("✅ Credentials loaded successfully!")
+
 except Exception as e:
     st.error(f"❌ Failed to load Google credentials: {e}")
     st.stop()
 
 # ------------------------------------------------------
-# INITIALIZE BIGQUERY CLIENT
+# BIGQUERY CLIENT
 # ------------------------------------------------------
 try:
     bq_client = bigquery.Client(project=PROJECT_ID, credentials=credentials)
@@ -97,7 +99,7 @@ def format_moneyline(value):
 
 
 def detect_stat(market: str) -> str:
-    """Identify pts/reb/ast/pra from BigQuery market string."""
+    """Identify pts/reb/ast/pra from market string."""
     m = (market or "").lower()
 
     if "p+r+a" in m or "pra" in m:
@@ -106,22 +108,19 @@ def detect_stat(market: str) -> str:
         return "ast"
     if "reb" in m:
         return "reb"
-    if "pts" in m or "point" in m:
+    if "pt" in m or "point" in m:
         return "pts"
     return ""
 
 
 # ------------------------------------------------------
-# LOAD BIGQUERY TABLES
+# LOAD DATA (CACHED)
 # ------------------------------------------------------
 @st.cache_data(show_spinner=True)
 def load_props():
     df = bq_client.query(PROPS_SQL).to_dataframe()
     df.columns = [c.strip() for c in df.columns]
-
-    if "game_date" in df:
-        df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
-
+    df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
     return df
 
 
@@ -143,16 +142,12 @@ if "saved_bets" not in st.session_state:
     st.session_state.saved_bets = []
 
 
-def bet_key(row):
-    return f"{row['Player']}|{row['Market']}|{row['Price']}|{row['Line']}|{row['Bookmaker']}"
-
-
 # ------------------------------------------------------
 # SIDEBAR FILTERS
 # ------------------------------------------------------
 st.sidebar.header("⚙ Filters")
 
-# Games
+# Game filter
 games = sorted(
     (props_df["home_team"] + " vs " + props_df["visitor_team"])
     .dropna()
@@ -162,21 +157,30 @@ games = sorted(
 games = ["All games"] + games
 sel_game = st.sidebar.selectbox("Game", games)
 
-# Player
-players = sorted(props_df["player"].dropna().unique().tolist())
+# Player filter
+players = sorted(props_df["player"].dropna().unique())
 players = ["All players"] + players
 sel_player = st.sidebar.selectbox("Player", players)
 
-# Market
-markets = sorted(props_df["market"].dropna().unique().tolist())
+# Market filter
+markets = sorted(props_df["market"].dropna().unique())
 markets = ["All Stats"] + markets
 sel_market = st.sidebar.selectbox("Market", markets)
 
-# Bookmakers
+# Bookmaker filter (default DK + FD)
 books = sorted(props_df["bookmaker"].dropna().unique())
-sel_books = st.sidebar.multiselect("Bookmaker", books, default=books)
 
-# Odds filter
+default_books = [b for b in books if b.lower() in ("draftkings", "fanduel")]
+if not default_books:
+    default_books = books  # fallback
+
+sel_books = st.sidebar.multiselect(
+    "Bookmaker",
+    books,
+    default=default_books,
+)
+
+# Odds slider
 min_odds = int(props_df["price"].min())
 max_odds = int(props_df["price"].max())
 sel_odds = st.sidebar.slider("Odds Range", min_odds, max_odds, (min_odds, max_odds))
@@ -185,7 +189,7 @@ sel_odds = st.sidebar.slider("Odds Range", min_odds, max_odds, (min_odds, max_od
 sel_hit10 = st.sidebar.slider("Min Hit Rate L10", 0.0, 1.0, 0.5, step=0.01)
 
 # ------------------------------------------------------
-# BUILD PROPS TABLE
+# FILTER PROPS DATA
 # ------------------------------------------------------
 def filter_props(df):
     d = df.copy()
@@ -201,19 +205,20 @@ def filter_props(df):
         d = d[d["market"] == sel_market]
 
     d = d[d["bookmaker"].isin(sel_books)]
-
     d = d[d["price"].between(sel_odds[0], sel_odds[1])]
-
     d = d[d["hit_rate_last10"] >= sel_hit10]
 
     return d
 
 
 # ------------------------------------------------------
-# PROP OVERVIEW TAB
+# TABS
 # ------------------------------------------------------
 tab1, tab2, tab3 = st.tabs(["🧮 Props Overview", "📈 Trend Analysis", "📋 Saved Bets"])
 
+# ------------------------------------------------------
+# TAB 1 – PROPS OVERVIEW
+# ------------------------------------------------------
 with tab1:
     st.subheader("Props Overview")
 
@@ -222,7 +227,8 @@ with tab1:
     if d.empty:
         st.info("No props match your filters.")
     else:
-        d = d.sort_values("hit_rate_last10", ascending=False)
+        # Sort by Hit Rate 10 (descending)
+        d = d.sort_values("hit_rate_last10", ascending=False, na_position="last")
 
         d["Price"] = d["price"].apply(format_moneyline)
         d["Hit L5"] = d["hit_rate_last5"]
@@ -238,7 +244,7 @@ with tab1:
         st.dataframe(d[display_cols], use_container_width=True)
 
 # ------------------------------------------------------
-# TREND ANALYSIS TAB
+# TAB 2 – TREND ANALYSIS
 # ------------------------------------------------------
 with tab2:
     st.subheader("Trend Analysis")
@@ -251,7 +257,10 @@ with tab2:
         m = st.selectbox("Market", markets)
 
         line_values = sorted(
-            props_df[(props_df["player"] == p) & (props_df["market"] == m)]["line"].unique().tolist()
+            props_df[(props_df["player"] == p) & (props_df["market"] == m)]["line"]
+            .dropna()
+            .unique()
+            .tolist()
         )
         line_pick = st.selectbox("Select Line", line_values)
 
@@ -273,7 +282,7 @@ with tab2:
         st.plotly_chart(fig, use_container_width=True)
 
 # ------------------------------------------------------
-# SAVED BETS TAB
+# TAB 3 – SAVED BETS
 # ------------------------------------------------------
 with tab3:
     st.subheader("Saved Bets")

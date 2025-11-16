@@ -95,17 +95,8 @@ def format_moneyline(value):
         return "—"
 
 def get_stat_base_from_market(market: str) -> str:
-    """
-    Detect stat category (pts, reb, ast, pra) from a market string.
-    Handles things like:
-      - player_points_alternate
-      - player_rebounds
-      - player_assists_alternate
-      - player_points_rebounds_assists_alternate
-    """
     m = (market or "").lower().strip()
 
-    # PRA must be detected BEFORE pts/reb/ast
     if (
         "points_rebounds_assists" in m
         or "pra" in m
@@ -124,10 +115,6 @@ def get_stat_base_from_market(market: str) -> str:
     return ""
 
 def add_dynamic_averages(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Add L5/L10/L20 Avg columns for each row,
-    mapping to pts/reb/ast/pra_* based on that row's market.
-    """
     if df.empty:
         df["L5 Avg"] = np.nan
         df["L10 Avg"] = np.nan
@@ -154,15 +141,12 @@ def add_dynamic_averages(df: pd.DataFrame) -> pd.DataFrame:
 @st.cache_data(ttl=600, show_spinner=True)
 def load_props_cached(_bq_client, query):
     df = _bq_client.query(query).to_dataframe()
-    # Normalize column names / strip
     df.columns = [c.strip() for c in df.columns]
 
-    # Strip string columns
     for col in ["player", "market", "bookmaker", "player_team", "opponent_team", "home_team", "visitor_team"]:
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip()
 
-    # Ensure numeric types where relevant
     numeric_cols = [
         "line", "price",
         "hit_rate_last5", "hit_rate_last10", "hit_rate_last20",
@@ -176,7 +160,6 @@ def load_props_cached(_bq_client, query):
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
-    # Fractional hit rates for filtering/sorting (0–1)
     for src, dst in [
         ("hit_rate_last5", "hit5_frac"),
         ("hit_rate_last10", "hit10_frac"),
@@ -185,7 +168,6 @@ def load_props_cached(_bq_client, query):
         if src in df.columns:
             df[dst] = df[src] / 100.0
 
-    # Add dynamic averages based on market
     df = add_dynamic_averages(df)
     return df
 
@@ -215,50 +197,23 @@ refresh_clicked = st.sidebar.button("🔄 Refresh Data")
 if refresh_clicked:
     st.sidebar.info("♻️ Refreshing data... please wait.")
     st.cache_data.clear()
-    for key in ["props_df", "game_logs_df", "last_updated"]:
-        st.session_state.pop(key, None)
     st.sidebar.success("✅ Reload complete!")
     st.rerun()
 
 # ------------------------------------------------------
-# LOAD DATA INTO SESSION
+# LOAD DATA INTO MEMORY
 # ------------------------------------------------------
-if "props_df" not in st.session_state:
-    with st.spinner("⏳ Loading props from BigQuery..."):
-        st.session_state.props_df = load_props_cached(bq_client, PROPS_SQL)
-        st.session_state.last_updated = datetime.datetime.now()
-
-if "game_logs_df" not in st.session_state:
-    with st.spinner("📈 Loading game logs from BigQuery..."):
-        st.session_state.game_logs_df = load_game_logs_cached(bq_client, GAME_LOGS_SQL)
-        st.session_state.last_updated = datetime.datetime.now()
-
-props_df = st.session_state.props_df
-game_logs_df = st.session_state.game_logs_df
-
-if "last_updated" in st.session_state:
-    last_updated_str = st.session_state.last_updated.strftime("%Y-%m-%d %I:%M %p")
-    st.sidebar.info(f"🕒 **Data last updated:** {last_updated_str}")
+props_df = load_props_cached(bq_client, PROPS_SQL)
+game_logs_df = load_game_logs_cached(bq_client, GAME_LOGS_SQL)
 
 # ------------------------------------------------------
-# SESSION STATE (Saved Bets)
+# Debug info
 # ------------------------------------------------------
-if "saved_bets" not in st.session_state:
-    st.session_state.saved_bets = []
-
-def _bet_key(row):
-    return f"{row['Player']}|{row['Market']}|{row['Bookmaker']}|{row['Line']}|{row['Price (Am)']}"
-
-def sync_saved_bets_from_editor(edited_df):
-    for _, row in edited_df.iterrows():
-        key = _bet_key(row)
-        checked = row.get("Save Bet", False)
-        exists = any(_bet_key(x) == key for x in st.session_state.saved_bets)
-        if checked and not exists:
-            st.session_state.saved_bets.append(row.to_dict())
-        elif not checked and exists:
-            st.session_state.saved_bets = [x for x in st.session_state.saved_bets if _bet_key(x) != key]
-
+if props_df is not None:
+    st.sidebar.info("Props loaded")
+if game_logs_df is not None:
+    st.sidebar.info("Logs loaded")
+    
 # ------------------------------------------------------
 # SIDEBAR FILTERS
 # ------------------------------------------------------

@@ -11,6 +11,8 @@ import pytz
 from datetime import datetime
 from google.oauth2 import service_account
 from google.cloud import bigquery
+from urllib.parse import urlencode
+import html as html_lib
 
 # ------------------------------------------------------
 # TIMEZONE (EST)
@@ -138,6 +140,84 @@ TEAM_LOGOS = {
 }
 
 # ------------------------------------------------------
+# SESSION STATE
+# ------------------------------------------------------
+if "saved_bets" not in st.session_state:
+    st.session_state.saved_bets = []
+
+if "active_tab" not in st.session_state:
+    st.session_state.active_tab = "🧮 Props Overview"
+
+if "trend_player" not in st.session_state:
+    st.session_state.trend_player = None
+
+if "trend_market" not in st.session_state:
+    st.session_state.trend_market = None
+
+if "trend_line" not in st.session_state:
+    st.session_state.trend_line = None
+
+if "processed_actions" not in st.session_state:
+    st.session_state.processed_actions = set()
+
+# ------------------------------------------------------
+# QUERY PARAM HANDLING
+# ------------------------------------------------------
+params = st.experimental_get_query_params()
+
+# Handle "save bet" action via query params
+action = params.get("action", [None])[0]
+if action == "save":
+    player = params.get("player", [""])[0]
+    market = params.get("market", [""])[0]
+    line = params.get("line", [""])[0]
+    price = params.get("price", [""])[0]
+    bookmaker = params.get("bookmaker", [""])[0]
+    uid = params.get("id", [""])[0]
+
+    if uid and uid not in st.session_state.processed_actions:
+        st.session_state.saved_bets.append(
+            {
+                "player": player,
+                "market": market,
+                "line": line,
+                "price": price,
+                "bookmaker": bookmaker,
+            }
+        )
+        st.session_state.processed_actions.add(uid)
+        st.success(f"Saved bet: {player} {market} {line} @ {price} ({bookmaker})")
+
+    # Clear action-related params so we don't re-save on rerun
+    cleaned = params.copy()
+    for k in ["action", "player", "market", "line", "price", "bookmaker", "id"]:
+        cleaned.pop(k, None)
+    st.experimental_set_query_params(**cleaned)
+    params = cleaned
+
+# Handle navigation to Trend tab via query params
+go = params.get("go", [None])[0]
+if go == "trend":
+    player = params.get("player", [""])[0]
+    market = params.get("market", [""])[0]
+    line_s = params.get("line", [""])[0]
+
+    st.session_state.trend_player = player or None
+    st.session_state.trend_market = market or None
+    try:
+        st.session_state.trend_line = float(line_s)
+    except Exception:
+        st.session_state.trend_line = None
+
+    st.session_state.active_tab = "📈 Trend Analysis"
+
+    cleaned = params.copy()
+    for k in ["go", "player", "market", "line"]:
+        cleaned.pop(k, None)
+    st.experimental_set_query_params(**cleaned)
+    params = cleaned
+
+# ------------------------------------------------------
 # UTILITY FUNCTIONS
 # ------------------------------------------------------
 def format_moneyline(v):
@@ -204,8 +284,9 @@ def add_defense(df):
 def format_display(df):
     df = df.copy()
 
+    # Round matchup difficulty but keep numeric semantics
     df["Matchup Difficulty"] = df["Matchup Difficulty"].apply(
-        lambda x: f"{int(round(x))}" if pd.notna(x) else ""
+        lambda x: int(round(x)) if pd.notna(x) else ""
     )
 
     for col in ["hit_rate_last5", "hit_rate_last10", "hit_rate_last20"]:
@@ -266,20 +347,21 @@ historical_df = load_historical()
 # ------------------------------------------------------
 # SIDEBAR FILTERS
 # ------------------------------------------------------
-if "saved_bets" not in st.session_state:
-    st.session_state.saved_bets = []
-
 st.sidebar.header("Filters")
 
 games_list = (props_df["home_team"] + " vs " + props_df["visitor_team"]).astype(str)
 games = ["All games"] + sorted(games_list.unique())
 sel_game = st.sidebar.selectbox("Game", games)
 
-players = ["All players"] + sorted(props_df["player"].fillna("").astype(str).unique())
-sel_player = st.sidebar.selectbox("Player", players)
+players_sidebar = ["All players"] + sorted(
+    props_df["player"].fillna("").astype(str).unique()
+)
+sel_player = st.sidebar.selectbox("Player", players_sidebar)
 
-markets = ["All Stats"] + sorted(props_df["market"].fillna("").astype(str).unique())
-sel_market = st.sidebar.selectbox("Market", markets)
+markets_sidebar = ["All Stats"] + sorted(
+    props_df["market"].fillna("").astype(str).unique()
+)
+sel_market = st.sidebar.selectbox("Market", markets_sidebar)
 
 books = sorted(props_df["bookmaker"].fillna("").astype(str).unique())
 default_books = [b for b in books if b.lower() in ("draftkings", "fanduel")] or books
@@ -290,6 +372,9 @@ od_max = int(props_df["price"].max())
 sel_odds = st.sidebar.slider("Odds Range", od_min, od_max, (od_min, od_max))
 
 sel_hit10 = st.sidebar.slider("Min Hit Rate L10", 0.0, 1.0, 0.5)
+
+# NEW: toggle to only show saved props
+show_only_saved = st.sidebar.checkbox("Show Only Saved Props", value=False)
 
 # ------------------------------------------------------
 # FILTER FUNCTION
@@ -314,19 +399,39 @@ def filter_props(df):
     d = d[d["price"].between(sel_odds[0], sel_odds[1])]
     d = d[d["hit_rate_last10"] >= sel_hit10]
 
+    # If toggle on, restrict to saved props (match by player, market, line, bookmaker)
+    if show_only_saved and st.session_state.saved_bets:
+        saved_df = pd.DataFrame(st.session_state.saved_bets)
+        d = d.merge(
+            saved_df[["player", "market", "line", "bookmaker"]],
+            on=["player", "market", "line", "bookmaker"],
+            how="inner",
+        )
+
     return d
 
 # ------------------------------------------------------
-# TABS
+# TAB NAV (RADIO)
 # ------------------------------------------------------
-tab1, tab2, tab3, tab4 = st.tabs(
-    ["🧮 Props Overview", "📈 Trend Analysis", "📋 Saved Bets", "📊 Prop Analytics"]
+tab_labels = [
+    "🧮 Props Overview",
+    "📈 Trend Analysis",
+    "📋 Saved Bets",
+    "📊 Prop Analytics",
+]
+
+current_tab = st.radio(
+    "View",
+    tab_labels,
+    index=tab_labels.index(st.session_state.active_tab),
+    horizontal=True,
+    key="active_tab",
 )
 
 # ------------------------------------------------------
-# TAB 1 — PROPS OVERVIEW (sortable dataframe)
+# TAB 1 — PROPS OVERVIEW (HTML + DataTables + Save + Clickable Player)
 # ------------------------------------------------------
-with tab1:
+if current_tab == "🧮 Props Overview":
     st.subheader("Props Overview")
 
     d = filter_props(props_df)
@@ -338,48 +443,186 @@ with tab1:
         d = add_defense(d)
         d["Price"] = d["price"].apply(format_moneyline)
         d = format_display(d)
+        d["Opponent Logo URL"] = d["opponent_team"].apply(lambda t: TEAM_LOGOS.get(t, ""))
 
-        # Default sort (same behavior)
-        d = d.sort_values("hit_rate_last10", ascending=False)
-
-        cols = [
-            "player",
-            "market",
-            "line",
-            "Price",
-            "bookmaker",
-            "Pos Def Rank",
-            "Overall Def Rank",
-            "Matchup Difficulty",
-            "hit_rate_last5",
-            "hit_rate_last10",
-            "hit_rate_last20",
-            "L5 Avg",
-            "L10 Avg",
-            "L20 Avg",
-        ]
-
-        st.dataframe(
-            d[cols],
-            use_container_width=True,
-            hide_index=True
+        # Default sort: hit_rate_last10 descending (numeric before formatting)
+        d = d.sort_values(
+            by="hit_rate_last10", ascending=False, key=lambda s: pd.to_numeric(s.str.rstrip('%'), errors="coerce")
         )
+
+        header_html = (
+            "<thead><tr>"
+            "<th>Save Bet</th>"
+            "<th>Player</th>"
+            "<th>Market</th>"
+            "<th>Line</th>"
+            "<th>Price</th>"
+            "<th>Book</th>"
+            "<th>Pos Def Rank</th>"
+            "<th>Overall Def Rank</th>"
+            "<th>Matchup Difficulty</th>"
+            "<th>Hit Rate L5</th>"
+            "<th>Hit Rate L10</th>"
+            "<th>Hit Rate L20</th>"
+            "<th>L5 Avg</th>"
+            "<th>L10 Avg</th>"
+            "<th>L20 Avg</th>"
+            "<th>Opponent</th>"
+            "</tr></thead>"
+        )
+
+        body_html = "<tbody>"
+        for idx, row in d.iterrows():
+            # Save bet link
+            save_params = {
+                "action": "save",
+                "player": row["player"],
+                "market": row["market"],
+                "line": row["line"],
+                "price": row["Price"],
+                "bookmaker": row["bookmaker"],
+                "id": f"{row['player']}_{row['market']}_{row['line']}_{idx}",
+            }
+            save_href = "?" + urlencode(save_params)
+            save_link = (
+                f"<a href='{save_href}' "
+                "style='background:#28a745;color:white;padding:4px 8px;border-radius:4px;"
+                "text-decoration:none;font-size:12px;'>Save</a>"
+            )
+
+            # Clickable player link -> Trend Analysis
+            trend_params = {
+                "go": "trend",
+                "player": row["player"],
+                "market": row["market"],
+                "line": row["line"],
+            }
+            trend_href = "?" + urlencode(trend_params)
+            player_link = (
+                f"<a href='{trend_href}' "
+                "style='color:#4da6ff;text-decoration:underline;cursor:pointer;'>"
+                f"{html_lib.escape(str(row['player']))}</a>"
+            )
+
+            # Opponent logo
+            logo_url = row["Opponent Logo URL"]
+            if logo_url:
+                logo_html = (
+                    f"<img src='{logo_url}' width='32' style='display:block;margin:auto;'/>"
+                )
+            else:
+                logo_html = ""
+
+            body_html += "<tr>"
+            # Save button
+            body_html += f"<td>{save_link}</td>"
+            # Player (clickable)
+            body_html += f"<td>{player_link}</td>"
+            # Market, line, price, book
+            body_html += (
+                f"<td>{html_lib.escape(str(row['market']))}</td>"
+                f"<td>{html_lib.escape(str(row['line']))}</td>"
+                f"<td>{html_lib.escape(str(row['Price']))}</td>"
+                f"<td>{html_lib.escape(str(row['bookmaker']))}</td>"
+                f"<td>{html_lib.escape(str(row['Pos Def Rank']))}</td>"
+                f"<td>{html_lib.escape(str(row['Overall Def Rank']))}</td>"
+            )
+
+            # Color-coded matchup difficulty (0–100, lower = easier)
+            match_val = row["Matchup Difficulty"]
+            try:
+                mv = float(match_val)
+                if mv <= 20:
+                    bg = "background-color:#5cb85c;color:white;"   # green (very easy)
+                elif mv <= 40:
+                    bg = "background-color:#ffd500;color:black;"   # yellow (favorable)
+                elif mv <= 60:
+                    bg = "background-color:#aaaaaa;color:black;"   # gray (neutral)
+                elif mv <= 80:
+                    bg = "background-color:#f0ad4e;color:black;"   # orange (difficult)
+                else:
+                    bg = "background-color:#d9534f;color:white;"   # red (very difficult)
+            except Exception:
+                mv = ""
+                bg = ""
+
+            body_html += f"<td style='{bg}'>{mv}</td>"
+
+            # Remaining stats
+            body_html += (
+                f"<td>{html_lib.escape(str(row['hit_rate_last5']))}</td>"
+                f"<td>{html_lib.escape(str(row['hit_rate_last10']))}</td>"
+                f"<td>{html_lib.escape(str(row['hit_rate_last20']))}</td>"
+                f"<td>{html_lib.escape(str(row['L5 Avg']))}</td>"
+                f"<td>{html_lib.escape(str(row['L10 Avg']))}</td>"
+                f"<td>{html_lib.escape(str(row['L20 Avg']))}</td>"
+                f"<td>{logo_html}</td>"
+            )
+            body_html += "</tr>"
+
+        body_html += "</tbody>"
+
+        full_table = f"""
+        <link rel="stylesheet"
+              href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
+        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+        <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+
+        <script>
+        $(document).ready(function() {{
+            $('#props-table').DataTable({{
+                pageLength: 50,
+                order: [[10, 'desc']]
+            }});
+        }});
+        </script>
+
+        <table id="props-table" class="display" style="width:100%;border-collapse:collapse;">
+            {header_html}
+            {body_html}
+        </table>
+        """
+
+        st.markdown(full_table, unsafe_allow_html=True)
 
 # ------------------------------------------------------
 # TAB 2 — TREND ANALYSIS
 # ------------------------------------------------------
-with tab2:
+elif current_tab == "📈 Trend Analysis":
     st.subheader("Trend Analysis")
 
-    p = st.selectbox("Player", ["(select)"] + sorted(props_df["player"].unique()))
+    all_players = ["(select)"] + sorted(props_df["player"].unique())
+    if st.session_state.trend_player in all_players:
+        default_p_index = all_players.index(st.session_state.trend_player)
+    else:
+        default_p_index = 0
+
+    p = st.selectbox("Player", all_players, index=default_p_index)
+
     if p != "(select)":
         markets = sorted(props_df[props_df["player"] == p]["market"].unique())
-        m = st.selectbox("Market", markets)
+        if st.session_state.trend_market in markets:
+            default_m_index = markets.index(st.session_state.trend_market)
+        else:
+            default_m_index = 0
+
+        m = st.selectbox("Market", markets, index=default_m_index)
 
         lines = sorted(
-            props_df[(props_df["player"] == p) & (props_df["market"] == m)]["line"].unique()
+            props_df[(props_df["player"] == p) & (props_df["market"] == m)][
+                "line"
+            ].unique()
         )
-        line_pick = st.selectbox("Select Line", lines)
+
+        if (
+            st.session_state.trend_line is not None
+            and st.session_state.trend_line in lines
+        ):
+            default_line_index = list(lines).index(st.session_state.trend_line)
+        else:
+            default_line_index = 0
+
+        line_pick = st.selectbox("Select Line", lines, index=default_line_index)
 
         stat = detect_stat(m)
 
@@ -411,10 +654,8 @@ with tab2:
             hoverinfo="text",
         )
 
-        # Label x-axis with dates
         fig.update_xaxes(tickvals=df_hist["date"], ticktext=df_hist["date"])
 
-        # Add logos under bars
         for date_label, opp_team in zip(df_hist["date"], df_hist["opponent_team"]):
             logo_url = TEAM_LOGOS.get(opp_team, "")
             if logo_url:
@@ -453,7 +694,7 @@ with tab2:
 # ------------------------------------------------------
 # TAB 3 — SAVED BETS
 # ------------------------------------------------------
-with tab3:
+elif current_tab == "📋 Saved Bets":
     st.subheader("Saved Bets")
 
     if not st.session_state.saved_bets:
@@ -468,7 +709,7 @@ with tab3:
 # ------------------------------------------------------
 # TAB 4 — PROP ANALYTICS
 # ------------------------------------------------------
-with tab4:
+elif current_tab == "📊 Prop Analytics":
     st.subheader("Prop Analytics")
 
     d = filter_props(props_df)
@@ -502,11 +743,7 @@ with tab4:
             "L10 Avg",
         ]
 
-        st.dataframe(
-            d[cols],
-            use_container_width=True,
-            hide_index=True
-        )
+        st.dataframe(d[cols], use_container_width=True, hide_index=True)
 
 # ------------------------------------------------------
 # LAST UPDATED

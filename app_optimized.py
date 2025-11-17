@@ -173,18 +173,6 @@ def get_dynamic_averages(df):
     df["L20 Avg"] = df.apply(lambda r: pull(r, 20), axis=1)
     return df
 
-def defense_color(v):
-    if pd.isna(v) or v == "":
-        return "background-color:#444;color:white;"
-    v = int(v)
-    if v <= 5:
-        return "background-color:#d9534f;color:white;"
-    if v <= 15:
-        return "background-color:#f0ad4e;color:black;"
-    if v <= 25:
-        return "background-color:#ffd500;color:black;"
-    return "background-color:#5cb85c;color:white;"
-
 def add_defense(df):
     df = df.copy()
     stat = df["market"].apply(detect_stat)
@@ -216,12 +204,10 @@ def add_defense(df):
 def format_display(df):
     df = df.copy()
 
-    # matchup difficulty -> 0 decimals
     df["Matchup Difficulty"] = df["Matchup Difficulty"].apply(
         lambda x: f"{int(round(x))}" if pd.notna(x) else ""
     )
 
-    # hit rate percent formatting
     for col in ["hit_rate_last5", "hit_rate_last10", "hit_rate_last20"]:
         def fmt(x):
             if pd.isna(x):
@@ -232,14 +218,13 @@ def format_display(df):
 
         df[col] = df[col].apply(fmt)
 
-    # averages -> 1 decimal place
     for col in ["L5 Avg", "L10 Avg", "L20 Avg"]:
         df[col] = df[col].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "")
 
     return df
 
 # ------------------------------------------------------
-# LOAD DATA (EST-CONVERTED)
+# LOAD DATA
 # ------------------------------------------------------
 @st.cache_data
 def load_props():
@@ -252,12 +237,10 @@ def load_props():
         .dt.tz_convert(EST)
     )
 
-    # team fields as strings
     df["home_team"] = df["home_team"].fillna("").astype(str)
     df["visitor_team"] = df["visitor_team"].fillna("").astype(str)
     df["opponent_team"] = df["opponent_team"].fillna("").astype(str)
 
-    # numeric fields we know we'll filter/sort on
     df["price"] = pd.to_numeric(df["price"], errors="coerce")
     df["hit_rate_last10"] = pd.to_numeric(df["hit_rate_last10"], errors="coerce")
 
@@ -273,6 +256,7 @@ def load_historical():
         .dt.tz_localize("UTC")
         .dt.tz_convert(EST)
     )
+
     df["opponent_team"] = df["opponent_team"].fillna("").astype(str)
     return df
 
@@ -308,12 +292,11 @@ sel_odds = st.sidebar.slider("Odds Range", od_min, od_max, (od_min, od_max))
 sel_hit10 = st.sidebar.slider("Min Hit Rate L10", 0.0, 1.0, 0.5)
 
 # ------------------------------------------------------
-# FILTER FUNCTION (NUMERIC-SAFE)
+# FILTER FUNCTION
 # ------------------------------------------------------
 def filter_props(df):
     d = df.copy()
 
-    # enforce numeric before comparisons
     d["price"] = pd.to_numeric(d["price"], errors="coerce")
     d["hit_rate_last10"] = pd.to_numeric(d["hit_rate_last10"], errors="coerce")
 
@@ -341,7 +324,7 @@ tab1, tab2, tab3, tab4 = st.tabs(
 )
 
 # ------------------------------------------------------
-# TAB 1 — PROPS OVERVIEW
+# TAB 1 — PROPS OVERVIEW (sortable dataframe)
 # ------------------------------------------------------
 with tab1:
     st.subheader("Props Overview")
@@ -356,9 +339,7 @@ with tab1:
         d["Price"] = d["price"].apply(format_moneyline)
         d = format_display(d)
 
-        d["Opponent Logo"] = d["opponent_team"].apply(lambda t: TEAM_LOGOS.get(t, ""))
-
-        # sort by hit rate 10 (still numeric in underlying df before formatting)
+        # Default sort (same behavior)
         d = d.sort_values("hit_rate_last10", ascending=False)
 
         cols = [
@@ -378,34 +359,11 @@ with tab1:
             "L20 Avg",
         ]
 
-        html = "<table style='width:100%;border-collapse:collapse;'>"
-        html += "<tr>"
-        for c in cols + ["Opponent Logo"]:
-            html += (
-                "<th style='text-align:center;padding:6px;border-bottom:1px solid #444'>"
-                f"{c}</th>"
-            )
-        html += "</tr>"
-
-        for _, row in d.iterrows():
-            html += "<tr>"
-            for c in cols:
-                val = row[c]
-                style = ""
-                if c in ["Pos Def Rank", "Overall Def Rank", "Matchup Difficulty"]:
-                    style = defense_color(val)
-                html += (
-                    f"<td style='text-align:center;padding:6px;{style}'>{val}</td>"
-                )
-
-            logo = TEAM_LOGOS.get(row["opponent_team"], "")
-            html += (
-                f"<td style='text-align:center;'><img src='{logo}' width='32'></td>"
-            )
-            html += "</tr>"
-
-        html += "</table>"
-        st.markdown(html, unsafe_allow_html=True)
+        st.dataframe(
+            d[cols],
+            use_container_width=True,
+            hide_index=True
+        )
 
 # ------------------------------------------------------
 # TAB 2 — TREND ANALYSIS
@@ -453,13 +411,11 @@ with tab2:
             hoverinfo="text",
         )
 
-        # Show dates as tick labels
+        # Label x-axis with dates
         fig.update_xaxes(tickvals=df_hist["date"], ticktext=df_hist["date"])
 
-        # Add opponent logos under the x-axis using layout images
-        for date_label, opp_team in zip(
-            df_hist["date"], df_hist["opponent_team"]
-        ):
+        # Add logos under bars
+        for date_label, opp_team in zip(df_hist["date"], df_hist["opponent_team"]):
             logo_url = TEAM_LOGOS.get(opp_team, "")
             if logo_url:
                 fig.add_layout_image(
@@ -546,27 +502,11 @@ with tab4:
             "L10 Avg",
         ]
 
-        html = "<table style='width:100%;border-collapse:collapse;'>"
-        html += "<tr>"
-        for c in cols:
-            html += (
-                "<th style='text-align:center;padding:6px;border-bottom:1px solid #444'>"
-                f"{c}</th>"
-            )
-        html += "</tr>"
-
-        for _, row in d.iterrows():
-            html += "<tr>"
-            for c in cols:
-                v = row[c]
-                style = ""
-                if c == "Matchup Difficulty":
-                    style = defense_color(v)
-                html += f"<td style='text-align:center;padding:6px;{style}'>{v}</td>"
-            html += "</tr>"
-
-        html += "</table>"
-        st.markdown(html, unsafe_allow_html=True)
+        st.dataframe(
+            d[cols],
+            use_container_width=True,
+            hide_index=True
+        )
 
 # ------------------------------------------------------
 # LAST UPDATED

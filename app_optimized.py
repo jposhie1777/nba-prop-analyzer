@@ -377,6 +377,13 @@ sel_hit10 = st.sidebar.slider("Min Hit Rate L10", 0.0, 1.0, 0.5)
 show_only_saved = st.sidebar.checkbox("Show Only Saved Props", value=False)
 
 # ------------------------------------------------------
+# REFRESH BUTTON
+# ------------------------------------------------------
+if st.sidebar.button("🔄 Refresh Data"):
+    st.cache_data.clear()
+    st.experimental_rerun()
+
+# ------------------------------------------------------
 # FILTER FUNCTION
 # ------------------------------------------------------
 def filter_props(df):

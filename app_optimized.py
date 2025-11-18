@@ -207,11 +207,13 @@ def add_defense(df):
         "ast": "opp_pos_ast_rank",
         "pra": "opp_pos_pra_rank",
     }
+
+    # UPDATED to match your table
     overall_cols = {
-        "pts": "opp_overall_pts_rank",
-        "reb": "opp_overall_reb_rank",
-        "ast": "opp_overall_ast_rank",
-        "pra": "opp_overall_pra_rank",
+        "pts": "overall_pts_rank",
+        "reb": "overall_reb_rank",
+        "ast": "overall_ast_rank",
+        "pra": "overall_pra_rank",
     }
 
     df["Pos Def Rank"] = [
@@ -220,12 +222,14 @@ def add_defense(df):
         else ""
         for i in df.index
     ]
+
     df["Overall Def Rank"] = [
         df.loc[i, overall_cols.get(stat_series[i])]
         if overall_cols.get(stat_series[i]) in df.columns
         else ""
         for i in df.index
     ]
+
     df["Matchup Difficulty"] = df.get("matchup_difficulty_score", np.nan)
     return df
 

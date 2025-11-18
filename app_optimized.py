@@ -452,35 +452,41 @@ if current_tab == "🧮 Props Overview":
         d = format_display(d)
         d["Opponent Logo URL"] = d["opponent_team"].apply(lambda t: TEAM_LOGOS.get(t, ""))
 
-        # Default sort: hit_rate_last10 descending (numeric before formatting)
+        # Default sort — LAST10 descending
         d = d.sort_values(
-            by="hit_rate_last10", ascending=False, key=lambda s: pd.to_numeric(s.str.rstrip('%'), errors="coerce")
+            by="hit_rate_last10", ascending=False,
+            key=lambda s: pd.to_numeric(s.str.rstrip('%'), errors="coerce")
         )
 
-        header_html = (
-            "<thead><tr>"
-            "<th>Save Bet</th>"
-            "<th>Player</th>"
-            "<th>Market</th>"
-            "<th>Line</th>"
-            "<th>Price</th>"
-            "<th>Book</th>"
-            "<th>Pos Def Rank</th>"
-            "<th>Overall Def Rank</th>"
-            "<th>Matchup Difficulty</th>"
-            "<th>Hit Rate L5</th>"
-            "<th>Hit Rate L10</th>"
-            "<th>Hit Rate L20</th>"
-            "<th>L5 Avg</th>"
-            "<th>L10 Avg</th>"
-            "<th>L20 Avg</th>"
-            "<th>Opponent</th>"
-            "</tr></thead>"
-        )
+        # ---------- BUILD HTML TABLE ----------
+        header_html = """
+        <thead>
+        <tr>
+            <th>Save Bet</th>
+            <th>Player</th>
+            <th>Market</th>
+            <th>Line</th>
+            <th>Price</th>
+            <th>Book</th>
+            <th>Pos Def Rank</th>
+            <th>Overall Def Rank</th>
+            <th>Matchup</th>
+            <th>Hit L5</th>
+            <th>Hit L10</th>
+            <th>Hit L20</th>
+            <th>L5 Avg</th>
+            <th>L10 Avg</th>
+            <th>L20 Avg</th>
+            <th>Opponent</th>
+        </tr>
+        </thead>
+        """
 
         body_html = "<tbody>"
+
         for idx, row in d.iterrows():
-            # Save bet link
+
+            # Save button
             save_params = {
                 "action": "save",
                 "player": row["player"],
@@ -493,11 +499,11 @@ if current_tab == "🧮 Props Overview":
             save_href = "?" + urlencode(save_params)
             save_link = (
                 f"<a href='{save_href}' "
-                "style='background:#28a745;color:white;padding:4px 8px;border-radius:4px;"
-                "text-decoration:none;font-size:12px;'>Save</a>"
+                "style='background:#28a745;color:white;padding:4px 8px;"
+                "border-radius:4px;text-decoration:none;font-size:12px;'>Save</a>"
             )
 
-            # Clickable player link -> Trend Analysis
+            # Player → Trend tab link
             trend_params = {
                 "go": "trend",
                 "player": row["player"],
@@ -507,68 +513,56 @@ if current_tab == "🧮 Props Overview":
             trend_href = "?" + urlencode(trend_params)
             player_link = (
                 f"<a href='{trend_href}' "
-                "style='color:#4da6ff;text-decoration:underline;cursor:pointer;'>"
+                "style='color:#4da6ff; text-decoration:underline;'>"
                 f"{html_lib.escape(str(row['player']))}</a>"
             )
 
             # Opponent logo
-            logo_url = row["Opponent Logo URL"]
-            if logo_url:
-                logo_html = (
-                    f"<img src='{logo_url}' width='32' style='display:block;margin:auto;'/>"
-                )
-            else:
-                logo_html = ""
+            logo_html = ""
+            if row["Opponent Logo URL"]:
+                logo_html = f"<img src='{row['Opponent Logo URL']}' width='32' style='display:block;margin:auto;'/>"
 
-            body_html += "<tr>"
-            # Save button
-            body_html += f"<td>{save_link}</td>"
-            # Player (clickable)
-            body_html += f"<td>{player_link}</td>"
-            # Market, line, price, book
-            body_html += (
-                f"<td>{html_lib.escape(str(row['market']))}</td>"
-                f"<td>{html_lib.escape(str(row['line']))}</td>"
-                f"<td>{html_lib.escape(str(row['Price']))}</td>"
-                f"<td>{html_lib.escape(str(row['bookmaker']))}</td>"
-                f"<td>{html_lib.escape(str(row['Pos Def Rank']))}</td>"
-                f"<td>{html_lib.escape(str(row['Overall Def Rank']))}</td>"
-            )
-
-            # Color-coded matchup difficulty (0–100, lower = easier)
+            # Matchup difficulty coloring
             match_val = row["Matchup Difficulty"]
             try:
                 mv = float(match_val)
                 if mv <= 20:
-                    bg = "background-color:#5cb85c;color:white;"   # green (very easy)
+                    bg = "background-color:#5cb85c;color:white;"
                 elif mv <= 40:
-                    bg = "background-color:#ffd500;color:black;"   # yellow (favorable)
+                    bg = "background-color:#ffd500;color:black;"
                 elif mv <= 60:
-                    bg = "background-color:#aaaaaa;color:black;"   # gray (neutral)
+                    bg = "background-color:#aaaaaa;color:black;"
                 elif mv <= 80:
-                    bg = "background-color:#f0ad4e;color:black;"   # orange (difficult)
+                    bg = "background-color:#f0ad4e;color:black;"
                 else:
-                    bg = "background-color:#d9534f;color:white;"   # red (very difficult)
-            except Exception:
-                mv = ""
-                bg = ""
+                    bg = "background-color:#d9534f;color:white;"
+            except:
+                mv, bg = "", ""
 
-            body_html += f"<td style='{bg}'>{mv}</td>"
-
-            # Remaining stats
-            body_html += (
-                f"<td>{html_lib.escape(str(row['hit_rate_last5']))}</td>"
-                f"<td>{html_lib.escape(str(row['hit_rate_last10']))}</td>"
-                f"<td>{html_lib.escape(str(row['hit_rate_last20']))}</td>"
-                f"<td>{html_lib.escape(str(row['L5 Avg']))}</td>"
-                f"<td>{html_lib.escape(str(row['L10 Avg']))}</td>"
-                f"<td>{html_lib.escape(str(row['L20 Avg']))}</td>"
-                f"<td>{logo_html}</td>"
-            )
-            body_html += "</tr>"
+            body_html += f"""
+            <tr>
+                <td>{save_link}</td>
+                <td>{player_link}</td>
+                <td>{html_lib.escape(str(row['market']))}</td>
+                <td>{html_lib.escape(str(row['line']))}</td>
+                <td>{html_lib.escape(str(row['Price']))}</td>
+                <td>{html_lib.escape(str(row['bookmaker']))}</td>
+                <td>{html_lib.escape(str(row['Pos Def Rank']))}</td>
+                <td>{html_lib.escape(str(row['Overall Def Rank']))}</td>
+                <td style="{bg}">{mv}</td>
+                <td>{html_lib.escape(str(row['hit_rate_last5']))}</td>
+                <td>{html_lib.escape(str(row['hit_rate_last10']))}</td>
+                <td>{html_lib.escape(str(row['hit_rate_last20']))}</td>
+                <td>{html_lib.escape(str(row['L5 Avg']))}</td>
+                <td>{html_lib.escape(str(row['L10 Avg']))}</td>
+                <td>{html_lib.escape(str(row['L20 Avg']))}</td>
+                <td>{logo_html}</td>
+            </tr>
+            """
 
         body_html += "</tbody>"
 
+        # ---------- DataTable + delayed initialization (fixes sorting) ----------
         full_table = f"""
         <link rel="stylesheet"
               href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
@@ -576,11 +570,18 @@ if current_tab == "🧮 Props Overview":
         <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
 
         <script>
+        function initDataTable() {{
+            if (!$.fn.DataTable.isDataTable('#props-table')) {{
+                $('#props-table').DataTable({{
+                    pageLength: 50,
+                    order: [[10, 'desc']],
+                    autoWidth: false
+                }});
+            }}
+        }}
+
         $(document).ready(function() {{
-            $('#props-table').DataTable({{
-                pageLength: 50,
-                order: [[10, 'desc']]
-            }});
+            setTimeout(initDataTable, 300);
         }});
         </script>
 

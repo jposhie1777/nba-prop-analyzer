@@ -438,6 +438,8 @@ current_tab = st.radio(
 # ------------------------------------------------------
 # TAB 1 — PROPS OVERVIEW (HTML + DataTables + Save + Clickable Player)
 # ------------------------------------------------------
+import streamlit.components.v1 as components
+
 if current_tab == "🧮 Props Overview":
     st.subheader("Props Overview")
 
@@ -446,19 +448,21 @@ if current_tab == "🧮 Props Overview":
     if d.empty:
         st.info("No props match your filters.")
     else:
+        # Enhance dataset
         d = get_dynamic_averages(d)
         d = add_defense(d)
         d["Price"] = d["price"].apply(format_moneyline)
         d = format_display(d)
         d["Opponent Logo URL"] = d["opponent_team"].apply(lambda t: TEAM_LOGOS.get(t, ""))
 
-        # Default sort — LAST10 descending
+        # Default sort: hit_rate_last10 descending (numeric)
         d = d.sort_values(
-            by="hit_rate_last10", ascending=False,
+            by="hit_rate_last10",
+            ascending=False,
             key=lambda s: pd.to_numeric(s.str.rstrip('%'), errors="coerce")
         )
 
-        # ---------- BUILD HTML TABLE ----------
+        # ---------- Build table HTML ----------
         header_html = """
         <thead>
         <tr>
@@ -497,13 +501,13 @@ if current_tab == "🧮 Props Overview":
                 "id": f"{row['player']}_{row['market']}_{row['line']}_{idx}",
             }
             save_href = "?" + urlencode(save_params)
-            save_link = (
+            save_button = (
                 f"<a href='{save_href}' "
                 "style='background:#28a745;color:white;padding:4px 8px;"
                 "border-radius:4px;text-decoration:none;font-size:12px;'>Save</a>"
             )
 
-            # Player → Trend tab link
+            # Trend link
             trend_params = {
                 "go": "trend",
                 "player": row["player"],
@@ -513,16 +517,17 @@ if current_tab == "🧮 Props Overview":
             trend_href = "?" + urlencode(trend_params)
             player_link = (
                 f"<a href='{trend_href}' "
-                "style='color:#4da6ff; text-decoration:underline;'>"
+                "style='color:#4da6ff;text-decoration:underline;'>"
                 f"{html_lib.escape(str(row['player']))}</a>"
             )
 
             # Opponent logo
-            logo_html = ""
             if row["Opponent Logo URL"]:
                 logo_html = f"<img src='{row['Opponent Logo URL']}' width='32' style='display:block;margin:auto;'/>"
+            else:
+                logo_html = ""
 
-            # Matchup difficulty coloring
+            # Matchup difficulty color coding
             match_val = row["Matchup Difficulty"]
             try:
                 mv = float(match_val)
@@ -541,7 +546,7 @@ if current_tab == "🧮 Props Overview":
 
             body_html += f"""
             <tr>
-                <td>{save_link}</td>
+                <td>{save_button}</td>
                 <td>{player_link}</td>
                 <td>{html_lib.escape(str(row['market']))}</td>
                 <td>{html_lib.escape(str(row['line']))}</td>
@@ -562,36 +567,52 @@ if current_tab == "🧮 Props Overview":
 
         body_html += "</tbody>"
 
-        # ---------- DataTable + delayed initialization (fixes sorting) ----------
+        # ---------- Final HTML with DataTables ----------
         full_table = f"""
-        <link rel="stylesheet"
-              href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
-        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-        <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+        <html>
+        <head>
+            <link rel="stylesheet"
+                href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
+            <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+            <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
 
-        <script>
-        function initDataTable() {{
-            if (!$.fn.DataTable.isDataTable('#props-table')) {{
-                $('#props-table').DataTable({{
-                    pageLength: 50,
-                    order: [[10, 'desc']],
-                    autoWidth: false
-                }});
+            <style>
+                table.dataTable tbody td {{
+                    text-align: center;
+                    vertical-align: middle;
+                }}
+                table.dataTable thead th {{
+                    text-align: center;
+                }}
+            </style>
+
+            <script>
+            function initDataTable() {{
+                if (!$.fn.DataTable.isDataTable('#props-table')) {{
+                    $('#props-table').DataTable({{
+                        pageLength: 50,
+                        autoWidth: false
+                    }});
+                }}
             }}
-        }}
 
-        $(document).ready(function() {{
-            setTimeout(initDataTable, 300);
-        }});
-        </script>
+            document.addEventListener("DOMContentLoaded", function() {{
+                setTimeout(initDataTable, 300);
+            }});
+            </script>
+        </head>
 
-        <table id="props-table" class="display" style="width:100%;border-collapse:collapse;">
-            {header_html}
-            {body_html}
-        </table>
+        <body>
+            <table id="props-table" class="display" style="width:100%;border-collapse:collapse;">
+                {header_html}
+                {body_html}
+            </table>
+        </body>
+        </html>
         """
 
-        st.markdown(full_table, unsafe_allow_html=True)
+        # USE STREAMLIT COMPONENTS TO RENDER FULL HTML
+        components.html(full_table, height=900, scrolling=True)
 
 # ------------------------------------------------------
 # TAB 2 — TREND ANALYSIS
@@ -730,31 +751,37 @@ elif current_tab == "📊 Prop Analytics":
         d = format_display(d)
         d["Price"] = d["price"].apply(format_moneyline)
 
-        if "ev" not in d.columns:
-            st.error("❌ EV column missing from the database.")
+        # --- NEW EV columns ---
+        ev_cols = ["ev_last5", "ev_last10", "ev_last20"]
+
+        missing = [c for c in ev_cols if c not in d.columns]
+        if missing:
+            st.error(f"❌ Missing EV columns in database: {', '.join(missing)}")
             st.stop()
 
-        d["ev"] = pd.to_numeric(d["ev"], errors="coerce")
+        # Convert EV columns to numeric
+        for col in ev_cols:
+            d[col] = pd.to_numeric(d[col], errors="coerce")
+
+        # Sort by EV (highest EV_last10 default)
+        d = d.sort_values("ev_last10", ascending=False)
+
+        # Format hit rates
         d["Hit Rate 10"] = d["hit_rate_last10"]
 
-        d = d.sort_values("ev", ascending=False)
-
+        # Columns to display
         cols = [
             "player",
             "market",
             "line",
             "Price",
             "bookmaker",
-            "ev",
+            "ev_last5",
+            "ev_last10",
+            "ev_last20",
             "Matchup Difficulty",
             "Hit Rate 10",
             "L10 Avg",
         ]
 
         st.dataframe(d[cols], use_container_width=True, hide_index=True)
-
-# ------------------------------------------------------
-# LAST UPDATED
-# ------------------------------------------------------
-now = datetime.now(EST)
-st.sidebar.markdown(f"**Last Updated:** {now.strftime('%b %d, %I:%M %p')} ET")

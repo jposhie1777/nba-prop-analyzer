@@ -75,6 +75,7 @@ FROM `{PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}`
 ORDER BY game_date
 """
 
+
 # ------------------------------------------------------
 # AUTHENTICATION
 # ------------------------------------------------------
@@ -215,6 +216,15 @@ if go == "trend":
         cleaned.pop(k, None)
     st.experimental_set_query_params(**cleaned)
     params = cleaned
+
+if "saved_bets" not in st.session_state:
+    st.session_state.saved_bets = []
+
+def add_saved_bet(bet):
+    st.session_state.saved_bets.append(bet)
+
+# Bridge: JS → Python
+st.experimental_connection("jscomm", type="js").expose(add_saved_bet)
 
 # ------------------------------------------------------
 # UTILITY FUNCTIONS
@@ -435,9 +445,10 @@ current_tab = st.radio(
 )
 
 # ------------------------------------------------------
-# TAB 1 — PROPS OVERVIEW (HTML + DataTables + Save + Clickable Player)
+# TAB 1 — PROPS OVERVIEW (HTML + DataTables + Checkboxes + JS Bridge)
 # ------------------------------------------------------
 import streamlit.components.v1 as components
+import json
 
 if current_tab == "🧮 Props Overview":
     st.subheader("Props Overview")
@@ -454,7 +465,7 @@ if current_tab == "🧮 Props Overview":
         d = format_display(d)
         d["Opponent Logo URL"] = d["opponent_team"].apply(lambda t: TEAM_LOGOS.get(t, ""))
 
-        # Default sort: hit_rate_last10 descending (numeric)
+        # Default sort—descending by hit rate L10
         d = d.sort_values(
             by="hit_rate_last10",
             ascending=False,
@@ -465,7 +476,7 @@ if current_tab == "🧮 Props Overview":
         header_html = """
         <thead>
         <tr>
-            <th>Save Bet</th>
+            <th>Save</th>
             <th>Player</th>
             <th>Market</th>
             <th>Line</th>
@@ -489,24 +500,21 @@ if current_tab == "🧮 Props Overview":
 
         for idx, row in d.iterrows():
 
-            # Save button
-            save_params = {
-                "action": "save",
+            # ✔ Build row dict for JS → Streamlit messaging
+            bet_dict = {
                 "player": row["player"],
                 "market": row["market"],
                 "line": row["line"],
                 "price": row["Price"],
                 "bookmaker": row["bookmaker"],
-                "id": f"{row['player']}_{row['market']}_{row['line']}_{idx}",
             }
-            save_href = "?" + urlencode(save_params)
-            save_button = (
-                f"<a href='{save_href}' "
-                "style='background:#28a745;color:white;padding:4px 8px;"
-                "border-radius:4px;text-decoration:none;font-size:12px;'>Save</a>"
+            encoded = html_lib.escape(json.dumps(bet_dict))
+
+            save_checkbox = (
+                f"<input type='checkbox' class='savebet' data-bet='{encoded}'>"
             )
 
-            # Trend link
+            # Player → Trend link
             trend_params = {
                 "go": "trend",
                 "player": row["player"],
@@ -521,10 +529,12 @@ if current_tab == "🧮 Props Overview":
             )
 
             # Opponent logo
+            logo_html = ""
             if row["Opponent Logo URL"]:
-                logo_html = f"<img src='{row['Opponent Logo URL']}' width='32' style='display:block;margin:auto;'/>"
-            else:
-                logo_html = ""
+                logo_html = (
+                    f"<img src='{row['Opponent Logo URL']}' width='32' "
+                    "style='display:block;margin:auto;'/>"
+                )
 
             # Matchup difficulty color coding
             match_val = row["Matchup Difficulty"]
@@ -545,7 +555,7 @@ if current_tab == "🧮 Props Overview":
 
             body_html += f"""
             <tr>
-                <td>{save_button}</td>
+                <td>{save_checkbox}</td>
                 <td>{player_link}</td>
                 <td>{html_lib.escape(str(row['market']))}</td>
                 <td>{html_lib.escape(str(row['line']))}</td>
@@ -566,7 +576,7 @@ if current_tab == "🧮 Props Overview":
 
         body_html += "</tbody>"
 
-        # ---------- Final HTML with DataTables ----------
+        # ---------- Final HTML + DataTables + JS Messaging ----------
         full_table = f"""
         <html>
         <head>
@@ -582,21 +592,38 @@ if current_tab == "🧮 Props Overview":
                 }}
                 table.dataTable thead th {{
                     text-align: center;
+                    cursor: pointer;
                 }}
             </style>
 
             <script>
-            function initDataTable() {{
-                if (!$.fn.DataTable.isDataTable('#props-table')) {{
-                    $('#props-table').DataTable({{
-                        pageLength: 50,
-                        autoWidth: false
-                    }});
-                }}
+            // Send message back to Streamlit
+            function streamlitSend(method, payload) {{
+                const msg = {{ method: method, args: payload }};
+                window.parent.postMessage(msg, "*");
             }}
 
             document.addEventListener("DOMContentLoaded", function() {{
-                setTimeout(initDataTable, 300);
+
+                // Initialize DataTable
+                function initTable() {{
+                    if (!$.fn.DataTable.isDataTable('#props-table')) {{
+                        $('#props-table').DataTable({{
+                            pageLength: 50,
+                            autoWidth: false
+                        }});
+                    }}
+                }}
+
+                setTimeout(initTable, 300);
+
+                // Checkbox handler → send bet to Streamlit
+                $(document).on('change', '.savebet', function() {{
+                    if (this.checked) {{
+                        const bet = JSON.parse(this.dataset.bet);
+                        streamlitSend("add_saved_bet", bet);
+                    }}
+                }});
             }});
             </script>
         </head>
@@ -610,8 +637,9 @@ if current_tab == "🧮 Props Overview":
         </html>
         """
 
-        # USE STREAMLIT COMPONENTS TO RENDER FULL HTML
+        # Render HTML inside iframe
         components.html(full_table, height=900, scrolling=True)
+
 
 # ------------------------------------------------------
 # TAB 2 — TREND ANALYSIS

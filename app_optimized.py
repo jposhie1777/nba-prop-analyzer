@@ -163,10 +163,10 @@ if "processed_actions" not in st.session_state:
 # ------------------------------------------------------
 # QUERY PARAM HANDLING
 # ------------------------------------------------------
-params = st.experimental_get_query_params()
+params = st.query_params
 
-# Handle "save bet" action via query params
 action = params.get("action", [None])[0]
+
 if action == "save":
     player = params.get("player", [""])[0]
     market = params.get("market", [""])[0]
@@ -188,12 +188,11 @@ if action == "save":
         st.session_state.processed_actions.add(uid)
         st.success(f"Saved bet: {player} {market} {line} @ {price} ({bookmaker})")
 
-    # Clear action-related params so we don't re-save on rerun
     cleaned = params.copy()
     for k in ["action", "player", "market", "line", "price", "bookmaker", "id"]:
         cleaned.pop(k, None)
-    st.experimental_set_query_params(**cleaned)
-    params = cleaned
+
+    st.query_params = cleaned
 
 # Handle navigation to Trend tab via query params
 go = params.get("go", [None])[0]

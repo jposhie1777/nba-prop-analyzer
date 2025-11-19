@@ -156,6 +156,9 @@ if "trend_market" not in st.session_state:
 if "trend_line" not in st.session_state:
     st.session_state.trend_line = None
 
+if "trend_bet_type" not in st.session_state:
+    st.session_state.trend_bet_type = None
+
 # ------------------------------------------------------
 # UTILITY FUNCTIONS
 # ------------------------------------------------------
@@ -208,7 +211,6 @@ def add_defense(df):
         "pra": "opp_pos_pra_rank",
     }
 
-    # UPDATED to match your table
     overall_cols = {
         "pts": "overall_pts_rank",
         "reb": "overall_reb_rank",
@@ -244,12 +246,14 @@ def format_display(df):
 
     # Hit rate columns as percentages
     for col in ["hit_rate_last5", "hit_rate_last10", "hit_rate_last20"]:
+
         def fmt(x):
             if pd.isna(x):
                 return ""
             if 0 <= x <= 1:
                 return f"{int(round(x * 100))}%"
             return f"{int(round(x))}%"
+
         df[col] = df[col].apply(fmt)
 
     # Average columns as 1 decimal
@@ -367,9 +371,10 @@ def filter_props(df):
     # Restrict to saved props if toggle on
     if show_only_saved and st.session_state.saved_bets:
         saved_df = pd.DataFrame(st.session_state.saved_bets)
+        key_cols = ["player", "market", "line", "bet_type", "bookmaker"]
         d = d.merge(
-            saved_df[["player", "market", "line", "bookmaker"]],
-            on=["player", "market", "line", "bookmaker"],
+            saved_df[key_cols],
+            on=key_cols,
             how="inner",
         )
 
@@ -424,7 +429,7 @@ if current_tab == "🧮 Props Overview":
         # Mark already-saved bets as True
         if st.session_state.saved_bets:
             saved_df = pd.DataFrame(st.session_state.saved_bets)
-            key_cols = ["player", "market", "line", "bookmaker"]
+            key_cols = ["player", "market", "line", "bet_type", "bookmaker"]
             d_display["Save"] = d_display[key_cols].merge(
                 saved_df[key_cols].drop_duplicates(),
                 on=key_cols,
@@ -439,6 +444,7 @@ if current_tab == "🧮 Props Overview":
             "player",
             "market",
             "line",
+            "bet_type",  # label
             "Price",
             "bookmaker",
             "Pos Def Rank",
@@ -458,6 +464,7 @@ if current_tab == "🧮 Props Overview":
                 "player": "Player",
                 "market": "Market",
                 "line": "Line",
+                "bet_type": "Label",
                 "bookmaker": "Book",
                 "hit_rate_last5": "Hit L5",
                 "hit_rate_last10": "Hit L10",
@@ -482,17 +489,23 @@ if current_tab == "🧮 Props Overview":
         # Update saved_bets from edited table
         saved_rows = edited[edited["Save"]].copy()
         if not saved_rows.empty:
-            st.session_state.saved_bets = saved_rows[
-                ["Player", "Market", "Line", "Price", "Book"]
-            ].rename(
-                columns={
-                    "Player": "player",
-                    "Market": "market",
-                    "Line": "line",
-                    "Price": "price",
-                    "Book": "bookmaker",
-                }
-            ).drop_duplicates().to_dict("records")
+            st.session_state.saved_bets = (
+                saved_rows[
+                    ["Player", "Market", "Line", "Label", "Price", "Book"]
+                ]
+                .rename(
+                    columns={
+                        "Player": "player",
+                        "Market": "market",
+                        "Line": "line",
+                        "Label": "bet_type",
+                        "Price": "price",
+                        "Book": "bookmaker",
+                    }
+                )
+                .drop_duplicates()
+                .to_dict("records")
+            )
         else:
             st.session_state.saved_bets = []
 
@@ -509,8 +522,10 @@ elif current_tab == "📈 Trend Analysis":
         default_p_index = 0
 
     p = st.selectbox("Player", all_players, index=default_p_index)
-
     if p != "(select)":
+        st.session_state.trend_player = p
+
+        # Markets for this player
         markets = sorted(props_df[props_df["player"] == p]["market"].unique())
         if st.session_state.trend_market in markets:
             default_m_index = markets.index(st.session_state.trend_market)
@@ -518,76 +533,122 @@ elif current_tab == "📈 Trend Analysis":
             default_m_index = 0
 
         m = st.selectbox("Market", markets, index=default_m_index)
+        st.session_state.trend_market = m
 
-        lines = sorted(
+        # Bet types (Over / Under) for this player + market
+        bet_types = sorted(
             props_df[(props_df["player"] == p) & (props_df["market"] == m)][
-                "line"
-            ].unique()
+                "bet_type"
+            ]
+            .dropna()
+            .unique()
         )
-
-        if (
-            st.session_state.trend_line is not None
-            and st.session_state.trend_line in lines
-        ):
-            default_line_index = list(lines).index(st.session_state.trend_line)
+        if not bet_types:
+            st.warning("No bet types available for this player/market.")
         else:
-            default_line_index = 0
+            if (
+                st.session_state.trend_bet_type is not None
+                and st.session_state.trend_bet_type in bet_types
+            ):
+                default_bt_index = bet_types.index(st.session_state.trend_bet_type)
+            else:
+                default_bt_index = 0
 
-        line_pick = st.selectbox("Select Line", lines, index=default_line_index)
+            bt = st.selectbox("Bet Type", bet_types, index=default_bt_index)
+            st.session_state.trend_bet_type = bt
 
-        stat = detect_stat(m)
-        if not stat:
-            st.warning("Unable to detect stat type for this market.")
-        else:
-            df_hist = (
-                historical_df[
-                    (historical_df["player"] == p) & (historical_df[stat].notna())
-                ]
-                .sort_values("game_date")
-                .tail(20)
+            # Lines for this player + market + bet type
+            lines = sorted(
+                props_df[
+                    (props_df["player"] == p)
+                    & (props_df["market"] == m)
+                    & (props_df["bet_type"] == bt)
+                ]["line"].unique()
             )
 
-            if df_hist.empty:
-                st.info("No historical data available for this player/stat.")
+            if (
+                st.session_state.trend_line is not None
+                and st.session_state.trend_line in lines
+            ):
+                default_line_index = list(lines).index(st.session_state.trend_line)
             else:
-                df_hist["date"] = df_hist["game_date"].dt.strftime("%b %d")
-                df_hist["color"] = np.where(df_hist[stat] > line_pick, "green", "red")
+                default_line_index = 0
 
-                hover = [
-                    f"<b>{d}</b><br>{stat.upper()}: {v}<br>Opponent: {opp}"
-                    for d, opp, v in zip(
-                        df_hist["date"], df_hist["opponent_team"], df_hist[stat]
+            line_pick = st.selectbox("Select Line", lines, index=default_line_index)
+            st.session_state.trend_line = line_pick
+
+            stat = detect_stat(m)
+            if not stat:
+                st.warning("Unable to detect stat type for this market.")
+            else:
+                df_hist = (
+                    historical_df[
+                        (historical_df["player"] == p) & (historical_df[stat].notna())
+                    ]
+                    .sort_values("game_date")
+                    .tail(20)
+                )
+
+                if df_hist.empty:
+                    st.info("No historical data available for this player/stat.")
+                else:
+                    df_hist["date"] = df_hist["game_date"].dt.strftime("%b %d")
+
+                    # Color coding based on bet type:
+                    # Over  -> green if stat > line
+                    # Under -> green if stat < line
+                    if bt.lower() == "over":
+                        hit_mask = df_hist[stat] > line_pick
+                    elif bt.lower() == "under":
+                        hit_mask = df_hist[stat] < line_pick
+                    else:
+                        # Fallback to "Over"-style logic
+                        hit_mask = df_hist[stat] > line_pick
+
+                    df_hist["color"] = np.where(hit_mask, "green", "red")
+
+                    hover = []
+                    for dte, opp, val, hit in zip(
+                        df_hist["date"],
+                        df_hist["opponent_team"],
+                        df_hist[stat],
+                        hit_mask,
+                    ):
+                        outcome = "Hit" if hit else "Miss"
+                        hover.append(
+                            f"<b>{dte}</b><br>{stat.upper()}: {val}<br>"
+                            f"Opponent: {opp}<br>"
+                            f"Outcome vs {bt} {line_pick}: {outcome}"
+                        )
+
+                    fig = go.Figure()
+                    fig.add_bar(
+                        x=df_hist["date"],
+                        y=df_hist[stat],
+                        marker_color=df_hist["color"],
+                        hovertext=hover,
+                        hoverinfo="text",
                     )
-                ]
 
-                fig = go.Figure()
-                fig.add_bar(
-                    x=df_hist["date"],
-                    y=df_hist[stat],
-                    marker_color=df_hist["color"],
-                    hovertext=hover,
-                    hoverinfo="text",
-                )
+                    fig.update_xaxes(tickvals=df_hist["date"], ticktext=df_hist["date"])
 
-                fig.update_xaxes(tickvals=df_hist["date"], ticktext=df_hist["date"])
+                    fig.add_hline(
+                        y=line_pick,
+                        line_dash="dash",
+                        line_color="white",
+                        annotation_text=f"{bt} {line_pick}",
+                        annotation_position="top left",
+                    )
 
-                fig.add_hline(
-                    y=line_pick,
-                    line_dash="dash",
-                    line_color="white",
-                    annotation_text=f"Line: {line_pick}",
-                    annotation_position="top left",
-                )
+                    fig.update_layout(
+                        height=450,
+                        plot_bgcolor="#222",
+                        paper_bgcolor="#222",
+                        font=dict(color="white"),
+                        margin=dict(b=40, t=40, l=40, r=20),
+                    )
 
-                fig.update_layout(
-                    height=450,
-                    plot_bgcolor="#222",
-                    paper_bgcolor="#222",
-                    font=dict(color="white"),
-                    margin=dict(b=40, t=40, l=40, r=20),
-                )
-
-                st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, use_container_width=True)
 
 # ------------------------------------------------------
 # TAB 3 — SAVED BETS
@@ -599,7 +660,20 @@ elif current_tab == "📋 Saved Bets":
         st.info("No saved bets yet. Go to Props Overview and check the 'Save Bet' boxes.")
     else:
         df_save = pd.DataFrame(st.session_state.saved_bets)
-        st.dataframe(df_save, use_container_width=True, hide_index=True)
+
+        # Nicely labeled view
+        df_save_display = df_save.rename(
+            columns={
+                "player": "Player",
+                "market": "Market",
+                "line": "Line",
+                "bet_type": "Label",
+                "price": "Price",
+                "bookmaker": "Book",
+            }
+        )
+
+        st.dataframe(df_save_display, use_container_width=True, hide_index=True)
 
         csv = df_save.to_csv(index=False).encode("utf-8")
         st.download_button("Download CSV", csv, "saved_bets.csv", "text/csv")

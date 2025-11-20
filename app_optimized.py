@@ -46,9 +46,12 @@ st.markdown(
 # ENVIRONMENT VARIABLES
 # ------------------------------------------------------
 PROJECT_ID = os.getenv("PROJECT_ID", "")
-DATASET = "nba_prop_analyzer"
+
+# Let dataset be configurable but default to your existing value
+DATASET = os.getenv("BIGQUERY_DATASET", "nba_prop_analyzer")
 PROPS_TABLE = "todays_props_with_hit_rates"
 HISTORICAL_TABLE = "historical_player_stats_for_trends"
+
 SERVICE_JSON = os.getenv("GCP_SERVICE_ACCOUNT", "")
 
 # Auth0
@@ -56,8 +59,9 @@ AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN", "")
 AUTH0_CLIENT_ID = os.getenv("AUTH0_CLIENT_ID", "")
 AUTH0_CLIENT_SECRET = os.getenv("AUTH0_CLIENT_SECRET", "")
 AUTH0_REDIRECT_URI = os.getenv("AUTH0_REDIRECT_URI", "")
+AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE", "")
 
-# Supabase Postgres (or any Postgres)
+# Render PostgreSQL
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 missing_env = []
@@ -75,6 +79,8 @@ if not AUTH0_CLIENT_SECRET:
     missing_env.append("AUTH0_CLIENT_SECRET")
 if not AUTH0_REDIRECT_URI:
     missing_env.append("AUTH0_REDIRECT_URI")
+if not AUTH0_AUDIENCE:
+    missing_env.append("AUTH0_AUDIENCE")
 
 if missing_env:
     st.error(
@@ -136,22 +142,61 @@ except Exception as e:
     st.stop()
 
 # ------------------------------------------------------
-# SUPABASE / POSTGRES CONNECTION HELPERS
+# RENDER POSTGRES CONNECTION HELPERS
 # ------------------------------------------------------
 def get_db_conn():
-    """Create a new Postgres connection (Supabase Postgres)."""
-    return psycopg2.connect(DATABASE_URL)
+    """
+    Create a new PostgreSQL connection to your Render database.
+
+    Render URLs usually already include sslmode=require, but we enforce it
+    as a keyword arg too just to be safe.
+    """
+    return psycopg2.connect(DATABASE_URL, sslmode="require")
+
+
+def init_db_schema():
+    """
+    Create tables if they don't exist.
+    Safe to run on every startup.
+    """
+    try:
+        conn = get_db_conn()
+        cur = conn.cursor()
+
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                auth0_sub TEXT UNIQUE NOT NULL,
+                email TEXT
+            );
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS saved_bets (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                bet_name TEXT,
+                bet_details JSONB,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+            """
+        )
+
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        st.sidebar.error(f"DB init error: {e}")
+
+
+init_db_schema()
 
 
 def get_or_create_user(auth0_sub: str, email: str):
     """
-    Ensure a user exists in the Postgres 'users' table and return the row.
-    Table schema (Supabase):
-        CREATE TABLE users (
-            id SERIAL PRIMARY KEY,
-            auth0_sub TEXT UNIQUE NOT NULL,
-            email TEXT
-        );
+    Ensure a user exists in the 'users' table and return the row.
     """
     conn = get_db_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -175,15 +220,7 @@ def get_or_create_user(auth0_sub: str, email: str):
 
 def load_saved_bets_from_db(user_id: int):
     """
-    Load saved bets from Postgres.
-    Table schema (Supabase):
-        CREATE TABLE saved_bets (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER REFERENCES users(id),
-            bet_name TEXT,
-            bet_details JSONB,
-            created_at TIMESTAMP DEFAULT NOW()
-        );
+    Load saved bets from DB as a list of dicts.
     """
     try:
         conn = get_db_conn()
@@ -194,6 +231,7 @@ def load_saved_bets_from_db(user_id: int):
         )
         rows = cur.fetchall()
         conn.close()
+
         bets = []
         for r in rows:
             details = r.get("bet_details")
@@ -208,23 +246,21 @@ def load_saved_bets_from_db(user_id: int):
 def replace_saved_bets_in_db(user_id: int, bets: list[dict]):
     """
     Replace all saved bets for this user with the current list in memory.
-    Simple approach: DELETE then INSERT.
+    Simple: DELETE then INSERT.
     """
     try:
         conn = get_db_conn()
         cur = conn.cursor()
+
         cur.execute("DELETE FROM saved_bets WHERE user_id = %s", (user_id,))
 
         for bet in bets:
-            # Friendly name for the bet
             bet_name = (
                 f"{bet.get('player', '')} "
                 f"{bet.get('market', '')} "
                 f"{bet.get('line', '')} "
                 f"{bet.get('bet_type', '')}"
-            ).strip()
-            if not bet_name:
-                bet_name = "Bet"
+            ).strip() or "Bet"
 
             cur.execute(
                 """
@@ -248,6 +284,7 @@ def get_auth0_authorize_url():
         "client_id": AUTH0_CLIENT_ID,
         "redirect_uri": AUTH0_REDIRECT_URI,
         "scope": "openid profile email",
+        "audience": AUTH0_AUDIENCE,
     }
     return f"https://{AUTH0_DOMAIN}/authorize?{urlencode(params)}"
 
@@ -260,6 +297,7 @@ def exchange_code_for_token(code: str):
         "client_secret": AUTH0_CLIENT_SECRET,
         "code": code,
         "redirect_uri": AUTH0_REDIRECT_URI,
+        "audience": AUTH0_AUDIENCE,
     }
     resp = requests.post(token_url, json=payload, timeout=10)
     resp.raise_for_status()
@@ -267,8 +305,10 @@ def exchange_code_for_token(code: str):
 
 
 def decode_id_token(id_token: str):
-    # For simplicity, we skip signature verification here.
-    # For production, you should validate the signature & audience.
+    """
+    For simplicity, we disable signature & audience verification here.
+    For production you should verify the token using Auth0's JWKS keys.
+    """
     return jwt.decode(id_token, options={"verify_signature": False, "verify_aud": False})
 
 
@@ -291,13 +331,14 @@ def ensure_logged_in():
         code = code[0]
 
     if code:
-        # We returned from Auth0
+        # Returned from Auth0 with a code
         try:
             token_data = exchange_code_for_token(code)
             id_token = token_data.get("id_token")
             if not id_token:
                 raise ValueError("No id_token in Auth0 response.")
             claims = decode_id_token(id_token)
+
             auth0_sub = claims.get("sub")
             email = claims.get("email", "")
 
@@ -397,7 +438,7 @@ if "trend_line" not in st.session_state:
 if "trend_bet_type" not in st.session_state:
     st.session_state.trend_bet_type = None
 
-# Load saved bets from DB once per session
+# Load saved bets once per session, after we know user_id
 if not st.session_state.saved_bets_loaded:
     st.session_state.saved_bets = load_saved_bets_from_db(user_id)
     st.session_state.saved_bets_loaded = True
@@ -527,7 +568,6 @@ def load_props():
     df["price"] = pd.to_numeric(df["price"], errors="coerce")
     df["hit_rate_last10"] = pd.to_numeric(df["hit_rate_last10"], errors="coerce")
 
-    # EV columns may or may not exist yet; keep as-is
     for c in ["ev_last5", "ev_last10", "ev_last20"]:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
@@ -611,15 +651,10 @@ def filter_props(df):
     d = d[d["price"].between(sel_odds[0], sel_odds[1])]
     d = d[d["hit_rate_last10"] >= sel_hit10]
 
-    # Restrict to saved props if toggle on
     if show_only_saved and st.session_state.saved_bets:
         saved_df = pd.DataFrame(st.session_state.saved_bets)
         key_cols = ["player", "market", "line", "bet_type", "bookmaker"]
-        d = d.merge(
-            saved_df[key_cols],
-            on=key_cols,
-            how="inner",
-        )
+        d = d.merge(saved_df[key_cols], on=key_cols, how="inner")
 
     return d
 
@@ -643,7 +678,7 @@ current_tab = st.radio(
 )
 
 # ------------------------------------------------------
-# TAB 1 — PROPS OVERVIEW (data_editor + Save checkbox)
+# TAB 1 — PROPS OVERVIEW
 # ------------------------------------------------------
 if current_tab == "🧮 Props Overview":
     st.subheader("Props Overview")
@@ -656,20 +691,14 @@ if current_tab == "🧮 Props Overview":
         d = get_dynamic_averages(d)
         d = add_defense(d)
 
-        # Numeric copy of hit_rate for sorting if needed
         d["hit_rate_last10_num"] = d["hit_rate_last10"]
-
-        # Display fields
         d["Price"] = d["price"].apply(format_moneyline)
         d = format_display(d)
 
-        # Add logo url for info (optional)
         d["Opponent Logo"] = d["opponent_team"].map(TEAM_LOGOS).fillna("")
 
-        # Add Save column default False
         d_display = d.copy()
 
-        # Mark already-saved bets as True
         if st.session_state.saved_bets:
             saved_df = pd.DataFrame(st.session_state.saved_bets)
             key_cols = ["player", "market", "line", "bet_type", "bookmaker"]
@@ -687,7 +716,7 @@ if current_tab == "🧮 Props Overview":
             "player",
             "market",
             "line",
-            "bet_type",  # label
+            "bet_type",
             "Price",
             "bookmaker",
             "Pos Def Rank",
@@ -729,13 +758,10 @@ if current_tab == "🧮 Props Overview":
             key="props_overview_editor",
         )
 
-        # Update saved_bets from edited table
         saved_rows = edited[edited["Save"]].copy()
         if not saved_rows.empty:
             st.session_state.saved_bets = (
-                saved_rows[
-                    ["Player", "Market", "Line", "Label", "Price", "Book"]
-                ]
+                saved_rows[["Player", "Market", "Line", "Label", "Price", "Book"]]
                 .rename(
                     columns={
                         "Player": "player",
@@ -752,7 +778,7 @@ if current_tab == "🧮 Props Overview":
         else:
             st.session_state.saved_bets = []
 
-        # Persist to DB for this user
+        # Persist to DB
         replace_saved_bets_in_db(user_id, st.session_state.saved_bets)
 
 # ------------------------------------------------------
@@ -771,7 +797,6 @@ elif current_tab == "📈 Trend Analysis":
     if p != "(select)":
         st.session_state.trend_player = p
 
-        # Markets for this player
         markets = sorted(props_df[props_df["player"] == p]["market"].unique())
         if st.session_state.trend_market in markets:
             default_m_index = markets.index(st.session_state.trend_market)
@@ -781,7 +806,6 @@ elif current_tab == "📈 Trend Analysis":
         m = st.selectbox("Market", markets, index=default_m_index)
         st.session_state.trend_market = m
 
-        # Bet types (Over / Under) for this player + market
         bet_types = sorted(
             props_df[(props_df["player"] == p) & (props_df["market"] == m)][
                 "bet_type"
@@ -789,6 +813,7 @@ elif current_tab == "📈 Trend Analysis":
             .dropna()
             .unique()
         )
+
         if not bet_types:
             st.warning("No bet types available for this player/market.")
         else:
@@ -803,7 +828,6 @@ elif current_tab == "📈 Trend Analysis":
             bt = st.selectbox("Bet Type", bet_types, index=default_bt_index)
             st.session_state.trend_bet_type = bt
 
-            # Lines for this player + market + bet type
             lines = sorted(
                 props_df[
                     (props_df["player"] == p)
@@ -840,15 +864,11 @@ elif current_tab == "📈 Trend Analysis":
                 else:
                     df_hist["date"] = df_hist["game_date"].dt.strftime("%b %d")
 
-                    # Color coding based on bet type:
-                    # Over  -> green if stat > line
-                    # Under -> green if stat < line
                     if bt.lower() == "over":
                         hit_mask = df_hist[stat] > line_pick
                     elif bt.lower() == "under":
                         hit_mask = df_hist[stat] < line_pick
                     else:
-                        # Fallback to "Over"-style logic
                         hit_mask = df_hist[stat] > line_pick
 
                     df_hist["color"] = np.where(hit_mask, "green", "red")
@@ -907,7 +927,6 @@ elif current_tab == "📋 Saved Bets":
     else:
         df_save = pd.DataFrame(st.session_state.saved_bets)
 
-        # Nicely labeled view
         df_save_display = df_save.rename(
             columns={
                 "player": "Player",

@@ -685,102 +685,128 @@ if current_tab == "🧮 Props Overview":
     st.subheader("Props Overview")
 
     d = filter_props(props_df)
-
     if d.empty:
         st.info("No props match your filters.")
+        st.stop()
+
+    # ----------- Add dynamic averages + defense -----------
+    d = get_dynamic_averages(d)
+    d = add_defense(d)
+
+    # ----------- FIX: Ensure hit rates are true numeric 0–100 -----------
+    for col in ["hit_rate_last5", "hit_rate_last10", "hit_rate_last20"]:
+        d[col] = (
+            pd.to_numeric(d[col], errors="coerce")
+            .apply(lambda x: x * 100 if 0 <= x <= 1 else x)
+        )
+
+    d["hit_rate_last10_num"] = d["hit_rate_last10"].astype(float)
+
+    # ----------- Format display columns -----------
+    d["Price"] = d["price"].apply(format_moneyline)
+    d = format_display(d)
+    d["Opponent Logo"] = d["opponent_team"].map(TEAM_LOGOS).fillna("")
+
+    d_display = d.copy()
+
+    # ----------- Mark saved bets -----------
+    if st.session_state.saved_bets:
+        saved_df = pd.DataFrame(st.session_state.saved_bets)
+        key_cols = ["player", "market", "line", "bet_type", "bookmaker"]
+        d_display["Save"] = d_display[key_cols].merge(
+            saved_df[key_cols].drop_duplicates(),
+            on=key_cols,
+            how="left",
+            indicator=True
+        )["_merge"].eq("both")
     else:
-        d = get_dynamic_averages(d)
-        d = add_defense(d)
+        d_display["Save"] = False
 
-        d["hit_rate_last10_num"] = d["hit_rate_last10"]
-        d["Price"] = d["price"].apply(format_moneyline)
-        d = format_display(d)
+    # ----------- Columns displayed -----------
+    display_cols = [
+        "Save",
+        "player",
+        "market",
+        "line",
+        "bet_type",
+        "Price",
+        "bookmaker",
+        "Pos Def Rank",
+        "Overall Def Rank",
+        "Matchup Difficulty",
+        "hit_rate_last5",
+        "hit_rate_last10",
+        "hit_rate_last20",
+        "L5 Avg",
+        "L10 Avg",
+        "L20 Avg",
+        "opponent_team",
+    ]
 
-        d["Opponent Logo"] = d["opponent_team"].map(TEAM_LOGOS).fillna("")
+    d_display = d_display[display_cols].rename(
+        columns={
+            "player": "Player",
+            "market": "Market",
+            "line": "Line",
+            "bet_type": "Label",
+            "bookmaker": "Book",
+            "hit_rate_last5": "Hit L5",
+            "hit_rate_last10": "Hit L10",
+            "hit_rate_last20": "Hit L20",
+            "opponent_team": "Opponent",
+        }
+    )
 
-        d_display = d.copy()
+    # ----------- Streamlit Editor (with numeric columns) -----------
+    edited = st.data_editor(
+        d_display,
+        use_container_width=True,
+        hide_index=True,
+        num_rows="fixed",
+        column_config={
+            "Save": st.column_config.CheckboxColumn(
+                "Save Bet", help="Save/unsave this prop"
+            ),
+            "Hit L5": st.column_config.NumberColumn("Hit L5", format="%.0f%%"),
+            "Hit L10": st.column_config.NumberColumn("Hit L10", format="%.0f%%"),
+            "Hit L20": st.column_config.NumberColumn("Hit L20", format="%.0f%%"),
+            "L5 Avg": st.column_config.NumberColumn("L5 Avg", format="%.1f"),
+            "L10 Avg": st.column_config.NumberColumn("L10 Avg", format="%.1f"),
+            "L20 Avg": st.column_config.NumberColumn("L20 Avg", format="%.1f"),
+            "Matchup Difficulty": st.column_config.NumberColumn(
+                "Matchup Difficulty", format="%.0f"
+            ),
+        },
+        key="props_overview_editor",
+    )
 
-        if st.session_state.saved_bets:
-            saved_df = pd.DataFrame(st.session_state.saved_bets)
-            key_cols = ["player", "market", "line", "bet_type", "bookmaker"]
-            d_display["Save"] = d_display[key_cols].merge(
-                saved_df[key_cols].drop_duplicates(),
-                on=key_cols,
-                how="left",
-                indicator=True,
-            )["_merge"].eq("both")
-        else:
-            d_display["Save"] = False
+    # ----------- SAFE checkbox handling (fixes NaN mask issue) -----------
+    save_mask = edited["Save"].fillna(False).astype(bool)
+    saved_rows = edited.loc[save_mask].copy()
 
-        display_cols = [
-            "Save",
-            "player",
-            "market",
-            "line",
-            "bet_type",
-            "Price",
-            "bookmaker",
-            "Pos Def Rank",
-            "Overall Def Rank",
-            "Matchup Difficulty",
-            "hit_rate_last5",
-            "hit_rate_last10",
-            "hit_rate_last20",
-            "L5 Avg",
-            "L10 Avg",
-            "L20 Avg",
-            "opponent_team",
-        ]
-
-        d_display = d_display[display_cols].rename(
-            columns={
-                "player": "Player",
-                "market": "Market",
-                "line": "Line",
-                "bet_type": "Label",
-                "bookmaker": "Book",
-                "hit_rate_last5": "Hit L5",
-                "hit_rate_last10": "Hit L10",
-                "hit_rate_last20": "Hit L20",
-                "opponent_team": "Opponent",
-            }
-        )
-
-        edited = st.data_editor(
-            d_display,
-            use_container_width=True,
-            hide_index=True,
-            num_rows="fixed",
-            column_config={
-                "Save": st.column_config.CheckboxColumn(
-                    "Save Bet", help="Save/unsave this prop"
-                )
-            },
-            key="props_overview_editor",
-        )
-
-        saved_rows = edited[edited["Save"]].copy()
-        if not saved_rows.empty:
-            st.session_state.saved_bets = (
-                saved_rows[["Player", "Market", "Line", "Label", "Price", "Book"]]
-                .rename(
-                    columns={
-                        "Player": "player",
-                        "Market": "market",
-                        "Line": "line",
-                        "Label": "bet_type",
-                        "Price": "price",
-                        "Book": "bookmaker",
-                    }
-                )
-                .drop_duplicates()
-                .to_dict("records")
+    # ----------- Update session-state saved bets -----------
+    if not saved_rows.empty:
+        st.session_state.saved_bets = (
+            saved_rows[["Player", "Market", "Line", "Label", "Price", "Book"]]
+            .rename(
+                columns={
+                    "Player": "player",
+                    "Market": "market",
+                    "Line": "line",
+                    "Label": "bet_type",
+                    "Price": "price",
+                    "Book": "bookmaker",
+                }
             )
-        else:
-            st.session_state.saved_bets = []
+            .drop_duplicates()
+            .to_dict("records")
+        )
+    else:
+        st.session_state.saved_bets = []
 
-        # Persist to DB
-        replace_saved_bets_in_db(user_id, st.session_state.saved_bets)
+    # ----------- Sync to PostgreSQL DB -----------
+    replace_saved_bets_in_db(user_id, st.session_state.saved_bets)
+
 
 # ------------------------------------------------------
 # TAB 2 — TREND ANALYSIS
@@ -788,6 +814,7 @@ if current_tab == "🧮 Props Overview":
 elif current_tab == "📈 Trend Analysis":
     st.subheader("Trend Analysis")
 
+    # Player selector
     all_players = ["(select)"] + sorted(props_df["player"].unique())
     if st.session_state.trend_player in all_players:
         default_p_index = all_players.index(st.session_state.trend_player)
@@ -795,127 +822,156 @@ elif current_tab == "📈 Trend Analysis":
         default_p_index = 0
 
     p = st.selectbox("Player", all_players, index=default_p_index)
-    if p != "(select)":
-        st.session_state.trend_player = p
+    if p == "(select)":
+        st.stop()
 
-        markets = sorted(props_df[props_df["player"] == p]["market"].unique())
-        if st.session_state.trend_market in markets:
-            default_m_index = markets.index(st.session_state.trend_market)
-        else:
-            default_m_index = 0
+    st.session_state.trend_player = p
 
-        m = st.selectbox("Market", markets, index=default_m_index)
-        st.session_state.trend_market = m
+    # Market selector
+    markets = sorted(props_df[props_df["player"] == p]["market"].unique())
+    if st.session_state.trend_market in markets:
+        default_m_index = markets.index(st.session_state.trend_market)
+    else:
+        default_m_index = 0
 
-        bet_types = sorted(
-            props_df[(props_df["player"] == p) & (props_df["market"] == m)][
-                "bet_type"
-            ]
-            .dropna()
-            .unique()
+    m = st.selectbox("Market", markets, index=default_m_index)
+    st.session_state.trend_market = m
+
+    # Bet type selector
+    bet_types = sorted(
+        props_df[(props_df["player"] == p) & (props_df["market"] == m)][
+            "bet_type"
+        ].dropna().unique()
+    )
+    if not bet_types:
+        st.warning("No bet types available.")
+        st.stop()
+
+    if st.session_state.trend_bet_type in bet_types:
+        default_bt = bet_types.index(st.session_state.trend_bet_type)
+    else:
+        default_bt = 0
+
+    bt = st.selectbox("Bet Type", bet_types, index=default_bt)
+    st.session_state.trend_bet_type = bt
+
+    # Line selector
+    lines = sorted(
+        props_df[
+            (props_df["player"] == p)
+            & (props_df["market"] == m)
+            & (props_df["bet_type"] == bt)
+        ]["line"].unique()
+    )
+
+    if not lines:
+        st.warning("No lines available.")
+        st.stop()
+
+    if st.session_state.trend_line in lines:
+        default_line = list(lines).index(st.session_state.trend_line)
+    else:
+        default_line = 0
+
+    line_pick = st.selectbox("Select Line", lines, index=default_line)
+    st.session_state.trend_line = line_pick
+
+    # ---------------------------
+    # Sample size toggle
+    # ---------------------------
+    n_games = st.radio(
+        "Sample Size (most recent games)",
+        [5, 10, 20],
+        index=1,
+        horizontal=True,
+    )
+
+    # STAT DETECTION
+    stat = detect_stat(m)
+    if not stat:
+        st.warning("Unable to detect stat type for this market.")
+        st.stop()
+
+    # Pull last N games
+    df_hist = (
+        historical_df[
+            (historical_df["player"] == p) & (historical_df[stat].notna())
+        ]
+        .sort_values("game_date")
+        .tail(n_games)
+    )
+
+    if df_hist.empty:
+        st.info("No historical data available for this player/stat.")
+        st.stop()
+
+    df_hist["date"] = df_hist["game_date"].dt.strftime("%b %d")
+
+    # OVER → stat > line ; UNDER → stat < line
+    if bt.lower() == "over":
+        hit_mask = df_hist[stat] > line_pick
+    else:
+        hit_mask = df_hist[stat] < line_pick
+
+    df_hist["color"] = np.where(hit_mask, "green", "red")
+
+    # ---------------------------
+    # HIT RATE BADGE
+    # ---------------------------
+    total = len(df_hist)
+    hits = int(hit_mask.sum())
+    hit_rate = hits / total if total else 0
+
+    st.markdown(
+        f"### Hit Rate: **{hit_rate:.0%}**  \n"
+        f"({hits} of {total} games) vs **{bt} {line_pick}**"
+    )
+
+    # ---------------------------
+    # Plot
+    # ---------------------------
+    hover = []
+    for dte, opp, val, hit in zip(
+        df_hist["date"],
+        df_hist["opponent_team"],
+        df_hist[stat],
+        hit_mask,
+    ):
+        hover.append(
+            f"<b>{dte}</b><br>"
+            f"{stat.upper()}: {val}<br>"
+            f"Opponent: {opp}<br>"
+            f"{'Hit' if hit else 'Miss'} vs {bt} {line_pick}"
         )
 
-        if not bet_types:
-            st.warning("No bet types available for this player/market.")
-        else:
-            if (
-                st.session_state.trend_bet_type is not None
-                and st.session_state.trend_bet_type in bet_types
-            ):
-                default_bt_index = bet_types.index(st.session_state.trend_bet_type)
-            else:
-                default_bt_index = 0
+    fig = go.Figure()
+    fig.add_bar(
+        x=df_hist["date"],
+        y=df_hist[stat],
+        marker_color=df_hist["color"],
+        hovertext=hover,
+        hoverinfo="text",
+    )
 
-            bt = st.selectbox("Bet Type", bet_types, index=default_bt_index)
-            st.session_state.trend_bet_type = bt
+    fig.update_xaxes(tickvals=df_hist["date"], ticktext=df_hist["date"])
 
-            lines = sorted(
-                props_df[
-                    (props_df["player"] == p)
-                    & (props_df["market"] == m)
-                    & (props_df["bet_type"] == bt)
-                ]["line"].unique()
-            )
+    fig.add_hline(
+        y=line_pick,
+        line_dash="dash",
+        line_color="white",
+        annotation_text=f"{bt} {line_pick}",
+        annotation_position="top left",
+    )
 
-            if (
-                st.session_state.trend_line is not None
-                and st.session_state.trend_line in lines
-            ):
-                default_line_index = list(lines).index(st.session_state.trend_line)
-            else:
-                default_line_index = 0
+    fig.update_layout(
+        height=450,
+        plot_bgcolor="#222",
+        paper_bgcolor="#222",
+        font=dict(color="white"),
+        margin=dict(b=40, t=40, l=40, r=20),
+    )
 
-            line_pick = st.selectbox("Select Line", lines, index=default_line_index)
-            st.session_state.trend_line = line_pick
-
-            stat = detect_stat(m)
-            if not stat:
-                st.warning("Unable to detect stat type for this market.")
-            else:
-                df_hist = (
-                    historical_df[
-                        (historical_df["player"] == p) & (historical_df[stat].notna())
-                    ]
-                    .sort_values("game_date")
-                    .tail(20)
-                )
-
-                if df_hist.empty:
-                    st.info("No historical data available for this player/stat.")
-                else:
-                    df_hist["date"] = df_hist["game_date"].dt.strftime("%b %d")
-
-                    if bt.lower() == "over":
-                        hit_mask = df_hist[stat] > line_pick
-                    elif bt.lower() == "under":
-                        hit_mask = df_hist[stat] < line_pick
-                    else:
-                        hit_mask = df_hist[stat] > line_pick
-
-                    df_hist["color"] = np.where(hit_mask, "green", "red")
-
-                    hover = []
-                    for dte, opp, val, hit in zip(
-                        df_hist["date"],
-                        df_hist["opponent_team"],
-                        df_hist[stat],
-                        hit_mask,
-                    ):
-                        outcome = "Hit" if hit else "Miss"
-                        hover.append(
-                            f"<b>{dte}</b><br>{stat.upper()}: {val}<br>"
-                            f"Opponent: {opp}<br>"
-                            f"Outcome vs {bt} {line_pick}: {outcome}"
-                        )
-
-                    fig = go.Figure()
-                    fig.add_bar(
-                        x=df_hist["date"],
-                        y=df_hist[stat],
-                        marker_color=df_hist["color"],
-                        hovertext=hover,
-                        hoverinfo="text",
-                    )
-
-                    fig.update_xaxes(tickvals=df_hist["date"], ticktext=df_hist["date"])
-
-                    fig.add_hline(
-                        y=line_pick,
-                        line_dash="dash",
-                        line_color="white",
-                        annotation_text=f"{bt} {line_pick}",
-                        annotation_position="top left",
-                    )
-
-                    fig.update_layout(
-                        height=450,
-                        plot_bgcolor="#222",
-                        paper_bgcolor="#222",
-                        font=dict(color="white"),
-                        margin=dict(b=40, t=40, l=40, r=20),
-                    )
-
-                    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True)
 
 # ------------------------------------------------------
 # TAB 3 — SAVED BETS

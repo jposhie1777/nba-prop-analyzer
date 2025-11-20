@@ -358,7 +358,7 @@ def ensure_logged_in():
                 st.experimental_set_query_params()
             except Exception:
                 pass
-            st.experimental_rerun()
+            st.rerun()
         except Exception as e:
             st.error(f"❌ Login failed: {e}")
             st.stop()
@@ -627,7 +627,7 @@ show_only_saved = st.sidebar.checkbox("Show Only Saved Props", value=False)
 # Refresh button
 if st.sidebar.button("🔄 Refresh Data"):
     st.cache_data.clear()
-    st.experimental_rerun()
+    st.rerun()
 
 # ------------------------------------------------------
 # FILTER FUNCTION

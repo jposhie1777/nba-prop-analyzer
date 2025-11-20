@@ -668,7 +668,9 @@ tab_labels = [
     "📈 Trend Analysis",
     "📋 Saved Bets",
     "📊 Prop Analytics",
+    "🎟️ Bet Slip"
 ]
+
 
 current_tab = st.radio(
     "View",
@@ -685,31 +687,47 @@ if current_tab == "🧮 Props Overview":
     st.subheader("Props Overview")
 
     d = filter_props(props_df)
+
     if d.empty:
         st.info("No props match your filters.")
         st.stop()
 
-    # ----------- Add dynamic averages + defense -----------
+    # -----------------------------
+    # Add dynamic averages + defense
+    # -----------------------------
     d = get_dynamic_averages(d)
     d = add_defense(d)
 
-    # ----------- FIX: Ensure hit rates are true numeric 0–100 -----------
+    # -----------------------------
+    # Convert hit rates to TRUE numeric values (0–100)
+    # -----------------------------
     for col in ["hit_rate_last5", "hit_rate_last10", "hit_rate_last20"]:
         d[col] = (
             pd.to_numeric(d[col], errors="coerce")
             .apply(lambda x: x * 100 if 0 <= x <= 1 else x)
         )
 
+    # Numeric sort helper
     d["hit_rate_last10_num"] = d["hit_rate_last10"].astype(float)
 
-    # ----------- Format display columns -----------
+    # -----------------------------
+    # Display formatting
+    # -----------------------------
     d["Price"] = d["price"].apply(format_moneyline)
+
+    # VERY IMPORTANT:
+    # Do NOT format hit rates in format_display() anymore
     d = format_display(d)
+
+    # Opponent logos
     d["Opponent Logo"] = d["opponent_team"].map(TEAM_LOGOS).fillna("")
 
+    # Copy for UI
     d_display = d.copy()
 
-    # ----------- Mark saved bets -----------
+    # -----------------------------
+    # Mark saved bets
+    # -----------------------------
     if st.session_state.saved_bets:
         saved_df = pd.DataFrame(st.session_state.saved_bets)
         key_cols = ["player", "market", "line", "bet_type", "bookmaker"]
@@ -722,7 +740,9 @@ if current_tab == "🧮 Props Overview":
     else:
         d_display["Save"] = False
 
-    # ----------- Columns displayed -----------
+    # -----------------------------
+    # Columns to display
+    # -----------------------------
     display_cols = [
         "Save",
         "player",
@@ -757,7 +777,9 @@ if current_tab == "🧮 Props Overview":
         }
     )
 
-    # ----------- Streamlit Editor (with numeric columns) -----------
+    # -----------------------------
+    # DATA EDITOR (sorting now works)
+    # -----------------------------
     edited = st.data_editor(
         d_display,
         use_container_width=True,
@@ -767,12 +789,17 @@ if current_tab == "🧮 Props Overview":
             "Save": st.column_config.CheckboxColumn(
                 "Save Bet", help="Save/unsave this prop"
             ),
+            # Hit Rates shown as percentages but numeric internally
             "Hit L5": st.column_config.NumberColumn("Hit L5", format="%.0f%%"),
             "Hit L10": st.column_config.NumberColumn("Hit L10", format="%.0f%%"),
             "Hit L20": st.column_config.NumberColumn("Hit L20", format="%.0f%%"),
+
+            # Averages
             "L5 Avg": st.column_config.NumberColumn("L5 Avg", format="%.1f"),
             "L10 Avg": st.column_config.NumberColumn("L10 Avg", format="%.1f"),
             "L20 Avg": st.column_config.NumberColumn("L20 Avg", format="%.1f"),
+
+            # Difficulty score numeric
             "Matchup Difficulty": st.column_config.NumberColumn(
                 "Matchup Difficulty", format="%.0f"
             ),
@@ -780,11 +807,15 @@ if current_tab == "🧮 Props Overview":
         key="props_overview_editor",
     )
 
-    # ----------- SAFE checkbox handling (fixes NaN mask issue) -----------
+    # -----------------------------
+    # SAFE CHECKBOX MASKING
+    # -----------------------------
     save_mask = edited["Save"].fillna(False).astype(bool)
     saved_rows = edited.loc[save_mask].copy()
 
-    # ----------- Update session-state saved bets -----------
+    # -----------------------------
+    # Update session state saved bets
+    # -----------------------------
     if not saved_rows.empty:
         st.session_state.saved_bets = (
             saved_rows[["Player", "Market", "Line", "Label", "Price", "Book"]]
@@ -804,7 +835,9 @@ if current_tab == "🧮 Props Overview":
     else:
         st.session_state.saved_bets = []
 
-    # ----------- Sync to PostgreSQL DB -----------
+    # -----------------------------
+    # Save to PostgreSQL
+    # -----------------------------
     replace_saved_bets_in_db(user_id, st.session_state.saved_bets)
 
 
@@ -1053,6 +1086,131 @@ elif current_tab == "📊 Prop Analytics":
             )
 
             st.dataframe(d_display, use_container_width=True, hide_index=True)
+
+# ------------------------------------------------------
+# TAB 5 — BET SLIP
+# ------------------------------------------------------
+elif current_tab == "🎟️ Bet Slip":
+    st.subheader("Bet Slip Generator")
+
+    bets = st.session_state.saved_bets
+
+    if not bets:
+        st.info("Save bets from the Props Overview tab to build a bet slip.")
+        st.stop()
+
+    slip_df = pd.DataFrame(bets).copy()
+
+    # Convert American odds to decimal odds
+    def american_to_decimal(odds):
+        if odds > 0:
+            return 1 + (odds / 100)
+        else:
+            return 1 + (100 / abs(odds))
+
+    slip_df["decimal_odds"] = slip_df["price"].astype(float).apply(american_to_decimal)
+
+    st.write("### Select Bets to Add to Slip")
+
+    slip_df["Add to Slip"] = False
+    slip_df["Stake"] = 0.0
+
+    edited_slip = st.data_editor(
+        slip_df,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Add to Slip": st.column_config.CheckboxColumn("Add"),
+            "Stake": st.column_config.NumberColumn("Stake ($)", min_value=0.0),
+        },
+        key="bet_slip_editor"
+    )
+
+    # Filter selected bets
+    mask = edited_slip["Add to Slip"].fillna(False).astype(bool)
+    selected = edited_slip.loc[mask]
+
+    if selected.empty:
+        st.info("Select bets using the checkboxes above.")
+        st.stop()
+
+    st.markdown("### 📌 Selected Bets")
+
+    st.dataframe(
+        selected[["player", "market", "line", "bet_type", "price", "Stake"]],
+        use_container_width=True,
+        hide_index=True
+    )
+
+    # -----------------------------
+    # CALCULATE INDIVIDUAL RETURNS
+    # -----------------------------
+    def calc_payout(odds, stake):
+        odds = float(odds)
+        if odds > 0:
+            return stake * (odds / 100)
+        else:
+            return stake * (100 / abs(odds))
+
+    selected["Payout"] = selected.apply(
+        lambda r: calc_payout(r["price"], r["Stake"]), axis=1
+    )
+
+    total_stake = selected["Stake"].sum()
+    total_return = (selected["Stake"] + selected["Payout"]).sum()
+
+    st.markdown(f"### 💵 Total Stake: **${total_stake:.2f}**")
+    st.markdown(f"### 💰 Total Expected Return: **${total_return:.2f}**")
+
+    # ------------------------------------------------------
+    # PARLAY OPTION
+    # ------------------------------------------------------
+    make_parlay = st.checkbox("Combine these bets into a PARLAY")
+
+    if make_parlay:
+        st.markdown("## 🎯 Parlay Builder")
+
+        stake = st.number_input("Parlay Stake ($)", min_value=0.0, value=10.0)
+
+        # Parlay decimal odds = product of all decimal odds
+        parlay_decimal = selected["decimal_odds"].prod()
+        parlay_payout = stake * (parlay_decimal - 1)
+
+        st.markdown(f"**Combined Decimal Odds:** {parlay_decimal:.3f}")
+        st.markdown(f"**Parlay Payout:** ${parlay_payout:.2f}")
+
+        # Build a betslip object for export
+        parlay_details = {
+            "type": "parlay",
+            "legs": selected.to_dict("records"),
+            "combined_decimal": parlay_decimal,
+            "stake": stake,
+            "payout": parlay_payout,
+        }
+
+        slip_json = json.dumps(parlay_details, indent=2)
+        st.download_button(
+            "Download Parlay Slip",
+            slip_json,
+            "parlay_slip.json",
+            "application/json"
+        )
+
+    # ------------------------------------------------------
+    # EXPORT INDIVIDUAL BET SLIP
+    # ------------------------------------------------------
+    st.markdown("### 📤 Export Bet Slip")
+
+    slip_export = selected[
+        ["player", "market", "line", "bet_type", "price", "Stake", "Payout"]
+    ].to_csv(index=False)
+
+    st.download_button(
+        "Download Bet Slip CSV",
+        slip_export,
+        "bet_slip.csv",
+        "text/csv"
+    )
 
 # ------------------------------------------------------
 # LAST UPDATED

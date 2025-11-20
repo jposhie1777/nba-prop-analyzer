@@ -62,7 +62,8 @@ AUTH0_REDIRECT_URI = os.getenv("AUTH0_REDIRECT_URI", "")
 AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE", "")
 
 # Render PostgreSQL
-DATABASE_URL = os.getenv("DATABASE_URL", "")
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+
 
 missing_env = []
 if not PROJECT_ID:

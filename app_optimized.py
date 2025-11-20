@@ -4,12 +4,18 @@
 import os
 import json
 from datetime import datetime
+from urllib.parse import urlencode
 
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import pytz
+import requests
 import streamlit as st
+import psycopg2
+import psycopg2.extras
+import jwt
+
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
@@ -45,12 +51,40 @@ PROPS_TABLE = "todays_props_with_hit_rates"
 HISTORICAL_TABLE = "historical_player_stats_for_trends"
 SERVICE_JSON = os.getenv("GCP_SERVICE_ACCOUNT", "")
 
-if not PROJECT_ID or not SERVICE_JSON:
-    st.error("❌ Missing PROJECT_ID or GCP_SERVICE_ACCOUNT environment variables.")
+# Auth0
+AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN", "")
+AUTH0_CLIENT_ID = os.getenv("AUTH0_CLIENT_ID", "")
+AUTH0_CLIENT_SECRET = os.getenv("AUTH0_CLIENT_SECRET", "")
+AUTH0_REDIRECT_URI = os.getenv("AUTH0_REDIRECT_URI", "")
+
+# Supabase Postgres (or any Postgres)
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+
+missing_env = []
+if not PROJECT_ID:
+    missing_env.append("PROJECT_ID")
+if not SERVICE_JSON:
+    missing_env.append("GCP_SERVICE_ACCOUNT")
+if not DATABASE_URL:
+    missing_env.append("DATABASE_URL")
+if not AUTH0_DOMAIN:
+    missing_env.append("AUTH0_DOMAIN")
+if not AUTH0_CLIENT_ID:
+    missing_env.append("AUTH0_CLIENT_ID")
+if not AUTH0_CLIENT_SECRET:
+    missing_env.append("AUTH0_CLIENT_SECRET")
+if not AUTH0_REDIRECT_URI:
+    missing_env.append("AUTH0_REDIRECT_URI")
+
+if missing_env:
+    st.error(
+        "❌ Missing required environment variables:\n\n"
+        + "\n".join(f"- {m}" for m in missing_env)
+    )
     st.stop()
 
 # ------------------------------------------------------
-# SQL STATEMENTS
+# SQL STATEMENTS (BIGQUERY)
 # ------------------------------------------------------
 PROPS_SQL = f"""
 SELECT *
@@ -75,7 +109,7 @@ ORDER BY game_date
 """
 
 # ------------------------------------------------------
-# AUTHENTICATION
+# AUTHENTICATION – GOOGLE BIGQUERY
 # ------------------------------------------------------
 try:
     creds_dict = json.loads(SERVICE_JSON)
@@ -86,9 +120,8 @@ try:
             "https://www.googleapis.com/auth/bigquery",
         ],
     )
-    st.write("✅ Credentials loaded.")
 except Exception as e:
-    st.error(f"❌ Credential error: {e}")
+    st.error(f"❌ BigQuery credential error: {e}")
     st.stop()
 
 # ------------------------------------------------------
@@ -101,6 +134,208 @@ try:
 except Exception as e:
     st.sidebar.error(f"BigQuery connection failed: {e}")
     st.stop()
+
+# ------------------------------------------------------
+# SUPABASE / POSTGRES CONNECTION HELPERS
+# ------------------------------------------------------
+def get_db_conn():
+    """Create a new Postgres connection (Supabase Postgres)."""
+    return psycopg2.connect(DATABASE_URL)
+
+
+def get_or_create_user(auth0_sub: str, email: str):
+    """
+    Ensure a user exists in the Postgres 'users' table and return the row.
+    Table schema (Supabase):
+        CREATE TABLE users (
+            id SERIAL PRIMARY KEY,
+            auth0_sub TEXT UNIQUE NOT NULL,
+            email TEXT
+        );
+    """
+    conn = get_db_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    cur.execute("SELECT * FROM users WHERE auth0_sub = %s", (auth0_sub,))
+    row = cur.fetchone()
+
+    if row:
+        conn.close()
+        return row
+
+    cur.execute(
+        "INSERT INTO users (auth0_sub, email) VALUES (%s, %s) RETURNING *",
+        (auth0_sub, email),
+    )
+    row = cur.fetchone()
+    conn.commit()
+    conn.close()
+    return row
+
+
+def load_saved_bets_from_db(user_id: int):
+    """
+    Load saved bets from Postgres.
+    Table schema (Supabase):
+        CREATE TABLE saved_bets (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id),
+            bet_name TEXT,
+            bet_details JSONB,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+    """
+    try:
+        conn = get_db_conn()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute(
+            "SELECT bet_details FROM saved_bets WHERE user_id = %s ORDER BY created_at DESC",
+            (user_id,),
+        )
+        rows = cur.fetchall()
+        conn.close()
+        bets = []
+        for r in rows:
+            details = r.get("bet_details")
+            if isinstance(details, dict):
+                bets.append(details)
+        return bets
+    except Exception as e:
+        st.sidebar.warning(f"Could not load saved bets from DB: {e}")
+        return []
+
+
+def replace_saved_bets_in_db(user_id: int, bets: list[dict]):
+    """
+    Replace all saved bets for this user with the current list in memory.
+    Simple approach: DELETE then INSERT.
+    """
+    try:
+        conn = get_db_conn()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM saved_bets WHERE user_id = %s", (user_id,))
+
+        for bet in bets:
+            # Friendly name for the bet
+            bet_name = (
+                f"{bet.get('player', '')} "
+                f"{bet.get('market', '')} "
+                f"{bet.get('line', '')} "
+                f"{bet.get('bet_type', '')}"
+            ).strip()
+            if not bet_name:
+                bet_name = "Bet"
+
+            cur.execute(
+                """
+                INSERT INTO saved_bets (user_id, bet_name, bet_details)
+                VALUES (%s, %s, %s)
+                """,
+                (user_id, bet_name, psycopg2.extras.Json(bet)),
+            )
+
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        st.sidebar.error(f"Error saving bets to DB: {e}")
+
+# ------------------------------------------------------
+# AUTH0 HELPERS (LOGIN)
+# ------------------------------------------------------
+def get_auth0_authorize_url():
+    params = {
+        "response_type": "code",
+        "client_id": AUTH0_CLIENT_ID,
+        "redirect_uri": AUTH0_REDIRECT_URI,
+        "scope": "openid profile email",
+    }
+    return f"https://{AUTH0_DOMAIN}/authorize?{urlencode(params)}"
+
+
+def exchange_code_for_token(code: str):
+    token_url = f"https://{AUTH0_DOMAIN}/oauth/token"
+    payload = {
+        "grant_type": "authorization_code",
+        "client_id": AUTH0_CLIENT_ID,
+        "client_secret": AUTH0_CLIENT_SECRET,
+        "code": code,
+        "redirect_uri": AUTH0_REDIRECT_URI,
+    }
+    resp = requests.post(token_url, json=payload, timeout=10)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def decode_id_token(id_token: str):
+    # For simplicity, we skip signature verification here.
+    # For production, you should validate the signature & audience.
+    return jwt.decode(id_token, options={"verify_signature": False, "verify_aud": False})
+
+
+def ensure_logged_in():
+    """
+    Handle Auth0 login flow and store user info in st.session_state.
+    If not logged in, show Login button and stop the app.
+    """
+    if "user" in st.session_state and "user_id" in st.session_state:
+        return
+
+    # Try to get 'code' from query params
+    try:
+        qp = st.query_params
+    except AttributeError:
+        qp = st.experimental_get_query_params()
+
+    code = qp.get("code")
+    if isinstance(code, list):
+        code = code[0]
+
+    if code:
+        # We returned from Auth0
+        try:
+            token_data = exchange_code_for_token(code)
+            id_token = token_data.get("id_token")
+            if not id_token:
+                raise ValueError("No id_token in Auth0 response.")
+            claims = decode_id_token(id_token)
+            auth0_sub = claims.get("sub")
+            email = claims.get("email", "")
+
+            if not auth0_sub:
+                raise ValueError("Missing 'sub' in id_token.")
+
+            user_row = get_or_create_user(auth0_sub, email)
+            st.session_state["user"] = {
+                "auth0_sub": auth0_sub,
+                "email": email,
+            }
+            st.session_state["user_id"] = user_row["id"]
+
+            # Clear 'code' from URL and rerun once
+            try:
+                st.experimental_set_query_params()
+            except Exception:
+                pass
+            st.experimental_rerun()
+        except Exception as e:
+            st.error(f"❌ Login failed: {e}")
+            st.stop()
+
+    # Not logged in and no 'code' param -> show login link
+    login_url = get_auth0_authorize_url()
+    st.title("NBA Prop Analyzer")
+    st.info("Please log in to view props, trends, and saved bets.")
+    st.markdown(f"[🔐 Log in with Auth0]({login_url})")
+    st.stop()
+
+
+# ------------------------------------------------------
+# REQUIRE LOGIN
+# ------------------------------------------------------
+ensure_logged_in()
+user = st.session_state["user"]
+user_id = st.session_state["user_id"]
+st.sidebar.markdown(f"**User:** {user.get('email') or 'Logged in'}")
 
 # ------------------------------------------------------
 # LOGOS (STATIC)
@@ -144,6 +379,9 @@ TEAM_LOGOS = {
 if "saved_bets" not in st.session_state:
     st.session_state.saved_bets = []
 
+if "saved_bets_loaded" not in st.session_state:
+    st.session_state.saved_bets_loaded = False
+
 if "active_tab" not in st.session_state:
     st.session_state.active_tab = "🧮 Props Overview"
 
@@ -158,6 +396,11 @@ if "trend_line" not in st.session_state:
 
 if "trend_bet_type" not in st.session_state:
     st.session_state.trend_bet_type = None
+
+# Load saved bets from DB once per session
+if not st.session_state.saved_bets_loaded:
+    st.session_state.saved_bets = load_saved_bets_from_db(user_id)
+    st.session_state.saved_bets_loaded = True
 
 # ------------------------------------------------------
 # UTILITY FUNCTIONS
@@ -264,7 +507,7 @@ def format_display(df):
 
 
 # ------------------------------------------------------
-# LOAD DATA
+# LOAD DATA (BIGQUERY)
 # ------------------------------------------------------
 @st.cache_data
 def load_props():
@@ -508,6 +751,9 @@ if current_tab == "🧮 Props Overview":
             )
         else:
             st.session_state.saved_bets = []
+
+        # Persist to DB for this user
+        replace_saved_bets_in_db(user_id, st.session_state.saved_bets)
 
 # ------------------------------------------------------
 # TAB 2 — TREND ANALYSIS

@@ -707,26 +707,25 @@ if current_tab == "🧮 Props Overview":
             .apply(lambda x: x * 100 if 0 <= x <= 1 else x)
         )
 
-    # Numeric sort helper
+    # Numeric sort helper for hit rate L10
     d["hit_rate_last10_num"] = d["hit_rate_last10"].astype(float)
 
     # -----------------------------
-    # Display formatting
+    # Format display values (EXCEPT hit rates)
     # -----------------------------
     d["Price"] = d["price"].apply(format_moneyline)
 
-    # VERY IMPORTANT:
-    # Do NOT format hit rates in format_display() anymore
+    # IMPORTANT: format_display() must NOT modify hit rates
     d = format_display(d)
 
-    # Opponent logos
+    # Add logos
     d["Opponent Logo"] = d["opponent_team"].map(TEAM_LOGOS).fillna("")
 
     # Copy for UI
     d_display = d.copy()
 
     # -----------------------------
-    # Mark saved bets
+    # Determine which props are saved
     # -----------------------------
     if st.session_state.saved_bets:
         saved_df = pd.DataFrame(st.session_state.saved_bets)
@@ -735,13 +734,13 @@ if current_tab == "🧮 Props Overview":
             saved_df[key_cols].drop_duplicates(),
             on=key_cols,
             how="left",
-            indicator=True
+            indicator=True,
         )["_merge"].eq("both")
     else:
         d_display["Save"] = False
 
     # -----------------------------
-    # Columns to display
+    # Choose columns for the view
     # -----------------------------
     display_cols = [
         "Save",
@@ -778,7 +777,7 @@ if current_tab == "🧮 Props Overview":
     )
 
     # -----------------------------
-    # DATA EDITOR (sorting now works)
+    # DATA EDITOR (hit rates shown as % but numeric)
     # -----------------------------
     edited = st.data_editor(
         d_display,
@@ -786,10 +785,9 @@ if current_tab == "🧮 Props Overview":
         hide_index=True,
         num_rows="fixed",
         column_config={
-            "Save": st.column_config.CheckboxColumn(
-                "Save Bet", help="Save/unsave this prop"
-            ),
-            # Hit Rates shown as percentages but numeric internally
+            "Save": st.column_config.CheckboxColumn("Save Bet"),
+
+            # HIT RATES (numeric sorted, displayed as %)
             "Hit L5": st.column_config.NumberColumn("Hit L5", format="%.0f%%"),
             "Hit L10": st.column_config.NumberColumn("Hit L10", format="%.0f%%"),
             "Hit L20": st.column_config.NumberColumn("Hit L20", format="%.0f%%"),
@@ -801,20 +799,21 @@ if current_tab == "🧮 Props Overview":
 
             # Difficulty score numeric
             "Matchup Difficulty": st.column_config.NumberColumn(
-                "Matchup Difficulty", format="%.0f"
+                "Matchup Difficulty",
+                format="%.0f"
             ),
         },
         key="props_overview_editor",
     )
 
     # -----------------------------
-    # SAFE CHECKBOX MASKING
+    # SAFE CHECKBOX HANDLING (Fixes NaN mask error)
     # -----------------------------
     save_mask = edited["Save"].fillna(False).astype(bool)
     saved_rows = edited.loc[save_mask].copy()
 
     # -----------------------------
-    # Update session state saved bets
+    # Update session-state saved bets
     # -----------------------------
     if not saved_rows.empty:
         st.session_state.saved_bets = (
@@ -836,10 +835,9 @@ if current_tab == "🧮 Props Overview":
         st.session_state.saved_bets = []
 
     # -----------------------------
-    # Save to PostgreSQL
+    # Sync saved bets to PostgreSQL
     # -----------------------------
     replace_saved_bets_in_db(user_id, st.session_state.saved_bets)
-
 
 
 # ------------------------------------------------------

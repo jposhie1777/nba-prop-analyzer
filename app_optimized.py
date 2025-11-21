@@ -841,6 +841,7 @@ if current_tab == "🧮 Props Overview":
     replace_saved_bets_in_db(user_id, st.session_state.saved_bets)
 
 
+
 # ------------------------------------------------------
 # TAB 2 — TREND ANALYSIS
 # ------------------------------------------------------

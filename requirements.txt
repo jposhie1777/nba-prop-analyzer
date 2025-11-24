@@ -3,7 +3,6 @@
 # -------------------------
 streamlit==1.39.0
 streamlit-javascript
-streamlit-html
 streamlit-aggrid
 
 # -------------------------

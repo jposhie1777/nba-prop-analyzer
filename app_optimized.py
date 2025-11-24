@@ -1528,6 +1528,9 @@ with tab1:
             gb.configure_column("*", filter=True)
             gb.configure_selection("multiple", use_checkbox=True)
             gb.configure_grid_options(getRowStyle=row_style_js)
+            gb.configure_grid_options(defaultColDef={"flex": 1})
+            gb.configure_default_column(cellStyle={'textAlign': 'center'})
+
 
             gb.configure_column("Player", pinned="left")
             gb.configure_column("Odds", valueFormatter=odds_formatter, width=95)

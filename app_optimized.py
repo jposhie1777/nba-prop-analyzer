@@ -1,13 +1,12 @@
 # ------------------------------------------------------
 # NBA Prop Analyzer - Merged Production + Dev UI
 # ------------------------------------------------------
-
 import os
 import json
 from datetime import datetime
 from urllib.parse import urlencode
-import base64
 
+import base64
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -18,45 +17,34 @@ import psycopg2
 import psycopg2.extras
 import jwt
 
-from st_aggrid import (
-    AgGrid,
-    GridOptionsBuilder,
-    GridUpdateMode,
-    JsCode,
-)
-
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from google.cloud import bigquery
 from google.oauth2 import service_account
-
 
 # ------------------------------------------------------
 # TIMEZONE (EST)
 # ------------------------------------------------------
-
 EST = pytz.timezone("America/New_York")
-
 
 # ------------------------------------------------------
 # STREAMLIT CONFIG
 # ------------------------------------------------------
-
 st.set_page_config(
     page_title="NBA Prop Analyzer",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-
 # ------------------------------------------------------
 # ENVIRONMENT VARIABLES
 # ------------------------------------------------------
-
 PROJECT_ID = os.getenv("PROJECT_ID", "")
+
 DATASET = os.getenv("BIGQUERY_DATASET", "nba_prop_analyzer")
 PROPS_TABLE = "todays_props_with_hit_rates"
 HISTORICAL_TABLE = "historical_player_stats_for_trends"
 
-# SERVICE_JSON is a JSON string
+# SERVICE_JSON is a JSON string (not a filepath)
 SERVICE_JSON = os.getenv("GCP_SERVICE_ACCOUNT", "")
 
 # Auth0
@@ -66,11 +54,10 @@ AUTH0_CLIENT_SECRET = os.getenv("AUTH0_CLIENT_SECRET", "")
 AUTH0_REDIRECT_URI = os.getenv("AUTH0_REDIRECT_URI", "")
 AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE", "")
 
-# PostgreSQL (Render)
+# Render PostgreSQL
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 
 missing_env = []
-
 if not PROJECT_ID:
     missing_env.append("PROJECT_ID")
 if not SERVICE_JSON:
@@ -95,38 +82,34 @@ if missing_env:
     )
     st.stop()
 
-
 # ------------------------------------------------------
 # SQL STATEMENTS (BIGQUERY)
 # ------------------------------------------------------
-
 PROPS_SQL = f"""
-    SELECT *
-    FROM {PROJECT_ID}.{DATASET}.{PROPS_TABLE}
+SELECT *
+FROM `{PROJECT_ID}.{DATASET}.{PROPS_TABLE}`
 """
 
 HISTORICAL_SQL = f"""
-    SELECT
-        player,
-        player_team,
-        home_team,
-        visitor_team,
-        game_date,
-        opponent_team,
-        home_away,
-        pts,
-        reb,
-        ast,
-        pra
-    FROM {PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}
-    ORDER BY game_date
+SELECT
+  player,
+  player_team,
+  home_team,
+  visitor_team,
+  game_date,
+  opponent_team,
+  home_away,
+  pts,
+  reb,
+  ast,
+  pra
+FROM `{PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}`
+ORDER BY game_date
 """
-
 
 # ------------------------------------------------------
 # AUTHENTICATION – GOOGLE BIGQUERY
 # ------------------------------------------------------
-
 try:
     creds_dict = json.loads(SERVICE_JSON)
     creds = service_account.Credentials.from_service_account_info(
@@ -140,11 +123,9 @@ except Exception as e:
     st.error(f"❌ BigQuery credential error: {e}")
     st.stop()
 
-
 # ------------------------------------------------------
 # BIGQUERY CLIENT
 # ------------------------------------------------------
-
 try:
     bq_client = bigquery.Client(credentials=creds, project=PROJECT_ID)
     _ = bq_client.query("SELECT 1").result()
@@ -153,31 +134,32 @@ except Exception as e:
     st.sidebar.error(f"BigQuery connection failed: {e}")
     st.stop()
 
-
 # ------------------------------------------------------
-# POSTGRES CONNECTION HELPERS
+# RENDER POSTGRES CONNECTION HELPERS
 # ------------------------------------------------------
-
 def get_db_conn():
-    """Create a new PostgreSQL connection."""
+    """Create a new PostgreSQL connection to your Render database."""
     return psycopg2.connect(DATABASE_URL, sslmode="require")
 
 
 def init_db_schema():
-    """Create database tables if missing."""
+    """Create tables if they don't exist. Safe to run on every startup."""
     try:
         conn = get_db_conn()
         cur = conn.cursor()
 
-        cur.execute("""
+        cur.execute(
+            """
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
                 auth0_sub TEXT UNIQUE NOT NULL,
                 email TEXT
             );
-        """)
+            """
+        )
 
-        cur.execute("""
+        cur.execute(
+            """
             CREATE TABLE IF NOT EXISTS saved_bets (
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER REFERENCES users(id),
@@ -185,11 +167,11 @@ def init_db_schema():
                 bet_details JSONB,
                 created_at TIMESTAMP DEFAULT NOW()
             );
-        """)
+            """
+        )
 
         conn.commit()
         conn.close()
-
     except Exception as e:
         st.sidebar.error(f"DB init error: {e}")
 
@@ -198,7 +180,7 @@ init_db_schema()
 
 
 def get_or_create_user(auth0_sub: str, email: str):
-    """Return existing user or create a new one."""
+    """Ensure a user exists in the 'users' table and return the row."""
     conn = get_db_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
@@ -210,37 +192,27 @@ def get_or_create_user(auth0_sub: str, email: str):
         return row
 
     cur.execute(
-        """
-        INSERT INTO users (auth0_sub, email)
-        VALUES (%s, %s)
-        RETURNING *
-        """,
+        "INSERT INTO users (auth0_sub, email) VALUES (%s, %s) RETURNING *",
         (auth0_sub, email),
     )
-
     row = cur.fetchone()
     conn.commit()
     conn.close()
-
     return row
 
 
 def load_saved_bets_from_db(user_id: int):
-    """Load saved bets from DB, normalize 'Label'→'bet_type'."""
+    """
+    Load saved bets from DB as a list of dicts.
+    Normalize any old 'Label' keys to 'bet_type'.
+    """
     try:
         conn = get_db_conn()
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-
         cur.execute(
-            """
-            SELECT bet_details
-            FROM saved_bets
-            WHERE user_id = %s
-            ORDER BY created_at DESC
-            """,
+            "SELECT bet_details FROM saved_bets WHERE user_id = %s ORDER BY created_at DESC",
             (user_id,),
         )
-
         rows = cur.fetchall()
         conn.close()
 
@@ -248,20 +220,22 @@ def load_saved_bets_from_db(user_id: int):
         for r in rows:
             details = r.get("bet_details")
             if isinstance(details, dict):
+                # Normalize: if old 'Label' is present, map it to 'bet_type'
                 if "bet_type" not in details and "Label" in details:
                     details["bet_type"] = details.pop("Label")
 
                 bets.append(details)
-
         return bets
-
     except Exception as e:
-        st.sidebar.warning(f"Cannot load saved bets: {e}")
+        st.sidebar.warning(f"Could not load saved bets from DB: {e}")
         return []
 
 
 def replace_saved_bets_in_db(user_id: int, bets: list[dict]):
-    """Delete all saved bets & insert updated list."""
+    """
+    Replace all saved bets for this user with the current list in memory.
+    Simple: DELETE then INSERT.
+    """
     try:
         conn = get_db_conn()
         cur = conn.cursor()
@@ -269,6 +243,7 @@ def replace_saved_bets_in_db(user_id: int, bets: list[dict]):
         cur.execute("DELETE FROM saved_bets WHERE user_id = %s", (user_id,))
 
         for bet in bets:
+            # Normalize 'Label' -> 'bet_type' just in case
             if "bet_type" not in bet and "Label" in bet:
                 bet["bet_type"] = bet.pop("Label")
 
@@ -289,15 +264,12 @@ def replace_saved_bets_in_db(user_id: int, bets: list[dict]):
 
         conn.commit()
         conn.close()
-
     except Exception as e:
-        st.sidebar.error(f"Error saving bets: {e}")
-
+        st.sidebar.error(f"Error saving bets to DB: {e}")
 
 # ------------------------------------------------------
 # AUTH0 HELPERS (LOGIN)
 # ------------------------------------------------------
-
 def get_auth0_authorize_url():
     params = {
         "response_type": "code",
@@ -311,7 +283,6 @@ def get_auth0_authorize_url():
 
 def exchange_code_for_token(code: str):
     token_url = f"https://{AUTH0_DOMAIN}/oauth/token"
-
     payload = {
         "grant_type": "authorization_code",
         "client_id": AUTH0_CLIENT_ID,
@@ -320,26 +291,28 @@ def exchange_code_for_token(code: str):
         "redirect_uri": AUTH0_REDIRECT_URI,
         "audience": AUTH0_AUDIENCE,
     }
-
     resp = requests.post(token_url, json=payload, timeout=10)
     resp.raise_for_status()
     return resp.json()
 
 
 def decode_id_token(id_token: str):
-    """Decode without signature verification (dev mode)."""
-    return jwt.decode(
-        id_token,
-        options={"verify_signature": False, "verify_aud": False},
-    )
+    """
+    For simplicity, we disable signature & audience verification here.
+    For production you should verify the token using Auth0's JWKS keys.
+    """
+    return jwt.decode(id_token, options={"verify_signature": False, "verify_aud": False})
 
 
 def ensure_logged_in():
-    """Run Auth0 login flow."""
-
+    """
+    Handle Auth0 login flow and store user info in st.session_state.
+    If not logged in, show Login button and stop the app.
+    """
     if "user" in st.session_state and "user_id" in st.session_state:
         return
 
+    # Try to get 'code' from query params
     try:
         qp = st.query_params
     except AttributeError:
@@ -350,37 +323,39 @@ def ensure_logged_in():
         code = code[0]
 
     if code:
+        # Returned from Auth0 with a code
         try:
             token_data = exchange_code_for_token(code)
             id_token = token_data.get("id_token")
             if not id_token:
-                raise ValueError("No id_token in response.")
-
+                raise ValueError("No id_token in Auth0 response.")
             claims = decode_id_token(id_token)
+
             auth0_sub = claims.get("sub")
             email = claims.get("email", "")
 
             if not auth0_sub:
-                raise ValueError("Missing 'sub' in token.")
+                raise ValueError("Missing 'sub' in id_token.")
 
             user_row = get_or_create_user(auth0_sub, email)
-
-            st.session_state["user"] = {"auth0_sub": auth0_sub, "email": email}
+            st.session_state["user"] = {
+                "auth0_sub": auth0_sub,
+                "email": email,
+            }
             st.session_state["user_id"] = user_row["id"]
 
+            # Clear 'code' from URL and rerun once
             try:
                 st.experimental_set_query_params()
             except Exception:
                 pass
-
             st.rerun()
-
         except Exception as e:
             st.error(f"❌ Login failed: {e}")
             st.stop()
 
+    # Not logged in and no 'code' param -> show login link
     login_url = get_auth0_authorize_url()
-
     st.title("NBA Prop Analyzer")
     st.info("Please log in to view props, trends, and saved bets.")
     st.markdown(f"[🔐 Log in with Auth0]({login_url})")
@@ -390,18 +365,14 @@ def ensure_logged_in():
 # ------------------------------------------------------
 # REQUIRE LOGIN
 # ------------------------------------------------------
-
 ensure_logged_in()
-
 user = st.session_state["user"]
 user_id = st.session_state["user_id"]
-
 st.sidebar.markdown(f"**User:** {user.get('email') or 'Logged in'}")
 
 # ------------------------------------------------------
 # THEME PRESETS (from dev)
 # ------------------------------------------------------
-
 THEMES = {
     "Sportsbook Dark": {
         "bg": "#020617",
@@ -429,229 +400,373 @@ theme_choice = st.sidebar.selectbox(
     index=list(THEMES.keys()).index(st.session_state.theme_choice),
     key="theme_choice",
 )
-
 theme = THEMES[st.session_state.theme_choice]
-
 
 # ------------------------------------------------------
 # GLOBAL STYLES (from dev)
 # ------------------------------------------------------
-
 st.markdown(
     f"""
-<style>
-html, body, [class*="css"] {{
-    font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}}
+    <style>
+    html, body, [class*="css"] {{
+        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
 
-.block-container {{
-    padding-top: 1rem !important;
-    padding-bottom: 2rem !important;
-    max-width: 1400px !important;
-}}
+    .block-container {{
+        padding-top: 1rem !important;
+        padding-bottom: 2rem !important;
+        max-width: 1400px !important;
+    }}
 
-body {{
-    background: radial-gradient(circle at top, {theme["bg"]} 0, #000 55%) !important;
-}}
+    body {{
+        background: radial-gradient(circle at top, {theme["bg"]} 0, #000 55%) !important;
+    }}
 
-[data-testid="stSidebar"] {{
-    background: radial-gradient(circle at top left, #1f2937 0, #020617 55%);
-    border-right: 1px solid rgba(255,255,255,0.04);
-}}
-[data-testid="stSidebar"] * {{
-    color: #e5e7eb !important;
-}}
+    [data-testid="stSidebar"] {{
+        background: radial-gradient(circle at top left, #1f2937 0, #020617 55%);
+        border-right: 1px solid rgba(255,255,255,0.04);
+    }}
 
-.app-header {{
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.6rem 0 1.1rem;
-    border-bottom: 1px solid rgba(148,163,184,0.25);
-    margin-bottom: 0.9rem;
-}}
+    [data-testid="stSidebar"] * {{
+        color: #e5e7eb !important;
+    }}
 
-.app-header-left {{
-    display: flex;
-    align-items: center;
-    gap: 0.85rem;
-}}
+    .app-header {{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.6rem 0 1.1rem;
+        border-bottom: 1px solid rgba(148,163,184,0.25);
+        margin-bottom: 0.9rem;
+    }}
 
-.app-logo {{
-    width: 42px;
-    height: 42px;
-    border-radius: 12px;
-    background: radial-gradient(circle at 0 0, #f97316, #ea580c 25%, #0f172a 90%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-weight: 900;
-    font-size: 20px;
-    letter-spacing: 0.02em;
-    box-shadow: 0 14px 30px rgba(15,23,42,0.8);
-    animation: float-logo 5s ease-in-out infinite;
-}}
+    .app-header-left {{
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+    }}
 
-@keyframes float-logo {{
-    0%, 100% {{ transform: translateY(0); }}
-    50% {{ transform: translateY(-2px); }}
-}}
+    .app-logo {{
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        background: radial-gradient(circle at 0 0, #f97316, #ea580c 25%, #0f172a 90%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 900;
+        font-size: 20px;
+        letter-spacing: 0.02em;
+        box-shadow: 0 14px 30px rgba(15,23,42,0.8);
+        animation: float-logo 5s ease-in-out infinite;
+    }}
 
-.app-title {{
-    font-size: 1.4rem;
-    font-weight: 700;
-    margin: 0;
-    letter-spacing: 0.02em;
-    color: #e5e7eb;
-}}
+    @keyframes float-logo {{
+        0%, 100% {{ transform: translateY(0); }}
+        50% {{ transform: translateY(-2px); }}
+    }}
 
-.app-subtitle {{
-    font-size: 0.78rem;
-    margin: 0;
-    color: #9ca3af;
-}}
+    .app-title {{
+        font-size: 1.4rem;
+        font-weight: 700;
+        margin: 0;
+        letter-spacing: 0.02em;
+        color: #e5e7eb;
+    }}
 
-.pill {{
-    padding: 4px 12px;
-    border-radius: 999px;
-    border: 1px solid rgba(148,163,184,0.4);
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: #e5e7eb;
-    background: linear-gradient(135deg, rgba(15,118,110,0.45), rgba(15,23,42,0.98));
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    box-shadow: 0 12px 30px rgba(15,23,42,0.9);
-}}
+    .app-subtitle {{
+        font-size: 0.78rem;
+        margin: 0;
+        color: #9ca3af;
+    }}
 
-.pill-dot {{
-    width: 7px;
-    height: 7px;
-    border-radius: 999px;
-    background: #22c55e;
-    box-shadow: 0 0 10px rgba(34,197,94,0.9);
-    animation: pulse-dot 1.5s infinite;
-}}
+    .pill {{
+        padding: 4px 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(148,163,184,0.4);
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #e5e7eb;
+        background: linear-gradient(135deg, rgba(15,118,110,0.45), rgba(15,23,42,0.98));
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        box-shadow: 0 12px 30px rgba(15,23,42,0.9);
+    }}
 
-@keyframes pulse-dot {{
-    0%, 100% {{ transform: scale(1); opacity: 1; }}
-    50% {{ transform: scale(1.35); opacity: 0.75; }}
-}}
+    .pill-dot {{
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: #22c55e;
+        box-shadow: 0 0 10px rgba(34,197,94,0.9);
+        animation: pulse-dot 1.5s infinite;
+    }}
 
-.metric-grid {{
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-    gap: 0.75rem;
-    margin-bottom: 0.75rem;
-}}
+    @keyframes pulse-dot {{
+        0%, 100% {{ transform: scale(1); opacity: 1; }}
+        50% {{ transform: scale(1.35); opacity: 0.75; }}
+    }}
 
-.metric-card {{
-    background: radial-gradient(circle at top, rgba(15,23,42,0.94), rgba(15,23,42,0.98));
-    border-radius: 16px;
-    padding: 0.75rem 0.9rem;
-    border: 1px solid rgba(148,163,184,0.35);
-    box-shadow: 0 18px 45px rgba(15,23,42,0.95);
-    transition: transform 0.14s ease-out, box-shadow 0.14s ease-out, border-color 0.14s ease-out;
-}}
-.metric-card:hover {{
-    transform: translateY(-2px);
-    box-shadow: 0 24px 55px rgba(15,23,42,1);
-    border-color: {theme["accent"]};
-}}
+    .metric-grid {{
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 0.75rem;
+    }}
 
-.metric-label {{
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: #9ca3af;
-    margin-bottom: 0.15rem;
-}}
+    .metric-card {{
+        background: radial-gradient(circle at top, rgba(15,23,42,0.94), rgba(15,23,42,0.98));
+        border-radius: 16px;
+        padding: 0.75rem 0.9rem;
+        border: 1px solid rgba(148,163,184,0.35);
+        box-shadow: 0 18px 45px rgba(15,23,42,0.95);
+        transition: transform 0.14s ease-out, box-shadow 0.14s ease-out, border-color 0.14s ease-out;
+    }}
 
-.metric-value {{
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: #f9fafb;
-}}
+    .metric-card:hover {{
+        transform: translateY(-2px);
+        box-shadow: 0 24px 55px rgba(15,23,42,1);
+        border-color: {theme["accent"]};
+    }}
 
-.metric-sub {{
-    font-size: 0.72rem;
-    color: #9ca3af;
-}}
+    .metric-label {{
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: #9ca3af;
+        margin-bottom: 0.15rem;
+    }}
 
-</style>
-""",
+    .metric-value {{
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #f9fafb;
+    }}
+
+    .metric-sub {{
+        font-size: 0.72rem;
+        color: #9ca3af;
+    }}
+
+    .prop-card {{
+        border-radius: 16px;
+        padding: 0.75rem 0.9rem;
+        border: 1px solid rgba(148,163,184,0.28);
+        background: radial-gradient(circle at 0 0, rgba(15,23,42,1), rgba(15,23,42,0.96));
+        box-shadow: 0 20px 50px rgba(15,23,42,0.95);
+        margin-bottom: 0.9rem;
+        transition: transform 0.16s ease-out, box-shadow 0.16s ease-out, border-color 0.16s ease-out;
+    }}
+
+    .prop-card:hover {{
+        transform: translateY(-3px);
+        box-shadow: 0 26px 60px rgba(15,23,42,1);
+        border-color: {theme["accent"]};
+    }}
+
+    .prop-headline {{
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.35rem;
+    }}
+
+    .prop-player {{
+        font-weight: 600;
+        font-size: 0.92rem;
+        color: #e5e7eb;
+    }}
+
+    .prop-market {{
+        font-size: 0.78rem;
+        color: #9ca3af;
+    }}
+
+    .pill-book {{
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 0.7rem;
+        border: 1px solid rgba(148,163,184,0.4);
+        color: #e5e7eb;
+    }}
+
+    .prop-meta {{
+        display: flex;
+        justify-content: space-between;
+        gap: 0.5rem;
+        font-size: 0.75rem;
+        color: #9ca3af;
+    }}
+
+    .stDataFrame, .stDataEditor,
+    [data-testid="stDataFrame"] > div,
+    [data-testid="stDataEditor"] > div {{
+        border-radius: 16px !important;
+        box-shadow: 0 20px 50px rgba(15,23,42,0.98) !important;
+        border: 1px solid rgba(148,163,184,0.45) !important;
+        overflow: hidden;
+        background: radial-gradient(circle at top left, rgba(15,23,42,0.98), rgba(15,23,42,0.96));
+    }}
+
+    .stDataFrame table, .stDataEditor table,
+    [data-testid="stDataFrame"] table,
+    [data-testid="stDataEditor"] table {{
+        width: 100%;
+        border-collapse: collapse;
+    }}
+
+    .stDataFrame table td, .stDataFrame table th,
+    .stDataEditor table td, .stDataEditor table th,
+    [data-testid="stDataFrame"] table td, [data-testid="stDataFrame"] table th,
+    [data-testid="stDataEditor"] table td, [data-testid="stDataEditor"] table th {{
+        text-align: center !important;
+        vertical-align: middle !important;
+    }}
+
+    .stDataFrame thead th, .stDataEditor thead th,
+    [data-testid="stDataFrame"] thead th,
+    [data-testid="stDataEditor"] thead th {{
+        background: #020617 !important;
+        color: #e5e7eb !important;
+        font-weight: 700 !important;
+        font-size: 0.78rem !important;
+        border-bottom: 1px solid rgba(148,163,184,0.45) !important;
+    }}
+
+    .stDataFrame tbody tr:nth-child(even) td,
+    .stDataEditor tbody tr:nth-child(even) td,
+    [data-testid="stDataFrame"] tbody tr:nth-child(even) td,
+    [data-testid="stDataEditor"] tbody tr:nth-child(even) td {{
+        background-color: rgba(17,24,39,0.9) !important;
+    }}
+
+    .stDataFrame tbody tr:nth-child(odd) td,
+    .stDataEditor tbody tr:nth-child(odd) td,
+    [data-testid="stDataFrame"] tbody tr:nth-child(odd) td,
+    [data-testid="stDataEditor"] tbody tr:nth-child(odd) td {{
+        background-color: rgba(15,23,42,0.95) !important;
+    }}
+
+    .stDataFrame tbody tr:hover td,
+    .stDataEditor tbody tr:hover td,
+    [data-testid="stDataFrame"] tbody tr:hover td,
+    [data-testid="stDataEditor"] tbody tr:hover td {{
+        background-color: rgba(15,23,42,1) !important;
+    }}
+
+    .stDataFrame tbody td,
+    .stDataEditor tbody td,
+    [data-testid="stDataFrame"] tbody td,
+    [data-testid="stDataEditor"] tbody td {{
+        font-size: 0.8rem !important;
+        border-bottom: 1px solid rgba(31,41,55,0.85) !important;
+    }}
+
+    .stButton > button {{
+        border-radius: 999px !important;
+        padding: 0.35rem 0.95rem !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.03em;
+        border: 1px solid rgba(148,163,184,0.4) !important;
+        background: radial-gradient(circle at 0 0, {theme["accent"]}, {theme["accent_soft"]} 50%, #020617 100%);
+        color: #f9fafb !important;
+        box-shadow: 0 12px 30px rgba(8,47,73,0.9);
+        transition: all 0.16s ease-out !important;
+    }}
+
+    .stButton > button:hover {{
+        transform: translateY(-1px) scale(1.01);
+        box-shadow: 0 16px 40px rgba(8,47,73,1);
+    }}
+
+    button[data-baseweb="tab"],
+    [data-testid="stTabs"] button {{
+        font-size: 0.8rem !important;
+        text-transform: none !important;
+    }}
+
+    .stSidebar label,
+    section[data-testid="stSidebar"] label {{
+        font-size: 0.78rem !important;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #e5e7eb !important;
+    }}
+
+    .sparkline {{
+        stroke: {theme["accent"]};
+        fill: none;
+        stroke-width: 2;
+    }}
+    </style>
+    """,
     unsafe_allow_html=True,
 )
 
-
-# ------------------------------------------------------
-# MOBILE FIXES FOR AG-GRID
-# ------------------------------------------------------
-
-st.markdown(
-    """
+st.markdown("""
 <style>
-/* Ensure responsive grid width */
-.ag-theme-balham .ag-center-cols-container {
-    min-width: 1100px !important;
-}
 
-/* Enable horizontal scrolling */
-.ag-theme-balham .ag-body-viewport,
-.ag-theme-balham .ag-center-cols-viewport,
-.ag-theme-balham .ag-root-wrapper,
-.ag-theme-balham .ag-root {
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-}
+    /* ----------------------------------------------
+       MOBILE FIX FOR AG-GRID (balham theme)
+       ---------------------------------------------- */
 
-/* Prevent tiny cell widths */
-.ag-theme-balham .ag-header-cell,
-.ag-theme-balham .ag-cell {
-    min-width: 115px !important;
-    white-space: nowrap !important;
-}
+    /* Force real width so columns don't collapse */
+    .ag-theme-balham .ag-center-cols-container {
+        min-width: 1100px !important;
+    }
+
+    /* Ensure horizontal scrolling works on mobile */
+    .ag-theme-balham .ag-body-viewport,
+    .ag-theme-balham .ag-center-cols-viewport,
+    .ag-theme-balham .ag-root-wrapper,
+    .ag-theme-balham .ag-root {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+
+    /* Prevent cells & headers from shrinking too small */
+    .ag-theme-balham .ag-header-cell,
+    .ag-theme-balham .ag-cell {
+        min-width: 115px !important;
+        white-space: nowrap !important;
+    }
+
 </style>
-""",
-    unsafe_allow_html=True,
-)
+""", unsafe_allow_html=True)
 
 
 # ------------------------------------------------------
-# HEADER UI
+# HEADER
 # ------------------------------------------------------
-
 st.markdown(
     """
-<div class="app-header">
-    <div class="app-header-left">
-        <div class="app-logo">NBA</div>
+    <div class="app-header">
+        <div class="app-header-left">
+            <div class="app-logo">NBA</div>
+            <div>
+                <h1 class="app-title">Prop Analyzer</h1>
+                <p class="app-subtitle">
+                    Explore props, trends, saved bets, and parlay scenarios using live BigQuery data.
+                </p>
+            </div>
+        </div>
         <div>
-            <h1 class="app-title">Prop Analyzer</h1>
-            <p class="app-subtitle">
-                Explore props, trends, saved bets, and parlay scenarios using live BigQuery data.
-            </p>
+            <span class="pill">
+                <span class="pill-dot"></span>
+                LIVE AUTHENTICATED
+            </span>
         </div>
     </div>
-    <div>
-        <span class="pill">
-            <span class="pill-dot"></span>
-            LIVE AUTHENTICATED
-        </span>
-    </div>
-</div>
-""",
+    """,
     unsafe_allow_html=True,
 )
 
-
 # ------------------------------------------------------
-# TEAM LOGOS (STATIC)
+# LOGOS (STATIC)
 # ------------------------------------------------------
-
 TEAM_LOGOS = {
     "ATL": "https://a.espncdn.com/i/teamlogos/nba/500/atl.png",
     "BOS": "https://a.espncdn.com/i/teamlogos/nba/500/bos.png",
@@ -685,6 +800,7 @@ TEAM_LOGOS = {
     "WAS": "https://a.espncdn.com/i/teamlogos/nba/500/wsh.png",
 }
 
+# Map full team names from BigQuery → 3-letter codes
 TEAM_NAME_TO_CODE = {
     "Atlanta Hawks": "ATL",
     "Boston Celtics": "BOS",
@@ -718,11 +834,7 @@ TEAM_NAME_TO_CODE = {
     "Washington Wizards": "WAS",
 }
 
-
-# ------------------------------------------------------
-# MARKET DISPLAY MAP
-# ------------------------------------------------------
-
+# MARKET DISPLAY MAP (prettier labels)
 MARKET_DISPLAY_MAP = {
     "player_assists_alternate": "Assists",
     "player_points_alternate": "Points",
@@ -733,20 +845,12 @@ MARKET_DISPLAY_MAP = {
     "player_rebounds_assists_alternate": "Reb+Ast",
 }
 
-
-# ------------------------------------------------------
-# PROP TAGS
-# ------------------------------------------------------
-
 def build_prop_tags(row):
     tags = []
-
     if row.get("hit_rate_last10", 0) >= 0.70:
         tags.append(("🔥 HOT", "#f97316"))
 
     odds = row.get("price", 0)
-
-    # Compute implied probability
     if odds > 0:
         implied = 100 / (odds + 100)
     else:
@@ -756,7 +860,6 @@ def build_prop_tags(row):
         tags.append(("📈 EV+", "#22c55e"))
 
     matchup = float(row.get("matchup_difficulty_score", 50))
-
     if matchup <= 33:
         tags.append(("🔴 Hard", "#ef4444"))
     elif matchup >= 67:
@@ -766,10 +869,9 @@ def build_prop_tags(row):
 
     return tags
 
-
 def build_tags_html(tags):
     return "".join(
-        f"""
+        f'''
         <span style="
             background:{color};
             padding:3px 8px;
@@ -779,17 +881,10 @@ def build_tags_html(tags):
             font-weight:600;
             color:white;
             display:inline-block;
-        ">
-        {label}
-        </span>
-        """
+        ">{label}</span>
+        '''
         for label, color in tags
     )
-
-
-# ------------------------------------------------------
-# LOGO → BASE64 HELPERS
-# ------------------------------------------------------
 
 @st.cache_data(show_spinner=False)
 def logo_to_base64(url: str) -> str:
@@ -803,21 +898,12 @@ def logo_to_base64(url: str) -> str:
     except Exception:
         return ""
 
-
 @st.cache_data(show_spinner=False)
 def build_team_logo_b64_map(team_logos: dict) -> dict:
     out = {}
     for code, url in team_logos.items():
         out[code] = logo_to_base64(url)
     return out
-
-
-TEAM_LOGOS_BASE64 = build_team_logo_b64_map(TEAM_LOGOS)
-
-
-# ------------------------------------------------------
-# TEAM NAME NORMALIZER
-# ------------------------------------------------------
 
 def normalize_team_code(raw: str) -> str:
     if raw is None:
@@ -833,7 +919,6 @@ def normalize_team_code(raw: str) -> str:
 
     s_low = s.lower()
 
-    # fuzzy match
     for full_name, code in TEAM_NAME_TO_CODE.items():
         if s_low in full_name.lower():
             return code
@@ -842,7 +927,6 @@ def normalize_team_code(raw: str) -> str:
         if full_name.lower().startswith(s_low):
             return code
 
-    # city aliases
     city_aliases = {
         "la": "LAL",
         "los angeles": "LAL",
@@ -863,39 +947,36 @@ def normalize_team_code(raw: str) -> str:
             return code
 
     return s
+
+TEAM_LOGOS_BASE64 = build_team_logo_b64_map(TEAM_LOGOS)
+
 # ------------------------------------------------------
 # SESSION STATE
 # ------------------------------------------------------
-
 if "saved_bets" not in st.session_state:
     st.session_state.saved_bets = []
 
 if "saved_bets_loaded" not in st.session_state:
     st.session_state.saved_bets_loaded = False
 
-# Trend Lab session variables
+# Trend lab state (optional)
 if "trend_player" not in st.session_state:
     st.session_state.trend_player = None
-
 if "trend_market" not in st.session_state:
     st.session_state.trend_market = None
-
 if "trend_line" not in st.session_state:
     st.session_state.trend_line = None
-
 if "trend_bet_type" not in st.session_state:
     st.session_state.trend_bet_type = None
 
-# Load DB-backed saved bets 1 time per session
+# Load saved bets once per session, after we know user_id
 if not st.session_state.saved_bets_loaded:
     st.session_state.saved_bets = load_saved_bets_from_db(user_id)
     st.session_state.saved_bets_loaded = True
 
-
 # ------------------------------------------------------
-# UTILITY FUNCTIONS
+# UTILITY FUNCTIONS (from production)
 # ------------------------------------------------------
-
 def format_moneyline(v):
     try:
         v = float(v)
@@ -907,7 +988,6 @@ def format_moneyline(v):
 
 def detect_stat(market):
     m = (market or "").lower()
-
     if "p+r+a" in m or "pra" in m:
         return "pra"
     if "assist" in m or "ast" in m:
@@ -916,7 +996,6 @@ def detect_stat(market):
         return "reb"
     if "pt" in m or "point" in m:
         return "pts"
-
     return ""
 
 
@@ -933,13 +1012,11 @@ def get_dynamic_averages(df):
     df["L5 Avg"] = df.apply(lambda r: pull(r, 5), axis=1)
     df["L10 Avg"] = df.apply(lambda r: pull(r, 10), axis=1)
     df["L20 Avg"] = df.apply(lambda r: pull(r, 20), axis=1)
-
     return df
 
 
 def add_defense(df):
     df = df.copy()
-
     stat_series = df["market"].apply(detect_stat)
 
     pos_cols = {
@@ -971,7 +1048,6 @@ def add_defense(df):
     ]
 
     df["Matchup Difficulty"] = df.get("matchup_difficulty_score", np.nan)
-
     return df
 
 
@@ -987,11 +1063,9 @@ def format_display(df):
 
     return df
 
-
 # ------------------------------------------------------
 # LOAD DATA (BIGQUERY)
 # ------------------------------------------------------
-
 @st.cache_data(show_spinner=True)
 def load_props():
     df = bq_client.query(PROPS_SQL).to_dataframe()
@@ -1029,15 +1103,12 @@ def load_history():
 props_df = load_props()
 history_df = load_history()
 
-
 # ------------------------------------------------------
-# SIDEBAR FILTERS
+# SIDEBAR FILTERS (using production-style filters)
 # ------------------------------------------------------
-
 st.sidebar.header("Filters")
 
 games_list = (props_df["home_team"] + " vs " + props_df["visitor_team"]).astype(str)
-
 games = ["All games"] + sorted(games_list.unique())
 sel_game = st.sidebar.selectbox("Game", games)
 
@@ -1053,7 +1124,6 @@ sel_market = st.sidebar.selectbox("Market", markets_sidebar)
 
 books = sorted(props_df["bookmaker"].fillna("").astype(str).unique())
 default_books = [b for b in books if b.lower() in ("draftkings", "fanduel")] or books
-
 sel_books = st.sidebar.multiselect("Bookmaker", books, default=default_books)
 
 od_min = int(props_df["price"].min()) if not props_df.empty else -300
@@ -1068,11 +1138,9 @@ if st.sidebar.button("🔄 Refresh Data"):
     st.cache_data.clear()
     st.rerun()
 
-
 # ------------------------------------------------------
 # FILTER FUNCTION
 # ------------------------------------------------------
-
 def filter_props(df):
     d = df.copy()
 
@@ -1097,19 +1165,17 @@ def filter_props(df):
 
     if show_only_saved and st.session_state.saved_bets:
         saved_df = pd.DataFrame(st.session_state.saved_bets)
-
         key_cols = ["player", "market", "line", "bet_type", "bookmaker"]
-
         if all(col in d.columns for col in key_cols) and all(
             col in saved_df.columns for col in key_cols
         ):
             d = d.merge(saved_df[key_cols], on=key_cols, how="inner")
 
     return d
-# ------------------------------------------------------
-# TABS
-# ------------------------------------------------------
 
+# ------------------------------------------------------
+# TABS (Dev 4 tabs + Prop Analytics)
+# ------------------------------------------------------
 tab1, tab2, tab3, tab4, tab5 = st.tabs(
     [
         "🧮 Props Overview",
@@ -1120,11 +1186,9 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(
     ]
 )
 
-
 # ------------------------------------------------------
 # TAB 1 — PROPS OVERVIEW (Card Grid + Advanced Table)
 # ------------------------------------------------------
-
 with tab1:
     st.subheader("Props Overview (Real Slate)")
 
@@ -1171,12 +1235,10 @@ with tab1:
         </div>
     </div>
     """
-
     st.markdown(metrics_html, unsafe_allow_html=True)
 
     if filtered_df.empty:
         st.info("No props match your filters.")
-
     else:
         view_mode = st.radio(
             "View Mode",
@@ -1211,11 +1273,9 @@ with tab1:
 
         card_df = filtered_df[
             filtered_df.apply(
-                lambda r: (
-                    pd.notna(r.get("price"))
-                    and pd.notna(r.get("hit_rate_last10"))
-                    and good_for_card(r)
-                ),
+                lambda r: pd.notna(r.get("price"))
+                and pd.notna(r.get("hit_rate_last10"))
+                and good_for_card(r),
                 axis=1,
             )
         ]
@@ -1223,7 +1283,6 @@ with tab1:
         # ======================================================
         # CARD GRID VIEW
         # ======================================================
-
         if view_mode == "Card grid":
             top = (
                 card_df.sort_values("hit_rate_last10", ascending=False)
@@ -1236,7 +1295,6 @@ with tab1:
 
             for idx, row in top.iterrows():
                 col = cols[idx % 4]
-
                 with col:
                     hit10 = row.get("hit_rate_last10", 0.0)
                     hit20 = row.get("hit_rate_last20", 0.0)
@@ -1266,14 +1324,12 @@ with tab1:
                         """
                     else:
                         logos_html = (
-                            f"<div style='font-size:0.75rem;color:#9ca3af;'>"
-                            f"{row.get('home_team','')} vs {row.get('opponent_team','')}"
-                            f"</div>"
+                            f"<div style='font-size:0.75rem;color:#9ca3af;'>{row.get('home_team','')} "
+                            f"vs {row.get('opponent_team','')}</div>"
                         )
 
                     pretty_market = MARKET_DISPLAY_MAP.get(
-                        row.get("market", ""),
-                        row.get("market", ""),
+                        row.get("market", ""), row.get("market", "")
                     )
 
                     tags = build_prop_tags(row)
@@ -1294,6 +1350,7 @@ with tab1:
                                 {logos_html}
                             </div>
                         </div>
+
                         <div class="prop-meta">
                             <div>
                                 <div style="color:#e5e7eb;font-size:0.8rem;">{odds:+d}</div>
@@ -1321,13 +1378,11 @@ with tab1:
         # ======================================================
         # ADVANCED TABLE VIEW (AG-Grid, mobile-safe)
         # ======================================================
-
         else:
             df = filtered_df.copy()
 
             if "home_team" in df.columns:
                 df["home_team"] = df["home_team"].astype(str).str.strip().str.upper()
-
             if "opponent_team" in df.columns:
                 df["opponent_team"] = (
                     df["opponent_team"].astype(str).str.strip().str.upper()
@@ -1351,7 +1406,6 @@ with tab1:
             df["Matchup30"] = (
                 df["matchup_difficulty_score"].fillna(5).clip(1, 10) * 3
             ).round(0)
-
             df["line"] = df["line"].astype(float)
 
             df["Sparkline"] = df.apply(
@@ -1393,7 +1447,6 @@ with tab1:
                     if (!v || !Array.isArray(v) || v.length === 0) {
                         return '';
                     }
-
                     const values = v;
                     const maxVal = Math.max(...values);
                     const minVal = Math.min(...values);
@@ -1406,12 +1459,14 @@ with tab1:
 
                     let points = values.map((val, i) => {
                         const x = (i / (values.length - 1)) * width;
-                        return ${x},${scaleY(val)};
+                        return `${x},${scaleY(val)}`;
                     }).join(" ");
 
-                    return <svg width="${width}" height="${height}">
-                        <polyline points="${points}" class="sparkline" />
-                    </svg> ;
+                    return `
+                        <svg width="${width}" height="${height}">
+                            <polyline points="${points}" class="sparkline" />
+                        </svg>
+                    `;
                 }
                 """
             )
@@ -1508,7 +1563,7 @@ with tab1:
                 """
             )
 
-            # AG-Grid configuration
+            # 🔧 AG-Grid config with mobile-safe settings
             gb = GridOptionsBuilder.from_dataframe(grid_df)
 
             gb.configure_default_column(
@@ -1525,14 +1580,13 @@ with tab1:
 
             gb.configure_grid_options(
                 getRowStyle=row_style_js,
-                suppressSizeToFit=True,
-                suppressAutoSize=True,
+                suppressSizeToFit=True,       # don't auto-fit to viewport
+                suppressAutoSize=True,        # don't auto-auto-size after render
                 suppressHorizontalScroll=False,
                 domLayout="normal",
             )
 
             gb.configure_column("Player", pinned="left", minWidth=140, width=160)
-
             gb.configure_column("Odds", valueFormatter=odds_formatter, width=95)
 
             gb.configure_column(
@@ -1571,11 +1625,12 @@ with tab1:
                 valueFormatter=percent_formatter,
                 width=80,
             )
-
             gb.configure_column("Edge_raw", hide=True)
-
-            gb.configure_column("Edge", cellStyle=edge_cell_style, width=100)
-
+            gb.configure_column(
+                "Edge",
+                cellStyle=edge_cell_style,
+                width=100,
+            )
             gb.configure_column(
                 "Matchup30",
                 header_name="Matchup",
@@ -1588,8 +1643,8 @@ with tab1:
                 grid_df,
                 gridOptions=gb.build(),
                 update_mode=GridUpdateMode.SELECTION_CHANGED,
-                fit_columns_on_grid_load=False,
-                theme="balham",
+                fit_columns_on_grid_load=False,   # 🚫 critical for mobile
+                theme="balham",              # match dark CSS hooks
                 allow_unsafe_jscode=True,
                 height=550,
             )
@@ -1600,7 +1655,6 @@ with tab1:
                 sel_df = pd.DataFrame(selected_rows)[
                     ["Player", "Market", "Line", "Label", "Odds", "Book"]
                 ]
-
                 sel_df = sel_df.rename(
                     columns={
                         "Player": "player",
@@ -1617,47 +1671,32 @@ with tab1:
                 )
 
                 replace_saved_bets_in_db(user_id, st.session_state.saved_bets)
-                st.success(f"{len(sel_df)} bet(s) saved.")
 
+                st.success(f"{len(sel_df)} bet(s) saved.")
             else:
                 st.session_state.saved_bets = []
                 replace_saved_bets_in_db(user_id, [])
+
+
 # ------------------------------------------------------
 # TAB 2 — TREND LAB (Dev)
 # ------------------------------------------------------
-
 with tab2:
     st.subheader("Trend Lab (Real History + Dynamic Line)")
 
     c1, c2, c3 = st.columns([1.2, 1.2, 1])
-
     with c1:
         player = st.selectbox(
-            "Player",
-            sorted(props_df["player"].dropna().unique())
+            "Player", sorted(props_df["player"].dropna().unique())
         )
-
     with c2:
-        stat_label = st.selectbox(
-            "Stat",
-            ["Points", "Rebounds", "Assists", "P+R+A"]
-        )
-
+        stat_label = st.selectbox("Stat", ["Points", "Rebounds", "Assists", "P+R+A"])
     with c3:
         n_games = st.slider("Last N games", 5, 25, 15)
 
-    stat_map = {
-        "Points": "pts",
-        "Rebounds": "reb",
-        "Assists": "ast",
-        "P+R+A": "pra",
-    }
-
+    stat_map = {"Points": "pts", "Rebounds": "reb", "Assists": "ast", "P+R+A": "pra"}
     stat = stat_map[stat_label]
 
-    # --------------------------------------------
-    # CLEAN PLAYER NAMES FOR MATCHING
-    # --------------------------------------------
     def clean_name(name):
         if not isinstance(name, str):
             return ""
@@ -1682,21 +1721,13 @@ with tab2:
         .reset_index(drop=True)
     )
 
-    df = (
-        df.sort_values("game_date")
-        .tail(n_games)
-        .reset_index(drop=True)
-    )
+    df = df.sort_values("game_date").tail(n_games).reset_index(drop=True)
 
     if df.empty:
         st.info("No historical data found for this selection.")
-
     else:
         df["date_str"] = df["game_date"].dt.strftime("%b %d")
 
-        # --------------------------------------------
-        # Auto-detect prop line from today's slate
-        # --------------------------------------------
         market_map = {
             "Points": "player_points_alternate",
             "Rebounds": "player_rebounds_alternate",
@@ -1716,7 +1747,6 @@ with tab2:
                 player_props["line"].dropna().unique().astype(float)
             )
             line = st.selectbox("Line", available_lines, index=0)
-
         else:
             line = st.number_input(
                 f"No real props found. Enter custom line for {stat_label}",
@@ -1725,9 +1755,6 @@ with tab2:
                 step=0.5,
             )
 
-        # --------------------------------------------
-        # Compute hits
-        # --------------------------------------------
         df["hit"] = df[stat] > float(line)
         df["rolling"] = df[stat].rolling(window=5, min_periods=1).mean()
 
@@ -1736,9 +1763,6 @@ with tab2:
         std_dev = df[stat].std()
         last_game_value = df[stat].iloc[-1]
 
-        # --------------------------------------------
-        # Metric row UI
-        # --------------------------------------------
         metric_row = f"""
         <div class="metric-grid" style="margin-top:0.25rem;margin-bottom:1rem;">
             <div class="metric-card">
@@ -1759,18 +1783,12 @@ with tab2:
             <div class="metric-card">
                 <div class="metric-label">Last Game</div>
                 <div class="metric-value">{last_game_value:.0f}</div>
-                <div class="metric-sub">
-                    {'Hit' if last_game_value > line else 'Miss'} vs {line}
-                </div>
+                <div class="metric-sub">{'Hit' if last_game_value > line else 'Miss'} vs {line}</div>
             </div>
         </div>
         """
-
         st.markdown(metric_row, unsafe_allow_html=True)
 
-        # --------------------------------------------
-        # Chart Hover Text
-        # --------------------------------------------
         hover = [
             (
                 f"<b>{row['date_str']}</b><br>"
@@ -1782,17 +1800,12 @@ with tab2:
             for _, row in df.iterrows()
         ]
 
-        # --------------------------------------------
-        # PLOTLY CHART
-        # --------------------------------------------
         fig = go.Figure()
 
         fig.add_bar(
             x=df["date_str"],
             y=df[stat],
-            marker_color=[
-                "#22c55e" if h else "#ef4444" for h in df["hit"]
-            ],
+            marker_color=["#22c55e" if h else "#ef4444" for h in df["hit"]],
             hovertext=hover,
             hoverinfo="text",
             name="Game Result",
@@ -1828,43 +1841,26 @@ with tab2:
 
         st.plotly_chart(fig, use_container_width=True)
 
-        # --------------------------------------------
-        # HIT/MISS RIBBON
-        # --------------------------------------------
         ribbon_html = "<div style='display:flex;gap:4px;margin:6px 0;'>"
-
         for h in df["hit"]:
             ribbon_html += (
                 "<div style='width:14px;height:14px;border-radius:3px;background:#22c55e;'></div>"
-                if h else
-                "<div style='width:14px;height:14px;border-radius:3px;background:#ef4444;'></div>"
+                if h
+                else "<div style='width:14px;height:14px;border-radius:3px;background:#ef4444;'></div>"
             )
-
         ribbon_html += "</div>"
-
         st.markdown(ribbon_html, unsafe_allow_html=True)
 
-        # --------------------------------------------
-        # TREND TABLE
-        # --------------------------------------------
         table_df = df.copy()
         table_df["Outcome"] = table_df["hit"].map({True: "Hit", False: "Miss"})
-
-        table_df_display = table_df[
-            ["date_str", "opponent_team", stat, "Outcome"]
-        ]
-
+        table_df_display = table_df[["date_str", "opponent_team", stat, "Outcome"]]
         table_df_display.columns = ["Date", "Opponent", stat_label, "Outcome"]
 
-        st.dataframe(
-            table_df_display,
-            use_container_width=True,
-            hide_index=True
-        )
+        st.dataframe(table_df_display, use_container_width=True, hide_index=True)
+
 # ------------------------------------------------------
 # TAB 3 — SAVED BETS (DB-backed)
 # ------------------------------------------------------
-
 with tab3:
     st.subheader("Saved Bets")
 
@@ -1872,10 +1868,8 @@ with tab3:
         st.info(
             "No saved bets yet — select rows in the Props Overview table (Advanced Table view)."
         )
-
     else:
         df_saved = pd.DataFrame(st.session_state.saved_bets)
-
         df_saved_display = df_saved.rename(
             columns={
                 "player": "Player",
@@ -1887,14 +1881,9 @@ with tab3:
             }
         )
 
-        st.dataframe(
-            df_saved_display,
-            use_container_width=True,
-            hide_index=True
-        )
+        st.dataframe(df_saved_display, use_container_width=True, hide_index=True)
 
         csv = df_saved.to_csv(index=False).encode("utf-8")
-
         st.download_button(
             "Download Saved Bets (CSV)",
             data=csv,
@@ -1902,26 +1891,19 @@ with tab3:
             mime="text/csv",
         )
 
-
 # ------------------------------------------------------
 # TAB 4 — BET SLIP PLAYGROUND (Dev)
 # ------------------------------------------------------
-
 with tab4:
     st.subheader("Bet Slip Playground (Real Calculations)")
 
     if not st.session_state.saved_bets:
         st.info("Save some bets from Props Overview first (Advanced Table).")
-
     else:
         slip_df = pd.DataFrame(st.session_state.saved_bets).copy()
-
         slip_df["Add to Slip"] = True
         slip_df["Stake"] = 0.0
 
-        # --------------------------------------------
-        # ODDS CONVERSION
-        # --------------------------------------------
         def american_to_decimal(odds: float) -> float:
             odds = float(odds)
             if odds > 0:
@@ -1940,38 +1922,24 @@ with tab4:
             hide_index=True,
             column_config={
                 "Add to Slip": st.column_config.CheckboxColumn("Add"),
-                "Stake": st.column_config.NumberColumn(
-                    "Stake ($)",
-                    min_value=0.0
-                ),
+                "Stake": st.column_config.NumberColumn("Stake ($)", min_value=0.0),
                 "decimal_odds": st.column_config.NumberColumn(
-                    "Decimal",
-                    format="%.3f"
+                    "Decimal", format="%.3f"
                 ),
             },
             key="bet_slip_editor_real",
         )
 
-        mask = (
-            edited_slip["Add to Slip"]
-            .fillna(False)
-            .astype(bool)
-        )
-
+        mask = edited_slip["Add to Slip"].fillna(False).astype(bool)
         selected = edited_slip.loc[mask]
 
         if selected.empty:
             st.info("Use the **Add** checkbox to include legs in your slip.")
-
         else:
             c1, c2 = st.columns([2, 1])
 
-            # --------------------------------------------
-            # ACTIVE LEGS TABLE
-            # --------------------------------------------
             with c1:
                 st.markdown("##### Active Legs")
-
                 st.dataframe(
                     selected[
                         [
@@ -1988,9 +1956,6 @@ with tab4:
                     hide_index=True,
                 )
 
-            # --------------------------------------------
-            # PAYOUT HELPERS
-            # --------------------------------------------
             def calc_payout(odds, stake):
                 odds = float(odds)
                 stake = float(stake)
@@ -2001,53 +1966,40 @@ with tab4:
                 return stake * (100 / abs(odds))
 
             selected["Payout"] = selected.apply(
-                lambda r: calc_payout(r["price"], r["Stake"]),
-                axis=1,
+                lambda r: calc_payout(r["price"], r["Stake"]), axis=1
             )
 
             total_stake = selected["Stake"].sum()
             total_return = (selected["Stake"] + selected["Payout"]).sum()
 
-            # --------------------------------------------
-            # SINGLES SUMMARY
-            # --------------------------------------------
             with c2:
                 st.markdown("##### Singles Summary")
                 st.metric("Total Stake", f"${total_stake:.2f}")
                 st.metric("Total Return (Singles)", f"${total_return:.2f}")
 
-                st.markdown("---")
+            st.markdown("---")
+            st.markdown("#### 🎯 Parlay Simulator")
 
-                # --------------------------------------------
-                # PARLAY SIMULATOR
-                # --------------------------------------------
-                st.markdown("#### 🎯 Parlay Simulator")
+            col1, col2, col3 = st.columns([1.4, 1.4, 2])
 
-                col1, col2, col3 = st.columns([1.4, 1.4, 2])
+            with col1:
+                parlay_stake = st.number_input(
+                    "Parlay Stake ($)", min_value=0.0, value=10.0, step=1.0
+                )
 
-                with col1:
-                    parlay_stake = st.number_input(
-                        "Parlay Stake ($)",
-                        min_value=0.0,
-                        value=10.0,
-                        step=1.0,
-                    )
+            with col2:
+                combined_decimal = selected["decimal_odds"].prod()
+                st.metric("Combined Decimal", f"{combined_decimal:.3f}")
 
-                with col2:
-                    combined_decimal = selected["decimal_odds"].prod()
-                    st.metric("Combined Decimal", f"{combined_decimal:.3f}")
+            with col3:
+                parlay_payout = (
+                    parlay_stake * (combined_decimal - 1) if parlay_stake > 0 else 0
+                )
+                st.metric("Parlay Payout", f"${parlay_payout:.2f}")
 
-                with col3:
-                    parlay_payout = (
-                        parlay_stake * (combined_decimal - 1)
-                        if parlay_stake > 0
-                        else 0
-                    )
-                    st.metric("Parlay Payout", f"${parlay_payout:.2f}")
 # ------------------------------------------------------
 # TAB 5 — PROP ANALYTICS (Original Production Tab)
 # ------------------------------------------------------
-
 with tab5:
     st.subheader("Prop Analytics")
 
@@ -2055,31 +2007,20 @@ with tab5:
 
     if d.empty:
         st.info("No props match your filters.")
-
     else:
-        # --------------------------------------------
-        # Enrich with dynamic averages + defense info
-        # --------------------------------------------
         d = get_dynamic_averages(d)
         d = add_defense(d)
-
         d["Price"] = d["price"].apply(format_moneyline)
 
         ev_cols = ["ev_last5", "ev_last10", "ev_last20"]
         missing_ev = [c for c in ev_cols if c not in d.columns]
-
         if missing_ev:
-            st.error(
-                f"❌ Missing EV columns in database: {', '.join(missing_ev)}"
-            )
-
+            st.error(f"❌ Missing EV columns in database: {', '.join(missing_ev)}")
         else:
             for col in ev_cols:
                 d[col] = pd.to_numeric(d[col], errors="coerce")
 
             d["Hit Rate 10"] = d["hit_rate_last10"]
-
-            # Sort by EV (last 10 games)
             d = d.sort_values("ev_last10", ascending=False)
 
             cols = [
@@ -2108,31 +2049,10 @@ with tab5:
                 }
             )
 
-            st.dataframe(
-                d_display,
-                use_container_width=True,
-                hide_index=True
-            )
-
+            st.dataframe(d_display, use_container_width=True, hide_index=True)
 
 # ------------------------------------------------------
-# LAST UPDATED (Sidebar)
+# LAST UPDATED
 # ------------------------------------------------------
-
 now = datetime.now(EST)
-st.sidebar.markdown(
-    f"**Last Updated:** {now.strftime('%b %d, %I:%M %p')} ET"
-)
-# ------------------------------------------------------
-# END OF SCRIPT
-# ------------------------------------------------------
-
-# All UI tabs, data processing, BigQuery loads, DB connection,
-# Auth0 authentication, filters, components, and charts have been
-# fully initialized above.
-
-# Streamlit ends the script naturally after rendering the last component.
-# No extra teardown or footer logic is required.
-
-# The application will rerun automatically on any user interaction,
-# ensuring a dynamic, live-updating NBA prop analysis experience.
+st.sidebar.markdown(f"**Last Updated:** {now.strftime('%b %d, %I:%M %p')} ET")

@@ -709,30 +709,46 @@ st.markdown(
 st.markdown("""
 <style>
 
-    /* ----------------------------------------------
-       MOBILE FIX FOR AG-GRID:
-       Prevents column compression and enables scrolling
-       ---------------------------------------------- */
+    /* ---------------------------------------------------------
+       FULL MOBILE FIX FOR AG-GRID ON STREAMLIT (WORKS 100%)
+       --------------------------------------------------------- */
 
-    /* Force AG-Grid's internal column container to have real width */
-    .ag-theme-balham-dark .ag-center-cols-container {
-        min-width: 1000px !important;   /* You can increase if needed */
+    /* 1. Force AG-Grid to render at full desktop width */
+    div.ag-root-wrapper, 
+    div.ag-root,
+    div.ag-body-viewport,
+    div.ag-center-cols-viewport,
+    div.ag-center-cols-container {
+        min-width: 1400px !important;    /* Increase this value */
+        width: 1400px !important;        /* Hard width required */
     }
 
-    /* Make the whole table horizontally scrollable */
-    .ag-root-wrapper,
-    .ag-root,
-    .ag-body-viewport,
-    .ag-center-cols-viewport {
-        overflow-x: auto !important;
-        -webkit-overflow-scrolling: touch !important; /* smooth iOS scroll */
+    /* 2. Outer wrapper must scroll */
+    div.ag-root-wrapper,
+    div.ag-root,
+    div.ag-body-viewport,
+    div.ag-center-cols-viewport {
+        overflow-x: scroll !important;
+        overflow-y: visible !important;
+        -webkit-overflow-scrolling: touch !important;
     }
 
-    /* Prevent header labels from shrinking too small */
+    /* 3. Cells and headers must not shrink */
     .ag-header-cell, 
     .ag-cell {
-        min-width: 115px !important;   /* columns stay readable */
+        min-width: 130px !important;      /* Bigger than before */
+        width: 130px !important;
         white-space: nowrap !important;
+    }
+
+    /* 4. Prevent AG-Grid's auto-size from overriding our widths */
+    .ag-header-cell-resize {
+        display: none !important;
+    }
+
+    /* 5. Streamlit constraint override (critical on mobile) */
+    [data-testid="stHorizontalBlock"] {
+        overflow-x: scroll !important;
     }
 
 </style>

@@ -706,6 +706,39 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+st.markdown("""
+<style>
+
+    /* ----------------------------------------------
+       MOBILE FIX FOR AG-GRID:
+       Prevents column compression and enables scrolling
+       ---------------------------------------------- */
+
+    /* Force AG-Grid's internal column container to have real width */
+    .ag-theme-balham-dark .ag-center-cols-container {
+        min-width: 1000px !important;   /* You can increase if needed */
+    }
+
+    /* Make the whole table horizontally scrollable */
+    .ag-root-wrapper,
+    .ag-root,
+    .ag-body-viewport,
+    .ag-center-cols-viewport {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important; /* smooth iOS scroll */
+    }
+
+    /* Prevent header labels from shrinking too small */
+    .ag-header-cell, 
+    .ag-cell {
+        min-width: 115px !important;   /* columns stay readable */
+        white-space: nowrap !important;
+    }
+
+</style>
+""", unsafe_allow_html=True)
+
+
 # ------------------------------------------------------
 # HEADER
 # ------------------------------------------------------

@@ -2056,4 +2056,3 @@ with tab5:
 # ------------------------------------------------------
 now = datetime.now(EST)
 st.sidebar.markdown(f"**Last Updated:** {now.strftime('%b %d, %I:%M %p')} ET")
-"""

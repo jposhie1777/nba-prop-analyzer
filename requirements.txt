@@ -3,7 +3,7 @@
 # -------------------------
 streamlit==1.39.0
 streamlit-javascript
-streamlit-aggrid
+streamlit-aggrid==0.3.4.post3
 
 # -------------------------
 # DATA & ANALYTICS

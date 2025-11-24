@@ -706,50 +706,34 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.markdown("""
 <style>
 
-    /* ---------------------------------------------------------
-       FULL MOBILE FIX FOR AG-GRID ON STREAMLIT (WORKS 100%)
-       --------------------------------------------------------- */
+    /* ----------------------------------------------
+       MOBILE FIX FOR AG-GRID (balham theme)
+       ---------------------------------------------- */
 
-    /* 1. Force AG-Grid to render at full desktop width */
-    div.ag-root-wrapper, 
-    div.ag-root,
-    div.ag-body-viewport,
-    div.ag-center-cols-viewport,
-    div.ag-center-cols-container {
-        min-width: 1400px !important;    /* Increase this value */
-        width: 1400px !important;        /* Hard width required */
+    /* Force real width so columns don't collapse */
+    .ag-theme-balham .ag-center-cols-container {
+        min-width: 1100px !important;
     }
 
-    /* 2. Outer wrapper must scroll */
-    div.ag-root-wrapper,
-    div.ag-root,
-    div.ag-body-viewport,
-    div.ag-center-cols-viewport {
-        overflow-x: scroll !important;
-        overflow-y: visible !important;
+    /* Ensure horizontal scrolling works on mobile */
+    .ag-theme-balham .ag-body-viewport,
+    .ag-theme-balham .ag-center-cols-viewport,
+    .ag-theme-balham .ag-root-wrapper,
+    .ag-theme-balham .ag-root {
+        overflow-x: auto !important;
         -webkit-overflow-scrolling: touch !important;
     }
 
-    /* 3. Cells and headers must not shrink */
-    .ag-header-cell, 
-    .ag-cell {
-        min-width: 130px !important;      /* Bigger than before */
-        width: 130px !important;
+    /* Prevent cells & headers from shrinking too small */
+    .ag-theme-balham .ag-header-cell,
+    .ag-theme-balham .ag-cell {
+        min-width: 115px !important;
         white-space: nowrap !important;
     }
 
-    /* 4. Prevent AG-Grid's auto-size from overriding our widths */
-    .ag-header-cell-resize {
-        display: none !important;
-    }
-
-    /* 5. Streamlit constraint override (critical on mobile) */
-    [data-testid="stHorizontalBlock"] {
-        overflow-x: scroll !important;
-    }
+</style>
 
 </style>
 """, unsafe_allow_html=True)
@@ -1661,7 +1645,7 @@ with tab1:
                 gridOptions=gb.build(),
                 update_mode=GridUpdateMode.SELECTION_CHANGED,
                 fit_columns_on_grid_load=False,   # 🚫 critical for mobile
-                theme="balham-dark",              # match dark CSS hooks
+                theme="balham",              # match dark CSS hooks
                 allow_unsafe_jscode=True,
                 height=550,
             )

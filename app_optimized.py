@@ -1,11 +1,12 @@
 # ------------------------------------------------------
-# IMPORTS
+# NBA Prop Analyzer - Merged Production + Dev UI
 # ------------------------------------------------------
 import os
 import json
 from datetime import datetime
 from urllib.parse import urlencode
 
+import base64
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -16,6 +17,7 @@ import psycopg2
 import psycopg2.extras
 import jwt
 
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
@@ -27,19 +29,10 @@ EST = pytz.timezone("America/New_York")
 # ------------------------------------------------------
 # STREAMLIT CONFIG
 # ------------------------------------------------------
-st.set_page_config(page_title="NBA Prop Analyzer", layout="wide")
-
-# Global CSS
-st.markdown(
-    """
-    <style>
-    table td, table th {
-        text-align: center !important;
-        vertical-align: middle !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
+st.set_page_config(
+    page_title="NBA Prop Analyzer",
+    layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 # ------------------------------------------------------
@@ -47,11 +40,11 @@ st.markdown(
 # ------------------------------------------------------
 PROJECT_ID = os.getenv("PROJECT_ID", "")
 
-# Let dataset be configurable but default to your existing value
 DATASET = os.getenv("BIGQUERY_DATASET", "nba_prop_analyzer")
 PROPS_TABLE = "todays_props_with_hit_rates"
 HISTORICAL_TABLE = "historical_player_stats_for_trends"
 
+# SERVICE_JSON is a JSON string (not a filepath)
 SERVICE_JSON = os.getenv("GCP_SERVICE_ACCOUNT", "")
 
 # Auth0
@@ -145,17 +138,12 @@ except Exception as e:
 # RENDER POSTGRES CONNECTION HELPERS
 # ------------------------------------------------------
 def get_db_conn():
-    """
-    Create a new PostgreSQL connection to your Render database.
-    """
+    """Create a new PostgreSQL connection to your Render database."""
     return psycopg2.connect(DATABASE_URL, sslmode="require")
 
 
 def init_db_schema():
-    """
-    Create tables if they don't exist.
-    Safe to run on every startup.
-    """
+    """Create tables if they don't exist. Safe to run on every startup."""
     try:
         conn = get_db_conn()
         cur = conn.cursor()
@@ -192,9 +180,7 @@ init_db_schema()
 
 
 def get_or_create_user(auth0_sub: str, email: str):
-    """
-    Ensure a user exists in the 'users' table and return the row.
-    """
+    """Ensure a user exists in the 'users' table and return the row."""
     conn = get_db_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
@@ -218,6 +204,7 @@ def get_or_create_user(auth0_sub: str, email: str):
 def load_saved_bets_from_db(user_id: int):
     """
     Load saved bets from DB as a list of dicts.
+    Normalize any old 'Label' keys to 'bet_type'.
     """
     try:
         conn = get_db_conn()
@@ -233,6 +220,10 @@ def load_saved_bets_from_db(user_id: int):
         for r in rows:
             details = r.get("bet_details")
             if isinstance(details, dict):
+                # Normalize: if old 'Label' is present, map it to 'bet_type'
+                if "bet_type" not in details and "Label" in details:
+                    details["bet_type"] = details.pop("Label")
+
                 bets.append(details)
         return bets
     except Exception as e:
@@ -252,6 +243,10 @@ def replace_saved_bets_in_db(user_id: int, bets: list[dict]):
         cur.execute("DELETE FROM saved_bets WHERE user_id = %s", (user_id,))
 
         for bet in bets:
+            # Normalize 'Label' -> 'bet_type' just in case
+            if "bet_type" not in bet and "Label" in bet:
+                bet["bet_type"] = bet.pop("Label")
+
             bet_name = (
                 f"{bet.get('player', '')} "
                 f"{bet.get('market', '')} "
@@ -376,6 +371,368 @@ user_id = st.session_state["user_id"]
 st.sidebar.markdown(f"**User:** {user.get('email') or 'Logged in'}")
 
 # ------------------------------------------------------
+# THEME PRESETS (from dev)
+# ------------------------------------------------------
+THEMES = {
+    "Sportsbook Dark": {
+        "bg": "#020617",
+        "accent": "#0ea5e9",
+        "accent_soft": "#0369a1",
+    },
+    "Neon Night": {
+        "bg": "#050816",
+        "accent": "#a855f7",
+        "accent_soft": "#22c55e",
+    },
+    "Slate Blue": {
+        "bg": "#020617",
+        "accent": "#3b82f6",
+        "accent_soft": "#6366f1",
+    },
+}
+
+if "theme_choice" not in st.session_state:
+    st.session_state.theme_choice = "Sportsbook Dark"
+
+theme_choice = st.sidebar.selectbox(
+    "Theme",
+    list(THEMES.keys()),
+    index=list(THEMES.keys()).index(st.session_state.theme_choice),
+    key="theme_choice",
+)
+theme = THEMES[st.session_state.theme_choice]
+
+# ------------------------------------------------------
+# GLOBAL STYLES (from dev)
+# ------------------------------------------------------
+st.markdown(
+    f"""
+    <style>
+    html, body, [class*="css"] {{
+        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
+
+    .block-container {{
+        padding-top: 1rem !important;
+        padding-bottom: 2rem !important;
+        max-width: 1400px !important;
+    }}
+
+    body {{
+        background: radial-gradient(circle at top, {theme["bg"]} 0, #000 55%) !important;
+    }}
+
+    [data-testid="stSidebar"] {{
+        background: radial-gradient(circle at top left, #1f2937 0, #020617 55%);
+        border-right: 1px solid rgba(255,255,255,0.04);
+    }}
+
+    [data-testid="stSidebar"] * {{
+        color: #e5e7eb !important;
+    }}
+
+    .app-header {{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.6rem 0 1.1rem;
+        border-bottom: 1px solid rgba(148,163,184,0.25);
+        margin-bottom: 0.9rem;
+    }}
+
+    .app-header-left {{
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+    }}
+
+    .app-logo {{
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        background: radial-gradient(circle at 0 0, #f97316, #ea580c 25%, #0f172a 90%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 900;
+        font-size: 20px;
+        letter-spacing: 0.02em;
+        box-shadow: 0 14px 30px rgba(15,23,42,0.8);
+        animation: float-logo 5s ease-in-out infinite;
+    }}
+
+    @keyframes float-logo {{
+        0%, 100% {{ transform: translateY(0); }}
+        50% {{ transform: translateY(-2px); }}
+    }}
+
+    .app-title {{
+        font-size: 1.4rem;
+        font-weight: 700;
+        margin: 0;
+        letter-spacing: 0.02em;
+        color: #e5e7eb;
+    }}
+
+    .app-subtitle {{
+        font-size: 0.78rem;
+        margin: 0;
+        color: #9ca3af;
+    }}
+
+    .pill {{
+        padding: 4px 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(148,163,184,0.4);
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #e5e7eb;
+        background: linear-gradient(135deg, rgba(15,118,110,0.45), rgba(15,23,42,0.98));
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        box-shadow: 0 12px 30px rgba(15,23,42,0.9);
+    }}
+
+    .pill-dot {{
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: #22c55e;
+        box-shadow: 0 0 10px rgba(34,197,94,0.9);
+        animation: pulse-dot 1.5s infinite;
+    }}
+
+    @keyframes pulse-dot {{
+        0%, 100% {{ transform: scale(1); opacity: 1; }}
+        50% {{ transform: scale(1.35); opacity: 0.75; }}
+    }}
+
+    .metric-grid {{
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 0.75rem;
+    }}
+
+    .metric-card {{
+        background: radial-gradient(circle at top, rgba(15,23,42,0.94), rgba(15,23,42,0.98));
+        border-radius: 16px;
+        padding: 0.75rem 0.9rem;
+        border: 1px solid rgba(148,163,184,0.35);
+        box-shadow: 0 18px 45px rgba(15,23,42,0.95);
+        transition: transform 0.14s ease-out, box-shadow 0.14s ease-out, border-color 0.14s ease-out;
+    }}
+
+    .metric-card:hover {{
+        transform: translateY(-2px);
+        box-shadow: 0 24px 55px rgba(15,23,42,1);
+        border-color: {theme["accent"]};
+    }}
+
+    .metric-label {{
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: #9ca3af;
+        margin-bottom: 0.15rem;
+    }}
+
+    .metric-value {{
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #f9fafb;
+    }}
+
+    .metric-sub {{
+        font-size: 0.72rem;
+        color: #9ca3af;
+    }}
+
+    .prop-card {{
+        border-radius: 16px;
+        padding: 0.75rem 0.9rem;
+        border: 1px solid rgba(148,163,184,0.28);
+        background: radial-gradient(circle at 0 0, rgba(15,23,42,1), rgba(15,23,42,0.96));
+        box-shadow: 0 20px 50px rgba(15,23,42,0.95);
+        margin-bottom: 0.9rem;
+        transition: transform 0.16s ease-out, box-shadow 0.16s ease-out, border-color 0.16s ease-out;
+    }}
+
+    .prop-card:hover {{
+        transform: translateY(-3px);
+        box-shadow: 0 26px 60px rgba(15,23,42,1);
+        border-color: {theme["accent"]};
+    }}
+
+    .prop-headline {{
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.35rem;
+    }}
+
+    .prop-player {{
+        font-weight: 600;
+        font-size: 0.92rem;
+        color: #e5e7eb;
+    }}
+
+    .prop-market {{
+        font-size: 0.78rem;
+        color: #9ca3af;
+    }}
+
+    .pill-book {{
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 0.7rem;
+        border: 1px solid rgba(148,163,184,0.4);
+        color: #e5e7eb;
+    }}
+
+    .prop-meta {{
+        display: flex;
+        justify-content: space-between;
+        gap: 0.5rem;
+        font-size: 0.75rem;
+        color: #9ca3af;
+    }}
+
+    .stDataFrame, .stDataEditor,
+    [data-testid="stDataFrame"] > div,
+    [data-testid="stDataEditor"] > div {{
+        border-radius: 16px !important;
+        box-shadow: 0 20px 50px rgba(15,23,42,0.98) !important;
+        border: 1px solid rgba(148,163,184,0.45) !important;
+        overflow: hidden;
+        background: radial-gradient(circle at top left, rgba(15,23,42,0.98), rgba(15,23,42,0.96));
+    }}
+
+    .stDataFrame table, .stDataEditor table,
+    [data-testid="stDataFrame"] table,
+    [data-testid="stDataEditor"] table {{
+        width: 100%;
+        border-collapse: collapse;
+    }}
+
+    .stDataFrame table td, .stDataFrame table th,
+    .stDataEditor table td, .stDataEditor table th,
+    [data-testid="stDataFrame"] table td, [data-testid="stDataFrame"] table th,
+    [data-testid="stDataEditor"] table td, [data-testid="stDataEditor"] table th {{
+        text-align: center !important;
+        vertical-align: middle !important;
+    }}
+
+    .stDataFrame thead th, .stDataEditor thead th,
+    [data-testid="stDataFrame"] thead th,
+    [data-testid="stDataEditor"] thead th {{
+        background: #020617 !important;
+        color: #e5e7eb !important;
+        font-weight: 700 !important;
+        font-size: 0.78rem !important;
+        border-bottom: 1px solid rgba(148,163,184,0.45) !important;
+    }}
+
+    .stDataFrame tbody tr:nth-child(even) td,
+    .stDataEditor tbody tr:nth-child(even) td,
+    [data-testid="stDataFrame"] tbody tr:nth-child(even) td,
+    [data-testid="stDataEditor"] tbody tr:nth-child(even) td {{
+        background-color: rgba(17,24,39,0.9) !important;
+    }}
+
+    .stDataFrame tbody tr:nth-child(odd) td,
+    .stDataEditor tbody tr:nth-child(odd) td,
+    [data-testid="stDataFrame"] tbody tr:nth-child(odd) td,
+    [data-testid="stDataEditor"] tbody tr:nth-child(odd) td {{
+        background-color: rgba(15,23,42,0.95) !important;
+    }}
+
+    .stDataFrame tbody tr:hover td,
+    .stDataEditor tbody tr:hover td,
+    [data-testid="stDataFrame"] tbody tr:hover td,
+    [data-testid="stDataEditor"] tbody tr:hover td {{
+        background-color: rgba(15,23,42,1) !important;
+    }}
+
+    .stDataFrame tbody td,
+    .stDataEditor tbody td,
+    [data-testid="stDataFrame"] tbody td,
+    [data-testid="stDataEditor"] tbody td {{
+        font-size: 0.8rem !important;
+        border-bottom: 1px solid rgba(31,41,55,0.85) !important;
+    }}
+
+    .stButton > button {{
+        border-radius: 999px !important;
+        padding: 0.35rem 0.95rem !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.03em;
+        border: 1px solid rgba(148,163,184,0.4) !important;
+        background: radial-gradient(circle at 0 0, {theme["accent"]}, {theme["accent_soft"]} 50%, #020617 100%);
+        color: #f9fafb !important;
+        box-shadow: 0 12px 30px rgba(8,47,73,0.9);
+        transition: all 0.16s ease-out !important;
+    }}
+
+    .stButton > button:hover {{
+        transform: translateY(-1px) scale(1.01);
+        box-shadow: 0 16px 40px rgba(8,47,73,1);
+    }}
+
+    button[data-baseweb="tab"],
+    [data-testid="stTabs"] button {{
+        font-size: 0.8rem !important;
+        text-transform: none !important;
+    }}
+
+    .stSidebar label,
+    section[data-testid="stSidebar"] label {{
+        font-size: 0.78rem !important;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #e5e7eb !important;
+    }}
+
+    .sparkline {{
+        stroke: {theme["accent"]};
+        fill: none;
+        stroke-width: 2;
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ------------------------------------------------------
+# HEADER
+# ------------------------------------------------------
+st.markdown(
+    """
+    <div class="app-header">
+        <div class="app-header-left">
+            <div class="app-logo">NBA</div>
+            <div>
+                <h1 class="app-title">Prop Analyzer</h1>
+                <p class="app-subtitle">
+                    Explore props, trends, saved bets, and parlay scenarios using live BigQuery data.
+                </p>
+            </div>
+        </div>
+        <div>
+            <span class="pill">
+                <span class="pill-dot"></span>
+                LIVE AUTHENTICATED
+            </span>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ------------------------------------------------------
 # LOGOS (STATIC)
 # ------------------------------------------------------
 TEAM_LOGOS = {
@@ -411,6 +768,156 @@ TEAM_LOGOS = {
     "WAS": "https://a.espncdn.com/i/teamlogos/nba/500/wsh.png",
 }
 
+# Map full team names from BigQuery → 3-letter codes
+TEAM_NAME_TO_CODE = {
+    "Atlanta Hawks": "ATL",
+    "Boston Celtics": "BOS",
+    "Brooklyn Nets": "BKN",
+    "Charlotte Hornets": "CHA",
+    "Chicago Bulls": "CHI",
+    "Cleveland Cavaliers": "CLE",
+    "Dallas Mavericks": "DAL",
+    "Denver Nuggets": "DEN",
+    "Detroit Pistons": "DET",
+    "Golden State Warriors": "GSW",
+    "Houston Rockets": "HOU",
+    "Indiana Pacers": "IND",
+    "LA Clippers": "LAC",
+    "Los Angeles Lakers": "LAL",
+    "Memphis Grizzlies": "MEM",
+    "Miami Heat": "MIA",
+    "Milwaukee Bucks": "MIL",
+    "Minnesota Timberwolves": "MIN",
+    "New Orleans Pelicans": "NOP",
+    "New York Knicks": "NYK",
+    "Oklahoma City Thunder": "OKC",
+    "Orlando Magic": "ORL",
+    "Philadelphia 76ers": "PHI",
+    "Phoenix Suns": "PHX",
+    "Portland Trail Blazers": "POR",
+    "Sacramento Kings": "SAC",
+    "San Antonio Spurs": "SAS",
+    "Toronto Raptors": "TOR",
+    "Utah Jazz": "UTA",
+    "Washington Wizards": "WAS",
+}
+
+# MARKET DISPLAY MAP (prettier labels)
+MARKET_DISPLAY_MAP = {
+    "player_assists_alternate": "Assists",
+    "player_points_alternate": "Points",
+    "player_rebounds_alternate": "Rebounds",
+    "player_points_assists_alternate": "Pts+Ast",
+    "player_points_rebounds_alternate": "Pts+Reb",
+    "player_points_rebounds_assists_alternate": "PRA",
+    "player_rebounds_assists_alternate": "Reb+Ast",
+}
+
+def build_prop_tags(row):
+    tags = []
+    if row.get("hit_rate_last10", 0) >= 0.70:
+        tags.append(("🔥 HOT", "#f97316"))
+
+    odds = row.get("price", 0)
+    if odds > 0:
+        implied = 100 / (odds + 100)
+    else:
+        implied = abs(odds) / (abs(odds) + 100) if odds != 0 else 0
+
+    if row.get("hit_rate_last10", 0) > implied:
+        tags.append(("📈 EV+", "#22c55e"))
+
+    matchup = float(row.get("matchup_difficulty_score", 50))
+    if matchup <= 33:
+        tags.append(("🔴 Hard", "#ef4444"))
+    elif matchup >= 67:
+        tags.append(("🟢 Easy", "#22c55e"))
+    else:
+        tags.append(("🟡 Neutral", "#eab308"))
+
+    return tags
+
+def build_tags_html(tags):
+    return "".join(
+        f'''
+        <span style="
+            background:{color};
+            padding:3px 8px;
+            border-radius:8px;
+            margin-right:4px;
+            font-size:0.68rem;
+            font-weight:600;
+            color:white;
+            display:inline-block;
+        ">{label}</span>
+        '''
+        for label, color in tags
+    )
+
+@st.cache_data(show_spinner=False)
+def logo_to_base64(url: str) -> str:
+    if not url:
+        return ""
+    try:
+        resp = requests.get(url, timeout=5)
+        resp.raise_for_status()
+        b64 = base64.b64encode(resp.content).decode("utf-8")
+        return f"data:image/png;base64,{b64}"
+    except Exception:
+        return ""
+
+@st.cache_data(show_spinner=False)
+def build_team_logo_b64_map(team_logos: dict) -> dict:
+    out = {}
+    for code, url in team_logos.items():
+        out[code] = logo_to_base64(url)
+    return out
+
+def normalize_team_code(raw: str) -> str:
+    if raw is None:
+        return ""
+
+    s = str(raw).strip()
+
+    if s.upper() in TEAM_LOGOS:
+        return s.upper()
+
+    if s in TEAM_NAME_TO_CODE:
+        return TEAM_NAME_TO_CODE[s]
+
+    s_low = s.lower()
+
+    for full_name, code in TEAM_NAME_TO_CODE.items():
+        if s_low in full_name.lower():
+            return code
+
+    for full_name, code in TEAM_NAME_TO_CODE.items():
+        if full_name.lower().startswith(s_low):
+            return code
+
+    city_aliases = {
+        "la": "LAL",
+        "los angeles": "LAL",
+        "new york": "NYK",
+        "phoenix": "PHX",
+        "golden state": "GSW",
+        "san antonio": "SAS",
+        "new orleans": "NOP",
+        "oklahoma city": "OKC",
+        "utah": "UTA",
+        "cleveland": "CLE",
+        "miami": "MIA",
+        "milwaukee": "MIL",
+    }
+
+    for alias, code in city_aliases.items():
+        if s_low == alias or s_low.startswith(alias):
+            return code
+
+    return s
+
+TEAM_LOGOS_BASE64 = build_team_logo_b64_map(TEAM_LOGOS)
+
 # ------------------------------------------------------
 # SESSION STATE
 # ------------------------------------------------------
@@ -420,18 +927,13 @@ if "saved_bets" not in st.session_state:
 if "saved_bets_loaded" not in st.session_state:
     st.session_state.saved_bets_loaded = False
 
-if "active_tab" not in st.session_state:
-    st.session_state.active_tab = "🧮 Props Overview"
-
+# Trend lab state (optional)
 if "trend_player" not in st.session_state:
     st.session_state.trend_player = None
-
 if "trend_market" not in st.session_state:
     st.session_state.trend_market = None
-
 if "trend_line" not in st.session_state:
     st.session_state.trend_line = None
-
 if "trend_bet_type" not in st.session_state:
     st.session_state.trend_bet_type = None
 
@@ -441,7 +943,7 @@ if not st.session_state.saved_bets_loaded:
     st.session_state.saved_bets_loaded = True
 
 # ------------------------------------------------------
-# UTILITY FUNCTIONS
+# UTILITY FUNCTIONS (from production)
 # ------------------------------------------------------
 def format_moneyline(v):
     try:
@@ -520,41 +1022,35 @@ def add_defense(df):
 def format_display(df):
     df = df.copy()
 
-    # Round matchup difficulty for display
     df["Matchup Difficulty"] = df["Matchup Difficulty"].apply(
         lambda x: int(round(x)) if pd.notna(x) else ""
     )
 
-    # IMPORTANT: do NOT format hit-rate columns here.
-    # They stay numeric so Streamlit can treat them as numbers.
-
-    # Average columns as 1 decimal (string for display)
     for col in ["L5 Avg", "L10 Avg", "L20 Avg"]:
         df[col] = df[col].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "")
 
     return df
 
-
 # ------------------------------------------------------
 # LOAD DATA (BIGQUERY)
 # ------------------------------------------------------
-@st.cache_data
+@st.cache_data(show_spinner=True)
 def load_props():
     df = bq_client.query(PROPS_SQL).to_dataframe()
     df.columns = df.columns.str.strip()
 
-    df["game_date"] = (
-        pd.to_datetime(df["game_date"], errors="coerce")
-        .dt.tz_localize("UTC")
-        .dt.tz_convert(EST)
-    )
+    df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
 
-    df["home_team"] = df["home_team"].fillna("").astype(str)
-    df["visitor_team"] = df["visitor_team"].fillna("").astype(str)
-    df["opponent_team"] = df["opponent_team"].fillna("").astype(str)
+    for col in ["home_team", "visitor_team", "opponent_team"]:
+        df[col] = df[col].fillna("").astype(str)
 
     df["price"] = pd.to_numeric(df["price"], errors="coerce")
-    df["hit_rate_last10"] = pd.to_numeric(df["hit_rate_last10"], errors="coerce")
+    df["hit_rate_last5"] = pd.to_numeric(df.get("hit_rate_last5"), errors="coerce")
+    df["hit_rate_last10"] = pd.to_numeric(df.get("hit_rate_last10"), errors="coerce")
+    df["hit_rate_last20"] = pd.to_numeric(df.get("hit_rate_last20"), errors="coerce")
+    df["matchup_difficulty_score"] = pd.to_numeric(
+        df.get("matchup_difficulty_score"), errors="coerce"
+    )
 
     for c in ["ev_last5", "ev_last10", "ev_last20"]:
         if c in df.columns:
@@ -563,25 +1059,20 @@ def load_props():
     return df
 
 
-@st.cache_data
-def load_historical():
+@st.cache_data(show_spinner=True)
+def load_history():
     df = bq_client.query(HISTORICAL_SQL).to_dataframe()
     df.columns = df.columns.str.strip()
-
-    df["game_date"] = (
-        pd.to_datetime(df["game_date"], errors="coerce")
-        .dt.tz_localize("UTC")
-        .dt.tz_convert(EST)
-    )
+    df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
     df["opponent_team"] = df["opponent_team"].fillna("").astype(str)
     return df
 
 
 props_df = load_props()
-historical_df = load_historical()
+history_df = load_history()
 
 # ------------------------------------------------------
-# SIDEBAR FILTERS
+# SIDEBAR FILTERS (using production-style filters)
 # ------------------------------------------------------
 st.sidebar.header("Filters")
 
@@ -603,15 +1094,14 @@ books = sorted(props_df["bookmaker"].fillna("").astype(str).unique())
 default_books = [b for b in books if b.lower() in ("draftkings", "fanduel")] or books
 sel_books = st.sidebar.multiselect("Bookmaker", books, default=default_books)
 
-od_min = int(props_df["price"].min())
-od_max = int(props_df["price"].max())
+od_min = int(props_df["price"].min()) if not props_df.empty else -300
+od_max = int(props_df["price"].max()) if not props_df.empty else 300
 sel_odds = st.sidebar.slider("Odds Range", od_min, od_max, (od_min, od_max))
 
 sel_hit10 = st.sidebar.slider("Min Hit Rate L10", 0.0, 1.0, 0.5)
 
 show_only_saved = st.sidebar.checkbox("Show Only Saved Props", value=False)
 
-# Refresh button
 if st.sidebar.button("🔄 Refresh Data"):
     st.cache_data.clear()
     st.rerun()
@@ -635,307 +1125,690 @@ def filter_props(df):
     if sel_market != "All Stats":
         d = d[d["market"] == sel_market]
 
-    d = d[d["bookmaker"].isin(sel_books)]
+    if sel_books:
+        d = d[d["bookmaker"].isin(sel_books)]
+
     d = d[d["price"].between(sel_odds[0], sel_odds[1])]
     d = d[d["hit_rate_last10"] >= sel_hit10]
 
     if show_only_saved and st.session_state.saved_bets:
         saved_df = pd.DataFrame(st.session_state.saved_bets)
         key_cols = ["player", "market", "line", "bet_type", "bookmaker"]
-        d = d.merge(saved_df[key_cols], on=key_cols, how="inner")
+        if all(col in d.columns for col in key_cols) and all(
+            col in saved_df.columns for col in key_cols
+        ):
+            d = d.merge(saved_df[key_cols], on=key_cols, how="inner")
 
     return d
 
-
 # ------------------------------------------------------
-# TAB NAV (RADIO)
+# TABS (Dev 4 tabs + Prop Analytics)
 # ------------------------------------------------------
-tab_labels = [
-    "🧮 Props Overview",
-    "📈 Trend Analysis",
-    "📋 Saved Bets",
-    "📊 Prop Analytics",
-]
-
-current_tab = st.radio(
-    "View",
-    tab_labels,
-    index=tab_labels.index(st.session_state.active_tab),
-    horizontal=True,
-    key="active_tab",
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    [
+        "🧮 Props Overview",
+        "📈 Trend Lab",
+        "📋 Saved Bets",
+        "🎟️ Bet Slip Playground",
+        "📊 Prop Analytics",
+    ]
 )
 
 # ------------------------------------------------------
-# TAB 1 — PROPS OVERVIEW
+# TAB 1 — PROPS OVERVIEW (Card Grid + Advanced Table)
 # ------------------------------------------------------
-if current_tab == "🧮 Props Overview":
-    st.subheader("Props Overview")
+with tab1:
+    st.subheader("Props Overview (Real Slate)")
 
-    d = filter_props(props_df)
+    filtered_df = filter_props(props_df)
 
-    if d.empty:
+    total_props = len(filtered_df)
+    avg_hit = (
+        filtered_df["hit_rate_last10"].mean()
+        if (total_props and "hit_rate_last10" in filtered_df)
+        else 0
+    )
+    avg_odds = (
+        filtered_df["price"].mean()
+        if (total_props and "price" in filtered_df)
+        else 0
+    )
+    avg_matchup = (
+        filtered_df["matchup_difficulty_score"].mean()
+        if (total_props and "matchup_difficulty_score" in filtered_df)
+        else 0
+    )
+
+    metrics_html = f"""
+    <div class="metric-grid">
+        <div class="metric-card">
+            <div class="metric-label">Props Shown</div>
+            <div class="metric-value">{total_props}</div>
+            <div class="metric-sub">filtered results</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Avg Hit Rate (L10)</div>
+            <div class="metric-value">{avg_hit:.0%}</div>
+            <div class="metric-sub">trending performance</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Avg Odds</div>
+            <div class="metric-value">{avg_odds:+.0f}</div>
+            <div class="metric-sub">mean book line</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Matchup Difficulty</div>
+            <div class="metric-value">{avg_matchup:.1f}/10</div>
+            <div class="metric-sub">lower = easier</div>
+        </div>
+    </div>
+    """
+    st.markdown(metrics_html, unsafe_allow_html=True)
+
+    if filtered_df.empty:
         st.info("No props match your filters.")
     else:
-        # Dynamic averages + defense
-        d = get_dynamic_averages(d)
-        d = add_defense(d)
+        view_mode = st.radio(
+            "View Mode",
+            ["Card grid", "Advanced Table"],
+            horizontal=True,
+            index=0,
+        )
 
-        # Convert hit rates (0–1) to percentages (0–100) ONCE
-        for col in ["hit_rate_last5", "hit_rate_last10", "hit_rate_last20"]:
-            d[col] = pd.to_numeric(d[col], errors="coerce") * 100.0
+        # Card grid filter rules
+        MIN_ODDS_FOR_CARD = -140
+        MIN_L10 = 0.55
+        REQUIRE_EV_PLUS = True
 
-        # Helper for potential numeric sorting
-        d["hit_rate_last10_num"] = d["hit_rate_last10"].astype(float)
+        def is_ev_plus(row):
+            odds = row["price"]
+            if odds > 0:
+                implied = 100 / (odds + 100)
+            else:
+                implied = abs(odds) / (abs(odds) + 100)
+            return row["hit_rate_last10"] > implied
 
-        # Moneyline formatting
-        d["Price"] = d["price"].apply(format_moneyline)
+        def good_for_card(row):
+            if row["price"] < MIN_ODDS_FOR_CARD:
+                return False
+            if row["hit_rate_last10"] < MIN_L10:
+                return False
+            if REQUIRE_EV_PLUS and not is_ev_plus(row):
+                return False
+            return True
 
-        # Do NOT touch hit-rates inside format_display
-        d = format_display(d)
-
-        # Opponent Logo (optional)
-        d["Opponent Logo"] = d["opponent_team"].map(TEAM_LOGOS).fillna("")
-
-        d_display = d.copy()
-
-        # Mark already-saved bets
-        if st.session_state.saved_bets:
-            saved_df = pd.DataFrame(st.session_state.saved_bets)
-            key_cols = ["player", "market", "line", "bet_type", "bookmaker"]
-            d_display["Save"] = d_display[key_cols].merge(
-                saved_df[key_cols].drop_duplicates(),
-                on=key_cols,
-                how="left",
-                indicator=True,
-            )["_merge"].eq("both")
-        else:
-            d_display["Save"] = False
-
-        # Columns to show
-        display_cols = [
-            "Save",
-            "player",
-            "market",
-            "line",
-            "bet_type",
-            "Price",
-            "bookmaker",
-            "Pos Def Rank",
-            "Overall Def Rank",
-            "Matchup Difficulty",
-            "hit_rate_last5",
-            "hit_rate_last10",
-            "hit_rate_last20",
-            "L5 Avg",
-            "L10 Avg",
-            "L20 Avg",
-            "opponent_team",
+        card_df = filtered_df[
+            filtered_df.apply(
+                lambda r: pd.notna(r.get("price"))
+                and pd.notna(r.get("hit_rate_last10"))
+                and good_for_card(r),
+                axis=1,
+            )
         ]
 
-        d_display = d_display[display_cols].rename(
-            columns={
-                "player": "Player",
-                "market": "Market",
-                "line": "Line",
-                "bet_type": "Label",
-                "bookmaker": "Book",
-                "hit_rate_last5": "Hit L5",
-                "hit_rate_last10": "Hit L10",
-                "hit_rate_last20": "Hit L20",
-                "opponent_team": "Opponent",
-            }
-        )
+        if view_mode == "Card grid":
+            top = (
+                card_df.sort_values("hit_rate_last10", ascending=False)
+                .head(16)
+                .reset_index(drop=True)
+            )
 
-        edited = st.data_editor(
-            d_display,
-            use_container_width=True,
-            hide_index=True,
-            num_rows="fixed",
-            column_config={
-                "Save": st.column_config.CheckboxColumn(
-                    "Save Bet", help="Save/unsave this prop"
-                ),
-                # Hit rates: numeric but displayed as %
-                "Hit L5": st.column_config.NumberColumn("Hit L5", format="%.0f%%"),
-                "Hit L10": st.column_config.NumberColumn("Hit L10", format="%.0f%%"),
-                "Hit L20": st.column_config.NumberColumn("Hit L20", format="%.0f%%"),
-            },
-            key="props_overview_editor",
-        )
+            cols = st.columns(4)
+            has_html = hasattr(st, "html")
 
-        # Safe checkbox mask (prevents NaN mask error)
-        save_mask = edited["Save"].fillna(False).astype(bool)
-        saved_rows = edited.loc[save_mask].copy()
+            for idx, row in top.iterrows():
+                col = cols[idx % 4]
+                with col:
+                    hit10 = row.get("hit_rate_last10", 0.0)
+                    hit20 = row.get("hit_rate_last20", 0.0)
+                    odds = int(row.get("price", 0))
+                    matchup = row.get("matchup_difficulty_score", 50)
 
-        if not saved_rows.empty:
-            st.session_state.saved_bets = (
-                saved_rows[["Player", "Market", "Line", "Label", "Price", "Book"]]
-                .rename(
+                    if odds > 0:
+                        implied_prob = 100 / (odds + 100)
+                    else:
+                        implied_prob = (
+                            abs(odds) / (abs(odds) + 100) if odds != 0 else 0
+                        )
+
+                    player_team = normalize_team_code(row.get("player_team", ""))
+                    opp_team = normalize_team_code(row.get("opponent_team", ""))
+
+                    home_logo = TEAM_LOGOS_BASE64.get(player_team, "")
+                    opp_logo = TEAM_LOGOS_BASE64.get(opp_team, "")
+
+                    if home_logo and opp_logo:
+                        logos_html = f"""
+                        <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">
+                            <img src="{home_logo}" style="height:18px;border-radius:4px;" />
+                            <span style="font-size:0.7rem;color:#9ca3af;">vs</span>
+                            <img src="{opp_logo}" style="height:18px;border-radius:4px;" />
+                        </div>
+                        """
+                    else:
+                        logos_html = (
+                            f"<div style='font-size:0.75rem;color:#9ca3af;'>{row.get('home_team','')} "
+                            f"vs {row.get('opponent_team','')}</div>"
+                        )
+
+                    pretty_market = MARKET_DISPLAY_MAP.get(
+                        row.get("market", ""), row.get("market", "")
+                    )
+
+                    tags = build_prop_tags(row)
+                    tags_html = build_tags_html(tags)
+
+                    card_html = f"""
+                    <div class="prop-card">
+                        <div class="prop-headline">
+                            <div>
+                                <div class="prop-player">{row.get('player','')}</div>
+                                <div class="prop-market">
+                                    {pretty_market} • {str(row.get('bet_type','')).upper()} {row.get('line','')}
+                                </div>
+                                <div style="margin-top:4px;">{tags_html}</div>
+                            </div>
+                            <div style="text-align:right;">
+                                <div class="pill-book">{row.get('bookmaker','')}</div>
+                                {logos_html}
+                            </div>
+                        </div>
+
+                        <div class="prop-meta">
+                            <div>
+                                <div style="color:#e5e7eb;font-size:0.8rem;">{odds:+d}</div>
+                                <div style="font-size:0.7rem;">Imp: {implied_prob:.0%}</div>
+                            </div>
+                            <div>
+                                <div style="color:#e5e7eb;font-size:0.8rem;">L10: {hit10:.0%}</div>
+                                <div style="font-size:0.7rem;">L20: {hit20:.0%}</div>
+                            </div>
+                            <div>
+                                <div style="color:#e5e7eb;font-size:0.8rem;">{matchup:.0f}/100</div>
+                                <div style="font-size:0.7rem;">Difficulty</div>
+                            </div>
+                        </div>
+                    </div>
+                    """
+
+                    if has_html:
+                        st.html(card_html)
+                    else:
+                        st.markdown(card_html, unsafe_allow_html=True)
+
+            st.caption("Card view is visual-only — use the table for saving legs.")
+
+        else:
+            df = filtered_df.copy()
+
+            if "home_team" in df.columns:
+                df["home_team"] = df["home_team"].astype(str).str.strip().str.upper()
+            if "opponent_team" in df.columns:
+                df["opponent_team"] = (
+                    df["opponent_team"].astype(str).str.strip().str.upper()
+                )
+
+            df["Implied Prob"] = np.where(
+                df["price"] > 0,
+                100 / (df["price"] + 100),
+                np.abs(df["price"]) / (np.abs(df["price"]) + 100),
+            ) * 100
+
+            df["Hit5"] = (df["hit_rate_last5"] * 100).round(0)
+            df["Hit10"] = (df["hit_rate_last10"] * 100).round(0)
+            df["Hit20"] = (df["hit_rate_last20"] * 100).round(0)
+
+            df["Edge_raw"] = df["Hit10"] - df["Implied Prob"]
+            df["Edge"] = df["Edge_raw"].apply(
+                lambda x: f"+{x:.1f}%" if x > 0 else f"{x:.1f}%"
+            )
+
+            df["Matchup30"] = (
+                df["matchup_difficulty_score"].fillna(5).clip(1, 10) * 3
+            ).round(0)
+            df["line"] = df["line"].astype(float)
+
+            df["Sparkline"] = df.apply(
+                lambda r: [
+                    int(r["Hit5"]),
+                    int(r["Hit10"]),
+                    int(r["Hit20"]),
+                    int(np.random.randint(30, 90)),
+                    int(np.random.randint(30, 90)),
+                ],
+                axis=1,
+            )
+
+            grid_df = pd.DataFrame(
+                {
+                    "Player": df["player"],
+                    "Market": df["market"].apply(
+                        lambda m: MARKET_DISPLAY_MAP.get(m, m)
+                    ),
+                    "Line": df["line"],
+                    "Label": df["bet_type"],
+                    "Odds": df["price"],
+                    "Book": df["bookmaker"],
+                    "Hit5": df["Hit5"],
+                    "Hit10": df["Hit10"],
+                    "Hit20": df["Hit20"],
+                    "Spark": df["Sparkline"],
+                    "ImpProb": df["Implied Prob"],
+                    "Edge_raw": df["Edge_raw"],
+                    "Edge": df["Edge"],
+                    "Matchup30": df["Matchup30"],
+                }
+            )
+
+            sparkline_renderer = JsCode(
+                """
+                function(params){
+                    const v = params.value;
+                    if (!v || !Array.isArray(v) || v.length === 0) {
+                        return '';
+                    }
+                    const values = v;
+                    const maxVal = Math.max(...values);
+                    const minVal = Math.min(...values);
+                    const height = 22;
+                    const width = 60;
+
+                    function scaleY(val) {
+                        return height - ((val - minVal) / (maxVal - minVal + 0.0001)) * height;
+                    }
+
+                    let points = values.map((val, i) => {
+                        const x = (i / (values.length - 1)) * width;
+                        return `${x},${scaleY(val)}`;
+                    }).join(" ");
+
+                    return `
+                        <svg width="${width}" height="${height}">
+                            <polyline points="${points}" class="sparkline" />
+                        </svg>
+                    `;
+                }
+                """
+            )
+
+            odds_formatter = JsCode(
+                """
+                function(params){
+                    if (params.value == null) return '';
+                    return params.value > 0 ? '+' + params.value : params.value.toString();
+                }
+                """
+            )
+
+            percent_formatter = JsCode(
+                """
+                function(params){
+                    if (params.value == null) return '';
+                    return params.value.toFixed(0) + '%';
+                }
+                """
+            )
+
+            matchup_formatter = JsCode(
+                """
+                function(params){
+                    if (params.value == null) return '';
+                    return params.value.toFixed(0) + '/30';
+                }
+                """
+            )
+
+            row_style_js = JsCode(
+                """
+                function(params){
+                    const e = params.data.Edge_raw;
+                    if (e >= 8) {
+                        return { backgroundColor: "rgba(34,197,94,0.08)" };
+                    }
+                    if (e >= 3) {
+                        return { backgroundColor: "rgba(59,130,246,0.08)" };
+                    }
+                    if (e <= -5) {
+                        return { backgroundColor: "rgba(239,68,68,0.08)" };
+                    }
+                    return {};
+                }
+                """
+            )
+
+            hit_cell_style = JsCode(
+                """
+                function(params){
+                    const pct = params.value;
+                    const hue = 120 * (pct / 100);
+                    return {
+                        backgroundColor: `hsl(${hue},85%,40%)`,
+                        color: 'white',
+                        textAlign: 'center',
+                        fontWeight: 700
+                    };
+                }
+                """
+            )
+
+            edge_cell_style = JsCode(
+                """
+                function(params){
+                    const raw = params.data.Edge_raw;
+                    const t = (raw + 30) / 60.0;
+                    const hue = 120 * Math.max(0, Math.min(1, t));
+                    return {
+                        backgroundColor: `hsl(${hue},80%,35%)`,
+                        color: 'white',
+                        textAlign: 'center',
+                        fontWeight: 700
+                    };
+                }
+                """
+            )
+
+            matchup_cell_style = JsCode(
+                """
+                function(params){
+                    var v = params.value;
+                    var t = (v - 1) / 29.0;
+                    var hue = 120 * t;
+                    return {
+                        backgroundColor: 'hsl(' + hue + ',70%,35%)',
+                        color: 'white',
+                        textAlign: 'center',
+                        fontWeight: 700
+                    };
+                }
+                """
+            )
+
+            gb = GridOptionsBuilder.from_dataframe(grid_df)
+            gb.configure_default_column(sortable=True, resizable=True)
+            gb.configure_column("*", filter=True)
+            gb.configure_selection("multiple", use_checkbox=True)
+            gb.configure_grid_options(getRowStyle=row_style_js)
+
+            gb.configure_column("Player", pinned="left")
+            gb.configure_column("Odds", valueFormatter=odds_formatter, width=95)
+
+            gb.configure_column(
+                "Hit5",
+                header_name="L5",
+                valueFormatter=percent_formatter,
+                cellStyle=hit_cell_style,
+                width=75,
+            )
+            gb.configure_column(
+                "Hit10",
+                header_name="L10",
+                valueFormatter=percent_formatter,
+                cellStyle=hit_cell_style,
+                width=75,
+            )
+            gb.configure_column(
+                "Hit20",
+                header_name="L20",
+                valueFormatter=percent_formatter,
+                cellStyle=hit_cell_style,
+                width=75,
+            )
+
+            gb.configure_column(
+                "Spark",
+                header_name="Trend",
+                cellRenderer=sparkline_renderer,
+                width=100,
+                filter=False,
+            )
+
+            gb.configure_column(
+                "ImpProb",
+                header_name="Imp%",
+                valueFormatter=percent_formatter,
+                width=80,
+            )
+            gb.configure_column("Edge_raw", hide=True)
+            gb.configure_column("Edge", cellStyle=edge_cell_style, width=100)
+            gb.configure_column(
+                "Matchup30",
+                header_name="Matchup",
+                valueFormatter=matchup_formatter,
+                cellStyle=matchup_cell_style,
+                width=100,
+            )
+
+            grid_response = AgGrid(
+                grid_df,
+                gridOptions=gb.build(),
+                update_mode=GridUpdateMode.SELECTION_CHANGED,
+                fit_columns_on_grid_load=True,
+                theme="balham-dark",
+                allow_unsafe_jscode=True,
+                height=550,
+            )
+
+            selected_rows = grid_response.get("selected_rows", [])
+
+            if selected_rows:
+                sel_df = pd.DataFrame(selected_rows)[
+                    ["Player", "Market", "Line", "Label", "Odds", "Book"]
+                ]
+                sel_df = sel_df.rename(
                     columns={
                         "Player": "player",
                         "Market": "market",
                         "Line": "line",
                         "Label": "bet_type",
-                        "Price": "price",
+                        "Odds": "price",
                         "Book": "bookmaker",
                     }
                 )
-                .drop_duplicates()
-                .to_dict("records")
-            )
-        else:
-            st.session_state.saved_bets = []
 
-        # Persist to DB
-        replace_saved_bets_in_db(user_id, st.session_state.saved_bets)
-
-# ------------------------------------------------------
-# TAB 2 — TREND ANALYSIS
-# ------------------------------------------------------
-elif current_tab == "📈 Trend Analysis":
-    st.subheader("Trend Analysis")
-
-    all_players = ["(select)"] + sorted(props_df["player"].unique())
-    if st.session_state.trend_player in all_players:
-        default_p_index = all_players.index(st.session_state.trend_player)
-    else:
-        default_p_index = 0
-
-    p = st.selectbox("Player", all_players, index=default_p_index)
-    if p != "(select)":
-        st.session_state.trend_player = p
-
-        markets = sorted(props_df[props_df["player"] == p]["market"].unique())
-        if st.session_state.trend_market in markets:
-            default_m_index = markets.index(st.session_state.trend_market)
-        else:
-            default_m_index = 0
-
-        m = st.selectbox("Market", markets, index=default_m_index)
-        st.session_state.trend_market = m
-
-        bet_types = sorted(
-            props_df[(props_df["player"] == p) & (props_df["market"] == m)][
-                "bet_type"
-            ]
-            .dropna()
-            .unique()
-        )
-
-        if not bet_types:
-            st.warning("No bet types available for this player/market.")
-        else:
-            if (
-                st.session_state.trend_bet_type is not None
-                and st.session_state.trend_bet_type in bet_types
-            ):
-                default_bt_index = bet_types.index(st.session_state.trend_bet_type)
-            else:
-                default_bt_index = 0
-
-            bt = st.selectbox("Bet Type", bet_types, index=default_bt_index)
-            st.session_state.trend_bet_type = bt
-
-            lines = sorted(
-                props_df[
-                    (props_df["player"] == p)
-                    & (props_df["market"] == m)
-                    & (props_df["bet_type"] == bt)
-                ]["line"].unique()
-            )
-
-            if (
-                st.session_state.trend_line is not None
-                and st.session_state.trend_line in lines
-            ):
-                default_line_index = list(lines).index(st.session_state.trend_line)
-            else:
-                default_line_index = 0
-
-            line_pick = st.selectbox("Select Line", lines, index=default_line_index)
-            st.session_state.trend_line = line_pick
-
-            stat = detect_stat(m)
-            if not stat:
-                st.warning("Unable to detect stat type for this market.")
-            else:
-                df_hist = (
-                    historical_df[
-                        (historical_df["player"] == p) & (historical_df[stat].notna())
-                    ]
-                    .sort_values("game_date")
-                    .tail(20)
+                st.session_state.saved_bets = (
+                    sel_df.drop_duplicates().to_dict("records")
                 )
 
-                if df_hist.empty:
-                    st.info("No historical data available for this player/stat.")
-                else:
-                    df_hist["date"] = df_hist["game_date"].dt.strftime("%b %d")
+                replace_saved_bets_in_db(user_id, st.session_state.saved_bets)
 
-                    if bt.lower() == "over":
-                        hit_mask = df_hist[stat] > line_pick
-                    elif bt.lower() == "under":
-                        hit_mask = df_hist[stat] < line_pick
-                    else:
-                        hit_mask = df_hist[stat] > line_pick
-
-                    df_hist["color"] = np.where(hit_mask, "green", "red")
-
-                    hover = []
-                    for dte, opp, val, hit in zip(
-                        df_hist["date"],
-                        df_hist["opponent_team"],
-                        df_hist[stat],
-                        hit_mask,
-                    ):
-                        outcome = "Hit" if hit else "Miss"
-                        hover.append(
-                            f"<b>{dte}</b><br>{stat.upper()}: {val}<br>"
-                            f"Opponent: {opp}<br>"
-                            f"Outcome vs {bt} {line_pick}: {outcome}"
-                        )
-
-                    fig = go.Figure()
-                    fig.add_bar(
-                        x=df_hist["date"],
-                        y=df_hist[stat],
-                        marker_color=df_hist["color"],
-                        hovertext=hover,
-                        hoverinfo="text",
-                    )
-
-                    fig.update_xaxes(tickvals=df_hist["date"], ticktext=df_hist["date"])
-
-                    fig.add_hline(
-                        y=line_pick,
-                        line_dash="dash",
-                        line_color="white",
-                        annotation_text=f"{bt} {line_pick}",
-                        annotation_position="top left",
-                    )
-
-                    fig.update_layout(
-                        height=450,
-                        plot_bgcolor="#222",
-                        paper_bgcolor="#222",
-                        font=dict(color="white"),
-                        margin=dict(b=40, t=40, l=40, r=20),
-                    )
-
-                    st.plotly_chart(fig, use_container_width=True)
+                st.success(f"{len(sel_df)} bet(s) saved.")
+            else:
+                st.session_state.saved_bets = []
+                replace_saved_bets_in_db(user_id, [])
 
 # ------------------------------------------------------
-# TAB 3 — SAVED BETS
+# TAB 2 — TREND LAB (Dev)
 # ------------------------------------------------------
-elif current_tab == "📋 Saved Bets":
+with tab2:
+    st.subheader("Trend Lab (Real History + Dynamic Line)")
+
+    c1, c2, c3 = st.columns([1.2, 1.2, 1])
+    with c1:
+        player = st.selectbox(
+            "Player", sorted(props_df["player"].dropna().unique())
+        )
+    with c2:
+        stat_label = st.selectbox("Stat", ["Points", "Rebounds", "Assists", "P+R+A"])
+    with c3:
+        n_games = st.slider("Last N games", 5, 25, 15)
+
+    stat_map = {"Points": "pts", "Rebounds": "reb", "Assists": "ast", "P+R+A": "pra"}
+    stat = stat_map[stat_label]
+
+    def clean_name(name):
+        if not isinstance(name, str):
+            return ""
+        return (
+            name.lower()
+            .replace(".", "")
+            .replace("-", " ")
+            .strip()
+        )
+
+    history_df["player_clean"] = history_df["player"].apply(clean_name)
+    player_clean = clean_name(player)
+
+    df = history_df[history_df["player_clean"] == player_clean].copy()
+
+    df[stat] = pd.to_numeric(df[stat], errors="coerce")
+    df = df[df[stat].notna()]
+
+    df = (
+        df.sort_values("game_date")
+        .drop_duplicates(subset=["game_date"], keep="last")
+        .reset_index(drop=True)
+    )
+
+    df = df.sort_values("game_date").tail(n_games).reset_index(drop=True)
+
+    if df.empty:
+        st.info("No historical data found for this selection.")
+    else:
+        df["date_str"] = df["game_date"].dt.strftime("%b %d")
+
+        market_map = {
+            "Points": "player_points_alternate",
+            "Rebounds": "player_rebounds_alternate",
+            "Assists": "player_assists_alternate",
+            "P+R+A": "player_points_rebounds_assists_alternate",
+        }
+
+        selected_market_code = market_map[stat_label]
+
+        player_props = props_df[
+            (props_df["player"] == player)
+            & (props_df["market"] == selected_market_code)
+        ]
+
+        if not player_props.empty:
+            available_lines = sorted(
+                player_props["line"].dropna().unique().astype(float)
+            )
+            line = st.selectbox("Line", available_lines, index=0)
+        else:
+            line = st.number_input(
+                f"No real props found. Enter custom line for {stat_label}",
+                min_value=0.0,
+                value=10.0,
+                step=0.5,
+            )
+
+        df["hit"] = df[stat] > float(line)
+        df["rolling"] = df[stat].rolling(window=5, min_periods=1).mean()
+
+        hit_rate = df["hit"].mean()
+        avg_last5 = df[stat].tail(5).mean()
+        std_dev = df[stat].std()
+        last_game_value = df[stat].iloc[-1]
+
+        metric_row = f"""
+        <div class="metric-grid" style="margin-top:0.25rem;margin-bottom:1rem;">
+            <div class="metric-card">
+                <div class="metric-label">Hit Rate</div>
+                <div class="metric-value">{hit_rate:.0%}</div>
+                <div class="metric-sub">{df['hit'].sum()} of {len(df)} games</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Avg Last 5</div>
+                <div class="metric-value">{avg_last5:.1f}</div>
+                <div class="metric-sub">recent form</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Consistency</div>
+                <div class="metric-value">{std_dev:.1f}</div>
+                <div class="metric-sub">std deviation</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Last Game</div>
+                <div class="metric-value">{last_game_value:.0f}</div>
+                <div class="metric-sub">{'Hit' if last_game_value > line else 'Miss'} vs {line}</div>
+            </div>
+        </div>
+        """
+        st.markdown(metric_row, unsafe_allow_html=True)
+
+        hover = [
+            (
+                f"<b>{row['date_str']}</b><br>"
+                f"{stat_label}: {row[stat]}<br>"
+                f"5-game avg: {row['rolling']:.1f}<br>"
+                f"Opponent: {row['opponent_team']}<br>"
+                f"{'Hit' if row['hit'] else 'Miss'} vs line {line}"
+            )
+            for _, row in df.iterrows()
+        ]
+
+        fig = go.Figure()
+
+        fig.add_bar(
+            x=df["date_str"],
+            y=df[stat],
+            marker_color=["#22c55e" if h else "#ef4444" for h in df["hit"]],
+            hovertext=hover,
+            hoverinfo="text",
+            name="Game Result",
+        )
+
+        fig.add_trace(
+            go.Scatter(
+                x=df["date_str"],
+                y=df["rolling"],
+                mode="lines+markers",
+                line=dict(width=3, color=theme["accent"]),
+                marker=dict(size=6),
+                name="5-game Avg",
+            )
+        )
+
+        fig.add_hline(
+            y=line,
+            line_dash="dot",
+            line_color="#e5e7eb",
+            annotation_text=f"Line {line}",
+            annotation_position="top left",
+        )
+
+        fig.update_layout(
+            template="plotly_dark",
+            height=420,
+            margin=dict(l=30, r=20, t=40, b=30),
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            bargap=0.25,
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        ribbon_html = "<div style='display:flex;gap:4px;margin:6px 0;'>"
+        for h in df["hit"]:
+            ribbon_html += (
+                "<div style='width:14px;height:14px;border-radius:3px;background:#22c55e;'></div>"
+                if h
+                else "<div style='width:14px;height:14px;border-radius:3px;background:#ef4444;'></div>"
+            )
+        ribbon_html += "</div>"
+        st.markdown(ribbon_html, unsafe_allow_html=True)
+
+        table_df = df.copy()
+        table_df["Outcome"] = table_df["hit"].map({True: "Hit", False: "Miss"})
+        table_df_display = table_df[["date_str", "opponent_team", stat, "Outcome"]]
+        table_df_display.columns = ["Date", "Opponent", stat_label, "Outcome"]
+
+        st.dataframe(table_df_display, use_container_width=True, hide_index=True)
+
+# ------------------------------------------------------
+# TAB 3 — SAVED BETS (DB-backed)
+# ------------------------------------------------------
+with tab3:
     st.subheader("Saved Bets")
 
     if not st.session_state.saved_bets:
-        st.info("No saved bets yet. Go to Props Overview and check the 'Save Bet' boxes.")
+        st.info(
+            "No saved bets yet — select rows in the Props Overview table (Advanced Table view)."
+        )
     else:
-        df_save = pd.DataFrame(st.session_state.saved_bets)
-
-        df_save_display = df_save.rename(
+        df_saved = pd.DataFrame(st.session_state.saved_bets)
+        df_saved_display = df_saved.rename(
             columns={
                 "player": "Player",
                 "market": "Market",
@@ -946,15 +1819,126 @@ elif current_tab == "📋 Saved Bets":
             }
         )
 
-        st.dataframe(df_save_display, use_container_width=True, hide_index=True)
+        st.dataframe(df_saved_display, use_container_width=True, hide_index=True)
 
-        csv = df_save.to_csv(index=False).encode("utf-8")
-        st.download_button("Download CSV", csv, "saved_bets.csv", "text/csv")
+        csv = df_saved.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "Download Saved Bets (CSV)",
+            data=csv,
+            file_name="saved_bets.csv",
+            mime="text/csv",
+        )
 
 # ------------------------------------------------------
-# TAB 4 — PROP ANALYTICS
+# TAB 4 — BET SLIP PLAYGROUND (Dev)
 # ------------------------------------------------------
-elif current_tab == "📊 Prop Analytics":
+with tab4:
+    st.subheader("Bet Slip Playground (Real Calculations)")
+
+    if not st.session_state.saved_bets:
+        st.info("Save some bets from Props Overview first (Advanced Table).")
+    else:
+        slip_df = pd.DataFrame(st.session_state.saved_bets).copy()
+        slip_df["Add to Slip"] = True
+        slip_df["Stake"] = 0.0
+
+        def american_to_decimal(odds: float) -> float:
+            odds = float(odds)
+            if odds > 0:
+                return 1 + (odds / 100)
+            return 1 + (100 / abs(odds))
+
+        slip_df["decimal_odds"] = slip_df["price"].astype(float).apply(
+            american_to_decimal
+        )
+
+        st.markdown("#### 💾 Legs in Slip (DB-backed, real data)")
+
+        edited_slip = st.data_editor(
+            slip_df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Add to Slip": st.column_config.CheckboxColumn("Add"),
+                "Stake": st.column_config.NumberColumn("Stake ($)", min_value=0.0),
+                "decimal_odds": st.column_config.NumberColumn(
+                    "Decimal", format="%.3f"
+                ),
+            },
+            key="bet_slip_editor_real",
+        )
+
+        mask = edited_slip["Add to Slip"].fillna(False).astype(bool)
+        selected = edited_slip.loc[mask]
+
+        if selected.empty:
+            st.info("Use the **Add** checkbox to include legs in your slip.")
+        else:
+            c1, c2 = st.columns([2, 1])
+
+            with c1:
+                st.markdown("##### Active Legs")
+                st.dataframe(
+                    selected[
+                        [
+                            "player",
+                            "market",
+                            "line",
+                            "bet_type",
+                            "price",
+                            "Stake",
+                            "decimal_odds",
+                        ]
+                    ],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+            def calc_payout(odds, stake):
+                odds = float(odds)
+                stake = float(stake)
+                if stake <= 0:
+                    return 0.0
+                if odds > 0:
+                    return stake * (odds / 100)
+                return stake * (100 / abs(odds))
+
+            selected["Payout"] = selected.apply(
+                lambda r: calc_payout(r["price"], r["Stake"]), axis=1
+            )
+
+            total_stake = selected["Stake"].sum()
+            total_return = (selected["Stake"] + selected["Payout"]).sum()
+
+            with c2:
+                st.markdown("##### Singles Summary")
+                st.metric("Total Stake", f"${total_stake:.2f}")
+                st.metric("Total Return (Singles)", f"${total_return:.2f}")
+
+            st.markdown("---")
+            st.markdown("#### 🎯 Parlay Simulator")
+
+            col1, col2, col3 = st.columns([1.4, 1.4, 2])
+
+            with col1:
+                parlay_stake = st.number_input(
+                    "Parlay Stake ($)", min_value=0.0, value=10.0, step=1.0
+                )
+
+            with col2:
+                combined_decimal = selected["decimal_odds"].prod()
+                st.metric("Combined Decimal", f"{combined_decimal:.3f}")
+
+            with col3:
+                parlay_payout = (
+                    parlay_stake * (combined_decimal - 1) if parlay_stake > 0 else 0
+                )
+                st.metric("Parlay Payout", f"${parlay_payout:.2f}")
+
+# ------------------------------------------------------
+# TAB 5 — PROP ANALYTICS (Original Production Tab)
+# ------------------------------------------------------
+with tab5:
     st.subheader("Prop Analytics")
 
     d = filter_props(props_df)

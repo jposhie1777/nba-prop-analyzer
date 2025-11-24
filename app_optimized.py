@@ -1583,7 +1583,7 @@ with tab1:
                 gridOptions=gb.build(),
                 update_mode=GridUpdateMode.SELECTION_CHANGED,
                 fit_columns_on_grid_load=True,
-                theme="balham-dark",
+                theme="balham",
                 allow_unsafe_jscode=True,
                 height=550,
             )

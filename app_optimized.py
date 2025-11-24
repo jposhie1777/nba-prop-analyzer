@@ -1528,7 +1528,9 @@ with tab1:
             gb.configure_column("*", filter=True)
             gb.configure_selection("multiple", use_checkbox=True)
             gb.configure_grid_options(getRowStyle=row_style_js)
-            gb.configure_grid_options(defaultColDef={"flex": 1})
+            gridOptions = gb.build()
+            for col in gridOptions["columnDefs"]:
+                col["autoSizeAllColumns"] = True
             gb.configure_default_column(cellStyle={'textAlign': 'center'})
 
 

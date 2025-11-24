@@ -1264,7 +1264,9 @@ with tab1:
             index=0,
         )
 
+        # -----------------------------
         # Card grid filter rules
+        # -----------------------------
         MIN_ODDS_FOR_CARD = -140
         MIN_L10 = 0.55
         REQUIRE_EV_PLUS = True
@@ -1295,6 +1297,9 @@ with tab1:
             )
         ]
 
+        # ======================================================
+        # CARD GRID VIEW
+        # ======================================================
         if view_mode == "Card grid":
             top = (
                 card_df.sort_values("hit_rate_last10", ascending=False)
@@ -1387,6 +1392,9 @@ with tab1:
 
             st.caption("Card view is visual-only — use the table for saving legs.")
 
+        # ======================================================
+        # ADVANCED TABLE VIEW (AG-Grid, mobile-safe)
+        # ======================================================
         else:
             df = filtered_df.copy()
 
@@ -1572,16 +1580,30 @@ with tab1:
                 """
             )
 
+            # 🔧 AG-Grid config with mobile-safe settings
             gb = GridOptionsBuilder.from_dataframe(grid_df)
-            gb.configure_default_column(sortable=True, resizable=True)
+
+            gb.configure_default_column(
+                sortable=True,
+                resizable=True,
+                minWidth=120,
+                width=130,
+                maxWidth=200,
+                cellStyle={"textAlign": "center"},
+            )
+
             gb.configure_column("*", filter=True)
             gb.configure_selection("multiple", use_checkbox=True)
-            gb.configure_grid_options(getRowStyle=row_style_js)
-            gb.configure_grid_options(defaultColDef={"flex": 1})
-            gb.configure_default_column(cellStyle={'textAlign': 'center'})
 
+            gb.configure_grid_options(
+                getRowStyle=row_style_js,
+                suppressSizeToFit=True,       # don't auto-fit to viewport
+                suppressAutoSize=True,        # don't auto-auto-size after render
+                suppressHorizontalScroll=False,
+                domLayout="normal",
+            )
 
-            gb.configure_column("Player", pinned="left")
+            gb.configure_column("Player", pinned="left", minWidth=140, width=160)
             gb.configure_column("Odds", valueFormatter=odds_formatter, width=95)
 
             gb.configure_column(
@@ -1621,7 +1643,11 @@ with tab1:
                 width=80,
             )
             gb.configure_column("Edge_raw", hide=True)
-            gb.configure_column("Edge", cellStyle=edge_cell_style, width=100)
+            gb.configure_column(
+                "Edge",
+                cellStyle=edge_cell_style,
+                width=100,
+            )
             gb.configure_column(
                 "Matchup30",
                 header_name="Matchup",
@@ -1634,8 +1660,8 @@ with tab1:
                 grid_df,
                 gridOptions=gb.build(),
                 update_mode=GridUpdateMode.SELECTION_CHANGED,
-                fit_columns_on_grid_load=True,
-                theme="balham",
+                fit_columns_on_grid_load=False,   # 🚫 critical for mobile
+                theme="balham-dark",              # match dark CSS hooks
                 allow_unsafe_jscode=True,
                 height=550,
             )
@@ -1667,6 +1693,7 @@ with tab1:
             else:
                 st.session_state.saved_bets = []
                 replace_saved_bets_in_db(user_id, [])
+
 
 # ------------------------------------------------------
 # TAB 2 — TREND LAB (Dev)

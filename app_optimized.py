@@ -1318,47 +1318,107 @@ with tab1:
         ]
 
         # ======================================================
-        # CARD GRID VIEW
+        # CARD GRID VIEW (UPDATED WITH PAGINATION + MANUAL FILTERS)
         # ======================================================
         if view_mode == "Card grid":
 
-            # Remove artificial 16 card limit
-            top = card_df.sort_values(
-                "hit_rate_last10", ascending=False
-            ).reset_index(drop=True)
+            # =============================
+            # Apply manual card grid rules
+            # =============================
+            MIN_ODDS_FOR_CARD = manual_odds_min
+            MAX_ODDS_FOR_CARD = manual_odds_max
+            MIN_L10 = manual_l10_min / 100
+            REQUIRE_EV_PLUS = True
 
-            # ---- scrollable container ----
+            def good_for_card(row):
+                # Odds range
+                if row["price"] < MIN_ODDS_FOR_CARD or row["price"] > MAX_ODDS_FOR_CARD:
+                    return False
+
+                # L10 hit rate
+                if row["hit_rate_last10"] < MIN_L10:
+                    return False
+
+                # Optional EV+ logic
+                if REQUIRE_EV_PLUS and not is_ev_plus(row):
+                    return False
+
+                return True
+
+            # Filter for cards
+            card_df = filtered_df[
+                filtered_df.apply(
+                    lambda r: (
+                        pd.notna(r.get("price"))
+                        and pd.notna(r.get("hit_rate_last10"))
+                        and good_for_card(r)
+                    ),
+                    axis=1,
+                )
+            ]
+
+            # Sort highest L10 → lowest
+            top = card_df.sort_values("hit_rate_last10", ascending=False).reset_index(drop=True)
+
+            # =============================
+            # PAGINATION
+            # =============================
+            page_size = 30
+            total_cards = len(top)
+            total_pages = max(1, (total_cards + page_size - 1) // page_size)
+
+            st.write(f"Showing {total_cards} props • {total_pages} pages")
+
+            page = st.number_input(
+                "Page",
+                min_value=1,
+                max_value=total_pages,
+                value=1,
+                step=1,
+                key="card_page_input"
+            )
+
+            start = (page - 1) * page_size
+            end = start + page_size
+            page_df = top.iloc[start:end]
+
+            # =============================
+            # RENDER CARDS IN PAGE
+            # =============================
+
             st.markdown("""
                 <div style="
-                    max-height: 900px;
+                    max-height: 1200px;
                     overflow-y: auto;
-                    padding-right: 10px;
+                    padding-right: 12px;
                 ">
             """, unsafe_allow_html=True)
 
             cols = st.columns(4)
             has_html = hasattr(st, "html")
 
-            for idx, row in top.iterrows():
+            for idx, row in page_df.iterrows():
                 col = cols[idx % 4]
+
                 with col:
                     hit10 = row.get("hit_rate_last10", 0.0)
                     hit20 = row.get("hit_rate_last20", 0.0)
                     odds = int(row.get("price", 0))
                     matchup = row.get("matchup_difficulty_score", 50)
 
+                    # Implied
                     if odds > 0:
                         implied_prob = 100 / (odds + 100)
                     else:
                         implied_prob = abs(odds) / (abs(odds) + 100)
 
+                    # Logos
                     player_team = normalize_team_code(row.get("player_team", ""))
                     opp_team = normalize_team_code(row.get("opponent_team", ""))
 
                     home_logo = TEAM_LOGOS_BASE64.get(player_team, "")
                     opp_logo = TEAM_LOGOS_BASE64.get(opp_team, "")
 
-                    logos_html = ""
                     if home_logo and opp_logo:
                         logos_html = f"""
                         <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">
@@ -1367,13 +1427,22 @@ with tab1:
                             <img src="{opp_logo}" style="height:18px;border-radius:4px;" />
                         </div>
                         """
+                    else:
+                        logos_html = (
+                            f"<div style='font-size:0.75rem;color:#9ca3af;'>"
+                            f"{row.get('home_team','')} vs {row.get('opponent_team','')}"
+                            f"</div>"
+                        )
 
+                    # Pretty market label
                     pretty_market = MARKET_DISPLAY_MAP.get(
                         row.get("market", ""), row.get("market", "")
                     )
+
                     tags = build_prop_tags(row)
                     tags_html = build_tags_html(tags)
 
+                    # Card UI
                     card_html = f"""
                     <div class="prop-card">
                         <div class="prop-headline">
@@ -1413,6 +1482,9 @@ with tab1:
                         st.markdown(card_html, unsafe_allow_html=True)
 
             st.markdown("</div>", unsafe_allow_html=True)
+
+            st.caption("Card view is visual-only — use the table for selecting saved bets.")
+
 
             
 

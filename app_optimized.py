@@ -834,6 +834,15 @@ TEAM_NAME_TO_CODE = {
     "Washington Wizards": "WAS",
 }
 
+SPORTSBOOK_LOGOS = {
+    "DraftKings": "https://seeklogo.com/images/D/draftkings-logo-6E6D99A63E-seeklogo.com.png",
+    "FanDuel": "https://seeklogo.com/images/F/fanduel-logo-7F5F31BBA5-seeklogo.com.png",
+    "BetMGM": "https://seeklogo.com/images/B/betmgm-logo-5E7ADDE41D-seeklogo.com.png",
+    "Caesars": "https://seeklogo.com/images/C/caesars-sportsbook-logo-2A0364177A-seeklogo.com.png",
+    "ESPN BET": "https://seeklogo.com/images/E/espn-bet-logo-A8CBE74E0B-seeklogo.com.png",
+}
+
+
 # MARKET DISPLAY MAP (prettier labels)
 MARKET_DISPLAY_MAP = {
     "player_assists_alternate": "Assists",
@@ -949,6 +958,8 @@ def normalize_team_code(raw: str) -> str:
     return s
 
 TEAM_LOGOS_BASE64 = build_team_logo_b64_map(TEAM_LOGOS)
+SPORTSBOOK_LOGOS_BASE64 = build_team_logo_b64_map(SPORTSBOOK_LOGOS)
+
 
 # ------------------------------------------------------
 # SESSION STATE
@@ -1406,13 +1417,13 @@ with tab1:
                     odds = int(row.get("price", 0))
                     matchup = row.get("matchup_difficulty_score", 50)
 
-                    # Implied
+                    # Implied probability
                     if odds > 0:
                         implied_prob = 100 / (odds + 100)
                     else:
                         implied_prob = abs(odds) / (abs(odds) + 100)
 
-                    # Logos
+                    # Team logos
                     player_team = normalize_team_code(row.get("player_team", ""))
                     opp_team = normalize_team_code(row.get("opponent_team", ""))
 
@@ -1434,15 +1445,25 @@ with tab1:
                             f"</div>"
                         )
 
-                    # Pretty market label
+                    # Sportsbook Logo
+                    book = row.get("bookmaker", "")
+                    book_logo = SPORTSBOOK_LOGOS_BASE64.get(book, "")
+
+                    if book_logo:
+                        book_html = f'<img src="{book_logo}" style="height:24px;border-radius:6px;" />'
+                    else:
+                        book_html = f'<div class="pill-book">{book}</div>'
+
+                    # Pretty market
                     pretty_market = MARKET_DISPLAY_MAP.get(
                         row.get("market", ""), row.get("market", "")
                     )
 
+                    # Tags
                     tags = build_prop_tags(row)
                     tags_html = build_tags_html(tags)
 
-                    # Card UI
+                    # Build final HTML card
                     card_html = f"""
                     <div class="prop-card">
                         <div class="prop-headline">
@@ -1453,8 +1474,9 @@ with tab1:
                                 </div>
                                 <div style="margin-top:4px;">{tags_html}</div>
                             </div>
+
                             <div style="text-align:right;">
-                                <div class="pill-book">{row.get('bookmaker','')}</div>
+                                {book_html}
                                 {logos_html}
                             </div>
                         </div>
@@ -1475,11 +1497,6 @@ with tab1:
                         </div>
                     </div>
                     """
-
-                    if has_html:
-                        st.html(card_html)
-                    else:
-                        st.markdown(card_html, unsafe_allow_html=True)
 
             st.markdown("</div>", unsafe_allow_html=True)
 

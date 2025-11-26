@@ -1284,11 +1284,20 @@ with tab1:
         # CARD GRID VIEW
         # ======================================================
         if view_mode == "Card grid":
-            top = (
-                card_df.sort_values("hit_rate_last10", ascending=False)
-                .head(16)
-                .reset_index(drop=True)
-            )
+
+            # Remove artificial 16 card limit
+            top = card_df.sort_values(
+                "hit_rate_last10", ascending=False
+            ).reset_index(drop=True)
+
+            # ---- scrollable container ----
+            st.markdown("""
+                <div style="
+                    max-height: 900px;
+                    overflow-y: auto;
+                    padding-right: 10px;
+                ">
+            """, unsafe_allow_html=True)
 
             cols = st.columns(4)
             has_html = hasattr(st, "html")
@@ -1304,9 +1313,7 @@ with tab1:
                     if odds > 0:
                         implied_prob = 100 / (odds + 100)
                     else:
-                        implied_prob = (
-                            abs(odds) / (abs(odds) + 100) if odds != 0 else 0
-                        )
+                        implied_prob = abs(odds) / (abs(odds) + 100)
 
                     player_team = normalize_team_code(row.get("player_team", ""))
                     opp_team = normalize_team_code(row.get("opponent_team", ""))
@@ -1314,6 +1321,7 @@ with tab1:
                     home_logo = TEAM_LOGOS_BASE64.get(player_team, "")
                     opp_logo = TEAM_LOGOS_BASE64.get(opp_team, "")
 
+                    logos_html = ""
                     if home_logo and opp_logo:
                         logos_html = f"""
                         <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">
@@ -1322,16 +1330,10 @@ with tab1:
                             <img src="{opp_logo}" style="height:18px;border-radius:4px;" />
                         </div>
                         """
-                    else:
-                        logos_html = (
-                            f"<div style='font-size:0.75rem;color:#9ca3af;'>{row.get('home_team','')} "
-                            f"vs {row.get('opponent_team','')}</div>"
-                        )
 
                     pretty_market = MARKET_DISPLAY_MAP.get(
                         row.get("market", ""), row.get("market", "")
                     )
-
                     tags = build_prop_tags(row)
                     tags_html = build_tags_html(tags)
 
@@ -1373,7 +1375,9 @@ with tab1:
                     else:
                         st.markdown(card_html, unsafe_allow_html=True)
 
-            st.caption("Card view is visual-only — use the table for saving legs.")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            
 
         # ======================================================
         # ADVANCED TABLE VIEW (AG-Grid, mobile-safe)

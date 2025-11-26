@@ -1410,7 +1410,6 @@ with tab1:
 
             for idx, row in page_df.iterrows():
                 col = cols[idx % 4]
-
                 with col:
                     hit10 = row.get("hit_rate_last10", 0.0)
                     hit20 = row.get("hit_rate_last20", 0.0)
@@ -1445,16 +1444,16 @@ with tab1:
                             f"</div>"
                         )
 
-                    # Sportsbook Logo
+                    # Sportsbook logos
                     book = row.get("bookmaker", "")
                     book_logo = SPORTSBOOK_LOGOS_BASE64.get(book, "")
 
                     if book_logo:
-                        book_html = f'<img src="{book_logo}" style="height:24px;border-radius:6px;" />'
+                        book_html = f'<img src="{book_logo}" style="height:24px;border-radius:4px;" />'
                     else:
                         book_html = f'<div class="pill-book">{book}</div>'
 
-                    # Pretty market
+                    # Pretty market name
                     pretty_market = MARKET_DISPLAY_MAP.get(
                         row.get("market", ""), row.get("market", "")
                     )
@@ -1463,7 +1462,7 @@ with tab1:
                     tags = build_prop_tags(row)
                     tags_html = build_tags_html(tags)
 
-                    # Build final HTML card
+                    # Final card HTML
                     card_html = f"""
                     <div class="prop-card">
                         <div class="prop-headline">
@@ -1498,7 +1497,11 @@ with tab1:
                     </div>
                     """
 
-            st.markdown("</div>", unsafe_allow_html=True)
+                    if has_html:
+                        st.html(card_html)
+                    else:
+                        st.markdown(card_html, unsafe_allow_html=True)
+
 
             st.caption("Card view is visual-only — use the table for selecting saved bets.")
 

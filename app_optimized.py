@@ -1138,6 +1138,33 @@ if st.sidebar.button("🔄 Refresh Data"):
     st.cache_data.clear()
     st.rerun()
 
+# ----------------------------------
+# CARD GRID FILTERS (Manual Inputs)
+# ----------------------------------
+st.sidebar.markdown("### Card Grid Filters")
+
+manual_odds_min = st.sidebar.number_input(
+    "Minimum Odds",
+    value=-200,      # Default
+    step=5
+)
+
+manual_odds_max = st.sidebar.number_input(
+    "Maximum Odds",
+    value=400,       # Default
+    step=5
+)
+
+manual_l10_min = st.sidebar.number_input(
+    "Minimum L10 Hit Rate (%)",
+    min_value=0,
+    max_value=100,
+    value=80,        # Default: 80%
+    step=1
+)
+
+
+
 # ------------------------------------------------------
 # FILTER FUNCTION
 # ------------------------------------------------------
@@ -1250,9 +1277,12 @@ with tab1:
         # -----------------------------
         # Card grid filter rules
         # -----------------------------
-        MIN_ODDS_FOR_CARD = -140
-        MIN_L10 = 0.55
-        REQUIRE_EV_PLUS = True
+        # User-controlled card grid rules
+        MIN_ODDS_FOR_CARD = manual_odds_min
+        MAX_ODDS_FOR_CARD = manual_odds_max
+        MIN_L10 = manual_l10_min / 100      # convert 80 → 0.80
+        REQUIRE_EV_PLUS = True              # keep this, or set False if not needed
+
 
         def is_ev_plus(row):
             odds = row["price"]
@@ -1263,13 +1293,20 @@ with tab1:
             return row["hit_rate_last10"] > implied
 
         def good_for_card(row):
-            if row["price"] < MIN_ODDS_FOR_CARD:
+            # Odds range filter (manual min & max)
+            if row["price"] < MIN_ODDS_FOR_CARD or row["price"] > MAX_ODDS_FOR_CARD:
                 return False
+            
+            # L10 Hit Rate filter (manual)
             if row["hit_rate_last10"] < MIN_L10:
                 return False
+            
+            # Optional EV+ requirement
             if REQUIRE_EV_PLUS and not is_ev_plus(row):
                 return False
+            
             return True
+
 
         card_df = filtered_df[
             filtered_df.apply(

@@ -835,12 +835,19 @@ TEAM_NAME_TO_CODE = {
 }
 
 SPORTSBOOK_LOGOS = {
-    "DraftKings": "https://seeklogo.com/images/D/draftkings-logo-6E6D99A63E-seeklogo.com.png",
-    "FanDuel": "https://seeklogo.com/images/F/fanduel-logo-7F5F31BBA5-seeklogo.com.png",
-    "BetMGM": "https://seeklogo.com/images/B/betmgm-logo-5E7ADDE41D-seeklogo.com.png",
-    "Caesars": "https://seeklogo.com/images/C/caesars-sportsbook-logo-2A0364177A-seeklogo.com.png",
-    "ESPN BET": "https://seeklogo.com/images/E/espn-bet-logo-A8CBE74E0B-seeklogo.com.png",
+    "DraftKings": "https://storage.googleapis.com/bvb-public/sportsbooks/draftkings.png",
+    "FanDuel": "https://storage.googleapis.com/bvb-public/sportsbooks/fanduel.png",
+    "BetMGM": "https://storage.googleapis.com/bvb-public/sportsbooks/betmgm.png",
+    "Caesars": "https://storage.googleapis.com/bvb-public/sportsbooks/caesars.png",
+    "ESPN BET": "https://storage.googleapis.com/bvb-public/sportsbooks/espnbet.png",
+    "BetOnline.ag": "https://storage.googleapis.com/bvb-public/sportsbooks/betonline.png",
+    "Bovada": "https://storage.googleapis.com/bvb-public/sportsbooks/bovada.png",
+    "BetRivers": "https://storage.googleapis.com/bvb-public/sportsbooks/betrivers.png",
+    "PointsBet": "https://storage.googleapis.com/bvb-public/sportsbooks/pointsbet.png",
+    "Hard Rock": "https://storage.googleapis.com/bvb-public/sportsbooks/hardrock.png",
+    "Fanatics": "https://storage.googleapis.com/bvb-public/sportsbooks/fanatics.png",
 }
+
 
 
 # MARKET DISPLAY MAP (prettier labels)

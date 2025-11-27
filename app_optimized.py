@@ -1328,35 +1328,53 @@ with tab1:
             )
         ]
 
-        # ======================================================
-        # CARD GRID VIEW (UPDATED WITH PAGINATION + MANUAL FILTERS)
-        # ======================================================
+        
+        # ===============================
+        # CARD GRID VIEW (FINAL VERSION)
+        # ===============================
         if view_mode == "Card grid":
 
-            # =============================
-            # Apply manual card grid rules
-            # =============================
+            # normalize book names so logos match
+            def normalize_bookmaker(name: str) -> str:
+                if not name:
+                    return ""
+                n = name.strip().lower()
+
+                if "draft" in n:
+                    return "DraftKings"
+                if "fanduel" in n or n == "fd":
+                    return "FanDuel"
+                if "mgm" in n:
+                    return "BetMGM"
+                if "caes" in n:
+                    return "Caesars"
+                if "espn" in n:
+                    return "ESPN BET"
+                return name
+
+            # card filters (your manual inputs)
             MIN_ODDS_FOR_CARD = manual_odds_min
             MAX_ODDS_FOR_CARD = manual_odds_max
             MIN_L10 = manual_l10_min / 100
             REQUIRE_EV_PLUS = True
 
+            def is_ev_plus(row):
+                odds = row["price"]
+                if odds > 0:
+                    implied = 100 / (odds + 100)
+                else:
+                    implied = abs(odds) / (abs(odds) + 100)
+                return row["hit_rate_last10"] > implied
+
             def good_for_card(row):
-                # Odds range
                 if row["price"] < MIN_ODDS_FOR_CARD or row["price"] > MAX_ODDS_FOR_CARD:
                     return False
-
-                # L10 hit rate
                 if row["hit_rate_last10"] < MIN_L10:
                     return False
-
-                # Optional EV+ logic
                 if REQUIRE_EV_PLUS and not is_ev_plus(row):
                     return False
-
                 return True
 
-            # Filter for cards
             card_df = filtered_df[
                 filtered_df.apply(
                     lambda r: (
@@ -1368,14 +1386,12 @@ with tab1:
                 )
             ]
 
-            # Sort highest L10 → lowest
-            top = card_df.sort_values("hit_rate_last10", ascending=False).reset_index(drop=True)
+            # Sort top-down by L10 hit rate
+            ranked = card_df.sort_values("hit_rate_last10", ascending=False).reset_index(drop=True)
 
-            # =============================
-            # PAGINATION
-            # =============================
+            # Pagination
             page_size = 30
-            total_cards = len(top)
+            total_cards = len(ranked)
             total_pages = max(1, (total_cards + page_size - 1) // page_size)
 
             st.write(f"Showing {total_cards} props • {total_pages} pages")
@@ -1391,15 +1407,12 @@ with tab1:
 
             start = (page - 1) * page_size
             end = start + page_size
-            page_df = top.iloc[start:end]
+            page_df = ranked.iloc[start:end]
 
-            # =============================
-            # RENDER CARDS IN PAGE
-            # =============================
-
+            # scroll container
             st.markdown("""
                 <div style="
-                    max-height: 1200px;
+                    max-height: 1300px;
                     overflow-y: auto;
                     padding-right: 12px;
                 ">
@@ -1410,19 +1423,26 @@ with tab1:
 
             for idx, row in page_df.iterrows():
                 col = cols[idx % 4]
+
                 with col:
+
+                    player = row.get("player", "")
+                    pretty_market = MARKET_DISPLAY_MAP.get(row.get("market", ""), row.get("market", ""))
+                    bet_type = str(row.get("bet_type", "")).upper()
+                    line = row.get("line", "")
+
+                    odds = int(row.get("price", 0))
                     hit10 = row.get("hit_rate_last10", 0.0)
                     hit20 = row.get("hit_rate_last20", 0.0)
-                    odds = int(row.get("price", 0))
                     matchup = row.get("matchup_difficulty_score", 50)
 
-                    # Implied probability
+                    # implied probability
                     if odds > 0:
                         implied_prob = 100 / (odds + 100)
                     else:
                         implied_prob = abs(odds) / (abs(odds) + 100)
 
-                    # Team logos
+                    # teams
                     player_team = normalize_team_code(row.get("player_team", ""))
                     opp_team = normalize_team_code(row.get("opponent_team", ""))
 
@@ -1431,49 +1451,43 @@ with tab1:
 
                     if home_logo and opp_logo:
                         logos_html = f"""
-                        <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">
-                            <img src="{home_logo}" style="height:18px;border-radius:4px;" />
-                            <span style="font-size:0.7rem;color:#9ca3af;">vs</span>
-                            <img src="{opp_logo}" style="height:18px;border-radius:4px;" />
-                        </div>
+                            <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">
+                                <img src="{home_logo}" style="height:18px;border-radius:4px;" />
+                                <span style="font-size:0.7rem;color:#9ca3af;">vs</span>
+                                <img src="{opp_logo}" style="height:18px;border-radius:4px;" />
+                            </div>
                         """
                     else:
-                        logos_html = (
-                            f"<div style='font-size:0.75rem;color:#9ca3af;'>"
-                            f"{row.get('home_team','')} vs {row.get('opponent_team','')}"
-                            f"</div>"
-                        )
+                        logos_html = f"""
+                            <div style='font-size:0.75rem;color:#9ca3af;'>
+                                {row.get("home_team","")} vs {row.get("opponent_team","")}
+                            </div>
+                        """
 
-                    # Sportsbook logos
-                    book = row.get("bookmaker", "")
-                    book_logo = SPORTSBOOK_LOGOS_BASE64.get(book, "")
+                    # sportsbook logo
+                    book_raw = row.get("bookmaker", "")
+                    book = normalize_bookmaker(book_raw)
+                    book_logo_b64 = SPORTSBOOK_LOGOS_BASE64.get(book, "")
 
-                    if book_logo:
-                        book_html = f'<img src="{book_logo}" style="height:24px;border-radius:4px;" />'
+                    if book_logo_b64:
+                        book_html = f'<img src="{book_logo_b64}" style="height:24px;border-radius:4px;" />'
                     else:
                         book_html = f'<div class="pill-book">{book}</div>'
 
-                    # Pretty market name
-                    pretty_market = MARKET_DISPLAY_MAP.get(
-                        row.get("market", ""), row.get("market", "")
-                    )
+                    # tags
+                    tags_html = build_tags_html(build_prop_tags(row))
 
-                    # Tags
-                    tags = build_prop_tags(row)
-                    tags_html = build_tags_html(tags)
-
-                    # Final card HTML
+                    # final card HTML
                     card_html = f"""
                     <div class="prop-card">
                         <div class="prop-headline">
                             <div>
-                                <div class="prop-player">{row.get('player','')}</div>
+                                <div class="prop-player">{player}</div>
                                 <div class="prop-market">
-                                    {pretty_market} • {str(row.get('bet_type','')).upper()} {row.get('line','')}
+                                    {pretty_market} • {bet_type} {line}
                                 </div>
                                 <div style="margin-top:4px;">{tags_html}</div>
                             </div>
-
                             <div style="text-align:right;">
                                 {book_html}
                                 {logos_html}
@@ -1502,9 +1516,8 @@ with tab1:
                     else:
                         st.markdown(card_html, unsafe_allow_html=True)
 
-
-            st.caption("Card view is visual-only — use the table for selecting saved bets.")
-
+            st.markdown("</div>", unsafe_allow_html=True)
+            st.caption("Card view is visual-only — use the table to save legs.")
 
             
 

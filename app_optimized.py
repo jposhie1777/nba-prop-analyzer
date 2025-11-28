@@ -102,7 +102,9 @@ SELECT
   pts,
   reb,
   ast,
-  pra
+  pra,
+  stl,
+  blk
 FROM `{PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}`
 ORDER BY game_date
 """
@@ -850,7 +852,6 @@ SPORTSBOOK_LOGOS = {
 
 
 
-# MARKET DISPLAY MAP (prettier labels)
 MARKET_DISPLAY_MAP = {
     "player_assists_alternate": "Assists",
     "player_points_alternate": "Points",
@@ -859,7 +860,12 @@ MARKET_DISPLAY_MAP = {
     "player_points_rebounds_alternate": "Pts+Reb",
     "player_points_rebounds_assists_alternate": "PRA",
     "player_rebounds_assists_alternate": "Reb+Ast",
+
+    # NEW:
+    "player_steals_alternate": "Steals",
+    "player_blocks_alternate": "Blocks",
 }
+
 
 def build_prop_tags(row):
     tags = []
@@ -1006,6 +1012,7 @@ def format_moneyline(v):
 
 def detect_stat(market):
     m = (market or "").lower()
+
     if "p+r+a" in m or "pra" in m:
         return "pra"
     if "assist" in m or "ast" in m:
@@ -1014,7 +1021,13 @@ def detect_stat(market):
         return "reb"
     if "pt" in m or "point" in m:
         return "pts"
+    if "stl" in m or "steal" in m:
+        return "stl"
+    if "blk" in m or "block" in m:
+        return "blk"
+
     return ""
+
 
 
 def get_dynamic_averages(df):
@@ -1042,6 +1055,8 @@ def add_defense(df):
         "reb": "opp_pos_reb_rank",
         "ast": "opp_pos_ast_rank",
         "pra": "opp_pos_pra_rank",
+        "stl": "opp_pos_stl_rank",
+        "blk": "opp_pos_blk_rank",
     }
 
     overall_cols = {
@@ -1049,7 +1064,10 @@ def add_defense(df):
         "reb": "overall_reb_rank",
         "ast": "overall_ast_rank",
         "pra": "overall_pra_rank",
+        "stl": "overall_stl_rank",
+        "blk": "overall_blk_rank",
     }
+
 
     df["Pos Def Rank"] = [
         df.loc[i, pos_cols.get(stat_series[i])]
@@ -1843,12 +1861,21 @@ with tab2:
             "Player", sorted(props_df["player"].dropna().unique())
         )
     with c2:
-        stat_label = st.selectbox("Stat", ["Points", "Rebounds", "Assists", "P+R+A"])
+        stat_label = st.selectbox("Stat", ["Points", "Rebounds", "Assists", "P+R+A", "Steals", "Blocks"])
     with c3:
         n_games = st.slider("Last N games", 5, 25, 15)
 
-    stat_map = {"Points": "pts", "Rebounds": "reb", "Assists": "ast", "P+R+A": "pra"}
+    stat_map = {
+        "Points": "pts",
+        "Rebounds": "reb",
+        "Assists": "ast",
+        "P+R+A": "pra",
+        "Steals": "stl",
+        "Blocks": "blk",
+    }
     stat = stat_map[stat_label]
+
+
 
     def clean_name(name):
         if not isinstance(name, str):
@@ -1886,7 +1913,10 @@ with tab2:
             "Rebounds": "player_rebounds_alternate",
             "Assists": "player_assists_alternate",
             "P+R+A": "player_points_rebounds_assists_alternate",
+            "Steals": "player_steals_alternate",
+            "Blocks": "player_blocks_alternate",
         }
+
 
         selected_market_code = market_map[stat_label]
 

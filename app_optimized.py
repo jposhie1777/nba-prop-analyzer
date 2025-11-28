@@ -1116,9 +1116,17 @@ def load_props():
     df["hit_rate_last5"] = pd.to_numeric(df.get("hit_rate_last5"), errors="coerce")
     df["hit_rate_last10"] = pd.to_numeric(df.get("hit_rate_last10"), errors="coerce")
     df["hit_rate_last20"] = pd.to_numeric(df.get("hit_rate_last20"), errors="coerce")
-    df["matchup_difficulty_score"] = pd.to_numeric(
-        df.get("matchup_difficulty_score"), errors="coerce"
-    )
+    # Handle renamed matchup difficulty column
+    if "matchup_difficulty_by_stat" in df.columns:
+        df["matchup_difficulty_score"] = pd.to_numeric(
+            df["matchup_difficulty_by_stat"], errors="coerce"
+        )
+    else:
+        # fallback for older schema
+        df["matchup_difficulty_score"] = pd.to_numeric(
+            df.get("matchup_difficulty_score"), errors="coerce"
+        )
+
 
     for c in ["ev_last5", "ev_last10", "ev_last20"]:
         if c in df.columns:
@@ -1178,6 +1186,11 @@ if st.sidebar.button("🔄 Refresh Data"):
 # CARD GRID FILTERS (Manual Inputs)
 # ----------------------------------
 st.sidebar.markdown("### Card Grid Filters")
+
+show_defensive_props = st.sidebar.checkbox(
+    "Show Defensive Props (Steals & Blocks)",
+    value=True
+)
 
 manual_odds_min = st.sidebar.number_input(
     "Minimum Odds",
@@ -1329,19 +1342,32 @@ with tab1:
             return row["hit_rate_last10"] > implied
 
         def good_for_card(row):
-            # Odds range filter (manual min & max)
+            stat = detect_stat(row["market"])
+
+            # -----------------------------------------
+            # NEW: If user enabled defensive props,
+            # auto-include all steals/blocks props
+            # as long as odds are within min/max.
+            # -----------------------------------------
+            if show_defensive_props and stat in ("stl", "blk"):
+                if row["price"] < MIN_ODDS_FOR_CARD or row["price"] > MAX_ODDS_FOR_CARD:
+                    return False
+                return True
+
+            # -----------------------------------------
+            # Normal filters for all other stats
+            # -----------------------------------------
             if row["price"] < MIN_ODDS_FOR_CARD or row["price"] > MAX_ODDS_FOR_CARD:
                 return False
-            
-            # L10 Hit Rate filter (manual)
+
             if row["hit_rate_last10"] < MIN_L10:
                 return False
-            
-            # Optional EV+ requirement
+
             if REQUIRE_EV_PLUS and not is_ev_plus(row):
                 return False
-            
+
             return True
+
 
 
         card_df = filtered_df[

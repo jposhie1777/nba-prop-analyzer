@@ -1241,8 +1241,20 @@ def filter_props(df):
     # Odds slider
     d = d[d["price"].between(sel_odds[0], sel_odds[1])]
 
-    # Global Min L10 Hit Rate (applies to ALL props, including steals/blocks)
-    d = d[d["hit_rate_last10"] >= sel_hit10]
+    # ------------------------------------------------------
+    # Global Min L10 Hit Rate
+    # BUT – steals/blocks bypass the L10 requirement
+    # ------------------------------------------------------
+    stat_series = d["market"].apply(detect_stat)
+
+    # Keep:
+    #   - All steals/blocks props
+    #   - Any other prop meeting the L10 threshold
+    d = d[
+        (stat_series.isin(["stl", "blk"])) |
+        (d["hit_rate_last10"] >= sel_hit10)
+    ]
+
 
     # Saved bets filter
     if show_only_saved and st.session_state.saved_bets:

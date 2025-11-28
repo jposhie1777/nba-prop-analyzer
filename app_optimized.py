@@ -1220,6 +1220,8 @@ manual_l10_min = st.sidebar.number_input(
 def filter_props(df):
     d = df.copy()
 
+    stat = detect_stat(d["market"])
+
     d["price"] = pd.to_numeric(d["price"], errors="coerce")
     d["hit_rate_last10"] = pd.to_numeric(d["hit_rate_last10"], errors="coerce")
 
@@ -1238,6 +1240,18 @@ def filter_props(df):
 
     d = d[d["price"].between(sel_odds[0], sel_odds[1])]
     d = d[d["hit_rate_last10"] >= sel_hit10]
+
+    stat = detect_stat(d["market"])
+
+    # Allow defensive props to bypass hit-rate filter
+    if show_defensive_props:
+        d = d[
+            (stat.isin(["stl", "blk"])) |
+            (d["hit_rate_last10"] >= sel_hit10)
+        ]
+    else:
+        d = d[d["hit_rate_last10"] >= sel_hit10]
+
 
     if show_only_saved and st.session_state.saved_bets:
         saved_df = pd.DataFrame(st.session_state.saved_bets)

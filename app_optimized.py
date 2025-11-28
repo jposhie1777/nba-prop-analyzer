@@ -1274,26 +1274,17 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(
 # TAB 1 — PROPS OVERVIEW (Card Grid + Advanced Table)
 # ------------------------------------------------------
 with tab1:
+
     st.subheader("Props Overview (Real Slate)")
 
+    # Apply global sidebar filters
     filtered_df = filter_props(props_df)
 
+    # ----------- TOP METRICS ----------
     total_props = len(filtered_df)
-    avg_hit = (
-        filtered_df["hit_rate_last10"].mean()
-        if (total_props and "hit_rate_last10" in filtered_df)
-        else 0
-    )
-    avg_odds = (
-        filtered_df["price"].mean()
-        if (total_props and "price" in filtered_df)
-        else 0
-    )
-    avg_matchup = (
-        filtered_df["matchup_difficulty_score"].mean()
-        if (total_props and "matchup_difficulty_score" in filtered_df)
-        else 0
-    )
+    avg_hit = filtered_df["hit_rate_last10"].mean() if total_props else 0
+    avg_odds = filtered_df["price"].mean() if total_props else 0
+    avg_matchup = filtered_df["matchup_difficulty_score"].mean() if total_props else 0
 
     metrics_html = f"""
     <div class="metric-grid">
@@ -1321,527 +1312,444 @@ with tab1:
     """
     st.markdown(metrics_html, unsafe_allow_html=True)
 
-        if filtered_df.empty:
-            st.info("No props match your filters.")
-        else:
-            view_mode = st.radio(
-                "View Mode",
-                ["Card grid", "Advanced Table"],
-                horizontal=True,
-                index=0,
+    if filtered_df.empty:
+        st.info("No props match your filters.")
+        st.stop()
+
+    # -------------------------------------------
+    # Mode toggle
+    # -------------------------------------------
+    view_mode = st.radio(
+        "View Mode",
+        ["Card grid", "Advanced Table"],
+        horizontal=True,
+        index=0
+    )
+
+    # ======================================================
+    # CARD GRID VIEW (Option B — Steals/Blocks bypass L10)
+    # ======================================================
+    if view_mode == "Card grid":
+
+        # -------------------------
+        # Helpers
+        # -------------------------
+        def normalize_bookmaker(name: str) -> str:
+            if not name:
+                return ""
+            n = name.strip().lower()
+            if "draft" in n:
+                return "DraftKings"
+            if "fanduel" in n or n == "fd":
+                return "FanDuel"
+            if "mgm" in n:
+                return "BetMGM"
+            if "caes" in n:
+                return "Caesars"
+            if "espn" in n:
+                return "ESPN BET"
+            return name
+
+        MIN_ODDS_FOR_CARD = manual_odds_min
+        MAX_ODDS_FOR_CARD = manual_odds_max
+        MIN_L10 = manual_l10_min / 100
+        REQUIRE_EV_PLUS = True
+
+        def is_ev_plus(row):
+            odds = row["price"]
+            implied = (
+                100 / (odds + 100)
+                if odds > 0
+                else abs(odds) / (abs(odds) + 100)
             )
+            return row["hit_rate_last10"] > implied
 
-            # ===============================
-            # CARD GRID VIEW (Option B)
-            # ===============================
-            if view_mode == "Card grid":
+        def card_good(row):
+            """
+            Card Grid Option B:
+            - Must meet odds range
+            - Must be EV+
+            - Steals/Blocks bypass L10-but others must meet manual L10 threshold
+            """
+            if pd.isna(row.get("price")) or pd.isna(row.get("hit_rate_last10")):
+                return False
 
-                # normalize book names so logos match
-                def normalize_bookmaker(name: str) -> str:
-                    if not name:
-                        return ""
-                    n = name.strip().lower()
+            if not (MIN_ODDS_FOR_CARD <= row["price"] <= MAX_ODDS_FOR_CARD):
+                return False
 
-                    if "draft" in n:
-                        return "DraftKings"
-                    if "fanduel" in n or n == "fd":
-                        return "FanDuel"
-                    if "mgm" in n:
-                        return "BetMGM"
-                    if "caes" in n:
-                        return "Caesars"
-                    if "espn" in n:
-                        return "ESPN BET"
-                    return name
+            stat = detect_stat(row.get("market", ""))
 
-                # Card-grid specific filters (manual inputs)
-                MIN_ODDS_FOR_CARD = manual_odds_min
-                MAX_ODDS_FOR_CARD = manual_odds_max
-                MIN_L10 = manual_l10_min / 100.0   # e.g. 80 → 0.80
-                REQUIRE_EV_PLUS = True
+            if stat not in ("stl", "blk") and row["hit_rate_last10"] < MIN_L10:
+                return False
 
-                def is_ev_plus(row):
-                    odds = row["price"]
-                    if odds > 0:
-                        implied = 100 / (odds + 100)
-                    else:
-                        implied = abs(odds) / (abs(odds) + 100)
-                    return row["hit_rate_last10"] > implied
+            if REQUIRE_EV_PLUS and not is_ev_plus(row):
+                return False
 
-                def good_for_card(row):
-                    """
-                    Card Grid Option B:
-                    - All props must:
-                        - have price & hit_rate_last10
-                        - be within manual odds range
-                        - be EV+ (if REQUIRE_EV_PLUS)
-                    - BUT steals/blocks bypass the L10 threshold.
-                    """
-                    if pd.isna(row.get("price")) or pd.isna(row.get("hit_rate_last10")):
-                        return False
+            return True
 
-                    # Odds range (always enforced)
-                    if row["price"] < MIN_ODDS_FOR_CARD or row["price"] > MAX_ODDS_FOR_CARD:
-                        return False
+        # Apply card-grid filter
+        card_df = filtered_df[filtered_df.apply(card_good, axis=1)]
 
-                    stat = detect_stat(row.get("market", ""))
+        ranked = (
+            card_df.sort_values("hit_rate_last10", ascending=False)
+            if not card_df.empty
+            else card_df
+        ).reset_index(drop=True)
 
-                    # L10 requirement applies to everything EXCEPT steals & blocks
-                    if stat not in ("stl", "blk") and row["hit_rate_last10"] < MIN_L10:
-                        return False
+        # Pagination
+        page_size = 30
+        total_cards = len(ranked)
+        total_pages = max(1, (total_cards + page_size - 1) // page_size)
 
-                    # EV+ requirement applies to all stats, including steals/blocks
-                    if REQUIRE_EV_PLUS and not is_ev_plus(row):
-                        return False
+        st.write(f"Showing {total_cards} props • {total_pages} pages")
 
-                    return True
+        page = st.number_input(
+            "Page",
+            min_value=1,
+            max_value=total_pages,
+            value=1,
+            step=1,
+            key="card_page_number"
+        )
 
-                # Apply card-grid filter on already sidebar-filtered df
-                card_df = filtered_df[
-                    filtered_df.apply(good_for_card, axis=1)
-                ]
+        start = (page - 1) * page_size
+        end = start + page_size
+        page_df = ranked.iloc[start:end]
 
-                # Sort top-down by L10 hit rate
-                if not card_df.empty:
-                    ranked = card_df.sort_values(
-                        "hit_rate_last10", ascending=False
-                    ).reset_index(drop=True)
-                else:
-                    ranked = card_df
+        st.markdown("""
+            <div style="
+                max-height: 1100px;
+                overflow-y: auto;
+                padding-right: 12px;
+            ">
+        """, unsafe_allow_html=True)
 
-                # Pagination
-                page_size = 30
-                total_cards = len(ranked)
-                total_pages = max(1, (total_cards + page_size - 1) // page_size)
+        cols = st.columns(4)
+        has_html = hasattr(st, "html")
 
-                st.write(f"Showing {total_cards} props • {total_pages} pages")
+        for idx, row in page_df.iterrows():
+            col = cols[idx % 4]
+            with col:
 
-                page = st.number_input(
-                    "Page",
-                    min_value=1,
-                    max_value=total_pages,
-                    value=1,
-                    step=1,
-                    key="card_page_input"
+                player = row.get("player", "")
+                pretty_market = MARKET_DISPLAY_MAP.get(
+                    row.get("market", ""), row.get("market", "")
+                )
+                bet_type = str(row.get("bet_type", "")).upper()
+                line = row.get("line", "")
+
+                odds = int(row.get("price", 0))
+                hit10 = row.get("hit_rate_last10", 0.0)
+                hit20 = row.get("hit_rate_last20", 0.0)
+                matchup = row.get("matchup_difficulty_score", 50)
+
+                implied_prob = (
+                    100 / (odds + 100)
+                    if odds > 0
+                    else abs(odds) / (abs(odds) + 100)
                 )
 
-                start = (page - 1) * page_size
-                end = start + page_size
-                page_df = ranked.iloc[start:end]
+                player_team = normalize_team_code(row.get("player_team", ""))
+                opp_team = normalize_team_code(row.get("opponent_team", ""))
 
-                # scroll container
-                st.markdown("""
-                    <div style="
-                        max-height: 1300px;
-                        overflow-y: auto;
-                        padding-right: 12px;
-                    ">
-                """, unsafe_allow_html=True)
+                home_logo = TEAM_LOGOS_BASE64.get(player_team, "")
+                opp_logo = TEAM_LOGOS_BASE64.get(opp_team, "")
 
-                cols = st.columns(4)
-                has_html = hasattr(st, "html")
-
-                for idx, row in page_df.iterrows():
-                    col = cols[idx % 4]
-
-                    with col:
-                        player = row.get("player", "")
-                        pretty_market = MARKET_DISPLAY_MAP.get(
-                            row.get("market", ""), row.get("market", "")
-                        )
-                        bet_type = str(row.get("bet_type", "")).upper()
-                        line = row.get("line", "")
-
-                        odds = int(row.get("price", 0))
-                        hit10 = row.get("hit_rate_last10", 0.0)
-                        hit20 = row.get("hit_rate_last20", 0.0)
-                        matchup = row.get("matchup_difficulty_score", 50)
-
-                        # implied probability
-                        if odds > 0:
-                            implied_prob = 100 / (odds + 100)
-                        else:
-                            implied_prob = abs(odds) / (abs(odds) + 100)
-
-                        # teams
-                        player_team = normalize_team_code(row.get("player_team", ""))
-                        opp_team = normalize_team_code(row.get("opponent_team", ""))
-
-                        home_logo = TEAM_LOGOS_BASE64.get(player_team, "")
-                        opp_logo = TEAM_LOGOS_BASE64.get(opp_team, "")
-
-                        if home_logo and opp_logo:
-                            logos_html = f"""
-                                <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">
-                                    <img src="{home_logo}" style="height:18px;border-radius:4px;" />
-                                    <span style="font-size:0.7rem;color:#9ca3af;">vs</span>
-                                    <img src="{opp_logo}" style="height:18px;border-radius:4px;" />
-                                </div>
-                            """
-                        else:
-                            logos_html = f"""
-                                <div style='font-size:0.75rem;color:#9ca3af;'>
-                                    {row.get("home_team","")} vs {row.get("opponent_team","")}
-                                </div>
-                            """
-
-                        # sportsbook logo
-                        book_raw = row.get("bookmaker", "")
-                        book = normalize_bookmaker(book_raw)
-                        book_logo_b64 = SPORTSBOOK_LOGOS_BASE64.get(book, "")
-
-                        if book_logo_b64:
-                            book_html = f'<img src="{book_logo_b64}" style="height:24px;border-radius:4px;" />'
-                        else:
-                            book_html = f'<div class="pill-book">{book}</div>'
-
-                        # tags
-                        tags_html = build_tags_html(build_prop_tags(row))
-
-                        # final card HTML
-                        card_html = f"""
-                        <div class="prop-card">
-                            <div class="prop-headline">
-                                <div>
-                                    <div class="prop-player">{player}</div>
-                                    <div class="prop-market">
-                                        {pretty_market} • {bet_type} {line}
-                                    </div>
-                                    <div style="margin-top:4px;">{tags_html}</div>
-                                </div>
-                                <div style="text-align:right;">
-                                    {book_html}
-                                    {logos_html}
-                                </div>
-                            </div>
-
-                            <div class="prop-meta">
-                                <div>
-                                    <div style="color:#e5e7eb;font-size:0.8rem;">{odds:+d}</div>
-                                    <div style="font-size:0.7rem;">Imp: {implied_prob:.0%}</div>
-                                </div>
-                                <div>
-                                    <div style="color:#e5e7eb;font-size:0.8rem;">L10: {hit10:.0%}</div>
-                                    <div style="font-size:0.7rem;">L20: {hit20:.0%}</div>
-                                </div>
-                                <div>
-                                    <div style="color:#e5e7eb;font-size:0.8rem;">{matchup:.0f}/100</div>
-                                    <div style="font-size:0.7rem;">Difficulty</div>
-                                </div>
-                            </div>
+                if home_logo and opp_logo:
+                    logos_html = f"""
+                        <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">
+                            <img src="{home_logo}" style="height:18px;border-radius:4px;" />
+                            <span style="font-size:0.7rem;color:#9ca3af;">vs</span>
+                            <img src="{opp_logo}" style="height:18px;border-radius:4px;" />
                         </div>
-                        """
-
-                        if has_html:
-                            st.html(card_html)
-                        else:
-                            st.markdown(card_html, unsafe_allow_html=True)
-
-                st.markdown("</div>", unsafe_allow_html=True)
-                st.caption("Card view is visual-only — use the table to save legs.")
-
-            # ======================================================
-            # ADVANCED TABLE VIEW (unchanged)
-            # ======================================================
-            else:
-                df = filtered_df.copy()
-
-                if "home_team" in df.columns:
-                    df["home_team"] = df["home_team"].astype(str).str.strip().str.upper()
-                if "opponent_team" in df.columns:
-                    df["opponent_team"] = (
-                        df["opponent_team"].astype(str).str.strip().str.upper()
-                    )
-
-                df["Implied Prob"] = np.where(
-                    df["price"] > 0,
-                    100 / (df["price"] + 100),
-                    np.abs(df["price"]) / (np.abs(df["price"]) + 100),
-                ) * 100
-
-                df["Hit5"] = (df["hit_rate_last5"] * 100).round(0)
-                df["Hit10"] = (df["hit_rate_last10"] * 100).round(0)
-                df["Hit20"] = (df["hit_rate_last20"] * 100).round(0)
-
-                df["Edge_raw"] = df["Hit10"] - df["Implied Prob"]
-                df["Edge"] = df["Edge_raw"].apply(
-                    lambda x: f"+{x:.1f}%" if x > 0 else f"{x:.1f}%"
-                )
-
-                df["Matchup30"] = (
-                    df["matchup_difficulty_score"].fillna(5).clip(1, 10) * 3
-                ).round(0)
-                df["line"] = df["line"].astype(float)
-
-                df["Sparkline"] = df.apply(
-                    lambda r: [
-                        int(r["Hit5"]),
-                        int(r["Hit10"]),
-                        int(r["Hit20"]),
-                        int(np.random.randint(30, 90)),
-                        int(np.random.randint(30, 90)),
-                    ],
-                    axis=1,
-                )
-
-                grid_df = pd.DataFrame(
-                    {
-                        "Player": df["player"],
-                        "Market": df["market"].apply(
-                            lambda m: MARKET_DISPLAY_MAP.get(m, m)
-                        ),
-                        "Line": df["line"],
-                        "Label": df["bet_type"],
-                        "Odds": df["price"],
-                        "Book": df["bookmaker"],
-                        "Hit5": df["Hit5"],
-                        "Hit10": df["Hit10"],
-                        "Hit20": df["Hit20"],
-                        "Spark": df["Sparkline"],
-                        "ImpProb": df["Implied Prob"],
-                        "Edge_raw": df["Edge_raw"],
-                        "Edge": df["Edge"],
-                        "Matchup30": df["Matchup30"],
-                    }
-                )
-
-                sparkline_renderer = JsCode(
                     """
-                    function(params){
-                        const v = params.value;
-                        if (!v || !Array.isArray(v) || v.length === 0) {
-                            return '';
-                        }
-                        const values = v;
-                        const maxVal = Math.max(...values);
-                        const minVal = Math.min(...values);
-                        const height = 22;
-                        const width = 60;
-
-                        function scaleY(val) {
-                            return height - ((val - minVal) / (maxVal - minVal + 0.0001)) * height;
-                        }
-
-                        let points = values.map((val, i) => {
-                            const x = (i / (values.length - 1)) * width;
-                            return `${x},${scaleY(val)}`;
-                        }).join(" ");
-
-                        return `
-                            <svg width="${width}" height="${height}">
-                                <polyline points="${points}" class="sparkline" />
-                            </svg>
-                        `;
-                    }
-                    """
-                )
-
-                odds_formatter = JsCode(
-                    """
-                    function(params){
-                        if (params.value == null) return '';
-                        return params.value > 0 ? '+' + params.value : params.value.toString();
-                    }
-                    """
-                )
-
-                percent_formatter = JsCode(
-                    """
-                    function(params){
-                        if (params.value == null) return '';
-                        return params.value.toFixed(0) + '%';
-                    }
-                    """
-                )
-
-                matchup_formatter = JsCode(
-                    """
-                    function(params){
-                        if (params.value == null) return '';
-                        return params.value.toFixed(0) + '/30';
-                    }
-                    """
-                )
-
-                row_style_js = JsCode(
-                    """
-                    function(params){
-                        const e = params.data.Edge_raw;
-                        if (e >= 8) {
-                            return { backgroundColor: "rgba(34,197,94,0.08)" };
-                        }
-                        if (e >= 3) {
-                            return { backgroundColor: "rgba(59,130,246,0.08)" };
-                        }
-                        if (e <= -5) {
-                            return { backgroundColor: "rgba(239,68,68,0.08)" };
-                        }
-                        return {};
-                    }
-                    """
-                )
-
-                hit_cell_style = JsCode(
-                    """
-                    function(params){
-                        const pct = params.value;
-                        const hue = 120 * (pct / 100);
-                        return {
-                            backgroundColor: `hsl(${hue},85%,40%)`,
-                            color: 'white',
-                            textAlign: 'center',
-                            fontWeight: 700
-                        };
-                    }
-                    """
-                )
-
-                edge_cell_style = JsCode(
-                    """
-                    function(params){
-                        const raw = params.data.Edge_raw;
-                        const t = (raw + 30) / 60.0;
-                        const hue = 120 * Math.max(0, Math.min(1, t));
-                        return {
-                            backgroundColor: `hsl(${hue},80%,35%)`,
-                            color: 'white',
-                            textAlign: 'center',
-                            fontWeight: 700
-                        };
-                    }
-                    """
-                )
-
-                matchup_cell_style = JsCode(
-                    """
-                    function(params){
-                        var v = params.value;
-                        var t = (v - 1) / 29.0;
-                        var hue = 120 * t;
-                        return {
-                            backgroundColor: 'hsl(' + hue + ',70%,35%)',
-                            color: 'white',
-                            textAlign: 'center',
-                            fontWeight: 700
-                        };
-                    }
-                    """
-                )
-
-                gb = GridOptionsBuilder.from_dataframe(grid_df)
-
-                gb.configure_default_column(
-                    sortable=True,
-                    resizable=True,
-                    minWidth=120,
-                    width=130,
-                    maxWidth=200,
-                    cellStyle={"textAlign": "center"},
-                )
-
-                gb.configure_column("*", filter=True)
-                gb.configure_selection("multiple", use_checkbox=True)
-
-                gb.configure_grid_options(
-                    getRowStyle=row_style_js,
-                    suppressSizeToFit=True,
-                    suppressAutoSize=True,
-                    suppressHorizontalScroll=False,
-                    domLayout="normal",
-                )
-
-                gb.configure_column("Player", pinned="left", minWidth=140, width=160)
-                gb.configure_column("Odds", valueFormatter=odds_formatter, width=95)
-
-                gb.configure_column(
-                    "Hit5",
-                    header_name="L5",
-                    valueFormatter=percent_formatter,
-                    cellStyle=hit_cell_style,
-                    width=75,
-                )
-                gb.configure_column(
-                    "Hit10",
-                    header_name="L10",
-                    valueFormatter=percent_formatter,
-                    cellStyle=hit_cell_style,
-                    width=75,
-                )
-                gb.configure_column(
-                    "Hit20",
-                    header_name="L20",
-                    valueFormatter=percent_formatter,
-                    cellStyle=hit_cell_style,
-                    width=75,
-                )
-
-                gb.configure_column(
-                    "Spark",
-                    header_name="Trend",
-                    cellRenderer=sparkline_renderer,
-                    width=100,
-                    filter=False,
-                )
-
-                gb.configure_column(
-                    "ImpProb",
-                    header_name="Imp%",
-                    valueFormatter=percent_formatter,
-                    width=80,
-                )
-                gb.configure_column("Edge_raw", hide=True)
-                gb.configure_column(
-                    "Edge",
-                    cellStyle=edge_cell_style,
-                    width=100,
-                )
-                gb.configure_column(
-                    "Matchup30",
-                    header_name="Matchup",
-                    valueFormatter=matchup_formatter,
-                    cellStyle=matchup_cell_style,
-                    width=100,
-                )
-
-                grid_response = AgGrid(
-                    grid_df,
-                    gridOptions=gb.build(),
-                    update_mode=GridUpdateMode.SELECTION_CHANGED,
-                    fit_columns_on_grid_load=False,
-                    theme="balham",
-                    allow_unsafe_jscode=True,
-                    height=550,
-                )
-
-                selected_rows = grid_response.get("selected_rows", [])
-
-                if selected_rows:
-                    sel_df = pd.DataFrame(selected_rows)[
-                        ["Player", "Market", "Line", "Label", "Odds", "Book"]
-                    ]
-                    sel_df = sel_df.rename(
-                        columns={
-                            "Player": "player",
-                            "Market": "market",
-                            "Line": "line",
-                            "Label": "bet_type",
-                            "Odds": "price",
-                            "Book": "bookmaker",
-                        }
-                    )
-
-                    st.session_state.saved_bets = (
-                        sel_df.drop_duplicates().to_dict("records")
-                    )
-
-                    replace_saved_bets_in_db(user_id, st.session_state.saved_bets)
-
-                    st.success(f"{len(sel_df)} bet(s) saved.")
                 else:
-                    st.session_state.saved_bets = []
-                    replace_saved_bets_in_db(user_id, [])
+                    logos_html = f"""
+                        <div style='font-size:0.75rem;color:#9ca3af;'>
+                            {row.get("home_team","")} vs {row.get("opponent_team","")}
+                        </div>
+                    """
 
+                book = normalize_bookmaker(row.get("bookmaker", ""))
+                book_logo_b64 = SPORTSBOOK_LOGOS_BASE64.get(book, "")
 
+                if book_logo_b64:
+                    book_html = f'<img src="{book_logo_b64}" style="height:24px;border-radius:4px;" />'
+                else:
+                    book_html = f'<div class="pill-book">{book}</div>'
+
+                tags_html = build_tags_html(build_prop_tags(row))
+
+                card_html = f"""
+                <div class="prop-card">
+                    <div class="prop-headline">
+                        <div>
+                            <div class="prop-player">{player}</div>
+                            <div class="prop-market">
+                                {pretty_market} • {bet_type} {line}
+                            </div>
+                            <div style="margin-top:4px;">{tags_html}</div>
+                        </div>
+                        <div style="text-align:right;">
+                            {book_html}
+                            {logos_html}
+                        </div>
+                    </div>
+
+                    <div class="prop-meta">
+                        <div>
+                            <div style="color:#e5e7eb;font-size:0.8rem;">{odds:+d}</div>
+                            <div style="font-size:0.7rem;">Imp: {implied_prob:.0%}</div>
+                        </div>
+                        <div>
+                            <div style="color:#e5e7eb;font-size:0.8rem;">L10: {hit10:.0%}</div>
+                            <div style="font-size:0.7rem;">L20: {hit20:.0%}</div>
+                        </div>
+                        <div>
+                            <div style="color:#e5e7eb;font-size:0.8rem;">{matchup:.0f}/100</div>
+                            <div style="font-size:0.7rem;">Difficulty</div>
+                        </div>
+                    </div>
+                </div>
+                """
+
+                if has_html:
+                    st.html(card_html)
+                else:
+                    st.markdown(card_html, unsafe_allow_html=True)
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        st.caption("Card view is visual-only — use the table to save legs.")
+
+    # ======================================================
+    # ADVANCED TABLE VIEW  (FULL RESTORE)
+    # ======================================================
+    else:
+
+        df = filtered_df.copy()
+
+        # Normalize team codes
+        df["home_team"] = df["home_team"].astype(str).str.upper()
+        df["opponent_team"] = df["opponent_team"].astype(str).str.upper()
+
+        # Add derived fields
+        df["Implied Prob"] = np.where(
+            df["price"] > 0,
+            100 / (df["price"] + 100),
+            np.abs(df["price"]) / (np.abs(df["price"]) + 100),
+        ) * 100
+
+        df["Hit5"] = (df["hit_rate_last5"] * 100).round(0)
+        df["Hit10"] = (df["hit_rate_last10"] * 100).round(0)
+        df["Hit20"] = (df["hit_rate_last20"] * 100).round(0)
+
+        df["Edge_raw"] = df["Hit10"] - df["Implied Prob"]
+        df["Edge"] = df["Edge_raw"].apply(
+            lambda x: f"+{x:.1f}%" if x > 0 else f"{x:.1f}%"
+        )
+
+        df["Matchup30"] = (
+            df["matchup_difficulty_score"].fillna(5).clip(1, 10) * 3
+        ).round(0)
+
+        df["line"] = df["line"].astype(float)
+
+        # Fake trend sparkline (kept from previous version)
+        df["Sparkline"] = df.apply(
+            lambda r: [
+                int(r["Hit5"]),
+                int(r["Hit10"]),
+                int(r["Hit20"]),
+                int(np.random.randint(30, 90)),
+                int(np.random.randint(30, 90)),
+            ],
+            axis=1,
+        )
+
+        # Build grid dataframe
+        grid_df = pd.DataFrame({
+            "Player": df["player"],
+            "Market": df["market"].apply(lambda m: MARKET_DISPLAY_MAP.get(m, m)),
+            "Line": df["line"],
+            "Label": df["bet_type"],
+            "Odds": df["price"],
+            "Book": df["bookmaker"],
+            "Hit5": df["Hit5"],
+            "Hit10": df["Hit10"],
+            "Hit20": df["Hit20"],
+            "Spark": df["Sparkline"],
+            "ImpProb": df["Implied Prob"],
+            "Edge_raw": df["Edge_raw"],
+            "Edge": df["Edge"],
+            "Matchup30": df["Matchup30"],
+        })
+
+        # -----------------------------
+        # Render AG-Grid (unchanged)
+        # -----------------------------
+        sparkline_renderer = JsCode("""
+            function(params){
+                const v = params.value;
+                if (!v || !Array.isArray(v)) return '';
+                const maxVal = Math.max(...v);
+                const minVal = Math.min(...v);
+                const height = 22;
+                const width = 60;
+                function scaleY(val){
+                    return height - ((val - minVal) / (maxVal - minVal + 0.0001)) * height;
+                }
+                let pts = v.map((val,i)=>{
+                    const x = (i / (v.length - 1)) * width;
+                    return `${x},${scaleY(val)}`;
+                }).join(" ");
+                return `
+                    <svg width="${width}" height="${height}">
+                        <polyline points="${pts}" class="sparkline" />
+                    </svg>
+                `;
+            }
+        """)
+
+        odds_formatter = JsCode("""
+            function(params){
+                if (params.value == null) return '';
+                return params.value > 0 ? '+' + params.value : params.value.toString();
+            }
+        """)
+
+        percent_formatter = JsCode("""
+            function(params){
+                if (params.value == null) return '';
+                return params.value.toFixed(0) + '%';
+            }
+        """)
+
+        matchup_formatter = JsCode("""
+            function(params){
+                if (params.value == null) return '';
+                return params.value.toFixed(0) + '/30';
+            }
+        """)
+
+        row_style_js = JsCode("""
+            function(params){
+                const e = params.data.Edge_raw;
+                if (e >= 8) return { backgroundColor: "rgba(34,197,94,0.08)" };
+                if (e >= 3) return { backgroundColor: "rgba(59,130,246,0.08)" };
+                if (e <= -5) return { backgroundColor: "rgba(239,68,68,0.08)" };
+                return {};
+            }
+        """)
+
+        hit_style = JsCode("""
+            function(params){
+                const p = params.value;
+                const hue = 120 * (p / 100);
+                return {
+                    backgroundColor: `hsl(${hue},85%,40%)`,
+                    color: 'white',
+                    fontWeight: 700,
+                    textAlign: 'center'
+                };
+            }
+        """)
+
+        edge_style = JsCode("""
+            function(params){
+                const e = params.data.Edge_raw;
+                const t = (e + 30) / 60.0;
+                const hue = 120 * Math.max(0, Math.min(1, t));
+                return {
+                    backgroundColor: `hsl(${hue},80%,35%)`,
+                    color: 'white',
+                    fontWeight: 700,
+                    textAlign: 'center'
+                };
+            }
+        """)
+
+        matchup_style = JsCode("""
+            function(params){
+                const v = params.value;
+                const t = (v - 1) / 29.0;
+                const hue = 120 * t;
+                return {
+                    backgroundColor: `hsl(${hue},70%,35%)`,
+                    color: 'white',
+                    fontWeight: 700,
+                    textAlign: 'center'
+                };
+            }
+        """)
+
+        # Build the grid options
+        gb = GridOptionsBuilder.from_dataframe(grid_df)
+        gb.configure_default_column(
+            sortable=True,
+            resizable=True,
+            minWidth=120,
+            width=130,
+            maxWidth=200,
+            cellStyle={"textAlign": "center"},
+        )
+        gb.configure_column("*", filter=True)
+        gb.configure_selection("multiple", use_checkbox=True)
+
+        gb.configure_grid_options(
+            getRowStyle=row_style_js,
+            suppressSizeToFit=True,
+            suppressAutoSize=True,
+            suppressHorizontalScroll=False,
+            domLayout="normal",
+        )
+
+        gb.configure_column("Player", pinned="left", minWidth=140)
+        gb.configure_column("Odds", valueFormatter=odds_formatter, width=95)
+
+        gb.configure_column("Hit5", header_name="L5", valueFormatter=percent_formatter, cellStyle=hit_style, width=75)
+        gb.configure_column("Hit10", header_name="L10", valueFormatter=percent_formatter, cellStyle=hit_style, width=75)
+        gb.configure_column("Hit20", header_name="L20", valueFormatter=percent_formatter, cellStyle=hit_style, width=75)
+
+        gb.configure_column("Spark", header_name="Trend", cellRenderer=sparkline_renderer, width=100, filter=False)
+        gb.configure_column("ImpProb", header_name="Imp%", valueFormatter=percent_formatter, width=80)
+
+        gb.configure_column("Edge_raw", hide=True)
+        gb.configure_column("Edge", cellStyle=edge_style, width=100)
+        gb.configure_column("Matchup30", header_name="Matchup", valueFormatter=matchup_formatter, cellStyle=matchup_style, width=100)
+
+        grid_response = AgGrid(
+            grid_df,
+            gridOptions=gb.build(),
+            update_mode=GridUpdateMode.SELECTION_CHANGED,
+            fit_columns_on_grid_load=False,
+            theme="balham",
+            allow_unsafe_jscode=True,
+            height=550,
+        )
+
+        selected = grid_response.get("selected_rows", [])
+
+        # Save selected bets
+        if selected:
+            sel_df = pd.DataFrame(selected)[
+                ["Player", "Market", "Line", "Label", "Odds", "Book"]
+            ].rename(columns={
+                "Player": "player",
+                "Market": "market",
+                "Line": "line",
+                "Label": "bet_type",
+                "Odds": "price",
+                "Book": "bookmaker",
+            })
+
+            st.session_state.saved_bets = sel_df.drop_duplicates().to_dict("records")
+            replace_saved_bets_in_db(user_id, st.session_state.saved_bets)
+
+            st.success(f"{len(sel_df)} bet(s) saved.")
+        else:
+            st.session_state.saved_bets = []
+            replace_saved_bets_in_db(user_id, [])
 
 # ------------------------------------------------------
 # TAB 2 — TREND LAB (Dev)

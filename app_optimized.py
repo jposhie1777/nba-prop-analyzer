@@ -104,10 +104,12 @@ SELECT
   ast,
   pra,
   stl,
-  blk
+  blk,
+  fg3m
 FROM `{PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}`
 ORDER BY game_date
 """
+
 
 # ------------------------------------------------------
 # AUTHENTICATION – GOOGLE BIGQUERY
@@ -864,6 +866,8 @@ MARKET_DISPLAY_MAP = {
     # NEW:
     "player_steals_alternate": "Steals",
     "player_blocks_alternate": "Blocks",
+    "player_3pt_made_alternate": "3PT Made",
+    "player_fg3m_alternate": "3PT Made",
 }
 
 
@@ -1025,6 +1029,8 @@ def detect_stat(market):
         return "stl"
     if "blk" in m or "block" in m:
         return "blk"
+    if "3" in m and ("fg3" in m or "3pt" in m or "three" in m):
+        return "fg3m"
 
     return ""
 
@@ -1775,7 +1781,7 @@ with tab2:
             "Player", sorted(props_df["player"].dropna().unique())
         )
     with c2:
-        stat_label = st.selectbox("Stat", ["Points", "Rebounds", "Assists", "P+R+A", "Steals", "Blocks"])
+        stat_label = st.selectbox("Stat", ["Points", "Rebounds", "Assists", "P+R+A", "Steals", "Blocks", "3PT Made"])
     with c3:
         n_games = st.slider("Last N games", 5, 25, 15)
 
@@ -1786,7 +1792,9 @@ with tab2:
         "P+R+A": "pra",
         "Steals": "stl",
         "Blocks": "blk",
+        "3PT Made": "fg3m",
     }
+
     stat = stat_map[stat_label]
 
 

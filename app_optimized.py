@@ -1004,6 +1004,10 @@ def normalize_team_code(raw: str) -> str:
 TEAM_LOGOS_BASE64 = build_team_logo_b64_map(TEAM_LOGOS)
 SPORTSBOOK_LOGOS_BASE64 = build_team_logo_b64_map(SPORTSBOOK_LOGOS)
 
+# Safety check — warn if logo download failed
+if not any(SPORTSBOOK_LOGOS_BASE64.values()):
+    st.warning("⚠️ Sportsbook logos failed to load — using text labels instead.")
+
 
 # ------------------------------------------------------
 # SESSION STATE
@@ -1455,21 +1459,40 @@ with tab1:
         # -------------------------
         # Helpers
         # -------------------------
-        def normalize_bookmaker(name: str) -> str:
-            if not name:
+        def normalize_bookmaker(raw: str) -> str:
+            """Return a canonical sportsbook name that matches SPORTSBOOK_LOGOS & BASE64 dicts."""
+            if not raw:
                 return ""
-            n = name.strip().lower()
-            if "draft" in n:
+
+            r = raw.strip().lower()
+
+            # Safe normalization rules
+            if "draft" in r:
                 return "DraftKings"
-            if "fanduel" in n or n == "fd":
+            if "fanduel" in r or r in ("fd", "fan duel", "fan-dueled"):
                 return "FanDuel"
-            if "mgm" in n:
+            if "mgm" in r:
                 return "BetMGM"
-            if "caes" in n:
+            if "caes" in r:
                 return "Caesars"
-            if "espn" in n:
+            if "espn" in r:
                 return "ESPN BET"
-            return name
+            if "bovada" in r:
+                return "Bovada"
+            if "betrivers" in r or "bet rivers" in r:
+                return "BetRivers"
+            if "hard rock" in r:
+                return "Hard Rock"
+            if "pointsbet" in r or "points bet" in r:
+                return "PointsBet"
+            if "fanatics" in r:
+                return "Fanatics"
+            if "betonline" in r or "bet online" in r:
+                return "BetOnline.ag"
+
+            # fallback (rare, won’t break HTML)
+            return raw.strip()
+
 
         MIN_ODDS_FOR_CARD = manual_odds_min
         MAX_ODDS_FOR_CARD = manual_odds_max
@@ -1595,9 +1618,25 @@ with tab1:
                 book_logo_b64 = SPORTSBOOK_LOGOS_BASE64.get(book, "")
 
                 if book_logo_b64:
-                    book_html = f'<img src="{book_logo_b64}" style="height:24px;border-radius:4px;" />'
+                    # HTML-safe logo wrapper (cannot break rendering)
+                    book_html = f"""
+                        <div style="display:flex;align-items:center;">
+                            <img src="{book_logo_b64}"
+                                alt="{book}"
+                                style="height:26px;width:auto;object-fit:contain;border-radius:4px;" />
+                        </div>
+                    """
                 else:
-                    book_html = f'<div class="pill-book">{book}</div>'
+                    # Safe fallback pill
+                    book_html = f"""
+                        <div style="
+                            padding:3px 10px;
+                            border-radius:8px;
+                            background:rgba(255,255,255,0.08);
+                            border:1px solid rgba(255,255,255,0.15);
+                            font-size:0.7rem;
+                        ">{book}</div>
+                    """
 
                 tags_html = build_tags_html(build_prop_tags(row))
 

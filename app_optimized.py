@@ -2100,7 +2100,7 @@ with tab3:
         )
 
 # ------------------------------------------------------
-# TAB 4 — DEPTH CHART + INJURY REPORT (REWRITTEN & FIXED)
+# TAB 4 — DEPTH CHART + INJURY REPORT (FINAL FIXED VERSION)
 # ------------------------------------------------------
 with tab4:
     st.subheader("Depth Chart & Injury Report")
@@ -2209,7 +2209,7 @@ with tab4:
                         depth_val = r["depth"]
                         player_name = r["player"]
 
-                        # ------------ ROLE-BASED COLORS (FINAL VERSION) ------------
+                        # ------------ ROLE-BASED COLORS (SAFE VERSION) ------------
                         rl = str(role).lower()
 
                         if rl.startswith("start"):
@@ -2222,36 +2222,28 @@ with tab4:
                             bg = "linear-gradient(135deg, rgba(148,163,184,0.25), rgba(100,116,139,0.4))"
                             border = "rgba(148,163,184,0.8)"
 
-                        # ------------ CARD HTML (NO INLINE JS) ------------
+                        # ------------ CARD HTML (NO MULTILINE STYLE) ------------
                         st.markdown(
                             f"""
-                            <div class="depth-card" style="
-                                background:{bg};
-                                border:1px solid {border};
-                                font-size:0.85rem;
-                            ">
-                                <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <div class="depth-card" style="background:{bg}; border:1px solid {border}; font-size:0.85rem;">
+                                
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                
                                     <div>
-                                        <div style="font-weight:700;color:#fff;font-size:0.95rem;">
+                                        <div style="font-weight:700; color:#fff; font-size:0.95rem;">
                                             {player_name}
                                         </div>
-                                        <div style="font-size:0.75rem;color:#e2e8f0;">
+                                        <div style="font-size:0.75rem; color:#e2e8f0;">
                                             {role}
                                         </div>
                                     </div>
 
-                                    <div style="
-                                        font-size:0.72rem;
-                                        background:rgba(255,255,255,0.15);
-                                        padding:4px 8px;
-                                        border-radius:8px;
-                                        color:#f1f5f9;
-                                        border:1px solid rgba(255,255,255,0.18);
-                                        text-align:center;
-                                    ">
+                                    <div style="font-size:0.72rem; background:rgba(255,255,255,0.15); padding:4px 8px; border-radius:8px; color:#f1f5f9; border:1px solid rgba(255,255,255,0.18); text-align:center;">
                                         Depth {depth_val}
                                     </div>
+
                                 </div>
+
                             </div>
                             """,
                             unsafe_allow_html=True,
@@ -2302,40 +2294,26 @@ with tab4:
 
                 st.markdown(
                     f"""
-                    <div style="
-                        padding:12px 14px;
-                        margin-bottom:12px;
-                        border-radius:14px;
-                        background:{bg};
-                        border:1px solid {border};
-                        font-size:0.82rem;
-                        box-shadow:0 8px 20px rgba(0,0,0,0.4);
-                    ">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                            <div style="font-weight:600;color:#fef2f2;font-size:0.95rem;">
+                    <div style="padding:12px 14px; margin-bottom:12px; border-radius:14px; background:{bg}; border:1px solid {border}; font-size:0.82rem; box-shadow:0 8px 20px rgba(0,0,0,0.4);">
+
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <div style="font-weight:600; color:#fef2f2; font-size:0.95rem;">
                                 {full_name}
                             </div>
 
-                            <div style="
-                                padding:2px 10px;
-                                border-radius:999px;
-                                background:{pill_bg};
-                                color:white;
-                                font-size:0.7rem;
-                                font-weight:700;
-                                text-transform:uppercase;
-                                letter-spacing:0.08em;
-                            ">
+                            <div style="padding:2px 10px; border-radius:999px; background:{pill_bg}; color:white; font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.08em;">
                                 {status}
                             </div>
                         </div>
 
-                        <div style="font-size:0.76rem;color:#e5e7eb;margin-bottom:4px;">
+                        <div style="font-size:0.76rem; color:#e5e7eb; margin-bottom:4px;">
                             <b>Return:</b> {return_raw}
                         </div>
-                        <div style="font-size:0.76rem;color:#e5e7eb;">
+
+                        <div style="font-size:0.76rem; color:#e5e7eb;">
                             {desc}
                         </div>
+
                     </div>
                     """,
                     unsafe_allow_html=True,

@@ -1369,13 +1369,9 @@ def filter_props(df):
     # ------------------------------------------------------
     stat_series = d["market"].apply(detect_stat)
 
-    # Keep:
-    #   - All steals/blocks props
-    #   - Any other prop meeting the L10 threshold
-    d = d[
-        (stat_series.isin(["stl", "blk"])) |
-        (d["hit_rate_last10"] >= sel_hit10)
-    ]
+    # ALL markets must meet L10 threshold
+    d = d[d["hit_rate_last10"] >= sel_hit10]
+
 
 
     # Saved bets filter
@@ -1529,10 +1525,9 @@ with tab1:
             if not (MIN_ODDS_FOR_CARD <= row["price"] <= MAX_ODDS_FOR_CARD):
                 return False
 
-            stat = detect_stat(row.get("market", ""))
-
-            if stat not in ("stl", "blk") and row["hit_rate_last10"] < MIN_L10:
+            if row["hit_rate_last10"] < MIN_L10:
                 return False
+
 
             if REQUIRE_EV_PLUS and not is_ev_plus(row):
                 return False

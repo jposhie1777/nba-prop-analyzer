@@ -1197,6 +1197,37 @@ depth_df = load_depth_charts()
 injury_df = load_injury_report()
 
 # ------------------------------------------------------
+# FIX INJURY TEAM MISMATCH
+# ------------------------------------------------------
+
+def normalize_name(s):
+    if not isinstance(s, str):
+        return ""
+    return (
+        s.lower()
+        .replace(".", "")
+        .replace("'", "")
+        .replace("-", " ")
+        .strip()
+    )
+
+# Normalize names in both datasets
+injury_df["full_name_clean"] = (
+    injury_df["first_name"].astype(str) + " " + injury_df["last_name"].astype(str)
+).apply(normalize_name)
+
+depth_df["player_clean"] = depth_df["player"].astype(str).apply(normalize_name)
+
+# Merge injuries with correct team mapping from depth chart
+injury_df = injury_df.merge(
+    depth_df[["player_clean", "team_number", "team_abbr", "team_name"]],
+    on="player_clean",
+    how="left"
+)
+
+
+
+# ------------------------------------------------------
 # SIDEBAR FILTERS (using production-style filters)
 # ------------------------------------------------------
 st.sidebar.header("Filters")

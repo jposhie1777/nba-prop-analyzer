@@ -110,6 +110,33 @@ FROM `{PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}`
 ORDER BY game_date
 """
 
+# NEW: depth chart + injury SQL
+DEPTH_SQL = f"""
+SELECT
+  team_number,
+  team_abbr,
+  team_name,
+  player,
+  position,
+  role,
+  depth
+FROM `{PROJECT_ID}.nba_data.team_rosters_2025-2026`
+ORDER BY team_number, position, depth
+"""
+
+INJURY_SQL = f"""
+SELECT
+  snapshot_ts,
+  player_id,
+  first_name,
+  last_name,
+  team_id,
+  status,
+  return_date_raw,
+  description
+FROM `{PROJECT_ID}.nba_prop_analyzer.player_injuries_raw`
+ORDER BY snapshot_ts DESC
+"""
 
 # ------------------------------------------------------
 # AUTHENTICATION – GOOGLE BIGQUERY
@@ -753,7 +780,7 @@ st.markdown(
             <div>
                 <h1 class="app-title">Prop Analyzer</h1>
                 <p class="app-subtitle">
-                    Explore props, trends, saved bets, and parlay scenarios using live BigQuery data.
+                    Explore props, trends, saved bets, and team context using live BigQuery data.
                 </p>
             </div>
         </div>
@@ -1149,9 +1176,25 @@ def load_history():
     df["opponent_team"] = df["opponent_team"].fillna("").astype(str)
     return df
 
+# NEW: depth chart + injury loaders
+@st.cache_data(show_spinner=True)
+def load_depth_charts():
+    df = bq_client.query(DEPTH_SQL).to_dataframe()
+    df.columns = df.columns.str.strip()
+    return df
+
+@st.cache_data(show_spinner=True)
+def load_injury_report():
+    df = bq_client.query(INJURY_SQL).to_dataframe()
+    df.columns = df.columns.str.strip()
+    df["snapshot_ts"] = pd.to_datetime(df["snapshot_ts"], errors="coerce")
+    return df
+
 
 props_df = load_props()
 history_df = load_history()
+depth_df = load_depth_charts()
+injury_df = load_injury_report()
 
 # ------------------------------------------------------
 # SIDEBAR FILTERS (using production-style filters)
@@ -1276,15 +1319,14 @@ def filter_props(df):
 
 
 # ------------------------------------------------------
-# TABS (Dev 4 tabs + Prop Analytics)
+# TABS
 # ------------------------------------------------------
-tab1, tab2, tab3, tab4, tab5 = st.tabs(
+tab1, tab2, tab3, tab4 = st.tabs(
     [
         "🧮 Props Overview",
         "📈 Trend Lab",
         "📋 Saved Bets",
-        "🎟️ Bet Slip Playground",
-        "📊 Prop Analytics",
+        "📋 Depth Chart & Injury Report",
     ]
 )
 
@@ -1997,164 +2039,195 @@ with tab3:
         )
 
 # ------------------------------------------------------
-# TAB 4 — BET SLIP PLAYGROUND (Dev)
+# TAB 4 — DEPTH CHART + INJURY REPORT
 # ------------------------------------------------------
 with tab4:
-    st.subheader("Bet Slip Playground (Real Calculations)")
+    st.subheader("Depth Chart & Injury Report")
 
-    if not st.session_state.saved_bets:
-        st.info("Save some bets from Props Overview first (Advanced Table).")
-    else:
-        slip_df = pd.DataFrame(st.session_state.saved_bets).copy()
-        slip_df["Add to Slip"] = True
-        slip_df["Stake"] = 0.0
+    # Build team selector from depth_df
+    teams_meta = (
+        depth_df[["team_number", "team_abbr", "team_name"]]
+        .drop_duplicates()
+        .sort_values("team_name")
+        .reset_index(drop=True)
+    )
 
-        def american_to_decimal(odds: float) -> float:
-            odds = float(odds)
-            if odds > 0:
-                return 1 + (odds / 100)
-            return 1 + (100 / abs(odds))
+    team_labels = [
+        f"{row.team_name} ({row.team_abbr})" for row in teams_meta.itertuples()
+    ]
+    label_to_meta = {
+        f"{row.team_name} ({row.team_abbr})": row
+        for row in teams_meta.itertuples()
+    }
 
-        slip_df["decimal_odds"] = slip_df["price"].astype(float).apply(
-            american_to_decimal
+    selected_label = st.selectbox("Select Team", team_labels)
+    team_row = label_to_meta[selected_label]
+    team_number = int(team_row.team_number)
+    team_abbr = team_row.team_abbr
+    team_name = team_row.team_name
+
+    team_depth = depth_df[depth_df["team_number"] == team_number].copy()
+    team_injuries = injury_df[injury_df["team_id"] == team_number].copy()
+
+    # Header with logo
+    team_logo_b64 = TEAM_LOGOS_BASE64.get(team_abbr, "")
+    if team_logo_b64:
+        st.markdown(
+            f"""
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:0.8rem;">
+                <img src="{team_logo_b64}" style="height:40px;border-radius:8px;" />
+                <div>
+                    <div style="font-size:1.1rem;font-weight:700;color:#e5e7eb;">{team_name}</div>
+                    <div style="font-size:0.8rem;color:#9ca3af;">Depth chart & current injury context</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
-        st.markdown("#### 💾 Legs in Slip (DB-backed, real data)")
+    col_left, col_right = st.columns([1.4, 1.1])
 
-        edited_slip = st.data_editor(
-            slip_df,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "Add to Slip": st.column_config.CheckboxColumn("Add"),
-                "Stake": st.column_config.NumberColumn("Stake ($)", min_value=0.0),
-                "decimal_odds": st.column_config.NumberColumn(
-                    "Decimal", format="%.3f"
-                ),
-            },
-            key="bet_slip_editor_real",
+    # ---------------- Depth Chart ----------------
+    with col_left:
+        st.markdown("### 🏀 Depth Chart")
+
+        if team_depth.empty:
+            st.info("No depth chart data found for this team.")
+        else:
+            # Sort positions nicely
+            pos_order = ["PG", "SG", "SF", "PF", "C", "G", "F"]
+            positions = sorted(
+                team_depth["position"].unique(),
+                key=lambda p: pos_order.index(p) if p in pos_order else len(pos_order) + ord(str(p)[0]),
+            )
+
+            n_cols = min(3, len(positions)) if positions else 1
+            cols_pos = st.columns(n_cols)
+
+            for idx, pos in enumerate(positions):
+                col_pos = cols_pos[idx % n_cols]
+                with col_pos:
+                    st.markdown(f"#### {pos}")
+                    sub = (
+                        team_depth[team_depth["position"] == pos]
+                        .sort_values("depth")
+                        .reset_index(drop=True)
+                    )
+                    for _, r in sub.iterrows():
+                        role = r["role"]
+                        depth_val = r["depth"]
+                        player_name = r["player"]
+
+                        # Color role
+                        if str(role).lower().startswith("start"):
+                            bg = "rgba(34,197,94,0.22)"   # green-ish
+                            border = "rgba(34,197,94,0.6)"
+                        elif "rotation" in str(role).lower():
+                            bg = "rgba(59,130,246,0.22)"   # blue-ish
+                            border = "rgba(59,130,246,0.5)"
+                        else:
+                            bg = "rgba(148,163,184,0.12)"  # gray-ish
+                            border = "rgba(148,163,184,0.5)"
+
+                        st.markdown(
+                            f"""
+                            <div style="
+                                padding:8px 10px;
+                                margin-bottom:6px;
+                                border-radius:10px;
+                                background:{bg};
+                                border:1px solid {border};
+                                font-size:0.82rem;
+                            ">
+                                <div style="display:flex;justify-content:space-between;align-items:center;">
+                                    <div>
+                                        <div style="font-weight:600;color:#f9fafb;">{player_name}</div>
+                                        <div style="font-size:0.7rem;color:#e5e7eb;">{role}</div>
+                                    </div>
+                                    <div style="font-size:0.7rem;color:#cbd5f5;">
+                                        Depth {depth_val}
+                                    </div>
+                                </div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+
+    # ---------------- Injury Report ----------------
+    with col_right:
+        st.markdown("### 🏥 Injury Report")
+
+        if team_injuries.empty:
+            st.success("No reported injuries for this team.")
+        else:
+            # Latest per player
+            team_injuries = (
+                team_injuries.sort_values("snapshot_ts")
+                .groupby("player_id", as_index=False)
+                .tail(1)
+                .sort_values("status")
+            )
+            latest_ts = team_injuries["snapshot_ts"].max()
+            if pd.notna(latest_ts):
+                st.caption(f"Last snapshot: {latest_ts.strftime('%b %d, %Y %I:%M %p')}")
+
+            for _, r in team_injuries.iterrows():
+                full_name = f"{r['first_name']} {r['last_name']}"
+                status = r["status"]
+                return_raw = r.get("return_date_raw", "")
+                desc = r.get("description", "")
+
+                status_lower = str(status).lower()
+                if "out" in status_lower:
+                    border = "rgba(239,68,68,0.7)"
+                    bg = "rgba(127,29,29,0.3)"
+                    pill_bg = "rgba(239,68,68,0.9)"
+                elif "doubt" in status_lower or "questionable" in status_lower or "gtd" in status_lower:
+                    border = "rgba(234,179,8,0.7)"
+                    bg = "rgba(120,53,15,0.3)"
+                    pill_bg = "rgba(234,179,8,0.9)"
+                else:
+                    border = "rgba(59,130,246,0.7)"
+                    bg = "rgba(30,64,175,0.3)"
+                    pill_bg = "rgba(59,130,246,0.9)"
+
+                st.markdown(
+                    f"""
+                    <div style="
+                        padding:10px 12px;
+                        margin-bottom:10px;
+                        border-radius:12px;
+                        background:{bg};
+                        border:1px solid {border};
+                        font-size:0.82rem;
+                    ">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                            <div style="font-weight:600;color:#fef2f2;">{full_name}</div>
+                            <div style="
+                                padding:2px 8px;
+                                border-radius:999px;
+                                background:{pill_bg};
+                                color:white;
+                                font-size:0.7rem;
+                                font-weight:700;
+                                text-transform:uppercase;
+                                letter-spacing:0.08em;
+                            ">{status}</div>
+                        </div>
+                        <div style="font-size:0.76rem;color:#e5e7eb;margin-bottom:4px;">
+                            <b>Return:</b> {return_raw}
+                        </div>
+                        <div style="font-size:0.76rem;color:#e5e7eb;">
+                            {desc}
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+        st.caption(
+            "This tab will later feed into Bayesian adjustments on the prop grid (playing time & injury context)."
         )
-
-        mask = edited_slip["Add to Slip"].fillna(False).astype(bool)
-        selected = edited_slip.loc[mask]
-
-        if selected.empty:
-            st.info("Use the **Add** checkbox to include legs in your slip.")
-        else:
-            c1, c2 = st.columns([2, 1])
-
-            with c1:
-                st.markdown("##### Active Legs")
-                st.dataframe(
-                    selected[
-                        [
-                            "player",
-                            "market",
-                            "line",
-                            "bet_type",
-                            "price",
-                            "Stake",
-                            "decimal_odds",
-                        ]
-                    ],
-                    use_container_width=True,
-                    hide_index=True,
-                )
-
-            def calc_payout(odds, stake):
-                odds = float(odds)
-                stake = float(stake)
-                if stake <= 0:
-                    return 0.0
-                if odds > 0:
-                    return stake * (odds / 100)
-                return stake * (100 / abs(odds))
-
-            selected["Payout"] = selected.apply(
-                lambda r: calc_payout(r["price"], r["Stake"]), axis=1
-            )
-
-            total_stake = selected["Stake"].sum()
-            total_return = (selected["Stake"] + selected["Payout"]).sum()
-
-            with c2:
-                st.markdown("##### Singles Summary")
-                st.metric("Total Stake", f"${total_stake:.2f}")
-                st.metric("Total Return (Singles)", f"${total_return:.2f}")
-
-            st.markdown("---")
-            st.markdown("#### 🎯 Parlay Simulator")
-
-            col1, col2, col3 = st.columns([1.4, 1.4, 2])
-
-            with col1:
-                parlay_stake = st.number_input(
-                    "Parlay Stake ($)", min_value=0.0, value=10.0, step=1.0
-                )
-
-            with col2:
-                combined_decimal = selected["decimal_odds"].prod()
-                st.metric("Combined Decimal", f"{combined_decimal:.3f}")
-
-            with col3:
-                parlay_payout = (
-                    parlay_stake * (combined_decimal - 1) if parlay_stake > 0 else 0
-                )
-                st.metric("Parlay Payout", f"${parlay_payout:.2f}")
-
-# ------------------------------------------------------
-# TAB 5 — PROP ANALYTICS (Original Production Tab)
-# ------------------------------------------------------
-with tab5:
-    st.subheader("Prop Analytics")
-
-    d = filter_props(props_df)
-
-    if d.empty:
-        st.info("No props match your filters.")
-    else:
-        d = get_dynamic_averages(d)
-        d = add_defense(d)
-        d["Price"] = d["price"].apply(format_moneyline)
-
-        ev_cols = ["ev_last5", "ev_last10", "ev_last20"]
-        missing_ev = [c for c in ev_cols if c not in d.columns]
-        if missing_ev:
-            st.error(f"❌ Missing EV columns in database: {', '.join(missing_ev)}")
-        else:
-            for col in ev_cols:
-                d[col] = pd.to_numeric(d[col], errors="coerce")
-
-            d["Hit Rate 10"] = d["hit_rate_last10"]
-            d = d.sort_values("ev_last10", ascending=False)
-
-            cols = [
-                "player",
-                "market",
-                "line",
-                "Price",
-                "bookmaker",
-                "ev_last5",
-                "ev_last10",
-                "ev_last20",
-                "Matchup Difficulty",
-                "Hit Rate 10",
-                "L10 Avg",
-            ]
-
-            d_display = d[cols].rename(
-                columns={
-                    "player": "Player",
-                    "market": "Market",
-                    "line": "Line",
-                    "bookmaker": "Book",
-                    "ev_last5": "EV L5",
-                    "ev_last10": "EV L10",
-                    "ev_last20": "EV L20",
-                }
-            )
-
-            st.dataframe(d_display, use_container_width=True, hide_index=True)
 
 # ------------------------------------------------------
 # LAST UPDATED

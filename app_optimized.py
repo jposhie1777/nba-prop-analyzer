@@ -2184,34 +2184,56 @@ with tab4:
                         depth_val = r["depth"]
                         player_name = r["player"]
 
-                        # Role-based coloring
+                        # NEW vivid role-based coloring & card styling
                         rl = str(role).lower()
+
                         if rl.startswith("start"):
-                            bg = "rgba(34,197,94,0.22)"
-                            border = "rgba(34,197,94,0.6)"
+                            # bright green starter card
+                            bg = "linear-gradient(135deg, rgba(34,197,94,0.35), rgba(22,163,74,0.55))"
+                            border = "rgba(34,197,94,0.9)"
                         elif "rotation" in rl:
-                            bg = "rgba(59,130,246,0.22)"
-                            border = "rgba(59,130,246,0.5)"
+                            # bold blue rotation card
+                            bg = "linear-gradient(135deg, rgba(59,130,246,0.35), rgba(37,99,235,0.55))"
+                            border = "rgba(59,130,246,0.9)"
                         else:
-                            bg = "rgba(148,163,184,0.12)"
-                            border = "rgba(148,163,184,0.5)"
+                            # bench / limited minutes
+                            bg = "linear-gradient(135deg, rgba(148,163,184,0.25), rgba(100,116,139,0.4))"
+                            border = "rgba(148,163,184,0.8)"
 
                         st.markdown(
                             f"""
                             <div style="
-                                padding:8px 10px;
-                                margin-bottom:6px;
-                                border-radius:10px;
+                                padding:12px 14px;
+                                margin-bottom:10px;
+                                border-radius:14px;
                                 background:{bg};
                                 border:1px solid {border};
-                                font-size:0.82rem;
-                            ">
+                                font-size:0.85rem;
+                                box-shadow:0 8px 20px rgba(0,0,0,0.35);
+                                backdrop-filter:blur(4px);
+                                transition:all .15s ease-out;
+                            "
+                            onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 12px 28px rgba(0,0,0,0.5)'"
+                            onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 8px 20px rgba(0,0,0,0.35)'"
+                            >
                                 <div style="display:flex;justify-content:space-between;align-items:center;">
                                     <div>
-                                        <div style="font-weight:600;color:#f9fafb;">{player_name}</div>
-                                        <div style="font-size:0.7rem;color:#e5e7eb;">{role}</div>
+                                        <div style="font-weight:700;color:#fff;font-size:0.95rem;">
+                                            {player_name}
+                                        </div>
+                                        <div style="font-size:0.75rem;color:#e2e8f0;">
+                                            {role}
+                                        </div>
                                     </div>
-                                    <div style="font-size:0.7rem;color:#cbd5f5;">
+
+                                    <div style="
+                                        font-size:0.72rem;
+                                        background:rgba(255,255,255,0.12);
+                                        padding:4px 8px;
+                                        border-radius:8px;
+                                        color:#f1f5f9;
+                                        border:1px solid rgba(255,255,255,0.15);
+                                    ">
                                         Depth {depth_val}
                                     </div>
                                 </div>
@@ -2220,6 +2242,8 @@ with tab4:
                             unsafe_allow_html=True,
                         )
 
+
+                        
     # ------------------------------------------------------
     # INJURY REPORT
     # ------------------------------------------------------

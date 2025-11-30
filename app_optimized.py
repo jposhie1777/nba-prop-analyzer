@@ -2100,12 +2100,14 @@ with tab3:
         )
 
 # ------------------------------------------------------
-# TAB 4 — DEPTH CHART + INJURY REPORT
+# TAB 4 — DEPTH CHART + INJURY REPORT (FINAL FIXED VERSION)
 # ------------------------------------------------------
 with tab4:
     st.subheader("Depth Chart & Injury Report")
 
-    # Build team selector from depth_df
+    # ----------------------------
+    # TEAM SELECTOR
+    # ----------------------------
     teams_meta = (
         depth_df[["team_number", "team_abbr", "team_name"]]
         .drop_duplicates()
@@ -2113,32 +2115,33 @@ with tab4:
         .reset_index(drop=True)
     )
 
-    team_labels = [
-        f"{row.team_name} ({row.team_abbr})" for row in teams_meta.itertuples()
-    ]
-    label_to_meta = {
-        f"{row.team_name} ({row.team_abbr})": row
-        for row in teams_meta.itertuples()
-    }
+    team_labels = [f"{row.team_name} ({row.team_abbr})" for row in teams_meta.itertuples()]
+    label_to_meta = {f"{row.team_name} ({row.team_abbr})": row for row in teams_meta.itertuples()}
 
     selected_label = st.selectbox("Select Team", team_labels)
     team_row = label_to_meta[selected_label]
-    team_number = int(team_row.team_number)
-    team_abbr = team_row.team_abbr
-    team_name = team_row.team_name
 
-    team_depth = depth_df[depth_df["team_number"] == team_number].copy()
+    selected_team_number = int(team_row.team_number)
+    selected_abbr = team_row.team_abbr
+    selected_name = team_row.team_name
+
+    # Filter depth for selected team
+    team_depth = depth_df[depth_df["team_number"] == selected_team_number].copy()
+
+    # Filter injuries for selected team
     team_injuries = injury_df[injury_df["team_number"] == selected_team_number].copy()
 
-    # Header with logo
-    team_logo_b64 = TEAM_LOGOS_BASE64.get(team_abbr, "")
+    # ----------------------------
+    # TEAM HEADER (w/ Logo)
+    # ----------------------------
+    team_logo_b64 = TEAM_LOGOS_BASE64.get(selected_abbr, "")
     if team_logo_b64:
         st.markdown(
             f"""
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:0.8rem;">
                 <img src="{team_logo_b64}" style="height:40px;border-radius:8px;" />
                 <div>
-                    <div style="font-size:1.1rem;font-weight:700;color:#e5e7eb;">{team_name}</div>
+                    <div style="font-size:1.1rem;font-weight:700;color:#e5e7eb;">{selected_name}</div>
                     <div style="font-size:0.8rem;color:#9ca3af;">Depth chart & current injury context</div>
                 </div>
             </div>
@@ -2146,48 +2149,51 @@ with tab4:
             unsafe_allow_html=True,
         )
 
+    # LAYOUT
     col_left, col_right = st.columns([1.4, 1.1])
 
-    # ---------------- Depth Chart ----------------
+    # ------------------------------------------------------
+    # DEPTH CHART
+    # ------------------------------------------------------
     with col_left:
         st.markdown("### 🏀 Depth Chart")
 
         if team_depth.empty:
-            st.info("No depth chart data found for this team.")
+            st.info("No depth chart data available for this team.")
         else:
-            # Sort positions nicely
             pos_order = ["PG", "SG", "SF", "PF", "C", "G", "F"]
             positions = sorted(
                 team_depth["position"].unique(),
-                key=lambda p: pos_order.index(p) if p in pos_order else len(pos_order) + ord(str(p)[0]),
+                key=lambda p: pos_order.index(p) if p in pos_order else 999,
             )
 
-            n_cols = min(3, len(positions)) if positions else 1
-            cols_pos = st.columns(n_cols)
+            cols_pos = st.columns(min(3, len(positions)))
 
-            for idx, pos in enumerate(positions):
-                col_pos = cols_pos[idx % n_cols]
-                with col_pos:
+            for i, pos in enumerate(positions):
+                with cols_pos[i % len(cols_pos)]:
                     st.markdown(f"#### {pos}")
+
                     sub = (
                         team_depth[team_depth["position"] == pos]
                         .sort_values("depth")
                         .reset_index(drop=True)
                     )
+
                     for _, r in sub.iterrows():
                         role = r["role"]
                         depth_val = r["depth"]
                         player_name = r["player"]
 
-                        # Color role
-                        if str(role).lower().startswith("start"):
-                            bg = "rgba(34,197,94,0.22)"   # green-ish
+                        # Role-based coloring
+                        rl = str(role).lower()
+                        if rl.startswith("start"):
+                            bg = "rgba(34,197,94,0.22)"
                             border = "rgba(34,197,94,0.6)"
-                        elif "rotation" in str(role).lower():
-                            bg = "rgba(59,130,246,0.22)"   # blue-ish
+                        elif "rotation" in rl:
+                            bg = "rgba(59,130,246,0.22)"
                             border = "rgba(59,130,246,0.5)"
                         else:
-                            bg = "rgba(148,163,184,0.12)"  # gray-ish
+                            bg = "rgba(148,163,184,0.12)"
                             border = "rgba(148,163,184,0.5)"
 
                         st.markdown(
@@ -2214,23 +2220,26 @@ with tab4:
                             unsafe_allow_html=True,
                         )
 
-    # ---------------- Injury Report ----------------
+    # ------------------------------------------------------
+    # INJURY REPORT
+    # ------------------------------------------------------
     with col_right:
         st.markdown("### 🏥 Injury Report")
 
         if team_injuries.empty:
             st.success("No reported injuries for this team.")
         else:
-            # Latest per player
+            # Only latest snapshot per player
             team_injuries = (
                 team_injuries.sort_values("snapshot_ts")
                 .groupby("player_id", as_index=False)
                 .tail(1)
                 .sort_values("status")
             )
-            latest_ts = team_injuries["snapshot_ts"].max()
-            if pd.notna(latest_ts):
-                st.caption(f"Last snapshot: {latest_ts.strftime('%b %d, %Y %I:%M %p')}")
+
+            last_ts = team_injuries["snapshot_ts"].max()
+            if pd.notna(last_ts):
+                st.caption(f"Last update: {last_ts.strftime('%b %d, %Y %I:%M %p')}")
 
             for _, r in team_injuries.iterrows():
                 full_name = f"{r['first_name']} {r['last_name']}"
@@ -2238,12 +2247,12 @@ with tab4:
                 return_raw = r.get("return_date_raw", "")
                 desc = r.get("description", "")
 
-                status_lower = str(status).lower()
-                if "out" in status_lower:
+                sl = str(status).lower()
+                if "out" in sl:
                     border = "rgba(239,68,68,0.7)"
                     bg = "rgba(127,29,29,0.3)"
                     pill_bg = "rgba(239,68,68,0.9)"
-                elif "doubt" in status_lower or "questionable" in status_lower or "gtd" in status_lower:
+                elif "doubt" in sl or "questionable" in sl or "gtd" in sl:
                     border = "rgba(234,179,8,0.7)"
                     bg = "rgba(120,53,15,0.3)"
                     pill_bg = "rgba(234,179,8,0.9)"
@@ -2286,9 +2295,8 @@ with tab4:
                     unsafe_allow_html=True,
                 )
 
-        st.caption(
-            "This tab will later feed into Bayesian adjustments on the prop grid (playing time & injury context)."
-        )
+        st.caption("This tab will later support Bayesian prop updates based on injuries & depth roles.")
+
 
 # ------------------------------------------------------
 # LAST UPDATED

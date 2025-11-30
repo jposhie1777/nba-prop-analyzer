@@ -1194,7 +1194,12 @@ def load_injury_report():
 props_df = load_props()
 history_df = load_history()
 depth_df = load_depth_charts()
+
+# 🔍 DEBUG: Show depth chart table columns
+st.write("Depth columns:", depth_df.columns.tolist())
+
 injury_df = load_injury_report()
+
 
 # ------------------------------------------------------
 # FIX INJURY TEAM MISMATCH

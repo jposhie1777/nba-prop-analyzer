@@ -2100,10 +2100,30 @@ with tab3:
         )
 
 # ------------------------------------------------------
-# TAB 4 — DEPTH CHART + INJURY REPORT (FINAL FIXED VERSION)
+# TAB 4 — DEPTH CHART + INJURY REPORT (REWRITTEN & FIXED)
 # ------------------------------------------------------
 with tab4:
     st.subheader("Depth Chart & Injury Report")
+
+    # ------------------------------------------
+    # CSS Styling (added once, safe for all cards)
+    # ------------------------------------------
+    st.markdown("""
+    <style>
+        .depth-card {
+            padding:12px 14px;
+            margin-bottom:10px;
+            border-radius:14px;
+            box-shadow:0 8px 20px rgba(0,0,0,0.35);
+            backdrop-filter:blur(4px);
+            transition:all .15s ease-out;
+        }
+        .depth-card:hover {
+            transform:translateY(-2px);
+            box-shadow:0 12px 28px rgba(0,0,0,0.55);
+        }
+    </style>
+    """, unsafe_allow_html=True)
 
     # ----------------------------
     # TEAM SELECTOR
@@ -2132,7 +2152,7 @@ with tab4:
     team_injuries = injury_df[injury_df["team_number"] == selected_team_number].copy()
 
     # ----------------------------
-    # TEAM HEADER (w/ Logo)
+    # TEAM HEADER (with logo)
     # ----------------------------
     team_logo_b64 = TEAM_LOGOS_BASE64.get(selected_abbr, "")
     if team_logo_b64:
@@ -2142,18 +2162,20 @@ with tab4:
                 <img src="{team_logo_b64}" style="height:40px;border-radius:8px;" />
                 <div>
                     <div style="font-size:1.1rem;font-weight:700;color:#e5e7eb;">{selected_name}</div>
-                    <div style="font-size:0.8rem;color:#9ca3af;">Depth chart & current injury context</div>
+                    <div style="font-size:0.8rem;color:#9ca3af;">Depth chart & injury status</div>
                 </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-    # LAYOUT
+    # ------------------------------------------
+    # LAYOUT: DEPTH CHART (LEFT) + INJURIES (RIGHT)
+    # ------------------------------------------
     col_left, col_right = st.columns([1.4, 1.1])
 
     # ------------------------------------------------------
-    # DEPTH CHART
+    # DEPTH CHART (LEFT COLUMN)
     # ------------------------------------------------------
     with col_left:
         st.markdown("### 🏀 Depth Chart")
@@ -2161,6 +2183,8 @@ with tab4:
         if team_depth.empty:
             st.info("No depth chart data available for this team.")
         else:
+
+            # Ordered positions
             pos_order = ["PG", "SG", "SF", "PF", "C", "G", "F"]
             positions = sorted(
                 team_depth["position"].unique(),
@@ -2169,6 +2193,7 @@ with tab4:
 
             cols_pos = st.columns(min(3, len(positions)))
 
+            # Render each position group
             for i, pos in enumerate(positions):
                 with cols_pos[i % len(cols_pos)]:
                     st.markdown(f"#### {pos}")
@@ -2184,38 +2209,27 @@ with tab4:
                         depth_val = r["depth"]
                         player_name = r["player"]
 
-                        # NEW vivid role-based coloring & card styling
+                        # ------------ ROLE-BASED COLORS (FINAL VERSION) ------------
                         rl = str(role).lower()
 
                         if rl.startswith("start"):
-                            # bright green starter card
                             bg = "linear-gradient(135deg, rgba(34,197,94,0.35), rgba(22,163,74,0.55))"
                             border = "rgba(34,197,94,0.9)"
                         elif "rotation" in rl:
-                            # bold blue rotation card
                             bg = "linear-gradient(135deg, rgba(59,130,246,0.35), rgba(37,99,235,0.55))"
                             border = "rgba(59,130,246,0.9)"
                         else:
-                            # bench / limited minutes
                             bg = "linear-gradient(135deg, rgba(148,163,184,0.25), rgba(100,116,139,0.4))"
                             border = "rgba(148,163,184,0.8)"
 
+                        # ------------ CARD HTML (NO INLINE JS) ------------
                         st.markdown(
                             f"""
-                            <div style="
-                                padding:12px 14px;
-                                margin-bottom:10px;
-                                border-radius:14px;
+                            <div class="depth-card" style="
                                 background:{bg};
                                 border:1px solid {border};
                                 font-size:0.85rem;
-                                box-shadow:0 8px 20px rgba(0,0,0,0.35);
-                                backdrop-filter:blur(4px);
-                                transition:all .15s ease-out;
-                            "
-                            onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 12px 28px rgba(0,0,0,0.5)'"
-                            onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 8px 20px rgba(0,0,0,0.35)'"
-                            >
+                            ">
                                 <div style="display:flex;justify-content:space-between;align-items:center;">
                                     <div>
                                         <div style="font-weight:700;color:#fff;font-size:0.95rem;">
@@ -2228,11 +2242,12 @@ with tab4:
 
                                     <div style="
                                         font-size:0.72rem;
-                                        background:rgba(255,255,255,0.12);
+                                        background:rgba(255,255,255,0.15);
                                         padding:4px 8px;
                                         border-radius:8px;
                                         color:#f1f5f9;
-                                        border:1px solid rgba(255,255,255,0.15);
+                                        border:1px solid rgba(255,255,255,0.18);
+                                        text-align:center;
                                     ">
                                         Depth {depth_val}
                                     </div>
@@ -2242,10 +2257,8 @@ with tab4:
                             unsafe_allow_html=True,
                         )
 
-
-                        
     # ------------------------------------------------------
-    # INJURY REPORT
+    # INJURY REPORT (RIGHT COLUMN)
     # ------------------------------------------------------
     with col_right:
         st.markdown("### 🏥 Injury Report")
@@ -2265,12 +2278,14 @@ with tab4:
             if pd.notna(last_ts):
                 st.caption(f"Last update: {last_ts.strftime('%b %d, %Y %I:%M %p')}")
 
+            # Render each injury card
             for _, r in team_injuries.iterrows():
                 full_name = f"{r['first_name']} {r['last_name']}"
                 status = r["status"]
                 return_raw = r.get("return_date_raw", "")
                 desc = r.get("description", "")
 
+                # Color coding
                 sl = str(status).lower()
                 if "out" in sl:
                     border = "rgba(239,68,68,0.7)"
@@ -2288,17 +2303,21 @@ with tab4:
                 st.markdown(
                     f"""
                     <div style="
-                        padding:10px 12px;
-                        margin-bottom:10px;
-                        border-radius:12px;
+                        padding:12px 14px;
+                        margin-bottom:12px;
+                        border-radius:14px;
                         background:{bg};
                         border:1px solid {border};
                         font-size:0.82rem;
+                        box-shadow:0 8px 20px rgba(0,0,0,0.4);
                     ">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                            <div style="font-weight:600;color:#fef2f2;">{full_name}</div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                            <div style="font-weight:600;color:#fef2f2;font-size:0.95rem;">
+                                {full_name}
+                            </div>
+
                             <div style="
-                                padding:2px 8px;
+                                padding:2px 10px;
                                 border-radius:999px;
                                 background:{pill_bg};
                                 color:white;
@@ -2306,8 +2325,11 @@ with tab4:
                                 font-weight:700;
                                 text-transform:uppercase;
                                 letter-spacing:0.08em;
-                            ">{status}</div>
+                            ">
+                                {status}
+                            </div>
                         </div>
+
                         <div style="font-size:0.76rem;color:#e5e7eb;margin-bottom:4px;">
                             <b>Return:</b> {return_raw}
                         </div>
@@ -2318,8 +2340,6 @@ with tab4:
                     """,
                     unsafe_allow_html=True,
                 )
-
-        st.caption("This tab will later support Bayesian prop updates based on injuries & depth roles.")
 
 
 # ------------------------------------------------------

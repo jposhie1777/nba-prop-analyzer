@@ -2104,67 +2104,75 @@ with tab3:
 with tab4:
     st.subheader("")
 
-    # --------------------------------------------------------------------
-    # GLOBAL CSS — MATCHES YOUR PROP CARD GRID (dark, glossy, floating)
-    # --------------------------------------------------------------------
+    # --------------------------------------------------------
+    # GLOBAL CSS — SPACIOUS CARD GRID + INJURY BADGE SUPPORT
+    # --------------------------------------------------------
     st.html("""
 <style>
 
 .depth-card {
-    padding:14px 16px;
-    margin-bottom:12px;
-    border-radius:18px;
+    padding:18px 20px;
+    margin-bottom:20px;
+    border-radius:20px;
     border:1px solid rgba(148,163,184,0.35);
     background: radial-gradient(circle at top left, rgba(30,41,59,1), rgba(15,23,42,0.92));
-    box-shadow: 0 18px 45px rgba(15,23,42,0.95);
+    box-shadow: 0 22px 55px rgba(15,23,42,0.90);
     transition: transform .18s ease-out, box-shadow .18s ease-out, border-color .18s ease-out;
 }
 
 .depth-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 26px 60px rgba(15,23,42,1);
+    transform: translateY(-4px);
+    box-shadow: 0 30px 70px rgba(15,23,42,1);
     border-color: #3b82f6;
 }
 
 .role-pill {
-    font-size: 0.68rem;
-    padding: 3px 8px;
+    font-size: 0.70rem;
+    padding: 4px 10px;
     border-radius: 999px;
     display: inline-block;
     font-weight: 600;
     color: white;
-    margin-right: 5px;
+    margin-top: 6px;
+}
+
+.injury-badge {
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: white;
+    margin-left: 6px;
 }
 
 .injury-card {
-    padding:16px 18px;
-    margin-bottom:16px;
-    border-radius:18px;
+    padding:18px 20px;
+    margin-bottom:22px;
+    border-radius:20px;
     border:1px solid rgba(148,163,184,0.28);
     background: radial-gradient(circle at 0 0, rgba(42,0,0,0.85), rgba(40,0,0,0.65));
-    box-shadow: 0 20px 50px rgba(15,23,42,0.95);
+    box-shadow: 0 22px 55px rgba(15,23,42,0.95);
     transition: transform .18s ease-out, box-shadow .18s ease-out;
 }
 
 .injury-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 26px 60px rgba(15,23,42,1);
-}
-
-.injury-status-pill {
-    padding: 2px 10px;
-    border-radius: 999px;
-    font-size: 0.7rem;
-    font-weight: 700;
-    color: white;
-    letter-spacing: 0.05em;
+    transform: translateY(-4px);
+    box-shadow: 0 32px 75px rgba(15,23,42,1);
 }
 
 .header-flex {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 1.1rem;
+    gap: 14px;
+    margin-bottom: 1.6rem;
+}
+
+.position-header {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #e5e7eb;
+    margin-bottom: 10px;
+    margin-top: 10px;
 }
 
 </style>
@@ -2189,24 +2197,32 @@ with tab4:
     selected_abbr = team_row.team_abbr
     selected_name = team_row.team_name
 
-    # Filter data
-    team_depth = depth_df[depth_df["team_number"] == selected_team_number]
-    team_injuries = injury_df[injury_df["team_number"] == selected_team_number]
+    # Filter
+    team_depth = depth_df[depth_df["team_number"] == selected_team_number].copy()
+    team_injuries = injury_df[injury_df["team_number"] == selected_team_number].copy()
+
+    # Prepare fast lookup for injuries
+    injury_lookup = (
+        team_injuries.groupby("player_id")
+        .tail(1)
+        .set_index("player_id")[["status", "description"]]
+        .to_dict(orient="index")
+    )
 
     # ----------------------------
-    # TEAM HEADER
+    # TEAM HEADER (more spacious)
     # ----------------------------
     logo = TEAM_LOGOS_BASE64.get(selected_abbr, "")
     st.html(
         f"<div class='header-flex'>"
-        f"<img src='{logo}' style='height:42px;border-radius:10px;'/>"
+        f"<img src='{logo}' style='height:55px;border-radius:12px;'/>"
         f"<div>"
-        f"<div style='font-size:1.35rem;font-weight:700;color:#e5e7eb;'>{selected_name}</div>"
-        f"<div style='font-size:0.85rem;color:#9ca3af;'>Depth chart & injury status</div>"
+        f"<div style='font-size:1.55rem;font-weight:700;color:#e5e7eb;'>{selected_name}</div>"
+        f"<div style='font-size:0.9rem;color:#9ca3af;'>Depth chart & injury status</div>"
         f"</div></div>"
     )
 
-    col_left, col_right = st.columns([1.5, 1.1])
+    col_left, col_right = st.columns([1.6, 1.0])
 
     # ------------------------------------------------------
     # DEPTH CHART (LEFT)
@@ -2215,13 +2231,18 @@ with tab4:
         st.markdown("## 🏀 Depth Chart")
 
         pos_order = ["PG", "SG", "SF", "PF", "C", "G", "F"]
-        positions = sorted(team_depth["position"].unique(), key=lambda p: pos_order.index(p) if p in pos_order else 99)
+        positions = sorted(
+            team_depth["position"].unique(),
+            key=lambda p: pos_order.index(p) if p in pos_order else 99
+        )
 
-        pos_cols = st.columns(min(4, len(positions)))
+        # Wider column spacing: max 3 per row
+        pos_cols = st.columns(min(3, len(positions)))
 
         for i, pos in enumerate(positions):
             with pos_cols[i % len(pos_cols)]:
-                st.markdown(f"### {pos}")
+
+                st.markdown(f"<div class='position-header'>{pos}</div>", unsafe_allow_html=True)
 
                 rows = team_depth[team_depth["position"] == pos].sort_values("depth")
 
@@ -2229,8 +2250,25 @@ with tab4:
                     name = r["player"]
                     role = r["role"]
                     depth_val = r["depth"]
+                    player_id = r.get("player_id", None)
 
-                    # Role pill coloring
+                    # Injury badge logic
+                    injury_html = ""
+                    if player_id in injury_lookup:
+                        st_val = injury_lookup[player_id]["status"]
+                        st_low = st_val.lower()
+                        if "out" in st_low:
+                            badge_color = "background:#ef4444;"
+                        elif "question" in st_low or "doubt" in st_low:
+                            badge_color = "background:#eab308;"
+                        else:
+                            badge_color = "background:#3b82f6;"
+
+                        injury_html = (
+                            f"<span class='injury-badge' style='{badge_color}'>{st_val.upper()}</span>"
+                        )
+
+                    # Role color
                     rl = role.lower()
                     if rl.startswith("start"):
                         role_color = "background:#22c55e;"
@@ -2241,14 +2279,17 @@ with tab4:
 
                     html = (
                         f"<div class='depth-card'>"
-                        f"<div style='display:flex;justify-content:space-between;'>"
-                        f"<div>"
-                        f"<div style='font-size:0.95rem;font-weight:700;color:white;'>{name}</div>"
-                        f"<span class='role-pill' style='{role_color}'>{role}</span>"
-                        f"</div>"
-                        f"<div style='font-size:0.75rem;color:#e5e7eb;background:rgba(255,255,255,0.08);padding:4px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);'>"
-                        f"Depth {depth_val}</div>"
-                        f"</div>"
+                        f"  <div style='display:flex;justify-content:space-between;align-items:center;'>"
+                        f"    <div>"
+                        f"      <div style='font-size:1.05rem;font-weight:700;color:white;'>{name}{injury_html}</div>"
+                        f"      <span class='role-pill' style='{role_color}'>{role}</span>"
+                        f"    </div>"
+                        f"    <div style='font-size:0.8rem;color:#e5e7eb;"
+                        f"          background:rgba(255,255,255,0.08);padding:5px 12px;border-radius:10px;"
+                        f"          border:1px solid rgba(255,255,255,0.12);'>"
+                        f"      Depth {depth_val}"
+                        f"    </div>"
+                        f"  </div>"
                         f"</div>"
                     )
 
@@ -2273,25 +2314,28 @@ with tab4:
                 .sort_values("status")
                 .iterrows()
             ):
+
                 name = f"{r['first_name']} {r['last_name']}"
                 status = r["status"]
                 ret = r["return_date_raw"]
                 desc = r["description"]
 
-                color = (
-                    "background:#ef4444;" if "out" in status.lower()
-                    else "background:#eab308;" if "question" in status.lower() or "doubt" in status.lower()
-                    else "background:#3b82f6;"
-                )
+                st_low = status.lower()
+                if "out" in st_low:
+                    status_color = "background:#ef4444;"
+                elif "question" in st_low or "doubt" in st_low:
+                    status_color = "background:#eab308;"
+                else:
+                    status_color = "background:#3b82f6;"
 
                 html = (
                     f"<div class='injury-card'>"
-                    f"<div style='display:flex;justify-content:space-between;'>"
-                    f"<div style='font-size:1rem;font-weight:600;color:white;'>{name}</div>"
-                    f"<div class='injury-status-pill' style='{color}'>{status.upper()}</div>"
-                    f"</div>"
-                    f"<div style='font-size:0.8rem;color:#e5e7eb;margin-top:6px;'><b>Return:</b> {ret}</div>"
-                    f"<div style='font-size:0.8rem;color:#e5e7eb;margin-top:4px;'>{desc}</div>"
+                    f"  <div style='display:flex;justify-content:space-between;'>"
+                    f"    <div style='font-size:1.05rem;font-weight:600;color:white;'>{name}</div>"
+                    f"    <div class='injury-badge' style='{status_color}'>{status.upper()}</div>"
+                    f"  </div>"
+                    f"  <div style='font-size:0.85rem;color:#e5e7eb;margin-top:6px;'><b>Return:</b> {ret}</div>"
+                    f"  <div style='font-size:0.85rem;color:#e5e7eb;margin-top:6px;'>{desc}</div>"
                     f"</div>"
                 )
 

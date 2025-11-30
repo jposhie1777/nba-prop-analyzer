@@ -2128,7 +2128,7 @@ with tab4:
     team_name = team_row.team_name
 
     team_depth = depth_df[depth_df["team_number"] == team_number].copy()
-    team_injuries = injury_df[injury_df["team_id"] == team_number].copy()
+    team_injuries = injury_df[injury_df["team_number"] == selected_team_number].copy()
 
     # Header with logo
     team_logo_b64 = TEAM_LOGOS_BASE64.get(team_abbr, "")

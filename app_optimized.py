@@ -866,19 +866,18 @@ TEAM_NAME_TO_CODE = {
 }
 
 SPORTSBOOK_LOGOS = {
-    "DraftKings": "https://storage.googleapis.com/bvb-public/sportsbooks/draftkings.png",
-    "FanDuel": "https://storage.googleapis.com/bvb-public/sportsbooks/fanduel.png",
-    "BetMGM": "https://storage.googleapis.com/bvb-public/sportsbooks/betmgm.png",
-    "Caesars": "https://storage.googleapis.com/bvb-public/sportsbooks/caesars.png",
-    "ESPN BET": "https://storage.googleapis.com/bvb-public/sportsbooks/espnbet.png",
-    "BetOnline.ag": "https://storage.googleapis.com/bvb-public/sportsbooks/betonline.png",
-    "Bovada": "https://storage.googleapis.com/bvb-public/sportsbooks/bovada.png",
-    "BetRivers": "https://storage.googleapis.com/bvb-public/sportsbooks/betrivers.png",
-    "PointsBet": "https://storage.googleapis.com/bvb-public/sportsbooks/pointsbet.png",
-    "Hard Rock": "https://storage.googleapis.com/bvb-public/sportsbooks/hardrock.png",
-    "Fanatics": "https://storage.googleapis.com/bvb-public/sportsbooks/fanatics.png",
+    "DraftKings": "https://companieslogo.com/img/orig/DKNG_BIG-9bcdf411.png",
+    "FanDuel": "https://cdn.sanity.io/images/pbwem9y5/fanduel_common_production/4e0edb20ac982d636677e195250484e8dc344cd3-5851x2434.png",
+    "BetMGM": "https://upload.wikimedia.org/wikipedia/en/1/1f/BetMGM_logo.png",
+    "Caesars": "https://upload.wikimedia.org/wikipedia/en/7/7a/Caesars_Sportsbook_logo.png",
+    "ESPN BET": "https://a.espncdn.com/redesign/assets/img/logos/espnbet/espnbet-logo-blue.png",
+    "BetOnline.ag": "https://www.sportsbookreview.com/wp-content/uploads/2022/06/betonline-logo.png",
+    "Bovada": "https://www.sportsbookreview.com/wp-content/uploads/2020/09/bovada-logo.png",
+    "BetRivers": "https://upload.wikimedia.org/wikipedia/commons/4/4b/BetRivers_Logo.png",
+    "PointsBet": "https://upload.wikimedia.org/wikipedia/commons/3/39/PointsBet_logo.png",
+    "Hard Rock": "https://upload.wikimedia.org/wikipedia/en/7/73/Hard_Rock_Bet_logo.png",
+    "Fanatics": "https://upload.wikimedia.org/wikipedia/commons/4/4c/Fanatics_Logo.png",
 }
-
 
 
 MARKET_DISPLAY_MAP = {

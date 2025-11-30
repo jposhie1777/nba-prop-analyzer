@@ -865,10 +865,15 @@ TEAM_NAME_TO_CODE = {
     "Washington Wizards": "WAS",
 }
 
+APP_ROOT = os.getcwd()
+
 SPORTSBOOK_LOGOS = {
-    "DraftKings": "static/logos/Draftkingssmall.png",
-    "FanDuel": "static/logos/Fanduelsmall.png",
+    "DraftKings": os.path.join(APP_ROOT, "static/logos/Draftkingssmall.png"),
+    "FanDuel": os.path.join(APP_ROOT, "static/logos/Fanduelsmall.png"),
 }
+
+st.write("File exists:", os.path.exists(os.path.join(APP_ROOT, "static/logos/Draftkingssmall.png")))
+st.write("Working directory:", APP_ROOT)
 
 
 

@@ -1002,11 +1002,15 @@ def normalize_team_code(raw: str) -> str:
     return s
 
 TEAM_LOGOS_BASE64 = build_team_logo_b64_map(TEAM_LOGOS)
-SPORTSBOOK_LOGOS_BASE64 = build_team_logo_b64_map(SPORTSBOOK_LOGOS)
+# ------------------------------------------------------
+# SPORTSBOOK LOGOS (Base64 Embedded – DraftKings + FanDuel)
+# ------------------------------------------------------
+SPORTSBOOK_LOGOS_BASE64 = {
+    "FanDuel": "data:image/png;base64,/9j/4AAQSkZJRgABAQAAAQABA...AIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiA//2Q==",
 
-# Safety check — warn if logo download failed
-if not any(SPORTSBOOK_LOGOS_BASE64.values()):
-    st.warning("⚠️ Sportsbook logos failed to load — using text labels instead.")
+    "DraftKings": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg...wHOH6wkJTZ6IWdIs5yR117dpbklvtsz/wfLcIfgKCDIZcAAAAASUVORK5CYII="
+}
+
 
 
 # ------------------------------------------------------

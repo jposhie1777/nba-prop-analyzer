@@ -1194,15 +1194,11 @@ def load_injury_report():
 props_df = load_props()
 history_df = load_history()
 depth_df = load_depth_charts()
-
-# 🔍 DEBUG: Show depth chart table columns
-st.write("Depth columns:", depth_df.columns.tolist())
-
 injury_df = load_injury_report()
 
 
 # ------------------------------------------------------
-# FIX INJURY TEAM MISMATCH
+# FIX INJURY TEAM MISMATCH — USING DEPTH CHART MAPPING
 # ------------------------------------------------------
 
 def normalize_name(s):
@@ -1210,25 +1206,27 @@ def normalize_name(s):
         return ""
     return (
         s.lower()
-        .replace(".", "")
-        .replace("'", "")
-        .replace("-", " ")
-        .strip()
+         .replace(".", "")
+         .replace("'", "")
+         .replace("-", " ")
+         .strip()
     )
 
-# Normalize names in both datasets
+# Normalize injury names
 injury_df["full_name_clean"] = (
     injury_df["first_name"].astype(str) + " " + injury_df["last_name"].astype(str)
 ).apply(normalize_name)
 
+# Normalize roster names
 depth_df["player_clean"] = depth_df["player"].astype(str).apply(normalize_name)
 
-# Merge injuries with correct team mapping from depth chart
+# Merge injuries with correct team mapping
 injury_df = injury_df.merge(
     depth_df[["player_clean", "team_number", "team_abbr", "team_name"]],
     on="player_clean",
     how="left"
 )
+
 
 
 

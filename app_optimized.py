@@ -2100,7 +2100,7 @@ with tab3:
         )
 
 # ------------------------------------------------------
-# TAB 4 — DEPTH CHART + INJURY REPORT (FINAL FIXED VERSION)
+# TAB 4 — DEPTH CHART + INJURY REPORT (REDESIGNED)
 # ------------------------------------------------------
 with tab4:
     st.subheader("Depth Chart & Injury Report")
@@ -2132,170 +2132,207 @@ with tab4:
     team_injuries = injury_df[injury_df["team_number"] == selected_team_number].copy()
 
     # ----------------------------
-    # TEAM HEADER (w/ Logo)
+    # TEAM HEADER (Logo + Name)
     # ----------------------------
     team_logo_b64 = TEAM_LOGOS_BASE64.get(selected_abbr, "")
     if team_logo_b64:
         st.markdown(
             f"""
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:0.8rem;">
-                <img src="{team_logo_b64}" style="height:40px;border-radius:8px;" />
+            <div style="display:flex;align-items:center;gap:14px;margin-bottom:1rem;">
+                <img src="{team_logo_b64}" style="height:48px;border-radius:10px;" />
                 <div>
-                    <div style="font-size:1.1rem;font-weight:700;color:#e5e7eb;">{selected_name}</div>
-                    <div style="font-size:0.8rem;color:#9ca3af;">Depth chart & current injury context</div>
+                    <div style="font-size:1.3rem;font-weight:700;color:#f3f4f6;">
+                        {selected_name}
+                    </div>
+                    <div style="font-size:0.85rem;color:#9ca3af;">
+                        Depth chart & injury context
+                    </div>
                 </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-    # LAYOUT
-    col_left, col_right = st.columns([1.4, 1.1])
+    # ----------------------------
+    # FIXED NBA POSITION ORDER
+    # ----------------------------
+    POSITIONS = ["PG", "SG", "SF", "PF", "C"]
 
-    # ------------------------------------------------------
-    # DEPTH CHART
-    # ------------------------------------------------------
-    with col_left:
-        st.markdown("### 🏀 Depth Chart")
+    # Filter only these positions
+    team_depth = team_depth[team_depth["position"].isin(POSITIONS)]
 
-        if team_depth.empty:
-            st.info("No depth chart data available for this team.")
-        else:
-            pos_order = ["PG", "SG", "SF", "PF", "C", "G", "F"]
-            positions = sorted(
-                team_depth["position"].unique(),
-                key=lambda p: pos_order.index(p) if p in pos_order else 999,
+    # ----------------------------
+    # COLUMN LAYOUT (Even 5 columns)
+    # ----------------------------
+    col_pg, col_sg, col_sf, col_pf, col_c = st.columns(5)
+    col_map = {"PG": col_pg, "SG": col_sg, "SF": col_sf, "PF": col_pf, "C": col_c}
+
+    # ----------------------------
+    # ROLE-BASED COLORS
+    # ----------------------------
+    ROLE_COLORS = {
+        "starter": ("rgba(34,197,94,0.22)", "rgba(34,197,94,0.65)"),
+        "rotation": ("rgba(59,130,246,0.22)", "rgba(59,130,246,0.55)"),
+        "bench": ("rgba(148,163,184,0.18)", "rgba(148,163,184,0.45)"),
+    }
+
+    def role_to_colors(role):
+        r = (role or "").lower()
+        if "start" in r:
+            return ROLE_COLORS["starter"]
+        if "rotation" in r:
+            return ROLE_COLORS["rotation"]
+        return ROLE_COLORS["bench"]
+
+    # ----------------------------
+    # DEPTH CHART RENDERING
+    # ----------------------------
+    st.markdown("### 🏀 Depth Chart")
+
+    for pos in POSITIONS:
+        with col_map[pos]:
+            st.markdown(
+                f"""
+                <div style="
+                    font-size:1rem;
+                    font-weight:700;
+                    color:#e5e7eb;
+                    margin-bottom:0.4rem;
+                    text-align:center;
+                ">
+                    {pos}
+                </div>
+                """,
+                unsafe_allow_html=True,
             )
 
-            cols_pos = st.columns(min(3, len(positions)))
-
-            for i, pos in enumerate(positions):
-                with cols_pos[i % len(cols_pos)]:
-                    st.markdown(f"#### {pos}")
-
-                    sub = (
-                        team_depth[team_depth["position"] == pos]
-                        .sort_values("depth")
-                        .reset_index(drop=True)
-                    )
-
-                    for _, r in sub.iterrows():
-                        role = r["role"]
-                        depth_val = r["depth"]
-                        player_name = r["player"]
-
-                        # Role-based coloring
-                        rl = str(role).lower()
-                        if rl.startswith("start"):
-                            bg = "rgba(34,197,94,0.22)"
-                            border = "rgba(34,197,94,0.6)"
-                        elif "rotation" in rl:
-                            bg = "rgba(59,130,246,0.22)"
-                            border = "rgba(59,130,246,0.5)"
-                        else:
-                            bg = "rgba(148,163,184,0.12)"
-                            border = "rgba(148,163,184,0.5)"
-
-                        st.markdown(
-                            f"""
-                            <div style="
-                                padding:8px 10px;
-                                margin-bottom:6px;
-                                border-radius:10px;
-                                background:{bg};
-                                border:1px solid {border};
-                                font-size:0.82rem;
-                            ">
-                                <div style="display:flex;justify-content:space-between;align-items:center;">
-                                    <div>
-                                        <div style="font-weight:600;color:#f9fafb;">{player_name}</div>
-                                        <div style="font-size:0.7rem;color:#e5e7eb;">{role}</div>
-                                    </div>
-                                    <div style="font-size:0.7rem;color:#cbd5f5;">
-                                        Depth {depth_val}
-                                    </div>
-                                </div>
-                            </div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
-
-    # ------------------------------------------------------
-    # INJURY REPORT
-    # ------------------------------------------------------
-    with col_right:
-        st.markdown("### 🏥 Injury Report")
-
-        if team_injuries.empty:
-            st.success("No reported injuries for this team.")
-        else:
-            # Only latest snapshot per player
-            team_injuries = (
-                team_injuries.sort_values("snapshot_ts")
-                .groupby("player_id", as_index=False)
-                .tail(1)
-                .sort_values("status")
+            sub = (
+                team_depth[team_depth["position"] == pos]
+                .sort_values("depth")
+                .reset_index(drop=True)
             )
 
-            last_ts = team_injuries["snapshot_ts"].max()
-            if pd.notna(last_ts):
-                st.caption(f"Last update: {last_ts.strftime('%b %d, %Y %I:%M %p')}")
+            for _, r in sub.iterrows():
+                player_name = r["player"]
+                role = r["role"]
+                depth_val = r["depth"]
 
-            for _, r in team_injuries.iterrows():
-                full_name = f"{r['first_name']} {r['last_name']}"
-                status = r["status"]
-                return_raw = r.get("return_date_raw", "")
-                desc = r.get("description", "")
-
-                sl = str(status).lower()
-                if "out" in sl:
-                    border = "rgba(239,68,68,0.7)"
-                    bg = "rgba(127,29,29,0.3)"
-                    pill_bg = "rgba(239,68,68,0.9)"
-                elif "doubt" in sl or "questionable" in sl or "gtd" in sl:
-                    border = "rgba(234,179,8,0.7)"
-                    bg = "rgba(120,53,15,0.3)"
-                    pill_bg = "rgba(234,179,8,0.9)"
-                else:
-                    border = "rgba(59,130,246,0.7)"
-                    bg = "rgba(30,64,175,0.3)"
-                    pill_bg = "rgba(59,130,246,0.9)"
+                bg, border = role_to_colors(role)
 
                 st.markdown(
                     f"""
                     <div style="
-                        padding:10px 12px;
-                        margin-bottom:10px;
+                        padding:12px 14px;
+                        margin-bottom:8px;
                         border-radius:12px;
                         background:{bg};
                         border:1px solid {border};
-                        font-size:0.82rem;
+                        display:flex;
+                        justify-content:space-between;
+                        align-items:center;
+                        color:#f9fafb;
                     ">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                            <div style="font-weight:600;color:#fef2f2;">{full_name}</div>
-                            <div style="
-                                padding:2px 8px;
-                                border-radius:999px;
-                                background:{pill_bg};
-                                color:white;
-                                font-size:0.7rem;
-                                font-weight:700;
-                                text-transform:uppercase;
-                                letter-spacing:0.08em;
-                            ">{status}</div>
+                        <div>
+                            <div style="font-weight:700;font-size:0.9rem;">
+                                {player_name}
+                            </div>
+                            <div style="font-size:0.75rem;color:#d1d5db;">
+                                {role}
+                            </div>
                         </div>
-                        <div style="font-size:0.76rem;color:#e5e7eb;margin-bottom:4px;">
-                            <b>Return:</b> {return_raw}
-                        </div>
-                        <div style="font-size:0.76rem;color:#e5e7eb;">
-                            {desc}
+
+                        <div style="
+                            padding:4px 10px;
+                            border-radius:999px;
+                            background:rgba(0,0,0,0.35);
+                            font-size:0.72rem;
+                            font-weight:600;
+                            color:#e5e7eb;
+                        ">
+                            Depth {depth_val}
                         </div>
                     </div>
                     """,
                     unsafe_allow_html=True,
                 )
 
-        st.caption("This tab will later support Bayesian prop updates based on injuries & depth roles.")
+    # ======================================================
+    # INJURY REPORT (unchanged style — but aligned)
+    # ======================================================
+    st.markdown("### 🏥 Injury Report")
+
+    if team_injuries.empty:
+        st.success("No reported injuries for this team.")
+    else:
+        team_injuries = (
+            team_injuries.sort_values("snapshot_ts")
+            .groupby("player_id", as_index=False)
+            .tail(1)
+            .sort_values("status")
+        )
+
+        last_ts = team_injuries["snapshot_ts"].max()
+        if pd.notna(last_ts):
+            st.caption(f"Last update: {last_ts.strftime('%b %d, %Y %I:%M %p')}")
+
+        for _, r in team_injuries.iterrows():
+            full_name = f"{r['first_name']} {r['last_name']}"
+            status = r["status"]
+            return_raw = r.get("return_date_raw", "")
+            desc = r.get("description", "")
+
+            sl = status.lower()
+            if "out" in sl:
+                border = "rgba(239,68,68,0.7)"
+                bg = "rgba(127,29,29,0.3)"
+                pill = "rgba(239,68,68,0.9)"
+            elif "doubt" in sl or "questionable" in sl or "gtd" in sl:
+                border = "rgba(234,179,8,0.7)"
+                bg = "rgba(120,53,15,0.3)"
+                pill = "rgba(234,179,8,0.9)"
+            else:
+                border = "rgba(59,130,246,0.7)"
+                bg = "rgba(30,64,175,0.3)"
+                pill = "rgba(59,130,246,0.9)"
+
+            st.markdown(
+                f"""
+                <div style="
+                    padding:12px 14px;
+                    margin-bottom:12px;
+                    border-radius:12px;
+                    background:{bg};
+                    border:1px solid {border};
+                    font-size:0.85rem;
+                ">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <div style="font-weight:700;color:#fef2f2;">
+                            {full_name}
+                        </div>
+                        <div style="
+                            padding:3px 10px;
+                            border-radius:999px;
+                            background:{pill};
+                            color:white;
+                            font-size:0.7rem;
+                            font-weight:700;
+                            text-transform:uppercase;
+                            letter-spacing:0.07em;
+                        ">
+                            {status}
+                        </div>
+                    </div>
+
+                    <div style="font-size:0.75rem;color:#e5e7eb;margin-top:6px;">
+                        <b>Return:</b> {return_raw}
+                    </div>
+                    <div style="font-size:0.75rem;color:#e5e7eb;margin-top:4px;">
+                        {desc}
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
 
 # ------------------------------------------------------

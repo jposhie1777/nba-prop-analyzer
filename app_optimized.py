@@ -1191,14 +1191,16 @@ def load_injury_report():
     return df
 
 
+# ------------------------------------------------------
+# LOAD BASE TABLES
+# ------------------------------------------------------
 props_df = load_props()
 history_df = load_history()
 depth_df = load_depth_charts()
-injury_df = load_injury_report()
-
+injury_df = load_injury_report()    # <-- MUST COME BEFORE FIX
 
 # ------------------------------------------------------
-# FIX INJURY TEAM MISMATCH — USING DEPTH CHART MAPPING
+# FIX INJURY TEAM MISMATCH — USING DEPTH CHART
 # ------------------------------------------------------
 
 def normalize_name(s):
@@ -1212,23 +1214,27 @@ def normalize_name(s):
          .strip()
     )
 
-# Normalize injury names
-injury_df["full_name_clean"] = (
+# Injury player names
+injury_df["player_clean"] = (
     injury_df["first_name"].astype(str) + " " + injury_df["last_name"].astype(str)
 ).apply(normalize_name)
 
-# Normalize roster names
+# Depth chart player names
 depth_df["player_clean"] = depth_df["player"].astype(str).apply(normalize_name)
 
-# Merge injuries with correct team mapping
+# DEBUG BEFORE MERGE
+st.write("Injury_df columns BEFORE merge:", injury_df.columns.tolist())
+st.write("Depth_df columns BEFORE merge:", depth_df.columns.tolist())
+
+# Merge to attach correct team
 injury_df = injury_df.merge(
     depth_df[["player_clean", "team_number", "team_abbr", "team_name"]],
     on="player_clean",
     how="left"
 )
 
-
-
+# DEBUG AFTER MERGE
+st.write("Injury_df AFTER merge:", injury_df.head())
 
 # ------------------------------------------------------
 # SIDEBAR FILTERS (using production-style filters)

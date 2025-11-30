@@ -120,7 +120,7 @@ SELECT
   position,
   role,
   depth
-FROM `{PROJECT_ID}.nba_data.team_rosters_2025-2026`
+FROM `{PROJECT_ID}.nba_data.team_rosters_2025_2026`
 ORDER BY team_number, position, depth
 """
 

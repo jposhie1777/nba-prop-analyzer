@@ -866,18 +866,10 @@ TEAM_NAME_TO_CODE = {
 }
 
 SPORTSBOOK_LOGOS = {
-    "DraftKings": "https://companieslogo.com/img/orig/DKNG_BIG-9bcdf411.png",
-    "FanDuel": "https://cdn.sanity.io/images/pbwem9y5/fanduel_common_production/4e0edb20ac982d636677e195250484e8dc344cd3-5851x2434.png",
-    "BetMGM": "https://upload.wikimedia.org/wikipedia/en/1/1f/BetMGM_logo.png",
-    "Caesars": "https://upload.wikimedia.org/wikipedia/en/7/7a/Caesars_Sportsbook_logo.png",
-    "ESPN BET": "https://a.espncdn.com/redesign/assets/img/logos/espnbet/espnbet-logo-blue.png",
-    "BetOnline.ag": "https://www.sportsbookreview.com/wp-content/uploads/2022/06/betonline-logo.png",
-    "Bovada": "https://www.sportsbookreview.com/wp-content/uploads/2020/09/bovada-logo.png",
-    "BetRivers": "https://upload.wikimedia.org/wikipedia/commons/4/4b/BetRivers_Logo.png",
-    "PointsBet": "https://upload.wikimedia.org/wikipedia/commons/3/39/PointsBet_logo.png",
-    "Hard Rock": "https://upload.wikimedia.org/wikipedia/en/7/73/Hard_Rock_Bet_logo.png",
-    "Fanatics": "https://upload.wikimedia.org/wikipedia/commons/4/4c/Fanatics_Logo.png",
+    "DraftKings": "static/logos/Draftkingssmall.png",
+    "FanDuel": "static/logos/Fanduelsmall.png",
 }
+
 
 
 MARKET_DISPLAY_MAP = {
@@ -938,24 +930,43 @@ def build_tags_html(tags):
         for label, color in tags
     )
 
+# ------------------------------------------------------
+# LOGO LOADERS
+# ------------------------------------------------------
+
 @st.cache_data(show_spinner=False)
-def logo_to_base64(url: str) -> str:
-    if not url:
+def logo_to_base64_local(path: str) -> str:
+    if not path:
         return ""
     try:
-        resp = requests.get(url, timeout=5)
-        resp.raise_for_status()
-        b64 = base64.b64encode(resp.content).decode("utf-8")
+        with open(path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("utf-8")
         return f"data:image/png;base64,{b64}"
-    except Exception:
+    except:
         return ""
 
 @st.cache_data(show_spinner=False)
-def build_team_logo_b64_map(team_logos: dict) -> dict:
-    out = {}
-    for code, url in team_logos.items():
-        out[code] = logo_to_base64(url)
-    return out
+def logo_to_base64_url(url: str) -> str:
+    if not url:
+        return ""
+    try:
+        r = requests.get(url, timeout=5)
+        r.raise_for_status()
+        b64 = base64.b64encode(r.content).decode("utf-8")
+        return f"data:image/png;base64,{b64}"
+    except:
+        return ""
+
+TEAM_LOGOS_BASE64 = {
+    code: logo_to_base64_url(url)
+    for code, url in TEAM_LOGOS.items()
+}
+
+SPORTSBOOK_LOGOS_BASE64 = {
+    name: logo_to_base64_local(path)
+    for name, path in SPORTSBOOK_LOGOS.items()
+}
+
 
 def normalize_team_code(raw: str) -> str:
     if raw is None:
@@ -999,16 +1010,6 @@ def normalize_team_code(raw: str) -> str:
             return code
 
     return s
-
-TEAM_LOGOS_BASE64 = build_team_logo_b64_map(TEAM_LOGOS)
-# ------------------------------------------------------
-# SPORTSBOOK LOGOS (Base64 Embedded – DraftKings + FanDuel)
-# ------------------------------------------------------
-SPORTSBOOK_LOGOS_BASE64 = {
-    "FanDuel": "data:image/png;base64,/9j/4AAQSkZJRgABAQAAAQABAQAAAAD/2wCEAAkGBxISEhUTEhIVFhUVFRUVFRUVFRUVFRUWFxUWFxUYHSggGBolGxUVITEhJSkrLi4uFx8zODMtNygtLisBCgoKDg0OGxAQGy0lICYtLS8tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLf/AABEIAKMBNwMBIgACEQEDEQH/xAAcAAEAAgMBAQEAAAAAAAAAAAAABAUCAwYBBwj/xABFEAACAQIEAwYDBQcEAwAAAAAAAQIDEQQSITEFBkFRYSJxgZEykaGx8BQjQlJicpLB0fAVFiQzU4KSsiQ1VIKys//EABoBAAIDAQEAAAAAAAAAAAAAAAABAgMEBQb/xAAsEQACAgIBAwQBAwQDAAAAAAAAAQIDEQQSITEyQVEFFCJhgZGh8BVxwdHh/9oADAMBAAIRAxEAPwD0iIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAKTSSSSSeSSSeQSSfSCSSeQSSSSSZJJJJJJJKkknkkkknkEkn0gknkkknkkkknkkknkkkknkkknkkknkEkn0gknkkknkkkknkkkknkkknkkknkkknkEkn0gknkkknkkkknkkkknkkknkkknkkknkEkn0gknkkknkkkknkkkknkkknkkknkkknkEkn0gknkkknkkkknkkkknkkknkkknkkknkEkn0gknkkknkkkknkkkknkkknkkknkkknkEkn0gknkkk...",
-    "DraftKings": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAoAAAAGQCAYAAABN7EzNAAAAOXRFWHRTb2Z0d2FyZQBNYWNyb21lZGlhIEZpcmV3b3JrcyAzLjIgKFJlY3RhbmdlZCkgaHR0cDovL21hY3JvbWVkaWEub3JnL2N1c3RvbS8pNqz3AAAACXBIWXMAAA3XAAAN1wFCKJt4AAAgAElEQVR4nOzde3BV5R3H8Y+SkSQQBBGECIgiI4Aa2oJEBRLIOLCJAEiBRVOzdVamrbr2rrauqpqu6u6rqrpVpb+2mvt71XStvttqrbqnVrXVU1QaJAhAEESJAICIEYQaYCEICIAhEj5yzn3MzuzsxOUB3zOzOzM7szM7szGfmec77/nO+bNnXNf+IH8d8SeuV1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq1Wq..."
-}
-
 
 
 # ------------------------------------------------------

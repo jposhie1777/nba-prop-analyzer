@@ -1627,7 +1627,14 @@ with tab1:
                         <div style="display:flex;align-items:center;">
                             <img src="{book_logo_b64}"
                                 alt="{book}"
-                                style="height:26px;width:auto;object-fit:contain;border-radius:4px;" />
+                                style="
+                                    height:26px;
+                                    width:auto;
+                                    max-width:90px;
+                                    object-fit:contain;
+                                    border-radius:4px;
+                                " />
+
                         </div>
                     """
                 else:

@@ -2100,7 +2100,7 @@ with tab3:
         )
 
 # ------------------------------------------------------
-# TAB 4 — DEPTH CHART + INJURY REPORT (REDESIGNED)
+# TAB 4 — DEPTH CHART + INJURY REPORT (SAFE VERSION)
 # ------------------------------------------------------
 with tab4:
     st.subheader("Depth Chart & Injury Report")
@@ -2116,67 +2116,54 @@ with tab4:
     )
 
     team_labels = [f"{row.team_name} ({row.team_abbr})" for row in teams_meta.itertuples()]
-    label_to_meta = {f"{row.team_name} ({row.team_abbr})": row for row in teams_meta.itertuples()}
+    lookup = {f"{row.team_name} ({row.team_abbr})": row for row in teams_meta.itertuples()}
 
-    selected_label = st.selectbox("Select Team", team_labels)
-    team_row = label_to_meta[selected_label]
+    sel_label = st.selectbox("Select Team", team_labels)
+    team_row = lookup[sel_label]
 
-    selected_team_number = int(team_row.team_number)
-    selected_abbr = team_row.team_abbr
-    selected_name = team_row.team_name
+    team_number = int(team_row.team_number)
+    team_abbr = team_row.team_abbr
+    team_name = team_row.team_name
 
-    # Filter depth for selected team
-    team_depth = depth_df[depth_df["team_number"] == selected_team_number].copy()
-
-    # Filter injuries for selected team
-    team_injuries = injury_df[injury_df["team_number"] == selected_team_number].copy()
+    # Filter data for this team
+    team_depth = depth_df[depth_df["team_number"] == team_number].copy()
+    team_injuries = injury_df[injury_df["team_number"] == team_number].copy()
 
     # ----------------------------
-    # TEAM HEADER (Logo + Name)
+    # TEAM HEADER
     # ----------------------------
-    team_logo_b64 = TEAM_LOGOS_BASE64.get(selected_abbr, "")
-    if team_logo_b64:
-        st.markdown(
-            f"""
-            <div style="display:flex;align-items:center;gap:14px;margin-bottom:1rem;">
-                <img src="{team_logo_b64}" style="height:48px;border-radius:10px;" />
-                <div>
-                    <div style="font-size:1.3rem;font-weight:700;color:#f3f4f6;">
-                        {selected_name}
-                    </div>
-                    <div style="font-size:0.85rem;color:#9ca3af;">
-                        Depth chart & injury context
-                    </div>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+    logo_b64 = TEAM_LOGOS_BASE64.get(team_abbr, "")
+
+    header_html = """
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:1rem;">
+        <img src="{logo}" style="height:48px;border-radius:10px;" />
+        <div>
+            <div style="font-size:1.3rem;font-weight:700;color:#f3f4f6;">{name}</div>
+            <div style="font-size:0.85rem;color:#9ca3af;">Depth chart & injury context</div>
+        </div>
+    </div>
+    """.format(logo=logo_b64, name=team_name)
+
+    st.markdown(header_html, unsafe_allow_html=True)
 
     # ----------------------------
-    # FIXED NBA POSITION ORDER
+    # FIXED NBA POSITIONS
     # ----------------------------
     POSITIONS = ["PG", "SG", "SF", "PF", "C"]
 
-    # Filter only these positions
     team_depth = team_depth[team_depth["position"].isin(POSITIONS)]
 
-    # ----------------------------
-    # COLUMN LAYOUT (Even 5 columns)
-    # ----------------------------
     col_pg, col_sg, col_sf, col_pf, col_c = st.columns(5)
-    col_map = {"PG": col_pg, "SG": col_sg, "SF": col_sf, "PF": col_pf, "C": col_c}
+    colmap = {"PG": col_pg, "SG": col_sg, "SF": col_sf, "PF": col_pf, "C": col_c}
 
-    # ----------------------------
-    # ROLE-BASED COLORS
-    # ----------------------------
+    # ROLE COLORS
     ROLE_COLORS = {
         "starter": ("rgba(34,197,94,0.22)", "rgba(34,197,94,0.65)"),
         "rotation": ("rgba(59,130,246,0.22)", "rgba(59,130,246,0.55)"),
         "bench": ("rgba(148,163,184,0.18)", "rgba(148,163,184,0.45)"),
     }
 
-    def role_to_colors(role):
+    def get_colors(role):
         r = (role or "").lower()
         if "start" in r:
             return ROLE_COLORS["starter"]
@@ -2185,108 +2172,98 @@ with tab4:
         return ROLE_COLORS["bench"]
 
     # ----------------------------
-    # DEPTH CHART RENDERING
+    # DEPTH CHART
     # ----------------------------
     st.markdown("### 🏀 Depth Chart")
 
     for pos in POSITIONS:
-        with col_map[pos]:
-            st.markdown(
-                f"""
-                <div style="
-                    font-size:1rem;
-                    font-weight:700;
-                    color:#e5e7eb;
-                    margin-bottom:0.4rem;
-                    text-align:center;
-                ">
-                    {pos}
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+        with colmap[pos]:
+            header = """
+            <div style="
+                font-size:1rem;
+                font-weight:700;
+                color:#e5e7eb;
+                margin-bottom:0.4rem;
+                text-align:center;">
+                {pos}
+            </div>
+            """.format(pos=pos)
+            st.markdown(header, unsafe_allow_html=True)
 
-            sub = (
+            subset = (
                 team_depth[team_depth["position"] == pos]
                 .sort_values("depth")
                 .reset_index(drop=True)
             )
 
-            for _, r in sub.iterrows():
-                player_name = r["player"]
-                role = r["role"]
-                depth_val = r["depth"]
+            for _, row in subset.iterrows():
+                player = row["player"]
+                role = row["role"]
+                depth = row["depth"]
+                bg, border = get_colors(role)
 
-                bg, border = role_to_colors(role)
-
-                st.markdown(
-                    f"""
-                    <div style="
-                        padding:12px 14px;
-                        margin-bottom:8px;
-                        border-radius:12px;
-                        background:{bg};
-                        border:1px solid {border};
-                        display:flex;
-                        justify-content:space-between;
-                        align-items:center;
-                        color:#f9fafb;
-                    ">
-                        <div>
-                            <div style="font-weight:700;font-size:0.9rem;">
-                                {player_name}
-                            </div>
-                            <div style="font-size:0.75rem;color:#d1d5db;">
-                                {role}
-                            </div>
-                        </div>
-
-                        <div style="
-                            padding:4px 10px;
-                            border-radius:999px;
-                            background:rgba(0,0,0,0.35);
-                            font-size:0.72rem;
-                            font-weight:600;
-                            color:#e5e7eb;
-                        ">
-                            Depth {depth_val}
-                        </div>
+                card = """
+                <div style="
+                    padding:12px 14px;
+                    margin-bottom:8px;
+                    border-radius:12px;
+                    background:{bg};
+                    border:1px solid {border};
+                    display:flex;
+                    justify-content:space-between;
+                    align-items:center;
+                    color:#f9fafb;">
+                    
+                    <div>
+                        <div style="font-weight:700;font-size:0.9rem;">{player}</div>
+                        <div style="font-size:0.75rem;color:#d1d5db;">{role}</div>
                     </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
 
-    # ======================================================
-    # INJURY REPORT (unchanged style — but aligned)
-    # ======================================================
+                    <div style="
+                        padding:4px 10px;
+                        border-radius:999px;
+                        background:rgba(0,0,0,0.35);
+                        font-size:0.72rem;
+                        font-weight:600;
+                        color:#e5e7eb;">
+                        Depth {depth}
+                    </div>
+
+                </div>
+                """.format(bg=bg, border=border, player=player, role=role, depth=depth)
+
+                st.markdown(card, unsafe_allow_html=True)
+
+    # ----------------------------
+    # INJURY REPORT
+    # ----------------------------
     st.markdown("### 🏥 Injury Report")
 
     if team_injuries.empty:
         st.success("No reported injuries for this team.")
     else:
-        team_injuries = (
+        latest = (
             team_injuries.sort_values("snapshot_ts")
             .groupby("player_id", as_index=False)
             .tail(1)
-            .sort_values("status")
         )
 
-        last_ts = team_injuries["snapshot_ts"].max()
+        last_ts = latest["snapshot_ts"].max()
         if pd.notna(last_ts):
-            st.caption(f"Last update: {last_ts.strftime('%b %d, %Y %I:%M %p')}")
+            st.caption("Last update: " + last_ts.strftime("%b %d, %Y %I:%M %p"))
 
-        for _, r in team_injuries.iterrows():
-            full_name = f"{r['first_name']} {r['last_name']}"
-            status = r["status"]
-            return_raw = r.get("return_date_raw", "")
-            desc = r.get("description", "")
+        for _, row in latest.iterrows():
+            full = f"{row['first_name']} {row['last_name']}"
+            status = row["status"]
+            ret = row.get("return_date_raw", "")
+            desc = row.get("description", "")
 
-            sl = status.lower()
-            if "out" in sl:
+            s = status.lower()
+            if "out" in s:
                 border = "rgba(239,68,68,0.7)"
                 bg = "rgba(127,29,29,0.3)"
                 pill = "rgba(239,68,68,0.9)"
-            elif "doubt" in sl or "questionable" in sl or "gtd" in sl:
+            elif "doubt" in s or "question" in s or "gtd" in s:
                 border = "rgba(234,179,8,0.7)"
                 bg = "rgba(120,53,15,0.3)"
                 pill = "rgba(234,179,8,0.9)"
@@ -2295,45 +2272,46 @@ with tab4:
                 bg = "rgba(30,64,175,0.3)"
                 pill = "rgba(59,130,246,0.9)"
 
-            st.markdown(
-                f"""
-                <div style="
-                    padding:12px 14px;
-                    margin-bottom:12px;
-                    border-radius:12px;
-                    background:{bg};
-                    border:1px solid {border};
-                    font-size:0.85rem;
-                ">
-                    <div style="display:flex;justify-content:space-between;align-items:center;">
-                        <div style="font-weight:700;color:#fef2f2;">
-                            {full_name}
-                        </div>
-                        <div style="
-                            padding:3px 10px;
-                            border-radius:999px;
-                            background:{pill};
-                            color:white;
-                            font-size:0.7rem;
-                            font-weight:700;
-                            text-transform:uppercase;
-                            letter-spacing:0.07em;
-                        ">
-                            {status}
-                        </div>
-                    </div>
-
-                    <div style="font-size:0.75rem;color:#e5e7eb;margin-top:6px;">
-                        <b>Return:</b> {return_raw}
-                    </div>
-                    <div style="font-size:0.75rem;color:#e5e7eb;margin-top:4px;">
-                        {desc}
+            inj_html = """
+            <div style="
+                padding:12px 14px;
+                margin-bottom:12px;
+                border-radius:12px;
+                background:{bg};
+                border:1px solid {border};
+                color:#e5e7eb;
+                font-size:0.85rem;">
+                
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div style="font-weight:700;color:#fef2f2;">{name}</div>
+                    <div style="
+                        padding:3px 10px;
+                        border-radius:999px;
+                        background:{pill};
+                        color:white;
+                        font-size:0.7rem;
+                        font-weight:700;
+                        text-transform:uppercase;
+                        letter-spacing:0.07em;">
+                        {status}
                     </div>
                 </div>
-                """,
-                unsafe_allow_html=True,
+
+                <div style="font-size:0.75rem;margin-top:6px;">
+                    <b>Return:</b> {ret}
+                </div>
+
+                <div style="font-size:0.75rem;margin-top:4px;">
+                    {desc}
+                </div>
+
+            </div>
+            """.format(
+                bg=bg, border=border, pill=pill,
+                name=full, status=status, ret=ret, desc=desc
             )
 
+            st.markdown(inj_html, unsafe_allow_html=True)
 
 # ------------------------------------------------------
 # LAST UPDATED

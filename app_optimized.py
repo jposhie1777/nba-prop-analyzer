@@ -1657,17 +1657,30 @@ with tab1:
 
             return True
 
-        # Attach WOWY data
+        # Attach WOWY deltas into card_df
         card_df = attach_wowy_deltas(filtered_df, wowy_df)
 
-        # Group WOWY rows per player/team and attach list to each row
+        # These are the ONLY columns we want in the WOWY list:
+        wowy_cols = [
+            "breakdown", "pts_delta", "reb_delta", "ast_delta",
+            "pra_delta", "pts_reb_delta"
+        ]
+
+        def extract_wowy_list(group):
+            # Get only the WOWY rows (those where breakdown is NOT null)
+            w = group[group["breakdown"].notna()][wowy_cols]
+            # Convert to list of dicts
+            return w.to_dict("records")
+
+        # Group by player/team and attach list
         grouped = (
             card_df.groupby(["player", "player_team"])
-                .apply(lambda g: g.assign(_wowy_list=g.to_dict("records")))
+                .apply(lambda g: g.assign(_wowy_list=extract_wowy_list(g)))
                 .reset_index(drop=True)
         )
 
         card_df = grouped
+
 
         # Apply card-grid filter
         card_df = card_df[card_df.apply(card_good, axis=1)]

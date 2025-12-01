@@ -1660,27 +1660,27 @@ with tab1:
         # Attach WOWY deltas into card_df
         card_df = attach_wowy_deltas(filtered_df, wowy_df)
 
-        # These are the ONLY columns we want in the WOWY list:
+        # WOWY columns
         wowy_cols = [
-            "breakdown", "pts_delta", "reb_delta", "ast_delta",
-            "pra_delta", "pts_reb_delta"
+            "breakdown", "pts_delta", "reb_delta",
+            "ast_delta", "pra_delta", "pts_reb_delta"
         ]
 
-        def extract_wowy_list(group):
-            # Get only the WOWY rows (those where breakdown is NOT null)
-            w = group[group["breakdown"].notna()][wowy_cols]
-            # Convert to list of dicts
+        def extract_wowy_list(g):
+            # Only WOWY rows (those where breakdown isn't null)
+            w = g[g["breakdown"].notna()][wowy_cols]
             return w.to_dict("records")
 
-        # Group by player/team and attach list
-        grouped = (
-            card_df.groupby(["player", "player_team"])
-                .apply(lambda g: g.assign(_wowy_list=extract_wowy_list(g)))
-                .reset_index(drop=True)
+        # STEP 1 — Build a map of { (player, team): [list_of_wowy_dicts] }
+        wowy_map = {}
+        for (player, team), g in card_df.groupby(["player", "player_team"]):
+            wowy_map[(player, team)] = extract_wowy_list(g)
+
+        # STEP 2 — Assign per row (SAFE, NO LENGTH MISMATCH)
+        card_df["_wowy_list"] = card_df.apply(
+            lambda r: wowy_map.get((r["player"], r["player_team"]), []),
+            axis=1
         )
-
-        card_df = grouped
-
 
         # Apply card-grid filter
         card_df = card_df[card_df.apply(card_good, axis=1)]

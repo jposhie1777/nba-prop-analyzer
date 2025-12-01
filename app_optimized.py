@@ -1356,44 +1356,53 @@ def market_to_delta_column(market):
 
 def build_wowy_block(row):
     """
-    Build stacked WOWY HTML for a card.
-    Each injured teammate's delta is color-coded and listed.
+    Show a SHORT summary:
+    'Impact: +1.65 when Trae Young (Out)'
+    Uses ONLY the largest WOWY delta for the current prop's stat.
     """
-    wowy_rows = row.get("_rows", None)
-    if wowy_rows is None or not isinstance(wowy_rows, pd.DataFrame):
-        return ""
-
     delta_col = market_to_delta_column(row.get("market", ""))
     if not delta_col:
         return ""
 
-    blocks = []
-    for _, w in wowy_rows.iterrows():
-        if delta_col not in w or pd.isna(w[delta_col]):
-            continue
+    wrows = row.get("_wowy_list", [])
+    if not wrows:
+        return ""
 
-        delta = float(w[delta_col])
-        sign = "+" if delta > 0 else ""
-        color = "#22c55e" if delta > 0 else "#ef4444"
-        breakdown = w.get("breakdown", "")
+    # Pick biggest absolute delta
+    best = None
+    best_val = 0
 
-        blocks.append(f"""
-            <div style="
-                padding:6px 10px;
-                margin-top:6px;
-                border-left:3px solid {color};
-                background:rgba(15,23,42,0.85);
-                border-radius:6px;">
-                <div style="font-size:0.78rem;font-weight:700;color:{color}">
-                    {breakdown}
-                </div>
-                <div style="font-size:0.72rem;color:#e5e7eb;margin-top:2px;">
-                    Impact on this prop: <b style="color:{color}">{sign}{delta:.2f}</b>
-                </div>
-            </div>
-        """)
+    for w in wrows:
+        if delta_col in w and pd.notna(w[delta_col]):
+            val = float(w[delta_col])
+            if abs(val) > abs(best_val):
+                best = w
+                best_val = val
 
-    return "".join(blocks)
+    if not best:
+        return ""
+
+    sign = "+" if best_val > 0 else ""
+    color = "#22c55e" if best_val > 0 else "#ef4444"
+
+    # Extract teammate + injury from breakdown ("Trae Young (Out) → ...")
+    teammate = best["breakdown"].split("→")[0].strip()
+
+    return f"""
+        <div style="margin-top:6px; font-size:0.72rem;
+                    padding:6px 10px;
+                    border-radius:8px;
+                    background:rgba(255,255,255,0.05);
+                    border-left:3px solid {color};">
+            <span style="color:{color}; font-weight:700;">
+                Impact: {sign}{best_val:.2f}
+            </span>
+            <span style="color:#e5e7eb;">
+                when {teammate}
+            </span>
+        </div>
+    """
+
 
 # ------------------------------------------------------
 # SIDEBAR FILTERS (using production-style filters)
@@ -1648,9 +1657,17 @@ with tab1:
 
             return True
 
-        # Attach WOWY data and group injured teammates per player/market/line/book
+        # Attach WOWY data
         card_df = attach_wowy_deltas(filtered_df, wowy_df)
-        card_df = group_wowy_rows(card_df)
+
+        # Group WOWY rows per player/team and attach list to each row
+        grouped = (
+            card_df.groupby(["player", "player_team"])
+                .apply(lambda g: g.assign(_wowy_list=g.to_dict("records")))
+                .reset_index(drop=True)
+        )
+
+        card_df = grouped
 
         # Apply card-grid filter
         card_df = card_df[card_df.apply(card_good, axis=1)]
@@ -1765,7 +1782,7 @@ with tab1:
 
                 tags_html = build_tags_html(build_prop_tags(row))
 
-                # WOWY stacked HTML (multiple injured teammates)
+                # WOWY brief HTML line
                 wowy_html = build_wowy_block(row)
 
                 card_html = f"""
@@ -1799,7 +1816,8 @@ with tab1:
                         </div>
                     </div>
 
-                    {wowy_html}
+                    {wowy_html}   <!-- WOWY appears here -->
+
                 </div>
                 """
 
@@ -2514,52 +2532,36 @@ with tab4:
 with tab5:
     st.subheader("🔀 WOWY (With/Without You) Analyzer")
 
-    player_list = sorted(props_df["player"].dropna().unique())
-    selected_player = st.selectbox("Select Player", player_list)
+    st.markdown("""
+    Below is the full WOWY table — showing how each player's production
+    changes when a specific teammate is **OUT**.
+    
+    Sort any column to explore the biggest deltas.
+    """)
 
-    # Normalize for match
-    def norm_w(x):
-        if not isinstance(x, str):
-            return ""
-        return (
-            x.lower()
-             .replace(".", "")
-             .replace("-", " ")
-             .replace("'", "")
-             .strip()
-        )
+    # Prepare WOWY table
+    wow = wowy_df.copy()
 
-    p_norm = norm_w(selected_player)
+    # Sort by biggest points impact
+    wow = wow.sort_values("pts_delta", ascending=False)
 
-    w = wowy_df[wowy_df["player_norm"] == p_norm].copy()
+    # Build display table
+    disp = wow[[
+        "player_a",
+        "team_abbr",
+        "breakdown",
+        "pts_delta",
+        "reb_delta",
+        "ast_delta",
+        "pra_delta",
+        "pts_reb_delta"
+    ]]
 
-    if w.empty:
-        st.info("No WOWY data for this player.")
-    else:
-        st.markdown("### 🧩 Injury Impact Deltas")
-
-        def fmt_delta(val):
-            if pd.isna(val):
-                return ""
-            sign = "+" if val > 0 else ""
-            color = "#22c55e" if val > 0 else "#ef4444"
-            return f"<span style='color:{color};font-weight:700'>{sign}{val:.2f}</span>"
-
-        w_display = w[[
-            "breakdown",
-            "pts_delta", "reb_delta", "ast_delta",
-            "pra_delta", "pts_reb_delta"
-        ]].copy()
-
-        for col in ["pts_delta", "reb_delta", "ast_delta", "pra_delta", "pts_reb_delta"]:
-            w_display[col] = w_display[col].apply(fmt_delta)
-
-        st.write("**Each row represents this player's change in production when a specific teammate is OUT.**")
-
-        st.markdown(
-            w_display.to_html(escape=False, index=False),
-            unsafe_allow_html=True
-        )
+    st.dataframe(
+        disp,
+        hide_index=True,
+        use_container_width=True
+    )
 
 # ------------------------------------------------------
 # LAST UPDATED

@@ -130,7 +130,8 @@ SELECT
   player_id,
   first_name,
   last_name,
-  team_id,
+  current_team,
+  team_abbrev,
   status,
   return_date_raw,
   description
@@ -1235,7 +1236,7 @@ injury_df = load_injury_report()    # <-- MUST COME BEFORE FIX
 wowy_df = load_wowy_deltas()
 
 # ------------------------------------------------------
-# FIX INJURY TEAM MISMATCH — HANDLE INITIALS (J. Tatum, T. Young, K. Porzingis)
+# FIX INJURY TEAM MATCHING (NEW SCHEMA)
 # ------------------------------------------------------
 def normalize(s):
     if not isinstance(s, str):
@@ -1248,29 +1249,32 @@ def normalize(s):
          .strip()
     )
 
-# Injury names
+# Clean name columns
 injury_df["first_clean"] = injury_df["first_name"].apply(normalize)
 injury_df["last_clean"] = injury_df["last_name"].apply(normalize)
 
-# Depth chart names
+# Depth chart name normalization
 depth_df["player_norm"] = depth_df["player"].apply(normalize)
+depth_df["first_initial"] = depth_df["player_norm"].apply(
+    lambda x: x.split(" ")[0][0] if x else ""
+)
+depth_df["last_clean"] = depth_df["player_norm"].apply(
+    lambda x: x.split(" ")[1] if len(x.split(" ")) > 1 else ""
+)
 
-# Extract first initial and last name
-depth_df["first_initial"] = depth_df["player_norm"].apply(lambda x: x.split(" ")[0][0] if x else "")
-depth_df["last_clean"] = depth_df["player_norm"].apply(lambda x: x.split(" ")[1] if len(x.split(" ")) > 1 else "")
-
-# Merge by last name first
+# Merge NEW: join by team_abbrev from injury table
 merged = injury_df.merge(
     depth_df,
-    on="last_clean",
+    left_on=["team_abbrev", "last_clean"],
+    right_on=["team_abbr", "last_clean"],
     how="left",
     suffixes=("", "_roster")
 )
 
-# Filter matches where first initial agrees
+# Verify first initial matches
 def row_matches(row):
     inj_initial = row["first_clean"][0] if row["first_clean"] else ""
-    roster_initial = row["first_initial"] if isinstance(row["first_initial"], str) else ""
+    roster_initial = row.get("first_initial", "")
     return inj_initial == roster_initial
 
 merged["name_match"] = merged.apply(row_matches, axis=1)
@@ -1278,14 +1282,16 @@ merged["name_match"] = merged.apply(row_matches, axis=1)
 # Keep only matched rows
 injury_df = merged[merged["name_match"] == True].copy()
 
-# Clean columns
+# Final clean columns
 injury_df = injury_df[
     [
         "snapshot_ts", "player_id", "first_name", "last_name",
+        "team_abbrev", "current_team",
         "status", "return_date_raw", "description",
         "team_number", "team_abbr", "team_name"
     ]
 ]
+
 
 # ------------------------------------------------------
 # WOWY HELPERS

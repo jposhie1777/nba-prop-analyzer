@@ -138,6 +138,12 @@ FROM {PROJECT_ID}.nba_prop_analyzer.player_injuries_raw
 ORDER BY snapshot_ts DESC
 """
 
+# NEW: WOWY delta SQL
+DELTA_SQL = f"""
+SELECT *
+FROM {PROJECT_ID}.nba_prop_analyzer.player_wowy_deltas
+"""
+
 # ------------------------------------------------------
 # AUTHENTICATION – GOOGLE BIGQUERY
 # ------------------------------------------------------
@@ -875,8 +881,6 @@ SPORTSBOOK_LOGOS = {
 st.write("File exists:", os.path.exists(os.path.join(APP_ROOT, "static/logos/Draftkingssmall.png")))
 st.write("Working directory:", APP_ROOT)
 
-
-
 MARKET_DISPLAY_MAP = {
     "player_assists_alternate": "Assists",
     "player_points_alternate": "Points",
@@ -1074,7 +1078,6 @@ def detect_stat(market):
     return ""
 
 
-
 def get_dynamic_averages(df):
     df = df.copy()
 
@@ -1112,7 +1115,6 @@ def add_defense(df):
         "stl": "overall_stl_rank",
         "blk": "overall_blk_rank",
     }
-
 
     df["Pos Def Rank"] = [
         df.loc[i, pos_cols.get(stat_series[i])]
@@ -1172,7 +1174,6 @@ def load_props():
             df.get("matchup_difficulty_score"), errors="coerce"
         )
 
-
     for c in ["ev_last5", "ev_last10", "ev_last20"]:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
@@ -1188,12 +1189,13 @@ def load_history():
     df["opponent_team"] = df["opponent_team"].fillna("").astype(str)
     return df
 
-# NEW: depth chart + injury loaders
+
 @st.cache_data(show_spinner=True)
 def load_depth_charts():
     df = bq_client.query(DEPTH_SQL).to_dataframe()
     df.columns = df.columns.str.strip()
     return df
+
 
 @st.cache_data(show_spinner=True)
 def load_injury_report():
@@ -1203,6 +1205,26 @@ def load_injury_report():
     return df
 
 
+@st.cache_data(show_spinner=True)
+def load_wowy_deltas():
+    df = bq_client.query(DELTA_SQL).to_dataframe()
+    df.columns = df.columns.str.strip()
+
+    # Normalize player name for matching
+    def norm(x):
+        if not isinstance(x, str):
+            return ""
+        return (
+            x.lower()
+             .replace(".", "")
+             .replace("-", " ")
+             .replace("'", "")
+             .strip()
+        )
+
+    df["player_norm"] = df["player_a"].apply(norm)
+    return df
+
 # ------------------------------------------------------
 # LOAD BASE TABLES
 # ------------------------------------------------------
@@ -1210,11 +1232,11 @@ props_df = load_props()
 history_df = load_history()
 depth_df = load_depth_charts()
 injury_df = load_injury_report()    # <-- MUST COME BEFORE FIX
+wowy_df = load_wowy_deltas()
 
 # ------------------------------------------------------
 # FIX INJURY TEAM MISMATCH — HANDLE INITIALS (J. Tatum, T. Young, K. Porzingis)
 # ------------------------------------------------------
-
 def normalize(s):
     if not isinstance(s, str):
         return ""
@@ -1237,9 +1259,7 @@ depth_df["player_norm"] = depth_df["player"].apply(normalize)
 depth_df["first_initial"] = depth_df["player_norm"].apply(lambda x: x.split(" ")[0][0] if x else "")
 depth_df["last_clean"] = depth_df["player_norm"].apply(lambda x: x.split(" ")[1] if len(x.split(" ")) > 1 else "")
 
-# ------------------------------------------------------
 # Merge by last name first
-# ------------------------------------------------------
 merged = injury_df.merge(
     depth_df,
     on="last_clean",
@@ -1247,9 +1267,7 @@ merged = injury_df.merge(
     suffixes=("", "_roster")
 )
 
-# ------------------------------------------------------
 # Filter matches where first initial agrees
-# ------------------------------------------------------
 def row_matches(row):
     inj_initial = row["first_clean"][0] if row["first_clean"] else ""
     roster_initial = row["first_initial"] if isinstance(row["first_initial"], str) else ""
@@ -1268,6 +1286,114 @@ injury_df = injury_df[
         "team_number", "team_abbr", "team_name"
     ]
 ]
+
+# ------------------------------------------------------
+# WOWY HELPERS
+# ------------------------------------------------------
+def attach_wowy_deltas(df, wowy_df_global):
+    """Attach WOWY rows (can be multiple injured teammates) to props by player + team."""
+    if wowy_df_global is None or wowy_df_global.empty:
+        return df
+
+    df = df.copy()
+
+    def norm(x):
+        if not isinstance(x, str):
+            return ""
+        return (
+            x.lower()
+             .replace(".", "")
+             .replace("-", " ")
+             .replace("'", "")
+             .strip()
+        )
+
+    df["player_norm"] = df["player"].apply(norm)
+
+    merged = df.merge(
+        wowy_df_global,
+        how="left",
+        left_on=["player_norm", "player_team"],
+        right_on=["player_norm", "team_abbr"],
+        suffixes=("", "_wowy"),
+    )
+    return merged
+
+
+def group_wowy_rows(df):
+    """
+    Reduce to one row per (player, market, line, bookmaker),
+    but attach a DataFrame of all WOWY rows as _rows.
+    """
+    df = df.copy()
+    group_cols = ["player", "market", "line", "bookmaker"]
+    if not all(col in df.columns for col in group_cols):
+        return df
+
+    grouped_rows = []
+    for _, g in df.groupby(group_cols):
+        base = g.iloc[0].copy()
+        base["_rows"] = g  # all WOWY variants in one blob
+        grouped_rows.append(base)
+
+    return pd.DataFrame(grouped_rows)
+
+
+def market_to_delta_column(market):
+    m = str(market).lower()
+    if "point" in m or "pts" in m:
+        return "pts_delta"
+    if "reb" in m:
+        return "reb_delta"
+    if "ast" in m:
+        return "ast_delta"
+    if "pra" in m or "p+r+a" in m:
+        return "pra_delta"
+    if "p+r" in m:
+        return "pts_reb_delta"
+    return None
+
+
+def build_wowy_block(row):
+    """
+    Build stacked WOWY HTML for a card.
+    Each injured teammate's delta is color-coded and listed.
+    """
+    wowy_rows = row.get("_rows", None)
+    if wowy_rows is None or not isinstance(wowy_rows, pd.DataFrame):
+        return ""
+
+    delta_col = market_to_delta_column(row.get("market", ""))
+    if not delta_col:
+        return ""
+
+    blocks = []
+    for _, w in wowy_rows.iterrows():
+        if delta_col not in w or pd.isna(w[delta_col]):
+            continue
+
+        delta = float(w[delta_col])
+        sign = "+" if delta > 0 else ""
+        color = "#22c55e" if delta > 0 else "#ef4444"
+        breakdown = w.get("breakdown", "")
+
+        blocks.append(f"""
+            <div style="
+                padding:6px 10px;
+                margin-top:6px;
+                border-left:3px solid {color};
+                background:rgba(15,23,42,0.85);
+                border-radius:6px;">
+                <div style="font-size:0.78rem;font-weight:700;color:{color}">
+                    {breakdown}
+                </div>
+                <div style="font-size:0.72rem;color:#e5e7eb;margin-top:2px;">
+                    Impact on this prop: <b style="color:{color}">{sign}{delta:.2f}</b>
+                </div>
+            </div>
+        """)
+
+    return "".join(blocks)
 
 # ------------------------------------------------------
 # SIDEBAR FILTERS (using production-style filters)
@@ -1334,8 +1460,6 @@ manual_l10_min = st.sidebar.number_input(
     step=1
 )
 
-
-
 # ------------------------------------------------------
 # FILTER FUNCTION
 # ------------------------------------------------------
@@ -1363,16 +1487,8 @@ def filter_props(df):
     # Odds slider
     d = d[d["price"].between(sel_odds[0], sel_odds[1])]
 
-    # ------------------------------------------------------
     # Global Min L10 Hit Rate
-    # BUT – steals/blocks bypass the L10 requirement
-    # ------------------------------------------------------
-    stat_series = d["market"].apply(detect_stat)
-
-    # ALL markets must meet L10 threshold
     d = d[d["hit_rate_last10"] >= sel_hit10]
-
-
 
     # Saved bets filter
     if show_only_saved and st.session_state.saved_bets:
@@ -1386,16 +1502,16 @@ def filter_props(df):
     return d
 
 
-
 # ------------------------------------------------------
 # TABS
 # ------------------------------------------------------
-tab1, tab2, tab3, tab4 = st.tabs(
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
     [
         "🧮 Props Overview",
         "📈 Trend Lab",
         "📋 Saved Bets",
         "📋 Depth Chart & Injury Report",
+        "🔀 WOWY Analyzer",
     ]
 )
 
@@ -1456,7 +1572,7 @@ with tab1:
     )
 
     # ======================================================
-    # CARD GRID VIEW (Option B — Steals/Blocks bypass L10)
+    # CARD GRID VIEW (with WOWY deltas stacked)
     # ======================================================
     if view_mode == "Card grid":
 
@@ -1497,7 +1613,6 @@ with tab1:
             # fallback (rare, won’t break HTML)
             return raw.strip()
 
-
         MIN_ODDS_FOR_CARD = manual_odds_min
         MAX_ODDS_FOR_CARD = manual_odds_max
         MIN_L10 = manual_l10_min / 100
@@ -1514,10 +1629,10 @@ with tab1:
 
         def card_good(row):
             """
-            Card Grid Option B:
+            Card grid filter:
             - Must meet odds range
+            - Must meet L10 threshold
             - Must be EV+
-            - Steals/Blocks bypass L10-but others must meet manual L10 threshold
             """
             if pd.isna(row.get("price")) or pd.isna(row.get("hit_rate_last10")):
                 return False
@@ -1528,14 +1643,17 @@ with tab1:
             if row["hit_rate_last10"] < MIN_L10:
                 return False
 
-
             if REQUIRE_EV_PLUS and not is_ev_plus(row):
                 return False
 
             return True
 
+        # Attach WOWY data and group injured teammates per player/market/line/book
+        card_df = attach_wowy_deltas(filtered_df, wowy_df)
+        card_df = group_wowy_rows(card_df)
+
         # Apply card-grid filter
-        card_df = filtered_df[filtered_df.apply(card_good, axis=1)]
+        card_df = card_df[card_df.apply(card_good, axis=1)]
 
         ranked = (
             card_df.sort_values("hit_rate_last10", ascending=False)
@@ -1621,7 +1739,6 @@ with tab1:
                 book_logo_b64 = SPORTSBOOK_LOGOS_BASE64.get(book, "")
 
                 if book_logo_b64:
-                    # HTML-safe logo wrapper (cannot break rendering)
                     book_html = f"""
                         <div style="display:flex;align-items:center;">
                             <img src="{book_logo_b64}"
@@ -1633,11 +1750,9 @@ with tab1:
                                     object-fit:contain;
                                     border-radius:4px;
                                 " />
-
                         </div>
                     """
                 else:
-                    # Safe fallback pill
                     book_html = f"""
                         <div style="
                             padding:3px 10px;
@@ -1649,6 +1764,9 @@ with tab1:
                     """
 
                 tags_html = build_tags_html(build_prop_tags(row))
+
+                # WOWY stacked HTML (multiple injured teammates)
+                wowy_html = build_wowy_block(row)
 
                 card_html = f"""
                 <div class="prop-card">
@@ -1680,6 +1798,8 @@ with tab1:
                             <div style="font-size:0.7rem;">Difficulty</div>
                         </div>
                     </div>
+
+                    {wowy_html}
                 </div>
                 """
 
@@ -1725,7 +1845,7 @@ with tab1:
 
         df["line"] = df["line"].astype(float)
 
-        # Fake trend sparkline (kept from previous version)
+        # Fake trend sparkline
         df["Sparkline"] = df.apply(
             lambda r: [
                 int(r["Hit5"]),
@@ -1737,7 +1857,6 @@ with tab1:
             axis=1,
         )
 
-        # Build grid dataframe
         grid_df = pd.DataFrame({
             "Player": df["player"],
             "Market": df["market"].apply(lambda m: MARKET_DISPLAY_MAP.get(m, m)),
@@ -1771,13 +1890,13 @@ with tab1:
                 }
                 let pts = v.map((val,i)=>{
                     const x = (i / (v.length - 1)) * width;
-                    return ${x},${scaleY(val)};
+                    return `${x},${scaleY(val)}`;
                 }).join(" ");
-                return 
+                return `
                     <svg width="${width}" height="${height}">
                         <polyline points="${pts}" class="sparkline" />
                     </svg>
-                ;
+                `;
             }
         """)
 
@@ -1817,7 +1936,7 @@ with tab1:
                 const p = params.value;
                 const hue = 120 * (p / 100);
                 return {
-                    backgroundColor: hsl(${hue},85%,40%),
+                    backgroundColor: `hsl(${hue},85%,40%)`,
                     color: 'white',
                     fontWeight: 700,
                     textAlign: 'center'
@@ -1829,9 +1948,10 @@ with tab1:
             function(params){
                 const e = params.data.Edge_raw;
                 const t = (e + 30) / 60.0;
-                const hue = 120 * Math.max(0, Math.min(1, t));
+                const clipped = Math.max(0, Math.min(1, t));
+                const hue = 120 * clipped;
                 return {
-                    backgroundColor: hsl(${hue},80%,35%),
+                    backgroundColor: `hsl(${hue},80%,35%)`,
                     color: 'white',
                     fontWeight: 700,
                     textAlign: 'center'
@@ -1843,9 +1963,10 @@ with tab1:
             function(params){
                 const v = params.value;
                 const t = (v - 1) / 29.0;
-                const hue = 120 * t;
+                const clipped = Math.max(0, Math.min(1, t));
+                const hue = 120 * clipped;
                 return {
-                    backgroundColor: hsl(${hue},70%,35%),
+                    backgroundColor: `hsl(${hue},70%,35%)`,
                     color: 'white',
                     fontWeight: 700,
                     textAlign: 'center'
@@ -1853,7 +1974,6 @@ with tab1:
             }
         """)
 
-        # Build the grid options
         gb = GridOptionsBuilder.from_dataframe(grid_df)
         gb.configure_default_column(
             sortable=True,
@@ -1949,8 +2069,6 @@ with tab2:
 
     stat = stat_map[stat_label]
 
-
-
     def clean_name(name):
         if not isinstance(name, str):
             return ""
@@ -1990,7 +2108,6 @@ with tab2:
             "Steals": "player_steals_alternate",
             "Blocks": "player_blocks_alternate",
         }
-
 
         selected_market_code = market_map[stat_label]
 
@@ -2147,8 +2264,9 @@ with tab3:
             file_name="saved_bets.csv",
             mime="text/csv",
         )
+
 #-------------------------------------------------
-# TAB 4 Depth Chart
+# TAB 4 Depth Chart & Injury Report
 #-------------------------------------------------
 with tab4:
     st.subheader("")
@@ -2389,6 +2507,59 @@ with tab4:
                 )
 
                 st.html(html)
+
+# ------------------------------------------------------
+# TAB 5 — WOWY ANALYZER
+# ------------------------------------------------------
+with tab5:
+    st.subheader("🔀 WOWY (With/Without You) Analyzer")
+
+    player_list = sorted(props_df["player"].dropna().unique())
+    selected_player = st.selectbox("Select Player", player_list)
+
+    # Normalize for match
+    def norm_w(x):
+        if not isinstance(x, str):
+            return ""
+        return (
+            x.lower()
+             .replace(".", "")
+             .replace("-", " ")
+             .replace("'", "")
+             .strip()
+        )
+
+    p_norm = norm_w(selected_player)
+
+    w = wowy_df[wowy_df["player_norm"] == p_norm].copy()
+
+    if w.empty:
+        st.info("No WOWY data for this player.")
+    else:
+        st.markdown("### 🧩 Injury Impact Deltas")
+
+        def fmt_delta(val):
+            if pd.isna(val):
+                return ""
+            sign = "+" if val > 0 else ""
+            color = "#22c55e" if val > 0 else "#ef4444"
+            return f"<span style='color:{color};font-weight:700'>{sign}{val:.2f}</span>"
+
+        w_display = w[[
+            "breakdown",
+            "pts_delta", "reb_delta", "ast_delta",
+            "pra_delta", "pts_reb_delta"
+        ]].copy()
+
+        for col in ["pts_delta", "reb_delta", "ast_delta", "pra_delta", "pts_reb_delta"]:
+            w_display[col] = w_display[col].apply(fmt_delta)
+
+        st.write("**Each row represents this player's change in production when a specific teammate is OUT.**")
+
+        st.markdown(
+            w_display.to_html(escape=False, index=False),
+            unsafe_allow_html=True
+        )
 
 # ------------------------------------------------------
 # LAST UPDATED

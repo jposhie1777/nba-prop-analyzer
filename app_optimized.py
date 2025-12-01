@@ -1666,6 +1666,10 @@ with tab1:
         # Attach WOWY deltas into card_df
         card_df = attach_wowy_deltas(filtered_df, wowy_df)
 
+        # ADD THIS → computes L5/L10/L20 averages dynamically
+        card_df = get_dynamic_averages(card_df)
+
+
         # WOWY columns
         wowy_cols = [
             "breakdown", "pts_delta", "reb_delta",

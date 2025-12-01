@@ -901,8 +901,8 @@ MARKET_DISPLAY_MAP = {
 
 def build_prop_tags(row):
     tags = []
-    if row.get("hit_rate_last10", 0) >= 0.70:
-        tags.append(("🔥 HOT", "#f97316"))
+    #if row.get("hit_rate_last10", 0) >= 0.70:
+        #tags.append(("🔥 HOT", "#f97316"))
 
     odds = row.get("price", 0)
     if odds > 0:
@@ -1827,7 +1827,7 @@ with tab1:
                         </div>
                         <div>
                             <div style="color:#e5e7eb;font-size:0.8rem;">L10: {hit10:.0%}</div>
-                            <div style="font-size:0.7rem;">L20: {hit20:.0%}</div>
+                            <div style="font-size:0.7rem;">Avg: {row.get("L10 Avg", "")}</div>
                         </div>
                         <div>
                             <div style="color:#e5e7eb;font-size:0.8rem;">{matchup:.0f}/100</div>

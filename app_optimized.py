@@ -86,24 +86,8 @@ if missing_env:
 # SQL STATEMENTS (BIGQUERY)
 # ------------------------------------------------------
 PROPS_SQL = f"""
-HISTORICAL_SQL = f"""
-SELECT
-  player,
-  player_team,
-  home_team,
-  visitor_team,
-  game_date,
-  opponent_team,
-  home_away,
-  pts,
-  reb,
-  ast,
-  pra,
-  stl,
-  blk,
-  SAFE_CAST(fg3m AS FLOAT64) AS fg3m
-FROM {PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}
-ORDER BY game_date
+SELECT *
+FROM {PROJECT_ID}.{DATASET}.{PROPS_TABLE}
 """
 
 HISTORICAL_SQL = f"""
@@ -121,7 +105,7 @@ SELECT
   pra,
   stl,
   blk,
-  fg3m
+  SAFE_CAST(fg3m AS FLOAT64) AS fg3m
 FROM {PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}
 ORDER BY game_date
 """

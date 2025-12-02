@@ -105,7 +105,6 @@ SELECT
   pra,
   stl,
   blk,
-  SAFE_CAST(fg3m AS FLOAT64) AS fg3m
 FROM {PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}
 ORDER BY game_date
 """
@@ -895,14 +894,13 @@ MARKET_DISPLAY_MAP = {
     "player_steals_alternate": "Steals",
     "player_blocks_alternate": "Blocks",
     "player_3pt_made_alternate": "3PT Made",
-    "player_fg3m_alternate": "3PT Made",
 }
 
 
 def build_prop_tags(row):
     tags = []
-    #if row.get("hit_rate_last10", 0) >= 0.70:
-        #tags.append(("🔥 HOT", "#f97316"))
+    if row.get("hit_rate_last10", 0) >= 0.70:
+        tags.append(("🔥 HOT", "#f97316"))
 
     odds = row.get("price", 0)
     if odds > 0:
@@ -1666,10 +1664,6 @@ with tab1:
         # Attach WOWY deltas into card_df
         card_df = attach_wowy_deltas(filtered_df, wowy_df)
 
-        # ADD THIS → computes L5/L10/L20 averages dynamically
-        card_df = get_dynamic_averages(card_df)
-
-
         # WOWY columns
         wowy_cols = [
             "breakdown", "pts_delta", "reb_delta",
@@ -1831,7 +1825,7 @@ with tab1:
                         </div>
                         <div>
                             <div style="color:#e5e7eb;font-size:0.8rem;">L10: {hit10:.0%}</div>
-                            <div style="font-size:0.7rem;">Avg: {row.get("L10 Avg", "")}</div>
+                            <div style="font-size:0.7rem;">L20: {hit20:.0%}</div>
                         </div>
                         <div>
                             <div style="color:#e5e7eb;font-size:0.8rem;">{matchup:.0f}/100</div>
@@ -2105,7 +2099,6 @@ with tab2:
         "P+R+A": "pra",
         "Steals": "stl",
         "Blocks": "blk",
-        "3PT Made": "fg3m",
     }
 
     stat = stat_map[stat_label]

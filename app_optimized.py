@@ -365,50 +365,74 @@ def _qp_get_single(key: str, default=None):
         return v[0] if v else default
     return v
 
+from streamlit_cookies_controller import CookieController
+cookie = CookieController()
 
 def ensure_logged_in():
     """
-    Handle Auth0 login flow and store user info in st.session_state.
-    If not logged in, show Login button and stop the app.
+    Mobile-safe Auth0 login flow.
+    - Stores token & user data in cookies (persistent)
+    - Eliminates session_state dependency (mobile issue)
+    - Prevents double-rerender Auth0 redirect loops
     """
-    if "user" in st.session_state and "user_id" in st.session_state:
+
+    # ----- 1) Check if already authenticated via cookie -----
+    saved_token = cookie.get("auth_id_token")
+    saved_sub = cookie.get("auth_sub")
+    saved_email = cookie.get("auth_email")
+    saved_user_id = cookie.get("auth_user_id")
+
+    if saved_token and saved_sub:
+        # Already logged in → restore minimal session info for UI
+        st.session_state["user"] = {
+            "auth0_sub": saved_sub,
+            "email": saved_email,
+        }
+        st.session_state["user_id"] = int(saved_user_id)
         return
 
-    # Get 'code' from query params using the new API
+    # ----- 2) Check for Auth0 redirect with ?code= param -----
     code = _qp_get_single("code", None)
 
     if code:
-        # Returned from Auth0 with a code
         try:
+            # Exchange code for Auth0 tokens
             token_data = exchange_code_for_token(code)
             id_token = token_data.get("id_token")
             if not id_token:
                 raise ValueError("No id_token in Auth0 response.")
-            claims = decode_id_token(id_token)
 
+            # Decode ID token
+            claims = decode_id_token(id_token)
             auth0_sub = claims.get("sub")
             email = claims.get("email", "")
 
             if not auth0_sub:
                 raise ValueError("Missing 'sub' in id_token.")
 
+            # DB lookup/insert
             user_row = get_or_create_user(auth0_sub, email)
-            st.session_state["user"] = {
-                "auth0_sub": auth0_sub,
-                "email": email,
-            }
-            st.session_state["user_id"] = user_row["id"]
+            user_id = user_row["id"]
 
-            # Clear 'code' from URL and rerun
+            # ----- 3) Store login in cookies (persistent, mobile-safe) -----
+            cookie.set("auth_id_token", id_token, expires=7)
+            cookie.set("auth_sub", auth0_sub, expires=7)
+            cookie.set("auth_email", email, expires=7)
+            cookie.set("auth_user_id", str(user_id), expires=7)
+
+            # ----- 4) Clean URL (remove ?code=) -----
             new_params = dict(st.query_params)
             new_params.pop("code", None)
             st.query_params = new_params
-            st.rerun()
+
+            # Stop here; next render will show logged-in state
+            st.stop()
+
         except Exception as e:
             st.error(f"❌ Login failed: {e}")
             st.stop()
 
-    # Not logged in and no 'code' param -> show login link
+    # ----- 5) No cookie + no code → must log in -----
     login_url = get_auth0_authorize_url()
     st.title("NBA Prop Analyzer")
     st.info("Please log in to view props, trends, and saved bets.")

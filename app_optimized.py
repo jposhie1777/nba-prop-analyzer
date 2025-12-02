@@ -896,29 +896,6 @@ MARKET_DISPLAY_MAP = {
     "player_3pt_made_alternate": "3PT Made",
 }
 
-
-def build_prop_tags(row):
-    tags = []
-
-    # EV+ tag stays the same
-    odds = row.get("price", 0)
-    implied = 100 / (odds + 100) if odds > 0 else abs(odds) / (abs(odds) + 100)
-    if row.get("hit_rate_last10", 0) > implied:
-        tags.append(("📈 EV+", "#22c55e"))
-
-    # NEW: Opponent Rank-based difficulty tag
-    opp_rank = get_opponent_rank(row)
-
-    if opp_rank is not None:
-        if opp_rank <= 10:
-            tags.append(("🔴 Hard", "#ef4444"))
-        elif opp_rank <= 20:
-            tags.append(("🟡 Neutral", "#eab308"))
-        else:
-            tags.append(("🟢 Easy", "#22c55e"))
-
-    return tags
-
 def build_tags_html(tags):
     return "".join(
         f'''
@@ -1583,14 +1560,41 @@ with tab1:
     )
 
     # ======================================================
-    # CARD GRID VIEW (with WOWY deltas stacked) — PATCHED
+    # CARD GRID VIEW (with sparkline + updated layout)
     # ======================================================
     if view_mode == "Card grid":
 
-        # -------------------------
-        # Helpers
-        # -------------------------
+        # ---------- Sparkline Builder ----------
+        def build_sparkline(values, width=80, height=24, color="#0ea5e9"):
+            if not values or len(values) == 0:
+                return ""
 
+            xs = list(range(len(values)))
+            min_v = min(values)
+            max_v = max(values)
+            span = max_v - min_v or 1
+
+            pts = []
+            for i, v in enumerate(values):
+                x = int((i / (len(values) - 1)) * width)
+                y = int(height - ((v - min_v) / span) * height)
+                pts.append(f"{x},{y}")
+
+            svg = " ".join(pts)
+
+            return f"""
+                <svg width="{width}" height="{height}" style="overflow:visible;">
+                    <polyline 
+                        points="{svg}"
+                        fill="none"
+                        stroke="{color}"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                    />
+                </svg>
+            """
+
+        # ---------- Bookmaker Name Normalizer ----------
         def normalize_bookmaker(raw: str) -> str:
             if not raw:
                 return ""
@@ -1615,11 +1619,11 @@ with tab1:
                 return "PointsBet"
             if "fanatics" in r:
                 return "Fanatics"
-            if "betonline" in r or "bet online" in r:
+            if "betonline" in r:
                 return "BetOnline.ag"
             return raw.strip()
 
-        # Card filter settings
+        # ---------- Card Filters ----------
         MIN_ODDS_FOR_CARD = manual_odds_min
         MAX_ODDS_FOR_CARD = manual_odds_max
         MIN_L10 = manual_l10_min / 100
@@ -1627,11 +1631,7 @@ with tab1:
 
         def is_ev_plus(row):
             odds = row["price"]
-            implied = (
-                100 / (odds + 100)
-                if odds > 0
-                else abs(odds) / (abs(odds) + 100)
-            )
+            implied = (100 / (odds + 100)) if odds > 0 else abs(odds) / (abs(odds) + 100)
             return row["hit_rate_last10"] > implied
 
         def card_good(row):
@@ -1645,13 +1645,11 @@ with tab1:
                 return False
             return True
 
-        # WOWY merging
+        # ---------- WOWY Merge ----------
         card_df = attach_wowy_deltas(filtered_df, wowy_df)
 
-        wowy_cols = [
-            "breakdown", "pts_delta", "reb_delta",
-            "ast_delta", "pra_delta", "pts_reb_delta"
-        ]
+        wowy_cols = ["breakdown", "pts_delta", "reb_delta", "ast_delta",
+                    "pra_delta", "pts_reb_delta"]
 
         def extract_wowy_list(g):
             w = g[g["breakdown"].notna()][wowy_cols]
@@ -1666,31 +1664,29 @@ with tab1:
             axis=1
         )
 
-        # ------------ NEW FUNCTIONS FOR THIS PATCH --------------
-
+        # ---------- Correct L10 Averages ----------
         def get_l10_avg(row):
-        stat = detect_stat(row.get("market", ""))
+            stat = detect_stat(row.get("market", ""))
 
-        avg_cols = {
-            "pts": "pts_avg_last10",
-            "reb": "reb_avg_last10",
-            "ast": "ast_avg_last10",
-            "pra": "pra_avg_last10",
-            "stl": "stl_avg_last10",
-            "blk": "blk_avg_last10",
-            "fg3m": "fg3m_avg_last10",
-        }
+            avg_cols = {
+                "pts": "pts_avg_last10",
+                "reb": "reb_avg_last10",
+                "ast": "ast_avg_last10",
+                "pra": "pra_avg_last10",
+                "stl": "stl_avg_last10",
+                "blk": "blk_avg_last10",
+                "fg3m": "fg3m_avg_last10",
+            }
 
-        col = avg_cols.get(stat)
-        if col and col in row:
-            return row[col]
+            col = avg_cols.get(stat)
+            if col and col in row:
+                return row[col]
+            return None
 
-        return None
-
-
-        # Opponent ranking lookup
+        # ---------- Opponent Rank ----------
         def get_opponent_rank(row):
             stat = detect_stat(row.get("market", ""))
+
             rank_cols = {
                 "pts": "opp_pos_pts_rank",
                 "reb": "opp_pos_reb_rank",
@@ -1700,30 +1696,49 @@ with tab1:
                 "blk": "opp_pos_blk_rank",
                 "fg3m": "opp_pos_fg3m_rank",
             }
+
             col = rank_cols.get(stat)
             if col and col in row:
                 return row[col]
             return None
 
-        # Rank color scaling (1–30 → red→yellow→green)
         def rank_to_color(rank):
             if rank is None:
-                return "#9ca3af"  # grey
+                return "#9ca3af"
             t = (rank - 1) / 29
-            hue = 120 * t   # 0=red, 120=green
+            hue = 120 * t
             return f"hsl({hue}, 85%, 45%)"
 
-        # ---------------------------------------------------------
-        # Filter down to accepted card props
-        # ---------------------------------------------------------
+        # ---------- Difficulty Tag Uses Opp Rank ----------
+        def build_prop_tags(row):
+            tags = []
+
+            # EV+
+            odds = row.get("price", 0)
+            implied = 100 / (odds + 100) if odds > 0 else abs(odds) / (abs(odds) + 100)
+            if row.get("hit_rate_last10", 0) > implied:
+                tags.append(("📈 EV+", "#22c55e"))
+
+            # Difficulty based on Opponent Rank
+            r = get_opponent_rank(row)
+            if r is not None:
+                if r <= 10:
+                    tags.append(("🔴 Hard", "#ef4444"))
+                elif r <= 20:
+                    tags.append(("🟡 Neutral", "#eab308"))
+                else:
+                    tags.append(("🟢 Easy", "#22c55e"))
+
+            return tags
+
+        # ---------- Filter ----------
         card_df = card_df[card_df.apply(card_good, axis=1)]
         ranked = (
             card_df.sort_values("hit_rate_last10", ascending=False)
-            if not card_df.empty
-            else card_df
+            if not card_df.empty else card_df
         ).reset_index(drop=True)
 
-        # Pagination
+        # ---------- Pagination ----------
         page_size = 30
         total_cards = len(ranked)
         total_pages = max(1, (total_cards + page_size - 1) // page_size)
@@ -1731,12 +1746,7 @@ with tab1:
         st.write(f"Showing {total_cards} props • {total_pages} pages")
 
         page = st.number_input(
-            "Page",
-            min_value=1,
-            max_value=total_pages,
-            value=1,
-            step=1,
-            key="card_page_number"
+            "Page", min_value=1, max_value=total_pages, value=1, step=1, key="card_page_number"
         )
 
         start = (page - 1) * page_size
@@ -1744,85 +1754,69 @@ with tab1:
         page_df = ranked.iloc[start:end]
 
         st.markdown("""
-            <div style="
-                max-height: 1100px;
-                overflow-y: auto;
-                padding-right: 12px;
-            ">
+            <div style="max-height:1100px; overflow-y:auto; padding-right:12px;">
         """, unsafe_allow_html=True)
 
         cols = st.columns(4)
         has_html = hasattr(st, "html")
 
-        # ---------------------------------------------------------
+        # ======================================================
         # CARD LOOP
-        # ---------------------------------------------------------
+        # ======================================================
         for idx, row in page_df.iterrows():
+
             col = cols[idx % 4]
             with col:
 
                 player = row.get("player", "")
-                pretty_market = MARKET_DISPLAY_MAP.get(
-                    row.get("market", ""), row.get("market", "")
-                )
+                pretty_market = MARKET_DISPLAY_MAP.get(row.get("market", ""),
+                                                    row.get("market", ""))
                 bet_type = str(row.get("bet_type", "")).upper()
                 line = row.get("line", "")
 
                 odds = int(row.get("price", 0))
                 hit10 = row.get("hit_rate_last10", 0.0)
 
-                # -------- NEW: L10 AVERAGE --------
+                # ---- L10 Average ----
                 l10_avg = get_l10_avg(row)
-                l10_avg_display = f"{l10_avg:.1f}" if l10_avg is not None else "-"
+                l10_avg_display = f"{l10_avg:.1f}" if l10_avg else "-"
 
-                # -------- NEW: OPPONENT RANK (1–30) --------
+                # ---- Opponent Rank ----
                 opp_rank = get_opponent_rank(row)
-                rank_display = opp_rank if opp_rank is not None else "-"
+                rank_display = opp_rank if opp_rank else "-"
                 rank_color = rank_to_color(opp_rank)
 
-                implied_prob = (
-                    100 / (odds + 100)
-                    if odds > 0
-                    else abs(odds) / (abs(odds) + 100)
-                )
+                implied_prob = (100 / (odds + 100)) if odds > 0 else abs(odds) / (
+                            abs(odds) + 100)
 
+                # ---- Trend Sparkline ----
+                stat = detect_stat(row["market"])
+                spark_vals = row.get(f"{stat}_last7_list", None)
+                spark_html = build_sparkline(spark_vals) if spark_vals is not None else ""
+
+                # ---- Logos ----
                 player_team = normalize_team_code(row.get("player_team", ""))
                 opp_team = normalize_team_code(row.get("opponent_team", ""))
 
                 home_logo = TEAM_LOGOS_BASE64.get(player_team, "")
                 opp_logo = TEAM_LOGOS_BASE64.get(opp_team, "")
 
-                if home_logo and opp_logo:
-                    logos_html = f"""
-                        <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">
-                            <img src="{home_logo}" style="height:18px;border-radius:4px;" />
-                            <span style="font-size:0.7rem;color:#9ca3af;">vs</span>
-                            <img src="{opp_logo}" style="height:18px;border-radius:4px;" />
-                        </div>
-                    """
-                else:
-                    logos_html = f"""
-                        <div style='font-size:0.75rem;color:#9ca3af;'>
-                            {row.get("home_team","")} vs {row.get("opponent_team","")}
-                        </div>
-                    """
+                logos_html = f"""
+                    <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">
+                        <img src="{home_logo}" style="height:18px;border-radius:4px;" />
+                        <span style="font-size:0.7rem;color:#9ca3af;">vs</span>
+                        <img src="{opp_logo}" style="height:18px;border-radius:4px;" />
+                    </div>
+                """ if home_logo else ""
 
+                # ---- Bookmaker ----
                 book = normalize_bookmaker(row.get("bookmaker", ""))
                 book_logo_b64 = SPORTSBOOK_LOGOS_BASE64.get(book, "")
 
                 if book_logo_b64:
                     book_html = f"""
-                        <div style="display:flex;align-items:center;">
-                            <img src="{book_logo_b64}"
-                                alt="{book}"
-                                style="
-                                    height:26px;
-                                    width:auto;
-                                    max-width:90px;
-                                    object-fit:contain;
-                                    border-radius:4px;
-                                " />
-                        </div>
+                        <img src="{book_logo_b64}" 
+                            style="height:26px;max-width:90px;object-fit:contain;" />
                     """
                 else:
                     book_html = f"""
@@ -1831,58 +1825,73 @@ with tab1:
                             border-radius:8px;
                             background:rgba(255,255,255,0.08);
                             border:1px solid rgba(255,255,255,0.15);
-                            font-size:0.7rem;
-                        ">{book}</div>
+                            font-size:0.7rem;">
+                            {book}
+                        </div>
                     """
 
-                # Tags & WOWY
                 tags_html = build_tags_html(build_prop_tags(row))
                 wowy_html = build_wowy_block(row)
 
-                # ---------------------------------------------------------
-                # PATCHED CARD HTML BLOCK
-                # ---------------------------------------------------------
+                # ======================================================
+                # NEW CARD LAYOUT
+                # ======================================================
                 card_html = f"""
                 <div class="prop-card">
-                    <div class="prop-headline">
-                        <div>
-                            <div class="prop-player">{player}</div>
-                            <div class="prop-market">
-                                {pretty_market} • {bet_type} {line}
-                            </div>
-                            <div style="margin-top:4px;">{tags_html}</div>
+
+                    <!-- TOP CENTER: Player + Market -->
+                    <div style="text-align:center; margin-bottom:6px;">
+                        <div class="prop-player" style="font-size:1.05rem;font-weight:700;">
+                            {player}
                         </div>
-                        <div style="text-align:right;">
-                            {book_html}
-                            {logos_html}
+                        <div class="prop-market" 
+                            style="font-size:0.82rem;color:#9ca3af;margin-top:2px;">
+                            {pretty_market} • {bet_type} {line}
                         </div>
                     </div>
 
-                    <div class="prop-meta">
+                    <hr style="border:0;border-top:1px solid rgba(255,255,255,0.08);
+                            margin:6px 0 10px 0;" />
 
-                        <!-- Left: Odds -->
+                    <!-- MIDDLE: Sparkline Left, Logos Right -->
+                    <div style="display:flex;justify-content:space-between;align-items:center;
+                                margin-bottom:8px;">
+                        <div style="padding-right:8px;flex:1;">{spark_html}</div>
+
+                        <div style="text-align:right; flex-shrink:0;">
+                            {book_html}
+                            <div style="margin-top:4px;">{logos_html}</div>
+                        </div>
+                    </div>
+
+                    <!-- TAGS -->
+                    <div style="display:flex;justify-content:center;margin-bottom:6px;">
+                        {tags_html}
+                    </div>
+
+                    <!-- BOTTOM METRICS -->
+                    <div class="prop-meta" style="margin-top:2px;">
+
                         <div>
                             <div style="color:#e5e7eb;font-size:0.8rem;">{odds:+d}</div>
                             <div style="font-size:0.7rem;">Imp: {implied_prob:.0%}</div>
                         </div>
 
-                        <!-- Middle: L10 Hit + L10 Avg -->
                         <div>
                             <div style="color:#e5e7eb;font-size:0.8rem;">L10 Hit: {hit10:.0%}</div>
                             <div style="font-size:0.7rem;">L10 Avg: {l10_avg_display}</div>
                         </div>
 
-                        <!-- Right: Opponent Rank (1–30) -->
                         <div>
                             <div style="color:{rank_color};font-size:0.8rem;font-weight:700;">
                                 {rank_display}
                             </div>
                             <div style="font-size:0.7rem;">Opp Rank</div>
                         </div>
-
                     </div>
 
                     {wowy_html}
+
                 </div>
                 """
 
@@ -1892,7 +1901,7 @@ with tab1:
                     st.markdown(card_html, unsafe_allow_html=True)
 
         st.markdown("</div>", unsafe_allow_html=True)
-        st.caption("Card view updated: L10 Avg + Opp Rank (1–30).")
+        st.caption("Card view updated: centered header, sparkline, opponent-rank difficulty, correct L10 averages.")
 
 
     # ======================================================

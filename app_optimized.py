@@ -115,9 +115,8 @@ SELECT
   ast,
   pra,
   stl,
-  blk,
-  SAFE_CAST(fg3m AS FLOAT64) AS fg3m
-FROM {PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}
+  blk
+FROM `{PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}`
 ORDER BY game_date
 """
 
@@ -2201,7 +2200,6 @@ with tab2:
         "P+R+A",
         "Steals",
         "Blocks",
-        "3PT Made",
     ]
 
     if st.session_state.get("trend_market") in stats_list:
@@ -2232,7 +2230,6 @@ with tab2:
         "P+R+A": "pra",
         "Steals": "stl",
         "Blocks": "blk",
-        "3PT Made": "fg3m",
     }
 
     stat = stat_map[stat_label]
@@ -2275,7 +2272,6 @@ with tab2:
             "P+R+A": "player_points_rebounds_assists_alternate",
             "Steals": "player_steals_alternate",
             "Blocks": "player_blocks_alternate",
-            "3PT Made": "player_3pt_made_alternate",
         }
 
         selected_market_code = market_map[stat_label]

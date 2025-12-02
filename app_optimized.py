@@ -899,25 +899,23 @@ MARKET_DISPLAY_MAP = {
 
 def build_prop_tags(row):
     tags = []
-    #if row.get("hit_rate_last10", 0) >= 0.70:
-        #tags.append(("🔥 HOT", "#f97316"))
 
+    # EV+ tag stays the same
     odds = row.get("price", 0)
-    if odds > 0:
-        implied = 100 / (odds + 100)
-    else:
-        implied = abs(odds) / (abs(odds) + 100) if odds != 0 else 0
-
+    implied = 100 / (odds + 100) if odds > 0 else abs(odds) / (abs(odds) + 100)
     if row.get("hit_rate_last10", 0) > implied:
         tags.append(("📈 EV+", "#22c55e"))
 
-    matchup = float(row.get("matchup_difficulty_score", 50))
-    if matchup <= 33:
-        tags.append(("🔴 Hard", "#ef4444"))
-    elif matchup >= 67:
-        tags.append(("🟢 Easy", "#22c55e"))
-    else:
-        tags.append(("🟡 Neutral", "#eab308"))
+    # NEW: Opponent Rank-based difficulty tag
+    opp_rank = get_opponent_rank(row)
+
+    if opp_rank is not None:
+        if opp_rank <= 10:
+            tags.append(("🔴 Hard", "#ef4444"))
+        elif opp_rank <= 20:
+            tags.append(("🟡 Neutral", "#eab308"))
+        else:
+            tags.append(("🟢 Easy", "#22c55e"))
 
     return tags
 
@@ -1670,13 +1668,25 @@ with tab1:
 
         # ------------ NEW FUNCTIONS FOR THIS PATCH --------------
 
-        # L10 Average extraction
         def get_l10_avg(row):
-            stat = detect_stat(row.get("market", ""))
-            if not stat:
-                return None
-            col = f"{stat}_last10"
-            return row.get(col, None)
+        stat = detect_stat(row.get("market", ""))
+
+        avg_cols = {
+            "pts": "pts_avg_last10",
+            "reb": "reb_avg_last10",
+            "ast": "ast_avg_last10",
+            "pra": "pra_avg_last10",
+            "stl": "stl_avg_last10",
+            "blk": "blk_avg_last10",
+            "fg3m": "fg3m_avg_last10",
+        }
+
+        col = avg_cols.get(stat)
+        if col and col in row:
+            return row[col]
+
+        return None
+
 
         # Opponent ranking lookup
         def get_opponent_rank(row):

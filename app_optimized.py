@@ -1,5 +1,5 @@
 # ------------------------------------------------------
-# NBA Prop Analyzer - Merged Production + Dev UI (Fixed)
+# NBA Prop Analyzer - Merged Production + Dev UI (Cleaned)
 # ------------------------------------------------------
 import os
 import json
@@ -28,10 +28,12 @@ def render_html(html: str):
     else:
         st.markdown(html, unsafe_allow_html=True)
 
+
 # ------------------------------------------------------
 # TIMEZONE (EST)
 # ------------------------------------------------------
 EST = pytz.timezone("America/New_York")
+
 
 # ------------------------------------------------------
 # STREAMLIT CONFIG
@@ -41,6 +43,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
 
 # ------------------------------------------------------
 # ENVIRONMENT VARIABLES
@@ -89,6 +92,7 @@ if missing_env:
     )
     st.stop()
 
+
 # ------------------------------------------------------
 # SQL STATEMENTS (BIGQUERY)
 # ------------------------------------------------------
@@ -117,7 +121,7 @@ FROM {PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}
 ORDER BY game_date
 """
 
-# NEW: depth chart + injury SQL
+# Depth chart + injury SQL
 DEPTH_SQL = f"""
 SELECT
   team_number,
@@ -146,11 +150,12 @@ FROM {PROJECT_ID}.nba_prop_analyzer.player_injuries_raw
 ORDER BY snapshot_ts DESC
 """
 
-# NEW: WOWY delta SQL
+# WOWY delta SQL
 DELTA_SQL = f"""
 SELECT *
 FROM {PROJECT_ID}.nba_prop_analyzer.player_wowy_deltas
 """
+
 
 # ------------------------------------------------------
 # AUTHENTICATION – GOOGLE BIGQUERY
@@ -179,8 +184,9 @@ except Exception as e:
     st.sidebar.error(f"BigQuery connection failed: {e}")
     st.stop()
 
+
 # ------------------------------------------------------
-# RENDER POSTGRES CONNECTION HELPERS
+# POSTGRES HELPERS
 # ------------------------------------------------------
 def get_db_conn():
     """Create a new PostgreSQL connection to your Render database."""
@@ -312,6 +318,7 @@ def replace_saved_bets_in_db(user_id: int, bets: list[dict]):
     except Exception as e:
         st.sidebar.error(f"Error saving bets to DB: {e}")
 
+
 # ------------------------------------------------------
 # AUTH0 HELPERS (LOGIN)
 # ------------------------------------------------------
@@ -349,6 +356,17 @@ def decode_id_token(id_token: str):
     return jwt.decode(id_token, options={"verify_signature": False, "verify_aud": False})
 
 
+def _qp_get_single(key: str, default=None):
+    """Helper to read a single value from st.query_params."""
+    qp = st.query_params
+    if key not in qp:
+        return default
+    v = qp[key]
+    if isinstance(v, list):
+        return v[0] if v else default
+    return v
+
+
 def ensure_logged_in():
     """
     Handle Auth0 login flow and store user info in st.session_state.
@@ -357,15 +375,8 @@ def ensure_logged_in():
     if "user" in st.session_state and "user_id" in st.session_state:
         return
 
-    # Try to get 'code' from query params
-    try:
-        qp = st.query_params
-    except AttributeError:
-        qp = st.experimental_get_query_params()
-
-    code = qp.get("code")
-    if isinstance(code, list):
-        code = code[0]
+    # Get 'code' from query params using the new API
+    code = _qp_get_single("code", None)
 
     if code:
         # Returned from Auth0 with a code
@@ -389,11 +400,10 @@ def ensure_logged_in():
             }
             st.session_state["user_id"] = user_row["id"]
 
-            # Clear 'code' from URL and rerun once
-            try:
-                st.experimental_set_query_params()
-            except Exception:
-                pass
+            # Clear 'code' from URL and rerun
+            new_params = dict(st.query_params)
+            new_params.pop("code", None)
+            st.query_params = new_params
             st.rerun()
         except Exception as e:
             st.error(f"❌ Login failed: {e}")
@@ -415,20 +425,18 @@ user = st.session_state["user"]
 user_id = st.session_state["user_id"]
 st.sidebar.markdown(f"**User:** {user.get('email') or 'Logged in'}")
 
+
 # ------------------------------------------------------
 # URL PARAMS FOR NAVIGATION (Props <-> Trend Lab)
 # ------------------------------------------------------
-try:
-    qp = st.query_params
-except AttributeError:
-    qp = st.experimental_get_query_params()
+ACTIVE_TAB = _qp_get_single("tab", "props") or "props"
+TREND_PLAYER_QP = _qp_get_single("player", None)
+TREND_STAT_QP = _qp_get_single("stat", None)
+TREND_LINE_QP = _qp_get_single("line", None)
 
-ACTIVE_TAB = qp.get("tab", ["props"])[0]  # 'props' or 'trend'
-TREND_PLAYER_QP = qp.get("player", [None])[0]
-TREND_STAT_QP = qp.get("stat", [None])[0]
-TREND_LINE_QP = qp.get("line", [None])[0]
 
-st.markdown("""
+st.markdown(
+    """
 <style>
 .invisible-card-button > button {
     opacity: 0 !important;
@@ -440,11 +448,13 @@ st.markdown("""
     z-index: 5 !important;
 }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 
 # ------------------------------------------------------
-# THEME PRESETS (from dev)
+# THEME PRESETS
 # ------------------------------------------------------
 THEMES = {
     "Sportsbook Dark": {
@@ -475,8 +485,9 @@ theme_choice = st.sidebar.selectbox(
 )
 theme = THEMES[st.session_state.theme_choice]
 
+
 # ------------------------------------------------------
-# GLOBAL STYLES (from dev)
+# GLOBAL STYLES
 # ------------------------------------------------------
 st.markdown(
     f"""
@@ -779,7 +790,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.markdown("""
+st.markdown(
+    """
 <style>
 
     /* ----------------------------------------------
@@ -808,7 +820,9 @@ st.markdown("""
     }
 
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 
 # ------------------------------------------------------
@@ -836,6 +850,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 # ------------------------------------------------------
 # LOGOS (STATIC)
@@ -873,7 +888,6 @@ TEAM_LOGOS = {
     "WAS": "https://a.espncdn.com/i/teamlogos/nba/500/wsh.png",
 }
 
-# Map full team names from BigQuery → 3-letter codes
 TEAM_NAME_TO_CODE = {
     "Atlanta Hawks": "ATL",
     "Boston Celtics": "BOS",
@@ -914,8 +928,6 @@ SPORTSBOOK_LOGOS = {
     "FanDuel": os.path.join(APP_ROOT, "static/logos/Fanduelsmall.png"),
 }
 
-st.write("File exists:", os.path.exists(os.path.join(APP_ROOT, "static/logos/Draftkingssmall.png")))
-st.write("Working directory:", APP_ROOT)
 
 MARKET_DISPLAY_MAP = {
     "player_assists_alternate": "Assists",
@@ -925,8 +937,6 @@ MARKET_DISPLAY_MAP = {
     "player_points_rebounds_alternate": "Pts+Reb",
     "player_points_rebounds_assists_alternate": "PRA",
     "player_rebounds_assists_alternate": "Reb+Ast",
-
-    # NEW:
     "player_steals_alternate": "Steals",
     "player_blocks_alternate": "Blocks",
     "player_3pt_made_alternate": "3PT Made",
@@ -949,7 +959,6 @@ def build_prop_tags(row):
     if hit10 > implied_prob:
         tags.append(("📈 EV+", "#22c55e"))
 
-    # Matchup difficulty tagging
     matchup = float(row.get("matchup_difficulty_score", 50))
     if matchup <= 33:
         tags.append(("🔴 Hard", "#ef4444"))
@@ -978,10 +987,10 @@ def build_tags_html(tags):
         for label, color in tags
     )
 
+
 # ------------------------------------------------------
 # LOGO LOADERS
 # ------------------------------------------------------
-
 @st.cache_data(show_spinner=False)
 def logo_to_base64_local(path: str) -> str:
     if not path:
@@ -990,8 +999,9 @@ def logo_to_base64_local(path: str) -> str:
         with open(path, "rb") as f:
             b64 = base64.b64encode(f.read()).decode("utf-8")
         return f"data:image/png;base64,{b64}"
-    except:
+    except Exception:
         return ""
+
 
 @st.cache_data(show_spinner=False)
 def logo_to_base64_url(url: str) -> str:
@@ -1002,38 +1012,28 @@ def logo_to_base64_url(url: str) -> str:
         r.raise_for_status()
         b64 = base64.b64encode(r.content).decode("utf-8")
         return f"data:image/png;base64,{b64}"
-    except:
+    except Exception:
         return ""
 
-TEAM_LOGOS_BASE64 = {
-    code: logo_to_base64_url(url)
-    for code, url in TEAM_LOGOS.items()
-}
 
-SPORTSBOOK_LOGOS_BASE64 = {
-    name: logo_to_base64_local(path)
-    for name, path in SPORTSBOOK_LOGOS.items()
-}
+TEAM_LOGOS_BASE64 = {code: logo_to_base64_url(url) for code, url in TEAM_LOGOS.items()}
+
+SPORTSBOOK_LOGOS_BASE64 = {name: logo_to_base64_local(path) for name, path in SPORTSBOOK_LOGOS.items()}
 
 
 def normalize_team_code(raw: str) -> str:
     if raw is None:
         return ""
-
     s = str(raw).strip()
-
     if s.upper() in TEAM_LOGOS:
         return s.upper()
-
     if s in TEAM_NAME_TO_CODE:
         return TEAM_NAME_TO_CODE[s]
 
     s_low = s.lower()
-
     for full_name, code in TEAM_NAME_TO_CODE.items():
         if s_low in full_name.lower():
             return code
-
     for full_name, code in TEAM_NAME_TO_CODE.items():
         if full_name.lower().startswith(s_low):
             return code
@@ -1052,11 +1052,9 @@ def normalize_team_code(raw: str) -> str:
         "miami": "MIA",
         "milwaukee": "MIL",
     }
-
     for alias, code in city_aliases.items():
         if s_low == alias or s_low.startswith(alias):
             return code
-
     return s
 
 
@@ -1069,7 +1067,7 @@ if "saved_bets" not in st.session_state:
 if "saved_bets_loaded" not in st.session_state:
     st.session_state.saved_bets_loaded = False
 
-# Trend lab state (optional)
+# Trend lab state
 if "trend_player" not in st.session_state:
     st.session_state.trend_player = None
 if "trend_market" not in st.session_state:
@@ -1084,8 +1082,9 @@ if not st.session_state.saved_bets_loaded:
     st.session_state.saved_bets = load_saved_bets_from_db(user_id)
     st.session_state.saved_bets_loaded = True
 
+
 # ------------------------------------------------------
-# UTILITY FUNCTIONS (from production)
+# UTILITY FUNCTIONS
 # ------------------------------------------------------
 def format_moneyline(v):
     try:
@@ -1185,6 +1184,7 @@ def format_display(df):
 
     return df
 
+
 # ------------------------------------------------------
 # LOAD DATA (BIGQUERY)
 # ------------------------------------------------------
@@ -1255,14 +1255,15 @@ def load_wowy_deltas():
             return ""
         return (
             x.lower()
-             .replace(".", "")
-             .replace("-", " ")
-             .replace("'", "")
-             .strip()
+            .replace(".", "")
+            .replace("-", " ")
+            .replace("'", "")
+            .strip()
         )
 
     df["player_norm"] = df["player_a"].apply(norm)
     return df
+
 
 # ------------------------------------------------------
 # LOAD BASE TABLES
@@ -1270,8 +1271,9 @@ def load_wowy_deltas():
 props_df = load_props()
 history_df = load_history()
 depth_df = load_depth_charts()
-injury_df = load_injury_report()    # <-- MUST COME BEFORE FIX
+injury_df = load_injury_report()  # <-- MUST COME BEFORE FIX
 wowy_df = load_wowy_deltas()
+
 
 # ------------------------------------------------------
 # FIX INJURY TEAM MATCHING (NEW SCHEMA)
@@ -1281,11 +1283,12 @@ def normalize(s):
         return ""
     return (
         s.lower()
-         .replace(".", "")
-         .replace("'", "")
-         .replace("-", " ")
-         .strip()
+        .replace(".", "")
+        .replace("'", "")
+        .replace("-", " ")
+        .strip()
     )
+
 
 # Clean name columns
 injury_df["first_clean"] = injury_df["first_name"].apply(normalize)
@@ -1300,20 +1303,21 @@ depth_df["last_clean"] = depth_df["player_norm"].apply(
     lambda x: x.split(" ")[1] if len(x.split(" ")) > 1 else ""
 )
 
-# Merge NEW: join by team_abbrev from injury table
+# Merge: join by team_abbrev from injury table
 merged = injury_df.merge(
     depth_df,
     left_on=["team_abbrev", "last_clean"],
     right_on=["team_abbr", "last_clean"],
     how="left",
-    suffixes=("", "_roster")
+    suffixes=("", "_roster"),
 )
 
-# Verify first initial matches
+
 def row_matches(row):
     inj_initial = row["first_clean"][0] if row["first_clean"] else ""
     roster_initial = row.get("first_initial", "")
     return inj_initial == roster_initial
+
 
 merged["name_match"] = merged.apply(row_matches, axis=1)
 
@@ -1323,10 +1327,18 @@ injury_df = merged[merged["name_match"] == True].copy()
 # Final clean columns
 injury_df = injury_df[
     [
-        "snapshot_ts", "player_id", "first_name", "last_name",
-        "team_abbrev", "current_team",
-        "status", "return_date_raw", "description",
-        "team_number", "team_abbr", "team_name"
+        "snapshot_ts",
+        "player_id",
+        "first_name",
+        "last_name",
+        "team_abbrev",
+        "current_team",
+        "status",
+        "return_date_raw",
+        "description",
+        "team_number",
+        "team_abbr",
+        "team_name",
     ]
 ]
 
@@ -1346,22 +1358,22 @@ def attach_wowy_deltas(df, wowy_df_global):
             return ""
         return (
             x.lower()
-             .replace(".", "")
-             .replace("-", " ")
-             .replace("'", "")
-             .strip()
+            .replace(".", "")
+            .replace("-", " ")
+            .replace("'", "")
+            .strip()
         )
 
     df["player_norm"] = df["player"].apply(norm)
 
-    merged = df.merge(
+    merged_local = df.merge(
         wowy_df_global,
         how="left",
         left_on=["player_norm", "player_team"],
         right_on=["player_norm", "team_abbr"],
         suffixes=("", "_wowy"),
     )
-    return merged
+    return merged_local
 
 
 def group_wowy_rows(df):
@@ -1449,7 +1461,7 @@ def build_wowy_block(row):
 
 
 # ------------------------------------------------------
-# SIDEBAR FILTERS (using production-style filters)
+# SIDEBAR FILTERS
 # ------------------------------------------------------
 st.sidebar.header("Filters")
 
@@ -1490,19 +1502,19 @@ st.sidebar.markdown("### Card Grid Filters")
 
 show_defensive_props = st.sidebar.checkbox(
     "Show Defensive Props (Steals & Blocks)",
-    value=True
+    value=True,
 )
 
 manual_odds_min = st.sidebar.number_input(
     "Minimum Odds",
     value=-200,      # Default
-    step=5
+    step=5,
 )
 
 manual_odds_max = st.sidebar.number_input(
     "Maximum Odds",
     value=400,       # Default
-    step=5
+    step=5,
 )
 
 manual_l10_min = st.sidebar.number_input(
@@ -1510,8 +1522,9 @@ manual_l10_min = st.sidebar.number_input(
     min_value=0,
     max_value=100,
     value=80,        # Default: 80%
-    step=1
+    step=1,
 )
+
 
 # ------------------------------------------------------
 # FILTER FUNCTION
@@ -1568,12 +1581,6 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(
     ]
 )
 
-# Force Trend Lab to become the active tab when URL says so
-if ACTIVE_TAB == "trend":
-    with tab2:
-        pass
-
-
 # ------------------------------------------------------
 # TAB 1 — PROPS OVERVIEW (Card Grid + Advanced Table)
 # ------------------------------------------------------
@@ -1627,7 +1634,7 @@ with tab1:
         "View Mode",
         ["Card grid", "Advanced Table"],
         horizontal=True,
-        index=0
+        index=0,
     )
 
     # ======================================================
@@ -1677,15 +1684,14 @@ with tab1:
             "Points": "Points",
             "Rebounds": "Rebounds",
             "Assists": "Assists",
-            "Pts+Ast": "Assists",     # adjust if you later support this explicitly
-            "Pts+Reb": "Points",      # adjust as needed
+            "Pts+Ast": "Assists",  # adjust if you support this explicitly
+            "Pts+Reb": "Points",
             "PRA": "P+R+A",
             "Reb+Ast": "Assists",
             "Steals": "Steals",
             "Blocks": "Blocks",
             "3PT Made": "3PT Made",
         }
-
 
         MIN_ODDS_FOR_CARD = manual_odds_min
         MAX_ODDS_FOR_CARD = manual_odds_max
@@ -1725,14 +1731,17 @@ with tab1:
         # Attach WOWY deltas into card_df
         card_df = attach_wowy_deltas(filtered_df, wowy_df)
 
-        # ADD THIS → computes L5/L10/L20 averages dynamically
+        # Compute L5/L10/L20 averages dynamically
         card_df = get_dynamic_averages(card_df)
-
 
         # WOWY columns
         wowy_cols = [
-            "breakdown", "pts_delta", "reb_delta",
-            "ast_delta", "pra_delta", "pts_reb_delta"
+            "breakdown",
+            "pts_delta",
+            "reb_delta",
+            "ast_delta",
+            "pra_delta",
+            "pts_reb_delta",
         ]
 
         def extract_wowy_list(g):
@@ -1742,13 +1751,13 @@ with tab1:
 
         # STEP 1 — Build a map of { (player, team): [list_of_wowy_dicts] }
         wowy_map = {}
-        for (player, team), g in card_df.groupby(["player", "player_team"]):
-            wowy_map[(player, team)] = extract_wowy_list(g)
+        for (player_name, team), g in card_df.groupby(["player", "player_team"]):
+            wowy_map[(player_name, team)] = extract_wowy_list(g)
 
         # STEP 2 — Assign per row (SAFE, NO LENGTH MISMATCH)
         card_df["_wowy_list"] = card_df.apply(
             lambda r: wowy_map.get((r["player"], r["player_team"]), []),
-            axis=1
+            axis=1,
         )
 
         # Apply card-grid filter
@@ -1773,20 +1782,23 @@ with tab1:
             max_value=total_pages,
             value=1,
             step=1,
-            key="card_page_number"
+            key="card_page_number",
         )
 
         start = (page - 1) * page_size
         end = start + page_size
         page_df = ranked.iloc[start:end]
 
-        st.markdown("""
+        st.markdown(
+            """
             <div style="
                 max-height: 1100px;
                 overflow-y: auto;
                 padding-right: 12px;
             ">
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
         cols = st.columns(4)
 
@@ -1797,8 +1809,10 @@ with tab1:
                 # Generate unique key for each card button
                 btn_key = f"card_click_{idx}"
 
-                player = row.get("player", "")
-                pretty_market = MARKET_DISPLAY_MAP.get(row.get("market", ""), row.get("market", ""))
+                player_name = row.get("player", "")
+                pretty_market = MARKET_DISPLAY_MAP.get(
+                    row.get("market", ""), row.get("market", "")
+                )
                 bet_type = str(row.get("bet_type", "")).upper()
                 line = row.get("line", "")
 
@@ -1823,7 +1837,7 @@ with tab1:
                 <div class="prop-card">
                     <div class="prop-headline">
                         <div>
-                            <div class="prop-player">{player}</div>
+                            <div class="prop-player">{player_name}</div>
                             <div class="prop-market">
                                 {pretty_market} • {bet_type} {line}
                             </div>
@@ -1853,22 +1867,15 @@ with tab1:
                 # Invisible overlay button wrapper
                 st.markdown('<div class="invisible-card-button">', unsafe_allow_html=True)
                 if st.button(" ", key=btn_key):
-                    try:
-                        st.experimental_set_query_params(
-                            tab="trend",
-                            player=player,
-                            stat=trend_stat,
-                            line=str(line),
-                        )
-                    except Exception:
-                        st.query_params(
-                            tab="trend",
-                            player=player,
-                            stat=trend_stat,
-                            line=str(line),
-                        )
+                    # Update query params to trigger Trend Lab view
+                    new_params = dict(st.query_params)
+                    new_params["tab"] = "trend"
+                    new_params["player"] = player_name
+                    new_params["stat"] = trend_stat
+                    new_params["line"] = str(line)
+                    st.query_params = new_params
                     st.rerun()
-                st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
 
                 # Render card
                 render_html(card_html)
@@ -1922,27 +1929,30 @@ with tab1:
             axis=1,
         )
 
-        grid_df = pd.DataFrame({
-            "Player": df["player"],
-            "Market": df["market"].apply(lambda m: MARKET_DISPLAY_MAP.get(m, m)),
-            "Line": df["line"],
-            "Label": df["bet_type"],
-            "Odds": df["price"],
-            "Book": df["bookmaker"],
-            "Hit5": df["Hit5"],
-            "Hit10": df["Hit10"],
-            "Hit20": df["Hit20"],
-            "Spark": df["Sparkline"],
-            "ImpProb": df["Implied Prob"],
-            "Edge_raw": df["Edge_raw"],
-            "Edge": df["Edge"],
-            "Matchup30": df["Matchup30"],
-        })
+        grid_df = pd.DataFrame(
+            {
+                "Player": df["player"],
+                "Market": df["market"].apply(lambda m: MARKET_DISPLAY_MAP.get(m, m)),
+                "Line": df["line"],
+                "Label": df["bet_type"],
+                "Odds": df["price"],
+                "Book": df["bookmaker"],
+                "Hit5": df["Hit5"],
+                "Hit10": df["Hit10"],
+                "Hit20": df["Hit20"],
+                "Spark": df["Sparkline"],
+                "ImpProb": df["Implied Prob"],
+                "Edge_raw": df["Edge_raw"],
+                "Edge": df["Edge"],
+                "Matchup30": df["Matchup30"],
+            }
+        )
 
         # -----------------------------
         # Render AG-Grid
         # -----------------------------
-        sparkline_renderer = JsCode("""
+        sparkline_renderer = JsCode(
+            """
             function(params){
                 const v = params.value;
                 if (!v || !Array.isArray(v)) return '';
@@ -1963,30 +1973,38 @@ with tab1:
                     </svg>
                 `;
             }
-        """)
+        """
+        )
 
-        odds_formatter = JsCode("""
+        odds_formatter = JsCode(
+            """
             function(params){
                 if (params.value == null) return '';
                 return params.value > 0 ? '+' + params.value : params.value.toString();
             }
-        """)
+        """
+        )
 
-        percent_formatter = JsCode("""
+        percent_formatter = JsCode(
+            """
             function(params){
                 if (params.value == null) return '';
                 return params.value.toFixed(0) + '%';
             }
-        """)
+        """
+        )
 
-        matchup_formatter = JsCode("""
+        matchup_formatter = JsCode(
+            """
             function(params){
                 if (params.value == null) return '';
                 return params.value.toFixed(0) + '/30';
             }
-        """)
+        """
+        )
 
-        row_style_js = JsCode("""
+        row_style_js = JsCode(
+            """
             function(params){
                 const e = params.data.Edge_raw;
                 if (e >= 8) return { backgroundColor: "rgba(34,197,94,0.08)" };
@@ -1994,9 +2012,11 @@ with tab1:
                 if (e <= -5) return { backgroundColor: "rgba(239,68,68,0.08)" };
                 return {};
             }
-        """)
+        """
+        )
 
-        hit_style = JsCode("""
+        hit_style = JsCode(
+            """
             function(params){
                 const p = params.value;
                 const hue = 120 * (p / 100);
@@ -2007,9 +2027,11 @@ with tab1:
                     textAlign: 'center'
                 };
             }
-        """)
+        """
+        )
 
-        edge_style = JsCode("""
+        edge_style = JsCode(
+            """
             function(params){
                 const e = params.data.Edge_raw;
                 const t = (e + 30) / 60.0;
@@ -2022,9 +2044,11 @@ with tab1:
                     textAlign: 'center'
                 };
             }
-        """)
+        """
+        )
 
-        matchup_style = JsCode("""
+        matchup_style = JsCode(
+            """
             function(params){
                 const v = params.value;
                 const t = (v - 1) / 29.0;
@@ -2037,7 +2061,8 @@ with tab1:
                     textAlign: 'center'
                 };
             }
-        """)
+        """
+        )
 
         gb = GridOptionsBuilder.from_dataframe(grid_df)
         gb.configure_default_column(
@@ -2062,16 +2087,48 @@ with tab1:
         gb.configure_column("Player", pinned="left", minWidth=140)
         gb.configure_column("Odds", valueFormatter=odds_formatter, width=95)
 
-        gb.configure_column("Hit5", header_name="L5", valueFormatter=percent_formatter, cellStyle=hit_style, width=75)
-        gb.configure_column("Hit10", header_name="L10", valueFormatter=percent_formatter, cellStyle=hit_style, width=75)
-        gb.configure_column("Hit20", header_name="L20", valueFormatter=percent_formatter, cellStyle=hit_style, width=75)
+        gb.configure_column(
+            "Hit5",
+            header_name="L5",
+            valueFormatter=percent_formatter,
+            cellStyle=hit_style,
+            width=75,
+        )
+        gb.configure_column(
+            "Hit10",
+            header_name="L10",
+            valueFormatter=percent_formatter,
+            cellStyle=hit_style,
+            width=75,
+        )
+        gb.configure_column(
+            "Hit20",
+            header_name="L20",
+            valueFormatter=percent_formatter,
+            cellStyle=hit_style,
+            width=75,
+        )
 
-        gb.configure_column("Spark", header_name="Trend", cellRenderer=sparkline_renderer, width=100, filter=False)
-        gb.configure_column("ImpProb", header_name="Imp%", valueFormatter=percent_formatter, width=80)
+        gb.configure_column(
+            "Spark",
+            header_name="Trend",
+            cellRenderer=sparkline_renderer,
+            width=100,
+            filter=False,
+        )
+        gb.configure_column(
+            "ImpProb", header_name="Imp%", valueFormatter=percent_formatter, width=80
+        )
 
         gb.configure_column("Edge_raw", hide=True)
         gb.configure_column("Edge", cellStyle=edge_style, width=100)
-        gb.configure_column("Matchup30", header_name="Matchup", valueFormatter=matchup_formatter, cellStyle=matchup_style, width=100)
+        gb.configure_column(
+            "Matchup30",
+            header_name="Matchup",
+            valueFormatter=matchup_formatter,
+            cellStyle=matchup_style,
+            width=100,
+        )
 
         grid_response = AgGrid(
             grid_df,
@@ -2089,14 +2146,16 @@ with tab1:
         if selected:
             sel_df = pd.DataFrame(selected)[
                 ["Player", "Market", "Line", "Label", "Odds", "Book"]
-            ].rename(columns={
-                "Player": "player",
-                "Market": "market",
-                "Line": "line",
-                "Label": "bet_type",
-                "Odds": "price",
-                "Book": "bookmaker",
-            })
+            ].rename(
+                columns={
+                    "Player": "player",
+                    "Market": "market",
+                    "Line": "line",
+                    "Label": "bet_type",
+                    "Odds": "price",
+                    "Book": "bookmaker",
+                }
+            )
 
             st.session_state.saved_bets = sel_df.drop_duplicates().to_dict("records")
             replace_saved_bets_in_db(user_id, st.session_state.saved_bets)
@@ -2105,6 +2164,7 @@ with tab1:
         else:
             st.session_state.saved_bets = []
             replace_saved_bets_in_db(user_id, [])
+
 
 # ------------------------------------------------------
 # TAB 2 — TREND LAB (Dev)
@@ -2134,7 +2194,15 @@ with tab2:
     else:
         default_player_index = 0
 
-    stats_list = ["Points", "Rebounds", "Assists", "P+R+A", "Steals", "Blocks", "3PT Made"]
+    stats_list = [
+        "Points",
+        "Rebounds",
+        "Assists",
+        "P+R+A",
+        "Steals",
+        "Blocks",
+        "3PT Made",
+    ]
 
     if st.session_state.get("trend_market") in stats_list:
         default_stat_idx = stats_list.index(st.session_state["trend_market"])
@@ -2349,6 +2417,7 @@ with tab2:
 
         st.dataframe(table_df_display, use_container_width=True, hide_index=True)
 
+
 # ------------------------------------------------------
 # TAB 3 — SAVED BETS (DB-backed)
 # ------------------------------------------------------
@@ -2382,6 +2451,7 @@ with tab3:
             mime="text/csv",
         )
 
+
 #-------------------------------------------------
 # TAB 4 Depth Chart & Injury Report
 #-------------------------------------------------
@@ -2391,7 +2461,8 @@ with tab4:
     # --------------------------------------------------------
     # GLOBAL CSS — SPACIOUS CARD GRID + INJURY BADGE SUPPORT
     # --------------------------------------------------------
-    render_html("""
+    render_html(
+        """
 <style>
 
 .depth-card {
@@ -2460,7 +2531,8 @@ with tab4:
 }
 
 </style>
-""")
+"""
+    )
 
     # ----------------------------
     # TEAM SELECTOR
@@ -2472,7 +2544,9 @@ with tab4:
     )
 
     team_labels = [f"{r.team_name} ({r.team_abbr})" for r in teams_meta.itertuples()]
-    label_to_meta = {label: row for label, row in zip(team_labels, teams_meta.itertuples())}
+    label_to_meta = {
+        label: row for label, row in zip(team_labels, teams_meta.itertuples())
+    }
 
     selected_label = st.selectbox("Select Team", team_labels)
     team_row = label_to_meta[selected_label]
@@ -2517,7 +2591,7 @@ with tab4:
         pos_order = ["PG", "SG", "SF", "PF", "C", "G", "F"]
         positions = sorted(
             team_depth["position"].unique(),
-            key=lambda p: pos_order.index(p) if p in pos_order else 99
+            key=lambda p: pos_order.index(p) if p in pos_order else 99,
         )
 
         # Wider column spacing: max 3 per row
@@ -2526,7 +2600,10 @@ with tab4:
         for i, pos in enumerate(positions):
             with pos_cols[i % len(pos_cols)]:
 
-                st.markdown(f"<div class='position-header'>{pos}</div>", unsafe_allow_html=True)
+                st.markdown(
+                    f"<div class='position-header'>{pos}</div>",
+                    unsafe_allow_html=True,
+                )
 
                 rows = team_depth[team_depth["position"] == pos].sort_values("depth")
 
@@ -2625,18 +2702,21 @@ with tab4:
 
                 render_html(html)
 
+
 # ------------------------------------------------------
 # TAB 5 — WOWY ANALYZER
 # ------------------------------------------------------
 with tab5:
     st.subheader("🔀 WOWY (With/Without You) Analyzer")
 
-    st.markdown("""
+    st.markdown(
+        """
     Below is the full WOWY table — showing how each player's production
     changes when a specific teammate is **OUT**.
 
     Sort any column to explore the biggest deltas.
-    """)
+    """
+    )
 
     # Prepare WOWY table
     wow = wowy_df.copy()
@@ -2645,22 +2725,25 @@ with tab5:
     wow = wow.sort_values("pts_delta", ascending=False)
 
     # Build display table
-    disp = wow[[
-        "player_a",
-        "team_abbr",
-        "breakdown",
-        "pts_delta",
-        "reb_delta",
-        "ast_delta",
-        "pra_delta",
-        "pts_reb_delta"
-    ]]
+    disp = wow[
+        [
+            "player_a",
+            "team_abbr",
+            "breakdown",
+            "pts_delta",
+            "reb_delta",
+            "ast_delta",
+            "pra_delta",
+            "pts_reb_delta",
+        ]
+    ]
 
     st.dataframe(
         disp,
         hide_index=True,
-        use_container_width=True
+        use_container_width=True,
     )
+
 
 # ------------------------------------------------------
 # LAST UPDATED

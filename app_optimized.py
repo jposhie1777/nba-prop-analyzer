@@ -802,7 +802,8 @@ st.markdown("""
     position: relative;
 }
 
-.card-wrapper > button {
+/* FIXED — correct selector for Streamlit buttons */
+.card-wrapper .stButton > button {
     position: absolute !important;
     top: 0;
     left: 0;
@@ -811,9 +812,12 @@ st.markdown("""
     opacity: 0 !important;
     z-index: 10 !important;
     cursor: pointer;
+    background: transparent !important;
+    border: none !important;
 }
 </style>
 """, unsafe_allow_html=True)
+
 
 st.markdown(
     """

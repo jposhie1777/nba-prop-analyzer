@@ -899,8 +899,8 @@ MARKET_DISPLAY_MAP = {
 
 def build_prop_tags(row):
     tags = []
-    if row.get("hit_rate_last10", 0) >= 0.70:
-        tags.append(("🔥 HOT", "#f97316"))
+    #if row.get("hit_rate_last10", 0) >= 0.70:
+        #tags.append(("🔥 HOT", "#f97316"))
 
     odds = row.get("price", 0)
     if odds > 0:
@@ -1585,21 +1585,18 @@ with tab1:
     )
 
     # ======================================================
-    # CARD GRID VIEW (with WOWY deltas stacked)
+    # CARD GRID VIEW (with WOWY deltas stacked) — PATCHED
     # ======================================================
     if view_mode == "Card grid":
 
         # -------------------------
         # Helpers
         # -------------------------
+
         def normalize_bookmaker(raw: str) -> str:
-            """Return a canonical sportsbook name that matches SPORTSBOOK_LOGOS & BASE64 dicts."""
             if not raw:
                 return ""
-
             r = raw.strip().lower()
-
-            # Safe normalization rules
             if "draft" in r:
                 return "DraftKings"
             if "fanduel" in r or r in ("fd", "fan duel", "fan-dueled"):
@@ -1612,20 +1609,19 @@ with tab1:
                 return "ESPN BET"
             if "bovada" in r:
                 return "Bovada"
-            if "betrivers" in r or "bet rivers" in r:
+            if "betrivers" in r:
                 return "BetRivers"
             if "hard rock" in r:
                 return "Hard Rock"
-            if "pointsbet" in r or "points bet" in r:
+            if "pointsbet" in r:
                 return "PointsBet"
             if "fanatics" in r:
                 return "Fanatics"
             if "betonline" in r or "bet online" in r:
                 return "BetOnline.ag"
-
-            # fallback (rare, won’t break HTML)
             return raw.strip()
 
+        # Card filter settings
         MIN_ODDS_FOR_CARD = manual_odds_min
         MAX_ODDS_FOR_CARD = manual_odds_max
         MIN_L10 = manual_l10_min / 100
@@ -1641,54 +1637,76 @@ with tab1:
             return row["hit_rate_last10"] > implied
 
         def card_good(row):
-            """
-            Card grid filter:
-            - Must meet odds range
-            - Must meet L10 threshold
-            - Must be EV+
-            """
             if pd.isna(row.get("price")) or pd.isna(row.get("hit_rate_last10")):
                 return False
-
             if not (MIN_ODDS_FOR_CARD <= row["price"] <= MAX_ODDS_FOR_CARD):
                 return False
-
             if row["hit_rate_last10"] < MIN_L10:
                 return False
-
             if REQUIRE_EV_PLUS and not is_ev_plus(row):
                 return False
-
             return True
 
-        # Attach WOWY deltas into card_df
+        # WOWY merging
         card_df = attach_wowy_deltas(filtered_df, wowy_df)
 
-        # WOWY columns
         wowy_cols = [
             "breakdown", "pts_delta", "reb_delta",
             "ast_delta", "pra_delta", "pts_reb_delta"
         ]
 
         def extract_wowy_list(g):
-            # Only WOWY rows (those where breakdown isn't null)
             w = g[g["breakdown"].notna()][wowy_cols]
             return w.to_dict("records")
 
-        # STEP 1 — Build a map of { (player, team): [list_of_wowy_dicts] }
         wowy_map = {}
         for (player, team), g in card_df.groupby(["player", "player_team"]):
             wowy_map[(player, team)] = extract_wowy_list(g)
 
-        # STEP 2 — Assign per row (SAFE, NO LENGTH MISMATCH)
         card_df["_wowy_list"] = card_df.apply(
             lambda r: wowy_map.get((r["player"], r["player_team"]), []),
             axis=1
         )
 
-        # Apply card-grid filter
-        card_df = card_df[card_df.apply(card_good, axis=1)]
+        # ------------ NEW FUNCTIONS FOR THIS PATCH --------------
 
+        # L10 Average extraction
+        def get_l10_avg(row):
+            stat = detect_stat(row.get("market", ""))
+            if not stat:
+                return None
+            col = f"{stat}_last10"
+            return row.get(col, None)
+
+        # Opponent ranking lookup
+        def get_opponent_rank(row):
+            stat = detect_stat(row.get("market", ""))
+            rank_cols = {
+                "pts": "opp_pos_pts_rank",
+                "reb": "opp_pos_reb_rank",
+                "ast": "opp_pos_ast_rank",
+                "pra": "opp_pos_pra_rank",
+                "stl": "opp_pos_stl_rank",
+                "blk": "opp_pos_blk_rank",
+                "fg3m": "opp_pos_fg3m_rank",
+            }
+            col = rank_cols.get(stat)
+            if col and col in row:
+                return row[col]
+            return None
+
+        # Rank color scaling (1–30 → red→yellow→green)
+        def rank_to_color(rank):
+            if rank is None:
+                return "#9ca3af"  # grey
+            t = (rank - 1) / 29
+            hue = 120 * t   # 0=red, 120=green
+            return f"hsl({hue}, 85%, 45%)"
+
+        # ---------------------------------------------------------
+        # Filter down to accepted card props
+        # ---------------------------------------------------------
+        card_df = card_df[card_df.apply(card_good, axis=1)]
         ranked = (
             card_df.sort_values("hit_rate_last10", ascending=False)
             if not card_df.empty
@@ -1726,6 +1744,9 @@ with tab1:
         cols = st.columns(4)
         has_html = hasattr(st, "html")
 
+        # ---------------------------------------------------------
+        # CARD LOOP
+        # ---------------------------------------------------------
         for idx, row in page_df.iterrows():
             col = cols[idx % 4]
             with col:
@@ -1739,8 +1760,15 @@ with tab1:
 
                 odds = int(row.get("price", 0))
                 hit10 = row.get("hit_rate_last10", 0.0)
-                hit20 = row.get("hit_rate_last20", 0.0)
-                matchup = row.get("matchup_difficulty_score", 50)
+
+                # -------- NEW: L10 AVERAGE --------
+                l10_avg = get_l10_avg(row)
+                l10_avg_display = f"{l10_avg:.1f}" if l10_avg is not None else "-"
+
+                # -------- NEW: OPPONENT RANK (1–30) --------
+                opp_rank = get_opponent_rank(row)
+                rank_display = opp_rank if opp_rank is not None else "-"
+                rank_color = rank_to_color(opp_rank)
 
                 implied_prob = (
                     100 / (odds + 100)
@@ -1797,11 +1825,13 @@ with tab1:
                         ">{book}</div>
                     """
 
+                # Tags & WOWY
                 tags_html = build_tags_html(build_prop_tags(row))
-
-                # WOWY brief HTML line
                 wowy_html = build_wowy_block(row)
 
+                # ---------------------------------------------------------
+                # PATCHED CARD HTML BLOCK
+                # ---------------------------------------------------------
                 card_html = f"""
                 <div class="prop-card">
                     <div class="prop-headline">
@@ -1819,22 +1849,30 @@ with tab1:
                     </div>
 
                     <div class="prop-meta">
+
+                        <!-- Left: Odds -->
                         <div>
                             <div style="color:#e5e7eb;font-size:0.8rem;">{odds:+d}</div>
                             <div style="font-size:0.7rem;">Imp: {implied_prob:.0%}</div>
                         </div>
+
+                        <!-- Middle: L10 Hit + L10 Avg -->
                         <div>
-                            <div style="color:#e5e7eb;font-size:0.8rem;">L10: {hit10:.0%}</div>
-                            <div style="font-size:0.7rem;">L20: {hit20:.0%}</div>
+                            <div style="color:#e5e7eb;font-size:0.8rem;">L10 Hit: {hit10:.0%}</div>
+                            <div style="font-size:0.7rem;">L10 Avg: {l10_avg_display}</div>
                         </div>
+
+                        <!-- Right: Opponent Rank (1–30) -->
                         <div>
-                            <div style="color:#e5e7eb;font-size:0.8rem;">{matchup:.0f}/100</div>
-                            <div style="font-size:0.7rem;">Difficulty</div>
+                            <div style="color:{rank_color};font-size:0.8rem;font-weight:700;">
+                                {rank_display}
+                            </div>
+                            <div style="font-size:0.7rem;">Opp Rank</div>
                         </div>
+
                     </div>
 
-                    {wowy_html}   <!-- WOWY appears here -->
-
+                    {wowy_html}
                 </div>
                 """
 
@@ -1844,8 +1882,8 @@ with tab1:
                     st.markdown(card_html, unsafe_allow_html=True)
 
         st.markdown("</div>", unsafe_allow_html=True)
+        st.caption("Card view updated: L10 Avg + Opp Rank (1–30).")
 
-        st.caption("Card view is visual-only — use the table to save legs.")
 
     # ======================================================
     # ADVANCED TABLE VIEW  (FULL RESTORE)

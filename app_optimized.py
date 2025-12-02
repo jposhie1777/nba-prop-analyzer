@@ -1,5 +1,5 @@
 # ------------------------------------------------------
-# NBA Prop Analyzer - Merged Production + Dev UI
+# NBA Prop Analyzer - Merged Production + Dev UI (Fixed)
 # ------------------------------------------------------
 import os
 import json
@@ -20,6 +20,13 @@ import jwt
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from google.cloud import bigquery
 from google.oauth2 import service_account
+
+# Small helper so we can safely render raw HTML on any Streamlit version
+def render_html(html: str):
+    if hasattr(st, "html"):
+        st.html(html)
+    else:
+        st.markdown(html, unsafe_allow_html=True)
 
 # ------------------------------------------------------
 # TIMEZONE (EST)
@@ -407,6 +414,34 @@ ensure_logged_in()
 user = st.session_state["user"]
 user_id = st.session_state["user_id"]
 st.sidebar.markdown(f"**User:** {user.get('email') or 'Logged in'}")
+
+# ------------------------------------------------------
+# URL PARAMS FOR NAVIGATION (Props <-> Trend Lab)
+# ------------------------------------------------------
+try:
+    qp = st.query_params
+except AttributeError:
+    qp = st.experimental_get_query_params()
+
+ACTIVE_TAB = qp.get("tab", ["props"])[0]  # 'props' or 'trend'
+TREND_PLAYER_QP = qp.get("player", [None])[0]
+TREND_STAT_QP = qp.get("stat", [None])[0]
+TREND_LINE_QP = qp.get("line", [None])[0]
+
+st.markdown("""
+<style>
+.invisible-card-button > button {
+    opacity: 0 !important;
+    height: 140px !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin-top: -10px !important;
+    position: absolute !important;
+    z-index: 5 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 
 # ------------------------------------------------------
 # THEME PRESETS (from dev)
@@ -901,18 +936,20 @@ MARKET_DISPLAY_MAP = {
 
 def build_prop_tags(row):
     tags = []
-    #if row.get("hit_rate_last10", 0) >= 0.70:
-        #tags.append(("🔥 HOT", "#f97316"))
 
     odds = row.get("price", 0)
     if odds > 0:
-        implied = 100 / (odds + 100)
+        implied_prob = 100 / (odds + 100)
     else:
-        implied = abs(odds) / (abs(odds) + 100) if odds != 0 else 0
+        implied_prob = abs(odds) / (abs(odds) + 100)
 
-    if row.get("hit_rate_last10", 0) > implied:
+    hit10 = row.get("hit_rate_last10", 0.0)
+
+    # EV+ condition
+    if hit10 > implied_prob:
         tags.append(("📈 EV+", "#22c55e"))
 
+    # Matchup difficulty tagging
     matchup = float(row.get("matchup_difficulty_score", 50))
     if matchup <= 33:
         tags.append(("🔴 Hard", "#ef4444"))
@@ -922,6 +959,7 @@ def build_prop_tags(row):
         tags.append(("🟡 Neutral", "#eab308"))
 
     return tags
+
 
 def build_tags_html(tags):
     return "".join(
@@ -1530,6 +1568,12 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(
     ]
 )
 
+# Force Trend Lab to become the active tab when URL says so
+if ACTIVE_TAB == "trend":
+    with tab2:
+        pass
+
+
 # ------------------------------------------------------
 # TAB 1 — PROPS OVERVIEW (Card Grid + Advanced Table)
 # ------------------------------------------------------
@@ -1627,6 +1671,21 @@ with tab1:
 
             # fallback (rare, won’t break HTML)
             return raw.strip()
+
+        # Map card display markets to Trend Lab stat labels
+        CARD_TO_TREND_STAT_LABEL = {
+            "Points": "Points",
+            "Rebounds": "Rebounds",
+            "Assists": "Assists",
+            "Pts+Ast": "Assists",     # adjust if you later support this explicitly
+            "Pts+Reb": "Points",      # adjust as needed
+            "PRA": "P+R+A",
+            "Reb+Ast": "Assists",
+            "Steals": "Steals",
+            "Blocks": "Blocks",
+            "3PT Made": "3PT Made",
+        }
+
 
         MIN_ODDS_FOR_CARD = manual_odds_min
         MAX_ODDS_FOR_CARD = manual_odds_max
@@ -1730,84 +1789,36 @@ with tab1:
         """, unsafe_allow_html=True)
 
         cols = st.columns(4)
-        has_html = hasattr(st, "html")
 
         for idx, row in page_df.iterrows():
             col = cols[idx % 4]
             with col:
 
+                # Generate unique key for each card button
+                btn_key = f"card_click_{idx}"
+
                 player = row.get("player", "")
-                pretty_market = MARKET_DISPLAY_MAP.get(
-                    row.get("market", ""), row.get("market", "")
-                )
+                pretty_market = MARKET_DISPLAY_MAP.get(row.get("market", ""), row.get("market", ""))
                 bet_type = str(row.get("bet_type", "")).upper()
                 line = row.get("line", "")
 
                 odds = int(row.get("price", 0))
                 hit10 = row.get("hit_rate_last10", 0.0)
-                hit20 = row.get("hit_rate_last20", 0.0)
                 matchup = row.get("matchup_difficulty_score", 50)
 
-                implied_prob = (
-                    100 / (odds + 100)
-                    if odds > 0
-                    else abs(odds) / (abs(odds) + 100)
-                )
-
-                player_team = normalize_team_code(row.get("player_team", ""))
-                opp_team = normalize_team_code(row.get("opponent_team", ""))
-
-                home_logo = TEAM_LOGOS_BASE64.get(player_team, "")
-                opp_logo = TEAM_LOGOS_BASE64.get(opp_team, "")
-
-                if home_logo and opp_logo:
-                    logos_html = f"""
-                        <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">
-                            <img src="{home_logo}" style="height:18px;border-radius:4px;" />
-                            <span style="font-size:0.7rem;color:#9ca3af;">vs</span>
-                            <img src="{opp_logo}" style="height:18px;border-radius:4px;" />
-                        </div>
-                    """
+                # Compute implied probability for display
+                if odds > 0:
+                    implied_prob = 100 / (odds + 100)
                 else:
-                    logos_html = f"""
-                        <div style='font-size:0.75rem;color:#9ca3af;'>
-                            {row.get("home_team","")} vs {row.get("opponent_team","")}
-                        </div>
-                    """
+                    implied_prob = abs(odds) / (abs(odds) + 100)
 
-                book = normalize_bookmaker(row.get("bookmaker", ""))
-                book_logo_b64 = SPORTSBOOK_LOGOS_BASE64.get(book, "")
+                l10_avg = row.get("L10 Avg", np.nan)
+                l10_avg_str = f"{l10_avg:.1f}" if pd.notna(l10_avg) else ""
 
-                if book_logo_b64:
-                    book_html = f"""
-                        <div style="display:flex;align-items:center;">
-                            <img src="{book_logo_b64}"
-                                alt="{book}"
-                                style="
-                                    height:26px;
-                                    width:auto;
-                                    max-width:90px;
-                                    object-fit:contain;
-                                    border-radius:4px;
-                                " />
-                        </div>
-                    """
-                else:
-                    book_html = f"""
-                        <div style="
-                            padding:3px 10px;
-                            border-radius:8px;
-                            background:rgba(255,255,255,0.08);
-                            border:1px solid rgba(255,255,255,0.15);
-                            font-size:0.7rem;
-                        ">{book}</div>
-                    """
+                # Determine Trend Lab stat
+                trend_stat = CARD_TO_TREND_STAT_LABEL.get(pretty_market, "Points")
 
-                tags_html = build_tags_html(build_prop_tags(row))
-
-                # WOWY brief HTML line
-                wowy_html = build_wowy_block(row)
-
+                # Build the card HTML
                 card_html = f"""
                 <div class="prop-card">
                     <div class="prop-headline">
@@ -1816,11 +1827,7 @@ with tab1:
                             <div class="prop-market">
                                 {pretty_market} • {bet_type} {line}
                             </div>
-                            <div style="margin-top:4px;">{tags_html}</div>
-                        </div>
-                        <div style="text-align:right;">
-                            {book_html}
-                            {logos_html}
+                            <div style="margin-top:4px;">{build_tags_html(build_prop_tags(row))}</div>
                         </div>
                     </div>
 
@@ -1831,7 +1838,7 @@ with tab1:
                         </div>
                         <div>
                             <div style="color:#e5e7eb;font-size:0.8rem;">L10: {hit10:.0%}</div>
-                            <div style="font-size:0.7rem;">Avg: {row.get("L10 Avg", "")}</div>
+                            <div style="font-size:0.7rem;">Avg: {l10_avg_str}</div>
                         </div>
                         <div>
                             <div style="color:#e5e7eb;font-size:0.8rem;">{matchup:.0f}/100</div>
@@ -1839,15 +1846,32 @@ with tab1:
                         </div>
                     </div>
 
-                    {wowy_html}   <!-- WOWY appears here -->
-
+                    {build_wowy_block(row)}
                 </div>
                 """
 
-                if has_html:
-                    st.html(card_html)
-                else:
-                    st.markdown(card_html, unsafe_allow_html=True)
+                # Invisible overlay button wrapper
+                st.markdown('<div class="invisible-card-button">', unsafe_allow_html=True)
+                if st.button(" ", key=btn_key):
+                    try:
+                        st.experimental_set_query_params(
+                            tab="trend",
+                            player=player,
+                            stat=trend_stat,
+                            line=str(line),
+                        )
+                    except Exception:
+                        st.query_params(
+                            tab="trend",
+                            player=player,
+                            stat=trend_stat,
+                            line=str(line),
+                        )
+                    st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
+
+                # Render card
+                render_html(card_html)
 
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -1916,7 +1940,7 @@ with tab1:
         })
 
         # -----------------------------
-        # Render AG-Grid (unchanged)
+        # Render AG-Grid
         # -----------------------------
         sparkline_renderer = JsCode("""
             function(params){
@@ -2088,13 +2112,48 @@ with tab1:
 with tab2:
     st.subheader("Trend Lab (Real History + Dynamic Line)")
 
+    # 1) If URL says we're in trend mode, store those into session
+    if ACTIVE_TAB == "trend":
+        if TREND_PLAYER_QP:
+            st.session_state.trend_player = TREND_PLAYER_QP
+
+        if TREND_STAT_QP:
+            st.session_state.trend_market = TREND_STAT_QP
+
+        if TREND_LINE_QP:
+            try:
+                st.session_state.trend_line = float(TREND_LINE_QP)
+            except Exception:
+                pass
+
+    # 2) Build the controls, using session state (possibly from URL) for defaults
+    player_list = sorted(props_df["player"].dropna().unique())
+
+    if st.session_state.get("trend_player") in player_list:
+        default_player_index = player_list.index(st.session_state["trend_player"])
+    else:
+        default_player_index = 0
+
+    stats_list = ["Points", "Rebounds", "Assists", "P+R+A", "Steals", "Blocks", "3PT Made"]
+
+    if st.session_state.get("trend_market") in stats_list:
+        default_stat_idx = stats_list.index(st.session_state["trend_market"])
+    else:
+        default_stat_idx = 0
+
     c1, c2, c3 = st.columns([1.2, 1.2, 1])
     with c1:
         player = st.selectbox(
-            "Player", sorted(props_df["player"].dropna().unique())
+            "Player",
+            player_list,
+            index=default_player_index,
         )
     with c2:
-        stat_label = st.selectbox("Stat", ["Points", "Rebounds", "Assists", "P+R+A", "Steals", "Blocks", "3PT Made"])
+        stat_label = st.selectbox(
+            "Stat",
+            stats_list,
+            index=default_stat_idx,
+        )
     with c3:
         n_games = st.slider("Last N games", 5, 25, 15)
 
@@ -2148,6 +2207,7 @@ with tab2:
             "P+R+A": "player_points_rebounds_assists_alternate",
             "Steals": "player_steals_alternate",
             "Blocks": "player_blocks_alternate",
+            "3PT Made": "player_3pt_made_alternate",
         }
 
         selected_market_code = market_map[stat_label]
@@ -2161,12 +2221,29 @@ with tab2:
             available_lines = sorted(
                 player_props["line"].dropna().unique().astype(float)
             )
-            line = st.selectbox("Line", available_lines, index=0)
+        else:
+            available_lines = []
+
+        # Default line: from session/URL if present, else first real line, else 10.0
+        if st.session_state.get("trend_line") and st.session_state.trend_line is not None:
+            default_line_value = float(st.session_state.trend_line)
+        elif available_lines:
+            default_line_value = float(available_lines[0])
+        else:
+            default_line_value = 10.0
+
+        if available_lines:
+            # pick closest line to default_line_value
+            closest_idx = min(
+                range(len(available_lines)),
+                key=lambda i: abs(available_lines[i] - default_line_value),
+            )
+            line = st.selectbox("Line", available_lines, index=closest_idx)
         else:
             line = st.number_input(
                 f"No real props found. Enter custom line for {stat_label}",
                 min_value=0.0,
-                value=10.0,
+                value=default_line_value,
                 step=0.5,
             )
 
@@ -2220,7 +2297,6 @@ with tab2:
         fig.add_bar(
             x=df["date_str"],
             y=df[stat],
-            marker_color=["#22c55e" if h else "#ef4444" for h in df["hit"]],
             hovertext=hover,
             hoverinfo="text",
             name="Game Result",
@@ -2315,7 +2391,7 @@ with tab4:
     # --------------------------------------------------------
     # GLOBAL CSS — SPACIOUS CARD GRID + INJURY BADGE SUPPORT
     # --------------------------------------------------------
-    st.html("""
+    render_html("""
 <style>
 
 .depth-card {
@@ -2421,7 +2497,7 @@ with tab4:
     # TEAM HEADER (more spacious)
     # ----------------------------
     logo = TEAM_LOGOS_BASE64.get(selected_abbr, "")
-    st.html(
+    render_html(
         f"<div class='header-flex'>"
         f"<img src='{logo}' style='height:55px;border-radius:12px;'/>"
         f"<div>"
@@ -2501,7 +2577,7 @@ with tab4:
                         f"</div>"
                     )
 
-                    st.html(html)
+                    render_html(html)
 
     # ------------------------------------------------------
     # INJURY REPORT (RIGHT)
@@ -2547,7 +2623,7 @@ with tab4:
                     f"</div>"
                 )
 
-                st.html(html)
+                render_html(html)
 
 # ------------------------------------------------------
 # TAB 5 — WOWY ANALYZER
@@ -2558,7 +2634,7 @@ with tab5:
     st.markdown("""
     Below is the full WOWY table — showing how each player's production
     changes when a specific teammate is **OUT**.
-    
+
     Sort any column to explore the biggest deltas.
     """)
 

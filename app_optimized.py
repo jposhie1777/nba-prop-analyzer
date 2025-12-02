@@ -1,5 +1,3 @@
-This now suddenly doesn't work and it gives me a 403 error when I try to login. The only change I made was add a redirect loop for mobile because the mobile login was cycling through the login page 
-
 # ------------------------------------------------------
 # NBA Prop Analyzer - Merged Production + Dev UI (Cleaned)
 # ------------------------------------------------------

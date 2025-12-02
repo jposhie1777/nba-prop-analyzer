@@ -434,23 +434,6 @@ TREND_STAT_QP = _qp_get_single("stat", None)
 TREND_LINE_QP = _qp_get_single("line", None)
 
 
-st.markdown(
-    """
-<style>
-.invisible-card-button > button {
-    opacity: 0 !important;
-    height: 140px !important;
-    width: 100% !important;
-    padding: 0 !important;
-    margin-top: -10px !important;
-    position: absolute !important;
-    z-index: 5 !important;
-}
-</style>
-""",
-    unsafe_allow_html=True,
-)
-
 
 # ------------------------------------------------------
 # THEME PRESETS
@@ -788,6 +771,25 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+st.markdown("""
+<style>
+.card-wrapper {
+    position: relative;
+}
+
+.card-wrapper > button {
+    position: absolute !important;
+    top: 0;
+    left: 0;
+    width: 100% !important;
+    height: 100% !important;
+    opacity: 0 !important;
+    z-index: 10 !important;
+    cursor: pointer;
+}
+</style>
+""", unsafe_allow_html=True)
 
 st.markdown(
     """
@@ -1863,10 +1865,10 @@ with tab1:
                 </div>
                 """
 
-                # Invisible overlay button wrapper
-                st.markdown('<div class="invisible-card-button">', unsafe_allow_html=True)
+                st.markdown("<div class='card-wrapper'>", unsafe_allow_html=True)
+
+                # Invisible full-card click target
                 if st.button(" ", key=btn_key):
-                    # Update query params to trigger Trend Lab view
                     new_params = dict(st.query_params)
                     new_params["tab"] = "trend"
                     new_params["player"] = player_name
@@ -1874,10 +1876,12 @@ with tab1:
                     new_params["line"] = str(line)
                     st.query_params = new_params
                     st.rerun()
+
+                # Render card HTML
+                render_html(card_html)
+
                 st.markdown("</div>", unsafe_allow_html=True)
 
-                # Render card
-                render_html(card_html)
 
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -2517,6 +2521,8 @@ with tab4:
     gap: 14px;
     margin-bottom: 1.6rem;
 }
+
+
 
 .position-header {
     font-size: 1.2rem;

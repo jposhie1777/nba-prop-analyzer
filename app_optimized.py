@@ -16,6 +16,8 @@ import streamlit as st
 import psycopg2
 import psycopg2.extras
 import jwt
+import streamlit.components.v1 as components
+
 
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from google.cloud import bigquery
@@ -916,7 +918,6 @@ MARKET_DISPLAY_MAP = {
     # NEW:
     "player_steals_alternate": "Steals",
     "player_blocks_alternate": "Blocks",
-    "player_3pt_made_alternate": "3PT Made",
 }
 
 def build_tags_html(tags):
@@ -1272,10 +1273,6 @@ def load_wowy_deltas():
 # ------------------------------------------------------
 props_df = load_props()
 history_df = load_history()
-
-st.write("DEBUG: PROJECT_ID =", PROJECT_ID)
-st.write("DEBUG: DATASET =", DATASET)
-st.write("DEBUG: TABLE =", HISTORICAL_TABLE)
 
 # Run one direct query:
 test_df = bq_client.query(f"SELECT * FROM `{PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}` LIMIT 5").to_dataframe()
@@ -1971,12 +1968,6 @@ with tab1:
 
                 stat = detect_stat(row.get("market", ""))
 
-                # DEBUG: verify what we’re feeding into the sparkline
-                st.write(
-                    "DEBUG SPARK:", row["player"], "stat =", stat,
-                    "vals =", get_spark_values(row)
-                )
-
                 spark_vals = get_spark_values(row)
                 spark_html = build_sparkline(spark_vals)
 
@@ -2074,10 +2065,7 @@ with tab1:
                 </div>
                 """
 
-                if has_html:
-                    st.html(card_html)
-                else:
-                    st.markdown(card_html, unsafe_allow_html=True)
+                components.html(card_html, height=330, scrolling=False)
 
         st.markdown("</div>", unsafe_allow_html=True)
         st.caption("Card view updated: centered header, sparkline, L10 fixes, opponent-rank difficulty, NA-safe logic.")
@@ -2317,7 +2305,7 @@ with tab2:
             "Player", sorted(props_df["player"].dropna().unique())
         )
     with c2:
-        stat_label = st.selectbox("Stat", ["Points", "Rebounds", "Assists", "P+R+A", "Steals", "Blocks", "3PT Made"])
+        stat_label = st.selectbox("Stat", ["Points", "Rebounds", "Assists", "P+R+A", "Steals", "Blocks"])
     with c3:
         n_games = st.slider("Last N games", 5, 25, 15)
 
@@ -2537,7 +2525,7 @@ with tab4:
     # --------------------------------------------------------
     # GLOBAL CSS — SPACIOUS CARD GRID + INJURY BADGE SUPPORT
     # --------------------------------------------------------
-    st.html("""
+    st.markdown("""
 <style>
 
 .depth-card {
@@ -2606,7 +2594,7 @@ with tab4:
 }
 
 </style>
-""")
+""", unsafe_allow_html=True)
 
     # ----------------------------
     # TEAM SELECTOR
@@ -2643,13 +2631,15 @@ with tab4:
     # TEAM HEADER (more spacious)
     # ----------------------------
     logo = TEAM_LOGOS_BASE64.get(selected_abbr, "")
-    st.html(
+    components.html(
         f"<div class='header-flex'>"
         f"<img src='{logo}' style='height:55px;border-radius:12px;'/>"
         f"<div>"
         f"<div style='font-size:1.55rem;font-weight:700;color:#e5e7eb;'>{selected_name}</div>"
         f"<div style='font-size:0.9rem;color:#9ca3af;'>Depth chart & injury status</div>"
-        f"</div></div>"
+        f"</div></div>",
+        height=90,
+        scrolling=False,
     )
 
     col_left, col_right = st.columns([1.6, 1.0])
@@ -2723,7 +2713,8 @@ with tab4:
                         f"</div>"
                     )
 
-                    st.html(html)
+                    components.html(html, height=110, scrolling=False)
+
 
     # ------------------------------------------------------
     # INJURY REPORT (RIGHT)
@@ -2769,7 +2760,8 @@ with tab4:
                     f"</div>"
                 )
 
-                st.html(html)
+                components.html(html, height=140, scrolling=False)
+
 
 # ------------------------------------------------------
 # TAB 5 — WOWY ANALYZER

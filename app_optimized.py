@@ -1266,6 +1266,7 @@ def load_wowy_deltas():
 # ------------------------------------------------------
 props_df = load_props()
 history_df = load_history()
+st.write("HISTORY SAMPLE:", history_df.head(3))
 depth_df = load_depth_charts()
 injury_df = load_injury_report()    # <-- MUST COME BEFORE FIX
 wowy_df = load_wowy_deltas()

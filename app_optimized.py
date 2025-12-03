@@ -2091,7 +2091,11 @@ with tab1:
                 </div>
                 """
 
-                st.markdown(card_html, unsafe_allow_html=True)
+                # Clean HTML comments — Streamlit can't render <!-- --> safely
+                clean_html = card_html.replace("<!--", "").replace("-->", "")
+
+                st.markdown(clean_html, unsafe_allow_html=True)
+
 
         st.markdown("</div>", unsafe_allow_html=True)
         st.caption("Card view updated: centered header, sparkline, L10 fixes, opponent-rank difficulty, NA-safe logic.")

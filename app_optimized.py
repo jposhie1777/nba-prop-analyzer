@@ -1896,26 +1896,26 @@ with tab1:
         )
 
         def get_l10_avg(row):
-        stat = detect_stat(row.get("market", ""))
+            stat = detect_stat(row.get("market", ""))
 
-        col_map = {
-            "pts": "pts_last10",
-            "reb": "reb_last10",
-            "ast": "ast_last10",
-            "pra": "pra_last10",
-            "stl": "stl_last10",
-            "blk": "blk_last10",
+            col_map = {
+                "pts": "pts_last10",
+                "reb": "reb_last10",
+                "ast": "ast_last10",
+                "pra": "pra_last10",
+                "stl": "stl_last10",
+                "blk": "blk_last10",
 
-            # NEW COMBINED STATS
-            "pr": "pr_last10",
-            "pa": "pa_last10",
-            "ra": "ra_last10",
-        }
+                # NEW COMBINED STATS
+                "pr": "pr_last10",
+                "pa": "pa_last10",
+                "ra": "ra_last10",
+            }
 
-        col = col_map.get(stat)
-        value = row.get(col)
+            col = col_map.get(stat)
+            value = row.get(col)
 
-        return float(value) if pd.notna(value) else None
+            return float(value) if pd.notna(value) else None
 
 
 

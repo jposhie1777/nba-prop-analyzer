@@ -1177,31 +1177,40 @@ def load_props():
 
     return df
 
+import numpy as np
 import ast
 
 def convert_list_columns(df):
-    """
-    Ensures all *_lastN_list fields are real Python lists.
-    Handles:
-    - BigQuery REPEATED FIELDS (already lists)
-    - stringified arrays ("[12, 15, 18]")
-    - NaN, None → []
-    """
-    import ast
-
     for col in df.columns:
         if col.endswith(("_last5_list", "_last7_list", "_last10_list")):
 
             def fix(x):
-                if isinstance(x, list):    # BigQuery repeated field
+                # Already list
+                if isinstance(x, list):
                     return x
-                if isinstance(x, str):     # stringified JSON
+
+                # BigQuery gives numpy arrays
+                if isinstance(x, np.ndarray):
+                    return x.tolist()
+
+                # Pandas Series
+                if hasattr(x, "tolist"):
+                    try:
+                        return x.tolist()
+                    except:
+                        pass
+
+                # Stringified lists
+                if isinstance(x, str):
                     try:
                         return ast.literal_eval(x)
                     except:
                         return []
+
+                # None
                 if x is None:
                     return []
+
                 return []
 
             df[col] = df[col].apply(fix)
@@ -1222,6 +1231,8 @@ def load_history():
     df = convert_list_columns(df)
 
     return df
+
+st.write("CHECK:", history_df.loc[0, "pts_last5_list"], type(history_df.loc[0, "pts_last5_list"]))
 
 @st.cache_data(show_spinner=True)
 def load_depth_charts():

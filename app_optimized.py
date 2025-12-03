@@ -106,32 +106,29 @@ SELECT
   blk,
   pra,
 
-  -- LAST 5
-  pts_last5_list,
-  reb_last5_list,
-  ast_last5_list,
-  stl_last5_list,
-  blk_last5_list,
-  pra_last5_list,
+  ARRAY(SELECT x FROM UNNEST(pts_last5_list) x) AS pts_last5_list,
+  ARRAY(SELECT x FROM UNNEST(reb_last5_list) x) AS reb_last5_list,
+  ARRAY(SELECT x FROM UNNEST(ast_last5_list) x) AS ast_last5_list,
+  ARRAY(SELECT x FROM UNNEST(stl_last5_list) x) AS stl_last5_list,
+  ARRAY(SELECT x FROM UNNEST(blk_last5_list) x) AS blk_last5_list,
+  ARRAY(SELECT x FROM UNNEST(pra_last5_list) x) AS pra_last5_list,
 
-  -- LAST 7
-  pts_last7_list,
-  reb_last7_list,
-  ast_last7_list,
-  stl_last7_list,
-  blk_last7_list,
-  pra_last7_list,
+  ARRAY(SELECT x FROM UNNEST(pts_last7_list) x) AS pts_last7_list,
+  ARRAY(SELECT x FROM UNNEST(reb_last7_list) x) AS reb_last7_list,
+  ARRAY(SELECT x FROM UNNEST(ast_last7_list) x) AS ast_last7_list,
+  ARRAY(SELECT x FROM UNNEST(stl_last7_list) x) AS stl_last7_list,
+  ARRAY(SELECT x FROM UNNEST(blk_last7_list) x) AS blk_last7_list,
+  ARRAY(SELECT x FROM UNNEST(pra_last7_list) x) AS pra_last7_list,
 
-  -- LAST 10
-  pts_last10_list,
-  reb_last10_list,
-  ast_last10_list,
-  stl_last10_list,
-  blk_last10_list,
-  pra_last10_list
+  ARRAY(SELECT x FROM UNNEST(pts_last10_list) x) AS pts_last10_list,
+  ARRAY(SELECT x FROM UNNEST(reb_last10_list) x) AS reb_last10_list,
+  ARRAY(SELECT x FROM UNNEST(ast_last10_list) x) AS ast_last10_list,
+  ARRAY(SELECT x FROM UNNEST(stl_last10_list) x) AS stl_last10_list,
+  ARRAY(SELECT x FROM UNNEST(blk_last10_list) x) AS blk_last10_list,
+  ARRAY(SELECT x FROM UNNEST(pra_last10_list) x) AS pra_last10_list
 
-FROM {PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}
-ORDER BY game_date
+FROM `{PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}`
+ORDER BY game_date DESC;
 """
 
 

@@ -1274,21 +1274,29 @@ wowy_df = load_wowy_deltas()
 # ATTACH LAST-7 & LAST-10 ARRAYS (FOR SPARKLINES + L10 AVG)
 # ------------------------------------------------------
 
+# ✅ Only keep historical rows where *any* last7 or last10 lists are populated
+history_lists = history_df[
+    history_df.filter(regex="_last(5|7|10)_list$").notna().any(axis=1)
+]
+
+# ✅ Then grab the latest row that actually has sparkline data
 hist_latest = (
-    history_df.sort_values("game_date")
+    history_lists.sort_values("game_date")
     .groupby("player")
     .tail(1)[[
         "player",
-        "pts_last7_list", "pts_last10_list",
-        "reb_last7_list", "reb_last10_list",
-        "ast_last7_list", "ast_last10_list",
-        "stl_last7_list", "stl_last10_list",
-        "blk_last7_list", "blk_last10_list",
-        "pra_last7_list", "pra_last10_list"
+        "pts_last5_list", "pts_last7_list", "pts_last10_list",
+        "reb_last5_list", "reb_last7_list", "reb_last10_list",
+        "ast_last5_list", "ast_last7_list", "ast_last10_list",
+        "stl_last5_list", "stl_last7_list", "stl_last10_list",
+        "blk_last5_list", "blk_last7_list", "blk_last10_list",
+        "pra_last5_list", "pra_last7_list", "pra_last10_list",
     ]]
 )
 
+# ✅ KEEP THIS — it attaches historical trend arrays to today's props
 props_df = props_df.merge(hist_latest, on="player", how="left")
+
 
 
 # ------------------------------------------------------
@@ -1892,7 +1900,12 @@ with tab1:
                     rank_display = "-"
                     rank_color = "#9ca3af"
 
-                stat = detect_stat(row["market"])
+                stat = detect_stat(row.get("market", ""))
+
+                # 🔍 DEBUG LINE — ADD THIS
+                st.write("DEBUG:", row["player"], stat, get_spark_values(row))
+
+                # then your real sparkline code runs
                 spark_vals = get_spark_values(row)
                 spark_html = build_sparkline(spark_vals)
 

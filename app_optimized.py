@@ -1281,11 +1281,6 @@ wowy_df = load_wowy_deltas()
 # ATTACH LAST-7 & LAST-10 ARRAYS (FOR SPARKLINES + L10 AVG)
 # ------------------------------------------------------
 
-# ✅ Only keep historical rows where *any* last7 or last10 lists are populated
-history_lists = history_df[
-    history_df.filter(regex="_last(5|7|10)_list$").notna().any(axis=1)
-]
-
 # ✅ Then grab the latest row that actually has sparkline data
 hist_latest = (
     history_lists.sort_values("game_date")

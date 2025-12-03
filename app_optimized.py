@@ -18,6 +18,7 @@ import psycopg2.extras
 import jwt
 import streamlit.components.v1 as components
 
+
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from google.cloud import bigquery
 from google.oauth2 import service_account
@@ -131,6 +132,7 @@ SELECT
 FROM `{PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}`
 ORDER BY game_date DESC;
 """
+
 
 # NEW: depth chart + injury SQL
 DEPTH_SQL = f"""
@@ -367,10 +369,9 @@ def decode_id_token(id_token: str):
 def ensure_logged_in():
     """
     Handle Auth0 login flow and store user info in st.session_state.
-    If not logged in, show Login hero screen and stop the app.
+    If not logged in, show Login button and stop the app.
     """
-    # Already logged in?
-    if st.session_state.get("user") and st.session_state.get("user_id"):
+    if "user" in st.session_state and "user_id" in st.session_state:
         return
 
     # Try to get 'code' from query params
@@ -383,8 +384,8 @@ def ensure_logged_in():
     if isinstance(code, list):
         code = code[0]
 
-    # Returned from Auth0 with a code → exchange and log in
     if code:
+        # Returned from Auth0 with a code
         try:
             token_data = exchange_code_for_token(code)
             id_token = token_data.get("id_token")
@@ -415,304 +416,12 @@ def ensure_logged_in():
             st.error(f"❌ Login failed: {e}")
             st.stop()
 
-    # ------------------------------------------------------------------
-    # No session and no 'code' param -> show LOGIN HERO SCREEN and stop
-    # ------------------------------------------------------------------
+    # Not logged in and no 'code' param -> show login link
     login_url = get_auth0_authorize_url()
-
-    # ---------------------------
-    # CSS (markdown is OK for CSS)
-    # ---------------------------
-    st.markdown(
-        """
-        <style>
-        body {
-            background: radial-gradient(circle at top, #020617 0, #000 60%) !important;
-        }
-        .login-wrapper {
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem 1rem;
-        }
-        .login-card {
-            max-width: 880px;
-            width: 100%;
-            border-radius: 24px;
-            padding: 2.4rem 2.6rem;
-            background:
-                radial-gradient(circle at 0 0, rgba(59,130,246,0.35), transparent 55%),
-                radial-gradient(circle at 100% 0, rgba(234,179,8,0.25), transparent 55%),
-                radial-gradient(circle at 0 100%, rgba(15,23,42,0.98), rgba(15,23,42,0.94));
-            border: 1px solid rgba(148,163,184,0.45);
-            box-shadow: 0 32px 90px rgba(15,23,42,1);
-        }
-        .login-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 1.6rem;
-            margin-bottom: 1.8rem;
-        }
-        .login-logo {
-            width: 58px;
-            height: 58px;
-            border-radius: 18px;
-            background: radial-gradient(circle at 0 0, #f97316, #ea580c 35%, #0f172a 95%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 900;
-            font-size: 22px;
-            box-shadow: 0 20px 45px rgba(15,23,42,0.95);
-        }
-        .login-title {
-            font-size: 1.75rem;
-            font-weight: 700;
-            color: #e5e7eb;
-            margin-bottom: 0.25rem;
-        }
-        .login-subtitle {
-            font-size: 0.9rem;
-            color: #9ca3af;
-            max-width: 480px;
-        }
-        .login-badge {
-            padding: 4px 12px;
-            border-radius: 999px;
-            font-size: 0.7rem;
-            text-transform: uppercase;
-            letter-spacing: 0.12em;
-            border: 1px solid rgba(148,163,184,0.6);
-            color: #e5e7eb;
-            background: linear-gradient(135deg, rgba(22,163,74,0.8), rgba(15,23,42,0.95));
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .login-badge-dot {
-            width: 7px;
-            height: 7px;
-            border-radius: 999px;
-            background: #22c55e;
-            box-shadow: 0 0 12px rgba(34,197,94,0.9);
-            animation: pulse-dot 1.5s infinite;
-        }
-        @keyframes pulse-dot {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.35); opacity: 0.75; }
-        }
-
-        .login-grid {
-            display: grid;
-            grid-template-columns: minmax(0, 2fr) minmax(0, 2fr);
-            gap: 1.6rem;
-        }
-        @media (max-width: 900px) {
-            .login-grid { grid-template-columns: 1fr; }
-            .login-header { flex-direction: column; align-items: flex-start; }
-        }
-
-        .login-feature-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-        .login-feature-list li {
-            display: flex;
-            align-items: flex-start;
-            gap: 0.55rem;
-            margin-bottom: 0.6rem;
-            font-size: 0.85rem;
-            color: #d1d5db;
-        }
-        .login-feature-icon {
-            width: 22px;
-            height: 22px;
-            border-radius: 999px;
-            background: rgba(15,23,42,0.9);
-            border: 1px solid rgba(148,163,184,0.7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .login-pseudo-card {
-            border-radius: 18px;
-            padding: 0.9rem 1rem;
-            background:
-                radial-gradient(circle at 0 0, rgba(59,130,246,0.30), transparent 55%),
-                radial-gradient(circle at 100% 0, rgba(234,179,8,0.22), transparent 55%),
-                radial-gradient(circle at 0 100%, rgba(15,23,42,1), rgba(15,23,42,0.96));
-            border: 1px solid rgba(148,163,184,0.4);
-            box-shadow: 0 20px 50px rgba(15,23,42,0.98);
-            font-size: 0.8rem;
-            color: #e5e7eb;
-        }
-        .login-pseudo-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .login-pseudo-player {
-            font-weight: 650;
-        }
-        .login-pill {
-            padding: 3px 9px;
-            border-radius: 999px;
-            font-size: 0.7rem;
-            border: 1px solid rgba(148,163,184,0.5);
-            background: rgba(15,23,42,0.9);
-        }
-        .login-metric-row {
-            display: flex;
-            gap: 0.75rem;
-            margin-top: 0.4rem;
-        }
-        .login-metric-label {
-            font-size: 0.7rem;
-            text-transform: uppercase;
-            letter-spacing: 0.12em;
-            color: #9ca3af;
-        }
-        .login-metric-value {
-            font-size: 0.9rem;
-            font-weight: 600;
-            color: #e5e7eb;
-        }
-
-        .login-cta {
-            margin-top: 1.8rem;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.75rem;
-        }
-        .login-button {
-            padding: 0.6rem 1.4rem;
-            border-radius: 999px;
-            border: 1px solid rgba(148,163,184,0.55);
-            background: radial-gradient(circle at 0 0, #0ea5e9, #22c55e 50%, #020617 100%);
-            color: white;
-            font-weight: 600;
-            text-decoration: none;
-            font-size: 0.78rem;
-            letter-spacing: 0.05em;
-            box-shadow: 0 18px 45px rgba(8,47,73,0.95);
-            display: inline-flex;
-            align-items: center;
-            transition: 0.15s;
-        }
-        .login-button:hover {
-            transform: translateY(-1px) scale(1.01);
-            box-shadow: 0 26px 60px rgba(8,47,73,1);
-        }
-        .login-cta-note {
-            font-size: 0.76rem;
-            color: #9ca3af;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    # ---------------------------
-    # HTML (rendered as a component)
-    # ---------------------------
-    html = f"""
-    <div class="login-wrapper">
-      <div class="login-card">
-
-        <div class="login-header">
-          <div style="display:flex;align-items:center;gap:0.9rem;">
-            <div class="login-logo">NBA</div>
-            <div>
-              <div class="login-title">Prop Analyzer</div>
-              <div class="login-subtitle">
-                Log in to explore today's props, trend lines, WOWY deltas, and depth-chart context
-                powered by live BigQuery + Auth0.
-              </div>
-            </div>
-          </div>
-          <div class="login-badge">
-            <span class="login-badge-dot"></span>
-            SECURE • AUTH0 SINGLE SIGN-ON
-          </div>
-        </div>
-
-        <div class="login-grid">
-          <div>
-            <ul class="login-feature-list">
-              <li>
-                <div class="login-feature-icon">📊</div>
-                <div><b>Props overview at a glance</b><br/>
-                Filter by game, market, and book — then sort by hit rate vs implied odds.</div>
-              </li>
-              <li>
-                <div class="login-feature-icon">📈</div>
-                <div><b>Trend Lab</b><br/>
-                Rolling averages, ribbons, and line-based hit metrics for any player.</div>
-              </li>
-              <li>
-                <div class="login-feature-icon">🧠</div>
-                <div><b>Context-aware edges</b><br/>
-                WOWY deltas, depth charts, injuries, & matchup difficulty scores.</div>
-              </li>
-              <li>
-                <div class="login-feature-icon">💾</div>
-                <div><b>Saved Bets</b><br/>
-                Persist picks to Postgres & download tickets with one click.</div>
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <div class="login-pseudo-card">
-              <div class="login-pseudo-header">
-                <div>
-                  <div class="login-pseudo-player">Sample: J. Tatum</div>
-                  <div style="font-size:0.75rem;color:#9ca3af;">
-                    Points • Over 27.5
-                  </div>
-                </div>
-                <div class="login-pill">+120 EV+</div>
-              </div>
-              <div class="login-metric-row">
-                <div>
-                  <div class="login-metric-label">Hit Rate</div>
-                  <div class="login-metric-value">70%</div>
-                </div>
-                <div>
-                  <div class="login-metric-label">Implied</div>
-                  <div class="login-metric-value">45%</div>
-                </div>
-                <div>
-                  <div class="login-metric-label">Matchup</div>
-                  <div class="login-metric-value">Easy (24/30)</div>
-                </div>
-              </div>
-              <div style="margin-top:0.7rem;font-size:0.74rem;color:#9ca3af;">
-                Visual preview only — log in to view real props & slate data.
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="login-cta">
-          <a href="{login_url}" class="login-button">🔐 Log in with Auth0</a>
-          <div class="login-cta-note">
-            Your session is secure and handled entirely by Auth0.
-          </div>
-        </div>
-
-      </div>
-    </div>
-    """
-
-    components.html(html, height=700, scrolling=False)
+    st.title("NBA Prop Analyzer")
+    st.info("Please log in to view props, trends, and saved bets.")
+    st.markdown(f"[🔐 Log in with Auth0]({login_url})")
     st.stop()
-
 
 
 # ------------------------------------------------------
@@ -756,7 +465,7 @@ theme_choice = st.sidebar.selectbox(
 theme = THEMES[st.session_state.theme_choice]
 
 # ------------------------------------------------------
-# GLOBAL STYLES (with optimized prop cards)
+# GLOBAL STYLES (from dev)
 # ------------------------------------------------------
 st.markdown(
     f"""
@@ -904,112 +613,55 @@ st.markdown(
         color: #9ca3af;
     }}
 
-    /* ------------ OPTIMIZED PROP CARD STYLING ------------ */
-
     .prop-card {{
-        position: relative;
-        border-radius: 18px;
-        padding: 0.9rem 1rem;
-        border: 1px solid rgba(148,163,184,0.3);
-        background:
-            radial-gradient(circle at 0 0, rgba(30,64,175,0.25), transparent 55%),
-            radial-gradient(circle at 100% 0, rgba(251,191,36,0.18), transparent 55%),
-            radial-gradient(circle at 0 100%, rgba(15,23,42,0.98), rgba(15,23,42,0.94));
-        box-shadow: 0 18px 40px rgba(15,23,42,0.9);
-        margin-bottom: 1rem;
-        transition:
-            transform 0.16s ease-out,
-            box-shadow 0.16s ease-out,
-            border-color 0.16s ease-out,
-            background 0.16s ease-out;
-        overflow: hidden;
-    }}
-
-    .prop-card::before {{
-        content: "";
-        position: absolute;
-        inset: 0;
-        border-radius: inherit;
-        border-top: 1px solid rgba(248,250,252,0.08);
-        border-left: 1px solid rgba(248,250,252,0.04);
-        opacity: 0.9;
-        pointer-events: none;
+        border-radius: 16px;
+        padding: 0.75rem 0.9rem;
+        border: 1px solid rgba(148,163,184,0.28);
+        background: radial-gradient(circle at 0 0, rgba(15,23,42,1), rgba(15,23,42,0.96));
+        box-shadow: 0 20px 50px rgba(15,23,42,0.95);
+        margin-bottom: 0.9rem;
+        transition: transform 0.16s ease-out, box-shadow 0.16s ease-out, border-color 0.16s ease-out;
     }}
 
     .prop-card:hover {{
-        transform: translateY(-3px) translateZ(0);
+        transform: translateY(-3px);
         box-shadow: 0 26px 60px rgba(15,23,42,1);
         border-color: {theme["accent"]};
-        background:
-            radial-gradient(circle at 0 0, rgba(59,130,246,0.28), transparent 55%),
-            radial-gradient(circle at 100% 0, rgba(234,179,8,0.22), transparent 55%),
-            radial-gradient(circle at 0 100%, rgba(15,23,42,1), rgba(15,23,42,0.96));
     }}
 
     .prop-headline {{
         display: flex;
         justify-content: space-between;
         align-items: center;
-        gap: 0.4rem;
-        margin-bottom: 0.4rem;
+        margin-bottom: 0.35rem;
     }}
 
     .prop-player {{
-        font-weight: 650;
-        font-size: 0.95rem;
+        font-weight: 600;
+        font-size: 0.92rem;
         color: #e5e7eb;
-        letter-spacing: 0.01em;
     }}
 
     .prop-market {{
         font-size: 0.78rem;
         color: #9ca3af;
-        white-space: nowrap;
     }}
 
     .pill-book {{
-        padding: 3px 9px;
+        padding: 2px 8px;
         border-radius: 999px;
         font-size: 0.7rem;
-        border: 1px solid rgba(148,163,184,0.45);
+        border: 1px solid rgba(148,163,184,0.4);
         color: #e5e7eb;
-        background: linear-gradient(135deg, rgba(15,23,42,0.9), rgba(15,23,42,0.6));
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
     }}
 
     .prop-meta {{
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 0.35rem;
-        margin-top: 0.4rem;
+        display: flex;
+        justify-content: space-between;
+        gap: 0.5rem;
         font-size: 0.75rem;
         color: #9ca3af;
     }}
-
-    .prop-meta > div {{
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        justify-content: center;
-    }}
-
-    .prop-meta-label {{
-        font-size: 0.68rem;
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-        color: #6b7280;
-        margin-bottom: 2px;
-    }}
-
-    .prop-meta-value {{
-        font-size: 0.82rem;
-        font-weight: 600;
-        color: #e5e7eb;
-    }}
-
-    /* ------------ END PROP CARD STYLING ------------ */
 
     .stDataFrame, .stDataEditor,
     [data-testid="stDataFrame"] > div,
@@ -1116,8 +768,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.markdown(
-    """
+st.markdown("""
 <style>
 
     /* ----------------------------------------------
@@ -1146,9 +797,8 @@ st.markdown(
     }
 
 </style>
-""",
-    unsafe_allow_html=True,
-)
+""", unsafe_allow_html=True)
+
 
 # ------------------------------------------------------
 # HEADER
@@ -1268,6 +918,7 @@ MARKET_DISPLAY_MAP = {
     # NEW:
     "player_steals_alternate": "Steals",
     "player_blocks_alternate": "Blocks",
+    "player_3pt_made_alternate": "3PT Made",
 }
 
 def build_tags_html(tags):
@@ -1623,6 +1274,18 @@ def load_wowy_deltas():
 # ------------------------------------------------------
 props_df = load_props()
 history_df = load_history()
+
+# Run one direct query:
+test_df = bq_client.query(f"SELECT * FROM `{PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}` LIMIT 5").to_dataframe()
+st.write("DEBUG: DIRECT QUERY SAMPLE:", test_df)
+st.write("DEBUG: History after load + convert_list_columns")
+st.write(history_df.head(10)[[
+    "player",
+    "pts_last5_list",
+    "pts_last7_list",
+    "pts_last10_list"
+]])
+
 depth_df = load_depth_charts()
 injury_df = load_injury_report()    # <-- MUST COME BEFORE FIX
 wowy_df = load_wowy_deltas()
@@ -1646,6 +1309,12 @@ def normalize_name(n):
 props_df["player_norm"] = props_df["player"].apply(normalize_name)
 history_df["player_norm"] = history_df["player"].apply(normalize_name)
 
+st.write("DEBUG history_df sample WITH player_norm:")
+st.write(history_df[[
+    "player", "player_norm",
+    "pts_last5_list", "pts_last7_list", "pts_last10_list"
+]].head(20))
+
 
 # ------------------------------------------------------
 # ATTACH LAST-5 / LAST-7 / LAST-10 ARRAYS
@@ -1665,6 +1334,7 @@ hist_latest = (
     ]]
 )
 
+st.write("DEBUG hist_latest (should contain arrays):")
 st.write(hist_latest.head(20))
 
 # ------------------------------------------------------
@@ -1673,6 +1343,15 @@ st.write(hist_latest.head(20))
 props_df = props_df.merge(hist_latest, on="player_norm", how="left")
 
 
+# ------------------------------------------------------
+# DEBUG — sanity check spark lists
+# ------------------------------------------------------
+st.write("DEBUG merged player lists (should NOT be empty):")
+st.write(
+    props_df[
+        ["player", "player_norm", "pts_last5_list", "pts_last7_list", "pts_last10_list"]
+    ].head(25)
+)
 # ------------------------------------------------------
 # FIX INJURY TEAM MATCHING (NEW SCHEMA)
 # ------------------------------------------------------
@@ -2219,8 +1898,8 @@ with tab1:
             odds = row.get("price", 0)
             implied = (100 / (odds + 100)) if odds > 0 else abs(odds) / (abs(odds) + 100)
 
-            #if row.get("hit_rate_last10", 0) > implied:
-                #tags.append(("📈 EV+", "#22c55e"))
+            if row.get("hit_rate_last10", 0) > implied:
+                tags.append(("📈 EV+", "#22c55e"))
 
             r = get_opponent_rank(row)
             if isinstance(r, int):
@@ -2289,6 +1968,12 @@ with tab1:
                     rank_color = "#9ca3af"
 
                 stat = detect_stat(row.get("market", ""))
+
+                # DEBUG: verify what we’re feeding into the sparkline
+                st.write(
+                    "DEBUG SPARK:", row["player"], "stat =", stat,
+                    "vals =", get_spark_values(row)
+                )
 
                 spark_vals = get_spark_values(row)
                 spark_html = build_sparkline(spark_vals)
@@ -2387,7 +2072,7 @@ with tab1:
                 </div>
                 """
 
-                st.markdown(card_html, unsafe_allow_html=True)
+                components.html(card_html, height=330, scrolling=False)
 
         st.markdown("</div>", unsafe_allow_html=True)
         st.caption("Card view updated: centered header, sparkline, L10 fixes, opponent-rank difficulty, NA-safe logic.")
@@ -2627,7 +2312,7 @@ with tab2:
             "Player", sorted(props_df["player"].dropna().unique())
         )
     with c2:
-        stat_label = st.selectbox("Stat", ["Points", "Rebounds", "Assists", "P+R+A", "Steals", "Blocks"])
+        stat_label = st.selectbox("Stat", ["Points", "Rebounds", "Assists", "P+R+A", "Steals", "Blocks", "3PT Made"])
     with c3:
         n_games = st.slider("Last N games", 5, 25, 15)
 
@@ -2959,7 +2644,7 @@ with tab4:
         f"<div>"
         f"<div style='font-size:1.55rem;font-weight:700;color:#e5e7eb;'>{selected_name}</div>"
         f"<div style='font-size:0.9rem;color:#9ca3af;'>Depth chart & injury status</div>"
-        f"</div></div>",
+        f"</div></div>"",
         height=90,
         scrolling=False,
     )

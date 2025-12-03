@@ -1255,6 +1255,27 @@ injury_df = load_injury_report()    # <-- MUST COME BEFORE FIX
 wowy_df = load_wowy_deltas()
 
 # ------------------------------------------------------
+# ATTACH LAST-7 & LAST-10 ARRAYS (FOR SPARKLINES + L10 AVG)
+# ------------------------------------------------------
+
+hist_latest = (
+    history_df.sort_values("game_date")
+    .groupby("player")
+    .tail(1)[[
+        "player",
+        "pts_last7_list", "pts_last10_list",
+        "reb_last7_list", "reb_last10_list",
+        "ast_last7_list", "ast_last10_list",
+        "stl_last7_list", "stl_last10_list",
+        "blk_last7_list", "blk_last10_list",
+        "pra_last7_list", "pra_last10_list"
+    ]]
+)
+
+props_df = props_df.merge(hist_latest, on="player", how="left")
+
+
+# ------------------------------------------------------
 # FIX INJURY TEAM MATCHING (NEW SCHEMA)
 # ------------------------------------------------------
 def normalize(s):
@@ -1814,20 +1835,7 @@ with tab1:
                     rank_color = "#9ca3af"
 
                 stat = detect_stat(row["market"])
-
-                # Map market → correct BigQuery array column
-                stat_to_col = {
-                    "pts": "pts_last7_list",
-                    "reb": "reb_last7_list",
-                    "ast": "ast_last7_list",
-                    "stl": "stl_last7_list",
-                    "blk": "blk_last7_list",
-                    "pra": "pra_last7_list",
-                }
-
-                col = stat_to_col.get(stat)
-                spark_vals = row.get(col, None)
-
+                spark_vals = row.get(f"{stat}_last7_list")
                 spark_html = build_sparkline(spark_vals)
 
 

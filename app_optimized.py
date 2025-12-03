@@ -1296,6 +1296,13 @@ def normalize_name(n):
 props_df["player_norm"] = props_df["player"].apply(normalize_name)
 history_df["player_norm"] = history_df["player"].apply(normalize_name)
 
+st.write("DEBUG history_df sample WITH player_norm:")
+st.write(history_df[[
+    "player", "player_norm",
+    "pts_last5_list", "pts_last7_list", "pts_last10_list"
+]].head(20))
+
+
 # ------------------------------------------------------
 # ATTACH LAST-5 / LAST-7 / LAST-10 ARRAYS
 # select MOST RECENT game per player (correct!)
@@ -1314,10 +1321,14 @@ hist_latest = (
     ]]
 )
 
+st.write("DEBUG hist_latest (should contain arrays):")
+st.write(hist_latest.head(20))
+
 # ------------------------------------------------------
 # MERGE (now works because player_norm matches)
 # ------------------------------------------------------
 props_df = props_df.merge(hist_latest, on="player_norm", how="left")
+
 
 # ------------------------------------------------------
 # DEBUG — sanity check spark lists
@@ -1328,18 +1339,6 @@ st.write(
         ["player", "player_norm", "pts_last5_list", "pts_last7_list", "pts_last10_list"]
     ].head(25)
 )
-
-
-# ------------------------------------------------------
-# DEBUG — sanity check sparkline arrays after merging
-# ------------------------------------------------------
-st.write("DEBUG — Sample merged trend arrays (should NOT be empty):")
-st.write(
-    props_df[
-        ["player", "pts_last5_list", "pts_last7_list", "pts_last10_list"]
-    ].head(20)
-)
-
 # ------------------------------------------------------
 # FIX INJURY TEAM MATCHING (NEW SCHEMA)
 # ------------------------------------------------------

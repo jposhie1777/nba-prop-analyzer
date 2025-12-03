@@ -1909,10 +1909,19 @@ with tab1:
 
                 stat = detect_stat(row.get("market", ""))
 
-                # 🔍 DEBUG LINE — ADD THIS
-                st.write("DEBUG:", row["player"], stat, get_spark_values(row))
+                # 🔍 DEBUG: Sparkline data before rendering
+                st.write(
+                    "DEBUG SPARKLINE MERGE:",
+                    row["player"],
+                    "stat =", stat,
+                    "spark_list =", {
+                        "5": row.get(f"{stat}_last5_list"),
+                        "7": row.get(f"{stat}_last7_list"),
+                        "10": row.get(f"{stat}_last10_list"),
+                    }
+                )
 
-                # then your real sparkline code runs
+                # Then build sparkline normally
                 spark_vals = get_spark_values(row)
                 spark_html = build_sparkline(spark_vals)
 

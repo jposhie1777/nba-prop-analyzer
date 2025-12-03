@@ -2091,10 +2091,7 @@ with tab1:
                 </div>
                 """
 
-                # Clean HTML comments — Streamlit can't render <!-- --> safely
-                clean_html = card_html.replace("<!--", "").replace("-->", "")
-
-                st.markdown(clean_html, unsafe_allow_html=True)
+                components.html(card_html, height=330, scrolling=False)
 
 
         st.markdown("</div>", unsafe_allow_html=True)

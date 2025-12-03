@@ -102,12 +102,38 @@ SELECT
   pts,
   reb,
   ast,
-  pra,
   stl,
   blk,
+  pra,
+
+  -- LAST 5
+  pts_last5_list,
+  reb_last5_list,
+  ast_last5_list,
+  stl_last5_list,
+  blk_last5_list,
+  pra_last5_list,
+
+  -- LAST 7
+  pts_last7_list,
+  reb_last7_list,
+  ast_last7_list,
+  stl_last7_list,
+  blk_last7_list,
+  pra_last7_list,
+
+  -- LAST 10
+  pts_last10_list,
+  reb_last10_list,
+  ast_last10_list,
+  stl_last10_list,
+  blk_last10_list,
+  pra_last10_list
+
 FROM {PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}
 ORDER BY game_date
 """
+
 
 # NEW: depth chart + injury SQL
 DEPTH_SQL = f"""
@@ -1154,6 +1180,23 @@ def load_props():
 
     return df
 
+import ast
+
+def convert_list_columns(df):
+    """
+    Convert BigQuery stringified arrays like "[12, 15, 18]" into Python lists.
+    """
+    for col in df.columns:
+        if (
+            col.endswith("_last5_list")
+            or col.endswith("_last7_list")
+            or col.endswith("_last10_list")
+        ):
+            df[col] = df[col].apply(
+                lambda x: ast.literal_eval(x) if isinstance(x, str) else x
+            )
+    return df
+
 
 @st.cache_data(show_spinner=True)
 def load_history():
@@ -1161,8 +1204,11 @@ def load_history():
     df.columns = df.columns.str.strip()
     df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
     df["opponent_team"] = df["opponent_team"].fillna("").astype(str)
-    return df
 
+    # 🔥 Convert stringified lists into real Python lists
+    df = convert_list_columns(df)
+
+    return df
 
 @st.cache_data(show_spinner=True)
 def load_depth_charts():

@@ -918,7 +918,6 @@ MARKET_DISPLAY_MAP = {
     # NEW:
     "player_steals_alternate": "Steals",
     "player_blocks_alternate": "Blocks",
-    "player_3pt_made_alternate": "3PT Made",
 }
 
 def build_tags_html(tags):
@@ -1071,8 +1070,6 @@ def detect_stat(market):
         return "stl"
     if "blk" in m or "block" in m:
         return "blk"
-    if "3" in m and ("fg3" in m or "3pt" in m or "three" in m):
-        return "fg3m"
 
     return ""
 
@@ -2312,7 +2309,7 @@ with tab2:
             "Player", sorted(props_df["player"].dropna().unique())
         )
     with c2:
-        stat_label = st.selectbox("Stat", ["Points", "Rebounds", "Assists", "P+R+A", "Steals", "Blocks", "3PT Made"])
+        stat_label = st.selectbox("Stat", ["Points", "Rebounds", "Assists", "P+R+A", "Steals", "Blocks"])
     with c3:
         n_games = st.slider("Last N games", 5, 25, 15)
 
@@ -2644,7 +2641,7 @@ with tab4:
         f"<div>"
         f"<div style='font-size:1.55rem;font-weight:700;color:#e5e7eb;'>{selected_name}</div>"
         f"<div style='font-size:0.9rem;color:#9ca3af;'>Depth chart & injury status</div>"
-        f"</div></div>"",
+        f"</div></div>",
         height=90,
         scrolling=False,
     )

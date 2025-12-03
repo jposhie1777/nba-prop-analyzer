@@ -414,12 +414,324 @@ def ensure_logged_in():
             st.error(f"❌ Login failed: {e}")
             st.stop()
 
-    # Not logged in and no 'code' param -> show login link
-    login_url = get_auth0_authorize_url()
-    st.title("NBA Prop Analyzer")
-    st.info("Please log in to view props, trends, and saved bets.")
-    st.markdown(f"[🔐 Log in with Auth0]({login_url})")
-    st.stop()
+        # Not logged in and no 'code' param -> show hero landing screen
+        login_url = get_auth0_authorize_url()
+
+        # Local CSS just for the login screen (runs before the rest of the app)
+        st.markdown(
+            """
+            <style>
+            body {
+                background: radial-gradient(circle at top, #020617 0, #000 60%) !important;
+            }
+            .login-wrapper {
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 2rem 1rem;
+            }
+            .login-card {
+                max-width: 880px;
+                width: 100%;
+                border-radius: 24px;
+                padding: 2.4rem 2.6rem;
+                background:
+                    radial-gradient(circle at 0 0, rgba(59,130,246,0.35), transparent 55%),
+                    radial-gradient(circle at 100% 0, rgba(234,179,8,0.25), transparent 55%),
+                    radial-gradient(circle at 0 100%, rgba(15,23,42,0.98), rgba(15,23,42,0.94));
+                border: 1px solid rgba(148,163,184,0.45);
+                box-shadow: 0 32px 90px rgba(15,23,42,1);
+            }
+            .login-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 1.6rem;
+                margin-bottom: 1.8rem;
+            }
+            .login-badge {
+                padding: 4px 12px;
+                border-radius: 999px;
+                font-size: 0.7rem;
+                text-transform: uppercase;
+                letter-spacing: 0.12em;
+                border: 1px solid rgba(148,163,184,0.6);
+                color: #e5e7eb;
+                background: linear-gradient(135deg, rgba(22,163,74,0.8), rgba(15,23,42,0.95));
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+            }
+            .login-badge-dot {
+                width: 7px;
+                height: 7px;
+                border-radius: 999px;
+                background: #22c55e;
+                box-shadow: 0 0 12px rgba(34,197,94,0.9);
+                animation: pulse-dot 1.5s infinite;
+            }
+            @keyframes pulse-dot {
+                0%, 100% { transform: scale(1); opacity: 1; }
+                50% { transform: scale(1.35); opacity: 0.75; }
+            }
+            .login-logo {
+                width: 58px;
+                height: 58px;
+                border-radius: 18px;
+                background: radial-gradient(circle at 0 0, #f97316, #ea580c 35%, #0f172a 95%);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-weight: 900;
+                font-size: 22px;
+                letter-spacing: 0.06em;
+                box-shadow: 0 20px 45px rgba(15,23,42,0.95);
+            }
+            .login-title {
+                font-size: 1.75rem;
+                font-weight: 700;
+                color: #e5e7eb;
+                margin-bottom: 0.25rem;
+            }
+            .login-subtitle {
+                font-size: 0.9rem;
+                color: #9ca3af;
+                max-width: 480px;
+            }
+            .login-grid {
+                display: grid;
+                grid-template-columns: minmax(0, 2fr) minmax(0, 2fr);
+                gap: 1.6rem;
+                margin-top: 0.75rem;
+            }
+            @media (max-width: 900px) {
+                .login-card {
+                    padding: 1.8rem 1.6rem;
+                }
+                .login-grid {
+                    grid-template-columns: minmax(0, 1fr);
+                }
+                .login-header {
+                    flex-direction: column;
+                    align-items: flex-start;
+                }
+            }
+            .login-feature-list {
+                list-style: none;
+                padding: 0;
+                margin: 0;
+            }
+            .login-feature-list li {
+                display: flex;
+                align-items: flex-start;
+                gap: 0.55rem;
+                margin-bottom: 0.6rem;
+                font-size: 0.85rem;
+                color: #d1d5db;
+            }
+            .login-feature-icon {
+                width: 22px;
+                height: 22px;
+                border-radius: 999px;
+                background: rgba(15,23,42,0.9);
+                border: 1px solid rgba(148,163,184,0.7);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 0.9rem;
+            }
+            .login-pseudo-card {
+                border-radius: 18px;
+                padding: 0.9rem 1rem;
+                background:
+                    radial-gradient(circle at 0 0, rgba(59,130,246,0.30), transparent 55%),
+                    radial-gradient(circle at 100% 0, rgba(234,179,8,0.22), transparent 55%),
+                    radial-gradient(circle at 0 100%, rgba(15,23,42,1), rgba(15,23,42,0.96));
+                border: 1px solid rgba(148,163,184,0.4);
+                box-shadow: 0 20px 50px rgba(15,23,42,0.98);
+                font-size: 0.8rem;
+                color: #e5e7eb;
+            }
+            .login-pseudo-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 0.35rem;
+            }
+            .login-pseudo-player {
+                font-weight: 650;
+                letter-spacing: 0.02em;
+            }
+            .login-pill {
+                padding: 3px 9px;
+                border-radius: 999px;
+                font-size: 0.7rem;
+                border: 1px solid rgba(148,163,184,0.5);
+                background: rgba(15,23,42,0.9);
+            }
+            .login-metric-row {
+                display: flex;
+                gap: 0.75rem;
+                margin-top: 0.4rem;
+                font-size: 0.75rem;
+            }
+            .login-metric {
+                flex: 1;
+            }
+            .login-metric-label {
+                color: #9ca3af;
+                font-size: 0.7rem;
+                text-transform: uppercase;
+                letter-spacing: 0.12em;
+                margin-bottom: 2px;
+            }
+            .login-metric-value {
+                font-size: 0.9rem;
+                font-weight: 600;
+            }
+            .login-cta {
+                margin-top: 1.8rem;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.75rem;
+                align-items: center;
+            }
+            .login-button {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                padding: 0.6rem 1.4rem;
+                border-radius: 999px;
+                border: 1px solid rgba(148,163,184,0.55);
+                background: radial-gradient(circle at 0 0, #0ea5e9, #22c55e 50%, #020617 100%);
+                color: #f9fafb;
+                font-weight: 600;
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                text-decoration: none;
+                font-size: 0.78rem;
+                box-shadow: 0 18px 45px rgba(8,47,73,0.95);
+                transition: transform 0.15s ease-out, box-shadow 0.15s ease-out, border-color 0.15s ease-out;
+            }
+            .login-button:hover {
+                transform: translateY(-1px) scale(1.01);
+                box-shadow: 0 26px 60px rgba(8,47,73,1);
+                border-color: rgba(248,250,252,0.8);
+            }
+            .login-cta-note {
+                font-size: 0.76rem;
+                color: #9ca3af;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
+            f"""
+            <div class="login-wrapper">
+            <div class="login-card">
+                <div class="login-header">
+                <div style="display:flex;align-items:center;gap:0.9rem;">
+                    <div class="login-logo">NBA</div>
+                    <div>
+                    <div class="login-title">Prop Analyzer</div>
+                    <div class="login-subtitle">
+                        Log in to explore today’s props, trend lines, WOWY deltas, and depth-chart context
+                        powered by live BigQuery + Auth0.
+                    </div>
+                    </div>
+                </div>
+                <div>
+                    <div class="login-badge">
+                    <span class="login-badge-dot"></span>
+                    SECURE • AUTH0 SINGLE SIGN-ON
+                    </div>
+                </div>
+                </div>
+
+                <div class="login-grid">
+                <div>
+                    <ul class="login-feature-list">
+                    <li>
+                        <div class="login-feature-icon">📊</div>
+                        <div>
+                        <b>Props overview at a glance</b><br/>
+                        Filter by game, market, and book — then sort by hit rate vs implied odds.
+                        </div>
+                    </li>
+                    <li>
+                        <div class="login-feature-icon">📈</div>
+                        <div>
+                        <b>Trend Lab</b><br/>
+                        Last-N game charts with rolling averages and hit ribbons for any player.
+                        </div>
+                    </li>
+                    <li>
+                        <div class="login-feature-icon">🧠</div>
+                        <div>
+                        <b>Context-aware edges</b><br/>
+                        WOWY deltas, matchup difficulty, and injury + depth-chart overlays.
+                        </div>
+                    </li>
+                    <li>
+                        <div class="login-feature-icon">💾</div>
+                        <div>
+                        <b>Saved bet tickets</b><br/>
+                        Sync your favorite angles to Postgres and export to CSV in one click.
+                        </div>
+                    </li>
+                    </ul>
+                </div>
+
+                <div>
+                    <div class="login-pseudo-card">
+                    <div class="login-pseudo-header">
+                        <div>
+                        <div class="login-pseudo-player">Sample: J. Tatum</div>
+                        <div style="font-size:0.75rem;color:#9ca3af;margin-top:1px;">
+                            Points • Over 27.5
+                        </div>
+                        </div>
+                        <div class="login-pill">+120 EV+</div>
+                    </div>
+                    <div class="login-metric-row">
+                        <div class="login-metric">
+                        <div class="login-metric-label">Hit Rate (L10)</div>
+                        <div class="login-metric-value">70%</div>
+                        </div>
+                        <div class="login-metric">
+                        <div class="login-metric-label">Implied</div>
+                        <div class="login-metric-value">45%</div>
+                        </div>
+                        <div class="login-metric">
+                        <div class="login-metric-label">Matchup</div>
+                        <div class="login-metric-value">Easy (24/30)</div>
+                        </div>
+                    </div>
+                    <div style="margin-top:0.7rem;font-size:0.74rem;color:#9ca3af;">
+                        Visual card preview only — log in to see the real slate, odds, and hit-rate data.
+                    </div>
+                    </div>
+                </div>
+                </div>
+
+                <div class="login-cta">
+                <a href="{login_url}" class="login-button">🔐 Log in with Auth0</a>
+                <div class="login-cta-note">
+                    SSO handled by Auth0 • your session is secured and never stored in-app.
+                </div>
+                </div>
+            </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        st.stop()
+
 
 
 # ------------------------------------------------------
@@ -1372,7 +1684,6 @@ hist_latest = (
     ]]
 )
 
-st.write("DEBUG hist_latest (should contain arrays):")
 st.write(hist_latest.head(20))
 
 # ------------------------------------------------------
@@ -2095,7 +2406,7 @@ with tab1:
                 </div>
                 """
 
-                components.html(card_html, height=330, scrolling=False)
+                st.markdown(card_html, unsafe_allow_html=True)
 
         st.markdown("</div>", unsafe_allow_html=True)
         st.caption("Card view updated: centered header, sparkline, L10 fixes, opponent-rank difficulty, NA-safe logic.")

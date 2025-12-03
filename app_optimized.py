@@ -1263,7 +1263,16 @@ def load_wowy_deltas():
 # ------------------------------------------------------
 props_df = load_props()
 history_df = load_history()
-st.write("HISTORY SAMPLE:", history_df.head(3))
+
+st.write("DEBUG: PROJECT_ID =", PROJECT_ID)
+st.write("DEBUG: DATASET =", DATASET)
+st.write("DEBUG: TABLE =", HISTORICAL_TABLE)
+
+# Run one direct query:
+test_df = bq_client.query(f"SELECT * FROM `{PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}` LIMIT 5").to_dataframe()
+st.write("DEBUG: DIRECT QUERY SAMPLE:", test_df)
+
+
 depth_df = load_depth_charts()
 injury_df = load_injury_report()    # <-- MUST COME BEFORE FIX
 wowy_df = load_wowy_deltas()

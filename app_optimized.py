@@ -1184,18 +1184,34 @@ import ast
 
 def convert_list_columns(df):
     """
-    Convert BigQuery stringified arrays like "[12, 15, 18]" into Python lists.
+    Ensures all *_lastN_list fields are real Python lists.
+    Handles:
+    - BigQuery REPEATED FIELDS (already lists)
+    - stringified arrays ("[12, 15, 18]")
+    - NaN, None → []
     """
+    import ast
+
     for col in df.columns:
-        if (
-            col.endswith("_last5_list")
-            or col.endswith("_last7_list")
-            or col.endswith("_last10_list")
-        ):
-            df[col] = df[col].apply(
-                lambda x: ast.literal_eval(x) if isinstance(x, str) else x
-            )
+        if col.endswith(("_last5_list", "_last7_list", "_last10_list")):
+
+            def fix(x):
+                if isinstance(x, list):    # BigQuery repeated field
+                    return x
+                if isinstance(x, str):     # stringified JSON
+                    try:
+                        return ast.literal_eval(x)
+                    except:
+                        return []
+                if x is None:
+                    return []
+                return []
+
+            df[col] = df[col].apply(fix)
+
     return df
+
+
 
 
 @st.cache_data(show_spinner=True)
@@ -1633,13 +1649,53 @@ with tab1:
 
         import pandas as pd
 
-        # == Sparkline Builder ==
+        def get_spark_values(row):
+            """
+            Choose the best available sparkline data for this prop.
+            Priority:
+            1. last7 list
+            2. last10 list
+            3. last5 list
+            Returns a list of numeric values or [].
+            """
+            stat = detect_stat(row.get("market", ""))  # pts, reb, ast, etc.
+
+            if not stat:
+                return []
+
+            candidates = [
+                f"{stat}_last7_list",
+                f"{stat}_last10_list",
+                f"{stat}_last5_list",
+            ]
+
+            for col in candidates:
+                vals = row.get(col)
+                if isinstance(vals, list) and len(vals) > 0:
+                    # Filter out invalid entries
+                    clean = [v for v in vals if isinstance(v, (int, float))]
+                    if len(clean) > 0:
+                        return clean
+
+            return []
+
+
         def build_sparkline(values, width=80, height=24, color="#0ea5e9"):
-            if values is None or not isinstance(values, (list, tuple)) or len(values) < 2:
+            # Validate input
+            if not isinstance(values, (list, tuple)):
                 return ""
+
+            values = [v for v in values if isinstance(v, (int, float))]
+
+            if len(values) == 0:
+                return ""  # no sparkline
+
+            if len(values) == 1:
+                values = values + values  # duplicate to allow polyline
+
             min_v = min(values)
             max_v = max(values)
-            span = max_v - min_v or 1
+            span = max_v - min_v if max_v != min_v else 1
 
             pts = []
             for i, v in enumerate(values):
@@ -1648,17 +1704,19 @@ with tab1:
                 pts.append(f"{x},{y}")
 
             svg_pts = " ".join(pts)
+
             return f"""
-                <svg width="{width}" height="{height}" style="overflow:visible;">
-                    <polyline 
-                        points="{svg_pts}"
-                        fill="none"
-                        stroke="{color}"
-                        stroke-width="2.2"
-                        stroke-linecap="round"
-                    />
-                </svg>
+            <svg width="{width}" height="{height}" style="overflow:visible;">
+                <polyline 
+                    points="{svg_pts}" 
+                    fill="none" 
+                    stroke="{color}" 
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                />
+            </svg>
             """
+
 
         # == Bookmaker Normalization ==
         def normalize_bookmaker(raw: str) -> str:
@@ -1835,7 +1893,7 @@ with tab1:
                     rank_color = "#9ca3af"
 
                 stat = detect_stat(row["market"])
-                spark_vals = row.get(f"{stat}_last7_list")
+                spark_vals = get_spark_values(row)
                 spark_html = build_sparkline(spark_vals)
 
 

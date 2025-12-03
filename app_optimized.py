@@ -1657,21 +1657,19 @@ with tab1:
             lambda r: w_map.get((r["player"], r["player_team"]), []), axis=1
         )
 
-        # == L10 Avg ==
         def get_l10_avg(row):
             stat = detect_stat(row.get("market", ""))
             col = {
-                "pts": "pts_avg_last10",
-                "reb": "reb_avg_last10",
-                "ast": "ast_avg_last10",
-                "pra": "pra_avg_last10",
-                "stl": "stl_avg_last10",
-                "blk": "blk_avg_last10",
-                "fg3m": "fg3m_avg_last10",
+                "pts": "pts_last10",
+                "reb": "reb_last10",
+                "ast": "ast_last10",
+                "pra": "pra_last10",
+                "stl": "stl_last10",
+                "blk": "blk_last10",
             }.get(stat)
-            if col and col in row and pd.notna(row[col]):
-                return float(row[col])
-            return None
+            value = row.get(col)
+            return float(value) if pd.notna(value) else None
+
 
         # == Opponent Rank ==
         def get_opponent_rank(row):
@@ -1683,7 +1681,6 @@ with tab1:
                 "pra": "opp_pos_pra_rank",
                 "stl": "opp_pos_stl_rank",
                 "blk": "opp_pos_blk_rank",
-                "fg3m": "opp_pos_fg3m_rank",
             }.get(stat)
             if col and col in row and pd.notna(row[col]):
                 return int(row[col])
@@ -1770,10 +1767,23 @@ with tab1:
                     rank_display = "-"
                     rank_color = "#9ca3af"
 
-                # Sparkline
                 stat = detect_stat(row["market"])
-                spark_vals = row.get(f"{stat}_last7_list", None)
+
+                # Map market → correct BigQuery array column
+                stat_to_col = {
+                    "pts": "pts_last7_list",
+                    "reb": "reb_last7_list",
+                    "ast": "ast_last7_list",
+                    "stl": "stl_last7_list",
+                    "blk": "blk_last7_list",
+                    "pra": "pra_last7_list",
+                }
+
+                col = stat_to_col.get(stat)
+                spark_vals = row.get(col, None)
+
                 spark_html = build_sparkline(spark_vals)
+
 
                 # Logos
                 player_team = normalize_team_code(row.get("player_team", ""))

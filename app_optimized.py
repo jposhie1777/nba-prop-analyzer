@@ -1281,9 +1281,9 @@ wowy_df = load_wowy_deltas()
 # ATTACH LAST-7 & LAST-10 ARRAYS (FOR SPARKLINES + L10 AVG)
 # ------------------------------------------------------
 
-# ✅ Then grab the latest row that actually has sparkline data
+# Use full history_df — arrays already converted & present
 hist_latest = (
-    history_lists.sort_values("game_date")
+    history_df.sort_values("game_date")
     .groupby("player")
     .tail(1)[[
         "player",
@@ -1296,8 +1296,8 @@ hist_latest = (
     ]]
 )
 
-# ✅ KEEP THIS — it attaches historical trend arrays to today's props
 props_df = props_df.merge(hist_latest, on="player", how="left")
+
 
 
 

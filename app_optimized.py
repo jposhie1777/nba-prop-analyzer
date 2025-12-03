@@ -1128,6 +1128,13 @@ def detect_stat(market):
         return "stl"
     if "blk" in m or "block" in m:
         return "blk"
+    if "p+r" in m and "a" not in m:
+        return "pr"
+    if "p+a" in m or "pa" in m:
+        return "pa"
+    if "r+a" in m or "ra" in m:
+        return "ra"
+
 
     return ""
 
@@ -1500,6 +1507,11 @@ def market_to_delta_column(market):
         return "pra_delta"
     if "p+r" in m:
         return "pts_reb_delta"
+    if "p+a" in m or "pa" in m:
+        return "pa_delta"
+    if "r+a" in m or "ra" in m:
+        return "ra_delta"
+    
     return None
 
 
@@ -1884,17 +1896,27 @@ with tab1:
         )
 
         def get_l10_avg(row):
-            stat = detect_stat(row.get("market", ""))
-            col = {
-                "pts": "pts_last10",
-                "reb": "reb_last10",
-                "ast": "ast_last10",
-                "pra": "pra_last10",
-                "stl": "stl_last10",
-                "blk": "blk_last10",
-            }.get(stat)
-            value = row.get(col)
-            return float(value) if pd.notna(value) else None
+        stat = detect_stat(row.get("market", ""))
+
+        col_map = {
+            "pts": "pts_last10",
+            "reb": "reb_last10",
+            "ast": "ast_last10",
+            "pra": "pra_last10",
+            "stl": "stl_last10",
+            "blk": "blk_last10",
+
+            # NEW COMBINED STATS
+            "pr": "pr_last10",
+            "pa": "pa_last10",
+            "ra": "ra_last10",
+        }
+
+        col = col_map.get(stat)
+        value = row.get(col)
+
+        return float(value) if pd.notna(value) else None
+
 
 
         # == Opponent Rank ==
@@ -1906,6 +1928,9 @@ with tab1:
                 "ast": "opp_pos_ast_rank",
                 "pra": "opp_pos_pra_rank",
                 "stl": "opp_pos_stl_rank",
+                "pr": "opp_pos_pr_rank",
+                "pa": "opp_pos_pa_rank",
+                "ra": "opp_pos_ra_rank",
                 "blk": "opp_pos_blk_rank",
             }.get(stat)
             if col and col in row and pd.notna(row[col]):

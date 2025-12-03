@@ -1927,8 +1927,8 @@ with tab1:
             odds = row.get("price", 0)
             implied = (100 / (odds + 100)) if odds > 0 else abs(odds) / (abs(odds) + 100)
 
-            if row.get("hit_rate_last10", 0) > implied:
-                tags.append(("📈 EV+", "#22c55e"))
+            #if row.get("hit_rate_last10", 0) > implied:
+                #tags.append(("📈 EV+", "#22c55e"))
 
             r = get_opponent_rank(row)
             if isinstance(r, int):

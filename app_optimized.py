@@ -18,7 +18,6 @@ import psycopg2.extras
 import jwt
 import streamlit.components.v1 as components
 
-
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from google.cloud import bigquery
 from google.oauth2 import service_account
@@ -132,7 +131,6 @@ SELECT
 FROM `{PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}`
 ORDER BY game_date DESC;
 """
-
 
 # NEW: depth chart + injury SQL
 DEPTH_SQL = f"""
@@ -465,7 +463,7 @@ theme_choice = st.sidebar.selectbox(
 theme = THEMES[st.session_state.theme_choice]
 
 # ------------------------------------------------------
-# GLOBAL STYLES (from dev)
+# GLOBAL STYLES (with optimized prop cards)
 # ------------------------------------------------------
 st.markdown(
     f"""
@@ -613,55 +611,112 @@ st.markdown(
         color: #9ca3af;
     }}
 
+    /* ------------ OPTIMIZED PROP CARD STYLING ------------ */
+
     .prop-card {{
-        border-radius: 16px;
-        padding: 0.75rem 0.9rem;
-        border: 1px solid rgba(148,163,184,0.28);
-        background: radial-gradient(circle at 0 0, rgba(15,23,42,1), rgba(15,23,42,0.96));
-        box-shadow: 0 20px 50px rgba(15,23,42,0.95);
-        margin-bottom: 0.9rem;
-        transition: transform 0.16s ease-out, box-shadow 0.16s ease-out, border-color 0.16s ease-out;
+        position: relative;
+        border-radius: 18px;
+        padding: 0.9rem 1rem;
+        border: 1px solid rgba(148,163,184,0.3);
+        background:
+            radial-gradient(circle at 0 0, rgba(30,64,175,0.25), transparent 55%),
+            radial-gradient(circle at 100% 0, rgba(251,191,36,0.18), transparent 55%),
+            radial-gradient(circle at 0 100%, rgba(15,23,42,0.98), rgba(15,23,42,0.94));
+        box-shadow: 0 18px 40px rgba(15,23,42,0.9);
+        margin-bottom: 1rem;
+        transition:
+            transform 0.16s ease-out,
+            box-shadow 0.16s ease-out,
+            border-color 0.16s ease-out,
+            background 0.16s ease-out;
+        overflow: hidden;
+    }}
+
+    .prop-card::before {{
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        border-top: 1px solid rgba(248,250,252,0.08);
+        border-left: 1px solid rgba(248,250,252,0.04);
+        opacity: 0.9;
+        pointer-events: none;
     }}
 
     .prop-card:hover {{
-        transform: translateY(-3px);
+        transform: translateY(-3px) translateZ(0);
         box-shadow: 0 26px 60px rgba(15,23,42,1);
         border-color: {theme["accent"]};
+        background:
+            radial-gradient(circle at 0 0, rgba(59,130,246,0.28), transparent 55%),
+            radial-gradient(circle at 100% 0, rgba(234,179,8,0.22), transparent 55%),
+            radial-gradient(circle at 0 100%, rgba(15,23,42,1), rgba(15,23,42,0.96));
     }}
 
     .prop-headline {{
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 0.35rem;
+        gap: 0.4rem;
+        margin-bottom: 0.4rem;
     }}
 
     .prop-player {{
-        font-weight: 600;
-        font-size: 0.92rem;
+        font-weight: 650;
+        font-size: 0.95rem;
         color: #e5e7eb;
+        letter-spacing: 0.01em;
     }}
 
     .prop-market {{
         font-size: 0.78rem;
         color: #9ca3af;
+        white-space: nowrap;
     }}
 
     .pill-book {{
-        padding: 2px 8px;
+        padding: 3px 9px;
         border-radius: 999px;
         font-size: 0.7rem;
-        border: 1px solid rgba(148,163,184,0.4);
+        border: 1px solid rgba(148,163,184,0.45);
         color: #e5e7eb;
+        background: linear-gradient(135deg, rgba(15,23,42,0.9), rgba(15,23,42,0.6));
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
     }}
 
     .prop-meta {{
-        display: flex;
-        justify-content: space-between;
-        gap: 0.5rem;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.35rem;
+        margin-top: 0.4rem;
         font-size: 0.75rem;
         color: #9ca3af;
     }}
+
+    .prop-meta > div {{
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: center;
+    }}
+
+    .prop-meta-label {{
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #6b7280;
+        margin-bottom: 2px;
+    }}
+
+    .prop-meta-value {{
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #e5e7eb;
+    }}
+
+    /* ------------ END PROP CARD STYLING ------------ */
 
     .stDataFrame, .stDataEditor,
     [data-testid="stDataFrame"] > div,
@@ -768,7 +823,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.markdown("""
+st.markdown(
+    """
 <style>
 
     /* ----------------------------------------------
@@ -797,8 +853,9 @@ st.markdown("""
     }
 
 </style>
-""", unsafe_allow_html=True)
-
+""",
+    unsafe_allow_html=True,
+)
 
 # ------------------------------------------------------
 # HEADER
@@ -1273,18 +1330,6 @@ def load_wowy_deltas():
 # ------------------------------------------------------
 props_df = load_props()
 history_df = load_history()
-
-# Run one direct query:
-test_df = bq_client.query(f"SELECT * FROM `{PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}` LIMIT 5").to_dataframe()
-st.write("DEBUG: DIRECT QUERY SAMPLE:", test_df)
-st.write("DEBUG: History after load + convert_list_columns")
-st.write(history_df.head(10)[[
-    "player",
-    "pts_last5_list",
-    "pts_last7_list",
-    "pts_last10_list"
-]])
-
 depth_df = load_depth_charts()
 injury_df = load_injury_report()    # <-- MUST COME BEFORE FIX
 wowy_df = load_wowy_deltas()
@@ -1307,12 +1352,6 @@ def normalize_name(n):
 
 props_df["player_norm"] = props_df["player"].apply(normalize_name)
 history_df["player_norm"] = history_df["player"].apply(normalize_name)
-
-st.write("DEBUG history_df sample WITH player_norm:")
-st.write(history_df[[
-    "player", "player_norm",
-    "pts_last5_list", "pts_last7_list", "pts_last10_list"
-]].head(20))
 
 
 # ------------------------------------------------------
@@ -1342,15 +1381,6 @@ st.write(hist_latest.head(20))
 props_df = props_df.merge(hist_latest, on="player_norm", how="left")
 
 
-# ------------------------------------------------------
-# DEBUG — sanity check spark lists
-# ------------------------------------------------------
-st.write("DEBUG merged player lists (should NOT be empty):")
-st.write(
-    props_df[
-        ["player", "player_norm", "pts_last5_list", "pts_last7_list", "pts_last10_list"]
-    ].head(25)
-)
 # ------------------------------------------------------
 # FIX INJURY TEAM MATCHING (NEW SCHEMA)
 # ------------------------------------------------------

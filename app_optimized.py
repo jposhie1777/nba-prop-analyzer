@@ -1716,14 +1716,12 @@ with tab1:
 
         def get_spark_values(row):
             """
-            Choose the best available sparkline data for this prop.
-            Priority:
-            1. *_last7_list
-            2. *_last10_list
-            3. *_last5_list
-            Returns a list of numeric values or [].
+            Pick the best series for this prop, based on the detected stat.
+            Priority: last7_list, then last10_list, then last5_list.
+            Returns a plain Python list of numbers, or [].
             """
-            stat = detect_stat(row.get("market", ""))  # pts, reb, ast, etc.
+            stat = detect_stat(row.get("market", ""))  # pts, reb, ast, pra, stl, blk
+
             if not stat:
                 return []
 
@@ -1734,74 +1732,67 @@ with tab1:
             ]
 
             for col in candidates:
-                vals = row.get(col)
-
-                # Make sure it's iterable
-                if vals is None:
-                    continue
-                if isinstance(vals, (np.ndarray, pd.Series)):
-                    vals = vals.tolist()
-                if not isinstance(vals, (list, tuple)):
-                    continue
-                if len(vals) == 0:
+                if col not in row.index:
                     continue
 
-                # Try to coerce everything to float
-                clean = []
-                for v in vals:
-                    try:
-                        clean.append(float(v))
-                    except (TypeError, ValueError):
-                        continue
+                vals = row[col]
 
-                if clean:
-                    return clean
+                # Already a list
+                if isinstance(vals, list):
+                    clean = [v for v in vals if isinstance(v, (int, float))]
+                    if clean:
+                        return clean
+
+                # Numpy array
+                if isinstance(vals, np.ndarray):
+                    clean = [float(v) for v in vals if isinstance(v, (int, float, np.number))]
+                    if clean:
+                        return clean
 
             return []
 
 
         def build_sparkline(values, width=80, height=24, color="#0ea5e9"):
+            """
+            Return a tiny inline SVG sparkline. Uses only inline styles so it
+            works inside st.markdown AND st.html.
+            """
+            # Defensive: only accept numeric sequences
             if not isinstance(values, (list, tuple)):
                 return ""
 
-            # coerce again defensively
-            clean_vals = []
-            for v in values:
-                try:
-                    clean_vals.append(float(v))
-                except (TypeError, ValueError):
-                    continue
+            values = [v for v in values if isinstance(v, (int, float))]
 
-            if len(clean_vals) == 0:
+            if len(values) == 0:
                 return ""
 
-            if len(clean_vals) == 1:
-                clean_vals = clean_vals + clean_vals
+            # If there's only one point, duplicate so we still see a line
+            if len(values) == 1:
+                values = values + values
 
-            min_v = min(clean_vals)
-            max_v = max(clean_vals)
-            span = max_v - min_v if max_v != min_v else 1
+            min_v = min(values)
+            max_v = max(values)
+            span = max_v - min_v if max_v != min_v else 1.0
 
-            pts = []
-            for i, v in enumerate(clean_vals):
-                x = int((i / (len(clean_vals) - 1)) * width)
-                y = int(height - ((v - min_v) / span) * height)
-                pts.append(f"{x},{y}")
+            points = []
+            for i, v in enumerate(values):
+                x = (i / (len(values) - 1)) * width
+                y = height - ((v - min_v) / span) * height
+                points.append(f"{x:.1f},{y:.1f}")
 
-            svg_pts = " ".join(pts)
+            svg_points = " ".join(points)
 
             return f"""
             <svg width="{width}" height="{height}" style="overflow:visible;">
-                <polyline 
-                    points="{svg_pts}" 
-                    fill="none" 
-                    stroke="{color}" 
+                <polyline
+                    points="{svg_points}"
+                    fill="none"
+                    stroke="{color}"
                     stroke-width="2.2"
                     stroke-linecap="round"
                 />
             </svg>
             """
-
 
 
         # == Bookmaker Normalization ==
@@ -1980,19 +1971,12 @@ with tab1:
 
                 stat = detect_stat(row.get("market", ""))
 
-                # 🔍 DEBUG: Sparkline data before rendering
+                # DEBUG: verify what we’re feeding into the sparkline
                 st.write(
-                    "DEBUG SPARKLINE MERGE:",
-                    row["player"],
-                    "stat =", stat,
-                    "spark_list =", {
-                        "5": row.get(f"{stat}_last5_list"),
-                        "7": row.get(f"{stat}_last7_list"),
-                        "10": row.get(f"{stat}_last10_list"),
-                    }
+                    "DEBUG SPARK:", row["player"], "stat =", stat,
+                    "vals =", get_spark_values(row)
                 )
 
-                # Then build sparkline normally
                 spark_vals = get_spark_values(row)
                 spark_html = build_sparkline(spark_vals)
 
@@ -2090,10 +2074,7 @@ with tab1:
                 </div>
                 """
 
-                if has_html:
-                    st.html(card_html)
-                else:
-                    st.markdown(card_html, unsafe_allow_html=True)
+                st.markdown(card_html, unsafe_allow_html=True)
 
         st.markdown("</div>", unsafe_allow_html=True)
         st.caption("Card view updated: centered header, sparkline, L10 fixes, opponent-rank difficulty, NA-safe logic.")

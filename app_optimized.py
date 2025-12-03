@@ -420,6 +420,9 @@ def ensure_logged_in():
     # ------------------------------------------------------------------
     login_url = get_auth0_authorize_url()
 
+    # ---------------------------
+    # CSS (markdown is OK for CSS)
+    # ---------------------------
     st.markdown(
         """
         <style>
@@ -452,6 +455,30 @@ def ensure_logged_in():
             gap: 1.6rem;
             margin-bottom: 1.8rem;
         }
+        .login-logo {
+            width: 58px;
+            height: 58px;
+            border-radius: 18px;
+            background: radial-gradient(circle at 0 0, #f97316, #ea580c 35%, #0f172a 95%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 900;
+            font-size: 22px;
+            box-shadow: 0 20px 45px rgba(15,23,42,0.95);
+        }
+        .login-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: #e5e7eb;
+            margin-bottom: 0.25rem;
+        }
+        .login-subtitle {
+            font-size: 0.9rem;
+            color: #9ca3af;
+            max-width: 480px;
+        }
         .login-badge {
             padding: 4px 12px;
             border-radius: 999px;
@@ -477,49 +504,17 @@ def ensure_logged_in():
             0%, 100% { transform: scale(1); opacity: 1; }
             50% { transform: scale(1.35); opacity: 0.75; }
         }
-        .login-logo {
-            width: 58px;
-            height: 58px;
-            border-radius: 18px;
-            background: radial-gradient(circle at 0 0, #f97316, #ea580c 35%, #0f172a 95%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 900;
-            font-size: 22px;
-            letter-spacing: 0.06em;
-            box-shadow: 0 20px 45px rgba(15,23,42,0.95);
-        }
-        .login-title {
-            font-size: 1.75rem;
-            font-weight: 700;
-            color: #e5e7eb;
-            margin-bottom: 0.25rem;
-        }
-        .login-subtitle {
-            font-size: 0.9rem;
-            color: #9ca3af;
-            max-width: 480px;
-        }
+
         .login-grid {
             display: grid;
             grid-template-columns: minmax(0, 2fr) minmax(0, 2fr);
             gap: 1.6rem;
-            margin-top: 0.75rem;
         }
         @media (max-width: 900px) {
-            .login-card {
-                padding: 1.8rem 1.6rem;
-            }
-            .login-grid {
-                grid-template-columns: minmax(0, 1fr);
-            }
-            .login-header {
-                flex-direction: column;
-                align-items: flex-start;
-            }
+            .login-grid { grid-template-columns: 1fr; }
+            .login-header { flex-direction: column; align-items: flex-start; }
         }
+
         .login-feature-list {
             list-style: none;
             padding: 0;
@@ -542,8 +537,8 @@ def ensure_logged_in():
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 0.9rem;
         }
+
         .login-pseudo-card {
             border-radius: 18px;
             padding: 0.9rem 1rem;
@@ -560,11 +555,9 @@ def ensure_logged_in():
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 0.35rem;
         }
         .login-pseudo-player {
             font-weight: 650;
-            letter-spacing: 0.02em;
         }
         .login-pill {
             padding: 3px 9px;
@@ -577,50 +570,43 @@ def ensure_logged_in():
             display: flex;
             gap: 0.75rem;
             margin-top: 0.4rem;
-            font-size: 0.75rem;
-        }
-        .login-metric {
-            flex: 1;
         }
         .login-metric-label {
-            color: #9ca3af;
             font-size: 0.7rem;
             text-transform: uppercase;
             letter-spacing: 0.12em;
-            margin-bottom: 2px;
+            color: #9ca3af;
         }
         .login-metric-value {
             font-size: 0.9rem;
             font-weight: 600;
+            color: #e5e7eb;
         }
+
         .login-cta {
             margin-top: 1.8rem;
             display: flex;
             flex-wrap: wrap;
             gap: 0.75rem;
-            align-items: center;
         }
         .login-button {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
             padding: 0.6rem 1.4rem;
             border-radius: 999px;
             border: 1px solid rgba(148,163,184,0.55);
             background: radial-gradient(circle at 0 0, #0ea5e9, #22c55e 50%, #020617 100%);
-            color: #f9fafb;
+            color: white;
             font-weight: 600;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
             text-decoration: none;
             font-size: 0.78rem;
+            letter-spacing: 0.05em;
             box-shadow: 0 18px 45px rgba(8,47,73,0.95);
-            transition: transform 0.15s ease-out, box-shadow 0.15s ease-out, border-color 0.15s ease-out;
+            display: inline-flex;
+            align-items: center;
+            transition: 0.15s;
         }
         .login-button:hover {
             transform: translateY(-1px) scale(1.01);
             box-shadow: 0 26px 60px rgba(8,47,73,1);
-            border-color: rgba(248,250,252,0.8);
         }
         .login-cta-note {
             font-size: 0.76rem;
@@ -631,108 +617,102 @@ def ensure_logged_in():
         unsafe_allow_html=True,
     )
 
-    st.markdown(
-        f"""
-        <div class="login-wrapper">
-          <div class="login-card">
-            <div class="login-header">
-              <div style="display:flex;align-items:center;gap:0.9rem;">
-                <div class="login-logo">NBA</div>
+    # ---------------------------
+    # HTML (rendered as a component)
+    # ---------------------------
+    html = f"""
+    <div class="login-wrapper">
+      <div class="login-card">
+
+        <div class="login-header">
+          <div style="display:flex;align-items:center;gap:0.9rem;">
+            <div class="login-logo">NBA</div>
+            <div>
+              <div class="login-title">Prop Analyzer</div>
+              <div class="login-subtitle">
+                Log in to explore today's props, trend lines, WOWY deltas, and depth-chart context
+                powered by live BigQuery + Auth0.
+              </div>
+            </div>
+          </div>
+          <div class="login-badge">
+            <span class="login-badge-dot"></span>
+            SECURE • AUTH0 SINGLE SIGN-ON
+          </div>
+        </div>
+
+        <div class="login-grid">
+          <div>
+            <ul class="login-feature-list">
+              <li>
+                <div class="login-feature-icon">📊</div>
+                <div><b>Props overview at a glance</b><br/>
+                Filter by game, market, and book — then sort by hit rate vs implied odds.</div>
+              </li>
+              <li>
+                <div class="login-feature-icon">📈</div>
+                <div><b>Trend Lab</b><br/>
+                Rolling averages, ribbons, and line-based hit metrics for any player.</div>
+              </li>
+              <li>
+                <div class="login-feature-icon">🧠</div>
+                <div><b>Context-aware edges</b><br/>
+                WOWY deltas, depth charts, injuries, & matchup difficulty scores.</div>
+              </li>
+              <li>
+                <div class="login-feature-icon">💾</div>
+                <div><b>Saved Bets</b><br/>
+                Persist picks to Postgres & download tickets with one click.</div>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <div class="login-pseudo-card">
+              <div class="login-pseudo-header">
                 <div>
-                  <div class="login-title">Prop Analyzer</div>
-                  <div class="login-subtitle">
-                    Log in to explore today’s props, trend lines, WOWY deltas, and depth-chart context
-                    powered by live BigQuery + Auth0.
+                  <div class="login-pseudo-player">Sample: J. Tatum</div>
+                  <div style="font-size:0.75rem;color:#9ca3af;">
+                    Points • Over 27.5
                   </div>
                 </div>
+                <div class="login-pill">+120 EV+</div>
               </div>
-              <div>
-                <div class="login-badge">
-                  <span class="login-badge-dot"></span>
-                  SECURE • AUTH0 SINGLE SIGN-ON
+              <div class="login-metric-row">
+                <div>
+                  <div class="login-metric-label">Hit Rate</div>
+                  <div class="login-metric-value">70%</div>
+                </div>
+                <div>
+                  <div class="login-metric-label">Implied</div>
+                  <div class="login-metric-value">45%</div>
+                </div>
+                <div>
+                  <div class="login-metric-label">Matchup</div>
+                  <div class="login-metric-value">Easy (24/30)</div>
                 </div>
               </div>
-            </div>
-
-            <div class="login-grid">
-              <div>
-                <ul class="login-feature-list">
-                  <li>
-                    <div class="login-feature-icon">📊</div>
-                    <div>
-                      <b>Props overview at a glance</b><br/>
-                      Filter by game, market, and book — then sort by hit rate vs implied odds.
-                    </div>
-                  </li>
-                  <li>
-                    <div class="login-feature-icon">📈</div>
-                    <div>
-                      <b>Trend Lab</b><br/>
-                      Last-N game charts with rolling averages and hit ribbons for any player.
-                    </div>
-                  </li>
-                  <li>
-                    <div class="login-feature-icon">🧠</div>
-                    <div>
-                      <b>Context-aware edges</b><br/>
-                      WOWY deltas, matchup difficulty, and injury + depth-chart overlays.
-                    </div>
-                  </li>
-                  <li>
-                    <div class="login-feature-icon">💾</div>
-                    <div>
-                      <b>Saved bet tickets</b><br/>
-                      Sync your favorite angles to Postgres and export to CSV in one click.
-                    </div>
-                  </li>
-                </ul>
-              </div>
-
-              <div>
-                <div class="login-pseudo-card">
-                  <div class="login-pseudo-header">
-                    <div>
-                      <div class="login-pseudo-player">Sample: J. Tatum</div>
-                      <div style="font-size:0.75rem;color:#9ca3af;margin-top:1px;">
-                        Points • Over 27.5
-                      </div>
-                    </div>
-                    <div class="login-pill">+120 EV+</div>
-                  </div>
-                  <div class="login-metric-row">
-                    <div class="login-metric">
-                      <div class="login-metric-label">Hit Rate (L10)</div>
-                      <div class="login-metric-value">70%</div>
-                    </div>
-                    <div class="login-metric">
-                      <div class="login-metric-label">Implied</div>
-                      <div class="login-metric-value">45%</div>
-                    </div>
-                    <div class="login-metric">
-                      <div class="login-metric-label">Matchup</div>
-                      <div class="login-metric-value">Easy (24/30)</div>
-                    </div>
-                  </div>
-                  <div style="margin-top:0.7rem;font-size:0.74rem;color:#9ca3af;">
-                    Visual card preview only — log in to see the real slate, odds, and hit-rate data.
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="login-cta">
-              <a href="{login_url}" class="login-button">🔐 Log in with Auth0</a>
-              <div class="login-cta-note">
-                SSO handled by Auth0 • your session is secured and never stored in-app.
+              <div style="margin-top:0.7rem;font-size:0.74rem;color:#9ca3af;">
+                Visual preview only — log in to view real props & slate data.
               </div>
             </div>
           </div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
 
+        <div class="login-cta">
+          <a href="{login_url}" class="login-button">🔐 Log in with Auth0</a>
+          <div class="login-cta-note">
+            Your session is secure and handled entirely by Auth0.
+          </div>
+        </div>
+
+      </div>
+    </div>
+    """
+
+    components.html(html, height=700, scrolling=False)
     st.stop()
+
 
 
 # ------------------------------------------------------

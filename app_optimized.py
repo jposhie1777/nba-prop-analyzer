@@ -1281,11 +1281,10 @@ wowy_df = load_wowy_deltas()
 # ATTACH LAST-7 & LAST-10 ARRAYS (FOR SPARKLINES + L10 AVG)
 # ------------------------------------------------------
 
-# Use full history_df — arrays already converted & present
 hist_latest = (
-    history_df.sort_values("game_date")
+    history_df.sort_values("game_date", ascending=False)
     .groupby("player")
-    .tail(1)[[
+    .head(1)[[
         "player",
         "pts_last5_list", "pts_last7_list", "pts_last10_list",
         "reb_last5_list", "reb_last7_list", "reb_last10_list",
@@ -1298,7 +1297,9 @@ hist_latest = (
 
 props_df = props_df.merge(hist_latest, on="player", how="left")
 
-
+st.write("DEBUG merged player lists:", props_df[
+    ["player", "pts_last5_list", "pts_last7_list", "pts_last10_list"]
+].head(20))
 
 
 # ------------------------------------------------------

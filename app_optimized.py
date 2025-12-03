@@ -1232,8 +1232,6 @@ def load_history():
 
     return df
 
-st.write("CHECK:", history_df.loc[0, "pts_last5_list"], type(history_df.loc[0, "pts_last5_list"]))
-
 @st.cache_data(show_spinner=True)
 def load_depth_charts():
     df = bq_client.query(DEPTH_SQL).to_dataframe()
@@ -1282,7 +1280,13 @@ st.write("DEBUG: TABLE =", HISTORICAL_TABLE)
 # Run one direct query:
 test_df = bq_client.query(f"SELECT * FROM `{PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}` LIMIT 5").to_dataframe()
 st.write("DEBUG: DIRECT QUERY SAMPLE:", test_df)
-
+st.write("DEBUG: History after load + convert_list_columns")
+st.write(history_df.head(10)[[
+    "player",
+    "pts_last5_list",
+    "pts_last7_list",
+    "pts_last10_list"
+]])
 
 depth_df = load_depth_charts()
 injury_df = load_injury_report()    # <-- MUST COME BEFORE FIX

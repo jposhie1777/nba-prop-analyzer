@@ -2074,7 +2074,10 @@ with tab1:
                 </div>
                 """
 
-                st.markdown(card_html, unsafe_allow_html=True)
+                if has_html:
+                    st.html(card_html)
+                else:
+                    st.markdown(card_html, unsafe_allow_html=True)
 
         st.markdown("</div>", unsafe_allow_html=True)
         st.caption("Card view updated: centered header, sparkline, L10 fixes, opponent-rank difficulty, NA-safe logic.")

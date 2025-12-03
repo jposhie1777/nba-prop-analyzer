@@ -1712,17 +1712,18 @@ with tab1:
 
         import pandas as pd
 
+        import numpy as np
+
         def get_spark_values(row):
             """
             Choose the best available sparkline data for this prop.
             Priority:
-            1. last7 list
-            2. last10 list
-            3. last5 list
+            1. *_last7_list
+            2. *_last10_list
+            3. *_last5_list
             Returns a list of numeric values or [].
             """
             stat = detect_stat(row.get("market", ""))  # pts, reb, ast, etc.
-
             if not stat:
                 return []
 
@@ -1734,35 +1735,56 @@ with tab1:
 
             for col in candidates:
                 vals = row.get(col)
-                if isinstance(vals, list) and len(vals) > 0:
-                    # Filter out invalid entries
-                    clean = [v for v in vals if isinstance(v, (int, float))]
-                    if len(clean) > 0:
-                        return clean
+
+                # Make sure it's iterable
+                if vals is None:
+                    continue
+                if isinstance(vals, (np.ndarray, pd.Series)):
+                    vals = vals.tolist()
+                if not isinstance(vals, (list, tuple)):
+                    continue
+                if len(vals) == 0:
+                    continue
+
+                # Try to coerce everything to float
+                clean = []
+                for v in vals:
+                    try:
+                        clean.append(float(v))
+                    except (TypeError, ValueError):
+                        continue
+
+                if clean:
+                    return clean
 
             return []
 
 
         def build_sparkline(values, width=80, height=24, color="#0ea5e9"):
-            # Validate input
             if not isinstance(values, (list, tuple)):
                 return ""
 
-            values = [v for v in values if isinstance(v, (int, float))]
+            # coerce again defensively
+            clean_vals = []
+            for v in values:
+                try:
+                    clean_vals.append(float(v))
+                except (TypeError, ValueError):
+                    continue
 
-            if len(values) == 0:
-                return ""  # no sparkline
+            if len(clean_vals) == 0:
+                return ""
 
-            if len(values) == 1:
-                values = values + values  # duplicate to allow polyline
+            if len(clean_vals) == 1:
+                clean_vals = clean_vals + clean_vals
 
-            min_v = min(values)
-            max_v = max(values)
+            min_v = min(clean_vals)
+            max_v = max(clean_vals)
             span = max_v - min_v if max_v != min_v else 1
 
             pts = []
-            for i, v in enumerate(values):
-                x = int((i / (len(values) - 1)) * width)
+            for i, v in enumerate(clean_vals):
+                x = int((i / (len(clean_vals) - 1)) * width)
                 y = int(height - ((v - min_v) / span) * height)
                 pts.append(f"{x},{y}")
 
@@ -1779,6 +1801,7 @@ with tab1:
                 />
             </svg>
             """
+
 
 
         # == Bookmaker Normalization ==

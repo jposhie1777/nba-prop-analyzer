@@ -1996,7 +1996,8 @@ with tab1:
 
                 # Sparkline
                 spark_vals = get_spark_values(row)
-                spark_html = build_bar_sparkline(row, spark_vals)
+                line_value = float(row.get("line", 0))
+                spark_html = build_sparkline_bars_hitmiss(spark_vals, line_value)
 
                 # Logos
                 player_team = normalize_team_code(row.get("player_team", ""))

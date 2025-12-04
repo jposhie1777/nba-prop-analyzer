@@ -1741,39 +1741,65 @@ with tab1:
 
             return []
 
-        def build_sparkline(values, width=80, height=24, color="#0ea5e9"):
+        def build_sparkline_bars_hitmiss(values, line_value, width=90, height=34):
             """
-            Return a tiny inline SVG sparkline. No leading indentation so
-            Markdown never treats it as code.
+            Mini bar chart with green/red coloring based on line hit,
+            plus tiny numeric labels above each bar.
             """
-            if not isinstance(values, (list, tuple)):
+            if not values or not isinstance(values, (list, tuple)):
                 return ""
 
             values = [v for v in values if isinstance(v, (int, float))]
-            if len(values) == 0:
+            if not values:
                 return ""
 
-            if len(values) == 1:
-                values = values + values
+            n = len(values)
+            bar_width = width / n
 
-            min_v = min(values)
-            max_v = max(values)
-            span = max_v - min_v if max_v != min_v else 1.0
+            max_v = max(max(values), line_value)
+            min_v = min(min(values), line_value)
+            span = (max_v - min_v) or 1
 
-            points = []
+            rects = []
+            labels = []
+            line_elems = []
+
             for i, v in enumerate(values):
-                x = (i / (len(values) - 1)) * width
-                y = height - ((v - min_v) / span) * height
-                points.append(f"{x:.1f},{y:.1f}")
+                bar_height = (v - min_v) / span * (height - 12)
+                x = i * bar_width
+                y = height - bar_height
 
-            svg_points = " ".join(points)
+                # Color: green if hit, red if missed
+                bar_color = "#22c55e" if v >= line_value else "#ef4444"
 
-            return (
-                f'<svg width="{width}" height="{height}" style="overflow:visible;">'
-                f'<polyline points="{svg_points}" fill="none" '
-                f'stroke="{color}" stroke-width="2.2" stroke-linecap="round" />'
-                f'</svg>'
+                # The bar itself
+                rects.append(
+                    f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_width - 1:.1f}" '
+                    f'height="{bar_height:.1f}" fill="{bar_color}" rx="2" />'
+                )
+
+                # Numeric label above bar
+                labels.append(
+                    f'<text x="{x + bar_width/2:.1f}" y="{y - 2:.1f}" '
+                    f'font-size="6px" fill="#e5e7eb" text-anchor="middle">{int(v)}</text>'
+                )
+
+            # Line marker at prop line
+            line_y = height - ((line_value - min_v) / span * (height - 12))
+            line_elems.append(
+                f'<line x1="0" y1="{line_y:.1f}" x2="{width}" y2="{line_y:.1f}" '
+                f'stroke="#9ca3af" stroke-width="1" stroke-dasharray="3,2" />'
             )
+
+            svg = f"""
+            <svg width="{width}" height="{height}" style="overflow:visible;">
+                {''.join(labels)}
+                {''.join(rects)}
+                {''.join(line_elems)}
+            </svg>
+            """
+            return svg
+
 
         # ---------- Bookmaker normalization ----------
         def normalize_bookmaker(raw: str) -> str:

@@ -951,6 +951,7 @@ st.write("DraftKings logo loaded:", bool(SPORTSBOOK_LOGOS_BASE64.get("DraftKings
 st.write("FanDuel logo loaded:", bool(SPORTSBOOK_LOGOS_BASE64.get("FanDuel")))
 st.write("DraftKings base64 length:", len(SPORTSBOOK_LOGOS_BASE64.get("DraftKings", "")))
 st.write("Expected DK full path:", SPORTSBOOK_LOGOS["DraftKings"])
+st.write("APP_ROOT:", APP_ROOT)
 
 
 MARKET_DISPLAY_MAP = {

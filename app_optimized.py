@@ -922,7 +922,7 @@ TEAM_NAME_TO_CODE = {
     "Washington Wizards": "WAS",
 }
 
-APP_ROOT = os.getcwd()
+APP_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 import base64
 

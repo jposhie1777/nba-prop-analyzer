@@ -2127,10 +2127,12 @@ with tab1:
                     '  </div>',  # END TOP BAR
 
 
-                    # --- SPARKLINE CENTERED ---
-                    '  <div style="display:flex; justify-content:center; margin:8px 0;">',
-                    f'    {spark_html}',
+
+                    # --- SPARKLINE CENTERED (NO ESCAPING BUG) ---
+                    '  <div style="display:flex; justify-content:center; margin:8px 0;">'
+                        + spark_html +
                     '  </div>',
+
 
 
                     # --- TAGS CENTERED ---
@@ -2138,26 +2140,33 @@ with tab1:
                     f'    {tags_html}',
                     '  </div>',
 
+
+
                     # --- BOTTOM METRICS ---
                     '  <div class="prop-meta" style="margin-top:2px;">',
+
                     '    <div>',
-                    f'      <div style="color:#e5e7eb;font-size:0.8rem;">{odds:+d}</div>',
+                    f'      <div style="color:#e5e7eb;font-size:0.8rem;">{odds:+d}</div>'
                     f'      <div style="font-size:0.7rem;">Imp: {implied_prob:.0%}</div>',
                     '    </div>',
+
                     '    <div>',
-                    f'      <div style="color:#e5e7eb;font-size:0.8rem;">L10 Hit: {hit10:.0%}</div>',
+                    f'      <div style="color:#e5e7eb;font-size:0.8rem;">L10 Hit: {hit10:.0%}</div>'
                     f'      <div style="font-size:0.7rem;">L10 Avg: {l10_avg_display}</div>',
                     '    </div>',
+
                     '    <div>',
                     f'      <div style="color:{rank_color};font-size:0.8rem;font-weight:700;">{rank_display}</div>',
                     '      <div style="font-size:0.7rem;">Opp Rank</div>',
                     '    </div>',
-                    '  </div>',
+
+                    '  </div>',  # END BOTTOM METRICS
 
                     f'  {wowy_html}',
 
                     '</div>',
                 ]
+
 
                 card_html = "\n".join(card_lines)
 

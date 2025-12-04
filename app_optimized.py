@@ -922,13 +922,17 @@ TEAM_NAME_TO_CODE = {
     "Washington Wizards": "WAS",
 }
 
-APP_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "NBA-PROP-ANALYZER")
-
-
+import os
 import base64
+import pathlib
+
+# Directory containing this Python file
+FILE_DIR = pathlib.Path(__file__).resolve().parent
+
+# Correct logo directory
+LOGO_DIR = FILE_DIR / "NBA-PROP-ANALYZER" / "static" / "logos"
 
 def logo_to_base64_local(path: str) -> str:
-    """Load a local image file and convert it to a base64 data URL."""
     try:
         with open(path, "rb") as f:
             encoded = base64.b64encode(f.read()).decode("utf-8")
@@ -937,10 +941,9 @@ def logo_to_base64_local(path: str) -> str:
         print(f"Error loading logo {path}: {e}")
         return ""
 
-
 SPORTSBOOK_LOGOS = {
-    "DraftKings": os.path.join(APP_ROOT, "static/logos/Draftkingssmall.png"),
-    "FanDuel": os.path.join(APP_ROOT, "static/logos/Fanduelsmall.png"),
+    "DraftKings": str(LOGO_DIR / "Draftkingssmall.png"),
+    "FanDuel": str(LOGO_DIR / "Fanduelsmall.png"),
 }
 
 SPORTSBOOK_LOGOS_BASE64 = {
@@ -948,6 +951,10 @@ SPORTSBOOK_LOGOS_BASE64 = {
     for name, path in SPORTSBOOK_LOGOS.items()
 }
 
+# Debug
+st.write("DK exists:", os.path.exists(SPORTSBOOK_LOGOS["DraftKings"]))
+st.write("FD exists:", os.path.exists(SPORTSBOOK_LOGOS["FanDuel"]))
+st.write("DK base64 length:", len(SPORTSBOOK_LOGOS_BASE64["DraftKings"]))
 st.write("DraftKings logo loaded:", bool(SPORTSBOOK_LOGOS_BASE64.get("DraftKings")))
 st.write("FanDuel logo loaded:", bool(SPORTSBOOK_LOGOS_BASE64.get("FanDuel")))
 st.write("DraftKings base64 length:", len(SPORTSBOOK_LOGOS_BASE64.get("DraftKings", "")))

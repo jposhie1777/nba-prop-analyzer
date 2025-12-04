@@ -835,16 +835,25 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+    st.markdown(
+    """
+<style>
+
+# ------------------------------------------------------
+# AG-GRID MOBILE FIX CSS (separate style block)
+# ------------------------------------------------------
+st.markdown(
+    """
+<style>
+
     /* ----------------------------------------------
        MOBILE FIX FOR AG-GRID (balham theme)
        ---------------------------------------------- */
 
-    /* Force real width so columns don't collapse */
     .ag-theme-balham .ag-center-cols-container {
         min-width: 1100px !important;
     }
 
-    /* Ensure horizontal scrolling works on mobile */
     .ag-theme-balham .ag-body-viewport,
     .ag-theme-balham .ag-center-cols-viewport,
     .ag-theme-balham .ag-root-wrapper,
@@ -853,7 +862,6 @@ st.markdown(
         -webkit-overflow-scrolling: touch !important;
     }
 
-    /* Prevent cells & headers from shrinking too small */
     .ag-theme-balham .ag-header-cell,
     .ag-theme-balham .ag-cell {
         min-width: 115px !important;
@@ -861,7 +869,7 @@ st.markdown(
     }
 
 </style>
-""",
+    """,
     unsafe_allow_html=True,
 )
 

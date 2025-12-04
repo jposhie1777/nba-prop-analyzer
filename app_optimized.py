@@ -953,29 +953,6 @@ SPORTSBOOK_LOGOS_BASE64 = {
 
 import os
 
-st.write("Listing contents of FILE_DIR:", FILE_DIR)
-st.write(os.listdir(FILE_DIR))
-
-if (FILE_DIR / "NBA-PROP-ANALYZER").exists():
-    st.write("Listing NBA-PROP-ANALYZER folder:")
-    st.write(os.listdir(FILE_DIR / "NBA-PROP-ANALYZER"))
-else:
-    st.write("NBA-PROP-ANALYZER folder NOT found under FILE_DIR")
-
-if (FILE_DIR / "NBA-PROP-ANALYZER" / "static").exists():
-    st.write("Listing static folder:")
-    st.write(os.listdir(FILE_DIR / "NBA-PROP-ANALYZER" / "static"))
-
-if (FILE_DIR / "NBA-PROP-ANALYZER" / "static" / "logos").exists():
-    st.write("Listing logos folder:")
-    st.write(os.listdir(FILE_DIR / "NBA-PROP-ANALYZER" / "static" / "logos"))
-else:
-    st.write("Logos folder NOT found.")
-
-st.write("Logo dir:", LOGO_DIR)
-st.write("Logo dir exists:", LOGO_DIR.exists())
-st.write(os.listdir(LOGO_DIR) if LOGO_DIR.exists() else "No folder")
-
 
 
 MARKET_DISPLAY_MAP = {

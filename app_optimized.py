@@ -17,6 +17,8 @@ import psycopg2
 import psycopg2.extras
 import jwt
 import streamlit.components.v1 as components
+import textwrap
+
 
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from google.cloud import bigquery
@@ -1652,7 +1654,7 @@ with tab1:
     avg_odds = filtered_df["price"].mean() if total_props else 0
     avg_matchup = filtered_df["matchup_difficulty_score"].mean() if total_props else 0
 
-    metrics_html = f"""
+    metrics_html = textwrap.dedent(f"""
     <div class="metric-grid">
         <div class="metric-card">
             <div class="metric-label">Props Shown</div>
@@ -1675,7 +1677,7 @@ with tab1:
             <div class="metric-sub">lower = easier</div>
         </div>
     </div>
-    """
+    """)
     st.markdown(metrics_html, unsafe_allow_html=True)
 
     if filtered_df.empty:
@@ -1698,7 +1700,6 @@ with tab1:
     if view_mode == "Card grid":
 
         import pandas as pd
-
         import numpy as np
 
         def get_spark_values(row):
@@ -1738,13 +1739,11 @@ with tab1:
 
             return []
 
-
         def build_sparkline(values, width=80, height=24, color="#0ea5e9"):
             """
             Return a tiny inline SVG sparkline. Uses only inline styles so it
             works inside st.markdown AND st.html.
             """
-            # Defensive: only accept numeric sequences
             if not isinstance(values, (list, tuple)):
                 return ""
 
@@ -1769,7 +1768,7 @@ with tab1:
 
             svg_points = " ".join(points)
 
-            return f"""
+            return textwrap.dedent(f"""
             <svg width="{width}" height="{height}" style="overflow:visible;">
                 <polyline
                     points="{svg_points}"
@@ -1779,8 +1778,7 @@ with tab1:
                     stroke-linecap="round"
                 />
             </svg>
-            """
-
+            """)
 
         # == Bookmaker Normalization ==
         def normalize_bookmaker(raw: str) -> str:
@@ -1831,8 +1829,10 @@ with tab1:
         # == WOWY merge ==
         card_df = attach_wowy_deltas(filtered_df, wowy_df)
 
-        wowy_cols = ["breakdown", "pts_delta", "reb_delta", "ast_delta",
-                     "pra_delta", "pts_reb_delta"]
+        wowy_cols = [
+            "breakdown", "pts_delta", "reb_delta", "ast_delta",
+            "pra_delta", "pts_reb_delta"
+        ]
 
         def extract_wowy_list(g):
             w = g[g["breakdown"].notna()][wowy_cols]
@@ -1843,7 +1843,8 @@ with tab1:
             w_map[(player, team)] = extract_wowy_list(g)
 
         card_df["_wowy_list"] = card_df.apply(
-            lambda r: w_map.get((r["player"], r["player_team"]), []), axis=1
+            lambda r: w_map.get((r["player"], r["player_team"]), []),
+            axis=1
         )
 
         def get_l10_avg(row):
@@ -1856,7 +1857,6 @@ with tab1:
                 "pra": "pra_last10",
                 "stl": "stl_last10",
                 "blk": "blk_last10",
-
                 # NEW COMBINED STATS
                 "pr": "pr_last10",
                 "pa": "pa_last10",
@@ -1867,8 +1867,6 @@ with tab1:
             value = row.get(col)
 
             return float(value) if pd.notna(value) else None
-
-
 
         # == Opponent Rank ==
         def get_opponent_rank(row):
@@ -1900,8 +1898,8 @@ with tab1:
             odds = row.get("price", 0)
             implied = (100 / (odds + 100)) if odds > 0 else abs(odds) / (abs(odds) + 100)
 
-            #if row.get("hit_rate_last10", 0) > implied:
-                #tags.append(("📈 EV+", "#22c55e"))
+            # if row.get("hit_rate_last10", 0) > implied:
+            #     tags.append(("📈 EV+", "#22c55e"))
 
             r = get_opponent_rank(row)
             if isinstance(r, int):
@@ -1925,16 +1923,24 @@ with tab1:
         st.write(f"Showing {total_cards} props • {total_pages} pages")
 
         page = st.number_input(
-            "Page", min_value=1, max_value=total_pages, value=1, step=1, key="card_page_number"
+            "Page",
+            min_value=1,
+            max_value=total_pages,
+            value=1,
+            step=1,
+            key="card_page_number",
         )
 
         start = (page - 1) * page_size
         end = start + page_size
         page_df = ranked.iloc[start:end]
 
-        st.markdown("""
+        st.markdown(
+            textwrap.dedent("""
             <div style="max-height:1100px; overflow-y:auto; padding-right:12px;">
-        """, unsafe_allow_html=True)
+            """),
+            unsafe_allow_html=True,
+        )
 
         cols = st.columns(4)
         has_html = hasattr(st, "html")
@@ -1969,10 +1975,8 @@ with tab1:
                     rank_display = "-"
                     rank_color = "#9ca3af"
 
-                stat = detect_stat(row.get("market", ""))
                 spark_vals = get_spark_values(row)
                 spark_html = build_sparkline(spark_vals)
-
 
                 # Logos
                 player_team = normalize_team_code(row.get("player_team", ""))
@@ -1981,41 +1985,44 @@ with tab1:
                 home_logo = TEAM_LOGOS_BASE64.get(player_team, "")
                 opp_logo = TEAM_LOGOS_BASE64.get(opp_team, "")
 
-                logos_html = f"""
+                if home_logo:
+                    logos_html = textwrap.dedent(f"""
                     <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">
                         <img src="{home_logo}" style="height:18px;border-radius:4px;" />
                         <span style="font-size:0.7rem;color:#9ca3af;">vs</span>
                         <img src="{opp_logo}" style="height:18px;border-radius:4px;" />
                     </div>
-                """ if home_logo else ""
+                    """)
+                else:
+                    logos_html = ""
 
                 # Bookmaker
                 book = normalize_bookmaker(row.get("bookmaker", ""))
                 book_logo_b64 = SPORTSBOOK_LOGOS_BASE64.get(book, "")
 
                 if book_logo_b64:
-                    book_html = f"""
-                        <img src="{book_logo_b64}" 
-                             style="height:26px;max-width:90px;object-fit:contain;" />
-                    """
+                    book_html = textwrap.dedent(f"""
+                    <img src="{book_logo_b64}"
+                         style="height:26px;max-width:90px;object-fit:contain;" />
+                    """)
                 else:
-                    book_html = f"""
-                        <div style="
-                            padding:3px 10px;
-                            border-radius:8px;
-                            background:rgba(255,255,255,0.08);
-                            border:1px solid rgba(255,255,255,0.15);
-                            font-size:0.7rem;">
-                            {book}
-                        </div>
-                    """
+                    book_html = textwrap.dedent(f"""
+                    <div style="
+                        padding:3px 10px;
+                        border-radius:8px;
+                        background:rgba(255,255,255,0.08);
+                        border:1px solid rgba(255,255,255,0.15);
+                        font-size:0.7rem;">
+                        {book}
+                    </div>
+                    """)
 
                 # Tags + WOWY
                 tags_html = build_tags_html(build_prop_tags(row))
                 wowy_html = build_wowy_block(row)
 
-                # Card Layout
-                card_html = f"""
+                # Card Layout (dedented so Markdown doesn't treat it as code)
+                card_html = textwrap.dedent(f"""
                 <div class="prop-card">
 
                     <!-- TOP CENTER -->
@@ -2065,7 +2072,7 @@ with tab1:
                     {wowy_html}
 
                 </div>
-                """
+                """)
 
                 st.markdown(card_html, unsafe_allow_html=True)
 
@@ -2129,8 +2136,6 @@ with tab1:
         })
 
         # --- AG Grid render config (unchanged from your version) ---
-        # (leaving your renderer code untouched)
-        # ------------------------------------------------------------
         sparkline_renderer = JsCode("""
             function(params){
                 const v = params.value;
@@ -2251,16 +2256,51 @@ with tab1:
         gb.configure_column("Player", pinned="left", minWidth=140)
         gb.configure_column("Odds", valueFormatter=odds_formatter, width=95)
 
-        gb.configure_column("Hit5", header_name="L5", valueFormatter=percent_formatter, cellStyle=hit_style, width=75)
-        gb.configure_column("Hit10", header_name="L10", valueFormatter=percent_formatter, cellStyle=hit_style, width=75)
-        gb.configure_column("Hit20", header_name="L20", valueFormatter=percent_formatter, cellStyle=hit_style, width=75)
+        gb.configure_column(
+            "Hit5",
+            header_name="L5",
+            valueFormatter=percent_formatter,
+            cellStyle=hit_style,
+            width=75,
+        )
+        gb.configure_column(
+            "Hit10",
+            header_name="L10",
+            valueFormatter=percent_formatter,
+            cellStyle=hit_style,
+            width=75,
+        )
+        gb.configure_column(
+            "Hit20",
+            header_name="L20",
+            valueFormatter=percent_formatter,
+            cellStyle=hit_style,
+            width=75,
+        )
 
-        gb.configure_column("Spark", header_name="Trend", cellRenderer=sparkline_renderer, width=100, filter=False)
-        gb.configure_column("ImpProb", header_name="Imp%", valueFormatter=percent_formatter, width=80)
+        gb.configure_column(
+            "Spark",
+            header_name="Trend",
+            cellRenderer=sparkline_renderer,
+            width=100,
+            filter=False,
+        )
+        gb.configure_column(
+            "ImpProb",
+            header_name="Imp%",
+            valueFormatter=percent_formatter,
+            width=80,
+        )
 
         gb.configure_column("Edge_raw", hide=True)
         gb.configure_column("Edge", cellStyle=edge_style, width=100)
-        gb.configure_column("Matchup30", header_name="Matchup", valueFormatter=matchup_formatter, cellStyle=matchup_style, width=100)
+        gb.configure_column(
+            "Matchup30",
+            header_name="Matchup",
+            valueFormatter=matchup_formatter,
+            cellStyle=matchup_style,
+            width=100,
+        )
 
         grid_response = AgGrid(
             grid_df,
@@ -2278,14 +2318,16 @@ with tab1:
         if selected:
             sel_df = pd.DataFrame(selected)[
                 ["Player", "Market", "Line", "Label", "Odds", "Book"]
-            ].rename(columns={
-                "Player": "player",
-                "Market": "market",
-                "Line": "line",
-                "Label": "bet_type",
-                "Odds": "price",
-                "Book": "bookmaker",
-            })
+            ].rename(
+                columns={
+                    "Player": "player",
+                    "Market": "market",
+                    "Line": "line",
+                    "Label": "bet_type",
+                    "Odds": "price",
+                    "Book": "bookmaker",
+                }
+            )
 
             st.session_state.saved_bets = sel_df.drop_duplicates().to_dict("records")
             replace_saved_bets_in_db(user_id, st.session_state.saved_bets)

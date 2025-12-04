@@ -611,125 +611,123 @@ st.markdown(
         color: #9ca3af;
     }}
 
-        /* ------------ OPTIMIZED PROP CARD STYLING (NEON NIGHT) ------------ */
+                /* ------------ OPTIMIZED PROP CARD STYLING (NEON NIGHT) ------------ */
 
-        .prop-card {
-            position: relative;
-            border-radius: 20px;
-            padding: 1.0rem 1.15rem;
-            border: 1px solid rgba(129,140,248,0.75);  /* indigo border */
-            background:
-                radial-gradient(circle at 0 0, rgba(168,85,247,0.22), transparent 55%),
-                radial-gradient(circle at 100% 0, rgba(34,197,94,0.20), transparent 55%),
-                radial-gradient(circle at 0 130%, rgba(15,23,42,1), rgba(15,23,42,0.95));
-            box-shadow:
-                0 18px 45px rgba(15,23,42,0.95),
-                0 0 26px rgba(129,140,248,0.45);
-            margin-bottom: 1rem;
-            transition:
-                transform 0.16s ease-out,
-                box-shadow 0.16s ease-out,
-                border-color 0.16s ease-out,
-                background 0.16s ease-out,
-                filter 0.16s ease-out;
-            overflow: hidden;
-        }
+                .prop-card {{
+                    position: relative;
+                    border-radius: 20px;
+                    padding: 1.0rem 1.15rem;
+                    border: 1px solid rgba(129,140,248,0.75);  /* indigo border */
+                    background:
+                        radial-gradient(circle at 0 0, rgba(168,85,247,0.22), transparent 55%),
+                        radial-gradient(circle at 100% 0, rgba(34,197,94,0.20), transparent 55%),
+                        radial-gradient(circle at 0 130%, rgba(15,23,42,1), rgba(15,23,42,0.95));
+                    box-shadow:
+                        0 18px 45px rgba(15,23,42,0.95),
+                        0 0 26px rgba(129,140,248,0.45);
+                    margin-bottom: 1rem;
+                    transition:
+                        transform 0.16s ease-out,
+                        box-shadow 0.16s ease-out,
+                        border-color 0.16s ease-out,
+                        background 0.16s ease-out,
+                        filter 0.16s ease-out;
+                    overflow: hidden;
+                }}
 
-        .prop-card::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            border-radius: inherit;
-            border-top: 1px solid rgba(248,250,252,0.12);
-            border-left: 1px solid rgba(248,250,252,0.06);
-            opacity: 0.95;
-            pointer-events: none;
-        }
+                .prop-card::before {{
+                    content: "";
+                    position: absolute;
+                    inset: 0;
+                    border-radius: inherit;
+                    border-top: 1px solid rgba(248,250,252,0.12);
+                    border-left: 1px solid rgba(248,250,252,0.06);
+                    opacity: 0.95;
+                    pointer-events: none;
+                }}
 
-        .prop-card:hover {
-            transform: translateY(-4px) translateZ(0);
-            box-shadow:
-                0 26px 70px rgba(15,23,42,1),
-                0 0 35px rgba(168,85,247,0.60);
-            border-color: {theme["accent"]};
-            background:
-                radial-gradient(circle at 0 0, rgba(168,85,247,0.32), transparent 55%),
-                radial-gradient(circle at 100% 0, rgba(34,197,94,0.26), transparent 55%),
-                radial-gradient(circle at 0 130%, rgba(15,23,42,1), rgba(15,23,42,0.98));
-            filter: saturate(1.15);
-        }
+                .prop-card:hover {{
+                    transform: translateY(-4px) translateZ(0);
+                    box-shadow:
+                        0 26px 70px rgba(15,23,42,1),
+                        0 0 35px rgba(168,85,247,0.60);
+                    border-color: {theme["accent"]};
+                    background:
+                        radial-gradient(circle at 0 0, rgba(168,85,247,0.32), transparent 55%),
+                        radial-gradient(circle at 100% 0, rgba(34,197,94,0.26), transparent 55%),
+                        radial-gradient(circle at 0 130%, rgba(15,23,42,1), rgba(15,23,42,0.98));
+                    filter: saturate(1.15);
+                }}
 
-        .prop-headline {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 0.4rem;
-            margin-bottom: 0.45rem;
-        }
+                .prop-headline {{
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    gap: 0.4rem;
+                    margin-bottom: 0.45rem;
+                }}
 
-        .prop-player {
-            font-weight: 700;
-            font-size: 1.0rem;
-            color: #f9fafb;
-            letter-spacing: 0.01em;
-        }
+                .prop-player {{
+                    font-weight: 700;
+                    font-size: 1.0rem;
+                    color: #f9fafb;
+                    letter-spacing: 0.01em;
+                }}
 
-        .prop-market {
-            font-size: 0.8rem;
-            color: #9ca3af;
-            white-space: nowrap;
-        }
+                .prop-market {{
+                    font-size: 0.8rem;
+                    color: #9ca3af;
+                    white-space: nowrap;
+                }}
 
-        .pill-book {
-            padding: 3px 10px;
-            border-radius: 999px;
-            font-size: 0.7rem;
-            border: 1px solid rgba(148,163,184,0.55);
-            color: #e5e7eb;
-            background: linear-gradient(
-                135deg,
-                rgba(15,23,42,0.1),
-                rgba(88,28,135,0.9)
-            );
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            box-shadow: 0 0 18px rgba(168,85,247,0.55);
-        }
+                .pill-book {{
+                    padding: 3px 10px;
+                    border-radius: 999px;
+                    font-size: 0.7rem;
+                    border: 1px solid rgba(148,163,184,0.55);
+                    color: #e5e7eb;
+                    background: linear-gradient(
+                        135deg,
+                        rgba(15,23,42,0.1),
+                        rgba(88,28,135,0.9)
+                    );
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                    box-shadow: 0 0 18px rgba(168,85,247,0.55);
+                }}
 
-        .prop-meta {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 0.45rem;
-            margin-top: 0.45rem;
-            font-size: 0.75rem;
-            color: #9ca3af;
-        }
+                .prop-meta {{
+                    display: grid;
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
+                    gap: 0.45rem;
+                    margin-top: 0.45rem;
+                    font-size: 0.75rem;
+                    color: #9ca3af;
+                }}
 
-        .prop-meta > div {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            justify-content: center;
-        }
+                .prop-meta > div {{
+                    display: flex;
+                    flex-direction: column;
+                    align-items: flex-start;
+                    justify-content: center;
+                }}
 
-        .prop-meta-label {
-            font-size: 0.68rem;
-            text-transform: uppercase;
-            letter-spacing: 0.12em;
-            color: #6b7280;
-            margin-bottom: 2px;
-        }
+                .prop-meta-label {{
+                    font-size: 0.68rem;
+                    text-transform: uppercase;
+                    letter-spacing: 0.12em;
+                    color: #6b7280;
+                    margin-bottom: 2px;
+                }}
 
-        .prop-meta-value {
-            font-size: 0.84rem;
-            font-weight: 650;
-            color: #e5e7eb;
-        }
+                .prop-meta-value {{
+                    font-size: 0.84rem;
+                    font-weight: 650;
+                    color: #e5e7eb;
+                }}
 
-        /* ------------ END PROP CARD STYLING (NEON NIGHT) ------------ */
-
-
+                /* ------------ END PROP CARD STYLING (NEON NIGHT) ------------ */
 
 
     .stDataFrame, .stDataEditor,
@@ -836,10 +834,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
-st.markdown(
-    """
-<style>
 
     /* ----------------------------------------------
        MOBILE FIX FOR AG-GRID (balham theme)

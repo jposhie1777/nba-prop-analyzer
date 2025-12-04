@@ -463,291 +463,350 @@ theme_choice = st.sidebar.selectbox(
 theme = THEMES[st.session_state.theme_choice]
 
 # ------------------------------------------------------
-# GLOBAL STYLES (with optimized prop cards)
+# GLOBAL STYLES (Optimized - Full Visual Preservation)
 # ------------------------------------------------------
 st.markdown(
     f"""
-<style>
+    <style>
 
-html, body, [class*="css"] {{
-    font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}}
+    /* ---------- GLOBAL THEME ---------- */
 
-.block-container {{
-    padding-top: 1rem !important;
-    padding-bottom: 2rem !important;
-    max-width: 1400px !important;
-}}
+    html, body, [class*="css"] {{
+        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
 
-body {{
-    background: radial-gradient(circle at top, {theme["bg"]} 0, #000 55%) !important;
-}}
+    body {{
+        background: radial-gradient(circle at top, {theme["bg"]} 0, #000 55%) !important;
+    }}
 
-[data-testid="stSidebar"] {{
-    background: radial-gradient(circle at top left, #1f2937 0, #020617 55%);
-    border-right: 1px solid rgba(255,255,255,0.04);
-}}
+    .block-container {{
+        padding-top: 1rem !important;
+        padding-bottom: 2rem !important;
+        max-width: 1400px !important;
+    }}
 
-[data-testid="stSidebar"] * {{
-    color: #e5e7eb !important;
-}}
+    [data-testid="stSidebar"] {{
+        background: radial-gradient(circle at top left, #1f2937 0, #020617 55%);
+        border-right: 1px solid rgba(255,255,255,0.04);
+    }}
 
-.app-header {{
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.6rem 0 1.1rem;
-    border-bottom: 1px solid rgba(148,163,184,0.25);
-    margin-bottom: 0.9rem;
-}}
+    [data-testid="stSidebar"] * {{
+        color: #e5e7eb !important;
+    }}
 
-.app-header-left {{
-    display: flex;
-    align-items: center;
-    gap: 0.85rem;
-}}
+    /* ---------- HEADER ---------- */
 
-.app-logo {{
-    width: 42px;
-    height: 42px;
-    border-radius: 12px;
-    background: radial-gradient(circle at 0 0, #f97316, #ea580c 25%, #0f172a 90%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-weight: 900;
-    font-size: 20px;
-    letter-spacing: 0.02em;
-    box-shadow: 0 14px 30px rgba(15,23,42,0.8);
-    animation: float-logo 5s ease-in-out infinite;
-}}
+    .app-header {{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.6rem 0 1.1rem;
+        border-bottom: 1px solid rgba(148,163,184,0.25);
+        margin-bottom: 0.9rem;
+    }}
 
-@keyframes float-logo {{
-    0%, 100% {{ transform: translateY(0); }}
-    50% {{ transform: translateY(-2px); }}
-}}
+    .app-header-left {{
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+    }}
 
-.app-title {{
-    font-size: 1.4rem;
-    font-weight: 700;
-    margin: 0;
-    letter-spacing: 0.02em;
-    color: #e5e7eb;
-}}
+    .app-logo {{
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        background: radial-gradient(circle at 0 0, #f97316, #ea580c 25%, #0f172a 90%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 900;
+        font-size: 20px;
+        letter-spacing: 0.02em;
+        box-shadow: 0 14px 30px rgba(15,23,42,0.8);
+        animation: float-logo 5s ease-in-out infinite;
+    }}
 
-.app-subtitle {{
-    font-size: 0.78rem;
-    margin: 0;
-    color: #9ca3af;
-}}
+    @keyframes float-logo {{
+        0%, 100% {{ transform: translateY(0); }}
+        50% {{ transform: translateY(-2px); }}
+    }}
 
-.pill {{
-    padding: 4px 12px;
-    border-radius: 999px;
-    border: 1px solid rgba(148,163,184,0.4);
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: #e5e7eb;
-    background: linear-gradient(135deg, rgba(15,118,110,0.45), rgba(15,23,42,0.98));
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    box-shadow: 0 12px 30px rgba(15,23,42,0.9);
-}}
+    .app-title {{
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: #e5e7eb;
+        margin: 0;
+    }}
 
-.pill-dot {{
-    width: 7px;
-    height: 7px;
-    border-radius: 999px;
-    background: #22c55e;
-    box-shadow: 0 0 10px rgba(34,197,94,0.9);
-    animation: pulse-dot 1.5s infinite;
-}}
+    .app-subtitle {{
+        margin: 0;
+        font-size: 0.78rem;
+        color: #9ca3af;
+    }}
 
-@keyframes pulse-dot {{
-    0%, 100% {{ transform: scale(1); opacity: 1; }}
-    50% {{ transform: scale(1.35); opacity: 0.75; }}
-}}
+    .pill {{
+        padding: 4px 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(148,163,184,0.4);
+        font-size: 0.7rem;
+        letter-spacing: 0.12em;
+        color: #e5e7eb;
+        background: linear-gradient(135deg, rgba(15,118,110,0.45), rgba(15,23,42,0.98));
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        box-shadow: 0 12px 30px rgba(15,23,42,0.9);
+    }}
 
-.metric-grid {{
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-    gap: 0.75rem;
-    margin-bottom: 0.75rem;
-}}
+    .pill-dot {{
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: #22c55e;
+        box-shadow: 0 0 10px rgba(34,197,94,0.9);
+        animation: pulse-dot 1.5s infinite;
+    }}
 
-.metric-card {{
-    background: radial-gradient(circle at top, rgba(15,23,42,0.94), rgba(15,23,42,0.98));
-    border-radius: 16px;
-    padding: 0.75rem 0.9rem;
-    border: 1px solid rgba(148,163,184,0.35);
-    box-shadow: 0 18px 45px rgba(15,23,42,0.95);
-    transition: transform 0.14s ease-out, box-shadow 0.14s ease-out, border-color 0.14s ease-out;
-}}
+    @keyframes pulse-dot {{
+        0%, 100% {{ transform: scale(1); opacity: 1; }}
+        50% {{ transform: scale(1.35); opacity: 0.75; }}
+    }}
 
-.metric-card:hover {{
-    transform: translateY(-2px);
-    box-shadow: 0 24px 55px rgba(15,23,42,1);
-    border-color: {theme["accent"]};
-}}
+    /* ---------- METRIC CARDS ---------- */
 
-.metric-label {{
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: #9ca3af;
-    margin-bottom: 0.15rem;
-}}
+    .metric-grid {{
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 0.75rem;
+    }}
 
-.metric-value {{
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: #f9fafb;
-}}
+    .metric-card {{
+        background: radial-gradient(circle at top, rgba(15,23,42,0.94), rgba(15,23,42,0.98));
+        border-radius: 16px;
+        padding: 0.75rem 0.9rem;
+        border: 1px solid rgba(148,163,184,0.35);
+        box-shadow: 0 18px 45px rgba(15,23,42,0.95);
+        transition: 0.14s ease-out;
+    }}
 
-.metric-sub {{
-    font-size: 0.72rem;
-    color: #9ca3af;
-}}
+    .metric-card:hover {{
+        transform: translateY(-2px);
+        box-shadow: 0 24px 55px rgba(15,23,42,1);
+        border-color: {theme["accent"]};
+    }}
 
-/* ------------ OPTIMIZED PROP CARD STYLING (NEON NIGHT) ------------ */
+    .metric-label {{
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: #9ca3af;
+    }}
 
-.prop-card {{
-    position: relative;
-    border-radius: 20px;
-    padding: 1.0rem 1.15rem;
-    border: 1px solid rgba(129,140,248,0.75);
-    background:
-        radial-gradient(circle at 0 0, rgba(168,85,247,0.22), transparent 55%),
-        radial-gradient(circle at 100% 0, rgba(34,197,94,0.20), transparent 55%),
-        radial-gradient(circle at 0 130%, rgba(15,23,42,1), rgba(15,23,42,0.95));
-    box-shadow:
-        0 18px 45px rgba(15,23,42,0.95),
-        0 0 26px rgba(129,140,248,0.45);
-    margin-bottom: 1rem;
-    transition: transform 0.16s ease-out, box-shadow 0.16s ease-out,
-                border-color 0.16s ease-out, background 0.16s ease-out, filter 0.16s ease-out;
-    overflow: hidden;
-}}
+    .metric-value {{
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #f9fafb;
+    }}
 
-.prop-card::before {{
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    border-top: 1px solid rgba(248,250,252,0.12);
-    border-left: 1px solid rgba(248,250,252,0.06);
-    opacity: 0.95;
-    pointer-events: none;
-}}
+    .metric-sub {{
+        font-size: 0.72rem;
+        color: #9ca3af;
+    }}
 
-.prop-card:hover {{
-    transform: translateY(-4px);
-    box-shadow:
-        0 26px 70px rgba(15,23,42,1),
-        0 0 35px rgba(168,85,247,0.60);
-    border-color: {theme["accent"]};
-    filter: saturate(1.15);
-}}
+    /* ---------- PROP CARD (NEON NIGHT) ---------- */
 
-.prop-headline {{
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 0.4rem;
-    margin-bottom: 0.45rem;
-}}
+    .prop-card {{
+        position: relative;
+        border-radius: 20px;
+        padding: 1rem 1.15rem;
+        border: 1px solid rgba(129,140,248,0.75);
+        background:
+            radial-gradient(circle at 0 0, rgba(168,85,247,0.22), transparent 55%),
+            radial-gradient(circle at 100% 0, rgba(34,197,94,0.20), transparent 55%),
+            radial-gradient(circle at 0 130%, rgba(15,23,42,1), rgba(15,23,42,0.95));
+        box-shadow:
+            0 18px 45px rgba(15,23,42,0.95),
+            0 0 26px rgba(129,140,248,0.45);
+        margin-bottom: 1rem;
+        overflow: hidden;
+        transition: 0.16s ease-out;
+    }}
 
-.prop-player {{
-    font-weight: 700;
-    font-size: 1.0rem;
-    color: #f9fafb;
-}}
+    .prop-card::before {{
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        border-top: 1px solid rgba(248,250,252,0.12);
+        border-left: 1px solid rgba(248,250,252,0.06);
+        pointer-events: none;
+    }}
 
-.prop-market {{
-    font-size: 0.8rem;
-    color: #9ca3af;
-}}
+    .prop-card:hover {{
+        transform: translateY(-4px);
+        filter: saturate(1.15);
+        border-color: {theme["accent"]};
+        box-shadow:
+            0 26px 70px rgba(15,23,42,1),
+            0 0 35px rgba(168,85,247,0.60);
+        background:
+            radial-gradient(circle at 0 0, rgba(168,85,247,0.32), transparent 55%),
+            radial-gradient(circle at 100% 0, rgba(34,197,94,0.26), transparent 55%),
+            radial-gradient(circle at 0 130%, rgba(15,23,42,1), rgba(15,23,42,0.98));
+    }}
 
-.pill-book {{
-    padding: 3px 10px;
-    border-radius: 999px;
-    font-size: 0.7rem;
-    border: 1px solid rgba(148,163,184,0.55);
-    color: #e5e7eb;
-    background: linear-gradient(135deg, rgba(15,23,42,0.1), rgba(88,28,135,0.9));
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    box-shadow: 0 0 18px rgba(168,85,247,0.55);
-}}
+    .prop-headline {{
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.45rem;
+    }}
 
-.prop-meta {{
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.45rem;
-    margin-top: 0.45rem;
-    font-size: 0.75rem;
-}}
+    .prop-player {{
+        font-size: 1rem;
+        font-weight: 700;
+        color: #f9fafb;
+    }}
 
-.prop-meta-label {{
-    font-size: 0.68rem;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: #6b7280;
-}}
+    .prop-market {{
+        color: #9ca3af;
+        font-size: 0.8rem;
+        white-space: nowrap;
+    }}
 
-.prop-meta-value {{
-    font-size: 0.84rem;
-    font-weight: 650;
-    color: #e5e7eb;
-}}
+    .pill-book {{
+        padding: 3px 10px;
+        font-size: 0.7rem;
+        border-radius: 999px;
+        border: 1px solid rgba(148,163,184,0.55);
+        color: #e5e7eb;
+        background: linear-gradient(135deg, rgba(15,23,42,0.1), rgba(88,28,135,0.9));
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        box-shadow: 0 0 18px rgba(168,85,247,0.55);
+    }}
 
-/* ------------ END PROP CARD STYLING (NEON NIGHT) ------------ */
+    .prop-meta {{
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.45rem;
+        margin-top: 0.45rem;
+    }}
 
-.sparkline {{
-    stroke: {theme["accent"]};
-    fill: none;
-    stroke-width: 2;
-}}
+    .prop-meta-label {{
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #6b7280;
+    }}
 
-</style>
+    .prop-meta-value {{
+        font-size: 0.84rem;
+        font-weight: 650;
+        color: #e5e7eb;
+    }}
+
+    /* ---------- DATAFRAME / TABLES ---------- */
+
+    [data-testid="stDataFrame"],
+    [data-testid="stDataEditor"] {{
+        border-radius: 16px !important;
+        border: 1px solid rgba(148,163,184,0.45) !important;
+        box-shadow: 0 20px 50px rgba(15,23,42,0.98) !important;
+        overflow: hidden;
+        background: radial-gradient(circle at top left, rgba(15,23,42,0.98), rgba(15,23,42,0.96));
+    }}
+
+    .stDataFrame table,
+    .stDataEditor table {{
+        width: 100%;
+        border-collapse: collapse;
+    }}
+
+    .stDataFrame thead th,
+    .stDataEditor thead th {{
+        background: #020617 !important;
+        color: #e5e7eb !important;
+        font-weight: 700 !important;
+        border-bottom: 1px solid rgba(148,163,184,0.45) !important;
+    }}
+
+    .stDataFrame tbody tr:nth-child(even) td,
+    .stDataEditor tbody tr:nth-child(even) td {{
+        background: rgba(17,24,39,0.9) !important;
+    }}
+
+    .stDataFrame tbody tr:nth-child(odd) td,
+    .stDataEditor tbody tr:nth-child(odd) td {{
+        background: rgba(15,23,42,0.95) !important;
+    }}
+
+    .stDataFrame tbody tr:hover td,
+    .stDataEditor tbody tr:hover td {{
+        background: rgba(15,23,42,1) !important;
+    }}
+
+    /* ---------- BUTTONS ---------- */
+
+    .stButton > button {{
+        border-radius: 999px !important;
+        padding: 0.35rem 0.95rem !important;
+        font-weight: 600 !important;
+        border: 1px solid rgba(148,163,184,0.4) !important;
+        background: radial-gradient(circle at 0 0, {theme["accent"]}, {theme["accent_soft"]} 50%, #020617 100%);
+        color: #f9fafb !important;
+        box-shadow: 0 12px 30px rgba(8,47,73,0.9);
+        transition: 0.16s ease-out !important;
+    }}
+
+    .stButton > button:hover {{
+        transform: translateY(-1px) scale(1.01);
+        box-shadow: 0 16px 40px rgba(8,47,73,1);
+    }}
+
+    .sparkline {{
+        stroke: {theme["accent"]};
+        fill: none;
+    }}
+
+    </style>
     """,
     unsafe_allow_html=True,
 )
 
-
 # ------------------------------------------------------
-# AG-GRID MOBILE FIX CSS (separate style block)
+# AG-GRID MOBILE FIX (separate block)
 # ------------------------------------------------------
 st.markdown(
     """
-<style>
+    <style>
 
-.ag-theme-balham .ag-center-cols-container {
-    min-width: 1100px !important;
-}
+    .ag-theme-balham .ag-center-cols-container {
+        min-width: 1100px !important;
+    }
 
-.ag-theme-balham .ag-body-viewport,
-.ag-theme-balham .ag-center-cols-viewport,
-.ag-theme-balham .ag-root-wrapper,
-.ag-theme-balham .ag-root {
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-}
+    .ag-theme-balham .ag-body-viewport,
+    .ag-theme-balham .ag-center-cols-viewport,
+    .ag-theme-balham .ag-root-wrapper,
+    .ag-theme-balham .ag-root {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
 
-.ag-theme-balham .ag-header-cell,
-.ag-theme-balham .ag-cell {
-    min-width: 115px !important;
-    white-space: nowrap !important;
-}
+    .ag-theme-balham .ag-header-cell,
+    .ag-theme-balham .ag-cell {
+        min-width: 115px !important;
+        white-space: nowrap !important;
+    }
 
-</style>
+    </style>
     """,
     unsafe_allow_html=True,
 )
+
 
 # ------------------------------------------------------
 # HEADER

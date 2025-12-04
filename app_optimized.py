@@ -924,6 +924,19 @@ TEAM_NAME_TO_CODE = {
 
 APP_ROOT = os.getcwd()
 
+import base64
+
+def logo_to_base64_local(path: str) -> str:
+    """Load a local image file and convert it to a base64 data URL."""
+    try:
+        with open(path, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode("utf-8")
+            return f"data:image/png;base64,{encoded}"
+    except Exception as e:
+        print(f"Error loading logo {path}: {e}")
+        return ""
+
+
 SPORTSBOOK_LOGOS = {
     "DraftKings": os.path.join(APP_ROOT, "static/logos/Draftkingssmall.png"),
     "FanDuel": os.path.join(APP_ROOT, "static/logos/Fanduelsmall.png"),

@@ -930,7 +930,7 @@ import pathlib
 FILE_DIR = pathlib.Path(__file__).resolve().parent
 
 # Correct logo directory
-LOGO_DIR = FILE_DIR / "NBA-PROP-ANALYZER" / "static" / "logos"
+LOGO_DIR = FILE_DIR / "static" / "logos"
 
 def logo_to_base64_local(path: str) -> str:
     try:
@@ -971,6 +971,10 @@ if (FILE_DIR / "NBA-PROP-ANALYZER" / "static" / "logos").exists():
     st.write(os.listdir(FILE_DIR / "NBA-PROP-ANALYZER" / "static" / "logos"))
 else:
     st.write("Logos folder NOT found.")
+
+st.write("Logo dir:", LOGO_DIR)
+st.write("Logo dir exists:", LOGO_DIR.exists())
+st.write(os.listdir(LOGO_DIR) if LOGO_DIR.exists() else "No folder")
 
 
 

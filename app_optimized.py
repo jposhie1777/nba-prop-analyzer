@@ -1068,28 +1068,66 @@ def format_moneyline(v):
         return "—"
 
 
-def detect_stat(market):
+def detect_stat(market: str) -> str:
+    """
+    Map a props 'market' string to a stat key:
+    pts, reb, ast, stl, blk, pra, pr, pa, ra
+    Works for both pretty labels and internal codes like
+    'player_points_rebounds_assists_alternate'.
+    """
     m = (market or "").lower()
 
-    if "p+r+a" in m or "pra" in m:
+    # ---- COMBO STATS FIRST ----
+    # PRA
+    if (
+        "points_rebounds_assists" in m
+        or "p+r+a" in m
+        or " pra" in m
+        or m.endswith("pra")
+        or "pra " in m
+    ):
         return "pra"
+
+    # P+R
+    if (
+        "points_rebounds" in m
+        or ("p+r" in m and "a" not in m)
+        or " pr" in m
+        or m.endswith("pr")
+    ):
+        return "pr"
+
+    # P+A
+    if (
+        "points_assists" in m
+        or "points_and_assists" in m
+        or "p+a" in m
+        or " pa" in m
+        or m.endswith("pa")
+    ):
+        return "pa"
+
+    # R+A
+    if (
+        "rebounds_assists" in m
+        or "rebounds_and_assists" in m
+        or "r+a" in m
+        or " ra" in m
+        or m.endswith("ra")
+    ):
+        return "ra"
+
+    # ---- SINGLE STATS ----
     if "assist" in m or "ast" in m:
         return "ast"
-    if "reb" in m:
+    if "rebound" in m or "reb" in m:
         return "reb"
-    if "pt" in m or "point" in m:
+    if "point" in m or "pts" in m or "scoring" in m:
         return "pts"
     if "stl" in m or "steal" in m:
         return "stl"
     if "blk" in m or "block" in m:
         return "blk"
-    if "p+r" in m and "a" not in m:
-        return "pr"
-    if "p+a" in m or "pa" in m:
-        return "pa"
-    if "r+a" in m or "ra" in m:
-        return "ra"
-
 
     return ""
 
@@ -1324,18 +1362,25 @@ hist_latest = (
     .groupby("player_norm")
     .head(1)[[
         "player_norm",
+
+        # base stats
         "pts_last5_list", "pts_last7_list", "pts_last10_list",
         "reb_last5_list", "reb_last7_list", "reb_last10_list",
         "ast_last5_list", "ast_last7_list", "ast_last10_list",
         "stl_last5_list", "stl_last7_list", "stl_last10_list",
         "blk_last5_list", "blk_last7_list", "blk_last10_list",
+
+        # combo: PRA
         "pra_last5_list", "pra_last7_list", "pra_last10_list",
+
+        # combo: PR, PA, RA  ✅ NEW
+        "pr_last5_list",  "pr_last7_list",  "pr_last10_list",
+        "pa_last5_list",  "pa_last7_list",  "pa_last10_list",
+        "ra_last5_list",  "ra_last7_list",  "ra_last10_list",
     ]]
 )
 
-# ------------------------------------------------------
-# MERGE (now works because player_norm matches)
-# ------------------------------------------------------
+# Merge into props (so card_df rows have all lists)
 props_df = props_df.merge(hist_latest, on="player_norm", how="left")
 
 

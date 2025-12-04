@@ -932,21 +932,23 @@ MARKET_DISPLAY_MAP = {
 }
 
 def build_tags_html(tags):
-    return "".join(
-        f'''
-        <span style="
-            background:{color};
-            padding:3px 8px;
-            border-radius:8px;
-            margin-right:4px;
-            font-size:0.68rem;
-            font-weight:600;
-            color:white;
-            display:inline-block;
-        ">{label}</span>
-        '''
-        for label, color in tags
-    )
+    """
+    Render tags on one line with NO indentation or newlines,
+    so Streamlit does NOT interpret them as code blocks.
+    """
+    html_parts = []
+
+    for label, color in tags:
+        html_parts.append(
+            f'<span style="background:{color};'
+            f'padding:3px 8px;border-radius:8px;'
+            f'margin-right:4px;font-size:0.68rem;'
+            f'font-weight:600;color:white;display:inline-block;">'
+            f'{label}</span>'
+        )
+
+    return "".join(html_parts)
+
 
 # ------------------------------------------------------
 # LOGO LOADERS

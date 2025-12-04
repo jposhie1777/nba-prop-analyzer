@@ -1702,6 +1702,7 @@ with tab1:
         import pandas as pd
         import numpy as np
 
+        # ---------- Tiny sparkline ----------
         def get_spark_values(row):
             """
             Pick the best series for this prop, based on the detected stat.
@@ -1709,7 +1710,6 @@ with tab1:
             Returns a plain Python list of numbers, or [].
             """
             stat = detect_stat(row.get("market", ""))  # pts, reb, ast, pra, stl, blk
-
             if not stat:
                 return []
 
@@ -1741,18 +1741,16 @@ with tab1:
 
         def build_sparkline(values, width=80, height=24, color="#0ea5e9"):
             """
-            Return a tiny inline SVG sparkline. Uses only inline styles so it
-            works inside st.markdown AND st.html.
+            Return a tiny inline SVG sparkline. No leading indentation so
+            Markdown never treats it as code.
             """
             if not isinstance(values, (list, tuple)):
                 return ""
 
             values = [v for v in values if isinstance(v, (int, float))]
-
             if len(values) == 0:
                 return ""
 
-            # If there's only one point, duplicate so we still see a line
             if len(values) == 1:
                 values = values + values
 
@@ -1768,19 +1766,14 @@ with tab1:
 
             svg_points = " ".join(points)
 
-            return textwrap.dedent(f"""
-            <svg width="{width}" height="{height}" style="overflow:visible;">
-                <polyline
-                    points="{svg_points}"
-                    fill="none"
-                    stroke="{color}"
-                    stroke-width="2.2"
-                    stroke-linecap="round"
-                />
-            </svg>
-            """)
+            return (
+                f'<svg width="{width}" height="{height}" style="overflow:visible;">'
+                f'<polyline points="{svg_points}" fill="none" '
+                f'stroke="{color}" stroke-width="2.2" stroke-linecap="round" />'
+                f'</svg>'
+            )
 
-        # == Bookmaker Normalization ==
+        # ---------- Bookmaker normalization ----------
         def normalize_bookmaker(raw: str) -> str:
             if not raw:
                 return ""
@@ -1804,7 +1797,7 @@ with tab1:
                     return v
             return raw.strip()
 
-        # == Filters ==
+        # ---------- Filters for card grid ----------
         MIN_ODDS_FOR_CARD = manual_odds_min
         MAX_ODDS_FOR_CARD = manual_odds_max
         MIN_L10 = manual_l10_min / 100
@@ -1826,7 +1819,7 @@ with tab1:
                 return False
             return True
 
-        # == WOWY merge ==
+        # ---------- WOWY merge ----------
         card_df = attach_wowy_deltas(filtered_df, wowy_df)
 
         wowy_cols = [
@@ -1847,6 +1840,7 @@ with tab1:
             axis=1
         )
 
+        # ---------- L10 averages ----------
         def get_l10_avg(row):
             stat = detect_stat(row.get("market", ""))
 
@@ -1865,10 +1859,9 @@ with tab1:
 
             col = col_map.get(stat)
             value = row.get(col)
-
             return float(value) if pd.notna(value) else None
 
-        # == Opponent Rank ==
+        # ---------- Opponent rank ----------
         def get_opponent_rank(row):
             stat = detect_stat(row.get("market", ""))
             col = {
@@ -1892,12 +1885,13 @@ with tab1:
             t = (rank - 1) / 29
             return f"hsl({120 * t}, 85%, 45%)"
 
-        # == Tags ==
+        # ---------- Tags ----------
         def build_prop_tags(row):
             tags = []
             odds = row.get("price", 0)
             implied = (100 / (odds + 100)) if odds > 0 else abs(odds) / (abs(odds) + 100)
 
+            # If you want EV+ tag, uncomment:
             # if row.get("hit_rate_last10", 0) > implied:
             #     tags.append(("📈 EV+", "#22c55e"))
 
@@ -1911,11 +1905,11 @@ with tab1:
                     tags.append(("🟢 Easy", "#22c55e"))
             return tags
 
-        # Filter
+        # ---------- Apply filters / ranking ----------
         card_df = card_df[card_df.apply(card_good, axis=1)]
         ranked = card_df.sort_values("hit_rate_last10", ascending=False).reset_index(drop=True)
 
-        # Pagination
+        # ---------- Pagination ----------
         page_size = 30
         total_cards = len(ranked)
         total_pages = max(1, (total_cards + page_size - 1) // page_size)
@@ -1936,14 +1930,11 @@ with tab1:
         page_df = ranked.iloc[start:end]
 
         st.markdown(
-            textwrap.dedent("""
-            <div style="max-height:1100px; overflow-y:auto; padding-right:12px;">
-            """),
+            '<div style="max-height:1100px; overflow-y:auto; padding-right:12px;">',
             unsafe_allow_html=True,
         )
 
         cols = st.columns(4)
-        has_html = hasattr(st, "html")
 
         # ==============================
         # CARD LOOP
@@ -1975,6 +1966,7 @@ with tab1:
                     rank_display = "-"
                     rank_color = "#9ca3af"
 
+                # Sparkline
                 spark_vals = get_spark_values(row)
                 spark_html = build_sparkline(spark_vals)
 
@@ -1986,13 +1978,13 @@ with tab1:
                 opp_logo = TEAM_LOGOS_BASE64.get(opp_team, "")
 
                 if home_logo:
-                    logos_html = textwrap.dedent(f"""
-                    <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">
-                        <img src="{home_logo}" style="height:18px;border-radius:4px;" />
-                        <span style="font-size:0.7rem;color:#9ca3af;">vs</span>
-                        <img src="{opp_logo}" style="height:18px;border-radius:4px;" />
-                    </div>
-                    """)
+                    logos_html = (
+                        '<div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">'
+                        f'<img src="{home_logo}" style="height:18px;border-radius:4px;" />'
+                        '<span style="font-size:0.7rem;color:#9ca3af;">vs</span>'
+                        f'<img src="{opp_logo}" style="height:18px;border-radius:4px;" />'
+                        '</div>'
+                    )
                 else:
                     logos_html = ""
 
@@ -2001,83 +1993,78 @@ with tab1:
                 book_logo_b64 = SPORTSBOOK_LOGOS_BASE64.get(book, "")
 
                 if book_logo_b64:
-                    book_html = textwrap.dedent(f"""
-                    <img src="{book_logo_b64}"
-                         style="height:26px;max-width:90px;object-fit:contain;" />
-                    """)
+                    book_html = (
+                        f'<img src="{book_logo_b64}" '
+                        'style="height:26px;max-width:90px;object-fit:contain;" />'
+                    )
                 else:
-                    book_html = textwrap.dedent(f"""
-                    <div style="
-                        padding:3px 10px;
-                        border-radius:8px;
-                        background:rgba(255,255,255,0.08);
-                        border:1px solid rgba(255,255,255,0.15);
-                        font-size:0.7rem;">
-                        {book}
-                    </div>
-                    """)
+                    book_html = (
+                        '<div style="padding:3px 10px;border-radius:8px;'
+                        'background:rgba(255,255,255,0.08);'
+                        'border:1px solid rgba(255,255,255,0.15);font-size:0.7rem;">'
+                        f'{book}'
+                        '</div>'
+                    )
 
                 # Tags + WOWY
                 tags_html = build_tags_html(build_prop_tags(row))
                 wowy_html = build_wowy_block(row)
 
-                # Card Layout (dedented so Markdown doesn't treat it as code)
-                card_html = textwrap.dedent(f"""
-                <div class="prop-card">
-
-                    <!-- TOP CENTER -->
-                    <div style="text-align:center; margin-bottom:6px;">
-                        <div class="prop-player" style="font-size:1.05rem;font-weight:700;">
-                            {player}
-                        </div>
-                        <div class="prop-market" style="font-size:0.82rem;color:#9ca3af;margin-top:2px;">
-                            {pretty_market} • {bet_type} {line}
-                        </div>
-                    </div>
-
-                    <hr style="border:0;border-top:1px solid rgba(255,255,255,0.08);margin:6px 0 10px 0;" />
-
-                    <!-- MIDDLE SPLIT -->
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                        <div style="padding-right:8px;flex:1;">{spark_html}</div>
-                        <div style="text-align:right; flex-shrink:0;">
-                            {book_html}
-                            <div style="margin-top:4px;">{logos_html}</div>
-                        </div>
-                    </div>
-
-                    <!-- TAGS -->
-                    <div style="display:flex;justify-content:center;margin-bottom:6px;">
-                        {tags_html}
-                    </div>
-
-                    <!-- BOTTOM METRICS -->
-                    <div class="prop-meta" style="margin-top:2px;">
-                        <div>
-                            <div style="color:#e5e7eb;font-size:0.8rem;">{odds:+d}</div>
-                            <div style="font-size:0.7rem;">Imp: {implied_prob:.0%}</div>
-                        </div>
-                        <div>
-                            <div style="color:#e5e7eb;font-size:0.8rem;">L10 Hit: {hit10:.0%}</div>
-                            <div style="font-size:0.7rem;">L10 Avg: {l10_avg_display}</div>
-                        </div>
-                        <div>
-                            <div style="color:{rank_color};font-size:0.8rem;font-weight:700;">
-                                {rank_display}
-                            </div>
-                            <div style="font-size:0.7rem;">Opp Rank</div>
-                        </div>
-                    </div>
-
-                    {wowy_html}
-
-                </div>
-                """)
+                # ---------- Card Layout (no leading indentation) ----------
+                card_lines = [
+                    '<div class="prop-card">',
+                    '  <!-- TOP CENTER -->',
+                    '  <div style="text-align:center; margin-bottom:6px;">',
+                    '    <div class="prop-player" style="font-size:1.05rem;font-weight:700;">',
+                    f'      {player}',
+                    '    </div>',
+                    '    <div class="prop-market" style="font-size:0.82rem;color:#9ca3af;margin-top:2px;">',
+                    f'      {pretty_market} • {bet_type} {line}',
+                    '    </div>',
+                    '  </div>',
+                    '  <hr style="border:0;border-top:1px solid rgba(255,255,255,0.08);'
+                    'margin:6px 0 10px 0;" />',
+                    '  <!-- MIDDLE SPLIT -->',
+                    '  <div style="display:flex;justify-content:space-between;align-items:center;'
+                    'margin-bottom:8px;">',
+                    f'    <div style="padding-right:8px;flex:1;">{spark_html}</div>',
+                    '    <div style="text-align:right; flex-shrink:0;">',
+                    f'      {book_html}',
+                    f'      <div style="margin-top:4px;">{logos_html}</div>',
+                    '    </div>',
+                    '  </div>',
+                    '  <!-- TAGS -->',
+                    '  <div style="display:flex;justify-content:center;margin-bottom:6px;">',
+                    f'    {tags_html}',
+                    '  </div>',
+                    '  <!-- BOTTOM METRICS -->',
+                    '  <div class="prop-meta" style="margin-top:2px;">',
+                    '    <div>',
+                    f'      <div style="color:#e5e7eb;font-size:0.8rem;">{odds:+d}</div>',
+                    f'      <div style="font-size:0.7rem;">Imp: {implied_prob:.0%}</div>',
+                    '    </div>',
+                    '    <div>',
+                    f'      <div style="color:#e5e7eb;font-size:0.8rem;">L10 Hit: {hit10:.0%}</div>',
+                    f'      <div style="font-size:0.7rem;">L10 Avg: {l10_avg_display}</div>',
+                    '    </div>',
+                    '    <div>',
+                    f'      <div style="color:{rank_color};font-size:0.8rem;font-weight:700;">'
+                    f'{rank_display}</div>',
+                    '      <div style="font-size:0.7rem;">Opp Rank</div>',
+                    '    </div>',
+                    '  </div>',
+                    f'  {wowy_html}',
+                    '</div>',
+                ]
+                card_html = "\n".join(card_lines)
 
                 st.markdown(card_html, unsafe_allow_html=True)
 
         st.markdown("</div>", unsafe_allow_html=True)
-        st.caption("Card view updated: centered header, sparkline, L10 fixes, opponent-rank difficulty, NA-safe logic.")
+        st.caption(
+            "Card view updated: centered header, sparkline, L10 fixes, "
+            "opponent-rank difficulty, NA-safe logic."
+        )
 
     # ======================================================
     # ADVANCED TABLE VIEW

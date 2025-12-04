@@ -951,16 +951,27 @@ SPORTSBOOK_LOGOS_BASE64 = {
     for name, path in SPORTSBOOK_LOGOS.items()
 }
 
-# Debug
-st.write("DK exists:", os.path.exists(SPORTSBOOK_LOGOS["DraftKings"]))
-st.write("FD exists:", os.path.exists(SPORTSBOOK_LOGOS["FanDuel"]))
-st.write("DK base64 length:", len(SPORTSBOOK_LOGOS_BASE64["DraftKings"]))
-st.write("DraftKings logo loaded:", bool(SPORTSBOOK_LOGOS_BASE64.get("DraftKings")))
-st.write("FanDuel logo loaded:", bool(SPORTSBOOK_LOGOS_BASE64.get("FanDuel")))
-st.write("DraftKings base64 length:", len(SPORTSBOOK_LOGOS_BASE64.get("DraftKings", "")))
-st.write("Expected DK full path:", SPORTSBOOK_LOGOS["DraftKings"])
-st.write("APP_ROOT:", APP_ROOT)
-st.write("This file lives at:", __file__)
+import os
+
+st.write("Listing contents of FILE_DIR:", FILE_DIR)
+st.write(os.listdir(FILE_DIR))
+
+if (FILE_DIR / "NBA-PROP-ANALYZER").exists():
+    st.write("Listing NBA-PROP-ANALYZER folder:")
+    st.write(os.listdir(FILE_DIR / "NBA-PROP-ANALYZER"))
+else:
+    st.write("NBA-PROP-ANALYZER folder NOT found under FILE_DIR")
+
+if (FILE_DIR / "NBA-PROP-ANALYZER" / "static").exists():
+    st.write("Listing static folder:")
+    st.write(os.listdir(FILE_DIR / "NBA-PROP-ANALYZER" / "static"))
+
+if (FILE_DIR / "NBA-PROP-ANALYZER" / "static" / "logos").exists():
+    st.write("Listing logos folder:")
+    st.write(os.listdir(FILE_DIR / "NBA-PROP-ANALYZER" / "static" / "logos"))
+else:
+    st.write("Logos folder NOT found.")
+
 
 
 MARKET_DISPLAY_MAP = {

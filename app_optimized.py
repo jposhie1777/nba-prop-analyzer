@@ -102,6 +102,7 @@ SELECT
   game_date,
   opponent_team,
   home_away,
+
   pts,
   reb,
   ast,
@@ -109,42 +110,43 @@ SELECT
   blk,
   pra,
 
-  -- Last 5
-  ARRAY(SELECT x FROM UNNEST(pts_last5_list)) AS pts_last5_list,
-  ARRAY(SELECT x FROM UNNEST(reb_last5_list)) AS reb_last5_list,
-  ARRAY(SELECT x FROM UNNEST(ast_last5_list)) AS ast_last5_list,
-  ARRAY(SELECT x FROM UNNEST(stl_last5_list)) AS stl_last5_list,
-  ARRAY(SELECT x FROM UNNEST(blk_last5_list)) AS blk_last5_list,
-  ARRAY(SELECT x FROM UNNEST(pra_last5_list)) AS pra_last5_list,
-  ARRAY(SELECT x FROM UNNEST(pr_last5_list))  AS pr_last5_list,
-  ARRAY(SELECT x FROM UNNEST(pa_last5_list))  AS pa_last5_list,
-  ARRAY(SELECT x FROM UNNEST(ra_last5_list))  AS ra_last5_list,
+  -- Last 5 (already arrays in your table)
+  pts_last5_list,
+  reb_last5_list,
+  ast_last5_list,
+  stl_last5_list,
+  blk_last5_list,
+  pra_last5_list,
+  pr_last5_list,
+  pa_last5_list,
+  ra_last5_list,
 
   -- Last 7
-  ARRAY(SELECT x FROM UNNEST(pts_last7_list)) AS pts_last7_list,
-  ARRAY(SELECT x FROM UNNEST(reb_last7_list)) AS reb_last7_list,
-  ARRAY(SELECT x FROM UNNEST(ast_last7_list)) AS ast_last7_list,
-  ARRAY(SELECT x FROM UNNEST(stl_last7_list)) AS stl_last7_list,
-  ARRAY(SELECT x FROM UNNEST(blk_last7_list)) AS blk_last7_list,
-  ARRAY(SELECT x FROM UNNEST(pra_last7_list)) AS pra_last7_list,
-  ARRAY(SELECT x FROM UNNEST(pr_last7_list))  AS pr_last7_list,
-  ARRAY(SELECT x FROM UNNEST(pa_last7_list))  AS pa_last7_list,
-  ARRAY(SELECT x FROM UNNEST(ra_last7_list))  AS ra_last7_list,
+  pts_last7_list,
+  reb_last7_list,
+  ast_last7_list,
+  stl_last7_list,
+  blk_last7_list,
+  pra_last7_list,
+  pr_last7_list,
+  pa_last7_list,
+  ra_last7_list,
 
   -- Last 10
-  ARRAY(SELECT x FROM UNNEST(pts_last10_list)) AS pts_last10_list,
-  ARRAY(SELECT x FROM UNNEST(reb_last10_list)) AS reb_last10_list,
-  ARRAY(SELECT x FROM UNNEST(ast_last10_list)) AS ast_last10_list,
-  ARRAY(SELECT x FROM UNNEST(stl_last10_list)) AS stl_last10_list,
-  ARRAY(SELECT x FROM UNNEST(blk_last10_list)) AS blk_last10_list,
-  ARRAY(SELECT x FROM UNNEST(pra_last10_list)) AS pra_last10_list,
-  ARRAY(SELECT x FROM UNNEST(pr_last10_list))  AS pr_last10_list,
-  ARRAY(SELECT x FROM UNNEST(pa_last10_list))  AS pa_last10_list,
-  ARRAY(SELECT x FROM UNNEST(ra_last10_list))  AS ra_last10_list
+  pts_last10_list,
+  reb_last10_list,
+  ast_last10_list,
+  stl_last10_list,
+  blk_last10_list,
+  pra_last10_list,
+  pr_last10_list,
+  pa_last10_list,
+  ra_last10_list
 
 FROM `{PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}`
 ORDER BY game_date DESC;
 """
+
 
 
 # NEW: depth chart + injury SQL

@@ -929,8 +929,15 @@ SPORTSBOOK_LOGOS = {
     "FanDuel": os.path.join(APP_ROOT, "static/logos/Fanduelsmall.png"),
 }
 
-st.write("File exists:", os.path.exists(os.path.join(APP_ROOT, "static/logos/Draftkingssmall.png")))
-st.write("Working directory:", APP_ROOT)
+SPORTSBOOK_LOGOS_BASE64 = {
+    name: logo_to_base64_local(path)
+    for name, path in SPORTSBOOK_LOGOS.items()
+}
+
+st.write("DraftKings logo loaded:", bool(SPORTSBOOK_LOGOS_BASE64.get("DraftKings")))
+st.write("FanDuel logo loaded:", bool(SPORTSBOOK_LOGOS_BASE64.get("FanDuel")))
+st.write("DraftKings base64 length:", len(SPORTSBOOK_LOGOS_BASE64.get("DraftKings", "")))
+
 
 MARKET_DISPLAY_MAP = {
     "player_assists_alternate": "Assists",
@@ -1866,24 +1873,24 @@ with tab1:
             if not raw:
                 return ""
             r = raw.strip().lower()
+
             mapping = {
                 "draft": "DraftKings",
+                "draftkings": "DraftKings",
+                "dk": "DraftKings",
+
                 "fanduel": "FanDuel",
                 "fd": "FanDuel",
-                "mgm": "BetMGM",
-                "caes": "Caesars",
-                "espn": "ESPN BET",
-                "bovada": "Bovada",
-                "betrivers": "BetRivers",
-                "hard rock": "Hard Rock",
-                "pointsbet": "PointsBet",
-                "fanatics": "Fanatics",
-                "betonline": "BetOnline.ag",
+                "fan duel": "FanDuel",
             }
+
             for k, v in mapping.items():
                 if k in r:
                     return v
-            return raw.strip()
+            
+            # default: capitalize correctly
+            return raw.strip().title()
+
 
         # ---------- Filters for card grid ----------
         MIN_ODDS_FOR_CARD = manual_odds_min
@@ -2077,23 +2084,27 @@ with tab1:
                 else:
                     logos_html = ""
 
-                # Bookmaker
+                # Normalize & fetch sportsbook logo
                 book = normalize_bookmaker(row.get("bookmaker", ""))
-                book_logo_b64 = SPORTSBOOK_LOGOS_BASE64.get(book, "")
+                book_logo_b64 = SPORTSBOOK_LOGOS_BASE64.get(book)
 
                 if book_logo_b64:
                     book_html = (
                         f'<img src="{book_logo_b64}" '
-                        'style="height:26px;max-width:90px;object-fit:contain;" />'
+                        'style="height:26px; width:auto; max-width:80px; object-fit:contain;'
+                        'filter:drop-shadow(0 0 6px rgba(0,0,0,0.4));" />'
                     )
                 else:
+                    # Fallback text pill ONLY if logo missing
                     book_html = (
-                        '<div style="padding:3px 10px;border-radius:8px;'
+                        '<div style="padding:3px 10px; border-radius:8px;'
                         'background:rgba(255,255,255,0.08);'
-                        'border:1px solid rgba(255,255,255,0.15);font-size:0.7rem;">'
+                        'border:1px solid rgba(255,255,255,0.15);'
+                        'font-size:0.7rem;">'
                         f'{book}'
                         '</div>'
                     )
+
 
                 # Tags + WOWY
                 tags_html = build_tags_html(build_prop_tags(row))

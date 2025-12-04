@@ -1776,8 +1776,8 @@ with tab1:
                 return []
 
             candidates = [
-                f"{stat}_last7_list",
                 f"{stat}_last10_list",
+                f"{stat}_last7_list",
                 f"{stat}_last5_list",
             ]
 
@@ -2102,31 +2102,43 @@ with tab1:
                 # ---------- Card Layout (no leading indentation) ----------
                 card_lines = [
                     '<div class="prop-card">',
-                    '  <!-- TOP CENTER -->',
-                    '  <div style="text-align:center; margin-bottom:6px;">',
-                    '    <div class="prop-player" style="font-size:1.05rem;font-weight:700;">',
-                    f'      {player}',
+
+                    # --- TOP BAR: MATCHUP LEFT | PLAYER + MARKET CENTER | BOOK RIGHT ---
+                    '  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">',
+
+                    # LEFT → MATCHUP LOGOS
+                    '    <div style="display:flex; align-items:center; gap:6px; min-width:70px;">'
+                    f'      <img src="{home_logo}" style="height:20px;border-radius:4px;" />'
+                    '      <span style="font-size:0.7rem;color:#9ca3af;">vs</span>'
+                    f'      <img src="{opp_logo}" style="height:20px;border-radius:4px;" />'
                     '    </div>',
-                    '    <div class="prop-market" style="font-size:0.82rem;color:#9ca3af;margin-top:2px;">',
-                    f'      {pretty_market} • {bet_type} {line}',
+
+                    # CENTER → PLAYER + MARKET
+                    '    <div style="text-align:center; flex:1;">'
+                    f'      <div class="prop-player" style="font-size:1.05rem;font-weight:700;">{player}</div>'
+                    f'      <div class="prop-market" style="font-size:0.82rem;color:#9ca3af;">{pretty_market} • {bet_type} {line}</div>'
                     '    </div>',
+
+                    # RIGHT → BOOK
+                    '    <div style="display:flex; justify-content:flex-end; min-width:70px;">'
+                    f'      {book_html}'
+                    '    </div>',
+
+                    '  </div>',  # END TOP BAR
+
+
+                    # --- SPARKLINE CENTERED ---
+                    '  <div style="display:flex; justify-content:center; margin:8px 0;">',
+                    f'    {spark_html}',
                     '  </div>',
-                    '  <hr style="border:0;border-top:1px solid rgba(255,255,255,0.08);'
-                    'margin:6px 0 10px 0;" />',
-                    '  <!-- MIDDLE SPLIT -->',
-                    '  <div style="display:flex;justify-content:space-between;align-items:center;'
-                    'margin-bottom:8px;">',
-                    f'    <div style="padding-right:8px;flex:1;">{spark_html}</div>',
-                    '    <div style="text-align:right; flex-shrink:0;">',
-                    f'      {book_html}',
-                    f'      <div style="margin-top:4px;">{logos_html}</div>',
-                    '    </div>',
-                    '  </div>',
-                    '  <!-- TAGS -->',
-                    '  <div style="display:flex;justify-content:center;margin-bottom:6px;">',
+
+
+                    # --- TAGS CENTERED ---
+                    '  <div style="display:flex; justify-content:center; margin-bottom:6px;">',
                     f'    {tags_html}',
                     '  </div>',
-                    '  <!-- BOTTOM METRICS -->',
+
+                    # --- BOTTOM METRICS ---
                     '  <div class="prop-meta" style="margin-top:2px;">',
                     '    <div>',
                     f'      <div style="color:#e5e7eb;font-size:0.8rem;">{odds:+d}</div>',
@@ -2137,14 +2149,16 @@ with tab1:
                     f'      <div style="font-size:0.7rem;">L10 Avg: {l10_avg_display}</div>',
                     '    </div>',
                     '    <div>',
-                    f'      <div style="color:{rank_color};font-size:0.8rem;font-weight:700;">'
-                    f'{rank_display}</div>',
+                    f'      <div style="color:{rank_color};font-size:0.8rem;font-weight:700;">{rank_display}</div>',
                     '      <div style="font-size:0.7rem;">Opp Rank</div>',
                     '    </div>',
                     '  </div>',
+
                     f'  {wowy_html}',
+
                     '</div>',
                 ]
+
                 card_html = "\n".join(card_lines)
 
                 st.markdown(card_html, unsafe_allow_html=True)

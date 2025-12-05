@@ -1479,9 +1479,9 @@ merged = injury_df.merge(
 def row_matches(row):
     fc = row.get("first_clean", "")
 
-    # Normalize to a clean string
-    if isinstance(fc, str):
-        inj_initial = fc[:1]  # first character
+    # Ensure we only take a valid string
+    if isinstance(fc, str) and len(fc) > 0:
+        inj_initial = fc[0]
     else:
         inj_initial = ""
 

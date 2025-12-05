@@ -2070,31 +2070,31 @@ def render_prop_cards(
 # ------------------------------------------------------
 st.sidebar.header("Filters")
 
-games_list = (props_df["home_team"] + " vs " + props_df["visitor_team"]).astype(str)
-games = ["All games"] + sorted(games_list.unique())
-sel_game = st.sidebar.selectbox("Game", games)
+#games_list = (props_df["home_team"] + " vs " + props_df["visitor_team"]).astype(str)
+#games = ["All games"] + sorted(games_list.unique())
+#sel_game = st.sidebar.selectbox("Game", games)
 
-players_sidebar = ["All players"] + sorted(
-    props_df["player"].fillna("").astype(str).unique()
-)
-sel_player = st.sidebar.selectbox("Player", players_sidebar)
+#players_sidebar = ["All players"] + sorted(
+    #props_df["player"].fillna("").astype(str).unique()
+#)
+#sel_player = st.sidebar.selectbox("Player", players_sidebar)
 
-markets_sidebar = ["All Stats"] + sorted(
-    props_df["market"].fillna("").astype(str).unique()
-)
-sel_market = st.sidebar.selectbox("Market", markets_sidebar)
+#markets_sidebar = ["All Stats"] + sorted(
+    #props_df["market"].fillna("").astype(str).unique()
+#)
+#sel_market = st.sidebar.selectbox("Market", markets_sidebar)
 
-books = sorted(props_df["bookmaker"].fillna("").astype(str).unique())
-default_books = [b for b in books if b.lower() in ("draftkings", "fanduel")] or books
-sel_books = st.sidebar.multiselect("Bookmaker", books, default=default_books)
+#books = sorted(props_df["bookmaker"].fillna("").astype(str).unique())
+#default_books = [b for b in books if b.lower() in ("draftkings", "fanduel")] or books
+#sel_books = st.sidebar.multiselect("Bookmaker", books, default=default_books)
 
-od_min = int(props_df["price"].min()) if not props_df.empty else -300
-od_max = int(props_df["price"].max()) if not props_df.empty else 300
-sel_odds = st.sidebar.slider("Odds Range", od_min, od_max, (od_min, od_max))
+#od_min = int(props_df["price"].min()) if not props_df.empty else -300
+#od_max = int(props_df["price"].max()) if not props_df.empty else 300
+#sel_odds = st.sidebar.slider("Odds Range", od_min, od_max, (od_min, od_max))
 
-sel_hit10 = st.sidebar.slider("Min Hit Rate L10", 0.0, 1.0, 0.5)
+#sel_hit10 = st.sidebar.slider("Min Hit Rate L10", 0.0, 1.0, 0.5)
 
-show_only_saved = st.sidebar.checkbox("Show Only Saved Props", value=False)
+#show_only_saved = st.sidebar.checkbox("Show Only Saved Props", value=False)
 
 if st.sidebar.button("🔄 Refresh Data"):
     st.cache_data.clear()
@@ -2215,21 +2215,43 @@ with tab1:
 
     st.subheader("EV+ Props (Real Slate)")
 
-    # Apply global sidebar filters (game, player, market, book, odds range slider, min L10)
-    filtered_df = filter_props(props_df)
+    # ------------------- EV+ FILTER BAR -------------------
+    c1, c2 = st.columns(2)
 
-    # ----------- TOP METRICS ----------
-    total_props = len(filtered_df)
-    avg_hit = filtered_df["hit_rate_last10"].mean() if total_props else 0
-    avg_odds = filtered_df["price"].mean() if total_props else 0
-    avg_matchup = filtered_df["matchup_difficulty_score"].mean() if total_props else 0
+    with c1:
+        ev_odds_min = st.number_input(
+            "Minimum Odds",
+            value=-200,
+            step=10,
+            key="ev_min_odds",
+        )
+
+    with c2:
+        ev_odds_max = st.number_input(
+            "Maximum Odds",
+            value=400,
+            step=10,
+            key="ev_max_odds",
+        )
+
+    # Base DF (no sidebar filters)
+    df = props_df.copy()
+    df["price"] = pd.to_numeric(df["price"], errors="coerce")
+    df["hit_rate_last10"] = pd.to_numeric(df["hit_rate_last10"], errors="coerce")
+    df = df.dropna(subset=["price", "hit_rate_last10"])
+
+    # ------- METRICS -------
+    total_props = len(df)
+    avg_hit = df["hit_rate_last10"].mean() if total_props else 0
+    avg_odds = df["price"].mean() if total_props else 0
+    avg_matchup = df["matchup_difficulty_score"].mean() if total_props else 0
 
     metrics_html = textwrap.dedent(f"""
     <div class="metric-grid">
         <div class="metric-card">
-            <div class="metric-label">Props Shown</div>
+            <div class="metric-label">Props Analyzed</div>
             <div class="metric-value">{total_props}</div>
-            <div class="metric-sub">filtered results</div>
+            <div class="metric-sub">before EV filter</div>
         </div>
         <div class="metric-card">
             <div class="metric-label">Avg Hit Rate (L10)</div>
@@ -2250,16 +2272,16 @@ with tab1:
     """)
     st.markdown(metrics_html, unsafe_allow_html=True)
 
-    if filtered_df.empty:
-        st.info("No props match your filters.")
+    # ------- EV+ CARD RENDER -------
+    if df.empty:
+        st.info("No props available.")
     else:
-        # EV+ tab uses global sidebar odds + min L10 as before
         render_prop_cards(
-            filtered_df,
-            require_ev_plus=True,
-            odds_min=manual_odds_min,
-            odds_max=manual_odds_max,
-            min_hit_rate=manual_l10_min / 100.0,
+            df,
+            require_ev_plus=True,        # 🔥 THIS enforces EV+ only
+            odds_min=ev_odds_min,
+            odds_max=ev_odds_max,
+            min_hit_rate=0.0,            # hit threshold is handled by EV logic
             hit_rate_col="hit_rate_last10",
             hit_label="L10 Hit",
             min_opp_rank=None,
@@ -2302,7 +2324,7 @@ with tab2:
         df = df[df["game_label"].isin(selected_games)]
 
     # Second row of filters: odds + hit window + hit rate + opponent rank
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
 
     with c1:
         avail_odds_min = st.number_input(
@@ -2346,6 +2368,24 @@ with tab2:
             key="avail_min_opp_rank",
         )
 
+    with c5:
+        sportsbook_list = sorted(
+            df["bookmaker"]
+            .fillna("")
+            .map(normalize_bookmaker)
+            .dropna()
+            .unique()
+            .tolist()
+        )
+
+        selected_books = st.multiselect(
+            "Sportsbooks",
+            sportsbook_list,
+            default=sportsbook_list,
+            key="avail_books",
+        )
+
+
     # Map hit window → column
     hit_rate_col_map = {
         "L5": "hit_rate_last5",
@@ -2360,6 +2400,11 @@ with tab2:
 
     # Drop rows without odds or selected hit-rate column
     df = df.dropna(subset=["price", hit_rate_col])
+
+    # Apply sportsbook filter
+    df["book_clean"] = df["bookmaker"].map(normalize_bookmaker)
+    df = df[df["book_clean"].isin(selected_books)]
+
 
     if df.empty:
         st.info("No props available for today with the current filters.")

@@ -1850,20 +1850,20 @@ def render_prop_cards(
     ]
 
     def extract_wowy_list(g):
-    # If no WOWY cols exist → return empty list safely
-    if not wowy_cols:
-        return []
+        # If no WOWY cols exist → return empty list safely
+        if not wowy_cols:
+            return []
 
-    df2 = g.copy()
+        df2 = g.copy()
 
-    # Filter only on columns that exist
-    df2 = df2[wowy_cols]
+        # Filter only on columns that exist
+        df2 = df2[wowy_cols]
 
-    # If breakdown exists, drop rows where it's null
-    if "breakdown" in df2.columns:
-        df2 = df2[df2["breakdown"].notna()]
+        # If breakdown exists, drop rows where it's null
+        if "breakdown" in df2.columns:
+            df2 = df2[df2["breakdown"].notna()]
 
-    return df2.to_dict("records")
+        return df2.to_dict("records")
 
 
     w_map = {}

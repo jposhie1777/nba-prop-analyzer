@@ -1850,8 +1850,21 @@ def render_prop_cards(
     ]
 
     def extract_wowy_list(g):
-        w = g[g["breakdown"].notna()][wowy_cols]
-        return w.to_dict("records")
+    # If no WOWY cols exist → return empty list safely
+    if not wowy_cols:
+        return []
+
+    df2 = g.copy()
+
+    # Filter only on columns that exist
+    df2 = df2[wowy_cols]
+
+    # If breakdown exists, drop rows where it's null
+    if "breakdown" in df2.columns:
+        df2 = df2[df2["breakdown"].notna()]
+
+    return df2.to_dict("records")
+
 
     w_map = {}
     for (player, team), g in card_df.groupby(["player", "player_team"]):

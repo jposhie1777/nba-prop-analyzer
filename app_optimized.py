@@ -2715,32 +2715,68 @@ with tab2:
 with tab3:
     st.subheader("Saved Bets")
 
+    # Nothing saved yet
     if not st.session_state.saved_bets:
-        st.info(
-            "No saved bets yet — select rows in the Props Overview table (Advanced Table view)."
-        )
-    else:
-        df_saved = pd.DataFrame(st.session_state.saved_bets)
-        df_saved_display = df_saved.rename(
-            columns={
-                "player": "Player",
-                "market": "Market",
-                "line": "Line",
-                "bet_type": "Label",
-                "price": "Price",
-                "bookmaker": "Book",
-            }
+        st.info("No saved bets yet.")
+        st.stop()
+
+    # Convert to DataFrame for display
+    df_saved = pd.DataFrame(st.session_state.saved_bets)
+    df_saved_display = df_saved.rename(
+        columns={
+            "player": "Player",
+            "market": "Market",
+            "line": "Line",
+            "bet_type": "Label",
+            "price": "Price",
+            "bookmaker": "Book",
+        }
+    )
+
+    # ---- DISPLAY SAVED BETS WITH REMOVE BUTTONS ----
+    for i, bet in enumerate(st.session_state.saved_bets):
+        col1, col2 = st.columns([8, 1])
+
+        with col1:
+            st.markdown(
+                f"""
+                **{bet['player']}**  
+                {bet['market']} **{bet['bet_type']} {bet['line']}**  
+                Odds: **{bet['price']}** — Book: **{bet['bookmaker']}**
+                """
+            )
+        with col2:
+            if st.button("❌", key=f"remove_{i}"):
+                # Remove this bet
+                st.session_state.saved_bets.pop(i)
+                replace_saved_bets_in_db(user_id, st.session_state.saved_bets)
+                st.rerun()
+
+    st.write("---")
+
+    # ---- CLEAR ALL BUTTON ----
+    if st.button("🗑️ Clear All Saved Bets"):
+        st.session_state.saved_bets = []
+        replace_saved_bets_in_db(user_id, [])
+        st.success("All saved bets cleared.")
+        st.rerun()
+
+    st.write("---")
+
+    # ---- EXPORT AS TEXT ----
+    txt_export = ""
+    for b in st.session_state.saved_bets:
+        txt_export += (
+            f"{b['player']} | {b['market']} | {b['bet_type']} {b['line']} | "
+            f"Odds {b['price']} | {b['bookmaker']}\n"
         )
 
-        st.dataframe(df_saved_display, use_container_width=True, hide_index=True)
-
-        csv = df_saved.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            "Download Saved Bets (CSV)",
-            data=csv,
-            file_name="saved_bets.csv",
-            mime="text/csv",
-        )
+    st.download_button(
+        "Download as Text",
+        data=txt_export,
+        file_name="saved_bets.txt",
+        mime="text/plain",
+    )
 
 #-------------------------------------------------
 # TAB 4 Depth Chart & Injury Report

@@ -1476,10 +1476,17 @@ merged = injury_df.merge(
     suffixes=("", "_roster")
 )
 
-# Verify first initial matches
 def row_matches(row):
-    inj_initial = row["first_clean"][0] if row["first_clean"] else ""
+    fc = row.get("first_clean", "")
+
+    # Normalize to a clean string
+    if isinstance(fc, str):
+        inj_initial = fc[:1]  # first character
+    else:
+        inj_initial = ""
+
     roster_initial = row.get("first_initial", "")
+
     return inj_initial == roster_initial
 
 merged["name_match"] = merged.apply(row_matches, axis=1)

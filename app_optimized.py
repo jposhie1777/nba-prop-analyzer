@@ -1094,6 +1094,23 @@ if not st.session_state.saved_bets_loaded:
     st.session_state.saved_bets = load_saved_bets_from_db(user_id)
     st.session_state.saved_bets_loaded = True
 
+
+
+# Helper: persist bets for this user to Postgres
+def save_bet_for_user(user_id: int, bet: dict):
+    """Append a bet for this user (per account) and sync to the saved_bets table."""
+    # Normalize old 'Label' field if present
+    if "bet_type" not in bet and "Label" in bet:
+        bet["bet_type"] = bet.pop("Label")
+
+    # Append to in-memory session list
+    current = st.session_state.get("saved_bets", [])
+    current.append(bet)
+    st.session_state.saved_bets = current
+
+    # Sync entire list to DB
+    replace_saved_bets_in_db(user_id, current)
+
 # ------------------------------------------------------
 # UTILITY FUNCTIONS (from production)
 # ------------------------------------------------------
@@ -1698,17 +1715,39 @@ def filter_props(df):
     # Global Min L10 Hit Rate
     d = d[d["hit_rate_last10"] >= sel_hit10]
 
-    # Saved bets filter
-    if show_only_saved and st.session_state.saved_bets:
-        saved_df = pd.DataFrame(st.session_state.saved_bets)
-        key_cols = ["player", "market", "line", "bet_type", "bookmaker"]
-        if all(col in d.columns for col in key_cols) and all(
-            col in saved_df.columns for col in key_cols
-        ):
-            d = d.merge(saved_df[key_cols], on=key_cols, how="inner")
+        # Saved bets filter (JSON-based)
+        if show_only_saved:
+            try:
+                saved_list = load_saved_bets()  # from JSON file
+            except Exception:
+                saved_list = []
 
-    return d
+            if saved_list:
+                saved_df = pd.DataFrame(saved_list)
 
+                # We stored both the internal market code and a pretty label
+                # so map JSON -> props_df column names:
+                saved_df = saved_df.rename(
+                    columns={
+                        "market_code": "market",
+                        "label": "bet_type",
+                        "book": "bookmaker",
+                    }
+                )
+
+                key_cols = ["player", "market", "line", "bet_type", "bookmaker"]
+
+                if all(col in d.columns for col in key_cols) and all(
+                    col in saved_df.columns for col in key_cols
+                ):
+                    # Only keep rows that appear in the saved bets list
+                    d = d.merge(
+                        saved_df[key_cols].drop_duplicates(),
+                        on=key_cols,
+                        how="inner",
+                    )
+
+        return d
 
 # ------------------------------------------------------
 # TABS

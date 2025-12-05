@@ -1730,57 +1730,6 @@ with tab1:
 
     st.subheader("Props Overview (Real Slate)")
 
-    # --------------------------------------------------
-    # 🔐 SAVE BET / DRAWER STATE (Option A – no DB)
-    # --------------------------------------------------
-    if "drawer_bets" not in st.session_state:
-        st.session_state.drawer_bets = []  # list of bet dicts
-
-    if "drawer_open" not in st.session_state:
-        st.session_state.drawer_open = False
-
-    def make_bet_from_row(row):
-        """Create a compact bet dict from a props row."""
-        return {
-            "player": row.get("player", ""),
-            "market_code": row.get("market", ""),
-            "market": MARKET_DISPLAY_MAP.get(row.get("market", ""), row.get("market", "")),
-            "line": float(row.get("line", 0)) if pd.notna(row.get("line", None)) else None,
-            "bet_type": str(row.get("bet_type", "")).upper(),
-            "bookmaker": str(row.get("bookmaker", "")),
-            "price": int(row.get("price", 0)) if pd.notna(row.get("price", None)) else None,
-            "hit_rate_last10": float(row.get("hit_rate_last10", 0.0)) if pd.notna(row.get("hit_rate_last10", None)) else 0.0,
-            "player_team": row.get("player_team", ""),
-            "opponent_team": row.get("opponent_team", ""),
-        }
-
-    def bet_to_display_line(bet: dict) -> str:
-        """Compact human-readable label for drawer list."""
-        odds = bet.get("price")
-        odds_str = f"{odds:+d}" if isinstance(odds, int) else "—"
-        hr10 = bet.get("hit_rate_last10", 0.0)
-        hr10_str = f"{hr10:.0%}" if isinstance(hr10, (int, float, float)) else "—"
-
-        return (
-            f"{bet.get('player', '')} – "
-            f"{bet.get('market', '')} "
-            f"{bet.get('bet_type', '')} {bet.get('line', '')} "
-            f"@ {bet.get('bookmaker', '')} ({odds_str}, L10 {hr10_str})"
-        )
-
-    def add_bet_to_drawer(bet: dict):
-        """Append bet to drawer if not already present."""
-        existing = st.session_state.drawer_bets
-        # Avoid duplicates by simple string identity
-        new_label = bet_to_display_line(bet)
-        labels = [bet_to_display_line(b) for b in existing]
-        if new_label not in labels:
-            st.session_state.drawer_bets.append(bet)
-
-    def remove_bet_from_drawer(idx: int):
-        if 0 <= idx < len(st.session_state.drawer_bets):
-            st.session_state.drawer_bets.pop(idx)
-
     # Apply global sidebar filters
     filtered_df = filter_props(props_df)
 
@@ -1821,70 +1770,14 @@ with tab1:
         st.stop()
 
     # -------------------------------------------
-    # Mode toggle + Drawer toggle
+    # Mode toggle
     # -------------------------------------------
-    top_col1, top_col2 = st.columns([3, 1])
-    with top_col1:
-        view_mode = st.radio(
-            "View Mode",
-            ["Card grid", "Advanced Table"],
-            horizontal=True,
-            index=0,
-        )
-    with top_col2:
-        btn_label = f"📂 Saved Bets ({len(st.session_state.drawer_bets)})"
-        if st.button(btn_label, use_container_width=True):
-            st.session_state.drawer_open = not st.session_state.drawer_open
-            st.experimental_rerun()
-
-    # -------------------------------------------
-    # Drawer UI (top of tab)
-    # -------------------------------------------
-    if st.session_state.drawer_open:
-        with st.container():
-            st.markdown(
-                """
-                <div style="
-                    border-radius: 16px;
-                    border: 1px solid rgba(148,163,184,0.5);
-                    padding: 10px 14px;
-                    margin-bottom: 12px;
-                    background: radial-gradient(circle at top left, rgba(15,23,42,1), rgba(15,23,42,0.95));
-                    box-shadow: 0 18px 40px rgba(15,23,42,0.95);
-                ">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                        <div style="font-size:0.9rem;font-weight:600;color:#e5e7eb;">
-                            Saved Bets
-                        </div>
-                        <div style="font-size:0.75rem;color:#9ca3af;">
-                            Click ❌ to remove, or Clear All
-                        </div>
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-            if not st.session_state.drawer_bets:
-                st.caption("No bets saved yet. Use ⭐ Save Bet on any card.")
-            else:
-                # Render each saved bet with a remove button
-                for i, bet in enumerate(st.session_state.drawer_bets):
-                    c1, c2 = st.columns([9, 1])
-                    with c1:
-                        st.markdown(
-                            f"- {bet_to_display_line(bet)}",
-                            unsafe_allow_html=False,
-                        )
-                    with c2:
-                        if st.button("❌", key=f"remove_bet_{i}"):
-                            remove_bet_from_drawer(i)
-                            st.experimental_rerun()
-
-                # Clear all button
-                if st.button("🧹 Clear All Saved Bets"):
-                    st.session_state.drawer_bets = []
-                    st.experimental_rerun()
+    view_mode = st.radio(
+        "View Mode",
+        ["Card grid", "Advanced Table"],
+        horizontal=True,
+        index=0
+    )
 
     # ======================================================
     # CARD GRID VIEW  (sparkline, L10 fix, opp rank fix)
@@ -1990,6 +1883,7 @@ with tab1:
             """
             return svg
 
+
         # ---------- Bookmaker normalization ----------
         def normalize_bookmaker(raw: str) -> str:
             if not raw:
@@ -2000,6 +1894,7 @@ with tab1:
                 "draft": "DraftKings",
                 "draftkings": "DraftKings",
                 "dk": "DraftKings",
+
                 "fanduel": "FanDuel",
                 "fd": "FanDuel",
                 "fan duel": "FanDuel",
@@ -2008,9 +1903,10 @@ with tab1:
             for k, v in mapping.items():
                 if k in r:
                     return v
-
+            
             # default: capitalize correctly
             return raw.strip().title()
+
 
         # ---------- Filters for card grid ----------
         MIN_ODDS_FOR_CARD = manual_odds_min
@@ -2106,7 +2002,7 @@ with tab1:
             odds = row.get("price", 0)
             implied = (100 / (odds + 100)) if odds > 0 else abs(odds) / (abs(odds) + 100)
 
-            # If you want EV+ tag, you can uncomment this:
+            # If you want EV+ tag, uncomment:
             # if row.get("hit_rate_last10", 0) > implied:
             #     tags.append(("📈 EV+", "#22c55e"))
 
@@ -2193,6 +2089,17 @@ with tab1:
                 home_logo = TEAM_LOGOS_BASE64.get(player_team, "")
                 opp_logo = TEAM_LOGOS_BASE64.get(opp_team, "")
 
+                if home_logo:
+                    logos_html = (
+                        '<div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">'
+                        f'<img src="{home_logo}" style="height:18px;border-radius:4px;" />'
+                        '<span style="font-size:0.7rem;color:#9ca3af;">vs</span>'
+                        f'<img src="{opp_logo}" style="height:18px;border-radius:4px;" />'
+                        '</div>'
+                    )
+                else:
+                    logos_html = ""
+
                 # Normalize & fetch sportsbook logo
                 book = normalize_bookmaker(row.get("bookmaker", ""))
                 book_logo_b64 = SPORTSBOOK_LOGOS_BASE64.get(book)
@@ -2214,11 +2121,12 @@ with tab1:
                         '</div>'
                     )
 
+
                 # Tags + WOWY
                 tags_html = build_tags_html(build_prop_tags(row))
                 wowy_html = build_wowy_block(row)
 
-                # ---------- Card Layout ----------
+                # ---------- Card Layout (no leading indentation) ----------
                 card_lines = [
                     '<div class="prop-card">',
 
@@ -2245,15 +2153,21 @@ with tab1:
 
                     '  </div>',  # END TOP BAR
 
-                    # --- SPARKLINE CENTERED ---
+
+
+                    # --- SPARKLINE CENTERED (NO ESCAPING BUG) ---
                     '  <div style="display:flex; justify-content:center; margin:8px 0;">'
                         + spark_html +
                     '  </div>',
+
+
 
                     # --- TAGS CENTERED ---
                     '  <div style="display:flex; justify-content:center; margin-bottom:6px;">',
                     f'    {tags_html}',
                     '  </div>',
+
+
 
                     # --- BOTTOM METRICS ---
                     '  <div class="prop-meta" style="margin-top:2px;">',
@@ -2280,25 +2194,19 @@ with tab1:
                     '</div>',
                 ]
 
-                card_html = "\n".join(card_lines)
-                st.markdown(card_html, unsafe_allow_html=True)
 
-                # 🔘 Save Bet button (logically "inside" the card)
-                bet_dict = make_bet_from_row(row)
-                if st.button("⭐ Save Bet", key=f"save_bet_{page}_{idx}"):
-                    add_bet_to_drawer(bet_dict)
-                    # Optionally auto-open drawer when you first save
-                    st.session_state.drawer_open = True
-                    st.experimental_rerun()
+                card_html = "\n".join(card_lines)
+
+                st.markdown(card_html, unsafe_allow_html=True)
 
         st.markdown("</div>", unsafe_allow_html=True)
         st.caption(
             "Card view updated: centered header, sparkline, L10 fixes, "
-            "opponent-rank difficulty, NA-safe logic, and per-card Save Bet + drawer."
+            "opponent-rank difficulty, NA-safe logic."
         )
 
     # ======================================================
-    # ADVANCED TABLE VIEW (read-only, no saves)
+    # ADVANCED TABLE VIEW
     # ======================================================
     else:
 
@@ -2353,7 +2261,7 @@ with tab1:
             "Matchup30": df["Matchup30"],
         })
 
-        # --- AG Grid render config (unchanged, but read-only) ---
+        # --- AG Grid render config (unchanged from your version) ---
         sparkline_renderer = JsCode("""
             function(params){
                 const v = params.value;
@@ -2461,6 +2369,7 @@ with tab1:
             cellStyle={"textAlign": "center"},
         )
         gb.configure_column("*", filter=True)
+        gb.configure_selection("multiple", use_checkbox=True)
 
         gb.configure_grid_options(
             getRowStyle=row_style_js,
@@ -2519,15 +2428,40 @@ with tab1:
             width=100,
         )
 
-        AgGrid(
+        grid_response = AgGrid(
             grid_df,
             gridOptions=gb.build(),
-            update_mode=GridUpdateMode.NO_UPDATE,  # read-only
+            update_mode=GridUpdateMode.SELECTION_CHANGED,
             fit_columns_on_grid_load=False,
             theme="balham",
             allow_unsafe_jscode=True,
             height=550,
         )
+
+        selected = grid_response.get("selected_rows", [])
+
+        # Save selected bets
+        if selected:
+            sel_df = pd.DataFrame(selected)[
+                ["Player", "Market", "Line", "Label", "Odds", "Book"]
+            ].rename(
+                columns={
+                    "Player": "player",
+                    "Market": "market",
+                    "Line": "line",
+                    "Label": "bet_type",
+                    "Odds": "price",
+                    "Book": "bookmaker",
+                }
+            )
+
+            st.session_state.saved_bets = sel_df.drop_duplicates().to_dict("records")
+            replace_saved_bets_in_db(user_id, st.session_state.saved_bets)
+
+            st.success(f"{len(sel_df)} bet(s) saved.")
+        else:
+            st.session_state.saved_bets = []
+            replace_saved_bets_in_db(user_id, [])
 
 # ------------------------------------------------------
 # TAB 2 — TREND LAB (Dev)

@@ -2819,13 +2819,20 @@ with tab5:
     team_depth = depth_df[depth_df["team_number"] == selected_team_number].copy()
     team_injuries = injury_df[injury_df["team_number"] == selected_team_number].copy()
 
-    # Prepare fast lookup for injuries
     injury_lookup = (
         team_injuries.groupby("player_id")
         .tail(1)
-        .set_index("player_id")[["status", "description"]]
+        .set_index("player_id")[[
+            "status",
+            "short_comment",
+            "injury_type",
+            "injury_location",
+            "injury_side",
+            "injury_detail"
+        ]]
         .to_dict(orient="index")
-    )
+)
+
 
     # ----------------------------
     # TEAM HEADER (more spacious)

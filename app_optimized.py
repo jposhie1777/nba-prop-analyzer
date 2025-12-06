@@ -1942,8 +1942,12 @@ def render_prop_cards(
         st.info("No props match your filters (after EV/odds/hit-rate logic).")
         return
 
-    # ---- sort + pagination base ----
-    card_df = card_df.sort_values(hit_rate_col, ascending=False).reset_index(drop=True)
+    # 🔥 Sort by hit rate first (descending), then odds (ascending)
+    card_df = card_df.sort_values(
+        by=[hit_rate_col, "price"],
+        ascending=[False, True]
+    ).reset_index(drop=True)
+
 
     page_size = 30
     total_cards = len(card_df)

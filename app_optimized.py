@@ -2006,7 +2006,7 @@ def render_prop_cards(
         opp_logo = TEAM_LOGOS_BASE64.get(away, "")
 
         # ---- Bookmaker logo ----
-        book_logo = BOOKMAKER_LOGOS_BASE64.get(normalize_bookmaker(bookmaker), "")
+        book_logo = SPORTSBOOK_LOGOS_BASE64.get(normalize_bookmaker(bookmaker), "")
         book_html = f'<img src="{book_logo}" style="height:20px;border-radius:4px;" />' if book_logo else bookmaker
 
         # ---- EV badge ----

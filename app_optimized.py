@@ -1470,6 +1470,20 @@ def normalize(s):
 injury_df["first_clean"] = injury_df["first_name"].apply(normalize)
 injury_df["last_clean"] = injury_df["last_name"].apply(normalize)
 
+# ------------------------------------------------------
+# INJURY LOOKUP FOR PROP CARDS
+# ------------------------------------------------------
+# Take the most recent injury row per player
+injury_lookup = (
+    injury_df.sort_values("snapshot_ts")
+    .groupby("player_id")
+    .tail(1)
+)
+
+# Convert to dict → player_id → injury row
+injury_lookup = injury_lookup.set_index("player_id").to_dict("index")
+
+
 # Depth chart name normalization
 depth_df["player_norm"] = depth_df["player"].apply(normalize)
 depth_df["first_initial"] = depth_df["player_norm"].apply(
@@ -1804,6 +1818,42 @@ def get_opponent_rank(row):
         return int(row[col])
     return None
 
+def injury_badge_for_player(player_id):
+    """Return HTML badge for injury designation, or empty string if healthy."""
+
+    inj = injury_lookup.get(player_id)
+
+    if not inj:
+        return ""  # no data
+
+    status = inj["status"].strip().upper()
+
+    # Treat these as healthy → no badge displayed
+    if status in ["AVAILABLE", "ACTIVE", "PROBABLE", "HEALTHY"]:
+        return ""
+
+    # Color coding
+    if "OUT" in status:
+        clr = "#ef4444"
+    elif "DOUBT" in status or "QUESTION" in status:
+        clr = "#eab308"
+    else:
+        clr = "#3b82f6"
+
+    return f"""
+        <span style="
+            background:{clr};
+            color:white;
+            padding:2px 7px;
+            font-size:0.65rem;
+            border-radius:999px;
+            margin-left:6px;
+            font-weight:700;
+        ">
+            {status}
+        </span>
+    """
+
 
 def rank_to_color(rank):
     if not isinstance(rank, int):
@@ -2030,11 +2080,19 @@ def render_prop_cards(
                 f'      <img src="{opp_logo}" style="height:20px;border-radius:4px;" />'
                 '    </div>',
 
+                # injury badge
+                inj_badge = injury_badge_for_player(row.get("player_id"))
+
                 # CENTER → PLAYER + MARKET
                 '    <div style="text-align:center; flex:1;">'
-                f'      <div class="prop-player" style="font-size:1.05rem;font-weight:700;">{player}</div>'
-                f'      <div class="prop-market" style="font-size:0.82rem;color:#9ca3af;">{pretty_market} • {bet_type} {line}</div>'
+                f'      <div class="prop-player" style="font-size:1.05rem;font-weight:700;">'
+                f'          {player} {inj_badge}'
+                '      </div>'
+                f'      <div class="prop-market" style="font-size:0.82rem;color:#9ca3af;">'
+                f'          {pretty_market} • {bet_type} {line}'
+                '      </div>'
                 '    </div>',
+
 
                 # RIGHT → BOOK
                 '    <div style="display:flex; justify-content:flex-end; min-width:70px;">'
@@ -2799,9 +2857,11 @@ with tab5:
     selected_abbr = team_row.team_abbr
     selected_name = team_row.team_name
 
-    # Subsets
     team_depth = depth_df[depth_df["team_number"] == selected_team_number].copy()
-    team_injuries = injury_df[injury_df["team_number"] == selected_team_number].copy()
+
+    # FIX: injury data uses team_abbrev, not team_number
+    team_injuries = injury_df[injury_df["team_abbrev"] == selected_abbr].copy()
+
 
     # Latest injury per player
     latest_injuries = (

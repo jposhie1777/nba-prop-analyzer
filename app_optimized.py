@@ -1928,11 +1928,16 @@ def render_prop_cards(
     if min_opp_rank:
         working = working[working["opp_rank"] >= min_opp_rank]
 
-    # Sort by EV descending when EV+ view
-    if require_ev_plus:
-        working = working.sort_values("ev", ascending=False)
+    # Use the correct EV column from your dataset
+    EV_COL = "ev_last10"
+
+    if require_ev_plus and EV_COL in working.columns:
+        # Sort by EV (last10) descending
+        working = working.sort_values(EV_COL, ascending=False)
     else:
+        # Default sorting: odds (price)
         working = working.sort_values("price", ascending=False)
+
 
     if working.empty:
         st.info("No props match your filters.")
@@ -1985,6 +1990,7 @@ def render_prop_cards(
         bet_type = row["bet_type"]
         line = row["line"]
         price = row["price"]
+        EV_COL = "ev_last10"
         ev = row.get(EV_COL)
         team = row.get("team")
         home = row.get("home_team")

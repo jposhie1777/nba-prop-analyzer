@@ -1915,8 +1915,14 @@ def render_prop_cards(
     working = working[working[hit_rate_col] >= min_hit_rate]
 
     # EV+ filter (Tab 1 only)
+    EV_COL = "ev_last10"
+
     if require_ev_plus:
-        working = working[working["ev"] > 0]
+        if EV_COL in working.columns:
+            working = working[working[EV_COL] > 0]
+        else:
+            st.warning("No EV column found in data.")
+
 
     # Opponent rank
     if min_opp_rank:
@@ -1979,7 +1985,7 @@ def render_prop_cards(
         bet_type = row["bet_type"]
         line = row["line"]
         price = row["price"]
-        ev = row.get("ev")
+        ev = row.get(EV_COL)
         team = row.get("team")
         home = row.get("home_team")
         away = row.get("visitor_team")

@@ -2935,77 +2935,89 @@ with tab5:
             last_ts = team_injuries["snapshot_ts"].max()
             st.caption(f"Last update: {last_ts.strftime('%b %d, %Y %I:%M %p')}")
 
-            # Only show most recent record for each player_id
-            latest_rows = (
-                team_injuries.sort_values("snapshot_ts")
+            # Pull ONLY the most recent entry for each player
+            latest = (
+                team_injuries
+                .sort_values("snapshot_ts")
                 .groupby("player_id")
                 .tail(1)
-                .sort_values("status")
+                .sort_values("status", ascending=True)
             )
 
-            for _, r in latest_rows.iterrows():
+            for _, r in latest.iterrows():
 
-                # ---- BASIC FIELDS ----
+                # --------------------------
+                # BASIC FIELDS
+                # --------------------------
                 name = f"{r['first_name']} {r['last_name']}"
                 status = r.get("status", "Unknown")
-                ret = r.get("return_date_raw", "")
-                
-                # ---- NEW SCHEMA FIELDS ----
-                inj_type = r.get("injury_type", "")
-                inj_loc = r.get("injury_location", "")
-                inj_side = r.get("injury_side", "")
-                inj_detail = r.get("injury_detail", "")
+                return_date = r.get("return_date_raw", "N/A")
+
+                # NEW TABLE FIELDS
+                injury_type = r.get("injury_type", "")
+                injury_location = r.get("injury_location", "")
+                injury_side = r.get("injury_side", "")
+                injury_detail = r.get("injury_detail", "")
 
                 short_comment = r.get("short_comment", "")
                 long_comment = r.get("long_comment", "")
 
-                # ---- STATUS COLOR ----
-                st_low = status.lower()
-                if "out" in st_low:
-                    status_color = "background:#ef4444;"      # Red
-                elif "question" in st_low or "doubt" in st_low or "day-to-day" in st_low:
-                    status_color = "background:#eab308;"      # Yellow
+                # --------------------------
+                # COLOR LOGIC FOR STATUS
+                # --------------------------
+                status_lower = status.lower()
+                if "out" in status_lower:
+                    status_color = "background:#ef4444;"   # red
+                elif "question" in status_lower or "doubt" in status_lower:
+                    status_color = "background:#eab308;"   # yellow
+                elif "prob" in status_lower:
+                    status_color = "background:#3b82f6;"   # blue
                 else:
-                    status_color = "background:#3b82f6;"      # Blue (active / probable)
+                    status_color = "background:#6b7280;"   # gray default
 
-                # ---- INJURY DESCRIPTOR LINE ----
-                injury_line = " • ".join(
-                    [x for x in [inj_type, inj_loc, inj_side, inj_detail] if x]
-                )
+                # --------------------------
+                # COMPOSE INJURY DETAILS LINE
+                # --------------------------
+                injury_parts = [
+                    injury_type,
+                    injury_location,
+                    injury_side,
+                    injury_detail
+                ]
+                injury_line = " • ".join([p for p in injury_parts if p])
+
                 if not injury_line:
-                    injury_line = "No injury details available"
+                    injury_line = "No injury detail provided."
 
-                # ---- HTML CARD ----
-                html = (
-                    f"<div class='injury-card'>"
+                # --------------------------
+                # HTML CARD
+                # --------------------------
+                html = f"""
+                    <div class='injury-card'>
+                        <div style='display:flex;justify-content:space-between;'>
+                            <div style='font-size:1.05rem;font-weight:600;color:white;'>{name}</div>
+                            <div class='injury-badge' style='{status_color}'>{status.upper()}</div>
+                        </div>
 
-                    f"  <div style='display:flex;justify-content:space-between;'>"
-                    f"    <div style='font-size:1.05rem;font-weight:600;color:white;'>{name}</div>"
-                    f"    <div class='injury-badge' style='{status_color}'>{status.upper()}</div>"
-                    f"  </div>"
+                        <div style='font-size:0.85rem;color:#e5e7eb;margin-top:6px;'>
+                            <b>Return:</b> {return_date}
+                        </div>
 
-                    f"  <div style='font-size:0.85rem;color:#e5e7eb;margin-top:6px;'>"
-                    f"    <b>Return:</b> {ret}"
-                    f"  </div>"
+                        <div style='font-size:0.85rem;color:#e5e7eb;margin-top:6px;'>
+                            <b>Injury:</b> {injury_line}
+                        </div>
 
-                    f"  <div style='font-size:0.85rem;color:#e5e7eb;margin-top:6px;'>"
-                    f"    <b>Injury:</b> {injury_line}"
-                    f"  </div>"
+                        <div style='font-size:0.85rem;color:#e5e7eb;margin-top:8px;'>
+                            {short_comment}
+                        </div>
 
-                    # Short comment (always shown)
-                    f"  <div style='font-size:0.85rem;color:#e5e7eb;margin-top:8px;'>"
-                    f"    {short_comment}"
-                    f"  </div>"
+                        <div style='font-size:0.8rem;color:#9ca3af;margin-top:6px;'>
+                            {long_comment}
+                        </div>
+                    </div>
+                """
 
-                    # Long comment (optional)
-                    f"  <div style='font-size:0.80rem;color:#9ca3af;margin-top:6px;'>"
-                    f"    {long_comment}"
-                    f"  </div>"
-
-                    f"</div>"
-                )
-
-                components.html(html, height=180, scrolling=False)
+                components.html(html, height=200, scrolling=False)
 
 
 # ------------------------------------------------------

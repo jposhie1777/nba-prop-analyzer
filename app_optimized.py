@@ -1885,275 +1885,207 @@ def compute_implied_prob(odds):
     return abs(odds) / (abs(odds) + 100)
 
 
+# ------------------------------------------------------
+# RENDER PROP CARDS (Unified for Tab1 + Tab2)
+# ------------------------------------------------------
 def render_prop_cards(
     df,
-    *,
-    require_ev_plus: bool,
-    odds_min: float,
-    odds_max: float,
-    min_hit_rate: float,
-    hit_rate_col: str = "hit_rate_last10",
-    hit_label: str = "L10 Hit",
-    min_opp_rank: int | None = None,
-    page_key: str = "ev",
+    require_ev_plus,
+    odds_min,
+    odds_max,
+    min_hit_rate,
+    hit_rate_col,
+    hit_label,
+    min_opp_rank,
+    page_key,
 ):
     """
-    Shared card-grid renderer for both EV+ Props and Available Props.
-    df should already have basic cleaning done (price, hit_rate cols numeric).
+    Renders HTML prop cards with filters, pagination, and injury badges.
     """
 
-    if df.empty:
+    # ----------------------------
+    # Filtering
+    # ----------------------------
+    working = df.copy()
+
+    # Odds filter
+    working = working[(working["price"] >= odds_min) & (working["price"] <= odds_max)]
+
+    # Hit rate filter
+    working = working[working[hit_rate_col] >= min_hit_rate]
+
+    # EV+ filter (Tab 1 only)
+    if require_ev_plus:
+        working = working[working["ev"] > 0]
+
+    # Opponent rank
+    if min_opp_rank:
+        working = working[working["opp_rank"] >= min_opp_rank]
+
+    # Sort by EV descending when EV+ view
+    if require_ev_plus:
+        working = working.sort_values("ev", ascending=False)
+    else:
+        working = working.sort_values("price", ascending=False)
+
+    if working.empty:
         st.info("No props match your filters.")
         return
 
-    # ---- WOWY merge once per render ----
-    card_df = attach_wowy_deltas(df, wowy_df)
+    # ----------------------------
+    # Pagination
+    # ----------------------------
+    per_page = 25
+    total = len(working)
+    total_pages = (total - 1) // per_page + 1
 
-    wowy_cols = [
-        "breakdown", "pts_delta", "reb_delta", "ast_delta",
-        "pra_delta", "pts_reb_delta"
-    ]
+    page = st.session_state.get(f"page_{page_key}", 1)
+    if page < 1:
+        page = 1
+    if page > total_pages:
+        page = total_pages
 
-    def extract_wowy_list(g):
-        # If no WOWY cols exist → return empty list safely
-        if not wowy_cols:
-            return []
+    start = (page - 1) * per_page
+    end = start + per_page
+    page_df = working.iloc[start:end]
 
-        df2 = g.copy()
+    # Pagination buttons
+    c1, c2, c3 = st.columns([1, 2, 1])
 
-        # Filter only on columns that exist
-        df2 = df2[wowy_cols]
+    with c1:
+        if st.button("⬅ Prev", key=f"prev_{page_key}") and page > 1:
+            st.session_state[f"page_{page_key}"] = page - 1
+            st.experimental_rerun()
 
-        # If breakdown exists, drop rows where it's null
-        if "breakdown" in df2.columns:
-            df2 = df2[df2["breakdown"].notna()]
-
-        return df2.to_dict("records")
-
-
-    w_map = {}
-    for (player, team), g in card_df.groupby(["player", "player_team"]):
-        w_map[(player, team)] = extract_wowy_list(g)
-
-    card_df["_wowy_list"] = card_df.apply(
-        lambda r: w_map.get((r["player"], r["player_team"]), []),
-        axis=1
-    )
-
-    # ---- row filter ----
-    def card_good(row):
-        price = row.get("price")
-        hit = row.get(hit_rate_col)
-
-        if pd.isna(price) or pd.isna(hit):
-            return False
-
-        if not (odds_min <= price <= odds_max):
-            return False
-
-        if hit < min_hit_rate:
-            return False
-
-        if min_opp_rank is not None:
-            r = get_opponent_rank(row)
-            if r is None or r < min_opp_rank:
-                return False
-
-        if require_ev_plus:
-            implied = compute_implied_prob(price)
-            if implied is None or hit <= implied:
-                return False
-
-        return True
-
-    card_df = card_df[card_df.apply(card_good, axis=1)]
-
-    if card_df.empty:
-        st.info("No props match your filters (after EV/odds/hit-rate logic).")
-        return
-
-    # ---- sort + pagination base ----
-    card_df = card_df.sort_values(hit_rate_col, ascending=False).reset_index(drop=True)
-
-    page_size = 30
-    total_cards = len(card_df)
-    total_pages = max(1, (total_cards + page_size - 1) // page_size)
-
-    st.write(f"Showing {total_cards} props • {total_pages} pages")
-
-    page = st.number_input(
-        "Page",
-        min_value=1,
-        max_value=total_pages,
-        value=1,
-        step=1,
-        key=f"{page_key}_card_page_number",
-    )
-
-    start = (page - 1) * page_size
-    end = start + page_size
-    page_df = card_df.iloc[start:end]
+    with c3:
+        if st.button("Next ➡", key=f"next_{page_key}") and page < total_pages:
+            st.session_state[f"page_{page_key}"] = page + 1
+            st.experimental_rerun()
 
     st.markdown(
-        '<div style="max-height:1100px; overflow-y:auto; padding-right:12px;">',
+        f"<div style='text-align:center;color:#9ca3af;margin-bottom:10px;'>Page {page} of {total_pages}</div>",
         unsafe_allow_html=True,
     )
 
-    cols = st.columns(4)
-
-    # ==============================
-    # CARD LOOP
-    # ==============================
+    # ----------------------------
+    # CARD RENDER LOOP
+    # ----------------------------
     for idx, row in page_df.iterrows():
-        col = cols[idx % 4]
-        with col:
-            player = row.get("player", "")
-            pretty_market = MARKET_DISPLAY_MAP.get(row.get("market", ""), row.get("market", ""))
-            bet_type = str(row.get("bet_type", "")).upper()
-            line = row.get("line", "")
 
-            odds = int(row.get("price", 0))
-            implied_prob = compute_implied_prob(odds) or 0.0
-            hit = row.get(hit_rate_col, 0.0)
+        # ---- Core data ----
+        player = row["player"]
+        player_id = row.get("player_id")
+        stat = row["stat"]
+        bet_type = row["bet_type"]
+        line = row["line"]
+        price = row["price"]
+        ev = row.get("ev")
+        team = row.get("team")
+        home = row.get("home_team")
+        away = row.get("visitor_team")
+        pretty_market = row.get("market_pretty")
+        bookmaker = row.get("bookmaker")
 
-            # L10 Avg (display only, even if filter window is L5/L20)
-            l10_avg = get_l10_avg(row)
-            l10_avg_display = f"{l10_avg:.1f}" if l10_avg is not None else "-"
+        # ---- Injury badge ----
+        inj_badge = injury_badge_for_player(player_id)
 
-            # Opp Rank
-            opp_rank = get_opponent_rank(row)
-            if isinstance(opp_rank, int):
-                rank_display = opp_rank
-                rank_color = rank_to_color(opp_rank)
-            else:
-                rank_display = "-"
-                rank_color = "#9ca3af"
+        # ---- Logos ----
+        home_logo = TEAM_LOGOS_BASE64.get(home, "")
+        opp_logo = TEAM_LOGOS_BASE64.get(away, "")
 
-            # Sparkline
-            spark_vals = get_spark_values(row)
-            line_value = float(row.get("line", 0))
-            spark_html = build_sparkline_bars_hitmiss(spark_vals, line_value)
+        # ---- Bookmaker logo ----
+        book_logo = BOOKMAKER_LOGOS_BASE64.get(normalize_bookmaker(bookmaker), "")
+        book_html = f'<img src="{book_logo}" style="height:20px;border-radius:4px;" />' if book_logo else bookmaker
 
-            # Logos
-            player_team = normalize_team_code(row.get("player_team", ""))
-            opp_team = normalize_team_code(row.get("opponent_team", ""))
+        # ---- EV badge ----
+        ev_html = ""
+        if require_ev_plus and pd.notna(ev):
+            clr = "#22c55e" if ev > 0 else "#ef4444"
+            ev_html = f"""
+            <div style="
+                background:{clr};
+                color:white;
+                font-size:0.75rem;
+                padding:4px 10px;
+                border-radius:999px;
+                font-weight:700;
+                display:inline-block;
+                margin-bottom:6px;
+            ">
+                EV {ev:+.2f}
+            </div>
+            """
 
-            home_logo = TEAM_LOGOS_BASE64.get(player_team, "")
-            opp_logo = TEAM_LOGOS_BASE64.get(opp_team, "")
+        # ---- Save button ID ----
+        save_key = f"save_{page_key}_{idx}_{player}_{stat}_{line}_{price}"
 
-            # Normalize & fetch sportsbook logo
-            book = normalize_bookmaker(row.get("bookmaker", ""))
-            book_logo_b64 = SPORTSBOOK_LOGOS_BASE64.get(book)
+        # ----------------------------
+        # CARD HTML
+        # ----------------------------
+        card_html = f"""
+        <div class="prop-card">
 
-            if book_logo_b64:
-                book_html = (
-                    f'<img src="{book_logo_b64}" '
-                    'style="height:26px; width:auto; max-width:80px; object-fit:contain;'
-                    'filter:drop-shadow(0 0 6px rgba(0,0,0,0.4));" />'
-                )
-            else:
-                book_html = (
-                    '<div style="padding:3px 10px; border-radius:8px;'
-                    'background:rgba(255,255,255,0.08);'
-                    'border:1px solid rgba(255,255,255,0.15);'
-                    'font-size:0.7rem;">'
-                    f'{book}'
-                    '</div>'
-                )
+            <!-- TOP BAR -->
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
 
-            # Tags + WOWY
-            tags_html = build_tags_html(build_prop_tags(row))
-            wowy_html = build_wowy_block(row)
+                <!-- LEFT: MATCHUP LOGOS -->
+                <div style="display:flex; align-items:center; gap:6px; min-width:70px;">
+                    <img src="{home_logo}" style="height:20px;border-radius:4px;" />
+                    <span style="font-size:0.7rem;color:#9ca3af;">vs</span>
+                    <img src="{opp_logo}" style="height:20px;border-radius:4px;" />
+                </div>
 
-            # ---------- Card Layout ----------
+                <!-- CENTER: PLAYER NAME + MARKET -->
+                <div style="text-align:center; flex:1;">
+                    <div class="prop-player" style="font-size:1.05rem;font-weight:700;">
+                        {player} {inj_badge}
+                    </div>
+                    <div class="prop-market" style="font-size:0.82rem;color:#9ca3af;">
+                        {pretty_market} • {bet_type} {line}
+                    </div>
+                </div>
 
-            card_lines = [
-                '<div class="prop-card">',
+                <!-- RIGHT: BOOKMAKER -->
+                <div style="display:flex; justify-content:flex-end; min-width:70px;">
+                    {book_html}
+                </div>
 
-                # TOP BAR
-                '  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">',
+            </div>
 
-                # LEFT → MATCHUP LOGOS
-                '    <div style="display:flex; align-items:center; gap:6px; min-width:70px;">'
-                f'      <img src="{home_logo}" style="height:20px;border-radius:4px;" />'
-                '      <span style="font-size:0.7rem;color:#9ca3af;">vs</span>'
-                f'      <img src="{opp_logo}" style="height:20px;border-radius:4px;" />'
-                '    </div>',
+            <!-- EV BADGE -->
+            <div style="text-align:center;">
+                {ev_html}
+            </div>
 
-                # injury badge
-                inj_badge = injury_badge_for_player(row.get("player_id"))
+            <!-- ODDS -->
+            <div style="font-size:0.92rem;font-weight:600;color:white;text-align:center;margin-top:4px;">
+                Odds: {price:+}
+            </div>
 
-                # CENTER → PLAYER + MARKET
-                '    <div style="text-align:center; flex:1;">'
-                f'      <div class="prop-player" style="font-size:1.05rem;font-weight:700;">'
-                f'          {player} {inj_badge}'
-                '      </div>'
-                f'      <div class="prop-market" style="font-size:0.82rem;color:#9ca3af;">'
-                f'          {pretty_market} • {bet_type} {line}'
-                '      </div>'
-                '    </div>',
+        </div>
+        """
 
+        # Render card
+        st.markdown(card_html, unsafe_allow_html=True)
 
-                # RIGHT → BOOK
-                '    <div style="display:flex; justify-content:flex-end; min-width:70px;">'
-                f'      {book_html}'
-                '    </div>',
+        # ----------------------------
+        # SAVE BET BUTTON
+        # ----------------------------
+        if st.button("Save Bet", key=save_key):
+            add_saved_bet(
+                player=player,
+                market=pretty_market,
+                bet_type=bet_type,
+                line=line,
+                odds=price,
+                bookmaker=bookmaker,
+            )
+            st.success("Saved!")
 
-                '  </div>',  # END TOP BAR
+    # ----------------------------
+    # END CARD LOOP
+    # ----------------------------
 
-                # SPARKLINE
-                '  <div style="display:flex; justify-content:center; margin:8px 0;">'
-                    + spark_html +
-                '  </div>',
-
-                # TAGS
-                '  <div style="display:flex; justify-content:center; margin-bottom:6px;">',
-                f'    {tags_html}',
-                '  </div>',
-
-                # BOTTOM METRICS
-                '  <div class="prop-meta" style="margin-top:2px;">',
-
-                '    <div>',
-                f'      <div style="color:#e5e7eb;font-size:0.8rem;">{odds:+d}</div>'
-                f'      <div style="font-size:0.7rem;">Imp: {implied_prob:.0%}</div>',
-                '    </div>',
-
-                '    <div>',
-                f'      <div style="color:#e5e7eb;font-size:0.8rem;">{hit_label}: {hit:.0%}</div>'
-                f'      <div style="font-size:0.7rem;">L10 Avg: {l10_avg_display}</div>',
-                '    </div>',
-
-                '    <div>',
-                f'      <div style="color:{rank_color};font-size:0.8rem;font-weight:700;">{rank_display}</div>',
-                '      <div style="font-size:0.7rem;">Opp Rank</div>',
-                '    </div>',
-
-                '  </div>',  # END BOTTOM METRICS
-
-                f'  {wowy_html}',
-
-                '</div>',
-            ]
-
-            card_html = "\n".join(card_lines)
-            st.markdown(card_html, unsafe_allow_html=True)
-
-            # --- SAVE BET BUTTON ---
-            bet_payload = {
-                "player": player,
-                "market": row.get("market"),
-                "line": row.get("line"),
-                "bet_type": bet_type,
-                "price": odds,
-                "bookmaker": row.get("bookmaker"),
-            }
-
-            btn_key = f"{page_key}_save_{player}_{row.get('market')}_{row.get('line')}_{idx}"
-
-            if st.button("💾 Save Bet", key=btn_key):
-                save_bet_for_user(user_id, bet_payload)
-                st.success(f"Saved: {player} {pretty_market} {bet_type} {line}")
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -2860,7 +2792,8 @@ with tab5:
     team_depth = depth_df[depth_df["team_number"] == selected_team_number].copy()
 
     # FIX: injury data uses team_abbrev, not team_number
-    team_injuries = injury_df[injury_df["team_abbrev"] == selected_abbr].copy()
+    team_injuries = injury_df[injury_df["team_abbrev"] == selected_abbr]
+
 
 
     # Latest injury per player

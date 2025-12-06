@@ -166,17 +166,29 @@ ORDER BY team_number, position, depth
 INJURY_SQL = f"""
 SELECT
   snapshot_ts,
+  injury_id,
+  report_date,
   player_id,
   first_name,
   last_name,
-  current_team,
+  full_name,
+  team_id,
   team_abbrev,
+  team_name,
   status,
+  status_type_desc,
+  status_type_abbr,
   return_date_raw,
-  description
-FROM {PROJECT_ID}.nba_prop_analyzer.player_injuries_raw
+  injury_type,
+  injury_location,
+  injury_side,
+  injury_detail,
+  long_comment,
+  short_comment
+FROM `{PROJECT_ID}.nba_prop_analyzer.player_injuries_raw`
 ORDER BY snapshot_ts DESC
 """
+
 
 # NEW: WOWY delta SQL
 DELTA_SQL = f"""
@@ -1494,15 +1506,18 @@ merged["name_match"] = merged.apply(row_matches, axis=1)
 # Keep only matched rows
 injury_df = merged[merged["name_match"] == True].copy()
 
-# Final clean columns
 injury_df = injury_df[
     [
         "snapshot_ts", "player_id", "first_name", "last_name",
-        "team_abbrev", "current_team",
-        "status", "return_date_raw", "description",
-        "team_number", "team_abbr", "team_name"
+        "team_abbrev", "team_name",
+        "status", "status_type_desc", "status_type_abbr",
+        "return_date_raw",
+        "injury_type", "injury_location", "injury_side", "injury_detail",
+        "short_comment", "long_comment",
+        "team_number", "team_abbr"
     ]
 ]
+
 
 
 # ------------------------------------------------------
@@ -2682,84 +2697,88 @@ with tab4:
         )
 
 #-------------------------------------------------
-# TAB 5 — DEPTH CHART & INJURY REPORT (your old Tab 4)
+# TAB 5 — DEPTH CHART & INJURY REPORT (f-string safe)
 #-------------------------------------------------
 with tab5:
-    st.subheader("")
+
+    st.subheader("Depth Chart & Injury Report")
 
     # --------------------------------------------------------
-    # GLOBAL CSS — SPACIOUS CARD GRID + INJURY BADGE SUPPORT
+    # STATIC CSS (no f-string required)
     # --------------------------------------------------------
     st.markdown("""
-<style>
+    <style>
 
-.depth-card {
-    padding:18px 20px;
-    margin-bottom:20px;
-    border-radius:20px;
-    border:1px solid rgba(148,163,184,0.35);
-    background: radial-gradient(circle at top left, rgba(30,41,59,1), rgba(15,23,42,0.92));
-    box-shadow: 0 22px 55px rgba(15,23,42,0.90);
-    transition: transform .18s ease-out, box-shadow .18s ease-out, border-color .18s ease-out;
-}
+    .team-header-card {
+        background: radial-gradient(circle at top, rgba(15,23,42,0.95), rgba(15,23,42,0.92));
+        padding: 20px;
+        border-radius: 18px;
+        border: 1px solid rgba(148,163,184,0.35);
+        box-shadow: 0 22px 55px rgba(15,23,42,0.9);
+        margin-bottom: 20px;
+    }
 
-.depth-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 30px 70px rgba(15,23,42,1);
-    border-color: #3b82f6;
-}
+    .depth-player-card {
+        background: radial-gradient(circle at top left, rgba(15,23,42,0.96), rgba(15,23,42,0.92));
+        border-radius: 18px;
+        padding: 14px 16px;
+        border: 1px solid rgba(148,163,184,0.35);
+        box-shadow: 0 18px 45px rgba(15,23,42,0.95);
+        margin-bottom: 12px;
+        transition: 0.16s ease-out;
+    }
 
-.role-pill {
-    font-size: 0.70rem;
-    padding: 4px 10px;
-    border-radius: 999px;
-    display: inline-block;
-    font-weight: 600;
-    color: white;
-    margin-top: 6px;
-}
+    .depth-player-card:hover {
+        transform: translateY(-3px);
+        border-color: #3b82f6;
+        box-shadow: 0 26px 60px rgba(15,23,42,1);
+    }
 
-.injury-badge {
-    padding: 3px 10px;
-    border-radius: 999px;
-    font-size: 0.68rem;
-    font-weight: 700;
-    color: white;
-    margin-left: 6px;
-}
+    .injury-card {
+        background: radial-gradient(circle at top, rgba(50,0,0,0.85), rgba(20,0,0,0.9));
+        border-radius: 18px;
+        padding: 18px 20px;
+        border: 1px solid rgba(255,100,100,0.35);
+        box-shadow: 0 22px 55px rgba(15,23,42,0.95);
+        margin-bottom: 18px;
+        transition: 0.18s ease-out;
+    }
 
-.injury-card {
-    padding:18px 20px;
-    margin-bottom:22px;
-    border-radius:20px;
-    border:1px solid rgba(148,163,184,0.28);
-    background: radial-gradient(circle at 0 0, rgba(42,0,0,0.85), rgba(40,0,0,0.65));
-    box-shadow: 0 22px 55px rgba(15,23,42,0.95);
-    transition: transform .18s ease-out, box-shadow .18s ease-out;
-}
+    .injury-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 30px 70px rgba(15,23,42,1);
+        border-color: #ef4444;
+    }
 
-.injury-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 32px 75px rgba(15,23,42,1);
-}
+    .injury-badge {
+        padding: 3px 10px;
+        border-radius: 999px;
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: white;
+        margin-left: 6px;
+    }
 
-.header-flex {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin-bottom: 1.6rem;
-}
+    .role-pill {
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: white;
+        display: inline-block;
+        margin-top: 6px;
+    }
 
-.position-header {
-    font-size: 1.2rem;
-    font-weight: 700;
-    color: #e5e7eb;
-    margin-bottom: 10px;
-    margin-top: 10px;
-}
+    .position-title {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #e5e7eb;
+        margin-bottom: 8px;
+        margin-top: 12px;
+    }
 
-</style>
-""", unsafe_allow_html=True)
+    </style>
+    """, unsafe_allow_html=True)
 
     # ----------------------------
     # TEAM SELECTOR
@@ -2774,46 +2793,56 @@ with tab5:
     label_to_meta = {label: row for label, row in zip(team_labels, teams_meta.itertuples())}
 
     selected_label = st.selectbox("Select Team", team_labels)
-    team_row = label_to_meta[selected_label]
 
+    team_row = label_to_meta[selected_label]
     selected_team_number = int(team_row.team_number)
     selected_abbr = team_row.team_abbr
     selected_name = team_row.team_name
 
-    # Filter
+    # Subsets
     team_depth = depth_df[depth_df["team_number"] == selected_team_number].copy()
     team_injuries = injury_df[injury_df["team_number"] == selected_team_number].copy()
 
-    # Prepare fast lookup for injuries
-    injury_lookup = (
-        team_injuries.groupby("player_id")
+    # Latest injury per player
+    latest_injuries = (
+        team_injuries.sort_values("snapshot_ts")
+        .groupby("player_id")
         .tail(1)
-        .set_index("player_id")[["status", "description"]]
-        .to_dict(orient="index")
+        .set_index("player_id")
+        .to_dict("index")
     )
 
     # ----------------------------
-    # TEAM HEADER (more spacious)
+    # TEAM HEADER (f-string!)
     # ----------------------------
     logo = TEAM_LOGOS_BASE64.get(selected_abbr, "")
-    components.html(
-        f"<div class='header-flex'>"
-        f"<img src='{logo}' style='height:55px;border-radius:12px;'/>"
-        f"<div>"
-        f"<div style='font-size:1.55rem;font-weight:700;color:#e5e7eb;'>{selected_name}</div>"
-        f"<div style='font-size:0.9rem;color:#9ca3af;'>Depth chart & injury status</div>"
-        f"</div></div>",
-        height=90,
-        scrolling=False,
+
+    st.markdown(
+        f"""
+        <div class="team-header-card">
+            <div style="display:flex;align-items:center;gap:15px;">
+                <img src="{logo}" style="height:55px;border-radius:12px;" />
+                <div>
+                    <div style="font-size:1.55rem;font-weight:700;color:#f3f4f6;">
+                        {selected_name}
+                    </div>
+                    <div style="font-size:0.9rem;color:#9ca3af;">
+                        Depth chart & real-time injury report
+                    </div>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
     )
 
     col_left, col_right = st.columns([1.6, 1.0])
 
     # ------------------------------------------------------
-    # DEPTH CHART (LEFT)
+    # LEFT — DEPTH CHART (f-string safe)
     # ------------------------------------------------------
     with col_left:
-        st.markdown("## 🏀 Depth Chart")
+        st.markdown("### 🏀 Depth Chart")
 
         pos_order = ["PG", "SG", "SF", "PF", "C", "G", "F"]
         positions = sorted(
@@ -2821,13 +2850,15 @@ with tab5:
             key=lambda p: pos_order.index(p) if p in pos_order else 99
         )
 
-        # Wider column spacing: max 3 per row
-        pos_cols = st.columns(min(3, len(positions)))
+        cols_pos = st.columns(min(3, len(positions)))
 
         for i, pos in enumerate(positions):
-            with pos_cols[i % len(pos_cols)]:
+            with cols_pos[i % len(cols_pos)]:
 
-                st.markdown(f"<div class='position-header'>{pos}</div>", unsafe_allow_html=True)
+                st.markdown(
+                    f"<div class='position-title'>{pos}</div>",
+                    unsafe_allow_html=True
+                )
 
                 rows = team_depth[team_depth["position"] == pos].sort_values("depth")
 
@@ -2835,97 +2866,118 @@ with tab5:
                     name = r["player"]
                     role = r["role"]
                     depth_val = r["depth"]
-                    player_id = r.get("player_id", None)
+                    pid = r.get("player_id")
 
-                    # Injury badge logic
+                    # Injury badge
                     injury_html = ""
-                    if player_id in injury_lookup:
-                        st_val = injury_lookup[player_id]["status"]
-                        st_low = st_val.lower()
-                        if "out" in st_low:
-                            badge_color = "background:#ef4444;"
-                        elif "question" in st_low or "doubt" in st_low:
-                            badge_color = "background:#eab308;"
-                        else:
-                            badge_color = "background:#3b82f6;"
+                    if pid in latest_injuries:
+                        inj = latest_injuries[pid]
+                        status = inj["status"].upper()
 
-                        injury_html = (
-                            f"<span class='injury-badge' style='{badge_color}'>{st_val.upper()}</span>"
-                        )
+                        if "OUT" in status:
+                            clr = "#ef4444"
+                        elif "QUESTION" in status or "DOUBT" in status:
+                            clr = "#eab308"
+                        else:
+                            clr = "#3b82f6"
+
+                        injury_html = f"""
+                        <span class='injury-badge' style='background:{clr};'>
+                            {status}
+                        </span>
+                        """
 
                     # Role color
                     rl = role.lower()
                     if rl.startswith("start"):
-                        role_color = "background:#22c55e;"
+                        role_color = "#22c55e"
                     elif "rotation" in rl:
-                        role_color = "background:#3b82f6;"
+                        role_color = "#3b82f6"
                     else:
-                        role_color = "background:#6b7280;"
+                        role_color = "#6b7280"
 
-                    html = (
-                        f"<div class='depth-card'>"
-                        f"  <div style='display:flex;justify-content:space-between;align-items:center;'>"
-                        f"    <div>"
-                        f"      <div style='font-size:1.05rem;font-weight:700;color:white;'>{name}{injury_html}</div>"
-                        f"      <span class='role-pill' style='{role_color}'>{role}</span>"
-                        f"    </div>"
-                        f"    <div style='font-size:0.8rem;color:#e5e7eb;"
-                        f"          background:rgba(255,255,255,0.08);padding:5px 12px;border-radius:10px;"
-                        f"          border:1px solid rgba(255,255,255,0.12);'>"
-                        f"      Depth {depth_val}"
-                        f"    </div>"
-                        f"  </div>"
-                        f"</div>"
+                    st.markdown(
+                        f"""
+                        <div class="depth-player-card">
+                            <div style="display:flex;justify-content:space-between;align-items:center;">
+                                <div>
+                                    <div style="font-size:1.05rem;font-weight:700;color:white;">
+                                        {name} {injury_html}
+                                    </div>
+                                    <span class="role-pill" style="background:{role_color};">
+                                        {role}
+                                    </span>
+                                </div>
+                                <div style="
+                                    font-size:0.8rem;color:#e5e7eb;
+                                    background:rgba(255,255,255,0.08);
+                                    padding:5px 12px;border-radius:10px;
+                                    border:1px solid rgba(255,255,255,0.12);
+                                ">
+                                    Depth {depth_val}
+                                </div>
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
                     )
 
-                    components.html(html, height=110, scrolling=False)
-
-
     # ------------------------------------------------------
-    # INJURY REPORT (RIGHT)
+    # RIGHT — INJURY REPORT (f-string safe)
     # ------------------------------------------------------
     with col_right:
-        st.markdown("## 🏥 Injury Report")
+
+        st.markdown("### 🏥 Injury Report")
 
         if team_injuries.empty:
-            st.success("No reported injuries.")
+            st.success("No active injuries.")
         else:
             last_ts = team_injuries["snapshot_ts"].max()
-            st.caption(f"Last update: {last_ts.strftime('%b %d, %Y %I:%M %p')}")
+            st.caption(f"Last updated: {last_ts.strftime('%b %d, %Y %I:%M %p')}")
 
-            for _, r in (
+            latest_only = (
                 team_injuries.sort_values("snapshot_ts")
                 .groupby("player_id")
                 .tail(1)
                 .sort_values("status")
-                .iterrows()
-            ):
+            )
 
+            for _, r in latest_only.iterrows():
                 name = f"{r['first_name']} {r['last_name']}"
-                status = r["status"]
+                status = r["status"].upper()
                 ret = r["return_date_raw"]
-                desc = r["description"]
+                desc = r.get("short_comment") or r.get("long_comment") or ""
 
-                st_low = status.lower()
-                if "out" in st_low:
-                    status_color = "background:#ef4444;"
-                elif "question" in st_low or "doubt" in st_low:
-                    status_color = "background:#eab308;"
+                if "OUT" in status:
+                    clr = "#ef4444"
+                elif "QUESTION" in status or "DOUBT" in status:
+                    clr = "#eab308"
                 else:
-                    status_color = "background:#3b82f6;"
+                    clr = "#3b82f6"
 
-                html = (
-                    f"<div class='injury-card'>"
-                    f"  <div style='display:flex;justify-content:space-between;'>"
-                    f"    <div style='font-size:1.05rem;font-weight:600;color:white;'>{name}</div>"
-                    f"    <div class='injury-badge' style='{status_color}'>{status.upper()}</div>"
-                    f"  </div>"
-                    f"  <div style='font-size:0.85rem;color:#e5e7eb;margin-top:6px;'><b>Return:</b> {ret}</div>"
-                    f"  <div style='font-size:0.85rem;color:#e5e7eb;margin-top:6px;'>{desc}</div>"
-                    f"</div>"
+                st.markdown(
+                    f"""
+                    <div class="injury-card">
+                        <div style="display:flex;justify-content:space-between;">
+                            <div style="font-size:1.05rem;font-weight:600;color:white;">
+                                {name}
+                            </div>
+                            <div class="injury-badge" style="background:{clr};">
+                                {status}
+                            </div>
+                        </div>
+
+                        <div style="font-size:0.85rem;color:#e5e7eb;margin-top:6px;">
+                            <b>Return:</b> {ret}
+                        </div>
+
+                        <div style="font-size:0.85rem;color:#e5e7eb;margin-top:6px;">
+                            {desc}
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
                 )
-
-                components.html(html, height=140, scrolling=False)
 
 
 # ------------------------------------------------------

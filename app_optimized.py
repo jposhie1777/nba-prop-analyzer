@@ -1470,20 +1470,6 @@ def normalize(s):
 injury_df["first_clean"] = injury_df["first_name"].apply(normalize)
 injury_df["last_clean"] = injury_df["last_name"].apply(normalize)
 
-# ------------------------------------------------------
-# INJURY LOOKUP FOR PROP CARDS
-# ------------------------------------------------------
-# Take the most recent injury row per player
-injury_lookup = (
-    injury_df.sort_values("snapshot_ts")
-    .groupby("player_id")
-    .tail(1)
-)
-
-# Convert to dict → player_id → injury row
-injury_lookup = injury_lookup.set_index("player_id").to_dict("index")
-
-
 # Depth chart name normalization
 depth_df["player_norm"] = depth_df["player"].apply(normalize)
 depth_df["first_initial"] = depth_df["player_norm"].apply(
@@ -1818,42 +1804,6 @@ def get_opponent_rank(row):
         return int(row[col])
     return None
 
-def injury_badge_for_player(player_id):
-    """Return HTML badge for injury designation, or empty string if healthy."""
-
-    inj = injury_lookup.get(player_id)
-
-    if not inj:
-        return ""  # no data
-
-    status = inj["status"].strip().upper()
-
-    # Treat these as healthy → no badge displayed
-    if status in ["AVAILABLE", "ACTIVE", "PROBABLE", "HEALTHY"]:
-        return ""
-
-    # Color coding
-    if "OUT" in status:
-        clr = "#ef4444"
-    elif "DOUBT" in status or "QUESTION" in status:
-        clr = "#eab308"
-    else:
-        clr = "#3b82f6"
-
-    return f"""
-        <span style="
-            background:{clr};
-            color:white;
-            padding:2px 7px;
-            font-size:0.65rem;
-            border-radius:999px;
-            margin-left:6px;
-            font-weight:700;
-        ">
-            {status}
-        </span>
-    """
-
 
 def rank_to_color(rank):
     if not isinstance(rank, int):
@@ -1885,219 +1835,267 @@ def compute_implied_prob(odds):
     return abs(odds) / (abs(odds) + 100)
 
 
-# ------------------------------------------------------
-# RENDER PROP CARDS (Unified for Tab1 + Tab2)
-# ------------------------------------------------------
 def render_prop_cards(
     df,
-    require_ev_plus,
-    odds_min,
-    odds_max,
-    min_hit_rate,
-    hit_rate_col,
-    hit_label,
-    min_opp_rank,
-    page_key,
+    *,
+    require_ev_plus: bool,
+    odds_min: float,
+    odds_max: float,
+    min_hit_rate: float,
+    hit_rate_col: str = "hit_rate_last10",
+    hit_label: str = "L10 Hit",
+    min_opp_rank: int | None = None,
+    page_key: str = "ev",
 ):
     """
-    Renders HTML prop cards with filters, pagination, and injury badges.
+    Shared card-grid renderer for both EV+ Props and Available Props.
+    df should already have basic cleaning done (price, hit_rate cols numeric).
     """
 
-    # ----------------------------
-    # Filtering
-    # ----------------------------
-    working = df.copy()
-
-    # Odds filter
-    working = working[(working["price"] >= odds_min) & (working["price"] <= odds_max)]
-
-    # Hit rate filter
-    working = working[working[hit_rate_col] >= min_hit_rate]
-
-    # EV+ filter (Tab 1 only)
-    EV_COL = "ev_last10"
-
-    if require_ev_plus:
-        if EV_COL in working.columns:
-            working = working[working[EV_COL] > 0]
-        else:
-            st.warning("No EV column found in data.")
-
-
-    # Opponent rank
-    if min_opp_rank:
-        working = working[working["opp_rank"] >= min_opp_rank]
-
-    # Use the correct EV column from your dataset
-    EV_COL = "ev_last10"
-
-    if require_ev_plus and EV_COL in working.columns:
-        # Sort by EV (last10) descending
-        working = working.sort_values(EV_COL, ascending=False)
-    else:
-        # Default sorting: odds (price)
-        working = working.sort_values("price", ascending=False)
-
-
-    if working.empty:
+    if df.empty:
         st.info("No props match your filters.")
         return
 
-    # ----------------------------
-    # Pagination
-    # ----------------------------
-    per_page = 25
-    total = len(working)
-    total_pages = (total - 1) // per_page + 1
+    # ---- WOWY merge once per render ----
+    card_df = attach_wowy_deltas(df, wowy_df)
 
-    page = st.session_state.get(f"page_{page_key}", 1)
-    if page < 1:
-        page = 1
-    if page > total_pages:
-        page = total_pages
+    wowy_cols = [
+        "breakdown", "pts_delta", "reb_delta", "ast_delta",
+        "pra_delta", "pts_reb_delta"
+    ]
 
-    start = (page - 1) * per_page
-    end = start + per_page
-    page_df = working.iloc[start:end]
+    def extract_wowy_list(g):
+        # If no WOWY cols exist → return empty list safely
+        if not wowy_cols:
+            return []
 
-    # Pagination buttons
-    c1, c2, c3 = st.columns([1, 2, 1])
+        df2 = g.copy()
 
-    with c1:
-        if st.button("⬅ Prev", key=f"prev_{page_key}") and page > 1:
-            st.session_state[f"page_{page_key}"] = page - 1
-            st.experimental_rerun()
+        # Filter only on columns that exist
+        df2 = df2[wowy_cols]
 
-    with c3:
-        if st.button("Next ➡", key=f"next_{page_key}") and page < total_pages:
-            st.session_state[f"page_{page_key}"] = page + 1
-            st.experimental_rerun()
+        # If breakdown exists, drop rows where it's null
+        if "breakdown" in df2.columns:
+            df2 = df2[df2["breakdown"].notna()]
+
+        return df2.to_dict("records")
+
+
+    w_map = {}
+    for (player, team), g in card_df.groupby(["player", "player_team"]):
+        w_map[(player, team)] = extract_wowy_list(g)
+
+    card_df["_wowy_list"] = card_df.apply(
+        lambda r: w_map.get((r["player"], r["player_team"]), []),
+        axis=1
+    )
+
+    # ---- row filter ----
+    def card_good(row):
+        price = row.get("price")
+        hit = row.get(hit_rate_col)
+
+        if pd.isna(price) or pd.isna(hit):
+            return False
+
+        if not (odds_min <= price <= odds_max):
+            return False
+
+        if hit < min_hit_rate:
+            return False
+
+        if min_opp_rank is not None:
+            r = get_opponent_rank(row)
+            if r is None or r < min_opp_rank:
+                return False
+
+        if require_ev_plus:
+            implied = compute_implied_prob(price)
+            if implied is None or hit <= implied:
+                return False
+
+        return True
+
+    card_df = card_df[card_df.apply(card_good, axis=1)]
+
+    if card_df.empty:
+        st.info("No props match your filters (after EV/odds/hit-rate logic).")
+        return
+
+    # ---- sort + pagination base ----
+    card_df = card_df.sort_values(hit_rate_col, ascending=False).reset_index(drop=True)
+
+    page_size = 30
+    total_cards = len(card_df)
+    total_pages = max(1, (total_cards + page_size - 1) // page_size)
+
+    st.write(f"Showing {total_cards} props • {total_pages} pages")
+
+    page = st.number_input(
+        "Page",
+        min_value=1,
+        max_value=total_pages,
+        value=1,
+        step=1,
+        key=f"{page_key}_card_page_number",
+    )
+
+    start = (page - 1) * page_size
+    end = start + page_size
+    page_df = card_df.iloc[start:end]
 
     st.markdown(
-        f"<div style='text-align:center;color:#9ca3af;margin-bottom:10px;'>Page {page} of {total_pages}</div>",
+        '<div style="max-height:1100px; overflow-y:auto; padding-right:12px;">',
         unsafe_allow_html=True,
     )
 
-    # ----------------------------
-    # CARD RENDER LOOP
-    # ----------------------------
+    cols = st.columns(4)
+
+    # ==============================
+    # CARD LOOP
+    # ==============================
     for idx, row in page_df.iterrows():
+        col = cols[idx % 4]
+        with col:
+            player = row.get("player", "")
+            pretty_market = MARKET_DISPLAY_MAP.get(row.get("market", ""), row.get("market", ""))
+            bet_type = str(row.get("bet_type", "")).upper()
+            line = row.get("line", "")
 
-        # ---- Core data ----
-        player = row["player"]
-        player_id = row.get("player_id")
-        stat = row.get("stat") or detect_stat(row.get("market", ""))
-        bet_type = row["bet_type"]
-        line = row["line"]
-        price = row["price"]
-        EV_COL = "ev_last10"
-        ev = row.get(EV_COL)
-        team = row.get("team")
-        home = row.get("home_team")
-        away = row.get("visitor_team")
-        pretty_market = row.get("market_pretty")
-        bookmaker = row.get("bookmaker")
+            odds = int(row.get("price", 0))
+            implied_prob = compute_implied_prob(odds) or 0.0
+            hit = row.get(hit_rate_col, 0.0)
 
-        # ---- Injury badge ----
-        inj_badge = injury_badge_for_player(player_id)
+            # L10 Avg (display only, even if filter window is L5/L20)
+            l10_avg = get_l10_avg(row)
+            l10_avg_display = f"{l10_avg:.1f}" if l10_avg is not None else "-"
 
-        # ---- Logos ----
-        home_logo = TEAM_LOGOS_BASE64.get(home, "")
-        opp_logo = TEAM_LOGOS_BASE64.get(away, "")
+            # Opp Rank
+            opp_rank = get_opponent_rank(row)
+            if isinstance(opp_rank, int):
+                rank_display = opp_rank
+                rank_color = rank_to_color(opp_rank)
+            else:
+                rank_display = "-"
+                rank_color = "#9ca3af"
 
-        # ---- Bookmaker logo ----
-        book_logo = SPORTSBOOK_LOGOS_BASE64.get(normalize_bookmaker(bookmaker), "")
-        book_html = f'<img src="{book_logo}" style="height:20px;border-radius:4px;" />' if book_logo else bookmaker
+            # Sparkline
+            spark_vals = get_spark_values(row)
+            line_value = float(row.get("line", 0))
+            spark_html = build_sparkline_bars_hitmiss(spark_vals, line_value)
 
-        # ---- EV badge ----
-        ev_html = ""
-        if require_ev_plus and pd.notna(ev):
-            clr = "#22c55e" if ev > 0 else "#ef4444"
-            ev_html = f"""
-            <div style="
-                background:{clr};
-                color:white;
-                font-size:0.75rem;
-                padding:4px 10px;
-                border-radius:999px;
-                font-weight:700;
-                display:inline-block;
-                margin-bottom:6px;
-            ">
-                EV {ev:+.2f}
-            </div>
-            """
+            # Logos
+            player_team = normalize_team_code(row.get("player_team", ""))
+            opp_team = normalize_team_code(row.get("opponent_team", ""))
 
-        # ---- Save button ID ----
-        save_key = f"save_{page_key}_{idx}_{player}_{stat}_{line}_{price}"
+            home_logo = TEAM_LOGOS_BASE64.get(player_team, "")
+            opp_logo = TEAM_LOGOS_BASE64.get(opp_team, "")
 
-        # ----------------------------
-        # CARD HTML
-        # ----------------------------
-        card_html = f"""
-        <div class="prop-card">
+            # Normalize & fetch sportsbook logo
+            book = normalize_bookmaker(row.get("bookmaker", ""))
+            book_logo_b64 = SPORTSBOOK_LOGOS_BASE64.get(book)
 
-            <!-- TOP BAR -->
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            if book_logo_b64:
+                book_html = (
+                    f'<img src="{book_logo_b64}" '
+                    'style="height:26px; width:auto; max-width:80px; object-fit:contain;'
+                    'filter:drop-shadow(0 0 6px rgba(0,0,0,0.4));" />'
+                )
+            else:
+                book_html = (
+                    '<div style="padding:3px 10px; border-radius:8px;'
+                    'background:rgba(255,255,255,0.08);'
+                    'border:1px solid rgba(255,255,255,0.15);'
+                    'font-size:0.7rem;">'
+                    f'{book}'
+                    '</div>'
+                )
 
-                <!-- LEFT: MATCHUP LOGOS -->
-                <div style="display:flex; align-items:center; gap:6px; min-width:70px;">
-                    <img src="{home_logo}" style="height:20px;border-radius:4px;" />
-                    <span style="font-size:0.7rem;color:#9ca3af;">vs</span>
-                    <img src="{opp_logo}" style="height:20px;border-radius:4px;" />
-                </div>
+            # Tags + WOWY
+            tags_html = build_tags_html(build_prop_tags(row))
+            wowy_html = build_wowy_block(row)
 
-                <!-- CENTER: PLAYER NAME + MARKET -->
-                <div style="text-align:center; flex:1;">
-                    <div class="prop-player" style="font-size:1.05rem;font-weight:700;">
-                        {player} {inj_badge}
-                    </div>
-                    <div class="prop-market" style="font-size:0.82rem;color:#9ca3af;">
-                        {pretty_market} • {bet_type} {line}
-                    </div>
-                </div>
+            # ---------- Card Layout ----------
 
-                <!-- RIGHT: BOOKMAKER -->
-                <div style="display:flex; justify-content:flex-end; min-width:70px;">
-                    {book_html}
-                </div>
+            card_lines = [
+                '<div class="prop-card">',
 
-            </div>
+                # TOP BAR
+                '  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">',
 
-            <!-- EV BADGE -->
-            <div style="text-align:center;">
-                {ev_html}
-            </div>
+                # LEFT → MATCHUP LOGOS
+                '    <div style="display:flex; align-items:center; gap:6px; min-width:70px;">'
+                f'      <img src="{home_logo}" style="height:20px;border-radius:4px;" />'
+                '      <span style="font-size:0.7rem;color:#9ca3af;">vs</span>'
+                f'      <img src="{opp_logo}" style="height:20px;border-radius:4px;" />'
+                '    </div>',
 
-            <!-- ODDS -->
-            <div style="font-size:0.92rem;font-weight:600;color:white;text-align:center;margin-top:4px;">
-                Odds: {price:+}
-            </div>
+                # CENTER → PLAYER + MARKET
+                '    <div style="text-align:center; flex:1;">'
+                f'      <div class="prop-player" style="font-size:1.05rem;font-weight:700;">{player}</div>'
+                f'      <div class="prop-market" style="font-size:0.82rem;color:#9ca3af;">{pretty_market} • {bet_type} {line}</div>'
+                '    </div>',
 
-        </div>
-        """
+                # RIGHT → BOOK
+                '    <div style="display:flex; justify-content:flex-end; min-width:70px;">'
+                f'      {book_html}'
+                '    </div>',
 
-        # Render card
-        st.markdown(card_html, unsafe_allow_html=True)
+                '  </div>',  # END TOP BAR
 
-        # ----------------------------
-        # SAVE BET BUTTON
-        # ----------------------------
-        if st.button("Save Bet", key=save_key):
-            add_saved_bet(
-                player=player,
-                market=pretty_market,
-                bet_type=bet_type,
-                line=line,
-                odds=price,
-                bookmaker=bookmaker,
-            )
-            st.success("Saved!")
+                # SPARKLINE
+                '  <div style="display:flex; justify-content:center; margin:8px 0;">'
+                    + spark_html +
+                '  </div>',
 
-    # ----------------------------
-    # END CARD LOOP
-    # ----------------------------
+                # TAGS
+                '  <div style="display:flex; justify-content:center; margin-bottom:6px;">',
+                f'    {tags_html}',
+                '  </div>',
 
+                # BOTTOM METRICS
+                '  <div class="prop-meta" style="margin-top:2px;">',
+
+                '    <div>',
+                f'      <div style="color:#e5e7eb;font-size:0.8rem;">{odds:+d}</div>'
+                f'      <div style="font-size:0.7rem;">Imp: {implied_prob:.0%}</div>',
+                '    </div>',
+
+                '    <div>',
+                f'      <div style="color:#e5e7eb;font-size:0.8rem;">{hit_label}: {hit:.0%}</div>'
+                f'      <div style="font-size:0.7rem;">L10 Avg: {l10_avg_display}</div>',
+                '    </div>',
+
+                '    <div>',
+                f'      <div style="color:{rank_color};font-size:0.8rem;font-weight:700;">{rank_display}</div>',
+                '      <div style="font-size:0.7rem;">Opp Rank</div>',
+                '    </div>',
+
+                '  </div>',  # END BOTTOM METRICS
+
+                f'  {wowy_html}',
+
+                '</div>',
+            ]
+
+            card_html = "\n".join(card_lines)
+            st.markdown(card_html, unsafe_allow_html=True)
+
+            # --- SAVE BET BUTTON ---
+            bet_payload = {
+                "player": player,
+                "market": row.get("market"),
+                "line": row.get("line"),
+                "bet_type": bet_type,
+                "price": odds,
+                "bookmaker": row.get("bookmaker"),
+            }
+
+            btn_key = f"{page_key}_save_{player}_{row.get('market')}_{row.get('line')}_{idx}"
+
+            if st.button("💾 Save Bet", key=btn_key):
+                save_bet_for_user(user_id, bet_payload)
+                st.success(f"Saved: {player} {pretty_market} {bet_type} {line}")
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -2699,88 +2697,84 @@ with tab4:
         )
 
 #-------------------------------------------------
-# TAB 5 — DEPTH CHART & INJURY REPORT (f-string safe)
+# TAB 5 — DEPTH CHART & INJURY REPORT (your old Tab 4)
 #-------------------------------------------------
 with tab5:
-
-    st.subheader("Depth Chart & Injury Report")
+    st.subheader("")
 
     # --------------------------------------------------------
-    # STATIC CSS (no f-string required)
+    # GLOBAL CSS — SPACIOUS CARD GRID + INJURY BADGE SUPPORT
     # --------------------------------------------------------
     st.markdown("""
-    <style>
+<style>
 
-    .team-header-card {
-        background: radial-gradient(circle at top, rgba(15,23,42,0.95), rgba(15,23,42,0.92));
-        padding: 20px;
-        border-radius: 18px;
-        border: 1px solid rgba(148,163,184,0.35);
-        box-shadow: 0 22px 55px rgba(15,23,42,0.9);
-        margin-bottom: 20px;
-    }
+.depth-card {
+    padding:18px 20px;
+    margin-bottom:20px;
+    border-radius:20px;
+    border:1px solid rgba(148,163,184,0.35);
+    background: radial-gradient(circle at top left, rgba(30,41,59,1), rgba(15,23,42,0.92));
+    box-shadow: 0 22px 55px rgba(15,23,42,0.90);
+    transition: transform .18s ease-out, box-shadow .18s ease-out, border-color .18s ease-out;
+}
 
-    .depth-player-card {
-        background: radial-gradient(circle at top left, rgba(15,23,42,0.96), rgba(15,23,42,0.92));
-        border-radius: 18px;
-        padding: 14px 16px;
-        border: 1px solid rgba(148,163,184,0.35);
-        box-shadow: 0 18px 45px rgba(15,23,42,0.95);
-        margin-bottom: 12px;
-        transition: 0.16s ease-out;
-    }
+.depth-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 30px 70px rgba(15,23,42,1);
+    border-color: #3b82f6;
+}
 
-    .depth-player-card:hover {
-        transform: translateY(-3px);
-        border-color: #3b82f6;
-        box-shadow: 0 26px 60px rgba(15,23,42,1);
-    }
+.role-pill {
+    font-size: 0.70rem;
+    padding: 4px 10px;
+    border-radius: 999px;
+    display: inline-block;
+    font-weight: 600;
+    color: white;
+    margin-top: 6px;
+}
 
-    .injury-card {
-        background: radial-gradient(circle at top, rgba(50,0,0,0.85), rgba(20,0,0,0.9));
-        border-radius: 18px;
-        padding: 18px 20px;
-        border: 1px solid rgba(255,100,100,0.35);
-        box-shadow: 0 22px 55px rgba(15,23,42,0.95);
-        margin-bottom: 18px;
-        transition: 0.18s ease-out;
-    }
+.injury-badge {
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: white;
+    margin-left: 6px;
+}
 
-    .injury-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 30px 70px rgba(15,23,42,1);
-        border-color: #ef4444;
-    }
+.injury-card {
+    padding:18px 20px;
+    margin-bottom:22px;
+    border-radius:20px;
+    border:1px solid rgba(148,163,184,0.28);
+    background: radial-gradient(circle at 0 0, rgba(42,0,0,0.85), rgba(40,0,0,0.65));
+    box-shadow: 0 22px 55px rgba(15,23,42,0.95);
+    transition: transform .18s ease-out, box-shadow .18s ease-out;
+}
 
-    .injury-badge {
-        padding: 3px 10px;
-        border-radius: 999px;
-        font-size: 0.68rem;
-        font-weight: 700;
-        color: white;
-        margin-left: 6px;
-    }
+.injury-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 32px 75px rgba(15,23,42,1);
+}
 
-    .role-pill {
-        padding: 4px 10px;
-        border-radius: 999px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        color: white;
-        display: inline-block;
-        margin-top: 6px;
-    }
+.header-flex {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 1.6rem;
+}
 
-    .position-title {
-        font-size: 1.2rem;
-        font-weight: 700;
-        color: #e5e7eb;
-        margin-bottom: 8px;
-        margin-top: 12px;
-    }
+.position-header {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #e5e7eb;
+    margin-bottom: 10px;
+    margin-top: 10px;
+}
 
-    </style>
-    """, unsafe_allow_html=True)
+</style>
+""", unsafe_allow_html=True)
 
     # ----------------------------
     # TEAM SELECTOR
@@ -2795,59 +2789,46 @@ with tab5:
     label_to_meta = {label: row for label, row in zip(team_labels, teams_meta.itertuples())}
 
     selected_label = st.selectbox("Select Team", team_labels)
-
     team_row = label_to_meta[selected_label]
+
     selected_team_number = int(team_row.team_number)
     selected_abbr = team_row.team_abbr
     selected_name = team_row.team_name
 
+    # Filter
     team_depth = depth_df[depth_df["team_number"] == selected_team_number].copy()
+    team_injuries = injury_df[injury_df["team_number"] == selected_team_number].copy()
 
-    # FIX: injury data uses team_abbrev, not team_number
-    team_injuries = injury_df[injury_df["team_abbrev"] == selected_abbr]
-
-
-
-    # Latest injury per player
-    latest_injuries = (
-        team_injuries.sort_values("snapshot_ts")
-        .groupby("player_id")
+    # Prepare fast lookup for injuries
+    injury_lookup = (
+        team_injuries.groupby("player_id")
         .tail(1)
-        .set_index("player_id")
-        .to_dict("index")
+        .set_index("player_id")[["status", "description"]]
+        .to_dict(orient="index")
     )
 
     # ----------------------------
-    # TEAM HEADER (f-string!)
+    # TEAM HEADER (more spacious)
     # ----------------------------
     logo = TEAM_LOGOS_BASE64.get(selected_abbr, "")
-
-    st.markdown(
-        f"""
-        <div class="team-header-card">
-            <div style="display:flex;align-items:center;gap:15px;">
-                <img src="{logo}" style="height:55px;border-radius:12px;" />
-                <div>
-                    <div style="font-size:1.55rem;font-weight:700;color:#f3f4f6;">
-                        {selected_name}
-                    </div>
-                    <div style="font-size:0.9rem;color:#9ca3af;">
-                        Depth chart & real-time injury report
-                    </div>
-                </div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
+    components.html(
+        f"<div class='header-flex'>"
+        f"<img src='{logo}' style='height:55px;border-radius:12px;'/>"
+        f"<div>"
+        f"<div style='font-size:1.55rem;font-weight:700;color:#e5e7eb;'>{selected_name}</div>"
+        f"<div style='font-size:0.9rem;color:#9ca3af;'>Depth chart & injury status</div>"
+        f"</div></div>",
+        height=90,
+        scrolling=False,
     )
 
     col_left, col_right = st.columns([1.6, 1.0])
 
     # ------------------------------------------------------
-    # LEFT — DEPTH CHART (f-string safe)
+    # DEPTH CHART (LEFT)
     # ------------------------------------------------------
     with col_left:
-        st.markdown("### 🏀 Depth Chart")
+        st.markdown("## 🏀 Depth Chart")
 
         pos_order = ["PG", "SG", "SF", "PF", "C", "G", "F"]
         positions = sorted(
@@ -2855,15 +2836,13 @@ with tab5:
             key=lambda p: pos_order.index(p) if p in pos_order else 99
         )
 
-        cols_pos = st.columns(min(3, len(positions)))
+        # Wider column spacing: max 3 per row
+        pos_cols = st.columns(min(3, len(positions)))
 
         for i, pos in enumerate(positions):
-            with cols_pos[i % len(cols_pos)]:
+            with pos_cols[i % len(pos_cols)]:
 
-                st.markdown(
-                    f"<div class='position-title'>{pos}</div>",
-                    unsafe_allow_html=True
-                )
+                st.markdown(f"<div class='position-header'>{pos}</div>", unsafe_allow_html=True)
 
                 rows = team_depth[team_depth["position"] == pos].sort_values("depth")
 
@@ -2871,118 +2850,97 @@ with tab5:
                     name = r["player"]
                     role = r["role"]
                     depth_val = r["depth"]
-                    pid = r.get("player_id")
+                    player_id = r.get("player_id", None)
 
-                    # Injury badge
+                    # Injury badge logic
                     injury_html = ""
-                    if pid in latest_injuries:
-                        inj = latest_injuries[pid]
-                        status = inj["status"].upper()
-
-                        if "OUT" in status:
-                            clr = "#ef4444"
-                        elif "QUESTION" in status or "DOUBT" in status:
-                            clr = "#eab308"
+                    if player_id in injury_lookup:
+                        st_val = injury_lookup[player_id]["status"]
+                        st_low = st_val.lower()
+                        if "out" in st_low:
+                            badge_color = "background:#ef4444;"
+                        elif "question" in st_low or "doubt" in st_low:
+                            badge_color = "background:#eab308;"
                         else:
-                            clr = "#3b82f6"
+                            badge_color = "background:#3b82f6;"
 
-                        injury_html = f"""
-                        <span class='injury-badge' style='background:{clr};'>
-                            {status}
-                        </span>
-                        """
+                        injury_html = (
+                            f"<span class='injury-badge' style='{badge_color}'>{st_val.upper()}</span>"
+                        )
 
                     # Role color
                     rl = role.lower()
                     if rl.startswith("start"):
-                        role_color = "#22c55e"
+                        role_color = "background:#22c55e;"
                     elif "rotation" in rl:
-                        role_color = "#3b82f6"
+                        role_color = "background:#3b82f6;"
                     else:
-                        role_color = "#6b7280"
+                        role_color = "background:#6b7280;"
 
-                    st.markdown(
-                        f"""
-                        <div class="depth-player-card">
-                            <div style="display:flex;justify-content:space-between;align-items:center;">
-                                <div>
-                                    <div style="font-size:1.05rem;font-weight:700;color:white;">
-                                        {name} {injury_html}
-                                    </div>
-                                    <span class="role-pill" style="background:{role_color};">
-                                        {role}
-                                    </span>
-                                </div>
-                                <div style="
-                                    font-size:0.8rem;color:#e5e7eb;
-                                    background:rgba(255,255,255,0.08);
-                                    padding:5px 12px;border-radius:10px;
-                                    border:1px solid rgba(255,255,255,0.12);
-                                ">
-                                    Depth {depth_val}
-                                </div>
-                            </div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True
+                    html = (
+                        f"<div class='depth-card'>"
+                        f"  <div style='display:flex;justify-content:space-between;align-items:center;'>"
+                        f"    <div>"
+                        f"      <div style='font-size:1.05rem;font-weight:700;color:white;'>{name}{injury_html}</div>"
+                        f"      <span class='role-pill' style='{role_color}'>{role}</span>"
+                        f"    </div>"
+                        f"    <div style='font-size:0.8rem;color:#e5e7eb;"
+                        f"          background:rgba(255,255,255,0.08);padding:5px 12px;border-radius:10px;"
+                        f"          border:1px solid rgba(255,255,255,0.12);'>"
+                        f"      Depth {depth_val}"
+                        f"    </div>"
+                        f"  </div>"
+                        f"</div>"
                     )
 
+                    components.html(html, height=110, scrolling=False)
+
+
     # ------------------------------------------------------
-    # RIGHT — INJURY REPORT (f-string safe)
+    # INJURY REPORT (RIGHT)
     # ------------------------------------------------------
     with col_right:
-
-        st.markdown("### 🏥 Injury Report")
+        st.markdown("## 🏥 Injury Report")
 
         if team_injuries.empty:
-            st.success("No active injuries.")
+            st.success("No reported injuries.")
         else:
             last_ts = team_injuries["snapshot_ts"].max()
-            st.caption(f"Last updated: {last_ts.strftime('%b %d, %Y %I:%M %p')}")
+            st.caption(f"Last update: {last_ts.strftime('%b %d, %Y %I:%M %p')}")
 
-            latest_only = (
+            for _, r in (
                 team_injuries.sort_values("snapshot_ts")
                 .groupby("player_id")
                 .tail(1)
                 .sort_values("status")
-            )
+                .iterrows()
+            ):
 
-            for _, r in latest_only.iterrows():
                 name = f"{r['first_name']} {r['last_name']}"
-                status = r["status"].upper()
+                status = r["status"]
                 ret = r["return_date_raw"]
-                desc = r.get("short_comment") or r.get("long_comment") or ""
+                desc = r["description"]
 
-                if "OUT" in status:
-                    clr = "#ef4444"
-                elif "QUESTION" in status or "DOUBT" in status:
-                    clr = "#eab308"
+                st_low = status.lower()
+                if "out" in st_low:
+                    status_color = "background:#ef4444;"
+                elif "question" in st_low or "doubt" in st_low:
+                    status_color = "background:#eab308;"
                 else:
-                    clr = "#3b82f6"
+                    status_color = "background:#3b82f6;"
 
-                st.markdown(
-                    f"""
-                    <div class="injury-card">
-                        <div style="display:flex;justify-content:space-between;">
-                            <div style="font-size:1.05rem;font-weight:600;color:white;">
-                                {name}
-                            </div>
-                            <div class="injury-badge" style="background:{clr};">
-                                {status}
-                            </div>
-                        </div>
-
-                        <div style="font-size:0.85rem;color:#e5e7eb;margin-top:6px;">
-                            <b>Return:</b> {ret}
-                        </div>
-
-                        <div style="font-size:0.85rem;color:#e5e7eb;margin-top:6px;">
-                            {desc}
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
+                html = (
+                    f"<div class='injury-card'>"
+                    f"  <div style='display:flex;justify-content:space-between;'>"
+                    f"    <div style='font-size:1.05rem;font-weight:600;color:white;'>{name}</div>"
+                    f"    <div class='injury-badge' style='{status_color}'>{status.upper()}</div>"
+                    f"  </div>"
+                    f"  <div style='font-size:0.85rem;color:#e5e7eb;margin-top:6px;'><b>Return:</b> {ret}</div>"
+                    f"  <div style='font-size:0.85rem;color:#e5e7eb;margin-top:6px;'>{desc}</div>"
+                    f"</div>"
                 )
+
+                components.html(html, height=140, scrolling=False)
 
 
 # ------------------------------------------------------

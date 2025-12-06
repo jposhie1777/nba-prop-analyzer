@@ -1508,15 +1508,35 @@ injury_df = merged[merged["name_match"] == True].copy()
 
 injury_df = injury_df[
     [
-        "snapshot_ts", "player_id", "first_name", "last_name",
-        "team_abbrev", "team_name",
-        "status", "status_type_desc", "status_type_abbr",
+        "snapshot_ts",
+        "injury_id",
+        "report_date",
+        "player_id",
+        "first_name",
+        "last_name",
+        "full_name",
+
+        "team_id",
+        "team_abbrev",
+        "team_name",
+
+        "status",
+        "status_type_desc",
+        "status_type_abbr",
         "return_date_raw",
-        "injury_type", "injury_location", "injury_side", "injury_detail",
-        "short_comment", "long_comment",
-        "team_number", "team_abbr"
+
+        "injury_type",
+        "injury_location",
+        "injury_side",
+        "injury_detail",
+
+        "long_comment",
+        "short_comment",
+
+        "team_number",
+        "team_abbr",
     ]
-]
+].copy()
 
 
 
@@ -2908,39 +2928,77 @@ with tab5:
             last_ts = team_injuries["snapshot_ts"].max()
             st.caption(f"Last update: {last_ts.strftime('%b %d, %Y %I:%M %p')}")
 
-            for _, r in (
+            # Only show most recent record for each player_id
+            latest_rows = (
                 team_injuries.sort_values("snapshot_ts")
                 .groupby("player_id")
                 .tail(1)
                 .sort_values("status")
-                .iterrows()
-            ):
+            )
 
+            for _, r in latest_rows.iterrows():
+
+                # ---- BASIC FIELDS ----
                 name = f"{r['first_name']} {r['last_name']}"
-                status = r["status"]
-                ret = r["return_date_raw"]
-                desc = r["description"]
+                status = r.get("status", "Unknown")
+                ret = r.get("return_date_raw", "")
+                
+                # ---- NEW SCHEMA FIELDS ----
+                inj_type = r.get("injury_type", "")
+                inj_loc = r.get("injury_location", "")
+                inj_side = r.get("injury_side", "")
+                inj_detail = r.get("injury_detail", "")
 
+                short_comment = r.get("short_comment", "")
+                long_comment = r.get("long_comment", "")
+
+                # ---- STATUS COLOR ----
                 st_low = status.lower()
                 if "out" in st_low:
-                    status_color = "background:#ef4444;"
-                elif "question" in st_low or "doubt" in st_low:
-                    status_color = "background:#eab308;"
+                    status_color = "background:#ef4444;"      # Red
+                elif "question" in st_low or "doubt" in st_low or "day-to-day" in st_low:
+                    status_color = "background:#eab308;"      # Yellow
                 else:
-                    status_color = "background:#3b82f6;"
+                    status_color = "background:#3b82f6;"      # Blue (active / probable)
 
+                # ---- INJURY DESCRIPTOR LINE ----
+                injury_line = " • ".join(
+                    [x for x in [inj_type, inj_loc, inj_side, inj_detail] if x]
+                )
+                if not injury_line:
+                    injury_line = "No injury details available"
+
+                # ---- HTML CARD ----
                 html = (
                     f"<div class='injury-card'>"
+
                     f"  <div style='display:flex;justify-content:space-between;'>"
                     f"    <div style='font-size:1.05rem;font-weight:600;color:white;'>{name}</div>"
                     f"    <div class='injury-badge' style='{status_color}'>{status.upper()}</div>"
                     f"  </div>"
-                    f"  <div style='font-size:0.85rem;color:#e5e7eb;margin-top:6px;'><b>Return:</b> {ret}</div>"
-                    f"  <div style='font-size:0.85rem;color:#e5e7eb;margin-top:6px;'>{desc}</div>"
+
+                    f"  <div style='font-size:0.85rem;color:#e5e7eb;margin-top:6px;'>"
+                    f"    <b>Return:</b> {ret}"
+                    f"  </div>"
+
+                    f"  <div style='font-size:0.85rem;color:#e5e7eb;margin-top:6px;'>"
+                    f"    <b>Injury:</b> {injury_line}"
+                    f"  </div>"
+
+                    # Short comment (always shown)
+                    f"  <div style='font-size:0.85rem;color:#e5e7eb;margin-top:8px;'>"
+                    f"    {short_comment}"
+                    f"  </div>"
+
+                    # Long comment (optional)
+                    f"  <div style='font-size:0.80rem;color:#9ca3af;margin-top:6px;'>"
+                    f"    {long_comment}"
+                    f"  </div>"
+
                     f"</div>"
                 )
 
-                components.html(html, height=140, scrolling=False)
+                components.html(html, height=180, scrolling=False)
 
 
 # ------------------------------------------------------

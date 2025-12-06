@@ -1986,7 +1986,7 @@ def render_prop_cards(
         # ---- Core data ----
         player = row["player"]
         player_id = row.get("player_id")
-        stat = row["stat"]
+        stat = row.get("stat") or detect_stat(row.get("market", ""))
         bet_type = row["bet_type"]
         line = row["line"]
         price = row["price"]

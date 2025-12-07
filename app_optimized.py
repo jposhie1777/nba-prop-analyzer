@@ -2181,61 +2181,67 @@ show_defensive_props = st.sidebar.checkbox(
 
 
 # ------------------------------------------------------
-# FILTER FUNCTION
+# FILTER FUNCTION (CLEAN VERSION - NO UI VARIABLES)
 # ------------------------------------------------------
 def filter_props(df):
+    """
+    Minimal shared filtering + preprocessing.
+    All tab-specific UI filter logic is now handled inside each tab,
+    NOT inside this function.
+    """
     d = df.copy()
 
-    # Ensure numeric
-    d["price"] = pd.to_numeric(d["price"], errors="coerce")
-    d["hit_rate_last10"] = pd.to_numeric(d["hit_rate_last10"], errors="coerce")
+    # ---------- Numeric cleanup ----------
+    if "price" in d.columns:
+        d["price"] = pd.to_numeric(d["price"], errors="coerce")
 
-    # ----- Sidebar filters -----
-    if sel_game != "All games":
-        home, away = sel_game.split(" vs ")
-        d = d[(d["home_team"] == home) & (d["visitor_team"] == away)]
+    if "hit_rate_last10" in d.columns:
+        d["hit_rate_last10"] = pd.to_numeric(d["hit_rate_last10"], errors="coerce")
 
-    if sel_player != "All players":
-        d = d[d["player"] == sel_player]
+    if "hit_rate_last5" in d.columns:
+        d["hit_rate_last5"] = pd.to_numeric(d["hit_rate_last5"], errors="coerce")
 
-    if sel_market != "All Stats":
-        d = d[d["market"] == sel_market]
+    if "hit_rate_last20" in d.columns:
+        d["hit_rate_last20"] = pd.to_numeric(d["hit_rate_last20"], errors="coerce")
 
-    if sel_books:
-        d = d[d["bookmaker"].isin(sel_books)]
-
-
-    # Saved bets filter (JSON-based)
-    if show_only_saved:
-        try:
-            saved_list = load_saved_bets()  # from JSON file
-        except Exception:
+    # ------------------------------------------------------
+    # SAVED BETS FILTER (JSON-based)
+    # ------------------------------------------------------
+    # NOTE: show_only_saved is a UI variable that is allowed here,
+    # because it is ONLY used in the Saved Bets tab.
+    # This will NOT trigger NameError, because every tab defines it.
+    try:
+        if show_only_saved:
+            saved_list = load_saved_bets()
+        else:
             saved_list = []
+    except Exception:
+        saved_list = []
 
-        if saved_list:
-            saved_df = pd.DataFrame(saved_list)
+    if show_only_saved and saved_list:
+        saved_df = pd.DataFrame(saved_list)
 
-            # We stored both the internal market code and a pretty label
-            # so map JSON -> props_df column names:
-            saved_df = saved_df.rename(
-                columns={
-                    "market_code": "market",
-                    "label": "bet_type",
-                    "book": "bookmaker",
-                }
+        # JSON stored: market_code, label, book
+        saved_df = saved_df.rename(
+            columns={
+                "market_code": "market",
+                "label": "bet_type",
+                "book": "bookmaker",
+            }
+        )
+
+        # Columns required to “match” a row as a saved bet
+        key_cols = ["player", "market", "line", "bet_type", "bookmaker"]
+
+        # Only merge if both sides contain all required columns
+        if all(col in d.columns for col in key_cols) and all(
+            col in saved_df.columns for col in key_cols
+        ):
+            d = d.merge(
+                saved_df[key_cols].drop_duplicates(),
+                on=key_cols,
+                how="inner",
             )
-
-            key_cols = ["player", "market", "line", "bet_type", "bookmaker"]
-
-            if all(col in d.columns for col in key_cols) and all(
-                col in saved_df.columns for col in key_cols
-            ):
-                # Only keep rows that appear in the saved bets list
-                d = d.merge(
-                    saved_df[key_cols].drop_duplicates(),
-                    on=key_cols,
-                    how="inner",
-                )
 
     return d
 

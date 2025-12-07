@@ -2651,8 +2651,9 @@ with tab4:
 
                 # Convert to % in hover
                 fig.update_traces(
-                    hovertemplate="Stat: %{y}<br>Opponent: %{x}<br>Edge: %{z:.1%}<extra></extra>"
+                    hovertemplate="Stat: %{y}<br>Opponent: %{x}<br>Edge: %{z:.1f}%%<extra></extra>"
                 )
+
 
                 st.plotly_chart(fig, use_container_width=True)
 
@@ -2748,7 +2749,8 @@ with tab5:
             if "hit_rate_last10" in display_df.columns:
                 display_df["hit_rate_last10"] = (display_df["hit_rate_last10"] * 100).round(1)
             if "edge_pct" in display_df.columns:
-                display_df["edge_pct"] = (display_df["edge_pct"] * 100).round(1)
+                display_df["edge_pct"] = display_df["edge_pct"].round(1)
+
 
             st.dataframe(display_df, use_container_width=True, hide_index=True)
 

@@ -1413,9 +1413,32 @@ wowy_df = load_wowy_deltas()
 # -----------------------------------------
 # GLOBAL FILTER LISTS (used by Tab 1 & Tab 2)
 # -----------------------------------------
+
+# Market list (this is safe)
 market_list = sorted(props_df["market"].dropna().unique().tolist())
-games_today = sorted(props_df["game_display"].dropna().unique().tolist())
+
+# Sportsbooks (also safe)
 sportsbook_list = sorted(props_df["sportsbook"].dropna().unique().tolist())
+
+# ---------------------------
+# Games list (safe fallback)
+# ---------------------------
+if "game_display" in props_df.columns:
+    games_today = sorted(props_df["game_display"].dropna().unique().tolist())
+elif "game" in props_df.columns:
+    games_today = sorted(props_df["game"].dropna().unique().tolist())
+elif {"home_team", "visitor_team"}.issubset(props_df.columns):
+    games_today = sorted(
+        (props_df["home_team"] + " vs " + props_df["visitor_team"])
+        .dropna()
+        .unique()
+        .tolist()
+    )
+elif "matchup" in props_df.columns:
+    games_today = sorted(props_df["matchup"].dropna().unique().tolist())
+else:
+    games_today = ["All Games"]  # ultimate fallback
+
 
 
 # ------------------------------------------------------

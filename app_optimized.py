@@ -801,6 +801,37 @@ st.markdown(
         fill: none;
     }}
 
+    /* ---------- COLLAPSIBLE FILTER PANEL / COMPACT FILTERS ---------- */
+
+    .filter-panel {{
+        background-color: rgba(255,255,255,0.05);
+        padding: 12px 18px;
+        border-radius: 10px;
+        margin-bottom: 15px;
+        border: 1px solid rgba(255,255,255,0.08);
+    }}
+
+    div[data-baseweb="tag"] {{
+        padding: 1px 6px !important;
+        border-radius: 4px !important;
+        font-size: 12px !important;
+    }}
+
+    div[data-baseweb="select"] > div {{
+        min-height: 32px !important;
+    }}
+
+    .css-1n76uvr, 
+    .css-1wa3eu0-placeholder {{
+        font-size: 13px !important;
+    }}
+
+    .css-1wa3eu0-control, 
+    .css-1y4p8pa-control {{
+        min-height: 32px !important;
+        border-radius: 6px !important;
+    }}
+
     </style>
     """,
     unsafe_allow_html=True,
@@ -2260,7 +2291,7 @@ def filter_props(df):
     return d
 
 
-tab_props, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs(
+tab1, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs(
     [
         "📈 Props",
         "🏅 EV Leaderboard",
@@ -2276,14 +2307,14 @@ tab_props, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs(
 
 
 # ------------------------------------------------------
-# UNIFIED PROPS TAB (Former Tab 1 + Tab 2)
+# UNIFIED PROPS TAB (All Props + Filters + EV+)
 # ------------------------------------------------------
-with tab_props:
+with tab1:
 
     st.subheader("All Available Props (Full Slate)")
 
     # ------------------------------------------
-    # EV+ FILTER SWITCH (NEW)
+    # EV+ FILTER SWITCH
     # ------------------------------------------
     show_ev_only = st.checkbox(
         "Show only EV+ bets (EV > Implied Probability)",
@@ -2296,125 +2327,101 @@ with tab_props:
     # ------------------------------------------
     df = filter_props(props_df)
 
-    # DEBUG PRINTS — add these 5 lines
+    # Debug prints
     st.write("🔍 DF BEFORE FILTERING — Rows:", len(df))
     if "market" in df.columns:
         st.write("🔍 Markets in Data:", df["market"].unique().tolist())
     st.write("🔍 market_list UI:", market_list)
 
+    # Ensure numeric
     df["price"] = pd.to_numeric(df["price"], errors="coerce")
     df["hit_rate_last5"] = pd.to_numeric(df["hit_rate_last5"], errors="coerce")
     df["hit_rate_last10"] = pd.to_numeric(df["hit_rate_last10"], errors="coerce")
     df["hit_rate_last20"] = pd.to_numeric(df["hit_rate_last20"], errors="coerce")
 
-    # ------------------------------------------
-    # COMPACT CSS FOR FILTER BAR
-    # ------------------------------------------
-    st.markdown("""
-    <style>
-    .stNumberInput > div > input { height: 30px !important; padding: 4px 6px !important; }
-    .stMultiSelect > div:nth-child(1) { padding-top: 2px !important; padding-bottom: 2px !important; }
-    div[data-baseweb="select"] > div { min-height: 32px !important; }
-    </style>
-    """, unsafe_allow_html=True)
+    # ------------------------------------------------------------
+    # COLLAPSIBLE FILTER PANEL (This is your only filter UI)
+    # ------------------------------------------------------------
+    with st.expander("⚙️ Filters", expanded=False):
 
-    # --------------------------------------------------
-    # TOP FILTER CARD — Bet Type / Market / Games
-    # --------------------------------------------------
-    with st.container():
-        c1, c2, c3 = st.columns([1, 1, 2])
+        st.markdown('<div class="filter-panel">', unsafe_allow_html=True)
+
+        # Row 1 — Bet Type / Market / Games
+        c1, c2, c3 = st.columns([1.2, 1.7, 1.5])
 
         with c1:
             f_bet_type = st.multiselect(
                 "Bet Type",
-                ["Over", "Under"],
+                options=["Over", "Under"],
                 default=["Over", "Under"],
-                key="props_bet_type"
             )
 
         with c2:
             f_market = st.multiselect(
                 "Market",
-                market_list,
+                options=market_list,
                 default=market_list,
-                key="props_market"
             )
 
         with c3:
             f_games = st.multiselect(
                 "Games",
-                games_today,
+                options=games_today,
                 default=games_today,
-                key="props_games"
             )
 
-    # --------------------------------------------------
-    # BOTTOM FILTER CARD — Odds / Window / Hit% / Books
-    # --------------------------------------------------
-    with st.container():
-        c1, c2, c3, c4, c5 = st.columns(5)
+        # Row 2 — Odds / Hit Window / % Hit Rate
+        c4, c5, c6 = st.columns([1, 1, 1])
 
-        with c1:
-            f_min_odds = st.number_input(
-                "Min Odds",
-                value=-600,
-                step=10,
-                key="props_min_odds"
-            )
+        with c4:
+            f_min_odds = st.number_input("Min Odds", value=-600, step=10)
+            f_max_odds = st.number_input("Max Odds", value=150, step=10)
 
-        with c2:
-            f_max_odds = st.number_input(
-                "Max Odds",
-                value=150,
-                step=10,
-                key="props_max_odds"
-            )
-
-        with c3:
+        with c5:
             f_window = st.selectbox(
                 "Hit Window",
                 ["L5", "L10", "L20"],
-                index=1,
-                key="props_window"
+                index=1
             )
 
-        with c4:
+        with c6:
             f_min_hit = st.slider(
                 "Min Hit Rate (%)",
-                0, 100, 80,
-                key="props_min_hit"
+                0, 100, 80
             )
 
-        with c5:
+        # Row 3 — Sportsbooks
+        c7 = st.columns([1])[0]
+
+        with c7:
             f_books = st.multiselect(
                 "Books",
-                sportsbook_list,
+                options=sportsbook_list,
                 default=sportsbook_list,
-                key="props_books"
             )
 
-    # --------------------------------------------------
-    # APPLY FILTERS TO DF
-    # --------------------------------------------------
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # ------------------------------------------------------------
+    # APPLY FILTERS TO DF (based on above panel)
+    # ------------------------------------------------------------
     df = df[df["bet_type"].isin(f_bet_type)]
     df = df[df["market"].isin(f_market)]
     df = df[df["bookmaker"].isin(f_books)]
     df = df[(df["price"] >= f_min_odds) & (df["price"] <= f_max_odds)]
 
-    # Hit window mapping
+    # Map hit window
     window_col = {
         "L5": "hit_rate_last5",
         "L10": "hit_rate_last10",
         "L20": "hit_rate_last20",
     }[f_window]
 
-    # slider is 0–100; convert to 0–1
+    # Convert hit slider % → decimal
     hit_rate_decimal = f_min_hit / 100.0
-
     df = df[df[window_col] >= hit_rate_decimal]
 
-
-    # Filter by game
+    # Game filter — home vs away format
     df["game_display"] = (
         df["home_team"].astype(str)
         + " vs "
@@ -2422,30 +2429,29 @@ with tab_props:
     )
     df = df[df["game_display"].isin(f_games)]
 
-    # --------------------------------------------------
-    # NEW: EV+ ONLY FILTER (OPTIONAL)
-    # --------------------------------------------------
+    # ------------------------------------------------------------
+    # EV+ ONLY FILTER (optional)
+    # ------------------------------------------------------------
     if show_ev_only:
         def is_ev_plus(row):
-            hit = row.get("hit_rate_last10")
+            hit = row.get(window_col)
             implied = compute_implied_prob(row.get("price"))
-            return hit is not None and implied is not None and hit > implied
+            return (hit is not None) and (implied is not None) and (hit > implied)
 
         df = df[df.apply(is_ev_plus, axis=1)]
 
-    # --------------------------------------------------
+    # ------------------------------------------------------------
     # SORTING — Hit Rate DESC, then Odds ASC
-    # --------------------------------------------------
+    # ------------------------------------------------------------
     if window_col in df.columns:
         df = df.sort_values([window_col, "price"], ascending=[False, True])
 
-
-    # --------------------------------------------------
-    # CARD RENDER
-    # --------------------------------------------------
+    # ------------------------------------------------------------
+    # CARD RENDERING
+    # ------------------------------------------------------------
     render_prop_cards(
         df=df,
-        require_ev_plus=False,            # EV+ handled above with show_ev_only
+        require_ev_plus=False,
         odds_min=f_min_odds,
         odds_max=f_max_odds,
         min_hit_rate=hit_rate_decimal,

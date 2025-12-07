@@ -1925,6 +1925,45 @@ def compute_implied_prob(odds):
         return 100 / (odds + 100)
     return abs(odds) / (abs(odds) + 100)
 
+# Global injury lookup populated ONCE per app refresh
+INJURY_LOOKUP_BY_NAME = {}
+
+def build_injury_lookup():
+    global INJURY_LOOKUP_BY_NAME
+
+    if injury_df.empty:
+        INJURY_LOOKUP_BY_NAME = {}
+        return
+
+    # Build lookup from ALL injuries — not just selected team
+    tmp = injury_df.copy()
+
+    def norm(s):
+        return str(s).lower().replace("'", "").replace(".", "").replace("-", "").strip()
+
+    tmp["full_norm"] = tmp.apply(
+        lambda r: norm(f"{r['first_name']} {r['last_name']}"), axis=1
+    )
+
+    # Most recent injury entry per player
+    tmp = (
+        tmp.sort_values("snapshot_ts")
+           .groupby("full_norm")
+           .tail(1)
+    )
+
+    # Only store non-healthy statuses
+    lookup = {}
+    for _, r in tmp.iterrows():
+        st = str(r.get("status", "")).strip()
+        if st.lower() not in ["", "available", "healthy", "active"]:
+            lookup[r["full_norm"]] = st
+
+    INJURY_LOOKUP_BY_NAME = lookup
+
+# Build lookup at load
+build_injury_lookup()
+
 
 def render_prop_cards(
     df,
@@ -1956,22 +1995,15 @@ def render_prop_cards(
     ]
 
     def extract_wowy_list(g):
-        # If no WOWY cols exist → return empty list safely
         if not wowy_cols:
             return []
-
         df2 = g.copy()
-
-        # Filter only on columns that exist
         df2 = df2[wowy_cols]
-
-        # If breakdown exists, drop rows where it's null
         if "breakdown" in df2.columns:
             df2 = df2[df2["breakdown"].notna()]
-
         return df2.to_dict("records")
 
-
+    # Build WOWY map
     w_map = {}
     for (player, team), g in card_df.groupby(["player", "player_team"]):
         w_map[(player, team)] = extract_wowy_list(g)
@@ -2013,13 +2045,13 @@ def render_prop_cards(
         st.info("No props match your filters (after EV/odds/hit-rate logic).")
         return
 
-    # 🔥 Sort by hit rate first (descending), then odds (ascending)
+    # ---- Sorting: best hit-rate → best odds ----
     card_df = card_df.sort_values(
         by=[hit_rate_col, "price"],
         ascending=[False, True]
     ).reset_index(drop=True)
 
-
+    # ---- Pagination ----
     page_size = 30
     total_cards = len(card_df)
     total_pages = max(1, (total_cards + page_size - 1) // page_size)
@@ -2052,7 +2084,46 @@ def render_prop_cards(
     for idx, row in page_df.iterrows():
         col = cols[idx % 4]
         with col:
+
+            # -------------------------------
+            # Player
+            # -------------------------------
             player = row.get("player", "")
+
+            # Injury Badge (Step 2)
+            def _norm(s):
+                return str(s).lower().replace("'", "").replace(".", "").replace("-", "").strip()
+
+            inj_status = INJURY_LOOKUP_BY_NAME.get(_norm(player))
+            badge_html = ""
+
+            if inj_status:
+                s = inj_status.lower()
+                if "out" in s:
+                    badge_color = "#ef4444"        # red
+                elif "question" in s or "doubt" in s:
+                    badge_color = "#eab308"        # yellow
+                else:
+                    badge_color = "#3b82f6"        # blue
+
+                badge_html = f"""
+                    <span style="
+                        background:{badge_color};
+                        color:white;
+                        padding:2px 6px;
+                        font-size:0.65rem;
+                        font-weight:700;
+                        border-radius:6px;
+                        margin-left:6px;
+                        white-space:nowrap;
+                    ">
+                    {inj_status.upper()}
+                    </span>
+                """
+
+            # -------------------------------
+            # Basic fields
+            # -------------------------------
             pretty_market = MARKET_DISPLAY_MAP.get(row.get("market", ""), row.get("market", ""))
             bet_type = str(row.get("bet_type", "")).upper()
             line = row.get("line", "")
@@ -2061,11 +2132,9 @@ def render_prop_cards(
             implied_prob = compute_implied_prob(odds) or 0.0
             hit = row.get(hit_rate_col, 0.0)
 
-            # L10 Avg (display only, even if filter window is L5/L20)
             l10_avg = get_l10_avg(row)
             l10_avg_display = f"{l10_avg:.1f}" if l10_avg is not None else "-"
 
-            # Opp Rank
             opp_rank = get_opponent_rank(row)
             if isinstance(opp_rank, int):
                 rank_display = opp_rank
@@ -2074,7 +2143,6 @@ def render_prop_cards(
                 rank_display = "-"
                 rank_color = "#9ca3af"
 
-            # Sparkline
             spark_vals = get_spark_values(row)
             line_value = float(row.get("line", 0))
             spark_html = build_sparkline_bars_hitmiss(spark_vals, line_value)
@@ -2086,7 +2154,7 @@ def render_prop_cards(
             home_logo = TEAM_LOGOS_BASE64.get(player_team, "")
             opp_logo = TEAM_LOGOS_BASE64.get(opp_team, "")
 
-            # Normalize & fetch sportsbook logo
+            # Sportsbook Logo
             book = normalize_bookmaker(row.get("bookmaker", ""))
             book_logo_b64 = SPORTSBOOK_LOGOS_BASE64.get(book)
 
@@ -2111,7 +2179,6 @@ def render_prop_cards(
             wowy_html = build_wowy_block(row)
 
             # ---------- Card Layout ----------
-
             card_lines = [
                 '<div class="prop-card">',
 
@@ -2125,10 +2192,10 @@ def render_prop_cards(
                 f'      <img src="{opp_logo}" style="height:20px;border-radius:4px;" />'
                 '    </div>',
 
-                # CENTER → PLAYER + MARKET
-                '    <div style="text-align:center; flex:1;">'
-                f'      <div class="prop-player" style="font-size:1.05rem;font-weight:700;">{player}</div>'
-                f'      <div class="prop-market" style="font-size:0.82rem;color:#9ca3af;">{pretty_market} • {bet_type} {line}</div>'
+                # CENTER → PLAYER + MARKET + INJ BADGE
+                '    <div style="text-align:center; flex:1; display:flex; flex-direction:column; align-items:center;">'
+                f'      <div style="font-size:1.05rem;font-weight:700; display:flex; align-items:center;">{player}{badge_html}</div>'
+                f'      <div style="font-size:0.82rem;color:#9ca3af;">{pretty_market} • {bet_type} {line}</div>'
                 '    </div>',
 
                 # RIGHT → BOOK
@@ -2193,6 +2260,7 @@ def render_prop_cards(
                 st.success(f"Saved: {player} {pretty_market} {bet_type} {line}")
 
     st.markdown("</div>", unsafe_allow_html=True)
+
 
 
 # ------------------------------------------------------
@@ -3072,7 +3140,7 @@ with tab8:
         )
 
 #-------------------------------------------------
-# TAB 9 — DEPTH CHART & INJURY REPORT (your old Tab 4)
+# TAB 9 — DEPTH CHART & INJURY REPORT
 #-------------------------------------------------
 with tab9:
     st.subheader("")
@@ -3170,27 +3238,12 @@ with tab9:
     selected_abbr = team_row.team_abbr
     selected_name = team_row.team_name
 
-    # Filter
+    # Filter for selected team
     team_depth = depth_df[depth_df["team_number"] == selected_team_number].copy()
     team_injuries = injury_df[injury_df["team_abbrev"] == selected_abbr].copy()
 
-    injury_lookup = (
-        team_injuries.groupby("player_id")
-        .tail(1)
-        .set_index("player_id")[[
-            "status",
-            "short_comment",
-            "injury_type",
-            "injury_location",
-            "injury_side",
-            "injury_detail"
-        ]]
-        .to_dict(orient="index")
-)
-
-
     # ----------------------------
-    # TEAM HEADER (more spacious)
+    # TEAM HEADER
     # ----------------------------
     logo = TEAM_LOGOS_BASE64.get(selected_abbr, "")
     components.html(
@@ -3218,7 +3271,6 @@ with tab9:
             key=lambda p: pos_order.index(p) if p in pos_order else 99
         )
 
-        # Wider column spacing: max 3 per row
         pos_cols = st.columns(min(3, len(positions)))
 
         for i, pos in enumerate(positions):
@@ -3234,21 +3286,31 @@ with tab9:
                     depth_val = r["depth"]
                     player_id = r.get("player_id", None)
 
-                    # Injury badge logic
+                    # --------------------
+                    # Lookup injury status
+                    # --------------------
+                    inj_status = None
                     injury_html = ""
-                    if player_id in injury_lookup:
-                        st_val = injury_lookup[player_id]["status"]
-                        st_low = st_val.lower()
-                        if "out" in st_low:
+
+                    if not team_injuries.empty:
+                        # build quick lookup dict by NORMALIZED name
+                        norm_name = name.lower().replace("'", "").replace(".", "").replace("-", "").strip()
+
+                        for _, ir in team_injuries.iterrows():
+                            n2 = f"{ir['first_name']} {ir['last_name']}".lower().replace("'", "").replace(".", "").replace("-", "").strip()
+                            if n2 == norm_name:
+                                inj_status = ir.get("status")
+                                break
+
+                    if inj_status:
+                        s = inj_status.lower()
+                        if "out" in s:
                             badge_color = "background:#ef4444;"
-                        elif "question" in st_low or "doubt" in st_low:
+                        elif "question" in s or "doubt" in s:
                             badge_color = "background:#eab308;"
                         else:
                             badge_color = "background:#3b82f6;"
-
-                        injury_html = (
-                            f"<span class='injury-badge' style='{badge_color}'>{st_val.upper()}</span>"
-                        )
+                        injury_html = f"<span class='injury-badge' style='{badge_color}'>{inj_status.upper()}</span>"
 
                     # Role color
                     rl = role.lower()
@@ -3281,27 +3343,21 @@ with tab9:
     # ------------------------------------------------------
     # INJURY REPORT (RIGHT)
     # ------------------------------------------------------
-    st.write("DEBUG — injury_df shape:", injury_df.shape)
-    st.write("DEBUG — sample rows:", injury_df.head(10))
-
     def make_injury_key(first, last):
         if not first:
             first = ""
         if not last:
             last = ""
 
-        # normalize: lowercase, remove punctuation
         f = (
-            str(first)
-            .lower()
+            str(first).lower()
             .replace("'", "")
             .replace(".", "")
             .replace("-", "")
             .strip()
         )
         l = (
-            str(last)
-            .lower()
+            str(last).lower()
             .replace("'", "")
             .replace(".", "")
             .replace("-", "")
@@ -3311,9 +3367,7 @@ with tab9:
         if not f and not l:
             return None
 
-        # first initial + last name
         return f"{f[:1]}-{l}"
-
 
     with col_right:
         st.markdown("## 🏥 Injury Report")
@@ -3323,15 +3377,15 @@ with tab9:
         else:
             last_ts = team_injuries["snapshot_ts"].max()
             st.caption(f"Last update: {last_ts.strftime('%b %d, %Y %I:%M %p')}")
-        
-            # Add grouping key
+
+            # ----------------------------------------
+            # Create grouping key for reliable dedup
+            # ----------------------------------------
             team_injuries["inj_key"] = team_injuries.apply(
                 lambda r: make_injury_key(r.get("first_name"), r.get("last_name")),
                 axis=1
             )
 
-
-            # Pull ONLY the most recent entry for each player
             latest = (
                 team_injuries
                 .sort_values("snapshot_ts")
@@ -3340,55 +3394,38 @@ with tab9:
                 .sort_values("status", ascending=True)
             )
 
-
             for _, r in latest.iterrows():
 
-                # --------------------------
-                # BASIC FIELDS
-                # --------------------------
-                name = f"{r['first_name']} {r['last_name']}"
-                status = r.get("status", "Unknown")
+                name     = f"{r['first_name']} {r['last_name']}"
+                status   = r.get("status", "Unknown")
                 return_date = r.get("return_date_raw", "N/A")
 
-                # NEW TABLE FIELDS
-                injury_type = r.get("injury_type", "")
+                injury_type     = r.get("injury_type", "")
                 injury_location = r.get("injury_location", "")
-                injury_side = r.get("injury_side", "")
-                injury_detail = r.get("injury_detail", "")
+                injury_side     = r.get("injury_side", "")
+                injury_detail   = r.get("injury_detail", "")
 
                 short_comment = r.get("short_comment", "")
-                long_comment = r.get("long_comment", "")
+                long_comment  = r.get("long_comment", "")
 
-                # --------------------------
-                # COLOR LOGIC FOR STATUS
-                # --------------------------
-                status_lower = status.lower()
-                if "out" in status_lower:
-                    status_color = "background:#ef4444;"   # red
-                elif "question" in status_lower or "doubt" in status_lower:
-                    status_color = "background:#eab308;"   # yellow
-                elif "prob" in status_lower:
-                    status_color = "background:#3b82f6;"   # blue
+                s = status.lower()
+                if "out" in s:
+                    status_color = "background:#ef4444;"
+                elif "question" in s or "doubt" in s:
+                    status_color = "background:#eab308;"
+                elif "prob" in s:
+                    status_color = "background:#3b82f6;"
                 else:
-                    status_color = "background:#6b7280;"   # gray default
+                    status_color = "background:#6b7280;"
 
-                # --------------------------
-                # COMPOSE INJURY DETAILS LINE
-                # --------------------------
                 injury_parts = [
                     injury_type,
                     injury_location,
                     injury_side,
-                    injury_detail
+                    injury_detail,
                 ]
-                injury_line = " • ".join([p for p in injury_parts if p])
+                injury_line = " • ".join([p for p in injury_parts if p]) or "No injury detail provided."
 
-                if not injury_line:
-                    injury_line = "No injury detail provided."
-
-                # --------------------------
-                # HTML CARD
-                # --------------------------
                 html = f"""
                     <div class='injury-card'>
                         <div style='display:flex;justify-content:space-between;'>

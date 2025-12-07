@@ -1944,7 +1944,7 @@ def render_prop_cards(
     # ---- row filter ----
     def card_good(row):
         price = row.get("price")
-        hit = row.get(window_col)
+        hit = row.get(hit_rate_col)
 
         if pd.isna(price) or pd.isna(hit):
             return False
@@ -2408,7 +2408,11 @@ with tab_props:
         "L20": "hit_rate_last20",
     }[f_window]
 
-    df = df[df[window_col] >= f_min_hit]
+    # slider is 0–100; convert to 0–1
+    hit_rate_decimal = f_min_hit / 100.0
+
+    df = df[df[window_col] >= hit_rate_decimal]
+
 
     # Filter by game
     df["game_display"] = (
@@ -2441,15 +2445,16 @@ with tab_props:
     # --------------------------------------------------
     render_prop_cards(
         df=df,
-        require_ev_plus=False,            # unified tab, independent of EV toggle
+        require_ev_plus=False,            # EV+ handled above with show_ev_only
         odds_min=f_min_odds,
         odds_max=f_max_odds,
-        min_hit_rate=f_min_hit / 100,
+        min_hit_rate=hit_rate_decimal,
         hit_rate_col=window_col,
         hit_label=f_window,
         min_opp_rank=None,
         page_key="props_unified"
     )
+
 
 
 # ------------------------------------------------------

@@ -3281,6 +3281,10 @@ with tab9:
     # ------------------------------------------------------
     # INJURY REPORT (RIGHT)
     # ------------------------------------------------------
+    st.write("DEBUG — injury_df shape:", injury_df.shape)
+    st.write("DEBUG — sample rows:", injury_df.head(10))
+
+    
     with col_right:
         st.markdown("## 🏥 Injury Report")
 

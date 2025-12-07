@@ -2318,8 +2318,9 @@ for _, row in props_df.iterrows():
     key = f"{home} vs {away}"
 
     # Use your existing team logo dictionary
-    home_logo = team_logos.get(home, "")  
-    away_logo = team_logos.get(away, "")
+    home_logo = TEAM_LOGOS.get(TEAM_NAME_TO_CODE.get(home, ""), "")
+    away_logo = TEAM_LOGOS.get(TEAM_NAME_TO_CODE.get(away, ""), "")
+
 
     game_pretty_labels[key] = f"🏀 {home} vs {away}"  # simple version
 
@@ -2400,8 +2401,9 @@ with tab1:
                 "Games",
                 options=games_today,
                 default=games_today,
-                format_func=lambda x: game_pretty_labels.get(x, x)
+                format_func=lambda x: x,             # Keep raw string
             )
+
 
 
         # Row 2 — Odds / Hit Window / % Hit Rate

@@ -1557,10 +1557,10 @@ depth_df["first_initial"] = depth_df["player_norm"].apply(
     lambda x: x.split(" ")[0][0] if x else ""
 )
 depth_df["last_clean"] = depth_df["player_norm"].apply(
-    lambda x: x.split(" ")[1] if len(x.split(" ")) > 1 else ""
+    lambda x: x.split(" ")[-1] if len(x.split(" ")) >= 2 else ""
 )
 
-# Merge NEW: join by team_abbrev from injury table
+# Merge by team + last name (can fail for some rookies)
 merged = injury_df.merge(
     depth_df,
     left_on=["team_abbrev", "last_clean"],
@@ -1569,25 +1569,20 @@ merged = injury_df.merge(
     suffixes=("", "_roster")
 )
 
+# Instead of DROPPING unmatched rows → keep all
 def row_matches(row):
     fc = row.get("first_clean", "")
-
-    # Ensure we only take a valid string
-    if isinstance(fc, str) and len(fc) > 0:
-        inj_initial = fc[0]
-    else:
-        inj_initial = ""
-
+    inj_initial = fc[0] if isinstance(fc, str) and fc else ""
     roster_initial = row.get("first_initial", "")
-
     return inj_initial == roster_initial
 
 merged["name_match"] = merged.apply(row_matches, axis=1)
 
-# Keep only matched rows
-injury_df = merged[merged["name_match"] == True].copy()
+# ✅ KEEP ALL ROWS (not just matched)
+inj_fixed = merged.copy()
 
-injury_df = injury_df[
+# Final column order
+injury_df = inj_fixed[
     [
         "snapshot_ts",
         "injury_id",
@@ -1596,29 +1591,24 @@ injury_df = injury_df[
         "first_name",
         "last_name",
         "full_name",
-
         "team_id",
         "team_abbrev",
         "team_name",
-
         "status",
         "status_type_desc",
         "status_type_abbr",
         "return_date_raw",
-
         "injury_type",
         "injury_location",
         "injury_side",
         "injury_detail",
-
         "long_comment",
         "short_comment",
-
+        # depth fields (may be NaN for rookies)
         "team_number",
         "team_abbr",
     ]
-].copy()
-
+]
 
 
 # ------------------------------------------------------

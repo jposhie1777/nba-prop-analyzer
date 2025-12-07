@@ -2179,25 +2179,6 @@ show_defensive_props = st.sidebar.checkbox(
     value=True
 )
 
-manual_odds_min = st.sidebar.number_input(
-    "Minimum Odds",
-    value=-200,      # Default
-    step=5
-)
-
-manual_odds_max = st.sidebar.number_input(
-    "Maximum Odds",
-    value=400,       # Default
-    step=5
-)
-
-manual_l10_min = st.sidebar.number_input(
-    "Minimum L10 Hit Rate (%)",
-    min_value=0,
-    max_value=100,
-    value=80,        # Default: 80%
-    step=1
-)
 
 # ------------------------------------------------------
 # FILTER FUNCTION
@@ -2223,11 +2204,6 @@ def filter_props(df):
     if sel_books:
         d = d[d["bookmaker"].isin(sel_books)]
 
-    # Odds slider
-    d = d[d["price"].between(sel_odds[0], sel_odds[1])]
-
-    # Global Min L10 Hit Rate
-    d = d[d["hit_rate_last10"] >= sel_hit10]
 
     # Saved bets filter (JSON-based)
     if show_only_saved:
@@ -2372,28 +2348,60 @@ with tab2:
     df["hit_rate_last10"] = pd.to_numeric(df.get("hit_rate_last10"), errors="coerce")
     df["hit_rate_last20"] = pd.to_numeric(df.get("hit_rate_last20"), errors="coerce")
 
-    # Build game labels
-    df["game_label"] = (df["home_team"].astype(str) + " vs " + df["visitor_team"].astype(str))
+    # Build game labels for multiselect
+    df["game_label"] = (
+        df["home_team"].astype(str) + " vs " + df["visitor_team"].astype(str)
+    )
     games_today = sorted(df["game_label"].dropna().unique().tolist())
 
-    # ---------- FILTER BAR ----------
-    fcol1, fcol2 = st.columns([2, 2])
-    with fcol1:
-        # Multi-select games
-        selected_games = st.multiselect(
-            "Filter Games (multi-select)",
-            games_today,
-            default=games_today,
+    # =========================================================
+    # 🔥 NEW FILTER ROW: BET TYPE + MARKET
+    # =========================================================
+    frow1, frow2 = st.columns([2, 2])
+
+    with frow1:
+        bet_type_filter = st.multiselect(
+            "Bet Type (Over / Under)",
+            ["Over", "Under"],
+            default=["Over", "Under"],
+            key="avail_bet_type",
         )
 
-    with fcol2:
-        st.markdown("&nbsp;", unsafe_allow_html=True)
+    with frow2:
+        market_list = sorted(
+            set(MARKET_DISPLAY_MAP.get(m, m) for m in df["market"])
+        )
+        market_filter = st.multiselect(
+            "Market",
+            market_list,
+            default=market_list,
+            key="avail_market",
+        )
 
-    # Apply game filter
+    # Apply bet type filter
+    df = df[df["bet_type"].isin(bet_type_filter)]
+
+    # Apply market filter
+    df["market_display"] = df["market"].map(lambda m: MARKET_DISPLAY_MAP.get(m, m))
+    df = df[df["market_display"].isin(market_filter)]
+
+    # =========================================================
+    # 🔥 SECOND FILTER ROW: GAMES ONLY
+    # =========================================================
+    with st.container():
+        selected_games = st.multiselect(
+            "Filter Games",
+            games_today,
+            default=games_today,
+            key="avail_games",
+        )
+
     if selected_games:
         df = df[df["game_label"].isin(selected_games)]
 
-    # Second row of filters: odds + hit window + hit rate + opponent rank
+    # =========================================================
+    # 🔥 THIRD FILTER ROW: Odds, Hit Window, Hit %, Opp Rank, Books
+    # =========================================================
     c1, c2, c3, c4, c5 = st.columns(5)
 
     with c1:
@@ -2455,8 +2463,9 @@ with tab2:
             key="avail_books",
         )
 
-
-    # Map hit window → column
+    # =========================================================
+    # 🔥 APPLY REMAINING FILTER LOGIC
+    # =========================================================
     hit_rate_col_map = {
         "L5": "hit_rate_last5",
         "L10": "hit_rate_last10",
@@ -2468,20 +2477,16 @@ with tab2:
     min_hit_rate = hit_min_pct / 100.0
     min_opp_rank = opp_rank_min_input if opp_rank_min_input > 1 else None
 
-    # Drop rows without odds or selected hit-rate column
     df = df.dropna(subset=["price", hit_rate_col])
-
-    # Apply sportsbook filter
     df["book_clean"] = df["bookmaker"].map(normalize_bookmaker)
     df = df[df["book_clean"].isin(selected_books)]
-
 
     if df.empty:
         st.info("No props available for today with the current filters.")
     else:
         render_prop_cards(
             df,
-            require_ev_plus=False,              # ❌ no EV filter here
+            require_ev_plus=False,
             odds_min=avail_odds_min,
             odds_max=avail_odds_max,
             min_hit_rate=min_hit_rate,

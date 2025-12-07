@@ -2499,6 +2499,205 @@ with tab1:
 with tab2:
     st.subheader("Available Props (Full Board)")
 
+    # ========================
+    # Drawer State
+    # ========================
+    if "drawer_open" not in st.session_state:
+        st.session_state.drawer_open = False
+
+    # ========================
+    # Drawer CSS
+    # ========================
+    drawer_css = """
+    <style>
+    .filter-drawer {
+        position: fixed;
+        top: 0;
+        right: -380px;
+        width: 360px;
+        height: 100%;
+        background-color: #1e1e1e;
+        padding: 25px 18px;
+        transition: right 0.3s ease-in-out;
+        z-index: 99999;
+        box-shadow: -4px 0 12px rgba(0,0,0,0.45);
+        overflow-y: auto;
+    }
+
+    .filter-drawer.open {
+        right: 0 !important;
+    }
+
+    .drawer-close-btn {
+        position: absolute;
+        top: 12px;
+        right: 14px;
+        color: #ccc;
+        cursor: pointer;
+        font-size: 24px;
+        font-weight: 600;
+    }
+
+    .drawer-title {
+        color: white;
+        font-size: 22px;
+        font-weight: 600;
+        margin-bottom: 10px;
+    }
+
+    .drawer-section-title {
+        margin-top: 15px;
+        font-size: 15px;
+        color: #bbb;
+        font-weight: 600;
+    }
+    </style>
+    """
+    st.markdown(drawer_css, unsafe_allow_html=True)
+
+    # ========================
+    # Drawer HTML container
+    # ========================
+    drawer_class = "filter-drawer open" if st.session_state.drawer_open else "filter-drawer"
+    st.markdown(f'<div class="{drawer_class}" id="drawer">', unsafe_allow_html=True)
+
+    # Close button
+    st.markdown("""
+        <div class="drawer-close-btn" onclick="window.parent.postMessage({type:'closeDrawer'}, '*')">✕</div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="drawer-title">Filters</div>', unsafe_allow_html=True)
+
+    # ----------------------
+    # Load DF
+    # ----------------------
+    df = props_df.copy()
+    df["market_display"] = df["market"].map(lambda m: MARKET_DISPLAY_MAP.get(m, m))
+    df["game_label"] = df["home_team"] + " vs " + df["visitor_team"]
+
+    # ========================
+    # FILTERS INSIDE DRAWER
+    # ========================
+
+    st.markdown('<div class="drawer-section-title">Bet Type</div>', unsafe_allow_html=True)
+    bet_type_filter = st.multiselect(
+        "",
+        ["Over", "Under"],
+        default=["Over", "Under"],
+        key="drawer_bt"
+    )
+
+    st.markdown('<div class="drawer-section-title">Market</div>', unsafe_allow_html=True)
+    market_list = sorted(set(df["market_display"]))
+    market_filter = st.multiselect(
+        "",
+        market_list,
+        default=market_list,
+        key="drawer_mkt"
+    )
+
+    st.markdown('<div class="drawer-section-title">Games</div>', unsafe_allow_html=True)
+    games_today = sorted(df["game_label"].unique().tolist())
+    selected_games = st.multiselect(
+        "",
+        games_today,
+        default=games_today,
+        key="drawer_games"
+    )
+
+    st.markdown('<div class="drawer-section-title">Odds Range</div>', unsafe_allow_html=True)
+    min_odds = st.number_input("Min Odds", value=-600, step=10, key="drawer_minodds")
+    max_odds = st.number_input("Max Odds", value=150, step=10, key="drawer_maxodds")
+
+    st.markdown('<div class="drawer-section-title">Hit Window</div>', unsafe_allow_html=True)
+    hit_window = st.selectbox(
+        "",
+        ["L5", "L10", "L20"],
+        index=1,
+        key="drawer_hw"
+    )
+
+    st.markdown('<div class="drawer-section-title">Min Hit Rate (%)</div>', unsafe_allow_html=True)
+    min_hit = st.slider("", min_value=0, max_value=100, value=90, key="drawer_minHit")
+
+    st.markdown('<div class="drawer-section-title">Opponent Rank</div>', unsafe_allow_html=True)
+    opp_rank = st.number_input("", min_value=1, max_value=30, value=1, key="drawer_oppRank")
+
+    st.markdown('<div class="drawer-section-title">Sportsbooks</div>', unsafe_allow_html=True)
+    sportsbook_list = sorted(df["bookmaker"].fillna("").map(normalize_bookmaker).unique().tolist())
+    selected_books = st.multiselect(
+        "",
+        sportsbook_list,
+        default=sportsbook_list,
+        key="drawer_books"
+    )
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ========================
+    # JS to open/close Drawer
+    # ========================
+    st.markdown("""
+    <script>
+    window.addEventListener('message', (event) => {
+        if (event.data.type === 'closeDrawer') {
+            window.parent.postMessage(
+                {isStreamlitMessage: true, streamlitCommand: "setComponentValue", key: "drawer_open", value: false},
+                "*"
+            );
+        }
+    });
+    </script>
+    """, unsafe_allow_html=True)
+
+    # ========================
+    # TOP BUTTONS (Filters + Sort)
+    # ========================
+    left, right = st.columns([1,1])
+
+    with left:
+        if st.button("⚙️ Filters"):
+            st.session_state.drawer_open = True
+
+    with right:
+        sort_by = st.selectbox(
+            "Sort",
+            ["Hit Rate ↓ then Odds ↑", "Odds ↑", "Odds ↓"],
+            index=0
+        )
+
+    # ========================
+    # APPLY FILTERS
+    # ========================
+    df = df[df["bet_type"].isin(bet_type_filter)]
+    df = df[df["market_display"].isin(market_filter)]
+    df = df[df["game_label"].isin(selected_games)]
+
+    df = df[df["price"].between(min_odds, max_odds)]
+    df = df[df["bookmaker"].map(normalize_bookmaker).isin(selected_books)]
+
+    hit_col = {"L5": "hit_rate_last5", "L10": "hit_rate_last10", "L20": "hit_rate_last20"}[hit_window]
+    df = df[df[hit_col] >= (min_hit / 100)]
+
+    min_opp_rank = opp_rank if opp_rank > 1 else None
+
+    # ----------------------
+    # RENDER CARDS
+    # ----------------------
+    render_prop_cards(
+        df,
+        require_ev_plus=False,
+        odds_min=min_odds,
+        odds_max=max_odds,
+        min_hit_rate=min_hit / 100,
+        hit_rate_col=hit_col,
+        hit_label=hit_window,
+        min_opp_rank=min_opp_rank,
+        page_key="avail_drawer"
+    )
+
+    st.subheader("Available Props (Full Board)")
+
     # Initialize drawer state
     if "drawer_open" not in st.session_state:
         st.session_state.drawer_open = False

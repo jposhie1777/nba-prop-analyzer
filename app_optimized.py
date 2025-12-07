@@ -1445,6 +1445,7 @@ wowy_df = load_wowy_deltas()
 # GLOBAL FILTER LISTS (used by Tab 1 & Tab 2)
 # ------------------------------------------------------
 
+
 market_list = sorted(props_df["market"].dropna().unique().tolist())
 sportsbook_list = sorted(props_df["bookmaker"].dropna().unique().tolist())
 
@@ -1460,7 +1461,25 @@ games_today = sorted(
     .tolist()
 )
 
-
+# Pretty market names for filters
+market_pretty_map = {
+    "player_points": "Points",
+    "player_points_alternate": "Points (Alt)",
+    "player_rebounds": "Rebounds",
+    "player_rebounds_alternate": "Rebounds (Alt)",
+    "player_assists": "Assists",
+    "player_assists_alternate": "Assists (Alt)",
+    "player_blocks": "Blocks",
+    "player_blocks_alternate": "Blocks (Alt)",
+    "player_steals": "Steals",
+    "player_steals_alternate": "Steals (Alt)",
+    "player_points_rebounds": "PTS + REB",
+    "player_points_assists": "PTS + AST",
+    "player_rebounds_assists": "REB + AST",
+    "player_points_rebounds_assists": "PRA",
+    "player_fg3m": "3PM",
+    "player_blocks_steals": "Stocks (BLK+STL)"
+}
 
 # ------------------------------------------------------
 # NORMALIZE PLAYER NAMES (fix merge issues)
@@ -2290,6 +2309,23 @@ def filter_props(df):
 
     return d
 
+# Pretty labels for game dropdown with team logos
+game_pretty_labels = {}
+
+for _, row in props_df.iterrows():
+    home = row["home_team"]
+    away = row["visitor_team"]
+    key = f"{home} vs {away}"
+
+    # Use your existing team logo dictionary
+    home_logo = team_logos.get(home, "")  
+    away_logo = team_logos.get(away, "")
+
+    game_pretty_labels[key] = f"🏀 {home} vs {away}"  # simple version
+
+    # If you want logos:
+    # game_pretty_labels[key] = f'<img src="{home_logo}" width="18"> {home} vs <img src="{away_logo}" width="18"> {away}'
+
 
 tab1, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs(
     [
@@ -2327,12 +2363,6 @@ with tab1:
     # ------------------------------------------
     df = filter_props(props_df)
 
-    # Debug prints
-    st.write("🔍 DF BEFORE FILTERING — Rows:", len(df))
-    if "market" in df.columns:
-        st.write("🔍 Markets in Data:", df["market"].unique().tolist())
-    st.write("🔍 market_list UI:", market_list)
-
     # Ensure numeric
     df["price"] = pd.to_numeric(df["price"], errors="coerce")
     df["hit_rate_last5"] = pd.to_numeric(df["hit_rate_last5"], errors="coerce")
@@ -2361,14 +2391,18 @@ with tab1:
                 "Market",
                 options=market_list,
                 default=market_list,
+                format_func=lambda x: market_pretty_map.get(x, x)
             )
+
 
         with c3:
             f_games = st.multiselect(
                 "Games",
                 options=games_today,
                 default=games_today,
+                format_func=lambda x: game_pretty_labels.get(x, x)
             )
+
 
         # Row 2 — Odds / Hit Window / % Hit Rate
         c4, c5, c6 = st.columns([1, 1, 1])
@@ -2397,7 +2431,7 @@ with tab1:
             f_books = st.multiselect(
                 "Books",
                 options=sportsbook_list,
-                default=sportsbook_list,
+                default=["DraftKings", "FanDuel"],   # NEW DEFAULT
             )
 
         st.markdown('</div>', unsafe_allow_html=True)

@@ -1944,7 +1944,7 @@ def render_prop_cards(
     # ---- row filter ----
     def card_good(row):
         price = row.get("price")
-        hit = row.get(hit_rate_col)
+        hit = row.get(window_col)
 
         if pd.isna(price) or pd.isna(hit):
             return False
@@ -2296,6 +2296,12 @@ with tab_props:
     # ------------------------------------------
     df = filter_props(props_df)
 
+    # DEBUG PRINTS — add these 5 lines
+    st.write("🔍 DF BEFORE FILTERING — Rows:", len(df))
+    if "market" in df.columns:
+        st.write("🔍 Markets in Data:", df["market"].unique().tolist())
+    st.write("🔍 market_list UI:", market_list)
+
     df["price"] = pd.to_numeric(df["price"], errors="coerce")
     df["hit_rate_last5"] = pd.to_numeric(df["hit_rate_last5"], errors="coerce")
     df["hit_rate_last10"] = pd.to_numeric(df["hit_rate_last10"], errors="coerce")
@@ -2426,7 +2432,9 @@ with tab_props:
     # --------------------------------------------------
     # SORTING — Hit Rate DESC, then Odds ASC
     # --------------------------------------------------
-    df = df.sort_values([window_col, "price"], ascending=[False, True])
+    if window_col in df.columns:
+        df = df.sort_values([window_col, "price"], ascending=[False, True])
+
 
     # --------------------------------------------------
     # CARD RENDER

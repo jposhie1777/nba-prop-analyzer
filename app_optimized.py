@@ -2356,48 +2356,51 @@ with tab1:
         )
 
 # ------------------------------------------------------
-# TAB 2 — AVAILABLE PROPS (Clean & Compact UI)
+# TAB 2 — AVAILABLE PROPS (FULL SLATE)
 # ------------------------------------------------------
 with tab2:
 
     st.subheader("Available Props (Full Slate)")
 
     # --------------------------------------------------
-    # Load & Filter DF
+    # Load global DF (pre-cleaned by filter_props)
     # --------------------------------------------------
     full_df = filter_props(props_df)
 
-    # Force numeric
+    # Normalize numeric
     full_df["price"] = pd.to_numeric(full_df["price"], errors="coerce")
     full_df["hit_rate_last10"] = pd.to_numeric(full_df["hit_rate_last10"], errors="coerce")
 
     # --------------------------------------------------
-    # COMPACT GLOBAL CSS (for tight filters)
+    # Load saved bets so they appear in this tab
+    # --------------------------------------------------
+    try:
+        saved_bets = load_saved_bets()
+    except:
+        saved_bets = []
+
+    # --------------------------------------------------
+    # COMPACT CSS
     # --------------------------------------------------
     st.markdown("""
     <style>
-
     div[data-baseweb="select"] > div { 
         min-height: 32px !important;
         padding-top: 2px !important;
         padding-bottom: 2px !important;
     }
-
     .stNumberInput > div > input {
         padding: 4px 6px !important;
         height: 30px !important;
     }
-
     .stMultiSelect > div:nth-child(1) {
         padding-top: 2px !important;
         padding-bottom: 2px !important;
     }
-
     .css-1kyxreq {
         padding-top: 0.2rem !important;
         padding-bottom: 0.2rem !important;
     }
-
     </style>
     """, unsafe_allow_html=True)
 
@@ -2466,7 +2469,7 @@ with tab2:
         with c3:
             f_window = st.selectbox(
                 "Hit Window",
-                ["L5","L10","L20"],
+                ["L5", "L10", "L20"],
                 index=1,
                 label_visibility="collapsed",
                 key="t2_window"
@@ -2493,11 +2496,11 @@ with tab2:
             st.caption("Sportsbooks")
 
     # --------------------------------------------------
-    # ACTIVE FILTER SUMMARY (clean sportsbook ribbon)
+    # ACTIVE FILTER SUMMARY (clean ribbon)
     # --------------------------------------------------
     active = []
 
-    if f_bet_type != ["Over","Under"]:
+    if f_bet_type != ["Over", "Under"]:
         active.append(", ".join(f_bet_type))
 
     if f_market != market_list:
@@ -2535,41 +2538,48 @@ with tab2:
     df = df[df["market"].isin(f_market)]
     df = df[df["bookmaker"].isin(f_books)]
     df = df[(df["price"] >= f_min_odds) & (df["price"] <= f_max_odds)]
+
     df = df[
         (df["hit_rate_last5"] >= f_min_hit) |
         (df["hit_rate_last10"] >= f_min_hit) |
         (df["hit_rate_last20"] >= f_min_hit)
     ]
 
-    # Filter by games
+    # Filter by game
     if f_games != games_today:
+        df["game_display"] = (
+            df["home_team"].astype(str)
+            + " vs "
+            + df["visitor_team"].astype(str)
+        )
         df = df[df["game_display"].isin(f_games)]
 
-    # Select hit rate window
+    # Hit window mapping
     window_col = {
         "L5": "hit_rate_last5",
         "L10": "hit_rate_last10",
-        "L20": "hit_rate_last20"
+        "L20": "hit_rate_last20",
     }[f_window]
 
     # --------------------------------------------------
-    # SORTING — First by Hit Rate (L10 or window), then by odds
+    # SORTING — high hit rate first, then lowest odds first
     # --------------------------------------------------
     df = df.sort_values(
         [window_col, "price"],
-        ascending=[False, True]   # high hit rate first; lowest odds first
+        ascending=[False, True]
     )
 
     # --------------------------------------------------
-    # RENDER CARDS
+    # RENDER CARDS (with saved bets)
     # --------------------------------------------------
     render_prop_cards(
         df,
-        saved_bets,
+        saved_bets,  # <- NOW LOADED SAFELY
         page_size=30,
         page_key="tab2",
         require_ev_plus=False
     )
+
 
 # ------------------------------------------------------
 # TAB 3 — EV LEADERBOARD

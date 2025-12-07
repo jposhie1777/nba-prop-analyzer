@@ -2584,7 +2584,8 @@ with tab3:
                 display_df["implied_prob"] = (display_df["implied_prob"] * 100).round(1)
 
             if "edge_pct" in display_df.columns:
-                display_df["edge_pct"] = (display_df["edge_pct"] * 100).round(1)
+                display_df["edge_pct"] = display_df["edge_pct"].round(1)
+
 
             if "matchup_difficulty_score" in display_df.columns:
                 display_df["matchup_difficulty_score"] = display_df["matchup_difficulty_score"].round(1)

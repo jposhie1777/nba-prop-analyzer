@@ -2533,7 +2533,7 @@ with tab2:
 
     df = df[df["bet_type"].isin(f_bet_type)]
     df = df[df["market"].isin(f_market)]
-    df = df[df["sportsbook"].isin(f_books)]
+    df = df[df["bookmaker"].isin(f_books)]
     df = df[(df["price"] >= f_min_odds) & (df["price"] <= f_max_odds)]
     df = df[
         (df["hit_rate_last5"] >= f_min_hit) |

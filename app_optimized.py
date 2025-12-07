@@ -3284,7 +3284,37 @@ with tab9:
     st.write("DEBUG — injury_df shape:", injury_df.shape)
     st.write("DEBUG — sample rows:", injury_df.head(10))
 
-    
+    def make_injury_key(first, last):
+        if not first:
+            first = ""
+        if not last:
+            last = ""
+
+        # normalize: lowercase, remove punctuation
+        f = (
+            str(first)
+            .lower()
+            .replace("'", "")
+            .replace(".", "")
+            .replace("-", "")
+            .strip()
+        )
+        l = (
+            str(last)
+            .lower()
+            .replace("'", "")
+            .replace(".", "")
+            .replace("-", "")
+            .strip()
+        )
+
+        if not f and not l:
+            return None
+
+        # first initial + last name
+        return f"{f[:1]}-{l}"
+
+
     with col_right:
         st.markdown("## 🏥 Injury Report")
 
@@ -3293,15 +3323,23 @@ with tab9:
         else:
             last_ts = team_injuries["snapshot_ts"].max()
             st.caption(f"Last update: {last_ts.strftime('%b %d, %Y %I:%M %p')}")
+        
+            # Add grouping key
+            team_injuries["inj_key"] = team_injuries.apply(
+                lambda r: make_injury_key(r.get("first_name"), r.get("last_name")),
+                axis=1
+            )
+
 
             # Pull ONLY the most recent entry for each player
             latest = (
                 team_injuries
                 .sort_values("snapshot_ts")
-                .groupby("player_id")
+                .groupby("inj_key")
                 .tail(1)
                 .sort_values("status", ascending=True)
             )
+
 
             for _, r in latest.iterrows():
 

@@ -1410,6 +1410,14 @@ depth_df = load_depth_charts()
 injury_df = load_injury_report()    # <-- MUST COME BEFORE FIX
 wowy_df = load_wowy_deltas()
 
+# -----------------------------------------
+# GLOBAL FILTER LISTS (used by Tab 1 & Tab 2)
+# -----------------------------------------
+market_list = sorted(props_df["market"].dropna().unique().tolist())
+games_today = sorted(props_df["game_display"].dropna().unique().tolist())
+sportsbook_list = sorted(props_df["sportsbook"].dropna().unique().tolist())
+
+
 # ------------------------------------------------------
 # NORMALIZE PLAYER NAMES (fix merge issues)
 # ------------------------------------------------------

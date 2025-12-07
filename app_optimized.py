@@ -2180,16 +2180,15 @@ show_defensive_props = st.sidebar.checkbox(
 )
 
 
-# ------------------------------------------------------
-# FILTER FUNCTION (CLEAN VERSION - NO UI VARIABLES)
-# ------------------------------------------------------
 def filter_props(df):
     """
     Minimal shared filtering + preprocessing.
-    All tab-specific UI filter logic is now handled inside each tab,
-    NOT inside this function.
+    All tab-specific UI filters are handled inside each tab.
     """
     d = df.copy()
+
+    # safely handle global toggle (default False if not defined)
+    show_only_saved_local = globals().get("show_only_saved", False)
 
     # ---------- Numeric cleanup ----------
     if "price" in d.columns:
@@ -2205,23 +2204,19 @@ def filter_props(df):
         d["hit_rate_last20"] = pd.to_numeric(d["hit_rate_last20"], errors="coerce")
 
     # ------------------------------------------------------
-    # SAVED BETS FILTER (JSON-based)
+    # Saved Bets Filter
     # ------------------------------------------------------
-    # NOTE: show_only_saved is a UI variable that is allowed here,
-    # because it is ONLY used in the Saved Bets tab.
-    # This will NOT trigger NameError, because every tab defines it.
     try:
-        if show_only_saved:
+        if show_only_saved_local:
             saved_list = load_saved_bets()
         else:
             saved_list = []
     except Exception:
         saved_list = []
 
-    if show_only_saved and saved_list:
+    if show_only_saved_local and saved_list:
         saved_df = pd.DataFrame(saved_list)
 
-        # JSON stored: market_code, label, book
         saved_df = saved_df.rename(
             columns={
                 "market_code": "market",
@@ -2230,10 +2225,8 @@ def filter_props(df):
             }
         )
 
-        # Columns required to “match” a row as a saved bet
         key_cols = ["player", "market", "line", "bet_type", "bookmaker"]
 
-        # Only merge if both sides contain all required columns
         if all(col in d.columns for col in key_cols) and all(
             col in saved_df.columns for col in key_cols
         ):
@@ -2244,6 +2237,7 @@ def filter_props(df):
             )
 
     return d
+
 
 tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs(
     [

@@ -2260,10 +2260,9 @@ def filter_props(df):
     return d
 
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs(
+tab_props, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs(
     [
-        "📈 EV+ Props",
-        "📊 Available Props",
+        "📈 Props",
         "🏅 EV Leaderboard",
         "🗺️ EV Heatmap",
         "📐 Trend Projection Model",
@@ -2274,6 +2273,7 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs(
         "🔀 WOWY Analyzer",
     ]
 )
+
 
 # ------------------------------------------------------
 # UNIFIED PROPS TAB (Former Tab 1 + Tab 2)

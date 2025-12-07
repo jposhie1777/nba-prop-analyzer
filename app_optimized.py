@@ -3172,7 +3172,7 @@ with tab9:
 
     # Filter
     team_depth = depth_df[depth_df["team_number"] == selected_team_number].copy()
-    team_injuries = injury_df[injury_df["team_number"] == selected_team_number].copy()
+    team_injuries = injury_df[injury_df["team_abbrev"] == selected_abbr].copy()
 
     injury_lookup = (
         team_injuries.groupby("player_id")

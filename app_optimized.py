@@ -2280,6 +2280,82 @@ with tab1:
             key="ev_max_odds",
         )
 
+    # ------------------- BASE EV DF -------------------
+    df = props_df.copy()
+    df["price"] = pd.to_numeric(df["price"], errors="coerce")
+    df["hit_rate_last10"] = pd.to_numeric(df["hit_rate_last10"], errors="coerce")
+    df = df.dropna(subset=["price", "hit_rate_last10"])
+
+    # ------------------- METRICS -------------------
+    total_props = len(df)
+    avg_hit = df["hit_rate_last10"].mean() if total_props else 0
+    avg_odds = df["price"].mean() if total_props else 0
+    avg_matchup = df["matchup_difficulty_score"].mean() if total_props else 0
+
+    metrics_html = textwrap.dedent(f"""
+    <div class="metric-grid">
+        <div class="metric-card">
+            <div class="metric-label">Props Analyzed</div>
+            <div class="metric-value">{total_props}</div>
+            <div class="metric-sub">before EV filter</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Avg Hit Rate (L10)</div>
+            <div class="metric-value">{avg_hit:.0%}</div>
+            <div class="metric-sub">trending performance</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Avg Odds</div>
+            <div class="metric-value">{avg_odds:+.0f}</div>
+            <div class="metric-sub">mean book line</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Matchup Difficulty</div>
+            <div class="metric-value">{avg_matchup:.1f}/10</div>
+            <div class="metric-sub">lower = easier</div>
+        </div>
+    </div>
+    """)
+    st.markdown(metrics_html, unsafe_allow_html=True)
+
+    # ------------------- RENDER EV+ CARDS -------------------
+    if df.empty:
+        st.info("No EV+ props available.")
+    else:
+        render_prop_cards(
+            df,
+            require_ev_plus=True,
+            odds_min=ev_odds_min,
+            odds_max=ev_odds_max,
+            min_hit_rate=0.0,
+            hit_rate_col="hit_rate_last10",
+            hit_label="L10 Hit",
+            min_opp_rank=None,
+            page_key="ev",
+        )
+
+
+    st.subheader("EV+ Props (Real Slate)")
+
+    # ------------------- EV+ FILTER BAR -------------------
+    c1, c2 = st.columns(2)
+
+    with c1:
+        ev_odds_min = st.number_input(
+            "Minimum Odds",
+            value=-200,
+            step=10,
+            key="ev_min_odds",
+        )
+
+    with c2:
+        ev_odds_max = st.number_input(
+            "Maximum Odds",
+            value=400,
+            step=10,
+            key="ev_max_odds",
+        )
+
     # Base DF (no sidebar filters)
     df = props_df.copy()
     df["price"] = pd.to_numeric(df["price"], errors="coerce")
@@ -2494,20 +2570,17 @@ with tab1:
         )
 
 # ------------------------------------------------------
-# TAB 2 — AVAILABLE PROPS (Full Board) with FILTER DRAWER
+# TAB 2 — AVAILABLE PROPS (Full Board) WITH SLIDING FILTER DRAWER
 # ------------------------------------------------------
 with tab2:
+
     st.subheader("Available Props (Full Board)")
 
-    # ========================
-    # Drawer State
-    # ========================
+    # -------------------- Drawer State --------------------
     if "drawer_open" not in st.session_state:
         st.session_state.drawer_open = False
 
-    # ========================
-    # Drawer CSS
-    # ========================
+    # -------------------- Drawer CSS ----------------------
     drawer_css = """
     <style>
     .filter-drawer {
@@ -2518,48 +2591,41 @@ with tab2:
         height: 100%;
         background-color: #1e1e1e;
         padding: 25px 18px;
-        transition: right 0.30s ease-in-out;
+        transition: right 0.3s ease-in-out;
         z-index: 99999;
-        box-shadow: -4px 0px 12px rgba(0,0,0,0.45);
+        box-shadow: -4px 0 12px rgba(0,0,0,0.45);
         overflow-y: auto;
     }
-
     .filter-drawer.open {
-        right: 0px !important;
+        right: 0 !important;
     }
-
+    .drawer-title {
+        color: #fff;
+        font-size: 22px;
+        font-weight: 600;
+        margin-bottom: 10px;
+    }
     .drawer-close-btn {
         position: absolute;
         top: 12px;
         right: 14px;
         color: #ccc;
-        cursor: pointer;
         font-size: 24px;
-        font-weight: 600;
+        cursor: pointer;
     }
-
-    .drawer-title {
-        color: white;
-        font-size: 22px;
-        font-weight: 600;
-        margin-bottom: 10px;
-    }
-
     .drawer-section-title {
-        margin-top: 15px;
-        font-size: 15px;
+        margin-top: 16px;
         color: #bbb;
+        font-size: 15px;
         font-weight: 600;
     }
     </style>
     """
     st.markdown(drawer_css, unsafe_allow_html=True)
 
-    # ========================
-    # Drawer Container
-    # ========================
+    # -------------------- Drawer Container --------------------
     drawer_class = "filter-drawer open" if st.session_state.drawer_open else "filter-drawer"
-    st.markdown(f'<div class="{drawer_class}" id="filterDrawer">', unsafe_allow_html=True)
+    st.markdown(f'<div class="{drawer_class}" id="drawer">', unsafe_allow_html=True)
 
     # Close button
     st.markdown("""
@@ -2568,115 +2634,94 @@ with tab2:
 
     st.markdown('<div class="drawer-title">Filters</div>', unsafe_allow_html=True)
 
-    # ========================
-    # DF PREP
-    # ========================
+    # -------------------- Base DF --------------------
     df = props_df.copy()
     df["market_display"] = df["market"].map(lambda m: MARKET_DISPLAY_MAP.get(m, m))
     df["game_label"] = df["home_team"] + " vs " + df["visitor_team"]
 
-    # ========================
-    # FILTERS INSIDE DRAWER
-    # ========================
+    # -------------------- Drawer Filters --------------------
 
-    # --- Bet Type ---
+    # Bet Type
     st.markdown('<div class="drawer-section-title">Bet Type</div>', unsafe_allow_html=True)
     bet_type_filter = st.multiselect(
         "",
         ["Over", "Under"],
         default=["Over", "Under"],
-        key="drawer_bt"
+        key="drawer_bt",
     )
 
-    # --- Market ---
+    # Market
     st.markdown('<div class="drawer-section-title">Market</div>', unsafe_allow_html=True)
-    market_list = sorted(set(df["market_display"]))
+    market_list = sorted(df["market_display"].unique().tolist())
     market_filter = st.multiselect(
         "",
         market_list,
         default=market_list,
-        key="drawer_market"
+        key="drawer_mkt",
     )
 
-    # --- Games ---
+    # Games
     st.markdown('<div class="drawer-section-title">Games</div>', unsafe_allow_html=True)
     games_today = sorted(df["game_label"].unique().tolist())
     selected_games = st.multiselect(
         "",
         games_today,
         default=games_today,
-        key="drawer_games"
+        key="drawer_games",
     )
 
-    # --- Odds ---
+    # Odds
     st.markdown('<div class="drawer-section-title">Odds Range</div>', unsafe_allow_html=True)
     min_odds = st.number_input("Min Odds", value=-600, step=10, key="drawer_minodds")
     max_odds = st.number_input("Max Odds", value=150, step=10, key="drawer_maxodds")
 
-    # --- Hit Window ---
+    # Hit Window
     st.markdown('<div class="drawer-section-title">Hit Window</div>', unsafe_allow_html=True)
     hit_window = st.selectbox(
         "",
         ["L5", "L10", "L20"],
         index=1,
-        key="drawer_hitwindow"
+        key="drawer_hw",
     )
 
-    # --- Min Hit Rate ---
-    st.markdown('<div class="drawer-section-title">Minimum Hit Rate (%)</div>', unsafe_allow_html=True)
-    min_hit = st.slider(
-        "",
-        min_value=0,
-        max_value=100,
-        value=90,
-        key="drawer_minhit"
-    )
+    # Hit %
+    st.markdown('<div class="drawer-section-title">Min Hit Rate (%)</div>', unsafe_allow_html=True)
+    min_hit = st.slider("", 0, 100, 90, key="drawer_minHit")
 
-    # --- Opponent Rank ---
+    # Opp Rank
     st.markdown('<div class="drawer-section-title">Opponent Rank</div>', unsafe_allow_html=True)
-    opp_rank = st.number_input(
-        "",
-        min_value=1,
-        max_value=30,
-        value=1,
-        key="drawer_opprank"
-    )
+    opp_rank = st.number_input("", min_value=1, max_value=30, value=1, key="drawer_oppRank")
 
-    # --- Sportsbooks ---
+    # Sportsbooks
     st.markdown('<div class="drawer-section-title">Sportsbooks</div>', unsafe_allow_html=True)
     sportsbook_list = sorted(df["bookmaker"].fillna("").map(normalize_bookmaker).unique().tolist())
     selected_books = st.multiselect(
         "",
         sportsbook_list,
         default=sportsbook_list,
-        key="drawer_books"
+        key="drawer_books",
     )
 
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)  # END drawer
 
-    # ========================
-    # JS LISTENER FOR CLOSE BUTTON
-    # ========================
+    # -------------------- Drawer JS --------------------
     st.markdown("""
     <script>
-    window.addEventListener('message', (e) => {
-        if (e.data.type === 'closeDrawer') {
+    window.addEventListener('message', (event) => {
+        if (event.data.type === 'closeDrawer') {
             window.parent.postMessage(
-                {isStreamlitMessage: true, streamlitCommand: "setComponentValue", key: "drawer_open", value: false},
-                "*"
+                {isStreamlitMessage: true, streamlitCommand: "setComponentValue", key: "drawer_open", value: false}, "*"
             );
         }
     });
     </script>
     """, unsafe_allow_html=True)
 
-    # ========================
-    # TOP ROW: FILTER BUTTON + SORT
-    # ========================
-    left, right = st.columns([1, 1])
+    # -------------------- Top Buttons (Filters + Sort) --------------------
+    left, right = st.columns([1,1])
 
     with left:
-        if st.button("⚙️ Filters", key="open_filter_drawer_btn"):
+        if st.button("⚙️ Filters", key="open_filters_btn"):
             st.session_state.drawer_open = True
 
     with right:
@@ -2684,36 +2729,32 @@ with tab2:
             "Sort",
             ["Hit Rate ↓ then Odds ↑", "Odds ↑", "Odds ↓"],
             index=0,
-            key="avail_sort"
+            key="avail_sort",
         )
 
-    # ========================
-    # APPLY FILTERS
-    # ========================
+    # -------------------- APPLY FILTERS --------------------
     df = df[df["bet_type"].isin(bet_type_filter)]
     df = df[df["market_display"].isin(market_filter)]
     df = df[df["game_label"].isin(selected_games)]
     df = df[df["price"].between(min_odds, max_odds)]
     df = df[df["bookmaker"].map(normalize_bookmaker).isin(selected_books)]
 
-    hit_col = {"L5": "hit_rate_last5", "L10": "hit_rate_last10", "L20": "hit_rate_last20"}[hit_window]
-    df = df[df[hit_col] >= (min_hit / 100)]
+    hit_col = {"L5":"hit_rate_last5","L10":"hit_rate_last10","L20":"hit_rate_last20"}[hit_window]
+    df = df[df[hit_col] >= (min_hit/100)]
 
-    min_opp_rank_value = opp_rank if opp_rank > 1 else None
+    min_opp_rank = opp_rank if opp_rank > 1 else None
 
-    # ========================
-    # RENDER CARDS
-    # ========================
+    # -------------------- RENDER CARDS --------------------
     render_prop_cards(
         df,
         require_ev_plus=False,
         odds_min=min_odds,
         odds_max=max_odds,
-        min_hit_rate=min_hit / 100,
+        min_hit_rate=min_hit/100,
         hit_rate_col=hit_col,
         hit_label=hit_window,
-        min_opp_rank=min_opp_rank_value,
-        page_key="avail_drawer"
+        min_opp_rank=min_opp_rank,
+        page_key="avail_drawer",
     )
 
 # ------------------------------------------------------

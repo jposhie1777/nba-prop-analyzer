@@ -3599,11 +3599,6 @@ with tab8:
             mime="text/plain",
         )
 
-
-# ------------------------------------------------------
-# NCAA Tabs
-# ------------------------------------------------------
-
 elif sport in ["NCAA Men's", "NCAA Women's"]:
     # For now: simple placeholder tabs + shared Saved Bets
     tabN1, tabN2, tabN3, tabN4, tabN5 = st.tabs(

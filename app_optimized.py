@@ -867,6 +867,60 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ------------------------------------------------------
+# SCROLL-TO-TOP FLOATING BUTTON (GLOBAL)
+# ------------------------------------------------------
+st.markdown("""
+<style>
+#scrollTopBtn {
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    z-index: 9999;
+    background-color: rgba(30, 30, 30, 0.85);
+    color: white;
+    padding: 10px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    border: 1px solid rgba(255,255,255,0.2);
+    box-shadow: 0px 4px 12px rgba(0,0,0,0.4);
+    backdrop-filter: blur(8px);
+    display: none;
+}
+#scrollTopBtn:hover {
+    background-color: rgba(60, 60, 60, 0.9);
+}
+</style>
+
+<script>
+window.addEventListener('scroll', function() {
+    const btn = document.getElementById('scrollTopBtn');
+    if (btn) {
+        if (window.scrollY > 400) {
+            btn.style.display = "block";
+        } else {
+            btn.style.display = "none";
+        }
+    }
+});
+function scrollToTop() {
+    window.scrollTo({top: 0, behavior: 'smooth'});
+}
+</script>
+
+<div id="scrollTopBtn" onclick="scrollToTop()">▲ Top</div>
+""", unsafe_allow_html=True)
+
+# ------------------------------------------------------
+# SPORT SELECTOR (TOP, ABOVE HEADER)
+# ------------------------------------------------------
+sport = st.selectbox(
+    "Sport",
+    ["NBA", "NCAA Men's", "NCAA Women's"],
+    index=0,
+)
+
 
 # ------------------------------------------------------
 # HEADER
@@ -2385,21 +2439,78 @@ for _, row in props_df.iterrows():
     # If you want logos:
     # game_pretty_labels[key] = f'<img src="{home_logo}" width="18"> {home} vs <img src="{away_logo}" width="18"> {away}'
 
+# ------------------------------------------------------
+# SHARED: RENDER SAVED BETS TAB (UNIVERSAL ACROSS SPORTS)
+# ------------------------------------------------------
+def render_saved_bets_tab():
+    st.subheader("Saved Bets")
 
-tab1, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs(
-    [
-        "📈 Props",
-        "🏅 EV Leaderboard",
-        "🗺️ EV Heatmap",
-        "📐 Trend Projection Model",
-        "⏱️ Minutes & Usage",
-        "📈 Trend Lab",
-        "📋 Saved Bets",
-        "📋 Depth Chart & Injury Report",
-        "🔀 WOWY Analyzer",
-    ]
-)
+    if not st.session_state.saved_bets:
+        st.info("No saved bets yet.")
+        return
 
+    # List saved bets
+    for i, bet in enumerate(st.session_state.saved_bets):
+        col1, col2 = st.columns([8, 1])
+
+        with col1:
+            st.markdown(
+                f"""
+                **{bet.get('player', '')}**  
+                {bet.get('market', '')} **{bet.get('bet_type', '')} {bet.get('line', '')}**  
+                Odds: **{bet.get('price', '')}** — Book: **{bet.get('bookmaker', '')}**
+                """
+            )
+        with col2:
+            if st.button("❌", key=f"remove_{i}"):
+                st.session_state.saved_bets.pop(i)
+                replace_saved_bets_in_db(user_id, st.session_state.saved_bets)
+                st.rerun()
+
+    st.write("---")
+
+    if st.button("🗑️ Clear All Saved Bets"):
+        st.session_state.saved_bets = []
+        replace_saved_bets_in_db(user_id, [])
+        st.success("All saved bets cleared.")
+        st.rerun()
+
+    st.write("---")
+
+    txt_export = ""
+    for b in st.session_state.saved_bets:
+        txt_export += (
+            f"{b.get('player', '')} | {b.get('market', '')} | "
+            f"{b.get('bet_type', '')} {b.get('line', '')} | "
+            f"Odds {b.get('price', '')} | {b.get('bookmaker', '')}\n"
+        )
+
+    st.download_button(
+        "Download as Text",
+        data=txt_export,
+        file_name="saved_bets.txt",
+        mime="text/plain",
+    )
+
+# ------------------------------------------------------
+# TABS — NBA / NCAA + UNIVERSAL SAVED BETS
+# ------------------------------------------------------
+
+if sport == "NBA":
+    # Saved Bets moved to LAST position in the bar
+    tab1, tab3, tab4, tab5, tab6, tab7, tab9, tab10, tab8 = st.tabs(
+        [
+            "📈 Props",
+            "🏅 EV Leaderboard",
+            "🗺️ EV Heatmap",
+            "📐 Trend Projection Model",
+            "⏱️ Minutes & Usage",
+            "📈 Trend Lab",
+            "📋 Depth Chart & Injury Report",
+            "🔀 WOWY Analyzer",
+            "📋 Saved Bets",  # last in the bar
+        ]
+    )
 
 # ------------------------------------------------------
 # UNIFIED PROPS TAB (All Props + Filters + EV+)
@@ -3089,55 +3200,6 @@ with tab7:
 
         st.dataframe(table_df_display, use_container_width=True, hide_index=True)
 
-# ------------------------------------------------------
-# TAB 8 — SAVED BETS (same logic as your old Tab 3)
-# ------------------------------------------------------
-with tab8:
-    st.subheader("Saved Bets")
-
-    if not st.session_state.saved_bets:
-        st.info("No saved bets yet.")
-    else:
-        for i, bet in enumerate(st.session_state.saved_bets):
-            col1, col2 = st.columns([8, 1])
-
-            with col1:
-                st.markdown(
-                    f"""
-                    **{bet['player']}**  
-                    {bet['market']} **{bet['bet_type']} {bet['line']}**  
-                    Odds: **{bet['price']}** — Book: **{bet['bookmaker']}**
-                    """
-                )
-            with col2:
-                if st.button("❌", key=f"remove_{i}"):
-                    st.session_state.saved_bets.pop(i)
-                    replace_saved_bets_in_db(user_id, st.session_state.saved_bets)
-                    st.rerun()
-
-        st.write("---")
-
-        if st.button("🗑️ Clear All Saved Bets"):
-            st.session_state.saved_bets = []
-            replace_saved_bets_in_db(user_id, [])
-            st.success("All saved bets cleared.")
-            st.rerun()
-
-        st.write("---")
-
-        txt_export = ""
-        for b in st.session_state.saved_bets:
-            txt_export += (
-                f"{b['player']} | {b['market']} | {b['bet_type']} {b['line']} | "
-                f"Odds {b['price']} | {b['bookmaker']}\n"
-            )
-
-        st.download_button(
-            "Download as Text",
-            data=txt_export,
-            file_name="saved_bets.txt",
-            mime="text/plain",
-        )
 
 #-------------------------------------------------
 # TAB 9 — DEPTH CHART & INJURY REPORT
@@ -3486,6 +3548,93 @@ with tab10:
         hide_index=True,
         use_container_width=True
     )
+
+# ------------------------------------------------------
+# TAB 8 — SAVED BETS (same logic as your old Tab 3)
+# ------------------------------------------------------
+with tab8:
+    st.subheader("Saved Bets")
+
+    if not st.session_state.saved_bets:
+        st.info("No saved bets yet.")
+    else:
+        for i, bet in enumerate(st.session_state.saved_bets):
+            col1, col2 = st.columns([8, 1])
+
+            with col1:
+                st.markdown(
+                    f"""
+                    **{bet['player']}**  
+                    {bet['market']} **{bet['bet_type']} {bet['line']}**  
+                    Odds: **{bet['price']}** — Book: **{bet['bookmaker']}**
+                    """
+                )
+            with col2:
+                if st.button("❌", key=f"remove_{i}"):
+                    st.session_state.saved_bets.pop(i)
+                    replace_saved_bets_in_db(user_id, st.session_state.saved_bets)
+                    st.rerun()
+
+        st.write("---")
+
+        if st.button("🗑️ Clear All Saved Bets"):
+            st.session_state.saved_bets = []
+            replace_saved_bets_in_db(user_id, [])
+            st.success("All saved bets cleared.")
+            st.rerun()
+
+        st.write("---")
+
+        txt_export = ""
+        for b in st.session_state.saved_bets:
+            txt_export += (
+                f"{b['player']} | {b['market']} | {b['bet_type']} {b['line']} | "
+                f"Odds {b['price']} | {b['bookmaker']}\n"
+            )
+
+        st.download_button(
+            "Download as Text",
+            data=txt_export,
+            file_name="saved_bets.txt",
+            mime="text/plain",
+        )
+
+
+# ------------------------------------------------------
+# NCAA Tabs
+# ------------------------------------------------------
+
+elif sport in ["NCAA Men's", "NCAA Women's"]:
+    # For now: simple placeholder tabs + shared Saved Bets
+    tabN1, tabN2, tabN3, tabN4, tabN5 = st.tabs(
+        [
+            "📈 Props",
+            "📊 Team Stats",
+            "📅 Game Logs",
+            "📋 Injury Report",
+            "📋 Saved Bets",  # universal, same session bets
+        ]
+    )
+
+    with tabN1:
+        st.subheader(f"{sport} Props")
+        st.info(f"{sport} props coming soon. (UI scaffold is ready.)")
+
+    with tabN2:
+        st.subheader(f"{sport} Team Stats")
+        st.info(f"{sport} team stats view coming soon.")
+
+    with tabN3:
+        st.subheader(f"{sport} Game Logs")
+        st.info(f"{sport} game logs coming soon.")
+
+    with tabN4:
+        st.subheader(f"{sport} Injury Report")
+        st.info(f"{sport} injury report coming soon.")
+
+    with tabN5:
+        render_saved_bets_tab()
+
 # ------------------------------------------------------
 # LAST UPDATED
 # ------------------------------------------------------

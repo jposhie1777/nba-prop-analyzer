@@ -2779,151 +2779,145 @@ if sport == "NBA":
         )
 
         # ------------------------------------------------------
-        # TAB 2 — GAME LINES + MODEL EV
+        # TAB 2 — GAME LINES + MODEL EV (Spread / Total / ML)
         # ------------------------------------------------------
         with tab2:
 
-            st.subheader("Game Lines & Model EV (Spread · Total · Moneyline)")
+            st.subheader("Game Lines + Model EV (ML · Spread · Total)")
 
             if game_report_df.empty:
                 st.info("No game report data for today.")
-                st.stop()
+            else:
 
-            df = game_report_df.copy()
+                df = game_report_df.copy()
 
-            # ensure numeric
-            for c in [
-                "home_win_pct","visitor_win_pct",
-                "exp_home_points","exp_visitor_points","exp_total_points",
-                "home_spread","visitor_spread",
-                "home_spread_price","visitor_spread_price",
-                "total_line","total_price",
-                "home_ml","visitor_ml",
-                "home_spread_edge","visitor_spread_edge",
-                "total_edge_pts",
-                "home_ml_edge","visitor_ml_edge",
-                "home_avg_pts_scored","home_avg_pts_allowed",
-                "visitor_avg_pts_scored","visitor_avg_pts_allowed",
-                "home_l10_diff","visitor_l10_diff"
-            ]:
-                if c in df.columns:
-                    df[c] = pd.to_numeric(df[c], errors="coerce")
+                # Ensure numeric fields
+                num_cols = [
+                    "exp_home_points", "exp_visitor_points",
+                    "home_win_pct", "visitor_win_pct",
+                    "home_team_strength", "visitor_team_strength",
+                    "home_l5_diff", "visitor_l5_diff",
+                    "home_l10_diff", "visitor_l10_diff",
+                    "home_over_expected", "visitor_over_expected"
+                ]
+                for col in num_cols:
+                    if col in df.columns:
+                        df[col] = pd.to_numeric(df[col], errors="coerce")
 
-            df["matchup"] = df["home_team"] + " vs " + df["visitor_team"]
+                # Loop over today's games
+                for _, row in df.iterrows():
 
-            # Sort by expected total (highest scoring games first)
-            df_cards = df.sort_values("exp_total_points", ascending=False)
+                    # -----------------------------
+                    # Team + Logos
+                    # -----------------------------
+                    home = row["home_team"]
+                    away = row["visitor_team"]
 
-            st.markdown("### 📋 Matchup Cards (Spread / Total / ML + Team Form)")
+                    home_logo = f"https://a.espncdn.com/i/teamlogos/nba/500/{home.replace(' ', '').lower()}.png"
+                    away_logo = f"https://a.espncdn.com/i/teamlogos/nba/500/{away.replace(' ', '').lower()}.png"
 
-            for _, r in df_cards.iterrows():
+                    # -----------------------------
+                    # Expected Score
+                    # -----------------------------
+                    exp_home = row.get("exp_home_points", None)
+                    exp_away = row.get("exp_visitor_points", None)
+                    model_score_display = (
+                        f"{exp_home:.1f} – {exp_away:.1f}"
+                        if exp_home is not None and exp_away is not None
+                        else "N/A"
+                    )
 
-                home = r.home_team
-                away = r.visitor_team
-                home_logo = TEAM_LOGOS.get(TEAM_NAME_TO_CODE.get(home,""), "")
-                away_logo = TEAM_LOGOS.get(TEAM_NAME_TO_CODE.get(away,""), "")
+                    # -----------------------------
+                    # Win Probability
+                    # -----------------------------
+                    wp_home = row.get("home_win_pct", None)
+                    wp_away = row.get("visitor_win_pct", None)
+                    win_prob = (
+                        f"{wp_home*100:.1f}% / {wp_away*100:.1f}%"
+                        if wp_home is not None and wp_away is not None
+                        else "N/A"
+                    )
 
-                # GAME CARD HTML
-                card_html = f"""
-        <div class="game-card">
+                    # -----------------------------
+                    # Spread / Total / ML (if available)
+                    # -----------------------------
+                    spread_text = row.get("consensus_spread", None)
+                    total_text = row.get("consensus_total", None)
+                    ml_home = row.get("moneyline_home", None)
+                    ml_away = row.get("moneyline_visitor", None)
 
-            <div class="game-headline">
+                    # Format values safely
+                    spread_display = spread_text if spread_text else "No spread data"
+                    total_display = total_text if total_text else "No total data"
 
-                <div style="flex:1;">
-                    <div class="game-team">
-                        <img src="{home_logo}" width="26" style="vertical-align:middle;margin-right:6px;" />
-                        {home}
-                        <span style="color:#64748b;font-size:0.8rem;">vs</span>
-                        <img src="{away_logo}" width="26" style="vertical-align:middle;margin:0 6px;" />
-                        {away}
+                    ml_display = (
+                        f"{home}: {ml_home} / {away}: {ml_away}"
+                        if ml_home is not None and ml_away is not None
+                        else "No moneyline data"
+                    )
+
+                    # ----------------------------------------------------------
+                    # Build Game Card HTML
+                    # ----------------------------------------------------------
+                    html = f"""
+                    <div class="game-card">
+
+                        <div class="game-headline">
+                            <div style="flex:1;">
+                                <div class="game-team">
+                                    <img src="{away_logo}" width="22"
+                                        style="vertical-align:middle;margin-right:6px;">
+                                    {away}
+                                    <br>
+                                    <img src="{home_logo}" width="22"
+                                        style="vertical-align:middle;margin-right:6px;">
+                                    {home}
+                                </div>
+                            </div>
+
+                            <div>
+                                <div class="game-metric">
+                                    Model Score:<br>
+                                    <span style="color:#9ca3af;">{model_score_display}</span>
+                                </div>
+
+                                <div class="game-metric" style="margin-top:8px;">
+                                    Win Prob:<br>
+                                    <span style="color:#9ca3af;">{win_prob}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="game-row">
+
+                            <div class="game-col">
+                                <div class="game-pill">
+                                    Spread:<br>
+                                    <span style="color:#9ca3af;">{spread_display}</span>
+                                </div>
+                            </div>
+
+                            <div class="game-col">
+                                <div class="game-pill">
+                                    Total:<br>
+                                    <span style="color:#9ca3af;">{total_display}</span>
+                                </div>
+                            </div>
+
+                            <div class="game-col">
+                                <div class="game-pill">
+                                    Moneyline:<br>
+                                    <span style="color:#9ca3af;">{ml_display}</span>
+                                </div>
+                            </div>
+
+                        </div>
+
                     </div>
+                    """
 
-                    <div class="game-metric">
-                        Model score: {r.exp_home_points:.1f} – {r.exp_visitor_points:.1f}
-                        <span style="color:#9ca3af;">(Total {r.exp_total_points:.1f})</span>
-                    </div>
+                    st.markdown(html, unsafe_allow_html=True)
 
-                    <div class="game-metric">
-                        Win prob: {r.home_win_pct:.1f}% / {r.visitor_win_pct:.1f}%
-                    </div>
-                </div>
-
-                <div style="text-align:right;">
-                    <div class="game-pill">
-                        Spread: {home} {r.home_spread:+.1f} ({format_moneyline(r.home_spread_price)}) /
-                        {away} {r.visitor_spread:+.1f} ({format_moneyline(r.visitor_spread_price)})
-                    </div>
-
-                    <div class="game-pill">
-                        Total: {r.total_line:.1f} ({format_moneyline(r.total_price)})
-                    </div>
-
-                    <div class="game-pill">
-                        ML: {home} {format_moneyline(r.home_ml)} /
-                        {away} {format_moneyline(r.visitor_ml)}
-                    </div>
-                </div>
-
-            </div>
-
-            <div class="game-row">
-                <div class="game-col">
-                    <div class="game-metric"><b>Spread Edge:</b></div>
-                    <div class="game-metric">Home {r.home_spread_edge:+.2f} | Away {r.visitor_spread_edge:+.2f}</div>
-                </div>
-                <div class="game-col">
-                    <div class="game-metric"><b>Total Edge:</b></div>
-                    <div class="game-metric">{r.total_edge_pts:+.2f}</div>
-                </div>
-                <div class="game-col">
-                    <div class="game-metric"><b>ML Edge:</b></div>
-                    <div class="game-metric">Home {(r.home_ml_edge*100):+.1f}% | Away {(r.visitor_ml_edge*100):+.1f}%</div>
-                </div>
-            </div>
-
-            <div class="game-row">
-                <div class="game-col">
-                    <div class="game-metric"><b>Home Off/Def:</b></div>
-                    <div class="game-metric">{r.home_avg_pts_scored:.1f} / {r.home_avg_pts_allowed:.1f}</div>
-                </div>
-                <div class="game-col">
-                    <div class="game-metric"><b>Away Off/Def:</b></div>
-                    <div class="game-metric">{r.visitor_avg_pts_scored:.1f} / {r.visitor_avg_pts_allowed:.1f}</div>
-                </div>
-                <div class="game-col">
-                    <div class="game-metric"><b>Form L10:</b></div>
-                    <div class="game-metric">
-                        Home {r.home_l10_diff:+.1f} | Away {r.visitor_l10_diff:+.1f}
-                    </div>
-                </div>
-            </div>
-
-        </div>
-        """
-                st.markdown(card_html, unsafe_allow_html=True)
-
-                # Mini trend chart
-                trend_df = pd.DataFrame({
-                    "Team": [f"{home} Off", f"{home} Def", f"{away} Off", f"{away} Def"],
-                    "Points": [
-                        r.home_avg_pts_scored,
-                        r.home_avg_pts_allowed,
-                        r.visitor_avg_pts_scored,
-                        r.visitor_avg_pts_allowed,
-                    ],
-                })
-
-                fig = go.Figure(go.Bar(x=trend_df["Team"], y=trend_df["Points"]))
-                fig.update_layout(
-                    template="plotly_dark",
-                    height=200,
-                    margin=dict(l=40, r=20, t=10, b=60),
-                    yaxis_title="Season Avg Points",
-                    xaxis_tickangle=-30,
-                )
-                st.plotly_chart(fig, use_container_width=True)
-
-                st.markdown("---")
 
 
 

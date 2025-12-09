@@ -863,6 +863,57 @@ st.markdown(
         border-radius: 6px !important;
     }}
 
+    /* ---------- GAME CARD (separate + conflict-free) ---------- */
+
+    .game-card {
+        padding:18px 22px;
+        margin-bottom:22px;
+        border-radius:20px;
+        border:1px solid rgba(148,163,184,0.28);
+        background: radial-gradient(circle at top left, rgba(30,41,59,1), rgba(15,23,42,0.92));
+        box-shadow:0 22px 55px rgba(15,23,42,0.90);
+    }
+
+    .game-headline {
+        display:flex;
+        justify-content:space-between;
+        align-items:flex-start;
+        margin-bottom:14px;
+    }
+
+    .game-team {
+        font-size:1.05rem;
+        font-weight:700;
+        color:white;
+    }
+
+    .game-metric {
+        font-size:0.88rem;
+        color:#e5e7eb;
+        margin-top:4px;
+    }
+
+    .game-pill {
+        background:rgba(255,255,255,0.08);
+        border:1px solid rgba(255,255,255,0.18);
+        padding:6px 12px;
+        border-radius:12px;
+        font-size:0.85rem;
+        color:#e5e7eb;
+        margin-top:4px;
+    }
+
+    .game-row {
+        display:flex;
+        justify-content:space-between;
+        gap:20px;
+        margin-top:12px;
+    }
+
+    .game-col {
+        flex:1;
+    }
+
     </style>
     """,
     unsafe_allow_html=True,
@@ -2726,316 +2777,152 @@ if sport == "NBA":
         )
 
         # ------------------------------------------------------
-        # TAB 2 — GAME LINES + MODEL EV (Spread / Total / ML)
+        # TAB 2 — GAME LINES + MODEL EV
         # ------------------------------------------------------
         with tab2:
+
             st.subheader("Game Lines & Model EV (Spread · Total · Moneyline)")
 
             if game_report_df.empty:
-                st.info("No game report data for today. Make sure nba_prop_analyzer.game_report is populated.")
+                st.info("No game report data for today.")
                 st.stop()
 
-            # Work off a clean copy
             df = game_report_df.copy()
 
-            # Ensure numeric types
-            num_cols = [
-                "home_team_strength", "visitor_team_strength",
-                "predicted_margin",
-                "home_win_pct", "visitor_win_pct",
-                "exp_home_points", "exp_visitor_points", "exp_total_points",
-                "pace_proxy", "pace_delta",
-                "home_over_expected", "visitor_over_expected",
-                "home_l5_diff", "visitor_l5_diff",
-                "home_l10_diff", "visitor_l10_diff",
-                "home_avg_pts_scored", "home_avg_pts_allowed",
-                "visitor_avg_pts_scored", "visitor_avg_pts_allowed",
-                "home_spread", "visitor_spread",
-                "home_spread_price", "visitor_spread_price",
-                "home_spread_edge", "visitor_spread_edge",
-                "total_line", "total_price", "total_edge_pts",
-                "home_ml", "visitor_ml",
-                "home_implied_prob", "visitor_implied_prob",
-                "home_ml_edge", "visitor_ml_edge",
-            ]
-            for c in num_cols:
+            # ensure numeric
+            for c in [
+                "home_win_pct","visitor_win_pct",
+                "exp_home_points","exp_visitor_points","exp_total_points",
+                "home_spread","visitor_spread",
+                "home_spread_price","visitor_spread_price",
+                "total_line","total_price",
+                "home_ml","visitor_ml",
+                "home_spread_edge","visitor_spread_edge",
+                "total_edge_pts",
+                "home_ml_edge","visitor_ml_edge",
+                "home_avg_pts_scored","home_avg_pts_allowed",
+                "visitor_avg_pts_scored","visitor_avg_pts_allowed",
+                "home_l10_diff","visitor_l10_diff"
+            ]:
                 if c in df.columns:
                     df[c] = pd.to_numeric(df[c], errors="coerce")
 
-            # Simple matchup label
             df["matchup"] = df["home_team"] + " vs " + df["visitor_team"]
 
-            # --------------------------------------------------
-            # 2A. TOP EDGES SUMMARY (Spread / Total / Moneyline)
-            # --------------------------------------------------
-            st.markdown("### 🔍 Top Edges (Model vs Book)")
-
-            c_spread, c_total, c_ml = st.columns(3)
-
-            # ---------------------
-            # Spread edges
-            # ---------------------
-            spread_rows = []
-            for _, r in df.iterrows():
-                m = r["matchup"]
-
-                # Home spread
-                if pd.notna(r.home_spread_edge):
-                    spread_rows.append({
-                        "Matchup": m,
-                        "Side": f"{r.home_team} (Home)",
-                        "Spread": r.home_spread,
-                        "Price": r.home_spread_price,
-                        "Edge_pts": r.home_spread_edge,
-                    })
-
-                # Away spread
-                if pd.notna(r.visitor_spread_edge):
-                    spread_rows.append({
-                        "Matchup": m,
-                        "Side": f"{r.visitor_team} (Away)",
-                        "Spread": r.visitor_spread,
-                        "Price": r.visitor_spread_price,
-                        "Edge_pts": r.visitor_spread_edge,
-                    })
-
-            if spread_rows:
-                spread_df = pd.DataFrame(spread_rows)
-                spread_df = spread_df.sort_values("Edge_pts", ascending=False).head(6)
-                spread_df["Price"] = spread_df["Price"].apply(format_moneyline)
-                spread_df["Edge_pts"] = spread_df["Edge_pts"].round(2)
-
-                with c_spread:
-                    st.markdown("**Spread Model (Edge in points)**")
-                    st.dataframe(spread_df, use_container_width=True, hide_index=True)
-            else:
-                with c_spread:
-                    st.info("No spread edge data in game_report.")
-
-            # ---------------------
-            # Total edges
-            # ---------------------
-            total_rows = []
-            for _, r in df.iterrows():
-                if pd.notna(r.total_edge_pts):
-                    total_rows.append({
-                        "Matchup": r["matchup"],
-                        "Total_line": r["total_line"],
-                        "Price": r["total_price"],
-                        "Edge_pts": r["total_edge_pts"],
-                    })
-
-            if total_rows:
-                total_df = pd.DataFrame(total_rows)
-                total_df = total_df.sort_values("Edge_pts", ascending=False).head(6)
-                total_df["Price"] = total_df["Price"].apply(format_moneyline)
-                total_df["Edge_pts"] = total_df["Edge_pts"].round(2)
-
-                with c_total:
-                    st.markdown("**Total Model (Edge in points)**")
-                    st.dataframe(total_df, use_container_width=True, hide_index=True)
-            else:
-                with c_total:
-                    st.info("No total edge data found.")
-
-            # ---------------------
-            # Moneyline edges
-            # ---------------------
-            ml_rows = []
-            for _, r in df.iterrows():
-                m = r.matchup
-
-                if pd.notna(r.home_ml_edge):
-                    ml_rows.append({
-                        "Matchup": m,
-                        "Side": f"{r.home_team} (Home)",
-                        "ML": r.home_ml,
-                        "Edge_pct": r.home_ml_edge * 100,
-                    })
-                if pd.notna(r.visitor_ml_edge):
-                    ml_rows.append({
-                        "Matchup": m,
-                        "Side": f"{r.visitor_team} (Away)",
-                        "ML": r.visitor_ml,
-                        "Edge_pct": r.visitor_ml_edge * 100,
-                    })
-
-            if ml_rows:
-                ml_df = pd.DataFrame(ml_rows)
-                ml_df = ml_df.sort_values("Edge_pct", ascending=False).head(6)
-                ml_df["ML"] = ml_df["ML"].apply(format_moneyline)
-                ml_df["Edge_pct"] = ml_df["Edge_pct"].round(1)
-
-                with c_ml:
-                    st.markdown("**Moneyline Model (Edge in %)**")
-                    st.dataframe(ml_df, use_container_width=True, hide_index=True)
-            else:
-                with c_ml:
-                    st.info("No moneyline edge data.")
-
-            st.markdown("---")
-
-            # --------------------------------------------------
-            # 2B. GAME HEATMAP — Pace × Total × Strength
-            # --------------------------------------------------
-            st.markdown("### 🔥 Game Heatmap (Pace × Total × Strength)")
-
-            heat_df = df.dropna(subset=["exp_total_points", "pace_proxy", "home_team_strength", "visitor_team_strength"]).copy()
-            heat_df["strength_diff"] = heat_df["home_team_strength"] - heat_df["visitor_team_strength"]
-
-            if heat_df.empty:
-                st.info("Not enough data to build the heatmap.")
-            else:
-                fig_heat = go.Figure(
-                    data=go.Scatter(
-                        x=heat_df["exp_total_points"],
-                        y=heat_df["pace_proxy"],
-                        mode="markers+text",
-                        text=heat_df["matchup"],
-                        textposition="top center",
-                        marker=dict(
-                            size=14,
-                            color=heat_df["strength_diff"],
-                            colorscale="RdBu",
-                            showscale=True,
-                            colorbar=dict(title="Home Strength Edge (pts)"),
-                        ),
-                    )
-                )
-                fig_heat.update_layout(
-                    xaxis_title="Model Expected Total",
-                    yaxis_title="Pace Proxy",
-                    template="plotly_dark",
-                    height=450,
-                )
-                st.plotly_chart(fig_heat, use_container_width=True)
-
-            st.markdown("---")
-
-            # --------------------------------------------------
-            # 2C. MATCHUP CARDS (HTML)
-            # --------------------------------------------------
-            st.markdown("### 📋 Matchup Cards (Spread / Total / ML + Team Form)")
-
+            # Sort by expected total (highest scoring games first)
             df_cards = df.sort_values("exp_total_points", ascending=False)
 
+            st.markdown("### 📋 Matchup Cards (Spread / Total / ML + Team Form)")
+
             for _, r in df_cards.iterrows():
+
                 home = r.home_team
                 away = r.visitor_team
+                home_logo = TEAM_LOGOS.get(TEAM_NAME_TO_CODE.get(home,""), "")
+                away_logo = TEAM_LOGOS.get(TEAM_NAME_TO_CODE.get(away,""), "")
 
-                home_logo = TEAM_LOGOS.get(TEAM_NAME_TO_CODE.get(home, ""), "")
-                away_logo = TEAM_LOGOS.get(TEAM_NAME_TO_CODE.get(away, ""), "")
-
-                # Build card
+                # GAME CARD HTML
                 card_html = f"""
-                <div class="prop-card">
+        <div class="game-card">
 
-                    <div class="prop-headline">
-                        <div>
-                            <div class="prop-player">
-                                <img src="{home_logo}" width="26" style="vertical-align:middle;margin-right:6px;" />
-                                {home}
-                                <span style="color:#64748b;font-size:0.8rem;">vs</span>
-                                <img src="{away_logo}" width="26" style="vertical-align:middle;margin:0 6px;" />
-                                {away}
-                            </div>
+            <div class="game-headline">
 
-                            <div class="prop-market">
-                                Model score: {r.exp_home_points:.1f} – {r.exp_visitor_points:.1f}
-                                <span style="color:#9ca3af;">(Total {r.exp_total_points:.1f})</span>
-                            </div>
-
-                            <div class="prop-market">
-                                Model win %: {r.home_win_pct:.1f}% | {r.visitor_win_pct:.1f}%
-                            </div>
-                        </div>
-
-                        <div style="text-align:right;">
-                            <div class="pill-book">
-                                Spread: {home} {r.home_spread:+.1f} ({format_moneyline(r.home_spread_price)}) /
-                                {away} {r.visitor_spread:+.1f} ({format_moneyline(r.visitor_spread_price)})
-                            </div>
-
-                            <div class="pill-book" style="margin-top:6px;">
-                                Total: {r.total_line:.1f} ({format_moneyline(r.total_price)})
-                            </div>
-
-                            <div class="pill-book" style="margin-top:6px;">
-                                ML: {home} {format_moneyline(r.home_ml)} /
-                                {away} {format_moneyline(r.visitor_ml)}
-                            </div>
-                        </div>
+                <div style="flex:1;">
+                    <div class="game-team">
+                        <img src="{home_logo}" width="26" style="vertical-align:middle;margin-right:6px;" />
+                        {home}
+                        <span style="color:#64748b;font-size:0.8rem;">vs</span>
+                        <img src="{away_logo}" width="26" style="vertical-align:middle;margin:0 6px;" />
+                        {away}
                     </div>
 
-                    <div class="prop-meta">
-                        <div>
-                            <div class="prop-meta-label">Spread Edge</div>
-                            <div class="prop-meta-value">
-                                Home {r.home_spread_edge:+.2f} | Away {r.visitor_spread_edge:+.2f}
-                            </div>
-                        </div>
-
-                        <div>
-                            <div class="prop-meta-label">Total Edge</div>
-                            <div class="prop-meta-value">{r.total_edge_pts:+.2f}</div>
-                        </div>
-
-                        <div>
-                            <div class="prop-meta-label">ML Edge</div>
-                            <div class="prop-meta-value">
-                                Home {(r.home_ml_edge*100):+.1f}% | Away {(r.visitor_ml_edge*100):+.1f}%
-                            </div>
-                        </div>
+                    <div class="game-metric">
+                        Model score: {r.exp_home_points:.1f} – {r.exp_visitor_points:.1f}
+                        <span style="color:#9ca3af;">(Total {r.exp_total_points:.1f})</span>
                     </div>
 
-                    <div class="prop-meta" style="margin-top:0.6rem;">
-                        <div>
-                            <div class="prop-meta-label">Home Off / Def</div>
-                            <div class="prop-meta-value">{r.home_avg_pts_scored:.1f} / {r.home_avg_pts_allowed:.1f}</div>
-                        </div>
-
-                        <div>
-                            <div class="prop-meta-label">Away Off / Def</div>
-                            <div class="prop-meta-value">{r.visitor_avg_pts_scored:.1f} / {r.visitor_avg_pts_allowed:.1f}</div>
-                        </div>
-
-                        <div>
-                            <div class="prop-meta-label">Form (L10 Diff)</div>
-                            <div class="prop-meta-value">
-                                Home {r.home_l10_diff:+.1f} | Away {r.visitor_l10_diff:+.1f}
-                            </div>
-                        </div>
+                    <div class="game-metric">
+                        Win prob: {r.home_win_pct:.1f}% / {r.visitor_win_pct:.1f}%
                     </div>
-
                 </div>
-                """
 
+                <div style="text-align:right;">
+                    <div class="game-pill">
+                        Spread: {home} {r.home_spread:+.1f} ({format_moneyline(r.home_spread_price)}) /
+                        {away} {r.visitor_spread:+.1f} ({format_moneyline(r.visitor_spread_price)})
+                    </div>
+
+                    <div class="game-pill">
+                        Total: {r.total_line:.1f} ({format_moneyline(r.total_price)})
+                    </div>
+
+                    <div class="game-pill">
+                        ML: {home} {format_moneyline(r.home_ml)} /
+                        {away} {format_moneyline(r.visitor_ml)}
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="game-row">
+                <div class="game-col">
+                    <div class="game-metric"><b>Spread Edge:</b></div>
+                    <div class="game-metric">Home {r.home_spread_edge:+.2f} | Away {r.visitor_spread_edge:+.2f}</div>
+                </div>
+                <div class="game-col">
+                    <div class="game-metric"><b>Total Edge:</b></div>
+                    <div class="game-metric">{r.total_edge_pts:+.2f}</div>
+                </div>
+                <div class="game-col">
+                    <div class="game-metric"><b>ML Edge:</b></div>
+                    <div class="game-metric">Home {(r.home_ml_edge*100):+.1f}% | Away {(r.visitor_ml_edge*100):+.1f}%</div>
+                </div>
+            </div>
+
+            <div class="game-row">
+                <div class="game-col">
+                    <div class="game-metric"><b>Home Off/Def:</b></div>
+                    <div class="game-metric">{r.home_avg_pts_scored:.1f} / {r.home_avg_pts_allowed:.1f}</div>
+                </div>
+                <div class="game-col">
+                    <div class="game-metric"><b>Away Off/Def:</b></div>
+                    <div class="game-metric">{r.visitor_avg_pts_scored:.1f} / {r.visitor_avg_pts_allowed:.1f}</div>
+                </div>
+                <div class="game-col">
+                    <div class="game-metric"><b>Form L10:</b></div>
+                    <div class="game-metric">
+                        Home {r.home_l10_diff:+.1f} | Away {r.visitor_l10_diff:+.1f}
+                    </div>
+                </div>
+            </div>
+
+        </div>
+        """
                 st.markdown(card_html, unsafe_allow_html=True)
 
-                # Trend mini-chart
-                trend_df = pd.DataFrame(
-                    {
-                        "Team": [f"{home} Off", f"{home} Def", f"{away} Off", f"{away} Def"],
-                        "Points": [
-                            r.home_avg_pts_scored,
-                            r.home_avg_pts_allowed,
-                            r.visitor_avg_pts_scored,
-                            r.visitor_avg_pts_allowed,
-                        ],
-                    }
-                )
+                # Mini trend chart
+                trend_df = pd.DataFrame({
+                    "Team": [f"{home} Off", f"{home} Def", f"{away} Off", f"{away} Def"],
+                    "Points": [
+                        r.home_avg_pts_scored,
+                        r.home_avg_pts_allowed,
+                        r.visitor_avg_pts_scored,
+                        r.visitor_avg_pts_allowed,
+                    ],
+                })
 
-                fig_trend = go.Figure(go.Bar(x=trend_df["Team"], y=trend_df["Points"]))
-                fig_trend.update_layout(
+                fig = go.Figure(go.Bar(x=trend_df["Team"], y=trend_df["Points"]))
+                fig.update_layout(
                     template="plotly_dark",
-                    height=220,
+                    height=200,
                     margin=dict(l=40, r=20, t=10, b=60),
                     yaxis_title="Season Avg Points",
                     xaxis_tickangle=-30,
                 )
-                st.plotly_chart(fig_trend, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True)
 
                 st.markdown("---")
+
 
 
 

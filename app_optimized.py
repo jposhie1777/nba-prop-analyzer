@@ -864,37 +864,37 @@ st.markdown(
     }}
 
 
-    /* ---------- GAME CARD (separate + conflict-free) ---------- */
+        /* ---------- GAME CARD (separate + conflict-free) ---------- */
 
-    .game-card {
+    .game-card {{
         padding:18px 22px;
         margin-bottom:22px;
         border-radius:20px;
         border:1px solid rgba(148,163,184,0.28);
         background: radial-gradient(circle at top left, rgba(30,41,59,1), rgba(15,23,42,0.92));
         box-shadow:0 22px 55px rgba(15,23,42,0.90);
-    }
+    }}
 
-    .game-headline {
+    .game-headline {{
         display:flex;
         justify-content:space-between;
         align-items:flex-start;
         margin-bottom:14px;
-    }
+    }}
 
-    .game-team {
+    .game-team {{
         font-size:1.05rem;
         font-weight:700;
         color:white;
-    }
+    }}
 
-    .game-metric {
+    .game-metric {{
         font-size:0.88rem;
         color:#e5e7eb;
         margin-top:4px;
-    }
+    }}
 
-    .game-pill {
+    .game-pill {{
         background:rgba(255,255,255,0.08);
         border:1px solid rgba(255,255,255,0.18);
         padding:6px 12px;
@@ -902,18 +902,19 @@ st.markdown(
         font-size:0.85rem;
         color:#e5e7eb;
         margin-top:4px;
-    }
+    }}
 
-    .game-row {
+    .game-row {{
         display:flex;
         justify-content:space-between;
         gap:20px;
         margin-top:12px;
-    }
+    }}
 
-    .game-col {
+    .game-col {{
         flex:1;
-    }
+    }}
+
 
     </style>
     """,

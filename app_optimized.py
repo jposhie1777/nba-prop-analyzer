@@ -2559,9 +2559,10 @@ def render_saved_bets_tab():
 
 if sport == "NBA":
     # Saved Bets moved to LAST position in the bar
-    tab1, tab3, tab4, tab5, tab6, tab7, tab9, tab10, tab8 = st.tabs(
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab9, tab10, tab8 = st.tabs(
         [
             "📈 Props",
+            "🏀 Game Lines",
             "🏅 EV Leaderboard",
             "🗺️ EV Heatmap",
             "📐 Trend Projection Model",

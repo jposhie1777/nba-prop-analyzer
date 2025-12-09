@@ -857,11 +857,12 @@ st.markdown(
         font-size: 13px !important;
     }}
 
-    .css-1wa3eu0-control, 
+    .css-1wa3eu0-control,
     .css-1y4p8pa-control {{
         min-height: 32px !important;
         border-radius: 6px !important;
     }}
+
 
     /* ---------- GAME CARD (separate + conflict-free) ---------- */
 

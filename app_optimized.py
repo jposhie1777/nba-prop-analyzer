@@ -2559,10 +2559,9 @@ def render_saved_bets_tab():
 
 if sport == "NBA":
     # Saved Bets moved to LAST position in the bar
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab9, tab10, tab8 = st.tabs(
+    tab1, tab3, tab4, tab5, tab6, tab7, tab9, tab10, tab8 = st.tabs(
         [
             "📈 Props",
-            "📊 Game Lines",
             "🏅 EV Leaderboard",
             "🗺️ EV Heatmap",
             "📐 Trend Projection Model",
@@ -2725,667 +2724,920 @@ if sport == "NBA":
             page_key="props_unified"
         )
 
-    # ------------------------------------------------------
-    # TAB 2 — GAME LINES & MATCHUP ANALYTICS
-    # ------------------------------------------------------
-    with tab2:
-        st.subheader("🏀 Game Lines & Matchup Analytics")
-
-        if game_report_df.empty:
-            st.info("No games scheduled today.")
-            st.stop()
-
-        # Split odds by game
-        grouped_odds = game_odds_df.groupby("Game")
-
-        # Loop through each game for matchup cards
-        for _, row in game_report_df.iterrows():
-            home = row["home_team"]
-            visitor = row["visitor_team"]
-
-            home_code = TEAM_NAME_TO_CODE.get(home, "")
-            visitor_code = TEAM_NAME_TO_CODE.get(visitor, "")
-
-            home_logo = TEAM_LOGOS.get(home_code, "")
-            visitor_logo = TEAM_LOGOS.get(visitor_code, "")
-
-            game_name = f"{visitor} @ {home}"
-            odds_game = grouped_odds.get_group(game_name) if game_name in grouped_odds.groups else None
-
-            # Layout
-            st.markdown("---")
-            col1, col2, col3 = st.columns([1.5, 2, 1.5])
-
-            # LEFT — HOME TEAM
-            with col1:
-                st.markdown(f"### <img src='{home_logo}' width='55'> **{home}**", unsafe_allow_html=True)
-                st.write(f"**Predicted Score:** {row['exp_home_points']}")
-                st.write(f"**Season Avg:** {row['home_avg_pts_scored']} PPG")
-                st.write(f"**Allowed:** {row['home_avg_pts_allowed']} OPP PPG")
-                st.write(f"**Rolling Form:** L5 {row['home_l5_diff']}, L10 {row['home_l10_diff']}")
-
-            # CENTER — MATCHUP SUMMARY
-            with col2:
-                st.markdown(f"### {visitor} @ {home}")
-                st.write(f"**Predicted Total:** {row['exp_total_points']}")
-                st.write(f"**Pace:** {row['pace_proxy']}")
-                st.write(f"**Predicted Margin:** {row['predicted_margin']:+}")
-
-                # Win probability bar
-                home_pct = row["home_win_pct"]
-                visitor_pct = row["visitor_win_pct"]
-
-                fig = go.Figure()
-                fig.add_trace(go.Bar(
-                    x=[home_pct, visitor_pct],
-                    y=["Home", "Visitor"],
-                    orientation="h",
-                    text=[f"{home_pct}%", f"{visitor_pct}%"],
-                    textposition="inside"
-                ))
-                fig.update_layout(height=140, margin=dict(l=10, r=10, t=20, b=20))
-                st.plotly_chart(fig, use_container_width=True)
-
-            # RIGHT — VISITOR TEAM
-            with col3:
-                st.markdown(f"### <img src='{visitor_logo}' width='55'> **{visitor}**", unsafe_allow_html=True)
-                st.write(f"**Predicted Score:** {row['exp_visitor_points']}")
-                st.write(f"**Season Avg:** {row['visitor_avg_pts_scored']} PPG")
-                st.write(f"**Allowed:** {row['visitor_avg_pts_allowed']} OPP PPG")
-                st.write(f"**Rolling Form:** L5 {row['visitor_l5_diff']}, L10 {row['visitor_l10_diff']}")
-
-            # ODDS BREAKDOWN
-            st.markdown("#### 📈 Sportsbook Odds")
-
-            if odds_game is not None:
-                c1, c2, c3, c4 = st.columns(4)
-
-                # MONEYLINE
-                ml_home = odds_game[(odds_game["Market"] == "h2h") & (odds_game["Outcome"] == home)]
-                ml_away = odds_game[(odds_game["Market"] == "h2h") & (odds_game["Outcome"] == visitor)]
-
-                with c1:
-                    st.write("**Moneyline**")
-                    if not ml_home.empty:
-                        st.write(f"{home}: {ml_home['Price'].values[0]}")
-                    if not ml_away.empty:
-                        st.write(f"{visitor}: {ml_away['Price'].values[0]}")
-
-                # SPREAD
-                spread_home = odds_game[(odds_game["Market"] == "spreads") & (odds_game["Outcome"] == home)]
-                spread_away = odds_game[(odds_game["Market"] == "spreads") & (odds_game["Outcome"] == visitor)]
-
-                with c2:
-                    st.write("**Spread**")
-                    if not spread_home.empty:
-                        st.write(f"{home}: {spread_home['Line'].values[0]} ({spread_home['Price'].values[0]})")
-                    if not spread_away.empty:
-                        st.write(f"{visitor}: {spread_away['Line'].values[0]} ({spread_away['Price'].values[0]})")
-
-                # TOTALS
-                totals = odds_game[odds_game["Market"] == "totals"]
-
-                with c3:
-                    st.write("**Total (O/U)**")
-                    if not totals.empty:
-                        total_line = totals["Line"].values[0]
-                        price = totals["Price"].values[0]
-                        st.write(f"Total: {total_line} ({price})")
-
-                # EV CALC FOR TOTAL
-                with c4:
-                    st.write("**EV — Total**")
-                    if not totals.empty:
-                        ev = row["exp_total_points"] - total_line
-                        st.write(f"Edge: {ev:+.1f} pts")
-
-        # Full tables toggle
-        with st.expander("📊 Full Game Analytics Data"):
-            st.dataframe(game_analytics_df, use_container_width=True)
-
-        with st.expander("📊 Raw Odds Data"):
-            st.dataframe(game_odds_df, use_container_width=True)
-
-
         # ------------------------------------------------------
-        # TAB 3 — EV LEADERBOARD
+        # TAB 2 — GAME LINES + MODEL EV (Spread / Total / ML)
         # ------------------------------------------------------
-        with tab3:
-            st.subheader("EV Leaderboard (Edge vs Market)")
+        with tab2:
+            st.subheader("Game Lines & Model EV (Spread · Total · Moneyline)")
 
-            if props_df.empty:
-                st.info("No props available for today.")
+            if game_report_df.empty:
+                st.info("No game report data for today. Make sure nba_prop_analyzer.game_report is populated.")
             else:
-                df_leader = props_df.copy()
+                df = game_report_df.copy()
 
-                # Make sure key numeric fields are numeric
-                for c in ["edge_pct", "edge_raw", "ev_last10", "hit_rate_last10", "price"]:
-                    if c in df_leader.columns:
-                        df_leader[c] = pd.to_numeric(df_leader[c], errors="coerce")
-
-                # Simple filters
-                col1, col2 = st.columns(2)
-                with col1:
-                    min_edge = st.slider(
-                        "Minimum Edge (%)",
-                        min_value=-20,
-                        max_value=50,
-                        value=0,
-                        step=1,
-                    )
-                with col2:
-                    min_hit = st.slider(
-                        "Minimum L10 Hit Rate (%)",
-                        min_value=0,
-                        max_value=100,
-                        value=60,
-                        step=5,
-                    )
-
-                # Filter on edge + hit rate if columns exist
-                if "edge_pct" in df_leader.columns:
-                    df_leader = df_leader[df_leader["edge_pct"] >= min_edge / 100.0]
-                if "hit_rate_last10" in df_leader.columns:
-                    df_leader = df_leader[df_leader["hit_rate_last10"] >= min_hit / 100.0]
-
-                # Sort: highest edge then highest EV
-                sort_cols = [c for c in ["edge_pct", "ev_last10"] if c in df_leader.columns]
-                if sort_cols:
-                    df_leader = df_leader.sort_values(sort_cols, ascending=False)
-
-                # Pretty market name
-                df_leader["market_pretty"] = df_leader["market"].map(
-                    lambda m: MARKET_DISPLAY_MAP.get(m, m)
-                )
-
-                cols_to_show = [
-                    "player",
-                    "market_pretty",
-                    "bet_type",
-                    "line",
-                    "price",
-                    "hit_rate_last10",
-                    "implied_prob",
-                    "edge_pct",
-                    "ev_last10",
-                    "proj_last10",
-                    "proj_diff_vs_line",
-                    "matchup_difficulty_score",
-                    "est_minutes",
-                    "usage_bump_pct",
+                # Ensure numeric types
+                num_cols = [
+                    "home_team_strength", "visitor_team_strength",
+                    "predicted_margin",
+                    "home_win_pct", "visitor_win_pct",
+                    "exp_home_points", "exp_visitor_points", "exp_total_points",
+                    "pace_proxy", "pace_delta",
+                    "home_over_expected", "visitor_over_expected",
+                    "home_l5_diff", "visitor_l5_diff",
+                    "home_l10_diff", "visitor_l10_diff",
+                    "home_avg_pts_scored", "home_avg_pts_allowed",
+                    "visitor_avg_pts_scored", "visitor_avg_pts_allowed",
+                    "home_spread", "visitor_spread",
+                    "home_spread_price", "visitor_spread_price",
+                    "home_spread_edge", "visitor_spread_edge",
+                    "total_line", "total_price", "total_edge_pts",
+                    "home_ml", "visitor_ml",
+                    "home_implied_prob", "visitor_implied_prob",
+                    "home_ml_edge", "visitor_ml_edge",
                 ]
-                cols_to_show = [c for c in cols_to_show if c in df_leader.columns]
+                for c in num_cols:
+                    if c in df.columns:
+                        df[c] = pd.to_numeric(df[c], errors="coerce")
 
-                if df_leader.empty:
-                    st.info("No props meet the current leaderboard filters.")
-                else:
-                    display_df = df_leader[cols_to_show].copy()
+                # Build a simple matchup label
+                df["matchup"] = df["home_team"].astype(str) + " vs " + df["visitor_team"].astype(str)
 
-                    # Format a few columns
-                    if "price" in display_df.columns:
-                        display_df["price"] = display_df["price"].apply(format_moneyline)
+                # --------------------------------------------------
+                # 2A. TOP EDGES SUMMARY (Spread / Total / Moneyline)
+                # --------------------------------------------------
+                st.markdown("### 🔍 Top Edges (Model vs Book)")
 
-                    if "hit_rate_last10" in display_df.columns:
-                        display_df["hit_rate_last10"] = (display_df["hit_rate_last10"] * 100).round(1)
+                c_spread, c_total, c_ml = st.columns(3)
 
-                    if "implied_prob" in display_df.columns:
-                        display_df["implied_prob"] = (display_df["implied_prob"] * 100).round(1)
-
-                    if "edge_pct" in display_df.columns:
-                        display_df["edge_pct"] = display_df["edge_pct"].round(1)
-
-                    if "matchup_difficulty_score" in display_df.columns:
-                        display_df["matchup_difficulty_score"] = display_df["matchup_difficulty_score"].round(1)
-
-                    st.dataframe(
-                        display_df,
-                        use_container_width=True,
-                        hide_index=True,
-                    )
-
-        # ------------------------------------------------------
-        # TAB 4 — DAILY EV HEATMAP
-        # ------------------------------------------------------
-        with tab4:
-            st.subheader("Daily EV Heatmap by Stat vs Opponent")
-
-            if props_df.empty:
-                st.info("No props available for today.")
-            else:
-                heat_df = props_df.copy()
-
-                # Derive a simple stat key from the market string (pts, reb, ast, pra, etc.)
-                heat_df["stat_key"] = heat_df["market"].apply(detect_stat)
-
-                if "edge_pct" not in heat_df.columns:
-                    st.warning("edge_pct column is missing; heatmap cannot be built.")
-                else:
-                    heat_df["edge_pct"] = pd.to_numeric(heat_df["edge_pct"], errors="coerce")
-                    heat_df = heat_df[
-                        heat_df["stat_key"].notna()
-                        & (heat_df["stat_key"] != "")
-                        & heat_df["opponent_team"].notna()
-                        & heat_df["edge_pct"].notna()
-                    ]
-
-                    if heat_df.empty:
-                        st.info("Not enough data to build the heatmap.")
-                    else:
-                        pivot = heat_df.pivot_table(
-                            index="stat_key",
-                            columns="opponent_team",
-                            values="edge_pct",
-                            aggfunc="mean",
+                # Helper: spread edges
+                spread_rows = []
+                for _, r in df.iterrows():
+                    m = r["matchup"]
+                    # Home side
+                    if pd.notna(r.get("home_spread_edge")) and pd.notna(r.get("home_spread")):
+                        spread_rows.append(
+                            {
+                                "Matchup": m,
+                                "Side": f"{r['home_team']} (Home)",
+                                "Spread": r["home_spread"],
+                                "Price": r.get("home_spread_price"),
+                                "Edge_pts": r["home_spread_edge"],
+                            }
+                        )
+                    # Visitor side
+                    if pd.notna(r.get("visitor_spread_edge")) and pd.notna(r.get("visitor_spread")):
+                        spread_rows.append(
+                            {
+                                "Matchup": m,
+                                "Side": f"{r['visitor_team']} (Away)",
+                                "Spread": r["visitor_spread"],
+                                "Price": r.get("visitor_spread_price"),
+                                "Edge_pts": r["visitor_spread_edge"],
+                            }
                         )
 
-                        fig = go.Figure(
-                            data=go.Heatmap(
-                                z=pivot.values,
-                                x=list(pivot.columns),
-                                y=list(pivot.index),
-                                colorscale="RdYlGn",
-                                zmid=0,
-                                colorbar=dict(title="Edge (%)"),
+                if spread_rows:
+                    spread_df = pd.DataFrame(spread_rows)
+                    spread_df = spread_df.sort_values("Edge_pts", ascending=False).head(6)
+
+                    # Format odds & edge
+                    if "Price" in spread_df.columns:
+                        spread_df["Price"] = spread_df["Price"].apply(format_moneyline)
+                    spread_df["Edge_pts"] = spread_df["Edge_pts"].round(2)
+
+                    with c_spread:
+                        st.markdown("**Spread Model (Edge in points)**")
+                        st.dataframe(
+                            spread_df[["Matchup", "Side", "Spread", "Price", "Edge_pts"]],
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+                else:
+                    with c_spread:
+                        st.info("No spread edge data in game_report.")
+
+                # Total edges
+                total_rows = []
+                for _, r in df.iterrows():
+                    if pd.notna(r.get("total_edge_pts")) and pd.notna(r.get("total_line")):
+                        total_rows.append(
+                            {
+                                "Matchup": r["matchup"],
+                                "Total_line": r["total_line"],
+                                "Price": r.get("total_price"),
+                                "Edge_pts": r["total_edge_pts"],
+                            }
+                        )
+                if total_rows:
+                    total_df = pd.DataFrame(total_rows)
+                    total_df = total_df.sort_values("Edge_pts", ascending=False).head(6)
+                    if "Price" in total_df.columns:
+                        total_df["Price"] = total_df["Price"].apply(format_moneyline)
+                    total_df["Edge_pts"] = total_df["Edge_pts"].round(2)
+
+                    with c_total:
+                        st.markdown("**Total Model (Edge in points)**")
+                        st.dataframe(
+                            total_df[["Matchup", "Total_line", "Price", "Edge_pts"]],
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+                else:
+                    with c_total:
+                        st.info("No total edge data in game_report.")
+
+                # Moneyline edges (EV in %)
+                ml_rows = []
+                for _, r in df.iterrows():
+                    m = r["matchup"]
+                    if pd.notna(r.get("home_ml_edge")) and pd.notna(r.get("home_ml")):
+                        ml_rows.append(
+                            {
+                                "Matchup": m,
+                                "Side": f"{r['home_team']} (Home)",
+                                "ML": r["home_ml"],
+                                "Edge_pct": r["home_ml_edge"] * 100.0,
+                            }
+                        )
+                    if pd.notna(r.get("visitor_ml_edge")) and pd.notna(r.get("visitor_ml")):
+                        ml_rows.append(
+                            {
+                                "Matchup": m,
+                                "Side": f"{r['visitor_team']} (Away)",
+                                "ML": r["visitor_ml"],
+                                "Edge_pct": r["visitor_ml_edge"] * 100.0,
+                            }
+                        )
+                if ml_rows:
+                    ml_df = pd.DataFrame(ml_rows)
+                    ml_df = ml_df.sort_values("Edge_pct", ascending=False).head(6)
+                    ml_df["ML"] = ml_df["ML"].apply(format_moneyline)
+                    ml_df["Edge_pct"] = ml_df["Edge_pct"].round(1)
+
+                    with c_ml:
+                        st.markdown("**Moneyline Model (Edge in %)**")
+                        st.dataframe(
+                            ml_df[["Matchup", "Side", "ML", "Edge_pct"]],
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+                else:
+                    with c_ml:
+                        st.info("No moneyline edge data in game_report.")
+
+                st.markdown("---")
+
+                # --------------------------------------------------
+                # 2B. GAME HEATMAP — Pace × Total × Strength
+                # --------------------------------------------------
+                st.markdown("### 🔥 Game Heatmap (Pace × Total × Strength)")
+
+                heat_df = df.copy()
+                # Drop rows with missing core values
+                heat_df = heat_df[
+                    heat_df["exp_total_points"].notna()
+                    & heat_df["pace_proxy"].notna()
+                    & heat_df["home_team_strength"].notna()
+                    & heat_df["visitor_team_strength"].notna()
+                ]
+
+                if heat_df.empty:
+                    st.info("Not enough data to build the heatmap.")
+                else:
+                    # Home strength minus visitor strength (model edge in pts)
+                    heat_df["strength_diff"] = (
+                        heat_df["home_team_strength"] - heat_df["visitor_team_strength"]
+                    )
+
+                    fig_heat = go.Figure(
+                        data=go.Scatter(
+                            x=heat_df["exp_total_points"],
+                            y=heat_df["pace_proxy"],
+                            mode="markers+text",
+                            text=heat_df["matchup"],
+                            textposition="top center",
+                            marker=dict(
+                                size=14,
+                                color=heat_df["strength_diff"],
+                                colorscale="RdBu",
+                                showscale=True,
+                                colorbar=dict(title="Home Strength Edge (pts)"),
+                            ),
+                        )
+                    )
+                    fig_heat.update_layout(
+                        xaxis_title="Model Expected Total Points",
+                        yaxis_title="Actual Total (Pace Proxy)",
+                        template="plotly_dark",
+                        height=450,
+                        margin=dict(l=40, r=40, t=40, b=40),
+                    )
+                    st.plotly_chart(fig_heat, use_container_width=True)
+
+                st.markdown("---")
+
+                # --------------------------------------------------
+                # 2C. MATCHUP CARDS + SIMPLE TREND SNAPSHOTS
+                # --------------------------------------------------
+                st.markdown("### 📋 Matchup Cards (Spread / Total / ML + Team Form)")
+
+                # Order games by expected total descending (highest scoring first)
+                df_cards = df.sort_values("exp_total_points", ascending=False)
+
+                for _, r in df_cards.iterrows():
+                    home = r["home_team"]
+                    away = r["visitor_team"]
+                    home_code = TEAM_NAME_TO_CODE.get(home, "")
+                    away_code = TEAM_NAME_TO_CODE.get(away, "")
+                    home_logo = TEAM_LOGOS.get(home_code, "")
+                    away_logo = TEAM_LOGOS.get(away_code, "")
+
+                    exp_home = r.get("exp_home_points")
+                    exp_away = r.get("exp_visitor_points")
+                    exp_total = r.get("exp_total_points")
+
+                    home_spread = r.get("home_spread")
+                    visitor_spread = r.get("visitor_spread")
+                    home_spread_price = r.get("home_spread_price")
+                    visitor_spread_price = r.get("visitor_spread_price")
+                    total_line = r.get("total_line")
+                    total_price = r.get("total_price")
+
+                    home_ml = r.get("home_ml")
+                    visitor_ml = r.get("visitor_ml")
+                    home_ml_edge = (r.get("home_ml_edge") or 0.0) * 100.0
+                    visitor_ml_edge = (r.get("visitor_ml_edge") or 0.0) * 100.0
+
+                    home_win = r.get("home_win_pct")
+                    visitor_win = r.get("visitor_win_pct")
+
+                    home_spread_edge = r.get("home_spread_edge")
+                    visitor_spread_edge = r.get("visitor_spread_edge")
+                    total_edge_pts = r.get("total_edge_pts")
+
+                    home_off = r.get("home_avg_pts_scored")
+                    home_def = r.get("home_avg_pts_allowed")
+                    away_off = r.get("visitor_avg_pts_scored")
+                    away_def = r.get("visitor_avg_pts_allowed")
+
+                    home_l10 = r.get("home_l10_diff")
+                    away_l10 = r.get("visitor_l10_diff")
+
+                    # Build the card HTML using existing prop-card styling
+                    card_html = f"""
+                    <div class="prop-card">
+                        <div class="prop-headline">
+                            <div>
+                                <div class="prop-player">
+                                    <img src="{home_logo}" width="26" style="vertical-align:middle;margin-right:6px;" />
+                                    {home}
+                                    <span style="color:#64748b;font-size:0.8rem;">vs</span>
+                                    <img src="{away_logo}" width="26" style="vertical-align:middle;margin:0 6px 0 6px;" />
+                                    {away}
+                                </div>
+                                <div class="prop-market">
+                                    Model score: {exp_home:.1f} – {exp_away:.1f} (Total {exp_total:.1f})
+                                </div>
+                                <div class="prop-market">
+                                    Model win %: {home_win:.1f}% &nbsp;|&nbsp; {away} {visitor_win:.1f}%
+                                </div>
+                            </div>
+                            <div style="text-align:right;">
+                                <div class="pill-book" style="margin-bottom:4px;">
+                                    Spread: {home} {home_spread:+.1f} ({format_moneyline(home_spread_price)}) /
+                                    {away} {visitor_spread:+.1f} ({format_moneyline(visitor_spread_price)})
+                                </div><br/>
+                                <div class="pill-book" style="margin-bottom:4px;">
+                                    Total: {total_line:.1f} ({format_moneyline(total_price)})
+                                </div><br/>
+                                <div class="pill-book">
+                                    ML: {home} {format_moneyline(home_ml)} /
+                                    {away} {format_moneyline(visitor_ml)}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="prop-meta">
+                            <div>
+                                <div class="prop-meta-label">Spread Edge (pts)</div>
+                                <div class="prop-meta-value">
+                                    Home {home_spread_edge:+.2f} &nbsp;|&nbsp; Away {visitor_spread_edge:+.2f}
+                                </div>
+                            </div>
+                            <div>
+                                <div class="prop-meta-label">Total Edge (pts)</div>
+                                <div class="prop-meta-value">
+                                    {total_edge_pts:+.2f}
+                                </div>
+                            </div>
+                            <div>
+                                <div class="prop-meta-label">Moneyline Edge</div>
+                                <div class="prop-meta-value">
+                                    Home {home_ml_edge:+.1f}% &nbsp;|&nbsp; Away {visitor_ml_edge:+.1f}%
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="prop-meta" style="margin-top:0.6rem;">
+                            <div>
+                                <div class="prop-meta-label">Home Off / Def (Season Avg)</div>
+                                <div class="prop-meta-value">
+                                    {home_off:.1f} / {home_def:.1f}
+                                </div>
+                            </div>
+                            <div>
+                                <div class="prop-meta-label">Away Off / Def (Season Avg)</div>
+                                <div class="prop-meta-value">
+                                    {away_off:.1f} / {away_def:.1f}
+                                </div>
+                            </div>
+                            <div>
+                                <div class="prop-meta-label">Form (L10 Point Diff)</div>
+                                <div class="prop-meta-value">
+                                    Home {home_l10:+.1f} &nbsp;|&nbsp; Away {away_l10:+.1f}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    """
+
+                    st.markdown(card_html, unsafe_allow_html=True)
+
+                    # ----- SIMPLE "TREND" SNAPSHOT CHART (Off vs Def) -----
+                    try:
+                        trend_df = pd.DataFrame(
+                            {
+                                "Team": [
+                                    f"{home} Off", f"{home} Def",
+                                    f"{away} Off", f"{away} Def",
+                                ],
+                                "Points": [
+                                    home_off, home_def,
+                                    away_off, away_def,
+                                ],
+                            }
+                        )
+                        fig_trend = go.Figure(
+                            data=go.Bar(
+                                x=trend_df["Team"],
+                                y=trend_df["Points"],
                             )
                         )
-                        fig.update_layout(
+                        fig_trend.update_layout(
+                            title=None,
+                            yaxis_title="Season Avg Points",
+                            xaxis_tickangle=-30,
                             template="plotly_dark",
-                            height=500,
-                            margin=dict(l=40, r=20, t=40, b=80),
-                            xaxis_title="Opponent",
-                            yaxis_title="Stat",
+                            height=220,
+                            margin=dict(l=40, r=20, t=10, b=60),
                         )
+                        st.plotly_chart(fig_trend, use_container_width=True)
+                    except Exception:
+                        # Don't kill the page if a single chart fails
+                        pass
 
-                        # Convert to % in hover
-                        fig.update_traces(
-                            hovertemplate="Stat: %{y}<br>Opponent: %{x}<br>Edge: %{z:.1f}%%<extra></extra>"
-                        )
+                    st.markdown("---")
 
-                        st.plotly_chart(fig, use_container_width=True)
 
-        # ------------------------------------------------------
-        # TAB 5 — TREND PROJECTION MODEL
-        # ------------------------------------------------------
-        with tab5:
-            st.subheader("Trend-Based Projection Model")
+    # ------------------------------------------------------
+    # TAB 3 — EV LEADERBOARD
+    # ------------------------------------------------------
+    with tab3:
+        st.subheader("EV Leaderboard (Edge vs Market)")
 
-            if props_df.empty:
-                st.info("No props available for today.")
-            else:
-                proj_df = props_df.copy()
+        if props_df.empty:
+            st.info("No props available for today.")
+        else:
+            df_leader = props_df.copy()
 
-                needed = [
-                    "proj_last10",
-                    "proj_std_last10",
-                    "proj_volatility_index",
-                    "proj_diff_vs_line",
-                    "hit_rate_last10",
-                    "price",
-                ]
-                for c in needed:
-                    if c in proj_df.columns:
-                        proj_df[c] = pd.to_numeric(proj_df[c], errors="coerce")
+            # Make sure key numeric fields are numeric
+            for c in ["edge_pct", "edge_raw", "ev_last10", "hit_rate_last10", "price"]:
+                if c in df_leader.columns:
+                    df_leader[c] = pd.to_numeric(df_leader[c], errors="coerce")
 
-                # Filters
-                c1, c2, c3 = st.columns(3)
-                with c1:
-                    min_proj_diff = st.slider(
-                        "Min Projection vs Line (points)",
-                        min_value=-10.0,
-                        max_value=20.0,
-                        value=1.0,
-                        step=0.5,
-                    )
-                with c2:
-                    max_vol_index = st.slider(
-                        "Max Volatility Index",
-                        min_value=0.0,
-                        max_value=5.0,
-                        value=3.0,
-                        step=0.1,
-                    )
-                with c3:
-                    min_hit10_proj = st.slider(
-                        "Min Hit Rate L10 (%)",
-                        min_value=0,
-                        max_value=100,
-                        value=50,
-                        step=5,
-                    )
-
-                if "proj_diff_vs_line" in proj_df.columns:
-                    proj_df = proj_df[proj_df["proj_diff_vs_line"] >= min_proj_diff]
-
-                if "proj_volatility_index" in proj_df.columns:
-                    proj_df = proj_df[proj_df["proj_volatility_index"] <= max_vol_index]
-
-                if "hit_rate_last10" in proj_df.columns:
-                    proj_df = proj_df[proj_df["hit_rate_last10"] >= min_hit10_proj / 100.0]
-
-                proj_df["market_pretty"] = proj_df["market"].map(
-                    lambda m: MARKET_DISPLAY_MAP.get(m, m)
+            # Simple filters
+            col1, col2 = st.columns(2)
+            with col1:
+                min_edge = st.slider(
+                    "Minimum Edge (%)",
+                    min_value=-20,
+                    max_value=50,
+                    value=0,
+                    step=1,
+                )
+            with col2:
+                min_hit = st.slider(
+                    "Minimum L10 Hit Rate (%)",
+                    min_value=0,
+                    max_value=100,
+                    value=60,
+                    step=5,
                 )
 
-                cols = [
-                    "player",
-                    "market_pretty",
-                    "bet_type",
-                    "line",
-                    "price",
-                    "proj_last10",
-                    "proj_std_last10",
-                    "proj_volatility_index",
-                    "proj_diff_vs_line",
-                    "hit_rate_last10",
-                    "edge_pct",
-                ]
-                cols = [c for c in cols if c in proj_df.columns]
+            # Filter on edge + hit rate if columns exist
+            if "edge_pct" in df_leader.columns:
+                df_leader = df_leader[df_leader["edge_pct"] >= min_edge / 100.0]
+            if "hit_rate_last10" in df_leader.columns:
+                df_leader = df_leader[df_leader["hit_rate_last10"] >= min_hit / 100.0]
 
-                if proj_df.empty:
-                    st.info("No props match the current projection filters.")
-                else:
-                    proj_df = proj_df.sort_values(
-                        by=[c for c in ["proj_diff_vs_line", "edge_pct"] if c in proj_df.columns],
-                        ascending=False,
-                    )
-                    display_df = proj_df[cols].copy()
+            # Sort: highest edge then highest EV
+            sort_cols = [c for c in ["edge_pct", "ev_last10"] if c in df_leader.columns]
+            if sort_cols:
+                df_leader = df_leader.sort_values(sort_cols, ascending=False)
 
-                    if "price" in display_df.columns:
-                        display_df["price"] = display_df["price"].apply(format_moneyline)
-                    if "hit_rate_last10" in display_df.columns:
-                        display_df["hit_rate_last10"] = (display_df["hit_rate_last10"] * 100).round(1)
-                    if "edge_pct" in display_df.columns:
-                        display_df["edge_pct"] = display_df["edge_pct"].round(1)
-
-                    st.dataframe(display_df, use_container_width=True, hide_index=True)
-
-        # ------------------------------------------------------
-        # TAB 6 — MINUTES & USAGE MODEL
-        # ------------------------------------------------------
-        with tab6:
-            st.subheader("Minutes & Usage (WOWY + Role Context)")
-
-            if props_df.empty:
-                st.info("No props available for today.")
-            else:
-                mu_df = props_df.copy()
-
-                for c in ["est_minutes", "usage_bump_pct", "proj_diff_vs_line", "ev_last10"]:
-                    if c in mu_df.columns:
-                        mu_df[c] = pd.to_numeric(mu_df[c], errors="coerce")
-
-                c1, c2, c3 = st.columns(3)
-                with c1:
-                    min_minutes = st.slider(
-                        "Min Estimated Minutes",
-                        min_value=0,
-                        max_value=48,
-                        value=24,
-                        step=2,
-                    )
-                with c2:
-                    min_usage_bump = st.slider(
-                        "Min Usage Bump (%)",
-                        min_value=-20,
-                        max_value=60,
-                        value=5,
-                        step=1,
-                    )
-                with c3:
-                    min_proj_diff_mu = st.slider(
-                        "Min Projection vs Line (points)",
-                        min_value=-10.0,
-                        max_value=20.0,
-                        value=0.0,
-                        step=0.5,
-                    )
-
-                if "est_minutes" in mu_df.columns:
-                    mu_df = mu_df[mu_df["est_minutes"] >= min_minutes]
-
-                if "usage_bump_pct" in mu_df.columns:
-                    mu_df = mu_df[mu_df["usage_bump_pct"] >= min_usage_bump]
-
-                if "proj_diff_vs_line" in mu_df.columns:
-                    mu_df = mu_df[mu_df["proj_diff_vs_line"] >= min_proj_diff_mu]
-
-                mu_df["market_pretty"] = mu_df["market"].map(
-                    lambda m: MARKET_DISPLAY_MAP.get(m, m)
-                )
-
-                cols = [
-                    "player",
-                    "player_team",
-                    "market_pretty",
-                    "bet_type",
-                    "line",
-                    "price",
-                    "est_minutes",
-                    "usage_bump_pct",
-                    "proj_diff_vs_line",
-                    "ev_last10",
-                    "hit_rate_last10",
-                    "matchup_difficulty_score",
-                ]
-                cols = [c for c in cols if c in mu_df.columns]
-
-                if mu_df.empty:
-                    st.info("No props match the current minutes/usage filters.")
-                else:
-                    mu_df = mu_df.sort_values(
-                        by=[c for c in ["usage_bump_pct", "est_minutes", "proj_diff_vs_line"] if c in mu_df.columns],
-                        ascending=False,
-                    )
-                    display_df = mu_df[cols].copy()
-
-                    if "price" in display_df.columns:
-                        display_df["price"] = display_df["price"].apply(format_moneyline)
-                    if "hit_rate_last10" in display_df.columns:
-                        display_df["hit_rate_last10"] = (display_df["hit_rate_last10"] * 100).round(1)
-
-                    st.dataframe(display_df, use_container_width=True, hide_index=True)
-
-        # ------------------------------------------------------
-        # TAB 7 — TREND LAB (same as your old Tab 2)
-        # ------------------------------------------------------
-        with tab7:
-            st.subheader("Trend Lab (Real History + Dynamic Line)")
-
-            c1, c2, c3 = st.columns([1.2, 1.2, 1])
-            with c1:
-                player = st.selectbox(
-                    "Player", sorted(props_df["player"].dropna().unique())
-                )
-            with c2:
-                stat_label = st.selectbox("Stat", ["Points", "Rebounds", "Assists", "P+R+A", "Steals", "Blocks"])
-            with c3:
-                n_games = st.slider("Last N games", 5, 25, 15)
-
-            stat_map = {
-                "Points": "pts",
-                "Rebounds": "reb",
-                "Assists": "ast",
-                "P+R+A": "pra",
-                "Steals": "stl",
-                "Blocks": "blk",
-            }
-
-            stat = stat_map[stat_label]
-
-            def clean_name(name):
-                if not isinstance(name, str):
-                    return ""
-                return (
-                    name.lower()
-                    .replace(".", "")
-                    .replace("-", " ")
-                    .strip()
-                )
-
-            history_df["player_clean"] = history_df["player"].apply(clean_name)
-            player_clean = clean_name(player)
-
-            df_trend = history_df[history_df["player_clean"] == player_clean].copy()
-
-            df_trend[stat] = pd.to_numeric(df_trend[stat], errors="coerce")
-            df_trend = df_trend[df_trend[stat].notna()]
-
-            df_trend = (
-                df_trend.sort_values("game_date")
-                .drop_duplicates(subset=["game_date"], keep="last")
-                .reset_index(drop=True)
+            # Pretty market name
+            df_leader["market_pretty"] = df_leader["market"].map(
+                lambda m: MARKET_DISPLAY_MAP.get(m, m)
             )
 
-            df_trend = df_trend.sort_values("game_date").tail(n_games).reset_index(drop=True)
+            cols_to_show = [
+                "player",
+                "market_pretty",
+                "bet_type",
+                "line",
+                "price",
+                "hit_rate_last10",
+                "implied_prob",
+                "edge_pct",
+                "ev_last10",
+                "proj_last10",
+                "proj_diff_vs_line",
+                "matchup_difficulty_score",
+                "est_minutes",
+                "usage_bump_pct",
+            ]
+            cols_to_show = [c for c in cols_to_show if c in df_leader.columns]
 
-            if df_trend.empty:
-                st.info("No historical data found for this selection.")
+            if df_leader.empty:
+                st.info("No props meet the current leaderboard filters.")
             else:
-                df_trend["date_str"] = df_trend["game_date"].dt.strftime("%b %d")
+                display_df = df_leader[cols_to_show].copy()
 
-                market_map = {
-                    "Points": "player_points_alternate",
-                    "Rebounds": "player_rebounds_alternate",
-                    "Assists": "player_assists_alternate",
-                    "P+R+A": "player_points_rebounds_assists_alternate",
-                    "Steals": "player_steals_alternate",
-                    "Blocks": "player_blocks_alternate",
-                }
+                # Format a few columns
+                if "price" in display_df.columns:
+                    display_df["price"] = display_df["price"].apply(format_moneyline)
 
-                selected_market_code = market_map[stat_label]
+                if "hit_rate_last10" in display_df.columns:
+                    display_df["hit_rate_last10"] = (display_df["hit_rate_last10"] * 100).round(1)
 
-                player_props = props_df[
-                    (props_df["player"] == player)
-                    & (props_df["market"] == selected_market_code)
+                if "implied_prob" in display_df.columns:
+                    display_df["implied_prob"] = (display_df["implied_prob"] * 100).round(1)
+
+                if "edge_pct" in display_df.columns:
+                    display_df["edge_pct"] = display_df["edge_pct"].round(1)
+
+                if "matchup_difficulty_score" in display_df.columns:
+                    display_df["matchup_difficulty_score"] = display_df["matchup_difficulty_score"].round(1)
+
+                st.dataframe(
+                    display_df,
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+    # ------------------------------------------------------
+    # TAB 4 — DAILY EV HEATMAP
+    # ------------------------------------------------------
+    with tab4:
+        st.subheader("Daily EV Heatmap by Stat vs Opponent")
+
+        if props_df.empty:
+            st.info("No props available for today.")
+        else:
+            heat_df = props_df.copy()
+
+            # Derive a simple stat key from the market string (pts, reb, ast, pra, etc.)
+            heat_df["stat_key"] = heat_df["market"].apply(detect_stat)
+
+            if "edge_pct" not in heat_df.columns:
+                st.warning("edge_pct column is missing; heatmap cannot be built.")
+            else:
+                heat_df["edge_pct"] = pd.to_numeric(heat_df["edge_pct"], errors="coerce")
+                heat_df = heat_df[
+                    heat_df["stat_key"].notna()
+                    & (heat_df["stat_key"] != "")
+                    & heat_df["opponent_team"].notna()
+                    & heat_df["edge_pct"].notna()
                 ]
 
-                if not player_props.empty:
-                    available_lines = sorted(
-                        player_props["line"].dropna().unique().astype(float)
-                    )
-                    line = st.selectbox("Line", available_lines, index=0)
+                if heat_df.empty:
+                    st.info("Not enough data to build the heatmap.")
                 else:
-                    line = st.number_input(
-                        f"No real props found. Enter custom line for {stat_label}",
-                        min_value=0.0,
-                        value=10.0,
-                        step=0.5,
+                    pivot = heat_df.pivot_table(
+                        index="stat_key",
+                        columns="opponent_team",
+                        values="edge_pct",
+                        aggfunc="mean",
                     )
 
-                df_trend["hit"] = df_trend[stat] > float(line)
-                df_trend["rolling"] = df_trend[stat].rolling(window=5, min_periods=1).mean()
+                    fig = go.Figure(
+                        data=go.Heatmap(
+                            z=pivot.values,
+                            x=list(pivot.columns),
+                            y=list(pivot.index),
+                            colorscale="RdYlGn",
+                            zmid=0,
+                            colorbar=dict(title="Edge (%)"),
+                        )
+                    )
+                    fig.update_layout(
+                        template="plotly_dark",
+                        height=500,
+                        margin=dict(l=40, r=20, t=40, b=80),
+                        xaxis_title="Opponent",
+                        yaxis_title="Stat",
+                    )
 
-                hit_rate = df_trend["hit"].mean()
-                avg_last5 = df_trend[stat].tail(5).mean()
-                std_dev = df_trend[stat].std()
-                last_game_value = df_trend[stat].iloc[-1]
+                    # Convert to % in hover
+                    fig.update_traces(
+                        hovertemplate="Stat: %{y}<br>Opponent: %{x}<br>Edge: %{z:.1f}%%<extra></extra>"
+                    )
 
-                metric_row = f"""
-                <div class="metric-grid" style="margin-top:0.25rem;margin-bottom:1rem;">
-                    <div class="metric-card">
-                        <div class="metric-label">Hit Rate</div>
-                        <div class="metric-value">{hit_rate:.0%}</div>
-                        <div class="metric-sub">{df_trend['hit'].sum()} of {len(df_trend)} games</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">Avg Last 5</div>
-                        <div class="metric-value">{avg_last5:.1f}</div>
-                        <div class="metric-sub">recent form</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">Consistency</div>
-                        <div class="metric-value">{std_dev:.1f}</div>
-                        <div class="metric-sub">std deviation</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">Last Game</div>
-                        <div class="metric-value">{last_game_value:.0f}</div>
-                        <div class="metric-sub">{'Hit' if last_game_value > line else 'Miss'} vs {line}</div>
-                    </div>
+                    st.plotly_chart(fig, use_container_width=True)
+
+    # ------------------------------------------------------
+    # TAB 5 — TREND PROJECTION MODEL
+    # ------------------------------------------------------
+    with tab5:
+        st.subheader("Trend-Based Projection Model")
+
+        if props_df.empty:
+            st.info("No props available for today.")
+        else:
+            proj_df = props_df.copy()
+
+            needed = [
+                "proj_last10",
+                "proj_std_last10",
+                "proj_volatility_index",
+                "proj_diff_vs_line",
+                "hit_rate_last10",
+                "price",
+            ]
+            for c in needed:
+                if c in proj_df.columns:
+                    proj_df[c] = pd.to_numeric(proj_df[c], errors="coerce")
+
+            # Filters
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                min_proj_diff = st.slider(
+                    "Min Projection vs Line (points)",
+                    min_value=-10.0,
+                    max_value=20.0,
+                    value=1.0,
+                    step=0.5,
+                )
+            with c2:
+                max_vol_index = st.slider(
+                    "Max Volatility Index",
+                    min_value=0.0,
+                    max_value=5.0,
+                    value=3.0,
+                    step=0.1,
+                )
+            with c3:
+                min_hit10_proj = st.slider(
+                    "Min Hit Rate L10 (%)",
+                    min_value=0,
+                    max_value=100,
+                    value=50,
+                    step=5,
+                )
+
+            if "proj_diff_vs_line" in proj_df.columns:
+                proj_df = proj_df[proj_df["proj_diff_vs_line"] >= min_proj_diff]
+
+            if "proj_volatility_index" in proj_df.columns:
+                proj_df = proj_df[proj_df["proj_volatility_index"] <= max_vol_index]
+
+            if "hit_rate_last10" in proj_df.columns:
+                proj_df = proj_df[proj_df["hit_rate_last10"] >= min_hit10_proj / 100.0]
+
+            proj_df["market_pretty"] = proj_df["market"].map(
+                lambda m: MARKET_DISPLAY_MAP.get(m, m)
+            )
+
+            cols = [
+                "player",
+                "market_pretty",
+                "bet_type",
+                "line",
+                "price",
+                "proj_last10",
+                "proj_std_last10",
+                "proj_volatility_index",
+                "proj_diff_vs_line",
+                "hit_rate_last10",
+                "edge_pct",
+            ]
+            cols = [c for c in cols if c in proj_df.columns]
+
+            if proj_df.empty:
+                st.info("No props match the current projection filters.")
+            else:
+                proj_df = proj_df.sort_values(
+                    by=[c for c in ["proj_diff_vs_line", "edge_pct"] if c in proj_df.columns],
+                    ascending=False,
+                )
+                display_df = proj_df[cols].copy()
+
+                if "price" in display_df.columns:
+                    display_df["price"] = display_df["price"].apply(format_moneyline)
+                if "hit_rate_last10" in display_df.columns:
+                    display_df["hit_rate_last10"] = (display_df["hit_rate_last10"] * 100).round(1)
+                if "edge_pct" in display_df.columns:
+                    display_df["edge_pct"] = display_df["edge_pct"].round(1)
+
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+    # ------------------------------------------------------
+    # TAB 6 — MINUTES & USAGE MODEL
+    # ------------------------------------------------------
+    with tab6:
+        st.subheader("Minutes & Usage (WOWY + Role Context)")
+
+        if props_df.empty:
+            st.info("No props available for today.")
+        else:
+            mu_df = props_df.copy()
+
+            for c in ["est_minutes", "usage_bump_pct", "proj_diff_vs_line", "ev_last10"]:
+                if c in mu_df.columns:
+                    mu_df[c] = pd.to_numeric(mu_df[c], errors="coerce")
+
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                min_minutes = st.slider(
+                    "Min Estimated Minutes",
+                    min_value=0,
+                    max_value=48,
+                    value=24,
+                    step=2,
+                )
+            with c2:
+                min_usage_bump = st.slider(
+                    "Min Usage Bump (%)",
+                    min_value=-20,
+                    max_value=60,
+                    value=5,
+                    step=1,
+                )
+            with c3:
+                min_proj_diff_mu = st.slider(
+                    "Min Projection vs Line (points)",
+                    min_value=-10.0,
+                    max_value=20.0,
+                    value=0.0,
+                    step=0.5,
+                )
+
+            if "est_minutes" in mu_df.columns:
+                mu_df = mu_df[mu_df["est_minutes"] >= min_minutes]
+
+            if "usage_bump_pct" in mu_df.columns:
+                mu_df = mu_df[mu_df["usage_bump_pct"] >= min_usage_bump]
+
+            if "proj_diff_vs_line" in mu_df.columns:
+                mu_df = mu_df[mu_df["proj_diff_vs_line"] >= min_proj_diff_mu]
+
+            mu_df["market_pretty"] = mu_df["market"].map(
+                lambda m: MARKET_DISPLAY_MAP.get(m, m)
+            )
+
+            cols = [
+                "player",
+                "player_team",
+                "market_pretty",
+                "bet_type",
+                "line",
+                "price",
+                "est_minutes",
+                "usage_bump_pct",
+                "proj_diff_vs_line",
+                "ev_last10",
+                "hit_rate_last10",
+                "matchup_difficulty_score",
+            ]
+            cols = [c for c in cols if c in mu_df.columns]
+
+            if mu_df.empty:
+                st.info("No props match the current minutes/usage filters.")
+            else:
+                mu_df = mu_df.sort_values(
+                    by=[c for c in ["usage_bump_pct", "est_minutes", "proj_diff_vs_line"] if c in mu_df.columns],
+                    ascending=False,
+                )
+                display_df = mu_df[cols].copy()
+
+                if "price" in display_df.columns:
+                    display_df["price"] = display_df["price"].apply(format_moneyline)
+                if "hit_rate_last10" in display_df.columns:
+                    display_df["hit_rate_last10"] = (display_df["hit_rate_last10"] * 100).round(1)
+
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+    # ------------------------------------------------------
+    # TAB 7 — TREND LAB (same as your old Tab 2)
+    # ------------------------------------------------------
+    with tab7:
+        st.subheader("Trend Lab (Real History + Dynamic Line)")
+
+        c1, c2, c3 = st.columns([1.2, 1.2, 1])
+        with c1:
+            player = st.selectbox(
+                "Player", sorted(props_df["player"].dropna().unique())
+            )
+        with c2:
+            stat_label = st.selectbox("Stat", ["Points", "Rebounds", "Assists", "P+R+A", "Steals", "Blocks"])
+        with c3:
+            n_games = st.slider("Last N games", 5, 25, 15)
+
+        stat_map = {
+            "Points": "pts",
+            "Rebounds": "reb",
+            "Assists": "ast",
+            "P+R+A": "pra",
+            "Steals": "stl",
+            "Blocks": "blk",
+        }
+
+        stat = stat_map[stat_label]
+
+        def clean_name(name):
+            if not isinstance(name, str):
+                return ""
+            return (
+                name.lower()
+                .replace(".", "")
+                .replace("-", " ")
+                .strip()
+            )
+
+        history_df["player_clean"] = history_df["player"].apply(clean_name)
+        player_clean = clean_name(player)
+
+        df_trend = history_df[history_df["player_clean"] == player_clean].copy()
+
+        df_trend[stat] = pd.to_numeric(df_trend[stat], errors="coerce")
+        df_trend = df_trend[df_trend[stat].notna()]
+
+        df_trend = (
+            df_trend.sort_values("game_date")
+            .drop_duplicates(subset=["game_date"], keep="last")
+            .reset_index(drop=True)
+        )
+
+        df_trend = df_trend.sort_values("game_date").tail(n_games).reset_index(drop=True)
+
+        if df_trend.empty:
+            st.info("No historical data found for this selection.")
+        else:
+            df_trend["date_str"] = df_trend["game_date"].dt.strftime("%b %d")
+
+            market_map = {
+                "Points": "player_points_alternate",
+                "Rebounds": "player_rebounds_alternate",
+                "Assists": "player_assists_alternate",
+                "P+R+A": "player_points_rebounds_assists_alternate",
+                "Steals": "player_steals_alternate",
+                "Blocks": "player_blocks_alternate",
+            }
+
+            selected_market_code = market_map[stat_label]
+
+            player_props = props_df[
+                (props_df["player"] == player)
+                & (props_df["market"] == selected_market_code)
+            ]
+
+            if not player_props.empty:
+                available_lines = sorted(
+                    player_props["line"].dropna().unique().astype(float)
+                )
+                line = st.selectbox("Line", available_lines, index=0)
+            else:
+                line = st.number_input(
+                    f"No real props found. Enter custom line for {stat_label}",
+                    min_value=0.0,
+                    value=10.0,
+                    step=0.5,
+                )
+
+            df_trend["hit"] = df_trend[stat] > float(line)
+            df_trend["rolling"] = df_trend[stat].rolling(window=5, min_periods=1).mean()
+
+            hit_rate = df_trend["hit"].mean()
+            avg_last5 = df_trend[stat].tail(5).mean()
+            std_dev = df_trend[stat].std()
+            last_game_value = df_trend[stat].iloc[-1]
+
+            metric_row = f"""
+            <div class="metric-grid" style="margin-top:0.25rem;margin-bottom:1rem;">
+                <div class="metric-card">
+                    <div class="metric-label">Hit Rate</div>
+                    <div class="metric-value">{hit_rate:.0%}</div>
+                    <div class="metric-sub">{df_trend['hit'].sum()} of {len(df_trend)} games</div>
                 </div>
-                """
-                st.markdown(metric_row, unsafe_allow_html=True)
+                <div class="metric-card">
+                    <div class="metric-label">Avg Last 5</div>
+                    <div class="metric-value">{avg_last5:.1f}</div>
+                    <div class="metric-sub">recent form</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Consistency</div>
+                    <div class="metric-value">{std_dev:.1f}</div>
+                    <div class="metric-sub">std deviation</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Last Game</div>
+                    <div class="metric-value">{last_game_value:.0f}</div>
+                    <div class="metric-sub">{'Hit' if last_game_value > line else 'Miss'} vs {line}</div>
+                </div>
+            </div>
+            """
+            st.markdown(metric_row, unsafe_allow_html=True)
 
-                hover = [
-                    (
-                        f"<b>{row['date_str']}</b><br>"
-                        f"{stat_label}: {row[stat]}<br>"
-                        f"5-game avg: {row['rolling']:.1f}<br>"
-                        f"Opponent: {row['opponent_team']}<br>"
-                        f"{'Hit' if row['hit'] else 'Miss'} vs line {line}"
-                    )
-                    for _, row in df_trend.iterrows()
-                ]
+            hover = [
+                (
+                    f"<b>{row['date_str']}</b><br>"
+                    f"{stat_label}: {row[stat]}<br>"
+                    f"5-game avg: {row['rolling']:.1f}<br>"
+                    f"Opponent: {row['opponent_team']}<br>"
+                    f"{'Hit' if row['hit'] else 'Miss'} vs line {line}"
+                )
+                for _, row in df_trend.iterrows()
+            ]
 
-                fig = go.Figure()
+            fig = go.Figure()
 
-                fig.add_bar(
+            fig.add_bar(
+                x=df_trend["date_str"],
+                y=df_trend[stat],
+                marker_color=["#22c55e" if h else "#ef4444" for h in df_trend["hit"]],
+                hovertext=hover,
+                hoverinfo="text",
+                name="Game Result",
+            )
+
+            fig.add_trace(
+                go.Scatter(
                     x=df_trend["date_str"],
-                    y=df_trend[stat],
-                    marker_color=["#22c55e" if h else "#ef4444" for h in df_trend["hit"]],
-                    hovertext=hover,
-                    hoverinfo="text",
-                    name="Game Result",
+                    y=df_trend["rolling"],
+                    mode="lines+markers",
+                    line=dict(width=3, color=theme["accent"]),
+                    marker=dict(size=6),
+                    name="5-game Avg",
                 )
+            )
 
-                fig.add_trace(
-                    go.Scatter(
-                        x=df_trend["date_str"],
-                        y=df_trend["rolling"],
-                        mode="lines+markers",
-                        line=dict(width=3, color=theme["accent"]),
-                        marker=dict(size=6),
-                        name="5-game Avg",
-                    )
+            fig.add_hline(
+                y=line,
+                line_dash="dot",
+                line_color="#e5e7eb",
+                annotation_text=f"Line {line}",
+                annotation_position="top left",
+            )
+
+            fig.update_layout(
+                template="plotly_dark",
+                height=420,
+                margin=dict(l=30, r=20, t=40, b=30),
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                bargap=0.25,
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            ribbon_html = "<div style='display:flex;gap:4px;margin:6px 0;'>"
+            for h in df_trend["hit"]:
+                ribbon_html += (
+                    "<div style='width:14px;height:14px;border-radius:3px;background:#22c55e;'></div>"
+                    if h
+                    else "<div style='width:14px;height:14px;border-radius:3px;background:#ef4444;'></div>"
                 )
+            ribbon_html += "</div>"
+            st.markdown(ribbon_html, unsafe_allow_html=True)
 
-                fig.add_hline(
-                    y=line,
-                    line_dash="dot",
-                    line_color="#e5e7eb",
-                    annotation_text=f"Line {line}",
-                    annotation_position="top left",
-                )
+            table_df = df_trend.copy()
+            table_df["Outcome"] = table_df["hit"].map({True: "Hit", False: "Miss"})
+            table_df_display = table_df[["date_str", "opponent_team", stat, "Outcome"]]
+            table_df_display.columns = ["Date", "Opponent", stat_label, "Outcome"]
 
-                fig.update_layout(
-                    template="plotly_dark",
-                    height=420,
-                    margin=dict(l=30, r=20, t=40, b=30),
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    bargap=0.25,
-                )
+            st.dataframe(table_df_display, use_container_width=True, hide_index=True)
 
-                st.plotly_chart(fig, use_container_width=True)
+    #-------------------------------------------------
+    # TAB 9 — DEPTH CHART & INJURY REPORT
+    #-------------------------------------------------
+    with tab9:
+        st.subheader("")
 
-                ribbon_html = "<div style='display:flex;gap:4px;margin:6px 0;'>"
-                for h in df_trend["hit"]:
-                    ribbon_html += (
-                        "<div style='width:14px;height:14px;border-radius:3px;background:#22c55e;'></div>"
-                        if h
-                        else "<div style='width:14px;height:14px;border-radius:3px;background:#ef4444;'></div>"
-                    )
-                ribbon_html += "</div>"
-                st.markdown(ribbon_html, unsafe_allow_html=True)
-
-                table_df = df_trend.copy()
-                table_df["Outcome"] = table_df["hit"].map({True: "Hit", False: "Miss"})
-                table_df_display = table_df[["date_str", "opponent_team", stat, "Outcome"]]
-                table_df_display.columns = ["Date", "Opponent", stat_label, "Outcome"]
-
-                st.dataframe(table_df_display, use_container_width=True, hide_index=True)
-
-        #-------------------------------------------------
-        # TAB 9 — DEPTH CHART & INJURY REPORT
-        #-------------------------------------------------
-        with tab9:
-            st.subheader("")
-
-            # --------------------------------------------------------
-            # GLOBAL CSS — SPACIOUS CARD GRID + INJURY BADGE SUPPORT
-            # --------------------------------------------------------
-            st.markdown("""
-    <style>
+        # --------------------------------------------------------
+        # GLOBAL CSS — SPACIOUS CARD GRID + INJURY BADGE SUPPORT
+        # --------------------------------------------------------
+        st.markdown("""
+<style>
 
 .depth-card {
     padding:18px 20px;
@@ -3804,6 +4056,12 @@ elif sport in ["NCAA Men's", "NCAA Women's"]:
 
     with tabN5:
         render_saved_bets_tab()
+
+# ------------------------------------------------------
+# LAST UPDATED FOOTER
+# ------------------------------------------------------
+now = datetime.now(EST)
+st.sidebar.markdown(f"**Last Updated:** {now.strftime('%b %d, %I:%M %p')} ET")
 
 # ------------------------------------------------------
 # LAST UPDATED FOOTER

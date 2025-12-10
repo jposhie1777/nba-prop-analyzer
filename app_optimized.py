@@ -2839,7 +2839,6 @@ if sport == "NBA":
         # ----------------------------------------------
         @st.cache_data(ttl=300)
         def load_game_odds_today() -> pd.DataFrame:
-            client = bigquery.Client()
             sql = """
             SELECT
                 home_team,
@@ -2853,7 +2852,8 @@ if sport == "NBA":
             FROM `graphite-flare-477419-h7.nba.nba_game_odds`
             WHERE DATE(start_time) = CURRENT_DATE()
             """
-            return client.query(sql).to_dataframe()
+            return bq_client.query(sql).to_dataframe()
+
 
 
         try:

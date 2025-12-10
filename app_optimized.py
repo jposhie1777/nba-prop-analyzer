@@ -2149,52 +2149,48 @@ def render_prop_cards(
     page_key: str = "ev",
 ):
     """
-    Shared card-grid renderer for both EV+ Props and Available Props.
-    df should already have basic cleaning done (price, hit_rate cols numeric).
+    Merged-book version:
+    - Groups by (player, market, line)
+    - Each card shows all sportsbooks + prices
+    - EXACT SAME formatting style as original (line-by-line f-strings)
     """
 
     if df.empty:
         st.info("No props match your filters.")
         return
 
-    # ---- WOWY merge once per render ----
+    # ---- WOWY merge ----
     card_df = attach_wowy_deltas(df, wowy_df)
 
-    wowy_cols = [
-        "breakdown", "pts_delta", "reb_delta", "ast_delta",
-        "pra_delta", "pts_reb_delta"
-    ]
+    wowy_cols = ["breakdown","pts_delta","reb_delta","ast_delta","pra_delta","pts_reb_delta"]
 
     def extract_wowy_list(g):
         if not wowy_cols:
             return []
-        df2 = g.copy()
-        df2 = df2[wowy_cols]
-        if "breakdown" in df2.columns:
-            df2 = df2[df2["breakdown"].notna()]
+        df2 = g.copy()[wowy_cols]
+        df2 = df2[df2["breakdown"].notna()]
         return df2.to_dict("records")
 
-    # Build WOWY map
-    w_map = {}
-    for (player, team), g in card_df.groupby(["player", "player_team"]):
-        w_map[(player, team)] = extract_wowy_list(g)
+    # Build map: (player, team) → wowy list
+    w_map = {
+        (p, t): extract_wowy_list(g)
+        for (p, t), g in card_df.groupby(["player", "player_team"])
+    }
 
     card_df["_wowy_list"] = card_df.apply(
         lambda r: w_map.get((r["player"], r["player_team"]), []),
         axis=1
     )
 
-    # ---- row filter ----
+    # ---- Row filter ----
     def card_good(row):
         price = row.get("price")
         hit = row.get(hit_rate_col)
 
         if pd.isna(price) or pd.isna(hit):
             return False
-
         if not (odds_min <= price <= odds_max):
             return False
-
         if hit < min_hit_rate:
             return False
 
@@ -2216,15 +2212,33 @@ def render_prop_cards(
         st.info("No props match your filters (after EV/odds/hit-rate logic).")
         return
 
-    # ---- Sorting: best hit-rate → best odds ----
-    card_df = card_df.sort_values(
+    # ============================================================================
+    # 🔥 MERGE DUPLICATE PROPS → GROUP BY (player, market, line)
+    # ============================================================================
+    merged_rows = []
+    for (player, market, line), g in card_df.groupby(["player", "market", "line"]):
+        # Get all books/prices for this prop
+        all_prices = (
+            g[["bookmaker", "price"]]
+            .sort_values("price")
+            .to_dict("records")
+        )
+
+        base = g.iloc[0].to_dict()
+        base["_all_prices"] = all_prices
+        merged_rows.append(base)
+
+    merged_df = pd.DataFrame(merged_rows)
+
+    # ---- Sorting ----
+    merged_df = merged_df.sort_values(
         by=[hit_rate_col, "price"],
         ascending=[False, True]
     ).reset_index(drop=True)
 
     # ---- Pagination ----
     page_size = 30
-    total_cards = len(card_df)
+    total_cards = len(merged_df)
     total_pages = max(1, (total_cards + page_size - 1) // page_size)
 
     st.write(f"Showing {total_cards} props • {total_pages} pages")
@@ -2240,67 +2254,49 @@ def render_prop_cards(
 
     start = (page - 1) * page_size
     end = start + page_size
-    page_df = card_df.iloc[start:end]
+    page_df = merged_df.iloc[start:end]
 
-    st.markdown(
-        '<div style="max-height:1100px; overflow-y:auto; padding-right:12px;">',
-        unsafe_allow_html=True,
-    )
+    st.markdown('<div style="max-height:1100px; overflow-y:auto; padding-right:12px;">',
+                unsafe_allow_html=True)
 
     cols = st.columns(4)
 
-    # ==============================
-    # CARD LOOP
-    # ==============================
+    # ============================================================================
+    # 🔥 CARD LOOP — EXACT SAME STYLE AS YOUR ORIGINAL
+    # ============================================================================
     for idx, row in page_df.iterrows():
         col = cols[idx % 4]
         with col:
 
-            # -------------------------------
-            # Player
-            # -------------------------------
             player = row.get("player", "")
 
-            # Injury Badge (Step 2)
+            # ---- Injury Badge ----
             def _norm(s):
                 return str(s).lower().replace("'", "").replace(".", "").replace("-", "").strip()
 
             inj_status = INJURY_LOOKUP_BY_NAME.get(_norm(player))
             badge_html = ""
-
             if inj_status:
                 s = inj_status.lower()
                 if "out" in s:
-                    badge_color = "#ef4444"        # red
+                    badge_color = "#ef4444"
                 elif "question" in s or "doubt" in s:
-                    badge_color = "#eab308"        # yellow
+                    badge_color = "#eab308"
                 else:
-                    badge_color = "#3b82f6"        # blue
+                    badge_color = "#3b82f6"
 
-                badge_html = f"""
-                    <span style="
-                        background:{badge_color};
-                        color:white;
-                        padding:2px 6px;
-                        font-size:0.65rem;
-                        font-weight:700;
-                        border-radius:6px;
-                        margin-left:6px;
-                        white-space:nowrap;
-                    ">
-                    {inj_status.upper()}
-                    </span>
-                """
+                badge_html = (
+                    f'<span style="background:{badge_color};color:white;padding:2px 6px;'
+                    f'font-size:0.65rem;font-weight:700;border-radius:6px;'
+                    f'margin-left:6px;">{inj_status.upper()}</span>'
+                )
 
-            # -------------------------------
-            # Basic fields
-            # -------------------------------
             pretty_market = MARKET_DISPLAY_MAP.get(row.get("market", ""), row.get("market", ""))
             bet_type = str(row.get("bet_type", "")).upper()
             line = row.get("line", "")
 
             odds = int(row.get("price", 0))
-            implied_prob = compute_implied_prob(odds) or 0.0
+            implied_prob = compute_implied_prob(odds) or 0
             hit = row.get(hit_rate_col, 0.0)
 
             l10_avg = get_l10_avg(row)
@@ -2315,87 +2311,94 @@ def render_prop_cards(
                 rank_color = "#9ca3af"
 
             spark_vals = get_spark_values(row)
-            line_value = float(row.get("line", 0))
-            spark_html = build_sparkline_bars_hitmiss(spark_vals, line_value)
+            spark_html = build_sparkline_bars_hitmiss(spark_vals, float(line))
 
-            # Logos
-            player_team = normalize_team_code(row.get("player_team", ""))
-            opp_team = normalize_team_code(row.get("opponent_team", ""))
+            # ---- Team logos ----
+            home_logo = TEAM_LOGOS_BASE64.get(normalize_team_code(row.get("player_team", "")), "")
+            opp_logo = TEAM_LOGOS_BASE64.get(normalize_team_code(row.get("opponent_team", "")), "")
 
-            home_logo = TEAM_LOGOS_BASE64.get(player_team, "")
-            opp_logo = TEAM_LOGOS_BASE64.get(opp_team, "")
+            # ============================================================================
+            # 🔥 MULTI-BOOK BLOCK
+            # ============================================================================
+            books_html_list = []
+            for b in row["_all_prices"]:
+                book = normalize_bookmaker(b["bookmaker"])
+                price = int(b["price"])
 
-            # Sportsbook Logo
-            book = normalize_bookmaker(row.get("bookmaker", ""))
-            book_logo_b64 = SPORTSBOOK_LOGOS_BASE64.get(book)
+                logo = SPORTSBOOK_LOGOS_BASE64.get(book)
+                if logo:
+                    html = (
+                        f'<div style="display:flex;align-items:center;gap:4px;">'
+                        f'<img src="{logo}" style="height:18px;object-fit:contain;" />'
+                        f'<span style="font-size:0.78rem;">{price:+d}</span>'
+                        f'</div>'
+                    )
+                else:
+                    html = (
+                        f'<div style="padding:4px 6px;border:1px solid #444;border-radius:6px;">'
+                        f'{book} {price:+d}'
+                        f'</div>'
+                    )
 
-            if book_logo_b64:
-                book_html = (
-                    f'<img src="{book_logo_b64}" '
-                    'style="height:26px; width:auto; max-width:80px; object-fit:contain;'
-                    'filter:drop-shadow(0 0 6px rgba(0,0,0,0.4));" />'
-                )
-            else:
-                book_html = (
-                    '<div style="padding:3px 10px; border-radius:8px;'
-                    'background:rgba(255,255,255,0.08);'
-                    'border:1px solid rgba(255,255,255,0.15);'
-                    'font-size:0.7rem;">'
-                    f'{book}'
-                    '</div>'
-                )
+                books_html_list.append(html)
 
-            # Tags + WOWY
+            books_block = (
+                "<div style='display:flex;flex-direction:column;align-items:flex-end;gap:4px;'>"
+                + "".join(books_html_list) +
+                "</div>"
+            )
+
+            # ---- Tags / WOWY ----
             tags_html = build_tags_html(build_prop_tags(row))
             wowy_html = build_wowy_block(row)
 
-            # ---------- Card Layout ----------
+            # ============================================================================
+            # 🔥 CARD HTML (IDENTICAL STYLE — LIST OF F-STRINGS)
+            # ============================================================================
             card_lines = [
                 '<div class="prop-card">',
 
-                # TOP BAR
-                '  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">',
+                # ---- TOP ROW ----
+                '  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">',
 
-                # LEFT → MATCHUP LOGOS
-                '    <div style="display:flex; align-items:center; gap:6px; min-width:70px;">'
+                # HOME/OPP LOGOS
+                '    <div style="display:flex;align-items:center;gap:6px;min-width:70px;">'
                 f'      <img src="{home_logo}" style="height:20px;border-radius:4px;" />'
                 '      <span style="font-size:0.7rem;color:#9ca3af;">vs</span>'
                 f'      <img src="{opp_logo}" style="height:20px;border-radius:4px;" />'
                 '    </div>',
 
-                # CENTER → PLAYER + MARKET + INJ BADGE
-                '    <div style="text-align:center; flex:1; display:flex; flex-direction:column; align-items:center;">'
-                f'      <div style="font-size:1.05rem;font-weight:700; display:flex; align-items:center;">{player}{badge_html}</div>'
+                # CENTER TEXT
+                '    <div style="text-align:center;flex:1;">'
+                f'      <div style="font-size:1.05rem;font-weight:700;display:flex;align-items:center;justify-content:center;">{player}{badge_html}</div>'
                 f'      <div style="font-size:0.82rem;color:#9ca3af;">{pretty_market} • {bet_type} {line}</div>'
                 '    </div>',
 
-                # RIGHT → BOOK
-                '    <div style="display:flex; justify-content:flex-end; min-width:70px;">'
-                f'      {book_html}'
-                '    </div>',
+                # MULTI BOOKS BLOCK (RIGHT)
+                f'    {books_block}',
 
-                '  </div>',  # END TOP BAR
+                '  </div>',  # END TOP ROW
 
                 # SPARKLINE
-                '  <div style="display:flex; justify-content:center; margin:8px 0;">'
-                    + spark_html +
+                '  <div style="display:flex;justify-content:center;margin:8px 0;">'
+                f'    {spark_html}'
                 '  </div>',
 
                 # TAGS
-                '  <div style="display:flex; justify-content:center; margin-bottom:6px;">',
-                f'    {tags_html}',
+                '  <div style="display:flex;justify-content:center;margin-bottom:6px;">'
+                f'    {tags_html}'
                 '  </div>',
 
-                # BOTTOM METRICS
+                # METRICS
                 '  <div class="prop-meta" style="margin-top:2px;">',
 
                 '    <div>',
-                f'      <div style="color:#e5e7eb;font-size:0.8rem;">{odds:+d}</div>'
+                f'      <div style="color:#e5e7eb;font-size:0.8rem;">{odds:+d}</div>',
                 f'      <div style="font-size:0.7rem;">Imp: {implied_prob:.0%}</div>',
                 '    </div>',
 
                 '    <div>',
-                f'      <div style="color:#e5e7eb;font-size:0.8rem;">{hit_label}: {hit:.0%}</div>'
+                f'      <div style="color:#e5e7eb;font-size:0.8rem;">{hit_label}: {hit:.0%}</div>',
                 f'      <div style="font-size:0.7rem;">L10 Avg: {l10_avg_display}</div>',
                 '    </div>',
 
@@ -2404,24 +2407,25 @@ def render_prop_cards(
                 '      <div style="font-size:0.7rem;">Opp Rank</div>',
                 '    </div>',
 
-                '  </div>',  # END BOTTOM METRICS
+                '  </div>',  # END METRICS
 
                 f'  {wowy_html}',
 
-                '</div>',
+                '</div>',  # END CARD
             ]
 
             card_html = "\n".join(card_lines)
             st.markdown(card_html, unsafe_allow_html=True)
 
-            # --- SAVE BET BUTTON ---
+            # ---- SAVE BET BUTTON (default = best price / first sorted) ----
+            first_book = row["_all_prices"][0]
             bet_payload = {
                 "player": player,
                 "market": row.get("market"),
                 "line": row.get("line"),
                 "bet_type": bet_type,
-                "price": odds,
-                "bookmaker": row.get("bookmaker"),
+                "price": first_book["price"],
+                "bookmaker": first_book["bookmaker"],
             }
 
             btn_key = f"{page_key}_save_{player}_{row.get('market')}_{row.get('line')}_{idx}"

@@ -3774,55 +3774,183 @@ if sport == "NBA":
             use_container_width=True
         )
 
-    # ------------------------------------------------------
-    # TAB 8 — SAVED BETS (same logic as your old Tab 3)
-    # ------------------------------------------------------
+    # ======================================================
+    # 📋 SAVED BETS TAB — PIKKIT OPTIMIZED EXPORT
+    # ======================================================
+
+    import streamlit as st
+    import pandas as pd
+    import streamlit.components.v1 as components
+
     with tab8:
-        st.subheader("Saved Bets")
 
-        if not st.session_state.saved_bets:
-            st.info("No saved bets yet.")
-        else:
-            for i, bet in enumerate(st.session_state.saved_bets):
-                col1, col2 = st.columns([8, 1])
+        st.header("Saved Bets")
 
-                with col1:
-                    st.markdown(
-                        f"""
-                        **{bet['player']}**  
-                        {bet['market']} **{bet['bet_type']} {bet['line']}**  
-                        Odds: **{bet['price']}** — Book: **{bet['bookmaker']}**
-                        """
-                    )
-                with col2:
-                    if st.button("❌", key=f"remove_{i}"):
-                        st.session_state.saved_bets.pop(i)
-                        replace_saved_bets_in_db(user_id, st.session_state.saved_bets)
-                        st.rerun()
+        # --------------------------------------------------
+        # Load saved bets
+        # --------------------------------------------------
+        slip = st.session_state.get("saved_bets", [])
+        slip_df = pd.DataFrame(slip)
 
-            st.write("---")
+        if slip_df.empty:
+            st.info("You haven't saved any bets yet.")
+            st.stop()
 
-            if st.button("🗑️ Clear All Saved Bets"):
-                st.session_state.saved_bets = []
-                replace_saved_bets_in_db(user_id, [])
-                st.success("All saved bets cleared.")
-                st.rerun()
+        # --------------------------------------------------
+        # Helper to normalize book structure
+        # --------------------------------------------------
+        def normalize_books(v):
+            """Ensure books=[{'bookmaker':..., 'price':...}]"""
+            if isinstance(v, list):
+                return v
+            if isinstance(v, dict):
+                return [{"bookmaker": k, "price": v[k]} for k in v]
+            return []
 
-            st.write("---")
+        slip_df["books"] = slip_df["books"].apply(normalize_books)
 
-            txt_export = ""
-            for b in st.session_state.saved_bets:
-                txt_export += (
-                    f"{b['player']} | {b['market']} | {b['bet_type']} {b['line']} | "
-                    f"Odds {b['price']} | {b['bookmaker']}\n"
+        # --------------------------------------------------
+        # Display saved bets
+        # --------------------------------------------------
+        st.markdown("### 🧾 Your Saved Bets")
+
+        for idx, row in slip_df.iterrows():
+
+            title = row.get("player") or row.get("team") or "Bet"
+            st.markdown(f"## 🎯 {title}")
+
+            is_prop = bool(row.get("bet_type"))
+            market = row.get("market", "—")
+            line = row.get("line", "—")
+
+            # PROP
+            if is_prop:
+                st.markdown(
+                    f"""
+                    **Player Prop — {market}**  
+                    **{row['bet_type'].upper()} {line}**
+                    """
+                )
+            # GAME LINE
+            else:
+                st.markdown(
+                    f"""
+                    **Game Line — {market}**  
+                    Team: **{row.get('team', '—')}**  
+                    Line: **{line}**
+                    """
                 )
 
-            st.download_button(
-                "Download as Text",
-                data=txt_export,
-                file_name="saved_bets.txt",
-                mime="text/plain",
-            )
+            # ODDS
+            st.markdown("**Available Odds:**")
+            books = normalize_books(row["books"])
+            if books:
+                for b in books:
+                    st.markdown(f"- **{b['bookmaker']}**: {b['price']}")
+            else:
+                st.markdown("- No odds available")
+
+            # REMOVE INDIVIDUAL
+            if st.button("❌ Remove", key=f"remove_{idx}"):
+                slip.pop(idx)
+                st.session_state["saved_bets"] = slip
+                st.rerun()
+
+            st.markdown("---")
+
+        # --------------------------------------------------
+        # REMOVE ALL BETS
+        # --------------------------------------------------
+        if st.button("🗑️ Remove All Bets"):
+            st.session_state["saved_bets"] = []
+            st.success("All saved bets removed.")
+            st.rerun()
+
+        # ======================================================
+        # 📲 EXPORT FOR PIKKIT — SELECTABLE TEXT BOX
+        # ======================================================
+        st.markdown("### 📲 Export for Pikkit")
+        st.markdown("Copy the slip below and paste it into Pikkit using the ➕ button.")
+
+        # --------------------------------------------------
+        # BUILD PIKKIT-FORMATTED TEXT
+        # --------------------------------------------------
+        export_lines = []
+
+        for _, row in slip_df.iterrows():
+
+            is_prop = bool(row.get("bet_type"))
+            player = row.get("player", "")
+            team = row.get("team", "")
+            market = row.get("market", "—")
+            line = row.get("line", "—")
+
+            # PROP FORMAT
+            if is_prop:
+                export_lines.append(f"{player} — {row['bet_type'].upper()} {line} ({market})")
+            else:
+                export_lines.append(f"{team} — {market} {line}")
+
+            # BEST ODDS
+            books = normalize_books(row["books"])
+            if books:
+                best = sorted(
+                    books,
+                    key=lambda x: (x["price"] >= 0, abs(x["price"]))
+                )[0]
+                export_lines.append(f"Best Odds: {best['price']} ({best['bookmaker']})")
+
+            export_lines.append("")  # blank line between slips
+
+        pikkit_text = "\n".join(export_lines).strip()
+
+        # --------------------------------------------------
+        # SELECTABLE EXPORT TEXT BOX (iPhone Safe)
+        # --------------------------------------------------
+        st.text_area(
+            "Pikkit Import Text",
+            pikkit_text,
+            height=220,
+            key="pikkit_textbox"
+        )
+
+        # --------------------------------------------------
+        # SELECT ALL & COPY BUTTON (JS - works on iPhone)
+        # --------------------------------------------------
+        components.html(
+            f"""
+            <script>
+                function copyPikkit() {{
+                    const ta = parent.document.querySelector('textarea[id="pikkit_textbox"]');
+                    if (!ta) return;
+                    ta.focus();
+                    ta.select();
+                    document.execCommand('copy');
+                }}
+            </script>
+
+            <button onclick="copyPikkit()"
+                style="
+                    background-color:#4CAF50;
+                    color:white;
+                    padding:10px 18px;
+                    font-size:16px;
+                    border:none;
+                    border-radius:8px;
+                    cursor:pointer;
+                    margin-top:5px;
+                ">
+                📋 Select All & Copy
+            </button>
+            """,
+            height=70,
+        )
+
+        # --------------------------------------------------
+        # OPEN PIKKIT BUTTON (Universal Link)
+        # --------------------------------------------------
+        st.link_button("📲 Open Pikkit", "https://quickpick.pikkit.com")
+
 
 # ------------------------------------------------------
 # NCAA MEN'S / WOMEN'S — Placeholder Tabs

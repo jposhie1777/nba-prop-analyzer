@@ -2417,15 +2417,13 @@ def render_prop_cards(
             card_html = "\n".join(card_lines)
             st.markdown(card_html, unsafe_allow_html=True)
 
-            # ---- SAVE BET BUTTON (default = best price / first sorted) ----
-            first_book = row["_all_prices"][0]
+            # ---- SAVE BET BUTTON (now saves ALL books/prices) ----
             bet_payload = {
                 "player": player,
                 "market": row.get("market"),
                 "line": row.get("line"),
                 "bet_type": bet_type,
-                "price": first_book["price"],
-                "bookmaker": first_book["bookmaker"],
+                "books": row["_all_prices"],   # << NEW — FULL MULTI-BOOK LIST
             }
 
             btn_key = f"{page_key}_save_{player}_{row.get('market')}_{row.get('line')}_{idx}"

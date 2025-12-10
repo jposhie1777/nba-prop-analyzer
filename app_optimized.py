@@ -2844,7 +2844,7 @@ if sport == "NBA":
                 Price AS price,
                 `Start Time` AS start_time
             FROM `graphite-flare-477419-h7.nba.nba_game_odds`
-            WHERE DATE(`Start Time`) = CURRENT_DATE()
+            WHERE DATE(TIMESTAMP(`Start Time`), "America/New_York") = CURRENT_DATE("America/New_York")
             """
             df = bq_client.query(sql).to_dataframe()
             df["line"] = pd.to_numeric(df["line"], errors="coerce")

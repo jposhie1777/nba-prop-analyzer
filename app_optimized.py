@@ -527,203 +527,399 @@ theme = THEMES[st.session_state.theme_choice]
 # ------------------------------------------------------
 st.markdown(
     f"""
-<style>
+    <style>
 
-html, body, [class*="css"] {{
-    font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}}
+    /* ---------- GLOBAL THEME ---------- */
 
-body {{
-    background: radial-gradient(circle at top, {theme["bg"]} 0, #000 55%) !important;
-}}
+    html, body, [class*="css"] {{
+        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
 
-.block-container {{
-    padding-top: 1rem !important;
-    padding-bottom: 2rem !important;
-    max-width: 1400px !important;
-}}
+    body {{
+        background: radial-gradient(circle at top, {theme["bg"]} 0, #000 55%) !important;
+    }}
 
-[data-testid="stSidebar"] {{
-    background: radial-gradient(circle at top left, #1f2937 0, #020617 55%);
-    border-right: 1px solid rgba(255,255,255,0.04);
-}}
+    .block-container {{
+        padding-top: 1rem !important;
+        padding-bottom: 2rem !important;
+        max-width: 1400px !important;
+    }}
 
-[data-testid="stSidebar"] * {{
-    color: #e5e7eb !important;
-}}
+    [data-testid="stSidebar"] {{
+        background: radial-gradient(circle at top left, #1f2937 0, #020617 55%);
+        border-right: 1px solid rgba(255,255,255,0.04);
+    }}
 
-.app-header {{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    padding:0.6rem 0 1.1rem;
-    border-bottom:1px solid rgba(148,163,184,0.25);
-    margin-bottom:0.9rem;
-}}
+    [data-testid="stSidebar"] * {{
+        color: #e5e7eb !important;
+    }}
 
-.app-header-left {{
-    display:flex;
-    align-items:center;
-    gap:0.85rem;
-}}
+    /* ---------- HEADER ---------- */
 
-.app-logo {{
-    width:42px;
-    height:42px;
-    border-radius:12px;
-    background:radial-gradient(circle at 0 0, #f97316, #ea580c 25%, #0f172a 90%);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    color:white;
-    font-weight:900;
-    font-size:20px;
-    letter-spacing:0.02em;
-    box-shadow:0 14px 30px rgba(15,23,42,0.8);
-    animation: float-logo 5s ease-in-out infinite;
-}}
+    .app-header {{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.6rem 0 1.1rem;
+        border-bottom: 1px solid rgba(148,163,184,0.25);
+        margin-bottom: 0.9rem;
+    }}
 
-@keyframes float-logo {{
-    0%, 100% {{ transform: translateY(0); }}
-    50% {{ transform: translateY(-2px); }}
-}}
+    .app-header-left {{
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+    }}
 
-.app-title {{
-    font-size:1.4rem;
-    font-weight:700;
-    color:#e5e7eb;
-}}
+    .app-logo {{
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        background: radial-gradient(circle at 0 0, #f97316, #ea580c 25%, #0f172a 90%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 900;
+        font-size: 20px;
+        letter-spacing: 0.02em;
+        box-shadow: 0 14px 30px rgba(15,23,42,0.8);
+        animation: float-logo 5s ease-in-out infinite;
+    }}
 
-.app-subtitle {{
-    margin:0;
-    font-size:0.78rem;
-    color:#9ca3af;
-}}
+    @keyframes float-logo {{
+        0%, 100% {{ transform: translateY(0); }}
+        50% {{ transform: translateY(-2px); }}
+    }}
 
-.pill {{
-    padding:4px 12px;
-    border-radius:999px;
-    border:1px solid rgba(148,163,184,0.4);
-    font-size:0.7rem;
-    letter-spacing:0.12em;
-    color:#e5e7eb;
-    background:linear-gradient(135deg, rgba(15,118,110,0.45), rgba(15,23,42,0.98));
-    display:inline-flex;
-    align-items:center;
-    gap:6px;
-    box-shadow:0 12px 30px rgba(15,23,42,0.9);
-}}
+    .app-title {{
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: #e5e7eb;
+        margin: 0;
+    }}
 
-.pill-dot {{
-    width:7px;
-    height:7px;
-    border-radius:999px;
-    background:#22c55e;
-    box-shadow:0 0 10px rgba(34,197,94,0.9);
-    animation:pulse-dot 1.5s infinite;
-}}
+    .app-subtitle {{
+        margin: 0;
+        font-size: 0.78rem;
+        color: #9ca3af;
+    }}
 
-@keyframes pulse-dot {{
-    0%, 100% {{ transform:scale(1); opacity:1; }}
-    50% {{ transform:scale(1.35); opacity:0.75; }}
-}}
+    .pill {{
+        padding: 4px 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(148,163,184,0.4);
+        font-size: 0.7rem;
+        letter-spacing: 0.12em;
+        color: #e5e7eb;
+        background: linear-gradient(135deg, rgba(15,118,110,0.45), rgba(15,23,42,0.98));
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        box-shadow: 0 12px 30px rgba(15,23,42,0.9);
+    }}
 
-.prop-card {{
-    position:relative;
-    border-radius:20px;
-    padding:1rem 1.15rem;
-    border:1px solid rgba(129,140,248,0.75);
-    background:
-        radial-gradient(circle at 0 0, rgba(168,85,247,0.22), transparent 55%),
-        radial-gradient(circle at 100% 0, rgba(34,197,94,0.20), transparent 55%),
-        radial-gradient(circle at 0 130%, rgba(15,23,42,1), rgba(15,23,42,0.95));
-    box-shadow:
-        0 18px 45px rgba(15,23,42,0.95),
-        0 0 26px rgba(129,140,248,0.45);
-    margin-bottom:1rem;
-    overflow:hidden;
-    transition:0.16s ease-out;
-}}
+    .pill-dot {{
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: #22c55e;
+        box-shadow: 0 0 10px rgba(34,197,94,0.9);
+        animation: pulse-dot 1.5s infinite;
+    }}
 
-.prop-card:hover {{
-    transform:translateY(-4px);
-    filter:saturate(1.15);
-    border-color:{theme["accent"]};
-    box-shadow:
-        0 26px 70px rgba(15,23,42,1),
-        0 0 35px rgba(168,85,247,0.60);
-    background:
-        radial-gradient(circle at 0 0, rgba(168,85,247,0.32), transparent 55%),
-        radial-gradient(circle at 100% 0, rgba(34,197,94,0.26), transparent 55%),
-        radial-gradient(circle at 0 130%, rgba(15,23,42,1), rgba(15,23,42,0.98));
-}}
+    @keyframes pulse-dot {{
+        0%, 100% {{ transform: scale(1); opacity: 1; }}
+        50% {{ transform: scale(1.35); opacity: 0.75; }}
+    }}
 
-.prop-headline {{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    margin-bottom:0.45rem;
-}}
+    /* ---------- METRIC CARDS ---------- */
 
-.prop-player {{
-    font-size:1rem;
-    font-weight:700;
-    color:#f9fafb;
-}}
+    .metric-grid {{
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 0.75rem;
+    }}
 
-.game-card {{
-    padding:18px 22px;
-    margin-bottom:22px;
-    border-radius:20px;
-    border:1px solid rgba(148,163,184,0.28);
-    background:radial-gradient(circle at top left, rgba(30,41,59,1), rgba(15,23,42,0.92));
-    box-shadow:0 22px 55px rgba(15,23,42,0.90);
-}}
+    .metric-card {{
+        background: radial-gradient(circle at top, rgba(15,23,42,0.94), rgba(15,23,42,0.98));
+        border-radius: 16px;
+        padding: 0.75rem 0.9rem;
+        border: 1px solid rgba(148,163,184,0.35);
+        box-shadow: 0 18px 45px rgba(15,23,42,0.95);
+        transition: 0.14s ease-out;
+    }}
 
-.game-headline {{
-    display:flex;
-    justify-content:space-between;
-    align-items:flex-start;
-    margin-bottom:14px;
-}}
+    .metric-card:hover {{
+        transform: translateY(-2px);
+        box-shadow: 0 24px 55px rgba(15,23,42,1);
+        border-color: {theme["accent"]};
+    }}
 
-.game-team {{
-    font-size:1.05rem;
-    font-weight:700;
-    color:white;
-}}
+    .metric-label {{
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: #9ca3af;
+    }}
 
-.game-metric {{
-    font-size:0.88rem;
-    color:#e5e7eb;
-    margin-top:4px;
-}}
+    .metric-value {{
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #f9fafb;
+    }}
 
-.game-pill {{
-    background:rgba(255,255,255,0.08);
-    border:1px solid rgba(255,255,255,0.18);
-    padding:6px 12px;
-    border-radius:12px;
-    font-size:0.85rem;
-    color:#e5e7eb;
-}}
+    .metric-sub {{
+        font-size: 0.72rem;
+        color: #9ca3af;
+    }}
 
-.game-row {{
-    display:flex;
-    justify-content:space-between;
-    gap:20px;
-    margin-top:12px;
-}}
+    /* ---------- PROP CARD (NEON NIGHT) ---------- */
 
-.game-col {{
-    flex:1;
-}}
+    .prop-card {{
+        position: relative;
+        border-radius: 20px;
+        padding: 1rem 1.15rem;
+        border: 1px solid rgba(129,140,248,0.75);
+        background:
+            radial-gradient(circle at 0 0, rgba(168,85,247,0.22), transparent 55%),
+            radial-gradient(circle at 100% 0, rgba(34,197,94,0.20), transparent 55%),
+            radial-gradient(circle at 0 130%, rgba(15,23,42,1), rgba(15,23,42,0.95));
+        box-shadow:
+            0 18px 45px rgba(15,23,42,0.95),
+            0 0 26px rgba(129,140,248,0.45);
+        margin-bottom: 1rem;
+        overflow: hidden;
+        transition: 0.16s ease-out;
+    }}
 
-</style>
-""",
-    unsafe_allow_html=True
+    .prop-card::before {{
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        border-top: 1px solid rgba(248,250,252,0.12);
+        border-left: 1px solid rgba(248,250,252,0.06);
+        pointer-events: none;
+    }}
+
+    .prop-card:hover {{
+        transform: translateY(-4px);
+        filter: saturate(1.15);
+        border-color: {theme["accent"]};
+        box-shadow:
+            0 26px 70px rgba(15,23,42,1),
+            0 0 35px rgba(168,85,247,0.60);
+        background:
+            radial-gradient(circle at 0 0, rgba(168,85,247,0.32), transparent 55%),
+            radial-gradient(circle at 100% 0, rgba(34,197,94,0.26), transparent 55%),
+            radial-gradient(circle at 0 130%, rgba(15,23,42,1), rgba(15,23,42,0.98));
+    }}
+
+    .prop-headline {{
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.45rem;
+    }}
+
+    .prop-player {{
+        font-size: 1rem;
+        font-weight: 700;
+        color: #f9fafb;
+    }}
+
+    .prop-market {{
+        color: #9ca3af;
+        font-size: 0.8rem;
+        white-space: nowrap;
+    }}
+
+    .pill-book {{
+        padding: 3px 10px;
+        font-size: 0.7rem;
+        border-radius: 999px;
+        border: 1px solid rgba(148,163,184,0.55);
+        color: #e5e7eb;
+        background: linear-gradient(135deg, rgba(15,23,42,0.1), rgba(88,28,135,0.9));
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        box-shadow: 0 0 18px rgba(168,85,247,0.55);
+    }}
+
+    .prop-meta {{
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.45rem;
+        margin-top: 0.45rem;
+    }}
+
+    .prop-meta-label {{
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #6b7280;
+    }}
+
+    .prop-meta-value {{
+        font-size: 0.84rem;
+        font-weight: 650;
+        color: #e5e7eb;
+    }}
+
+    /* ---------- DATAFRAME / TABLES ---------- */
+
+    [data-testid="stDataFrame"],
+    [data-testid="stDataEditor"] {{
+        border-radius: 16px !important;
+        border: 1px solid rgba(148,163,184,0.45) !important;
+        box-shadow: 0 20px 50px rgba(15,23,42,0.98) !important;
+        overflow: hidden;
+        background: radial-gradient(circle at top left, rgba(15,23,42,0.98), rgba(15,23,42,0.96));
+    }}
+
+    .stDataFrame table,
+    .stDataEditor table {{
+        width: 100%;
+        border-collapse: collapse;
+    }}
+
+    .stDataFrame thead th,
+    .stDataEditor thead th {{
+        background: #020617 !important;
+        color: #e5e7eb !important;
+        font-weight: 700 !important;
+        border-bottom: 1px solid rgba(148,163,184,0.45) !important;
+    }}
+
+    .stDataFrame tbody tr:nth-child(even) td,
+    .stDataEditor tbody tr:nth-child(even) td {{
+        background: rgba(17,24,39,0.9) !important;
+    }}
+
+    .stDataFrame tbody tr:nth-child(odd) td,
+    .stDataEditor tbody tr:nth-child(odd) td {{
+        background: rgba(15,23,42,0.95) !important;
+    }}
+
+    .stDataFrame tbody tr:hover td,
+    .stDataEditor tbody tr:hover td {{
+        background: rgba(15,23,42,1) !important;
+    }}
+
+    /* ---------- BUTTONS ---------- */
+
+    .stButton > button {{
+        border-radius: 999px !important;
+        padding: 0.35rem 0.95rem !important;
+        font-weight: 600 !important;
+        border: 1px solid rgba(148,163,184,0.4) !important;
+        background: radial-gradient(circle at 0 0, {theme["accent"]}, {theme["accent_soft"]} 50%, #020617 100%);
+        color: #f9fafb !important;
+        box-shadow: 0 12px 30px rgba(8,47,73,0.9);
+        transition: 0.16s ease-out !important;
+    }}
+
+    .stButton > button:hover {{
+        transform: translateY(-1px) scale(1.01);
+        box-shadow: 0 16px 40px rgba(8,47,73,1);
+    }}
+
+    .sparkline {{
+        stroke: {theme["accent"]};
+        fill: none;
+    }}
+
+    /* ---------- COLLAPSIBLE FILTER PANEL / COMPACT FILTERS ---------- */
+
+    .filter-panel {{
+        background-color: rgba(255,255,255,0.05);
+        padding: 12px 18px;
+        border-radius: 10px;
+        margin-bottom: 15px;
+        border: 1px solid rgba(255,255,255,0.08);
+    }}
+
+    div[data-baseweb="tag"] {{
+        padding: 1px 6px !important;
+        border-radius: 4px !important;
+        font-size: 12px !important;
+    }}
+
+    div[data-baseweb="select"] > div {{
+        min-height: 32px !important;
+    }}
+
+    .css-1n76uvr, 
+    .css-1wa3eu0-placeholder {{
+        font-size: 13px !important;
+    }}
+
+    .css-1wa3eu0-control,
+    .css-1y4p8pa-control {{
+        min-height: 32px !important;
+        border-radius: 6px !important;
+    }}
+
+
+        /* ---------- GAME CARD (separate + conflict-free) ---------- */
+
+    .game-card {{
+        padding:18px 22px;
+        margin-bottom:22px;
+        border-radius:20px;
+        border:1px solid rgba(148,163,184,0.28);
+        background: radial-gradient(circle at top left, rgba(30,41,59,1), rgba(15,23,42,0.92));
+        box-shadow:0 22px 55px rgba(15,23,42,0.90);
+    }}
+
+    .game-headline {{
+        display:flex;
+        justify-content:space-between;
+        align-items:flex-start;
+        margin-bottom:14px;
+    }}
+
+    .game-team {{
+        font-size:1.05rem;
+        font-weight:700;
+        color:white;
+    }}
+
+    .game-metric {{
+        font-size:0.88rem;
+        color:#e5e7eb;
+        margin-top:4px;
+    }}
+
+    .game-pill {{
+        background:rgba(255,255,255,0.08);
+        border:1px solid rgba(255,255,255,0.18);
+        padding:6px 12px;
+        border-radius:12px;
+        font-size:0.85rem;
+        color:#e5e7eb;
+        margin-top:4px;
+    }}
+
+    .game-row {{
+        display:flex;
+        justify-content:space-between;
+        gap:20px;
+        margin-top:12px;
+    }}
+
+    .game-col {{
+        flex:1;
+    }}
+
+
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
-
 
 # ------------------------------------------------------
 # AG-GRID MOBILE FIX (separate block)
@@ -2592,10 +2788,8 @@ if sport == "NBA":
             st.info("No game report data for today. Make sure nba_prop_analyzer.game_report is populated.")
             st.stop()
 
-        # copy dataframe
         df = game_report_df.copy()
 
-        # numeric columns
         num_cols = [
             "home_team_strength", "visitor_team_strength",
             "predicted_margin",
@@ -2613,14 +2807,7 @@ if sport == "NBA":
             if c in df.columns:
                 df[c] = pd.to_numeric(df[c], errors="coerce")
 
-        # ---------------------------
-        # SAFE FORMATTER (no crashes)
-        # ---------------------------
         def fmt(x, decimals=1, plus=False):
-            """
-            Converts any numeric value into a formatted string.
-            If x is None/NaN → returns "—".
-            """
             try:
                 x = float(x)
                 if plus:
@@ -2629,14 +2816,11 @@ if sport == "NBA":
             except:
                 return "—"
 
-        # logo resolver
-        def logo(team_name):
-            code = TEAM_NAME_TO_CODE.get(team_name, "")
+        def logo(team):
+            code = TEAM_NAME_TO_CODE.get(team, "")
             return TEAM_LOGOS_BASE64.get(code, "")
 
-        # ---------------------------
-        # RENDER EACH GAME CARD
-        # ---------------------------
+        # STRICT TEMPLATE METHOD  
         for _, row in df.iterrows():
 
             home = row["home_team"]
@@ -2645,24 +2829,20 @@ if sport == "NBA":
             home_logo = logo(home)
             away_logo = logo(away)
 
-            home_win = fmt(row.get("home_win_pct"))
-            away_win = fmt(row.get("visitor_win_pct"))
+            home_win = fmt(row["home_win_pct"])
+            away_win = fmt(row["visitor_win_pct"])
 
-            home_pts = fmt(row.get("exp_home_points"))
-            away_pts = fmt(row.get("exp_visitor_points"))
-            tot_pts = fmt(row.get("exp_total_points"))
+            home_pts = fmt(row["exp_home_points"])
+            away_pts = fmt(row["exp_visitor_points"])
+            tot_pts = fmt(row["exp_total_points"])
 
-            margin = fmt(row.get("predicted_margin"), plus=True)
+            margin = fmt(row["predicted_margin"], plus=True)
+            pace = fmt(row["pace_proxy"])
+            pace_delta = fmt(row["pace_delta"], plus=True)
 
-            pace = fmt(row.get("pace_proxy"))
-            pace_delta = fmt(row.get("pace_delta"), plus=True)
+            home_l5 = fmt(row["home_l5_diff"], plus=True)
+            away_l5 = fmt(row["visitor_l5_diff"], plus=True)
 
-            home_l5 = fmt(row.get("home_l5_diff"), plus=True)
-            away_l5 = fmt(row.get("visitor_l5_diff"), plus=True)
-
-            # ---------------------------
-            # BUILD THE HTML CARD
-            # ---------------------------
             card_html = f"""
     <div class="game-card">
 
@@ -2688,6 +2868,7 @@ if sport == "NBA":
                     {home_pts} – {away_pts}
                 </div>
             </div>
+
         </div>
 
         <div class="game-row">
@@ -2706,7 +2887,7 @@ if sport == "NBA":
                     <b>{tot_pts}</b> points
                 </div>
 
-                <div class="game-metric" style="margin-top:4px;">Spread</div>
+                <div class="game-metric">Spread</div>
                 <div class="game-pill">
                     {home} <b>{margin}</b>
                 </div>
@@ -2732,7 +2913,6 @@ if sport == "NBA":
     """
 
             st.markdown(card_html, unsafe_allow_html=True)
-
 
 
     # ------------------------------------------------------

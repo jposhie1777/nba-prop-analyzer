@@ -4006,6 +4006,9 @@ if sport == "NBA":
                 return [{"bookmaker": k, "price": v[k]} for k in v]
             return []
 
+        if "books" not in slip_df.columns:
+            slip_df["books"] = [[] for _ in range(len(slip_df))]
+        
         slip_df["books"] = slip_df["books"].apply(normalize_books)
 
         # --------------------------------------------------

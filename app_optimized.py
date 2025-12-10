@@ -3098,12 +3098,15 @@ if sport == "NBA":
             spread_text = "No spread odds found."
             total_text = "No total odds found."
 
-            # Lookup odds
-            if not odds_df.empty:
-                g = odds_df[
-                    (odds_df["home_team"] == home) &
-                    (odds_df["away_team"] == away)
-                ].copy()
+            # Filter to only FanDuel + DraftKings
+            allowed_books = ["FanDuel", "DraftKings"]
+
+            g = odds_df[
+                (odds_df["home_team"] == home) &
+                (odds_df["away_team"] == away) &
+                (odds_df["bookmaker"].isin(allowed_books))
+            ].copy()
+
 
                 if not g.empty:
 

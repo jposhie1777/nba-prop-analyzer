@@ -2786,51 +2786,80 @@ if sport == "NBA":
 
         if game_report_df.empty:
             st.info("No game report data for today. Make sure nba_prop_analyzer.game_report is populated.")
-        else:
-            df = game_report_df.copy()
+            st.stop()
 
-            num_cols = [
-                "home_team_strength", "visitor_team_strength",
-                "predicted_margin",
-                "home_win_pct", "visitor_win_pct",
-                "exp_home_points", "exp_visitor_points", "exp_total_points",
-                "pace_proxy", "pace_delta",
-                "home_over_expected", "visitor_over_expected",
-                "home_l5_diff", "visitor_l5_diff",
-                "home_l10_diff", "visitor_l10_diff",
-                "home_avg_pts_scored", "home_avg_pts_allowed",
-                "visitor_avg_pts_scored", "visitor_avg_pts_allowed",
-            ]
+        # copy dataframe
+        df = game_report_df.copy()
 
-            for c in num_cols:
-                if c in df.columns:
-                    df[c] = pd.to_numeric(df[c], errors="coerce")
+        # numeric columns
+        num_cols = [
+            "home_team_strength", "visitor_team_strength",
+            "predicted_margin",
+            "home_win_pct", "visitor_win_pct",
+            "exp_home_points", "exp_visitor_points", "exp_total_points",
+            "pace_proxy", "pace_delta",
+            "home_over_expected", "visitor_over_expected",
+            "home_l5_diff", "visitor_l5_diff",
+            "home_l10_diff", "visitor_l10_diff",
+            "home_avg_pts_scored", "home_avg_pts_allowed",
+            "visitor_avg_pts_scored", "visitor_avg_pts_allowed",
+        ]
 
-            def logo(team_name):
-                code = TEAM_NAME_TO_CODE.get(team_name, "")
-                return TEAM_LOGOS_BASE64.get(code, "")
+        for c in num_cols:
+            if c in df.columns:
+                df[c] = pd.to_numeric(df[c], errors="coerce")
 
-            for _, row in df.iterrows():
-                home = row["home_team"]
-                away = row["visitor_team"]
+        # ---------------------------
+        # SAFE FORMATTER (no crashes)
+        # ---------------------------
+        def fmt(x, decimals=1, plus=False):
+            """
+            Converts any numeric value into a formatted string.
+            If x is None/NaN → returns "—".
+            """
+            try:
+                x = float(x)
+                if plus:
+                    return f"{x:+.{decimals}f}"
+                return f"{x:.{decimals}f}"
+            except:
+                return "—"
 
-                home_logo = logo(home)
-                away_logo = logo(away)
+        # logo resolver
+        def logo(team_name):
+            code = TEAM_NAME_TO_CODE.get(team_name, "")
+            return TEAM_LOGOS_BASE64.get(code, "")
 
-                home_win = row.get("home_win_pct")
-                away_win = row.get("visitor_win_pct")
-                home_pts = row.get("exp_home_points")
-                away_pts = row.get("exp_visitor_points")
-                tot_pts = row.get("exp_total_points")
-                margin = row.get("predicted_margin")
+        # ---------------------------
+        # RENDER EACH GAME CARD
+        # ---------------------------
+        for _, row in df.iterrows():
 
-                pace = row.get("pace_proxy")
-                pace_delta = row.get("pace_delta")
+            home = row["home_team"]
+            away = row["visitor_team"]
 
-                home_l5 = row.get("home_l5_diff")
-                away_l5 = row.get("visitor_l5_diff")
+            home_logo = logo(home)
+            away_logo = logo(away)
 
-                card_html = f"""
+            home_win = fmt(row.get("home_win_pct"))
+            away_win = fmt(row.get("visitor_win_pct"))
+
+            home_pts = fmt(row.get("exp_home_points"))
+            away_pts = fmt(row.get("exp_visitor_points"))
+            tot_pts = fmt(row.get("exp_total_points"))
+
+            margin = fmt(row.get("predicted_margin"), plus=True)
+
+            pace = fmt(row.get("pace_proxy"))
+            pace_delta = fmt(row.get("pace_delta"), plus=True)
+
+            home_l5 = fmt(row.get("home_l5_diff"), plus=True)
+            away_l5 = fmt(row.get("visitor_l5_diff"), plus=True)
+
+            # ---------------------------
+            # BUILD THE HTML CARD
+            # ---------------------------
+            card_html = f"""
     <div class="game-card">
 
         <div class="game-headline">
@@ -2852,7 +2881,7 @@ if sport == "NBA":
             <div>
                 <div class="game-metric">Model Score:</div>
                 <div style="color:#9ca3af;font-size:0.95rem;font-weight:600;">
-                    {home_pts:.1f} – {away_pts:.1f}
+                    {home_pts} – {away_pts}
                 </div>
             </div>
         </div>
@@ -2862,33 +2891,34 @@ if sport == "NBA":
             <div class="game-col">
                 <div class="game-metric">Win Probabilities</div>
                 <div class="game-pill">
-                    {home}: <b>{home_win:.1f}%</b><br>
-                    {away}: <b>{away_win:.1f}%</b>
+                    {home}: <b>{home_win}%</b><br>
+                    {away}: <b>{away_win}%</b>
                 </div>
             </div>
 
             <div class="game-col">
                 <div class="game-metric">Projected Total</div>
                 <div class="game-pill">
-                    <b>{tot_pts:.1f}</b> points
+                    <b>{tot_pts}</b> points
                 </div>
+
                 <div class="game-metric" style="margin-top:4px;">Spread</div>
                 <div class="game-pill">
-                    {home} <b>{margin:+.1f}</b>
+                    {home} <b>{margin}</b>
                 </div>
             </div>
 
             <div class="game-col">
                 <div class="game-metric">Pace Projection</div>
                 <div class="game-pill">
-                    Pace: <b>{pace:.1f}</b><br>
-                    Δ vs Avg: <b>{pace_delta:+.1f}</b>
+                    Pace: <b>{pace}</b><br>
+                    Δ vs Avg: <b>{pace_delta}</b>
                 </div>
 
                 <div class="game-metric" style="margin-top:8px;">Last 5 Point Diff</div>
                 <div class="game-pill">
-                    {home}: <b>{home_l5:+.1f}</b><br>
-                    {away}: <b>{away_l5:+.1f}</b>
+                    {home}: <b>{home_l5}</b><br>
+                    {away}: <b>{away_l5}</b>
                 </div>
             </div>
 
@@ -2897,7 +2927,8 @@ if sport == "NBA":
     </div>
     """
 
-                st.markdown(card_html, unsafe_allow_html=True)
+            st.markdown(card_html, unsafe_allow_html=True)
+
 
 
     # ------------------------------------------------------

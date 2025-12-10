@@ -2779,9 +2779,12 @@ if sport == "NBA":
         )
 
     # ------------------------------------------------------
-    # TAB 2 — GAME LINES + MODEL EV (Spread / Total / ML)
+    # TAB 2 — GAME LINES + MODEL EV (PRETTY, MODERN, SAFE)
     # ------------------------------------------------------
+    import streamlit.components.v1 as components
+
     with tab2:
+
         st.subheader("Game Lines + Model EV (ML · Spread · Total)")
 
         if game_report_df.empty:
@@ -2790,6 +2793,9 @@ if sport == "NBA":
 
         df = game_report_df.copy()
 
+        # ----------------------------------------------
+        # Numeric cleanup
+        # ----------------------------------------------
         num_cols = [
             "home_team_strength", "visitor_team_strength",
             "predicted_margin",
@@ -2807,6 +2813,9 @@ if sport == "NBA":
             if c in df.columns:
                 df[c] = pd.to_numeric(df[c], errors="coerce")
 
+        # ----------------------------------------------
+        # Format helper (prevents .1f errors)
+        # ----------------------------------------------
         def fmt(x, decimals=1, plus=False):
             try:
                 x = float(x)
@@ -2816,103 +2825,162 @@ if sport == "NBA":
             except:
                 return "—"
 
-        def logo(team):
-            code = TEAM_NAME_TO_CODE.get(team, "")
+        # ----------------------------------------------
+        # Logo resolver
+        # ----------------------------------------------
+        def logo(team_name):
+            code = TEAM_NAME_TO_CODE.get(team_name, "")
             return TEAM_LOGOS_BASE64.get(code, "")
 
-        # STRICT TEMPLATE METHOD  
+        # ==============================================
+        # RENDER FUNCTION (Modern Pretty Card)
+        # ==============================================
+        def render_game_card(
+            home, away,
+            home_logo, away_logo,
+            home_pts, away_pts,
+            home_win, away_win,
+            tot_pts, margin,
+            pace, pace_delta,
+            home_l5, away_l5
+        ):
+
+            html = f"""
+            <div style="
+                background: radial-gradient(circle at top left, #1e293b, #0f172a);
+                border-radius:20px;
+                border:1px solid rgba(148,163,184,0.28);
+                padding:22px;
+                margin-bottom:20px;
+                color:white;
+                font-family:Inter, sans-serif;
+                box-shadow:0 20px 55px rgba(15,23,42,0.75);
+            ">
+
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                
+                    <div style="display:flex; align-items:center; gap:14px;">
+                        <div style="text-align:center;">
+                            <img src="{home_logo}" width="42" style="border-radius:6px;">
+                            <div style="font-size:1rem; font-weight:700;">{home}</div>
+                        </div>
+
+                        <div style="font-size:1.4rem; font-weight:700; color:#e5e7eb;">
+                            vs
+                        </div>
+
+                        <div style="text-align:center;">
+                            <img src="{away_logo}" width="42" style="border-radius:6px;">
+                            <div style="font-size:1rem; font-weight:700;">{away}</div>
+                        </div>
+                    </div>
+
+                    <div style="text-align:right;">
+                        <div style="color:#94a3b8; font-size:0.9rem;">Model Score</div>
+                        <div style="font-size:1rem; font-weight:600;">
+                            {home_pts} – {away_pts}
+                        </div>
+                    </div>
+
+                </div>
+
+                <hr style="border:0; border-top:1px solid rgba(255,255,255,0.08); margin:16px 0;">
+
+                <div style="display:flex; gap:20px;">
+
+                    <div style="flex:1;">
+                        <div style="color:#94a3b8; font-size:0.9rem;">Win Probabilities</div>
+                        <div style="
+                            background:rgba(255,255,255,0.08);
+                            padding:10px 14px;
+                            border-radius:12px;
+                            margin-top:4px;
+                            font-size:0.92rem;
+                        ">
+                            {home}: <b>{home_win}%</b><br>
+                            {away}: <b>{away_win}%</b>
+                        </div>
+                    </div>
+
+                    <div style="flex:1;">
+                        <div style="color:#94a3b8; font-size:0.9rem;">Projected Total</div>
+                        <div style="
+                            background:rgba(255,255,255,0.08);
+                            padding:10px 14px;
+                            border-radius:12px;
+                            margin-top:4px;
+                            font-size:0.92rem;
+                        ">
+                            <b>{tot_pts}</b> points
+                        </div>
+
+                        <div style="color:#94a3b8; margin-top:10px; font-size:0.9rem;">Spread</div>
+                        <div style="
+                            background:rgba(255,255,255,0.08);
+                            padding:10px 14px;
+                            border-radius:12px;
+                            margin-top:4px;
+                            font-size:0.92rem;
+                        ">
+                            {home}: <b>{margin}</b>
+                        </div>
+                    </div>
+
+                    <div style="flex:1;">
+                        <div style="color:#94a3b8; font-size:0.9rem;">Pace Projection</div>
+                        <div style="
+                            background:rgba(255,255,255,0.08);
+                            padding:10px 14px;
+                            border-radius:12px;
+                            margin-top:4px;
+                            font-size:0.92rem;
+                        ">
+                            Pace: <b>{pace}</b><br>
+                            Δ vs Avg: <b>{pace_delta}</b>
+                        </div>
+
+                        <div style="color:#94a3b8; margin-top:10px; font-size:0.9rem;">Last 5 Point Diff</div>
+                        <div style="
+                            background:rgba(255,255,255,0.08);
+                            padding:10px 14px;
+                            border-radius:12px;
+                            margin-top:4px;
+                            font-size:0.92rem;
+                        ">
+                            {home}: <b>{home_l5}</b><br>
+                            {away}: <b>{away_l5}</b>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+            """
+
+            components.html(html, height=420)
+
+        # ==========================================================
+        # RENDER ALL GAMES
+        # ==========================================================
         for _, row in df.iterrows():
 
-            home = row["home_team"]
-            away = row["visitor_team"]
+            render_game_card(
+                home=row["home_team"],
+                away=row["visitor_team"],
+                home_logo=logo(row["home_team"]),
+                away_logo=logo(row["visitor_team"]),
+                home_pts=fmt(row["exp_home_points"]),
+                away_pts=fmt(row["exp_visitor_points"]),
+                home_win=fmt(row["home_win_pct"]),
+                away_win=fmt(row["visitor_win_pct"]),
+                tot_pts=fmt(row["exp_total_points"]),
+                margin=fmt(row["predicted_margin"], plus=True),
+                pace=fmt(row["pace_proxy"]),
+                pace_delta=fmt(row["pace_delta"], plus=True),
+                home_l5=fmt(row["home_l5_diff"], plus=True),
+                away_l5=fmt(row["visitor_l5_diff"], plus=True)
+            )
 
-            home_logo = logo(home)
-            away_logo = logo(away)
-
-            home_win = fmt(row["home_win_pct"])
-            away_win = fmt(row["visitor_win_pct"])
-
-            home_pts = fmt(row["exp_home_points"])
-            away_pts = fmt(row["exp_visitor_points"])
-            tot_pts = fmt(row["exp_total_points"])
-
-            margin = fmt(row["predicted_margin"], plus=True)
-            pace = fmt(row["pace_proxy"])
-            pace_delta = fmt(row["pace_delta"], plus=True)
-
-            home_l5 = fmt(row["home_l5_diff"], plus=True)
-            away_l5 = fmt(row["visitor_l5_diff"], plus=True)
-
-            card_html = f"""
-    <div class="game-card">
-
-        <div class="game-headline">
-
-            <div style="display:flex;align-items:center;gap:10px;">
-                <div style="text-align:center;">
-                    <img src="{home_logo}" width="36" style="border-radius:6px;"><br>
-                    <span class="game-team">{home}</span>
-                </div>
-
-                <div style="font-size:1.3rem;font-weight:700;color:#e5e7eb;margin:0 14px;">vs</div>
-
-                <div style="text-align:center;">
-                    <img src="{away_logo}" width="36" style="border-radius:6px;"><br>
-                    <span class="game-team">{away}</span>
-                </div>
-            </div>
-
-            <div>
-                <div class="game-metric">Model Score:</div>
-                <div style="color:#9ca3af;font-size:0.95rem;font-weight:600;">
-                    {home_pts} – {away_pts}
-                </div>
-            </div>
-
-        </div>
-
-        <div class="game-row">
-
-            <div class="game-col">
-                <div class="game-metric">Win Probabilities</div>
-                <div class="game-pill">
-                    {home}: <b>{home_win}%</b><br>
-                    {away}: <b>{away_win}%</b>
-                </div>
-            </div>
-
-            <div class="game-col">
-                <div class="game-metric">Projected Total</div>
-                <div class="game-pill">
-                    <b>{tot_pts}</b> points
-                </div>
-
-                <div class="game-metric">Spread</div>
-                <div class="game-pill">
-                    {home} <b>{margin}</b>
-                </div>
-            </div>
-
-            <div class="game-col">
-                <div class="game-metric">Pace Projection</div>
-                <div class="game-pill">
-                    Pace: <b>{pace}</b><br>
-                    Δ vs Avg: <b>{pace_delta}</b>
-                </div>
-
-                <div class="game-metric" style="margin-top:8px;">Last 5 Point Diff</div>
-                <div class="game-pill">
-                    {home}: <b>{home_l5}</b><br>
-                    {away}: <b>{away_l5}</b>
-                </div>
-            </div>
-
-        </div>
-
-    </div>
-    """
-
-            st.markdown(card_html, unsafe_allow_html=True)
 
 
     # ------------------------------------------------------

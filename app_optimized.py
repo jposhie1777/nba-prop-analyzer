@@ -2836,6 +2836,7 @@ if sport == "NBA":
         # ----------------------------------------------
         # Load odds from BigQuery (today only)
         # ----------------------------------------------
+        # ----------------------------------------------
         @st.cache_data(ttl=300)
         def load_game_odds_today() -> pd.DataFrame:
             client = bigquery.Client()
@@ -2849,10 +2850,11 @@ if sport == "NBA":
                 line,
                 price,
                 start_time
-            FROM `nba.nba_game_odds`
+            FROM `graphite-flare-477419-h7.nba.nba_game_odds`
             WHERE DATE(start_time) = CURRENT_DATE()
             """
             return client.query(sql).to_dataframe()
+
 
         try:
             odds_df = load_game_odds_today()

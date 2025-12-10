@@ -2615,13 +2615,11 @@ def render_saved_bets_tab():
 
 if sport == "NBA":
     # Saved Bets moved to LAST position in the bar
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab9, tab10, tab8 = st.tabs(
+    tab1, tab2, tab3, tab6, tab7, tab9, tab10, tab8 = st.tabs(
         [
             "📈 Props",
             "🏀 Game Lines",
-            "🏅 EV Leaderboard",
-            "🗺️ EV Heatmap",
-            "📐 Trend Projection Model",
+            "📊 Advanced EV Tools",
             "⏱️ Minutes & Usage",
             "📈 Trend Lab",
             "📋 Depth Chart & Injury Report",
@@ -3164,256 +3162,213 @@ if sport == "NBA":
 
 
     # ------------------------------------------------------
-    # TAB 3 — EV LEADERBOARD
+    # NEW COMBINED TAB — ADVANCED EV TOOLS
     # ------------------------------------------------------
     with tab3:
-        st.subheader("EV Leaderboard (Edge vs Market)")
 
-        if props_df.empty:
-            st.info("No props available for today.")
-        else:
-            df_leader = props_df.copy()
+        st.subheader("📊 Advanced EV Tools")
 
-            # Make sure key numeric fields are numeric
-            for c in ["edge_pct", "edge_raw", "ev_last10", "hit_rate_last10", "price"]:
-                if c in df_leader.columns:
-                    df_leader[c] = pd.to_numeric(df_leader[c], errors="coerce")
-
-            # Simple filters
-            col1, col2 = st.columns(2)
-            with col1:
-                min_edge = st.slider(
-                    "Minimum Edge (%)",
-                    min_value=-20,
-                    max_value=50,
-                    value=0,
-                    step=1,
-                )
-            with col2:
-                min_hit = st.slider(
-                    "Minimum L10 Hit Rate (%)",
-                    min_value=0,
-                    max_value=100,
-                    value=60,
-                    step=5,
-                )
-
-            # Filter on edge + hit rate if columns exist
-            if "edge_pct" in df_leader.columns:
-                df_leader = df_leader[df_leader["edge_pct"] >= min_edge / 100.0]
-            if "hit_rate_last10" in df_leader.columns:
-                df_leader = df_leader[df_leader["hit_rate_last10"] >= min_hit / 100.0]
-
-            # Sort: highest edge then highest EV
-            sort_cols = [c for c in ["edge_pct", "ev_last10"] if c in df_leader.columns]
-            if sort_cols:
-                df_leader = df_leader.sort_values(sort_cols, ascending=False)
-
-            # Pretty market name
-            df_leader["market_pretty"] = df_leader["market"].map(
-                lambda m: MARKET_DISPLAY_MAP.get(m, m)
-            )
-
-            cols_to_show = [
-                "player",
-                "market_pretty",
-                "bet_type",
-                "line",
-                "price",
-                "hit_rate_last10",
-                "implied_prob",
-                "edge_pct",
-                "ev_last10",
-                "proj_last10",
-                "proj_diff_vs_line",
-                "matchup_difficulty_score",
-                "est_minutes",
-                "usage_bump_pct",
+        # --- Create subtabs ---
+        subtab1, subtab2, subtab3 = st.tabs(
+            [
+                "🏅 EV Leaderboard",
+                "🗺️ EV Heatmap",
+                "📐 Trend Projection Model",
             ]
-            cols_to_show = [c for c in cols_to_show if c in df_leader.columns]
+        )
 
-            if df_leader.empty:
-                st.info("No props meet the current leaderboard filters.")
+        # ======================================================
+        # 🏅 SUBTAB 1 — EV LEADERBOARD
+        # ======================================================
+        with subtab1:
+            st.markdown("### 🏅 EV Leaderboard")
+
+            if props_df.empty:
+                st.info("No props available for today.")
             else:
-                display_df = df_leader[cols_to_show].copy()
+                df_leader = props_df.copy()
 
-                # Format a few columns
-                if "price" in display_df.columns:
-                    display_df["price"] = display_df["price"].apply(format_moneyline)
+                # Make sure key numeric fields are numeric
+                for c in ["edge_pct", "edge_raw", "ev_last10", "hit_rate_last10", "price"]:
+                    if c in df_leader.columns:
+                        df_leader[c] = pd.to_numeric(df_leader[c], errors="coerce")
 
-                if "hit_rate_last10" in display_df.columns:
-                    display_df["hit_rate_last10"] = (display_df["hit_rate_last10"] * 100).round(1)
+                # Simple filters
+                col1, col2 = st.columns(2)
+                with col1:
+                    min_edge = st.slider(
+                        "Minimum Edge (%)",
+                        min_value=-20,
+                        max_value=50,
+                        value=0,
+                        step=1,
+                    )
+                with col2:
+                    min_hit = st.slider(
+                        "Minimum L10 Hit Rate (%)",
+                        min_value=0,
+                        max_value=100,
+                        value=60,
+                        step=5,
+                    )
 
-                if "implied_prob" in display_df.columns:
-                    display_df["implied_prob"] = (display_df["implied_prob"] * 100).round(1)
+                # Filter on edge + hit rate
+                if "edge_pct" in df_leader.columns:
+                    df_leader = df_leader[df_leader["edge_pct"] >= min_edge / 100.0]
+                if "hit_rate_last10" in df_leader.columns:
+                    df_leader = df_leader[df_leader["hit_rate_last10"] >= min_hit / 100.0]
 
-                if "edge_pct" in display_df.columns:
-                    display_df["edge_pct"] = display_df["edge_pct"].round(1)
+                # Sorting
+                sort_cols = [c for c in ["edge_pct", "ev_last10"] if c in df_leader.columns]
+                if sort_cols:
+                    df_leader = df_leader.sort_values(sort_cols, ascending=False)
 
-                if "matchup_difficulty_score" in display_df.columns:
-                    display_df["matchup_difficulty_score"] = display_df["matchup_difficulty_score"].round(1)
-
-                st.dataframe(
-                    display_df,
-                    use_container_width=True,
-                    hide_index=True,
+                df_leader["market_pretty"] = df_leader["market"].map(
+                    lambda m: MARKET_DISPLAY_MAP.get(m, m)
                 )
 
-    # ------------------------------------------------------
-    # TAB 4 — DAILY EV HEATMAP
-    # ------------------------------------------------------
-    with tab4:
-        st.subheader("Daily EV Heatmap by Stat vs Opponent")
-
-        if props_df.empty:
-            st.info("No props available for today.")
-        else:
-            heat_df = props_df.copy()
-
-            # Derive a simple stat key from the market string (pts, reb, ast, pra, etc.)
-            heat_df["stat_key"] = heat_df["market"].apply(detect_stat)
-
-            if "edge_pct" not in heat_df.columns:
-                st.warning("edge_pct column is missing; heatmap cannot be built.")
-            else:
-                heat_df["edge_pct"] = pd.to_numeric(heat_df["edge_pct"], errors="coerce")
-                heat_df = heat_df[
-                    heat_df["stat_key"].notna()
-                    & (heat_df["stat_key"] != "")
-                    & heat_df["opponent_team"].notna()
-                    & heat_df["edge_pct"].notna()
+                cols_to_show = [
+                    "player", "market_pretty", "bet_type", "line", "price",
+                    "hit_rate_last10", "implied_prob", "edge_pct", "ev_last10",
+                    "proj_last10", "proj_diff_vs_line", "matchup_difficulty_score",
+                    "est_minutes", "usage_bump_pct",
                 ]
+                cols_to_show = [c for c in cols_to_show if c in df_leader.columns]
 
-                if heat_df.empty:
-                    st.info("Not enough data to build the heatmap.")
+                if df_leader.empty:
+                    st.info("No props meet the current leaderboard filters.")
                 else:
-                    pivot = heat_df.pivot_table(
-                        index="stat_key",
-                        columns="opponent_team",
-                        values="edge_pct",
-                        aggfunc="mean",
-                    )
+                    display_df = df_leader[cols_to_show].copy()
 
-                    fig = go.Figure(
-                        data=go.Heatmap(
-                            z=pivot.values,
-                            x=list(pivot.columns),
-                            y=list(pivot.index),
-                            colorscale="RdYlGn",
-                            zmid=0,
-                            colorbar=dict(title="Edge (%)"),
-                        )
-                    )
-                    fig.update_layout(
-                        template="plotly_dark",
-                        height=500,
-                        margin=dict(l=40, r=20, t=40, b=80),
-                        xaxis_title="Opponent",
-                        yaxis_title="Stat",
-                    )
+                    if "price" in display_df.columns:
+                        display_df["price"] = display_df["price"].apply(format_moneyline)
+                    if "hit_rate_last10" in display_df.columns:
+                        display_df["hit_rate_last10"] = (display_df["hit_rate_last10"] * 100).round(1)
+                    if "implied_prob" in display_df.columns:
+                        display_df["implied_prob"] = (display_df["implied_prob"] * 100).round(1)
+                    if "edge_pct" in display_df.columns:
+                        display_df["edge_pct"] = display_df["edge_pct"].round(1)
 
-                    # Convert to % in hover
-                    fig.update_traces(
-                        hovertemplate="Stat: %{y}<br>Opponent: %{x}<br>Edge: %{z:.1f}%%<extra></extra>"
-                    )
+                    st.dataframe(display_df, use_container_width=True, hide_index=True)
 
-                    st.plotly_chart(fig, use_container_width=True)
+        # ======================================================
+        # 🗺️ SUBTAB 2 — EV HEATMAP
+        # ======================================================
+        with subtab2:
+            st.markdown("### 🗺️ EV Stat vs Opponent Heatmap")
 
-    # ------------------------------------------------------
-    # TAB 5 — TREND PROJECTION MODEL
-    # ------------------------------------------------------
-    with tab5:
-        st.subheader("Trend-Based Projection Model")
-
-        if props_df.empty:
-            st.info("No props available for today.")
-        else:
-            proj_df = props_df.copy()
-
-            needed = [
-                "proj_last10",
-                "proj_std_last10",
-                "proj_volatility_index",
-                "proj_diff_vs_line",
-                "hit_rate_last10",
-                "price",
-            ]
-            for c in needed:
-                if c in proj_df.columns:
-                    proj_df[c] = pd.to_numeric(proj_df[c], errors="coerce")
-
-            # Filters
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                min_proj_diff = st.slider(
-                    "Min Projection vs Line (points)",
-                    min_value=-10.0,
-                    max_value=20.0,
-                    value=1.0,
-                    step=0.5,
-                )
-            with c2:
-                max_vol_index = st.slider(
-                    "Max Volatility Index",
-                    min_value=0.0,
-                    max_value=5.0,
-                    value=3.0,
-                    step=0.1,
-                )
-            with c3:
-                min_hit10_proj = st.slider(
-                    "Min Hit Rate L10 (%)",
-                    min_value=0,
-                    max_value=100,
-                    value=50,
-                    step=5,
-                )
-
-            if "proj_diff_vs_line" in proj_df.columns:
-                proj_df = proj_df[proj_df["proj_diff_vs_line"] >= min_proj_diff]
-
-            if "proj_volatility_index" in proj_df.columns:
-                proj_df = proj_df[proj_df["proj_volatility_index"] <= max_vol_index]
-
-            if "hit_rate_last10" in proj_df.columns:
-                proj_df = proj_df[proj_df["hit_rate_last10"] >= min_hit10_proj / 100.0]
-
-            proj_df["market_pretty"] = proj_df["market"].map(
-                lambda m: MARKET_DISPLAY_MAP.get(m, m)
-            )
-
-            cols = [
-                "player",
-                "market_pretty",
-                "bet_type",
-                "line",
-                "price",
-                "proj_last10",
-                "proj_std_last10",
-                "proj_volatility_index",
-                "proj_diff_vs_line",
-                "hit_rate_last10",
-                "edge_pct",
-            ]
-            cols = [c for c in cols if c in proj_df.columns]
-
-            if proj_df.empty:
-                st.info("No props match the current projection filters.")
+            if props_df.empty:
+                st.info("No props available.")
             else:
-                proj_df = proj_df.sort_values(
-                    by=[c for c in ["proj_diff_vs_line", "edge_pct"] if c in proj_df.columns],
-                    ascending=False,
+                heat_df = props_df.copy()
+                heat_df["stat_key"] = heat_df["market"].apply(detect_stat)
+
+                if "edge_pct" not in heat_df.columns:
+                    st.warning("edge_pct column missing — cannot build heatmap.")
+                else:
+                    heat_df["edge_pct"] = pd.to_numeric(heat_df["edge_pct"], errors="coerce")
+                    heat_df = heat_df[
+                        heat_df["stat_key"].notna()
+                        & heat_df["opponent_team"].notna()
+                        & heat_df["edge_pct"].notna()
+                    ]
+
+                    if heat_df.empty:
+                        st.info("Not enough data for heatmap.")
+                    else:
+                        pivot = heat_df.pivot_table(
+                            index="stat_key",
+                            columns="opponent_team",
+                            values="edge_pct",
+                            aggfunc="mean",
+                        )
+
+                        fig = go.Figure(
+                            data=go.Heatmap(
+                                z=pivot.values,
+                                x=list(pivot.columns),
+                                y=list(pivot.index),
+                                colorscale="RdYlGn",
+                                zmid=0,
+                                colorbar=dict(title="Edge (%)"),
+                            )
+                        )
+                        fig.update_layout(
+                            template="plotly_dark",
+                            height=500,
+                            margin=dict(l=40, r=20, t=40, b=80),
+                            xaxis_title="Opponent",
+                            yaxis_title="Stat",
+                        )
+
+                        fig.update_traces(
+                            hovertemplate="Stat: %{y}<br>Opponent: %{x}<br>Edge: %{z:.1f}%%<extra></extra>"
+                        )
+
+                        st.plotly_chart(fig, use_container_width=True)
+
+        # ======================================================
+        # 📐 SUBTAB 3 — TREND PROJECTION MODEL
+        # ======================================================
+        with subtab3:
+            st.markdown("### 📐 Trend-Based Projection Model")
+
+            if props_df.empty:
+                st.info("No props available.")
+            else:
+                proj_df = props_df.copy()
+
+                needed = [
+                    "proj_last10", "proj_std_last10", "proj_volatility_index",
+                    "proj_diff_vs_line", "hit_rate_last10", "price",
+                ]
+                for c in needed:
+                    if c in proj_df.columns:
+                        proj_df[c] = pd.to_numeric(proj_df[c], errors="coerce")
+
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    min_proj_diff = st.slider("Min Projection vs Line", -10.0, 20.0, 1.0, 0.5)
+                with c2:
+                    max_vol_index = st.slider("Max Volatility Index", 0.0, 5.0, 3.0, 0.1)
+                with c3:
+                    min_hit10_proj = st.slider("Min Hit Rate L10 (%)", 0, 100, 50, 5)
+
+                if "proj_diff_vs_line" in proj_df.columns:
+                    proj_df = proj_df[proj_df["proj_diff_vs_line"] >= min_proj_diff]
+                if "proj_volatility_index" in proj_df.columns:
+                    proj_df = proj_df[proj_df["proj_volatility_index"] <= max_vol_index]
+                if "hit_rate_last10" in proj_df.columns:
+                    proj_df = proj_df[proj_df["hit_rate_last10"] >= min_hit10_proj / 100.0]
+
+                proj_df["market_pretty"] = proj_df["market"].map(
+                    lambda m: MARKET_DISPLAY_MAP.get(m, m)
                 )
-                display_df = proj_df[cols].copy()
 
-                if "price" in display_df.columns:
-                    display_df["price"] = display_df["price"].apply(format_moneyline)
-                if "hit_rate_last10" in display_df.columns:
-                    display_df["hit_rate_last10"] = (display_df["hit_rate_last10"] * 100).round(1)
-                if "edge_pct" in display_df.columns:
-                    display_df["edge_pct"] = display_df["edge_pct"].round(1)
+                cols = [
+                    "player", "market_pretty", "bet_type", "line", "price",
+                    "proj_last10", "proj_std_last10", "proj_volatility_index",
+                    "proj_diff_vs_line", "hit_rate_last10", "edge_pct",
+                ]
+                cols = [c for c in cols if c in proj_df.columns]
 
-                st.dataframe(display_df, use_container_width=True, hide_index=True)
+                if proj_df.empty:
+                    st.info("No props match filters.")
+                else:
+                    proj_df = proj_df.sort_values(
+                        by=[c for c in ["proj_diff_vs_line", "edge_pct"] if c in proj_df.columns],
+                        ascending=False,
+                    )
+                    display_df = proj_df[cols].copy()
+
+                    if "price" in display_df.columns:
+                        display_df["price"] = display_df["price"].apply(format_moneyline)
+                    if "hit_rate_last10" in display_df.columns:
+                        display_df["hit_rate_last10"] = (display_df["hit_rate_last10"] * 100).round(1)
+                    if "edge_pct" in display_df.columns:
+                        display_df["edge_pct"] = display_df["edge_pct"].round(1)
+
+                    st.dataframe(display_df, use_container_width=True, hide_index=True)
 
     # ------------------------------------------------------
     # TAB 6 — MINUTES & USAGE MODEL

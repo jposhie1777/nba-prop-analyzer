@@ -2779,12 +2779,13 @@ if sport == "NBA":
         )
 
     # ------------------------------------------------------
-    # TAB 2 — GAME LINES + MODEL EV (PRETTY, MODERN, SAFE)
+    # TAB 2 — GAME LINES + MODEL EV (with Sportsbook Odds)
     # ------------------------------------------------------
     import streamlit.components.v1 as components
+    from google.cloud import bigquery
+    import pandas as pd
 
     with tab2:
-
         st.subheader("Game Lines + Model EV (ML · Spread · Total)")
 
         if game_report_df.empty:
@@ -2828,9 +2829,55 @@ if sport == "NBA":
         # ----------------------------------------------
         # Logo resolver
         # ----------------------------------------------
-        def logo(team_name):
+        def logo(team_name: str) -> str:
             code = TEAM_NAME_TO_CODE.get(team_name, "")
             return TEAM_LOGOS_BASE64.get(code, "")
+
+        # ----------------------------------------------
+        # Load odds from BigQuery (today only)
+        # ----------------------------------------------
+        @st.cache_data(ttl=300)
+        def load_game_odds_today() -> pd.DataFrame:
+            client = bigquery.Client()
+            sql = """
+            SELECT
+                home_team,
+                away_team,
+                bookmaker,
+                market,
+                outcome,
+                line,
+                price,
+                start_time
+            FROM `nba.nba_game_odds`
+            WHERE DATE(start_time) = CURRENT_DATE()
+            """
+            return client.query(sql).to_dataframe()
+
+        try:
+            odds_df = load_game_odds_today()
+        except Exception as e:
+            st.warning(f"Could not load game odds from BigQuery: {e}")
+            odds_df = pd.DataFrame()
+
+        # Make sure consistent dtypes
+        if not odds_df.empty:
+            for col in ["line", "price"]:
+                if col in odds_df.columns:
+                    odds_df[col] = pd.to_numeric(odds_df[col], errors="coerce")
+
+        # ----------------------------------------------
+        # Helpers for odds
+        # ----------------------------------------------
+        def american_to_decimal(odds):
+            try:
+                odds = float(odds)
+            except:
+                return None
+            if odds > 0:
+                return 1 + odds / 100.0
+            else:
+                return 1 + 100.0 / abs(odds)
 
         # ==============================================
         # RENDER FUNCTION (Modern Pretty Card)
@@ -2842,7 +2889,12 @@ if sport == "NBA":
             home_win, away_win,
             tot_pts, margin,
             pace, pace_delta,
-            home_l5, away_l5
+            home_l5, away_l5,
+            # sportsbook snippets (already formatted strings)
+            home_ml_text,
+            away_ml_text,
+            spread_text,
+            total_text,
         ):
 
             html = f"""
@@ -2857,6 +2909,7 @@ if sport == "NBA":
                 box-shadow:0 20px 55px rgba(15,23,42,0.75);
             ">
 
+                <!-- HEADLINE ROW: TEAMS + MODEL SCORE -->
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                 
                     <div style="display:flex; align-items:center; gap:14px;">
@@ -2886,7 +2939,8 @@ if sport == "NBA":
 
                 <hr style="border:0; border-top:1px solid rgba(255,255,255,0.08); margin:16px 0;">
 
-                <div style="display:flex; gap:20px;">
+                <!-- ANALYTICS ROW -->
+                <div style="display:flex; gap:20px; margin-bottom:14px;">
 
                     <div style="flex:1;">
                         <div style="color:#94a3b8; font-size:0.9rem;">Win Probabilities</div>
@@ -2914,7 +2968,7 @@ if sport == "NBA":
                             <b>{tot_pts}</b> points
                         </div>
 
-                        <div style="color:#94a3b8; margin-top:10px; font-size:0.9rem;">Spread</div>
+                        <div style="color:#94a3b8; margin-top:10px; font-size:0.9rem;">Spread (model)</div>
                         <div style="
                             background:rgba(255,255,255,0.08);
                             padding:10px 14px;
@@ -2922,7 +2976,7 @@ if sport == "NBA":
                             margin-top:4px;
                             font-size:0.92rem;
                         ">
-                            {home}: <b>{margin}</b>
+                            {home} <b>{margin}</b>
                         </div>
                     </div>
 
@@ -2954,34 +3008,172 @@ if sport == "NBA":
 
                 </div>
 
+                <!-- SPORTSBOOK ODDS ROW -->
+                <div style="
+                    background:rgba(15,23,42,0.9);
+                    border-radius:14px;
+                    padding:12px 14px;
+                    border:1px solid rgba(148,163,184,0.35);
+                ">
+                    <div style="color:#94a3b8; font-size:0.88rem; margin-bottom:6px;">
+                        Sportsbook Snapshot (best available)
+                    </div>
+
+                    <div style="display:flex; gap:16px; font-size:0.9rem;">
+
+                        <div style="flex:1;">
+                            <div style="color:#9ca3af; font-size:0.8rem; text-transform:uppercase; letter-spacing:0.06em;">
+                                Moneyline
+                            </div>
+                            <div>
+                                {home_ml_text}<br>
+                                {away_ml_text}
+                            </div>
+                        </div>
+
+                        <div style="flex:1;">
+                            <div style="color:#9ca3af; font-size:0.8rem; text-transform:uppercase; letter-spacing:0.06em;">
+                                Spread
+                            </div>
+                            <div>
+                                {spread_text}
+                            </div>
+                        </div>
+
+                        <div style="flex:1;">
+                            <div style="color:#9ca3af; font-size:0.8rem; text-transform:uppercase; letter-spacing:0.06em;">
+                                Total
+                            </div>
+                            <div>
+                                {total_text}
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
             </div>
             """
 
-            components.html(html, height=420)
+            components.html(html, height=480)
 
         # ==========================================================
         # RENDER ALL GAMES
         # ==========================================================
         for _, row in df.iterrows():
+            home = row["home_team"]
+            away = row["visitor_team"]
 
+            # Base analytics
+            home_logo = logo(home)
+            away_logo = logo(away)
+
+            home_win = fmt(row.get("home_win_pct"))
+            away_win = fmt(row.get("visitor_win_pct"))
+            home_pts = fmt(row.get("exp_home_points"))
+            away_pts = fmt(row.get("exp_visitor_points"))
+            tot_pts = fmt(row.get("exp_total_points"))
+            margin = fmt(row.get("predicted_margin"), plus=True)
+            pace = fmt(row.get("pace_proxy"))
+            pace_delta = fmt(row.get("pace_delta"), plus=True)
+            home_l5 = fmt(row.get("home_l5_diff"), plus=True)
+            away_l5 = fmt(row.get("visitor_l5_diff"), plus=True)
+
+            # ------------------------------------------
+            # Default sportsbook texts
+            # ------------------------------------------
+            home_ml_text = "No ML odds found."
+            away_ml_text = ""
+            spread_text = "No spread odds found."
+            total_text = "No total odds found."
+
+            if not odds_df.empty:
+                g = odds_df[
+                    (odds_df["home_team"] == home) & (odds_df["away_team"] == away)
+                ].copy()
+
+                if not g.empty:
+                    # MONEYLINE (market = 'h2h')
+                    ml = g[g["market"].str.lower() == "h2h"].copy()
+                    if not ml.empty:
+                        # Best home ML
+                        ml_home = ml[ml["outcome"] == home].copy()
+                        if not ml_home.empty:
+                            ml_home["dec"] = ml_home["price"].apply(american_to_decimal)
+                            ml_home = ml_home.dropna(subset=["dec"])
+                            if not ml_home.empty:
+                                best_home = ml_home.sort_values("dec", ascending=False).iloc[0]
+                                home_ml_text = f'{home}: <b>{int(best_home["price"])}</b> ({best_home["bookmaker"]})'
+                        # Best away ML
+                        ml_away = ml[ml["outcome"] == away].copy()
+                        if not ml_away.empty:
+                            ml_away["dec"] = ml_away["price"].apply(american_to_decimal)
+                            ml_away = ml_away.dropna(subset=["dec"])
+                            if not ml_away.empty:
+                                best_away = ml_away.sort_values("dec", ascending=False).iloc[0]
+                                away_ml_text = f'{away}: <b>{int(best_away["price"])}</b> ({best_away["bookmaker"]})'
+
+                    # SPREADS (market = 'spreads')
+                    sp = g[g["market"].str.lower() == "spreads"].copy()
+                    if not sp.empty:
+                        # favor home spreads (outcome == home)
+                        sp_home = sp[sp["outcome"] == home].copy()
+                        if not sp_home.empty:
+                            # pick line with best decimal odds
+                            sp_home["dec"] = sp_home["price"].apply(american_to_decimal)
+                            sp_home = sp_home.dropna(subset=["dec"])
+                            if not sp_home.empty:
+                                best_sp = sp_home.sort_values("dec", ascending=False).iloc[0]
+                                spread_text = (
+                                    f'{home} {best_sp["line"]:+.1f} '
+                                    f'(<b>{int(best_sp["price"])}</b>, {best_sp["bookmaker"]})'
+                                )
+                        else:
+                            # fallback: any spread row
+                            sp["dec"] = sp["price"].apply(american_to_decimal)
+                            sp = sp.dropna(subset=["dec"])
+                            if not sp.empty:
+                                best_sp = sp.sort_values("dec", ascending=False).iloc[0]
+                                spread_text = (
+                                    f'{best_sp["outcome"]} {best_sp["line"]:+.1f} '
+                                    f'(<b>{int(best_sp["price"])}</b>, {best_sp["bookmaker"]})'
+                                )
+
+                    # TOTALS (market = 'totals')
+                    tot = g[g["market"].str.lower() == "totals"].copy()
+                    if not tot.empty:
+                        tot["dec"] = tot["price"].apply(american_to_decimal)
+                        tot = tot.dropna(subset=["dec"])
+                        if not tot.empty:
+                            best_tot = tot.sort_values("dec", ascending=False).iloc[0]
+                            # outcome might be 'Over' / 'Under' or similar
+                            outcome = str(best_tot.get("outcome") or "").title() or "Total"
+                            total_text = (
+                                f'{outcome} {best_tot["line"]:.1f} '
+                                f'(<b>{int(best_tot["price"])}</b>, {best_tot["bookmaker"]})'
+                            )
+
+            # Render the card with analytics + odds
             render_game_card(
-                home=row["home_team"],
-                away=row["visitor_team"],
-                home_logo=logo(row["home_team"]),
-                away_logo=logo(row["visitor_team"]),
-                home_pts=fmt(row["exp_home_points"]),
-                away_pts=fmt(row["exp_visitor_points"]),
-                home_win=fmt(row["home_win_pct"]),
-                away_win=fmt(row["visitor_win_pct"]),
-                tot_pts=fmt(row["exp_total_points"]),
-                margin=fmt(row["predicted_margin"], plus=True),
-                pace=fmt(row["pace_proxy"]),
-                pace_delta=fmt(row["pace_delta"], plus=True),
-                home_l5=fmt(row["home_l5_diff"], plus=True),
-                away_l5=fmt(row["visitor_l5_diff"], plus=True)
+                home=home,
+                away=away,
+                home_logo=home_logo,
+                away_logo=away_logo,
+                home_pts=home_pts,
+                away_pts=away_pts,
+                home_win=home_win,
+                away_win=away_win,
+                tot_pts=tot_pts,
+                margin=margin,
+                pace=pace,
+                pace_delta=pace_delta,
+                home_l5=home_l5,
+                away_l5=away_l5,
+                home_ml_text=home_ml_text,
+                away_ml_text=away_ml_text,
+                spread_text=spread_text,
+                total_text=total_text,
             )
-
-
 
     # ------------------------------------------------------
     # TAB 3 — EV LEADERBOARD

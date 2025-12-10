@@ -2782,7 +2782,7 @@ if sport == "NBA":
         )
 
     # ------------------------------------------------------
-    # TAB 2 — GAME LINES + MODEL EV (with Responsive + Compact Mobile Layout)
+    # TAB 2 — GAME LINES + MODEL EV (Responsive + Odds)
     # ------------------------------------------------------
     import streamlit.components.v1 as components
 
@@ -2833,7 +2833,7 @@ if sport == "NBA":
             return TEAM_LOGOS_BASE64.get(code, "")
 
         # ----------------------------------------------
-        # Load odds from BigQuery
+        # Load odds from BigQuery (correct column names)
         # ----------------------------------------------
         @st.cache_data(ttl=300)
         def load_game_odds():
@@ -2874,7 +2874,7 @@ if sport == "NBA":
             return 1 + 100 / abs(odds)
 
         # ==============================================
-        # RESPONSIVE + COMPACT CARD HTML RENDERER
+        # RESPONSIVE + MOBILE-COMPACT HTML CARD RENDERER
         # ==============================================
         def render_game_card(
             home, away,
@@ -2893,7 +2893,7 @@ if sport == "NBA":
             /* ===========================
             MOBILE COMPACT CARD STYLES
             =========================== */
-            @media (max-width: 650px) {
+            @media (max-width: 650px) {{
 
                 .game-card-wrapper {{
                     padding: 14px !important;
@@ -2947,7 +2947,7 @@ if sport == "NBA":
                 .game-card-wrapper * {{
                     line-height: 1.25 !important;
                 }}
-            }
+            }}
             </style>
 
             <div class="game-card-wrapper" style="
@@ -3159,6 +3159,7 @@ if sport == "NBA":
                 home_ml_text, away_ml_text,
                 spread_text, total_text
             )
+
 
 
 

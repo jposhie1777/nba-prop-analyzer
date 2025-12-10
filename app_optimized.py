@@ -2782,7 +2782,7 @@ if sport == "NBA":
         )
 
     # ------------------------------------------------------
-    # TAB 2 — GAME LINES + MODEL EV (with Sportsbook Odds)
+    # TAB 2 — GAME LINES + MODEL EV (with Responsive + Compact Mobile Layout)
     # ------------------------------------------------------
     import streamlit.components.v1 as components
 
@@ -2796,7 +2796,7 @@ if sport == "NBA":
         df = game_report_df.copy()
 
         # ----------------------------------------------
-        # Make numeric fields safe
+        # Fix numeric types
         # ----------------------------------------------
         numeric_cols = [
             "home_team_strength", "visitor_team_strength",
@@ -2814,7 +2814,7 @@ if sport == "NBA":
                 df[c] = pd.to_numeric(df[c], errors="coerce")
 
         # ----------------------------------------------
-        # Format helper
+        # Safe formatting helper
         # ----------------------------------------------
         def fmt(x, decimals=1, plus=False):
             try:
@@ -2826,9 +2826,9 @@ if sport == "NBA":
                 return "—"
 
         # ----------------------------------------------
-        # Get base64 logo
+        # Logo helper
         # ----------------------------------------------
-        def logo(team_name: str) -> str:
+        def logo(team_name):
             code = TEAM_NAME_TO_CODE.get(team_name, "")
             return TEAM_LOGOS_BASE64.get(code, "")
 
@@ -2862,7 +2862,7 @@ if sport == "NBA":
             odds_df = pd.DataFrame()
 
         # ----------------------------------------------
-        # American → Decimal
+        # American odds → decimal conversion
         # ----------------------------------------------
         def american_to_decimal(odds):
             try:
@@ -2871,12 +2871,11 @@ if sport == "NBA":
                 return None
             if odds > 0:
                 return 1 + odds / 100
-            else:
-                return 1 + 100 / abs(odds)
+            return 1 + 100 / abs(odds)
 
-        # ------------------------------------------------------
-        # Modern HTML Game Card Renderer (components.html)
-        # ------------------------------------------------------
+        # ==============================================
+        # RESPONSIVE + COMPACT CARD HTML RENDERER
+        # ==============================================
         def render_game_card(
             home, away,
             home_logo, away_logo,
@@ -2888,9 +2887,71 @@ if sport == "NBA":
             home_ml_text, away_ml_text,
             spread_text, total_text,
         ):
+
             html = f"""
-            <div style="
-                background: radial-gradient(circle at top left,#1e293b,#0f172a);
+            <style>
+            /* ===========================
+            MOBILE COMPACT CARD STYLES
+            =========================== */
+            @media (max-width: 650px) {
+
+                .game-card-wrapper {{
+                    padding: 14px !important;
+                    border-radius: 16px !important;
+                    margin-bottom: 16px !important;
+                }}
+
+                .game-headline-row {{
+                    flex-direction: column !important;
+                    text-align: center !important;
+                    gap: 12px !important;
+                }}
+
+                .game-team-block img {{
+                    width: 32px !important;
+                    height: 32px !important;
+                }}
+
+                .game-team-block div {{
+                    font-size: 0.88rem !important;
+                }}
+
+                .game-model-score {{
+                    width: 100% !important;
+                    text-align: center !important;
+                    font-size: 0.92rem !important;
+                }}
+
+                .game-analytics-row {{
+                    flex-direction: column !important;
+                    gap: 12px !important;
+                }}
+
+                .game-analytics-col {{
+                    width: 100% !important;
+                    padding: 8px !important;
+                }}
+
+                .game-odds-row {{
+                    flex-direction: column !important;
+                    gap: 10px !important;
+                    padding: 10px !important;
+                }}
+
+                .game-odds-col {{
+                    width: 100% !important;
+                    padding: 6px 0 !important;
+                    font-size: 0.87rem !important;
+                }}
+
+                .game-card-wrapper * {{
+                    line-height: 1.25 !important;
+                }}
+            }
+            </style>
+
+            <div class="game-card-wrapper" style="
+                background: radial-gradient(circle at top left, #1e293b, #0f172a);
                 border-radius:20px;
                 padding:22px;
                 margin-bottom:22px;
@@ -2900,24 +2961,31 @@ if sport == "NBA":
                 box-shadow:0 20px 55px rgba(15,23,42,0.75);
             ">
 
-                <!-- TEAMS + SCORE -->
-                <div style="display:flex;justify-content:space-between;align-items:center;">
+                <!-- HEADLINE -->
+                <div class="game-headline-row" style="
+                    display:flex;
+                    justify-content:space-between;
+                    align-items:center;
+                    flex-wrap:wrap;
+                ">
 
-                    <div style="display:flex;align-items:center;gap:14px;">
-                        <div style="text-align:center;">
+                    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+
+                        <div class="game-team-block" style="text-align:center;">
                             <img src="{home_logo}" width="44" style="border-radius:6px;">
                             <div style="font-size:1rem;font-weight:700;">{home}</div>
                         </div>
 
                         <div style="font-size:1.4rem;font-weight:700;color:#e5e7eb;">vs</div>
 
-                        <div style="text-align:center;">
+                        <div class="game-team-block" style="text-align:center;">
                             <img src="{away_logo}" width="44" style="border-radius:6px;">
                             <div style="font-size:1rem;font-weight:700;">{away}</div>
                         </div>
+
                     </div>
 
-                    <div style="text-align:right;">
+                    <div class="game-model-score" style="text-align:right;min-width:120px;">
                         <div style="color:#94a3b8;font-size:0.9rem;">Model Score</div>
                         <div style="font-size:1rem;font-weight:600;">
                             {home_pts} – {away_pts}
@@ -2928,37 +2996,37 @@ if sport == "NBA":
 
                 <hr style="border:0;border-top:1px solid rgba(255,255,255,0.08);margin:16px 0;">
 
-                <!-- ANALYTICS GRID -->
-                <div style="display:flex;gap:20px;margin-bottom:14px;">
+                <!-- ANALYTICS -->
+                <div class="game-analytics-row" style="display:flex;gap:20px;flex-wrap:wrap;">
 
-                    <div style="flex:1;">
-                        <div style="color:#94a3b8;font-size:0.9rem;">Win Probabilities</div>
+                    <div class="game-analytics-col" style="flex:1;min-width:180px;">
+                        <div style="color:#94a3b8;">Win Probabilities</div>
                         <div style="background:rgba(255,255,255,0.08);padding:10px;border-radius:12px;margin-top:4px;">
                             {home}: <b>{home_win}%</b><br>
                             {away}: <b>{away_win}%</b>
                         </div>
                     </div>
 
-                    <div style="flex:1;">
-                        <div style="color:#94a3b8;font-size:0.9rem;">Projected Total</div>
+                    <div class="game-analytics-col" style="flex:1;min-width:180px;">
+                        <div style="color:#94a3b8;">Projected Total</div>
                         <div style="background:rgba(255,255,255,0.08);padding:10px;border-radius:12px;margin-top:4px;">
                             <b>{tot_pts}</b> points
                         </div>
 
-                        <div style="color:#94a3b8;margin-top:10px;font-size:0.9rem;">Spread (model)</div>
+                        <div style="color:#94a3b8;margin-top:10px;">Spread (model)</div>
                         <div style="background:rgba(255,255,255,0.08);padding:10px;border-radius:12px;margin-top:4px;">
                             {home} <b>{margin}</b>
                         </div>
                     </div>
 
-                    <div style="flex:1;">
-                        <div style="color:#94a3b8;font-size:0.9rem;">Pace Projection</div>
+                    <div class="game-analytics-col" style="flex:1;min-width:180px;">
+                        <div style="color:#94a3b8;">Pace Projection</div>
                         <div style="background:rgba(255,255,255,0.08);padding:10px;border-radius:12px;margin-top:4px;">
                             Pace: <b>{pace}</b><br>
                             Δ vs Avg: <b>{pace_delta}</b>
                         </div>
 
-                        <div style="color:#94a3b8;margin-top:10px;font-size:0.9rem;">Last 5 Point Diff</div>
+                        <div style="color:#94a3b8;margin-top:10px;">Last 5 Point Diff</div>
                         <div style="background:rgba(255,255,255,0.08);padding:10px;border-radius:12px;margin-top:4px;">
                             {home}: <b>{home_l5}</b><br>
                             {away}: <b>{away_l5}</b>
@@ -2968,50 +3036,49 @@ if sport == "NBA":
                 </div>
 
                 <!-- ODDS -->
-                <div style="
+                <div class="game-odds-row" style="
                     background:rgba(15,23,42,0.9);
                     border-radius:14px;
                     padding:14px;
                     border:1px solid rgba(148,163,184,0.35);
+                    margin-top:12px;
+                    display:flex;
+                    gap:16px;
+                    flex-wrap:wrap;
                 ">
-                    <div style="color:#94a3b8;font-size:0.88rem;margin-bottom:6px;">
-                        Sportsbook Snapshot (best available)
+
+                    <div class="game-odds-col" style="flex:1;min-width:160px;">
+                        <div style="color:#9ca3af;font-size:0.8rem;text-transform:uppercase;">
+                            Moneyline
+                        </div>
+                        {home_ml_text}<br>{away_ml_text}
                     </div>
 
-                    <div style="display:flex;gap:16px;font-size:0.9rem;">
-
-                        <div style="flex:1;">
-                            <div style="color:#9ca3af;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em;">
-                                Moneyline
-                            </div>
-                            {home_ml_text}<br>{away_ml_text}
+                    <div class="game-odds-col" style="flex:1;min-width:160px;">
+                        <div style="color:#9ca3af;font-size:0.8rem;text-transform:uppercase;">
+                            Spread
                         </div>
-
-                        <div style="flex:1;">
-                            <div style="color:#9ca3af;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em;">
-                                Spread
-                            </div>
-                            {spread_text}
-                        </div>
-
-                        <div style="flex:1;">
-                            <div style="color:#9ca3af;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em;">
-                                Total
-                            </div>
-                            {total_text}
-                        </div>
-
+                        {spread_text}
                     </div>
+
+                    <div class="game-odds-col" style="flex:1;min-width:160px;">
+                        <div style="color:#9ca3af;font-size:0.8rem;text-transform:uppercase;">
+                            Total
+                        </div>
+                        {total_text}
+                    </div>
+
                 </div>
 
             </div>
             """
-            components.html(html, height=500)
+            components.html(html, height=570)
 
-        # ------------------------------------------------------
-        # LOOP THROUGH GAMES
-        # ------------------------------------------------------
+        # ===============================================
+        # RENDER EACH GAME CARD
+        # ===============================================
         for _, row in df.iterrows():
+
             home = row["home_team"]
             away = row["visitor_team"]
 
@@ -3029,15 +3096,13 @@ if sport == "NBA":
             home_l5 = fmt(row.get("home_l5_diff"), plus=True)
             away_l5 = fmt(row.get("visitor_l5_diff"), plus=True)
 
-            # DEFAULT ODDS TEXTS
+            # Default odds text
             home_ml_text = "No ML odds found."
             away_ml_text = ""
             spread_text = "No spread odds found."
             total_text = "No total odds found."
 
-            # ------------------------------
-            # ODDS LOOKUP
-            # ------------------------------
+            # Lookup odds
             if not odds_df.empty:
                 g = odds_df[
                     (odds_df["home_team"] == home) &
@@ -3045,21 +3110,20 @@ if sport == "NBA":
                 ].copy()
 
                 if not g.empty:
+
                     # MONEYLINE
-                    ml = g[g["market"].str.lower() == "h2h"]
+                    ml = g[g["market"].str.lower() == "h2h"].copy()
                     if not ml.empty:
-                        # best for home
-                        ml_home = ml[ml["outcome"] == home].copy()
-                        ml_home["dec"] = ml_home["price"].apply(american_to_decimal)
-                        ml_home = ml_home.dropna(subset=["dec"])
+                        ml["dec"] = ml["price"].apply(american_to_decimal)
+
+                        # best home ML
+                        ml_home = ml[ml["outcome"] == home].dropna(subset=["dec"])
                         if not ml_home.empty:
                             best = ml_home.sort_values("dec", ascending=False).iloc[0]
                             home_ml_text = f'{home}: <b>{int(best["price"])}</b> ({best["bookmaker"]})'
 
-                        # best for away
-                        ml_away = ml[ml["outcome"] == away].copy()
-                        ml_away["dec"] = ml_away["price"].apply(american_to_decimal)
-                        ml_away = ml_away.dropna(subset=["dec"])
+                        # best away ML
+                        ml_away = ml[ml["outcome"] == away].dropna(subset=["dec"])
                         if not ml_away.empty:
                             best = ml_away.sort_values("dec", ascending=False).iloc[0]
                             away_ml_text = f'{away}: <b>{int(best["price"])}</b> ({best["bookmaker"]})'
@@ -3069,27 +3133,21 @@ if sport == "NBA":
                     if not sp.empty:
                         sp["dec"] = sp["price"].apply(american_to_decimal)
                         sp = sp.dropna(subset=["dec"])
-                        if not sp.empty:
-                            best = sp.sort_values("dec", ascending=False).iloc[0]
-                            spread_text = (
-                                f'{best["outcome"]} {best["line"]:+.1f} '
-                                f'(<b>{int(best["price"])}</b>, {best["bookmaker"]})'
-                            )
+                        best = sp.sort_values("dec", ascending=False).iloc[0]
+                        spread_text = f'{best["outcome"]} {best["line"]:+.1f} (<b>{int(best["price"])}</b>, {best["bookmaker"]})'
 
-                    # TOTAL
+                    # TOTALS
                     tot = g[g["market"].str.lower() == "totals"].copy()
                     if not tot.empty:
                         tot["dec"] = tot["price"].apply(american_to_decimal)
                         tot = tot.dropna(subset=["dec"])
-                        if not tot.empty:
-                            best = tot.sort_values("dec", ascending=False).iloc[0]
-                            outcome = best["outcome"].title()
-                            total_text = (
-                                f'{outcome} {best["line"]:.1f} '
-                                f'(<b>{int(best["price"])}</b>, {best["bookmaker"]})'
-                            )
+                        best = tot.sort_values("dec", ascending=False).iloc[0]
+                        total_text = (
+                            f'{best["outcome"].title()} {best["line"]:.1f} '
+                            f'(<b>{int(best["price"])}</b>, {best["bookmaker"]})'
+                        )
 
-            # RENDER CARD
+            # Render the card
             render_game_card(
                 home, away,
                 home_logo, away_logo,
@@ -3101,6 +3159,7 @@ if sport == "NBA":
                 home_ml_text, away_ml_text,
                 spread_text, total_text
             )
+
 
 
     # ------------------------------------------------------

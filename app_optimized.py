@@ -2396,19 +2396,48 @@ def render_prop_cards(
             # ======================================================
             #                EXPANDER UI START
             # ======================================================
-            # ---- SHOW FULL CARD ALWAYS ----
+            # ---------------------------
+            # Unique key for this card
+            # ---------------------------
+            expand_key = f"{page_key}_expand_{player}_{row.get('market')}_{row.get('line')}_{idx}"
+            
+            # ---------------------------
+            # TAP TARGET (INVISIBLE BUTTON OVER CARD)
+            # ---------------------------
+            tap_label = f"tap_area_{expand_key}"
+            
+            # Render full card normally
             st.markdown(card_html, unsafe_allow_html=True)
             
-            # ---- EXPANDER BELOW THE CARD ----
-            with st.expander("📊 More Analytics", expanded=False):
+            # Invisible button ON TOP OF CARD
+            clicked = st.button(" ", key=tap_label, help=None)
             
-                st.markdown("### Additional Analytics (Placeholder)")
+            # If tapped → toggle expanded state
+            if clicked:
+                toggle_expander(expand_key)
+            
+            # ---------------------------
+            # EXPANDED SECTION (HIDDEN UNTIL CARD IS TAPPED)
+            # ---------------------------
+            if st.session_state.get(expand_key, False):
+            
+                st.markdown(
+                    """
+                    <div style='padding:10px 14px; margin-top:-10px; 
+                                 background:rgba(255,255,255,0.05); 
+                                 border-radius:10px; border:1px solid rgba(255,255,255,0.1);'>
+                    """,
+                    unsafe_allow_html=True
+                )
+            
+                st.markdown("### 📊 Additional Analytics (Placeholder)")
                 st.write("""
                 - Trend model output: **Coming soon**
                 - Matchup difficulty: **Placeholder**
                 - Usage trend: **Placeholder**
                 - Pace factor: **Placeholder**
                 """)
+            
                 st.markdown("---")
             
                 # --- SAVE BET BUTTON ---
@@ -2426,8 +2455,8 @@ def render_prop_cards(
                 if st.button("💾 Save Bet", key=btn_key):
                     save_bet_for_user(user_id, bet_payload)
                     st.success(f"Saved: {player} {pretty_market} {bet_type} {line}")
-
-    st.markdown("</div>", unsafe_allow_html=True)
+            
+                st.markdown("</div>", unsafe_allow_html=True)
 
 
 

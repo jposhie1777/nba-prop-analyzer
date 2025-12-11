@@ -925,18 +925,24 @@ st.markdown(
 
 st.markdown("""
 <style>
-.card-tap-btn > button {
+
+.card-tap-btn .stButton > button {
     background: transparent !important;
     border: none !important;
     color: transparent !important;
+    box-shadow: none !important;
     padding: 0 !important;
-    height: 0px !important;
+    margin: 0 !important;
     width: 100% !important;
-    cursor: pointer;
+    height: 20px !important;   /* keeps it clickable but invisible */
+    min-height: 0 !important;
+    border-radius: 0 !important;
 }
-.card-tap-btn > button:hover {
-    opacity: 0.1;
+
+.card-tap-btn .stButton > button:hover {
+    background: transparent !important;
 }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -2434,11 +2440,9 @@ def render_prop_cards(
             container = st.container()
             
             with st.container():
-                st.markdown(
-                    "<div style='background:red; padding:10px; color:white;'>DEBUG BUTTON AREA BELOW</div>",
-                    unsafe_allow_html=True
-                )
-                clicked = st.button("DEBUG TAP BUTTON", key=tap_label)
+                st.markdown('<div class="card-tap-btn">', unsafe_allow_html=True)
+                clicked = st.button("tap", key=tap_label)
+                st.markdown('</div>', unsafe_allow_html=True)
             
             if clicked:
                 toggle_expander(expand_key)

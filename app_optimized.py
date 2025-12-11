@@ -923,6 +923,23 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+st.markdown("""
+<style>
+.card-tap-btn > button {
+    background: transparent !important;
+    border: none !important;
+    color: transparent !important;
+    padding: 0 !important;
+    height: 0px !important;
+    width: 100% !important;
+    cursor: pointer;
+}
+.card-tap-btn > button:hover {
+    opacity: 0.1;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # ------------------------------------------------------
 # AG-GRID MOBILE FIX (separate block)
 # ------------------------------------------------------
@@ -1781,7 +1798,15 @@ injury_df = inj_fixed[
     ]
 ]
 
-
+# ==========================================
+# EXPANDER TOGGLE HELPER (required for Mode C)
+# ==========================================
+def toggle_expander(key: str):
+    if key not in st.session_state:
+        st.session_state[key] = True
+    else:
+        st.session_state[key] = not st.session_state[key]
+        
 # ------------------------------------------------------
 # WOWY HELPERS
 # ------------------------------------------------------
@@ -2397,38 +2422,34 @@ def render_prop_cards(
             #                EXPANDER UI START
             # ======================================================
             # ---------------------------
-            # Unique key for this card
+            # CARD TAP LOGIC
             # ---------------------------
             expand_key = f"{page_key}_expand_{player}_{row.get('market')}_{row.get('line')}_{idx}"
             
-            # ---------------------------
-            # TAP TARGET (INVISIBLE BUTTON OVER CARD)
-            # ---------------------------
-            tap_label = f"tap_area_{expand_key}"
-            
-            # Render full card normally
+            # FULL CARD ALWAYS VISIBLE
             st.markdown(card_html, unsafe_allow_html=True)
             
-            # Invisible button ON TOP OF CARD
-            clicked = st.button(" ", key=tap_label, help=None)
+            # INVISIBLE TAP BUTTON OVER THE CARD
+            tap_label = f"tap_{expand_key}"
+            container = st.container()
             
-            # If tapped → toggle expanded state
+            with container:
+                st.markdown('<div class="card-tap-btn">', unsafe_allow_html=True)
+                clicked = st.button(" ", key=tap_label)
+                st.markdown('</div>', unsafe_allow_html=True)
+            
             if clicked:
                 toggle_expander(expand_key)
             
-            # ---------------------------
-            # EXPANDED SECTION (HIDDEN UNTIL CARD IS TAPPED)
-            # ---------------------------
+            # EXPANDED CONTENT
             if st.session_state.get(expand_key, False):
             
-                st.markdown(
-                    """
-                    <div style='padding:10px 14px; margin-top:-10px; 
-                                 background:rgba(255,255,255,0.05); 
-                                 border-radius:10px; border:1px solid rgba(255,255,255,0.1);'>
-                    """,
-                    unsafe_allow_html=True
-                )
+                st.markdown("""
+                    <div style='padding:10px 14px; margin-top:-10px;
+                                background:rgba(255,255,255,0.05);
+                                border-radius:10px;
+                                border:1px solid rgba(255,255,255,0.1);'>
+                """, unsafe_allow_html=True)
             
                 st.markdown("### 📊 Additional Analytics (Placeholder)")
                 st.write("""
@@ -2440,7 +2461,7 @@ def render_prop_cards(
             
                 st.markdown("---")
             
-                # --- SAVE BET BUTTON ---
+                # SAVE BET BUTTON
                 bet_payload = {
                     "player": player,
                     "market": row.get("market"),

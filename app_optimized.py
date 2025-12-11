@@ -1288,26 +1288,18 @@ SPORTSBOOK_LOGOS_BASE64 = {
     for name, path in SPORTSBOOK_LOGOS.items()
 }
 
-def normalize_name(name: str) -> str:
-    if not name:
+# ------------------------------------------------------
+# Strip mascots from full team names
+# ------------------------------------------------------
+def strip_mascot(name: str):
+    if not isinstance(name, str):
         return ""
-    name = name.lower()
+    parts = name.split()
+    if len(parts) <= 1:
+        return name.lower()
 
-    # remove mascots (anything after last space IF mascot is recognized)
-    mascots = [
-        "bison", "bears", "bulldogs", "hawks", "eagles", "pirates", "mountaineers",
-        "vaqueros", "jaguars", "mavericks", "bisons", "hornets", "huskies", "orange",
-        "tigers", "cyclones", "catamounts"
-    ]
-
-    for m in mascots:
-        if name.endswith(" " + m):
-            name = name.rsplit(" ", 1)[0]
-
-    # cleanup
-    name = re.sub(r"[^a-z0-9 ]", "", name)
-    name = name.strip()
-    return name
+    # remove last word (assumed mascot)
+    return " ".join(parts[:-1]).lower()
 
 # ------------------------------------------------------
 # NCAA TEAM LOGO FETCHING (Fuzzy Matching)
@@ -1361,17 +1353,28 @@ def fuzzy_match_team(raw_name: str):
     )
     return match if score >= 70 else None
 
-def get_ncaa_logo(team_name: str):
-    """Return the ESPN team logo URL using fuzzy matching."""
+def get_ncaa_logo(team_name: str) -> str:
+    """Return the ESPN logo URL for a team, using fuzzy matching and mascot stripping."""
     if not team_name:
-        return "https://via.placeholder.com/64?text=?"
+        return "/static/missing_logo.png"
 
-    matched = fuzzy_match_team(team_name)
-    if not matched:
-        return "https://via.placeholder.com/64?text=?"
+    # normalize
+    clean = normalize_name(team_name)
 
-    slug = matched.lower().replace(" ", "-")
-    return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{slug}.png"
+    # remove mascots ("Pirates", "Mountaineers", "Hokies", etc.)
+    clean = strip_mascot(clean)
+
+    # Fuzzy match against dictionary keys
+    match, score, _ = process.extractOne(clean, NCAA_SCHOOL_NAMES, scorer=fuzz.WRatio)
+
+    if score < 70:
+        return "/static/missing_logo.png"
+
+    espn_id = NCAA_TEAM_ID_MAP.get(match)
+    if not espn_id:
+        return "/static/missing_logo.png"
+
+    return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{espn_id}.png"
 
 # ------------------------------------------------------
 # NCAA MEN'S BASKETBALL — ESPN TEAM LOGO SUPPORT
@@ -2822,27 +2825,18 @@ def build_injury_lookup():
 # Build lookup at load
 build_injury_lookup()
 
+# ------------------------------------------------------
+# RENDER NCAA OVERVIEW CARD (clean, mobile friendly)
+# ------------------------------------------------------
 def render_ncaab_overview_card(row):
-    """Render a clean NCAA game card with logos + expandable analytics."""
 
-    # -----------------------------
-    # Extract values
-    # -----------------------------
+    # Extract fields
     home = row.get("home_team", "")
     away = row.get("away_team", "")
 
-    # New Logo Matching
+    # Logos (fuzzy matched)
     home_logo = get_ncaa_logo(home)
     away_logo = get_ncaa_logo(away)
-
-    # Game ID for expander
-    game_id = (
-        str(row.get("game", ""))
-        .replace(" ", "")
-        .replace("@", "")
-        .replace("-", "")
-        .lower()
-    )
 
     # Time formatting
     start_time = row.get("start_time")
@@ -2859,143 +2853,147 @@ def render_ncaab_overview_card(row):
     away_spread = row.get("away_spread", "—")
     total_line = row.get("total_line", "—")
 
-    # Model Helpers
+    # Model projections
     def fmt(x):
         try:
             return f"{float(x):.1f}"
         except:
             return "—"
 
-    proj_home = fmt(row.get("proj_home_points"))
-    proj_away = fmt(row.get("proj_away_points"))
-    proj_total = fmt(row.get("proj_total_points"))
-    proj_margin = fmt(row.get("proj_margin"))
+    # Unique toggle ID
+    card_id = normalize_name(home + away).replace(" ", "")
 
-    # -----------------------------
-    # HTML Card
-    # -----------------------------
+    # --------------------------
+    # Card HTML
+    # --------------------------
     html = f"""
     <style>
-        .ncaab-card {{
-            background: #111827;
+        .card-wrapper {{
+            background: rgba(255,255,255,0.03);
+            border-radius: 18px;
             padding: 20px;
-            border-radius: 14px;
             margin-bottom: 22px;
-            border: 1px solid rgba(255,255,255,0.08);
-            color: white;
+            border: 1px solid rgba(255,255,255,0.07);
             font-family: Inter, sans-serif;
         }}
-        .ncaab-header {{
+
+        .card-header {{
             display: flex;
             justify-content: space-between;
             align-items: center;
         }}
+
         .team-block {{
-            flex: 1;
             text-align: center;
+            width: 45%;
         }}
+
         .team-logo {{
-            width: 54px;
-            height: 54px;
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
             object-fit: contain;
-            border-radius: 8px;
-            background: rgba(255,255,255,0.05);
-            padding: 4px;
+            background: rgba(0,0,0,0.15);
         }}
+
         .team-name {{
-            margin-top: 6px;
+            margin-top: 8px;
+            font-size: 1.05rem;
             font-weight: 700;
-            font-size: 1rem;
+            color: #fff;
         }}
-        .vs {{
-            flex: 0.3;
-            text-align: center;
+
+        .vs-label {{
+            font-size: 1.15rem;
             font-weight: 700;
-            color: #9CA3AF;
-            font-size: 1.2rem;
+            color: #9ca3af;
         }}
-        .expand-btn {{
+
+        .start-time {{
+            margin-top: 12px;
+            color: #9ca3af;
+            font-size: 0.9rem;
+        }}
+
+        .toggle-btn {{
             margin-top: 14px;
+            padding: 10px 18px;
             background: #2563EB;
             color: white;
-            padding: 8px 20px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-        }}
-        .expandable {{
-            max-height: 0px;
-            overflow: hidden;
-            transition: max-height 0.3s ease;
-        }}
-        .expanded {{
-            max-height: 900px;
-        }}
-        .data-box {{
-            margin-top: 12px;
-            background: rgba(255,255,255,0.06);
-            padding: 12px;
             border-radius: 10px;
+            cursor: pointer;
+            border: none;
+            font-size: 0.9rem;
+        }}
+
+        .expand-box {{
+            margin-top: 14px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 14px;
+            display: none;
+        }}
+
+        .expand-box.visible {{
+            display: block;
+        }}
+
+        .section-title {{
+            font-weight: 700;
+            margin-top: 6px;
+            color: #fff;
+        }}
+
+        .data-line {{
+            color: #d1d5db;
+            margin: 2px 0;
         }}
     </style>
 
-    <div class="ncaab-card">
+    <div class="card-wrapper">
 
-        <div class="ncaab-header">
+        <div class="card-header">
             <div class="team-block">
-                <img src="{home_logo}" class="team-logo">
+                <img class="team-logo" src="{home_logo}">
                 <div class="team-name">{home}</div>
             </div>
 
-            <div class="vs">vs</div>
+            <div class="vs-label">vs</div>
 
             <div class="team-block">
-                <img src="{away_logo}" class="team-logo">
+                <img class="team-logo" src="{away_logo}">
                 <div class="team-name">{away}</div>
             </div>
         </div>
 
-        <div style="margin-top: 6px; font-size: 0.85rem; color: #9CA3AF;">
-            {start_str}
-        </div>
+        <div class="start-time">{start_str}</div>
 
-        <button class="expand-btn" onclick="toggleNCAAB('{game_id}')">
+        <button class="toggle-btn" onclick="document.getElementById('box-{card_id}').classList.toggle('visible')">
             Show Details
         </button>
 
-        <div id="box-{game_id}" class="expandable">
+        <div id="box-{card_id}" class="expand-box">
 
-            <div class="data-box">
-                <b>Moneyline</b><br>
-                {home}: {home_ml}<br>
-                {away}: {away_ml}<br><br>
+            <div class="section-title">Moneyline</div>
+            <div class="data-line">{home}: {home_ml}</div>
+            <div class="data-line">{away}: {away_ml}</div>
 
-                <b>Spread</b><br>
-                {home}: {home_spread}<br>
-                {away}: {away_spread}<br><br>
+            <div class="section-title" style="margin-top:10px;">Spread</div>
+            <div class="data-line">{home}: {home_spread}</div>
+            <div class="data-line">{away}: {away_spread}</div>
 
-                <b>Total:</b> {total_line}
-            </div>
+            <div class="section-title" style="margin-top:10px;">Total</div>
+            <div class="data-line">Line: {total_line}</div>
 
-            <div class="data-box">
-                <b>Model Projections</b><br>
-                {home}: {proj_home}<br>
-                {away}: {proj_away}<br><br>
-
-                <b>Total:</b> {proj_total}<br>
-                <b>Margin:</b> {proj_margin}
-            </div>
+            <div class="section-title" style="margin-top:10px;">Model Projection</div>
+            <div class="data-line">{home}: {fmt(row.get("proj_home_points"))}</div>
+            <div class="data-line">{away}: {fmt(row.get("proj_away_points"))}</div>
+            <div class="data-line">Total: {fmt(row.get("proj_total_points"))}</div>
+            <div class="data-line">Margin: {fmt(row.get("proj_margin"))}</div>
 
         </div>
 
     </div>
-
-    <script>
-        function toggleNCAAB(id) {{
-            var el = document.getElementById("box-" + id);
-            el.classList.toggle("expanded");
-        }}
-    </script>
     """
 
     components.html(html, height=500)

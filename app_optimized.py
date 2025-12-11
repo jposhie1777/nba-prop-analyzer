@@ -18,6 +18,10 @@ import psycopg2.extras
 import jwt
 import streamlit.components.v1 as components
 import textwrap
+import re
+from functools import lru_cache
+from rapidfuzz import fuzz, process
+
 
 
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
@@ -1110,6 +1114,427 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ------------------------------------------------------
+# NCAA LOGO SLUG DICTIONARY (All 4 chunks combined here)
+# ------------------------------------------------------
+NCAA_SLUGS = {
+
+    # --- A ---
+    "abilene christian": "abilene-christian",
+    "air force": "air-force",
+    "akron": "akron",
+    "alabama": "alabama",
+    "alabama a m": "alabama-am",
+    "alabama state": "alabama-state",
+    "albany": "albany",
+    "alcorn state": "alcorn-state",
+    "american": "american",
+    "appalachian state": "appalachian-state",
+    "arizona": "arizona",
+    "arizona state": "arizona-state",
+    "arkansas": "arkansas",
+    "arkansas state": "arkansas-state",
+    "arkansas pine bluff": "arkansas-pine-bluff",
+    "army": "army",
+    "auburn": "auburn",
+    "austin peay": "austin-peay",
+
+    # --- B ---
+    "ball state": "ball-state",
+    "baylor": "baylor",
+    "bellarmine": "bellarmine",
+    "belmont": "belmont",
+    "bethune cookman": "bethune-cookman",
+    "binghamton": "binghamton",
+    "boise state": "boise-state",
+    "boston college": "boston-college",
+    "boston university": "boston-university",
+    "bowling green": "bowling-green",
+    "bradley": "bradley",
+    "brigham young": "byu",
+    "brown": "brown",
+    "bryant": "bryant",
+    "bucknell": "bucknell",
+    "buffalo": "buffalo",
+    "butler": "butler",
+
+    # --- C ---
+    "cal baptist": "cal-baptist",
+    "cal poly": "cal-poly",
+    "cal state bakersfield": "cal-state-bakersfield",
+    "cal state fullerton": "cal-state-fullerton",
+    "cal state northridge": "cal-state-northridge",
+    "california": "california",
+    "campbell": "campbell",
+    "canisius": "canisius",
+    "central arkansas": "central-arkansas",
+    "central connecticut state": "central-connecticut-state",
+    "central michigan": "central-michigan",
+    "charleston southern": "charleston-southern",
+    "charlotte": "charlotte",
+    "chattanooga": "chattanooga",
+    "chicago state": "chicago-state",
+    "cincinnati": "cincinnati",
+    "citadel": "citadel",
+    "clemson": "clemson",
+    "cleveland state": "cleveland-state",
+    "coastal carolina": "coastal-carolina",
+    "colgate": "colgate",
+    "college of charleston": "college-of-charleston",
+    "colorado": "colorado",
+    "colorado state": "colorado-state",
+    "columbia": "columbia",
+    "connecticut": "connecticut",
+    "coppin state": "coppin-state",
+    "cornell": "cornell",
+    "creighton": "creighton",
+
+    # --- D ---
+    "dartmouth": "dartmouth",
+    "davidson": "davidson",
+    "dayton": "dayton",
+    "delaware": "delaware",
+    "delaware state": "delaware-state",
+    "denver": "denver",
+    "depaul": "depaul",
+    "detroit mercy": "detroit-mercy",
+    "drake": "drake",
+    "drexel": "drexel",
+    "duke": "duke",
+    "duquesne": "duquesne",
+
+    # --- E ---
+    "east carolina": "east-carolina",
+    "east tennessee state": "east-tennessee-state",
+    "eastern illinois": "eastern-illinois",
+    "eastern kentucky": "eastern-kentucky",
+    "eastern michigan": "eastern-michigan",
+    "eastern washington": "eastern-washington",
+    "elon": "elon",
+    "evansville": "evansville",
+
+    # --- F ---
+    "fairfield": "fairfield",
+    "fairleigh dickinson": "fairleigh-dickinson",
+    "florida": "florida",
+    "florida a m": "florida-am",
+    "florida atlantic": "florida-atlantic",
+    "florida gulf coast": "florida-gulf-coast",
+    "florida international": "florida-international",
+    "florida state": "florida-state",
+    "fordham": "fordham",
+    "fort wayne": "purdue-fort-wayne",
+    "fresno state": "fresno-state",
+    "furman": "furman",
+
+}
+
+NCAA_SLUGS.update({
+
+    # --- G ---
+    "gannon": "gannon",  # rarely appears, placeholder
+    "gardner webb": "gardner-webb",
+    "george mason": "george-mason",
+    "george washington": "george-washington",
+    "georgetown": "georgetown",
+    "georgia": "georgia",
+    "georgia southern": "georgia-southern",
+    "georgia state": "georgia-state",
+    "georgia tech": "georgia-tech",
+    "gonzaga": "gonzaga",
+    "grambling": "grambling",
+    "grand canyon": "grand-canyon",
+    "green bay": "green-bay",
+    "hampton": "hampton",
+    "harvard": "harvard",
+    "hawaii": "hawaii",
+    "high point": "high-point",
+    "hofstra": "hofstra",
+    "holy cross": "holy-cross",
+    "houston": "houston",
+    "houston christian": "houston-baptist",
+
+    # --- I ---
+    "idaho": "idaho",
+    "idaho state": "idaho-state",
+    "illinois": "illinois",
+    "illinois chicago": "illinois-chicago",
+    "illinois state": "illinois-state",
+    "incarnate word": "incarnate-word",
+    "indiana": "indiana",
+    "indiana state": "indiana-state",
+    "iona": "iona",
+    "iowa": "iowa",
+    "iowa state": "iowa-state",
+    "iupui": "iupui",
+
+    # --- J ---
+    "jackson state": "jackson-state",
+    "jacksonville": "jacksonville",
+    "jacksonville state": "jacksonville-state",
+    "james madison": "james-madison",
+    "kansas": "kansas",
+    "kansas state": "kansas-state",
+    "kennesaw state": "kennesaw-state",
+    "kent state": "kent-state",
+    "kentucky": "kentucky",
+
+    # --- L ---
+    "la salle": "la-salle",
+    "lafayette": "lafayette",
+    "lamar": "lamar",
+    "lehigh": "lehigh",
+    "liberty": "liberty",
+    "lipscomb": "lipscomb",
+    "little rock": "little-rock",
+    "long beach state": "long-beach-state",
+    "long island": "long-island",
+    "longwood": "longwood",
+    "loyola chicago": "loyola-chicago",
+    "loyola maryland": "loyola-maryland",
+    "loyola marymount": "loyola-marymount",
+    "lsu": "lsu",
+
+})
+
+NCAA_SLUGS.update({
+
+    # --- M ---
+    "maine": "maine",
+    "manhattan": "manhattan",
+    "marist": "marist",
+    "marquette": "marquette",
+    "marshall": "marshall",
+    "maryland": "maryland",
+    "maryland eastern shore": "maryland-eastern-shore",
+    "massachusetts": "massachusetts",
+    "mcneese": "mcneese-state",
+    "memphis": "memphis",
+    "mercer": "mercer",
+    "miami": "miami",
+    "miami ohio": "miami-ohio",
+    "michigan": "michigan",
+    "michigan state": "michigan-state",
+    "middle tennessee": "middle-tennessee",
+    "milligan": "milligan",  # placeholder
+    "milwaukee": "milwaukee",
+    "minnesota": "minnesota",
+    "mississippi state": "mississippi-state",
+    "mississippi valley state": "mississippi-valley-state",
+    "missouri": "missouri",
+    "missouri state": "missouri-state",
+    "monmouth": "monmouth",
+    "montana": "montana",
+    "montana state": "montana-state",
+    "morehead state": "morehead-state",
+    "morgan state": "morgan-state",
+    "mount st marys": "mount-st-marys",
+    "murray state": "murray-state",
+
+    # --- N ---
+    "navy": "navy",
+    "nebraska": "nebraska",
+    "nevada": "nevada",
+    "nevada las vegas": "unlv",
+    "new hampshire": "new-hampshire",
+    "new mexico": "new-mexico",
+    "new mexico state": "new-mexico-state",
+    "new orleans": "new-orleans",
+    "niagara": "niagara",
+    "nicholls state": "nicholls-state",
+    "njit": "njit",
+    "norfolk state": "norfolk-state",
+    "north alabama": "north-alabama",
+    "north carolina": "north-carolina",
+    "north carolina a t": "north-carolina-at",
+    "north carolina central": "north-carolina-central",
+    "north dakota": "north-dakota",
+    "north dakota state": "north-dakota-state",
+    "north florida": "north-florida",
+    "north texas": "north-texas",
+    "northeastern": "northeastern",
+    "northern arizona": "northern-arizona",
+    "northern colorado": "northern-colorado",
+    "northern illinois": "northern-illinois",
+    "northern iowa": "northern-iowa",
+    "northern kentucky": "northern-kentucky",
+    "northwestern": "northwestern",
+    "notre dame": "notre-dame",
+
+    # --- O ---
+    "oakland": "oakland",
+    "ohio": "ohio",
+    "ohio state": "ohio-state",
+    "oklahoma": "oklahoma",
+    "oklahoma state": "oklahoma-state",
+    "old dominion": "old-dominion",
+    "ole miss": "ole-miss",
+    "omaha": "omaha",
+    "oral roberts": "oral-roberts",
+    "oregon": "oregon",
+    "oregon state": "oregon-state",
+    "ouachita baptist": "ouachita-baptist",  # placeholder
+    "overland": "overland",  # placeholder
+
+    # --- P ---
+    "pacific": "pacific",
+    "penn": "penn",
+    "penn state": "penn-state",
+    "pepperdine": "pepperdine",
+    "pittsburgh": "pittsburgh",
+    "portland": "portland",
+    "portland state": "portland-state",
+    "prairie view": "prairie-view",
+    "presbyterian": "presbyterian",
+    "princeton": "princeton",
+    "providence": "providence",
+    "purdue": "purdue",
+    "purdue fort wayne": "purdue-fort-wayne",
+
+    # --- Q ---
+    "quinnipiac": "quinnipiac",
+
+    # --- R ---
+    "radford": "radford",
+    "rhode island": "rhode-island",
+    "rice": "rice",
+    "richmond": "richmond",
+    "rider": "rider",
+    "robert morris": "robert-morris",
+    "rutgers": "rutgers",
+
+})
+
+NCAA_SLUGS.update({
+
+    # --- S ---
+    "sacramento state": "sacramento-state",
+    "sacred heart": "sacred-heart",
+    "saint bonaventure": "saint-bonaventure",
+    "saint francis": "saint-francis",
+    "saint josephs": "saint-josephs",
+    "saint louis": "saint-louis",
+    "saint marys": "saint-marys",
+    "saint peters": "saint-peters",
+    "sam houston": "sam-houston",
+    "samford": "samford",
+    "san diego": "san-diego",
+    "san diego state": "san-diego-state",
+    "san francisco": "san-francisco",
+    "san jose state": "san-jose-state",
+    "santa clara": "santa-clara",
+    "savannah state": "savannah-state",  # inactive but kept
+    "seattle": "seattle",
+    "seton hall": "seton-hall",
+    "siena": "siena",
+    "siu edwardsville": "siu-edwardsville",
+    "smu": "smu",
+    "south alabama": "south-alabama",
+    "south carolina": "south-carolina",
+    "south carolina state": "south-carolina-state",
+    "south dakota": "south-dakota",
+    "south dakota state": "south-dakota-state",
+    "south florida": "south-florida",
+    "southeast missouri state": "southeast-missouri-state",
+    "southeastern louisiana": "southeastern-louisiana",
+    "southern": "southern",
+    "southern illinois": "southern-illinois",
+    "southern indiana": "southern-indiana",
+    "southern miss": "southern-miss",
+    "southern utah": "southern-utah",
+    "stetson": "stetson",
+    "stephen f austin": "stephen-f-austin",
+    "stony brook": "stony-brook",
+    "stony brook university": "stony-brook",
+    "sutd": "sutd",  # placeholder
+    "syracuse": "syracuse",
+
+    # --- T ---
+    "tcu": "tcu",
+    "temple": "temple",
+    "tennessee": "tennessee",
+    "tennessee martin": "tennessee-martin",
+    "tennessee state": "tennessee-state",
+    "tennessee tech": "tennessee-tech",
+    "texas": "texas",
+    "texas a m": "texas-am",
+    "texas a m commerce": "texas-am-commerce",
+    "texas a m corpus christi": "texas-am-corpus-christi",
+    "texas christian": "tcu",
+    "texas el paso": "texas-el-paso",
+    "texas rio grande valley": "texas-rio-grande-valley",
+    "texas southern": "texas-southern",
+    "texas state": "texas-state",
+    "texas tech": "texas-tech",
+    "the citadel": "citadel",
+    "toledo": "toledo",
+    "towson": "towson",
+    "troy": "troy",
+    "tulane": "tulane",
+    "tulsa": "tulsa",
+
+    # --- U ---
+    "uc davis": "uc-davis",
+    "uc irvine": "uc-irvine",
+    "uc riverside": "uc-riverside",
+    "uc san diego": "uc-san-diego",
+    "uc santa barbara": "uc-santa-barbara",
+    "ucla": "ucla",
+    "unc asheville": "unc-asheville",
+    "unc greensboro": "unc-greensboro",
+    "unc wilmington": "unc-wilmington",
+    "unlv": "unlv",
+    "usc": "usc",
+    "usc upstate": "usc-upstate",
+    "ut arlington": "ut-arlington",
+    "ut chattanooga": "chattanooga",
+    "ut martin": "tennessee-martin",
+    "ut rio grande valley": "texas-rio-grande-valley",
+    "utah": "utah",
+    "utah state": "utah-state",
+    "utah tech": "utah-tech",
+    "utah valley": "utah-valley",
+
+    # --- V ---
+    "valparaiso": "valparaiso",
+    "vanderbilt": "vanderbilt",
+    "vermont": "vermont",
+    "villanova": "villanova",
+    "virginia": "virginia",
+    "virginia tech": "virginia-tech",
+    "vmi": "vmi",
+
+    # --- W ---
+    "wabash": "wabash",  # placeholder
+    "wagner": "wagner",
+    "wake forest": "wake-forest",
+    "washington": "washington",
+    "washington state": "washington-state",
+    "weber state": "weber-state",
+    "west georgia": "west-georgia",  # placeholder
+    "west virginia": "west-virginia",
+    "western carolina": "western-carolina",
+    "western illinois": "western-illinois",
+    "western kentucky": "western-kentucky",
+    "western michigan": "western-michigan",
+    "wichita state": "wichita-state",
+    "william mary": "william-mary",
+    "winthrop": "winthrop",
+    "wisconsin": "wisconsin",
+    "wofford": "wofford",
+    "wright state": "wright-state",
+    "wyoming": "wyoming",
+
+    # --- X ---
+    "xavier": "xavier",
+
+    # --- Y ---
+    "yale": "yale",
+    "youngstown state": "youngstown-state",
+
+})
+
+
 
 # ------------------------------------------------------
 # LOGOS (STATIC)
@@ -1283,6 +1708,59 @@ SPORTSBOOK_LOGOS_BASE64 = {
     name: logo_to_base64_local(path)
     for name, path in SPORTSBOOK_LOGOS.items()
 }
+
+def normalize_name(name: str) -> str:
+    if not name:
+        return ""
+    name = name.lower()
+
+    # remove mascots (anything after last space IF mascot is recognized)
+    mascots = [
+        "bison", "bears", "bulldogs", "hawks", "eagles", "pirates", "mountaineers",
+        "vaqueros", "jaguars", "mavericks", "bisons", "hornets", "huskies", "orange",
+        "tigers", "cyclones", "catamounts"
+    ]
+
+    for m in mascots:
+        if name.endswith(" " + m):
+            name = name.rsplit(" ", 1)[0]
+
+    # cleanup
+    name = re.sub(r"[^a-z0-9 ]", "", name)
+    name = name.strip()
+    return name
+
+@lru_cache(maxsize=500)
+def resolve_team_slug(team_name: str) -> str:
+    """
+    Fuzzy match the provided team name to the closest NCAA DI school.
+    Returns ESPN slug (e.g. 'virginia-tech')
+    """
+    if not team_name:
+        return None
+
+    name_norm = normalize_name(team_name)
+
+    candidates = list(NCAA_SLUGS.keys())
+
+    best_match, score, _ = process.extractOne(
+        name_norm,
+        candidates,
+        scorer=fuzz.WRatio
+    )
+
+    if score < 70:
+        # prevent garbage matches
+        return None
+
+    return NCAA_SLUGS[best_match]
+
+def get_ncaa_logo(team_name: str) -> str:
+    slug = resolve_team_slug(team_name)
+    if not slug:
+        return "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
+
+    return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{slug}.png"
 
 
 def normalize_team_code(raw: str) -> str:
@@ -2018,16 +2496,6 @@ def build_wowy_block(row):
         </div>
     """
 
-def ncaa_logo_url(team_id):
-    """
-    Returns ESPN logo URL for an NCAA team.
-    team_id must be integer-like.
-    """
-    try:
-        tid = int(team_id)
-        return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{tid}.png"
-    except:
-        return "https://a.espncdn.com/i/teamlogos/default.png"  # fallback
 
 
 # ------------------------------------------------------
@@ -2269,106 +2737,148 @@ import streamlit.components.v1 as components
 
 def render_ncaab_overview_card(row):
 
-    # Unique card ID
-    game_id = row["game"].replace(" ", "").replace("@", "").replace("-", "")
+    # ---------------------------------------
+    # Unique ID for expanding the card
+    # ---------------------------------------
+    game_id = (
+        str(row.get("game", ""))
+        .replace(" ", "")
+        .replace("@", "")
+        .replace("-", "")
+        .lower()
+    )
 
-    # Team names
-    home = row["home_team"]
-    away = row["away_team"]
+    # ---------------------------------------
+    # Team Names & Logos (fuzzy resolver)
+    # ---------------------------------------
+    home = row.get("home_team", "Home")
+    away = row.get("away_team", "Away")
 
-    # NCAA ESPN Logos
-    home_logo = ncaa_logo_url(row.get("home_team_id"))
-    away_logo = ncaa_logo_url(row.get("away_team_id"))
+    home_logo = get_ncaa_logo(home)
+    away_logo = get_ncaa_logo(away)
 
-    # Time formatting
-    start_time = row["start_time"]
+    # ---------------------------------------
+    # Start Time Formatting
+    # ---------------------------------------
+    start_time = row.get("start_time")
     try:
         dt = pd.to_datetime(start_time).tz_convert("America/New_York")
         start_str = dt.strftime("%a %I:%M %p ET")
     except:
         start_str = str(start_time)
 
-    # Odds
+    # ---------------------------------------
+    # Odds (ML / Spread / Total)
+    # ---------------------------------------
     home_ml = row.get("home_ml", "—")
     away_ml = row.get("away_ml", "—")
     home_spread = row.get("home_spread", "—")
     away_spread = row.get("away_spread", "—")
     total_line = row.get("total_line", "—")
 
-    # Model projections
+    # ---------------------------------------
+    # Formatting helper
+    # ---------------------------------------
     def fmt(x):
         try:
             return f"{float(x):.1f}"
         except:
             return "—"
 
+    # ---------------------------------------
+    # Card HTML
+    # ---------------------------------------
     html = f"""
     <style>
         .ncaab-card {{
-            background: #111827;
+            background: linear-gradient(135deg, #0f172a, #1e293b);
             padding: 20px;
-            border-radius: 14px;
-            margin-bottom: 20px;
-            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 16px;
+            margin-bottom: 22px;
+            border: 1px solid rgba(255,255,255,0.07);
             color: white;
             font-family: Inter, sans-serif;
+            transition: 0.2s ease;
         }}
-        .ncaab-header-row {{
+        .ncaab-card:hover {{
+            border-color: rgba(255,255,255,0.18);
+            background: linear-gradient(135deg, #15233a, #233144);
+        }}
+
+        .ncaab-header {{
             display: flex;
-            align-items: center;
             justify-content: space-between;
-            gap: 14px;
+            align-items: center;
         }}
+
         .team-block {{
-            text-align: center;
             flex: 1;
+            text-align: center;
         }}
+
         .team-logo {{
             width: 48px;
             height: 48px;
-            border-radius: 8px;
             object-fit: contain;
+            border-radius: 8px;
         }}
+
         .team-name {{
-            font-size: 1rem;
+            margin-top: 6px;
             font-weight: 700;
-            margin-top: 4px;
+            font-size: 1rem;
         }}
+
         .vs {{
+            flex: 0 0 auto;
             font-size: 1.1rem;
             font-weight: 700;
-            color: #9CA3AF;
-            flex: 0 0 auto;
+            color: #94a3b8;
+            padding: 0px 16px;
         }}
+
         .expand-btn {{
-            background: #2563EB;
-            color: white;
+            background: rgba(37,99,235,0.95);
+            border: none;
             padding: 8px 18px;
             border-radius: 8px;
+            font-weight: 600;
             margin-top: 12px;
             cursor: pointer;
-            border: none;
         }}
+
         .expandable {{
             max-height: 0px;
             overflow: hidden;
-            transition: max-height 0.3s ease;
+            transition: max-height 0.35s ease;
         }}
+
         .expanded {{
-            max-height: 950px;
+            max-height: 900px;
+            margin-top: 14px;
         }}
+
         .data-box {{
-            background: rgba(255,255,255,0.06);
+            background: rgba(255,255,255,0.05);
             padding: 12px;
             border-radius: 10px;
-            margin-top: 12px;
+            margin-bottom: 14px;
+            border: 1px solid rgba(255,255,255,0.06);
+        }}
+
+        .data-title {{
+            font-weight: 700;
+            margin-bottom: 6px;
+            font-size: 0.95rem;
+            color: #e2e8f0;
         }}
     </style>
 
     <div class="ncaab-card">
 
-        <!-- HEADER WITH LOGOS -->
-        <div class="ncaab-header-row">
+        <!-- HEADER -->
+        <div class="ncaab-header">
+
             <div class="team-block">
                 <img class="team-logo" src="{home_logo}">
                 <div class="team-name">{home}</div>
@@ -2380,9 +2890,10 @@ def render_ncaab_overview_card(row):
                 <img class="team-logo" src="{away_logo}">
                 <div class="team-name">{away}</div>
             </div>
+
         </div>
 
-        <div style="font-size:0.85rem; color:#9CA3AF; margin-top: 8px;">
+        <div style="font-size:0.85rem;color:#94a3b8;margin-top:8px;">
             {start_str}
         </div>
 
@@ -2390,24 +2901,30 @@ def render_ncaab_overview_card(row):
             Show Details
         </button>
 
+        <!-- EXPANDABLE CONTENT -->
         <div id="box-{game_id}" class="expandable">
 
             <div class="data-box">
-                <b>Moneyline</b><br>
+                <div class="data-title">Moneyline</div>
                 {home}: {home_ml}<br>
-                {away}: {away_ml}<br><br>
-
-                <b>Spread</b><br>
-                {home}: {home_spread}<br>
-                {away}: {away_spread}<br><br>
-
-                <b>Total:</b> {total_line}
+                {away}: {away_ml}
             </div>
 
             <div class="data-box">
-                <b>Model Projection</b><br>
-                {home}: {fmt(row.get("proj_home_points"))}<br>
-                {away}: {fmt(row.get("proj_away_points"))}<br><br>
+                <div class="data-title">Spread</div>
+                {home}: {home_spread}<br>
+                {away}: {away_spread}
+            </div>
+
+            <div class="data-box">
+                <div class="data-title">Total</div>
+                {total_line}
+            </div>
+
+            <div class="data-box">
+                <div class="data-title">Model Projection</div>
+                {home}: {fmt(row.get("proj_home_points"))} pts<br>
+                {away}: {fmt(row.get("proj_away_points"))} pts<br><br>
 
                 <b>Total:</b> {fmt(row.get("proj_total_points"))}<br>
                 <b>Margin:</b> {fmt(row.get("proj_margin"))}
@@ -2419,13 +2936,13 @@ def render_ncaab_overview_card(row):
 
     <script>
         function toggleNCAAB(id) {{
-            var section = document.getElementById("box-" + id);
-            section.classList.toggle("expanded");
+            var box = document.getElementById("box-" + id);
+            box.classList.toggle("expanded");
         }}
     </script>
     """
 
-    components.html(html, height=320)
+    components.html(html, height=330)
 
 
 

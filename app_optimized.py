@@ -2433,10 +2433,12 @@ def render_prop_cards(
             tap_label = f"tap_{expand_key}"
             container = st.container()
             
-            with container:
-                st.markdown('<div class="card-tap-btn">', unsafe_allow_html=True)
-                clicked = st.button(" ", key=tap_label)
-                st.markdown('</div>', unsafe_allow_html=True)
+            with st.container():
+                st.markdown(
+                    "<div style='background:red; padding:10px; color:white;'>DEBUG BUTTON AREA BELOW</div>",
+                    unsafe_allow_html=True
+                )
+                clicked = st.button("DEBUG TAP BUTTON", key=tap_label)
             
             if clicked:
                 toggle_expander(expand_key)

@@ -1289,62 +1289,30 @@ SPORTSBOOK_LOGOS_BASE64 = {
 }
 
 # ------------------------------------------------------
-# Strip mascots from full team names
+# NCAA LOGO SYSTEM (Option A — Slug + Fuzzy Matching)
 # ------------------------------------------------------
-def strip_mascot(name: str):
-    if not isinstance(name, str):
-        return ""
-    parts = name.split()
-    if len(parts) <= 1:
-        return name.lower()
 
-    # remove last word (assumed mascot)
-    return " ".join(parts[:-1]).lower()
-
-# ------------------------------------------------------
-# NCAA TEAM LOGO FETCHING (Fuzzy Matching)
-# ------------------------------------------------------
 from rapidfuzz import fuzz, process
+import re
 
-# List of NCAA team names (official school names only)
-NCAA_TEAM_MASTER = [
-    "Abilene Christian", "Air Force", "Akron", "Alabama", "Alabama A&M",
-    "Alabama State", "Albany", "Alcorn State", "American", "Appalachian State",
-    "Arizona", "Arizona State", "Arkansas", "Arkansas State", "Arkansas Pine Bluff",
-    "Army", "Auburn", "Austin Peay", "Ball State", "Baylor", "Bellarmine", "Belmont",
-    "Bethune Cookman", "Binghamton", "Boise State", "Boston College",
-    "Boston University", "Bowling Green", "Bradley", "Brigham Young", "Brown",
-    "Bryant", "Bucknell", "Buffalo", "Butler", "Cal Baptist", "Cal Poly",
-    "Cal State Bakersfield", "Cal State Fullerton", "Cal State Northridge",
-    "California", "Campbell", "Canisius", "Central Arkansas",
-    "Central Connecticut State", "Central Michigan", "Charleston Southern",
-    "Charlotte", "Chattanooga", "Chicago State", "Cincinnati", "Clemson",
-    "Cleveland State", "Coastal Carolina", "Colgate", "College of Charleston",
-    "Colorado", "Colorado State", "Columbia", "Connecticut", "Coppin State",
-    "Cornell", "Creighton", "Dartmouth", "Davidson", "Dayton", "Delaware",
-    "Delaware State", "Denver", "DePaul", "Detroit Mercy", "Drake", "Drexel",
-    "Duke", "Duquesne", "East Carolina", "East Tennessee State",
-    "Eastern Illinois", "Eastern Kentucky", "Eastern Michigan",
-    "Eastern Washington", "Elon", "Evansville", "Fairfield", "Fairleigh Dickinson"
-    # (Optional: continue adding entire NCAA list — but fuzzy match will still work)
-]
-
-def normalize_team_name(name: str) -> str:
-    """Normalize messy team names to improve matching accuracy."""
-    if not isinstance(name, str):
+# 1. Normalizes team names (removes punctuation, mascots, variants)
+def normalize_team_name(n: str) -> str:
+    if not isinstance(n, str):
         return ""
-    name = name.lower()
-    name = name.replace("state university", "state")
-    name = name.replace("university", "").strip()
-    name = name.replace("st.", "saint").replace("st ", "saint ")
-    name = name.replace("mountaineers", "").replace("pirates", "").strip()
-    name = name.replace("hawks", "").replace("hornets", "").strip()
-    name = name.replace("vaqueros", "").replace("jaguars", "").strip()
-    name = name.replace("bison", "").strip()
-    return name.strip()
+    n = n.lower()
+    n = re.sub(r"[^a-z0-9 ]", "", n)
+    n = n.replace(" state university", " state")
+    n = n.replace(" university", "")
+    n = n.replace(" st ", " state ")
+    n = n.replace(" mountaineers", "")
+    n = n.replace(" pirates", "")
+    n = n.replace(" jaguars", "")
+    n = n.replace(" vaqueros", "")
+    n = n.replace(" bison", "")
+    return n.strip()
 
+# 2. Fuzzy match raw name → official NCAA name
 def fuzzy_match_team(raw_name: str):
-    """Return best-matching official NCAA school name."""
     cleaned = normalize_team_name(raw_name)
     match, score, _ = process.extractOne(
         cleaned,
@@ -1353,96 +1321,18 @@ def fuzzy_match_team(raw_name: str):
     )
     return match if score >= 70 else None
 
-def get_ncaa_logo(team_name: str) -> str:
-    """Return the ESPN logo URL for a team, using fuzzy matching and mascot stripping."""
-    if not team_name:
-        return "/static/missing_logo.png"
-
-    # normalize
-    clean = normalize_name(team_name)
-
-    # remove mascots ("Pirates", "Mountaineers", "Hokies", etc.)
-    clean = strip_mascot(clean)
-
-    # Fuzzy match against dictionary keys
-    match, score, _ = process.extractOne(clean, NCAA_SCHOOL_NAMES, scorer=fuzz.WRatio)
-
-    if score < 70:
-        return "/static/missing_logo.png"
-
-    espn_id = NCAA_TEAM_ID_MAP.get(match)
-    if not espn_id:
-        return "/static/missing_logo.png"
-
-    return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{espn_id}.png"
-
-# ------------------------------------------------------
-# NCAA MEN'S BASKETBALL — ESPN TEAM LOGO SUPPORT
-# ------------------------------------------------------
-
-from rapidfuzz import fuzz, process
-
-# FULL TEAM MAP WILL BE SENT IN CHUNKS 2–4
-ESPN_NCAAM_TEAMS = {}   # <- will fill this with full 360+ team map
-
-
-# -------------------------------------------
-# Normalization for matching (reuse your NBA fn)
-# -------------------------------------------
-def normalize_team_name(n: str) -> str:
-    if not isinstance(n, str):
-        return ""
-    return (
-        n.lower()
-         .replace(".", "")
-         .replace("'", "")
-         .replace("-", " ")
-         .replace("&", "and")
-         .replace(" st ", " state ")
-         .replace(" univ ", " university ")
-         .strip()
-    )
-    
-
-# ------------------------------------------------------
-# Fuzzy matching function — maps your team → ESPN ID
-# ------------------------------------------------------
-def get_espn_team_id(team_name: str):
-    """Return ESPN numeric ID for a given team name (fuzzy matched)."""
-    
-    if not team_name:
+# 3. Convert official name → ESPN slug
+def ncaa_team_to_slug(team_name: str):
+    official = fuzzy_match_team(team_name)
+    if not official:
         return None
+    return NCAA_SLUGS.get(official.lower())
 
-    cleaned = normalize_team_name(team_name)
-
-    if not ESPN_NCAAM_TEAMS:
-        return None  # dictionary will be loaded in next chunks
-
-    # Extract best fuzzy match
-    best_key, score, _ = process.extractOne(
-        cleaned,
-        ESPN_NCAAM_TEAMS.keys(),
-        scorer=fuzz.WRatio
-    )
-
-    # Require at least 80% similarity
-    if score >= 80:
-        return ESPN_NCAAM_TEAMS[best_key]["id"]
-
-    return None
-
-
-# ------------------------------------------------------
-# Get ESPN LOGO URL
-# ------------------------------------------------------
-def ncaa_logo(team_name: str) -> str:
-    """Return the ESPN team logo URL for a given NCAA men's team."""
-    espn_id = get_espn_team_id(team_name)
-    
-    if espn_id:
-        return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{espn_id}.png"
-
-    # fallback image
+# 4. Final logo URL
+def get_ncaa_logo(team_name: str) -> str:
+    slug = ncaa_team_to_slug(team_name)
+    if slug:
+        return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{slug}.png"
     return "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
 # ------------------------------------------------------
 # ESPN TEAM MAP — CHUNK 2 (Teams 1–100)

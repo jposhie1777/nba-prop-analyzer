@@ -927,28 +927,23 @@ st.markdown(
 st.markdown("""
 <style>
 
-/* Stronger selector: targets only tap buttons inside .card-tap-btn */
-.card-tap-btn button {
-    background: transparent !important;
-    border: none !important;
-    color: transparent !important;
-    font-size: 0 !important;
-    padding: 0 !important;
-    margin: 0 !important;
+.card-tap-btn .stButton > button {
+    all: unset !important;
+    display: block !important;
     width: 100% !important;
-    height: 30px !important;       /* click area */
-    min-height: 0 !important;
-    box-shadow: none !important;
-    border-radius: 0 !important;
+    height: 50px !important;      /* tap area */
+    cursor: pointer !important;
+    background: transparent !important;
 }
 
-/* Prevent hover from revealing the button */
-.card-tap-btn button:hover,
-.card-tap-btn button:focus,
-.card-tap-btn button:active {
-    background: transparent !important;
-    color: transparent !important;
-    box-shadow: none !important;
+/* No visual change on hover/focus/active */
+.card-tap-btn .stButton > button:hover,
+.card-tap-btn .stButton > button:focus,
+.card-tap-btn .stButton > button:active {
+    all: unset !important;
+    display: block !important;
+    width: 100% !important;
+    height: 50px !important;
 }
 
 </style>
@@ -2189,37 +2184,48 @@ def render_prop_cards(
 ):
     """
     Shared card-grid renderer for both EV+ Props and Available Props.
-    NOW EXPANDABLE.
+    Cards are always visible; tapping the card's invisible overlay expands
+    an analytics / Save Bet section underneath.
     """
 
     if df.empty:
         st.info("No props match your filters.")
         return
 
-    # ---- WOWY merge once per render ----
+    # ------------------------------------------------------
+    # WOWY merge once per render
+    # ------------------------------------------------------
     card_df = attach_wowy_deltas(df, wowy_df)
 
-    wowy_cols = ["breakdown", "pts_delta", "reb_delta", "ast_delta",
-                 "pra_delta", "pts_reb_delta"]
+    wowy_cols = [
+        "breakdown",
+        "pts_delta",
+        "reb_delta",
+        "ast_delta",
+        "pra_delta",
+        "pts_reb_delta",
+    ]
 
-    def extract_wowy_list(g):
+    def extract_wowy_list(g: pd.DataFrame) -> list[dict]:
         df2 = g.copy()
         df2 = df2[wowy_cols]
         if "breakdown" in df2.columns:
             df2 = df2[df2["breakdown"].notna()]
         return df2.to_dict("records")
 
-    w_map = {}
+    w_map: dict[tuple[str, str], list[dict]] = {}
     for (player, team), g in card_df.groupby(["player", "player_team"]):
         w_map[(player, team)] = extract_wowy_list(g)
 
     card_df["_wowy_list"] = card_df.apply(
         lambda r: w_map.get((r["player"], r["player_team"]), []),
-        axis=1
+        axis=1,
     )
 
-    # ---- APPLY ROW FILTERS ----
-    def card_good(row):
+    # ------------------------------------------------------
+    # Row filter (odds / hit-rate / EV+ / opponent rank)
+    # ------------------------------------------------------
+    def card_good(row: pd.Series) -> bool:
         price = row.get("price")
         hit = row.get(hit_rate_col)
 
@@ -2250,13 +2256,17 @@ def render_prop_cards(
         st.info("No props match your filters (after EV/odds/hit-rate logic).")
         return
 
-    # ---- Sorting ----
+    # ------------------------------------------------------
+    # Sorting: best hit-rate → best odds
+    # ------------------------------------------------------
     card_df = card_df.sort_values(
         by=[hit_rate_col, "price"],
-        ascending=[False, True]
+        ascending=[False, True],
     ).reset_index(drop=True)
 
-    # ---- Pagination ----
+    # ------------------------------------------------------
+    # Pagination
+    # ------------------------------------------------------
     page_size = 30
     total_cards = len(card_df)
     total_pages = max(1, (total_cards + page_size - 1) // page_size)
@@ -2276,6 +2286,7 @@ def render_prop_cards(
     end = start + page_size
     page_df = card_df.iloc[start:end]
 
+    # Scroll wrapper
     st.markdown(
         '<div style="max-height:1100px; overflow-y:auto; padding-right:12px;">',
         unsafe_allow_html=True,
@@ -2289,12 +2300,20 @@ def render_prop_cards(
     for idx, row in page_df.iterrows():
         col = cols[idx % 4]
         with col:
+            # -------------------------------
+            # Basic fields
+            # -------------------------------
+            player = row.get("player", "") or ""
 
-            player = row.get("player", "")
-
-            # Injury Badge Helper
-            def _norm(s):
-                return str(s).lower().replace("'", "").replace(".", "").replace("-", "").strip()
+            def _norm(s: str) -> str:
+                return (
+                    str(s)
+                    .lower()
+                    .replace("'", "")
+                    .replace(".", "")
+                    .replace("-", "")
+                    .strip()
+                )
 
             inj_status = INJURY_LOOKUP_BY_NAME.get(_norm(player))
             badge_html = ""
@@ -2323,17 +2342,26 @@ def render_prop_cards(
                     </span>
                 """
 
-            pretty_market = MARKET_DISPLAY_MAP.get(row.get("market", ""), row.get("market", ""))
+            pretty_market = MARKET_DISPLAY_MAP.get(
+                row.get("market", ""), row.get("market", "")
+            )
             bet_type = str(row.get("bet_type", "")).upper()
             line = row.get("line", "")
 
-            odds = int(row.get("price", 0))
+            # Odds / hit info
+            price_val = row.get("price", 0)
+            try:
+                odds = int(price_val)
+            except (TypeError, ValueError):
+                odds = 0
+
             implied_prob = compute_implied_prob(odds) or 0.0
-            hit_val = row.get(hit_rate_col, 0.0)
+            hit_val = row.get(hit_rate_col, 0.0) or 0.0
 
             l10_avg = get_l10_avg(row)
             l10_avg_display = f"{l10_avg:.1f}" if l10_avg is not None else "-"
 
+            # Opponent rank
             opp_rank = get_opponent_rank(row)
             if isinstance(opp_rank, int):
                 rank_display = opp_rank
@@ -2342,123 +2370,135 @@ def render_prop_cards(
                 rank_display = "-"
                 rank_color = "#9ca3af"
 
+            # Sparkline
             spark_vals = get_spark_values(row)
-            line_value = float(row.get("line", 0))
+            line_value = float(row.get("line", 0) or 0)
             spark_html = build_sparkline_bars_hitmiss(spark_vals, line_value)
 
+            # Logos
             player_team = normalize_team_code(row.get("player_team", ""))
             opp_team = normalize_team_code(row.get("opponent_team", ""))
 
             home_logo = TEAM_LOGOS_BASE64.get(player_team, "")
             opp_logo = TEAM_LOGOS_BASE64.get(opp_team, "")
 
+            # Sportsbook
             book = normalize_bookmaker(row.get("bookmaker", ""))
             book_logo_b64 = SPORTSBOOK_LOGOS_BASE64.get(book)
 
             if book_logo_b64:
                 book_html = (
                     f'<img src="{book_logo_b64}" '
-                    'style="height:26px; width:auto; max-width:80px; object-fit:contain; filter:drop-shadow(0 0 6px rgba(0,0,0,0.4));" />'
+                    'style="height:26px; width:auto; max-width:80px; '
+                    'object-fit:contain; filter:drop-shadow(0 0 6px rgba(0,0,0,0.4));" />'
                 )
             else:
                 book_html = (
-                    f'<div style="padding:3px 10px; border-radius:8px;'
-                    'background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);font-size:0.7rem;">'
-                    f'{book}</div>'
+                    '<div style="padding:3px 10px; border-radius:8px;'
+                    'background:rgba(255,255,255,0.08);'
+                    'border:1px solid rgba(255,255,255,0.15);'
+                    'font-size:0.7rem;">'
+                    f"{book}"
+                    "</div>"
                 )
 
+            # Tags / WOWY block
             tags_html = build_tags_html(build_prop_tags(row))
             wowy_html = build_wowy_block(row)
 
-            # ======================================================
-            #       (A) EXPANDER LABEL (compact header)
-            # ======================================================
-            expand_label = f"{player} • {pretty_market} {bet_type} {line}"
-
-            # ======================================================
-            #       (B) FULL CARD HTML (inside expander)
-            # ======================================================
+            # ------------------------------------------------------
+            # Card HTML
+            # ------------------------------------------------------
             card_lines = [
                 '<div class="prop-card">',
 
-                # TOP BAR
-                '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">',
+                # Top bar
+                '<div style="display:flex; justify-content:space-between; '
+                'align-items:center; margin-bottom:10px;">',
 
-                # LOGOS
+                # Left: logos
                 '<div style="display:flex; align-items:center; gap:6px; min-width:70px;">'
                 f'<img src="{home_logo}" style="height:20px;border-radius:4px;" />'
                 '<span style="font-size:0.7rem;color:#9ca3af;">vs</span>'
                 f'<img src="{opp_logo}" style="height:20px;border-radius:4px;" />'
-                '</div>',
+                "</div>",
 
-                # PLAYER + MARKET
-                '<div style="text-align:center; flex:1; display:flex; flex-direction:column; align-items:center;">'
-                f'<div style="font-size:1.05rem;font-weight:700; display:flex; align-items:center;">{player}{badge_html}</div>'
-                f'<div style="font-size:0.82rem;color:#9ca3af;">{pretty_market} • {bet_type} {line}</div>'
-                '</div>',
+                # Center: player + market + injury
+                '<div style="text-align:center; flex:1; display:flex; '
+                'flex-direction:column; align-items:center;">'
+                f'<div style="font-size:1.05rem;font-weight:700; display:flex; '
+                f'align-items:center;">{player}{badge_html}</div>'
+                f'<div style="font-size:0.82rem;color:#9ca3af;">'
+                f"{pretty_market} • {bet_type} {line}</div>"
+                "</div>",
 
-                # BOOK LOGO
-                f'<div style="display:flex; justify-content:flex-end; min-width:70px;">{book_html}</div>',
-                '</div>',
+                # Right: book
+                '<div style="display:flex; justify-content:flex-end; min-width:70px;">'
+                f"{book_html}"
+                "</div>",
+                "</div>",  # end top bar
 
-                # SPARKLINE
-                f'<div style="display:flex; justify-content:center; margin:8px 0;">{spark_html}</div>',
+                # Sparkline
+                f'<div style="display:flex; justify-content:center; margin:8px 0;">'
+                f"{spark_html}</div>",
 
-                # TAGS
-                f'<div style="display:flex; justify-content:center; margin-bottom:6px;">{tags_html}</div>',
+                # Tags
+                f'<div style="display:flex; justify-content:center; margin-bottom:6px;">'
+                f"{tags_html}</div>",
 
-                # METRICS
-                '<div class="prop-meta" style="margin-top:2px;">'
-                '<div>'
+                # Bottom metrics
+                '<div class="prop-meta" style="margin-top:2px;">',
+
+                "<div>"
                 f'<div style="color:#e5e7eb;font-size:0.8rem;">{odds:+d}</div>'
                 f'<div style="font-size:0.7rem;">Imp: {implied_prob:.0%}</div>'
-                '</div>'
+                "</div>",
 
-                '<div>'
-                f'<div style="color:#e5e7eb;font-size:0.8rem;">{hit_label}: {hit_val:.0%}</div>'
+                "<div>"
+                f'<div style="color:#e5e7eb;font-size:0.8rem;">'
+                f"{hit_label}: {hit_val:.0%}</div>"
                 f'<div style="font-size:0.7rem;">L10 Avg: {l10_avg_display}</div>'
-                '</div>'
+                "</div>",
 
-                '<div>'
-                f'<div style="color:{rank_color};font-size:0.8rem;font-weight:700;">{rank_display}</div>'
+                "<div>"
+                f'<div style="color:{rank_color};font-size:0.8rem;'
+                f'font-weight:700;">{rank_display}</div>'
                 '<div style="font-size:0.7rem;">Opp Rank</div>'
-                '</div>'
-                '</div>',
+                "</div>",
+
+                "</div>",  # end prop-meta
 
                 wowy_html,
-
-                '</div>',
+                "</div>",  # end prop-card
             ]
 
             card_html = "\n".join(card_lines)
 
-            # ======================================================
-            #                EXPANDER UI START
-            # ======================================================
-            # ---------------------------
-            # CARD TAP LOGIC (Clean Version)
-            # ---------------------------
-            
-            # Unique keys for this card
-            expand_key = f"{page_key}_expand_{player}_{row.get('market')}_{row.get('line')}_{idx}"
-            tap_label  = f"tap_{expand_key}"
-            
-            # ----- FULL CARD -----
+            # ------------------------------------------------------
+            # RENDER CARD
+            # ------------------------------------------------------
             st.markdown(card_html, unsafe_allow_html=True)
-            
-            # ----- INVISIBLE TAP BUTTON (overlay) -----
-            with st.container():
-                st.markdown('<div class="card-tap-btn">', unsafe_allow_html=True)
-                clicked = st.button("tap", key=tap_label)
-                st.markdown('</div>', unsafe_allow_html=True)
-            
-            # Toggle expansion state when tapped
-            if clicked:
+
+            # ------------------------------------------------------
+            # TAP-TO-EXPAND LOGIC
+            # ------------------------------------------------------
+            # Unique keys per card
+            key_base = f"{page_key}_{idx}_{player}_{row.get('market')}_{row.get('line')}"
+            expand_key = f"{key_base}_expand"
+            tap_key = f"{key_base}_tap"
+
+            # Invisible overlay button in .card-tap-btn wrapper
+            st.markdown('<div class="card-tap-btn">', unsafe_allow_html=True)
+            tapped = st.button("tap", key=tap_key)  # label hidden by CSS
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            if tapped:
                 toggle_expander(expand_key)
-            
-            # ----- EXPANDED CONTENT -----
+
+            # ------------------------------------------------------
+            # EXPANDED ANALYTICS + SAVE BET
+            # ------------------------------------------------------
             if st.session_state.get(expand_key, False):
-            
                 st.markdown(
                     """
                     <div style='padding:10px 14px; margin-top:-10px;
@@ -2468,8 +2508,7 @@ def render_prop_cards(
                     """,
                     unsafe_allow_html=True,
                 )
-            
-                # Placeholder analytics section
+
                 st.markdown("### 📊 Additional Analytics (Placeholder)")
                 st.write(
                     """
@@ -2479,10 +2518,9 @@ def render_prop_cards(
                     - Pace factor: **Placeholder**  
                     """
                 )
-            
+
                 st.markdown("---")
-            
-                # Save bet payload
+
                 bet_payload = {
                     "player": player,
                     "market": row.get("market"),
@@ -2491,14 +2529,17 @@ def render_prop_cards(
                     "price": odds,
                     "bookmaker": row.get("bookmaker"),
                 }
-            
-                save_key = f"{page_key}_save_{player}_{row.get('market')}_{row.get('line')}_{idx}"
-            
+
+                save_key = f"{key_base}_save"
+
                 if st.button("💾 Save Bet", key=save_key):
                     save_bet_for_user(user_id, bet_payload)
                     st.success(f"Saved: {player} {pretty_market} {bet_type} {line}")
-            
+
                 st.markdown("</div>", unsafe_allow_html=True)
+
+    # Close scroll wrapper
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 

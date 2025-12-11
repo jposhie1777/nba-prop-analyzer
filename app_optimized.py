@@ -929,27 +929,29 @@ st.markdown("""
 st.markdown("""
 <style>
 
+/* Make entire card clickable by hiding the tap button completely */
 .card-tap-btn .stButton > button {
-    background: none !important;
+    background: transparent !important;
     border: none !important;
-    color: transparent !important;
-    box-shadow: none !important;
+    color: transparent !important;          /* hide text */
+    box-shadow: none !important;            /* remove global shadow */
     padding: 0 !important;
     margin: 0 !important;
-    width: 100% !important;
-    height: 30px !important; /* clickable area */
+    width: 100% !important;                 /* clickable full width */
+    height: 28px !important;                /* clickable area height */
     min-height: 0 !important;
     border-radius: 0 !important;
-    font-size: 0 !important;
+    font-size: 0 !important;                /* hide label text */
+    outline: none !important;
 }
 
-/* Remove hover/focus outlines */
+/* Prevent hover / focus / active states from showing anything */
 .card-tap-btn .stButton > button:hover,
 .card-tap-btn .stButton > button:focus,
 .card-tap-btn .stButton > button:active {
-    background: none !important;
-    outline: none !important;
+    background: transparent !important;
     box-shadow: none !important;
+    outline: none !important;
 }
 
 </style>

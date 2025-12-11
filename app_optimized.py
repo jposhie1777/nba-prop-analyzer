@@ -5041,7 +5041,6 @@ if sport == "NBA":
 # ------------------------------------------------------
 elif sport in ["NCAA Men's", "NCAA Women's"]:
 
-    # 5 Tabs
     tabN1, tabN2, tabN3, tabN4, tabN5 = st.tabs(
         [
             "🏀 Game Overview",
@@ -5052,32 +5051,35 @@ elif sport in ["NCAA Men's", "NCAA Women's"]:
         ]
     )
 
-    # --------------------------------------------------
-    # LOAD NCAA GAME ANALYTICS
-    # --------------------------------------------------
+    # Load data
     df = ncaab_game_analytics_df.copy()
 
     if df.empty:
         st.info("No NCAA game analytics loaded. Make sure the loader is running.")
         st.stop()
 
-    # --------------------------------------------------
-    # TAB 1 — Overview (Expandable Cards)
-    # --------------------------------------------------
+    # -------------------------------
+    # TAB 1 — OVERVIEW CARDS
+    # -------------------------------
     with tabN1:
         st.subheader(f"{sport} — Game Overview")
 
         for idx, row in df.iterrows():
-            render_ncaab_overview_card(row)  # <-- we will generate this function
+            render_ncaab_overview_card(row)
 
-    # --------------------------------------------------
-    # TAB 2 — Moneyline Analysis
-    # --------------------------------------------------
+    # -------------------------------
+    # TAB 2 — MONEYLINE
+    # -------------------------------
     with tabN2:
         st.subheader(f"{sport} — Moneyline Analysis")
 
         ml_df = df.copy()
-        ml_df["ml_strength"] = ml_df["proj_margin"]  # simple ranking proxy
+
+        # Ranking metric
+        if "proj_margin" in ml_df.columns:
+            ml_df["ml_strength"] = ml_df["proj_margin"]
+        elif "predicted_margin" in ml_df.columns:
+            ml_df["ml_strength"] = ml_df["predicted_margin"]
 
         ml_df = ml_df.sort_values("ml_strength", ascending=False)
 
@@ -5098,16 +5100,14 @@ elif sport in ["NCAA Men's", "NCAA Women's"]:
             use_container_width=True,
         )
 
-    # --------------------------------------------------
-    # TAB 3 — Spread Analysis
-    # --------------------------------------------------
+    # -------------------------------
+    # TAB 3 — SPREAD ANALYSIS
+    # -------------------------------
     with tabN3:
         st.subheader(f"{sport} — Spread Analysis")
 
-        spread_df = df.sort_values("spread_edge", ascending=False)
-
         st.dataframe(
-            spread_df[
+            df.sort_values("spread_edge", ascending=False)[
                 [
                     "game",
                     "start_time",
@@ -5122,16 +5122,14 @@ elif sport in ["NCAA Men's", "NCAA Women's"]:
             use_container_width=True,
         )
 
-    # --------------------------------------------------
-    # TAB 4 — Totals Analysis
-    # --------------------------------------------------
+    # -------------------------------
+    # TAB 4 — TOTALS ANALYSIS
+    # -------------------------------
     with tabN4:
         st.subheader(f"{sport} — Total Points Analysis")
 
-        totals_df = df.sort_values("total_edge", ascending=False)
-
         st.dataframe(
-            totals_df[
+            df.sort_values("total_edge", ascending=False)[
                 [
                     "game",
                     "start_time",
@@ -5146,11 +5144,12 @@ elif sport in ["NCAA Men's", "NCAA Women's"]:
             use_container_width=True,
         )
 
-    # --------------------------------------------------
-    # TAB 5 — Saved Bets
-    # --------------------------------------------------
+    # -------------------------------
+    # TAB 5 — SAVED BETS
+    # -------------------------------
     with tabN5:
         render_saved_bets_tab()
+
 
 
 # ------------------------------------------------------

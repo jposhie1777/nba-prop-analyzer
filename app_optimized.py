@@ -2874,7 +2874,7 @@ def render_saved_bets_tab():
 
 if sport == "NBA":
     # Saved Bets moved to LAST position in the bar
-    tab1, tab2, tab3, tab4, tab7, tab8, = st.tabs(
+    tab1, tab2, tab3, tab4, tab7, tab8 = st.tabs(
         [
             "📈 Props",
             "🏀 Game Lines",
@@ -4410,121 +4410,121 @@ if sport == "NBA":
         st.link_button("📲 Open Pikkit", "https://quickpick.pikkit.com")
 
 
-    # ------------------------------------------------------
-    # NCAA MEN'S / WOMEN'S — REAL MODULE
-    # ------------------------------------------------------
-    elif sport in ["NCAA Men's", "NCAA Women's"]:
+# ------------------------------------------------------
+# NCAA MEN'S / WOMEN'S — REAL MODULE
+# ------------------------------------------------------
+elif sport in ["NCAA Men's", "NCAA Women's"]:
 
-        # 5 Tabs
-        tabN1, tabN2, tabN3, tabN4, tabN5 = st.tabs(
-            [
-                "🏀 Game Overview",
-                "💰 Moneyline",
-                "📏 Spread",
-                "🔢 Totals",
-                "📋 Saved Bets",
-            ]
+    # 5 Tabs
+    tabN1, tabN2, tabN3, tabN4, tabN5 = st.tabs(
+        [
+            "🏀 Game Overview",
+            "💰 Moneyline",
+            "📏 Spread",
+            "🔢 Totals",
+            "📋 Saved Bets",
+        ]
+    )
+
+    # --------------------------------------------------
+    # LOAD NCAA GAME ANALYTICS
+    # --------------------------------------------------
+    df = ncaab_game_analytics_df.copy()
+
+    if df.empty:
+        st.info("No NCAA game analytics loaded. Make sure the loader is running.")
+        st.stop()
+
+    # --------------------------------------------------
+    # TAB 1 — Overview (Expandable Cards)
+    # --------------------------------------------------
+    with tabN1:
+        st.subheader(f"{sport} — Game Overview")
+
+        for idx, row in df.iterrows():
+            render_ncaab_overview_card(row)  # <-- we will generate this function
+
+    # --------------------------------------------------
+    # TAB 2 — Moneyline Analysis
+    # --------------------------------------------------
+    with tabN2:
+        st.subheader(f"{sport} — Moneyline Analysis")
+
+        ml_df = df.copy()
+        ml_df["ml_strength"] = ml_df["proj_margin"]  # simple ranking proxy
+
+        ml_df = ml_df.sort_values("ml_strength", ascending=False)
+
+        st.dataframe(
+            ml_df[
+                [
+                    "game",
+                    "start_time",
+                    "home_team",
+                    "away_team",
+                    "home_ml",
+                    "away_ml",
+                    "proj_home_points",
+                    "proj_away_points",
+                    "proj_margin",
+                ]
+            ],
+            use_container_width=True,
         )
 
-        # --------------------------------------------------
-        # LOAD NCAA GAME ANALYTICS
-        # --------------------------------------------------
-        df = ncaab_game_analytics_df.copy()
+    # --------------------------------------------------
+    # TAB 3 — Spread Analysis
+    # --------------------------------------------------
+    with tabN3:
+        st.subheader(f"{sport} — Spread Analysis")
 
-        if df.empty:
-            st.info("No NCAA game analytics loaded. Make sure the loader is running.")
-            st.stop()
+        spread_df = df.sort_values("spread_edge", ascending=False)
 
-        # --------------------------------------------------
-        # TAB 1 — Overview (Expandable Cards)
-        # --------------------------------------------------
-        with tabN1:
-            st.subheader(f"{sport} — Game Overview")
+        st.dataframe(
+            spread_df[
+                [
+                    "game",
+                    "start_time",
+                    "home_team",
+                    "away_team",
+                    "home_spread",
+                    "away_spread",
+                    "proj_margin",
+                    "spread_edge",
+                ]
+            ],
+            use_container_width=True,
+        )
 
-            for idx, row in df.iterrows():
-                render_ncaab_overview_card(row)  # <-- we will generate this function
+    # --------------------------------------------------
+    # TAB 4 — Totals Analysis
+    # --------------------------------------------------
+    with tabN4:
+        st.subheader(f"{sport} — Total Points Analysis")
 
-        # --------------------------------------------------
-        # TAB 2 — Moneyline Analysis
-        # --------------------------------------------------
-        with tabN2:
-            st.subheader(f"{sport} — Moneyline Analysis")
+        totals_df = df.sort_values("total_edge", ascending=False)
 
-            ml_df = df.copy()
-            ml_df["ml_strength"] = ml_df["proj_margin"]  # simple ranking proxy
+        st.dataframe(
+            totals_df[
+                [
+                    "game",
+                    "start_time",
+                    "home_team",
+                    "away_team",
+                    "total_line",
+                    "proj_total_points",
+                    "pace_proxy",
+                    "total_edge",
+                ]
+            ],
+            use_container_width=True,
+        )
 
-            ml_df = ml_df.sort_values("ml_strength", ascending=False)
-
-            st.dataframe(
-                ml_df[
-                    [
-                        "game",
-                        "start_time",
-                        "home_team",
-                        "away_team",
-                        "home_ml",
-                        "away_ml",
-                        "proj_home_points",
-                        "proj_away_points",
-                        "proj_margin",
-                    ]
-                ],
-                use_container_width=True,
-            )
-
-        # --------------------------------------------------
-        # TAB 3 — Spread Analysis
-        # --------------------------------------------------
-        with tabN3:
-            st.subheader(f"{sport} — Spread Analysis")
-
-            spread_df = df.sort_values("spread_edge", ascending=False)
-
-            st.dataframe(
-                spread_df[
-                    [
-                        "game",
-                        "start_time",
-                        "home_team",
-                        "away_team",
-                        "home_spread",
-                        "away_spread",
-                        "proj_margin",
-                        "spread_edge",
-                    ]
-                ],
-                use_container_width=True,
-            )
-
-        # --------------------------------------------------
-        # TAB 4 — Totals Analysis
-        # --------------------------------------------------
-        with tabN4:
-            st.subheader(f"{sport} — Total Points Analysis")
-
-            totals_df = df.sort_values("total_edge", ascending=False)
-
-            st.dataframe(
-                totals_df[
-                    [
-                        "game",
-                        "start_time",
-                        "home_team",
-                        "away_team",
-                        "total_line",
-                        "proj_total_points",
-                        "pace_proxy",
-                        "total_edge",
-                    ]
-                ],
-                use_container_width=True,
-            )
-
-        # --------------------------------------------------
-        # TAB 5 — Saved Bets
-        # --------------------------------------------------
-        with tabN5:
-            render_saved_bets_tab()
+    # --------------------------------------------------
+    # TAB 5 — Saved Bets
+    # --------------------------------------------------
+    with tabN5:
+        render_saved_bets_tab()
 
 
 # ------------------------------------------------------

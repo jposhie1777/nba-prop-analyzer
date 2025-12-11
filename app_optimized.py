@@ -2435,40 +2435,53 @@ def render_prop_cards(
             #                EXPANDER UI START
             # ======================================================
             # ---------------------------
-            # CARD TAP LOGIC
+            # CARD TAP LOGIC (Clean Version)
             # ---------------------------
-            expand_key = f"{page_key}_expand_{player}_{row.get('market')}_{row.get('line')}_{idx}"
             
-            # ----- FULL CARD (always visible) -----
+            # Unique keys for this card
+            expand_key = f"{page_key}_expand_{player}_{row.get('market')}_{row.get('line')}_{idx}"
+            tap_label  = f"tap_{expand_key}"
+            
+            # ----- FULL CARD -----
             st.markdown(card_html, unsafe_allow_html=True)
             
-            # ----- INVISIBLE TAP BUTTON UNDER CARD -----
-            st.markdown('<div class="card-tap-btn">', unsafe_allow_html=True)
-            clicked = st.button("tap", key=tap_label)
-            st.markdown('</div>', unsafe_allow_html=True)
+            # ----- INVISIBLE TAP BUTTON (overlay) -----
+            with st.container():
+                st.markdown('<div class="card-tap-btn">', unsafe_allow_html=True)
+                clicked = st.button("tap", key=tap_label)
+                st.markdown('</div>', unsafe_allow_html=True)
             
-            # ----- EXPANDED CONTENT WHEN CLICKED -----
+            # Toggle expansion state when tapped
             if clicked:
                 toggle_expander(expand_key)
             
+            # ----- EXPANDED CONTENT -----
             if st.session_state.get(expand_key, False):
-                st.markdown("""
+            
+                st.markdown(
+                    """
                     <div style='padding:10px 14px; margin-top:-10px;
                                 background:rgba(255,255,255,0.05);
                                 border-radius:10px;
                                 border:1px solid rgba(255,255,255,0.1);'>
-                """, unsafe_allow_html=True)
+                    """,
+                    unsafe_allow_html=True,
+                )
             
+                # Placeholder analytics section
                 st.markdown("### 📊 Additional Analytics (Placeholder)")
-                st.write("""
-                - Trend model output: Coming soon  
-                - Matchup difficulty: Placeholder  
-                - Usage trend: Placeholder  
-                - Pace factor: Placeholder  
-                """)
+                st.write(
+                    """
+                    - Trend model output: **Coming soon**  
+                    - Matchup difficulty: **Placeholder**  
+                    - Usage trend: **Placeholder**  
+                    - Pace factor: **Placeholder**  
+                    """
+                )
             
                 st.markdown("---")
             
+                # Save bet payload
                 bet_payload = {
                     "player": player,
                     "market": row.get("market"),
@@ -2478,9 +2491,9 @@ def render_prop_cards(
                     "bookmaker": row.get("bookmaker"),
                 }
             
-                btn_key = f"{page_key}_save_{player}_{row.get('market')}_{row.get('line')}_{idx}"
+                save_key = f"{page_key}_save_{player}_{row.get('market')}_{row.get('line')}_{idx}"
             
-                if st.button("💾 Save Bet", key=btn_key):
+                if st.button("💾 Save Bet", key=save_key):
                     save_bet_for_user(user_id, bet_payload)
                     st.success(f"Saved: {player} {pretty_market} {bet_type} {line}")
             

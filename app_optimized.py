@@ -227,6 +227,14 @@ FROM `graphite-flare-477419-h7.nba.nba_game_odds`
 WHERE DATE(`Start Time`) = CURRENT_DATE()
 """
 
+# ------------------------------------------------------
+# NCAA GAME ANALYTICS SQL
+# ------------------------------------------------------
+NCAAB_GAME_ANALYTICS_SQL = f"""
+SELECT *
+FROM `{PROJECT_ID}.ncaa_data.ncaab_game_analytics`
+ORDER BY start_time
+"""
 
 
 # ------------------------------------------------------
@@ -949,6 +957,48 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+st.markdown("""
+<style>
+
+/* NCAA CARD STYLES */
+.ncaab-card {
+    background: #111;
+    color: white;
+    padding: 14px 18px;
+    border-radius: 12px;
+    margin-bottom: 12px;
+    border: 1px solid rgba(255,255,255,0.08);
+}
+
+.ncaab-expanded {
+    background: rgba(255,255,255,0.06);
+    padding: 12px 16px;
+    border-radius: 10px;
+    margin-top: -4px;
+    margin-bottom: 16px;
+}
+
+.ncaab-card .matchup {
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.ncaab-card .start {
+    font-size: 13px;
+    opacity: 0.7;
+}
+
+.ncaab-card .odds-row {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 10px;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+
+
 # ------------------------------------------------------
 # AG-GRID MOBILE FIX (separate block)
 # ------------------------------------------------------
@@ -1605,6 +1655,36 @@ def load_game_analytics():
     df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
     return df
 
+# ------------------------------------------------------
+# LOAD NCAA GAME ANALYTICS
+# ------------------------------------------------------
+@st.cache_data(show_spinner=True)
+def load_ncaab_game_analytics():
+    df = bq_client.query(NCAAB_GAME_ANALYTICS_SQL).to_dataframe()
+    df.columns = df.columns.str.strip()
+
+    # Datetime normalization
+    df["start_time"] = pd.to_datetime(df["start_time"], errors="coerce")
+
+    # Numeric normalization
+    numeric_cols = [
+        "home_ml", "away_ml",
+        "home_spread", "away_spread",
+        "total_line",
+        "proj_home_points", "proj_away_points", "proj_total_points",
+        "proj_margin",
+        "spread_edge", "total_edge",
+        "l5_scoring_diff", "l10_scoring_diff",
+        "l5_margin_diff", "l10_margin_diff",
+        "pace_proxy"
+    ]
+
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    return df
+
 @st.cache_data(show_spinner=True)
 def load_game_report():
     df = bq_client.query(GAME_REPORT_SQL).to_dataframe()
@@ -1636,6 +1716,7 @@ wowy_df = load_wowy_deltas()
 game_analytics_df = load_game_analytics()
 game_report_df = load_game_report()
 game_odds_df = load_game_odds()
+ncaab_game_analytics_df = load_ncaab_game_analytics()
 
 
 # ------------------------------------------------------
@@ -2168,6 +2249,75 @@ def build_injury_lookup():
 
 # Build lookup at load
 build_injury_lookup()
+
+# ------------------------------------------------------
+# NCAA OVERVIEW CARD (Expandable)
+# ------------------------------------------------------
+def render_ncaab_overview_card(row):
+    expand_key = f"ncaab_expand_{row.name}"
+
+    home = row["home_team"]
+    away = row["away_team"]
+
+    start_local = (
+        pd.to_datetime(row["start_time"])
+        .tz_convert("America/New_York")
+        .strftime("%a %I:%M %p")
+    )
+
+    # -----------------------------
+    # Always-visible top card
+    # -----------------------------
+    st.markdown(f"""
+    <div class='ncaab-card'>
+        <div class='matchup'>
+            <strong>{away}</strong> @ <strong>{home}</strong>
+            <div class='start'>{start_local} ET</div>
+        </div>
+
+        <div class='odds-row'>
+            <div><b>ML:</b> {row.home_ml} / {row.away_ml}</div>
+            <div><b>Spread:</b> {row.home_spread} / {row.away_spread}</div>
+            <div><b>Total:</b> {row.total_line}</div>
+        </div>
+
+        <div class='model-row'>
+            Proj: {row.proj_home_points} – {row.proj_away_points}
+            (Total {row.proj_total_points})
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Toggle button
+    if st.button(
+        "Show Details" if not st.session_state.get(expand_key) else "Hide Details",
+        key=expand_key,
+    ):
+        st.session_state[expand_key] = not st.session_state.get(expand_key, False)
+
+    # -----------------------------
+    # EXPANDED CONTENT
+    # -----------------------------
+    if st.session_state.get(expand_key):
+        st.markdown(f"""
+        <div class='ncaab-expanded'>
+            <h4>Analytics</h4>
+            <ul>
+                <li><b>Projected Margin:</b> {row.proj_margin:+}</li>
+                <li><b>Spread Edge:</b> {row.spread_edge:+}</li>
+                <li><b>Total Edge:</b> {row.total_edge:+}</li>
+                <li><b>Pace Proxy:</b> {row.pace_proxy}</li>
+            </ul>
+
+            <h4>Recent Trends</h4>
+            <ul>
+                <li>L5 Scoring Diff: {row.l5_scoring_diff:+}</li>
+                <li>L10 Scoring Diff: {row.l10_scoring_diff:+}</li>
+                <li>L5 Margin Diff: {row.l5_margin_diff:+}</li>
+                <li>L10 Margin Diff: {row.l10_margin_diff:+}</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
 
 
 def render_prop_cards(
@@ -4084,7 +4234,6 @@ if sport == "NBA":
     # 📋 SAVED BETS TAB — PIKKIT OPTIMIZED EXPORT
     # ======================================================
 
-    import streamlit as st
     import pandas as pd
     import streamlit.components.v1 as components
 
@@ -4261,45 +4410,122 @@ if sport == "NBA":
         st.link_button("📲 Open Pikkit", "https://quickpick.pikkit.com")
 
 
-# ------------------------------------------------------
-# NCAA MEN'S / WOMEN'S — Placeholder Tabs
-# ------------------------------------------------------
-elif sport in ["NCAA Men's", "NCAA Women's"]:
+    # ------------------------------------------------------
+    # NCAA MEN'S / WOMEN'S — REAL MODULE
+    # ------------------------------------------------------
+    elif sport in ["NCAA Men's", "NCAA Women's"]:
 
-    tabN1, tabN2, tabN3, tabN4, tabN5 = st.tabs(
-        [
-            "📈 Props",
-            "📊 Team Stats",
-            "📅 Game Logs",
-            "📋 Injury Report",
-            "📋 Saved Bets",
-        ]
-    )
+        # 5 Tabs
+        tabN1, tabN2, tabN3, tabN4, tabN5 = st.tabs(
+            [
+                "🏀 Game Overview",
+                "💰 Moneyline",
+                "📏 Spread",
+                "🔢 Totals",
+                "📋 Saved Bets",
+            ]
+        )
 
-    with tabN1:
-        st.subheader(f"{sport} Props")
-        st.info(f"{sport} props coming soon.")
+        # --------------------------------------------------
+        # LOAD NCAA GAME ANALYTICS
+        # --------------------------------------------------
+        df = ncaab_game_analytics_df.copy()
 
-    with tabN2:
-        st.subheader(f"{sport} Team Stats")
-        st.info(f"{sport} team stats view coming soon.")
+        if df.empty:
+            st.info("No NCAA game analytics loaded. Make sure the loader is running.")
+            st.stop()
 
-    with tabN3:
-        st.subheader(f"{sport} Game Logs")
-        st.info(f"{sport} game logs coming soon.")
+        # --------------------------------------------------
+        # TAB 1 — Overview (Expandable Cards)
+        # --------------------------------------------------
+        with tabN1:
+            st.subheader(f"{sport} — Game Overview")
 
-    with tabN4:
-        st.subheader(f"{sport} Injury Report")
-        st.info(f"{sport} injury data coming soon.")
+            for idx, row in df.iterrows():
+                render_ncaab_overview_card(row)  # <-- we will generate this function
 
-    with tabN5:
-        render_saved_bets_tab()
+        # --------------------------------------------------
+        # TAB 2 — Moneyline Analysis
+        # --------------------------------------------------
+        with tabN2:
+            st.subheader(f"{sport} — Moneyline Analysis")
 
-# ------------------------------------------------------
-# LAST UPDATED FOOTER
-# ------------------------------------------------------
-now = datetime.now(EST)
-st.sidebar.markdown(f"**Last Updated:** {now.strftime('%b %d, %I:%M %p')} ET")
+            ml_df = df.copy()
+            ml_df["ml_strength"] = ml_df["proj_margin"]  # simple ranking proxy
+
+            ml_df = ml_df.sort_values("ml_strength", ascending=False)
+
+            st.dataframe(
+                ml_df[
+                    [
+                        "game",
+                        "start_time",
+                        "home_team",
+                        "away_team",
+                        "home_ml",
+                        "away_ml",
+                        "proj_home_points",
+                        "proj_away_points",
+                        "proj_margin",
+                    ]
+                ],
+                use_container_width=True,
+            )
+
+        # --------------------------------------------------
+        # TAB 3 — Spread Analysis
+        # --------------------------------------------------
+        with tabN3:
+            st.subheader(f"{sport} — Spread Analysis")
+
+            spread_df = df.sort_values("spread_edge", ascending=False)
+
+            st.dataframe(
+                spread_df[
+                    [
+                        "game",
+                        "start_time",
+                        "home_team",
+                        "away_team",
+                        "home_spread",
+                        "away_spread",
+                        "proj_margin",
+                        "spread_edge",
+                    ]
+                ],
+                use_container_width=True,
+            )
+
+        # --------------------------------------------------
+        # TAB 4 — Totals Analysis
+        # --------------------------------------------------
+        with tabN4:
+            st.subheader(f"{sport} — Total Points Analysis")
+
+            totals_df = df.sort_values("total_edge", ascending=False)
+
+            st.dataframe(
+                totals_df[
+                    [
+                        "game",
+                        "start_time",
+                        "home_team",
+                        "away_team",
+                        "total_line",
+                        "proj_total_points",
+                        "pace_proxy",
+                        "total_edge",
+                    ]
+                ],
+                use_container_width=True,
+            )
+
+        # --------------------------------------------------
+        # TAB 5 — Saved Bets
+        # --------------------------------------------------
+        with tabN5:
+            render_saved_bets_tab()
+
 
 # ------------------------------------------------------
 # LAST UPDATED FOOTER

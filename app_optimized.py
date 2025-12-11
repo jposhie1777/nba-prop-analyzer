@@ -2998,7 +2998,7 @@ def render_ncaab_overview_card(row):
     </script>
     """
 
-    components.html(html, height=330, unsafe_allow_html=True)
+    components.html(html, height=500)
 
 
 

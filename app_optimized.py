@@ -2018,6 +2018,18 @@ def build_wowy_block(row):
         </div>
     """
 
+def ncaa_logo_url(team_id):
+    """
+    Returns ESPN logo URL for an NCAA team.
+    team_id must be integer-like.
+    """
+    try:
+        tid = int(team_id)
+        return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{tid}.png"
+    except:
+        return "https://a.espncdn.com/i/teamlogos/default.png"  # fallback
+
+
 # ------------------------------------------------------
 # SHARED CARD-GRID HELPERS (EV+ & Available Props)
 # ------------------------------------------------------
@@ -2253,71 +2265,168 @@ build_injury_lookup()
 # ------------------------------------------------------
 # NCAA OVERVIEW CARD (Expandable)
 # ------------------------------------------------------
-def render_ncaab_overview_card(row):
-    expand_key = f"ncaab_expand_{row.name}"
+import streamlit.components.v1 as components
 
+def render_ncaab_overview_card(row):
+
+    # Unique card ID
+    game_id = row["game"].replace(" ", "").replace("@", "").replace("-", "")
+
+    # Team names
     home = row["home_team"]
     away = row["away_team"]
 
-    start_local = (
-        pd.to_datetime(row["start_time"])
-        .tz_convert("America/New_York")
-        .strftime("%a %I:%M %p")
-    )
+    # NCAA ESPN Logos
+    home_logo = ncaa_logo_url(row.get("home_team_id"))
+    away_logo = ncaa_logo_url(row.get("away_team_id"))
 
-    # -----------------------------
-    # Always-visible top card
-    # -----------------------------
-    st.markdown(f"""
-    <div class='ncaab-card'>
-        <div class='matchup'>
-            <strong>{away}</strong> @ <strong>{home}</strong>
-            <div class='start'>{start_local} ET</div>
+    # Time formatting
+    start_time = row["start_time"]
+    try:
+        dt = pd.to_datetime(start_time).tz_convert("America/New_York")
+        start_str = dt.strftime("%a %I:%M %p ET")
+    except:
+        start_str = str(start_time)
+
+    # Odds
+    home_ml = row.get("home_ml", "—")
+    away_ml = row.get("away_ml", "—")
+    home_spread = row.get("home_spread", "—")
+    away_spread = row.get("away_spread", "—")
+    total_line = row.get("total_line", "—")
+
+    # Model projections
+    def fmt(x):
+        try:
+            return f"{float(x):.1f}"
+        except:
+            return "—"
+
+    html = f"""
+    <style>
+        .ncaab-card {{
+            background: #111827;
+            padding: 20px;
+            border-radius: 14px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.08);
+            color: white;
+            font-family: Inter, sans-serif;
+        }}
+        .ncaab-header-row {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+        }}
+        .team-block {{
+            text-align: center;
+            flex: 1;
+        }}
+        .team-logo {{
+            width: 48px;
+            height: 48px;
+            border-radius: 8px;
+            object-fit: contain;
+        }}
+        .team-name {{
+            font-size: 1rem;
+            font-weight: 700;
+            margin-top: 4px;
+        }}
+        .vs {{
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #9CA3AF;
+            flex: 0 0 auto;
+        }}
+        .expand-btn {{
+            background: #2563EB;
+            color: white;
+            padding: 8px 18px;
+            border-radius: 8px;
+            margin-top: 12px;
+            cursor: pointer;
+            border: none;
+        }}
+        .expandable {{
+            max-height: 0px;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }}
+        .expanded {{
+            max-height: 950px;
+        }}
+        .data-box {{
+            background: rgba(255,255,255,0.06);
+            padding: 12px;
+            border-radius: 10px;
+            margin-top: 12px;
+        }}
+    </style>
+
+    <div class="ncaab-card">
+
+        <!-- HEADER WITH LOGOS -->
+        <div class="ncaab-header-row">
+            <div class="team-block">
+                <img class="team-logo" src="{home_logo}">
+                <div class="team-name">{home}</div>
+            </div>
+
+            <div class="vs">vs</div>
+
+            <div class="team-block">
+                <img class="team-logo" src="{away_logo}">
+                <div class="team-name">{away}</div>
+            </div>
         </div>
 
-        <div class='odds-row'>
-            <div><b>ML:</b> {row.home_ml} / {row.away_ml}</div>
-            <div><b>Spread:</b> {row.home_spread} / {row.away_spread}</div>
-            <div><b>Total:</b> {row.total_line}</div>
+        <div style="font-size:0.85rem; color:#9CA3AF; margin-top: 8px;">
+            {start_str}
         </div>
 
-        <div class='model-row'>
-            Proj: {row.proj_home_points} – {row.proj_away_points}
-            (Total {row.proj_total_points})
+        <button class="expand-btn" onclick="toggleNCAAB('{game_id}')">
+            Show Details
+        </button>
+
+        <div id="box-{game_id}" class="expandable">
+
+            <div class="data-box">
+                <b>Moneyline</b><br>
+                {home}: {home_ml}<br>
+                {away}: {away_ml}<br><br>
+
+                <b>Spread</b><br>
+                {home}: {home_spread}<br>
+                {away}: {away_spread}<br><br>
+
+                <b>Total:</b> {total_line}
+            </div>
+
+            <div class="data-box">
+                <b>Model Projection</b><br>
+                {home}: {fmt(row.get("proj_home_points"))}<br>
+                {away}: {fmt(row.get("proj_away_points"))}<br><br>
+
+                <b>Total:</b> {fmt(row.get("proj_total_points"))}<br>
+                <b>Margin:</b> {fmt(row.get("proj_margin"))}
+            </div>
+
         </div>
+
     </div>
-    """, unsafe_allow_html=True)
 
-    # Toggle button
-    if st.button(
-        "Show Details" if not st.session_state.get(expand_key) else "Hide Details",
-        key=expand_key,
-    ):
-        st.session_state[expand_key] = not st.session_state.get(expand_key, False)
+    <script>
+        function toggleNCAAB(id) {{
+            var section = document.getElementById("box-" + id);
+            section.classList.toggle("expanded");
+        }}
+    </script>
+    """
 
-    # -----------------------------
-    # EXPANDED CONTENT
-    # -----------------------------
-    if st.session_state.get(expand_key):
-        st.markdown(f"""
-        <div class='ncaab-expanded'>
-            <h4>Analytics</h4>
-            <ul>
-                <li><b>Projected Margin:</b> {row.proj_margin:+}</li>
-                <li><b>Spread Edge:</b> {row.spread_edge:+}</li>
-                <li><b>Total Edge:</b> {row.total_edge:+}</li>
-                <li><b>Pace Proxy:</b> {row.pace_proxy}</li>
-            </ul>
+    components.html(html, height=320)
 
-            <h4>Recent Trends</h4>
-            <ul>
-                <li>L5 Scoring Diff: {row.l5_scoring_diff:+}</li>
-                <li>L10 Scoring Diff: {row.l10_scoring_diff:+}</li>
-                <li>L5 Margin Diff: {row.l5_margin_diff:+}</li>
-                <li>L10 Margin Diff: {row.l10_margin_diff:+}</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
 
 
 def render_prop_cards(

@@ -1114,427 +1114,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ------------------------------------------------------
-# NCAA LOGO SLUG DICTIONARY (All 4 chunks combined here)
-# ------------------------------------------------------
-NCAA_SLUGS = {
-
-    # --- A ---
-    "abilene christian": "abilene-christian",
-    "air force": "air-force",
-    "akron": "akron",
-    "alabama": "alabama",
-    "alabama a m": "alabama-am",
-    "alabama state": "alabama-state",
-    "albany": "albany",
-    "alcorn state": "alcorn-state",
-    "american": "american",
-    "appalachian state": "appalachian-state",
-    "arizona": "arizona",
-    "arizona state": "arizona-state",
-    "arkansas": "arkansas",
-    "arkansas state": "arkansas-state",
-    "arkansas pine bluff": "arkansas-pine-bluff",
-    "army": "army",
-    "auburn": "auburn",
-    "austin peay": "austin-peay",
-
-    # --- B ---
-    "ball state": "ball-state",
-    "baylor": "baylor",
-    "bellarmine": "bellarmine",
-    "belmont": "belmont",
-    "bethune cookman": "bethune-cookman",
-    "binghamton": "binghamton",
-    "boise state": "boise-state",
-    "boston college": "boston-college",
-    "boston university": "boston-university",
-    "bowling green": "bowling-green",
-    "bradley": "bradley",
-    "brigham young": "byu",
-    "brown": "brown",
-    "bryant": "bryant",
-    "bucknell": "bucknell",
-    "buffalo": "buffalo",
-    "butler": "butler",
-
-    # --- C ---
-    "cal baptist": "cal-baptist",
-    "cal poly": "cal-poly",
-    "cal state bakersfield": "cal-state-bakersfield",
-    "cal state fullerton": "cal-state-fullerton",
-    "cal state northridge": "cal-state-northridge",
-    "california": "california",
-    "campbell": "campbell",
-    "canisius": "canisius",
-    "central arkansas": "central-arkansas",
-    "central connecticut state": "central-connecticut-state",
-    "central michigan": "central-michigan",
-    "charleston southern": "charleston-southern",
-    "charlotte": "charlotte",
-    "chattanooga": "chattanooga",
-    "chicago state": "chicago-state",
-    "cincinnati": "cincinnati",
-    "citadel": "citadel",
-    "clemson": "clemson",
-    "cleveland state": "cleveland-state",
-    "coastal carolina": "coastal-carolina",
-    "colgate": "colgate",
-    "college of charleston": "college-of-charleston",
-    "colorado": "colorado",
-    "colorado state": "colorado-state",
-    "columbia": "columbia",
-    "connecticut": "connecticut",
-    "coppin state": "coppin-state",
-    "cornell": "cornell",
-    "creighton": "creighton",
-
-    # --- D ---
-    "dartmouth": "dartmouth",
-    "davidson": "davidson",
-    "dayton": "dayton",
-    "delaware": "delaware",
-    "delaware state": "delaware-state",
-    "denver": "denver",
-    "depaul": "depaul",
-    "detroit mercy": "detroit-mercy",
-    "drake": "drake",
-    "drexel": "drexel",
-    "duke": "duke",
-    "duquesne": "duquesne",
-
-    # --- E ---
-    "east carolina": "east-carolina",
-    "east tennessee state": "east-tennessee-state",
-    "eastern illinois": "eastern-illinois",
-    "eastern kentucky": "eastern-kentucky",
-    "eastern michigan": "eastern-michigan",
-    "eastern washington": "eastern-washington",
-    "elon": "elon",
-    "evansville": "evansville",
-
-    # --- F ---
-    "fairfield": "fairfield",
-    "fairleigh dickinson": "fairleigh-dickinson",
-    "florida": "florida",
-    "florida a m": "florida-am",
-    "florida atlantic": "florida-atlantic",
-    "florida gulf coast": "florida-gulf-coast",
-    "florida international": "florida-international",
-    "florida state": "florida-state",
-    "fordham": "fordham",
-    "fort wayne": "purdue-fort-wayne",
-    "fresno state": "fresno-state",
-    "furman": "furman",
-
-}
-
-NCAA_SLUGS.update({
-
-    # --- G ---
-    "gannon": "gannon",  # rarely appears, placeholder
-    "gardner webb": "gardner-webb",
-    "george mason": "george-mason",
-    "george washington": "george-washington",
-    "georgetown": "georgetown",
-    "georgia": "georgia",
-    "georgia southern": "georgia-southern",
-    "georgia state": "georgia-state",
-    "georgia tech": "georgia-tech",
-    "gonzaga": "gonzaga",
-    "grambling": "grambling",
-    "grand canyon": "grand-canyon",
-    "green bay": "green-bay",
-    "hampton": "hampton",
-    "harvard": "harvard",
-    "hawaii": "hawaii",
-    "high point": "high-point",
-    "hofstra": "hofstra",
-    "holy cross": "holy-cross",
-    "houston": "houston",
-    "houston christian": "houston-baptist",
-
-    # --- I ---
-    "idaho": "idaho",
-    "idaho state": "idaho-state",
-    "illinois": "illinois",
-    "illinois chicago": "illinois-chicago",
-    "illinois state": "illinois-state",
-    "incarnate word": "incarnate-word",
-    "indiana": "indiana",
-    "indiana state": "indiana-state",
-    "iona": "iona",
-    "iowa": "iowa",
-    "iowa state": "iowa-state",
-    "iupui": "iupui",
-
-    # --- J ---
-    "jackson state": "jackson-state",
-    "jacksonville": "jacksonville",
-    "jacksonville state": "jacksonville-state",
-    "james madison": "james-madison",
-    "kansas": "kansas",
-    "kansas state": "kansas-state",
-    "kennesaw state": "kennesaw-state",
-    "kent state": "kent-state",
-    "kentucky": "kentucky",
-
-    # --- L ---
-    "la salle": "la-salle",
-    "lafayette": "lafayette",
-    "lamar": "lamar",
-    "lehigh": "lehigh",
-    "liberty": "liberty",
-    "lipscomb": "lipscomb",
-    "little rock": "little-rock",
-    "long beach state": "long-beach-state",
-    "long island": "long-island",
-    "longwood": "longwood",
-    "loyola chicago": "loyola-chicago",
-    "loyola maryland": "loyola-maryland",
-    "loyola marymount": "loyola-marymount",
-    "lsu": "lsu",
-
-})
-
-NCAA_SLUGS.update({
-
-    # --- M ---
-    "maine": "maine",
-    "manhattan": "manhattan",
-    "marist": "marist",
-    "marquette": "marquette",
-    "marshall": "marshall",
-    "maryland": "maryland",
-    "maryland eastern shore": "maryland-eastern-shore",
-    "massachusetts": "massachusetts",
-    "mcneese": "mcneese-state",
-    "memphis": "memphis",
-    "mercer": "mercer",
-    "miami": "miami",
-    "miami ohio": "miami-ohio",
-    "michigan": "michigan",
-    "michigan state": "michigan-state",
-    "middle tennessee": "middle-tennessee",
-    "milligan": "milligan",  # placeholder
-    "milwaukee": "milwaukee",
-    "minnesota": "minnesota",
-    "mississippi state": "mississippi-state",
-    "mississippi valley state": "mississippi-valley-state",
-    "missouri": "missouri",
-    "missouri state": "missouri-state",
-    "monmouth": "monmouth",
-    "montana": "montana",
-    "montana state": "montana-state",
-    "morehead state": "morehead-state",
-    "morgan state": "morgan-state",
-    "mount st marys": "mount-st-marys",
-    "murray state": "murray-state",
-
-    # --- N ---
-    "navy": "navy",
-    "nebraska": "nebraska",
-    "nevada": "nevada",
-    "nevada las vegas": "unlv",
-    "new hampshire": "new-hampshire",
-    "new mexico": "new-mexico",
-    "new mexico state": "new-mexico-state",
-    "new orleans": "new-orleans",
-    "niagara": "niagara",
-    "nicholls state": "nicholls-state",
-    "njit": "njit",
-    "norfolk state": "norfolk-state",
-    "north alabama": "north-alabama",
-    "north carolina": "north-carolina",
-    "north carolina a t": "north-carolina-at",
-    "north carolina central": "north-carolina-central",
-    "north dakota": "north-dakota",
-    "north dakota state": "north-dakota-state",
-    "north florida": "north-florida",
-    "north texas": "north-texas",
-    "northeastern": "northeastern",
-    "northern arizona": "northern-arizona",
-    "northern colorado": "northern-colorado",
-    "northern illinois": "northern-illinois",
-    "northern iowa": "northern-iowa",
-    "northern kentucky": "northern-kentucky",
-    "northwestern": "northwestern",
-    "notre dame": "notre-dame",
-
-    # --- O ---
-    "oakland": "oakland",
-    "ohio": "ohio",
-    "ohio state": "ohio-state",
-    "oklahoma": "oklahoma",
-    "oklahoma state": "oklahoma-state",
-    "old dominion": "old-dominion",
-    "ole miss": "ole-miss",
-    "omaha": "omaha",
-    "oral roberts": "oral-roberts",
-    "oregon": "oregon",
-    "oregon state": "oregon-state",
-    "ouachita baptist": "ouachita-baptist",  # placeholder
-    "overland": "overland",  # placeholder
-
-    # --- P ---
-    "pacific": "pacific",
-    "penn": "penn",
-    "penn state": "penn-state",
-    "pepperdine": "pepperdine",
-    "pittsburgh": "pittsburgh",
-    "portland": "portland",
-    "portland state": "portland-state",
-    "prairie view": "prairie-view",
-    "presbyterian": "presbyterian",
-    "princeton": "princeton",
-    "providence": "providence",
-    "purdue": "purdue",
-    "purdue fort wayne": "purdue-fort-wayne",
-
-    # --- Q ---
-    "quinnipiac": "quinnipiac",
-
-    # --- R ---
-    "radford": "radford",
-    "rhode island": "rhode-island",
-    "rice": "rice",
-    "richmond": "richmond",
-    "rider": "rider",
-    "robert morris": "robert-morris",
-    "rutgers": "rutgers",
-
-})
-
-NCAA_SLUGS.update({
-
-    # --- S ---
-    "sacramento state": "sacramento-state",
-    "sacred heart": "sacred-heart",
-    "saint bonaventure": "saint-bonaventure",
-    "saint francis": "saint-francis",
-    "saint josephs": "saint-josephs",
-    "saint louis": "saint-louis",
-    "saint marys": "saint-marys",
-    "saint peters": "saint-peters",
-    "sam houston": "sam-houston",
-    "samford": "samford",
-    "san diego": "san-diego",
-    "san diego state": "san-diego-state",
-    "san francisco": "san-francisco",
-    "san jose state": "san-jose-state",
-    "santa clara": "santa-clara",
-    "savannah state": "savannah-state",  # inactive but kept
-    "seattle": "seattle",
-    "seton hall": "seton-hall",
-    "siena": "siena",
-    "siu edwardsville": "siu-edwardsville",
-    "smu": "smu",
-    "south alabama": "south-alabama",
-    "south carolina": "south-carolina",
-    "south carolina state": "south-carolina-state",
-    "south dakota": "south-dakota",
-    "south dakota state": "south-dakota-state",
-    "south florida": "south-florida",
-    "southeast missouri state": "southeast-missouri-state",
-    "southeastern louisiana": "southeastern-louisiana",
-    "southern": "southern",
-    "southern illinois": "southern-illinois",
-    "southern indiana": "southern-indiana",
-    "southern miss": "southern-miss",
-    "southern utah": "southern-utah",
-    "stetson": "stetson",
-    "stephen f austin": "stephen-f-austin",
-    "stony brook": "stony-brook",
-    "stony brook university": "stony-brook",
-    "sutd": "sutd",  # placeholder
-    "syracuse": "syracuse",
-
-    # --- T ---
-    "tcu": "tcu",
-    "temple": "temple",
-    "tennessee": "tennessee",
-    "tennessee martin": "tennessee-martin",
-    "tennessee state": "tennessee-state",
-    "tennessee tech": "tennessee-tech",
-    "texas": "texas",
-    "texas a m": "texas-am",
-    "texas a m commerce": "texas-am-commerce",
-    "texas a m corpus christi": "texas-am-corpus-christi",
-    "texas christian": "tcu",
-    "texas el paso": "texas-el-paso",
-    "texas rio grande valley": "texas-rio-grande-valley",
-    "texas southern": "texas-southern",
-    "texas state": "texas-state",
-    "texas tech": "texas-tech",
-    "the citadel": "citadel",
-    "toledo": "toledo",
-    "towson": "towson",
-    "troy": "troy",
-    "tulane": "tulane",
-    "tulsa": "tulsa",
-
-    # --- U ---
-    "uc davis": "uc-davis",
-    "uc irvine": "uc-irvine",
-    "uc riverside": "uc-riverside",
-    "uc san diego": "uc-san-diego",
-    "uc santa barbara": "uc-santa-barbara",
-    "ucla": "ucla",
-    "unc asheville": "unc-asheville",
-    "unc greensboro": "unc-greensboro",
-    "unc wilmington": "unc-wilmington",
-    "unlv": "unlv",
-    "usc": "usc",
-    "usc upstate": "usc-upstate",
-    "ut arlington": "ut-arlington",
-    "ut chattanooga": "chattanooga",
-    "ut martin": "tennessee-martin",
-    "ut rio grande valley": "texas-rio-grande-valley",
-    "utah": "utah",
-    "utah state": "utah-state",
-    "utah tech": "utah-tech",
-    "utah valley": "utah-valley",
-
-    # --- V ---
-    "valparaiso": "valparaiso",
-    "vanderbilt": "vanderbilt",
-    "vermont": "vermont",
-    "villanova": "villanova",
-    "virginia": "virginia",
-    "virginia tech": "virginia-tech",
-    "vmi": "vmi",
-
-    # --- W ---
-    "wabash": "wabash",  # placeholder
-    "wagner": "wagner",
-    "wake forest": "wake-forest",
-    "washington": "washington",
-    "washington state": "washington-state",
-    "weber state": "weber-state",
-    "west georgia": "west-georgia",  # placeholder
-    "west virginia": "west-virginia",
-    "western carolina": "western-carolina",
-    "western illinois": "western-illinois",
-    "western kentucky": "western-kentucky",
-    "western michigan": "western-michigan",
-    "wichita state": "wichita-state",
-    "william mary": "william-mary",
-    "winthrop": "winthrop",
-    "wisconsin": "wisconsin",
-    "wofford": "wofford",
-    "wright state": "wright-state",
-    "wyoming": "wyoming",
-
-    # --- X ---
-    "xavier": "xavier",
-
-    # --- Y ---
-    "yale": "yale",
-    "youngstown state": "youngstown-state",
-
-})
-
-
 
 # ------------------------------------------------------
 # LOGOS (STATIC)
@@ -1730,38 +1309,487 @@ def normalize_name(name: str) -> str:
     name = name.strip()
     return name
 
-@lru_cache(maxsize=500)
-def resolve_team_slug(team_name: str) -> str:
-    """
-    Fuzzy match the provided team name to the closest NCAA DI school.
-    Returns ESPN slug (e.g. 'virginia-tech')
-    """
+# ------------------------------------------------------
+# NCAA MEN'S BASKETBALL — ESPN TEAM LOGO SUPPORT
+# ------------------------------------------------------
+
+from rapidfuzz import fuzz, process
+
+# FULL TEAM MAP WILL BE SENT IN CHUNKS 2–4
+ESPN_NCAAM_TEAMS = {}   # <- will fill this with full 360+ team map
+
+
+# -------------------------------------------
+# Normalization for matching (reuse your NBA fn)
+# -------------------------------------------
+def normalize_team_name(n: str) -> str:
+    if not isinstance(n, str):
+        return ""
+    return (
+        n.lower()
+         .replace(".", "")
+         .replace("'", "")
+         .replace("-", " ")
+         .replace("&", "and")
+         .replace(" st ", " state ")
+         .replace(" univ ", " university ")
+         .strip()
+    )
+    
+
+# ------------------------------------------------------
+# Fuzzy matching function — maps your team → ESPN ID
+# ------------------------------------------------------
+def get_espn_team_id(team_name: str):
+    """Return ESPN numeric ID for a given team name (fuzzy matched)."""
+    
     if not team_name:
         return None
 
-    name_norm = normalize_name(team_name)
+    cleaned = normalize_team_name(team_name)
 
-    candidates = list(NCAA_SLUGS.keys())
+    if not ESPN_NCAAM_TEAMS:
+        return None  # dictionary will be loaded in next chunks
 
-    best_match, score, _ = process.extractOne(
-        name_norm,
-        candidates,
+    # Extract best fuzzy match
+    best_key, score, _ = process.extractOne(
+        cleaned,
+        ESPN_NCAAM_TEAMS.keys(),
         scorer=fuzz.WRatio
     )
 
-    if score < 70:
-        # prevent garbage matches
-        return None
+    # Require at least 80% similarity
+    if score >= 80:
+        return ESPN_NCAAM_TEAMS[best_key]["id"]
 
-    return NCAA_SLUGS[best_match]
+    return None
 
-def get_ncaa_logo(team_name: str) -> str:
-    slug = resolve_team_slug(team_name)
-    if not slug:
-        return "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
 
-    return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{slug}.png"
+# ------------------------------------------------------
+# Get ESPN LOGO URL
+# ------------------------------------------------------
+def ncaa_logo(team_name: str) -> str:
+    """Return the ESPN team logo URL for a given NCAA men's team."""
+    espn_id = get_espn_team_id(team_name)
+    
+    if espn_id:
+        return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{espn_id}.png"
 
+    # fallback image
+    return "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
+# ------------------------------------------------------
+# ESPN TEAM MAP — CHUNK 2 (Teams 1–100)
+# ------------------------------------------------------
+
+ESPN_NCAAM_TEAMS.update({
+
+    "abilene christian": {"id": 2006, "name": "Abilene Christian Wildcats"},
+    "air force": {"id": 2007, "name": "Air Force Falcons"},
+    "akron": {"id": 2008, "name": "Akron Zips"},
+    "alabama": {"id": 333, "name": "Alabama Crimson Tide"},
+    "alabama a&m": {"id": 2010, "name": "Alabama A&M Bulldogs"},
+    "alabama state": {"id": 2012, "name": "Alabama State Hornets"},
+    "albany": {"id": 399, "name": "Albany Great Danes"},
+    "alcorn state": {"id": 2015, "name": "Alcorn State Braves"},
+    "american": {"id": 44, "name": "American Eagles"},
+    "appalachian state": {"id": 2026, "name": "Appalachian State Mountaineers"},
+    "arizona": {"id": 12, "name": "Arizona Wildcats"},
+    "arizona state": {"id": 9, "name": "Arizona State Sun Devils"},
+    "arkansas": {"id": 8, "name": "Arkansas Razorbacks"},
+    "arkansas pine bluff": {"id": 2032, "name": "Arkansas–Pine Bluff Golden Lions"},
+    "army": {"id": 349, "name": "Army Black Knights"},
+    "auburn": {"id": 2, "name": "Auburn Tigers"},
+
+    "austin peay": {"id": 2040, "name": "Austin Peay Governors"},
+    "ball state": {"id": 2050, "name": "Ball State Cardinals"},
+    "baylor": {"id": 239, "name": "Baylor Bears"},
+    "bellarmine": {"id": 112, "name": "Bellarmine Knights"},
+    "belmont": {"id": 2057, "name": "Belmont Bruins"},
+    "bethune cookman": {"id": 2060, "name": "Bethune–Cookman Wildcats"},
+    "binghamton": {"id": 2061, "name": "Binghamton Bearcats"},
+    "boise state": {"id": 68, "name": "Boise State Broncos"},
+    "boston college": {"id": 103, "name": "Boston College Eagles"},
+    "boston university": {"id": 104, "name": "Boston University Terriers"},
+    "bowling green": {"id": 284, "name": "Bowling Green Falcons"},
+    "bradley": {"id": 71, "name": "Bradley Braves"},
+    "brigham young": {"id": 252, "name": "BYU Cougars"},
+    "brown": {"id": 107, "name": "Brown Bears"},
+    "bryant": {"id": 2049, "name": "Bryant Bulldogs"},
+    "bucknell": {"id": 108, "name": "Bucknell Bison"},
+    "buffalo": {"id": 107, "name": "Buffalo Bulls"},
+    "butler": {"id": 2086, "name": "Butler Bulldogs"},
+
+    "cal baptist": {"id": 314, "name": "Cal Baptist Lancers"},
+    "cal poly": {"id": 13, "name": "Cal Poly Mustangs"},
+    "cal state bakersfield": {"id": 16, "name": "CSU Bakersfield Roadrunners"},
+    "cal state fullerton": {"id": 20, "name": "CSU Fullerton Titans"},
+    "cal state northridge": {"id": 22, "name": "CSUN Matadors"},
+    "california": {"id": 25, "name": "California Golden Bears"},
+    "campbell": {"id": 2099, "name": "Campbell Fighting Camels"},
+    "canisius": {"id": 62, "name": "Canisius Golden Griffins"},
+    "central arkansas": {"id": 2115, "name": "Central Arkansas Bears"},
+    "central connecticut state": {"id": 2116, "name": "CCSU Blue Devils"},
+    "central michigan": {"id": 2117, "name": "Central Michigan Chippewas"},
+
+    "charleston southern": {"id": 2122, "name": "Charleston Southern Buccaneers"},
+    "charlotte": {"id": 2429, "name": "Charlotte 49ers"},
+    "chattanooga": {"id": 2132, "name": "Chattanooga Mocs"},
+    "chicago state": {"id": 2137, "name": "Chicago State Cougars"},
+    "cincinnati": {"id": 213, "name": "Cincinnati Bearcats"},
+    "clemson": {"id": 228, "name": "Clemson Tigers"},
+    "cleveland state": {"id": 325, "name": "Cleveland State Vikings"},
+    "coastal carolina": {"id": 324, "name": "Coastal Carolina Chanticleers"},
+    "colgate": {"id": 2142, "name": "Colgate Raiders"},
+    "college of charleston": {"id": 232, "name": "College of Charleston Cougars"},
+    "colorado": {"id": 38, "name": "Colorado Buffaloes"},
+    "colorado state": {"id": 36, "name": "Colorado State Rams"},
+    "columbia": {"id": 171, "name": "Columbia Lions"},
+    "connecticut": {"id": 41, "name": "UConn Huskies"},
+    "coppin state": {"id": 2149, "name": "Coppin State Eagles"},
+    "cornell": {"id": 172, "name": "Cornell Big Red"},
+    "creighton": {"id": 156, "name": "Creighton Bluejays"},
+
+    "dartmouth": {"id": 158, "name": "Dartmouth Big Green"},
+    "davidson": {"id": 2166, "name": "Davidson Wildcats"},
+    "dayton": {"id": 2168, "name": "Dayton Flyers"},
+    "delaware": {"id": 48, "name": "Delaware Fightin' Blue Hens"},
+    "delaware state": {"id": 2172, "name": "Delaware State Hornets"},
+    "denver": {"id": 2174, "name": "Denver Pioneers"},
+    "depaul": {"id": 182, "name": "DePaul Blue Demons"},
+    "detroit mercy": {"id": 2179, "name": "Detroit Mercy Titans"},
+    "drake": {"id": 2180, "name": "Drake Bulldogs"},
+    "drexel": {"id": 2181, "name": "Drexel Dragons"},
+    "duke": {"id": 150, "name": "Duke Blue Devils"},
+    "duquesne": {"id": 2184, "name": "Duquesne Dukes"},
+
+    "east carolina": {"id": 151, "name": "East Carolina Pirates"},
+    "east tennessee state": {"id": 2193, "name": "East Tennessee State Buccaneers"},
+    "eastern illinois": {"id": 2196, "name": "Eastern Illinois Panthers"},
+    "eastern kentucky": {"id": 2197, "name": "Eastern Kentucky Colonels"},
+    "eastern michigan": {"id": 2198, "name": "Eastern Michigan Eagles"},
+    "eastern washington": {"id": 331, "name": "Eastern Washington Eagles"},
+    "elon": {"id": 47, "name": "Elon Phoenix"},
+    "evansville": {"id": 21, "name": "Evansville Purple Aces"},
+    "fairfield": {"id": 46, "name": "Fairfield Stags"},
+    "fairleigh dickinson": {"id": 2208, "name": "Fairleigh Dickinson Knights"},
+    "florida": {"id": 57, "name": "Florida Gators"},
+    "florida a&m": {"id": 50, "name": "Florida A&M Rattlers"},
+    "florida atlantic": {"id": 2226, "name": "Florida Atlantic Owls"},
+    "florida gulf coast": {"id": 526, "name": "Florida Gulf Coast Eagles"},
+    "florida international": {"id": 2229, "name": "FIU Panthers"},
+    "florida state": {"id": 52, "name": "Florida State Seminoles"},
+})
+
+# ------------------------------------------------------
+# ESPN TEAM MAP — CHUNK 3 (Teams 101–200)
+# ------------------------------------------------------
+
+ESPN_NCAAM_TEAMS.update({
+
+    "fordham": {"id": 2230, "name": "Fordham Rams"},
+    "fresno state": {"id": 278, "name": "Fresno State Bulldogs"},
+    "furman": {"id": 231, "name": "Furman Paladins"},
+
+    # --- G ---
+    "gardner webb": {"id": 2241, "name": "Gardner–Webb Runnin' Bulldogs"},
+    "george mason": {"id": 2244, "name": "George Mason Patriots"},
+    "george washington": {"id": 45, "name": "George Washington Revolutionaries"},
+    "georgetown": {"id": 46, "name": "Georgetown Hoyas"},
+    "georgia": {"id": 61, "name": "Georgia Bulldogs"},
+    "georgia southern": {"id": 290, "name": "Georgia Southern Eagles"},
+    "georgia state": {"id": 2247, "name": "Georgia State Panthers"},
+    "georgia tech": {"id": 59, "name": "Georgia Tech Yellow Jackets"},
+    "gonzaga": {"id": 2250, "name": "Gonzaga Bulldogs"},
+    "grambling": {"id": 275, "name": "Grambling State Tigers"},
+    "grand canyon": {"id": 2253, "name": "Grand Canyon Antelopes"},
+    "green bay": {"id": 273, "name": "Green Bay Phoenix"},
+
+    # --- H ---
+    "hampton": {"id": 47, "name": "Hampton Pirates"},
+    "harvard": {"id": 108, "name": "Harvard Crimson"},
+    "hawaii": {"id": 62, "name": "Hawaii Rainbow Warriors"},
+    "high point": {"id": 2256, "name": "High Point Panthers"},
+    "hofstra": {"id": 227, "name": "Hofstra Pride"},
+    "holy cross": {"id": 111, "name": "Holy Cross Crusaders"},
+    "houston": {"id": 248, "name": "Houston Cougars"},
+    "houston christian": {"id": 2270, "name": "Houston Christian Huskies"},
+
+    # --- I ---
+    "idaho": {"id": 70, "name": "Idaho Vandals"},
+    "idaho state": {"id": 71, "name": "Idaho State Bengals"},
+    "illinois": {"id": 356, "name": "Illinois Fighting Illini"},
+    "illinois chicago": {"id": 257, "name": "UIC Flames"},
+    "illinois state": {"id": 2287, "name": "Illinois State Redbirds"},
+    "incarnate word": {"id": 315, "name": "Incarnate Word Cardinals"},
+    "indiana": {"id": 84, "name": "Indiana Hoosiers"},
+    "indiana state": {"id": 85, "name": "Indiana State Sycamores"},
+    "iona": {"id": 86, "name": "Iona Gaels"},
+    "iowa": {"id": 2294, "name": "Iowa Hawkeyes"},
+    "iowa state": {"id": 66, "name": "Iowa State Cyclones"},
+    "iupui": {"id": 304, "name": "IUPUI Jaguars"},
+
+    # --- J ---
+    "jackson state": {"id": 2298, "name": "Jackson State Tigers"},
+    "jacksonville": {"id": 2300, "name": "Jacksonville Dolphins"},
+    "jacksonville state": {"id": 55, "name": "Jacksonville State Gamecocks"},
+    "james madison": {"id": 256, "name": "James Madison Dukes"},
+
+    # --- K ---
+    "kansas": {"id": 2305, "name": "Kansas Jayhawks"},
+    "kansas state": {"id": 2306, "name": "Kansas State Wildcats"},
+    "kennesaw state": {"id": 338, "name": "Kennesaw State Owls"},
+    "kent state": {"id": 2309, "name": "Kent State Golden Flashes"},
+    "kentucky": {"id": 96, "name": "Kentucky Wildcats"},
+
+    # --- L ---
+    "la salle": {"id": 2325, "name": "La Salle Explorers"},
+    "lafayette": {"id": 322, "name": "Lafayette Leopards"},
+    "lamar": {"id": 2328, "name": "Lamar Cardinals"},
+    "lehigh": {"id": 2335, "name": "Lehigh Mountain Hawks"},
+    "liberty": {"id": 2337, "name": "Liberty Flames"},
+    "lipscomb": {"id": 2340, "name": "Lipscomb Bisons"},
+    "little rock": {"id": 2344, "name": "Little Rock Trojans"},
+    "long beach state": {"id": 2348, "name": "Long Beach State Beach"},
+    "long island": {"id": 2349, "name": "Long Island Sharks"},
+    "longwood": {"id": 2351, "name": "Longwood Lancers"},
+    "loyola chicago": {"id": 2354, "name": "Loyola Chicago Ramblers"},
+    "loyola maryland": {"id": 2358, "name": "Loyola Maryland Greyhounds"},
+    "loyola marymount": {"id": 2359, "name": "Loyola Marymount Lions"},
+    "lsu": {"id": 99, "name": "LSU Tigers"},
+
+    # --- M ---
+    "maine": {"id": 311, "name": "Maine Black Bears"},
+    "manhattan": {"id": 2363, "name": "Manhattan Jaspers"},
+    "marist": {"id": 2368, "name": "Marist Red Foxes"},
+    "marquette": {"id": 269, "name": "Marquette Golden Eagles"},
+    "marshall": {"id": 2377, "name": "Marshall Thundering Herd"},
+    "maryland": {"id": 120, "name": "Maryland Terrapins"},
+    "maryland eastern shore": {"id": 123, "name": "Maryland Eastern Shore Hawks"},
+    "massachusetts": {"id": 113, "name": "UMass Minutemen"},
+    "mcneese": {"id": 2378, "name": "McNeese Cowboys"},
+    "memphis": {"id": 235, "name": "Memphis Tigers"},
+    "mercer": {"id": 2381, "name": "Mercer Bears"},
+    "miami": {"id": 2390, "name": "Miami Hurricanes"},
+    "miami ohio": {"id": 193, "name": "Miami (OH) RedHawks"},
+    "michigan": {"id": 130, "name": "Michigan Wolverines"},
+    "michigan state": {"id": 127, "name": "Michigan State Spartans"},
+    "middle tennessee": {"id": 2393, "name": "Middle Tennessee Blue Raiders"},
+    "milwaukee": {"id": 270, "name": "Milwaukee Panthers"},
+    "minnesota": {"id": 135, "name": "Minnesota Golden Gophers"},
+    "mississippi state": {"id": 344, "name": "Mississippi State Bulldogs"},
+    "mississippi valley state": {"id": 2400, "name": "Mississippi Valley State Delta Devils"},
+    "missouri": {"id": 142, "name": "Missouri Tigers"},
+    "missouri state": {"id": 1424, "name": "Missouri State Bears"},
+    "monmouth": {"id": 2430, "name": "Monmouth Hawks"},
+    "montana": {"id": 147, "name": "Montana Grizzlies"},
+    "montana state": {"id": 1471, "name": "Montana State Bobcats"},
+    "morehead state": {"id": 2413, "name": "Morehead State Eagles"},
+    "morgan state": {"id": 2415, "name": "Morgan State Bears"},
+    "mount st marys": {"id": 2428, "name": "Mount St. Mary's Mountaineers"},
+    "murray state": {"id": 93, "name": "Murray State Racers"},
+
+    # --- N ---
+    "navy": {"id": 249, "name": "Navy Midshipmen"},
+    "nebraska": {"id": 158, "name": "Nebraska Cornhuskers"},
+    "nevada": {"id": 2440, "name": "Nevada Wolf Pack"},
+    "unlv": {"id": 2439, "name": "UNLV Rebels"},
+    "new hampshire": {"id": 288, "name": "New Hampshire Wildcats"},
+    "new mexico": {"id": 167, "name": "New Mexico Lobos"},
+    "new mexico state": {"id": 166, "name": "New Mexico State Aggies"},
+    "new orleans": {"id": 2445, "name": "New Orleans Privateers"},
+    "niagara": {"id": 2446, "name": "Niagara Purple Eagles"},
+    "nicholls state": {"id": 2447, "name": "Nicholls Colonels"},
+    "njit": {"id": 2882, "name": "NJIT Highlanders"},
+    "norfolk state": {"id": 293, "name": "Norfolk State Spartans"},
+    "north alabama": {"id": 57, "name": "North Alabama Lions"},
+    "north carolina": {"id": 153, "name": "North Carolina Tar Heels"},
+    "north carolina a&t": {"id": 2448, "name": "NC A&T Aggies"},
+    "north carolina central": {"id": 2450, "name": "NC Central Eagles"},
+    "north dakota": {"id": 294, "name": "North Dakota Fighting Hawks"},
+    "north dakota state": {"id": 295, "name": "North Dakota State Bison"},
+    "north florida": {"id": 302, "name": "North Florida Ospreys"},
+    "north texas": {"id": 288, "name": "North Texas Mean Green"},
+    "northeastern": {"id": 1118, "name": "Northeastern Huskies"},
+    "northern arizona": {"id": 301, "name": "Northern Arizona Lumberjacks"},
+    "northern colorado": {"id": 2452, "name": "Northern Colorado Bears"},
+    "northern illinois": {"id": 2453, "name": "Northern Illinois Huskies"},
+    "northern iowa": {"id": 2460, "name": "Northern Iowa Panthers"},
+    "northern kentucky": {"id": 2463, "name": "Northern Kentucky Norse"},
+    "northwestern": {"id": 77, "name": "Northwestern Wildcats"},
+    "notre dame": {"id": 87, "name": "Notre Dame Fighting Irish"},
+
+})
+
+# ------------------------------------------------------
+# ESPN TEAM MAP — CHUNK 4 (Teams 200–362)
+# ------------------------------------------------------
+
+ESPN_NCAAM_TEAMS.update({
+
+    # --- O ---
+    "oakland": {"id": 2472, "name": "Oakland Golden Grizzlies"},
+    "ohio": {"id": 195, "name": "Ohio Bobcats"},
+    "ohio state": {"id": 194, "name": "Ohio State Buckeyes"},
+    "oklahoma": {"id": 201, "name": "Oklahoma Sooners"},
+    "oklahoma state": {"id": 197, "name": "Oklahoma State Cowboys"},
+    "old dominion": {"id": 295, "name": "Old Dominion Monarchs"},
+    "omaha": {"id": 2437, "name": "Omaha Mavericks"},
+    "oral roberts": {"id": 1976, "name": "Oral Roberts Golden Eagles"},
+    "oregon": {"id": 2483, "name": "Oregon Ducks"},
+    "oregon state": {"id": 204, "name": "Oregon State Beavers"},
+
+    # --- P ---
+    "pacific": {"id": 26, "name": "Pacific Tigers"},
+    "penn": {"id": 219, "name": "Penn Quakers"},
+    "penn state": {"id": 213, "name": "Penn State Nittany Lions"},
+    "pepperdine": {"id": 236, "name": "Pepperdine Waves"},
+    "pittsburgh": {"id": 221, "name": "Pittsburgh Panthers"},
+    "portland": {"id": 2491, "name": "Portland Pilots"},
+    "portland state": {"id": 2492, "name": "Portland State Vikings"},
+    "prairie view a&m": {"id": 2504, "name": "Prairie View A&M Panthers"},
+    "presbyterian": {"id": 2508, "name": "Presbyterian Blue Hose"},
+    "princeton": {"id": 163, "name": "Princeton Tigers"},
+    "providence": {"id": 2509, "name": "Providence Friars"},
+    "purdue": {"id": 250, "name": "Purdue Boilermakers"},
+    "purdue fort wayne": {"id": 2506, "name": "Purdue Fort Wayne Mastodons"},
+
+    # --- Q ---
+    "quinnipiac": {"id": 2513, "name": "Quinnipiac Bobcats"},
+
+    # --- R ---
+    "radford": {"id": 2514, "name": "Radford Highlanders"},
+    "rhode island": {"id": 227, "name": "Rhode Island Rams"},
+    "rice": {"id": 242, "name": "Rice Owls"},
+    "richmond": {"id": 2578, "name": "Richmond Spiders"},
+    "rider": {"id": 2520, "name": "Rider Broncs"},
+    "robert morris": {"id": 2523, "name": "Robert Morris Colonials"},
+    "rutgers": {"id": 164, "name": "Rutgers Scarlet Knights"},
+
+    # --- S ---
+    "sacramento state": {"id": 2541, "name": "Sacramento State Hornets"},
+    "sacred heart": {"id": 2542, "name": "Sacred Heart Pioneers"},
+    "saint francis pa": {"id": 2552, "name": "Saint Francis (PA) Red Flash"},
+    "saint josephs": {"id": 2603, "name": "Saint Joseph's Hawks"},
+    "saint louis": {"id": 139, "name": "Saint Louis Billikens"},
+    "saint marys": {"id": 2608, "name": "Saint Mary's Gaels"},
+    "saint peters": {"id": 2610, "name": "Saint Peter's Peacocks"},
+
+    "sam houston": {"id": 2538, "name": "Sam Houston Bearkats"},
+    "samford": {"id": 2550, "name": "Samford Bulldogs"},
+    "san diego": {"id": 301, "name": "San Diego Toreros"},
+    "san diego state": {"id": 21, "name": "San Diego State Aztecs"},
+    "san francisco": {"id": 2604, "name": "San Francisco Dons"},
+    "san jose state": {"id": 23, "name": "San Jose State Spartans"},
+    "santa clara": {"id": 259, "name": "Santa Clara Broncos"},
+
+    "seattle": {"id": 2519, "name": "Seattle Redhawks"},
+    "seton hall": {"id": 2551, "name": "Seton Hall Pirates"},
+    "shippensburg": {"id": 99, "name": "Shippensburg Raiders"},
+    "siena": {"id": 2560, "name": "Siena Saints"},
+    "siu edwardsville": {"id": 2564, "name": "SIUE Cougars"},
+    "smu": {"id": 2567, "name": "SMU Mustangs"},
+    "south alabama": {"id": 6, "name": "South Alabama Jaguars"},
+    "south carolina": {"id": 2579, "name": "South Carolina Gamecocks"},
+    "south carolina state": {"id": 2580, "name": "South Carolina State Bulldogs"},
+    "south dakota": {"id": 233, "name": "South Dakota Coyotes"},
+    "south dakota state": {"id": 2571, "name": "South Dakota State Jackrabbits"},
+    "south florida": {"id": 58, "name": "South Florida Bulls"},
+    "southeast missouri state": {"id": 2586, "name": "SEMO Redhawks"},
+    "southeastern louisiana": {"id": 2572, "name": "Southeastern Louisiana Lions"},
+    "southern": {"id": 2588, "name": "Southern Jaguars"},
+    "southern illinois": {"id": 2578, "name": "Southern Illinois Salukis"},
+    "southern indiana": {"id": 2591, "name": "Southern Indiana Screaming Eagles"},
+    "southern miss": {"id": 2572, "name": "Southern Miss Golden Eagles"},
+    "southern utah": {"id": 300, "name": "Southern Utah Thunderbirds"},
+    "st bonaventure": {"id": 179, "name": "St. Bonaventure Bonnies"},
+    "st francis brooklyn": {"id": 252, "name": "St. Francis Brooklyn Terriers"},
+    "st johns": {"id": 2599, "name": "St. John's Red Storm"},
+    "st thomas": {"id": 3001, "name": "St. Thomas Tommies"},
+    "stanford": {"id": 24, "name": "Stanford Cardinal"},
+    "stephen f austin": {"id": 2597, "name": "Stephen F. Austin Lumberjacks"},
+    "stetson": {"id": 2590, "name": "Stetson Hatters"},
+
+    # --- T ---
+    "tcu": {"id": 2628, "name": "TCU Horned Frogs"},
+    "temple": {"id": 218, "name": "Temple Owls"},
+    "tennessee": {"id": 2633, "name": "Tennessee Volunteers"},
+    "tennessee martin": {"id": 2634, "name": "UT Martin Skyhawks"},
+    "tennessee state": {"id": 2638, "name": "Tennessee State Tigers"},
+    "tennessee tech": {"id": 2640, "name": "Tennessee Tech Golden Eagles"},
+    "texas": {"id": 251, "name": "Texas Longhorns"},
+    "texas a&m": {"id": 245, "name": "Texas A&M Aggies"},
+    "texas a&m commerce": {"id": 3150, "name": "Texas A&M-Commerce Lions"},
+    "texas a&m corpus christi": {"id": 2670, "name": "Texas A&M–Corpus Christi Islanders"},
+    "texas state": {"id": 326, "name": "Texas State Bobcats"},
+    "texas southern": {"id": 2648, "name": "Texas Southern Tigers"},
+    "texas tech": {"id": 2641, "name": "Texas Tech Red Raiders"},
+    "the citadel": {"id": 239, "name": "The Citadel Bulldogs"},
+    "toledo": {"id": 2649, "name": "Toledo Rockets"},
+    "towson": {"id": 2652, "name": "Towson Tigers"},
+    "troy": {"id": 2653, "name": "Troy Trojans"},
+    "tulane": {"id": 2655, "name": "Tulane Green Wave"},
+    "tulsa": {"id": 202, "name": "Tulsa Golden Hurricane"},
+
+    # --- U ---
+    "uab": {"id": 5, "name": "UAB Blazers"},
+    "uc davis": {"id": 302, "name": "UC Davis Aggies"},
+    "uc irvine": {"id": 300, "name": "UC Irvine Anteaters"},
+    "uc riverside": {"id": 302, "name": "UC Riverside Highlanders"},
+    "uc san diego": {"id": 301, "name": "UC San Diego Tritons"},
+    "uc santa barbara": {"id": 302, "name": "UC Santa Barbara Gauchos"},
+    "ucf": {"id": 2116, "name": "UCF Knights"},
+    "ucla": {"id": 26, "name": "UCLA Bruins"},
+    "uconn": {"id": 41, "name": "UConn Huskies"},
+    "ul lafayette": {"id": 309, "name": "Louisiana Ragin' Cajuns"},
+    "ul monroe": {"id": 308, "name": "ULM Warhawks"},
+    "umbc": {"id": 299, "name": "UMBC Retrievers"},
+    "umkc": {"id": 301, "name": "Kansas City Roos"},
+    "unc asheville": {"id": 308, "name": "UNC Asheville Bulldogs"},
+    "unc greensboro": {"id": 309, "name": "UNC Greensboro Spartans"},
+    "unc wilmington": {"id": 310, "name": "UNC Wilmington Seahawks"},
+
+    "usc": {"id": 30, "name": "USC Trojans"},
+    "usc upstate": {"id": 292, "name": "USC Upstate Spartans"},
+    "ut arlington": {"id": 301, "name": "UT Arlington Mavericks"},
+    "ut rio grande valley": {"id": 28, "name": "UTRGV Vaqueros"},
+    "utah": {"id": 254, "name": "Utah Utes"},
+    "utah state": {"id": 328, "name": "Utah State Aggies"},
+    "utah tech": {"id": 301, "name": "Utah Tech Trailblazers"},
+    "utah valley": {"id": 301, "name": "Utah Valley Wolverines"},
+
+    # --- V ---
+    "valparaiso": {"id": 2674, "name": "Valparaiso Beacons"},
+    "vanderbilt": {"id": 238, "name": "Vanderbilt Commodores"},
+    "vermont": {"id": 261, "name": "Vermont Catamounts"},
+    "villanova": {"id": 222, "name": "Villanova Wildcats"},
+    "virginia": {"id": 258, "name": "Virginia Cavaliers"},
+    "virginia tech": {"id": 259, "name": "Virginia Tech Hokies"},
+    "vmi": {"id": 264, "name": "VMI Keydets"},
+
+    # --- W ---
+    "wagner": {"id": 294, "name": "Wagner Seahawks"},
+    "wake forest": {"id": 255, "name": "Wake Forest Demon Deacons"},
+    "washington": {"id": 264, "name": "Washington Huskies"},
+    "washington state": {"id": 265, "name": "Washington State Cougars"},
+    "weber state": {"id": 270, "name": "Weber State Wildcats"},
+    "west virginia": {"id": 277, "name": "West Virginia Mountaineers"},
+    "western carolina": {"id": 2717, "name": "Western Carolina Catamounts"},
+    "western illinois": {"id": 2710, "name": "Western Illinois Leathernecks"},
+    "western kentucky": {"id": 98, "name": "Western Kentucky Hilltoppers"},
+    "western michigan": {"id": 2711, "name": "Western Michigan Broncos"},
+    "wichita state": {"id": 2724, "name": "Wichita State Shockers"},
+    "william & mary": {"id": 2729, "name": "William & Mary Tribe"},
+    "winthrop": {"id": 2737, "name": "Winthrop Eagles"},
+    "wisconsin": {"id": 275, "name": "Wisconsin Badgers"},
+    "wofford": {"id": 2767, "name": "Wofford Terriers"},
+    "wright state": {"id": 2774, "name": "Wright State Raiders"},
+    "wyoming": {"id": 2751, "name": "Wyoming Cowboys"},
+
+    # --- Y ---
+    "yale": {"id": 43, "name": "Yale Bulldogs"},
+    "youngstown state": {"id": 2753, "name": "Youngstown State Penguins"},
+
+})
 
 def normalize_team_code(raw: str) -> str:
     if raw is None:
@@ -2731,203 +2759,126 @@ def build_injury_lookup():
 build_injury_lookup()
 
 # ------------------------------------------------------
-# NCAA OVERVIEW CARD (Expandable)
+# NCAA GAME OVERVIEW CARD (Final Optimized Version)
 # ------------------------------------------------------
-import streamlit.components.v1 as components
-
 def render_ncaab_overview_card(row):
+    # Safety helpers
+    def safe(x, default="—"):
+        return default if x is None or x == "" else x
 
-    # ---------------------------------------
-    # Unique ID for expanding the card
-    # ---------------------------------------
+    # Unique ID for expansion state
     game_id = (
-        str(row.get("game", ""))
+        row["game"]
         .replace(" ", "")
         .replace("@", "")
         .replace("-", "")
-        .lower()
+        .replace("'", "")
+        .replace(".", "")
     )
 
-    # ---------------------------------------
-    # Team Names & Logos (fuzzy resolver)
-    # ---------------------------------------
-    home = row.get("home_team", "Home")
-    away = row.get("away_team", "Away")
+    # Extract names
+    home = safe(row.get("home_team"))
+    away = safe(row.get("away_team"))
 
-    home_logo = get_ncaa_logo(home)
-    away_logo = get_ncaa_logo(away)
+    # ESPN Logos via fuzzy-matched slugs
+    home_logo_url = get_ncaa_logo(home)
+    away_logo_url = get_ncaa_logo(away)
 
-    # ---------------------------------------
-    # Start Time Formatting
-    # ---------------------------------------
+    # Convert logos to base64 (fast + safe for Streamlit)
+    home_logo_b64 = logo_to_base64_url(home_logo_url)
+    away_logo_b64 = logo_to_base64_url(away_logo_url)
+
+    # Format start time
     start_time = row.get("start_time")
-    try:
-        dt = pd.to_datetime(start_time).tz_convert("America/New_York")
-        start_str = dt.strftime("%a %I:%M %p ET")
-    except:
-        start_str = str(start_time)
-
-    # ---------------------------------------
-    # Odds (ML / Spread / Total)
-    # ---------------------------------------
-    home_ml = row.get("home_ml", "—")
-    away_ml = row.get("away_ml", "—")
-    home_spread = row.get("home_spread", "—")
-    away_spread = row.get("away_spread", "—")
-    total_line = row.get("total_line", "—")
-
-    # ---------------------------------------
-    # Formatting helper
-    # ---------------------------------------
-    def fmt(x):
+    if pd.isna(start_time):
+        start_str = ""
+    else:
         try:
-            return f"{float(x):.1f}"
+            dt = pd.to_datetime(start_time).tz_convert("America/New_York")
+            start_str = dt.strftime("%a • %I:%M %p ET")
         except:
-            return "—"
+            start_str = str(start_time)
 
-    # ---------------------------------------
-    # Card HTML
-    # ---------------------------------------
+    # Odds & projections
+    home_ml = safe(row.get("home_ml"))
+    away_ml = safe(row.get("away_ml"))
+    home_spread = safe(row.get("home_spread"))
+    away_spread = safe(row.get("away_spread"))
+    total_line = safe(row.get("total_line"))
+
+    proj_home = safe(row.get("proj_home_points"))
+    proj_away = safe(row.get("proj_away_points"))
+    proj_total = safe(row.get("proj_total_points"))
+    proj_margin = safe(row.get("proj_margin"))
+
+    # Build HTML
     html = f"""
-    <style>
-        .ncaab-card {{
-            background: linear-gradient(135deg, #0f172a, #1e293b);
-            padding: 20px;
-            border-radius: 16px;
-            margin-bottom: 22px;
-            border: 1px solid rgba(255,255,255,0.07);
-            color: white;
-            font-family: Inter, sans-serif;
-            transition: 0.2s ease;
-        }}
-        .ncaab-card:hover {{
-            border-color: rgba(255,255,255,0.18);
-            background: linear-gradient(135deg, #15233a, #233144);
-        }}
-
-        .ncaab-header {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }}
-
-        .team-block {{
-            flex: 1;
-            text-align: center;
-        }}
-
-        .team-logo {{
-            width: 48px;
-            height: 48px;
-            object-fit: contain;
-            border-radius: 8px;
-        }}
-
-        .team-name {{
-            margin-top: 6px;
-            font-weight: 700;
-            font-size: 1rem;
-        }}
-
-        .vs {{
-            flex: 0 0 auto;
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: #94a3b8;
-            padding: 0px 16px;
-        }}
-
-        .expand-btn {{
-            background: rgba(37,99,235,0.95);
-            border: none;
-            padding: 8px 18px;
-            border-radius: 8px;
-            font-weight: 600;
-            margin-top: 12px;
-            cursor: pointer;
-        }}
-
-        .expandable {{
-            max-height: 0px;
-            overflow: hidden;
-            transition: max-height 0.35s ease;
-        }}
-
-        .expanded {{
-            max-height: 900px;
-            margin-top: 14px;
-        }}
-
-        .data-box {{
-            background: rgba(255,255,255,0.05);
-            padding: 12px;
-            border-radius: 10px;
-            margin-bottom: 14px;
-            border: 1px solid rgba(255,255,255,0.06);
-        }}
-
-        .data-title {{
-            font-weight: 700;
-            margin-bottom: 6px;
-            font-size: 0.95rem;
-            color: #e2e8f0;
-        }}
-    </style>
-
     <div class="ncaab-card">
-
+        
         <!-- HEADER -->
-        <div class="ncaab-header">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
 
-            <div class="team-block">
-                <img class="team-logo" src="{home_logo}">
-                <div class="team-name">{home}</div>
+            <!-- HOME TEAM -->
+            <div style="flex:1; text-align:center;">
+                <img src="{home_logo_b64}" style="width:56px;height:56px;border-radius:8px;object-fit:contain;" />
+                <div style="font-size:0.95rem;font-weight:700;margin-top:4px;">{home}</div>
             </div>
 
-            <div class="vs">vs</div>
+            <!-- VS -->
+            <div style="flex:0 0 auto;font-size:1.1rem;font-weight:700;color:#9CA3AF;">vs</div>
 
-            <div class="team-block">
-                <img class="team-logo" src="{away_logo}">
-                <div class="team-name">{away}</div>
+            <!-- AWAY TEAM -->
+            <div style="flex:1; text-align:center;">
+                <img src="{away_logo_b64}" style="width:56px;height:56px;border-radius:8px;object-fit:contain;" />
+                <div style="font-size:0.95rem;font-weight:700;margin-top:4px;">{away}</div>
             </div>
 
         </div>
 
-        <div style="font-size:0.85rem;color:#94a3b8;margin-top:8px;">
+        <!-- START TIME -->
+        <div style="font-size:0.82rem;color:#9CA3AF;margin-top:6px;text-align:center;">
             {start_str}
         </div>
 
-        <button class="expand-btn" onclick="toggleNCAAB('{game_id}')">
+        <!-- EXPAND BUTTON -->
+        <button onclick="toggleCard_{game_id}()"
+                style="
+                    background:#2563EB;
+                    border:none;
+                    color:white;
+                    width:100%;
+                    margin-top:12px;
+                    padding:8px 0;
+                    border-radius:8px;
+                    cursor:pointer;
+                    font-size:0.9rem;
+                ">
             Show Details
         </button>
 
         <!-- EXPANDABLE CONTENT -->
-        <div id="box-{game_id}" class="expandable">
-
-            <div class="data-box">
-                <div class="data-title">Moneyline</div>
+        <div id="details_{game_id}"
+             style="max-height:0;overflow:hidden;transition:max-height 0.35s ease;">
+             
+            <div class="ncaab-expanded">
+                <b>Moneyline</b><br>
                 {home}: {home_ml}<br>
-                {away}: {away_ml}
-            </div>
+                {away}: {away_ml}<br><br>
 
-            <div class="data-box">
-                <div class="data-title">Spread</div>
+                <b>Spread</b><br>
                 {home}: {home_spread}<br>
-                {away}: {away_spread}
+                {away}: {away_spread}<br><br>
+
+                <b>Total:</b> {total_line}
             </div>
 
-            <div class="data-box">
-                <div class="data-title">Total</div>
-                {total_line}
-            </div>
+            <div class="ncaab-expanded">
+                <b>Model Projections</b><br>
+                {home}: {proj_home}<br>
+                {away}: {proj_away}<br><br>
 
-            <div class="data-box">
-                <div class="data-title">Model Projection</div>
-                {home}: {fmt(row.get("proj_home_points"))} pts<br>
-                {away}: {fmt(row.get("proj_away_points"))} pts<br><br>
-
-                <b>Total:</b> {fmt(row.get("proj_total_points"))}<br>
-                <b>Margin:</b> {fmt(row.get("proj_margin"))}
+                <b>Total:</b> {proj_total}<br>
+                <b>Margin:</b> {proj_margin}
             </div>
 
         </div>
@@ -2935,14 +2886,18 @@ def render_ncaab_overview_card(row):
     </div>
 
     <script>
-        function toggleNCAAB(id) {{
-            var box = document.getElementById("box-" + id);
-            box.classList.toggle("expanded");
+    function toggleCard_{game_id}() {{
+        var el = document.getElementById("details_{game_id}");
+        if (el.style.maxHeight === "0px" || el.style.maxHeight === "") {{
+            el.style.maxHeight = "900px";
+        }} else {{
+            el.style.maxHeight = "0px";
         }}
+    }}
     </script>
     """
 
-    components.html(html, height=330)
+    components.html(html, height=350)
 
 
 

@@ -35,7 +35,7 @@ EST = pytz.timezone("America/New_York")
 st.set_page_config(
     page_title="NBA Prop Analyzer",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 # ------------------------------------------------------
@@ -2396,11 +2396,13 @@ def render_prop_cards(
             # ======================================================
             #                EXPANDER UI START
             # ======================================================
-            with st.expander(expand_label, expanded=False):
-
-                st.markdown(card_html, unsafe_allow_html=True)
-
-                st.markdown("### 📊 Additional Analytics (Placeholder)")
+            # ---- SHOW FULL CARD ALWAYS ----
+            st.markdown(card_html, unsafe_allow_html=True)
+            
+            # ---- EXPANDER BELOW THE CARD ----
+            with st.expander("📊 More Analytics", expanded=False):
+            
+                st.markdown("### Additional Analytics (Placeholder)")
                 st.write("""
                 - Trend model output: **Coming soon**
                 - Matchup difficulty: **Placeholder**
@@ -2408,8 +2410,8 @@ def render_prop_cards(
                 - Pace factor: **Placeholder**
                 """)
                 st.markdown("---")
-
-                # SAVE BET LOGIC
+            
+                # --- SAVE BET BUTTON ---
                 bet_payload = {
                     "player": player,
                     "market": row.get("market"),
@@ -2418,9 +2420,9 @@ def render_prop_cards(
                     "price": odds,
                     "bookmaker": row.get("bookmaker"),
                 }
-
+            
                 btn_key = f"{page_key}_save_{player}_{row.get('market')}_{row.get('line')}_{idx}"
-
+            
                 if st.button("💾 Save Bet", key=btn_key):
                     save_bet_for_user(user_id, bet_payload)
                     st.success(f"Saved: {player} {pretty_market} {bet_type} {line}")

@@ -926,21 +926,30 @@ st.markdown(
 st.markdown("""
 <style>
 
+st.markdown("""
+<style>
+
 .card-tap-btn .stButton > button {
-    background: transparent !important;
+    background: none !important;
     border: none !important;
     color: transparent !important;
     box-shadow: none !important;
     padding: 0 !important;
     margin: 0 !important;
     width: 100% !important;
-    height: 20px !important;   /* keeps it clickable but invisible */
+    height: 30px !important; /* clickable area */
     min-height: 0 !important;
     border-radius: 0 !important;
+    font-size: 0 !important;
 }
 
-.card-tap-btn .stButton > button:hover {
-    background: transparent !important;
+/* Remove hover/focus outlines */
+.card-tap-btn .stButton > button:hover,
+.card-tap-btn .stButton > button:focus,
+.card-tap-btn .stButton > button:active {
+    background: none !important;
+    outline: none !important;
+    box-shadow: none !important;
 }
 
 </style>
@@ -2432,24 +2441,19 @@ def render_prop_cards(
             # ---------------------------
             expand_key = f"{page_key}_expand_{player}_{row.get('market')}_{row.get('line')}_{idx}"
             
-            # FULL CARD ALWAYS VISIBLE
+            # ----- FULL CARD (always visible) -----
             st.markdown(card_html, unsafe_allow_html=True)
             
-            # INVISIBLE TAP BUTTON OVER THE CARD
-            tap_label = f"tap_{expand_key}"
-            container = st.container()
+            # ----- INVISIBLE TAP BUTTON UNDER CARD -----
+            st.markdown('<div class="card-tap-btn">', unsafe_allow_html=True)
+            clicked = st.button("tap", key=tap_label)
+            st.markdown('</div>', unsafe_allow_html=True)
             
-            with st.container():
-                st.markdown('<div class="card-tap-btn">', unsafe_allow_html=True)
-                clicked = st.button("tap", key=tap_label)
-                st.markdown('</div>', unsafe_allow_html=True)
-            
+            # ----- EXPANDED CONTENT WHEN CLICKED -----
             if clicked:
                 toggle_expander(expand_key)
             
-            # EXPANDED CONTENT
             if st.session_state.get(expand_key, False):
-            
                 st.markdown("""
                     <div style='padding:10px 14px; margin-top:-10px;
                                 background:rgba(255,255,255,0.05);
@@ -2459,15 +2463,14 @@ def render_prop_cards(
             
                 st.markdown("### 📊 Additional Analytics (Placeholder)")
                 st.write("""
-                - Trend model output: **Coming soon**
-                - Matchup difficulty: **Placeholder**
-                - Usage trend: **Placeholder**
-                - Pace factor: **Placeholder**
+                - Trend model output: Coming soon  
+                - Matchup difficulty: Placeholder  
+                - Usage trend: Placeholder  
+                - Pace factor: Placeholder  
                 """)
             
                 st.markdown("---")
             
-                # SAVE BET BUTTON
                 bet_payload = {
                     "player": player,
                     "market": row.get("market"),

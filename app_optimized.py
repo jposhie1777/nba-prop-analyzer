@@ -1310,6 +1310,70 @@ def normalize_name(name: str) -> str:
     return name
 
 # ------------------------------------------------------
+# NCAA TEAM LOGO FETCHING (Fuzzy Matching)
+# ------------------------------------------------------
+from rapidfuzz import fuzz, process
+
+# List of NCAA team names (official school names only)
+NCAA_TEAM_MASTER = [
+    "Abilene Christian", "Air Force", "Akron", "Alabama", "Alabama A&M",
+    "Alabama State", "Albany", "Alcorn State", "American", "Appalachian State",
+    "Arizona", "Arizona State", "Arkansas", "Arkansas State", "Arkansas Pine Bluff",
+    "Army", "Auburn", "Austin Peay", "Ball State", "Baylor", "Bellarmine", "Belmont",
+    "Bethune Cookman", "Binghamton", "Boise State", "Boston College",
+    "Boston University", "Bowling Green", "Bradley", "Brigham Young", "Brown",
+    "Bryant", "Bucknell", "Buffalo", "Butler", "Cal Baptist", "Cal Poly",
+    "Cal State Bakersfield", "Cal State Fullerton", "Cal State Northridge",
+    "California", "Campbell", "Canisius", "Central Arkansas",
+    "Central Connecticut State", "Central Michigan", "Charleston Southern",
+    "Charlotte", "Chattanooga", "Chicago State", "Cincinnati", "Clemson",
+    "Cleveland State", "Coastal Carolina", "Colgate", "College of Charleston",
+    "Colorado", "Colorado State", "Columbia", "Connecticut", "Coppin State",
+    "Cornell", "Creighton", "Dartmouth", "Davidson", "Dayton", "Delaware",
+    "Delaware State", "Denver", "DePaul", "Detroit Mercy", "Drake", "Drexel",
+    "Duke", "Duquesne", "East Carolina", "East Tennessee State",
+    "Eastern Illinois", "Eastern Kentucky", "Eastern Michigan",
+    "Eastern Washington", "Elon", "Evansville", "Fairfield", "Fairleigh Dickinson"
+    # (Optional: continue adding entire NCAA list — but fuzzy match will still work)
+]
+
+def normalize_team_name(name: str) -> str:
+    """Normalize messy team names to improve matching accuracy."""
+    if not isinstance(name, str):
+        return ""
+    name = name.lower()
+    name = name.replace("state university", "state")
+    name = name.replace("university", "").strip()
+    name = name.replace("st.", "saint").replace("st ", "saint ")
+    name = name.replace("mountaineers", "").replace("pirates", "").strip()
+    name = name.replace("hawks", "").replace("hornets", "").strip()
+    name = name.replace("vaqueros", "").replace("jaguars", "").strip()
+    name = name.replace("bison", "").strip()
+    return name.strip()
+
+def fuzzy_match_team(raw_name: str):
+    """Return best-matching official NCAA school name."""
+    cleaned = normalize_team_name(raw_name)
+    match, score, _ = process.extractOne(
+        cleaned,
+        NCAA_TEAM_MASTER,
+        scorer=fuzz.WRatio
+    )
+    return match if score >= 70 else None
+
+def get_ncaa_logo(team_name: str):
+    """Return the ESPN team logo URL using fuzzy matching."""
+    if not team_name:
+        return "https://via.placeholder.com/64?text=?"
+
+    matched = fuzzy_match_team(team_name)
+    if not matched:
+        return "https://via.placeholder.com/64?text=?"
+
+    slug = matched.lower().replace(" ", "-")
+    return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{slug}.png"
+
+# ------------------------------------------------------
 # NCAA MEN'S BASKETBALL — ESPN TEAM LOGO SUPPORT
 # ------------------------------------------------------
 
@@ -2758,109 +2822,150 @@ def build_injury_lookup():
 # Build lookup at load
 build_injury_lookup()
 
-# ------------------------------------------------------
-# NCAA GAME OVERVIEW CARD (Final Optimized Version)
-# ------------------------------------------------------
 def render_ncaab_overview_card(row):
-    # Safety helpers
-    def safe(x, default="—"):
-        return default if x is None or x == "" else x
+    """Render a clean NCAA game card with logos + expandable analytics."""
 
-    # Unique ID for expansion state
+    # -----------------------------
+    # Extract values
+    # -----------------------------
+    home = row.get("home_team", "")
+    away = row.get("away_team", "")
+
+    # New Logo Matching
+    home_logo = get_ncaa_logo(home)
+    away_logo = get_ncaa_logo(away)
+
+    # Game ID for expander
     game_id = (
-        row["game"]
+        str(row.get("game", ""))
         .replace(" ", "")
         .replace("@", "")
         .replace("-", "")
-        .replace("'", "")
-        .replace(".", "")
+        .lower()
     )
 
-    # Extract names
-    home = safe(row.get("home_team"))
-    away = safe(row.get("away_team"))
-
-    # ESPN Logos via fuzzy-matched slugs
-    home_logo_url = get_ncaa_logo(home)
-    away_logo_url = get_ncaa_logo(away)
-
-    # Convert logos to base64 (fast + safe for Streamlit)
-    home_logo_b64 = logo_to_base64_url(home_logo_url)
-    away_logo_b64 = logo_to_base64_url(away_logo_url)
-
-    # Format start time
+    # Time formatting
     start_time = row.get("start_time")
-    if pd.isna(start_time):
-        start_str = ""
-    else:
+    try:
+        dt = pd.to_datetime(start_time).tz_convert("America/New_York")
+        start_str = dt.strftime("%a %I:%M %p ET")
+    except:
+        start_str = str(start_time)
+
+    # Odds
+    home_ml = row.get("home_ml", "—")
+    away_ml = row.get("away_ml", "—")
+    home_spread = row.get("home_spread", "—")
+    away_spread = row.get("away_spread", "—")
+    total_line = row.get("total_line", "—")
+
+    # Model Helpers
+    def fmt(x):
         try:
-            dt = pd.to_datetime(start_time).tz_convert("America/New_York")
-            start_str = dt.strftime("%a • %I:%M %p ET")
+            return f"{float(x):.1f}"
         except:
-            start_str = str(start_time)
+            return "—"
 
-    # Odds & projections
-    home_ml = safe(row.get("home_ml"))
-    away_ml = safe(row.get("away_ml"))
-    home_spread = safe(row.get("home_spread"))
-    away_spread = safe(row.get("away_spread"))
-    total_line = safe(row.get("total_line"))
+    proj_home = fmt(row.get("proj_home_points"))
+    proj_away = fmt(row.get("proj_away_points"))
+    proj_total = fmt(row.get("proj_total_points"))
+    proj_margin = fmt(row.get("proj_margin"))
 
-    proj_home = safe(row.get("proj_home_points"))
-    proj_away = safe(row.get("proj_away_points"))
-    proj_total = safe(row.get("proj_total_points"))
-    proj_margin = safe(row.get("proj_margin"))
-
-    # Build HTML
+    # -----------------------------
+    # HTML Card
+    # -----------------------------
     html = f"""
+    <style>
+        .ncaab-card {{
+            background: #111827;
+            padding: 20px;
+            border-radius: 14px;
+            margin-bottom: 22px;
+            border: 1px solid rgba(255,255,255,0.08);
+            color: white;
+            font-family: Inter, sans-serif;
+        }}
+        .ncaab-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+        .team-block {{
+            flex: 1;
+            text-align: center;
+        }}
+        .team-logo {{
+            width: 54px;
+            height: 54px;
+            object-fit: contain;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.05);
+            padding: 4px;
+        }}
+        .team-name {{
+            margin-top: 6px;
+            font-weight: 700;
+            font-size: 1rem;
+        }}
+        .vs {{
+            flex: 0.3;
+            text-align: center;
+            font-weight: 700;
+            color: #9CA3AF;
+            font-size: 1.2rem;
+        }}
+        .expand-btn {{
+            margin-top: 14px;
+            background: #2563EB;
+            color: white;
+            padding: 8px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }}
+        .expandable {{
+            max-height: 0px;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }}
+        .expanded {{
+            max-height: 900px;
+        }}
+        .data-box {{
+            margin-top: 12px;
+            background: rgba(255,255,255,0.06);
+            padding: 12px;
+            border-radius: 10px;
+        }}
+    </style>
+
     <div class="ncaab-card">
-        
-        <!-- HEADER -->
-        <div style="display:flex; align-items:center; justify-content:space-between;">
 
-            <!-- HOME TEAM -->
-            <div style="flex:1; text-align:center;">
-                <img src="{home_logo_b64}" style="width:56px;height:56px;border-radius:8px;object-fit:contain;" />
-                <div style="font-size:0.95rem;font-weight:700;margin-top:4px;">{home}</div>
+        <div class="ncaab-header">
+            <div class="team-block">
+                <img src="{home_logo}" class="team-logo">
+                <div class="team-name">{home}</div>
             </div>
 
-            <!-- VS -->
-            <div style="flex:0 0 auto;font-size:1.1rem;font-weight:700;color:#9CA3AF;">vs</div>
+            <div class="vs">vs</div>
 
-            <!-- AWAY TEAM -->
-            <div style="flex:1; text-align:center;">
-                <img src="{away_logo_b64}" style="width:56px;height:56px;border-radius:8px;object-fit:contain;" />
-                <div style="font-size:0.95rem;font-weight:700;margin-top:4px;">{away}</div>
+            <div class="team-block">
+                <img src="{away_logo}" class="team-logo">
+                <div class="team-name">{away}</div>
             </div>
-
         </div>
 
-        <!-- START TIME -->
-        <div style="font-size:0.82rem;color:#9CA3AF;margin-top:6px;text-align:center;">
+        <div style="margin-top: 6px; font-size: 0.85rem; color: #9CA3AF;">
             {start_str}
         </div>
 
-        <!-- EXPAND BUTTON -->
-        <button onclick="toggleCard_{game_id}()"
-                style="
-                    background:#2563EB;
-                    border:none;
-                    color:white;
-                    width:100%;
-                    margin-top:12px;
-                    padding:8px 0;
-                    border-radius:8px;
-                    cursor:pointer;
-                    font-size:0.9rem;
-                ">
+        <button class="expand-btn" onclick="toggleNCAAB('{game_id}')">
             Show Details
         </button>
 
-        <!-- EXPANDABLE CONTENT -->
-        <div id="details_{game_id}"
-             style="max-height:0;overflow:hidden;transition:max-height 0.35s ease;">
-             
-            <div class="ncaab-expanded">
+        <div id="box-{game_id}" class="expandable">
+
+            <div class="data-box">
                 <b>Moneyline</b><br>
                 {home}: {home_ml}<br>
                 {away}: {away_ml}<br><br>
@@ -2872,7 +2977,7 @@ def render_ncaab_overview_card(row):
                 <b>Total:</b> {total_line}
             </div>
 
-            <div class="ncaab-expanded">
+            <div class="data-box">
                 <b>Model Projections</b><br>
                 {home}: {proj_home}<br>
                 {away}: {proj_away}<br><br>
@@ -2886,18 +2991,14 @@ def render_ncaab_overview_card(row):
     </div>
 
     <script>
-    function toggleCard_{game_id}() {{
-        var el = document.getElementById("details_{game_id}");
-        if (el.style.maxHeight === "0px" || el.style.maxHeight === "") {{
-            el.style.maxHeight = "900px";
-        }} else {{
-            el.style.maxHeight = "0px";
+        function toggleNCAAB(id) {{
+            var el = document.getElementById("box-" + id);
+            el.classList.toggle("expanded");
         }}
-    }}
     </script>
     """
 
-    components.html(html, height=350)
+    components.html(html, height=330, unsafe_allow_html=True)
 
 
 

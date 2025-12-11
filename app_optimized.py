@@ -927,27 +927,28 @@ st.markdown(
 st.markdown("""
 <style>
 
-.card-tap-btn .stButton > button {
+/* Stronger selector: targets only tap buttons inside .card-tap-btn */
+.card-tap-btn button {
     background: transparent !important;
     border: none !important;
     color: transparent !important;
-    box-shadow: none !important;
+    font-size: 0 !important;
     padding: 0 !important;
     margin: 0 !important;
     width: 100% !important;
-    height: 28px !important;
+    height: 30px !important;       /* click area */
     min-height: 0 !important;
+    box-shadow: none !important;
     border-radius: 0 !important;
-    font-size: 0 !important;
-    outline: none !important;
 }
 
-.card-tap-btn .stButton > button:hover,
-.card-tap-btn .stButton > button:focus,
-.card-tap-btn .stButton > button:active {
+/* Prevent hover from revealing the button */
+.card-tap-btn button:hover,
+.card-tap-btn button:focus,
+.card-tap-btn button:active {
     background: transparent !important;
+    color: transparent !important;
     box-shadow: none !important;
-    outline: none !important;
 }
 
 </style>

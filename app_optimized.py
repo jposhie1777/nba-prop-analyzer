@@ -2751,6 +2751,7 @@ def build_injury_lookup():
 # Build lookup at load
 build_injury_lookup()
 
+
 # --------------------------------------------------------
 # NCAA MEN'S — RENDER GAME OVERVIEW CARD (FINAL VERSION)
 # --------------------------------------------------------
@@ -2769,30 +2770,31 @@ def render_ncaab_overview_card(row):
     score_html = ""
     if home_score is not None and away_score is not None:
         score_html = f"""
-        <div class="ncaab-score">
-            <span>{home_score}</span> - <span>{away_score}</span>
-        </div>
-        """
+<div class="ncaab-score">
+    <span>{home_score}</span> - <span>{away_score}</span>
+</div>
+"""
 
-    # ⭐ FIXED — FIRST CHARACTER IS "<"
-    card_html = f"""<div class="ncaab-card-container">
+    card_html = f"""
+<div class="ncaab-card-container">
 
-        <div class="ncaab-card-header">
-            <img src="{away_logo}" class="ncaab-team-logo" />
-            <div class="ncaab-vs-text">VS</div>
-            <img src="{home_logo}" class="ncaab-team-logo" />
-        </div>
+    <div class="ncaab-card-header">
+        <img src="{away_logo}" class="ncaab-team-logo" />
+        <div class="ncaab-vs-text">VS</div>
+        <img src="{home_logo}" class="ncaab-team-logo" />
+    </div>
 
-        <div class="ncaab-team-names">
-            <span class="ncaab-away">{away}</span>
-            <span class="ncaab-home">{home}</span>
-        </div>
+    <div class="ncaab-team-names">
+        <span class="ncaab-away">{away}</span>
+        <span class="ncaab-home">{home}</span>
+    </div>
 
-        <div class="ncaab-start">{start_time}</div>
+    <div class="ncaab-start">{start_time}</div>
 
-        {score_html}
+    {score_html}
 
-    </div>"""
+</div>
+"""
 
     st.markdown(card_html, unsafe_allow_html=True)
 

@@ -404,24 +404,8 @@ def replace_saved_bets_in_db(user_id: int, bets: list[dict]):
         st.sidebar.error(f"Error saving bets to DB: {e}")
 
 def render_landing_nba_games():
-    st.write("DEBUG: 🎯 Entered render_landing_nba_games()")
-
     st.subheader("🏀 NBA Games Today")
 
-    # -------------------------------
-    # Debug today's ET date
-    # -------------------------------
-    try:
-        et_today = datetime.now(pytz.timezone("America/New_York")).date()
-    except Exception:
-        et_today = None
-
-    if DEBUG_LANDING:
-        st.caption(f"DEBUG: ET today = {et_today}")
-
-    # -------------------------------
-    # Run query using AUTHENTICATED bq_client
-    # -------------------------------
     try:
         sql = """
         SELECT
@@ -440,37 +424,26 @@ def render_landing_nba_games():
         ORDER BY start_time_est
         """
 
-        if DEBUG_LANDING:
-            st.caption("DEBUG: Running SQL:")
-            st.code(sql, language="sql")
-
-        # ✅ Correct: use authenticated global bq_client
         df = bq_client.query(sql).to_dataframe()
-
-        if DEBUG_LANDING:
-            st.caption(f"DEBUG: Rows returned = {len(df)}")
-            if not df.empty:
-                st.dataframe(df.head())
 
         if df.empty:
             st.info("No NBA games scheduled for today.")
             return
 
         # -------------------------------
-        # Render game list
+        # Render game list cleanly
         # -------------------------------
         for _, g in df.iterrows():
 
-            # Safe logo fallback
+            # Team logos with safe fallback
             try:
                 away_logo = f"https://a.espncdn.com/i/teamlogos/nba/500/{int(g['visitor_team_id'])}.png"
                 home_logo = f"https://a.espncdn.com/i/teamlogos/nba/500/{int(g['home_team_id'])}.png"
             except Exception:
                 fallback = "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
-                away_logo = fallback
-                home_logo = fallback
+                away_logo = home_logo = fallback
 
-            # Game status text
+            # Status text
             if g.get("is_live"):
                 status = "<span style='color:#ff4d4d; font-weight:600;'>LIVE</span>"
             elif g.get("is_upcoming"):
@@ -478,6 +451,7 @@ def render_landing_nba_games():
             else:
                 status = "<span style='color:#9aa4b2;'>Final</span>"
 
+            # Render card
             st.markdown(
                 f"""
                 <div style="display:flex; align-items:center; gap:14px; margin-bottom:6px;">
@@ -490,16 +464,12 @@ def render_landing_nba_games():
                     {g['start_time_formatted']} ET • {status}
                 </div>
 
-                <div style="height:14px"></div>
+                <div style="height:12px"></div>
                 """,
                 unsafe_allow_html=True
             )
 
-    except Exception as e:
-        if DEBUG_LANDING:
-            st.error("DEBUG: Error while loading NBA games:")
-            st.exception(e)
-
+    except Exception:
         st.info("NBA games for today will appear here.")
 
 # ------------------------------------------------------

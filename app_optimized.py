@@ -408,9 +408,6 @@ def render_landing_nba_games():
 
     st.subheader("🏀 NBA Games Today")
 
-    # -------------------------------
-    # DEBUG: show today's ET date
-    # -------------------------------
     try:
         et_today = datetime.now(pytz.timezone("America/New_York")).date()
     except Exception:
@@ -420,8 +417,6 @@ def render_landing_nba_games():
         st.caption(f"DEBUG: ET today = {et_today}")
 
     try:
-        client = bigquery.Client()
-
         sql = """
         SELECT
             game_id,
@@ -443,7 +438,8 @@ def render_landing_nba_games():
             st.caption("DEBUG: Running SQL:")
             st.code(sql, language="sql")
 
-        df = client.query(sql).to_dataframe()
+        # ✅ USE AUTHENTICATED CLIENT
+        df = bq_client.query(sql).to_dataframe()
 
         if DEBUG_LANDING:
             st.caption(f"DEBUG: Rows returned = {len(df)}")
@@ -454,7 +450,7 @@ def render_landing_nba_games():
             st.info("No NBA games scheduled for today.")
             return
 
-        # ---- Render games ----
+        # ---- Render results
         for _, g in df.iterrows():
             try:
                 away_logo = f"https://a.espncdn.com/i/teamlogos/nba/500/{int(g['visitor_team_id'])}.png"
@@ -464,7 +460,6 @@ def render_landing_nba_games():
                     "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
                 )
 
-            # Status badge
             if g.get("is_live"):
                 status = "<span style='color:#ff4d4d; font-weight:600;'>LIVE</span>"
             elif g.get("is_upcoming"):
@@ -490,10 +485,10 @@ def render_landing_nba_games():
             )
 
     except Exception as e:
-        # Still break-proof, but more verbose when debugging
         if DEBUG_LANDING:
             st.error("DEBUG: Error while loading NBA games:")
             st.exception(e)
+
         st.info("NBA games for today will appear here.")
 
 # ------------------------------------------------------

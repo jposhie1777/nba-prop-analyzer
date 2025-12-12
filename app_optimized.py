@@ -582,14 +582,21 @@ theme_choice = st.sidebar.selectbox(
 )
 theme = THEMES[st.session_state.theme_choice]
 
-.pulse-header-logo {
-    width: 48px;
-    height: 48px;
-    border-radius: 14px;
-    object-fit: contain;
-    margin-right: 12px;
-    box-shadow: 0 8px 22px rgba(0,0,0,0.45);
-}
+st.markdown(
+    """
+    <style>
+    .pulse-header-logo {
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        object-fit: contain;
+        margin-right: 12px;
+        box-shadow: 0 8px 22px rgba(0,0,0,0.45);
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ------------------------------------------------------
 # GLOBAL STYLES (Optimized - Full Visual Preservation)

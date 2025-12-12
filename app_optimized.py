@@ -961,77 +961,55 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("""
+components.html("""
 <style>
-
 .ncaab-card-container {
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.12);
+    background: #111;
     border-radius: 14px;
-    padding: 14px 12px;
+    padding: 16px;
     margin-bottom: 16px;
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #eee;
+    font-family: Inter, sans-serif;
 }
-
-/* Header logos side by side */
 .ncaab-card-header {
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     align-items: center;
-    margin-bottom: 8px;
+    gap: 14px;
+    margin-bottom: 10px;
 }
-
 .ncaab-team-logo {
-    width: 70px;
-    height: 70px;
+    width: 50px;
+    height: 50px;
     object-fit: contain;
 }
-
-/* VS centered between logos */
 .ncaab-vs-text {
-    font-size: 22px;
+    font-size: 1.25rem;
     font-weight: 700;
-    color: #ffffffaa;
+    color: #999;
 }
-
-/* Team names row */
 .ncaab-team-names {
     display: flex;
     justify-content: space-between;
-    font-size: 15px;
-    font-weight: 600;
-    margin-top: 4px;
+    padding: 0 10px;
+    font-size: 0.95rem;
     margin-bottom: 8px;
-    color: white;
 }
-
 .ncaab-start {
-    font-size: 13px;
-    opacity: 0.7;
+    text-align: center;
+    color: #999;
+    font-size: 0.85rem;
     margin-bottom: 6px;
 }
-
-/* Score */
 .ncaab-score {
+    margin-top: 8px;
     text-align: center;
-    font-size: 22px;
+    font-size: 1.1rem;
     font-weight: 700;
-    margin-top: 4px;
 }
-
-@media (max-width: 550px) {
-    /* Increase mobile logo size */
-    .ncaab-team-logo {
-        width: 95px;
-        height: 95px;
-    }
-
-    .ncaab-vs-text {
-        font-size: 20px;
-    }
-}
-
 </style>
-""", unsafe_allow_html=True)
+""", height=0)
 
 
 
@@ -2755,12 +2733,15 @@ build_injury_lookup()
 # --------------------------------------------------------
 # NCAA MEN'S — RENDER GAME OVERVIEW CARD (FINAL VERSION)
 # --------------------------------------------------------
+import streamlit.components.v1 as components
+
 
 def render_ncaab_overview_card(row):
 
     home = row.get("home_team") or ""
     away = row.get("away_team") or ""
     start_time = row.get("start_time", "")
+
     home_score = row.get("home_score")
     away_score = row.get("away_score")
 
@@ -2770,35 +2751,33 @@ def render_ncaab_overview_card(row):
     score_html = ""
     if home_score is not None and away_score is not None:
         score_html = f"""
-<div class="ncaab-score">
-    <span>{home_score}</span> - <span>{away_score}</span>
-</div>
-"""
+            <div class="ncaab-score">
+                <span>{home_score}</span> - <span>{away_score}</span>
+            </div>
+        """
 
-    card_html = f"""
-<div class="ncaab-card-container">
+    html = f"""
+    <div class="ncaab-card-container">
+        
+        <div class="ncaab-card-header">
+            <img src="{away_logo}" class="ncaab-team-logo" />
+            <div class="ncaab-vs-text">VS</div>
+            <img src="{home_logo}" class="ncaab-team-logo" />
+        </div>
 
-    <div class="ncaab-card-header">
-        <img src="{away_logo}" class="ncaab-team-logo" />
-        <div class="ncaab-vs-text">VS</div>
-        <img src="{home_logo}" class="ncaab-team-logo" />
+        <div class="ncaab-team-names">
+            <span class="ncaab-away">{away}</span>
+            <span class="ncaab-home">{home}</span>
+        </div>
+
+        <div class="ncaab-start">{start_time}</div>
+
+        {score_html}
+
     </div>
+    """
 
-    <div class="ncaab-team-names">
-        <span class="ncaab-away">{away}</span>
-        <span class="ncaab-home">{home}</span>
-    </div>
-
-    <div class="ncaab-start">{start_time}</div>
-
-    {score_html}
-
-</div>
-"""
-
-    st.markdown(card_html, unsafe_allow_html=True)
-
-
+    components.html(html, height=500, scrolling=False)
 
 def render_prop_cards(
     df,

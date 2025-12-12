@@ -1282,6 +1282,8 @@ SPORTSBOOK_LOGOS_BASE64 = {
     for name, path in SPORTSBOOK_LOGOS.items()
 }
 
+NO_IMAGE = "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
+
 # ------------------------------------------------------
 # NCAA LOGO LOOKUP (Official ESPN ID System)
 # ------------------------------------------------------
@@ -1321,7 +1323,7 @@ def get_espn_team_id(team_name: str) -> int | None:
     if not team_name:
         return None
 
-    norm = normalize_team_name(team_name)
+    norm = normalize_ncaa_name(team_name)
 
     # direct match
     if norm in ESPN_NCAAM_TEAMS:
@@ -1334,30 +1336,36 @@ def get_espn_team_id(team_name: str) -> int | None:
 
     return None
 
-NO_IMAGE = "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
+def strip_mascot(name: str) -> str:
+    parts = name.split()
+    for i in range(len(parts), 0, -1):
+        candidate = " ".join(parts[:i])
+        if candidate in ESPN_NCAAM_TEAMS:
+            return candidate
+    return name
+
 
 def ncaa_logo(team_name: str) -> str:
-    """
-    Deterministic ESPN logo resolver.
-    Uses normalized exact-key lookup ONLY.
-    Eliminates:
-      - Alabama State -> Alabama
-      - Iowa State -> Iowa
-      - Virginia Tech -> Virginia
-      - Random logo drops
-    """
-
     if not isinstance(team_name, str) or not team_name.strip():
         return NO_IMAGE
 
+    print("TEAM RAW:", team_name)
+
     key = normalize_ncaa_name(team_name)
+    print("NORMALIZED:", key)
+
+    key = strip_mascot(key)
+    print("AFTER STRIP:", key)
 
     team = ESPN_NCAAM_TEAMS.get(key)
     if not team:
+        print("❌ NO MATCH\n")
         return NO_IMAGE
 
+    print("✅ MATCHED:", team["name"])
     return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{team['id']}.png"
-    
+
+
     
 # ------------------------------------------------------
 # ESPN TEAM MAP — CHUNK 2 (Teams 1–100)
@@ -1772,6 +1780,11 @@ ESPN_NCAAM_TEAMS.update({
     "youngstown state": {"id": 2753, "name": "Youngstown State Penguins"},
 
 })
+
+ESPN_NCAAM_TEAMS = {
+    normalize_ncaa_name(k): v
+    for k, v in ESPN_NCAAM_TEAMS.items()
+}
 
 def normalize_team_code(raw: str) -> str:
     if raw is None:

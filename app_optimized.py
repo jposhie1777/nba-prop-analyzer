@@ -404,8 +404,76 @@ def replace_saved_bets_in_db(user_id: int, bets: list[dict]):
         st.sidebar.error(f"Error saving bets to DB: {e}")
 
 def render_landing_nba_games():
+    import streamlit as st
+    from datetime import datetime
+    import pytz
+
     st.subheader("🏀 NBA Games Today")
-    st.info("NBA games for today will appear here.")
+
+    # ----------------------------
+    # Safe timezone
+    # ----------------------------
+    try:
+        EST = pytz.timezone("America/New_York")
+    except Exception:
+        EST = None
+
+    def safe_format(ts):
+        try:
+            if EST:
+                ts = ts.astimezone(EST)
+            return ts.strftime("%A %b %d %-I:%M%p ET")
+        except Exception:
+            return "Time TBD"
+
+    # ----------------------------
+    # Try loading games
+    # ----------------------------
+    try:
+        from google.cloud import bigquery
+
+        client = bigquery.Client()
+
+        sql = """
+        SELECT
+            start_time,
+            away_team_id,
+            home_team_id
+        FROM nba_data.nba_games
+        WHERE DATE(start_time) = CURRENT_DATE()
+        ORDER BY start_time
+        """
+
+        df = client.query(sql).to_dataframe()
+
+        if df.empty:
+            st.info("No NBA games scheduled for today.")
+            return
+
+        for _, g in df.iterrows():
+            try:
+                away_logo = f"https://a.espncdn.com/i/teamlogos/nba/500/{int(g.away_team_id)}.png"
+                home_logo = f"https://a.espncdn.com/i/teamlogos/nba/500/{int(g.home_team_id)}.png"
+            except Exception:
+                away_logo = home_logo = "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
+
+            st.markdown(
+                f"""
+                <div style="display:flex; align-items:center; gap:16px; margin-bottom:6px;">
+                    <img src="{away_logo}" width="44"/>
+                    <span style="font-weight:600;">vs</span>
+                    <img src="{home_logo}" width="44"/>
+                </div>
+                <div style="color:#9aa4b2; font-size:14px; margin-bottom:18px;">
+                    {safe_format(g.start_time)}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+    except Exception:
+        # Absolute final fallback
+        st.info("NBA games for today will appear here.")
 
 # ------------------------------------------------------
 # AUTH0 HELPERS (LOGIN)
@@ -497,8 +565,8 @@ def ensure_logged_in():
     # ------------------------------------------------------
     # NOT LOGGED IN — SHOW LANDING
     # ------------------------------------------------------
-    st.title("NBA Prop Analyzer")
-    st.caption("Daily NBA games, props, trends, and analytics")
+    st.title("Pulse Sports Analytics")
+    st.caption("Daily games, props, trends, and analytics")
 
     try:
         render_landing_nba_games()

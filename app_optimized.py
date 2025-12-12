@@ -2757,11 +2757,15 @@ from streamlit import components
 from datetime import datetime
 import pytz
 
+def fmt1(x):
+    """Format float with 1 decimal, or '-' if None."""
+    try:
+        return f"{float(x):.1f}"
+    except:
+        return "-"
+
 def render_ncaab_overview_card(row):
 
-    # ------------------------
-    # Extract values
-    # ------------------------
     home = row.get("home_team", "")
     away = row.get("away_team", "")
 
@@ -2774,7 +2778,7 @@ def render_ncaab_overview_card(row):
     exp_total = row.get("projected_total")
 
     # ------------------------
-    # Pretty Start Time
+    # Pretty Time Conversion
     # ------------------------
     dt = row.get("start_time")
     pretty_time = ""
@@ -2787,7 +2791,7 @@ def render_ncaab_overview_card(row):
         pretty_time = dt_est.strftime("%a, %b %d • %I:%M %p ET")
 
     # ------------------------
-    # BUILD HTML CARD
+    # HTML CARD
     # ------------------------
     html = f"""
     <div style="
@@ -2801,7 +2805,7 @@ def render_ncaab_overview_card(row):
         font-family:Inter, sans-serif;
     ">
 
-        <!-- Logos -->
+        <!-- Logos Row -->
         <div style="
             display:flex;
             justify-content:center;
@@ -2833,12 +2837,8 @@ def render_ncaab_overview_card(row):
             margin-bottom:12px;
             font-size:0.95rem;
         ">
-            <div style="flex:1; text-align:center;">
-                <div>Exp: {exp_away:.1f}</div>
-            </div>
-            <div style="flex:1; text-align:center;">
-                <div>Exp: {exp_home:.1f}</div>
-            </div>
+            <div style="flex:1; text-align:center;">Exp: {fmt1(exp_away)}</div>
+            <div style="flex:1; text-align:center;">Exp: {fmt1(exp_home)}</div>
         </div>
 
         <!-- Spread & Total -->
@@ -2847,10 +2847,10 @@ def render_ncaab_overview_card(row):
             margin-bottom:10px;
             font-size:0.95rem;
         ">
-            Spread: {exp_spread:+.1f} • Total: {exp_total:.1f}
+            Spread: {fmt1(exp_spread)} • Total: {fmt1(exp_total)}
         </div>
 
-        <!-- Start Time -->
+        <!-- Pretty Start Time -->
         <div style="
             text-align:center;
             font-size:0.95rem;
@@ -2862,9 +2862,6 @@ def render_ncaab_overview_card(row):
     </div>
     """
 
-    # ------------------------
-    # RENDER USING components.html
-    # ------------------------
     components.html(html, height=500, scrolling=False)
 
 def render_prop_cards(

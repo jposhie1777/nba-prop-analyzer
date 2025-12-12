@@ -1338,13 +1338,50 @@ def get_espn_team_id(team_name: str):
 
     return None
 
-def ncaa_logo(team_name: str) -> str:
-    """Return 500px ESPN logo URL using numeric ID."""
-    espn_id = get_espn_team_id(team_name)
+def ncaa_logo(team_name: str):
+    """
+    Returns the ESPN team logo using your ESPN_NCAAM_TEAMS dictionary.
+    This function eliminates fuzzy-matching mistakes like:
+        Alabama State -> Alabama
+        Iowa State    -> Iowa
+        Virginia Tech -> Virginia
+    """
 
-    if espn_id:
-        return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{espn_id}.png"
+    if not team_name:
+        return "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
 
+    # Normalize search key
+    key = team_name.lower().strip()
+
+    # 1) Direct match
+    if key in ESPN_NCAAM_TEAMS:
+        tid = ESPN_NCAAM_TEAMS[key]["id"]
+        return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{tid}.png"
+
+    # 2) If name includes mascot (ex: "Appalachian St Mountaineers")
+    #    Try removing mascot words and match only the school name.
+    parts = key.split()
+    for i in range(len(parts), 0, -1):
+        short = " ".join(parts[:i])
+        if short in ESPN_NCAAM_TEAMS:
+            tid = ESPN_NCAAM_TEAMS[short]["id"]
+            return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{tid}.png"
+
+    # 3) Replace common abbreviations
+    replacements = {
+        " st ": " state ",
+        " st. ": " state ",
+        "&": "and",
+    }
+    fixed = key
+    for a, b in replacements.items():
+        fixed = fixed.replace(a, b)
+
+    if fixed in ESPN_NCAAM_TEAMS:
+        tid = ESPN_NCAAM_TEAMS[fixed]["id"]
+        return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{tid}.png"
+
+    # 4) No match -> use fallback
     return "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
     
     

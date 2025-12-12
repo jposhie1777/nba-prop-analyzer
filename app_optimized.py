@@ -2814,7 +2814,7 @@ def render_ncaab_overview_card(row):
     </div>
     """
 
-    components.html(html, height=500)
+    st.markdown(card_html, unsafe_allow_html=True)
 
 
 

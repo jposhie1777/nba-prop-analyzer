@@ -2753,90 +2753,119 @@ def pretty_game_time(dt):
 # --------------------------------------------------------
 # NCAA MEN'S — RENDER GAME OVERVIEW CARD (FINAL VERSION)
 # --------------------------------------------------------
+from streamlit import components
+from datetime import datetime
+import pytz
+
 def render_ncaab_overview_card(row):
 
-    home = row.get("home_team", "") or ""
-    away = row.get("away_team", "") or ""
-    start_time = row.get("start_time")
-    home_score = row.get("home_score")
-    away_score = row.get("away_score")
-
-    # Convert to pretty “Thu, Dec 11 • 6:30 PM ET”
-    pretty_time = pretty_game_time(start_time)
+    # ------------------------
+    # Extract values
+    # ------------------------
+    home = row.get("home_team", "")
+    away = row.get("away_team", "")
 
     home_logo = ncaa_logo(home)
     away_logo = ncaa_logo(away)
 
-    # Optional score block
-    if home_score is not None and away_score is not None:
-        score_html = f"""
-        <div style="
-            font-size:1.1rem;
-            font-weight:700;
-            text-align:center;
-            margin-top:6px;
-            color:#e5e7eb;">
-            {away_score} - {home_score}
-        </div>
-        """
-    else:
-        score_html = ""
+    exp_home = row.get("exp_home_points")
+    exp_away = row.get("exp_away_points")
+    exp_spread = row.get("predicted_margin")
+    exp_total = row.get("projected_total")
 
-    # ⭐ Clean modern, mobile-safe card layout
-    card_html = f"""
+    # ------------------------
+    # Pretty Start Time
+    # ------------------------
+    dt = row.get("start_time")
+    pretty_time = ""
+    if dt:
+        if not isinstance(dt, datetime):
+            dt = datetime.fromisoformat(str(dt).replace("Z", "+00:00"))
+
+        est = pytz.timezone("America/New_York")
+        dt_est = dt.astimezone(est)
+        pretty_time = dt_est.strftime("%a, %b %d • %I:%M %p ET")
+
+    # ------------------------
+    # BUILD HTML CARD
+    # ------------------------
+    html = f"""
     <div style="
-        background:rgba(255,255,255,0.05);
-        border:1px solid rgba(255,255,255,0.10);
-        padding:18px;
-        border-radius:14px;
-        margin-bottom:22px;
-        text-align:center;
-        box-shadow:0 2px 8px rgba(0,0,0,0.25);
+        width:100%;
+        background:rgba(255,255,255,0.06);
+        border:1px solid rgba(255,255,255,0.12);
+        border-radius:18px;
+        padding:20px 16px;
+        margin-bottom:28px;
+        color:#e5e7eb;
+        font-family:Inter, sans-serif;
     ">
 
-        <!-- Logos Row -->
+        <!-- Logos -->
         <div style="
             display:flex;
             justify-content:center;
             align-items:center;
-            gap:26px;
-            margin-bottom:10px;
+            gap:30px;
+            margin-bottom:14px;
         ">
-            <img src="{away_logo}" style="height:70px; width:auto;" />
-            <span style="font-size:1.2rem; font-weight:700; color:#e5e7eb;">VS</span>
-            <img src="{home_logo}" style="height:70px; width:auto;" />
+            <img src="{away_logo}" style="height:80px; width:auto;" />
+            <span style="font-size:1.4rem; font-weight:700;">VS</span>
+            <img src="{home_logo}" style="height:80px; width:auto;" />
         </div>
 
         <!-- Team Names -->
         <div style="
             display:flex;
             justify-content:space-between;
+            margin-bottom:12px;
             font-size:1.05rem;
             font-weight:700;
-            color:#e5e7eb;
-            padding:0 6px;
-            margin-bottom:4px;
         ">
             <div style="flex:1; text-align:center;">{away}</div>
             <div style="flex:1; text-align:center;">{home}</div>
         </div>
 
-        <!-- Pretty Start Time -->
+        <!-- Expected Points -->
         <div style="
+            display:flex;
+            justify-content:space-between;
+            margin-bottom:12px;
             font-size:0.95rem;
-            margin-top:2px;
-            color:#9ca3af;
+        ">
+            <div style="flex:1; text-align:center;">
+                <div>Exp: {exp_away:.1f}</div>
+            </div>
+            <div style="flex:1; text-align:center;">
+                <div>Exp: {exp_home:.1f}</div>
+            </div>
+        </div>
+
+        <!-- Spread & Total -->
+        <div style="
             text-align:center;
+            margin-bottom:10px;
+            font-size:0.95rem;
+        ">
+            Spread: {exp_spread:+.1f} • Total: {exp_total:.1f}
+        </div>
+
+        <!-- Start Time -->
+        <div style="
+            text-align:center;
+            font-size:0.95rem;
+            color:#9ca3af;
         ">
             {pretty_time}
         </div>
 
-        {score_html}
-
     </div>
     """
 
-    st.markdown(card_html, unsafe_allow_html=True)
+    # ------------------------
+    # RENDER USING components.html
+    # ------------------------
+    components.html(html, height=500, scrolling=False)
 
 def render_prop_cards(
     df,

@@ -2733,15 +2733,11 @@ build_injury_lookup()
 # --------------------------------------------------------
 # NCAA MEN'S — RENDER GAME OVERVIEW CARD (FINAL VERSION)
 # --------------------------------------------------------
-import streamlit.components.v1 as components
-
-
 def render_ncaab_overview_card(row):
 
     home = row.get("home_team") or ""
     away = row.get("away_team") or ""
     start_time = row.get("start_time", "")
-
     home_score = row.get("home_score")
     away_score = row.get("away_score")
 
@@ -2751,33 +2747,86 @@ def render_ncaab_overview_card(row):
     score_html = ""
     if home_score is not None and away_score is not None:
         score_html = f"""
-            <div class="ncaab-score">
-                <span>{home_score}</span> - <span>{away_score}</span>
-            </div>
+            <div class="ncaab-score">{home_score} - {away_score}</div>
         """
 
     html = f"""
-    <div class="ncaab-card-container">
+    <div class="ncaab-card">
         
-        <div class="ncaab-card-header">
-            <img src="{away_logo}" class="ncaab-team-logo" />
-            <div class="ncaab-vs-text">VS</div>
-            <img src="{home_logo}" class="ncaab-team-logo" />
+        <div class="ncaab-header">
+            <img src="{away_logo}" class="team-logo"/>
+            <div class="vs">VS</div>
+            <img src="{home_logo}" class="team-logo"/>
         </div>
 
-        <div class="ncaab-team-names">
-            <span class="ncaab-away">{away}</span>
-            <span class="ncaab-home">{home}</span>
+        <div class="team-names">
+            <div class="away">{away}</div>
+            <div class="home">{home}</div>
         </div>
 
-        <div class="ncaab-start">{start_time}</div>
+        <div class="start-time">{start_time}</div>
 
         {score_html}
 
     </div>
+
+    <style>
+        .ncaab-card {{
+            width: 100%;
+            max-width: 500px;
+            margin: 20px auto;
+            padding: 16px;
+            border-radius: 16px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.15);
+            text-align: center;
+        }}
+
+        .ncaab-header {{
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 22px;
+            margin-bottom: 12px;
+        }}
+
+        /* FIX: Limit logo size so they *cannot* explode */
+        .team-logo {{
+            height: 80px;
+            width: 80px;
+            object-fit: contain;
+        }}
+
+        .vs {{
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #e5e7eb;
+        }}
+
+        .team-names {{
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+        }}
+
+        .start-time {{
+            font-size: 0.9rem;
+            color: #9ca3af;
+            margin-bottom: 8px;
+        }}
+
+        .ncaab-score {{
+            font-size: 1.2rem;
+            margin-top: 8px;
+            font-weight: 700;
+        }}
+    </style>
     """
 
-    components.html(html, height=500, scrolling=False)
+    components.html(html, height=500)
 
 def render_prop_cards(
     df,

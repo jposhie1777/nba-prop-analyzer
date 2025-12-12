@@ -2756,32 +2756,16 @@ build_injury_lookup()
 # --------------------------------------------------------
 
 def render_ncaab_overview_card(row):
-    """
-    Renders a single NCAA game overview card with:
-      - Home + Away logos (fuzzy matched via ESPN ID)
-      - Team names
-      - Start time
-      - Score (if available)
-    """
 
-    # --------------------------
-    # Extract game data
-    # --------------------------
     home = row.get("home_team") or ""
     away = row.get("away_team") or ""
     start_time = row.get("start_time", "")
-    home_score = row.get("home_score", None)
-    away_score = row.get("away_score", None)
+    home_score = row.get("home_score")
+    away_score = row.get("away_score")
 
-    # --------------------------
-    # NCAA LOGO LOOKUP
-    # --------------------------
     home_logo = ncaa_logo(home)
     away_logo = ncaa_logo(away)
 
-    # --------------------------
-    # Format score (if game started)
-    # --------------------------
     score_html = ""
     if home_score is not None and away_score is not None:
         score_html = f"""
@@ -2790,12 +2774,9 @@ def render_ncaab_overview_card(row):
         </div>
         """
 
-    # --------------------------
-    # Card HTML
-    # --------------------------
     card_html = f"""
     <div class="ncaab-card-container">
-        
+
         <div class="ncaab-card-header">
             <img src="{away_logo}" class="ncaab-team-logo" />
             <div class="ncaab-vs-text">VS</div>
@@ -2807,7 +2788,7 @@ def render_ncaab_overview_card(row):
             <span class="ncaab-home">{home}</span>
         </div>
 
-        <div class="ncaab-start"> {start_time} </div>
+        <div class="ncaab-start">{start_time}</div>
 
         {score_html}
 

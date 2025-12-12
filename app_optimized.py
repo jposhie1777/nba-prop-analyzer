@@ -405,76 +405,51 @@ def replace_saved_bets_in_db(user_id: int, bets: list[dict]):
 
 def render_landing_nba_games():
     import streamlit as st
+    from google.cloud import bigquery
     import pytz
-    from datetime import datetime
 
     st.subheader("🏀 NBA Games Today")
 
-    # ------------------------------------------------------
-    # TIMEZONE SAFE SETUP
-    # ------------------------------------------------------
     try:
-        EST = pytz.timezone("America/New_York")
-    except Exception:
-        EST = None
-    UTC = pytz.utc
-
-    def safe_format(ts):
-        """Format UTC timestamps as ET game times safely."""
-        try:
-            # Ensure timezone-aware
-            if ts.tzinfo is None:
-                ts = ts.replace(tzinfo=UTC)
-
-            ts_et = ts.astimezone(EST)
-            return ts_et.strftime("%A %b %d %-I:%M%p ET")
-        except Exception:
-            return "Time TBD"
-
-    # ------------------------------------------------------
-    # LOAD NBA GAMES (BREAK-PROOF)
-    # ------------------------------------------------------
-    try:
-        from google.cloud import bigquery
         client = bigquery.Client()
 
         sql = """
         SELECT
-            start_time,
-            away_team_id,
-            home_team_id
-        FROM `nba_data.games`
-        WHERE DATE(start_time, "America/New_York") = CURRENT_DATE("America/New_York")
-        ORDER BY start_time
+            game_id,
+            game_date,
+            start_time_est,
+            start_time_formatted,
+            home_team,
+            visitor_team,
+            home_team_id,
+            visitor_team_id,
+            is_live,
+            is_upcoming
+        FROM `nba_prop_analyzer.game_report`
+        WHERE game_date = CURRENT_DATE("America/New_York")
+        ORDER BY start_time_est
         """
 
         df = client.query(sql).to_dataframe()
 
-        # If empty, show simple message
         if df.empty:
             st.info("No NBA games scheduled for today.")
             return
 
-        # ------------------------------------------------------
-        # RENDER MATCHUPS
-        # ------------------------------------------------------
+        # ---- Render games ----
         for _, g in df.iterrows():
-            try:
-                away_logo = (
-                    f"https://a.espncdn.com/i/teamlogos/nba/500/{int(g.away_team_id)}.png"
-                )
-                home_logo = (
-                    f"https://a.espncdn.com/i/teamlogos/nba/500/{int(g.home_team_id)}.png"
-                )
-            except Exception:
-                # Fallback placeholder 
-                away_logo = home_logo = (
-                    "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
-                )
 
-            start_str = safe_format(g.start_time)
+            away_logo = f"https://a.espncdn.com/i/teamlogos/nba/500/{int(g.visitor_team_id)}.png"
+            home_logo = f"https://a.espncdn.com/i/teamlogos/nba/500/{int(g.home_team_id)}.png"
 
-            # Render clean matchup UI
+            # Status badge
+            if g.is_live:
+                status = "<span style='color:#ff4d4d; font-weight:600;'>LIVE</span>"
+            elif g.is_upcoming:
+                status = "<span style='color:#4dabf5; font-weight:600;'>Upcoming</span>"
+            else:
+                status = "<span style='color:#9aa4b2;'>Final</span>"
+
             st.markdown(
                 f"""
                 <div style="display:flex; align-items:center; gap:14px; margin-bottom:6px;">
@@ -482,15 +457,17 @@ def render_landing_nba_games():
                     <span style="font-weight:600;">vs</span>
                     <img src="{home_logo}" width="44" style="border-radius:6px;" />
                 </div>
-                <div style="color:#9aa4b2; font-size:14px; margin-bottom:18px;">
-                    {start_str}
+
+                <div style="color:#9aa4b2; font-size:14px; margin-bottom:4px;">
+                    {g.start_time_formatted} ET • {status}
                 </div>
+
+                <div style="height:14px"></div>
                 """,
                 unsafe_allow_html=True
             )
 
-    except Exception:
-        # Final fallback — never breaks the app.
+    except Exception as e:
         st.info("NBA games for today will appear here.")
 
 # ------------------------------------------------------

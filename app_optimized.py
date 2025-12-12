@@ -2729,104 +2729,114 @@ def build_injury_lookup():
 # Build lookup at load
 build_injury_lookup()
 
+def pretty_game_time(dt):
+    """
+    Format datetime as: Thu, Dec 11 • 6:30 PM ET
+    """
+    if not dt:
+        return ""
+
+    import pytz
+    from datetime import datetime
+
+    try:
+        if isinstance(dt, str):
+            dt = datetime.fromisoformat(dt.replace("Z", "+00:00"))
+    except Exception:
+        return str(dt)
+
+    est = pytz.timezone("America/New_York")
+    dt_est = dt.astimezone(est)
+
+    return dt_est.strftime("%a, %b %d • %-I:%M %p ET")
 
 # --------------------------------------------------------
 # NCAA MEN'S — RENDER GAME OVERVIEW CARD (FINAL VERSION)
 # --------------------------------------------------------
 def render_ncaab_overview_card(row):
 
-    home = row.get("home_team") or ""
-    away = row.get("away_team") or ""
-    start_time = row.get("start_time", "")
+    home = row.get("home_team", "") or ""
+    away = row.get("away_team", "") or ""
+    start_time = row.get("start_time")
     home_score = row.get("home_score")
     away_score = row.get("away_score")
+
+    # Convert to pretty “Thu, Dec 11 • 6:30 PM ET”
+    pretty_time = pretty_game_time(start_time)
 
     home_logo = ncaa_logo(home)
     away_logo = ncaa_logo(away)
 
-    score_html = ""
+    # Optional score block
     if home_score is not None and away_score is not None:
         score_html = f"""
-            <div class="ncaab-score">{home_score} - {away_score}</div>
+        <div style="
+            font-size:1.1rem;
+            font-weight:700;
+            text-align:center;
+            margin-top:6px;
+            color:#e5e7eb;">
+            {away_score} - {home_score}
+        </div>
         """
+    else:
+        score_html = ""
 
-    html = f"""
-    <div class="ncaab-card">
-        
-        <div class="ncaab-header">
-            <img src="{away_logo}" class="team-logo"/>
-            <div class="vs">VS</div>
-            <img src="{home_logo}" class="team-logo"/>
+    # ⭐ Clean modern, mobile-safe card layout
+    card_html = f"""
+    <div style="
+        background:rgba(255,255,255,0.05);
+        border:1px solid rgba(255,255,255,0.10);
+        padding:18px;
+        border-radius:14px;
+        margin-bottom:22px;
+        text-align:center;
+        box-shadow:0 2px 8px rgba(0,0,0,0.25);
+    ">
+
+        <!-- Logos Row -->
+        <div style="
+            display:flex;
+            justify-content:center;
+            align-items:center;
+            gap:26px;
+            margin-bottom:10px;
+        ">
+            <img src="{away_logo}" style="height:70px; width:auto;" />
+            <span style="font-size:1.2rem; font-weight:700; color:#e5e7eb;">VS</span>
+            <img src="{home_logo}" style="height:70px; width:auto;" />
         </div>
 
-        <div class="team-names">
-            <div class="away">{away}</div>
-            <div class="home">{home}</div>
+        <!-- Team Names -->
+        <div style="
+            display:flex;
+            justify-content:space-between;
+            font-size:1.05rem;
+            font-weight:700;
+            color:#e5e7eb;
+            padding:0 6px;
+            margin-bottom:4px;
+        ">
+            <div style="flex:1; text-align:center;">{away}</div>
+            <div style="flex:1; text-align:center;">{home}</div>
         </div>
 
-        <div class="start-time">{start_time}</div>
+        <!-- Pretty Start Time -->
+        <div style="
+            font-size:0.95rem;
+            margin-top:2px;
+            color:#9ca3af;
+            text-align:center;
+        ">
+            {pretty_time}
+        </div>
 
         {score_html}
 
     </div>
-
-    <style>
-        .ncaab-card {{
-            width: 100%;
-            max-width: 500px;
-            margin: 20px auto;
-            padding: 16px;
-            border-radius: 16px;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.15);
-            text-align: center;
-        }}
-
-        .ncaab-header {{
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 22px;
-            margin-bottom: 12px;
-        }}
-
-        /* FIX: Limit logo size so they *cannot* explode */
-        .team-logo {{
-            height: 80px;
-            width: 80px;
-            object-fit: contain;
-        }}
-
-        .vs {{
-            font-size: 1.4rem;
-            font-weight: 700;
-            color: #e5e7eb;
-        }}
-
-        .team-names {{
-            font-size: 1.1rem;
-            font-weight: 600;
-            margin-bottom: 6px;
-            display: flex;
-            justify-content: space-between;
-            padding: 0 20px;
-        }}
-
-        .start-time {{
-            font-size: 0.9rem;
-            color: #9ca3af;
-            margin-bottom: 8px;
-        }}
-
-        .ncaab-score {{
-            font-size: 1.2rem;
-            margin-top: 8px;
-            font-weight: 700;
-        }}
-    </style>
     """
 
-    components.html(html, height=500)
+    st.markdown(card_html, unsafe_allow_html=True)
 
 def render_prop_cards(
     df,

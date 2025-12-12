@@ -1366,83 +1366,73 @@ from rapidfuzz import fuzz, process
 # Empty dictionary populated by the ESPN_NCAAM_TEAMS.update() chunks
 ESPN_NCAAM_TEAMS = {}
 
-def normalize_ncaa_name(n: str) -> str:
-    if not isinstance(n, str):
+import re
+
+def normalize_ncaa_name(name: str) -> str:
+    if not isinstance(name, str):
         return ""
-    return (
-        n.lower()
-         .replace(".", "")
-         .replace("'", "")
-         .replace("-", " ")
-         .replace("&", "and")
-         .replace(" st ", " state ")
-         .replace(" university", "")
-         .strip()
-    )
 
-def get_espn_team_id(team_name: str):
-    """Fuzzy match your team name -> ESPN numeric ID."""
-    cleaned = normalize_ncaa_name(team_name)
+    name = name.lower().strip()
 
-    if not ESPN_NCAAM_TEAMS:
+    # punctuation normalization
+    name = name.replace("&", "and")
+    name = re.sub(r"[^\w\s]", "", name)  # remove punctuation
+
+    # standardize common abbreviations (SAFE rules)
+    replacements = {
+        r"\bst\b": "state",
+        r"\bmt\b": "mount",
+        r"\bft\b": "fort",
+    }
+
+    for pattern, repl in replacements.items():
+        name = re.sub(pattern, repl, name)
+
+    # normalize whitespace
+    name = re.sub(r"\s+", " ", name).strip()
+
+    return name
+
+def get_espn_team_id(team_name: str) -> int | None:
+    if not team_name:
         return None
 
-    best_key, score, _ = process.extractOne(
-        cleaned,
-        ESPN_NCAAM_TEAMS.keys(),
-        scorer=fuzz.WRatio
-    )
+    norm = normalize_team_name(team_name)
 
-    if score >= 80:
-        return ESPN_NCAAM_TEAMS[best_key]["id"]
+    # direct match
+    if norm in ESPN_NCAAM_TEAMS:
+        return ESPN_NCAAM_TEAMS[norm]["id"]
+
+    # fallback: partial containment (SAFE version)
+    for k, v in ESPN_NCAAM_TEAMS.items():
+        if norm == k:
+            return v["id"]
 
     return None
 
-def ncaa_logo(team_name: str):
+NO_IMAGE = "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
+
+def ncaa_logo(team_name: str) -> str:
     """
-    Returns the ESPN team logo using your ESPN_NCAAM_TEAMS dictionary.
-    This function eliminates fuzzy-matching mistakes like:
-        Alabama State -> Alabama
-        Iowa State    -> Iowa
-        Virginia Tech -> Virginia
+    Deterministic ESPN logo resolver.
+    Uses normalized exact-key lookup ONLY.
+    Eliminates:
+      - Alabama State -> Alabama
+      - Iowa State -> Iowa
+      - Virginia Tech -> Virginia
+      - Random logo drops
     """
 
-    if not team_name:
-        return "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
+    if not isinstance(team_name, str) or not team_name.strip():
+        return NO_IMAGE
 
-    # Normalize search key
-    key = team_name.lower().strip()
+    key = normalize_ncaa_name(team_name)
 
-    # 1) Direct match
-    if key in ESPN_NCAAM_TEAMS:
-        tid = ESPN_NCAAM_TEAMS[key]["id"]
-        return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{tid}.png"
+    team = ESPN_NCAAM_TEAMS.get(key)
+    if not team:
+        return NO_IMAGE
 
-    # 2) If name includes mascot (ex: "Appalachian St Mountaineers")
-    #    Try removing mascot words and match only the school name.
-    parts = key.split()
-    for i in range(len(parts), 0, -1):
-        short = " ".join(parts[:i])
-        if short in ESPN_NCAAM_TEAMS:
-            tid = ESPN_NCAAM_TEAMS[short]["id"]
-            return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{tid}.png"
-
-    # 3) Replace common abbreviations
-    replacements = {
-        " st ": " state ",
-        " st. ": " state ",
-        "&": "and",
-    }
-    fixed = key
-    for a, b in replacements.items():
-        fixed = fixed.replace(a, b)
-
-    if fixed in ESPN_NCAAM_TEAMS:
-        tid = ESPN_NCAAM_TEAMS[fixed]["id"]
-        return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{tid}.png"
-
-    # 4) No match -> use fallback
-    return "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
+    return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{team['id']}.png"
     
     
 # ------------------------------------------------------

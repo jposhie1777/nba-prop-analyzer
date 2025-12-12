@@ -22,7 +22,7 @@ import re
 from functools import lru_cache
 from rapidfuzz import fuzz, process
 
-
+DEBUG_LANDING = True   #  <-- ADD THIS
 
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from google.cloud import bigquery

@@ -508,9 +508,6 @@ def ensure_logged_in():
         f"""
         <div style="text-align:center; margin-top:40px;">
     
-            <img src="data:image/png;base64,{logo_base64}" 
-                 style="width:86px; margin-bottom:12px;" />
-    
             <h1 style="color:white; font-size:2.2rem; margin-bottom:6px;">
                 Pulse Sports Analytics
             </h1>
@@ -581,22 +578,6 @@ theme_choice = st.sidebar.selectbox(
     key="theme_choice",
 )
 theme = THEMES[st.session_state.theme_choice]
-
-st.markdown(
-    """
-    <style>
-    .pulse-header-logo {
-        width: 48px;
-        height: 48px;
-        border-radius: 14px;
-        object-fit: contain;
-        margin-right: 12px;
-        box-shadow: 0 8px 22px rgba(0,0,0,0.45);
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
 
 # ------------------------------------------------------
 # GLOBAL STYLES (Optimized - Full Visual Preservation)
@@ -1164,20 +1145,15 @@ sport = st.selectbox(
 # HEADER
 # ------------------------------------------------------
 st.markdown(
-    f"""
+    """
     <div class="app-header">
         <div class="app-header-left">
-
-            <img src="data:image/png;base64,{logo_base64}" 
-                 class="pulse-header-logo" />
-
             <div>
                 <h1 class="app-title">Pulse Sports Analytics</h1>
                 <p class="app-subtitle">
                     Multi-sport prop modeling, EV analytics, game projections & betting intelligence.
                 </p>
             </div>
-
         </div>
 
         <div>
@@ -1189,6 +1165,7 @@ st.markdown(
     </div>
     """,
     unsafe_allow_html=True,
+)
 )
 
 

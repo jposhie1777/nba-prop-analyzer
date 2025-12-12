@@ -512,12 +512,37 @@ if "user" not in st.session_state:
     st.title("Pulse Sports Analytics")
     st.caption("Daily games, props, trends, and analytics")
 
-    render_landing_nba_games()   # ← debug will show here
-
+    # 🔐 LOGIN CTA — TOP & PROMINENT
     login_url = get_auth0_authorize_url()
-    st.markdown(f"[🔐 Log in with Auth0]({login_url})")
+    st.markdown(
+        f"""
+        <div style="
+            margin: 14px 0 22px 0;
+            padding: 14px 18px;
+            border-radius: 14px;
+            border: 1px solid rgba(148,163,184,0.35);
+            background: radial-gradient(circle at top left, rgba(15,23,42,0.95), rgba(15,23,42,0.85));
+            box-shadow: 0 16px 40px rgba(15,23,42,0.9);
+            text-align: center;
+        ">
+            <a href="{login_url}"
+               style="
+                   font-size: 1rem;
+                   font-weight: 700;
+                   color: #38bdf8;
+                   text-decoration: none;
+               ">
+                🔐 Log in with Auth0
+            </a>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
-    st.stop()   # ← stops BEFORE loading authenticated UI
+    # 🏀 Games list
+    render_landing_nba_games()
+
+    st.stop()
 
 
 # ------------------------------------------------------

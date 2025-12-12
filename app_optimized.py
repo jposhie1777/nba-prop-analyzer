@@ -570,6 +570,7 @@ theme_choice = st.sidebar.selectbox(
 )
 theme = THEMES[st.session_state.theme_choice]
 
+
 # ------------------------------------------------------
 # GLOBAL STYLES (Optimized - Full Visual Preservation)
 # ------------------------------------------------------
@@ -1156,7 +1157,6 @@ st.markdown(
     </div>
     """,
     unsafe_allow_html=True,
-)
 )
 
 

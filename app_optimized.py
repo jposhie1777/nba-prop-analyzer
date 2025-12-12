@@ -408,6 +408,9 @@ def render_landing_nba_games():
 
     st.subheader("🏀 NBA Games Today")
 
+    # -------------------------------
+    # Debug today's ET date
+    # -------------------------------
     try:
         et_today = datetime.now(pytz.timezone("America/New_York")).date()
     except Exception:
@@ -416,6 +419,9 @@ def render_landing_nba_games():
     if DEBUG_LANDING:
         st.caption(f"DEBUG: ET today = {et_today}")
 
+    # -------------------------------
+    # Run query using AUTHENTICATED bq_client
+    # -------------------------------
     try:
         sql = """
         SELECT
@@ -438,7 +444,7 @@ def render_landing_nba_games():
             st.caption("DEBUG: Running SQL:")
             st.code(sql, language="sql")
 
-        # ✅ USE AUTHENTICATED CLIENT
+        # ✅ Correct: use authenticated global bq_client
         df = bq_client.query(sql).to_dataframe()
 
         if DEBUG_LANDING:
@@ -450,16 +456,21 @@ def render_landing_nba_games():
             st.info("No NBA games scheduled for today.")
             return
 
-        # ---- Render results
+        # -------------------------------
+        # Render game list
+        # -------------------------------
         for _, g in df.iterrows():
+
+            # Safe logo fallback
             try:
                 away_logo = f"https://a.espncdn.com/i/teamlogos/nba/500/{int(g['visitor_team_id'])}.png"
                 home_logo = f"https://a.espncdn.com/i/teamlogos/nba/500/{int(g['home_team_id'])}.png"
             except Exception:
-                away_logo = home_logo = (
-                    "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
-                )
+                fallback = "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
+                away_logo = fallback
+                home_logo = fallback
 
+            # Game status text
             if g.get("is_live"):
                 status = "<span style='color:#ff4d4d; font-weight:600;'>LIVE</span>"
             elif g.get("is_upcoming"):

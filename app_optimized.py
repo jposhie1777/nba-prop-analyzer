@@ -504,6 +504,56 @@ def exchange_code_for_token(code: str):
 def decode_id_token(id_token: str):
     return jwt.decode(id_token, options={"verify_signature": False, "verify_aud": False})
 
+# ------------------------------------------------------
+# AUTH FLOW – Handles Auth0 callback ONLY
+# ------------------------------------------------------
+def ensure_logged_in():
+    if "user" in st.session_state and "user_id" in st.session_state:
+        return
+
+    try:
+        qp = st.query_params
+    except AttributeError:
+        qp = st.experimental_get_query_params()
+
+    code = qp.get("code")
+    if isinstance(code, list):
+        code = code[0]
+
+    if not code:
+        return  # no Auth0 callback yet
+
+    try:
+        token_data = exchange_code_for_token(code)
+        id_token = token_data.get("id_token")
+        claims = decode_id_token(id_token)
+
+        auth0_sub = claims.get("sub")
+        email = claims.get("email", "")
+
+        user_row = get_or_create_user(auth0_sub, email)
+        st.session_state["user"] = {
+            "auth0_sub": auth0_sub,
+            "email": email,
+        }
+        st.session_state["user_id"] = user_row["id"]
+
+        # Clear ?code from URL
+        try:
+            st.experimental_set_query_params()
+        except:
+            pass
+
+        st.rerun()
+
+    except Exception as e:
+        st.error(f"❌ Login failed: {e}")
+        st.stop()
+
+# ------------------------------------------------------
+# AUTH FLOW – HANDLE AUTH0 CALLBACK FIRST
+# ------------------------------------------------------
+ensure_logged_in()
 
 # ------------------------------------------------------
 # NOT LOGGED IN → SHOW LANDING SCREEN (ONLY PLACE)
@@ -544,57 +594,9 @@ if "user" not in st.session_state:
 
     st.stop()
 
-
-# ------------------------------------------------------
-# AUTH FLOW – Only handles token exchange
-# ------------------------------------------------------
-def ensure_logged_in():
-    if "user" in st.session_state and "user_id" in st.session_state:
-        return
-
-    try:
-        qp = st.query_params
-    except AttributeError:
-        qp = st.experimental_get_query_params()
-
-    code = qp.get("code")
-    if isinstance(code, list):
-        code = code[0]
-
-    if not code:
-        return  # already handled by landing screen above
-
-    try:
-        token_data = exchange_code_for_token(code)
-        id_token = token_data.get("id_token")
-        claims = decode_id_token(id_token)
-
-        auth0_sub = claims.get("sub")
-        email = claims.get("email", "")
-
-        user_row = get_or_create_user(auth0_sub, email)
-        st.session_state["user"] = {
-            "auth0_sub": auth0_sub,
-            "email": email,
-        }
-        st.session_state["user_id"] = user_row["id"]
-
-        # Clear URL parameters
-        try:
-            st.experimental_set_query_params()
-        except:
-            pass
-
-        st.rerun()
-    except Exception as e:
-        st.error(f"❌ Login failed: {e}")
-        st.stop()
-
-
 # ------------------------------------------------------
 # REQUIRE LOGIN
 # ------------------------------------------------------
-ensure_logged_in()
 user = st.session_state["user"]
 user_id = st.session_state["user_id"]
 st.sidebar.markdown(f"**User:** {user.get('email') or 'Logged in'}")

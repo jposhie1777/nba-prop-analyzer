@@ -406,11 +406,6 @@ def replace_saved_bets_in_db(user_id: int, bets: list[dict]):
 def render_landing_nba_games():
     st.write("DEBUG: 🎯 Entered render_landing_nba_games()")
 
-    import streamlit as st
-    from google.cloud import bigquery
-    import pytz
-    from datetime import datetime
-
     st.subheader("🏀 NBA Games Today")
 
     # -------------------------------

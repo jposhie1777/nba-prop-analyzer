@@ -403,7 +403,9 @@ def replace_saved_bets_in_db(user_id: int, bets: list[dict]):
     except Exception as e:
         st.sidebar.error(f"Error saving bets to DB: {e}")
 
-
+def render_landing_nba_games():
+    st.subheader("🏀 NBA Games Today")
+    st.info("NBA games for today will appear here.")
 
 # ------------------------------------------------------
 # AUTH0 HELPERS (LOGIN)
@@ -492,11 +494,26 @@ def ensure_logged_in():
             st.error(f"❌ Login failed: {e}")
             st.stop()
 
-    # Not logged in and no 'code' param -> show login link
-    login_url = get_auth0_authorize_url()
+    # ------------------------------------------------------
+    # NOT LOGGED IN — SHOW LANDING
+    # ------------------------------------------------------
     st.title("NBA Prop Analyzer")
-    st.info("Please log in to view props, trends, and saved bets.")
-    st.markdown(f"[ð Log in with Auth0]({login_url})")
+    st.caption("Daily NBA games, props, trends, and analytics")
+
+    try:
+        render_landing_nba_games()
+    except Exception:
+        st.info("NBA games for today will appear here.")
+
+    try:
+        login_url = get_auth0_authorize_url()
+    except Exception:
+        login_url = None
+
+    if login_url:
+        st.markdown(f"[🔐 Log in with Auth0]({login_url})")
+
+    # ⛔ IMPORTANT: STOP HERE so app does NOT continue
     st.stop()
 
 

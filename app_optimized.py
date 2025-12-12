@@ -439,7 +439,7 @@ def render_landing_nba_games():
             start_time,
             away_team_id,
             home_team_id
-        FROM nba_data.nba_games
+        FROM nba_data.games
         WHERE DATE(start_time) = CURRENT_DATE()
         ORDER BY start_time
         """

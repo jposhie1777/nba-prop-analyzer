@@ -90,6 +90,17 @@ if missing_env:
     st.stop()
 
 # ------------------------------------------------------
+# LOAD APP LOGO (Pulse Sports Analytics)
+# ------------------------------------------------------
+def load_logo_base64(path):
+    import base64
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode()
+
+LOGO_PATH = "/mnt/data/8e2c75ba-aced-4c44-91d2-077c0abec76f.png"
+logo_base64 = load_logo_base64(LOGO_PATH)
+
+# ------------------------------------------------------
 # SQL STATEMENTS (BIGQUERY)
 # ------------------------------------------------------
 PROPS_SQL = f"""
@@ -401,6 +412,8 @@ def replace_saved_bets_in_db(user_id: int, bets: list[dict]):
     except Exception as e:
         st.sidebar.error(f"Error saving bets to DB: {e}")
 
+
+
 # ------------------------------------------------------
 # AUTH0 HELPERS (LOGIN)
 # ------------------------------------------------------
@@ -490,9 +503,42 @@ def ensure_logged_in():
 
     # Not logged in and no 'code' param -> show login link
     login_url = get_auth0_authorize_url()
-    st.title("NBA Prop Analyzer")
-    st.info("Please log in to view props, trends, and saved bets.")
-    st.markdown(f"[🔐 Log in with Auth0]({login_url})")
+    
+    st.markdown(
+        f"""
+        <div style="text-align:center; margin-top:40px;">
+    
+            <img src="data:image/png;base64,{logo_base64}" 
+                 style="width:86px; margin-bottom:12px;" />
+    
+            <h1 style="color:white; font-size:2.2rem; margin-bottom:6px;">
+                Pulse Sports Analytics
+            </h1>
+    
+            <p style="color:#9ca3af; font-size:1rem; margin-top:-4px;">
+                Unified analytics for NBA, NCAA, props, EV models, and betting intelligence.
+            </p>
+    
+            <div style="margin-top:28px;">
+                <a href="{login_url}" style="
+                    padding:12px 26px;
+                    border-radius:999px;
+                    background:#0ea5e9;
+                    color:white;
+                    text-decoration:none;
+                    font-weight:600;
+                    font-size:1.05rem;
+                    box-shadow:0 0 18px rgba(14,165,233,0.6);
+                ">
+                    🔐 Log in with Auth0
+                </a>
+            </div>
+    
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    
     st.stop()
 
 
@@ -535,6 +581,15 @@ theme_choice = st.sidebar.selectbox(
     key="theme_choice",
 )
 theme = THEMES[st.session_state.theme_choice]
+
+.pulse-header-logo {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    object-fit: contain;
+    margin-right: 12px;
+    box-shadow: 0 8px 22px rgba(0,0,0,0.45);
+}
 
 # ------------------------------------------------------
 # GLOBAL STYLES (Optimized - Full Visual Preservation)
@@ -1093,7 +1148,7 @@ function scrollToTop() {
 # ------------------------------------------------------
 sport = st.selectbox(
     "Sport",
-    ["NBA", "NCAA Men's", "NCAA Women's"],
+    ["NBA", "NCAA Men's"],
     index=0,
 )
 
@@ -1102,17 +1157,22 @@ sport = st.selectbox(
 # HEADER
 # ------------------------------------------------------
 st.markdown(
-    """
+    f"""
     <div class="app-header">
         <div class="app-header-left">
-            <div class="app-logo">NBA</div>
+
+            <img src="data:image/png;base64,{logo_base64}" 
+                 class="pulse-header-logo" />
+
             <div>
-                <h1 class="app-title">Prop Analyzer</h1>
+                <h1 class="app-title">Pulse Sports Analytics</h1>
                 <p class="app-subtitle">
-                    Explore props, trends, saved bets, and team context using live BigQuery data.
+                    Multi-sport prop modeling, EV analytics, game projections & betting intelligence.
                 </p>
             </div>
+
         </div>
+
         <div>
             <span class="pill">
                 <span class="pill-dot"></span>

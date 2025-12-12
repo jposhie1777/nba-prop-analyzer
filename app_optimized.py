@@ -404,6 +404,8 @@ def replace_saved_bets_in_db(user_id: int, bets: list[dict]):
         st.sidebar.error(f"Error saving bets to DB: {e}")
 
 def render_landing_nba_games():
+    st.write("DEBUG: 🎯 Entered render_landing_nba_games()")
+
     import streamlit as st
     from google.cloud import bigquery
     import pytz

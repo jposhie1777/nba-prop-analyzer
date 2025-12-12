@@ -964,38 +964,70 @@ st.markdown("""
 st.markdown("""
 <style>
 
-/* NCAA CARD STYLES */
-.ncaab-card {
-    background: #111;
-    color: white;
-    padding: 14px 18px;
-    border-radius: 12px;
-    margin-bottom: 12px;
-    border: 1px solid rgba(255,255,255,0.08);
-}
-
-.ncaab-expanded {
+.ncaab-card-container {
     background: rgba(255,255,255,0.06);
-    padding: 12px 16px;
-    border-radius: 10px;
-    margin-top: -4px;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 14px;
+    padding: 14px 12px;
     margin-bottom: 16px;
 }
 
-.ncaab-card .matchup {
-    font-size: 16px;
-    font-weight: 600;
-}
-
-.ncaab-card .start {
-    font-size: 13px;
-    opacity: 0.7;
-}
-
-.ncaab-card .odds-row {
+/* Header logos side by side */
+.ncaab-card-header {
     display: flex;
     justify-content: space-between;
-    margin-top: 10px;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.ncaab-team-logo {
+    width: 70px;
+    height: 70px;
+    object-fit: contain;
+}
+
+/* VS centered between logos */
+.ncaab-vs-text {
+    font-size: 22px;
+    font-weight: 700;
+    color: #ffffffaa;
+}
+
+/* Team names row */
+.ncaab-team-names {
+    display: flex;
+    justify-content: space-between;
+    font-size: 15px;
+    font-weight: 600;
+    margin-top: 4px;
+    margin-bottom: 8px;
+    color: white;
+}
+
+.ncaab-start {
+    font-size: 13px;
+    opacity: 0.7;
+    margin-bottom: 6px;
+}
+
+/* Score */
+.ncaab-score {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 700;
+    margin-top: 4px;
+}
+
+@media (max-width: 550px) {
+    /* Increase mobile logo size */
+    .ncaab-team-logo {
+        width: 95px;
+        height: 95px;
+    }
+
+    .ncaab-vs-text {
+        font-size: 20px;
+    }
 }
 
 </style>
@@ -1289,51 +1321,55 @@ SPORTSBOOK_LOGOS_BASE64 = {
 }
 
 # ------------------------------------------------------
-# NCAA LOGO SYSTEM (Option A — Slug + Fuzzy Matching)
+# NCAA LOGO LOOKUP (Official ESPN ID System)
 # ------------------------------------------------------
-
 from rapidfuzz import fuzz, process
-import re
 
-# 1. Normalizes team names (removes punctuation, mascots, variants)
-def normalize_team_name(n: str) -> str:
+# Empty dictionary populated by the ESPN_NCAAM_TEAMS.update() chunks
+ESPN_NCAAM_TEAMS = {}
+
+def normalize_ncaa_name(n: str) -> str:
     if not isinstance(n, str):
         return ""
-    n = n.lower()
-    n = re.sub(r"[^a-z0-9 ]", "", n)
-    n = n.replace(" state university", " state")
-    n = n.replace(" university", "")
-    n = n.replace(" st ", " state ")
-    n = n.replace(" mountaineers", "")
-    n = n.replace(" pirates", "")
-    n = n.replace(" jaguars", "")
-    n = n.replace(" vaqueros", "")
-    n = n.replace(" bison", "")
-    return n.strip()
+    return (
+        n.lower()
+         .replace(".", "")
+         .replace("'", "")
+         .replace("-", " ")
+         .replace("&", "and")
+         .replace(" st ", " state ")
+         .replace(" university", "")
+         .strip()
+    )
 
-# 2. Fuzzy match raw name → official NCAA name
-def fuzzy_match_team(raw_name: str):
-    cleaned = normalize_team_name(raw_name)
-    match, score, _ = process.extractOne(
+def get_espn_team_id(team_name: str):
+    """Fuzzy match your team name -> ESPN numeric ID."""
+    cleaned = normalize_ncaa_name(team_name)
+
+    if not ESPN_NCAAM_TEAMS:
+        return None
+
+    best_key, score, _ = process.extractOne(
         cleaned,
-        NCAA_TEAM_MASTER,
+        ESPN_NCAAM_TEAMS.keys(),
         scorer=fuzz.WRatio
     )
-    return match if score >= 70 else None
 
-# 3. Convert official name → ESPN slug
-def ncaa_team_to_slug(team_name: str):
-    official = fuzzy_match_team(team_name)
-    if not official:
-        return None
-    return NCAA_SLUGS.get(official.lower())
+    if score >= 80:
+        return ESPN_NCAAM_TEAMS[best_key]["id"]
 
-# 4. Final logo URL
-def get_ncaa_logo(team_name: str) -> str:
-    slug = ncaa_team_to_slug(team_name)
-    if slug:
-        return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{slug}.png"
+    return None
+
+def ncaa_logo(team_name: str) -> str:
+    """Return 500px ESPN logo URL using numeric ID."""
+    espn_id = get_espn_team_id(team_name)
+
+    if espn_id:
+        return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{espn_id}.png"
+
     return "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
+    
+    
 # ------------------------------------------------------
 # ESPN TEAM MAP — CHUNK 2 (Teams 1–100)
 # ------------------------------------------------------
@@ -2715,173 +2751,65 @@ def build_injury_lookup():
 # Build lookup at load
 build_injury_lookup()
 
-# ------------------------------------------------------
-# RENDER NCAA OVERVIEW CARD (clean, mobile friendly)
-# ------------------------------------------------------
+# --------------------------------------------------------
+# NCAA MEN'S — RENDER GAME OVERVIEW CARD (FINAL VERSION)
+# --------------------------------------------------------
+
 def render_ncaab_overview_card(row):
+    """
+    Renders a single NCAA game overview card with:
+      - Home + Away logos (fuzzy matched via ESPN ID)
+      - Team names
+      - Start time
+      - Score (if available)
+    """
 
-    # Extract fields
-    home = row.get("home_team", "")
-    away = row.get("away_team", "")
+    # --------------------------
+    # Extract game data
+    # --------------------------
+    home = row.get("home_team") or ""
+    away = row.get("away_team") or ""
+    start_time = row.get("start_time", "")
+    home_score = row.get("home_score", None)
+    away_score = row.get("away_score", None)
 
-    # Logos (fuzzy matched)
-    home_logo = get_ncaa_logo(home)
-    away_logo = get_ncaa_logo(away)
+    # --------------------------
+    # NCAA LOGO LOOKUP
+    # --------------------------
+    home_logo = ncaa_logo(home)
+    away_logo = ncaa_logo(away)
 
-    # Time formatting
-    start_time = row.get("start_time")
-    try:
-        dt = pd.to_datetime(start_time).tz_convert("America/New_York")
-        start_str = dt.strftime("%a %I:%M %p ET")
-    except:
-        start_str = str(start_time)
-
-    # Odds
-    home_ml = row.get("home_ml", "—")
-    away_ml = row.get("away_ml", "—")
-    home_spread = row.get("home_spread", "—")
-    away_spread = row.get("away_spread", "—")
-    total_line = row.get("total_line", "—")
-
-    # Model projections
-    def fmt(x):
-        try:
-            return f"{float(x):.1f}"
-        except:
-            return "—"
-
-    # Unique toggle ID
-    card_id = normalize_name(home + away).replace(" ", "")
+    # --------------------------
+    # Format score (if game started)
+    # --------------------------
+    score_html = ""
+    if home_score is not None and away_score is not None:
+        score_html = f"""
+        <div class="ncaab-score">
+            <span>{home_score}</span> - <span>{away_score}</span>
+        </div>
+        """
 
     # --------------------------
     # Card HTML
     # --------------------------
-    html = f"""
-    <style>
-        .card-wrapper {{
-            background: rgba(255,255,255,0.03);
-            border-radius: 18px;
-            padding: 20px;
-            margin-bottom: 22px;
-            border: 1px solid rgba(255,255,255,0.07);
-            font-family: Inter, sans-serif;
-        }}
-
-        .card-header {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }}
-
-        .team-block {{
-            text-align: center;
-            width: 45%;
-        }}
-
-        .team-logo {{
-            width: 60px;
-            height: 60px;
-            border-radius: 12px;
-            object-fit: contain;
-            background: rgba(0,0,0,0.15);
-        }}
-
-        .team-name {{
-            margin-top: 8px;
-            font-size: 1.05rem;
-            font-weight: 700;
-            color: #fff;
-        }}
-
-        .vs-label {{
-            font-size: 1.15rem;
-            font-weight: 700;
-            color: #9ca3af;
-        }}
-
-        .start-time {{
-            margin-top: 12px;
-            color: #9ca3af;
-            font-size: 0.9rem;
-        }}
-
-        .toggle-btn {{
-            margin-top: 14px;
-            padding: 10px 18px;
-            background: #2563EB;
-            color: white;
-            border-radius: 10px;
-            cursor: pointer;
-            border: none;
-            font-size: 0.9rem;
-        }}
-
-        .expand-box {{
-            margin-top: 14px;
-            background: rgba(255,255,255,0.05);
-            border-radius: 12px;
-            padding: 14px;
-            display: none;
-        }}
-
-        .expand-box.visible {{
-            display: block;
-        }}
-
-        .section-title {{
-            font-weight: 700;
-            margin-top: 6px;
-            color: #fff;
-        }}
-
-        .data-line {{
-            color: #d1d5db;
-            margin: 2px 0;
-        }}
-    </style>
-
-    <div class="card-wrapper">
-
-        <div class="card-header">
-            <div class="team-block">
-                <img class="team-logo" src="{home_logo}">
-                <div class="team-name">{home}</div>
-            </div>
-
-            <div class="vs-label">vs</div>
-
-            <div class="team-block">
-                <img class="team-logo" src="{away_logo}">
-                <div class="team-name">{away}</div>
-            </div>
+    card_html = f"""
+    <div class="ncaab-card-container">
+        
+        <div class="ncaab-card-header">
+            <img src="{away_logo}" class="ncaab-team-logo" />
+            <div class="ncaab-vs-text">VS</div>
+            <img src="{home_logo}" class="ncaab-team-logo" />
         </div>
 
-        <div class="start-time">{start_str}</div>
-
-        <button class="toggle-btn" onclick="document.getElementById('box-{card_id}').classList.toggle('visible')">
-            Show Details
-        </button>
-
-        <div id="box-{card_id}" class="expand-box">
-
-            <div class="section-title">Moneyline</div>
-            <div class="data-line">{home}: {home_ml}</div>
-            <div class="data-line">{away}: {away_ml}</div>
-
-            <div class="section-title" style="margin-top:10px;">Spread</div>
-            <div class="data-line">{home}: {home_spread}</div>
-            <div class="data-line">{away}: {away_spread}</div>
-
-            <div class="section-title" style="margin-top:10px;">Total</div>
-            <div class="data-line">Line: {total_line}</div>
-
-            <div class="section-title" style="margin-top:10px;">Model Projection</div>
-            <div class="data-line">{home}: {fmt(row.get("proj_home_points"))}</div>
-            <div class="data-line">{away}: {fmt(row.get("proj_away_points"))}</div>
-            <div class="data-line">Total: {fmt(row.get("proj_total_points"))}</div>
-            <div class="data-line">Margin: {fmt(row.get("proj_margin"))}</div>
-
+        <div class="ncaab-team-names">
+            <span class="ncaab-away">{away}</span>
+            <span class="ncaab-home">{home}</span>
         </div>
+
+        <div class="ncaab-start"> {start_time} </div>
+
+        {score_html}
 
     </div>
     """

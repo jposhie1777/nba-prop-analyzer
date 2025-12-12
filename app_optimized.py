@@ -531,22 +531,31 @@ def exchange_code_for_token(code: str):
 
 
 def decode_id_token(id_token: str):
-    """
-    For simplicity, we disable signature & audience verification here.
-    For production you should verify the token using Auth0's JWKS keys.
-    """
     return jwt.decode(id_token, options={"verify_signature": False, "verify_aud": False})
 
 
+# ------------------------------------------------------
+# NOT LOGGED IN → SHOW LANDING SCREEN (ONLY PLACE)
+# ------------------------------------------------------
+if "user" not in st.session_state:
+    st.title("Pulse Sports Analytics")
+    st.caption("Daily games, props, trends, and analytics")
+
+    render_landing_nba_games()   # ← debug will show here
+
+    login_url = get_auth0_authorize_url()
+    st.markdown(f"[🔐 Log in with Auth0]({login_url})")
+
+    st.stop()   # ← stops BEFORE loading authenticated UI
+
+
+# ------------------------------------------------------
+# AUTH FLOW – Only handles token exchange
+# ------------------------------------------------------
 def ensure_logged_in():
-    """
-    Handle Auth0 login flow and store user info in st.session_state.
-    If not logged in, show Login button and stop the app.
-    """
     if "user" in st.session_state and "user_id" in st.session_state:
         return
 
-    # Try to get 'code' from query params
     try:
         qp = st.query_params
     except AttributeError:
@@ -556,59 +565,34 @@ def ensure_logged_in():
     if isinstance(code, list):
         code = code[0]
 
-    if code:
-        # Returned from Auth0 with a code
+    if not code:
+        return  # already handled by landing screen above
+
+    try:
+        token_data = exchange_code_for_token(code)
+        id_token = token_data.get("id_token")
+        claims = decode_id_token(id_token)
+
+        auth0_sub = claims.get("sub")
+        email = claims.get("email", "")
+
+        user_row = get_or_create_user(auth0_sub, email)
+        st.session_state["user"] = {
+            "auth0_sub": auth0_sub,
+            "email": email,
+        }
+        st.session_state["user_id"] = user_row["id"]
+
+        # Clear URL parameters
         try:
-            token_data = exchange_code_for_token(code)
-            id_token = token_data.get("id_token")
-            if not id_token:
-                raise ValueError("No id_token in Auth0 response.")
-            claims = decode_id_token(id_token)
+            st.experimental_set_query_params()
+        except:
+            pass
 
-            auth0_sub = claims.get("sub")
-            email = claims.get("email", "")
-
-            if not auth0_sub:
-                raise ValueError("Missing 'sub' in id_token.")
-
-            user_row = get_or_create_user(auth0_sub, email)
-            st.session_state["user"] = {
-                "auth0_sub": auth0_sub,
-                "email": email,
-            }
-            st.session_state["user_id"] = user_row["id"]
-
-            # Clear 'code' from URL and rerun once
-            try:
-                st.experimental_set_query_params()
-            except Exception:
-                pass
-            st.rerun()
-        except Exception as e:
-            st.error(f"❌ Login failed: {e}")
-            st.stop()
-
-    # ------------------------------------------------------
-    # NOT LOGGED IN — SHOW LANDING
-    # ------------------------------------------------------
-    st.title("Pulse Sports Analytics")
-    st.caption("Daily games, props, trends, and analytics")
-
-    try:
-        render_landing_nba_games()
-    except Exception:
-        st.info("NBA games for today will appear here.")
-
-    try:
-        login_url = get_auth0_authorize_url()
-    except Exception:
-        login_url = None
-
-    if login_url:
-        st.markdown(f"[🔐 Log in with Auth0]({login_url})")
-
-    # ⛔ IMPORTANT: STOP HERE so app does NOT continue
-    st.stop()
+        st.rerun()
+    except Exception as e:
+        st.error(f"❌ Login failed: {e}")
+        st.stop()
 
 
 # ------------------------------------------------------
@@ -618,6 +602,7 @@ ensure_logged_in()
 user = st.session_state["user"]
 user_id = st.session_state["user_id"]
 st.sidebar.markdown(f"**User:** {user.get('email') or 'Logged in'}")
+
 
 # ------------------------------------------------------
 # THEME PRESETS (from dev)

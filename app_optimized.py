@@ -89,16 +89,7 @@ if missing_env:
     )
     st.stop()
 
-# ------------------------------------------------------
-# LOAD APP LOGO (Pulse Sports Analytics)
-# ------------------------------------------------------
-def load_logo_base64(path):
-    import base64
-    with open(path, "rb") as f:
-        return base64.b64encode(f.read()).decode()
 
-LOGO_PATH = "/mnt/data/8e2c75ba-aced-4c44-91d2-077c0abec76f.png"
-logo_base64 = load_logo_base64(LOGO_PATH)
 
 # ------------------------------------------------------
 # SQL STATEMENTS (BIGQUERY)

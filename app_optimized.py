@@ -494,39 +494,9 @@ def ensure_logged_in():
 
     # Not logged in and no 'code' param -> show login link
     login_url = get_auth0_authorize_url()
-    
-    st.markdown(
-        f"""
-        <div style="text-align:center; margin-top:40px;">
-    
-            <h1 style="color:white; font-size:2.2rem; margin-bottom:6px;">
-                Pulse Sports Analytics
-            </h1>
-    
-            <p style="color:#9ca3af; font-size:1rem; margin-top:-4px;">
-                Unified analytics for NBA, NCAA, props, EV models, and betting intelligence.
-            </p>
-    
-            <div style="margin-top:28px;">
-                <a href="{login_url}" style="
-                    padding:12px 26px;
-                    border-radius:999px;
-                    background:#0ea5e9;
-                    color:white;
-                    text-decoration:none;
-                    font-weight:600;
-                    font-size:1.05rem;
-                    box-shadow:0 0 18px rgba(14,165,233,0.6);
-                ">
-                    🔐 Log in with Auth0
-                </a>
-            </div>
-    
-        </div>
-        """,
-        unsafe_allow_html=True,   # ← THIS LINE IS CRITICAL
-    )
-    
+    st.title("NBA Prop Analyzer")
+    st.info("Please log in to view props, trends, and saved bets.")
+    st.markdown(f"[ð Log in with Auth0]({login_url})")
     st.stop()
 
 

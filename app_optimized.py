@@ -2753,7 +2753,7 @@ def pretty_game_time(dt):
 # --------------------------------------------------------
 # NCAA MEN'S — RENDER GAME OVERVIEW CARD (FINAL VERSION)
 # --------------------------------------------------------
-from streamlit import components
+import streamlit.components.v1 as components
 from datetime import datetime
 import pytz
 

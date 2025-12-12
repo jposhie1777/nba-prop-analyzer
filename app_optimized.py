@@ -1106,28 +1106,7 @@ sport = st.selectbox(
 # ------------------------------------------------------
 # HEADER
 # ------------------------------------------------------
-st.markdown(
-    """
-    <div class="app-header">
-        <div class="app-header-left">
-            <div>
-                <h1 class="app-title">Pulse Sports Analytics</h1>
-                <p class="app-subtitle">
-                    Multi-sport prop modeling, EV analytics, game projections & betting intelligence.
-                </p>
-            </div>
-        </div>
-
-        <div>
-            <span class="pill">
-                <span class="pill-dot"></span>
-                LIVE AUTHENTICATED
-            </span>
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+st.title("Pulse Sports Analytics")
 
 
 # ------------------------------------------------------

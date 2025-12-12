@@ -407,8 +407,20 @@ def render_landing_nba_games():
     import streamlit as st
     from google.cloud import bigquery
     import pytz
+    from datetime import datetime
 
     st.subheader("🏀 NBA Games Today")
+
+    # -------------------------------
+    # DEBUG: show today's ET date
+    # -------------------------------
+    try:
+        et_today = datetime.now(pytz.timezone("America/New_York")).date()
+    except Exception:
+        et_today = None
+
+    if DEBUG_LANDING:
+        st.caption(f"DEBUG: ET today = {et_today}")
 
     try:
         client = bigquery.Client()
@@ -430,7 +442,16 @@ def render_landing_nba_games():
         ORDER BY start_time_est
         """
 
+        if DEBUG_LANDING:
+            st.caption("DEBUG: Running SQL:")
+            st.code(sql, language="sql")
+
         df = client.query(sql).to_dataframe()
+
+        if DEBUG_LANDING:
+            st.caption(f"DEBUG: Rows returned = {len(df)}")
+            if not df.empty:
+                st.dataframe(df.head())
 
         if df.empty:
             st.info("No NBA games scheduled for today.")
@@ -438,14 +459,18 @@ def render_landing_nba_games():
 
         # ---- Render games ----
         for _, g in df.iterrows():
-
-            away_logo = f"https://a.espncdn.com/i/teamlogos/nba/500/{int(g.visitor_team_id)}.png"
-            home_logo = f"https://a.espncdn.com/i/teamlogos/nba/500/{int(g.home_team_id)}.png"
+            try:
+                away_logo = f"https://a.espncdn.com/i/teamlogos/nba/500/{int(g['visitor_team_id'])}.png"
+                home_logo = f"https://a.espncdn.com/i/teamlogos/nba/500/{int(g['home_team_id'])}.png"
+            except Exception:
+                away_logo = home_logo = (
+                    "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
+                )
 
             # Status badge
-            if g.is_live:
+            if g.get("is_live"):
                 status = "<span style='color:#ff4d4d; font-weight:600;'>LIVE</span>"
-            elif g.is_upcoming:
+            elif g.get("is_upcoming"):
                 status = "<span style='color:#4dabf5; font-weight:600;'>Upcoming</span>"
             else:
                 status = "<span style='color:#9aa4b2;'>Final</span>"
@@ -459,7 +484,7 @@ def render_landing_nba_games():
                 </div>
 
                 <div style="color:#9aa4b2; font-size:14px; margin-bottom:4px;">
-                    {g.start_time_formatted} ET • {status}
+                    {g['start_time_formatted']} ET • {status}
                 </div>
 
                 <div style="height:14px"></div>
@@ -468,6 +493,10 @@ def render_landing_nba_games():
             )
 
     except Exception as e:
+        # Still break-proof, but more verbose when debugging
+        if DEBUG_LANDING:
+            st.error("DEBUG: Error while loading NBA games:")
+            st.exception(e)
         st.info("NBA games for today will appear here.")
 
 # ------------------------------------------------------

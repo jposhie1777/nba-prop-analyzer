@@ -524,7 +524,7 @@ def ensure_logged_in():
     
         </div>
         """,
-        unsafe_allow_html=True,
+        unsafe_allow_html=True,   # ← THIS LINE IS CRITICAL
     )
     
     st.stop()

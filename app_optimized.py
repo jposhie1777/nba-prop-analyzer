@@ -3714,6 +3714,13 @@ if sport == "NBA":
         if df.empty:
             st.info("No games available.")
             st.stop()
+            
+         # 🔍 DEBUG — TEMPORARY
+        st.write("TAB 2 DF COLUMNS:")
+        st.write(df.columns.tolist())
+    
+        st.write("TAB 2 SAMPLE ROW:")
+        st.write(df.head(1))
     
         # ==============================================
         # EXPANDABLE GAME CARD RENDERER
@@ -3905,10 +3912,16 @@ if sport == "NBA":
         # ===============================================
         for _, row in df.iterrows():
     
-            game_id = f"game{row['game_id']}".replace(" ", "").replace("-", "")
-    
             home = row["home_team"]
             away = row["visitor_team"]
+            
+            game_id = (
+                f"{home}_{away}"
+                .lower()
+                .replace(" ", "")
+                .replace(".", "")
+                .replace("-", "")
+            )
     
             home_logo = logo(home)
             away_logo = logo(away)

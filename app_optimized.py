@@ -3788,7 +3788,7 @@ if sport == "NBA":
             .game-card:hover {{
                 background: linear-gradient(145deg, #162236, #253348);
             }}
-    
+            
             .expand-section {{
                 max-height: 0;
                 overflow: hidden;
@@ -3797,140 +3797,117 @@ if sport == "NBA":
             .expanded {{
                 max-height: 900px;
             }}
-    
+            
             .expand-hint {{
                 color: #94a3b8;
                 font-size: 0.8rem;
-                margin-top: 8px;
+                margin-top: 10px;
                 text-align: center;
             }}
-    
-            .proj-strip {{
-                margin-top: 14px;
-                display: flex;
-                gap: 14px;
-                background: rgba(255,255,255,0.05);
+            
+            .team-col {{
+                text-align: center;
+                width: 120px;
+            }}
+            
+            .proj-pts {{
+                margin-top: 4px;
+                font-size: 0.9rem;
+                color: #93c5fd;
+                font-weight: 600;
+            }}
+            
+            .center-col {{
+                text-align: center;
+                margin-top: 6px;
+                min-width: 80px;
+            }}
+            
+            .section-box {{
+                background: rgba(255,255,255,0.06);
                 padding: 12px;
-                border-radius: 14px;
+                border-radius: 12px;
                 font-size: 0.85rem;
             }}
-    
-            .proj-box {{
-                flex: 1;
-                min-width: 110px;
-            }}
-    
-            .proj-label {{
-                color: #9ca3af;
-                font-size: 0.75rem;
-            }}
-    
-            .proj-value {{
-                font-weight: 700;
-                font-size: 0.95rem;
-            }}
-    
-            @media(max-width: 650px) {{
-                .proj-strip {{
-                    flex-direction: column;
-                    gap: 10px;
-                }}
+            
+            .section-title {{
+                color: #94a3b8;
+                font-size: 0.8rem;
+                margin-bottom: 6px;
             }}
             </style>
-    
+            
             <div class="game-card" onclick="toggleExpand('{game_id}')">
-    
+            
                 <!-- HEADER -->
-                <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
-                    <div style="display:flex;align-items:center;gap:14px;">
-                        <div style="text-align:center;">
-                            <img src="{home_logo}" width="42">
-                            <div style="font-weight:700;margin-top:4px;">{home}</div>
-                        </div>
-                        <div style="font-size:1.2rem;font-weight:700;">vs</div>
-                        <div style="text-align:center;">
-                            <img src="{away_logo}" width="42">
-                            <div style="font-weight:700;margin-top:4px;">{away}</div>
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            
+                    <!-- HOME -->
+                    <div class="team-col">
+                        <img src="{home_logo}" width="42" style="border-radius:6px;">
+                        <div style="font-weight:700;margin-top:4px;">{home}</div>
+                        <div class="proj-pts">{home_pts} pts</div>
+                    </div>
+            
+                    <!-- CENTER -->
+                    <div class="center-col">
+                        <div style="font-size:1.25rem;font-weight:700;color:#e5e7eb;">vs</div>
+                        <div style="margin-top:4px;font-size:0.85rem;color:#9ca3af;">
+                            {start_time}
                         </div>
                     </div>
-    
-                    <div style="text-align:right;">
-                        <div style="font-size:0.75rem;color:#94a3b8;">Projected Points</div>
-                        <div style="font-weight:700;font-size:1.15rem;">
-                            {home_pts} – {away_pts}
-                        </div>
+            
+                    <!-- AWAY -->
+                    <div class="team-col">
+                        <img src="{away_logo}" width="42" style="border-radius:6px;">
+                        <div style="font-weight:700;margin-top:4px;">{away}</div>
+                        <div class="proj-pts">{away_pts} pts</div>
                     </div>
+            
                 </div>
-    
-                <!-- PROJECTIONS -->
-                <div class="proj-strip">
-                    <div class="proj-box">
-                        <div class="proj-label">Proj Total</div>
-                        <div class="proj-value">{tot_pts}</div>
-                    </div>
-    
-                    <div class="proj-box">
-                        <div class="proj-label">Proj Spread</div>
-                        <div class="proj-value">{home} {margin}</div>
-                    </div>
-    
-                    <div class="proj-box">
-                        <div class="proj-label">Best Odds</div>
-                        <div style="font-size:0.8rem;line-height:1.25;">
-                            {home_ml_text}<br>
-                            {spread_text}
-                        </div>
-                    </div>
-                </div>
-    
+            
                 <div class="expand-hint">Tap to expand ↓</div>
-    
+            
                 <!-- EXPANDED -->
                 <div id="expand-{game_id}" class="expand-section">
                     <div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.08);">
-    
-                        <div style="display:flex;flex-wrap:wrap;gap:16px;">
-    
-                            <div style="flex:1;min-width:180px;">
-                                <div style="color:#94a3b8;font-size:0.85rem;">Win Probability</div>
-                                <div style="background:rgba(255,255,255,0.06);padding:10px;border-radius:10px;">
-                                    {home}: <b>{home_win}%</b><br>
-                                    {away}: <b>{away_win}%</b>
+            
+                        <div style="display:flex;gap:18px;flex-wrap:wrap;">
+            
+                            <!-- MODEL (LEFT) -->
+                            <div style="flex:1;min-width:220px;">
+                                <div class="section-title">Model Projections</div>
+                                <div class="section-box">
+                                    Win %: {home_win}% / {away_win}%<br>
+                                    Projected Total: <b>{tot_pts}</b><br>
+                                    Model Spread: <b>{margin}</b><br>
+                                    Pace: {pace} ({pace_delta})<br>
+                                    L5 Diff: {home_l5} / {away_l5}
                                 </div>
                             </div>
-    
-                            <div style="flex:1;min-width:180px;">
-                                <div style="color:#94a3b8;font-size:0.85rem;">Pace / Form</div>
-                                <div style="background:rgba(255,255,255,0.06);padding:10px;border-radius:10px;">
-                                    Pace: <b>{pace}</b><br>
-                                    Δ Pace: <b>{pace_delta}</b><br>
-                                    L5: {home} <b>{home_l5}</b> / {away} <b>{away_l5}</b>
-                                </div>
-                            </div>
-    
-                        </div>
-    
-                        <div style="margin-top:20px;background:rgba(255,255,255,0.04);padding:12px;border-radius:12px;">
-                            <div style="display:flex;flex-wrap:wrap;gap:14px;">
-                                <div style="flex:1;min-width:170px;">
-                                    <div style="font-size:0.8rem;color:#9ca3af;">Moneyline</div>
-                                    {home_ml_text}<br>{away_ml_text}
-                                </div>
-                                <div style="flex:1;min-width:170px;">
-                                    <div style="font-size:0.8rem;color:#9ca3af;">Spread</div>
-                                    {spread_text}
-                                </div>
-                                <div style="flex:1;min-width:170px;">
-                                    <div style="font-size:0.8rem;color:#9ca3af;">Total</div>
+            
+                            <!-- MARKET (RIGHT) -->
+                            <div style="flex:1;min-width:220px;">
+                                <div class="section-title">Market Lines</div>
+                                <div class="section-box">
+                                    <b>Moneyline</b><br>
+                                    {home_ml_text}<br>
+                                    {away_ml_text}<br><br>
+            
+                                    <b>Spread</b><br>
+                                    {spread_text}<br><br>
+            
+                                    <b>Total</b><br>
                                     {total_text}
                                 </div>
                             </div>
+            
                         </div>
-    
+            
                     </div>
                 </div>
             </div>
-    
+            
             <script>
             function toggleExpand(id) {{
                 var el = document.getElementById("expand-" + id);
@@ -3938,7 +3915,6 @@ if sport == "NBA":
             }}
             </script>
             """
-    
             components.html(html, height=760)
     
         # ===============================================

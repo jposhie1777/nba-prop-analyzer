@@ -4064,6 +4064,8 @@ if sport == "NBA":
     
             home_logo = logo(home)
             away_logo = logo(away)
+            home_abbr = team_abbr(home)
+            away_abbr = team_abbr(away)
     
             home_pts = fmt(row.get("exp_home_points"))
             away_pts = fmt(row.get("exp_visitor_points"))

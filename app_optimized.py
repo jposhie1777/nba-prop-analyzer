@@ -1273,6 +1273,13 @@ TEAM_NAME_TO_CODE = {
     "Washington Wizards": "WAS",
 }
 
+def team_abbr(team_name: str) -> str:
+    """
+    Returns 3-letter NBA abbreviation.
+    Falls back safely if name not found.
+    """
+    return TEAM_NAME_TO_CODE.get(team_name, team_name[:3].upper())
+
 def logo(team_name: str) -> str:
     code = TEAM_NAME_TO_CODE.get(team_name)
     if not code:
@@ -3772,6 +3779,16 @@ if sport == "NBA":
             spread_text, total_text,
         ):
         
+            home_abbr = team_abbr(home)
+            away_abbr = team_abbr(away)
+            
+            # --- COLLAPSED (compact, NO EV) ---
+            collapsed_home_ml = f"{home_abbr} {home_ml}"
+            collapsed_away_ml = f"{away_abbr} {away_ml}"
+            
+            collapsed_spread = f"{home_abbr} {spread_line}"
+            collapsed_total  = f"O/U {total_line}"
+            
             html = f"""
             <style>
             .game-card {{
@@ -3944,18 +3961,18 @@ if sport == "NBA":
                 
                         <div class="summary-line">
                             <span class="summary-label">Total</span>
-                            <span class="summary-value">{total_text}</span>
+                            <span class="summary-value">{collapsed_total}</span>
                         </div>
                 
                         <div class="summary-line">
                             <span class="summary-label">Spread</span>
-                            <span class="summary-value">{spread_text}</span>
+                            <span class="summary-value">{collapsed_spread}</span>
                         </div>
                 
                         <div class="summary-line">
                             <span class="summary-label">ML</span>
                             <span class="summary-value">
-                                {home_ml_text} / {away_ml_text}
+                                {collapsed_home_ml} / {collapsed_away_ml}
                             </span>
                         </div>
                     </div>

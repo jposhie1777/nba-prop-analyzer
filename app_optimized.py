@@ -3980,52 +3980,53 @@ if sport == "NBA":
             total_text = "No total odds"
     
             # --------------------------------------------------
-            # ODDS LOOKUP (nba_odds schema)
+            # GAME ODDS + MODEL OUTPUT (FROM game_report)
             # --------------------------------------------------
-            allowed_books = ["FanDuel", "DraftKings"]
-    
-            g = game_odds_df[
-                (game_odds_df["home_team"] == home) &
-                (game_odds_df["away_team"] == away) &
-                (game_odds_df["bookmaker"].isin(allowed_books))
-            ].copy()
-    
-            # MONEYLINE
-            ml = g[g["market"] == "h2h"]
-            if not ml.empty:
-                ml["dec"] = ml["price"].apply(american_to_decimal)
-    
-                h = ml[ml["label"] == home]
-                if not h.empty:
-                    best = h.sort_values("dec", ascending=False).iloc[0]
-                    home_ml_text = f'{home}: <b>{int(best["price"])}</b> ({best["bookmaker"]})'
-    
-                a = ml[ml["label"] == away]
-                if not a.empty:
-                    best = a.sort_values("dec", ascending=False).iloc[0]
-                    away_ml_text = f'{away}: <b>{int(best["price"])}</b> ({best["bookmaker"]})'
-    
-            # SPREAD
-            sp = g[g["market"] == "spreads"]
-            if not sp.empty:
-                sp["dec"] = sp["price"].apply(american_to_decimal)
-                sp = sp.dropna(subset=["dec", "point"])
-                best = sp.sort_values("dec", ascending=False).iloc[0]
-                spread_text = (
-                    f'{best["label"]} {best["point"]:+.1f} '
-                    f'(<b>{int(best["price"])}</b>, {best["bookmaker"]})'
-                )
-    
-            # TOTAL
-            tot = g[g["market"] == "totals"]
-            if not tot.empty:
-                tot["dec"] = tot["price"].apply(american_to_decimal)
-                tot = tot.dropna(subset=["dec", "point"])
-                best = tot.sort_values("dec", ascending=False).iloc[0]
-                total_text = (
-                    f'{best["label"].title()} {best["point"]:.1f} '
-                    f'(<b>{int(best["price"])}</b>, {best["bookmaker"]})'
-                )
+            
+            # ----- MONEYLINE -----
+            home_ml = row.get("home_ml")
+            away_ml = row.get("visitor_ml")
+            
+            home_ml_edge = row.get("home_ml_edge")
+            away_ml_edge = row.get("visitor_ml_edge")
+            
+            home_ml_text = (
+                f"{home}: <b>{home_ml:+}</b>"
+                f" <span style='opacity:0.7'>EV {home_ml_edge:+.2f}%</span>"
+                if pd.notna(home_ml) else "—"
+            )
+            
+            away_ml_text = (
+                f"{away}: <b>{away_ml:+}</b>"
+                f" <span style='opacity:0.7'>EV {away_ml_edge:+.2f}%</span>"
+                if pd.notna(away_ml) else "—"
+            )
+            
+            
+            # ----- SPREAD -----
+            home_spread = row.get("home_spread")
+            home_spread_price = row.get("home_spread_price")
+            home_spread_edge = row.get("home_spread_edge")
+            
+            spread_text = (
+                f"{home} {home_spread:+.1f} "
+                f"(<b>{home_spread_price:+}</b>, "
+                f"EV {home_spread_edge:+.2f}%)"
+                if pd.notna(home_spread) else "—"
+            )
+            
+            
+            # ----- TOTAL -----
+            total_line = row.get("total_line")
+            total_price = row.get("total_price")
+            total_edge = row.get("total_edge_pts")
+            
+            total_text = (
+                f"O/U {total_line:.1f} "
+                f"(<b>{total_price:+}</b>, "
+                f"EV {total_edge:+.2f} pts)"
+                if pd.notna(total_line) else "—"
+            )
     
             # --------------------------------------------------
             # RENDER CARD

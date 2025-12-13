@@ -1273,6 +1273,12 @@ TEAM_NAME_TO_CODE = {
     "Washington Wizards": "WAS",
 }
 
+def logo(team_name: str) -> str:
+    code = TEAM_NAME_TO_CODE.get(team_name)
+    if not code:
+        return "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
+    return TEAM_LOGOS.get(code)
+
 import os
 import base64
 import pathlib

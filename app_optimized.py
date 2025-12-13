@@ -3705,6 +3705,9 @@ if sport == "NBA":
     # 🏀 TAB 2 — GAME LINES + MODEL EV (ML · SPREAD · TOTAL)
     # ======================================================
     with tab2:
+
+        # ✅ CRITICAL: bind tab2 to game_report
+        df = game_report_df.copy()
     
         st.subheader("🏀 Game Lines + Model EV (ML · Spread · Total)")
     

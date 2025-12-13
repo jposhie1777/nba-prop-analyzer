@@ -4107,6 +4107,14 @@ if sport == "NBA":
                 if pd.notna(away_ml) else "—"
             )
             
+            collapsed_ml_lines = (
+                [
+                    f"{home_abbr} {home_ml:+}",
+                    f"{away_abbr} {away_ml:+}",
+                ]
+                if pd.notna(home_ml) and pd.notna(away_ml)
+                else ["—"]
+            )
             
             # ----- SPREAD -----
             home_spread = row.get("home_spread")
@@ -4120,6 +4128,14 @@ if sport == "NBA":
                 if pd.notna(home_spread) else "—"
             )
             
+            collapsed_spread_lines = (
+                [
+                    f"{home_abbr} {home_spread:+.1f} {home_spread_price:+}",
+                    f"{away_abbr} {away_spread:+.1f} {away_spread_price:+}",
+                ]
+                if pd.notna(home_spread)
+                else ["—"]
+            )
             
             # ----- TOTAL -----
             total_line = row.get("total_line")
@@ -4131,6 +4147,15 @@ if sport == "NBA":
                 f"(<b>{total_price:+}</b>, "
                 f"EV {total_edge:+.2f} pts)"
                 if pd.notna(total_line) else "—"
+            )
+    
+            collapsed_total_lines = (
+                [
+                    f"O {total_price:+}",
+                    f"U {under_price:+}",
+                ]
+                if pd.notna(total_line)
+                else ["—"]
             )
     
             # --------------------------------------------------

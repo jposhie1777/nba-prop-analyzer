@@ -3783,11 +3783,16 @@ if sport == "NBA":
             away_abbr = team_abbr(away)
             
             # --- COLLAPSED (compact, NO EV) ---
-            collapsed_home_ml = f"{home_abbr} {home_ml}"
-            collapsed_away_ml = f"{away_abbr} {away_ml}"
             
-            collapsed_spread = f"{home_abbr} {spread_line}"
-            collapsed_total  = f"O/U {total_line}"
+            # Moneyline: take just the odds number
+            collapsed_home_ml = f"{home_abbr} {home_ml_text.split()[1]}"
+            collapsed_away_ml = f"{away_abbr} {away_ml_text.split()[1]}"
+            
+            # Spread: keep the number, replace team name with abbr
+            collapsed_spread = f"{home_abbr} {spread_text.split()[-1]}"
+            
+            # Total: strip text down to O/U number
+            collapsed_total = f"O/U {total_text.replace('O/U', '').strip()}"
             
             html = f"""
             <style>

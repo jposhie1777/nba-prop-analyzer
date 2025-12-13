@@ -3761,7 +3761,7 @@ if sport == "NBA":
         # ==============================================
         def render_game_card(
             game_id,
-            home, away,
+            home, away, start_time,
             home_logo, away_logo,
             home_pts, away_pts,
             home_win, away_win,
@@ -3925,6 +3925,14 @@ if sport == "NBA":
             home = row["home_team"]
             away = row["visitor_team"]
             
+            # ---------------------------
+            # START TIME (SAFE)
+            # ---------------------------
+            start_time = row.get("start_time_formatted") or row.get("start_time_est", "")
+    
+            if hasattr(start_time, "strftime"):
+                start_time = start_time.strftime("%-I:%M %p ET")
+            
             game_id = (
                 f"{home}_{away}"
                 .lower()
@@ -4009,7 +4017,7 @@ if sport == "NBA":
             # --------------------------------------------------
             render_game_card(
                 game_id,
-                home, away,
+                home, away, start_time,
                 home_logo, away_logo,
                 home_pts, away_pts,
                 home_win, away_win,

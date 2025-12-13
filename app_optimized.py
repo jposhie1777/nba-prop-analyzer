@@ -4188,6 +4188,7 @@ if sport == "NBA":
                     and pd.notna(under_price)
                 )
                 else ["—"]
+            )
     
             # --------------------------------------------------
             # RENDER CARD

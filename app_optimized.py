@@ -1279,6 +1279,38 @@ def logo(team_name: str) -> str:
         return "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
     return TEAM_LOGOS.get(code)
 
+def fmt(
+    val,
+    decimals: int = 1,
+    plus: bool = False,
+    pct: bool = False,
+):
+    """
+    Format numeric values safely for UI display.
+
+    Examples:
+    fmt(113.72)            -> '113.7'
+    fmt(-3.2, plus=True)   -> '-3.2'
+    fmt(3.2, plus=True)    -> '+3.2'
+    fmt(0.598, pct=True)   -> '59.8%'
+    """
+
+    if val is None:
+        return "—"
+
+    try:
+        val = float(val)
+    except Exception:
+        return "—"
+
+    if pct:
+        return f"{val * 100:.{decimals}f}%"
+
+    if plus:
+        return f"{val:+.{decimals}f}"
+
+    return f"{val:.{decimals}f}"
+
 import os
 import base64
 import pathlib

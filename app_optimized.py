@@ -3701,100 +3701,22 @@ if sport == "NBA":
             page_key="props_unified"
         )
 
-    # ------------------------------------------------------
-    # TAB 2 — GAME LINES + MODEL EV (Expandable Cards)
-    # ------------------------------------------------------
-    import streamlit.components.v1 as components
-
+    # ======================================================
+    # 🏀 TAB 2 — GAME LINES + MODEL EV (ML · SPREAD · TOTAL)
+    # ======================================================
     with tab2:
-        st.subheader("Game Lines + Model EV (ML · Spread · Total)")
-
-        if game_report_df.empty:
-            st.info("No game report data for today. Make sure nba_prop_analyzer.game_report is populated.")
+    
+        st.subheader("🏀 Game Lines + Model EV (ML · Spread · Total)")
+    
+        # --------------------------------------------------
+        # Guard: no games
+        # --------------------------------------------------
+        if df.empty:
+            st.info("No games available.")
             st.stop()
-
-        df = game_report_df.copy()
-
-        # ----------------------------------------------
-        # Fix numeric types
-        # ----------------------------------------------
-        numeric_cols = [
-            "home_team_strength", "visitor_team_strength",
-            "predicted_margin",
-            "home_win_pct", "visitor_win_pct",
-            "exp_home_points", "exp_visitor_points", "exp_total_points",
-            "pace_proxy", "pace_delta",
-            "home_l5_diff", "visitor_l5_diff",
-            "home_l10_diff", "visitor_l10_diff",
-            "home_avg_pts_scored", "home_avg_pts_allowed",
-            "visitor_avg_pts_scored", "visitor_avg_pts_allowed",
-        ]
-        for c in numeric_cols:
-            if c in df.columns:
-                df[c] = pd.to_numeric(df[c], errors="coerce")
-
-        # ----------------------------------------------
-        # Safe formatting helper
-        # ----------------------------------------------
-        def fmt(x, decimals=1, plus=False):
-            try:
-                x = float(x)
-                if plus:
-                    return f"{x:+.{decimals}f}"
-                return f"{x:.{decimals}f}"
-            except:
-                return "—"
-
-        # ----------------------------------------------
-        # Logo helper
-        # ----------------------------------------------
-        def logo(team_name):
-            code = TEAM_NAME_TO_CODE.get(team_name, "")
-            return TEAM_LOGOS_BASE64.get(code, "")
-
-        # ----------------------------------------------
-        # Load odds (ET-based filtering)
-        # ----------------------------------------------
-        @st.cache_data(ttl=300)
-        def load_game_odds():
-            sql = """
-            SELECT
-                `Home Team` AS home_team,
-                `Away Team` AS away_team,
-                Bookmaker AS bookmaker,
-                Market AS market,
-                Outcome AS outcome,
-                Line AS line,
-                Price AS price,
-                `Start Time` AS start_time
-            FROM `graphite-flare-477419-h7.nba.nba_game_odds`
-            WHERE DATE(TIMESTAMP(`Start Time`), "America/New_York") = CURRENT_DATE("America/New_York")
-            """
-            df = bq_client.query(sql).to_dataframe()
-            df["line"] = pd.to_numeric(df["line"], errors="coerce")
-            df["price"] = pd.to_numeric(df["price"], errors="coerce")
-            return df
-
-        try:
-            odds_df = load_game_odds()
-        except Exception as e:
-            st.warning(f"Could not load game odds from BigQuery: {e}")
-            odds_df = pd.DataFrame()
-
-        # ----------------------------------------------
-        # American → decimal odds
-        # ----------------------------------------------
-        def american_to_decimal(odds):
-            try:
-                odds = float(odds)
-            except:
-                return None
-            if odds > 0:
-                return 1 + odds / 100
-            return 1 + 100 / abs(odds)
-
+    
         # ==============================================
-        # EXPANDABLE GAME CARD (CLEAN PROJECTIONS + ODDS)
+        # EXPANDABLE GAME CARD RENDERER
         # ==============================================
         def render_game_card(
             game_id,
@@ -3808,7 +3730,7 @@ if sport == "NBA":
             home_ml_text, away_ml_text,
             spread_text, total_text,
         ):
-        
+    
             html = f"""
             <style>
             .game-card {{
@@ -3825,105 +3747,92 @@ if sport == "NBA":
             .game-card:hover {{
                 background: linear-gradient(145deg, #162236, #253348);
             }}
-        
+    
             .expand-section {{
-                max-height: 0px;
+                max-height: 0;
                 overflow: hidden;
                 transition: max-height 0.35s ease;
             }}
-        
             .expanded {{
                 max-height: 900px;
             }}
-        
+    
             .expand-hint {{
                 color: #94a3b8;
                 font-size: 0.8rem;
                 margin-top: 8px;
                 text-align: center;
             }}
-        
+    
             .proj-strip {{
                 margin-top: 14px;
                 display: flex;
-                justify-content: space-between;
                 gap: 14px;
                 background: rgba(255,255,255,0.05);
                 padding: 12px;
                 border-radius: 14px;
                 font-size: 0.85rem;
             }}
-        
+    
             .proj-box {{
                 flex: 1;
                 min-width: 110px;
             }}
-        
+    
             .proj-label {{
                 color: #9ca3af;
                 font-size: 0.75rem;
-                margin-bottom: 2px;
             }}
-        
+    
             .proj-value {{
                 font-weight: 700;
                 font-size: 0.95rem;
             }}
-        
+    
             @media(max-width: 650px) {{
                 .proj-strip {{
                     flex-direction: column;
                     gap: 10px;
                 }}
-                .team-label {{
-                    font-size: 0.9rem;
-                }}
-                .score-label {{
-                    font-size: 1.05rem;
-                }}
             }}
             </style>
-        
+    
             <div class="game-card" onclick="toggleExpand('{game_id}')">
-        
+    
                 <!-- HEADER -->
-                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
-        
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
                     <div style="display:flex;align-items:center;gap:14px;">
                         <div style="text-align:center;">
-                            <img src="{home_logo}" width="42" style="border-radius:6px;">
-                            <div class="team-label" style="font-weight:700;margin-top:4px;">{home}</div>
+                            <img src="{home_logo}" width="42">
+                            <div style="font-weight:700;margin-top:4px;">{home}</div>
                         </div>
-        
-                        <div style="font-size:1.3rem;font-weight:700;color:#e5e7eb;">vs</div>
-        
+                        <div style="font-size:1.2rem;font-weight:700;">vs</div>
                         <div style="text-align:center;">
-                            <img src="{away_logo}" width="42" style="border-radius:6px;">
-                            <div class="team-label" style="font-weight:700;margin-top:4px;">{away}</div>
+                            <img src="{away_logo}" width="42">
+                            <div style="font-weight:700;margin-top:4px;">{away}</div>
                         </div>
                     </div>
-        
+    
                     <div style="text-align:right;">
-                        <div style="color:#94a3b8;font-size:0.8rem;">Projected Points</div>
-                        <div class="score-label" style="font-weight:700;font-size:1.15rem;">
+                        <div style="font-size:0.75rem;color:#94a3b8;">Projected Points</div>
+                        <div style="font-weight:700;font-size:1.15rem;">
                             {home_pts} – {away_pts}
                         </div>
                     </div>
                 </div>
-        
-                <!-- PROJECTION + ODDS STRIP -->
+    
+                <!-- PROJECTIONS -->
                 <div class="proj-strip">
-        
                     <div class="proj-box">
                         <div class="proj-label">Proj Total</div>
                         <div class="proj-value">{tot_pts}</div>
                     </div>
-        
+    
                     <div class="proj-box">
                         <div class="proj-label">Proj Spread</div>
                         <div class="proj-value">{home} {margin}</div>
                     </div>
-        
+    
                     <div class="proj-box">
                         <div class="proj-label">Best Odds</div>
                         <div style="font-size:0.8rem;line-height:1.25;">
@@ -3931,83 +3840,68 @@ if sport == "NBA":
                             {spread_text}
                         </div>
                     </div>
-        
                 </div>
-        
+    
                 <div class="expand-hint">Tap to expand ↓</div>
-        
-                <!-- EXPANDED CONTENT -->
+    
+                <!-- EXPANDED -->
                 <div id="expand-{game_id}" class="expand-section">
                     <div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.08);">
-        
-                        <!-- ANALYTICS -->
+    
                         <div style="display:flex;flex-wrap:wrap;gap:16px;">
-        
+    
                             <div style="flex:1;min-width:180px;">
-                                <div style="color:#94a3b8;font-size:0.85rem;">Win Probabilities</div>
+                                <div style="color:#94a3b8;font-size:0.85rem;">Win Probability</div>
                                 <div style="background:rgba(255,255,255,0.06);padding:10px;border-radius:10px;">
                                     {home}: <b>{home_win}%</b><br>
                                     {away}: <b>{away_win}%</b>
                                 </div>
                             </div>
-        
+    
                             <div style="flex:1;min-width:180px;">
-                                <div style="color:#94a3b8;font-size:0.85rem;">Model Totals</div>
-                                <div style="background:rgba(255,255,255,0.06);padding:10px;border-radius:10px;">
-                                    Total: <b>{tot_pts}</b><br>
-                                    Spread: <b>{margin}</b>
-                                </div>
-                            </div>
-        
-                            <div style="flex:1;min-width:180px;">
-                                <div style="color:#94a3b8;font-size:0.85rem;">Pace & Form</div>
+                                <div style="color:#94a3b8;font-size:0.85rem;">Pace / Form</div>
                                 <div style="background:rgba(255,255,255,0.06);padding:10px;border-radius:10px;">
                                     Pace: <b>{pace}</b><br>
                                     Δ Pace: <b>{pace_delta}</b><br>
-                                    L5 Diff: {home} <b>{home_l5}</b> / {away} <b>{away_l5}</b>
+                                    L5: {home} <b>{home_l5}</b> / {away} <b>{away_l5}</b>
                                 </div>
                             </div>
-        
+    
                         </div>
-        
-                        <!-- ODDS -->
+    
                         <div style="margin-top:20px;background:rgba(255,255,255,0.04);padding:12px;border-radius:12px;">
                             <div style="display:flex;flex-wrap:wrap;gap:14px;">
-        
                                 <div style="flex:1;min-width:170px;">
                                     <div style="font-size:0.8rem;color:#9ca3af;">Moneyline</div>
                                     {home_ml_text}<br>{away_ml_text}
                                 </div>
-        
                                 <div style="flex:1;min-width:170px;">
                                     <div style="font-size:0.8rem;color:#9ca3af;">Spread</div>
                                     {spread_text}
                                 </div>
-        
                                 <div style="flex:1;min-width:170px;">
                                     <div style="font-size:0.8rem;color:#9ca3af;">Total</div>
                                     {total_text}
                                 </div>
-        
                             </div>
                         </div>
-        
+    
                     </div>
                 </div>
             </div>
-        
+    
             <script>
             function toggleExpand(id) {{
-                var section = document.getElementById("expand-" + id);
-                section.classList.toggle("expanded");
+                var el = document.getElementById("expand-" + id);
+                el.classList.toggle("expanded");
             }}
             </script>
             """
-        
+    
             components.html(html, height=760)
-
+    
         # ===============================================
-        # 2️⃣ RENDER ALL GAME CARDS (THIS IS REQUIRED)
+        # RENDER GAME CARDS
         # ===============================================
         for _, row in df.iterrows():
     
@@ -4030,6 +3924,65 @@ if sport == "NBA":
             home_l5 = fmt(row.get("home_l5_diff"), plus=True)
             away_l5 = fmt(row.get("visitor_l5_diff"), plus=True)
     
+            # --------------------------------------------------
+            # DEFAULT ODDS (ALWAYS DEFINED)
+            # --------------------------------------------------
+            home_ml_text = "No ML odds"
+            away_ml_text = ""
+            spread_text = "No spread odds"
+            total_text = "No total odds"
+    
+            # --------------------------------------------------
+            # ODDS LOOKUP (nba_odds schema)
+            # --------------------------------------------------
+            allowed_books = ["FanDuel", "DraftKings"]
+    
+            g = odds_df[
+                (odds_df["home_team"] == home) &
+                (odds_df["away_team"] == away) &
+                (odds_df["bookmaker"].isin(allowed_books))
+            ].copy()
+    
+            # MONEYLINE
+            ml = g[g["market"] == "h2h"]
+            if not ml.empty:
+                ml["dec"] = ml["price"].apply(american_to_decimal)
+    
+                h = ml[ml["label"] == home]
+                if not h.empty:
+                    best = h.sort_values("dec", ascending=False).iloc[0]
+                    home_ml_text = f'{home}: <b>{int(best["price"])}</b> ({best["bookmaker"]})'
+    
+                a = ml[ml["label"] == away]
+                if not a.empty:
+                    best = a.sort_values("dec", ascending=False).iloc[0]
+                    away_ml_text = f'{away}: <b>{int(best["price"])}</b> ({best["bookmaker"]})'
+    
+            # SPREAD
+            sp = g[g["market"] == "spreads"]
+            if not sp.empty:
+                sp["dec"] = sp["price"].apply(american_to_decimal)
+                sp = sp.dropna(subset=["dec", "point"])
+                best = sp.sort_values("dec", ascending=False).iloc[0]
+                spread_text = (
+                    f'{best["label"]} {best["point"]:+.1f} '
+                    f'(<b>{int(best["price"])}</b>, {best["bookmaker"]})'
+                )
+    
+            # TOTAL
+            tot = g[g["market"] == "totals"]
+            if not tot.empty:
+                tot["dec"] = tot["price"].apply(american_to_decimal)
+                tot = tot.dropna(subset=["dec", "point"])
+                best = tot.sort_values("dec", ascending=False).iloc[0]
+                total_text = (
+                    f'{best["label"].title()} {best["point"]:.1f} '
+                    f'(<b>{int(best["price"])}</b>, {best["bookmaker"]})'
+                )
+    
+            # --------------------------------------------------
+            # RENDER CARD
+            # --------------------------------------------------
             render_game_card(
                 game_id,
                 home, away,

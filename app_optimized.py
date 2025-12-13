@@ -3783,77 +3783,116 @@ if sport == "NBA":
                 border: 1px solid rgba(255,255,255,0.06);
                 transition: 0.15s ease-in-out;
             }}
-        
+            
             .game-card.expanded-card {{
                 margin-bottom: 18px;
             }}
-        
+            
             .game-card:hover {{
                 background: linear-gradient(145deg, #162236, #253348);
             }}
-        
+            
             .expand-section {{
                 max-height: 0;
                 overflow: hidden;
                 transition: max-height 0.35s ease;
             }}
-        
+            
             .expand-section.expanded {{
                 max-height: 900px;
                 margin-top: 8px;
             }}
-        
+            
             .expand-hint {{
                 color: #94a3b8;
                 font-size: 0.8rem;
                 margin-top: 10px;
                 text-align: center;
             }}
-        
+            
             .team-col {{
                 text-align: center;
                 width: 120px;
             }}
-        
+            
             .proj-pts {{
                 margin-top: 4px;
                 font-size: 0.9rem;
                 color: #93c5fd;
                 font-weight: 600;
             }}
-        
+            
             .center-col {{
                 text-align: center;
                 margin-top: 6px;
                 min-width: 80px;
             }}
-        
+            
             .section-box {{
                 background: rgba(255,255,255,0.06);
                 padding: 12px;
                 border-radius: 12px;
                 font-size: 0.85rem;
             }}
-        
+            
             .section-title {{
                 color: #94a3b8;
                 font-size: 0.8rem;
                 margin-bottom: 6px;
             }}
+            
+            /* -------- COLLAPSED SUMMARY -------- */
+            
+            .summary-row {{
+                display: flex;
+                gap: 14px;
+                margin-top: 12px;
+                padding-top: 10px;
+                border-top: 1px solid rgba(255,255,255,0.08);
+                font-size: 0.8rem;
+            }}
+            
+            .summary-col {{
+                flex: 1;
+            }}
+            
+            .summary-title {{
+                color: #94a3b8;
+                font-size: 0.7rem;
+                margin-bottom: 4px;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+            }}
+            
+            .summary-line {{
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 3px;
+                white-space: nowrap;
+            }}
+            
+            .summary-label {{
+                color: #cbd5f5;
+            }}
+            
+            .summary-value {{
+                color: #e5e7eb;
+                font-weight: 600;
+            }}
             </style>
-        
+            
             <div class="game-card" onclick="toggleExpand('{game_id}')">
-        
+            
                 <!-- HEADER -->
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-        
+            
                     <!-- HOME -->
                     <div class="team-col">
                         <img src="{home_logo}" width="42" style="border-radius:6px;">
                         <div style="font-weight:700;margin-top:4px;">{home}</div>
                         <div class="proj-pts">{home_pts} pts</div>
                     </div>
-        
+            
                     <!-- CENTER -->
                     <div class="center-col">
                         <div style="font-size:1.25rem;font-weight:700;color:#e5e7eb;">vs</div>
@@ -3861,24 +3900,71 @@ if sport == "NBA":
                             {start_time}
                         </div>
                     </div>
-        
+            
                     <!-- AWAY -->
                     <div class="team-col">
                         <img src="{away_logo}" width="42" style="border-radius:6px;">
                         <div style="font-weight:700;margin-top:4px;">{away}</div>
                         <div class="proj-pts">{away_pts} pts</div>
                     </div>
-        
+            
                 </div>
-        
+            
+                <!-- COLLAPSED SUMMARY -->
+                <div class="summary-row">
+            
+                    <!-- MODEL -->
+                    <div class="summary-col">
+                        <div class="summary-title">Model</div>
+            
+                        <div class="summary-line">
+                            <span class="summary-label">Proj Total</span>
+                            <span class="summary-value">{tot_pts}</span>
+                        </div>
+            
+                        <div class="summary-line">
+                            <span class="summary-label">Proj Spread</span>
+                            <span class="summary-value">{margin}</span>
+                        </div>
+            
+                        <div class="summary-line">
+                            <span class="summary-label">Proj ML</span>
+                            <span class="summary-value">{home_win}% / {away_win}%</span>
+                        </div>
+                    </div>
+            
+                    <!-- MARKET -->
+                    <div class="summary-col">
+                        <div class="summary-title">Market</div>
+            
+                        <div class="summary-line">
+                            <span class="summary-label">Total</span>
+                            <span class="summary-value">{total_text}</span>
+                        </div>
+            
+                        <div class="summary-line">
+                            <span class="summary-label">Spread</span>
+                            <span class="summary-value">{spread_text}</span>
+                        </div>
+            
+                        <div class="summary-line">
+                            <span class="summary-label">ML</span>
+                            <span class="summary-value">
+                                {home_ml_text} / {away_ml_text}
+                            </span>
+                        </div>
+                    </div>
+            
+                </div>
+            
                 <div class="expand-hint">Tap to expand ↓</div>
-        
+            
                 <!-- EXPANDED -->
                 <div id="expand-{game_id}" class="expand-section">
                     <div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.08);">
-        
+            
                         <div style="display:flex;gap:18px;flex-wrap:wrap;">
-        
+            
                             <!-- MODEL -->
                             <div style="flex:1;min-width:220px;">
                                 <div class="section-title">Model Projections</div>
@@ -3890,7 +3976,7 @@ if sport == "NBA":
                                     L5 Diff: {home_l5} / {away_l5}
                                 </div>
                             </div>
-        
+            
                             <!-- MARKET -->
                             <div style="flex:1;min-width:220px;">
                                 <div class="section-title">Market Lines</div>
@@ -3898,32 +3984,31 @@ if sport == "NBA":
                                     <b>Moneyline</b><br>
                                     {home_ml_text}<br>
                                     {away_ml_text}<br><br>
-        
+            
                                     <b>Spread</b><br>
                                     {spread_text}<br><br>
-        
+            
                                     <b>Total</b><br>
                                     {total_text}
                                 </div>
                             </div>
-        
+            
                         </div>
-        
+            
                     </div>
                 </div>
             </div>
-        
+            
             <script>
             function toggleExpand(id) {{
                 var section = document.getElementById("expand-" + id);
                 var card = section.closest(".game-card");
-        
+            
                 section.classList.toggle("expanded");
                 card.classList.toggle("expanded-card");
             }}
             </script>
             """
-        
             components.html(html, height=260)
     
         # ===============================================

@@ -4090,25 +4090,29 @@ if sport == "NBA":
             # GAME ODDS + MODEL OUTPUT (FROM game_report)
             # --------------------------------------------------
             
-            # ----- MONEYLINE -----
+            # ------------------------------------------------------
+            # MONEYLINE
+            # ------------------------------------------------------
             home_ml = row.get("home_ml")
             away_ml = row.get("visitor_ml")
             
             home_ml_edge = row.get("home_ml_edge")
             away_ml_edge = row.get("visitor_ml_edge")
             
+            # --- EXPANDED (verbose, with EV) ---
             home_ml_text = (
-                f"{home}: <b>{home_ml:+}</b>"
-                f" <span style='opacity:0.7'>EV {home_ml_edge:+.2f}%</span>"
+                f"{home}: <b>{home_ml:+}</b> "
+                f"<span style='opacity:0.7'>EV {home_ml_edge:+.2f}%</span>"
                 if pd.notna(home_ml) else "—"
             )
             
             away_ml_text = (
-                f"{away}: <b>{away_ml:+}</b>"
-                f" <span style='opacity:0.7'>EV {away_ml_edge:+.2f}%</span>"
+                f"{away}: <b>{away_ml:+}</b> "
+                f"<span style='opacity:0.7'>EV {away_ml_edge:+.2f}%</span>"
                 if pd.notna(away_ml) else "—"
             )
             
+            # --- COLLAPSED (compact, NO EV) ---
             collapsed_ml_lines = (
                 [
                     f"{home_abbr} {home_ml:+}",
@@ -4118,11 +4122,20 @@ if sport == "NBA":
                 else ["—"]
             )
             
-            # ----- SPREAD -----
-            home_spread = row.get("home_spread")
-            home_spread_price = row.get("home_spread_price")
-            home_spread_edge = row.get("home_spread_edge")
             
+            # ------------------------------------------------------
+            # SPREAD
+            # ------------------------------------------------------
+            home_spread = row.get("home_spread")
+            visitor_spread = row.get("visitor_spread")
+            
+            home_spread_price = row.get("home_spread_price")
+            visitor_spread_price = row.get("visitor_spread_price")
+            
+            home_spread_edge = row.get("home_spread_edge")
+            visitor_spread_edge = row.get("visitor_spread_edge")
+            
+            # --- EXPANDED (verbose, with EV) ---
             spread_text = (
                 f"{home} {home_spread:+.1f} "
                 f"(<b>{home_spread_price:+}</b>, "
@@ -4130,35 +4143,51 @@ if sport == "NBA":
                 if pd.notna(home_spread) else "—"
             )
             
+            # --- COLLAPSED (compact, NO EV) ---
             collapsed_spread_lines = (
                 [
                     f"{home_abbr} {home_spread:+.1f} {home_spread_price:+}",
-                    f"{away_abbr} {away_spread:+.1f} {away_spread_price:+}",
+                    f"{away_abbr} {visitor_spread:+.1f} {visitor_spread_price:+}",
                 ]
-                if pd.notna(home_spread)
+                if (
+                    pd.notna(home_spread)
+                    and pd.notna(visitor_spread)
+                    and pd.notna(home_spread_price)
+                    and pd.notna(visitor_spread_price)
+                )
                 else ["—"]
             )
             
-            # ----- TOTAL -----
+            
+            # ------------------------------------------------------
+            # TOTAL (OVER / UNDER)
+            # ------------------------------------------------------
             total_line = row.get("total_line")
-            total_price = row.get("total_price")
+            over_price = row.get("total_price")                 # Over price
+            under_price = row.get("visitor_total_price")        # Under price
+            
             total_edge = row.get("total_edge_pts")
             
+            # --- EXPANDED (verbose, with EV) ---
             total_text = (
                 f"O/U {total_line:.1f} "
-                f"(<b>{total_price:+}</b>, "
+                f"(<b>{over_price:+}</b>, "
                 f"EV {total_edge:+.2f} pts)"
                 if pd.notna(total_line) else "—"
             )
-    
+            
+            # --- COLLAPSED (compact, NO EV) ---
             collapsed_total_lines = (
                 [
-                    f"O {total_price:+}",
+                    f"O {over_price:+}",
                     f"U {under_price:+}",
                 ]
-                if pd.notna(total_line)
+                if (
+                    pd.notna(total_line)
+                    and pd.notna(over_price)
+                    and pd.notna(under_price)
+                )
                 else ["—"]
-            )
     
             # --------------------------------------------------
             # RENDER CARD

@@ -3844,40 +3844,45 @@ if sport == "NBA":
             /* -------- COLLAPSED SUMMARY -------- */
             
             .summary-row {{
-                display: flex;
-                gap: 14px;
-                margin-top: 12px;
-                padding-top: 10px;
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 12px;
+                margin-top: 10px;
+                padding-top: 8px;
                 border-top: 1px solid rgba(255,255,255,0.08);
-                font-size: 0.8rem;
+                font-size: 0.75rem;
             }}
             
             .summary-col {{
-                flex: 1;
+                display: grid;
+                row-gap: 4px;
             }}
             
             .summary-title {{
                 color: #94a3b8;
-                font-size: 0.7rem;
-                margin-bottom: 4px;
+                font-size: 0.65rem;
+                letter-spacing: 0.05em;
                 text-transform: uppercase;
-                letter-spacing: 0.04em;
+                margin-bottom: 2px;
             }}
             
             .summary-line {{
-                display: flex;
-                justify-content: space-between;
-                margin-bottom: 3px;
-                white-space: nowrap;
+                display: grid;
+                grid-template-columns: auto 1fr;
+                column-gap: 6px;
+                align-items: center;
             }}
             
             .summary-label {{
-                color: #cbd5f5;
+                color: #94a3b8;
+                white-space: nowrap;
             }}
             
             .summary-value {{
                 color: #e5e7eb;
                 font-weight: 600;
+                text-align: right;
+                white-space: nowrap;
             }}
             </style>
             
@@ -3912,41 +3917,41 @@ if sport == "NBA":
             
                 <!-- COLLAPSED SUMMARY -->
                 <div class="summary-row">
-            
+                
                     <!-- MODEL -->
                     <div class="summary-col">
                         <div class="summary-title">Model</div>
-            
+                
                         <div class="summary-line">
-                            <span class="summary-label">Proj Total</span>
+                            <span class="summary-label">Total</span>
                             <span class="summary-value">{tot_pts}</span>
                         </div>
-            
+                
                         <div class="summary-line">
-                            <span class="summary-label">Proj Spread</span>
+                            <span class="summary-label">Spread</span>
                             <span class="summary-value">{margin}</span>
                         </div>
-            
+                
                         <div class="summary-line">
-                            <span class="summary-label">Proj ML</span>
-                            <span class="summary-value">{home_win}% / {away_win}%</span>
+                            <span class="summary-label">ML</span>
+                            <span class="summary-value">{home_win}%–{away_win}%</span>
                         </div>
                     </div>
-            
+                
                     <!-- MARKET -->
                     <div class="summary-col">
                         <div class="summary-title">Market</div>
-            
+                
                         <div class="summary-line">
                             <span class="summary-label">Total</span>
                             <span class="summary-value">{total_text}</span>
                         </div>
-            
+                
                         <div class="summary-line">
                             <span class="summary-label">Spread</span>
                             <span class="summary-value">{spread_text}</span>
                         </div>
-            
+                
                         <div class="summary-line">
                             <span class="summary-label">ML</span>
                             <span class="summary-value">
@@ -3954,7 +3959,7 @@ if sport == "NBA":
                             </span>
                         </div>
                     </div>
-            
+                
                 </div>
             
                 <div class="expand-hint">Tap to expand ↓</div>

@@ -4006,6 +4006,42 @@ if sport == "NBA":
         
             components.html(html, height=760)
 
+        # ===============================================
+        # 2️⃣ RENDER ALL GAME CARDS (THIS IS REQUIRED)
+        # ===============================================
+        for _, row in df.iterrows():
+    
+            game_id = f"game{row['game_id']}".replace(" ", "").replace("-", "")
+    
+            home = row["home_team"]
+            away = row["visitor_team"]
+    
+            home_logo = logo(home)
+            away_logo = logo(away)
+    
+            home_pts = fmt(row.get("exp_home_points"))
+            away_pts = fmt(row.get("exp_visitor_points"))
+            tot_pts = fmt(row.get("exp_total_points"))
+            margin = fmt(row.get("predicted_margin"), plus=True)
+            home_win = fmt(row.get("home_win_pct"))
+            away_win = fmt(row.get("visitor_win_pct"))
+            pace = fmt(row.get("pace_proxy"))
+            pace_delta = fmt(row.get("pace_delta"), plus=True)
+            home_l5 = fmt(row.get("home_l5_diff"), plus=True)
+            away_l5 = fmt(row.get("visitor_l5_diff"), plus=True)
+    
+            render_game_card(
+                game_id,
+                home, away,
+                home_logo, away_logo,
+                home_pts, away_pts,
+                home_win, away_win,
+                tot_pts, margin,
+                pace, pace_delta,
+                home_l5, away_l5,
+                home_ml_text, away_ml_text,
+                spread_text, total_text
+            )
 
     # ------------------------------------------------------
     # NEW COMBINED TAB — ADVANCED EV TOOLS

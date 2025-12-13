@@ -3755,13 +3755,6 @@ if sport == "NBA":
         if df.empty:
             st.info("No games available.")
             st.stop()
-            
-         # 🔍 DEBUG — TEMPORARY
-        st.write("TAB 2 DF COLUMNS:")
-        st.write(df.columns.tolist())
-    
-        st.write("TAB 2 SAMPLE ROW:")
-        st.write(df.head(1))
     
         # ==============================================
         # EXPANDABLE GAME CARD RENDERER
@@ -3991,10 +3984,10 @@ if sport == "NBA":
             # --------------------------------------------------
             allowed_books = ["FanDuel", "DraftKings"]
     
-            g = odds_df[
-                (odds_df["home_team"] == home) &
-                (odds_df["away_team"] == away) &
-                (odds_df["bookmaker"].isin(allowed_books))
+            g = game_odds_df[
+                (game_odds_df["home_team"] == home) &
+                (game_odds_df["away_team"] == away) &
+                (game_odds_df["bookmaker"].isin(allowed_books))
             ].copy()
     
             # MONEYLINE

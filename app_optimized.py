@@ -2220,19 +2220,19 @@ def get_spark_values(row):
 
     return []
 
-def get_spark_dates(row):
+def get_spark_dates(row, n: int):
     """
-    Returns the date list that corresponds to the sparkline window.
-    Defaults to L10.
+    Return the correct generic date array for the sparkline window.
     """
-    for col in [
-        "last10_dates",
-        "last7_dates",
-        "last5_dates",
-        "last20_dates",
-    ]:
-        if col in row and isinstance(row[col], (list, tuple)) and row[col]:
-            return row[col]
+    col = f"last{n}_dates"
+    dates = row.get(col)
+
+    if isinstance(dates, list):
+        return dates
+
+    if isinstance(dates, np.ndarray):
+        return dates.tolist()
+
     return []
 
 
@@ -2790,12 +2790,16 @@ def render_prop_cards(
             rank_display = opp_rank if isinstance(opp_rank, int) else "-"
             rank_color = rank_to_color(opp_rank) if isinstance(opp_rank, int) else "#9ca3af"
 
-            # Sparkline
             spark_vals = get_spark_values(row)
+            spark_dates = get_spark_dates(row, n=10)   # 👈 matches L10 spark
+            line_value = float(row.get("line", 0) or 0)
+
             spark_html = build_sparkline_bars_hitmiss(
                 spark_vals,
-                float(line or 0),
+                line_value,
+                dates=spark_dates,
             )
+
 
             # Logos
             team = normalize_team_code(row.get("player_team", ""))

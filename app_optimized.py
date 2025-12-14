@@ -147,7 +147,11 @@ SELECT
   pra_last10_list,
   pr_last10_list,
   pa_last10_list,
-  ra_last10_list
+  ra_last10_list,
+  last5_dates,
+  last7_dates,
+  last10_dates,
+  last20_dates
 
 FROM `{PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}`
 ORDER BY game_date DESC;

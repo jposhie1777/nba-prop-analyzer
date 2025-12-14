@@ -2924,11 +2924,14 @@ def render_prop_cards(
             # ==========================================
             if st.session_state.open_prop_card == card_id:
 
+                # 🔑 MUST recompute here (new scope)
+                stat = detect_stat(row.get("market", ""))
+
                 with st.container():
                     st.markdown(
                         """
                         <div style="
-                            margin: 8px 0 16px 0;
+                            margin: 10px 0 18px 0;
                             padding: 16px;
                             background: rgba(15,23,42,0.97);
                             border: 1px solid rgba(148,163,184,0.25);
@@ -2938,13 +2941,15 @@ def render_prop_cards(
                         unsafe_allow_html=True,
                     )
 
-                    # --- CONTEXT ROW (wraps nicely on mobile)
+                    # ----------------------------
+                    # CONTEXT STRIP (wraps on mobile)
+                    # ----------------------------
                     st.markdown(
                         f"""
                         <div style="
                             display:flex;
                             flex-wrap:wrap;
-                            gap:10px;
+                            gap:12px;
                             font-size:0.75rem;
                             color:#cbd5f5;
                             margin-bottom:12px;
@@ -2957,30 +2962,61 @@ def render_prop_cards(
                         unsafe_allow_html=True,
                     )
 
-                    # --- METRICS (auto stack on mobile)
+                    # ----------------------------
+                    # TREND METRICS (stack nicely)
+                    # ----------------------------
                     st.metric("L5 Avg", fmt(row.get(f"{stat}_last5")))
                     st.metric("L10 Avg", fmt(row.get(f"{stat}_last10")))
                     st.metric("L20 Avg", fmt(row.get(f"{stat}_last20")))
                     st.metric("Δ vs Line", fmt(row.get("proj_diff_vs_line"), plus=True))
 
-                    # --- WOWY
-                    if row.get("_wowy_list"):
+                    vol = row.get("proj_volatility_index")
+                    if vol is not None:
+                        st.caption(f"Volatility Index: {fmt(vol)}")
+
+                    # ----------------------------
+                    # WOWY DETAILS (optional)
+                    # ----------------------------
+                    wrows = row.get("_wowy_list", [])
+                    delta_col = market_to_delta_column(row.get("market"))
+
+                    if wrows and delta_col:
                         st.markdown("**On / Off Impact**")
-                        for w in row["_wowy_list"]:
-                            delta = w.get(market_to_delta_column(row.get("market")))
+                        for w in wrows:
+                            delta = w.get(delta_col)
                             if pd.notna(delta):
-                                st.markdown(f"- **{delta:+.2f}** {w['breakdown']}")
+                                st.markdown(
+                                    f"- **{delta:+.2f}** {w.get('breakdown', '')}"
+                                )
 
                     st.markdown("---")
 
-                    # --- ACTIONS (big mobile buttons)
+                    # ----------------------------
+                    # ACTIONS (big mobile buttons)
+                    # ----------------------------
                     if st.button("💾 Save Bet", key=f"{card_id}_save"):
-                        save_bet_for_user(user_id, {...})
+                        save_bet_for_user(
+                            user_id,
+                            {
+                                "player": row.get("player"),
+                                "market": row.get("market"),
+                                "line": row.get("line"),
+                                "bet_type": row.get("bet_type"),
+                                "price": row.get("price"),
+                                "bookmaker": row.get("bookmaker"),
+                            },
+                        )
+                        st.success("Saved to Betslip")
 
-                    if st.button("📊 Trend Lab", key=f"{card_id}_trend"):
-                        ...
+                    if st.button("📊 Open Trend Lab", key=f"{card_id}_trend"):
+                        st.session_state.trend_player = row.get("player")
+                        st.session_state.trend_market = row.get("market")
+                        st.session_state.trend_line = row.get("line")
+                        st.session_state.trend_bet_type = row.get("bet_type")
+                        st.toast("Sent to Trend Lab")
 
                     st.markdown("</div>", unsafe_allow_html=True)
+
 
 
 

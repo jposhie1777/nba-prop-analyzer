@@ -21,6 +21,8 @@ import textwrap
 import re
 from functools import lru_cache
 from rapidfuzz import fuzz, process
+from textwrap import dedent
+
 
 DEBUG_LANDING = True   #  <-- ADD THIS
 
@@ -2924,32 +2926,32 @@ def render_prop_cards(
             # ==========================================
             if st.session_state.open_prop_card == card_id:
 
-                # Recompute stat safely (new scope)
+                # Recompute stat in this scope
                 stat = detect_stat(row.get("market", ""))
 
                 with st.container():
 
-                    # ----------------------------
+                    # --------------------------------------------------
                     # OUTER SHELL
-                    # ----------------------------
+                    # --------------------------------------------------
                     st.markdown(
-                        """
+                        dedent("""
                         <div style="
-                            margin: 10px 0 18px 0;
-                            padding: 16px;
-                            background: rgba(15,23,42,0.97);
-                            border: 1px solid rgba(148,163,184,0.25);
-                            border-radius: 16px;
+                            margin:10px 0 18px 0;
+                            padding:16px;
+                            background:rgba(15,23,42,0.97);
+                            border:1px solid rgba(148,163,184,0.25);
+                            border-radius:16px;
                         ">
-                        """,
+                        """),
                         unsafe_allow_html=True,
                     )
 
                     # ==================================================
-                    # 1) CONTEXT STRIP (wraps cleanly on mobile)
+                    # 1) CONTEXT STRIP
                     # ==================================================
                     st.markdown(
-                        f"""
+                        dedent(f"""
                         <div style="
                             display:flex;
                             flex-wrap:wrap;
@@ -2962,18 +2964,18 @@ def render_prop_cards(
                             <div>⏱ {fmt(row.get("est_minutes"))} min</div>
                             <div>📈 Usage {fmt(row.get("usage_bump_pct"), pct=True)}</div>
                         </div>
-                        """,
+                        """),
                         unsafe_allow_html=True,
                     )
 
                     # ==================================================
-                    # 2) HORIZONTAL TREND SNAPSHOT (L5 / L10 / L20 / Δ)
+                    # 2) HORIZONTAL TREND SNAPSHOT
                     # ==================================================
                     st.markdown(
-                        f"""
+                        dedent(f"""
                         <div style="
                             display:grid;
-                            grid-template-columns: repeat(4, 1fr);
+                            grid-template-columns:repeat(4,1fr);
                             gap:10px;
                             margin-bottom:16px;
                             text-align:center;
@@ -3010,7 +3012,7 @@ def render_prop_cards(
                                 </div>
                             </div>
                         </div>
-                        """,
+                        """),
                         unsafe_allow_html=True,
                     )
 
@@ -3034,7 +3036,7 @@ def render_prop_cards(
                             )
 
                             st.markdown(
-                                """
+                                dedent("""
                                 <div style="
                                     font-size:0.7rem;
                                     color:#9ca3af;
@@ -3042,7 +3044,7 @@ def render_prop_cards(
                                 ">
                                     Last 20 Games
                                 </div>
-                                """,
+                                """),
                                 unsafe_allow_html=True,
                             )
 
@@ -3051,10 +3053,10 @@ def render_prop_cards(
                                 unsafe_allow_html=True,
                             )
                         except Exception:
-                            pass  # Sparkline should never break UI
+                            pass
 
                     # ==================================================
-                    # 4) WOWY (INJURY-AWARE STAT IMPACT)
+                    # 4) WOWY (STAT + INJURY CONTEXT)
                     # ==================================================
                     delta_col = market_to_delta_column(row.get("market"))
                     wrows = row.get("_wowy_list", [])
@@ -3071,7 +3073,7 @@ def render_prop_cards(
                             color = "#22c55e" if delta > 0 else "#ef4444"
 
                             st.markdown(
-                                f"""
+                                dedent(f"""
                                 <div style="
                                     margin-top:14px;
                                     padding:12px 14px;
@@ -3087,14 +3089,17 @@ def render_prop_cards(
                                         when {best.get("breakdown", "")}
                                     </div>
                                 </div>
-                                """,
+                                """),
                                 unsafe_allow_html=True,
                             )
 
                     # ==================================================
-                    # 5) ACTIONS (BIG MOBILE BUTTONS)
+                    # 5) ACTIONS
                     # ==================================================
-                    st.markdown("<hr style='margin:16px 0;'>", unsafe_allow_html=True)
+                    st.markdown(
+                        dedent("<hr style='margin:16px 0;'>"),
+                        unsafe_allow_html=True,
+                    )
 
                     if st.button("💾 Save Bet", key=f"{card_id}_save"):
                         save_bet_for_user(
@@ -3117,15 +3122,10 @@ def render_prop_cards(
                         st.session_state.trend_bet_type = row.get("bet_type")
                         st.toast("Sent to Trend Lab")
 
-                    # ----------------------------
+                    # --------------------------------------------------
                     # CLOSE SHELL
-                    # ----------------------------
+                    # --------------------------------------------------
                     st.markdown("</div>", unsafe_allow_html=True)
-
-
-
-
-
 
     # Close scroll wrapper
     st.markdown("</div>", unsafe_allow_html=True)

@@ -2562,17 +2562,12 @@ def render_prop_cards(
     min_opp_rank: int | None = None,
     page_key: str = "ev",
 ):
-    """
-    Shared card-grid renderer for both EV+ Props and Available Props.
-    Adds sparkline date labels under bars (from BigQuery date arrays).
-    """
-
     if df.empty:
         st.info("No props match your filters.")
         return
 
     # ------------------------------------------------------
-    # WOWY merge once per render
+    # WOWY merge
     # ------------------------------------------------------
     card_df = attach_wowy_deltas(df, wowy_df)
 
@@ -2585,14 +2580,13 @@ def render_prop_cards(
         "pts_reb_delta",
     ]
 
-    def extract_wowy_list(g: pd.DataFrame) -> list[dict]:
-        df2 = g.copy()
-        df2 = df2[wowy_cols]
+    def extract_wowy_list(g):
+        df2 = g[wowy_cols].copy()
         if "breakdown" in df2.columns:
             df2 = df2[df2["breakdown"].notna()]
         return df2.to_dict("records")
 
-    w_map: dict[tuple[str, str], list[dict]] = {}
+    w_map = {}
     for (player, team), g in card_df.groupby(["player", "player_team"]):
         w_map[(player, team)] = extract_wowy_list(g)
 
@@ -2602,18 +2596,16 @@ def render_prop_cards(
     )
 
     # ------------------------------------------------------
-    # Row filter
+    # Filters
     # ------------------------------------------------------
-    def card_good(row: pd.Series) -> bool:
+    def card_good(row):
         price = row.get("price")
         hit = row.get(hit_rate_col)
 
         if pd.isna(price) or pd.isna(hit):
             return False
-
         if not (odds_min <= price <= odds_max):
             return False
-
         if hit < min_hit_rate:
             return False
 
@@ -2632,40 +2624,32 @@ def render_prop_cards(
     card_df = card_df[card_df.apply(card_good, axis=1)]
 
     if card_df.empty:
-        st.info("No props match your filters (after EV/odds/hit-rate logic).")
+        st.info("No props match your filters.")
         return
 
     # ------------------------------------------------------
-    # Sorting
+    # Sorting + Pagination
     # ------------------------------------------------------
     card_df = card_df.sort_values(
         by=[hit_rate_col, "price"],
         ascending=[False, True],
     ).reset_index(drop=True)
 
-    # ------------------------------------------------------
-    # Pagination
-    # ------------------------------------------------------
     page_size = 30
-    total_cards = len(card_df)
-    total_pages = max(1, (total_cards + page_size - 1) // page_size)
+    total_pages = max(1, (len(card_df) + page_size - 1) // page_size)
 
-    st.write(f"Showing {total_cards} props • {total_pages} pages")
+    st.write(f"Showing {len(card_df)} props • {total_pages} pages")
 
     page = st.number_input(
         "Page",
         min_value=1,
         max_value=total_pages,
         value=1,
-        step=1,
-        key=f"{page_key}_card_page_number",
+        key=f"{page_key}_page",
     )
 
     page_df = card_df.iloc[(page - 1) * page_size : page * page_size]
 
-    # ------------------------------------------------------
-    # Scroll wrapper
-    # ------------------------------------------------------
     st.markdown(
         '<div style="max-height:1100px; overflow-y:auto; padding-right:12px;">',
         unsafe_allow_html=True,
@@ -2677,138 +2661,62 @@ def render_prop_cards(
     # CARD LOOP
     # =====================================================
     for idx, row in page_df.iterrows():
-        col = cols[idx % 4]
-        with col:
+        with cols[idx % 4]:
 
-            player = row.get("player", "") or ""
+            player = row["player"]
 
-            # --------------------------------------------------
+            # -------------------------
             # Injury badge
-            # --------------------------------------------------
-            def _norm(s: str) -> str:
-                return (
-                    str(s).lower()
-                    .replace("'", "")
-                    .replace(".", "")
-                    .replace("-", "")
-                    .strip()
-                )
+            # -------------------------
+            def _norm(s):
+                return str(s).lower().replace("'", "").replace(".", "").replace("-", "")
 
             inj_status = INJURY_LOOKUP_BY_NAME.get(_norm(player))
             badge_html = ""
 
             if inj_status:
-                s = inj_status.lower()
-                badge_color = (
-                    "#ef4444" if "out" in s
-                    else "#eab308" if "question" in s or "doubt" in s
+                color = (
+                    "#ef4444" if "out" in inj_status.lower()
+                    else "#eab308" if "question" in inj_status.lower()
                     else "#3b82f6"
                 )
-
                 badge_html = f"""
                 <span style="
-                    background:{badge_color};
+                    background:{color};
                     color:white;
                     padding:2px 6px;
                     font-size:0.65rem;
-                    font-weight:700;
                     border-radius:6px;
                     margin-left:6px;
-                ">
-                    {inj_status.upper()}
-                </span>
+                ">{inj_status.upper()}</span>
                 """
 
-            pretty_market = MARKET_DISPLAY_MAP.get(
-                row.get("market", ""), row.get("market", "")
-            )
-            bet_type = str(row.get("bet_type", "")).upper()
-            line = row.get("line", "")
+            # -------------------------
+            # Basic info
+            # -------------------------
+            pretty_market = MARKET_DISPLAY_MAP.get(row["market"], row["market"])
+            bet_type = row["bet_type"].upper()
+            line = row["line"]
 
-            odds = int(row.get("price") or 0)
-            implied_prob = compute_implied_prob(odds) or 0.0
-            hit_val = row.get(hit_rate_col, 0.0) or 0.0
+            odds = int(row["price"])
+            implied = compute_implied_prob(odds) or 0
+            hit_val = row[hit_rate_col] or 0
 
-            l10_avg = get_l10_avg(row)
-            l10_avg_display = f"{l10_avg:.1f}" if l10_avg is not None else "-"
-
-            # --------------------------------------------------
-            # Opponent rank
-            # --------------------------------------------------
             opp_rank = get_opponent_rank(row)
             rank_display = opp_rank if isinstance(opp_rank, int) else "-"
             rank_color = rank_to_color(opp_rank) if isinstance(opp_rank, int) else "#9ca3af"
 
-            # --------------------------------------------------
-            # Sparkline WITH DATES
-            # --------------------------------------------------
-            spark_vals = get_spark_values(row) or []
-            spark_dates = row.get("last10_dates") or []
-
-            spark_items = []
-            for i, val in enumerate(spark_vals):
-                date_lbl = ""
-                if i < len(spark_dates) and spark_dates[i]:
-                    try:
-                        date_lbl = pd.to_datetime(spark_dates[i]).strftime("%m/%d")
-                    except Exception:
-                        pass
-
-                height = max(6, min(90, int((val / max(spark_vals)) * 90))) if spark_vals else 6
-                color = "#22c55e" if val >= float(line or 0) else "#ef4444"
-
-                spark_items.append(f"""
-                <div style="display:flex; flex-direction:column; align-items:center;">
-                    <div style="
-                        width:6px;
-                        height:{height}px;
-                        background:{color};
-                        border-radius:3px;
-                        margin-bottom:2px;
-                    "></div>
-                    <div style="font-size:9px; color:#9ca3af;">{date_lbl}</div>
-                </div>
-                """)
-
-            spark_html = f"""
-            <div style="display:flex; gap:6px; align-items:flex-end;">
-                {''.join(spark_items)}
-            </div>
-            """
-
-            # --------------------------------------------------
-            # Logos + book
-            # --------------------------------------------------
-            home_logo = TEAM_LOGOS_BASE64.get(
-                normalize_team_code(row.get("player_team", "")), ""
-            )
-            opp_logo = TEAM_LOGOS_BASE64.get(
-                normalize_team_code(row.get("opponent_team", "")), ""
-            )
-
-            book = normalize_bookmaker(row.get("bookmaker", ""))
-            book_logo_b64 = SPORTSBOOK_LOGOS_BASE64.get(book)
-
-            book_html = (
-                f'<img src="{book_logo_b64}" style="height:26px; filter:drop-shadow(0 0 6px rgba(0,0,0,0.4));" />'
-                if book_logo_b64
-                else f'<div style="font-size:0.7rem;">{book}</div>'
-            )
-
-            tags_html = build_tags_html(build_prop_tags(row))
-            wowy_html = build_wowy_block(row)
-
-            # --------------------------------------------------
-            # Card HTML
-            # --------------------------------------------------
+            # -------------------------
+            # Card shell (NO sparkline)
+            # -------------------------
             card_html = f"""
             <div class="prop-card">
 
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
                     <div style="display:flex; gap:6px;">
-                        <img src="{home_logo}" style="height:20px;" />
+                        <img src="{TEAM_LOGOS_BASE64.get(normalize_team_code(row['player_team']), '')}" style="height:20px;">
                         <span style="font-size:0.7rem;color:#9ca3af;">vs</span>
-                        <img src="{opp_logo}" style="height:20px;" />
+                        <img src="{TEAM_LOGOS_BASE64.get(normalize_team_code(row['opponent_team']), '')}" style="height:20px;">
                     </div>
 
                     <div style="text-align:center; flex:1;">
@@ -2820,25 +2728,25 @@ def render_prop_cards(
                         </div>
                     </div>
 
-                    <div>{book_html}</div>
+                    <div>
+                        {build_book_html(row.get("bookmaker"))}
+                    </div>
                 </div>
 
-                <div style="display:flex; justify-content:center; margin:10px 0;">
-                    {spark_html}
-                </div>
+                <div style="margin-top:6px;" id="spark_{page_key}_{idx}"></div>
 
-                <div style="display:flex; justify-content:center; margin-bottom:6px;">
-                    {tags_html}
+                <div style="display:flex; justify-content:center; margin:6px 0;">
+                    {build_tags_html(build_prop_tags(row))}
                 </div>
 
                 <div class="prop-meta">
                     <div>
-                        <div style="font-size:0.8rem;">{odds:+d}</div>
-                        <div style="font-size:0.7rem;">Imp {implied_prob:.0%}</div>
+                        <div>{odds:+d}</div>
+                        <div style="font-size:0.7rem;">Imp {implied:.0%}</div>
                     </div>
                     <div>
-                        <div style="font-size:0.8rem;">{hit_label}: {hit_val:.0%}</div>
-                        <div style="font-size:0.7rem;">L10 Avg {l10_avg_display}</div>
+                        <div>{hit_label}: {hit_val:.0%}</div>
+                        <div style="font-size:0.7rem;">L10 Avg {get_l10_avg(row):.1f}</div>
                     </div>
                     <div>
                         <div style="color:{rank_color}; font-weight:700;">{rank_display}</div>
@@ -2846,14 +2754,45 @@ def render_prop_cards(
                     </div>
                 </div>
 
-                {wowy_html}
+                {build_wowy_block(row)}
             </div>
             """
 
             st.markdown(card_html, unsafe_allow_html=True)
 
-    st.markdown("</div>", unsafe_allow_html=True)
+            # -------------------------
+            # Sparkline rendered SEPARATELY
+            # -------------------------
+            spark_vals = get_spark_values(row)
+            spark_dates = row.get("last10_dates") or []
 
+            bars = []
+            max_val = max(spark_vals) if max(spark_vals) > 0 else 1
+
+            for i, v in enumerate(spark_vals):
+                date_lbl = ""
+                if i < len(spark_dates):
+                    date_lbl = pd.to_datetime(spark_dates[i]).strftime("%m/%d")
+
+                height = max(6, int((v / max_val) * 90))
+                color = "#22c55e" if v >= float(line) else "#ef4444"
+
+                bars.append(f"""
+                <div style="display:flex; flex-direction:column; align-items:center;">
+                    <div style="width:6px; height:{height}px; background:{color}; border-radius:3px;"></div>
+                    <div style="font-size:9px; color:#9ca3af;">{date_lbl}</div>
+                </div>
+                """)
+
+            spark_html = f"""
+            <div style="display:flex; justify-content:center; gap:6px; margin:6px 0;">
+                {''.join(bars)}
+            </div>
+            """
+
+            st.markdown(spark_html, unsafe_allow_html=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ------------------------------------------------------

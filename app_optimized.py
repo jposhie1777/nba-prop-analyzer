@@ -1947,22 +1947,25 @@ hist_latest = (
     .head(1)[[
         "player_norm",
 
-        # base stats
+        # VALUES
         "pts_last5_list", "pts_last7_list", "pts_last10_list",
         "reb_last5_list", "reb_last7_list", "reb_last10_list",
         "ast_last5_list", "ast_last7_list", "ast_last10_list",
         "stl_last5_list", "stl_last7_list", "stl_last10_list",
         "blk_last5_list", "blk_last7_list", "blk_last10_list",
-
-        # combo: PRA
         "pra_last5_list", "pra_last7_list", "pra_last10_list",
-
-        # combo: PR, PA, RA  ✅ NEW
         "pr_last5_list",  "pr_last7_list",  "pr_last10_list",
         "pa_last5_list",  "pa_last7_list",  "pa_last10_list",
         "ra_last5_list",  "ra_last7_list",  "ra_last10_list",
+
+        # ✅ DATES (NEW)
+        "last5_dates",
+        "last7_dates",
+        "last10_dates",
+        "last20_dates",
     ]]
 )
+
 
 # Merge into props (so card_df rows have all lists)
 props_df = props_df.merge(hist_latest, on="player_norm", how="left")
@@ -2184,52 +2187,48 @@ def build_wowy_block(row):
 import pandas as pd
 import numpy as np
 
-def get_spark_values(row):
+def get_spark_series(row):
     """
-    Pick the best series for this prop, based on the detected stat.
-    Priority: last10_list, then last7_list, then last5_list.
-    Returns a plain Python list of numbers, or [].
+    Returns (values, dates) aligned 1:1
+    Dates are formatted short: MM/DD
     """
-    stat = detect_stat(row.get("market", ""))  # pts, reb, ast, pra, stl, blk
+    stat = detect_stat(row.get("market", ""))
     if not stat:
-        return []
+        return [], []
 
     candidates = [
-        f"{stat}_last10_list",
-        f"{stat}_last7_list",
-        f"{stat}_last5_list",
+        (f"{stat}_last10_list", "last10_dates"),
+        (f"{stat}_last7_list",  "last7_dates"),
+        (f"{stat}_last5_list",  "last5_dates"),
     ]
 
-    for col in candidates:
-        if col not in row.index:
-            continue
+    for val_col, date_col in candidates:
+        vals = row.get(val_col)
+        dates = row.get(date_col)
 
-        vals = row[col]
-
-        # Already a list
-        if isinstance(vals, list):
-            clean = [v for v in vals if isinstance(v, (int, float))]
+        if isinstance(vals, list) and isinstance(dates, list):
+            clean = [
+                (v, d) for v, d in zip(vals, dates)
+                if isinstance(v, (int, float))
+            ]
             if clean:
-                return clean
+                values, raw_dates = zip(*clean)
+                fmt_dates = [
+                    pd.to_datetime(d).strftime("%m/%d")
+                    for d in raw_dates
+                ]
+                return list(values), list(fmt_dates)
 
-        # Numpy array
-        if isinstance(vals, np.ndarray):
-            clean = [float(v) for v in vals if isinstance(v, (int, float, np.number))]
-            if clean:
-                return clean
-
-    return []
+    return [], []
 
 
-def build_sparkline_bars_hitmiss(values, line_value, width=90, height=34):
-    """
-    Mini bar chart with green/red coloring based on line hit,
-    plus tiny numeric labels above each bar.
-    """
-    if not values or not isinstance(values, (list, tuple)):
-        return ""
-
-    values = [v for v in values if isinstance(v, (int, float))]
+def build_sparkline_bars_hitmiss(
+    values,
+    dates,
+    line_value,
+    width=110,
+    height=46
+):
     if not values:
         return ""
 
@@ -2240,21 +2239,19 @@ def build_sparkline_bars_hitmiss(values, line_value, width=90, height=34):
     min_v = min(min(values), line_value)
     span = (max_v - min_v) or 1
 
-    rects = []
-    labels = []
-    line_elems = []
+    rects, labels, date_labels = [], [], []
 
-    for i, v in enumerate(values):
-        bar_height = (v - min_v) / span * (height - 12)
+    for i, (v, d) in enumerate(zip(values, dates)):
+        bar_height = (v - min_v) / span * (height - 18)
         x = i * bar_width
-        y = height - bar_height
+        y = height - 14 - bar_height
 
-        # Color: green if hit, red if missed
-        bar_color = "#22c55e" if v >= line_value else "#ef4444"
+        color = "#22c55e" if v >= line_value else "#ef4444"
 
         rects.append(
-            f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_width - 1:.1f}" '
-            f'height="{bar_height:.1f}" fill="{bar_color}" rx="2" />'
+            f'<rect x="{x:.1f}" y="{y:.1f}" '
+            f'width="{bar_width - 2:.1f}" height="{bar_height:.1f}" '
+            f'fill="{color}" rx="2" />'
         )
 
         labels.append(
@@ -2262,21 +2259,27 @@ def build_sparkline_bars_hitmiss(values, line_value, width=90, height=34):
             f'font-size="6px" fill="#e5e7eb" text-anchor="middle">{int(v)}</text>'
         )
 
-    # Line marker at prop line
-    line_y = height - ((line_value - min_v) / span * (height - 12))
-    line_elems.append(
-        f'<line x1="0" y1="{line_y:.1f}" x2="{width}" y2="{line_y:.1f}" '
+        # ⬇️ DATE LABEL
+        date_labels.append(
+            f'<text x="{x + bar_width/2:.1f}" y="{height - 2}" '
+            f'font-size="6px" fill="#9ca3af" text-anchor="middle">{d}</text>'
+        )
+
+    line_y = height - 14 - ((line_value - min_v) / span * (height - 18))
+    line_elem = (
+        f'<line x1="0" y1="{line_y:.1f}" '
+        f'x2="{width}" y2="{line_y:.1f}" '
         f'stroke="#9ca3af" stroke-width="1" stroke-dasharray="3,2" />'
     )
 
-    svg = f"""
-    <svg width="{width}" height="{height}" style="overflow:visible;">
-        {''.join(labels)}
+    return f"""
+    <svg width="{width}" height="{height}">
         {''.join(rects)}
-        {''.join(line_elems)}
+        {''.join(labels)}
+        {line_elem}
+        {''.join(date_labels)}
     </svg>
     """
-    return svg
 
 
 def normalize_bookmaker(raw: str) -> str:
@@ -2750,10 +2753,14 @@ def render_prop_cards(
                 rank_display = "-"
                 rank_color = "#9ca3af"
 
-            # Sparkline
-            spark_vals = get_spark_values(row)
+            # Sparkline (values + dates)
+            spark_vals, spark_dates = get_spark_series(row)
             line_value = float(row.get("line", 0) or 0)
-            spark_html = build_sparkline_bars_hitmiss(spark_vals, line_value)
+            spark_html = build_sparkline_bars_hitmiss(
+                spark_vals,
+                spark_dates,
+                line_value
+            )
 
             # Logos
             player_team = normalize_team_code(row.get("player_team", ""))

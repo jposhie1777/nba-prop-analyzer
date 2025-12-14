@@ -2193,6 +2193,70 @@ def build_wowy_block(row):
 import pandas as pd
 import numpy as np
 
+def combine_books_into_props(df: pd.DataFrame) -> pd.DataFrame:
+    group_cols = ["player", "market", "line", "bet_type"]
+
+    rows = []
+    for _, g in df.groupby(group_cols, dropna=False):
+        base = g.iloc[0].copy()
+
+        base["books"] = [
+            {
+                "book": normalize_bookmaker(r.get("bookmaker", "")),
+                "price": r.get("price"),
+            }
+            for _, r in g.iterrows()
+            if pd.notna(r.get("price"))
+        ]
+
+        rows.append(base)
+
+    return pd.DataFrame(rows)
+
+def render_book_badges(books):
+    badges = []
+
+    for b in books:
+        book = b["book"]
+        price = b["price"]
+
+        logo = SPORTSBOOK_LOGOS_BASE64.get(book)
+
+        if logo:
+            badges.append(
+                f"""
+                <div style="
+                    display:flex;
+                    align-items:center;
+                    gap:4px;
+                    background:rgba(255,255,255,0.06);
+                    border-radius:8px;
+                    padding:4px 6px;
+                ">
+                    <img src="{logo}" style="height:14px;" />
+                    <span style="font-size:0.7rem; color:#e5e7eb;">
+                        {price:+}
+                    </span>
+                </div>
+                """
+            )
+        else:
+            badges.append(
+                f"""
+                <div style="
+                    font-size:0.7rem;
+                    background:rgba(255,255,255,0.06);
+                    border-radius:8px;
+                    padding:4px 6px;
+                ">
+                    {book} {price:+}
+                </div>
+                """
+            )
+
+    return "<div style='display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;'>" + "".join(badges) + "</div>"
+
+
 def get_spark_series(row):
     stat = detect_stat(row.get("market", ""))
     if not stat:
@@ -2669,6 +2733,10 @@ def render_prop_cards(
         by=[hit_rate_col, "price"],
         ascending=[False, True],
     ).reset_index(drop=True)
+    
+    # 🔥 Combine sportsbooks into single prop rows
+    card_df = combine_books_into_props(card_df)
+
 
     # ------------------------------------------------------
     # Pagination
@@ -2799,25 +2867,54 @@ def render_prop_cards(
             home_logo = TEAM_LOGOS_BASE64.get(player_team, "")
             opp_logo = TEAM_LOGOS_BASE64.get(opp_team, "")
 
-            # Sportsbook
-            book = normalize_bookmaker(row.get("bookmaker", ""))
-            book_logo_b64 = SPORTSBOOK_LOGOS_BASE64.get(book)
+            # 🔥 Multi-book badges (top-right)
+            books = row.get("books", [])
 
-            if book_logo_b64:
-                book_html = (
-                    f'<img src="{book_logo_b64}" '
-                    'style="height:26px; width:auto; max-width:80px; '
-                    'object-fit:contain; filter:drop-shadow(0 0 6px rgba(0,0,0,0.4));" />'
-                )
-            else:
-                book_html = (
-                    '<div style="padding:3px 10px; border-radius:8px;'
-                    'background:rgba(255,255,255,0.08);'
-                    'border:1px solid rgba(255,255,255,0.15);'
-                    'font-size:0.7rem;">'
-                    f"{book}"
-                    "</div>"
-                )
+            book_badges = []
+            for b in books:
+                bk = b.get("book")
+                price = b.get("price")
+
+                logo = SPORTSBOOK_LOGOS_BASE64.get(bk)
+
+                if logo:
+                    book_badges.append(
+                        f"""
+                        <div style="
+                            display:flex;
+                            align-items:center;
+                            gap:4px;
+                            background:rgba(255,255,255,0.06);
+                            border-radius:8px;
+                            padding:4px 6px;
+                        ">
+                            <img src="{logo}" style="height:14px;" />
+                            <span style="font-size:0.7rem;color:#e5e7eb;">
+                                {int(price):+}
+                            </span>
+                        </div>
+                        """
+                    )
+                else:
+                    book_badges.append(
+                        f"""
+                        <div style="
+                            font-size:0.7rem;
+                            background:rgba(255,255,255,0.06);
+                            border-radius:8px;
+                            padding:4px 6px;
+                        ">
+                            {bk} {int(price):+}
+                        </div>
+                        """
+                    )
+
+            books_html = (
+                "<div style='display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;'>"
+                + "".join(book_badges)
+                + "</div>"
+            )
+
 
             # Tags / WOWY block
             tags_html = build_tags_html(build_prop_tags(row))
@@ -2849,11 +2946,12 @@ def render_prop_cards(
                 f"{pretty_market} • {bet_type} {line}</div>"
                 "</div>",
 
-                # Right: book
-                '<div style="display:flex; justify-content:flex-end; min-width:70px;">'
-                f"{book_html}"
+                # 🔥 Right: books (combined)
+                '<div style="display:flex; justify-content:flex-end; min-width:110px;">'
+                f"{books_html}"
                 "</div>",
                 "</div>",  # end top bar
+
 
                 # Sparkline
                 f'<div style="display:flex; justify-content:center; margin:8px 0;">'

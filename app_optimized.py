@@ -1510,6 +1510,11 @@ if "trend_line" not in st.session_state:
 if "trend_bet_type" not in st.session_state:
     st.session_state.trend_bet_type = None
 
+# Prop card accordion (only one open at a time)
+if "open_prop_card" not in st.session_state:
+    st.session_state.open_prop_card = None
+
+
 # Load saved bets once per session, after we know user_id
 if not st.session_state.saved_bets_loaded:
     st.session_state.saved_bets = load_saved_bets_from_db(user_id)
@@ -2897,63 +2902,168 @@ def render_prop_cards(
             st.markdown(card_html, unsafe_allow_html=True)
 
             # ------------------------------------------------------
-            # TAP-TO-EXPAND LOGIC
+            # TAP-TO-EXPAND LOGIC (accordion: only one open)
             # ------------------------------------------------------
-            # Unique keys per card
-            key_base = f"{page_key}_{idx}_{player}_{row.get('market')}_{row.get('line')}"
-            expand_key = f"{key_base}_expand"
-            tap_key = f"{key_base}_tap"
+            card_id = f"{page_key}_{idx}_{player}_{row.get('market')}_{row.get('line')}"
+            tap_key = f"{card_id}_tap"
 
-            # Invisible overlay button in .card-tap-btn wrapper
+            # Invisible overlay button
             st.markdown('<div class="card-tap-btn">', unsafe_allow_html=True)
-            tapped = st.button("tap", key=tap_key)  # label hidden by CSS
+            tapped = st.button("tap", key=tap_key)
             st.markdown("</div>", unsafe_allow_html=True)
 
             if tapped:
-                toggle_expander(expand_key)
+                if st.session_state.open_prop_card == card_id:
+                    st.session_state.open_prop_card = None
+                else:
+                    st.session_state.open_prop_card = card_id
+
 
             # ------------------------------------------------------
-            # EXPANDED ANALYTICS + SAVE BET
+            # EXPANDED ANALYTICS + ACTIONS (accordion controlled)
             # ------------------------------------------------------
-            if st.session_state.get(expand_key, False):
+            if st.session_state.open_prop_card == card_id:
+
+                # ----------------------------
+                # Safe stat detection
+                # ----------------------------
+                stat = detect_stat(row.get("market", ""))
+
+                l5  = row.get(f"{stat}_last5")
+                l10 = row.get(f"{stat}_last10")
+                l20 = row.get(f"{stat}_last20")
+
+                proj_diff  = row.get("proj_diff_vs_line")
+                volatility = row.get("proj_volatility_index")
+
+                game_time  = pretty_game_time(row.get("start_time"))
+                home_away  = row.get("home_away", "")
+                est_min    = row.get("est_minutes")
+                usage_bump = row.get("usage_bump_pct")
+
+                # ----------------------------
+                # Container
+                # ----------------------------
                 st.markdown(
                     """
-                    <div style='padding:10px 14px; margin-top:-10px;
-                                background:rgba(255,255,255,0.05);
-                                border-radius:10px;
-                                border:1px solid rgba(255,255,255,0.1);'>
+                    <div style="
+                        margin-top:-10px;
+                        padding:14px 16px;
+                        background:rgba(15,23,42,0.95);
+                        border:1px solid rgba(148,163,184,0.25);
+                        border-radius:14px;
+                        box-shadow:0 14px 40px rgba(15,23,42,0.85);
+                    ">
                     """,
                     unsafe_allow_html=True,
                 )
 
-                st.markdown("### 📊 Additional Analytics (Placeholder)")
-                st.write(
-                    """
-                    - Trend model output: **Coming soon**  
-                    - Matchup difficulty: **Placeholder**  
-                    - Usage trend: **Placeholder**  
-                    - Pace factor: **Placeholder**  
-                    """
+                # ====================================================
+                # 1) CONTEXT STRIP
+                # ====================================================
+                st.markdown(
+                    f"""
+                    <div style="
+                        display:flex;
+                        justify-content:space-between;
+                        gap:12px;
+                        font-size:0.72rem;
+                        color:#cbd5f5;
+                        margin-bottom:10px;
+                    ">
+                        <div>🕒 {game_time}</div>
+                        <div>{home_away.upper()}</div>
+                        <div>⏱ {fmt(est_min)} min</div>
+                        <div>📈 Usage {fmt(usage_bump, pct=True)}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
                 )
 
+                # ====================================================
+                # 2) TREND METRICS
+                # ====================================================
+                cols = st.columns(4)
+                cols[0].metric("L5 Avg", fmt(l5))
+                cols[1].metric("L10 Avg", fmt(l10))
+                cols[2].metric("L20 Avg", fmt(l20))
+                cols[3].metric("Δ vs Line", fmt(proj_diff, plus=True))
+
+                if volatility is not None:
+                    st.caption(f"Volatility Index: {fmt(volatility)}")
+
+                # ====================================================
+                # 3) WOWY DETAIL (SAFE)
+                # ====================================================
+                wrows = row.get("_wowy_list", [])
+                delta_col = market_to_delta_column(row.get("market")) or ""
+
+                if wrows and delta_col:
+                    st.markdown("**On / Off Impact (WOWY)**")
+
+                    for w in sorted(
+                        wrows,
+                        key=lambda x: abs(x.get(delta_col, 0) or 0),
+                        reverse=True,
+                    ):
+                        delta = w.get(delta_col)
+                        if pd.isna(delta):
+                            continue
+
+                        color = "#22c55e" if delta > 0 else "#ef4444"
+
+                        st.markdown(
+                            f"""
+                            <div style="
+                                font-size:0.72rem;
+                                padding:6px 10px;
+                                margin-bottom:4px;
+                                border-left:3px solid {color};
+                                background:rgba(255,255,255,0.04);
+                                border-radius:6px;
+                            ">
+                                <b style="color:{color};">{delta:+.2f}</b>
+                                <span style="color:#e5e7eb;">
+                                    — {w.get("breakdown", "Unknown")}
+                                </span>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+
+                # ====================================================
+                # 4) ACTIONS
+                # ====================================================
                 st.markdown("---")
 
-                bet_payload = {
-                    "player": player,
-                    "market": row.get("market"),
-                    "line": row.get("line"),
-                    "bet_type": bet_type,
-                    "price": odds,
-                    "bookmaker": row.get("bookmaker"),
-                }
+                action_cols = st.columns([1, 1, 2])
 
-                save_key = f"{key_base}_save"
+                with action_cols[0]:
+                    if st.button("💾 Save Bet", key=f"{card_id}_save"):
+                        save_bet_for_user(
+                            user_id,
+                            {
+                                "player": player,
+                                "market": row.get("market"),
+                                "line": row.get("line"),
+                                "bet_type": bet_type,
+                                "price": odds,
+                                "bookmaker": row.get("bookmaker"),
+                            },
+                        )
+                        st.success("Saved to Betslip")
 
-                if st.button("💾 Save Bet", key=save_key):
-                    save_bet_for_user(user_id, bet_payload)
-                    st.success(f"Saved: {player} {pretty_market} {bet_type} {line}")
+                with action_cols[1]:
+                    if st.button("📊 Trend Lab", key=f"{card_id}_trend"):
+                        st.session_state.trend_player = player
+                        st.session_state.trend_market = row.get("market")
+                        st.session_state.trend_line = row.get("line")
+                        st.session_state.trend_bet_type = bet_type
+                        st.toast("Sent to Trend Lab")
 
                 st.markdown("</div>", unsafe_allow_html=True)
+
+
 
     # Close scroll wrapper
     st.markdown("</div>", unsafe_allow_html=True)

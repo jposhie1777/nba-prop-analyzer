@@ -1423,89 +1423,13 @@ SPORTSBOOK_LOGOS_BASE64 = {
 
 NO_IMAGE = "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
 
-# ------------------------------------------------------
-# NCAA LOGO LOOKUP (Official ESPN ID System)
-# ------------------------------------------------------
-from rapidfuzz import fuzz, process
+def ncaa_logo(team_id: int | None) -> str:
+    if team_id is None:
+        return "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
 
-# Empty dictionary populated by the ESPN_NCAAM_TEAMS.update() chunks
-ESPN_NCAAM_TEAMS = {}
-
-import re
-
-def normalize_ncaa_name(name: str) -> str:
-    if not isinstance(name, str):
-        return ""
-
-    name = name.lower().strip()
-
-    # punctuation normalization
-    name = name.replace("&", "and")
-    name = re.sub(r"[^\w\s]", "", name)  # remove punctuation
-
-    # standardize common abbreviations (SAFE rules)
-    replacements = {
-        r"\bst\b": "state",
-        r"\bmt\b": "mount",
-        r"\bft\b": "fort",
-    }
-
-    for pattern, repl in replacements.items():
-        name = re.sub(pattern, repl, name)
-
-    # normalize whitespace
-    name = re.sub(r"\s+", " ", name).strip()
-
-    return name
-
-def get_espn_team_id(team_name: str) -> int | None:
-    if not team_name:
-        return None
-
-    norm = normalize_ncaa_name(team_name)
-
-    # direct match
-    if norm in ESPN_NCAAM_TEAMS:
-        return ESPN_NCAAM_TEAMS[norm]["id"]
-
-    # fallback: partial containment (SAFE version)
-    for k, v in ESPN_NCAAM_TEAMS.items():
-        if norm == k:
-            return v["id"]
-
-    return None
-
-def strip_mascot(name: str) -> str:
-    parts = name.split()
-    for i in range(len(parts), 0, -1):
-        candidate = " ".join(parts[:i])
-        if candidate in ESPN_NCAAM_TEAMS:
-            return candidate
-    return name
+    return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{int(team_id)}.png"
 
 
-def ncaa_logo(team_name: str) -> str:
-    if not isinstance(team_name, str) or not team_name.strip():
-        return NO_IMAGE
-
-    print("TEAM RAW:", team_name)
-
-    key = normalize_ncaa_name(team_name)
-    print("NORMALIZED:", key)
-
-    key = strip_mascot(key)
-    print("AFTER STRIP:", key)
-
-    team = ESPN_NCAAM_TEAMS.get(key)
-    if not team:
-        print("❌ NO MATCH\n")
-        return NO_IMAGE
-
-    print("✅ MATCHED:", team["name"])
-    return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{team['id']}.png"
-
-
-    
 # ------------------------------------------------------
 # ESPN TEAM MAP — CHUNK 2 (Teams 1–100)
 # ------------------------------------------------------
@@ -2932,8 +2856,8 @@ def render_ncaab_overview_card(row):
     home = row.get("home_team", "")
     away = row.get("away_team", "")
 
-    home_logo = ncaa_logo(home)
-    away_logo = ncaa_logo(away)
+    home_logo = ncaa_logo(row["home_espn_team_id"])
+    away_logo = ncaa_logo(row["away_espn_team_id"])
 
     # ----------------------------------------
     # CORRECT FIELD NAMES FROM GAME ANALYTICS

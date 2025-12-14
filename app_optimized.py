@@ -2650,6 +2650,9 @@ def render_prop_cards(
 
     page_df = card_df.iloc[(page - 1) * page_size : page * page_size]
 
+    # ------------------------------------------------------
+    # Scroll wrapper
+    # ------------------------------------------------------
     st.markdown(
         '<div style="max-height:1100px; overflow-y:auto; padding-right:12px;">',
         unsafe_allow_html=True,
@@ -2663,13 +2666,19 @@ def render_prop_cards(
     for idx, row in page_df.iterrows():
         with cols[idx % 4]:
 
-            player = row["player"]
+            player = row.get("player", "")
 
             # -------------------------
             # Injury badge
             # -------------------------
             def _norm(s):
-                return str(s).lower().replace("'", "").replace(".", "").replace("-", "")
+                return (
+                    str(s)
+                    .lower()
+                    .replace("'", "")
+                    .replace(".", "")
+                    .replace("-", "")
+                )
 
             inj_status = INJURY_LOOKUP_BY_NAME.get(_norm(player))
             badge_html = ""
@@ -2694,17 +2703,43 @@ def render_prop_cards(
             # -------------------------
             # Basic info
             # -------------------------
-            pretty_market = MARKET_DISPLAY_MAP.get(row["market"], row["market"])
-            bet_type = row["bet_type"].upper()
-            line = row["line"]
+            pretty_market = MARKET_DISPLAY_MAP.get(
+                row.get("market"), row.get("market")
+            )
+            bet_type = str(row.get("bet_type", "")).upper()
+            line = row.get("line")
 
-            odds = int(row["price"])
+            odds = int(row.get("price") or 0)
             implied = compute_implied_prob(odds) or 0
-            hit_val = row[hit_rate_col] or 0
+            hit_val = row.get(hit_rate_col) or 0
+
+            l10_avg = get_l10_avg(row)
+            l10_avg_display = f"{l10_avg:.1f}" if l10_avg is not None else "-"
 
             opp_rank = get_opponent_rank(row)
             rank_display = opp_rank if isinstance(opp_rank, int) else "-"
             rank_color = rank_to_color(opp_rank) if isinstance(opp_rank, int) else "#9ca3af"
+
+            # -------------------------
+            # Sportsbook HTML (OPTION A)
+            # -------------------------
+            book = normalize_bookmaker(row.get("bookmaker", ""))
+            book_logo_b64 = SPORTSBOOK_LOGOS_BASE64.get(book)
+
+            book_html = (
+                f'<img src="{book_logo_b64}" '
+                'style="height:26px; width:auto; max-width:80px; '
+                'object-fit:contain; filter:drop-shadow(0 0 6px rgba(0,0,0,0.4));" />'
+                if book_logo_b64
+                else (
+                    '<div style="padding:3px 10px; border-radius:8px;'
+                    'background:rgba(255,255,255,0.08);'
+                    'border:1px solid rgba(255,255,255,0.15);'
+                    'font-size:0.7rem;">'
+                    f"{book}"
+                    "</div>"
+                )
+            )
 
             # -------------------------
             # Card shell (NO sparkline)
@@ -2714,9 +2749,9 @@ def render_prop_cards(
 
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <div style="display:flex; gap:6px;">
-                        <img src="{TEAM_LOGOS_BASE64.get(normalize_team_code(row['player_team']), '')}" style="height:20px;">
+                        <img src="{TEAM_LOGOS_BASE64.get(normalize_team_code(row.get('player_team')), '')}" style="height:20px;">
                         <span style="font-size:0.7rem;color:#9ca3af;">vs</span>
-                        <img src="{TEAM_LOGOS_BASE64.get(normalize_team_code(row['opponent_team']), '')}" style="height:20px;">
+                        <img src="{TEAM_LOGOS_BASE64.get(normalize_team_code(row.get('opponent_team')), '')}" style="height:20px;">
                     </div>
 
                     <div style="text-align:center; flex:1;">
@@ -2728,12 +2763,8 @@ def render_prop_cards(
                         </div>
                     </div>
 
-                    <div>
-                        {build_book_html(row.get("bookmaker"))}
-                    </div>
+                    <div>{book_html}</div>
                 </div>
-
-                <div style="margin-top:6px;" id="spark_{page_key}_{idx}"></div>
 
                 <div style="display:flex; justify-content:center; margin:6px 0;">
                     {build_tags_html(build_prop_tags(row))}
@@ -2746,7 +2777,7 @@ def render_prop_cards(
                     </div>
                     <div>
                         <div>{hit_label}: {hit_val:.0%}</div>
-                        <div style="font-size:0.7rem;">L10 Avg {get_l10_avg(row):.1f}</div>
+                        <div style="font-size:0.7rem;">L10 Avg {l10_avg_display}</div>
                     </div>
                     <div>
                         <div style="color:{rank_color}; font-weight:700;">{rank_display}</div>
@@ -2761,9 +2792,9 @@ def render_prop_cards(
             st.markdown(card_html, unsafe_allow_html=True)
 
             # -------------------------
-            # Sparkline rendered SEPARATELY
+            # Sparkline (rendered separately)
             # -------------------------
-            spark_vals = get_spark_values(row)
+            spark_vals = get_spark_values(row) or []
             spark_dates = row.get("last10_dates") or []
 
             bars = []
@@ -2771,11 +2802,11 @@ def render_prop_cards(
 
             for i, v in enumerate(spark_vals):
                 date_lbl = ""
-                if i < len(spark_dates):
+                if i < len(spark_dates) and spark_dates[i]:
                     date_lbl = pd.to_datetime(spark_dates[i]).strftime("%m/%d")
 
                 height = max(6, int((v / max_val) * 90))
-                color = "#22c55e" if v >= float(line) else "#ef4444"
+                color = "#22c55e" if v >= float(line or 0) else "#ef4444"
 
                 bars.append(f"""
                 <div style="display:flex; flex-direction:column; align-items:center;">

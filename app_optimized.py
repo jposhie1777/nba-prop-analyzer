@@ -2606,6 +2606,12 @@ def render_prop_cards(
     min_opp_rank: int | None = None,
     page_key: str = "ev",
 ):
+    """
+    Shared card-grid renderer for both EV+ Props and Available Props.
+    Cards are always visible; tapping the card's invisible overlay expands
+    an analytics / Save Bet section underneath.
+    """
+
     if df.empty:
         st.info("No props match your filters.")
         return
@@ -2625,8 +2631,7 @@ def render_prop_cards(
     ]
 
     def extract_wowy_list(g: pd.DataFrame) -> list[dict]:
-        df2 = g.copy()
-        df2 = df2[wowy_cols]
+        df2 = g.copy()[wowy_cols]
         if "breakdown" in df2.columns:
             df2 = df2[df2["breakdown"].notna()]
         return df2.to_dict("records")
@@ -2671,7 +2676,7 @@ def render_prop_cards(
     card_df = card_df[card_df.apply(card_good, axis=1)]
 
     if card_df.empty:
-        st.info("No props match your filters.")
+        st.info("No props match your filters (after EV/odds/hit-rate logic).")
         return
 
     # ------------------------------------------------------
@@ -2697,7 +2702,7 @@ def render_prop_cards(
         max_value=total_pages,
         value=1,
         step=1,
-        key=f"{page_key}_card_page",
+        key=f"{page_key}_card_page_number",
     )
 
     start = (page - 1) * page_size
@@ -2719,13 +2724,14 @@ def render_prop_cards(
         with cols[idx % 4]:
 
             # -------------------------------
-            # Core fields
+            # Player / injury
             # -------------------------------
             player = row.get("player", "")
 
             def _norm(s: str) -> str:
                 return (
-                    str(s).lower()
+                    str(s)
+                    .lower()
                     .replace("'", "")
                     .replace(".", "")
                     .replace("-", "")
@@ -2734,13 +2740,16 @@ def render_prop_cards(
 
             inj_status = INJURY_LOOKUP_BY_NAME.get(_norm(player))
             badge_html = ""
+
             if inj_status:
                 s = inj_status.lower()
-                badge_color = (
-                    "#ef4444" if "out" in s
-                    else "#eab308" if "question" in s or "doubt" in s
-                    else "#3b82f6"
-                )
+                if "out" in s:
+                    badge_color = "#ef4444"
+                elif "question" in s or "doubt" in s:
+                    badge_color = "#eab308"
+                else:
+                    badge_color = "#3b82f6"
+
                 badge_html = f"""
                 <span style="
                     background:{badge_color};
@@ -2755,9 +2764,14 @@ def render_prop_cards(
                 </span>
                 """
 
-            pretty_market = MARKET_DISPLAY_MAP.get(row.get("market", ""), row.get("market"))
+            # -------------------------------
+            # Market / odds
+            # -------------------------------
+            pretty_market = MARKET_DISPLAY_MAP.get(
+                row.get("market", ""), row.get("market", "")
+            )
             bet_type = str(row.get("bet_type", "")).upper()
-            line = row.get("line")
+            line = row.get("line", "")
 
             odds = int(row.get("price", 0))
             implied_prob = compute_implied_prob(odds) or 0.0
@@ -2766,7 +2780,9 @@ def render_prop_cards(
             l10_avg = get_l10_avg(row)
             l10_avg_display = f"{l10_avg:.1f}" if l10_avg is not None else "-"
 
+            # -------------------------------
             # Opponent rank
+            # -------------------------------
             opp_rank = get_opponent_rank(row)
             if isinstance(opp_rank, int):
                 rank_display = opp_rank
@@ -2776,14 +2792,13 @@ def render_prop_cards(
                 rank_color = "#9ca3af"
 
             # -------------------------------
-            # Sparkline
+            # Sparkline (values ONLY)
             # -------------------------------
             spark_vals = get_spark_values(row)
-            spark_dates = get_spark_dates(row)
+            line_value = float(row.get("line", 0) or 0)
             spark_html = build_sparkline_bars_hitmiss(
                 spark_vals,
-                float(line),
-                dates=spark_dates,
+                line_value,
             )
 
             # -------------------------------
@@ -2796,17 +2811,19 @@ def render_prop_cards(
             opp_logo = TEAM_LOGOS_BASE64.get(opp_team, "")
 
             # -------------------------------
-            # Sportsbook (Option A – inline)
+            # Sportsbook
             # -------------------------------
             book = normalize_bookmaker(row.get("bookmaker", ""))
             book_logo_b64 = SPORTSBOOK_LOGOS_BASE64.get(book)
 
-            book_html = (
-                f'<img src="{book_logo_b64}" '
-                'style="height:26px; width:auto; max-width:80px; '
-                'object-fit:contain; filter:drop-shadow(0 0 6px rgba(0,0,0,0.4));" />'
-                if book_logo_b64
-                else (
+            if book_logo_b64:
+                book_html = (
+                    f'<img src="{book_logo_b64}" '
+                    'style="height:26px; width:auto; max-width:80px; '
+                    'object-fit:contain; filter:drop-shadow(0 0 6px rgba(0,0,0,0.4));" />'
+                )
+            else:
+                book_html = (
                     '<div style="padding:3px 10px; border-radius:8px;'
                     'background:rgba(255,255,255,0.08);'
                     'border:1px solid rgba(255,255,255,0.15);'
@@ -2814,13 +2831,12 @@ def render_prop_cards(
                     f"{book}"
                     "</div>"
                 )
-            )
 
             tags_html = build_tags_html(build_prop_tags(row))
             wowy_html = build_wowy_block(row)
 
             # -------------------------------
-            # CARD HTML (single f-string)
+            # Card HTML
             # -------------------------------
             card_html = f"""
             <div class="prop-card">
@@ -2876,7 +2892,6 @@ def render_prop_cards(
             st.markdown(card_html, unsafe_allow_html=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
-
 
 # ------------------------------------------------------
 # SIDEBAR FILTERS (using production-style filters)

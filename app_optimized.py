@@ -2221,11 +2221,21 @@ def get_spark_values(row):
     return []
 
 
-def build_sparkline_bars_hitmiss(values, line_value, width=90, height=34):
+def build_sparkline_bars_hitmiss(
+    values,
+    line_value,
+    width=90,
+    height=46,
+    dates=None,
+):
     """
-    Mini bar chart with green/red coloring based on line hit,
-    plus tiny numeric labels above each bar.
+    Mini SVG bar chart with:
+    - Green/red bars based on prop hit
+    - Numeric labels above bars
+    - Dashed prop line
+    - OPTIONAL date labels under bars
     """
+
     if not values or not isinstance(values, (list, tuple)):
         return ""
 
@@ -2242,41 +2252,60 @@ def build_sparkline_bars_hitmiss(values, line_value, width=90, height=34):
 
     rects = []
     labels = []
+    date_labels = []
     line_elems = []
 
-    for i, v in enumerate(values):
-        bar_height = (v - min_v) / span * (height - 12)
-        x = i * bar_width
-        y = height - bar_height
+    # --- vertical layout tuning ---
+    top_pad = 8
+    bottom_pad = 14 if dates else 6
+    usable_height = height - top_pad - bottom_pad
 
-        # Color: green if hit, red if missed
+    for i, v in enumerate(values):
+        bar_height = (v - min_v) / span * usable_height
+        x = i * bar_width
+        y = height - bottom_pad - bar_height
+
         bar_color = "#22c55e" if v >= line_value else "#ef4444"
 
+        # Bar
         rects.append(
-            f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_width - 1:.1f}" '
-            f'height="{bar_height:.1f}" fill="{bar_color}" rx="2" />'
+            f'<rect x="{x:.1f}" y="{y:.1f}" '
+            f'width="{bar_width - 1:.1f}" height="{bar_height:.1f}" '
+            f'fill="{bar_color}" rx="2" />'
         )
 
+        # Value label (top)
         labels.append(
             f'<text x="{x + bar_width/2:.1f}" y="{y - 2:.1f}" '
             f'font-size="6px" fill="#e5e7eb" text-anchor="middle">{int(v)}</text>'
         )
 
-    # Line marker at prop line
-    line_y = height - ((line_value - min_v) / span * (height - 12))
+        # Date label (bottom, optional)
+        if dates and i < len(dates):
+            try:
+                d = pd.to_datetime(dates[i]).strftime("%m/%d")
+            except Exception:
+                d = ""
+            date_labels.append(
+                f'<text x="{x + bar_width/2:.1f}" y="{height - 2}" '
+                f'font-size="6px" fill="#9ca3af" text-anchor="middle">{d}</text>'
+            )
+
+    # Prop line
+    line_y = height - bottom_pad - ((line_value - min_v) / span * usable_height)
     line_elems.append(
         f'<line x1="0" y1="{line_y:.1f}" x2="{width}" y2="{line_y:.1f}" '
         f'stroke="#9ca3af" stroke-width="1" stroke-dasharray="3,2" />'
     )
 
-    svg = f"""
+    return f"""
     <svg width="{width}" height="{height}" style="overflow:visible;">
         {''.join(labels)}
         {''.join(rects)}
         {''.join(line_elems)}
+        {''.join(date_labels)}
     </svg>
     """
-    return svg
 
 
 def normalize_bookmaker(raw: str) -> str:

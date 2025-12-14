@@ -2928,6 +2928,10 @@ def render_prop_cards(
                 stat = detect_stat(row.get("market", ""))
 
                 with st.container():
+
+                    # ----------------------------
+                    # OUTER SHELL
+                    # ----------------------------
                     st.markdown(
                         """
                         <div style="
@@ -3018,7 +3022,7 @@ def render_prop_cards(
 
                     if isinstance(vals_20, list) and isinstance(dates_20, list) and vals_20:
                         try:
-                            spark_html_20 = build_sparkline_bars_hitmiss(
+                            spark_html = build_sparkline_bars_hitmiss(
                                 values=vals_20[-20:],
                                 dates=[
                                     pd.to_datetime(d).strftime("%m/%d")
@@ -3043,20 +3047,19 @@ def render_prop_cards(
                             )
 
                             st.markdown(
-                                f'<div style="display:flex;justify-content:center;">{spark_html_20}</div>',
+                                f'<div style="display:flex;justify-content:center;">{spark_html}</div>',
                                 unsafe_allow_html=True,
                             )
                         except Exception:
-                            pass  # sparkline failure should NEVER break UI
+                            pass  # Sparkline should never break UI
 
                     # ==================================================
-                    # 4) INJURY + WOWY CONTEXT
+                    # 4) WOWY (INJURY-AWARE STAT IMPACT)
                     # ==================================================
                     delta_col = market_to_delta_column(row.get("market"))
                     wrows = row.get("_wowy_list", [])
 
                     if wrows and delta_col:
-                        # Pick strongest absolute delta
                         best = max(
                             wrows,
                             key=lambda x: abs(x.get(delta_col, 0) or 0),
@@ -3089,9 +3092,9 @@ def render_prop_cards(
                             )
 
                     # ==================================================
-                    # 5) ACTIONS (MOBILE FRIENDLY)
+                    # 5) ACTIONS (BIG MOBILE BUTTONS)
                     # ==================================================
-                    st.markdown("---")
+                    st.markdown("<hr style='margin:16px 0;'>", unsafe_allow_html=True)
 
                     if st.button("💾 Save Bet", key=f"{card_id}_save"):
                         save_bet_for_user(
@@ -3114,7 +3117,11 @@ def render_prop_cards(
                         st.session_state.trend_bet_type = row.get("bet_type")
                         st.toast("Sent to Trend Lab")
 
+                    # ----------------------------
+                    # CLOSE SHELL
+                    # ----------------------------
                     st.markdown("</div>", unsafe_allow_html=True)
+
 
 
 

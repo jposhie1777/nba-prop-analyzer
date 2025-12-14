@@ -2767,6 +2767,13 @@ def render_prop_cards(
                 line_value
             )
 
+            # DEBUG — sparkline data
+            if spark_vals:
+                st.caption(f"DEBUG spark: {len(spark_vals)} vals | dates: {spark_dates[:3]}")
+            else:
+                st.caption("DEBUG spark: NO VALUES")
+
+
             # Logos
             player_team = normalize_team_code(row.get("player_team", ""))
             opp_team = normalize_team_code(row.get("opponent_team", ""))

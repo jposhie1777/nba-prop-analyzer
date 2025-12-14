@@ -2591,24 +2591,53 @@ def render_prop_cards(
     min_opp_rank: int | None = None,
     page_key: str = "ev",
 ):
-
     if df.empty:
         st.info("No props match your filters.")
         return
 
-    card_df = df.copy()
+    # ------------------------------------------------------
+    # WOWY merge once per render
+    # ------------------------------------------------------
+    card_df = attach_wowy_deltas(df, wowy_df)
 
-    # -----------------------------
-    # Filtering
-    # -----------------------------
-    def card_good(row):
+    wowy_cols = [
+        "breakdown",
+        "pts_delta",
+        "reb_delta",
+        "ast_delta",
+        "pra_delta",
+        "pts_reb_delta",
+    ]
+
+    def extract_wowy_list(g: pd.DataFrame) -> list[dict]:
+        df2 = g.copy()
+        df2 = df2[wowy_cols]
+        if "breakdown" in df2.columns:
+            df2 = df2[df2["breakdown"].notna()]
+        return df2.to_dict("records")
+
+    w_map: dict[tuple[str, str], list[dict]] = {}
+    for (player, team), g in card_df.groupby(["player", "player_team"]):
+        w_map[(player, team)] = extract_wowy_list(g)
+
+    card_df["_wowy_list"] = card_df.apply(
+        lambda r: w_map.get((r["player"], r["player_team"]), []),
+        axis=1,
+    )
+
+    # ------------------------------------------------------
+    # Row filter
+    # ------------------------------------------------------
+    def card_good(row: pd.Series) -> bool:
         price = row.get("price")
         hit = row.get(hit_rate_col)
 
         if pd.isna(price) or pd.isna(hit):
             return False
+
         if not (odds_min <= price <= odds_max):
             return False
+
         if hit < min_hit_rate:
             return False
 
@@ -2627,120 +2656,211 @@ def render_prop_cards(
     card_df = card_df[card_df.apply(card_good, axis=1)]
 
     if card_df.empty:
-        st.info("No props match filters.")
+        st.info("No props match your filters.")
         return
 
+    # ------------------------------------------------------
+    # Sorting
+    # ------------------------------------------------------
     card_df = card_df.sort_values(
         by=[hit_rate_col, "price"],
         ascending=[False, True],
     ).reset_index(drop=True)
 
-    # -----------------------------
+    # ------------------------------------------------------
     # Pagination
-    # -----------------------------
+    # ------------------------------------------------------
     page_size = 30
-    total_pages = max(1, (len(card_df) + page_size - 1) // page_size)
+    total_cards = len(card_df)
+    total_pages = max(1, (total_cards + page_size - 1) // page_size)
+
+    st.write(f"Showing {total_cards} props • {total_pages} pages")
 
     page = st.number_input(
         "Page",
         min_value=1,
         max_value=total_pages,
         value=1,
-        key=f"{page_key}_page",
+        step=1,
+        key=f"{page_key}_card_page",
     )
 
-    page_df = card_df.iloc[(page - 1) * page_size : page * page_size]
+    start = (page - 1) * page_size
+    end = start + page_size
+    page_df = card_df.iloc[start:end]
+
+    # Scroll wrapper
+    st.markdown(
+        '<div style="max-height:1100px; overflow-y:auto; padding-right:12px;">',
+        unsafe_allow_html=True,
+    )
 
     cols = st.columns(4)
 
-    # =====================================================
+    # ======================================================
     # CARD LOOP
-    # =====================================================
+    # ======================================================
     for idx, row in page_df.iterrows():
         with cols[idx % 4]:
 
-            player = row["player"]
-            market = MARKET_DISPLAY_MAP.get(row["market"], row["market"])
-            bet_type = row["bet_type"].upper()
-            line = row["line"]
+            # -------------------------------
+            # Core fields
+            # -------------------------------
+            player = row.get("player", "")
 
-            odds = int(row["price"])
-            implied = compute_implied_prob(odds) or 0
-            hit = row[hit_rate_col]
+            def _norm(s: str) -> str:
+                return (
+                    str(s).lower()
+                    .replace("'", "")
+                    .replace(".", "")
+                    .replace("-", "")
+                    .strip()
+                )
+
+            inj_status = INJURY_LOOKUP_BY_NAME.get(_norm(player))
+            badge_html = ""
+            if inj_status:
+                s = inj_status.lower()
+                badge_color = (
+                    "#ef4444" if "out" in s
+                    else "#eab308" if "question" in s or "doubt" in s
+                    else "#3b82f6"
+                )
+                badge_html = f"""
+                <span style="
+                    background:{badge_color};
+                    color:white;
+                    padding:2px 6px;
+                    font-size:0.65rem;
+                    font-weight:700;
+                    border-radius:6px;
+                    margin-left:6px;
+                ">
+                    {inj_status.upper()}
+                </span>
+                """
+
+            pretty_market = MARKET_DISPLAY_MAP.get(row.get("market", ""), row.get("market"))
+            bet_type = str(row.get("bet_type", "")).upper()
+            line = row.get("line")
+
+            odds = int(row.get("price", 0))
+            implied_prob = compute_implied_prob(odds) or 0.0
+            hit_val = row.get(hit_rate_col, 0.0) or 0.0
 
             l10_avg = get_l10_avg(row)
-            l10_avg_disp = f"{l10_avg:.1f}" if l10_avg else "-"
+            l10_avg_display = f"{l10_avg:.1f}" if l10_avg is not None else "-"
 
+            # Opponent rank
             opp_rank = get_opponent_rank(row)
-            rank_disp = opp_rank if isinstance(opp_rank, int) else "-"
-            rank_color = rank_to_color(opp_rank) if isinstance(opp_rank, int) else "#9ca3af"
+            if isinstance(opp_rank, int):
+                rank_display = opp_rank
+                rank_color = rank_to_color(opp_rank)
+            else:
+                rank_display = "-"
+                rank_color = "#9ca3af"
 
-            # -----------------------------
-            # Sparkline + Dates
-            # -----------------------------
+            # -------------------------------
+            # Sparkline
+            # -------------------------------
             spark_vals = get_spark_values(row)
-            spark_dates = row.get("last10_dates", [])
-
+            spark_dates = get_spark_dates(row)
             spark_html = build_sparkline_bars_hitmiss(
                 spark_vals,
                 float(line),
-                dates=spark_dates,   # 👈 dates injected here
+                dates=spark_dates,
             )
 
-            # -----------------------------
+            # -------------------------------
             # Logos
-            # -----------------------------
-            team = normalize_team_code(row["player_team"])
-            opp = normalize_team_code(row["opponent_team"])
-            team_logo = TEAM_LOGOS_BASE64.get(team, "")
-            opp_logo = TEAM_LOGOS_BASE64.get(opp, "")
+            # -------------------------------
+            player_team = normalize_team_code(row.get("player_team", ""))
+            opp_team = normalize_team_code(row.get("opponent_team", ""))
 
-            book = normalize_bookmaker(row["bookmaker"])
-            book_logo = SPORTSBOOK_LOGOS_BASE64.get(book, "")
+            home_logo = TEAM_LOGOS_BASE64.get(player_team, "")
+            opp_logo = TEAM_LOGOS_BASE64.get(opp_team, "")
 
-            # -----------------------------
-            # FINAL CARD HTML (SINGLE f-string)
-            # -----------------------------
+            # -------------------------------
+            # Sportsbook (Option A – inline)
+            # -------------------------------
+            book = normalize_bookmaker(row.get("bookmaker", ""))
+            book_logo_b64 = SPORTSBOOK_LOGOS_BASE64.get(book)
+
+            book_html = (
+                f'<img src="{book_logo_b64}" '
+                'style="height:26px; width:auto; max-width:80px; '
+                'object-fit:contain; filter:drop-shadow(0 0 6px rgba(0,0,0,0.4));" />'
+                if book_logo_b64
+                else (
+                    '<div style="padding:3px 10px; border-radius:8px;'
+                    'background:rgba(255,255,255,0.08);'
+                    'border:1px solid rgba(255,255,255,0.15);'
+                    'font-size:0.7rem;">'
+                    f"{book}"
+                    "</div>"
+                )
+            )
+
+            tags_html = build_tags_html(build_prop_tags(row))
+            wowy_html = build_wowy_block(row)
+
+            # -------------------------------
+            # CARD HTML (single f-string)
+            # -------------------------------
             card_html = f"""
             <div class="prop-card">
-              <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                  <img src="{team_logo}" style="height:20px;">
-                  <span style="color:#9ca3af;font-size:0.7rem;">vs</span>
-                  <img src="{opp_logo}" style="height:20px;">
+
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <img src="{home_logo}" style="height:20px;border-radius:4px;" />
+                  <span style="font-size:0.7rem;color:#9ca3af;">vs</span>
+                  <img src="{opp_logo}" style="height:20px;border-radius:4px;" />
                 </div>
-                <img src="{book_logo}" style="height:26px;">
+
+                <div style="text-align:center;">
+                  <div style="font-size:1.05rem;font-weight:700;">
+                    {player}{badge_html}
+                  </div>
+                  <div style="font-size:0.82rem;color:#9ca3af;">
+                    {pretty_market} • {bet_type} {line}
+                  </div>
+                </div>
+
+                <div>{book_html}</div>
               </div>
 
-              <div style="text-align:center;margin-top:6px;">
-                <div style="font-size:1.05rem;font-weight:700;">{player}</div>
-                <div style="font-size:0.8rem;color:#9ca3af;">
-                  {market} • {bet_type} {line}
-                </div>
-              </div>
-
-              <div style="margin:8px 0; display:flex; justify-content:center;">
+              <div style="display:flex; justify-content:center; margin:8px 0;">
                 {spark_html}
+              </div>
+
+              <div style="display:flex; justify-content:center; margin-bottom:6px;">
+                {tags_html}
               </div>
 
               <div class="prop-meta">
                 <div>
-                  <div>{odds:+d}</div>
-                  <div style="font-size:0.7rem;">Imp {implied:.0%}</div>
+                  <div style="font-size:0.8rem;">{odds:+d}</div>
+                  <div style="font-size:0.7rem;">Imp: {implied_prob:.0%}</div>
                 </div>
                 <div>
-                  <div>{hit_label}: {hit:.0%}</div>
-                  <div style="font-size:0.7rem;">L10 Avg {l10_avg_disp}</div>
+                  <div style="font-size:0.8rem;">{hit_label}: {hit_val:.0%}</div>
+                  <div style="font-size:0.7rem;">L10 Avg: {l10_avg_display}</div>
                 </div>
                 <div>
-                  <div style="color:{rank_color};font-weight:700;">{rank_disp}</div>
+                  <div style="font-size:0.8rem; font-weight:700; color:{rank_color};">
+                    {rank_display}
+                  </div>
                   <div style="font-size:0.7rem;">Opp Rank</div>
                 </div>
               </div>
+
+              {wowy_html}
             </div>
             """
 
             st.markdown(card_html, unsafe_allow_html=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ------------------------------------------------------

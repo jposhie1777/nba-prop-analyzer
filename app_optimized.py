@@ -2220,6 +2220,21 @@ def get_spark_values(row):
 
     return []
 
+def get_spark_dates(row):
+    """
+    Returns the date list that corresponds to the sparkline window.
+    Defaults to L10.
+    """
+    for col in [
+        "last10_dates",
+        "last7_dates",
+        "last5_dates",
+        "last20_dates",
+    ]:
+        if col in row and isinstance(row[col], (list, tuple)) and row[col]:
+            return row[col]
+    return []
+
 
 def build_sparkline_bars_hitmiss(
     values,

@@ -2192,10 +2192,6 @@ import pandas as pd
 import numpy as np
 
 def get_spark_series(row):
-    """
-    Returns (values, dates) aligned 1:1
-    Dates are formatted short: MM/DD
-    """
     stat = detect_stat(row.get("market", ""))
     if not stat:
         return [], []
@@ -2211,17 +2207,22 @@ def get_spark_series(row):
         dates = row.get(date_col)
 
         if isinstance(vals, list) and isinstance(dates, list):
-            clean = [
-                (v, d) for v, d in zip(vals, dates)
-                if isinstance(v, (int, float))
-            ]
+            clean = []
+            for v, d in zip(vals, dates):
+                if isinstance(v, (int, float)):
+                    clean.append((v, d))
+
             if clean:
                 values, raw_dates = zip(*clean)
-                fmt_dates = [
-                    pd.to_datetime(d).strftime("%m/%d")
-                    for d in raw_dates
-                ]
-                return list(values), list(fmt_dates)
+
+                fmt_dates = []
+                for d in raw_dates:
+                    try:
+                        fmt_dates.append(pd.to_datetime(d).strftime("%m/%d"))
+                    except Exception:
+                        fmt_dates.append("")
+
+                return list(values), fmt_dates
 
     return [], []
 

@@ -1423,11 +1423,24 @@ SPORTSBOOK_LOGOS_BASE64 = {
 
 NO_IMAGE = "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
 
-def ncaa_logo(team_id: int | None) -> str:
-    if team_id is None:
+import pandas as pd
+
+def ncaa_logo(espn_team_id):
+    """
+    Safe ESPN logo resolver.
+    Accepts int, str, or missing values.
+    """
+
+    # Handle missing / NaN / NA
+    if espn_team_id is None or pd.isna(espn_team_id):
         return "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
 
-    return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{int(team_id)}.png"
+    try:
+        tid = int(espn_team_id)
+    except (ValueError, TypeError):
+        return "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
+
+    return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{tid}.png"
 
 
 def normalize_team_code(raw: str) -> str:

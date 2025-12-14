@@ -2924,7 +2924,7 @@ def render_prop_cards(
             # ==========================================
             if st.session_state.open_prop_card == card_id:
 
-                # 🔑 MUST recompute here (new scope)
+                # Recompute stat safely (new scope)
                 stat = detect_stat(row.get("market", ""))
 
                 with st.container():
@@ -2941,9 +2941,9 @@ def render_prop_cards(
                         unsafe_allow_html=True,
                     )
 
-                    # ----------------------------
-                    # CONTEXT STRIP (wraps on mobile)
-                    # ----------------------------
+                    # ==================================================
+                    # 1) CONTEXT STRIP (wraps cleanly on mobile)
+                    # ==================================================
                     st.markdown(
                         f"""
                         <div style="
@@ -2952,7 +2952,7 @@ def render_prop_cards(
                             gap:12px;
                             font-size:0.75rem;
                             color:#cbd5f5;
-                            margin-bottom:12px;
+                            margin-bottom:14px;
                         ">
                             <div>🕒 {pretty_game_time(row.get("start_time"))}</div>
                             <div>⏱ {fmt(row.get("est_minutes"))} min</div>
@@ -2962,38 +2962,137 @@ def render_prop_cards(
                         unsafe_allow_html=True,
                     )
 
-                    # ----------------------------
-                    # TREND METRICS (stack nicely)
-                    # ----------------------------
-                    st.metric("L5 Avg", fmt(row.get(f"{stat}_last5")))
-                    st.metric("L10 Avg", fmt(row.get(f"{stat}_last10")))
-                    st.metric("L20 Avg", fmt(row.get(f"{stat}_last20")))
-                    st.metric("Δ vs Line", fmt(row.get("proj_diff_vs_line"), plus=True))
+                    # ==================================================
+                    # 2) HORIZONTAL TREND SNAPSHOT (L5 / L10 / L20 / Δ)
+                    # ==================================================
+                    st.markdown(
+                        f"""
+                        <div style="
+                            display:grid;
+                            grid-template-columns: repeat(4, 1fr);
+                            gap:10px;
+                            margin-bottom:16px;
+                            text-align:center;
+                        ">
+                            <div>
+                                <div style="font-size:0.65rem;color:#9ca3af;">L5</div>
+                                <div style="font-size:1.05rem;font-weight:700;">
+                                    {fmt(row.get(f"{stat}_last5"))}
+                                </div>
+                            </div>
 
-                    vol = row.get("proj_volatility_index")
-                    if vol is not None:
-                        st.caption(f"Volatility Index: {fmt(vol)}")
+                            <div>
+                                <div style="font-size:0.65rem;color:#9ca3af;">L10</div>
+                                <div style="font-size:1.05rem;font-weight:700;">
+                                    {fmt(row.get(f"{stat}_last10"))}
+                                </div>
+                            </div>
 
-                    # ----------------------------
-                    # WOWY DETAILS (optional)
-                    # ----------------------------
-                    wrows = row.get("_wowy_list", [])
+                            <div>
+                                <div style="font-size:0.65rem;color:#9ca3af;">L20</div>
+                                <div style="font-size:1.05rem;font-weight:700;">
+                                    {fmt(row.get(f"{stat}_last20"))}
+                                </div>
+                            </div>
+
+                            <div>
+                                <div style="font-size:0.65rem;color:#9ca3af;">Δ Line</div>
+                                <div style="
+                                    font-size:1.05rem;
+                                    font-weight:700;
+                                    color:{'#22c55e' if (row.get('proj_diff_vs_line') or 0) > 0 else '#ef4444'};
+                                ">
+                                    {fmt(row.get("proj_diff_vs_line"), plus=True)}
+                                </div>
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+                    # ==================================================
+                    # 3) LAST 20 GAMES SPARKLINE
+                    # ==================================================
+                    vals_20 = row.get(f"{stat}_last20_list")
+                    dates_20 = row.get("last20_dates")
+
+                    if isinstance(vals_20, list) and isinstance(dates_20, list) and vals_20:
+                        try:
+                            spark_html_20 = build_sparkline_bars_hitmiss(
+                                values=vals_20[-20:],
+                                dates=[
+                                    pd.to_datetime(d).strftime("%m/%d")
+                                    for d in dates_20[-20:]
+                                ],
+                                line_value=float(row.get("line") or 0),
+                                width=260,
+                                height=60,
+                            )
+
+                            st.markdown(
+                                """
+                                <div style="
+                                    font-size:0.7rem;
+                                    color:#9ca3af;
+                                    margin-bottom:6px;
+                                ">
+                                    Last 20 Games
+                                </div>
+                                """,
+                                unsafe_allow_html=True,
+                            )
+
+                            st.markdown(
+                                f'<div style="display:flex;justify-content:center;">{spark_html_20}</div>',
+                                unsafe_allow_html=True,
+                            )
+                        except Exception:
+                            pass  # sparkline failure should NEVER break UI
+
+                    # ==================================================
+                    # 4) INJURY + WOWY CONTEXT
+                    # ==================================================
                     delta_col = market_to_delta_column(row.get("market"))
+                    wrows = row.get("_wowy_list", [])
 
                     if wrows and delta_col:
-                        st.markdown("**On / Off Impact**")
-                        for w in wrows:
-                            delta = w.get(delta_col)
-                            if pd.notna(delta):
-                                st.markdown(
-                                    f"- **{delta:+.2f}** {w.get('breakdown', '')}"
-                                )
+                        # Pick strongest absolute delta
+                        best = max(
+                            wrows,
+                            key=lambda x: abs(x.get(delta_col, 0) or 0),
+                            default=None,
+                        )
 
+                        if best and pd.notna(best.get(delta_col)):
+                            delta = float(best[delta_col])
+                            color = "#22c55e" if delta > 0 else "#ef4444"
+
+                            st.markdown(
+                                f"""
+                                <div style="
+                                    margin-top:14px;
+                                    padding:12px 14px;
+                                    border-left:4px solid {color};
+                                    background:rgba(255,255,255,0.04);
+                                    border-radius:10px;
+                                    font-size:0.75rem;
+                                ">
+                                    <div style="font-weight:700;color:{color};">
+                                        {delta:+.2f} {stat.upper()} Impact
+                                    </div>
+                                    <div style="color:#cbd5f5;margin-top:2px;">
+                                        when {best.get("breakdown", "")}
+                                    </div>
+                                </div>
+                                """,
+                                unsafe_allow_html=True,
+                            )
+
+                    # ==================================================
+                    # 5) ACTIONS (MOBILE FRIENDLY)
+                    # ==================================================
                     st.markdown("---")
 
-                    # ----------------------------
-                    # ACTIONS (big mobile buttons)
-                    # ----------------------------
                     if st.button("💾 Save Bet", key=f"{card_id}_save"):
                         save_bet_for_user(
                             user_id,
@@ -3016,6 +3115,7 @@ def render_prop_cards(
                         st.toast("Sent to Trend Lab")
 
                     st.markdown("</div>", unsafe_allow_html=True)
+
 
 
 

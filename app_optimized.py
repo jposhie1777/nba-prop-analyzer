@@ -2919,114 +2919,69 @@ def render_prop_cards(
                     st.session_state.open_prop_card = card_id
 
 
-            # ------------------------------------------------------
-            # EXPANDED ANALYTICS + ACTIONS (accordion controlled)
-            # ------------------------------------------------------
+            # ==========================================
+            # MOBILE-FIRST EXPANDED SECTION (FULL WIDTH)
+            # ==========================================
             if st.session_state.open_prop_card == card_id:
 
                 with st.container():
+                    st.markdown(
+                        """
+                        <div style="
+                            margin: 8px 0 16px 0;
+                            padding: 16px;
+                            background: rgba(15,23,42,0.97);
+                            border: 1px solid rgba(148,163,184,0.25);
+                            border-radius: 16px;
+                        ">
+                        """,
+                        unsafe_allow_html=True,
+                    )
 
-                    # ----------------------------
-                    # Context strip (HTML only)
-                    # ----------------------------
-                    stat = detect_stat(row.get("market", ""))
-
-                    game_time  = pretty_game_time(row.get("start_time"))
-                    home_away  = row.get("home_away", "")
-                    est_min    = row.get("est_minutes")
-                    usage_bump = row.get("usage_bump_pct")
-
+                    # --- CONTEXT ROW (wraps nicely on mobile)
                     st.markdown(
                         f"""
                         <div style="
-                            padding:10px 14px;
-                            margin-top:-6px;
-                            background:rgba(15,23,42,0.95);
-                            border:1px solid rgba(148,163,184,0.25);
-                            border-radius:14px;
+                            display:flex;
+                            flex-wrap:wrap;
+                            gap:10px;
+                            font-size:0.75rem;
+                            color:#cbd5f5;
+                            margin-bottom:12px;
                         ">
-                            <div style="
-                                display:flex;
-                                justify-content:space-between;
-                                gap:12px;
-                                font-size:0.72rem;
-                                color:#cbd5f5;
-                            ">
-                                <div>🕒 {game_time}</div>
-                                <div>{home_away.upper()}</div>
-                                <div>⏱ {fmt(est_min)} min</div>
-                                <div>📈 Usage {fmt(usage_bump, pct=True)}</div>
-                            </div>
+                            <div>🕒 {pretty_game_time(row.get("start_time"))}</div>
+                            <div>⏱ {fmt(row.get("est_minutes"))} min</div>
+                            <div>📈 Usage {fmt(row.get("usage_bump_pct"), pct=True)}</div>
                         </div>
                         """,
                         unsafe_allow_html=True,
                     )
 
-                    # ----------------------------
-                    # Trend metrics (PURE Streamlit)
-                    # ----------------------------
-                    l5  = row.get(f"{stat}_last5")
-                    l10 = row.get(f"{stat}_last10")
-                    l20 = row.get(f"{stat}_last20")
-                    proj_diff  = row.get("proj_diff_vs_line")
+                    # --- METRICS (auto stack on mobile)
+                    st.metric("L5 Avg", fmt(row.get(f"{stat}_last5")))
+                    st.metric("L10 Avg", fmt(row.get(f"{stat}_last10")))
+                    st.metric("L20 Avg", fmt(row.get(f"{stat}_last20")))
+                    st.metric("Δ vs Line", fmt(row.get("proj_diff_vs_line"), plus=True))
 
-                    cols = st.columns(4)
-                    cols[0].metric("L5 Avg", fmt(l5))
-                    cols[1].metric("L10 Avg", fmt(l10))
-                    cols[2].metric("L20 Avg", fmt(l20))
-                    cols[3].metric("Δ vs Line", fmt(proj_diff, plus=True))
+                    # --- WOWY
+                    if row.get("_wowy_list"):
+                        st.markdown("**On / Off Impact**")
+                        for w in row["_wowy_list"]:
+                            delta = w.get(market_to_delta_column(row.get("market")))
+                            if pd.notna(delta):
+                                st.markdown(f"- **{delta:+.2f}** {w['breakdown']}")
 
-                    # ----------------------------
-                    # WOWY (Streamlit-safe)
-                    # ----------------------------
-                    wrows = row.get("_wowy_list", [])
-                    delta_col = market_to_delta_column(row.get("market")) or ""
+                    st.markdown("---")
 
-                    if wrows and delta_col:
-                        st.markdown("**On / Off Impact (WOWY)**")
+                    # --- ACTIONS (big mobile buttons)
+                    if st.button("💾 Save Bet", key=f"{card_id}_save"):
+                        save_bet_for_user(user_id, {...})
 
-                        for w in sorted(
-                            wrows,
-                            key=lambda x: abs(x.get(delta_col, 0) or 0),
-                            reverse=True,
-                        ):
-                            delta = w.get(delta_col)
-                            if pd.isna(delta):
-                                continue
+                    if st.button("📊 Trend Lab", key=f"{card_id}_trend"):
+                        ...
 
-                            st.markdown(
-                                f"- **{delta:+.2f}** — {w.get('breakdown', 'Unknown')}"
-                            )
+                    st.markdown("</div>", unsafe_allow_html=True)
 
-                    st.divider()
-
-                    # ----------------------------
-                    # Actions
-                    # ----------------------------
-                    a1, a2, _ = st.columns([1, 1, 2])
-
-                    with a1:
-                        if st.button("💾 Save Bet", key=f"{card_id}_save"):
-                            save_bet_for_user(
-                                user_id,
-                                {
-                                    "player": player,
-                                    "market": row.get("market"),
-                                    "line": row.get("line"),
-                                    "bet_type": bet_type,
-                                    "price": odds,
-                                    "bookmaker": row.get("bookmaker"),
-                                },
-                            )
-                            st.success("Saved to Betslip")
-
-                    with a2:
-                        if st.button("📊 Trend Lab", key=f"{card_id}_trend"):
-                            st.session_state.trend_player = player
-                            st.session_state.trend_market = row.get("market")
-                            st.session_state.trend_line = row.get("line")
-                            st.session_state.trend_bet_type = bet_type
-                            st.toast("Sent to Trend Lab")
 
 
     # Close scroll wrapper

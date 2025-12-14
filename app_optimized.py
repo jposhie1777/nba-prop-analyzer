@@ -1973,6 +1973,8 @@ hist_latest = (
 
 # Merge into props (so card_df rows have all lists)
 props_df = props_df.merge(hist_latest, on="player_norm", how="left")
+# 🔥 ENSURE sparkline list columns are real Python lists
+props_df = convert_list_columns(props_df)
 
 
 
@@ -2206,23 +2208,36 @@ def get_spark_series(row):
         vals = row.get(val_col)
         dates = row.get(date_col)
 
-        if isinstance(vals, list) and isinstance(dates, list):
-            clean = []
-            for v, d in zip(vals, dates):
-                if isinstance(v, (int, float)):
-                    clean.append((v, d))
+        # Skip if either side is missing
+        if vals is None or dates is None:
+            continue
 
-            if clean:
-                values, raw_dates = zip(*clean)
+        # Coerce to plain Python lists (handles list, ndarray, Series)
+        try:
+            vals = list(vals)
+            dates = list(dates)
+        except Exception:
+            continue
 
-                fmt_dates = []
-                for d in raw_dates:
-                    try:
-                        fmt_dates.append(pd.to_datetime(d).strftime("%m/%d"))
-                    except Exception:
-                        fmt_dates.append("")
+        clean = []
+        for v, d in zip(vals, dates):
+            if isinstance(v, (int, float)):
+                clean.append((v, d))
 
-                return list(values), fmt_dates
+        if not clean:
+            continue
+
+        values, raw_dates = zip(*clean)
+
+        fmt_dates = []
+        for d in raw_dates:
+            try:
+                fmt_dates.append(pd.to_datetime(d).strftime("%m/%d"))
+            except Exception:
+                fmt_dates.append("")
+
+        return list(values), fmt_dates
+
 
     return [], []
 

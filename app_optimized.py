@@ -2699,7 +2699,13 @@ def render_prop_cards(
             # --------------------------------------------------
             # CARD HTML (strict f-strings)
             # --------------------------------------------------
-            card_html = build_prop_card_html(row)
+            card_lines = [
+                '<div class="prop-card">',
+                ...
+                '</div>',
+            ]
+            card_html = "\n".join(card_lines)
+
             st.markdown(card_html, unsafe_allow_html=True)
 
             # --------------------------------------------------

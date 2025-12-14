@@ -2701,9 +2701,17 @@ def render_prop_cards(
             # --------------------------------------------------
             card_lines = [
                 '<div class="prop-card">',
-                ...
+
+                '<div style="display:flex; justify-content:space-between;">',
+                f'<div>{player}</div>',
+                f'<div>{pretty_market} {line}</div>',
+                '</div>',
+
+                f'<div>{spark_html}</div>',
+
                 '</div>',
             ]
+
             card_html = "\n".join(card_lines)
 
             st.markdown(card_html, unsafe_allow_html=True)

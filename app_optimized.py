@@ -2755,19 +2755,6 @@ def render_prop_cards(
             line_value = float(row.get("line", 0) or 0)
             spark_html = build_sparkline_bars_hitmiss(spark_vals, line_value)
 
-            # ---------------- DEBUG: Sparkline sanity check ----------------
-            if player in ("Mark Williams", "Trey Murphy III"):
-                st.write({
-                    "player": player,
-                    "market": row.get("market"),
-                    "line": row.get("line"),
-                    "hit_rate": hit_val,
-                    "spark_vals": spark_vals,
-                    "spark_len": len(spark_vals),
-                })
-            # ---------------------------------------------------------------
-
-
             # Logos
             player_team = normalize_team_code(row.get("player_team", ""))
             opp_team = normalize_team_code(row.get("opponent_team", ""))

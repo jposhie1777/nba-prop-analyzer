@@ -2696,9 +2696,33 @@ def render_prop_cards(
         card_id = f"{page_key}_{idx}_{player}_{market}_{line}"
 
         with col:
-            # --------------------------------------------------
-            # CARD HTML (strict f-strings)
-            # --------------------------------------------------
+            # -----------------------------
+            # REQUIRED DEFINITIONS
+            # -----------------------------
+            pretty_market = MARKET_DISPLAY_MAP.get(
+                row.get("market", ""), row.get("market", "")
+            )
+
+            spark_vals, spark_dates = get_spark_series(row)
+
+            try:
+                line_value = float(row.get("line") or 0)
+            except Exception:
+                line_value = 0
+
+            spark_html = (
+                build_sparkline_bars_hitmiss(
+                    spark_vals,
+                    spark_dates,
+                    line_value,
+                )
+                if spark_vals
+                else ""
+            )
+
+            # -----------------------------
+            # CARD HTML
+            # -----------------------------
             card_lines = [
                 '<div class="prop-card">',
 
@@ -2713,12 +2737,11 @@ def render_prop_cards(
             ]
 
             card_html = "\n".join(card_lines)
-
             st.markdown(card_html, unsafe_allow_html=True)
 
-            # --------------------------------------------------
+            # -----------------------------
             # TAP BUTTON
-            # --------------------------------------------------
+            # -----------------------------
             tapped = st.button("tap", key=f"{card_id}_tap")
 
             if tapped:
@@ -2730,6 +2753,7 @@ def render_prop_cards(
             if st.session_state.get("open_prop_card") == card_id:
                 expanded_row = row.copy()
                 expanded_card_id = card_id
+
 
     # ======================================================
     # CLOSE SCROLL WRAPPER

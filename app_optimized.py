@@ -2926,206 +2926,294 @@ def render_prop_cards(
             # ==========================================
             if st.session_state.open_prop_card == card_id:
 
-                # Recompute stat in this scope
-                stat = detect_stat(row.get("market", ""))
+                # ---- safe stat + helpers ----
+                stat = detect_stat(row.get("market", "")) or ""
+                delta_vs_line = row.get("proj_diff_vs_line")
+                try:
+                    delta_vs_line_val = float(delta_vs_line) if delta_vs_line is not None else 0.0
+                except Exception:
+                    delta_vs_line_val = 0.0
 
-                with st.container():
+                delta_color = "#22c55e" if delta_vs_line_val > 0 else "#ef4444"
 
-                    # --------------------------------------------------
-                    # OUTER SHELL
-                    # --------------------------------------------------
-                    st.markdown(
-                        dedent("""
-                        <div style="
-                            margin:10px 0 18px 0;
-                            padding:16px;
-                            background:rgba(15,23,42,0.97);
-                            border:1px solid rgba(148,163,184,0.25);
-                            border-radius:16px;
-                        ">
-                        """),
-                        unsafe_allow_html=True,
-                    )
+                # Pull stat-specific avgs safely
+                l5  = row.get(f"{stat}_last5") if stat else None
+                l10 = row.get(f"{stat}_last10") if stat else None
+                l20 = row.get(f"{stat}_last20") if stat else None
 
-                    # ==================================================
-                    # 1) CONTEXT STRIP
-                    # ==================================================
-                    st.markdown(
-                        dedent(f"""
-                        <div style="
-                            display:flex;
-                            flex-wrap:wrap;
-                            gap:12px;
-                            font-size:0.75rem;
-                            color:#cbd5f5;
-                            margin-bottom:14px;
-                        ">
-                            <div>🕒 {pretty_game_time(row.get("start_time"))}</div>
-                            <div>⏱ {fmt(row.get("est_minutes"))} min</div>
-                            <div>📈 Usage {fmt(row.get("usage_bump_pct"), pct=True)}</div>
-                        </div>
-                        """),
-                        unsafe_allow_html=True,
-                    )
+                # ---- Outer shell open (STRICT: no leading whitespace) ----
+                st.markdown(
+                    f"<div style="
+                    f"'margin:10px 0 18px 0;"
+                    f"padding:16px;"
+                    f"background:rgba(15,23,42,0.97);"
+                    f"border:1px solid rgba(148,163,184,0.25);"
+                    f"border-radius:16px;'>",
+                    unsafe_allow_html=True,
+                )
 
-                    # ==================================================
-                    # 2) HORIZONTAL TREND SNAPSHOT
-                    # ==================================================
-                    st.markdown(
-                        dedent(f"""
-                        <div style="
-                            display:grid;
-                            grid-template-columns:repeat(4,1fr);
-                            gap:10px;
-                            margin-bottom:16px;
-                            text-align:center;
-                        ">
-                            <div>
-                                <div style="font-size:0.65rem;color:#9ca3af;">L5</div>
-                                <div style="font-size:1.05rem;font-weight:700;">
-                                    {fmt(row.get(f"{stat}_last5"))}
-                                </div>
-                            </div>
+                # ==================================================
+                # 1) CONTEXT STRIP (wraps on mobile)
+                # ==================================================
+                gt = pretty_game_time(row.get("start_time"))
+                est_min = row.get("est_minutes")
+                usage_bump = row.get("usage_bump_pct")
 
-                            <div>
-                                <div style="font-size:0.65rem;color:#9ca3af;">L10</div>
-                                <div style="font-size:1.05rem;font-weight:700;">
-                                    {fmt(row.get(f"{stat}_last10"))}
-                                </div>
-                            </div>
+                st.markdown(
+                    f"<div style="
+                    f"'display:flex;"
+                    f"flex-wrap:wrap;"
+                    f"gap:12px;"
+                    f"font-size:0.75rem;"
+                    f"color:#cbd5f5;"
+                    f"margin-bottom:14px;'>"
+                    f"<div>🕒 {gt}</div>"
+                    f"<div>⏱ {fmt(est_min)} min</div>"
+                    f"<div>📈 Usage {fmt(usage_bump, pct=True)}</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
 
-                            <div>
-                                <div style="font-size:0.65rem;color:#9ca3af;">L20</div>
-                                <div style="font-size:1.05rem;font-weight:700;">
-                                    {fmt(row.get(f"{stat}_last20"))}
-                                </div>
-                            </div>
+                # ==================================================
+                # 2) HORIZONTAL TREND SNAPSHOT (one row)
+                # ==================================================
+                st.markdown(
+                    f"<div style="
+                    f"'display:grid;"
+                    f"grid-template-columns:repeat(4, 1fr);"
+                    f"gap:10px;"
+                    f"margin-bottom:16px;"
+                    f"text-align:center;'>"
+                    f"<div>"
+                    f"<div style='font-size:0.65rem;color:#9ca3af;'>L5</div>"
+                    f"<div style='font-size:1.05rem;font-weight:800;color:#f9fafb;'>{fmt(l5)}</div>"
+                    f"</div>"
+                    f"<div>"
+                    f"<div style='font-size:0.65rem;color:#9ca3af;'>L10</div>"
+                    f"<div style='font-size:1.05rem;font-weight:800;color:#f9fafb;'>{fmt(l10)}</div>"
+                    f"</div>"
+                    f"<div>"
+                    f"<div style='font-size:0.65rem;color:#9ca3af;'>L20</div>"
+                    f"<div style='font-size:1.05rem;font-weight:800;color:#f9fafb;'>{fmt(l20)}</div>"
+                    f"</div>"
+                    f"<div>"
+                    f"<div style='font-size:0.65rem;color:#9ca3af;'>Δ Line</div>"
+                    f"<div style='font-size:1.05rem;font-weight:900;color:{delta_color};'>{fmt(delta_vs_line, plus=True)}</div>"
+                    f"</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
 
-                            <div>
-                                <div style="font-size:0.65rem;color:#9ca3af;">Δ Line</div>
-                                <div style="
-                                    font-size:1.05rem;
-                                    font-weight:700;
-                                    color:{'#22c55e' if (row.get('proj_diff_vs_line') or 0) > 0 else '#ef4444'};
-                                ">
-                                    {fmt(row.get("proj_diff_vs_line"), plus=True)}
-                                </div>
-                            </div>
-                        </div>
-                        """),
-                        unsafe_allow_html=True,
-                    )
+                # ==================================================
+                # 3) LAST 20 GAMES SPARKLINE (readable on mobile)
+                # ==================================================
+                vals_20 = row.get(f"{stat}_last20_list") if stat else None
+                dates_20 = row.get("last20_dates")
 
-                    # ==================================================
-                    # 3) LAST 20 GAMES SPARKLINE
-                    # ==================================================
-                    vals_20 = row.get(f"{stat}_last20_list")
-                    dates_20 = row.get("last20_dates")
+                # Coerce to lists safely
+                try:
+                    vals_20 = list(vals_20) if vals_20 is not None else []
+                except Exception:
+                    vals_20 = []
+                try:
+                    dates_20 = list(dates_20) if dates_20 is not None else []
+                except Exception:
+                    dates_20 = []
 
-                    if isinstance(vals_20, list) and isinstance(dates_20, list) and vals_20:
+                # Use last 20 aligned pairs only
+                spark20_html = ""
+                if vals_20 and dates_20:
+                    pairs = []
+                    for v, d in zip(vals_20, dates_20):
                         try:
-                            spark_html = build_sparkline_bars_hitmiss(
-                                values=vals_20[-20:],
-                                dates=[
-                                    pd.to_datetime(d).strftime("%m/%d")
-                                    for d in dates_20[-20:]
-                                ],
+                            vv = float(v)
+                        except Exception:
+                            continue
+                        pairs.append((vv, d))
+                    if pairs:
+                        pairs = pairs[-20:]
+                        v20 = [p[0] for p in pairs]
+                        d20 = []
+                        for p in pairs:
+                            try:
+                                d20.append(pd.to_datetime(p[1]).strftime("%m/%d"))
+                            except Exception:
+                                d20.append("")
+                        try:
+                            spark20_html = build_sparkline_bars_hitmiss(
+                                values=v20,
+                                dates=d20,
                                 line_value=float(row.get("line") or 0),
-                                width=260,
-                                height=60,
-                            )
-
-                            st.markdown(
-                                dedent("""
-                                <div style="
-                                    font-size:0.7rem;
-                                    color:#9ca3af;
-                                    margin-bottom:6px;
-                                ">
-                                    Last 20 Games
-                                </div>
-                                """),
-                                unsafe_allow_html=True,
-                            )
-
-                            st.markdown(
-                                f'<div style="display:flex;justify-content:center;">{spark_html}</div>',
-                                unsafe_allow_html=True,
+                                width=280,   # good mobile width
+                                height=64,   # readable
                             )
                         except Exception:
-                            pass
+                            spark20_html = ""
 
-                    # ==================================================
-                    # 4) WOWY (STAT + INJURY CONTEXT)
-                    # ==================================================
-                    delta_col = market_to_delta_column(row.get("market"))
-                    wrows = row.get("_wowy_list", [])
-
-                    if wrows and delta_col:
-                        best = max(
-                            wrows,
-                            key=lambda x: abs(x.get(delta_col, 0) or 0),
-                            default=None,
-                        )
-
-                        if best and pd.notna(best.get(delta_col)):
-                            delta = float(best[delta_col])
-                            color = "#22c55e" if delta > 0 else "#ef4444"
-
-                            st.markdown(
-                                dedent(f"""
-                                <div style="
-                                    margin-top:14px;
-                                    padding:12px 14px;
-                                    border-left:4px solid {color};
-                                    background:rgba(255,255,255,0.04);
-                                    border-radius:10px;
-                                    font-size:0.75rem;
-                                ">
-                                    <div style="font-weight:700;color:{color};">
-                                        {delta:+.2f} {stat.upper()} Impact
-                                    </div>
-                                    <div style="color:#cbd5f5;margin-top:2px;">
-                                        when {best.get("breakdown", "")}
-                                    </div>
-                                </div>
-                                """),
-                                unsafe_allow_html=True,
-                            )
-
-                    # ==================================================
-                    # 5) ACTIONS
-                    # ==================================================
+                if spark20_html:
                     st.markdown(
-                        dedent("<hr style='margin:16px 0;'>"),
+                        "<div style='font-size:0.75rem;color:#9ca3af;margin:8px 0 6px 0;'>Last 20 Games</div>",
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(
+                        f"<div style='display:flex;justify-content:center;overflow-x:auto;padding-bottom:4px;'>{spark20_html}</div>",
                         unsafe_allow_html=True,
                     )
 
-                    if st.button("💾 Save Bet", key=f"{card_id}_save"):
-                        save_bet_for_user(
-                            user_id,
-                            {
-                                "player": row.get("player"),
-                                "market": row.get("market"),
-                                "line": row.get("line"),
-                                "bet_type": row.get("bet_type"),
-                                "price": row.get("price"),
-                                "bookmaker": row.get("bookmaker"),
-                            },
+                # ==================================================
+                # 4) WOWY (best impact + optional full list)
+                # ==================================================
+                delta_col = market_to_delta_column(row.get("market"))
+                wrows = row.get("_wowy_list", [])
+                if wrows is None:
+                    wrows = []
+
+                best = None
+                if delta_col and wrows:
+                    best_abs = -1
+                    for w in wrows:
+                        try:
+                            dv = w.get(delta_col)
+                            if dv is None or (isinstance(dv, float) and pd.isna(dv)):
+                                continue
+                            dv = float(dv)
+                        except Exception:
+                            continue
+                        if abs(dv) > best_abs:
+                            best_abs = abs(dv)
+                            best = (dv, w)
+
+                if best:
+                    dv, w = best
+                    c = "#22c55e" if dv > 0 else "#ef4444"
+                    breakdown = w.get("breakdown", "")
+                    st.markdown(
+                        f"<div style="
+                        f"'margin-top:14px;"
+                        f"padding:12px 14px;"
+                        f"border-left:4px solid {c};"
+                        f"background:rgba(255,255,255,0.04);"
+                        f"border-radius:12px;'>"
+                        f"<div style='font-size:0.78rem;font-weight:900;color:{c};'>{dv:+.2f} {stat.upper() if stat else ''} WOWY</div>"
+                        f"<div style='font-size:0.75rem;color:#cbd5f5;margin-top:2px;line-height:1.25;'>{breakdown}</div>"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                # Optional full WOWY list (compact)
+                if wrows and delta_col:
+                    with st.expander("Show full WOWY list", expanded=False):
+                        # Sort by impact desc
+                        def _impact(x):
+                            try:
+                                return abs(float(x.get(delta_col) or 0))
+                            except Exception:
+                                return 0
+
+                        for w in sorted(wrows, key=_impact, reverse=True)[:10]:
+                            try:
+                                dv = float(w.get(delta_col))
+                            except Exception:
+                                continue
+                            c = "#22c55e" if dv > 0 else "#ef4444"
+                            st.markdown(
+                                f"<div style="
+                                f"'font-size:0.78rem;"
+                                f"padding:8px 10px;"
+                                f"margin:6px 0;"
+                                f"border-left:3px solid {c};"
+                                f"background:rgba(255,255,255,0.03);"
+                                f"border-radius:10px;'>"
+                                f"<b style='color:{c};'>{dv:+.2f}</b> "
+                                f"<span style='color:#e5e7eb;'>{w.get('breakdown','')}</span>"
+                                f"</div>",
+                                unsafe_allow_html=True,
+                            )
+
+                # ==================================================
+                # 5) TEAM INJURIES (from injury_df, same table you already load)
+                # ==================================================
+                team_abbr = row.get("player_team", "")
+                inj_block = []
+
+                try:
+                    team_inj = injury_df[injury_df["team_abbrev"] == team_abbr].copy()
+                except Exception:
+                    team_inj = pd.DataFrame()
+
+                if not team_inj.empty:
+                    # Most recent snapshot rows first
+                    try:
+                        team_inj["snapshot_ts"] = pd.to_datetime(team_inj["snapshot_ts"], errors="coerce")
+                        team_inj = team_inj.sort_values("snapshot_ts", ascending=False)
+                    except Exception:
+                        pass
+
+                    # Drop "healthy/available" type rows
+                    def _bad_status(s):
+                        s = str(s or "").lower().strip()
+                        return s not in ["", "available", "healthy", "active"]
+
+                    team_inj = team_inj[team_inj["status"].apply(_bad_status)]
+
+                if team_inj is not None and not team_inj.empty:
+                    st.markdown(
+                        "<div style='margin-top:14px;font-size:0.75rem;color:#9ca3af;'>Team injuries</div>",
+                        unsafe_allow_html=True,
+                    )
+                    # Show top 6
+                    for _, r in team_inj.head(6).iterrows():
+                        nm = r.get("full_name") or f"{r.get('first_name','')} {r.get('last_name','')}".strip()
+                        stt = str(r.get("status", "")).strip() or "—"
+                        cm = str(r.get("short_comment", "")).strip()
+                        if not cm:
+                            cm = str(r.get("injury_type", "")).strip()
+
+                        st.markdown(
+                            f"<div style="
+                            f"'padding:10px 12px;"
+                            f"margin-top:6px;"
+                            f"background:rgba(255,255,255,0.03);"
+                            f"border:1px solid rgba(148,163,184,0.18);"
+                            f"border-radius:12px;'>"
+                            f"<div style='font-size:0.82rem;font-weight:800;color:#f9fafb;'>{nm}</div>"
+                            f"<div style='font-size:0.75rem;color:#cbd5f5;margin-top:2px;line-height:1.25;'>"
+                            f"<b>{stt}</b>"
+                            f"{(' • ' + cm) if cm else ''}"
+                            f"</div>"
+                            f"</div>",
+                            unsafe_allow_html=True,
                         )
-                        st.success("Saved to Betslip")
 
-                    if st.button("📊 Open Trend Lab", key=f"{card_id}_trend"):
-                        st.session_state.trend_player = row.get("player")
-                        st.session_state.trend_market = row.get("market")
-                        st.session_state.trend_line = row.get("line")
-                        st.session_state.trend_bet_type = row.get("bet_type")
-                        st.toast("Sent to Trend Lab")
+                # ==================================================
+                # 6) ACTIONS (big mobile buttons)
+                # ==================================================
+                st.markdown("<hr style='margin:16px 0;border:none;border-top:1px solid rgba(148,163,184,0.18);'>", unsafe_allow_html=True)
 
-                    # --------------------------------------------------
-                    # CLOSE SHELL
-                    # --------------------------------------------------
-                    st.markdown("</div>", unsafe_allow_html=True)
+                if st.button("💾 Save Bet", key=f"{card_id}_save"):
+                    save_bet_for_user(
+                        user_id,
+                        {
+                            "player": row.get("player"),
+                            "market": row.get("market"),
+                            "line": row.get("line"),
+                            "bet_type": row.get("bet_type"),
+                            "price": row.get("price"),
+                            "bookmaker": row.get("bookmaker"),
+                        },
+                    )
+                    st.success("Saved to Betslip")
+
+                if st.button("📊 Open Trend Lab", key=f"{card_id}_trend"):
+                    st.session_state.trend_player = row.get("player")
+                    st.session_state.trend_market = row.get("market")
+                    st.session_state.trend_line = row.get("line")
+                    st.session_state.trend_bet_type = row.get("bet_type")
+                    st.toast("Sent to Trend Lab")
+
+                # ---- Outer shell close (STRICT) ----
+                st.markdown("</div>", unsafe_allow_html=True)
+
 
     # Close scroll wrapper
     st.markdown("</div>", unsafe_allow_html=True)

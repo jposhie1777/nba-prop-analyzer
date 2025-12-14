@@ -2281,9 +2281,20 @@ def build_sparkline_bars_hitmiss(
 
         # ⬇️ DATE LABEL
         date_labels.append(
-            f'<text x="{x + bar_width/2:.1f}" y="{height - 2}" '
-            f'font-size="6px" fill="#9ca3af" text-anchor="middle">{d}</text>'
+            f'''
+            <text
+                x="{x + bar_width/2:.1f}"
+                y="{height - 2}"
+                font-size="7px"
+                fill="#9ca3af"
+                text-anchor="end"
+                transform="rotate(-90 {x + bar_width/2:.1f},{height - 2})"
+            >
+                {d}
+            </text>
+            '''
         )
+
 
     line_y = height - 14 - ((line_value - min_v) / span * (height - 18))
     line_elem = (

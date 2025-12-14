@@ -2482,9 +2482,9 @@ def render_ncaab_overview_card(row):
         width:100%;
         background:rgba(255,255,255,0.06);
         border:1px solid rgba(255,255,255,0.12);
-        border-radius:18px;
-        padding:20px 16px;
-        margin-bottom:28px;
+        border-radius:14px;
+        padding:14px 14px;
+        margin-bottom:12px;
         color:#e5e7eb;
         font-family:Inter, sans-serif;
     ">
@@ -2494,20 +2494,20 @@ def render_ncaab_overview_card(row):
             display:flex;
             justify-content:center;
             align-items:center;
-            gap:30px;
-            margin-bottom:14px;
+            gap:20px;
+            margin-bottom:8px;
         ">
-            <img src="{away_logo}" style="height:80px; width:auto;" />
-            <span style="font-size:1.4rem; font-weight:700;">VS</span>
-            <img src="{home_logo}" style="height:80px; width:auto;" />
+            <img src="{away_logo}" style="height:56px; width:auto;" />
+            <span style="font-size:1.15rem; font-weight:700;">VS</span>
+            <img src="{home_logo}" style="height:56px; width:auto;" />
         </div>
 
         <!-- Team Names -->
         <div style="
             display:flex;
             justify-content:space-between;
-            margin-bottom:12px;
-            font-size:1.05rem;
+            margin-bottom:6px;
+            font-size:0.95rem;
             font-weight:700;
         ">
             <div style="flex:1; text-align:center;">{away}</div>
@@ -2518,8 +2518,9 @@ def render_ncaab_overview_card(row):
         <div style="
             display:flex;
             justify-content:space-between;
-            margin-bottom:12px;
-            font-size:0.95rem;
+            margin-bottom:6px;
+            font-size:0.9rem;
+            color:#d1d5db;
         ">
             <div style="flex:1; text-align:center;">Exp: {fmt1(exp_away)}</div>
             <div style="flex:1; text-align:center;">Exp: {fmt1(exp_home)}</div>
@@ -2528,8 +2529,8 @@ def render_ncaab_overview_card(row):
         <!-- Spread & Total -->
         <div style="
             text-align:center;
-            margin-bottom:10px;
-            font-size:0.95rem;
+            margin-bottom:6px;
+            font-size:0.9rem;
         ">
             Spread: {fmt1(exp_spread)} • Total: {fmt1(exp_total)}
         </div>
@@ -2537,7 +2538,7 @@ def render_ncaab_overview_card(row):
         <!-- Pretty Start Time -->
         <div style="
             text-align:center;
-            font-size:0.95rem;
+            font-size:0.85rem;
             color:#9ca3af;
         ">
             {pretty_time}
@@ -2546,7 +2547,8 @@ def render_ncaab_overview_card(row):
     </div>
     """
 
-    components.html(html, height=500, scrolling=False)
+
+    components.html(html, height=280, scrolling=False)
 
 def render_prop_cards(
     df,

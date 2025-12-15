@@ -25,6 +25,9 @@ import re
 from functools import lru_cache
 from rapidfuzz import fuzz, process
 
+import streamlit as st
+st.sidebar.markdown("🧪 DEV_APP.PY RUNNING")
+
 DEBUG_LANDING = True   #  <-- ADD THIS
 
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode

@@ -1137,6 +1137,23 @@ st.markdown(
 )
 
 # ------------------------------------------------------
+# SPARKLINE WINDOW CONFIG
+# ------------------------------------------------------
+SPARK_WINDOWS = {
+    "L5": {
+        "vals_col": "pts_last5_list",
+        "avg_col": "pts_last5_avg",
+        "width": 120,
+    },
+    "L20": {
+        "vals_col": "pts_last20_list",
+        "avg_col": "pts_last20_avg",
+        "width": 160,
+    },
+}
+
+
+# ------------------------------------------------------
 # SCROLL-TO-TOP FLOATING BUTTON (GLOBAL)
 # ------------------------------------------------------
 st.markdown("""
@@ -2378,7 +2395,108 @@ def get_spark_series(row):
 
     return [], []
 
+def build_bar_sparkline_svg_with_lines(
+    values: list,
+    *,
+    line_value: float | None = None,
+    avg_value: float | None = None,
+    width: int = 120,
+    height: int = 36,
+) -> str:
+    """
+    Bar sparkline with:
+    - Green bars above line
+    - Red bars below line
+    - Dashed prop line
+    - Optional avg line
+    Works for L5, L10, L20, etc.
+    """
 
+    if not values:
+        return ""
+
+    # -----------------------------
+    # Clean + coerce values
+    # -----------------------------
+    vals = [v for v in values if v is not None and not pd.isna(v)]
+    if not vals:
+        return ""
+
+    vmin = min(vals)
+    vmax = max(vals)
+
+    if vmin == vmax:
+        vmin -= 1
+        vmax += 1
+
+    pad_top = 3
+    pad_bottom = 3
+
+    def y(v):
+        return (
+            height - pad_bottom
+            - ((v - vmin) / (vmax - vmin)) * (height - pad_top - pad_bottom)
+        )
+
+    # -----------------------------
+    # Horizontal lines
+    # -----------------------------
+    overlays = ""
+
+    if line_value is not None and vmin <= line_value <= vmax:
+        y_line = y(line_value)
+        overlays += (
+            f"<line x1='0' y1='{y_line:.1f}' "
+            f"x2='{width}' y2='{y_line:.1f}' "
+            f"stroke='#ef4444' stroke-width='1' "
+            f"stroke-dasharray='4,3' />"
+        )
+
+    if avg_value is not None and vmin <= avg_value <= vmax:
+        y_avg = y(avg_value)
+        overlays += (
+            f"<line x1='0' y1='{y_avg:.1f}' "
+            f"x2='{width}' y2='{y_avg:.1f}' "
+            f"stroke='#38bdf8' stroke-width='1' />"
+        )
+
+    # -----------------------------
+    # Bars
+    # -----------------------------
+    n = len(vals)
+    gap = 1.5
+    bar_width = (width - (n - 1) * gap) / n
+
+    bars = []
+
+    for i, v in enumerate(vals):
+        bar_height = max(1, height - y(v) - pad_bottom)
+        x = i * (bar_width + gap)
+        y_pos = height - bar_height
+
+        if line_value is not None and v < line_value:
+            color = "#ef4444"  # red
+        else:
+            color = "#22c55e"  # green
+
+        bars.append(
+            f"<rect x='{x:.1f}' y='{y_pos:.1f}' "
+            f"width='{bar_width:.1f}' height='{bar_height:.1f}' "
+            f"rx='1.5' fill='{color}' />"
+        )
+
+    # -----------------------------
+    # Final SVG
+    # -----------------------------
+    return (
+        f"<svg width='{width}' height='{height}' "
+        f"viewBox='0 0 {width} {height}' "
+        f"preserveAspectRatio='none'>"
+        f"{overlays}"
+        f"{''.join(bars)}"
+        f"</svg>"
+    )
+    
 def build_sparkline_bars_hitmiss(
     values,
     dates,
@@ -2734,22 +2852,11 @@ def render_prop_cards(
     # ------------------------------------------------------
     card_df = attach_wowy_deltas(df, wowy_df)
 
-    wowy_cols = [
-        "breakdown",
-        "pts_delta",
-        "reb_delta",
-        "ast_delta",
-        "pra_delta",
-        "pts_reb_delta",
-        "pa_delta",
-        "ra_delta",
-    ]
-
     def extract_wowy_list(g: pd.DataFrame) -> list[dict]:
         if g.empty:
             return []
-    
-        wowy_cols = [
+
+        cols = [
             "breakdown",
             "pts_delta",
             "reb_delta",
@@ -2758,19 +2865,15 @@ def render_prop_cards(
             "pa_delta",
             "ra_delta",
         ]
-    
-        g2 = g.copy()
-    
-        existing_cols = [c for c in wowy_cols if c in g2.columns]
-    
-        if "breakdown" not in existing_cols:
+
+        existing = [c for c in cols if c in g.columns]
+        if "breakdown" not in existing:
             return []
-    
-        g2 = g2[existing_cols].dropna(how="all")
-    
+
+        g2 = g[existing].dropna(how="all")
         return g2.to_dict("records")
 
-    w_map: dict[tuple[str, str], list[dict]] = {}
+    w_map = {}
     for (player, team), g in card_df.groupby(["player", "player_team"]):
         w_map[(player, team)] = extract_wowy_list(g)
 
@@ -2782,29 +2885,24 @@ def render_prop_cards(
     # ------------------------------------------------------
     # Filters
     # ------------------------------------------------------
-    def card_good(row: pd.Series) -> bool:
+    def card_good(row):
         price = row.get("price")
         hit = row.get(hit_rate_col)
 
         if pd.isna(price) or pd.isna(hit):
             return False
-
         if not (odds_min <= price <= odds_max):
             return False
-
         if hit < min_hit_rate:
             return False
-
         if min_opp_rank is not None:
             r = get_opponent_rank(row)
             if r is None or r < min_opp_rank:
                 return False
-
         if require_ev_plus:
             implied = compute_implied_prob(price)
             if implied is None or hit <= implied:
                 return False
-
         return True
 
     card_df = card_df[card_df.apply(card_good, axis=1)]
@@ -2836,9 +2934,17 @@ def render_prop_cards(
         key=f"{page_key}_page",
     )
 
-    start = (page - 1) * page_size
-    end = start + page_size
-    page_df = card_df.iloc[start:end]
+    page_df = card_df.iloc[(page - 1) * page_size : page * page_size]
+
+    # ------------------------------------------------------
+    # Spark window toggle
+    # ------------------------------------------------------
+    spark_window = st.radio(
+        f"Trend Window",
+        ["L5", "L20"],
+        horizontal=True,
+        key=f"{page_key}_spark_window",
+    )
 
     st.markdown(
         f"<div style='max-height:1100px; overflow-y:auto; padding-right:12px;'>",
@@ -2851,15 +2957,13 @@ def render_prop_cards(
     # CARD LOOP
     # ======================================================
     for idx, row in page_df.iterrows():
-        col = cols[idx % 4]
-        with col:
+        with cols[idx % 4]:
 
             player = row.get("player", "")
             market = row.get("market", "")
             pretty_market = MARKET_DISPLAY_MAP.get(market, market)
             bet_type = str(row.get("bet_type", "")).upper()
-            line_val = row.get("line")
-            line_display = _fmt1(line_val)
+            line_val = float(row.get("line") or 0)
 
             odds = int(row.get("price") or 0)
             implied_prob = compute_implied_prob(odds) or 0.0
@@ -2869,27 +2973,24 @@ def render_prop_cards(
             # Averages
             # ------------------------
             l5_vals = _get_stat_list_for_market(row, 5)
-            l10_vals = _get_stat_list_for_market(row, 10)
             l20_vals = _get_stat_list_for_market(row, 20)
 
             l5_avg = _avg_last(l5_vals)
-            l10_avg = _avg_last(l10_vals)
             l20_avg = _avg_last(l20_vals)
+
+            if spark_window == "L5":
+                spark_vals = l5_vals
+                avg_val = l5_avg
+            else:
+                spark_vals = l20_vals
+                avg_val = l20_avg
 
             delta_vs_line = (l5_avg - line_val) if l5_avg is not None else None
 
-            # ------------------------
-            # Sparkline
-            # ------------------------
-            spark_vals, spark_dates = get_spark_series(row)
-            is_over = bool(row.get("is_over", True))
-
-            spark_html = build_l5_sparkline_svg_with_lines(
-                vals=spark_vals[-5:],
-                dates=spark_dates[-5:],
+            spark_html = build_bar_sparkline_svg_with_lines(
+                values=spark_vals,
                 line_value=line_val,
-                l5_avg=float(l5_avg or 0.0),
-                is_over=is_over,
+                avg_value=avg_val,
             )
 
             # ------------------------
@@ -2921,9 +3022,6 @@ def render_prop_cards(
 
             inj_impact_sum_val = inj_impact_sum if inj_rows else None
 
-            # ------------------------
-            # Confidence
-            # ------------------------
             confidence = _confidence_index(
                 hit_rate=hit_val,
                 implied_prob=implied_prob,
@@ -2939,122 +3037,35 @@ def render_prop_cards(
                 else "#ef4444"
             )
 
-            # ------------------------
-            # Trend link (same tab)
-            # ------------------------
-            trend_href = (
-                f"#trend_chart?"
-                f"player={player.replace(' ', '+')}"
-                f"&market={market}"
-            )
-
             # ==================================================
             # CARD HTML
             # ==================================================
-            card_lines = [
-                f"<div class='prop-card'>",
-
-                f"<div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;'>",
-
-                f"<div style='display:flex; align-items:center; gap:6px;'>",
-                f"<img src='{TEAM_LOGOS_BASE64.get(team_code, '')}' style='height:20px;border-radius:4px;' />",
-                f"</div>",
-
-                f"<div style='text-align:center; flex:1;'>",
-                f"<div style='font-size:1.05rem;font-weight:700;'>{player}</div>",
-                f"<div style='font-size:0.82rem;color:#9ca3af;'>{pretty_market} • {bet_type} {line_val}</div>",
-                f"</div>",
-
-                f"<div style='font-size:0.85rem;font-weight:800;'>{odds:+d}</div>",
-
-                f"</div>",
-
-                f"<div style='display:flex; justify-content:space-between; margin-bottom:6px; font-size:0.75rem;'>",
-                f"<div>L5: {_fmt1(l5_avg)}</div>",
-                f"<div>L10: {_fmt1(l10_avg)}</div>",
-                f"<div>L20: {_fmt1(l20_avg)}</div>",
-                f"<div>Δ: {_fmt_signed1(delta_vs_line)}</div>",
-                f"</div>",
-
-                f"<div style='display:flex; justify-content:center; margin:8px 0;'>",
-                f"{spark_html}",
-                f"</div>",
-
-                f"<div style='font-size:0.78rem; font-weight:900; color:{conf_color}; text-align:center;'>",
-                f"Confidence: {confidence}/100",
-                f"</div>",
-
-                f"</div>",
-            ]
-
-            card_html = "\n".join(card_lines)
-            st.markdown(card_html, unsafe_allow_html=True)
-
-
-            # ------------------------
-            # Tap to expand
-            # ------------------------
-            line_key = str(row.get("line"))
-            key_base = f"{page_key}_{idx}_{player}_{market}_{line_key}"
-            expand_key = f"{key_base}_expand"
-            tap_key = f"{key_base}_tap"
-
-            st.markdown(f"<div class='card-tap-btn'>", unsafe_allow_html=True)
-            tapped = st.button(f"tap", key=tap_key)
-            st.markdown(f"</div>", unsafe_allow_html=True)
-
-            if tapped:
-                toggle_expander(expand_key)
-
-            # ==================================================
-            # EXPANDED SECTION
-            # ==================================================
-            if st.session_state.get(expand_key, False):
-
-                injury_lines = []
-
-                for r in inj_rows:
-                    injury_lines.append(
-                        f"<div style='display:flex; justify-content:space-between;'>"
-                    )
-                    injury_lines.append(
-                        f"<div>{r['name']} ({r['status']})</div>"
-                    )
-                    injury_lines.append(
-                        f"<div>{_fmt_signed1(r['impact'])}</div>"
-                    )
-                    injury_lines.append(
-                        f"</div>"
-                    )
-
-                expanded_lines = [
-                    f"<div style='padding:12px; margin-top:-10px; border-radius:10px; background:rgba(255,255,255,0.05);'>",
-
-                    f"<div style='font-size:0.85rem; font-weight:800; margin-bottom:6px;'>",
-                    f"Injured Teammates (WOWY Impact)",
+            card_html = "\n".join(
+                [
+                    f"<div class='prop-card'>",
+                    f"<div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;'>",
+                    f"<div style='font-size:1.05rem;font-weight:700;'>{player}</div>",
+                    f"<div style='font-size:0.85rem;font-weight:800;'>{odds:+d}</div>",
+                    f"</div>",
+                    f"<div style='font-size:0.82rem;color:#9ca3af;text-align:center;'>",
+                    f"{pretty_market} • {bet_type} {line_val}",
+                    f"</div>",
+                    f"<div style='display:flex; justify-content:space-between; font-size:0.75rem; margin-top:6px;'>",
+                    f"<div>L5: {_fmt1(l5_avg)}</div>",
+                    f"<div>L20: {_fmt1(l20_avg)}</div>",
+                    f"<div>Δ: {_fmt_signed1(delta_vs_line)}</div>",
+                    f"</div>",
+                    f"<div style='display:flex; justify-content:center; margin:8px 0;'>",
+                    f"{spark_html}",
+                    f"</div>",
+                    f"<div style='font-size:0.78rem; font-weight:900; color:{conf_color}; text-align:center;'>",
+                    f"Confidence: {confidence}/100",
+                    f"</div>",
                     f"</div>",
                 ]
+            )
 
-                if injury_lines:
-                    expanded_lines.extend(injury_lines)
-                else:
-                    expanded_lines.append(
-                        f"<div style='font-size:0.75rem;color:#9ca3af;'>No teammate injuries</div>"
-                    )
-
-                expanded_lines.extend([
-                    f"<div style='margin-top:10px;'>",
-                    f"<a href='{trend_href}' style='font-size:0.8rem; font-weight:800; color:#93c5fd; text-decoration:none;'>",
-                    f"Go to Trend Chart →",
-                    f"</a>",
-                    f"</div>",
-
-                    f"</div>",
-                ])
-
-                expanded_html = "\n".join(expanded_lines)
-                st.markdown(expanded_html, unsafe_allow_html=True)
-
+            st.markdown(card_html, unsafe_allow_html=True)
 
     st.markdown(f"</div>", unsafe_allow_html=True)
 

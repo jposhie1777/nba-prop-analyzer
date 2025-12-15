@@ -576,9 +576,9 @@ else:
 # ------------------------------------------------------
 # NOT LOGGED IN → SHOW LANDING SCREEN (ONLY PLACE)
 # ------------------------------------------------------
-if not IS_DEV and "user" not in st.session_state:
-    st.title("Pulse Sports Analytics")
-    st.caption("Daily games, props, trends, and analytics")
+#if not IS_DEV and "user" not in st.session_state:
+    #st.title("Pulse Sports Analytics")
+    #st.caption("Daily games, props, trends, and analytics")
 
     # 🔐 LOGIN CTA — TOP & PROMINENT
     login_url = get_auth0_authorize_url()

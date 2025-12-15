@@ -3317,7 +3317,7 @@ def render_prop_cards(
                     f"font-size:0.8rem; margin-bottom:6px;'>",
                     f"<div>Δ Line: {_fmt_signed1(delta_vs_line)}</div>",
                     f"<div style='font-weight:800; color:{conf_color};'>"
-                    f"Confidence: {confidence}/100</div>",
+                    f"Confidence: {confidence_level} ({confidence_score})</div>",
                     f"</div>",
 
                     # Row: Minutes

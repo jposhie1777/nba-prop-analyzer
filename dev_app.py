@@ -3182,6 +3182,13 @@ def render_prop_cards(
                 # ------------------------
                 # Derived metrics (safe)
                 # ------------------------
+                market = row.get("market_lower")  # e.g. "pts", "reb", "pra"
+
+                l5_vals = row.get(f"{market}_last5_list") or []
+                l10_vals = row.get(f"{market}_last10_list") or []
+                l20_vals = row.get(f"{market}_last20_list") or []
+                cs
+                
                 l5_avg = _avg_last(l5_vals)
                 l10_avg = _avg_last(l10_vals)
                 l20_avg = _avg_last(l20_vals)

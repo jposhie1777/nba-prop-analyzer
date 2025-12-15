@@ -3187,7 +3187,7 @@ def render_prop_cards(
                 l5_vals = row.get(f"{market}_last5_list") or []
                 l10_vals = row.get(f"{market}_last10_list") or []
                 l20_vals = row.get(f"{market}_last20_list") or []
-                cs
+                cs = confidence_level  # or whatever variable you actually meant
                 
                 l5_avg = _avg_last(l5_vals)
                 l10_avg = _avg_last(l10_vals)

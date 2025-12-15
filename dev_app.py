@@ -2353,6 +2353,45 @@ def build_wowy_block(row):
 import pandas as pd
 import numpy as np
 
+def compute_confidence(
+    *,
+    hit_rate_l10: float | None,
+    delta_vs_line: float | None,
+    opp_rank: int | None,
+) -> tuple[float | None, str | None]:
+
+    if hit_rate_l10 is None or delta_vs_line is None:
+        return None, None
+
+    hit_score = max(0, min(1, hit_rate_l10))
+
+    MAX_DELTA = 8.0
+    delta_score = max(
+        0,
+        min(1, (delta_vs_line + MAX_DELTA) / (2 * MAX_DELTA))
+    )
+
+    if opp_rank:
+        opp_score = (opp_rank - 1) / 29
+    else:
+        opp_score = 0.5
+
+    score = (
+        0.4 * hit_score +
+        0.4 * delta_score +
+        0.2 * opp_score
+    ) * 100
+
+    if score >= 75:
+        level = "Strong"
+    elif score >= 60:
+        level = "Medium"
+    else:
+        level = "Light"
+
+    return round(score, 1), level
+
+
 def get_spark_series(row):
     stat = detect_stat(row.get("market", ""))
     if not stat:
@@ -3187,18 +3226,46 @@ def render_prop_cards(
                 l5_vals = row.get(f"{market}_last5_list") or []
                 l10_vals = row.get(f"{market}_last10_list") or []
                 l20_vals = row.get(f"{market}_last20_list") or []
-                cs = confidence_level  # or whatever variable you actually meant
                 
                 l5_avg = _avg_last(l5_vals)
                 l10_avg = _avg_last(l10_vals)
                 l20_avg = _avg_last(l20_vals)
 
+                # -----------------------------
+                # Delta vs line
+                # -----------------------------
                 delta_vs_line = (
                     (l10_avg - line_val)
                     if l10_avg is not None and line_val is not None
                     else None
                 )
+                
+                # -----------------------------
+                # Confidence (Strong / Medium / Light)
+                # -----------------------------
+                confidence_score, confidence_level = compute_confidence(
+                    hit_rate_l10=row.get("hit_rate_last10"),
+                    delta_vs_line=delta_vs_line,
+                    opp_rank=row.get("opp_rank"),
+                )
+                
+                CONF_COLORS = {
+                    "Strong": "#22c55e",
+                    "Medium": "#eab308",
+                    "Light":  "#60a5fa",
+                }
+                
+                conf_color = CONF_COLORS.get(confidence_level, "#9ca3af")
 
+                confidence_tooltip = (
+                    f"Confidence: {confidence_level} ({confidence_score})\n\n"
+                    f"L10 Hit Rate: {int(row.get('hit_rate_last10', 0) * 100)}%\n"
+                    f"L10 Avg vs Line: {round(delta_vs_line, 2) if delta_vs_line is not None else '—'}\n"
+                    f"Opponent Rank: {row.get('opp_rank', '—')}"
+                )
+                
+                cs = confidence_level  # or whatever variable you actually meant
+                
                 est_minutes = row.get("est_minutes")
                 l5_min_avg = row.get("l5_min_avg")
 
@@ -3206,22 +3273,6 @@ def render_prop_cards(
                     est_minutes - l5_min_avg
                     if est_minutes is not None and l5_min_avg is not None
                     else None
-                )
-
-                confidence = _confidence_index(
-                    hit_rate=hit_val,
-                    implied_prob=implied_prob,
-                    delta_vs_line=delta_vs_line,
-                    minutes_delta=minutes_delta,
-                    inj_impact_sum=inj_impact_sum_val,
-                )
-
-                conf_color = (
-                    "#22c55e"
-                    if confidence >= 70
-                    else "#eab308"
-                    if confidence >= 50
-                    else "#ef4444"
                 )
 
                 # ------------------------

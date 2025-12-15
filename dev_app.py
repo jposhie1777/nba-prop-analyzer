@@ -3028,10 +3028,16 @@ def render_prop_cards(
 
             inj_impact_sum_val = inj_impact_sum if inj_rows else None
 
+            # ------------------------
+            # Confidence
+            # ------------------------
+            minutes_delta = row.get("minutes_delta")  # safe: None if column doesn't exist
+            
             confidence = _confidence_index(
                 hit_rate=hit_val,
                 implied_prob=implied_prob,
                 delta_vs_line=delta_vs_line,
+                minutes_delta=minutes_delta,
                 inj_impact_sum=inj_impact_sum_val,
             )
 

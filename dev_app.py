@@ -41,7 +41,7 @@ st.set_page_config(
 # ✅ OK to call Streamlit stuff AFTER set_page_config
 st.sidebar.markdown("🧪 DEV_APP.PY RUNNING")
 
-DEBUG_LANDING = True
+IS_DEV = True
 
 
 # ------------------------------------------------------
@@ -559,12 +559,24 @@ def ensure_logged_in():
 # ------------------------------------------------------
 # AUTH FLOW – HANDLE AUTH0 CALLBACK FIRST
 # ------------------------------------------------------
-ensure_logged_in()
+# AUTH FLOW – HANDLE AUTH0 CALLBACK FIRST
+if not IS_DEV:
+    ensure_logged_in()
+else:
+    st.session_state.setdefault(
+        "user",
+        {
+            "auth0_sub": "dev-user",
+            "email": "dev@local.test",
+        },
+    )
+    st.session_state.setdefault("user_id", -1)
+
 
 # ------------------------------------------------------
 # NOT LOGGED IN → SHOW LANDING SCREEN (ONLY PLACE)
 # ------------------------------------------------------
-if "user" not in st.session_state:
+if not IS_DEV and "user" not in st.session_state:
     st.title("Pulse Sports Analytics")
     st.caption("Daily games, props, trends, and analytics")
 

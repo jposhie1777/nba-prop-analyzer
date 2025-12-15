@@ -2746,9 +2746,28 @@ def render_prop_cards(
     ]
 
     def extract_wowy_list(g: pd.DataFrame) -> list[dict]:
+        if g.empty:
+            return []
+    
+        wowy_cols = [
+            "breakdown",
+            "pts_delta",
+            "reb_delta",
+            "ast_delta",
+            "pra_delta",
+            "pa_delta",
+            "ra_delta",
+        ]
+    
         g2 = g.copy()
-        g2 = g2[wowy_cols]
-        g2 = g2[g2["breakdown"].notna()]
+    
+        existing_cols = [c for c in wowy_cols if c in g2.columns]
+    
+        if "breakdown" not in existing_cols:
+            return []
+    
+        g2 = g2[existing_cols].dropna(how="all")
+    
         return g2.to_dict("records")
 
     w_map: dict[tuple[str, str], list[dict]] = {}

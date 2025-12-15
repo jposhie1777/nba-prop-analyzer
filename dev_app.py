@@ -2858,6 +2858,7 @@ def render_prop_cards(
             market = row.get("market", "")
             pretty_market = MARKET_DISPLAY_MAP.get(market, market)
             bet_type = str(row.get("bet_type", "")).upper()
+            line_val = row.get("line")
             line_display = _fmt1(line_val)
 
             odds = int(row.get("price") or 0)

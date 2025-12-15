@@ -1417,7 +1417,13 @@ def _injury_wowy_impact_for_name(wowy_list: list[dict], injured_name: str, marke
                 return float(v2)
     return None
 
-def _confidence_index(hit_rate, implied_prob, delta_vs_line, minutes_delta, inj_impact_sum):
+def _confidence_index(
+    hit_rate,
+    implied_prob,
+    delta_vs_line,
+    minutes_delta=None,        # 👈 OPTIONAL
+    inj_impact_sum=None,
+):
     # simple + stable: 0..100
     hr = float(hit_rate or 0.0)
     ip = float(implied_prob or 0.0)

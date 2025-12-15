@@ -557,59 +557,35 @@ def ensure_logged_in():
         st.stop()
 
 # ------------------------------------------------------
-# AUTH FLOW – HANDLE AUTH0 CALLBACK FIRST
+# AUTH FLOW
 # ------------------------------------------------------
-# AUTH FLOW – HANDLE AUTH0 CALLBACK FIRST
-if not IS_DEV:
-    ensure_logged_in()
+if IS_DEV:
+    st.session_state["user"] = {
+        "auth0_sub": "dev-user",
+        "email": "dev@local.test",
+    }
+    st.session_state["user_id"] = -1
 else:
-    st.session_state.setdefault(
-        "user",
-        {
-            "auth0_sub": "dev-user",
-            "email": "dev@local.test",
-        },
-    )
-    st.session_state.setdefault("user_id", -1)
-
+    ensure_logged_in()
 
 # ------------------------------------------------------
-# NOT LOGGED IN → SHOW LANDING SCREEN (ONLY PLACE)
+# NOT LOGGED IN → SHOW LANDING SCREEN (PROD ONLY)
 # ------------------------------------------------------
-#if not IS_DEV and "user" not in st.session_state:
-    #st.title("Pulse Sports Analytics")
-    #st.caption("Daily games, props, trends, and analytics")
+if not IS_DEV and "user" not in st.session_state:
+    st.title("Pulse Sports Analytics")
+    st.caption("Daily games, props, trends, and analytics")
 
-    # 🔐 LOGIN CTA — TOP & PROMINENT
     login_url = get_auth0_authorize_url()
     st.markdown(
         f"""
-        <div style="
-            margin: 14px 0 22px 0;
-            padding: 14px 18px;
-            border-radius: 14px;
-            border: 1px solid rgba(148,163,184,0.35);
-            background: radial-gradient(circle at top left, rgba(15,23,42,0.95), rgba(15,23,42,0.85));
-            box-shadow: 0 16px 40px rgba(15,23,42,0.9);
-            text-align: center;
-        ">
-            <a href="{login_url}"
-               style="
-                   font-size: 1rem;
-                   font-weight: 700;
-                   color: #38bdf8;
-                   text-decoration: none;
-               ">
-                🔐 Log in with Auth0
-            </a>
+        <div style="margin: 14px 0;">
+            <a href="{login_url}">🔐 Log in with Auth0</a>
         </div>
         """,
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
 
-    # 🏀 Games list
     render_landing_nba_games()
-
     st.stop()
 
 # ------------------------------------------------------

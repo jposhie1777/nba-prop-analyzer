@@ -25,28 +25,24 @@ import re
 from functools import lru_cache
 from rapidfuzz import fuzz, process
 
-import streamlit as st
-st.sidebar.markdown("🧪 DEV_APP.PY RUNNING")
-
-DEBUG_LANDING = True   #  <-- ADD THIS
-
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
 # ------------------------------------------------------
-# TIMEZONE (EST)
-# ------------------------------------------------------
-EST = pytz.timezone("America/New_York")
-
-# ------------------------------------------------------
-# STREAMLIT CONFIG
+# STREAMLIT CONFIG (MUST BE FIRST STREAMLIT COMMAND)
 # ------------------------------------------------------
 st.set_page_config(
-    page_title="NBA Prop Analyzer",
+    page_title="NBA Prop Analyzer (DEV)",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
+# ✅ OK to call Streamlit stuff AFTER set_page_config
+st.sidebar.markdown("🧪 DEV_APP.PY RUNNING")
+
+DEBUG_LANDING = True
+
 
 # ------------------------------------------------------
 # ENVIRONMENT VARIABLES

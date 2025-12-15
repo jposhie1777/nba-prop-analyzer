@@ -3275,6 +3275,8 @@ def render_prop_cards(
                     else None
                 )
 
+                inj_rows = row.get("inj_rows") or []
+
                 # ------------------------
                 # Injury rows
                 # ------------------------

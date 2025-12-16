@@ -3277,9 +3277,10 @@ def render_prop_cards(
                 # ------------------------
                 # Market / stat prefix (canonical)
                 # ------------------------
-                raw_stat = row.get("stat_type")  # "PTS", "REB", "AST", "PA", "PR", "RA", "PRA"
-                
+                raw_stat = row.get("stat_type")
+
                 STAT_PREFIX_MAP = {
+                    # Canonical market codes
                     "PTS": "pts",
                     "REB": "reb",
                     "AST": "ast",
@@ -3289,9 +3290,20 @@ def render_prop_cards(
                     "PR":  "pts_reb",
                     "PA":  "pts_ast",
                     "RA":  "reb_ast",
+                
+                    # Text variants (defensive)
+                    "POINTS": "pts",
+                    "REBOUNDS": "reb",
+                    "ASSISTS": "ast",
+                    "STEALS": "stl",
+                    "BLOCKS": "blk",
                 }
                 
-                stat_prefix = STAT_PREFIX_MAP.get(str(raw_stat).upper())
+                stat_prefix = STAT_PREFIX_MAP.get(
+                    str(raw_stat).strip().upper()
+                    if raw_stat is not None
+                    else None
+                )
                 
                 line_val = row.get("line")
                 try:
@@ -3304,7 +3316,7 @@ def render_prop_cards(
                 l20_vals = row.get(f"{stat_prefix}_last20_list") or []
                 
                 st.caption(f"DEBUG L20 raw ({stat_prefix}): {l20_vals}")
-                
+                st.caption(f"DEBUG stat_type raw = {row.get('stat_type')}")
                 l5_avg = _avg_last(l5_vals)
                 l10_avg = _avg_last(l10_vals)
                 l20_avg = _avg_last(l20_vals)

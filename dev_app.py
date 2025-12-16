@@ -3300,7 +3300,7 @@ def render_prop_cards(
                 l10_vals = row.get(f"{stat_prefix}_last10_list") or []
                 l20_vals = row.get(f"{stat_prefix}_last20_list") or []
                 
-                st.caption(f"DEBUG L20 raw: {row.get(f'{stat}_last20_list')}")
+                st.caption(f"DEBUG L20 raw ({stat_prefix}): {l20_vals}")
                 
                 l5_avg = _avg_last(l5_vals)
                 l10_avg = _avg_last(l10_vals)

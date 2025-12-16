@@ -3127,12 +3127,6 @@ def render_prop_cards(
                 line_value
             )
 
-            # DEBUG — sparkline data
-            if spark_vals:
-                st.caption(f"DEBUG spark: {len(spark_vals)} vals | dates: {spark_dates[:3]}")
-            else:
-                st.caption("DEBUG spark: NO VALUES")
-
 
             # Logos
             player_team = normalize_team_code(row.get("player_team", ""))
@@ -3294,6 +3288,7 @@ def render_prop_cards(
                 st.write("DEBUG stat_type:", raw_stat)
                 st.write("DEBUG stat_prefix:", stat_prefix)
                 st.write("DEBUG l10:", l10_vals)
+                st.write("DEBUG breakdown raw:", row.get("breakdown"))
                 
                 l5_avg = _avg_last(l5_vals)
                 l10_avg = _avg_last(l10_vals)

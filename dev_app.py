@@ -2081,6 +2081,17 @@ market_pretty_map = {
     "player_blocks_steals": "Stocks (BLK+STL)"
 }
 
+MARKET_TO_PREFIX = {
+    "pts": "pts",
+    "reb": "reb",
+    "ast": "ast",
+    "pts+reb": "pr",
+    "pts+ast": "pa",
+    "reb+ast": "ra",
+    "pts+reb+ast": "pra",
+}
+
+
 # ------------------------------------------------------
 # NORMALIZE PLAYER NAMES (fix merge issues)
 # ------------------------------------------------------
@@ -3221,11 +3232,12 @@ def render_prop_cards(
                 # ------------------------
                 # Derived metrics (safe)
                 # ------------------------
-                market = row.get("market_lower")  # e.g. "pts", "reb", "pra"
-
-                l5_vals = row.get(f"{market}_last5_list") or []
-                l10_vals = row.get(f"{market}_last10_list") or []
-                l20_vals = row.get(f"{market}_last20_list") or []
+                market = row.get("market_lower")
+                stat_prefix = MARKET_TO_PREFIX.get(market)
+                
+                l5_vals  = row.get(f"{stat_prefix}_last5_list") if stat_prefix else []
+                l10_vals = row.get(f"{stat_prefix}_last10_list") if stat_prefix else []
+                l20_vals = row.get(f"{stat_prefix}_last20_list") if stat_prefix else []
                 
                 l5_avg = _avg_last(l5_vals)
                 l10_avg = _avg_last(l10_vals)

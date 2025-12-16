@@ -3311,15 +3311,12 @@ def render_prop_cards(
                 except Exception:
                     line_val = None
                 
-                l5_vals  = row.get(f"{stat_prefix}_last5_list") or []
-                l10_vals = row.get(f"{stat_prefix}_last10_list") or []
-                l20_vals = row.get(f"{stat_prefix}_last20_list") or []
-                
-                st.caption(f"DEBUG L20 raw ({stat_prefix}): {l20_vals}")
-                st.caption(f"DEBUG stat_type raw = {row.get('stat_type')}")
-                l5_avg = _avg_last(l5_vals)
-                l10_avg = _avg_last(l10_vals)
-                l20_avg = _avg_last(l20_vals)
+                # ------------------------
+                # L5 / L10 / L20 averages (SCALAR)
+                # ------------------------
+                l5_avg  = row.get(f"{stat_prefix}_last5")
+                l10_avg = row.get(f"{stat_prefix}_last10")
+                l20_avg = row.get(f"{stat_prefix}_last20")
 
                 # -----------------------------
                 # Delta vs line

@@ -3261,25 +3261,38 @@ def render_prop_cards(
             card_html = "\n".join(card_lines)
 
             # ------------------------------------------------------
-            # RENDER CARD
+            # TAP-ANYWHERE CARD (invisible overlay)
             # ------------------------------------------------------
-            st.markdown(card_html, unsafe_allow_html=True)
-
-            # ------------------------------------------------------
-            # TAP-TO-EXPAND LOGIC
-            # ------------------------------------------------------
-            # Unique keys per card
             key_base = f"{page_key}_{idx}_{player}_{row.get('market')}_{row.get('line')}"
             expand_key = f"{key_base}_expand"
             tap_key = f"{key_base}_tap"
-
-            # Invisible overlay button in .card-tap-btn wrapper
-            st.markdown('<div class="card-tap-btn">', unsafe_allow_html=True)
-            tapped = st.button("tap", key=tap_key)  # label hidden by CSS
-            st.markdown("</div>", unsafe_allow_html=True)
-
-            if tapped:
-                toggle_expander(expand_key)
+            
+            if expand_key not in st.session_state:
+                st.session_state[expand_key] = False
+            
+            with st.container():
+            
+                # Invisible full-card button
+                st.button(
+                    label="",
+                    key=tap_key,
+                    on_click=toggle_expander,
+                    args=(expand_key,),
+                    use_container_width=True,
+                )
+            
+                # Card HTML rendered ON TOP
+                st.markdown(
+                    f"""
+                    <div style="
+                        margin-top:-44px;
+                        pointer-events:none;
+                    ">
+                        {card_html}
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
 
             # ------------------------
             # Expanded Card Section 

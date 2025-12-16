@@ -3274,44 +3274,52 @@ def render_prop_cards(
             card_html = "\n".join(card_lines)
 
             # ------------------------------------------------------
-            # TAP-ANYWHERE CARD (invisible overlay)
+            # Stable keys
             # ------------------------------------------------------
-            key_base = f"{page_key}_{idx}_{player}_{row.get('market')}_{row.get('line')}"
+            key_base = (
+                f"{page_key}_"
+                f"{row.get('player')}_"
+                f"{row.get('market')}_"
+                f"{row.get('line')}_"
+                f"{row.get('game_id', '')}"
+            )
             expand_key = f"{key_base}_expand"
             tap_key = f"{key_base}_tap"
             
             if expand_key not in st.session_state:
                 st.session_state[expand_key] = False
             
+            # ------------------------------------------------------
+            # CARD + TAP OVERLAY (ORDER MATTERS)
+            # ------------------------------------------------------
             with st.container():
             
-                # Invisible full-card button
+                # 1️⃣ Render the card FIRST
+                st.markdown(card_html, unsafe_allow_html=True)
+            
+                # 2️⃣ Invisible button OVER the card (pulled upward)
+                st.markdown(
+                    """
+                    <div style="margin-top:-190px;">
+                    """,
+                    unsafe_allow_html=True,
+                )
+            
                 st.button(
-                    label="",
+                    "",
                     key=tap_key,
                     on_click=toggle_expander,
                     args=(expand_key,),
                     use_container_width=True,
                 )
             
-                # Card HTML rendered ON TOP
-                st.markdown(
-                    f"""
-                    <div style="
-                        margin-top:-44px;
-                        pointer-events:none;
-                    ">
-                        {card_html}
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-
-            # ------------------------
-            # Expanded Card Section 
-            # ------------------------
-
+                st.markdown("</div>", unsafe_allow_html=True)
+            
+            # ------------------------------------------------------
+            # EXPANDED SECTION
+            # ------------------------------------------------------
             if st.session_state.get(expand_key, False):
+                st.markdown(expanded_html, unsafe_allow_html=True)
 
                 # ------------------------
                 # Derived metrics (safe)

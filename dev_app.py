@@ -3298,16 +3298,17 @@ def render_prop_cards(
                 raw_stat = row.get("stat_type")
 
                 STAT_PREFIX_MAP = {
-                    # Canonical market codes
                     "PTS": "pts",
                     "REB": "reb",
                     "AST": "ast",
                     "STL": "stl",
                     "BLK": "blk",
+                
+                    # Combo stats — IMPORTANT
                     "PRA": "pra",
-                    "PR":  "pts_reb",
-                    "PA":  "pts_ast",
-                    "RA":  "reb_ast",
+                    "PA":  "pa",
+                    "PR":  "pr",
+                    "RA":  "ra",
                 
                     # Text variants (defensive)
                     "POINTS": "pts",

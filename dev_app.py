@@ -3289,21 +3289,160 @@ def render_prop_cards(
             if expand_key not in st.session_state:
                 st.session_state[expand_key] = False
             
-            # ------------------------------------------------------
+            
+            # ======================================================
+            # DERIVED METRICS (BUILT FIRST — IMPORTANT)
+            # ======================================================
+            display_market = row.get("market")
+            
+            raw_stat = row.get("stat_type")
+            
+            STAT_PREFIX_MAP = {
+                "PTS": "pts",
+                "REB": "reb",
+                "AST": "ast",
+                "STL": "stl",
+                "BLK": "blk",
+                "PRA": "pra",
+                "PA":  "pa",
+                "PR":  "pr",
+                "RA":  "ra",
+                "POINTS": "pts",
+                "REBOUNDS": "reb",
+                "ASSISTS": "ast",
+                "STEALS": "stl",
+                "BLOCKS": "blk",
+            }
+            
+            stat_prefix = STAT_PREFIX_MAP.get(
+                str(raw_stat).strip().upper()
+                if raw_stat is not None
+                else None
+            )
+            
+            try:
+                line_val = float(row.get("line"))
+            except Exception:
+                line_val = None
+            
+            l5_avg  = get_stat_avg(row, stat_prefix, 5)
+            l10_avg = get_stat_avg(row, stat_prefix, 10)
+            l20_avg = get_stat_avg(row, stat_prefix, 20)
+            
+            delta_vs_line = (
+                (l10_avg - line_val)
+                if l10_avg is not None and line_val is not None
+                else None
+            )
+            
+            confidence_score, confidence_level = compute_confidence(
+                hit_rate_l10=row.get("hit_rate_last10"),
+                delta_vs_line=delta_vs_line,
+                opp_rank=row.get("opp_rank"),
+            )
+            
+            CONF_COLORS = {
+                "Strong": "#22c55e",
+                "Medium": "#eab308",
+                "Light":  "#60a5fa",
+            }
+            conf_color = CONF_COLORS.get(confidence_level, "#9ca3af")
+            
+            est_minutes = row.get("est_minutes")
+            l5_min_avg = row.get("l5_min_avg")
+            
+            minutes_delta = (
+                est_minutes - l5_min_avg
+                if est_minutes is not None and l5_min_avg is not None
+                else None
+            )
+            
+            
+            # ======================================================
+            # WOWY / INJURY LINES (BUILT FIRST)
+            # ======================================================
+            injury_lines = []
+            
+            stat_type = row.get("stat_type")
+            wowy_col = WOWY_MARKET_MAP.get(stat_type)
+            wowy_breakdown = row.get("breakdown")
+            
+            if wowy_col and isinstance(wowy_breakdown, str) and wowy_breakdown.strip():
+                blocks = [b.strip() for b in wowy_breakdown.split(";") if b.strip()]
+            
+                for block in blocks:
+                    if "→" not in block:
+                        continue
+            
+                    name_part, stats_part = block.split("→", 1)
+                    stats = [s.strip() for s in stats_part.split(",") if s.strip()]
+                    matched = [s for s in stats if s.startswith(f"{stat_type}=")]
+            
+                    if not matched:
+                        continue
+            
+                    injury_lines.extend([
+                        f"<div style='margin-top:6px; font-weight:800; font-size:0.8rem;'>"
+                        f"{name_part.strip()} (Out)</div>",
+                        f"<div style='font-size:0.74rem; padding-left:8px; color:#cbd5e1;'>"
+                        f"{matched[0]}</div>",
+                    ])
+            
+            
+            # ======================================================
+            # BUILD EXPANDED HTML (ALWAYS)
+            # ======================================================
+            expanded_lines = [
+                f"<div style='padding:12px; margin-top:-8px; border-radius:12px;"
+                f"background:rgba(255,255,255,0.05);"
+                f"border:1px solid rgba(255,255,255,0.12);'>",
+            
+                f"<div style='display:flex; justify-content:space-between; "
+                f"font-size:0.78rem; margin-bottom:6px;'>",
+                f"<div>L5: {_fmt1(l5_avg)}</div>",
+                f"<div>L10: {_fmt1(l10_avg)}</div>",
+                f"<div>L20: {_fmt1(l20_avg)}</div>",
+                f"</div>",
+            
+                f"<div style='display:flex; justify-content:space-between; "
+                f"font-size:0.8rem; margin-bottom:6px;'>",
+                f"<div>Δ Line: {_fmt_signed1(delta_vs_line)}</div>",
+                f"<div style='font-weight:800; color:{conf_color};'>"
+                f"Confidence: {confidence_level} ({confidence_score})</div>",
+                f"</div>",
+            
+                f"<div style='display:flex; justify-content:space-between; "
+                f"font-size:0.78rem; margin-bottom:8px;'>",
+                f"<div>Proj Min: {_fmt1(est_minutes)}</div>",
+                f"<div>Δ Min (L5): {_fmt_signed1(minutes_delta)}</div>",
+                f"</div>",
+            
+                f"<div style='font-size:0.82rem; font-weight:800; margin-bottom:4px;'>"
+                f"Injured Teammates (WOWY Impact)</div>",
+            ]
+            
+            if injury_lines:
+                expanded_lines.extend(injury_lines)
+            else:
+                expanded_lines.append(
+                    f"<div style='font-size:0.75rem; color:#9ca3af;'>"
+                    f"No impactful teammate injuries</div>"
+                )
+            
+            expanded_lines.append("</div>")
+            expanded_html = "\n".join(expanded_lines)
+            
+            
+            # ======================================================
             # CARD + TAP OVERLAY (ORDER MATTERS)
-            # ------------------------------------------------------
+            # ======================================================
             with st.container():
             
-                # 1️⃣ Render the card FIRST
+                # Render card visually
                 st.markdown(card_html, unsafe_allow_html=True)
             
-                # 2️⃣ Invisible button OVER the card (pulled upward)
-                st.markdown(
-                    """
-                    <div style="margin-top:-190px;">
-                    """,
-                    unsafe_allow_html=True,
-                )
+                # Invisible tap overlay
+                st.markdown("<div style='margin-top:-190px;'>", unsafe_allow_html=True)
             
                 st.button(
                     "",
@@ -3315,189 +3454,11 @@ def render_prop_cards(
             
                 st.markdown("</div>", unsafe_allow_html=True)
             
-            # ------------------------------------------------------
-            # EXPANDED SECTION
-            # ------------------------------------------------------
+            
+            # ======================================================
+            # EXPANDED SECTION (RENDER ONLY)
+            # ======================================================
             if st.session_state.get(expand_key, False):
-                st.markdown(expanded_html, unsafe_allow_html=True)
-
-                # ------------------------
-                # Derived metrics (safe)
-                # ------------------------
-                display_market = row.get("market")  # pretty name
-
-                # ------------------------
-                # Market / stat prefix (canonical)
-                # ------------------------
-                raw_stat = row.get("stat_type")
-
-                STAT_PREFIX_MAP = {
-                    "PTS": "pts",
-                    "REB": "reb",
-                    "AST": "ast",
-                    "STL": "stl",
-                    "BLK": "blk",
-                
-                    # Combo stats — IMPORTANT
-                    "PRA": "pra",
-                    "PA":  "pa",
-                    "PR":  "pr",
-                    "RA":  "ra",
-                
-                    # Text variants (defensive)
-                    "POINTS": "pts",
-                    "REBOUNDS": "reb",
-                    "ASSISTS": "ast",
-                    "STEALS": "stl",
-                    "BLOCKS": "blk",
-                }
-                
-                stat_prefix = STAT_PREFIX_MAP.get(
-                    str(raw_stat).strip().upper()
-                    if raw_stat is not None
-                    else None
-                )
-                
-                line_val = row.get("line")
-                try:
-                    line_val = float(line_val) if line_val is not None else None
-                except Exception:
-                    line_val = None
-                
-                # ------------------------
-                # L5 / L10 / L20 averages (SCALAR)
-                # ------------------------
-                l5_avg  = get_stat_avg(row, stat_prefix, 5)
-                l10_avg = get_stat_avg(row, stat_prefix, 10)
-                l20_avg = get_stat_avg(row, stat_prefix, 20)
-
-                # -----------------------------
-                # Delta vs line
-                # -----------------------------
-                delta_vs_line = (
-                    (l10_avg - line_val)
-                    if l10_avg is not None and line_val is not None
-                    else None
-                )
-                
-                # -----------------------------
-                # Confidence (Strong / Medium / Light)
-                # -----------------------------
-                confidence_score, confidence_level = compute_confidence(
-                    hit_rate_l10=row.get("hit_rate_last10"),
-                    delta_vs_line=delta_vs_line,
-                    opp_rank=row.get("opp_rank"),
-                )
-                
-                CONF_COLORS = {
-                    "Strong": "#22c55e",
-                    "Medium": "#eab308",
-                    "Light":  "#60a5fa",
-                }
-                
-                conf_color = CONF_COLORS.get(confidence_level, "#9ca3af")
-
-                confidence_tooltip = (
-                    f"Confidence: {confidence_level} ({confidence_score})\n\n"
-                    f"L10 Hit Rate: {int(row.get('hit_rate_last10', 0) * 100)}%\n"
-                    f"L10 Avg vs Line: {round(delta_vs_line, 2) if delta_vs_line is not None else '—'}\n"
-                    f"Opponent Rank: {row.get('opp_rank', '—')}"
-                )
-                
-                cs = confidence_level  # or whatever variable you actually meant
-                
-                est_minutes = row.get("est_minutes")
-                l5_min_avg = row.get("l5_min_avg")
-
-                minutes_delta = (
-                    est_minutes - l5_min_avg
-                    if est_minutes is not None and l5_min_avg is not None
-                    else None
-                )
-
-                inj_rows = row.get("inj_rows") or []
-
-                # ------------------------
-                # Injured Teammates (WOWY) — market aware
-                # ------------------------
-                injury_lines = []
-
-                stat_type = row.get("stat_type")  # e.g. "REB", "PRA"
-                wowy_col = WOWY_MARKET_MAP.get(stat_type)
-
-                wowy_breakdown = row.get("breakdown")
-
-                if wowy_col and isinstance(wowy_breakdown, str) and wowy_breakdown.strip():
-
-                    blocks = [b.strip() for b in wowy_breakdown.split(";") if b.strip()]
-
-                    for block in blocks:
-                        if "→" not in block:
-                            continue
-
-                        name_part, stats_part = block.split("→", 1)
-
-                        # Find ONLY the stat that matches this card
-                        stats = [s.strip() for s in stats_part.split(",") if s.strip()]
-                        matched = [s for s in stats if s.startswith(f"{stat_type}=")]
-
-                        if not matched:
-                            continue  # nothing relevant for this market
-
-                        injury_lines.extend([
-                            f"<div style='margin-top:6px; font-weight:800; font-size:0.8rem;'>"
-                            f"{name_part.strip()} (Out)</div>",
-                            f"<div style='font-size:0.74rem; padding-left:8px; color:#cbd5e1;'>"
-                            f"{matched[0]}</div>",
-                        ])
-
-
-                # ------------------------
-                # Expanded HTML
-                # ------------------------
-                expanded_lines = [
-                    f"<div style='padding:12px; margin-top:-8px; border-radius:12px;"
-                    f"background:rgba(255,255,255,0.05);"
-                    f"border:1px solid rgba(255,255,255,0.12);'>",
-                
-                    # Row: L5 / L10 / L20
-                    f"<div style='display:flex; justify-content:space-between; "
-                    f"font-size:0.78rem; margin-bottom:6px;'>",
-                    f"<div>L5: {_fmt1(l5_avg)}</div>",
-                    f"<div>L10: {_fmt1(l10_avg)}</div>",
-                    f"<div>L20: {_fmt1(l20_avg)}</div>",
-                    f"</div>",
-                
-                    # Row: Delta + Confidence
-                    f"<div style='display:flex; justify-content:space-between; "
-                    f"font-size:0.8rem; margin-bottom:6px;'>",
-                    f"<div>Δ Line: {_fmt_signed1(delta_vs_line)}</div>",
-                    f"<div style='font-weight:800; color:{conf_color};'>"
-                    f"Confidence: {confidence_level} ({confidence_score})</div>",
-                    f"</div>",
-                
-                    # Row: Minutes
-                    f"<div style='display:flex; justify-content:space-between; "
-                    f"font-size:0.78rem; margin-bottom:8px;'>",
-                    f"<div>Proj Min: {_fmt1(est_minutes)}</div>",
-                    f"<div>Δ Min (L5): {_fmt_signed1(minutes_delta)}</div>",
-                    f"</div>",
-                
-                    # Injuries header
-                    f"<div style='font-size:0.82rem; font-weight:800; margin-bottom:4px;'>"
-                    f"Injured Teammates (WOWY Impact)</div>",
-                ]
-                if injury_lines:
-                    expanded_lines.extend(injury_lines)
-                else:
-                    expanded_lines.append(
-                        f"<div style='font-size:0.75rem; color:#9ca3af;'>"
-                        f"No impactful teammate injuries</div>"
-                    )
-                    
-                expanded_lines.append(f"</div>")
-
-                expanded_html = "\n".join(expanded_lines)
                 st.markdown(expanded_html, unsafe_allow_html=True)
 
     # Close scroll wrapper

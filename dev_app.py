@@ -3340,24 +3340,6 @@ def render_prop_cards(
                         f"No impactful teammate injuries</div>"
                     )
 
-                # Buttons
-                expanded_lines.extend([
-                    f"<div style='display:flex; justify-content:space-between; "
-                    f"gap:10px; margin-top:10px;'>",
-
-                    f"<div style='flex:1;'>",
-                    f"<a href='{trend_href}' "
-                    f"style='display:block; text-align:center; padding:8px 10px;"
-                    f"border-radius:10px; background:rgba(59,130,246,0.15);"
-                    f"font-size:0.8rem; font-weight:800; color:#93c5fd; "
-                    f"text-decoration:none;'>"
-                    f"View Trend Chart</a>",
-                    f"</div>",
-
-                    f"</div>",
-                    f"</div>",
-                ])
-
                 expanded_html = "\n".join(expanded_lines)
                 st.markdown(expanded_html, unsafe_allow_html=True)
 

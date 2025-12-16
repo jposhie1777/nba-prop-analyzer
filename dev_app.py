@@ -1444,6 +1444,21 @@ def _confidence_index(
 
     return int(round(max(0.0, min(100.0, base))))
 
+# ======================================================
+# WOWY market → delta column mapping
+# ======================================================
+WOWY_MARKET_MAP = {
+    "PTS": "pts_delta",
+    "REB": "reb_delta",
+    "AST": "ast_delta",
+    "STL": "stl_delta",
+    "BLK": "blk_delta",
+
+    "PRA": "pra_delta",
+    "PR": "pts_reb_delta",
+    "PA": "pts_ast_delta",
+    "RA": "reb_ast_delta",
+}
 
 def fmt(
     val,

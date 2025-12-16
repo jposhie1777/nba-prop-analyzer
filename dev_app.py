@@ -3281,6 +3281,12 @@ def render_prop_cards(
                 if stat_prefix in STAT_PREFIX_MAP:
                     stat_prefix = STAT_PREFIX_MAP[stat_prefix]
                 
+                line_val = row.get("line")
+                try:
+                    line_val = float(line_val) if line_val is not None else None
+                except Exception:
+                    line_val = None
+                
                 l5_vals  = row.get(f"{stat_prefix}_last5_list") or []
                 l10_vals = row.get(f"{stat_prefix}_last10_list") or []
                 l20_vals = row.get(f"{stat_prefix}_last20_list") or []

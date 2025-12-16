@@ -3270,6 +3270,10 @@ def render_prop_cards(
                 l10_vals = row.get(f"{stat_prefix}_last10_list") if stat_prefix else []
                 l20_vals = row.get(f"{stat_prefix}_last20_list") if stat_prefix else []
                 
+                st.write("DEBUG market:", market)
+                st.write("DEBUG prefix:", stat_prefix)
+                st.write("DEBUG l10:", l10_vals)
+                
                 l5_avg = _avg_last(l5_vals)
                 l10_avg = _avg_last(l10_vals)
                 l20_avg = _avg_last(l20_vals)

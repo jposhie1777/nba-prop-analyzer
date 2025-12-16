@@ -3346,23 +3346,45 @@ def render_prop_cards(
                 inj_rows = row.get("inj_rows") or []
 
                 # ------------------------
-                # Injury rows
+                # Injured Teammates (WOWY)
                 # ------------------------
                 injury_lines = []
-
+                
+                # --- Structured injury rows (if present)
+                inj_rows = row.get("inj_rows") or []
+                
                 for r in inj_rows:
                     injury_lines.append(
                         f"<div style='display:flex; justify-content:space-between; font-size:0.78rem;'>"
-                    )
-                    injury_lines.append(
-                        f"<div>{r['name']} ({r['status']})</div>"
-                    )
-                    injury_lines.append(
-                        f"<div>{_fmt_signed1(r['impact'])}</div>"
-                    )
-                    injury_lines.append(
+                        f"<div>{r.get('name', '—')} ({r.get('status', '—')})</div>"
+                        f"<div>{_fmt_signed1(r.get('impact'))}</div>"
                         f"</div>"
                     )
+                
+                # --- WOWY breakdown string from BigQuery
+                wowy_breakdown = row.get("breakdown")
+                
+                if isinstance(wowy_breakdown, str) and wowy_breakdown.strip():
+                    blocks = [b.strip() for b in wowy_breakdown.split(";") if b.strip()]
+                
+                    for block in blocks:
+                        if "→" not in block:
+                            continue
+                
+                        name_part, stats_part = block.split("→", 1)
+                
+                        injury_lines.append(
+                            f"<div style='margin-top:6px; font-weight:800; font-size:0.78rem;'>"
+                            f"{name_part.strip()}</div>"
+                        )
+                
+                        stats = [s.strip() for s in stats_part.split(",") if s.strip()]
+                
+                        for s in stats:
+                            injury_lines.append(
+                                f"<div style='font-size:0.75rem; margin-left:10px; color:#9ca3af;'>"
+                                f"{s}</div>"
+                            )
 
                 # ------------------------
                 # Expanded HTML
@@ -3398,6 +3420,13 @@ def render_prop_cards(
                     # Injuries header
                     f"<div style='font-size:0.82rem; font-weight:800; margin-bottom:4px;'>"
                     f"Injured Teammates (WOWY Impact)</div>",
+                    if injury_lines:
+                        expanded_lines.extend(injury_lines)
+                    else:
+                        expanded_lines.append(
+                            f"<div style='font-size:0.75rem; color:#9ca3af;'>"
+                            f"No impactful teammate injuries</div>"
+                        )
                 ]
 
                 if injury_lines:

@@ -1104,7 +1104,20 @@ components.html("""
 </style>
 """, height=0)
 
-
+st.markdown(
+    """
+    <style>
+    /* Invisible full-card tap buttons */
+    div[data-testid="stButton"] > button {
+        height: 190px;
+        opacity: 0;
+        padding: 0;
+        margin: 0;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ------------------------------------------------------
 # AG-GRID MOBILE FIX (separate block)

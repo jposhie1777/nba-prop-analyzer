@@ -1541,8 +1541,17 @@ def build_tags_html(tags):
         )
 
     return "".join(html_parts)
+    
+STAT_PREFIX_MAP = {
+    "points": "pts",
+    "rebounds": "reb",
+    "assists": "ast",
+    "steals": "stl",
+    "blocks": "blk",
+}
 
-
+if stat_prefix in STAT_PREFIX_MAP:
+    stat_prefix = STAT_PREFIX_MAP[stat_prefix]
 # ------------------------------------------------------
 # LOGO LOADERS
 # ------------------------------------------------------
@@ -3263,8 +3272,9 @@ def render_prop_cards(
                 # ------------------------
                 # Derived metrics (safe)
                 # ------------------------
-                market = row.get("market_lower")
-                stat_prefix = market_to_prefix(market)
+                display_market = row.get("market")  # pretty name
+                raw_stat = row.get("stat_type")
+                stat_prefix = (str(raw_stat).strip().lower() if raw_stat else None)
                 
                 l5_vals  = row.get(f"{stat_prefix}_last5_list") if stat_prefix else []
                 l10_vals = row.get(f"{stat_prefix}_last10_list") if stat_prefix else []

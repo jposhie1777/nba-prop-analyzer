@@ -3273,22 +3273,25 @@ def render_prop_cards(
                 # Derived metrics (safe)
                 # ------------------------
                 display_market = row.get("market")  # pretty name
+
                 # ------------------------
-                # Market / stat prefix
+                # Market / stat prefix (canonical)
                 # ------------------------
-                raw_stat = row.get("stat_type")  # e.g. "PA", "REB", "PTS", "PRA"
-                stat_prefix = str(raw_stat).strip().lower() if raw_stat else None
+                raw_stat = row.get("stat_type")  # "PTS", "REB", "AST", "PA", "PR", "RA", "PRA"
                 
                 STAT_PREFIX_MAP = {
-                    "points": "pts",
-                    "rebounds": "reb",
-                    "assists": "ast",
-                    "steals": "stl",
-                    "blocks": "blk",
+                    "PTS": "pts",
+                    "REB": "reb",
+                    "AST": "ast",
+                    "STL": "stl",
+                    "BLK": "blk",
+                    "PRA": "pra",
+                    "PR":  "pts_reb",
+                    "PA":  "pts_ast",
+                    "RA":  "reb_ast",
                 }
                 
-                if stat_prefix in STAT_PREFIX_MAP:
-                    stat_prefix = STAT_PREFIX_MAP[stat_prefix]
+                stat_prefix = STAT_PREFIX_MAP.get(str(raw_stat).upper())
                 
                 line_val = row.get("line")
                 try:

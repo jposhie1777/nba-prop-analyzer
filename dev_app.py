@@ -3345,21 +3345,15 @@ def render_prop_cards(
                 # ------------------------
                 injury_lines = []
                 
-                # --- Structured injury rows (if present)
-                inj_rows = row.get("inj_rows") or []
-                
-                for r in inj_rows:
-                    injury_lines.append(
-                        f"<div style='display:flex; justify-content:space-between; font-size:0.78rem;'>"
-                        f"<div>{r.get('name', '—')} ({r.get('status', '—')})</div>"
-                        f"<div>{_fmt_signed1(r.get('impact'))}</div>"
-                        f"</div>"
-                    )
-                
-                # --- WOWY breakdown string from BigQuery
                 wowy_breakdown = row.get("breakdown")
                 
+                # DEBUG (temporary – remove later)
+                st.caption(f"DEBUG breakdown raw: {wowy_breakdown}")
+                
+                # BigQuery NULLs come through as NaN (float)
                 if isinstance(wowy_breakdown, str) and wowy_breakdown.strip():
+                
+                    # Split on semicolon between players
                     blocks = [b.strip() for b in wowy_breakdown.split(";") if b.strip()]
                 
                     for block in blocks:
@@ -3368,16 +3362,17 @@ def render_prop_cards(
                 
                         name_part, stats_part = block.split("→", 1)
                 
+                        # Player header
                         injury_lines.append(
-                            f"<div style='margin-top:6px; font-weight:800; font-size:0.78rem;'>"
+                            f"<div style='margin-top:6px; font-weight:800; font-size:0.8rem;'>"
                             f"{name_part.strip()}</div>"
                         )
                 
+                        # Individual stat impacts
                         stats = [s.strip() for s in stats_part.split(",") if s.strip()]
-                
                         for s in stats:
                             injury_lines.append(
-                                f"<div style='font-size:0.75rem; margin-left:10px; color:#9ca3af;'>"
+                                f"<div style='font-size:0.74rem; padding-left:8px; color:#cbd5e1;'>"
                                 f"{s}</div>"
                             )
 

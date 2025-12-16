@@ -3341,40 +3341,39 @@ def render_prop_cards(
                 inj_rows = row.get("inj_rows") or []
 
                 # ------------------------
-                # Injured Teammates (WOWY)
+                # Injured Teammates (WOWY) — market aware
                 # ------------------------
                 injury_lines = []
-                
+
+                stat_type = row.get("stat_type")  # e.g. "REB", "PRA"
+                wowy_col = WOWY_MARKET_MAP.get(stat_type)
+
                 wowy_breakdown = row.get("breakdown")
-                
-                # DEBUG (temporary – remove later)
-                st.caption(f"DEBUG breakdown raw: {wowy_breakdown}")
-                
-                # BigQuery NULLs come through as NaN (float)
-                if isinstance(wowy_breakdown, str) and wowy_breakdown.strip():
-                
-                    # Split on semicolon between players
+
+                if wowy_col and isinstance(wowy_breakdown, str) and wowy_breakdown.strip():
+
                     blocks = [b.strip() for b in wowy_breakdown.split(";") if b.strip()]
-                
+
                     for block in blocks:
                         if "→" not in block:
                             continue
-                
+
                         name_part, stats_part = block.split("→", 1)
-                
-                        # Player header
-                        injury_lines.append(
-                            f"<div style='margin-top:6px; font-weight:800; font-size:0.8rem;'>"
-                            f"{name_part.strip()}</div>"
-                        )
-                
-                        # Individual stat impacts
+
+                        # Find ONLY the stat that matches this card
                         stats = [s.strip() for s in stats_part.split(",") if s.strip()]
-                        for s in stats:
-                            injury_lines.append(
-                                f"<div style='font-size:0.74rem; padding-left:8px; color:#cbd5e1;'>"
-                                f"{s}</div>"
-                            )
+                        matched = [s for s in stats if s.startswith(f"{stat_type}=")]
+
+                        if not matched:
+                            continue  # nothing relevant for this market
+
+                        injury_lines.extend([
+                            f"<div style='margin-top:6px; font-weight:800; font-size:0.8rem;'>"
+                            f"{name_part.strip()} (Out)</div>",
+                            f"<div style='font-size:0.74rem; padding-left:8px; color:#cbd5e1;'>"
+                            f"{matched[0]}</div>",
+                        ])
+
 
                 # ------------------------
                 # Expanded HTML

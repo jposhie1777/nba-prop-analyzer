@@ -3057,6 +3057,24 @@ def render_prop_cards(
 
     cols = st.columns(4)
 
+    # ------------------------------------------------------
+    # Helper: stat-aware averages with safe fallback
+    # ------------------------------------------------------
+    def get_stat_avg(row, stat_prefix, window):
+        """
+        window = 5 | 10 | 20
+        """
+        if stat_prefix:
+            val = row.get(f"{stat_prefix}_last{window}")
+            if val is not None:
+                return val
+
+        # Fallbacks (generic, known-good)
+        if window == 10:
+            return get_l10_avg(row)
+
+        return None
+
     # ============================================================
     #                          CARD LOOP
     # ============================================================
@@ -3314,9 +3332,9 @@ def render_prop_cards(
                 # ------------------------
                 # L5 / L10 / L20 averages (SCALAR)
                 # ------------------------
-                l5_avg  = row.get(f"{stat_prefix}_last5")
-                l10_avg = row.get(f"{stat_prefix}_last10")
-                l20_avg = row.get(f"{stat_prefix}_last20")
+                l5_avg  = get_stat_avg(row, stat_prefix, 5)
+                l10_avg = get_stat_avg(row, stat_prefix, 10)
+                l20_avg = get_stat_avg(row, stat_prefix, 20)
 
                 # -----------------------------
                 # Delta vs line

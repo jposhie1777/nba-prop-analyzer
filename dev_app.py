@@ -3393,7 +3393,7 @@ def render_prop_cards(
                     f"<div style='padding:12px; margin-top:-8px; border-radius:12px;"
                     f"background:rgba(255,255,255,0.05);"
                     f"border:1px solid rgba(255,255,255,0.12);'>",
-
+                
                     # Row: L5 / L10 / L20
                     f"<div style='display:flex; justify-content:space-between; "
                     f"font-size:0.78rem; margin-bottom:6px;'>",
@@ -3401,7 +3401,7 @@ def render_prop_cards(
                     f"<div>L10: {_fmt1(l10_avg)}</div>",
                     f"<div>L20: {_fmt1(l20_avg)}</div>",
                     f"</div>",
-
+                
                     # Row: Delta + Confidence
                     f"<div style='display:flex; justify-content:space-between; "
                     f"font-size:0.8rem; margin-bottom:6px;'>",
@@ -3409,26 +3409,18 @@ def render_prop_cards(
                     f"<div style='font-weight:800; color:{conf_color};'>"
                     f"Confidence: {confidence_level} ({confidence_score})</div>",
                     f"</div>",
-
+                
                     # Row: Minutes
                     f"<div style='display:flex; justify-content:space-between; "
                     f"font-size:0.78rem; margin-bottom:8px;'>",
                     f"<div>Proj Min: {_fmt1(est_minutes)}</div>",
                     f"<div>Δ Min (L5): {_fmt_signed1(minutes_delta)}</div>",
                     f"</div>",
-
+                
                     # Injuries header
                     f"<div style='font-size:0.82rem; font-weight:800; margin-bottom:4px;'>"
                     f"Injured Teammates (WOWY Impact)</div>",
-                    if injury_lines:
-                        expanded_lines.extend(injury_lines)
-                    else:
-                        expanded_lines.append(
-                            f"<div style='font-size:0.75rem; color:#9ca3af;'>"
-                            f"No impactful teammate injuries</div>"
-                        )
                 ]
-
                 if injury_lines:
                     expanded_lines.extend(injury_lines)
                 else:
@@ -3436,10 +3428,11 @@ def render_prop_cards(
                         f"<div style='font-size:0.75rem; color:#9ca3af;'>"
                         f"No impactful teammate injuries</div>"
                     )
+                    
+                expanded_lines.append(f"</div>")
 
                 expanded_html = "\n".join(expanded_lines)
                 st.markdown(expanded_html, unsafe_allow_html=True)
-
 
     # Close scroll wrapper
     st.markdown("</div>", unsafe_allow_html=True)

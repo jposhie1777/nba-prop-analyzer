@@ -3281,9 +3281,9 @@ def render_prop_cards(
                 if stat_prefix in STAT_PREFIX_MAP:
                     stat_prefix = STAT_PREFIX_MAP[stat_prefix]
                 
-                l5_vals  = row.get(f"{stat_prefix}_last5_list") if stat_prefix else []
-                l10_vals = row.get(f"{stat_prefix}_last10_list") if stat_prefix else []
-                l20_vals = row.get(f"{stat_prefix}_last20_list") if stat_prefix else []
+                l5_vals  = row.get(f"{stat_prefix}_last5_list") or []
+                l10_vals = row.get(f"{stat_prefix}_last10_list") or []
+                l20_vals = row.get(f"{stat_prefix}_last20_list") or []
                 
                 st.write("DEBUG stat_type:", raw_stat)
                 st.write("DEBUG stat_prefix:", stat_prefix)

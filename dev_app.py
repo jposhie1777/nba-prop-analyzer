@@ -2614,7 +2614,36 @@ def build_sparkline_bars_hitmiss(
         {''.join(date_labels)}
     </svg>
     """
+    
+def market_to_prefix(market: str | None) -> str | None:
+    if not market:
+        return None
 
+    m = market.lower().replace(" ", "").replace("_", "").replace("-", "")
+
+    # Singles
+    if m in ("pts", "points"):
+        return "pts"
+    if m in ("reb", "rebs", "rebounds"):
+        return "reb"
+    if m in ("ast", "asts", "assists"):
+        return "ast"
+    if m in ("stl", "stls", "steals"):
+        return "stl"
+    if m in ("blk", "blks", "blocks"):
+        return "blk"
+
+    # Combos
+    if m in ("ptsreb", "pointsrebounds", "pr"):
+        return "pr"
+    if m in ("ptsast", "pointsassists", "pa"):
+        return "pa"
+    if m in ("rebast", "reboundsassists", "ra"):
+        return "ra"
+    if m in ("ptsrebast", "pointsreboundsassists", "pra"):
+        return "pra"
+
+    return None
 
 def normalize_bookmaker(raw: str) -> str:
     if not raw:
@@ -2746,6 +2775,8 @@ def build_injury_lookup():
 
 # Build lookup at load
 build_injury_lookup()
+
+
 
 def pretty_game_time(dt):
     """
@@ -3233,7 +3264,7 @@ def render_prop_cards(
                 # Derived metrics (safe)
                 # ------------------------
                 market = row.get("market_lower")
-                stat_prefix = MARKET_TO_PREFIX.get(market)
+                stat_prefix = market_to_prefix(market)
                 
                 l5_vals  = row.get(f"{stat_prefix}_last5_list") if stat_prefix else []
                 l10_vals = row.get(f"{stat_prefix}_last10_list") if stat_prefix else []

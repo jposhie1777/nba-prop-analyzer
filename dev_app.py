@@ -3460,25 +3460,22 @@ def render_prop_cards(
             
             
             # ======================================================
-            # CARD + TAP OVERLAY (ORDER MATTERS)
+            # CARD + TAP OVERLAY (CORRECT — ABSOLUTE)
             # ======================================================
-            with st.container():
+            st.markdown('<div class="card-wrapper">', unsafe_allow_html=True)
             
-                # Render card visually
-                st.markdown(card_html, unsafe_allow_html=True)
+            # Card visual
+            st.markdown(card_html, unsafe_allow_html=True)
             
-                # Invisible tap overlay
-                st.markdown("<div style='margin-top:-190px;'>", unsafe_allow_html=True)
-            
-                st.button(
-                    "",
-                    key=tap_key,
-                    on_click=toggle_expander,
-                    args=(expand_key,),
-                    use_container_width=True,
-                )
-            
-                st.markdown("</div>", unsafe_allow_html=True)
+            # Full-card invisible tap overlay
+            st.markdown('<div class="card-overlay">', unsafe_allow_html=True)
+            st.button(
+                "",
+                key=tap_key,
+                on_click=toggle_expander,
+                args=(expand_key,),
+            )
+            st.markdown("</div></div>", unsafe_allow_html=True)
             
             
             # ======================================================

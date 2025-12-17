@@ -1114,46 +1114,6 @@ button[kind="secondary"] {
 </style>
 """, unsafe_allow_html=True)
 
-
-st.markdown(
-    """
-    <style>
-    /* Move Save Bet button into bottom-right of prop card */
-    div[data-testid="stButton"] > button {
-        position: relative;
-        top: -110px;          /* pulls button upward into card */
-        left: calc(100% - 140px);
-        background: rgba(30, 41, 59, 0.9);
-        color: #e5e7eb;
-        border-radius: 10px;
-        border: 1px solid rgba(148,163,184,0.35);
-        font-size: 0.78rem;
-        padding: 6px 12px;
-        box-shadow: 0 6px 16px rgba(0,0,0,0.45);
-    }
-
-    div[data-testid="stButton"] > button:hover {
-        background: rgba(34,197,94,0.15);
-        border-color: rgba(34,197,94,0.55);
-        color: #22c55e;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-st.markdown(
-    """
-    <style>
-    div[data-testid="column"] > div {
-        margin-top: -6px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-
 # ------------------------------------------------------
 # AG-GRID MOBILE FIX (separate block)
 # ------------------------------------------------------

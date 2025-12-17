@@ -1104,6 +1104,15 @@ components.html("""
 </style>
 """, height=0)
 
+st.markdown("""
+<style>
+button[kind="secondary"] {
+    border-radius: 0 0 14px 14px;
+    font-weight: 700;
+    font-size: 0.85rem;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ------------------------------------------------------
 # AG-GRID MOBILE FIX (separate block)

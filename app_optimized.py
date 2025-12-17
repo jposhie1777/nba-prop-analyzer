@@ -70,30 +70,43 @@ AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE", "")
 # Render PostgreSQL
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 
-missing_env = []
+# ------------------------------------------------------
+# REQUIRED ENV VARS (app cannot run without these)
+# ------------------------------------------------------
+missing_required = []
 if not PROJECT_ID:
-    missing_env.append("PROJECT_ID")
+    missing_required.append("PROJECT_ID")
 if not SERVICE_JSON:
-    missing_env.append("GCP_SERVICE_ACCOUNT")
+    missing_required.append("GCP_SERVICE_ACCOUNT")
 if not DATABASE_URL:
-    missing_env.append("DATABASE_URL")
-if not AUTH0_DOMAIN:
-    missing_env.append("AUTH0_DOMAIN")
-if not AUTH0_CLIENT_ID:
-    missing_env.append("AUTH0_CLIENT_ID")
-if not AUTH0_CLIENT_SECRET:
-    missing_env.append("AUTH0_CLIENT_SECRET")
-if not AUTH0_REDIRECT_URI:
-    missing_env.append("AUTH0_REDIRECT_URI")
-if not AUTH0_AUDIENCE:
-    missing_env.append("AUTH0_AUDIENCE")
+    missing_required.append("DATABASE_URL")
 
-if missing_env:
+if missing_required:
     st.error(
-        "❌ Missing required environment variables:\n\n"
-        + "\n".join(f"- {m}" for m in missing_env)
+        "❌ Missing REQUIRED environment variables:\n\n"
+        + "\n".join(f"- {m}" for m in missing_required)
     )
     st.stop()
+
+# ------------------------------------------------------
+# OPTIONAL ENV VARS (Auth0 – not enabled yet)
+# ------------------------------------------------------
+missing_auth0 = []
+if not AUTH0_DOMAIN:
+    missing_auth0.append("AUTH0_DOMAIN")
+if not AUTH0_CLIENT_ID:
+    missing_auth0.append("AUTH0_CLIENT_ID")
+if not AUTH0_CLIENT_SECRET:
+    missing_auth0.append("AUTH0_CLIENT_SECRET")
+if not AUTH0_REDIRECT_URI:
+    missing_auth0.append("AUTH0_REDIRECT_URI")
+if not AUTH0_AUDIENCE:
+    missing_auth0.append("AUTH0_AUDIENCE")
+
+if missing_auth0:
+    st.sidebar.warning(
+        "Auth0 not fully configured (running in single-user mode)"
+    )
 
 
 

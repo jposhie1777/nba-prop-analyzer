@@ -1104,61 +1104,6 @@ components.html("""
 </style>
 """, height=0)
 
-st.markdown(
-    """
-    <style>
-    /* Invisible full-card tap buttons */
-    div[data-testid="stButton"] > button {
-        height: 190px;
-        opacity: 0;
-        padding: 0;
-        margin: 0;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-st.markdown(
-    """
-    <style>
-    .card-wrapper {
-        position: relative;
-        height: 190px;              /* MUST MATCH CARD HEIGHT */
-    }
-
-    .card-overlay {
-        position: absolute;
-        inset: 0;
-        z-index: 10;
-    }
-
-    .card-overlay button {
-        width: 100%;
-        height: 100%;
-        opacity: 0;
-        padding: 0;
-        margin: 0;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-st.markdown(
-    """
-    <style>
-    /* Turn Streamlit buttons into invisible card containers */
-    div[data-testid="stButton"] > button {
-        all: unset;
-        width: 100%;
-        cursor: pointer;
-        display: block;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
 
 # ------------------------------------------------------
 # AG-GRID MOBILE FIX (separate block)
@@ -3324,8 +3269,8 @@ def render_prop_cards(
                 f"{row.get('line')}_"
                 f"{row.get('game_id', '')}"
             )
+            
             expand_key = f"{key_base}_expand"
-            tap_key = f"{key_base}_tap"
             
             if expand_key not in st.session_state:
                 st.session_state[expand_key] = False
@@ -3335,7 +3280,6 @@ def render_prop_cards(
             # DERIVED METRICS (BUILT FIRST — IMPORTANT)
             # ======================================================
             display_market = row.get("market")
-            
             raw_stat = row.get("stat_type")
             
             STAT_PREFIX_MAP = {
@@ -3431,10 +3375,10 @@ def render_prop_cards(
             
             
             # ======================================================
-            # BUILD EXPANDED HTML (ALWAYS)
+            # BUILD EXPANDED HTML (ALWAYS BUILT)
             # ======================================================
             expanded_lines = [
-                f"<div style='padding:12px; margin-top:-8px; border-radius:12px;"
+                f"<div style='padding:12px; margin-top:8px; border-radius:12px;"
                 f"background:rgba(255,255,255,0.05);"
                 f"border:1px solid rgba(255,255,255,0.12);'>",
             
@@ -3475,29 +3419,31 @@ def render_prop_cards(
             
             
             # ======================================================
-            # CARD + TAP OVERLAY (ORDER MATTERS)
+            # CARD + ATTACHED EXPAND BUTTON
             # ======================================================
             with st.container():
             
-                # Render card visually
+                # Render card
                 st.markdown(card_html, unsafe_allow_html=True)
             
-                # Invisible tap overlay
-                st.markdown("<div style='margin-top:-190px;'>", unsafe_allow_html=True)
+                # Expand / collapse button
+                expand_label = (
+                    "Collapse ▴"
+                    if st.session_state.get(expand_key, False)
+                    else "Click to expand ▾"
+                )
             
                 st.button(
-                    "",
-                    key=tap_key,
+                    expand_label,
+                    key=f"{expand_key}_btn",
                     on_click=toggle_expander,
                     args=(expand_key,),
                     use_container_width=True,
                 )
             
-                st.markdown("</div>", unsafe_allow_html=True)
-            
             
             # ======================================================
-            # EXPANDED SECTION (RENDER ONLY)
+            # EXPANDED SECTION (RENDER ONLY WHEN OPEN)
             # ======================================================
             if st.session_state.get(expand_key, False):
                 st.markdown(expanded_html, unsafe_allow_html=True)

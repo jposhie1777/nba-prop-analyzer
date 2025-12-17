@@ -4662,448 +4662,449 @@ if sport == "NBA":
     # ------------------------------------------------------
     # 📊 PLAYER CONTEXT HUB — Combines Minutes/Usage + Depth Chart + WOWY
     # ------------------------------------------------------
-    with tab4:
-
-        st.subheader("📊 Player Context Hub")
-
-        # Three subtabs that replace Tab 6, Tab 9, Tab 10
-        subA, subB, subC = st.tabs(
-            [
-                "⏱️ Minutes & Usage",
-                "📋 Depth Chart & Injuries",
-                "🔀 WOWY Analyzer",
-            ]
-        )
-
-        # ======================================================
-        # SUBTAB A — MINUTES & USAGE (Old Tab 6)
-        # ======================================================
-        with subA:
-
-            st.subheader("Minutes & Usage (WOWY + Role Context)")
-
-            if props_df.empty:
-                st.info("No props available for today.")
-            else:
-                mu_df = props_df.copy()
-
-                for c in ["est_minutes", "usage_bump_pct", "proj_diff_vs_line", "ev_last10"]:
-                    if c in mu_df.columns:
-                        mu_df[c] = pd.to_numeric(mu_df[c], errors="coerce")
-
-                c1, c2, c3 = st.columns(3)
-                with c1:
-                    min_minutes = st.slider(
-                        "Min Estimated Minutes",
-                        min_value=0,
-                        max_value=48,
-                        value=24,
-                        step=2,
-                    )
-                with c2:
-                    min_usage_bump = st.slider(
-                        "Min Usage Bump (%)",
-                        min_value=-20,
-                        max_value=60,
-                        value=5,
-                        step=1,
-                    )
-                with c3:
-                    min_proj_diff_mu = st.slider(
-                        "Min Projection vs Line (points)",
-                        min_value=-10.0,
-                        max_value=20.0,
-                        value=0.0,
-                        step=0.5,
-                    )
-
-                if "est_minutes" in mu_df.columns:
-                    mu_df = mu_df[mu_df["est_minutes"] >= min_minutes]
-
-                if "usage_bump_pct" in mu_df.columns:
-                    mu_df = mu_df[mu_df["usage_bump_pct"] >= min_usage_bump]
-
-                if "proj_diff_vs_line" in mu_df.columns:
-                    mu_df = mu_df[mu_df["proj_diff_vs_line"] >= min_proj_diff_mu]
-
-                mu_df["market_pretty"] = mu_df["market"].map(
-                    lambda m: MARKET_DISPLAY_MAP.get(m, m)
-                )
-
-                cols = [
-                    "player",
-                    "player_team",
-                    "market_pretty",
-                    "bet_type",
-                    "line",
-                    "price",
-                    "est_minutes",
-                    "usage_bump_pct",
-                    "proj_diff_vs_line",
-                    "ev_last10",
-                    "hit_rate_last10",
-                    "matchup_difficulty_score",
+    if False:
+        with tab4:
+    
+            st.subheader("📊 Player Context Hub")
+    
+            # Three subtabs that replace Tab 6, Tab 9, Tab 10
+            subA, subB, subC = st.tabs(
+                [
+                    "⏱️ Minutes & Usage",
+                    "📋 Depth Chart & Injuries",
+                    "🔀 WOWY Analyzer",
                 ]
-                cols = [c for c in cols if c in mu_df.columns]
-
-                if mu_df.empty:
-                    st.info("No props match the current minutes/usage filters.")
+            )
+    
+            # ======================================================
+            # SUBTAB A — MINUTES & USAGE (Old Tab 6)
+            # ======================================================
+            with subA:
+    
+                st.subheader("Minutes & Usage (WOWY + Role Context)")
+    
+                if props_df.empty:
+                    st.info("No props available for today.")
                 else:
-                    mu_df = mu_df.sort_values(
-                        by=[c for c in ["usage_bump_pct", "est_minutes", "proj_diff_vs_line"] if c in mu_df.columns],
-                        ascending=False,
+                    mu_df = props_df.copy()
+    
+                    for c in ["est_minutes", "usage_bump_pct", "proj_diff_vs_line", "ev_last10"]:
+                        if c in mu_df.columns:
+                            mu_df[c] = pd.to_numeric(mu_df[c], errors="coerce")
+    
+                    c1, c2, c3 = st.columns(3)
+                    with c1:
+                        min_minutes = st.slider(
+                            "Min Estimated Minutes",
+                            min_value=0,
+                            max_value=48,
+                            value=24,
+                            step=2,
+                        )
+                    with c2:
+                        min_usage_bump = st.slider(
+                            "Min Usage Bump (%)",
+                            min_value=-20,
+                            max_value=60,
+                            value=5,
+                            step=1,
+                        )
+                    with c3:
+                        min_proj_diff_mu = st.slider(
+                            "Min Projection vs Line (points)",
+                            min_value=-10.0,
+                            max_value=20.0,
+                            value=0.0,
+                            step=0.5,
+                        )
+    
+                    if "est_minutes" in mu_df.columns:
+                        mu_df = mu_df[mu_df["est_minutes"] >= min_minutes]
+    
+                    if "usage_bump_pct" in mu_df.columns:
+                        mu_df = mu_df[mu_df["usage_bump_pct"] >= min_usage_bump]
+    
+                    if "proj_diff_vs_line" in mu_df.columns:
+                        mu_df = mu_df[mu_df["proj_diff_vs_line"] >= min_proj_diff_mu]
+    
+                    mu_df["market_pretty"] = mu_df["market"].map(
+                        lambda m: MARKET_DISPLAY_MAP.get(m, m)
                     )
-                    display_df = mu_df[cols].copy()
-
-                    if "price" in display_df.columns:
-                        display_df["price"] = display_df["price"].apply(format_moneyline)
-                    if "hit_rate_last10" in display_df.columns:
-                        display_df["hit_rate_last10"] = (display_df["hit_rate_last10"] * 100).round(1)
-
-                    st.dataframe(display_df, use_container_width=True, hide_index=True)
-
-
-        # ======================================================
-        # SUBTAB B — DEPTH CHART & INJURY REPORT (Old Tab 9)
-        # ======================================================
-        with subB:
-
-            st.subheader("Depth Chart & Injury Report")
-
-            # --------------------------------------------------------
-            # GLOBAL CSS — SPACIOUS CARD GRID + INJURY BADGE SUPPORT
-            # --------------------------------------------------------
-            st.markdown("""
-    <style>
-
-    .depth-card {
-        padding:18px 20px;
-        margin-bottom:20px;
-        border-radius:20px;
-        border:1px solid rgba(148,163,184,0.35);
-        background: radial-gradient(circle at top left, rgba(30,41,59,1), rgba(15,23,42,0.92));
-        box-shadow: 0 22px 55px rgba(15,23,42,0.90);
-        transition: transform .18s ease-out, box-shadow .18s ease-out, border-color .18s ease-out;
-    }
-
-    .depth-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 30px 70px rgba(15,23,42,1);
-        border-color: #3b82f6;
-    }
-
-    .role-pill {
-        font-size: 0.70rem;
-        padding: 4px 10px;
-        border-radius: 999px;
-        display: inline-block;
-        font-weight: 600;
-        color: white;
-        margin-top: 6px;
-    }
-
-    .injury-badge {
-        padding: 3px 10px;
-        border-radius: 999px;
-        font-size: 0.68rem;
-        font-weight: 700;
-        color: white;
-        margin-left: 6px;
-    }
-
-    .injury-card {
-        padding:18px 20px;
-        margin-bottom:22px;
-        border-radius:20px;
-        border:1px solid rgba(148,163,184,0.28);
-        background: radial-gradient(circle at 0 0, rgba(42,0,0,0.85), rgba(40,0,0,0.65));
-        box-shadow: 0 22px 55px rgba(15,23,42,0.95);
-        transition: transform .18s ease-out, box-shadow .18s ease-out;
-    }
-
-    .injury-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 32px 75px rgba(15,23,42,1);
-    }
-
-    .header-flex {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        margin-bottom: 1.6rem;
-    }
-
-    .position-header {
-        font-size: 1.2rem;
-        font-weight: 700;
-        color: #e5e7eb;
-        margin-bottom: 10px;
-        margin-top: 10px;
-    }
-
-    </style>
-    """, unsafe_allow_html=True)
-
-            # ----------------------------
-            # TEAM SELECTOR
-            # ----------------------------
-            teams_meta = (
-                depth_df[["team_number", "team_abbr", "team_name"]]
-                .drop_duplicates()
-                .sort_values("team_name")
-            )
-
-            team_labels = [f"{r.team_name} ({r.team_abbr})" for r in teams_meta.itertuples()]
-            label_to_meta = {label: row for label, row in zip(team_labels, teams_meta.itertuples())}
-
-            selected_label = st.selectbox("Select Team", team_labels)
-            team_row = label_to_meta[selected_label]
-
-            selected_team_number = int(team_row.team_number)
-            selected_abbr = team_row.team_abbr
-            selected_name = team_row.team_name
-
-            # Filter for selected team
-            team_depth = depth_df[depth_df["team_number"] == selected_team_number].copy()
-            team_injuries = injury_df[injury_df["team_abbrev"] == selected_abbr].copy()
-
-            # ----------------------------
-            # TEAM HEADER
-            # ----------------------------
-            logo = TEAM_LOGOS_BASE64.get(selected_abbr, "")
-            components.html(
-                f"<div class='header-flex'>"
-                f"<img src='{logo}' style='height:55px;border-radius:12px;'/>"
-                f"<div>"
-                f"<div style='font-size:1.55rem;font-weight:700;color:#e5e7eb;'>{selected_name}</div>"
-                f"<div style='font-size:0.9rem;color:#9ca3af;'>Depth chart & injury status</div>"
-                f"</div></div>",
-                height=90,
-                scrolling=False,
-            )
-
-            col_left, col_right = st.columns([1.6, 1.0])
-
-            # ------------------------------------------------------
-            # DEPTH CHART (LEFT)
-            # ------------------------------------------------------
-            with col_left:
-                st.markdown("## 🏀 Depth Chart")
-
-                pos_order = ["PG", "SG", "SF", "PF", "C", "G", "F"]
-                positions = sorted(
-                    team_depth["position"].unique(),
-                    key=lambda p: pos_order.index(p) if p in pos_order else 99
+    
+                    cols = [
+                        "player",
+                        "player_team",
+                        "market_pretty",
+                        "bet_type",
+                        "line",
+                        "price",
+                        "est_minutes",
+                        "usage_bump_pct",
+                        "proj_diff_vs_line",
+                        "ev_last10",
+                        "hit_rate_last10",
+                        "matchup_difficulty_score",
+                    ]
+                    cols = [c for c in cols if c in mu_df.columns]
+    
+                    if mu_df.empty:
+                        st.info("No props match the current minutes/usage filters.")
+                    else:
+                        mu_df = mu_df.sort_values(
+                            by=[c for c in ["usage_bump_pct", "est_minutes", "proj_diff_vs_line"] if c in mu_df.columns],
+                            ascending=False,
+                        )
+                        display_df = mu_df[cols].copy()
+    
+                        if "price" in display_df.columns:
+                            display_df["price"] = display_df["price"].apply(format_moneyline)
+                        if "hit_rate_last10" in display_df.columns:
+                            display_df["hit_rate_last10"] = (display_df["hit_rate_last10"] * 100).round(1)
+    
+                        st.dataframe(display_df, use_container_width=True, hide_index=True)
+    
+    
+            # ======================================================
+            # SUBTAB B — DEPTH CHART & INJURY REPORT (Old Tab 9)
+            # ======================================================
+            with subB:
+    
+                st.subheader("Depth Chart & Injury Report")
+    
+                # --------------------------------------------------------
+                # GLOBAL CSS — SPACIOUS CARD GRID + INJURY BADGE SUPPORT
+                # --------------------------------------------------------
+                st.markdown("""
+        <style>
+    
+        .depth-card {
+            padding:18px 20px;
+            margin-bottom:20px;
+            border-radius:20px;
+            border:1px solid rgba(148,163,184,0.35);
+            background: radial-gradient(circle at top left, rgba(30,41,59,1), rgba(15,23,42,0.92));
+            box-shadow: 0 22px 55px rgba(15,23,42,0.90);
+            transition: transform .18s ease-out, box-shadow .18s ease-out, border-color .18s ease-out;
+        }
+    
+        .depth-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 30px 70px rgba(15,23,42,1);
+            border-color: #3b82f6;
+        }
+    
+        .role-pill {
+            font-size: 0.70rem;
+            padding: 4px 10px;
+            border-radius: 999px;
+            display: inline-block;
+            font-weight: 600;
+            color: white;
+            margin-top: 6px;
+        }
+    
+        .injury-badge {
+            padding: 3px 10px;
+            border-radius: 999px;
+            font-size: 0.68rem;
+            font-weight: 700;
+            color: white;
+            margin-left: 6px;
+        }
+    
+        .injury-card {
+            padding:18px 20px;
+            margin-bottom:22px;
+            border-radius:20px;
+            border:1px solid rgba(148,163,184,0.28);
+            background: radial-gradient(circle at 0 0, rgba(42,0,0,0.85), rgba(40,0,0,0.65));
+            box-shadow: 0 22px 55px rgba(15,23,42,0.95);
+            transition: transform .18s ease-out, box-shadow .18s ease-out;
+        }
+    
+        .injury-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 32px 75px rgba(15,23,42,1);
+        }
+    
+        .header-flex {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 1.6rem;
+        }
+    
+        .position-header {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #e5e7eb;
+            margin-bottom: 10px;
+            margin-top: 10px;
+        }
+    
+        </style>
+        """, unsafe_allow_html=True)
+    
+                # ----------------------------
+                # TEAM SELECTOR
+                # ----------------------------
+                teams_meta = (
+                    depth_df[["team_number", "team_abbr", "team_name"]]
+                    .drop_duplicates()
+                    .sort_values("team_name")
                 )
-
-                pos_cols = st.columns(min(3, len(positions)))
-
-                for i, pos in enumerate(positions):
-                    with pos_cols[i % len(pos_cols)]:
-
-                        st.markdown(f"<div class='position-header'>{pos}</div>", unsafe_allow_html=True)
-
-                        rows = team_depth[team_depth["position"] == pos].sort_values("depth")
-
-                        for _, r in rows.iterrows():
-                            name = r["player"]
-                            role = r["role"]
-                            depth_val = r["depth"]
-
-                            # Lookup injury status
-                            inj_status = None
-                            injury_html = ""
-
-                            if not team_injuries.empty:
-                                norm_name = name.lower().replace("'", "").replace(".", "").replace("-", "").strip()
-
-                                for _, ir in team_injuries.iterrows():
-                                    n2 = f"{ir['first_name']} {ir['last_name']}".lower().replace("'", "").replace(".", "").replace("-", "").strip()
-                                    if n2 == norm_name:
-                                        inj_status = ir.get("status")
-                                        break
-
-                            if inj_status:
-                                s = inj_status.lower()
-                                if "out" in s:
-                                    badge_color = "background:#ef4444;"
-                                elif "question" in s or "doubt" in s:
-                                    badge_color = "background:#eab308;"
+    
+                team_labels = [f"{r.team_name} ({r.team_abbr})" for r in teams_meta.itertuples()]
+                label_to_meta = {label: row for label, row in zip(team_labels, teams_meta.itertuples())}
+    
+                selected_label = st.selectbox("Select Team", team_labels)
+                team_row = label_to_meta[selected_label]
+    
+                selected_team_number = int(team_row.team_number)
+                selected_abbr = team_row.team_abbr
+                selected_name = team_row.team_name
+    
+                # Filter for selected team
+                team_depth = depth_df[depth_df["team_number"] == selected_team_number].copy()
+                team_injuries = injury_df[injury_df["team_abbrev"] == selected_abbr].copy()
+    
+                # ----------------------------
+                # TEAM HEADER
+                # ----------------------------
+                logo = TEAM_LOGOS_BASE64.get(selected_abbr, "")
+                components.html(
+                    f"<div class='header-flex'>"
+                    f"<img src='{logo}' style='height:55px;border-radius:12px;'/>"
+                    f"<div>"
+                    f"<div style='font-size:1.55rem;font-weight:700;color:#e5e7eb;'>{selected_name}</div>"
+                    f"<div style='font-size:0.9rem;color:#9ca3af;'>Depth chart & injury status</div>"
+                    f"</div></div>",
+                    height=90,
+                    scrolling=False,
+                )
+    
+                col_left, col_right = st.columns([1.6, 1.0])
+    
+                # ------------------------------------------------------
+                # DEPTH CHART (LEFT)
+                # ------------------------------------------------------
+                with col_left:
+                    st.markdown("## 🏀 Depth Chart")
+    
+                    pos_order = ["PG", "SG", "SF", "PF", "C", "G", "F"]
+                    positions = sorted(
+                        team_depth["position"].unique(),
+                        key=lambda p: pos_order.index(p) if p in pos_order else 99
+                    )
+    
+                    pos_cols = st.columns(min(3, len(positions)))
+    
+                    for i, pos in enumerate(positions):
+                        with pos_cols[i % len(pos_cols)]:
+    
+                            st.markdown(f"<div class='position-header'>{pos}</div>", unsafe_allow_html=True)
+    
+                            rows = team_depth[team_depth["position"] == pos].sort_values("depth")
+    
+                            for _, r in rows.iterrows():
+                                name = r["player"]
+                                role = r["role"]
+                                depth_val = r["depth"]
+    
+                                # Lookup injury status
+                                inj_status = None
+                                injury_html = ""
+    
+                                if not team_injuries.empty:
+                                    norm_name = name.lower().replace("'", "").replace(".", "").replace("-", "").strip()
+    
+                                    for _, ir in team_injuries.iterrows():
+                                        n2 = f"{ir['first_name']} {ir['last_name']}".lower().replace("'", "").replace(".", "").replace("-", "").strip()
+                                        if n2 == norm_name:
+                                            inj_status = ir.get("status")
+                                            break
+    
+                                if inj_status:
+                                    s = inj_status.lower()
+                                    if "out" in s:
+                                        badge_color = "background:#ef4444;"
+                                    elif "question" in s or "doubt" in s:
+                                        badge_color = "background:#eab308;"
+                                    else:
+                                        badge_color = "background:#3b82f6;"
+                                    injury_html = f"<span class='injury-badge' style='{badge_color}'>{inj_status.upper()}</span>"
+    
+                                # Role color
+                                rl = role.lower()
+                                if rl.startswith("start"):
+                                    role_color = "background:#22c55e;"
+                                elif "rotation" in rl:
+                                    role_color = "background:#3b82f6;"
                                 else:
-                                    badge_color = "background:#3b82f6;"
-                                injury_html = f"<span class='injury-badge' style='{badge_color}'>{inj_status.upper()}</span>"
-
-                            # Role color
-                            rl = role.lower()
-                            if rl.startswith("start"):
-                                role_color = "background:#22c55e;"
-                            elif "rotation" in rl:
-                                role_color = "background:#3b82f6;"
+                                    role_color = "background:#6b7280;"
+    
+                                html = (
+                                    f"<div class='depth-card'>"
+                                    f"  <div style='display:flex;justify-content:space-between;align-items:center;'>"
+                                    f"    <div>"
+                                    f"      <div style='font-size:1.05rem;font-weight:700;color:white;'>{name}{injury_html}</div>"
+                                    f"      <span class='role-pill' style='{role_color}'>{role}</span>"
+                                    f"    </div>"
+                                    f"    <div style='font-size:0.8rem;color:#e5e7eb;"
+                                    f"          background:rgba(255,255,255,0.08);padding:5px 12px;border-radius:10px;"
+                                    f"          border:1px solid rgba(255,255,255,0.12);'>"
+                                    f"      Depth {depth_val}"
+                                    f"    </div>"
+                                    f"  </div>"
+                                    f"</div>"
+                                )
+    
+                                components.html(html, height=110, scrolling=False)
+    
+                # ------------------------------------------------------
+                # INJURY REPORT (RIGHT)
+                # ------------------------------------------------------
+                def make_injury_key(first, last):
+                    if not first:
+                        first = ""
+                    if not last:
+                        last = ""
+    
+                    f = (
+                        str(first).lower()
+                        .replace("'", "")
+                        .replace(".", "")
+                        .replace("-", "")
+                        .strip()
+                    )
+                    l = (
+                        str(last).lower()
+                        .replace("'", "")
+                        .replace(".", "")
+                        .replace("-", "")
+                        .strip()
+                    )
+    
+                    if not f and not l:
+                        return None
+    
+                    return f"{f[:1]}-{l}"
+    
+                with col_right:
+                    st.markdown("## 🏥 Injury Report")
+    
+                    if team_injuries.empty:
+                        st.success("No reported injuries.")
+                    else:
+                        last_ts = team_injuries["snapshot_ts"].max()
+                        st.caption(f"Last update: {last_ts.strftime('%b %d, %Y %I:%M %p')}")
+    
+                        team_injuries["inj_key"] = team_injuries.apply(
+                            lambda r: make_injury_key(r.get("first_name"), r.get("last_name")),
+                            axis=1
+                        )
+    
+                        latest = (
+                            team_injuries
+                            .sort_values("snapshot_ts")
+                            .groupby("inj_key")
+                            .tail(1)
+                            .sort_values("status", ascending=True)
+                        )
+    
+                        for _, r in latest.iterrows():
+    
+                            name     = f"{r['first_name']} {r['last_name']}"
+                            status   = r.get("status", "Unknown")
+                            return_date = r.get("return_date_raw", "N/A")
+    
+                            injury_type     = r.get("injury_type", "")
+                            injury_location = r.get("injury_location", "")
+                            injury_side     = r.get("injury_side", "")
+                            injury_detail   = r.get("injury_detail", "")
+    
+                            short_comment = r.get("short_comment", "")
+                            long_comment  = r.get("long_comment", "")
+    
+                            s = status.lower()
+                            if "out" in s:
+                                status_color = "background:#ef4444;"
+                            elif "question" in s or "doubt" in s:
+                                status_color = "background:#eab308;"
+                            elif "prob" in s:
+                                status_color = "background:#3b82f6;"
                             else:
-                                role_color = "background:#6b7280;"
-
-                            html = (
-                                f"<div class='depth-card'>"
-                                f"  <div style='display:flex;justify-content:space-between;align-items:center;'>"
-                                f"    <div>"
-                                f"      <div style='font-size:1.05rem;font-weight:700;color:white;'>{name}{injury_html}</div>"
-                                f"      <span class='role-pill' style='{role_color}'>{role}</span>"
-                                f"    </div>"
-                                f"    <div style='font-size:0.8rem;color:#e5e7eb;"
-                                f"          background:rgba(255,255,255,0.08);padding:5px 12px;border-radius:10px;"
-                                f"          border:1px solid rgba(255,255,255,0.12);'>"
-                                f"      Depth {depth_val}"
-                                f"    </div>"
-                                f"  </div>"
-                                f"</div>"
-                            )
-
-                            components.html(html, height=110, scrolling=False)
-
-            # ------------------------------------------------------
-            # INJURY REPORT (RIGHT)
-            # ------------------------------------------------------
-            def make_injury_key(first, last):
-                if not first:
-                    first = ""
-                if not last:
-                    last = ""
-
-                f = (
-                    str(first).lower()
-                    .replace("'", "")
-                    .replace(".", "")
-                    .replace("-", "")
-                    .strip()
+                                status_color = "background:#6b7280;"
+    
+                            injury_parts = [
+                                injury_type,
+                                injury_location,
+                                injury_side,
+                                injury_detail,
+                            ]
+                            injury_line = " • ".join([p for p in injury_parts if p]) or "No injury detail provided."
+    
+                            html = f"""
+                                <div class='injury-card'>
+                                    <div style='display:flex;justify-content:space-between;'>
+                                        <div style='font-size:1.05rem;font-weight:600;color:white;'>{name}</div>
+                                        <div class='injury-badge' style='{status_color}'>{status.upper()}</div>
+                                    </div>
+    
+                                    <div style='font-size:0.85rem;color:#e5e7eb;margin-top:6px;'>
+                                        <b>Return:</b> {return_date}
+                                    </div>
+    
+                                    <div style='font-size:0.85rem;color:#e5e7eb;margin-top:6px;'>
+                                        <b>Injury:</b> {injury_line}
+                                    </div>
+    
+                                    <div style='font-size:0.85rem;color:#e5e7eb;margin-top:8px;'>
+                                        {short_comment}
+                                    </div>
+    
+                                    <div style='font-size:0.8rem;color:#9ca3af;margin-top:6px;'>
+                                        {long_comment}
+                                    </div>
+                                </div>
+                            """
+    
+                            components.html(html, height=200, scrolling=False)
+    
+    
+            # ======================================================
+            # SUBTAB C — WOWY ANALYZER (Old Tab 10)
+            # ======================================================
+            with subC:
+    
+                st.subheader("🔀 WOWY (With/Without You) Analyzer")
+    
+                st.markdown("""
+                Below is the full WOWY table — showing how each player's production
+                changes when a specific teammate is **OUT**.
+                
+                Sort any column to explore the biggest deltas.
+                """)
+    
+                wow = wowy_df.copy()
+                wow = wow.sort_values("pts_delta", ascending=False)
+    
+                disp = wow[[
+                    "player_a",
+                    "team_abbr",
+                    "breakdown",
+                    "pts_delta",
+                    "reb_delta",
+                    "ast_delta",
+                    "pra_delta",
+                    "pts_reb_delta"
+                ]]
+    
+                st.dataframe(
+                    disp,
+                    hide_index=True,
+                    use_container_width=True
                 )
-                l = (
-                    str(last).lower()
-                    .replace("'", "")
-                    .replace(".", "")
-                    .replace("-", "")
-                    .strip()
-                )
-
-                if not f and not l:
-                    return None
-
-                return f"{f[:1]}-{l}"
-
-            with col_right:
-                st.markdown("## 🏥 Injury Report")
-
-                if team_injuries.empty:
-                    st.success("No reported injuries.")
-                else:
-                    last_ts = team_injuries["snapshot_ts"].max()
-                    st.caption(f"Last update: {last_ts.strftime('%b %d, %Y %I:%M %p')}")
-
-                    team_injuries["inj_key"] = team_injuries.apply(
-                        lambda r: make_injury_key(r.get("first_name"), r.get("last_name")),
-                        axis=1
-                    )
-
-                    latest = (
-                        team_injuries
-                        .sort_values("snapshot_ts")
-                        .groupby("inj_key")
-                        .tail(1)
-                        .sort_values("status", ascending=True)
-                    )
-
-                    for _, r in latest.iterrows():
-
-                        name     = f"{r['first_name']} {r['last_name']}"
-                        status   = r.get("status", "Unknown")
-                        return_date = r.get("return_date_raw", "N/A")
-
-                        injury_type     = r.get("injury_type", "")
-                        injury_location = r.get("injury_location", "")
-                        injury_side     = r.get("injury_side", "")
-                        injury_detail   = r.get("injury_detail", "")
-
-                        short_comment = r.get("short_comment", "")
-                        long_comment  = r.get("long_comment", "")
-
-                        s = status.lower()
-                        if "out" in s:
-                            status_color = "background:#ef4444;"
-                        elif "question" in s or "doubt" in s:
-                            status_color = "background:#eab308;"
-                        elif "prob" in s:
-                            status_color = "background:#3b82f6;"
-                        else:
-                            status_color = "background:#6b7280;"
-
-                        injury_parts = [
-                            injury_type,
-                            injury_location,
-                            injury_side,
-                            injury_detail,
-                        ]
-                        injury_line = " • ".join([p for p in injury_parts if p]) or "No injury detail provided."
-
-                        html = f"""
-                            <div class='injury-card'>
-                                <div style='display:flex;justify-content:space-between;'>
-                                    <div style='font-size:1.05rem;font-weight:600;color:white;'>{name}</div>
-                                    <div class='injury-badge' style='{status_color}'>{status.upper()}</div>
-                                </div>
-
-                                <div style='font-size:0.85rem;color:#e5e7eb;margin-top:6px;'>
-                                    <b>Return:</b> {return_date}
-                                </div>
-
-                                <div style='font-size:0.85rem;color:#e5e7eb;margin-top:6px;'>
-                                    <b>Injury:</b> {injury_line}
-                                </div>
-
-                                <div style='font-size:0.85rem;color:#e5e7eb;margin-top:8px;'>
-                                    {short_comment}
-                                </div>
-
-                                <div style='font-size:0.8rem;color:#9ca3af;margin-top:6px;'>
-                                    {long_comment}
-                                </div>
-                            </div>
-                        """
-
-                        components.html(html, height=200, scrolling=False)
-
-
-        # ======================================================
-        # SUBTAB C — WOWY ANALYZER (Old Tab 10)
-        # ======================================================
-        with subC:
-
-            st.subheader("🔀 WOWY (With/Without You) Analyzer")
-
-            st.markdown("""
-            Below is the full WOWY table — showing how each player's production
-            changes when a specific teammate is **OUT**.
-            
-            Sort any column to explore the biggest deltas.
-            """)
-
-            wow = wowy_df.copy()
-            wow = wow.sort_values("pts_delta", ascending=False)
-
-            disp = wow[[
-                "player_a",
-                "team_abbr",
-                "breakdown",
-                "pts_delta",
-                "reb_delta",
-                "ast_delta",
-                "pra_delta",
-                "pts_reb_delta"
-            ]]
-
-            st.dataframe(
-                disp,
-                hide_index=True,
-                use_container_width=True
-            )
 
 
     # ------------------------------------------------------

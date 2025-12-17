@@ -3423,6 +3423,24 @@ def render_prop_cards(
                     f"No impactful teammate injuries</div>"
                 )
             
+            # ------------------------
+            # Save Bet (bottom-right)
+            # ------------------------
+            expanded_lines.extend([
+                f"<div style='display:flex; justify-content:flex-end; margin-top:10px;'>",
+                f"<button "
+                f"style='background:rgba(34,197,94,0.12); "
+                f"border:1px solid rgba(34,197,94,0.35); "
+                f"color:#22c55e; "
+                f"font-size:0.78rem; "
+                f"font-weight:700; "
+                f"padding:6px 12px; "
+                f"border-radius:999px; "
+                f"cursor:pointer;'>"
+                f"💾 Save Bet</button>",
+                f"</div>",
+            ])
+            
             expanded_lines.append("</div>")
             expanded_html = "\n".join(expanded_lines)
             

@@ -42,6 +42,12 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+# --------------------------------------------------
+# Session initialization (REQUIRED)
+# --------------------------------------------------
+if "current_user_id" not in st.session_state:
+    st.session_state["current_user_id"] = 1  # dev / single-user placeholder
+
 # ------------------------------------------------------
 # ENVIRONMENT VARIABLES
 # ------------------------------------------------------

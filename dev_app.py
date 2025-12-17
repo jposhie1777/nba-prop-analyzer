@@ -1728,20 +1728,51 @@ if not st.session_state.saved_bets_loaded:
 
 
 
-# Helper: persist bets for this user to Postgres
-def save_bet_for_user(user_id: int, bet: dict):
-    """Append a bet for this user (per account) and sync to the saved_bets table."""
-    # Normalize old 'Label' field if present
-    if "bet_type" not in bet and "Label" in bet:
-        bet["bet_type"] = bet.pop("Label")
+def save_bet_for_user(user_id: int, bet: dict) -> bool:
+    """
+    Save a bet for the current user.
+    - Deduplicates by (player, market, line, bet_type)
+    - Appends to session_state
+    - Syncs full list to Postgres
+    Returns True if added, False if duplicate.
+    """
 
-    # Append to in-memory session list
-    current = st.session_state.get("saved_bets", [])
-    current.append(bet)
-    st.session_state.saved_bets = current
+    # Ensure session list exists
+    if "saved_bets" not in st.session_state:
+        st.session_state["saved_bets"] = []
 
-    # Sync entire list to DB
-    replace_saved_bets_in_db(user_id, current)
+    saved = st.session_state["saved_bets"]
+
+    # Canonical dedupe key
+    dedupe_key = (
+        bet.get("player"),
+        bet.get("market"),
+        bet.get("line"),
+        bet.get("bet_type"),
+    )
+
+    existing_keys = {
+        (
+            b.get("player"),
+            b.get("market"),
+            b.get("line"),
+            b.get("bet_type"),
+        )
+        for b in saved
+    }
+
+    if dedupe_key in existing_keys:
+        return False
+
+    # Append (DO NOT mutate input)
+    saved.append(bet.copy())
+    st.session_state["saved_bets"] = saved
+
+    # Persist full list
+    replace_saved_bets_in_db(user_id, saved)
+
+    return True
+
 
 # ------------------------------------------------------
 # UTILITY FUNCTIONS (from production)
@@ -3412,23 +3443,6 @@ def render_prop_cards(
                     f"No impactful teammate injuries</div>"
                 )
             
-            # ------------------------
-            # Save Bet (bottom-right)
-            # ------------------------
-            expanded_lines.extend([
-                f"<div style='display:flex; justify-content:flex-end; margin-top:10px;'>",
-                f"<button "
-                f"style='background:rgba(34,197,94,0.12); "
-                f"border:1px solid rgba(34,197,94,0.35); "
-                f"color:#22c55e; "
-                f"font-size:0.78rem; "
-                f"font-weight:700; "
-                f"padding:6px 12px; "
-                f"border-radius:999px; "
-                f"cursor:pointer;'>"
-                f"💾 Save Bet</button>",
-                f"</div>",
-            ])
             
             expanded_lines.append("</div>")
             expanded_html = "\n".join(expanded_lines)
@@ -3462,7 +3476,55 @@ def render_prop_cards(
             # EXPANDED SECTION (RENDER ONLY WHEN OPEN)
             # ======================================================
             if st.session_state.get(expand_key, False):
+
+                # Render expanded analytics HTML
                 st.markdown(expanded_html, unsafe_allow_html=True)
+
+                # ------------------------
+                # Build canonical save payload
+                # ------------------------
+                save_payload = {
+                    "player": row.get("player"),
+                    "market": row.get("market"),
+                    "line": row.get("line"),
+                    "bet_type": str(row.get("bet_type")).upper(),
+                    "team": row.get("player_team"),
+                    "books": [
+                        {
+                            "bookmaker": bp.get("book"),
+                            "price": bp.get("price"),
+                        }
+                        for bp in row.get("book_prices", [])
+                        if bp.get("book") and bp.get("price") is not None
+                    ],
+                }
+
+                # ------------------------
+                # Real Save Bet button
+                # ------------------------
+                st.markdown(
+                    "<div style='display:flex; justify-content:flex-end;'>",
+                    unsafe_allow_html=True,
+                )
+
+                saved = st.button(
+                    "💾 Save Bet",
+                    key=f"{key_base}_save",
+                )
+
+                st.markdown("</div>", unsafe_allow_html=True)
+
+                if saved:
+                    added = save_bet_for_user(
+                        user_id=current_user_id,
+                        bet=save_payload,
+                    )
+
+                    if added:
+                        st.success("Bet saved")
+                    else:
+                        st.info("Bet already saved")
+
             
 
     # Close scroll wrapper

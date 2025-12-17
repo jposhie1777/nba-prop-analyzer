@@ -1114,6 +1114,34 @@ button[kind="secondary"] {
 </style>
 """, unsafe_allow_html=True)
 
+
+st.markdown(
+    """
+    <style>
+    /* Save Bet button overlay for prop cards */
+    div[data-testid="stButton"] > button[prop-save-btn="true"] {
+        position: relative;
+        top: -52px;
+        left: calc(100% - 140px);
+        background: linear-gradient(135deg, #22c55e, #16a34a);
+        color: white;
+        border-radius: 999px;
+        border: none;
+        font-weight: 800;
+        font-size: 0.78rem;
+        padding: 6px 14px;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+    }
+
+    div[data-testid="stButton"] > button[prop-save-btn="true"]:hover {
+        background: linear-gradient(135deg, #34d399, #22c55e);
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 # ------------------------------------------------------
 # AG-GRID MOBILE FIX (separate block)
 # ------------------------------------------------------
@@ -3384,43 +3412,49 @@ def render_prop_cards(
                     f"No impactful teammate injuries</div>"
                 )
             
-            # ------------------------
-            # Save Bet (bottom-right)
-            # ------------------------
-            expanded_lines.extend([
-                f"<div style='display:flex; justify-content:flex-end; margin-top:10px;'>",
-                f"<button "
-                f"style='background:rgba(34,197,94,0.12); "
-                f"border:1px solid rgba(34,197,94,0.35); "
-                f"color:#22c55e; "
-                f"font-size:0.78rem; "
-                f"font-weight:700; "
-                f"padding:6px 12px; "
-                f"border-radius:999px; "
-                f"cursor:pointer;'>"
-                f"💾 Save Bet</button>",
-                f"</div>",
-            ])
             
             expanded_lines.append("</div>")
             expanded_html = "\n".join(expanded_lines)
             
             
-            # ======================================================
-            # CARD + ATTACHED EXPAND BUTTON
-            # ======================================================
             with st.container():
-            
-                # Render card
+
+                # --------------------------------------------------
+                # Render card (HTML only)
+                # --------------------------------------------------
                 st.markdown(card_html, unsafe_allow_html=True)
-            
-                # Expand / collapse button
+
+                # --------------------------------------------------
+                # REAL Save Bet button (Streamlit-owned)
+                # --------------------------------------------------
+                save_key = f"{key_base}_save"
+
+                if st.button(
+                    "💾 Save Bet",
+                    key=save_key,
+                    help="Save this prop to Saved Bets",
+                ):
+                    st.session_state.setdefault("saved_prop_bets", []).append({
+                        "player": row.get("player"),
+                        "market": row.get("market"),
+                        "bet_type": row.get("bet_type"),
+                        "line": row.get("line"),
+                        "book_prices": row.get("book_prices"),
+                        "hit_rate_l10": row.get("hit_rate_last10"),
+                        "confidence": confidence_level,
+                        "game_id": row.get("game_id"),
+                    })
+                    st.toast("Saved bet ✅")
+
+                # --------------------------------------------------
+                # Expand / collapse button (UNCHANGED)
+                # --------------------------------------------------
                 expand_label = (
                     "Collapse ▴"
                     if st.session_state.get(expand_key, False)
                     else "Click to expand ▾"
                 )
-            
+
                 st.button(
                     expand_label,
                     key=f"{expand_key}_btn",
@@ -3428,6 +3462,7 @@ def render_prop_cards(
                     args=(expand_key,),
                     use_container_width=True,
                 )
+
             
             
             # ======================================================

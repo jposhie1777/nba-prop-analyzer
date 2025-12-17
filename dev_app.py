@@ -2941,7 +2941,6 @@ def render_ncaab_overview_card(row):
 
     components.html(html, height=280, scrolling=False)
 
-
 def render_prop_cards(
     df,
     *,
@@ -2963,6 +2962,34 @@ def render_prop_cards(
     if df.empty:
         st.info("No props match your filters.")
         return
+
+    # ======================================================
+    # GROUP PROPS (ONE CARD PER PLAYER / MARKET / LINE)
+    # ======================================================
+    GROUP_COLS = [
+        "player",
+        "market",
+        "line",
+        "game_id",
+    ]
+
+    AGG_MAP = {
+        "bookmaker": list,
+        "price": list,
+    }
+
+    # Keep first value for everything else
+    for c in df.columns:
+        if c not in GROUP_COLS and c not in AGG_MAP:
+            AGG_MAP[c] = "first"
+
+    grouped_df = (
+        df
+        .groupby(GROUP_COLS, dropna=False)
+        .agg(AGG_MAP)
+        .reset_index()
+    )
+
 
     # ------------------------------------------------------
     # WOWY merge once per render
@@ -3066,6 +3093,24 @@ def render_prop_cards(
 
     cols = st.columns(4)
 
+    # ------------------------------------------------------
+    # Helper: stat-aware averages with safe fallback
+    # ------------------------------------------------------
+    def get_stat_avg(row, stat_prefix, window):
+        """
+        window = 5 | 10 | 20
+        """
+        if stat_prefix:
+            val = row.get(f"{stat_prefix}_last{window}")
+            if val is not None:
+                return val
+
+        # Fallbacks (generic, known-good)
+        if window == 10:
+            return get_l10_avg(row)
+
+        return None
+
     # ============================================================
     #                          CARD LOOP
     # ============================================================
@@ -3150,12 +3195,6 @@ def render_prop_cards(
                 spark_dates,
                 line_value
             )
-
-            # DEBUG — sparkline data
-            if spark_vals:
-                st.caption(f"DEBUG spark: {len(spark_vals)} vals | dates: {spark_dates[:3]}")
-            else:
-                st.caption("DEBUG spark: NO VALUES")
 
 
             # Logos
@@ -3258,14 +3297,8 @@ def render_prop_cards(
             card_html = "\n".join(card_lines)
 
             # ------------------------------------------------------
-            # RENDER CARD
+            # Stable keys
             # ------------------------------------------------------
-            st.markdown(card_html, unsafe_allow_html=True)
-
-
-            # ======================================================
-            # Stable keys (NOW UNIQUE)
-            # ======================================================
             key_base = (
                 f"{page_key}_"
                 f"{row.get('player')}_"
@@ -3273,17 +3306,13 @@ def render_prop_cards(
                 f"{row.get('line')}_"
                 f"{row.get('game_id', '')}"
             )
-
+            
             expand_key = f"{key_base}_expand"
-
+            
             if expand_key not in st.session_state:
                 st.session_state[expand_key] = False
-
-            # ======================================================
-            # EXPANDED CARD SECTION
-            # (UNCHANGED — YOUR EXISTING LOGIC CONTINUES)
-            # ======================================================
-
+            
+            
             # ======================================================
             # DERIVED METRICS (BUILT FIRST — IMPORTANT)
             # ======================================================

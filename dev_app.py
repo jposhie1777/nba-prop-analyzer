@@ -1480,6 +1480,13 @@ def _confidence_index(
 
     return int(round(max(0.0, min(100.0, base))))
 
+def _pct(v):
+    return f"{v*100:.0f}%" if v is not None else "—"
+
+def _pm(v):
+    return f"{v:+.1f}" if v is not None else "—"
+
+
 # ======================================================
 # WOWY market → delta column mapping
 # ======================================================

@@ -3110,6 +3110,16 @@ def render_prop_cards(
                 line_value
             )
 
+            # ------------------------------------------------------
+            # Team logos
+            # ------------------------------------------------------
+            player_team = normalize_team_code(row.get("player_team", ""))
+            opp_team = normalize_team_code(row.get("opponent_team", ""))
+
+            home_logo = TEAM_LOGOS_BASE64.get(player_team, "")
+            opp_logo = TEAM_LOGOS_BASE64.get(opp_team, "")
+
+
             # ======================================================
             # 🔽 ADD THIS SECTION RIGHT HERE 🔽
             # Sportsbooks (MULTI-BOOK LOGOS)

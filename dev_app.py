@@ -1145,6 +1145,21 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+st.markdown(
+    """
+    <style>
+    /* Turn Streamlit buttons into invisible card containers */
+    div[data-testid="stButton"] > button {
+        all: unset;
+        width: 100%;
+        cursor: pointer;
+        display: block;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # ------------------------------------------------------
 # AG-GRID MOBILE FIX (separate block)
 # ------------------------------------------------------
@@ -3317,10 +3332,9 @@ def render_prop_cards(
             
             
             # ======================================================
-            # DERIVED METRICS (BUILT FIRST — IMPORTANT)
+            # DERIVED METRICS (UNCHANGED — BUILT FIRST)
             # ======================================================
             display_market = row.get("market")
-            
             raw_stat = row.get("stat_type")
             
             STAT_PREFIX_MAP = {
@@ -3385,7 +3399,7 @@ def render_prop_cards(
             
             
             # ======================================================
-            # WOWY / INJURY LINES (BUILT FIRST)
+            # WOWY / INJURY LINES
             # ======================================================
             injury_lines = []
             
@@ -3395,7 +3409,6 @@ def render_prop_cards(
             
             if wowy_col and isinstance(wowy_breakdown, str) and wowy_breakdown.strip():
                 blocks = [b.strip() for b in wowy_breakdown.split(";") if b.strip()]
-            
                 for block in blocks:
                     if "→" not in block:
                         continue
@@ -3460,29 +3473,24 @@ def render_prop_cards(
             
             
             # ======================================================
-            # CARD + TAP OVERLAY (CORRECT — ABSOLUTE)
+            # CARD = BUTTON (THE IMPORTANT PART)
             # ======================================================
-            st.markdown('<div class="card-wrapper">', unsafe_allow_html=True)
-            
-            # Card visual
-            st.markdown(card_html, unsafe_allow_html=True)
-            
-            # Full-card invisible tap overlay
-            st.markdown('<div class="card-overlay">', unsafe_allow_html=True)
-            st.button(
-                "",
+            clicked = st.button(
+                card_html,
                 key=tap_key,
-                on_click=toggle_expander,
-                args=(expand_key,),
+                use_container_width=True,
             )
-            st.markdown("</div></div>", unsafe_allow_html=True)
+            
+            if clicked:
+                st.session_state[expand_key] = not st.session_state.get(expand_key, False)
             
             
             # ======================================================
-            # EXPANDED SECTION (RENDER ONLY)
+            # EXPANDED SECTION
             # ======================================================
             if st.session_state.get(expand_key, False):
                 st.markdown(expanded_html, unsafe_allow_html=True)
+            
 
     # Close scroll wrapper
     st.markdown("</div>", unsafe_allow_html=True)

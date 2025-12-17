@@ -2965,7 +2965,7 @@ def render_prop_cards(
     # ======================================================
     # GROUP PROPS (ONE CARD PER PLAYER / MARKET / LINE)
     # ======================================================
-    GROUP_COLS = ["player", "market", "line", "game_id"]
+    GROUP_COLS = ["player", "market", "line"]
 
     AGG_MAP = {
         "bookmaker": list,

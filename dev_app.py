@@ -2963,34 +2963,6 @@ def render_prop_cards(
         st.info("No props match your filters.")
         return
 
-    # ======================================================
-    # GROUP PROPS (ONE CARD PER PLAYER / MARKET / LINE)
-    # ======================================================
-    GROUP_COLS = [
-        "player",
-        "market",
-        "line",
-        "game_id",
-    ]
-
-    AGG_MAP = {
-        "bookmaker": list,
-        "price": list,
-    }
-
-    # Keep first value for everything else
-    for c in df.columns:
-        if c not in GROUP_COLS and c not in AGG_MAP:
-            AGG_MAP[c] = "first"
-
-    grouped_df = (
-        df
-        .groupby(GROUP_COLS, dropna=False)
-        .agg(AGG_MAP)
-        .reset_index()
-    )
-
-
     # ------------------------------------------------------
     # WOWY merge once per render
     # ------------------------------------------------------

@@ -3332,9 +3332,10 @@ def render_prop_cards(
             
             
             # ======================================================
-            # DERIVED METRICS (UNCHANGED — BUILT FIRST)
+            # DERIVED METRICS (BUILT FIRST — IMPORTANT)
             # ======================================================
             display_market = row.get("market")
+            
             raw_stat = row.get("stat_type")
             
             STAT_PREFIX_MAP = {
@@ -3399,7 +3400,7 @@ def render_prop_cards(
             
             
             # ======================================================
-            # WOWY / INJURY LINES
+            # WOWY / INJURY LINES (BUILT FIRST)
             # ======================================================
             injury_lines = []
             
@@ -3409,6 +3410,7 @@ def render_prop_cards(
             
             if wowy_col and isinstance(wowy_breakdown, str) and wowy_breakdown.strip():
                 blocks = [b.strip() for b in wowy_breakdown.split(";") if b.strip()]
+            
                 for block in blocks:
                     if "→" not in block:
                         continue
@@ -3473,20 +3475,29 @@ def render_prop_cards(
             
             
             # ======================================================
-            # CARD = BUTTON (THE IMPORTANT PART)
+            # CARD + TAP OVERLAY (ORDER MATTERS)
             # ======================================================
-            clicked = st.button(
-                card_html,
-                key=tap_key,
-                use_container_width=True,
-            )
+            with st.container():
             
-            if clicked:
-                st.session_state[expand_key] = not st.session_state.get(expand_key, False)
+                # Render card visually
+                st.markdown(card_html, unsafe_allow_html=True)
+            
+                # Invisible tap overlay
+                st.markdown("<div style='margin-top:-190px;'>", unsafe_allow_html=True)
+            
+                st.button(
+                    "",
+                    key=tap_key,
+                    on_click=toggle_expander,
+                    args=(expand_key,),
+                    use_container_width=True,
+                )
+            
+                st.markdown("</div>", unsafe_allow_html=True)
             
             
             # ======================================================
-            # EXPANDED SECTION
+            # EXPANDED SECTION (RENDER ONLY)
             # ======================================================
             if st.session_state.get(expand_key, False):
                 st.markdown(expanded_html, unsafe_allow_html=True)

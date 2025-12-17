@@ -3058,6 +3058,25 @@ def render_prop_cards(
     end = start + page_size
     page_df = card_df.iloc[start:end]
 
+    # ------------------------------------------------------
+    # Helper: stat-aware averages with safe fallback
+    # ------------------------------------------------------
+    def get_stat_avg(row, stat_prefix, window):
+        """
+        window = 5 | 10 | 20
+        """
+        if stat_prefix:
+            val = row.get(f"{stat_prefix}_last{window}")
+            if val is not None:
+                return val
+
+        # Fallbacks (generic, known-good)
+        if window == 10:
+            return get_l10_avg(row)
+
+        return None
+
+
     # ======================================================
     # CARD LOOP (ONE ROW = ONE PROP)
     # ======================================================

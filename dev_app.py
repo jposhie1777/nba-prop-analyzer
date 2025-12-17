@@ -1118,28 +1118,30 @@ button[kind="secondary"] {
 st.markdown(
     """
     <style>
-    /* Save Bet button overlay for prop cards */
-    div[data-testid="stButton"] > button[prop-save-btn="true"] {
+    /* Move Save Bet button into bottom-right of prop card */
+    div[data-testid="stButton"] > button {
         position: relative;
-        top: -52px;
+        top: -110px;          /* pulls button upward into card */
         left: calc(100% - 140px);
-        background: linear-gradient(135deg, #22c55e, #16a34a);
-        color: white;
-        border-radius: 999px;
-        border: none;
-        font-weight: 800;
+        background: rgba(30, 41, 59, 0.9);
+        color: #e5e7eb;
+        border-radius: 10px;
+        border: 1px solid rgba(148,163,184,0.35);
         font-size: 0.78rem;
-        padding: 6px 14px;
-        box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+        padding: 6px 12px;
+        box-shadow: 0 6px 16px rgba(0,0,0,0.45);
     }
 
-    div[data-testid="stButton"] > button[prop-save-btn="true"]:hover {
-        background: linear-gradient(135deg, #34d399, #22c55e);
+    div[data-testid="stButton"] > button:hover {
+        background: rgba(34,197,94,0.15);
+        border-color: rgba(34,197,94,0.55);
+        color: #22c55e;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
 
 
 # ------------------------------------------------------

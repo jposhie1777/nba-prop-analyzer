@@ -3030,13 +3030,29 @@ def render_prop_cards(
     def combine_books(g: pd.DataFrame) -> pd.Series:
         base = g.iloc[0].copy()
 
-        base["book_prices"] = [
-            {
-                "book": normalize_bookmaker(r.get("bookmaker")),
-                "price": int(r.get("price")) if not pd.isna(r.get("price")) else None,
-            }
-            for _, r in g.iterrows()
-        ]
+        seen = set()
+        book_prices = []
+
+        for _, r in g.iterrows():
+            book = normalize_bookmaker(r.get("bookmaker"))
+            price = int(r.get("price")) if not pd.isna(r.get("price")) else None
+
+            key = (book, price)
+
+            if key in seen:
+                continue
+
+            seen.add(key)
+
+            book_prices.append(
+                {
+                    "book": book,
+                    "price": price,
+                }
+            )
+
+        base["book_prices"] = book_prices
+
 
         return base
 

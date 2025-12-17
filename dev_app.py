@@ -50,7 +50,7 @@ IS_DEV = True
 PROJECT_ID = os.getenv("PROJECT_ID", "")
 
 DATASET = os.getenv("BIGQUERY_DATASET", "nba_prop_analyzer")
-PROPS_TABLE = "todays_props_with_hit_rates"
+PROPS_TABLE = "todays_props_enriched"
 HISTORICAL_TABLE = "historical_player_stats_for_trends"
 
 # SERVICE_JSON is a JSON string (not a filepath)

@@ -3431,11 +3431,18 @@ def render_prop_cards(
             
             with st.container():
 
-                # Render card
+                # --------------------------------------------------
+                # Render card (HTML only)
+                # --------------------------------------------------
                 st.markdown(card_html, unsafe_allow_html=True)
 
+                # --------------------------------------------------
                 # Buttons row
+                # --------------------------------------------------
                 bcol1, bcol2 = st.columns([1, 2])
+
+                # 🔑 DEFINE SAVE KEY HERE
+                save_key = f"{key_base}_save"
 
                 with bcol1:
                     if st.button(

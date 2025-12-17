@@ -1119,6 +1119,32 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+st.markdown(
+    """
+    <style>
+    .card-wrapper {
+        position: relative;
+        height: 190px;              /* MUST MATCH CARD HEIGHT */
+    }
+
+    .card-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 10;
+    }
+
+    .card-overlay button {
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        padding: 0;
+        margin: 0;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # ------------------------------------------------------
 # AG-GRID MOBILE FIX (separate block)
 # ------------------------------------------------------

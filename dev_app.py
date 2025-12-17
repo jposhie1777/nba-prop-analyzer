@@ -3371,6 +3371,20 @@ def render_prop_cards(
                 else None
             )
             
+            # ======================================================
+            # DISTRIBUTION METRICS (L20 / L40)   ✅ ADD HERE
+            # ======================================================
+            dist20_hit = row.get("dist20_hit_rate")
+            dist20_c1 = row.get("dist20_clear_1p_rate")
+            dist20_c2 = row.get("dist20_clear_2p_rate")
+            dist20_bad = row.get("dist20_fail_bad_rate")
+            dist20_margin = row.get("dist20_avg_margin")
+
+            dist40_hit = row.get("dist40_hit_rate")
+            dist40_c1 = row.get("dist40_clear_1p_rate")
+            dist40_c2 = row.get("dist40_clear_2p_rate")
+            dist40_bad = row.get("dist40_fail_bad_rate")
+            dist40_margin = row.get("dist40_avg_margin")
             
             # ======================================================
             # WOWY / INJURY LINES (BUILT FIRST)
@@ -3410,31 +3424,92 @@ def render_prop_cards(
                 f"<div style='padding:12px; margin-top:8px; border-radius:12px;"
                 f"background:rgba(255,255,255,0.05);"
                 f"border:1px solid rgba(255,255,255,0.12);'>",
-            
+
+                # -------------------------
+                # L5 / L10 / L20 averages
+                # -------------------------
                 f"<div style='display:flex; justify-content:space-between; "
                 f"font-size:0.78rem; margin-bottom:6px;'>",
                 f"<div>L5: {_fmt1(l5_avg)}</div>",
                 f"<div>L10: {_fmt1(l10_avg)}</div>",
                 f"<div>L20: {_fmt1(l20_avg)}</div>",
                 f"</div>",
-            
+
+                # -------------------------
+                # Delta vs line + confidence
+                # -------------------------
                 f"<div style='display:flex; justify-content:space-between; "
                 f"font-size:0.8rem; margin-bottom:6px;'>",
                 f"<div>Δ Line: {_fmt_signed1(delta_vs_line)}</div>",
                 f"<div style='font-weight:800; color:{conf_color};'>"
                 f"Confidence: {confidence_level} ({confidence_score})</div>",
                 f"</div>",
-            
+
+                # -------------------------
+                # Minutes
+                # -------------------------
                 f"<div style='display:flex; justify-content:space-between; "
                 f"font-size:0.78rem; margin-bottom:8px;'>",
                 f"<div>Proj Min: {_fmt1(est_minutes)}</div>",
                 f"<div>Δ Min (L5): {_fmt_signed1(minutes_delta)}</div>",
                 f"</div>",
-            
-                f"<div style='font-size:0.82rem; font-weight:800; margin-bottom:4px;'>"
-                f"Injured Teammates (WOWY Impact)</div>",
             ]
-            
+
+            # ======================================================
+            # DISTRIBUTION METRICS (L20 / L40)
+            # ======================================================
+            expanded_lines.extend([
+                f"<div style='margin-top:10px;'>",
+
+                f"<div style='font-size:0.75rem; font-weight:800; opacity:0.9; margin-bottom:4px;'>"
+                f"Distribution vs Line"
+                f"</div>",
+
+                # -------- L20 --------
+                f"<div style='padding:8px; border-radius:10px; "
+                f"background:rgba(255,255,255,0.04); "
+                f"border:1px solid rgba(255,255,255,0.08); margin-bottom:6px;'>",
+
+                f"<div style='font-size:0.72rem; font-weight:700; margin-bottom:4px;'>"
+                f"Last 20 Games</div>",
+
+                f"<div style='display:flex; justify-content:space-between; font-size:0.7rem;'>"
+                f"<div>Hit: {_pct(dist20_hit)}</div>"
+                f"<div>+1: {_pct(dist20_c1)}</div>"
+                f"<div>+2: {_pct(dist20_c2)}</div>"
+                f"<div>Bad Miss: {_pct(dist20_bad)}</div>"
+                f"<div>Avg Δ: {_pm(dist20_margin)}</div>"
+                f"</div>",
+                f"</div>",
+
+                # -------- L40 --------
+                f"<div style='padding:8px; border-radius:10px; "
+                f"background:rgba(255,255,255,0.04); "
+                f"border:1px solid rgba(255,255,255,0.08);'>",
+
+                f"<div style='font-size:0.72rem; font-weight:700; margin-bottom:4px;'>"
+                f"Last 40 Games</div>",
+
+                f"<div style='display:flex; justify-content:space-between; font-size:0.7rem;'>"
+                f"<div>Hit: {_pct(dist40_hit)}</div>"
+                f"<div>+1: {_pct(dist40_c1)}</div>"
+                f"<div>+2: {_pct(dist40_c2)}</div>"
+                f"<div>Bad Miss: {_pct(dist40_bad)}</div>"
+                f"<div>Avg Δ: {_pm(dist40_margin)}</div>"
+                f"</div>",
+                f"</div>",
+
+                f"</div>",
+            ])
+
+            # ======================================================
+            # WOWY / INJURY IMPACT
+            # ======================================================
+            expanded_lines.extend([
+                f"<div style='font-size:0.82rem; font-weight:800; margin-top:10px; margin-bottom:4px;'>"
+                f"Injured Teammates (WOWY Impact)</div>",
+            ])
+
             if injury_lines:
                 expanded_lines.extend(injury_lines)
             else:
@@ -3442,10 +3517,12 @@ def render_prop_cards(
                     f"<div style='font-size:0.75rem; color:#9ca3af;'>"
                     f"No impactful teammate injuries</div>"
                 )
-            
-            
+
+            # Close wrapper
             expanded_lines.append("</div>")
+
             expanded_html = "\n".join(expanded_lines)
+
             
             
             # ======================================================

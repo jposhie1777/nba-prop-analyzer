@@ -3025,7 +3025,6 @@ def render_prop_cards(
         "market",
         "line",
         "bet_type",
-        "game_id",
     ]
 
     def combine_books(g: pd.DataFrame) -> pd.Series:

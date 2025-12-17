@@ -3431,44 +3431,44 @@ def render_prop_cards(
             
             with st.container():
 
-            # Render card
-            st.markdown(card_html, unsafe_allow_html=True)
+                # Render card
+                st.markdown(card_html, unsafe_allow_html=True)
 
-            # Buttons row
-            bcol1, bcol2 = st.columns([1, 2])
+                # Buttons row
+                bcol1, bcol2 = st.columns([1, 2])
 
-            with bcol1:
-                if st.button(
-                    "💾 Save Bet",
-                    key=save_key,
-                    help="Save this prop to Saved Bets",
-                ):
-                    st.session_state.setdefault("saved_prop_bets", []).append({
-                        "player": row.get("player"),
-                        "market": row.get("market"),
-                        "bet_type": row.get("bet_type"),
-                        "line": row.get("line"),
-                        "book_prices": row.get("book_prices"),
-                        "hit_rate_l10": row.get("hit_rate_last10"),
-                        "confidence": confidence_level,
-                        "game_id": row.get("game_id"),
-                    })
-                    st.toast("Saved bet ✅")
+                with bcol1:
+                    if st.button(
+                        "💾 Save Bet",
+                        key=save_key,
+                        help="Save this prop to Saved Bets",
+                    ):
+                        st.session_state.setdefault("saved_prop_bets", []).append({
+                            "player": row.get("player"),
+                            "market": row.get("market"),
+                            "bet_type": row.get("bet_type"),
+                            "line": row.get("line"),
+                            "book_prices": row.get("book_prices"),
+                            "hit_rate_l10": row.get("hit_rate_last10"),
+                            "confidence": confidence_level,
+                            "game_id": row.get("game_id"),
+                        })
+                        st.toast("Saved bet ✅")
 
-            with bcol2:
-                expand_label = (
-                    "Collapse ▴"
-                    if st.session_state.get(expand_key, False)
-                    else "Click to expand ▾"
-                )
+                with bcol2:
+                    expand_label = (
+                        "Collapse ▴"
+                        if st.session_state.get(expand_key, False)
+                        else "Click to expand ▾"
+                    )
 
-                st.button(
-                    expand_label,
-                    key=f"{expand_key}_btn",
-                    on_click=toggle_expander,
-                    args=(expand_key,),
-                    use_container_width=True,
-                )
+                    st.button(
+                        expand_label,
+                        key=f"{expand_key}_btn",
+                        on_click=toggle_expander,
+                        args=(expand_key,),
+                        use_container_width=True,
+                    )
 
             
             

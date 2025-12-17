@@ -3994,6 +3994,10 @@ if sport == "NBA":
     # ======================================================
     with tab2:
 
+        game_report_df = load_game_report()
+        game_analytics_df = load_game_analytics()
+        game_odds_df = load_game_odds()
+    
         # ✅ CRITICAL: bind tab2 to game_report
         df = game_report_df.copy()
     

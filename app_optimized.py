@@ -48,7 +48,7 @@ st.set_page_config(
 PROJECT_ID = os.getenv("PROJECT_ID", "")
 
 DATASET = os.getenv("BIGQUERY_DATASET", "nba_prop_analyzer")
-PROPS_TABLE = "todays_props_with_hit_rates"
+PROPS_TABLE = "todays_props_enriched"
 HISTORICAL_TABLE = "historical_player_stats_for_trends"
 
 # SERVICE_JSON is a JSON string (not a filepath)
@@ -3610,7 +3610,7 @@ def render_prop_cards(
 
                 if saved:
                     added = save_bet_for_user(
-                        user_id=current_user_id,
+                        user_id=st.session_state["current_user_id"],
                         bet=save_payload,
                     )
 
@@ -3618,6 +3618,7 @@ def render_prop_cards(
                         st.success("Bet saved")
                     else:
                         st.info("Bet already saved")
+
 
             
 

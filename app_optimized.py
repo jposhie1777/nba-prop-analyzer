@@ -2153,7 +2153,7 @@ history_df = load_history()
 depth_df = load_depth_charts()
 injury_df = load_injury_report()    # <-- MUST COME BEFORE FIX
 wowy_df = load_wowy_deltas()
-ncaab_game_analytics_df = load_ncaab_game_analytics()
+
 
 
 # ------------------------------------------------------
@@ -5505,6 +5505,8 @@ elif sport in ["NCAA Men's", "NCAA Women's"]:
     # TAB 1 — OVERVIEW CARDS
     # -------------------------------
     with tabN1:
+    
+        ncaab_game_analytics_df = load_ncaab_game_analytics()
         st.subheader(f"{sport} — Game Overview")
 
         for idx, row in df.iterrows():

@@ -2153,9 +2153,6 @@ history_df = load_history()
 depth_df = load_depth_charts()
 injury_df = load_injury_report()    # <-- MUST COME BEFORE FIX
 wowy_df = load_wowy_deltas()
-game_analytics_df = load_game_analytics()
-game_report_df = load_game_report()
-game_odds_df = load_game_odds()
 ncaab_game_analytics_df = load_ncaab_game_analytics()
 
 

@@ -2952,17 +2952,6 @@ def render_prop_cards(
     hit_label: str = "L10 Hit",
     min_opp_rank: int | None = None,
     page_key: str = "ev",
-def render_prop_cards(
-    df,
-    *,
-    require_ev_plus: bool,
-    odds_min: float,
-    odds_max: float,
-    min_hit_rate: float,
-    hit_rate_col: str = "hit_rate_last10",
-    hit_label: str = "L10 Hit",
-    min_opp_rank: int | None = None,
-    page_key: str = "ev",
 ):
     """
     ONE card per (player, market, line)

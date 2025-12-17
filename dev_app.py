@@ -1142,6 +1142,16 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+st.markdown(
+    """
+    <style>
+    div[data-testid="column"] > div {
+        margin-top: -6px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 # ------------------------------------------------------
@@ -3421,16 +3431,13 @@ def render_prop_cards(
             
             with st.container():
 
-                # --------------------------------------------------
-                # Render card (HTML only)
-                # --------------------------------------------------
-                st.markdown(card_html, unsafe_allow_html=True)
+            # Render card
+            st.markdown(card_html, unsafe_allow_html=True)
 
-                # --------------------------------------------------
-                # REAL Save Bet button (Streamlit-owned)
-                # --------------------------------------------------
-                save_key = f"{key_base}_save"
+            # Buttons row
+            bcol1, bcol2 = st.columns([1, 2])
 
+            with bcol1:
                 if st.button(
                     "💾 Save Bet",
                     key=save_key,
@@ -3448,9 +3455,7 @@ def render_prop_cards(
                     })
                     st.toast("Saved bet ✅")
 
-                # --------------------------------------------------
-                # Expand / collapse button (UNCHANGED)
-                # --------------------------------------------------
+            with bcol2:
                 expand_label = (
                     "Collapse ▴"
                     if st.session_state.get(expand_key, False)

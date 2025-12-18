@@ -30,6 +30,17 @@ from google.cloud import bigquery
 from google.oauth2 import service_account
 
 # ------------------------------------------------------
+# Memory debug helper
+# ------------------------------------------------------
+import os
+import psutil
+
+_process = psutil.Process(os.getpid())
+
+def get_mem_mb() -> float:
+    return _process.memory_info().rss / 1024 / 1024
+
+# ------------------------------------------------------
 # STREAMLIT CONFIG (MUST BE FIRST STREAMLIT COMMAND)
 # ------------------------------------------------------
 st.set_page_config(
@@ -43,7 +54,7 @@ st.sidebar.markdown("🧪 DEV_APP.PY RUNNING")
 
 IS_DEV = True
 
-
+st.caption(f"🧠 RAM usage: {get_mem_mb():.0f} MB")
 # ------------------------------------------------------
 # ENVIRONMENT VARIABLES
 # ------------------------------------------------------
@@ -3186,6 +3197,24 @@ def render_prop_cards(
     # ======================================================
     for idx, row in page_df.iterrows():
         col = cols[idx % 4]
+    
+        # 🔍 MEMORY DEBUG (per card)
+        mem_mb = get_mem_mb()
+        st.markdown(
+            f"""
+            <div style="
+                font-size:0.7rem;
+                color:#999;
+                text-align:right;
+                margin-bottom:4px;
+            ">
+                RAM: {mem_mb:.0f} MB
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    
+        # ---- existing card rendering continues below ----
 
         with col:
             player = row.get("player", "") or ""
@@ -3196,6 +3225,22 @@ def render_prop_cards(
 
             bet_type = str(row.get("bet_type", "")).upper()
             line = row.get("line")
+
+            # ======================================================
+            # STEP 5 — POST-RENDER GC (ONCE PER RERUN)
+            # ======================================================
+            import gc
+            gc.collect()
+            
+            st.caption(f"After render + GC: {get_mem_mb():.0f} MB")
+            
+            
+            # ======================================================
+            # STEP 6 — FINAL END-OF-RERUN SNAPSHOT
+            # ======================================================
+            st.sidebar.caption(
+                f"🔚 End of rerun RAM: {get_mem_mb():.0f} MB"
+            )
 
             # --------------------------------------------------
             # Odds / hit info
@@ -3590,20 +3635,31 @@ def render_prop_cards(
                     "<div style='display:flex; justify-content:flex-end;'>",
                     unsafe_allow_html=True,
                 )
-
+                
                 saved = st.button(
                     "💾 Save Bet",
                     key=f"{key_base}_save",
                 )
-
+                
                 st.markdown("</div>", unsafe_allow_html=True)
-
+                
                 if saved:
+                    # 🔍 MEMORY DEBUG — BEFORE SAVE
+                    mem_before = get_mem_mb()
+                
                     added = save_bet_for_user(
                         user_id=current_user_id,
                         bet=save_payload,
                     )
-
+                
+                    # 🔍 MEMORY DEBUG — AFTER SAVE
+                    mem_after = get_mem_mb()
+                
+                    st.caption(
+                        f"Save Bet Δ: +{mem_after - mem_before:.0f} MB "
+                        f"(now {mem_after:.0f} MB)"
+                    )
+                
                     if added:
                         st.success("Bet saved")
                     else:

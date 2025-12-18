@@ -1184,6 +1184,63 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+st.markdown(
+    """
+    <style>
+    .expanded-wrap {
+        margin-top: 8px;
+        padding: 10px;
+        border-radius: 12px;
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.12);
+    }
+
+    .expanded-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+        flex-wrap: nowrap;
+    }
+
+    .metric {
+        flex: 1;
+        text-align: center;
+        font-size: 0.72rem;
+    }
+
+    .metric span {
+        display: block;
+        color: #9ca3af;
+        margin-bottom: 2px;
+    }
+
+    .metric strong {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #ffffff;
+    }
+
+    .dist-row .metric {
+        font-size: 0.68rem;
+    }
+
+    .wowy-row {
+        font-size: 0.72rem;
+        color: #e5e7eb;
+        flex-wrap: wrap;
+    }
+
+    .wowy-empty {
+        color: #9ca3af;
+        font-style: italic;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 
 
 # ------------------------------------------------------
@@ -3280,35 +3337,48 @@ def render_prop_cards(
             expanded_html = (
                 f"<div class='expanded-wrap'>"
 
+                # ==================================================
+                # ROW 1 — AVERAGES
+                # ==================================================
                 f"<div class='expanded-row'>"
                 f"<div class='metric'><span>L5</span><strong>{_fmt1(l5_avg)}</strong></div>"
                 f"<div class='metric'><span>L10</span><strong>{_fmt1(l10_avg)}</strong></div>"
                 f"<div class='metric'><span>L20</span><strong>{_fmt1(l20_avg)}</strong></div>"
+                f"<div class='metric'><span>Δ Line</span><strong>{_fmt1(l10_avg - (line or 0))}</strong></div>"
                 f"</div>"
 
-                f"<div class='dist-block'>"
-                f"<div class='dist-header'>L20 Distribution</div>"
-                f"<div class='expanded-row'>"
-                f"<div class='metric'><span>Hit</span><strong>{_pct(row.get('dist20_hit_rate'))}</strong></div>"
+                # ==================================================
+                # ROW 2 — L20 DISTRIBUTION
+                # ==================================================
+                f"<div class='expanded-row dist-row'>"
+                f"<div class='metric'><span>L20 Hit</span><strong>{_pct(row.get('dist20_hit_rate'))}</strong></div>"
                 f"<div class='metric'><span>+1</span><strong>{_pct(row.get('dist20_clear_1p_rate'))}</strong></div>"
                 f"<div class='metric'><span>+2</span><strong>{_pct(row.get('dist20_clear_2p_rate'))}</strong></div>"
                 f"<div class='metric'><span>Bad</span><strong>{_pct(row.get('dist20_fail_bad_rate'))}</strong></div>"
                 f"<div class='metric'><span>Margin</span><strong>{_fmt1(row.get('dist20_avg_margin'))}</strong></div>"
                 f"</div>"
 
-                f"<div class='dist-header'>L40 Distribution</div>"
-                f"<div class='expanded-row'>"
-                f"<div class='metric'><span>Hit</span><strong>{_pct(row.get('dist40_hit_rate'))}</strong></div>"
+                # ==================================================
+                # ROW 3 — L40 DISTRIBUTION
+                # ==================================================
+                f"<div class='expanded-row dist-row'>"
+                f"<div class='metric'><span>L40 Hit</span><strong>{_pct(row.get('dist40_hit_rate'))}</strong></div>"
                 f"<div class='metric'><span>+1</span><strong>{_pct(row.get('dist40_clear_1p_rate'))}</strong></div>"
                 f"<div class='metric'><span>+2</span><strong>{_pct(row.get('dist40_clear_2p_rate'))}</strong></div>"
                 f"<div class='metric'><span>Bad</span><strong>{_pct(row.get('dist40_fail_bad_rate'))}</strong></div>"
                 f"<div class='metric'><span>Margin</span><strong>{_fmt1(row.get('dist40_avg_margin'))}</strong></div>"
                 f"</div>"
+
+                # ==================================================
+                # ROW 4 — INJURY / WOWY
+                # ==================================================
+                f"<div class='expanded-row wowy-row'>"
+                f"{row.get('wowy_html','<span class=\"wowy-empty\">No injury impact</span>')}"
                 f"</div>"
 
-                f"{row.get('wowy_html','')}"
                 f"</div>"
             )
+
 
             # -------------------------
             # SAVE BET

@@ -3148,7 +3148,6 @@ def render_prop_cards(
             player_team=("player_team", "first"),
             home_team=("home_team", "first"),
             visitor_team=("visitor_team", "first"),
-            game_id=("game_id", "first"),
     
             # OPTIONAL but likely used
             opp_rank=("opp_rank", "first"),

@@ -42,19 +42,13 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# --------------------------------------------------
-# Session initialization (REQUIRED)
-# --------------------------------------------------
-if "current_user_id" not in st.session_state:
-    st.session_state["current_user_id"] = 1  # dev / single-user placeholder
-
 # ------------------------------------------------------
 # ENVIRONMENT VARIABLES
 # ------------------------------------------------------
 PROJECT_ID = os.getenv("PROJECT_ID", "")
 
 DATASET = os.getenv("BIGQUERY_DATASET", "nba_prop_analyzer")
-PROPS_TABLE = "todays_props_enriched"
+PROPS_TABLE = "todays_props_with_hit_rates"
 HISTORICAL_TABLE = "historical_player_stats_for_trends"
 
 # SERVICE_JSON is a JSON string (not a filepath)
@@ -70,65 +64,33 @@ AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE", "")
 # Render PostgreSQL
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 
-# ------------------------------------------------------
-# REQUIRED ENV VARS (app cannot run without these)
-# ------------------------------------------------------
-missing_required = []
+missing_env = []
 if not PROJECT_ID:
-    missing_required.append("PROJECT_ID")
+    missing_env.append("PROJECT_ID")
 if not SERVICE_JSON:
-    missing_required.append("GCP_SERVICE_ACCOUNT")
+    missing_env.append("GCP_SERVICE_ACCOUNT")
 if not DATABASE_URL:
-    missing_required.append("DATABASE_URL")
+    missing_env.append("DATABASE_URL")
+if not AUTH0_DOMAIN:
+    missing_env.append("AUTH0_DOMAIN")
+if not AUTH0_CLIENT_ID:
+    missing_env.append("AUTH0_CLIENT_ID")
+if not AUTH0_CLIENT_SECRET:
+    missing_env.append("AUTH0_CLIENT_SECRET")
+if not AUTH0_REDIRECT_URI:
+    missing_env.append("AUTH0_REDIRECT_URI")
+if not AUTH0_AUDIENCE:
+    missing_env.append("AUTH0_AUDIENCE")
 
-if missing_required:
+if missing_env:
     st.error(
-        "❌ Missing REQUIRED environment variables:\n\n"
-        + "\n".join(f"- {m}" for m in missing_required)
+        "❌ Missing required environment variables:\n\n"
+        + "\n".join(f"- {m}" for m in missing_env)
     )
     st.stop()
 
-# ------------------------------------------------------
-# OPTIONAL ENV VARS (Auth0 – not enabled yet)
-# ------------------------------------------------------
-missing_auth0 = []
-if not AUTH0_DOMAIN:
-    missing_auth0.append("AUTH0_DOMAIN")
-if not AUTH0_CLIENT_ID:
-    missing_auth0.append("AUTH0_CLIENT_ID")
-if not AUTH0_CLIENT_SECRET:
-    missing_auth0.append("AUTH0_CLIENT_SECRET")
-if not AUTH0_REDIRECT_URI:
-    missing_auth0.append("AUTH0_REDIRECT_URI")
-if not AUTH0_AUDIENCE:
-    missing_auth0.append("AUTH0_AUDIENCE")
-
-if missing_auth0:
-    st.sidebar.warning(
-        "Auth0 not fully configured (running in single-user mode)"
-    )
 
 
-# ======================================================
-# HARD CACHED BIGQUERY LOADERS (REQUIRED FOR STABILITY)
-# ======================================================
-
-@st.cache_data(ttl=300, show_spinner="Loading today’s props…")
-def load_props_df(sql: str):
-    client = bigquery.Client(
-        project=PROJECT_ID,
-        credentials=credentials,
-    )
-    return client.query(sql).to_dataframe()
-
-@st.cache_data(ttl=600, show_spinner="Loading historical stats…")
-def load_historical_df(sql: str):
-    client = bigquery.Client(
-        project=PROJECT_ID,
-        credentials=credentials,
-    )
-    return client.query(sql).to_dataframe()
-    
 # ------------------------------------------------------
 # SQL STATEMENTS (BIGQUERY)
 # ------------------------------------------------------
@@ -1152,42 +1114,6 @@ components.html("""
 </style>
 """, height=0)
 
-st.markdown("""
-<style>
-button[kind="secondary"] {
-    border-radius: 0 0 14px 14px;
-    font-weight: 700;
-    font-size: 0.85rem;
-}
-</style>
-""", unsafe_allow_html=True)
-
-
-st.markdown(
-    """
-    <style>
-    /* Save Bet button overlay for prop cards */
-    div[data-testid="stButton"] > button[prop-save-btn="true"] {
-        position: relative;
-        top: -52px;
-        left: calc(100% - 140px);
-        background: linear-gradient(135deg, #22c55e, #16a34a);
-        color: white;
-        border-radius: 999px;
-        border: none;
-        font-weight: 800;
-        font-size: 0.78rem;
-        padding: 6px 14px;
-        box-shadow: 0 6px 18px rgba(0,0,0,0.35);
-    }
-
-    div[data-testid="stButton"] > button[prop-save-btn="true"]:hover {
-        background: linear-gradient(135deg, #34d399, #22c55e);
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
 
 
 # ------------------------------------------------------
@@ -1219,23 +1145,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
-# ------------------------------------------------------
-# SPARKLINE WINDOW CONFIG
-# ------------------------------------------------------
-SPARK_WINDOWS = {
-    "L5": {
-        "vals_col": "pts_last5_list",
-        "avg_col": "pts_last5_avg",
-        "width": 120,
-    },
-    "L20": {
-        "vals_col": "pts_last20_list",
-        "avg_col": "pts_last20_avg",
-        "width": 160,
-    },
-}
-
 
 # ------------------------------------------------------
 # SCROLL-TO-TOP FLOATING BUTTON (GLOBAL)
@@ -1381,176 +1290,6 @@ def logo(team_name: str) -> str:
         return "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
     return TEAM_LOGOS.get(code)
 
-def _safe_float(x):
-    try:
-        if x is None or pd.isna(x):
-            return None
-        return float(x)
-    except Exception:
-        return None
-
-def _fmt1(x):
-    return f"{float(x):.1f}" if x is not None and not pd.isna(x) else f"-"
-
-def _fmt_signed1(x):
-    if x is None or pd.isna(x):
-        return f"-"
-    return f"{float(x):+.1f}"
-
-def _norm_name(s: str) -> str:
-    return (
-        str(s or "")
-        .lower()
-        .replace(".", "")
-        .replace("'", "")
-        .replace("-", " ")
-        .replace(" jr", "")
-        .replace(" sr", "")
-        .strip()
-    )
-
-def _get_stat_list_for_market(row, n: int):
-    stat = detect_stat(row.get("market", ""))
-    if not stat:
-        return []
-    col = f"{stat}_last{n}_list"
-    v = row.get(col)
-    if v is None:
-        return []
-    try:
-        return list(v)
-    except Exception:
-        return []
-
-def _avg_last(values: list):
-    vals = []
-    for x in values:
-        if isinstance(x, (int, float)) and not pd.isna(x):
-            vals.append(float(x))
-    if not vals:
-        return None
-    return float(sum(vals) / len(vals))
-
-def _team_injuries_for_team(team_abbrev: str, exclude_player: str):
-    if injury_df is None or injury_df.empty:
-        return []
-
-    t = str(team_abbrev or "").strip().upper()
-    ex_norm = _norm_name(exclude_player)
-
-    df = injury_df.copy()
-    df = df[df["team_abbrev"].astype(str).str.upper() == t]
-
-    out = []
-    for _, r in df.iterrows():
-        nm = str(r.get("full_name", "") or "")
-        if _norm_name(nm) == ex_norm:
-            continue
-
-        stt = str(r.get("status", "") or "").strip()
-        abbr = str(r.get("status_type_abbr", "") or "").strip()
-        label = abbr if abbr else stt
-
-        if label:
-            out.append({"name": nm, "status": label})
-
-    # de-dupe by name keeping first (newest snapshot_ts already sorted DESC in SQL)
-    seen = set()
-    dedup = []
-    for x in out:
-        key = _norm_name(x["name"])
-        if key in seen:
-            continue
-        seen.add(key)
-        dedup.append(x)
-
-    return dedup
-
-def _market_to_wowy_col(market: str):
-    m = str(market or "").lower()
-    if "points_rebounds_assists" in m or "pra" in m:
-        return "pra_delta"
-    if "points_rebounds" in m or " pr" in m:
-        return "pts_reb_delta"
-    if "points_assists" in m or " pa" in m:
-        return "pa_delta"
-    if "rebounds_assists" in m or " ra" in m:
-        return "ra_delta"
-    if "assist" in m or "ast" in m:
-        return "ast_delta"
-    if "rebound" in m or "reb" in m:
-        return "reb_delta"
-    if "point" in m or "pts" in m:
-        return "pts_delta"
-    return None
-
-def _injury_wowy_impact_for_name(wowy_list: list[dict], injured_name: str, market: str):
-    col = _market_to_wowy_col(market)
-    if not col:
-        return None
-
-    target = _norm_name(injured_name)
-    for w in (wowy_list or []):
-        b = str(w.get("breakdown", "") or "")
-        # your breakdown often has teammate then arrow
-        left = b.split("→")[0].strip()
-        if target and target in _norm_name(left):
-            v = w.get(col)
-            v2 = _safe_float(v)
-            if v2 is not None:
-                return float(v2)
-    return None
-
-def _confidence_index(
-    hit_rate,
-    implied_prob,
-    delta_vs_line,
-    minutes_delta=None,        # 👈 OPTIONAL
-    inj_impact_sum=None,
-):
-    # simple + stable: 0..100
-    hr = float(hit_rate or 0.0)
-    ip = float(implied_prob or 0.0)
-    edge = hr - ip
-
-    base = 50.0
-    base += max(-20.0, min(25.0, edge * 120.0))
-
-    if delta_vs_line is not None:
-        base += max(-10.0, min(10.0, float(delta_vs_line) * 2.5))
-
-    if minutes_delta is not None:
-        # est_minutes - l5_min_avg : negative hurts
-        base += max(-18.0, min(10.0, float(minutes_delta) * 2.0))
-
-    if inj_impact_sum is not None:
-        base += max(-10.0, min(14.0, float(inj_impact_sum) * 3.0))
-
-    return int(round(max(0.0, min(100.0, base))))
-
-def _pct(v):
-    return f"{v*100:.0f}%" if v is not None else "—"
-
-def _pm(v):
-    return f"{v:+.1f}" if v is not None else "—"
-
-
-# ======================================================
-# WOWY market → delta column mapping
-# ======================================================
-WOWY_MARKET_MAP = {
-    "PTS": "pts_delta",
-    "REB": "reb_delta",
-    "AST": "ast_delta",
-    "STL": "stl_delta",
-    "BLK": "blk_delta",
-
-    "PRA": "pra_delta",
-    "PR": "pts_reb_delta",
-    "PA": "pts_ast_delta",
-    "RA": "reb_ast_delta",
-}
-
 def fmt(
     val,
     decimals: int = 1,
@@ -1647,7 +1386,7 @@ def build_tags_html(tags):
         )
 
     return "".join(html_parts)
-    
+
 
 # ------------------------------------------------------
 # LOGO LOADERS
@@ -1783,51 +1522,20 @@ if not st.session_state.saved_bets_loaded:
 
 
 
-def save_bet_for_user(user_id: int, bet: dict) -> bool:
-    """
-    Save a bet for the current user.
-    - Deduplicates by (player, market, line, bet_type)
-    - Appends to session_state
-    - Syncs full list to Postgres
-    Returns True if added, False if duplicate.
-    """
+# Helper: persist bets for this user to Postgres
+def save_bet_for_user(user_id: int, bet: dict):
+    """Append a bet for this user (per account) and sync to the saved_bets table."""
+    # Normalize old 'Label' field if present
+    if "bet_type" not in bet and "Label" in bet:
+        bet["bet_type"] = bet.pop("Label")
 
-    # Ensure session list exists
-    if "saved_bets" not in st.session_state:
-        st.session_state["saved_bets"] = []
+    # Append to in-memory session list
+    current = st.session_state.get("saved_bets", [])
+    current.append(bet)
+    st.session_state.saved_bets = current
 
-    saved = st.session_state["saved_bets"]
-
-    # Canonical dedupe key
-    dedupe_key = (
-        bet.get("player"),
-        bet.get("market"),
-        bet.get("line"),
-        bet.get("bet_type"),
-    )
-
-    existing_keys = {
-        (
-            b.get("player"),
-            b.get("market"),
-            b.get("line"),
-            b.get("bet_type"),
-        )
-        for b in saved
-    }
-
-    if dedupe_key in existing_keys:
-        return False
-
-    # Append (DO NOT mutate input)
-    saved.append(bet.copy())
-    st.session_state["saved_bets"] = saved
-
-    # Persist full list
-    replace_saved_bets_in_db(user_id, saved)
-
-    return True
-
+    # Sync entire list to DB
+    replace_saved_bets_in_db(user_id, current)
 
 # ------------------------------------------------------
 # UTILITY FUNCTIONS (from production)
@@ -2172,7 +1880,10 @@ history_df = load_history()
 depth_df = load_depth_charts()
 injury_df = load_injury_report()    # <-- MUST COME BEFORE FIX
 wowy_df = load_wowy_deltas()
-
+game_analytics_df = load_game_analytics()
+game_report_df = load_game_report()
+game_odds_df = load_game_odds()
+ncaab_game_analytics_df = load_ncaab_game_analytics()
 
 
 # ------------------------------------------------------
@@ -2214,17 +1925,6 @@ market_pretty_map = {
     "player_fg3m": "3PM",
     "player_blocks_steals": "Stocks (BLK+STL)"
 }
-
-MARKET_TO_PREFIX = {
-    "pts": "pts",
-    "reb": "reb",
-    "ast": "ast",
-    "pts+reb": "pr",
-    "pts+ast": "pa",
-    "reb+ast": "ra",
-    "pts+reb+ast": "pra",
-}
-
 
 # ------------------------------------------------------
 # NORMALIZE PLAYER NAMES (fix merge issues)
@@ -2372,36 +2072,33 @@ def toggle_expander(key: str):
 # ------------------------------------------------------
 # WOWY HELPERS
 # ------------------------------------------------------
-def attach_wowy_deltas(props_df: pd.DataFrame, wowy_df: pd.DataFrame) -> pd.DataFrame:
-    if wowy_df is None or wowy_df.empty:
-        return props_df
+def attach_wowy_deltas(df, wowy_df_global):
+    """Attach WOWY rows (can be multiple injured teammates) to props by player + team."""
+    if wowy_df_global is None or wowy_df_global.empty:
+        return df
+
+    df = df.copy()
 
     def norm(x):
         if not isinstance(x, str):
             return ""
         return (
             x.lower()
-            .replace(".", "")
-            .replace("-", " ")
-            .replace("'", "")
-            .strip()
+             .replace(".", "")
+             .replace("-", " ")
+             .replace("'", "")
+             .strip()
         )
 
-    # IMPORTANT: WOWY uses player_a
-    df = props_df
-    wowy = wowy_df.copy()
-
     df["player_norm"] = df["player"].apply(norm)
-    wowy["player_norm"] = wowy["player_a"].apply(norm)
 
     merged = df.merge(
-        wowy,
+        wowy_df_global,
         how="left",
         left_on=["player_norm", "player_team"],
         right_on=["player_norm", "team_abbr"],
         suffixes=("", "_wowy"),
     )
-
     return merged
 
 
@@ -2501,45 +2198,6 @@ def build_wowy_block(row):
 import pandas as pd
 import numpy as np
 
-def compute_confidence(
-    *,
-    hit_rate_l10: float | None,
-    delta_vs_line: float | None,
-    opp_rank: int | None,
-) -> tuple[float | None, str | None]:
-
-    if hit_rate_l10 is None or delta_vs_line is None:
-        return None, None
-
-    hit_score = max(0, min(1, hit_rate_l10))
-
-    MAX_DELTA = 8.0
-    delta_score = max(
-        0,
-        min(1, (delta_vs_line + MAX_DELTA) / (2 * MAX_DELTA))
-    )
-
-    if opp_rank:
-        opp_score = (opp_rank - 1) / 29
-    else:
-        opp_score = 0.5
-
-    score = (
-        0.4 * hit_score +
-        0.4 * delta_score +
-        0.2 * opp_score
-    ) * 100
-
-    if score >= 75:
-        level = "Strong"
-    elif score >= 60:
-        level = "Medium"
-    else:
-        level = "Light"
-
-    return round(score, 1), level
-
-
 def get_spark_series(row):
     stat = detect_stat(row.get("market", ""))
     if not stat:
@@ -2588,108 +2246,7 @@ def get_spark_series(row):
 
     return [], []
 
-def build_bar_sparkline_svg_with_lines(
-    values: list,
-    *,
-    line_value: float | None = None,
-    avg_value: float | None = None,
-    width: int = 120,
-    height: int = 36,
-) -> str:
-    """
-    Bar sparkline with:
-    - Green bars above line
-    - Red bars below line
-    - Dashed prop line
-    - Optional avg line
-    Works for L5, L10, L20, etc.
-    """
 
-    if not values:
-        return ""
-
-    # -----------------------------
-    # Clean + coerce values
-    # -----------------------------
-    vals = [v for v in values if v is not None and not pd.isna(v)]
-    if not vals:
-        return ""
-
-    vmin = min(vals)
-    vmax = max(vals)
-
-    if vmin == vmax:
-        vmin -= 1
-        vmax += 1
-
-    pad_top = 3
-    pad_bottom = 3
-
-    def y(v):
-        return (
-            height - pad_bottom
-            - ((v - vmin) / (vmax - vmin)) * (height - pad_top - pad_bottom)
-        )
-
-    # -----------------------------
-    # Horizontal lines
-    # -----------------------------
-    overlays = ""
-
-    if line_value is not None and vmin <= line_value <= vmax:
-        y_line = y(line_value)
-        overlays += (
-            f"<line x1='0' y1='{y_line:.1f}' "
-            f"x2='{width}' y2='{y_line:.1f}' "
-            f"stroke='#ef4444' stroke-width='1' "
-            f"stroke-dasharray='4,3' />"
-        )
-
-    if avg_value is not None and vmin <= avg_value <= vmax:
-        y_avg = y(avg_value)
-        overlays += (
-            f"<line x1='0' y1='{y_avg:.1f}' "
-            f"x2='{width}' y2='{y_avg:.1f}' "
-            f"stroke='#38bdf8' stroke-width='1' />"
-        )
-
-    # -----------------------------
-    # Bars
-    # -----------------------------
-    n = len(vals)
-    gap = 1.5
-    bar_width = (width - (n - 1) * gap) / n
-
-    bars = []
-
-    for i, v in enumerate(vals):
-        bar_height = max(1, height - y(v) - pad_bottom)
-        x = i * (bar_width + gap)
-        y_pos = height - bar_height
-
-        if line_value is not None and v < line_value:
-            color = "#ef4444"  # red
-        else:
-            color = "#22c55e"  # green
-
-        bars.append(
-            f"<rect x='{x:.1f}' y='{y_pos:.1f}' "
-            f"width='{bar_width:.1f}' height='{bar_height:.1f}' "
-            f"rx='1.5' fill='{color}' />"
-        )
-
-    # -----------------------------
-    # Final SVG
-    # -----------------------------
-    return (
-        f"<svg width='{width}' height='{height}' "
-        f"viewBox='0 0 {width} {height}' "
-        f"preserveAspectRatio='none'>"
-        f"{overlays}"
-        f"{''.join(bars)}"
-        f"</svg>"
-    )
-    
 def build_sparkline_bars_hitmiss(
     values,
     dates,
@@ -2751,36 +2308,7 @@ def build_sparkline_bars_hitmiss(
         {''.join(date_labels)}
     </svg>
     """
-    
-def market_to_prefix(market: str | None) -> str | None:
-    if not market:
-        return None
 
-    m = market.lower().replace(" ", "").replace("_", "").replace("-", "")
-
-    # Singles
-    if m in ("pts", "points"):
-        return "pts"
-    if m in ("reb", "rebs", "rebounds"):
-        return "reb"
-    if m in ("ast", "asts", "assists"):
-        return "ast"
-    if m in ("stl", "stls", "steals"):
-        return "stl"
-    if m in ("blk", "blks", "blocks"):
-        return "blk"
-
-    # Combos
-    if m in ("ptsreb", "pointsrebounds", "pr"):
-        return "pr"
-    if m in ("ptsast", "pointsassists", "pa"):
-        return "pa"
-    if m in ("rebast", "reboundsassists", "ra"):
-        return "ra"
-    if m in ("ptsrebast", "pointsreboundsassists", "pra"):
-        return "pra"
-
-    return None
 
 def normalize_bookmaker(raw: str) -> str:
     if not raw:
@@ -2912,8 +2440,6 @@ def build_injury_lookup():
 
 # Build lookup at load
 build_injury_lookup()
-
-
 
 def pretty_game_time(dt):
     """
@@ -3069,7 +2595,8 @@ def render_prop_cards(
 ):
     """
     Shared card-grid renderer for both EV+ Props and Available Props.
-    One card per unique prop. Multiple sportsbooks combined per card.
+    Cards are always visible; tapping the card's invisible overlay expands
+    an analytics / Save Bet section underneath.
     """
 
     if df.empty:
@@ -3077,26 +2604,37 @@ def render_prop_cards(
         return
 
     # ------------------------------------------------------
-    # WOWY merge
+    # WOWY merge once per render
     # ------------------------------------------------------
     card_df = attach_wowy_deltas(df, wowy_df)
 
-    # ------------------------------------------------------
-    # Restrict to DK / FD only
-    # ------------------------------------------------------
-    card_df = card_df[
-        card_df["bookmaker"].isin(
-            [
-                "DraftKings",
-                "FanDuel",
-                "draftkings",
-                "fanduel",
-            ]
-        )
+    wowy_cols = [
+        "breakdown",
+        "pts_delta",
+        "reb_delta",
+        "ast_delta",
+        "pra_delta",
+        "pts_reb_delta",
     ]
 
+    def extract_wowy_list(g: pd.DataFrame) -> list[dict]:
+        df2 = g.copy()
+        df2 = df2[wowy_cols]
+        if "breakdown" in df2.columns:
+            df2 = df2[df2["breakdown"].notna()]
+        return df2.to_dict("records")
+
+    w_map: dict[tuple[str, str], list[dict]] = {}
+    for (player, team), g in card_df.groupby(["player", "player_team"]):
+        w_map[(player, team)] = extract_wowy_list(g)
+
+    card_df["_wowy_list"] = card_df.apply(
+        lambda r: w_map.get((r["player"], r["player_team"]), []),
+        axis=1,
+    )
+
     # ------------------------------------------------------
-    # Row filter
+    # Row filter (odds / hit-rate / EV+ / opponent rank)
     # ------------------------------------------------------
     def card_good(row: pd.Series) -> bool:
         price = row.get("price")
@@ -3126,75 +2664,15 @@ def render_prop_cards(
     card_df = card_df[card_df.apply(card_good, axis=1)]
 
     if card_df.empty:
-        st.info("No props match your filters (after EV / odds / hit-rate logic).")
+        st.info("No props match your filters (after EV/odds/hit-rate logic).")
         return
 
     # ------------------------------------------------------
-    # GROUP INTO UNIQUE PROPS (combine sportsbooks)
-    # ------------------------------------------------------
-    PROP_KEY_COLS = [
-        "player",
-        "player_team",
-        "opponent_team",
-        "market",
-        "line",
-        "bet_type",
-    ]
-
-    SPARK_COLS = [
-        "pts_last5_list", "pts_last10_list", "pts_last20_list",
-        "reb_last5_list", "reb_last10_list", "reb_last20_list",
-        "ast_last5_list", "ast_last10_list", "ast_last20_list",
-        "pra_last5_list", "pra_last10_list", "pra_last20_list",
-        "pr_last10_list", "pa_last10_list", "ra_last10_list",
-        "last10_dates",
-    ]
-
-    agg_map = {
-        # sportsbooks
-        "book_prices": (
-            "price",
-            lambda s: [
-                {"book": b, "price": int(p) if not pd.isna(p) else None}
-                for b, p in zip(card_df.loc[s.index, "bookmaker"], s)
-            ]
-        ),
-    
-        # metrics
-        "hit_rate_last5": ("hit_rate_last5", "first"),
-        "hit_rate_last10": ("hit_rate_last10", "first"),
-        "hit_rate_last20": ("hit_rate_last20", "first"),
-        "edge_pct": ("edge_pct", "first"),
-        "implied_prob": ("implied_prob", "first"),
-    
-        # teams
-        "player_team": ("player_team", "first"),
-        "home_team": ("home_team", "first"),
-        "visitor_team": ("visitor_team", "first"),
-    }
-    
-    # optional numeric/context fields
-    for c in ["game_id", "matchup_difficulty_score", "est_minutes"]:
-        if c in card_df.columns:
-            agg_map[c] = (c, "first")
-    
-    # 🔥 sparkline arrays (THIS FIXES YOUR ISSUE)
-    for c in SPARK_COLS:
-        if c in card_df.columns:
-            agg_map[c] = (c, "first")
-    
-    card_df = (
-        card_df
-        .groupby(PROP_KEY_COLS, dropna=False, as_index=False)
-        .agg(**agg_map)
-    )
-
-    # ------------------------------------------------------
-    # Sorting
+    # Sorting: best hit-rate → best odds
     # ------------------------------------------------------
     card_df = card_df.sort_values(
-        by=[hit_rate_col],
-        ascending=[False],
+        by=[hit_rate_col, "price"],
+        ascending=[False, True],
     ).reset_index(drop=True)
 
     # ------------------------------------------------------
@@ -3207,470 +2685,280 @@ def render_prop_cards(
     st.write(f"Showing {total_cards} props • {total_pages} pages")
 
     page = st.number_input(
-        f"Page",
+        "Page",
         min_value=1,
         max_value=total_pages,
         value=1,
         step=1,
-        key=f"{page_key}_card_page",
+        key=f"{page_key}_card_page_number",
     )
 
     start = (page - 1) * page_size
     end = start + page_size
     page_df = card_df.iloc[start:end]
 
-    # ------------------------------------------------------
     # Scroll wrapper
-    # ------------------------------------------------------
     st.markdown(
-        f"<div style='max-height:1100px; overflow-y:auto; padding-right:12px;'>",
+        '<div style="max-height:1100px; overflow-y:auto; padding-right:12px;">',
         unsafe_allow_html=True,
     )
 
     cols = st.columns(4)
 
-    # ------------------------------------------------------
-    # Helper: stat-aware avg
-    # ------------------------------------------------------
-    def get_stat_avg(row, stat_prefix, window):
-        if stat_prefix:
-            val = row.get(f"{stat_prefix}_last{window}")
-            if val is not None:
-                return val
-        if window == 10:
-            return get_l10_avg(row)
-        return None
-
-    # ======================================================
-    # CARD LOOP
-    # ======================================================
+    # ============================================================
+    #                          CARD LOOP
+    # ============================================================
     for idx, row in page_df.iterrows():
         col = cols[idx % 4]
-
         with col:
+            # -------------------------------
+            # Basic fields
+            # -------------------------------
             player = row.get("player", "") or ""
 
+            def _norm(s: str) -> str:
+                return (
+                    str(s)
+                    .lower()
+                    .replace("'", "")
+                    .replace(".", "")
+                    .replace("-", "")
+                    .strip()
+                )
+
+            inj_status = INJURY_LOOKUP_BY_NAME.get(_norm(player))
+            badge_html = ""
+
+            if inj_status:
+                s = inj_status.lower()
+                if "out" in s:
+                    badge_color = "#ef4444"
+                elif "question" in s or "doubt" in s:
+                    badge_color = "#eab308"
+                else:
+                    badge_color = "#3b82f6"
+
+                badge_html = f"""
+                    <span style="
+                        background:{badge_color};
+                        color:white;
+                        padding:2px 6px;
+                        font-size:0.65rem;
+                        font-weight:700;
+                        border-radius:6px;
+                        margin-left:6px;
+                        white-space:nowrap;
+                    ">
+                    {inj_status.upper()}
+                    </span>
+                """
+
             pretty_market = MARKET_DISPLAY_MAP.get(
-                row.get("market"), row.get("market")
+                row.get("market", ""), row.get("market", "")
             )
-
             bet_type = str(row.get("bet_type", "")).upper()
-            line = row.get("line")
+            line = row.get("line", "")
 
-            # --------------------------------------------------
             # Odds / hit info
-            # --------------------------------------------------
+            price_val = row.get("price", 0)
+            try:
+                odds = int(price_val)
+            except (TypeError, ValueError):
+                odds = 0
+
+            implied_prob = compute_implied_prob(odds) or 0.0
             hit_val = row.get(hit_rate_col, 0.0) or 0.0
+
             l10_avg = get_l10_avg(row)
             l10_avg_display = f"{l10_avg:.1f}" if l10_avg is not None else "-"
 
-            # --------------------------------------------------
             # Opponent rank
-            # --------------------------------------------------
             opp_rank = get_opponent_rank(row)
-            rank_display = opp_rank if isinstance(opp_rank, int) else "-"
-            rank_color = rank_to_color(opp_rank) if isinstance(opp_rank, int) else "#9ca3af"
+            if isinstance(opp_rank, int):
+                rank_display = opp_rank
+                rank_color = rank_to_color(opp_rank)
+            else:
+                rank_display = "-"
+                rank_color = "#9ca3af"
 
-            # --------------------------------------------------
-            # Sparkline
-            # --------------------------------------------------
+            # Sparkline (values + dates)
             spark_vals, spark_dates = get_spark_series(row)
+            line_value = float(row.get("line", 0) or 0)
             spark_html = build_sparkline_bars_hitmiss(
                 spark_vals,
                 spark_dates,
-                float(line or 0),
+                line_value
             )
 
-            # --------------------------------------------------
+            # DEBUG — sparkline data
+            if spark_vals:
+                st.caption(f"DEBUG spark: {len(spark_vals)} vals | dates: {spark_dates[:3]}")
+            else:
+                st.caption("DEBUG spark: NO VALUES")
+
+
             # Logos
-            # --------------------------------------------------
-            home_logo = TEAM_LOGOS_BASE64.get(
-                normalize_team_code(row.get("player_team", "")),
-                "",
-            )
+            player_team = normalize_team_code(row.get("player_team", ""))
+            opp_team = normalize_team_code(row.get("opponent_team", ""))
 
-            opp_logo = TEAM_LOGOS_BASE64.get(
-                normalize_team_code(row.get("opponent_team", "")),
-                "",
-            )
+            home_logo = TEAM_LOGOS_BASE64.get(player_team, "")
+            opp_logo = TEAM_LOGOS_BASE64.get(opp_team, "")
 
-            # --------------------------------------------------
-            # BOOK PRICES (MULTI-BOOK)
-            # --------------------------------------------------
-            book_lines = []
+            # Sportsbook
+            book = normalize_bookmaker(row.get("bookmaker", ""))
+            book_logo_b64 = SPORTSBOOK_LOGOS_BASE64.get(book)
 
-            for bp in row.get("book_prices", []):
-                book = bp.get("book")
-                price = bp.get("price")
+            if book_logo_b64:
+                book_html = (
+                    f'<img src="{book_logo_b64}" '
+                    'style="height:26px; width:auto; max-width:80px; '
+                    'object-fit:contain; filter:drop-shadow(0 0 6px rgba(0,0,0,0.4));" />'
+                )
+            else:
+                book_html = (
+                    '<div style="padding:3px 10px; border-radius:8px;'
+                    'background:rgba(255,255,255,0.08);'
+                    'border:1px solid rgba(255,255,255,0.15);'
+                    'font-size:0.7rem;">'
+                    f"{book}"
+                    "</div>"
+                )
 
-                logo = SPORTSBOOK_LOGOS_BASE64.get(book)
+            # Tags / WOWY block
+            tags_html = build_tags_html(build_prop_tags(row))
+            wowy_html = build_wowy_block(row)
 
-                if logo and price is not None:
-                    book_lines.append(
-                        f"<div style='display:flex; align-items:center; gap:6px;'>"
-                        f"<img src='{logo}' style='height:22px; object-fit:contain;' />"
-                        f"<div style='font-size:0.75rem; font-weight:800;'>{price:+.0f}</div>"
-                        f"</div>"
-                    )
+            # ------------------------------------------------------
+            # Card HTML
+            # ------------------------------------------------------
+            card_lines = [
+                '<div class="prop-card">',
 
-            books_html = (
-                f"<div style='display:flex; flex-direction:column; "
-                f"align-items:flex-end; gap:4px;'>"
-                f"{''.join(book_lines)}"
-                f"</div>"
-            )
+                # Top bar
+                '<div style="display:flex; justify-content:space-between; '
+                'align-items:center; margin-bottom:10px;">',
 
-            # --------------------------------------------------
-            # CARD HTML
-            # --------------------------------------------------
-            card_html = (
-                f"<div class='prop-card'>"
-                f"<div style='display:flex; justify-content:space-between; "
-                f"align-items:center; margin-bottom:10px;'>"
-                f"<div style='display:flex; align-items:center; gap:6px;'>"
-                f"<img src='{home_logo}' style='height:20px;border-radius:4px;' />"
-                f"<span style='font-size:0.7rem;color:#9ca3af;'>vs</span>"
-                f"<img src='{opp_logo}' style='height:20px;border-radius:4px;' />"
-                f"</div>"
-                f"<div style='text-align:center; flex:1;'>"
-                f"<div style='font-size:1.05rem;font-weight:700;'>{player}</div>"
-                f"<div style='font-size:0.82rem;color:#9ca3af;'>"
+                # Left: logos
+                '<div style="display:flex; align-items:center; gap:6px; min-width:70px;">'
+                f'<img src="{home_logo}" style="height:20px;border-radius:4px;" />'
+                '<span style="font-size:0.7rem;color:#9ca3af;">vs</span>'
+                f'<img src="{opp_logo}" style="height:20px;border-radius:4px;" />'
+                "</div>",
+
+                # Center: player + market + injury
+                '<div style="text-align:center; flex:1; display:flex; '
+                'flex-direction:column; align-items:center;">'
+                f'<div style="font-size:1.05rem;font-weight:700; display:flex; '
+                f'align-items:center;">{player}{badge_html}</div>'
+                f'<div style="font-size:0.82rem;color:#9ca3af;">'
                 f"{pretty_market} • {bet_type} {line}</div>"
-                f"</div>"
-                f"{books_html}"
-                f"</div>"
-                f"<div style='display:flex; justify-content:center; margin:8px 0;'>"
-                f"{spark_html}</div>"
-                f"<div class='prop-meta'>"
-                f"<div>"
-                f"<div style='font-size:0.8rem;'>{hit_label}: {hit_val:.0%}</div>"
-                f"<div style='font-size:0.7rem;'>L10 Avg: {l10_avg_display}</div>"
-                f"</div>"
-                f"<div>"
-                f"<div style='font-size:0.8rem; font-weight:700; color:{rank_color};'>"
-                f"{rank_display}</div>"
-                f"<div style='font-size:0.7rem;'>Opp Rank</div>"
-                f"</div>"
-                f"</div>"
-                f"</div>"
-            )
+                "</div>",
 
-            # ------------------------------------------------------
-            # Stable keys
-            # ------------------------------------------------------
-            key_base = (
-                f"{page_key}_"
-                f"{row.get('player')}_"
-                f"{row.get('market')}_"
-                f"{row.get('line')}_"
-                f"{row.get('game_id', '')}"
-            )
-            
-            expand_key = f"{key_base}_expand"
-            
-            if expand_key not in st.session_state:
-                st.session_state[expand_key] = False
-            
-            
-            # ======================================================
-            # DERIVED METRICS (BUILT FIRST — IMPORTANT)
-            # ======================================================
-            display_market = row.get("market")
-            raw_stat = row.get("stat_type")
-            
-            STAT_PREFIX_MAP = {
-                "PTS": "pts",
-                "REB": "reb",
-                "AST": "ast",
-                "STL": "stl",
-                "BLK": "blk",
-                "PRA": "pra",
-                "PA":  "pa",
-                "PR":  "pr",
-                "RA":  "ra",
-                "POINTS": "pts",
-                "REBOUNDS": "reb",
-                "ASSISTS": "ast",
-                "STEALS": "stl",
-                "BLOCKS": "blk",
-            }
-            
-            stat_prefix = STAT_PREFIX_MAP.get(
-                str(raw_stat).strip().upper()
-                if raw_stat is not None
-                else None
-            )
-            
-            try:
-                line_val = float(row.get("line"))
-            except Exception:
-                line_val = None
-            
-            l5_avg  = get_stat_avg(row, stat_prefix, 5)
-            l10_avg = get_stat_avg(row, stat_prefix, 10)
-            l20_avg = get_stat_avg(row, stat_prefix, 20)
-            
-            delta_vs_line = (
-                (l10_avg - line_val)
-                if l10_avg is not None and line_val is not None
-                else None
-            )
-            
-            confidence_score, confidence_level = compute_confidence(
-                hit_rate_l10=row.get("hit_rate_last10"),
-                delta_vs_line=delta_vs_line,
-                opp_rank=row.get("opp_rank"),
-            )
-            
-            CONF_COLORS = {
-                "Strong": "#22c55e",
-                "Medium": "#eab308",
-                "Light":  "#60a5fa",
-            }
-            conf_color = CONF_COLORS.get(confidence_level, "#9ca3af")
-            
-            est_minutes = row.get("est_minutes")
-            l5_min_avg = row.get("l5_min_avg")
-            
-            minutes_delta = (
-                est_minutes - l5_min_avg
-                if est_minutes is not None and l5_min_avg is not None
-                else None
-            )
-            
-            # ======================================================
-            # DISTRIBUTION METRICS (L20 / L40)   ✅ ADD HERE
-            # ======================================================
-            dist20_hit = row.get("dist20_hit_rate")
-            dist20_c1 = row.get("dist20_clear_1p_rate")
-            dist20_c2 = row.get("dist20_clear_2p_rate")
-            dist20_bad = row.get("dist20_fail_bad_rate")
-            dist20_margin = row.get("dist20_avg_margin")
+                # Right: book
+                '<div style="display:flex; justify-content:flex-end; min-width:70px;">'
+                f"{book_html}"
+                "</div>",
+                "</div>",  # end top bar
 
-            dist40_hit = row.get("dist40_hit_rate")
-            dist40_c1 = row.get("dist40_clear_1p_rate")
-            dist40_c2 = row.get("dist40_clear_2p_rate")
-            dist40_bad = row.get("dist40_fail_bad_rate")
-            dist40_margin = row.get("dist40_avg_margin")
-            
-            # ======================================================
-            # WOWY / INJURY LINES (BUILT FIRST)
-            # ======================================================
-            injury_lines = []
-            
-            stat_type = row.get("stat_type")
-            wowy_col = WOWY_MARKET_MAP.get(stat_type)
-            wowy_breakdown = row.get("breakdown")
-            
-            if wowy_col and isinstance(wowy_breakdown, str) and wowy_breakdown.strip():
-                blocks = [b.strip() for b in wowy_breakdown.split(";") if b.strip()]
-            
-                for block in blocks:
-                    if "→" not in block:
-                        continue
-            
-                    name_part, stats_part = block.split("→", 1)
-                    stats = [s.strip() for s in stats_part.split(",") if s.strip()]
-                    matched = [s for s in stats if s.startswith(f"{stat_type}=")]
-            
-                    if not matched:
-                        continue
-            
-                    injury_lines.extend([
-                        f"<div style='margin-top:6px; font-weight:800; font-size:0.8rem;'>"
-                        f"{name_part.strip()} (Out)</div>",
-                        f"<div style='font-size:0.74rem; padding-left:8px; color:#cbd5e1;'>"
-                        f"{matched[0]}</div>",
-                    ])
-            
-            
-            # ======================================================
-            # BUILD EXPANDED HTML (ALWAYS BUILT)
-            # ======================================================
-            expanded_lines = [
-                f"<div style='padding:12px; margin-top:8px; border-radius:12px;"
-                f"background:rgba(255,255,255,0.05);"
-                f"border:1px solid rgba(255,255,255,0.12);'>",
+                # Sparkline
+                f'<div style="display:flex; justify-content:center; margin:8px 0;">'
+                f"{spark_html}</div>",
 
-                # -------------------------
-                # L5 / L10 / L20 averages
-                # -------------------------
-                f"<div style='display:flex; justify-content:space-between; "
-                f"font-size:0.78rem; margin-bottom:6px;'>",
-                f"<div>L5: {_fmt1(l5_avg)}</div>",
-                f"<div>L10: {_fmt1(l10_avg)}</div>",
-                f"<div>L20: {_fmt1(l20_avg)}</div>",
-                f"</div>",
+                # Tags
+                f'<div style="display:flex; justify-content:center; margin-bottom:6px;">'
+                f"{tags_html}</div>",
 
-                # -------------------------
-                # Delta vs line + confidence
-                # -------------------------
-                f"<div style='display:flex; justify-content:space-between; "
-                f"font-size:0.8rem; margin-bottom:6px;'>",
-                f"<div>Δ Line: {_fmt_signed1(delta_vs_line)}</div>",
-                f"<div style='font-weight:800; color:{conf_color};'>"
-                f"Confidence: {confidence_level} ({confidence_score})</div>",
-                f"</div>",
+                # Bottom metrics
+                '<div class="prop-meta" style="margin-top:2px;">',
 
-                # -------------------------
-                # Minutes
-                # -------------------------
-                f"<div style='display:flex; justify-content:space-between; "
-                f"font-size:0.78rem; margin-bottom:8px;'>",
-                f"<div>Proj Min: {_fmt1(est_minutes)}</div>",
-                f"<div>Δ Min (L5): {_fmt_signed1(minutes_delta)}</div>",
-                f"</div>",
+                "<div>"
+                f'<div style="color:#e5e7eb;font-size:0.8rem;">{odds:+d}</div>'
+                f'<div style="font-size:0.7rem;">Imp: {implied_prob:.0%}</div>'
+                "</div>",
+
+                "<div>"
+                f'<div style="color:#e5e7eb;font-size:0.8rem;">'
+                f"{hit_label}: {hit_val:.0%}</div>"
+                f'<div style="font-size:0.7rem;">L10 Avg: {l10_avg_display}</div>'
+                "</div>",
+
+                "<div>"
+                f'<div style="color:{rank_color};font-size:0.8rem;'
+                f'font-weight:700;">{rank_display}</div>'
+                '<div style="font-size:0.7rem;">Opp Rank</div>'
+                "</div>",
+
+                "</div>",  # end prop-meta
+
+                wowy_html,
+                "</div>",  # end prop-card
             ]
 
-            # ======================================================
-            # DISTRIBUTION METRICS (L20 / L40)
-            # ======================================================
-            expanded_lines.extend([
-                f"<div style='margin-top:10px;'>",
+            card_html = "\n".join(card_lines)
 
-                f"<div style='font-size:0.75rem; font-weight:800; opacity:0.9; margin-bottom:4px;'>"
-                f"Distribution vs Line"
-                f"</div>",
+            # ------------------------------------------------------
+            # RENDER CARD
+            # ------------------------------------------------------
+            st.markdown(card_html, unsafe_allow_html=True)
 
-                # -------- L20 --------
-                f"<div style='padding:8px; border-radius:10px; "
-                f"background:rgba(255,255,255,0.04); "
-                f"border:1px solid rgba(255,255,255,0.08); margin-bottom:6px;'>",
+            # ------------------------------------------------------
+            # TAP-TO-EXPAND LOGIC
+            # ------------------------------------------------------
+            # Unique keys per card
+            key_base = f"{page_key}_{idx}_{player}_{row.get('market')}_{row.get('line')}"
+            expand_key = f"{key_base}_expand"
+            tap_key = f"{key_base}_tap"
 
-                f"<div style='font-size:0.72rem; font-weight:700; margin-bottom:4px;'>"
-                f"Last 20 Games</div>",
+            # Invisible overlay button in .card-tap-btn wrapper
+            st.markdown('<div class="card-tap-btn">', unsafe_allow_html=True)
+            tapped = st.button("tap", key=tap_key)  # label hidden by CSS
+            st.markdown("</div>", unsafe_allow_html=True)
 
-                f"<div style='display:flex; justify-content:space-between; font-size:0.7rem;'>"
-                f"<div>Hit: {_pct(dist20_hit)}</div>"
-                f"<div>+1: {_pct(dist20_c1)}</div>"
-                f"<div>+2: {_pct(dist20_c2)}</div>"
-                f"<div>Bad Miss: {_pct(dist20_bad)}</div>"
-                f"<div>Avg Δ: {_pm(dist20_margin)}</div>"
-                f"</div>",
-                f"</div>",
+            if tapped:
+                toggle_expander(expand_key)
 
-                # -------- L40 --------
-                f"<div style='padding:8px; border-radius:10px; "
-                f"background:rgba(255,255,255,0.04); "
-                f"border:1px solid rgba(255,255,255,0.08);'>",
-
-                f"<div style='font-size:0.72rem; font-weight:700; margin-bottom:4px;'>"
-                f"Last 40 Games</div>",
-
-                f"<div style='display:flex; justify-content:space-between; font-size:0.7rem;'>"
-                f"<div>Hit: {_pct(dist40_hit)}</div>"
-                f"<div>+1: {_pct(dist40_c1)}</div>"
-                f"<div>+2: {_pct(dist40_c2)}</div>"
-                f"<div>Bad Miss: {_pct(dist40_bad)}</div>"
-                f"<div>Avg Δ: {_pm(dist40_margin)}</div>"
-                f"</div>",
-                f"</div>",
-
-                f"</div>",
-            ])
-
-            # ======================================================
-            # WOWY / INJURY IMPACT
-            # ======================================================
-            expanded_lines.extend([
-                f"<div style='font-size:0.82rem; font-weight:800; margin-top:10px; margin-bottom:4px;'>"
-                f"Injured Teammates (WOWY Impact)</div>",
-            ])
-
-            if injury_lines:
-                expanded_lines.extend(injury_lines)
-            else:
-                expanded_lines.append(
-                    f"<div style='font-size:0.75rem; color:#9ca3af;'>"
-                    f"No impactful teammate injuries</div>"
-                )
-
-            # Close wrapper
-            expanded_lines.append("</div>")
-
-            expanded_html = "\n".join(expanded_lines)
-
-            
-            
-            # ======================================================
-            # CARD + ATTACHED EXPAND BUTTON
-            # ======================================================
-            with st.container():
-            
-                # Render card
-                st.markdown(card_html, unsafe_allow_html=True)
-            
-                # Expand / collapse button
-                expand_label = (
-                    "Collapse ▴"
-                    if st.session_state.get(expand_key, False)
-                    else "Click to expand ▾"
-                )
-            
-                st.button(
-                    expand_label,
-                    key=f"{expand_key}_btn",
-                    on_click=toggle_expander,
-                    args=(expand_key,),
-                    use_container_width=True,
-                )
-            
-            
-            # ======================================================
-            # EXPANDED SECTION (RENDER ONLY WHEN OPEN)
-            # ======================================================
+            # ------------------------------------------------------
+            # EXPANDED ANALYTICS + SAVE BET
+            # ------------------------------------------------------
             if st.session_state.get(expand_key, False):
-
-                # Render expanded analytics HTML
-                st.markdown(expanded_html, unsafe_allow_html=True)
-
-                # ------------------------
-                # Build canonical save payload
-                # ------------------------
-                save_payload = {
-                    "player": row.get("player"),
-                    "market": row.get("market"),
-                    "line": row.get("line"),
-                    "bet_type": str(row.get("bet_type")).upper(),
-                    "team": row.get("player_team"),
-                    "books": [
-                        {
-                            "bookmaker": bp.get("book"),
-                            "price": bp.get("price"),
-                        }
-                        for bp in row.get("book_prices", [])
-                        if bp.get("book") and bp.get("price") is not None
-                    ],
-                }
-
-                # ------------------------
-                # Real Save Bet button
-                # ------------------------
                 st.markdown(
-                    "<div style='display:flex; justify-content:flex-end;'>",
+                    """
+                    <div style='padding:10px 14px; margin-top:-10px;
+                                background:rgba(255,255,255,0.05);
+                                border-radius:10px;
+                                border:1px solid rgba(255,255,255,0.1);'>
+                    """,
                     unsafe_allow_html=True,
                 )
 
-                saved = st.button(
-                    "💾 Save Bet",
-                    key=f"{key_base}_save",
+                st.markdown("### 📊 Additional Analytics (Placeholder)")
+                st.write(
+                    """
+                    - Trend model output: **Coming soon**  
+                    - Matchup difficulty: **Placeholder**  
+                    - Usage trend: **Placeholder**  
+                    - Pace factor: **Placeholder**  
+                    """
                 )
 
+                st.markdown("---")
+
+                bet_payload = {
+                    "player": player,
+                    "market": row.get("market"),
+                    "line": row.get("line"),
+                    "bet_type": bet_type,
+                    "price": odds,
+                    "bookmaker": row.get("bookmaker"),
+                }
+
+                save_key = f"{key_base}_save"
+
+                if st.button("💾 Save Bet", key=save_key):
+                    save_bet_for_user(user_id, bet_payload)
+                    st.success(f"Saved: {player} {pretty_market} {bet_type} {line}")
+
                 st.markdown("</div>", unsafe_allow_html=True)
-
-                if saved:
-                    added = save_bet_for_user(
-                        user_id=st.session_state["current_user_id"],
-                        bet=save_payload,
-                    )
-
-                    if added:
-                        st.success("Bet saved")
-                    else:
-                        st.info("Bet already saved")
-
-
-            
 
     # Close scroll wrapper
     st.markdown("</div>", unsafe_allow_html=True)
@@ -3837,15 +3125,14 @@ def render_saved_bets_tab():
 
     st.write("---")
 
-    lines = []
+    txt_export = ""
     for b in st.session_state.saved_bets:
-        lines.append(
-            f"{b.get('player','')} | {b.get('market','')} {b.get('line','')} | "
-            f"{b.get('bet_type','')} | Odds {b.get('price','')} | {b.get('bookmaker','')}"
+        txt_export += (
+            f"{b.get('player', '')} | {b.get('market', '')} | "
+            f"{b.get('bet_type', '')} {b.get('line', '')} | "
+            f"Odds {b.get('price', '')} | {b.get('bookmaker', '')}\n"
         )
-    
-    txt_export = "\n".join(lines)
-    
+
     st.download_button(
         "Download as Text",
         data=txt_export,
@@ -4026,10 +3313,6 @@ if sport == "NBA":
     # ======================================================
     with tab2:
 
-        game_report_df = load_game_report()
-        game_analytics_df = load_game_analytics()
-        game_odds_df = load_game_odds()
-    
         # ✅ CRITICAL: bind tab2 to game_report
         df = game_report_df.copy()
     
@@ -4488,659 +3771,657 @@ if sport == "NBA":
     # ------------------------------------------------------
     # NEW COMBINED TAB — ADVANCED EV TOOLS
     # ------------------------------------------------------
-    if False:
-        with tab3:
-    
-            st.subheader("📊 Advanced EV Tools")
-    
-            # --- Create subtabs ---
-            subtab1, subtab2, subtab3 = st.tabs(
-                [
-                    "🏅 EV Leaderboard",
-                    "🗺️ EV Heatmap",
-                    "📐 Trend Projection Model",
+    with tab3:
+
+        st.subheader("📊 Advanced EV Tools")
+
+        # --- Create subtabs ---
+        subtab1, subtab2, subtab3 = st.tabs(
+            [
+                "🏅 EV Leaderboard",
+                "🗺️ EV Heatmap",
+                "📐 Trend Projection Model",
+            ]
+        )
+
+        # ======================================================
+        # 🏅 SUBTAB 1 — EV LEADERBOARD
+        # ======================================================
+        with subtab1:
+            st.markdown("### 🏅 EV Leaderboard")
+
+            if props_df.empty:
+                st.info("No props available for today.")
+            else:
+                df_leader = props_df.copy()
+
+                # Make sure key numeric fields are numeric
+                for c in ["edge_pct", "edge_raw", "ev_last10", "hit_rate_last10", "price"]:
+                    if c in df_leader.columns:
+                        df_leader[c] = pd.to_numeric(df_leader[c], errors="coerce")
+
+                # Simple filters
+                col1, col2 = st.columns(2)
+                with col1:
+                    min_edge = st.slider(
+                        "Minimum Edge (%)",
+                        min_value=-20,
+                        max_value=50,
+                        value=0,
+                        step=1,
+                    )
+                with col2:
+                    min_hit = st.slider(
+                        "Minimum L10 Hit Rate (%)",
+                        min_value=0,
+                        max_value=100,
+                        value=60,
+                        step=5,
+                    )
+
+                # Filter on edge + hit rate
+                if "edge_pct" in df_leader.columns:
+                    df_leader = df_leader[df_leader["edge_pct"] >= min_edge / 100.0]
+                if "hit_rate_last10" in df_leader.columns:
+                    df_leader = df_leader[df_leader["hit_rate_last10"] >= min_hit / 100.0]
+
+                # Sorting
+                sort_cols = [c for c in ["edge_pct", "ev_last10"] if c in df_leader.columns]
+                if sort_cols:
+                    df_leader = df_leader.sort_values(sort_cols, ascending=False)
+
+                df_leader["market_pretty"] = df_leader["market"].map(
+                    lambda m: MARKET_DISPLAY_MAP.get(m, m)
+                )
+
+                cols_to_show = [
+                    "player", "market_pretty", "bet_type", "line", "price",
+                    "hit_rate_last10", "implied_prob", "edge_pct", "ev_last10",
+                    "proj_last10", "proj_diff_vs_line", "matchup_difficulty_score",
+                    "est_minutes", "usage_bump_pct",
                 ]
-            )
-    
-            # ======================================================
-            # 🏅 SUBTAB 1 — EV LEADERBOARD
-            # ======================================================
-            with subtab1:
-                st.markdown("### 🏅 EV Leaderboard")
-    
-                if props_df.empty:
-                    st.info("No props available for today.")
+                cols_to_show = [c for c in cols_to_show if c in df_leader.columns]
+
+                if df_leader.empty:
+                    st.info("No props meet the current leaderboard filters.")
                 else:
-                    df_leader = props_df.copy()
-    
-                    # Make sure key numeric fields are numeric
-                    for c in ["edge_pct", "edge_raw", "ev_last10", "hit_rate_last10", "price"]:
-                        if c in df_leader.columns:
-                            df_leader[c] = pd.to_numeric(df_leader[c], errors="coerce")
-    
-                    # Simple filters
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        min_edge = st.slider(
-                            "Minimum Edge (%)",
-                            min_value=-20,
-                            max_value=50,
-                            value=0,
-                            step=1,
+                    display_df = df_leader[cols_to_show].copy()
+
+                    if "price" in display_df.columns:
+                        display_df["price"] = display_df["price"].apply(format_moneyline)
+                    if "hit_rate_last10" in display_df.columns:
+                        display_df["hit_rate_last10"] = (display_df["hit_rate_last10"] * 100).round(1)
+                    if "implied_prob" in display_df.columns:
+                        display_df["implied_prob"] = (display_df["implied_prob"] * 100).round(1)
+                    if "edge_pct" in display_df.columns:
+                        display_df["edge_pct"] = display_df["edge_pct"].round(1)
+
+                    st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+        # ======================================================
+        # 🗺️ SUBTAB 2 — EV HEATMAP
+        # ======================================================
+        with subtab2:
+            st.markdown("### 🗺️ EV Stat vs Opponent Heatmap")
+
+            if props_df.empty:
+                st.info("No props available.")
+            else:
+                heat_df = props_df.copy()
+                heat_df["stat_key"] = heat_df["market"].apply(detect_stat)
+
+                if "edge_pct" not in heat_df.columns:
+                    st.warning("edge_pct column missing — cannot build heatmap.")
+                else:
+                    heat_df["edge_pct"] = pd.to_numeric(heat_df["edge_pct"], errors="coerce")
+                    heat_df = heat_df[
+                        heat_df["stat_key"].notna()
+                        & heat_df["opponent_team"].notna()
+                        & heat_df["edge_pct"].notna()
+                    ]
+
+                    if heat_df.empty:
+                        st.info("Not enough data for heatmap.")
+                    else:
+                        pivot = heat_df.pivot_table(
+                            index="stat_key",
+                            columns="opponent_team",
+                            values="edge_pct",
+                            aggfunc="mean",
                         )
-                    with col2:
-                        min_hit = st.slider(
-                            "Minimum L10 Hit Rate (%)",
-                            min_value=0,
-                            max_value=100,
-                            value=60,
-                            step=5,
+
+                        fig = go.Figure(
+                            data=go.Heatmap(
+                                z=pivot.values,
+                                x=list(pivot.columns),
+                                y=list(pivot.index),
+                                colorscale="RdYlGn",
+                                zmid=0,
+                                colorbar=dict(title="Edge (%)"),
+                            )
                         )
-    
-                    # Filter on edge + hit rate
-                    if "edge_pct" in df_leader.columns:
-                        df_leader = df_leader[df_leader["edge_pct"] >= min_edge / 100.0]
-                    if "hit_rate_last10" in df_leader.columns:
-                        df_leader = df_leader[df_leader["hit_rate_last10"] >= min_hit / 100.0]
-    
-                    # Sorting
-                    sort_cols = [c for c in ["edge_pct", "ev_last10"] if c in df_leader.columns]
-                    if sort_cols:
-                        df_leader = df_leader.sort_values(sort_cols, ascending=False)
-    
-                    df_leader["market_pretty"] = df_leader["market"].map(
-                        lambda m: MARKET_DISPLAY_MAP.get(m, m)
+                        fig.update_layout(
+                            template="plotly_dark",
+                            height=500,
+                            margin=dict(l=40, r=20, t=40, b=80),
+                            xaxis_title="Opponent",
+                            yaxis_title="Stat",
+                        )
+
+                        fig.update_traces(
+                            hovertemplate="Stat: %{y}<br>Opponent: %{x}<br>Edge: %{z:.1f}%%<extra></extra>"
+                        )
+
+                        st.plotly_chart(fig, use_container_width=True)
+
+        # ======================================================
+        # 📐 SUBTAB 3 — TREND PROJECTION MODEL
+        # ======================================================
+        with subtab3:
+            st.markdown("### 📐 Trend-Based Projection Model")
+
+            if props_df.empty:
+                st.info("No props available.")
+            else:
+                proj_df = props_df.copy()
+
+                needed = [
+                    "proj_last10", "proj_std_last10", "proj_volatility_index",
+                    "proj_diff_vs_line", "hit_rate_last10", "price",
+                ]
+                for c in needed:
+                    if c in proj_df.columns:
+                        proj_df[c] = pd.to_numeric(proj_df[c], errors="coerce")
+
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    min_proj_diff = st.slider("Min Projection vs Line", -10.0, 20.0, 1.0, 0.5)
+                with c2:
+                    max_vol_index = st.slider("Max Volatility Index", 0.0, 5.0, 3.0, 0.1)
+                with c3:
+                    min_hit10_proj = st.slider("Min Hit Rate L10 (%)", 0, 100, 50, 5)
+
+                if "proj_diff_vs_line" in proj_df.columns:
+                    proj_df = proj_df[proj_df["proj_diff_vs_line"] >= min_proj_diff]
+                if "proj_volatility_index" in proj_df.columns:
+                    proj_df = proj_df[proj_df["proj_volatility_index"] <= max_vol_index]
+                if "hit_rate_last10" in proj_df.columns:
+                    proj_df = proj_df[proj_df["hit_rate_last10"] >= min_hit10_proj / 100.0]
+
+                proj_df["market_pretty"] = proj_df["market"].map(
+                    lambda m: MARKET_DISPLAY_MAP.get(m, m)
+                )
+
+                cols = [
+                    "player", "market_pretty", "bet_type", "line", "price",
+                    "proj_last10", "proj_std_last10", "proj_volatility_index",
+                    "proj_diff_vs_line", "hit_rate_last10", "edge_pct",
+                ]
+                cols = [c for c in cols if c in proj_df.columns]
+
+                if proj_df.empty:
+                    st.info("No props match filters.")
+                else:
+                    proj_df = proj_df.sort_values(
+                        by=[c for c in ["proj_diff_vs_line", "edge_pct"] if c in proj_df.columns],
+                        ascending=False,
                     )
-    
-                    cols_to_show = [
-                        "player", "market_pretty", "bet_type", "line", "price",
-                        "hit_rate_last10", "implied_prob", "edge_pct", "ev_last10",
-                        "proj_last10", "proj_diff_vs_line", "matchup_difficulty_score",
-                        "est_minutes", "usage_bump_pct",
-                    ]
-                    cols_to_show = [c for c in cols_to_show if c in df_leader.columns]
-    
-                    if df_leader.empty:
-                        st.info("No props meet the current leaderboard filters.")
-                    else:
-                        display_df = df_leader[cols_to_show].copy()
-    
-                        if "price" in display_df.columns:
-                            display_df["price"] = display_df["price"].apply(format_moneyline)
-                        if "hit_rate_last10" in display_df.columns:
-                            display_df["hit_rate_last10"] = (display_df["hit_rate_last10"] * 100).round(1)
-                        if "implied_prob" in display_df.columns:
-                            display_df["implied_prob"] = (display_df["implied_prob"] * 100).round(1)
-                        if "edge_pct" in display_df.columns:
-                            display_df["edge_pct"] = display_df["edge_pct"].round(1)
-    
-                        st.dataframe(display_df, use_container_width=True, hide_index=True)
-    
-            # ======================================================
-            # 🗺️ SUBTAB 2 — EV HEATMAP
-            # ======================================================
-            with subtab2:
-                st.markdown("### 🗺️ EV Stat vs Opponent Heatmap")
-    
-                if props_df.empty:
-                    st.info("No props available.")
-                else:
-                    heat_df = props_df.copy()
-                    heat_df["stat_key"] = heat_df["market"].apply(detect_stat)
-    
-                    if "edge_pct" not in heat_df.columns:
-                        st.warning("edge_pct column missing — cannot build heatmap.")
-                    else:
-                        heat_df["edge_pct"] = pd.to_numeric(heat_df["edge_pct"], errors="coerce")
-                        heat_df = heat_df[
-                            heat_df["stat_key"].notna()
-                            & heat_df["opponent_team"].notna()
-                            & heat_df["edge_pct"].notna()
-                        ]
-    
-                        if heat_df.empty:
-                            st.info("Not enough data for heatmap.")
-                        else:
-                            pivot = heat_df.pivot_table(
-                                index="stat_key",
-                                columns="opponent_team",
-                                values="edge_pct",
-                                aggfunc="mean",
-                            )
-    
-                            fig = go.Figure(
-                                data=go.Heatmap(
-                                    z=pivot.values,
-                                    x=list(pivot.columns),
-                                    y=list(pivot.index),
-                                    colorscale="RdYlGn",
-                                    zmid=0,
-                                    colorbar=dict(title="Edge (%)"),
-                                )
-                            )
-                            fig.update_layout(
-                                template="plotly_dark",
-                                height=500,
-                                margin=dict(l=40, r=20, t=40, b=80),
-                                xaxis_title="Opponent",
-                                yaxis_title="Stat",
-                            )
-    
-                            fig.update_traces(
-                                hovertemplate="Stat: %{y}<br>Opponent: %{x}<br>Edge: %{z:.1f}%%<extra></extra>"
-                            )
-    
-                            st.plotly_chart(fig, use_container_width=True)
-    
-            # ======================================================
-            # 📐 SUBTAB 3 — TREND PROJECTION MODEL
-            # ======================================================
-            with subtab3:
-                st.markdown("### 📐 Trend-Based Projection Model")
-    
-                if props_df.empty:
-                    st.info("No props available.")
-                else:
-                    proj_df = props_df.copy()
-    
-                    needed = [
-                        "proj_last10", "proj_std_last10", "proj_volatility_index",
-                        "proj_diff_vs_line", "hit_rate_last10", "price",
-                    ]
-                    for c in needed:
-                        if c in proj_df.columns:
-                            proj_df[c] = pd.to_numeric(proj_df[c], errors="coerce")
-    
-                    c1, c2, c3 = st.columns(3)
-                    with c1:
-                        min_proj_diff = st.slider("Min Projection vs Line", -10.0, 20.0, 1.0, 0.5)
-                    with c2:
-                        max_vol_index = st.slider("Max Volatility Index", 0.0, 5.0, 3.0, 0.1)
-                    with c3:
-                        min_hit10_proj = st.slider("Min Hit Rate L10 (%)", 0, 100, 50, 5)
-    
-                    if "proj_diff_vs_line" in proj_df.columns:
-                        proj_df = proj_df[proj_df["proj_diff_vs_line"] >= min_proj_diff]
-                    if "proj_volatility_index" in proj_df.columns:
-                        proj_df = proj_df[proj_df["proj_volatility_index"] <= max_vol_index]
-                    if "hit_rate_last10" in proj_df.columns:
-                        proj_df = proj_df[proj_df["hit_rate_last10"] >= min_hit10_proj / 100.0]
-    
-                    proj_df["market_pretty"] = proj_df["market"].map(
-                        lambda m: MARKET_DISPLAY_MAP.get(m, m)
-                    )
-    
-                    cols = [
-                        "player", "market_pretty", "bet_type", "line", "price",
-                        "proj_last10", "proj_std_last10", "proj_volatility_index",
-                        "proj_diff_vs_line", "hit_rate_last10", "edge_pct",
-                    ]
-                    cols = [c for c in cols if c in proj_df.columns]
-    
-                    if proj_df.empty:
-                        st.info("No props match filters.")
-                    else:
-                        proj_df = proj_df.sort_values(
-                            by=[c for c in ["proj_diff_vs_line", "edge_pct"] if c in proj_df.columns],
-                            ascending=False,
-                        )
-                        display_df = proj_df[cols].copy()
-    
-                        if "price" in display_df.columns:
-                            display_df["price"] = display_df["price"].apply(format_moneyline)
-                        if "hit_rate_last10" in display_df.columns:
-                            display_df["hit_rate_last10"] = (display_df["hit_rate_last10"] * 100).round(1)
-                        if "edge_pct" in display_df.columns:
-                            display_df["edge_pct"] = display_df["edge_pct"].round(1)
-    
-                        st.dataframe(display_df, use_container_width=True, hide_index=True)
+                    display_df = proj_df[cols].copy()
+
+                    if "price" in display_df.columns:
+                        display_df["price"] = display_df["price"].apply(format_moneyline)
+                    if "hit_rate_last10" in display_df.columns:
+                        display_df["hit_rate_last10"] = (display_df["hit_rate_last10"] * 100).round(1)
+                    if "edge_pct" in display_df.columns:
+                        display_df["edge_pct"] = display_df["edge_pct"].round(1)
+
+                    st.dataframe(display_df, use_container_width=True, hide_index=True)
 
     # ------------------------------------------------------
     # 📊 PLAYER CONTEXT HUB — Combines Minutes/Usage + Depth Chart + WOWY
     # ------------------------------------------------------
-    if False:
-        with tab4:
-    
-            st.subheader("📊 Player Context Hub")
-    
-            # Three subtabs that replace Tab 6, Tab 9, Tab 10
-            subA, subB, subC = st.tabs(
-                [
-                    "⏱️ Minutes & Usage",
-                    "📋 Depth Chart & Injuries",
-                    "🔀 WOWY Analyzer",
+    with tab4:
+
+        st.subheader("📊 Player Context Hub")
+
+        # Three subtabs that replace Tab 6, Tab 9, Tab 10
+        subA, subB, subC = st.tabs(
+            [
+                "⏱️ Minutes & Usage",
+                "📋 Depth Chart & Injuries",
+                "🔀 WOWY Analyzer",
+            ]
+        )
+
+        # ======================================================
+        # SUBTAB A — MINUTES & USAGE (Old Tab 6)
+        # ======================================================
+        with subA:
+
+            st.subheader("Minutes & Usage (WOWY + Role Context)")
+
+            if props_df.empty:
+                st.info("No props available for today.")
+            else:
+                mu_df = props_df.copy()
+
+                for c in ["est_minutes", "usage_bump_pct", "proj_diff_vs_line", "ev_last10"]:
+                    if c in mu_df.columns:
+                        mu_df[c] = pd.to_numeric(mu_df[c], errors="coerce")
+
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    min_minutes = st.slider(
+                        "Min Estimated Minutes",
+                        min_value=0,
+                        max_value=48,
+                        value=24,
+                        step=2,
+                    )
+                with c2:
+                    min_usage_bump = st.slider(
+                        "Min Usage Bump (%)",
+                        min_value=-20,
+                        max_value=60,
+                        value=5,
+                        step=1,
+                    )
+                with c3:
+                    min_proj_diff_mu = st.slider(
+                        "Min Projection vs Line (points)",
+                        min_value=-10.0,
+                        max_value=20.0,
+                        value=0.0,
+                        step=0.5,
+                    )
+
+                if "est_minutes" in mu_df.columns:
+                    mu_df = mu_df[mu_df["est_minutes"] >= min_minutes]
+
+                if "usage_bump_pct" in mu_df.columns:
+                    mu_df = mu_df[mu_df["usage_bump_pct"] >= min_usage_bump]
+
+                if "proj_diff_vs_line" in mu_df.columns:
+                    mu_df = mu_df[mu_df["proj_diff_vs_line"] >= min_proj_diff_mu]
+
+                mu_df["market_pretty"] = mu_df["market"].map(
+                    lambda m: MARKET_DISPLAY_MAP.get(m, m)
+                )
+
+                cols = [
+                    "player",
+                    "player_team",
+                    "market_pretty",
+                    "bet_type",
+                    "line",
+                    "price",
+                    "est_minutes",
+                    "usage_bump_pct",
+                    "proj_diff_vs_line",
+                    "ev_last10",
+                    "hit_rate_last10",
+                    "matchup_difficulty_score",
                 ]
-            )
-    
-            # ======================================================
-            # SUBTAB A — MINUTES & USAGE (Old Tab 6)
-            # ======================================================
-            with subA:
-    
-                st.subheader("Minutes & Usage (WOWY + Role Context)")
-    
-                if props_df.empty:
-                    st.info("No props available for today.")
+                cols = [c for c in cols if c in mu_df.columns]
+
+                if mu_df.empty:
+                    st.info("No props match the current minutes/usage filters.")
                 else:
-                    mu_df = props_df.copy()
-    
-                    for c in ["est_minutes", "usage_bump_pct", "proj_diff_vs_line", "ev_last10"]:
-                        if c in mu_df.columns:
-                            mu_df[c] = pd.to_numeric(mu_df[c], errors="coerce")
-    
-                    c1, c2, c3 = st.columns(3)
-                    with c1:
-                        min_minutes = st.slider(
-                            "Min Estimated Minutes",
-                            min_value=0,
-                            max_value=48,
-                            value=24,
-                            step=2,
-                        )
-                    with c2:
-                        min_usage_bump = st.slider(
-                            "Min Usage Bump (%)",
-                            min_value=-20,
-                            max_value=60,
-                            value=5,
-                            step=1,
-                        )
-                    with c3:
-                        min_proj_diff_mu = st.slider(
-                            "Min Projection vs Line (points)",
-                            min_value=-10.0,
-                            max_value=20.0,
-                            value=0.0,
-                            step=0.5,
-                        )
-    
-                    if "est_minutes" in mu_df.columns:
-                        mu_df = mu_df[mu_df["est_minutes"] >= min_minutes]
-    
-                    if "usage_bump_pct" in mu_df.columns:
-                        mu_df = mu_df[mu_df["usage_bump_pct"] >= min_usage_bump]
-    
-                    if "proj_diff_vs_line" in mu_df.columns:
-                        mu_df = mu_df[mu_df["proj_diff_vs_line"] >= min_proj_diff_mu]
-    
-                    mu_df["market_pretty"] = mu_df["market"].map(
-                        lambda m: MARKET_DISPLAY_MAP.get(m, m)
+                    mu_df = mu_df.sort_values(
+                        by=[c for c in ["usage_bump_pct", "est_minutes", "proj_diff_vs_line"] if c in mu_df.columns],
+                        ascending=False,
                     )
-    
-                    cols = [
-                        "player",
-                        "player_team",
-                        "market_pretty",
-                        "bet_type",
-                        "line",
-                        "price",
-                        "est_minutes",
-                        "usage_bump_pct",
-                        "proj_diff_vs_line",
-                        "ev_last10",
-                        "hit_rate_last10",
-                        "matchup_difficulty_score",
-                    ]
-                    cols = [c for c in cols if c in mu_df.columns]
-    
-                    if mu_df.empty:
-                        st.info("No props match the current minutes/usage filters.")
-                    else:
-                        mu_df = mu_df.sort_values(
-                            by=[c for c in ["usage_bump_pct", "est_minutes", "proj_diff_vs_line"] if c in mu_df.columns],
-                            ascending=False,
-                        )
-                        display_df = mu_df[cols].copy()
-    
-                        if "price" in display_df.columns:
-                            display_df["price"] = display_df["price"].apply(format_moneyline)
-                        if "hit_rate_last10" in display_df.columns:
-                            display_df["hit_rate_last10"] = (display_df["hit_rate_last10"] * 100).round(1)
-    
-                        st.dataframe(display_df, use_container_width=True, hide_index=True)
-    
-    
-            # ======================================================
-            # SUBTAB B — DEPTH CHART & INJURY REPORT (Old Tab 9)
-            # ======================================================
-            with subB:
-    
-                st.subheader("Depth Chart & Injury Report")
-    
-                # --------------------------------------------------------
-                # GLOBAL CSS — SPACIOUS CARD GRID + INJURY BADGE SUPPORT
-                # --------------------------------------------------------
-                st.markdown("""
-        <style>
-    
-        .depth-card {
-            padding:18px 20px;
-            margin-bottom:20px;
-            border-radius:20px;
-            border:1px solid rgba(148,163,184,0.35);
-            background: radial-gradient(circle at top left, rgba(30,41,59,1), rgba(15,23,42,0.92));
-            box-shadow: 0 22px 55px rgba(15,23,42,0.90);
-            transition: transform .18s ease-out, box-shadow .18s ease-out, border-color .18s ease-out;
-        }
-    
-        .depth-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 30px 70px rgba(15,23,42,1);
-            border-color: #3b82f6;
-        }
-    
-        .role-pill {
-            font-size: 0.70rem;
-            padding: 4px 10px;
-            border-radius: 999px;
-            display: inline-block;
-            font-weight: 600;
-            color: white;
-            margin-top: 6px;
-        }
-    
-        .injury-badge {
-            padding: 3px 10px;
-            border-radius: 999px;
-            font-size: 0.68rem;
-            font-weight: 700;
-            color: white;
-            margin-left: 6px;
-        }
-    
-        .injury-card {
-            padding:18px 20px;
-            margin-bottom:22px;
-            border-radius:20px;
-            border:1px solid rgba(148,163,184,0.28);
-            background: radial-gradient(circle at 0 0, rgba(42,0,0,0.85), rgba(40,0,0,0.65));
-            box-shadow: 0 22px 55px rgba(15,23,42,0.95);
-            transition: transform .18s ease-out, box-shadow .18s ease-out;
-        }
-    
-        .injury-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 32px 75px rgba(15,23,42,1);
-        }
-    
-        .header-flex {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            margin-bottom: 1.6rem;
-        }
-    
-        .position-header {
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: #e5e7eb;
-            margin-bottom: 10px;
-            margin-top: 10px;
-        }
-    
-        </style>
-        """, unsafe_allow_html=True)
-    
-                # ----------------------------
-                # TEAM SELECTOR
-                # ----------------------------
-                teams_meta = (
-                    depth_df[["team_number", "team_abbr", "team_name"]]
-                    .drop_duplicates()
-                    .sort_values("team_name")
+                    display_df = mu_df[cols].copy()
+
+                    if "price" in display_df.columns:
+                        display_df["price"] = display_df["price"].apply(format_moneyline)
+                    if "hit_rate_last10" in display_df.columns:
+                        display_df["hit_rate_last10"] = (display_df["hit_rate_last10"] * 100).round(1)
+
+                    st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+
+        # ======================================================
+        # SUBTAB B — DEPTH CHART & INJURY REPORT (Old Tab 9)
+        # ======================================================
+        with subB:
+
+            st.subheader("Depth Chart & Injury Report")
+
+            # --------------------------------------------------------
+            # GLOBAL CSS — SPACIOUS CARD GRID + INJURY BADGE SUPPORT
+            # --------------------------------------------------------
+            st.markdown("""
+    <style>
+
+    .depth-card {
+        padding:18px 20px;
+        margin-bottom:20px;
+        border-radius:20px;
+        border:1px solid rgba(148,163,184,0.35);
+        background: radial-gradient(circle at top left, rgba(30,41,59,1), rgba(15,23,42,0.92));
+        box-shadow: 0 22px 55px rgba(15,23,42,0.90);
+        transition: transform .18s ease-out, box-shadow .18s ease-out, border-color .18s ease-out;
+    }
+
+    .depth-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 30px 70px rgba(15,23,42,1);
+        border-color: #3b82f6;
+    }
+
+    .role-pill {
+        font-size: 0.70rem;
+        padding: 4px 10px;
+        border-radius: 999px;
+        display: inline-block;
+        font-weight: 600;
+        color: white;
+        margin-top: 6px;
+    }
+
+    .injury-badge {
+        padding: 3px 10px;
+        border-radius: 999px;
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: white;
+        margin-left: 6px;
+    }
+
+    .injury-card {
+        padding:18px 20px;
+        margin-bottom:22px;
+        border-radius:20px;
+        border:1px solid rgba(148,163,184,0.28);
+        background: radial-gradient(circle at 0 0, rgba(42,0,0,0.85), rgba(40,0,0,0.65));
+        box-shadow: 0 22px 55px rgba(15,23,42,0.95);
+        transition: transform .18s ease-out, box-shadow .18s ease-out;
+    }
+
+    .injury-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 32px 75px rgba(15,23,42,1);
+    }
+
+    .header-flex {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 1.6rem;
+    }
+
+    .position-header {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #e5e7eb;
+        margin-bottom: 10px;
+        margin-top: 10px;
+    }
+
+    </style>
+    """, unsafe_allow_html=True)
+
+            # ----------------------------
+            # TEAM SELECTOR
+            # ----------------------------
+            teams_meta = (
+                depth_df[["team_number", "team_abbr", "team_name"]]
+                .drop_duplicates()
+                .sort_values("team_name")
+            )
+
+            team_labels = [f"{r.team_name} ({r.team_abbr})" for r in teams_meta.itertuples()]
+            label_to_meta = {label: row for label, row in zip(team_labels, teams_meta.itertuples())}
+
+            selected_label = st.selectbox("Select Team", team_labels)
+            team_row = label_to_meta[selected_label]
+
+            selected_team_number = int(team_row.team_number)
+            selected_abbr = team_row.team_abbr
+            selected_name = team_row.team_name
+
+            # Filter for selected team
+            team_depth = depth_df[depth_df["team_number"] == selected_team_number].copy()
+            team_injuries = injury_df[injury_df["team_abbrev"] == selected_abbr].copy()
+
+            # ----------------------------
+            # TEAM HEADER
+            # ----------------------------
+            logo = TEAM_LOGOS_BASE64.get(selected_abbr, "")
+            components.html(
+                f"<div class='header-flex'>"
+                f"<img src='{logo}' style='height:55px;border-radius:12px;'/>"
+                f"<div>"
+                f"<div style='font-size:1.55rem;font-weight:700;color:#e5e7eb;'>{selected_name}</div>"
+                f"<div style='font-size:0.9rem;color:#9ca3af;'>Depth chart & injury status</div>"
+                f"</div></div>",
+                height=90,
+                scrolling=False,
+            )
+
+            col_left, col_right = st.columns([1.6, 1.0])
+
+            # ------------------------------------------------------
+            # DEPTH CHART (LEFT)
+            # ------------------------------------------------------
+            with col_left:
+                st.markdown("## 🏀 Depth Chart")
+
+                pos_order = ["PG", "SG", "SF", "PF", "C", "G", "F"]
+                positions = sorted(
+                    team_depth["position"].unique(),
+                    key=lambda p: pos_order.index(p) if p in pos_order else 99
                 )
-    
-                team_labels = [f"{r.team_name} ({r.team_abbr})" for r in teams_meta.itertuples()]
-                label_to_meta = {label: row for label, row in zip(team_labels, teams_meta.itertuples())}
-    
-                selected_label = st.selectbox("Select Team", team_labels)
-                team_row = label_to_meta[selected_label]
-    
-                selected_team_number = int(team_row.team_number)
-                selected_abbr = team_row.team_abbr
-                selected_name = team_row.team_name
-    
-                # Filter for selected team
-                team_depth = depth_df[depth_df["team_number"] == selected_team_number].copy()
-                team_injuries = injury_df[injury_df["team_abbrev"] == selected_abbr].copy()
-    
-                # ----------------------------
-                # TEAM HEADER
-                # ----------------------------
-                logo = TEAM_LOGOS_BASE64.get(selected_abbr, "")
-                components.html(
-                    f"<div class='header-flex'>"
-                    f"<img src='{logo}' style='height:55px;border-radius:12px;'/>"
-                    f"<div>"
-                    f"<div style='font-size:1.55rem;font-weight:700;color:#e5e7eb;'>{selected_name}</div>"
-                    f"<div style='font-size:0.9rem;color:#9ca3af;'>Depth chart & injury status</div>"
-                    f"</div></div>",
-                    height=90,
-                    scrolling=False,
-                )
-    
-                col_left, col_right = st.columns([1.6, 1.0])
-    
-                # ------------------------------------------------------
-                # DEPTH CHART (LEFT)
-                # ------------------------------------------------------
-                with col_left:
-                    st.markdown("## 🏀 Depth Chart")
-    
-                    pos_order = ["PG", "SG", "SF", "PF", "C", "G", "F"]
-                    positions = sorted(
-                        team_depth["position"].unique(),
-                        key=lambda p: pos_order.index(p) if p in pos_order else 99
-                    )
-    
-                    pos_cols = st.columns(min(3, len(positions)))
-    
-                    for i, pos in enumerate(positions):
-                        with pos_cols[i % len(pos_cols)]:
-    
-                            st.markdown(f"<div class='position-header'>{pos}</div>", unsafe_allow_html=True)
-    
-                            rows = team_depth[team_depth["position"] == pos].sort_values("depth")
-    
-                            for _, r in rows.iterrows():
-                                name = r["player"]
-                                role = r["role"]
-                                depth_val = r["depth"]
-    
-                                # Lookup injury status
-                                inj_status = None
-                                injury_html = ""
-    
-                                if not team_injuries.empty:
-                                    norm_name = name.lower().replace("'", "").replace(".", "").replace("-", "").strip()
-    
-                                    for _, ir in team_injuries.iterrows():
-                                        n2 = f"{ir['first_name']} {ir['last_name']}".lower().replace("'", "").replace(".", "").replace("-", "").strip()
-                                        if n2 == norm_name:
-                                            inj_status = ir.get("status")
-                                            break
-    
-                                if inj_status:
-                                    s = inj_status.lower()
-                                    if "out" in s:
-                                        badge_color = "background:#ef4444;"
-                                    elif "question" in s or "doubt" in s:
-                                        badge_color = "background:#eab308;"
-                                    else:
-                                        badge_color = "background:#3b82f6;"
-                                    injury_html = f"<span class='injury-badge' style='{badge_color}'>{inj_status.upper()}</span>"
-    
-                                # Role color
-                                rl = role.lower()
-                                if rl.startswith("start"):
-                                    role_color = "background:#22c55e;"
-                                elif "rotation" in rl:
-                                    role_color = "background:#3b82f6;"
+
+                pos_cols = st.columns(min(3, len(positions)))
+
+                for i, pos in enumerate(positions):
+                    with pos_cols[i % len(pos_cols)]:
+
+                        st.markdown(f"<div class='position-header'>{pos}</div>", unsafe_allow_html=True)
+
+                        rows = team_depth[team_depth["position"] == pos].sort_values("depth")
+
+                        for _, r in rows.iterrows():
+                            name = r["player"]
+                            role = r["role"]
+                            depth_val = r["depth"]
+
+                            # Lookup injury status
+                            inj_status = None
+                            injury_html = ""
+
+                            if not team_injuries.empty:
+                                norm_name = name.lower().replace("'", "").replace(".", "").replace("-", "").strip()
+
+                                for _, ir in team_injuries.iterrows():
+                                    n2 = f"{ir['first_name']} {ir['last_name']}".lower().replace("'", "").replace(".", "").replace("-", "").strip()
+                                    if n2 == norm_name:
+                                        inj_status = ir.get("status")
+                                        break
+
+                            if inj_status:
+                                s = inj_status.lower()
+                                if "out" in s:
+                                    badge_color = "background:#ef4444;"
+                                elif "question" in s or "doubt" in s:
+                                    badge_color = "background:#eab308;"
                                 else:
-                                    role_color = "background:#6b7280;"
-    
-                                html = (
-                                    f"<div class='depth-card'>"
-                                    f"  <div style='display:flex;justify-content:space-between;align-items:center;'>"
-                                    f"    <div>"
-                                    f"      <div style='font-size:1.05rem;font-weight:700;color:white;'>{name}{injury_html}</div>"
-                                    f"      <span class='role-pill' style='{role_color}'>{role}</span>"
-                                    f"    </div>"
-                                    f"    <div style='font-size:0.8rem;color:#e5e7eb;"
-                                    f"          background:rgba(255,255,255,0.08);padding:5px 12px;border-radius:10px;"
-                                    f"          border:1px solid rgba(255,255,255,0.12);'>"
-                                    f"      Depth {depth_val}"
-                                    f"    </div>"
-                                    f"  </div>"
-                                    f"</div>"
-                                )
-    
-                                components.html(html, height=110, scrolling=False)
-    
-                # ------------------------------------------------------
-                # INJURY REPORT (RIGHT)
-                # ------------------------------------------------------
-                def make_injury_key(first, last):
-                    if not first:
-                        first = ""
-                    if not last:
-                        last = ""
-    
-                    f = (
-                        str(first).lower()
-                        .replace("'", "")
-                        .replace(".", "")
-                        .replace("-", "")
-                        .strip()
-                    )
-                    l = (
-                        str(last).lower()
-                        .replace("'", "")
-                        .replace(".", "")
-                        .replace("-", "")
-                        .strip()
-                    )
-    
-                    if not f and not l:
-                        return None
-    
-                    return f"{f[:1]}-{l}"
-    
-                with col_right:
-                    st.markdown("## 🏥 Injury Report")
-    
-                    if team_injuries.empty:
-                        st.success("No reported injuries.")
-                    else:
-                        last_ts = team_injuries["snapshot_ts"].max()
-                        st.caption(f"Last update: {last_ts.strftime('%b %d, %Y %I:%M %p')}")
-    
-                        team_injuries["inj_key"] = team_injuries.apply(
-                            lambda r: make_injury_key(r.get("first_name"), r.get("last_name")),
-                            axis=1
-                        )
-    
-                        latest = (
-                            team_injuries
-                            .sort_values("snapshot_ts")
-                            .groupby("inj_key")
-                            .tail(1)
-                            .sort_values("status", ascending=True)
-                        )
-    
-                        for _, r in latest.iterrows():
-    
-                            name     = f"{r['first_name']} {r['last_name']}"
-                            status   = r.get("status", "Unknown")
-                            return_date = r.get("return_date_raw", "N/A")
-    
-                            injury_type     = r.get("injury_type", "")
-                            injury_location = r.get("injury_location", "")
-                            injury_side     = r.get("injury_side", "")
-                            injury_detail   = r.get("injury_detail", "")
-    
-                            short_comment = r.get("short_comment", "")
-                            long_comment  = r.get("long_comment", "")
-    
-                            s = status.lower()
-                            if "out" in s:
-                                status_color = "background:#ef4444;"
-                            elif "question" in s or "doubt" in s:
-                                status_color = "background:#eab308;"
-                            elif "prob" in s:
-                                status_color = "background:#3b82f6;"
+                                    badge_color = "background:#3b82f6;"
+                                injury_html = f"<span class='injury-badge' style='{badge_color}'>{inj_status.upper()}</span>"
+
+                            # Role color
+                            rl = role.lower()
+                            if rl.startswith("start"):
+                                role_color = "background:#22c55e;"
+                            elif "rotation" in rl:
+                                role_color = "background:#3b82f6;"
                             else:
-                                status_color = "background:#6b7280;"
-    
-                            injury_parts = [
-                                injury_type,
-                                injury_location,
-                                injury_side,
-                                injury_detail,
-                            ]
-                            injury_line = " • ".join([p for p in injury_parts if p]) or "No injury detail provided."
-    
-                            html = f"""
-                                <div class='injury-card'>
-                                    <div style='display:flex;justify-content:space-between;'>
-                                        <div style='font-size:1.05rem;font-weight:600;color:white;'>{name}</div>
-                                        <div class='injury-badge' style='{status_color}'>{status.upper()}</div>
-                                    </div>
-    
-                                    <div style='font-size:0.85rem;color:#e5e7eb;margin-top:6px;'>
-                                        <b>Return:</b> {return_date}
-                                    </div>
-    
-                                    <div style='font-size:0.85rem;color:#e5e7eb;margin-top:6px;'>
-                                        <b>Injury:</b> {injury_line}
-                                    </div>
-    
-                                    <div style='font-size:0.85rem;color:#e5e7eb;margin-top:8px;'>
-                                        {short_comment}
-                                    </div>
-    
-                                    <div style='font-size:0.8rem;color:#9ca3af;margin-top:6px;'>
-                                        {long_comment}
-                                    </div>
-                                </div>
-                            """
-    
-                            components.html(html, height=200, scrolling=False)
-    
-    
-            # ======================================================
-            # SUBTAB C — WOWY ANALYZER (Old Tab 10)
-            # ======================================================
-            with subC:
-    
-                st.subheader("🔀 WOWY (With/Without You) Analyzer")
-    
-                st.markdown("""
-                Below is the full WOWY table — showing how each player's production
-                changes when a specific teammate is **OUT**.
-                
-                Sort any column to explore the biggest deltas.
-                """)
-    
-                wow = wowy_df.copy()
-                wow = wow.sort_values("pts_delta", ascending=False)
-    
-                disp = wow[[
-                    "player_a",
-                    "team_abbr",
-                    "breakdown",
-                    "pts_delta",
-                    "reb_delta",
-                    "ast_delta",
-                    "pra_delta",
-                    "pts_reb_delta"
-                ]]
-    
-                st.dataframe(
-                    disp,
-                    hide_index=True,
-                    use_container_width=True
+                                role_color = "background:#6b7280;"
+
+                            html = (
+                                f"<div class='depth-card'>"
+                                f"  <div style='display:flex;justify-content:space-between;align-items:center;'>"
+                                f"    <div>"
+                                f"      <div style='font-size:1.05rem;font-weight:700;color:white;'>{name}{injury_html}</div>"
+                                f"      <span class='role-pill' style='{role_color}'>{role}</span>"
+                                f"    </div>"
+                                f"    <div style='font-size:0.8rem;color:#e5e7eb;"
+                                f"          background:rgba(255,255,255,0.08);padding:5px 12px;border-radius:10px;"
+                                f"          border:1px solid rgba(255,255,255,0.12);'>"
+                                f"      Depth {depth_val}"
+                                f"    </div>"
+                                f"  </div>"
+                                f"</div>"
+                            )
+
+                            components.html(html, height=110, scrolling=False)
+
+            # ------------------------------------------------------
+            # INJURY REPORT (RIGHT)
+            # ------------------------------------------------------
+            def make_injury_key(first, last):
+                if not first:
+                    first = ""
+                if not last:
+                    last = ""
+
+                f = (
+                    str(first).lower()
+                    .replace("'", "")
+                    .replace(".", "")
+                    .replace("-", "")
+                    .strip()
                 )
+                l = (
+                    str(last).lower()
+                    .replace("'", "")
+                    .replace(".", "")
+                    .replace("-", "")
+                    .strip()
+                )
+
+                if not f and not l:
+                    return None
+
+                return f"{f[:1]}-{l}"
+
+            with col_right:
+                st.markdown("## 🏥 Injury Report")
+
+                if team_injuries.empty:
+                    st.success("No reported injuries.")
+                else:
+                    last_ts = team_injuries["snapshot_ts"].max()
+                    st.caption(f"Last update: {last_ts.strftime('%b %d, %Y %I:%M %p')}")
+
+                    team_injuries["inj_key"] = team_injuries.apply(
+                        lambda r: make_injury_key(r.get("first_name"), r.get("last_name")),
+                        axis=1
+                    )
+
+                    latest = (
+                        team_injuries
+                        .sort_values("snapshot_ts")
+                        .groupby("inj_key")
+                        .tail(1)
+                        .sort_values("status", ascending=True)
+                    )
+
+                    for _, r in latest.iterrows():
+
+                        name     = f"{r['first_name']} {r['last_name']}"
+                        status   = r.get("status", "Unknown")
+                        return_date = r.get("return_date_raw", "N/A")
+
+                        injury_type     = r.get("injury_type", "")
+                        injury_location = r.get("injury_location", "")
+                        injury_side     = r.get("injury_side", "")
+                        injury_detail   = r.get("injury_detail", "")
+
+                        short_comment = r.get("short_comment", "")
+                        long_comment  = r.get("long_comment", "")
+
+                        s = status.lower()
+                        if "out" in s:
+                            status_color = "background:#ef4444;"
+                        elif "question" in s or "doubt" in s:
+                            status_color = "background:#eab308;"
+                        elif "prob" in s:
+                            status_color = "background:#3b82f6;"
+                        else:
+                            status_color = "background:#6b7280;"
+
+                        injury_parts = [
+                            injury_type,
+                            injury_location,
+                            injury_side,
+                            injury_detail,
+                        ]
+                        injury_line = " • ".join([p for p in injury_parts if p]) or "No injury detail provided."
+
+                        html = f"""
+                            <div class='injury-card'>
+                                <div style='display:flex;justify-content:space-between;'>
+                                    <div style='font-size:1.05rem;font-weight:600;color:white;'>{name}</div>
+                                    <div class='injury-badge' style='{status_color}'>{status.upper()}</div>
+                                </div>
+
+                                <div style='font-size:0.85rem;color:#e5e7eb;margin-top:6px;'>
+                                    <b>Return:</b> {return_date}
+                                </div>
+
+                                <div style='font-size:0.85rem;color:#e5e7eb;margin-top:6px;'>
+                                    <b>Injury:</b> {injury_line}
+                                </div>
+
+                                <div style='font-size:0.85rem;color:#e5e7eb;margin-top:8px;'>
+                                    {short_comment}
+                                </div>
+
+                                <div style='font-size:0.8rem;color:#9ca3af;margin-top:6px;'>
+                                    {long_comment}
+                                </div>
+                            </div>
+                        """
+
+                        components.html(html, height=200, scrolling=False)
+
+
+        # ======================================================
+        # SUBTAB C — WOWY ANALYZER (Old Tab 10)
+        # ======================================================
+        with subC:
+
+            st.subheader("🔀 WOWY (With/Without You) Analyzer")
+
+            st.markdown("""
+            Below is the full WOWY table — showing how each player's production
+            changes when a specific teammate is **OUT**.
+            
+            Sort any column to explore the biggest deltas.
+            """)
+
+            wow = wowy_df.copy()
+            wow = wow.sort_values("pts_delta", ascending=False)
+
+            disp = wow[[
+                "player_a",
+                "team_abbr",
+                "breakdown",
+                "pts_delta",
+                "reb_delta",
+                "ast_delta",
+                "pra_delta",
+                "pts_reb_delta"
+            ]]
+
+            st.dataframe(
+                disp,
+                hide_index=True,
+                use_container_width=True
+            )
 
 
     # ------------------------------------------------------
@@ -5349,8 +4630,10 @@ if sport == "NBA":
         # Load saved bets
         # --------------------------------------------------
         slip = st.session_state.get("saved_bets", [])
-        if not slip:
-            st.info("You haven't saved any bets yet")
+        slip_df = pd.DataFrame(slip)
+
+        if slip_df.empty:
+            st.info("You haven't saved any bets yet.")
             st.stop()
 
         # --------------------------------------------------
@@ -5538,8 +4821,6 @@ elif sport in ["NCAA Men's", "NCAA Women's"]:
     # TAB 1 — OVERVIEW CARDS
     # -------------------------------
     with tabN1:
-    
-        ncaab_game_analytics_df = load_ncaab_game_analytics()
         st.subheader(f"{sport} — Game Overview")
 
         for idx, row in df.iterrows():

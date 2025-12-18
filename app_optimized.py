@@ -3119,41 +3119,45 @@ def render_prop_cards(
         "bet_type",
     ]
 
+    agg_map = {
+        # sportsbooks
+        "book_prices": (
+            "price",
+            lambda s: [
+                {"book": b, "price": int(p) if not pd.isna(p) else None}
+                for b, p in zip(card_df.loc[s.index, "bookmaker"], s)
+            ]
+        ),
+    
+        # always-present metrics
+        "hit_rate_last5": ("hit_rate_last5", "first"),
+        "hit_rate_last10": ("hit_rate_last10", "first"),
+        "hit_rate_last20": ("hit_rate_last20", "first"),
+        "edge_pct": ("edge_pct", "first"),
+        "implied_prob": ("implied_prob", "first"),
+    
+        # team info
+        "player_team": ("player_team", "first"),
+        "home_team": ("home_team", "first"),
+        "visitor_team": ("visitor_team", "first"),
+    }
+    
+    # OPTIONAL columns — only add if present
+    optional_cols = [
+        "game_id",
+        "opp_rank",
+        "matchup_difficulty_score",
+        "est_minutes",
+    ]
+    
+    for c in optional_cols:
+        if c in card_df.columns:
+            agg_map[c] = (c, "first")
+    
     card_df = (
         card_df
         .groupby(PROP_KEY_COLS, dropna=False, as_index=False)
-        .agg(
-            # sportsbooks
-            book_prices=(
-                "price",
-                lambda s: [
-                    {"book": b, "price": int(p) if not pd.isna(p) else None}
-                    for b, p in zip(
-                        card_df.loc[s.index, "bookmaker"],
-                        s
-                    )
-                ]
-            ),
-    
-            # hit rates
-            hit_rate_last5=("hit_rate_last5", "first"),
-            hit_rate_last10=("hit_rate_last10", "first"),
-            hit_rate_last20=("hit_rate_last20", "first"),
-    
-            # edge / probability
-            edge_pct=("edge_pct", "first"),
-            implied_prob=("implied_prob", "first"),
-    
-            # card metadata
-            player_team=("player_team", "first"),
-            home_team=("home_team", "first"),
-            visitor_team=("visitor_team", "first"),
-    
-            # OPTIONAL but likely used
-            opp_rank=("opp_rank", "first"),
-            est_minutes=("est_minutes", "first"),
-            matchup_difficulty_score=("matchup_difficulty_score", "first"),
-        )
+        .agg(**agg_map)
     )
 
     # ------------------------------------------------------

@@ -3442,10 +3442,12 @@ def render_prop_cards(
                 f"</div>"
             )
 
-            st.markdown(
+            components.html(
                 full_card_html,
-                unsafe_allow_html=True,
+                height=600,
+                scrolling=False,
             )
+
 
         # -------------------------
         # MEMORY DEBUG — AFTER CARD

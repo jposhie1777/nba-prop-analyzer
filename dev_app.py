@@ -3332,11 +3332,11 @@ def render_prop_cards(
             l10_avg = get_rolling_avg(row, 10)
             l20_avg = get_rolling_avg(row, 20)
 
-
-
             opp_rank = get_opponent_rank(row)
             rank_display = opp_rank if isinstance(opp_rank, int) else "-"
             rank_color = rank_to_color(opp_rank) if isinstance(opp_rank, int) else "#9ca3af"
+            stat_prefix = get_stat_prefix(row)
+
 
             spark_vals, spark_dates = get_spark_series(row)
             spark_html = build_sparkline_bars_hitmiss(

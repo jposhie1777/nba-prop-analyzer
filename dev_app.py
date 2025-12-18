@@ -1902,10 +1902,6 @@ def format_wowy_html(wowy_raw, stat_prefix):
     if not isinstance(wowy_raw, str) or not wowy_raw.strip():
         return "<span class='wowy-empty'>No injury impact</span>"
 
-    stat_key = WOWY_STAT_MAP.get(stat_prefix)
-    if not stat_key:
-        return "<span class='wowy-empty'>No injury impact</span>"
-
     blocks = [b.strip() for b in wowy_raw.split(";") if b.strip()]
     lines = []
 
@@ -1915,26 +1911,46 @@ def format_wowy_html(wowy_raw, stat_prefix):
 
         name_part, stats_part = block.split("→", 1)
 
-        stats = [s.strip() for s in stats_part.split(",") if s.strip()]
+        stats = {}
+        for s in stats_part.split(","):
+            if "=" in s:
+                k, v = s.strip().split("=", 1)
+                try:
+                    stats[k] = float(v)
+                except ValueError:
+                    pass
 
-        for s in stats:
-            if s.startswith(stat_key + "="):
-                val = s.split("=", 1)[1]
+        vals = extract_wowy_value(stats, stat_prefix)
 
-                lines.append(
-                    f"<div class='wowy-line'>"
-                    f"<strong>{name_part.strip()}</strong>: {val} {stat_key}"
-                    f"</div>"
-                )
+        if isinstance(vals, tuple):
+            vals = [v for v in vals if v is not None]
+            if not vals:
+                continue
+            total = sum(vals)
+        else:
+            if vals is None:
+                continue
+            total = vals
+
+        lines.append(
+            f"<div class='wowy-line'>"
+            f"<strong>{name_part.strip()}</strong>: {total:+.2f}"
+            f"</div>"
+        )
 
     if not lines:
         return "<span class='wowy-empty'>No relevant injury impact</span>"
 
-    return (
-        "<div class='wowy-container'>"
-        + "".join(lines) +
-        "</div>"
-    )
+    return "<div class='wowy-container'>" + "".join(lines) + "</div>"
+
+def extract_wowy_value(stats_dict, stat_prefix):
+    if stat_prefix == "pa":
+        return stats_dict.get("PTS"), stats_dict.get("AST")
+    if stat_prefix == "pr":
+        return stats_dict.get("PTS"), stats_dict.get("REB")
+    if stat_prefix == "ra":
+        return stats_dict.get("REB"), stats_dict.get("AST")
+    return stats_dict.get(WOWY_STAT_MAP.get(stat_prefix)),
 
 
 def detect_stat(market: str) -> str:

@@ -1115,12 +1115,30 @@ components.html("""
 </style>
 """, height=0)
 
+# ------------------------------------------------------
+# GLOBAL STYLES CARDS
+# ------------------------------------------------------
+
 st.markdown(
     f"""
     <style>
-    /* ------------------------------
-       Expand / Collapse
-    ------------------------------ */
+    /* Allow markdown content to receive clicks inside columns */
+    div[data-testid="column"] {{
+        overflow: visible;
+    }}
+
+    .prop-card-wrapper {{
+        cursor: pointer;
+        position: relative;
+        z-index: 5;
+    }}
+
+    /* Prevent children from stealing clicks */
+    .prop-card-wrapper * {{
+        pointer-events: none;
+    }}
+
+    /* Expanded section must be clickable */
     .card-expanded {{
         display: none;
         margin-top: 8px;
@@ -1131,20 +1149,6 @@ st.markdown(
         display: block;
     }}
 
-    /* ------------------------------
-       Click handling
-    ------------------------------ */
-    .prop-card-wrapper {{
-        cursor: pointer;
-    }}
-
-    .prop-card-wrapper * {{
-        pointer-events: none;
-    }}
-
-    /* ------------------------------
-       Expand hint
-    ------------------------------ */
     .expand-hint {{
         text-align: center;
         font-size: 0.7rem;
@@ -1152,9 +1156,6 @@ st.markdown(
         margin-top: 6px;
     }}
 
-    /* ------------------------------
-       Save Bet button
-    ------------------------------ */
     .save-bet-btn {{
         background: #2563eb;
         color: white;
@@ -1164,6 +1165,7 @@ st.markdown(
         font-size: 0.8rem;
         font-weight: 700;
         cursor: pointer;
+        pointer-events: auto;
     }}
 
     .save-bet-btn:hover {{
@@ -1173,6 +1175,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 st.markdown(
     f"""
@@ -3442,10 +3445,9 @@ def render_prop_cards(
                 f"</div>"
             )
 
-            components.html(
+            st.markdown(
                 full_card_html,
-                height=600,
-                scrolling=False,
+                unsafe_allow_html=True,
             )
 
 

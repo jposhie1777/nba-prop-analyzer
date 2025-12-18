@@ -3344,7 +3344,7 @@ def render_prop_cards(
                 f"<div class='metric'><span>L5</span><strong>{_fmt1(l5_avg)}</strong></div>"
                 f"<div class='metric'><span>L10</span><strong>{_fmt1(l10_avg)}</strong></div>"
                 f"<div class='metric'><span>L20</span><strong>{_fmt1(l20_avg)}</strong></div>"
-                f"<div class='metric'><span>Δ Line</span><strong>{_fmt1(l10_avg - (line or 0))}</strong></div>"
+                f"<div class='metric'><span>Δ Line</span><strong>{_fmt1((l10_avg - line) if l10_avg is not None and line is not None else None)}</strong></div>"
                 f"</div>"
 
                 # ==================================================

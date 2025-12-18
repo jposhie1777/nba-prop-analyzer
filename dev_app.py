@@ -3519,18 +3519,18 @@ def render_prop_cards(
             )
 
             full_card_html = (
-                f"<div "
-                f"class='prop-card-wrapper' "
-                f"data-card-id='{card_id}'>"
+                f"<details class='prop-card-wrapper'>"
+                f"<summary style='list-style:none; cursor:pointer;'>"
                 f"{base_card_html}"
-                f"<div "
-                f"id='{card_id}_expanded' "
-                f"class='card-expanded'>"
+                f"<div class='expand-hint'>Click to expand ▾</div>"
+                f"</summary>"
+                f"<div class='card-expanded'>"
                 f"{expanded_html}"
                 f"{save_button_html}"
                 f"</div>"
-                f"</div>"
+                f"</details>"
             )
+
 
             st.markdown(
                 full_card_html,

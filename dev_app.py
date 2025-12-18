@@ -1950,7 +1950,9 @@ def extract_wowy_value(stats_dict, stat_prefix):
         return stats_dict.get("PTS"), stats_dict.get("REB")
     if stat_prefix == "ra":
         return stats_dict.get("REB"), stats_dict.get("AST")
-    return stats_dict.get(WOWY_STAT_MAP.get(stat_prefix)),
+
+    # SINGLE STATS — RETURN SCALAR (NO COMMA)
+    return stats_dict.get(WOWY_STAT_MAP.get(stat_prefix))
 
 
 def detect_stat(market: str) -> str:
@@ -3362,7 +3364,8 @@ def render_prop_cards(
             if row.get("breakdown"):
                 st.caption(f"DEBUG breakdown: {row.get('breakdown')}")
 
-            stat_prefix = get_stat_prefix(row)
+            stat_prefix = detect_stat(row.get("market"))
+
 
 
             spark_vals, spark_dates = get_spark_series(row)

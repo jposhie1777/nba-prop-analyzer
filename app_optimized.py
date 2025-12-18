@@ -109,7 +109,26 @@ if missing_auth0:
     )
 
 
+# ======================================================
+# HARD CACHED BIGQUERY LOADERS (REQUIRED FOR STABILITY)
+# ======================================================
 
+@st.cache_data(ttl=300, show_spinner="Loading today’s props…")
+def load_props_df(sql: str):
+    client = bigquery.Client(
+        project=PROJECT_ID,
+        credentials=credentials,
+    )
+    return client.query(sql).to_dataframe()
+
+@st.cache_data(ttl=600, show_spinner="Loading historical stats…")
+def load_historical_df(sql: str):
+    client = bigquery.Client(
+        project=PROJECT_ID,
+        credentials=credentials,
+    )
+    return client.query(sql).to_dataframe()
+    
 # ------------------------------------------------------
 # SQL STATEMENTS (BIGQUERY)
 # ------------------------------------------------------

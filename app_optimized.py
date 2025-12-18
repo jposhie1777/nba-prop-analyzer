@@ -3157,7 +3157,7 @@ def render_prop_cards(
             agg_map[c] = (c, "first")
     
     # 🔥 sparkline arrays (THIS FIXES YOUR ISSUE)
-    for c in spark_cols:
+    for c in SPARK_COLS:
         if c in card_df.columns:
             agg_map[c] = (c, "first")
     

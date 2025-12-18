@@ -3950,17 +3950,39 @@ if sport == "NBA":
             home_abbr = team_abbr(home)
             away_abbr = team_abbr(away)
             
-            # --- COLLAPSED (compact, NO EV) ---
-            
-            # Moneyline: take just the odds number
-            collapsed_home_ml = f"{home_abbr} {home_ml_text.split()[1]}"
-            collapsed_away_ml = f"{away_abbr} {away_ml_text.split()[1]}"
-            
-            # Spread: keep the number, replace team name with abbr
-            collapsed_spread = f"{home_abbr} {spread_text.split()[-1]}"
-            
-            # Total: strip text down to O/U number
-            collapsed_total = f"O/U {total_text.replace('O/U', '').strip()}"
+            def safe_odds_part(text):
+                if not text:
+                    return ""
+                for part in str(text).split():
+                    if part.startswith(("+", "-")) and part[1:].isdigit():
+                        return part
+                return ""
+
+            # --- COLLAPSED (compact, SAFE) ---
+
+            home_ml_price = safe_odds_part(home_ml_text)
+            away_ml_price = safe_odds_part(away_ml_text)
+
+            collapsed_home_ml = f"{home_abbr} {home_ml_price}".strip()
+            collapsed_away_ml = f"{away_abbr} {away_ml_price}".strip()
+
+            spread_part = (
+                str(spread_text).split()[-1]
+                if spread_text and str(spread_text).split()
+                else ""
+            )
+            collapsed_spread = f"{home_abbr} {spread_part}".strip()
+
+            total_part = (
+                str(total_text)
+                .replace("O/U", "")
+                .replace("o/u", "")
+                .strip()
+                if total_text
+                else ""
+            )
+            collapsed_total = f"O/U {total_part}".strip()
+
             
             html = f"""
             <style>

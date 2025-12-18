@@ -3119,6 +3119,15 @@ def render_prop_cards(
         "bet_type",
     ]
 
+    SPARK_COLS = [
+        "pts_last5_list", "pts_last10_list", "pts_last20_list",
+        "reb_last5_list", "reb_last10_list", "reb_last20_list",
+        "ast_last5_list", "ast_last10_list", "ast_last20_list",
+        "pra_last5_list", "pra_last10_list", "pra_last20_list",
+        "pr_last10_list", "pa_last10_list", "ra_last10_list",
+        "last10_dates",
+    ]
+
     agg_map = {
         # sportsbooks
         "book_prices": (
@@ -3129,28 +3138,26 @@ def render_prop_cards(
             ]
         ),
     
-        # always-present metrics
+        # metrics
         "hit_rate_last5": ("hit_rate_last5", "first"),
         "hit_rate_last10": ("hit_rate_last10", "first"),
         "hit_rate_last20": ("hit_rate_last20", "first"),
         "edge_pct": ("edge_pct", "first"),
         "implied_prob": ("implied_prob", "first"),
     
-        # team info
+        # teams
         "player_team": ("player_team", "first"),
         "home_team": ("home_team", "first"),
         "visitor_team": ("visitor_team", "first"),
     }
     
-    # OPTIONAL columns — only add if present
-    optional_cols = [
-        "game_id",
-        "opp_rank",
-        "matchup_difficulty_score",
-        "est_minutes",
-    ]
+    # optional numeric/context fields
+    for c in ["game_id", "matchup_difficulty_score", "est_minutes"]:
+        if c in card_df.columns:
+            agg_map[c] = (c, "first")
     
-    for c in optional_cols:
+    # 🔥 sparkline arrays (THIS FIXES YOUR ISSUE)
+    for c in spark_cols:
         if c in card_df.columns:
             agg_map[c] = (c, "first")
     

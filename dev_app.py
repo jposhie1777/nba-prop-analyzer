@@ -1115,55 +1115,46 @@ components.html("""
 </style>
 """, height=0)
 
-st.markdown("""
-<style>
-button[kind="secondary"] {
-    border-radius: 0 0 14px 14px;
-    font-weight: 700;
-    font-size: 0.85rem;
-}
-</style>
-""", unsafe_allow_html=True)
-
-
-st.markdown(
-    """
-    <style>
-    /* Save Bet button overlay for prop cards */
-    div[data-testid="stButton"] > button[prop-save-btn="true"] {
-        position: relative;
-        top: -52px;
-        left: calc(100% - 140px);
-        background: linear-gradient(135deg, #22c55e, #16a34a);
-        color: white;
-        border-radius: 999px;
-        border: none;
-        font-weight: 800;
-        font-size: 0.78rem;
-        padding: 6px 14px;
-        box-shadow: 0 6px 18px rgba(0,0,0,0.35);
-    }
-
-    div[data-testid="stButton"] > button[prop-save-btn="true"]:hover {
-        background: linear-gradient(135deg, #34d399, #22c55e);
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
 st.markdown(
     f"""
     <style>
+    /* ------------------------------
+       Expand / Collapse
+    ------------------------------ */
     .card-expanded {{
         display: none;
         margin-top: 8px;
+        pointer-events: auto;
     }}
 
     .card-expanded.open {{
         display: block;
     }}
 
+    /* ------------------------------
+       Click handling
+    ------------------------------ */
+    .prop-card-wrapper {{
+        cursor: pointer;
+    }}
+
+    .prop-card-wrapper * {{
+        pointer-events: none;
+    }}
+
+    /* ------------------------------
+       Expand hint
+    ------------------------------ */
+    .expand-hint {{
+        text-align: center;
+        font-size: 0.7rem;
+        opacity: 0.65;
+        margin-top: 6px;
+    }}
+
+    /* ------------------------------
+       Save Bet button
+    ------------------------------ */
     .save-bet-btn {{
         background: #2563eb;
         color: white;
@@ -3097,14 +3088,21 @@ def render_prop_cards(
         st.info(f"No props match your filters.")
         return
 
-    # --------------------------------------------------
+    # ======================================================
+    # MEMORY DEBUG — START OF RERUN
+    # ======================================================
+    st.sidebar.caption(
+        f"🔁 Rerun start RAM: {get_mem_mb():.0f} MB"
+    )
+
+    # ------------------------------------------------------
     # WOWY merge
-    # --------------------------------------------------
+    # ------------------------------------------------------
     card_df = attach_wowy_deltas(df, wowy_df)
 
-    # --------------------------------------------------
+    # ------------------------------------------------------
     # Restrict sportsbooks
-    # --------------------------------------------------
+    # ------------------------------------------------------
     card_df = card_df[
         card_df["bookmaker"].isin(
             [
@@ -3116,9 +3114,9 @@ def render_prop_cards(
         )
     ]
 
-    # --------------------------------------------------
+    # ------------------------------------------------------
     # Row filter
-    # --------------------------------------------------
+    # ------------------------------------------------------
     def card_good(row: pd.Series) -> bool:
         price = row.get("price")
         hit = row.get(hit_rate_col)
@@ -3147,12 +3145,14 @@ def render_prop_cards(
     card_df = card_df[card_df.apply(card_good, axis=1)]
 
     if card_df.empty:
-        st.info(f"No props match your filters (after EV / odds / hit-rate logic).")
+        st.info(
+            f"No props match your filters (after EV / odds / hit-rate logic)."
+        )
         return
 
-    # --------------------------------------------------
-    # GROUP INTO UNIQUE PROPS
-    # --------------------------------------------------
+    # ------------------------------------------------------
+    # GROUP INTO UNIQUE PROPS (MULTI-BOOK)
+    # ------------------------------------------------------
     PROP_KEY_COLS = [
         "player",
         "player_team",
@@ -3170,7 +3170,11 @@ def render_prop_cards(
 
         for _, r in g.iterrows():
             book = normalize_bookmaker(r.get("bookmaker"))
-            price = int(r.get("price")) if not pd.isna(r.get("price")) else None
+            price = (
+                int(r.get("price"))
+                if not pd.isna(r.get("price"))
+                else None
+            )
 
             key = (book, price)
             if key in seen:
@@ -3195,22 +3199,31 @@ def render_prop_cards(
         .reset_index(drop=True)
     )
 
-    # --------------------------------------------------
+    # ------------------------------------------------------
     # Sorting
-    # --------------------------------------------------
-    card_df = card_df.sort_values(
-        by=[hit_rate_col],
-        ascending=[False],
-    ).reset_index(drop=True)
+    # ------------------------------------------------------
+    card_df = (
+        card_df
+        .sort_values(
+            by=[hit_rate_col],
+            ascending=[False],
+        )
+        .reset_index(drop=True)
+    )
 
-    # --------------------------------------------------
+    # ------------------------------------------------------
     # Pagination
-    # --------------------------------------------------
+    # ------------------------------------------------------
     page_size = 30
     total_cards = len(card_df)
-    total_pages = max(1, (total_cards + page_size - 1) // page_size)
+    total_pages = max(
+        1,
+        (total_cards + page_size - 1) // page_size,
+    )
 
-    st.write(f"Showing {total_cards} props • {total_pages} pages")
+    st.write(
+        f"Showing {total_cards} props • {total_pages} pages"
+    )
 
     page = st.number_input(
         f"Page",
@@ -3225,6 +3238,9 @@ def render_prop_cards(
     end = start + page_size
     page_df = card_df.iloc[start:end]
 
+    # ------------------------------------------------------
+    # Scroll wrapper
+    # ------------------------------------------------------
     st.markdown(
         f"<div style='max-height:1100px; overflow-y:auto; padding-right:12px;'>",
         unsafe_allow_html=True,
@@ -3232,12 +3248,21 @@ def render_prop_cards(
 
     cols = st.columns(4)
 
-    # ==================================================
+    # ======================================================
     # CARD LOOP
-    # ==================================================
+    # ======================================================
     for idx, row in page_df.iterrows():
         col = cols[idx % 4]
-        card_id = f"{page_key}_{idx}"
+
+        # -------------------------
+        # MEMORY DEBUG — PER CARD
+        # -------------------------
+        st.markdown(
+            f"<div style='font-size:0.7rem; color:#999; text-align:right;'>"
+            f"RAM before card: {get_mem_mb():.0f} MB"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
 
         with col:
             player = row.get("player") or ""
@@ -3250,10 +3275,18 @@ def render_prop_cards(
 
             hit_val = row.get(hit_rate_col) or 0.0
             l10_avg = get_l10_avg(row)
-            l10_avg_display = f"{l10_avg:.1f}" if l10_avg is not None else "-"
+            l10_avg_display = (
+                f"{l10_avg:.1f}"
+                if l10_avg is not None
+                else "-"
+            )
 
             opp_rank = get_opponent_rank(row)
-            rank_display = opp_rank if isinstance(opp_rank, int) else "-"
+            rank_display = (
+                opp_rank
+                if isinstance(opp_rank, int)
+                else "-"
+            )
             rank_color = (
                 rank_to_color(opp_rank)
                 if isinstance(opp_rank, int)
@@ -3271,15 +3304,14 @@ def render_prop_cards(
                 normalize_team_code(row.get("player_team", "")),
                 "",
             )
-
             opp_logo = TEAM_LOGOS_BASE64.get(
                 normalize_team_code(row.get("opponent_team", "")),
                 "",
             )
 
-            # --------------------------
+            # -------------------------
             # BOOK PRICES
-            # --------------------------
+            # -------------------------
             book_lines = []
 
             for bp in row.get("book_prices", []):
@@ -3291,47 +3323,86 @@ def render_prop_cards(
                     book_lines.append(
                         f"<div style='display:flex; align-items:center; gap:6px;'>"
                         f"<img src='{logo}' style='height:22px;' />"
-                        f"<div style='font-size:0.75rem; font-weight:800;'>{price:+d}</div>"
+                        f"<div style='font-size:0.75rem; font-weight:800;'>"
+                        f"{price:+d}"
+                        f"</div>"
                         f"</div>"
                     )
 
             books_html = (
-                f"<div style='display:flex; flex-direction:column; align-items:flex-end; gap:4px;'>"
+                f"<div style='display:flex; flex-direction:column; "
+                f"align-items:flex-end; gap:4px;'>"
                 f"{''.join(book_lines)}"
                 f"</div>"
             )
 
-            # --------------------------
-            # BASE CARD
-            # --------------------------
+            # -------------------------
+            # BASE CARD HTML
+            # -------------------------
+            expand_hint_html = (
+                f"<div class='expand-hint'>"
+                f"Click to expand ▾"
+                f"</div>"
+            )
+
             base_card_html = (
-                f"<div class='prop-card' onclick=\"toggleExpand('{card_id}')\">"
-                f"<div style='display:flex; justify-content:space-between; align-items:center;'>"
+                f"<div class='prop-card'>"
+                f"<div style='display:flex; justify-content:space-between; "
+                f"align-items:center;'>"
                 f"<div style='display:flex; align-items:center; gap:6px;'>"
                 f"<img src='{home_logo}' style='height:20px;border-radius:4px;' />"
                 f"<span style='font-size:0.7rem;color:#9ca3af;'>vs</span>"
                 f"<img src='{opp_logo}' style='height:20px;border-radius:4px;' />"
                 f"</div>"
                 f"<div style='text-align:center; flex:1;'>"
-                f"<div style='font-size:1.05rem;font-weight:700;'>{player}</div>"
-                f"<div style='font-size:0.82rem;color:#9ca3af;'>{pretty_market} • {bet_type} {line}</div>"
+                f"<div style='font-size:1.05rem;font-weight:700;'>"
+                f"{player}"
+                f"</div>"
+                f"<div style='font-size:0.82rem;color:#9ca3af;'>"
+                f"{pretty_market} • {bet_type} {line}"
+                f"</div>"
                 f"</div>"
                 f"{books_html}"
                 f"</div>"
-                f"<div style='display:flex; justify-content:center; margin:8px 0;'>{spark_html}</div>"
-                f"<div class='prop-meta'>"
-                f"<div><div style='font-size:0.8rem;'>{hit_label}: {hit_val:.0%}</div>"
-                f"<div style='font-size:0.7rem;'>L10 Avg: {l10_avg_display}</div></div>"
-                f"<div><div style='font-size:0.8rem; font-weight:700; color:{rank_color};'>{rank_display}</div>"
-                f"<div style='font-size:0.7rem;'>Opp Rank</div></div>"
+                f"<div style='display:flex; justify-content:center; margin:8px 0;'>"
+                f"{spark_html}"
                 f"</div>"
+                f"<div class='prop-meta'>"
+                f"<div>"
+                f"<div style='font-size:0.8rem;'>"
+                f"{hit_label}: {hit_val:.0%}"
+                f"</div>"
+                f"<div style='font-size:0.7rem;'>"
+                f"L10 Avg: {l10_avg_display}"
+                f"</div>"
+                f"</div>"
+                f"<div>"
+                f"<div style='font-size:0.8rem; font-weight:700; "
+                f"color:{rank_color};'>"
+                f"{rank_display}"
+                f"</div>"
+                f"<div style='font-size:0.7rem;'>Opp Rank</div>"
+                f"</div>"
+                f"</div>"
+                f"{expand_hint_html}"
                 f"</div>"
             )
 
-            # --------------------------
+            # -------------------------
+            # EXPANDED ANALYTICS
+            # -------------------------
+            expanded_html = (
+                f"<div style='padding:12px; border-radius:12px; "
+                f"background:rgba(255,255,255,0.05); "
+                f"border:1px solid rgba(255,255,255,0.12);'>"
+                f"<div style='font-size:0.8rem;'>Expanded analytics here</div>"
+                f"</div>"
+            )
+
+            # -------------------------
             # SAVE PAYLOAD
-            # --------------------------
-            save_payload = json.dumps(
+            # -------------------------
+            save_payload_json = json.dumps(
                 {
                     "player": row.get("player"),
                     "market": row.get("market"),
@@ -3343,29 +3414,60 @@ def render_prop_cards(
             )
 
             save_button_html = (
-                f"<div style='display:flex; justify-content:flex-end; margin-top:10px;'>"
-                f"<button class='save-bet-btn' onclick='saveBet({save_payload})'>"
-                f"💾 Save Bet</button>"
+                f"<div style='display:flex; justify-content:flex-end; "
+                f"margin-top:10px;'>"
+                f"<button class='save-bet-btn' "
+                f"onclick='saveBet({save_payload_json})'>"
+                f"💾 Save Bet"
+                f"</button>"
                 f"</div>"
             )
 
-            expanded_html = (
+            card_id = (
+                f"{page_key}_"
+                f"{row.get('player')}_"
+                f"{row.get('market')}_"
+                f"{row.get('line')}_"
+                f"{row.get('game_id', '')}"
+            ).replace(" ", "_")
+
+            full_card_html = (
+                f"<div class='prop-card-wrapper' "
+                f"onclick=\"toggleExpand('{card_id}')\">"
+                f"{base_card_html}"
                 f"<div id='{card_id}_expanded' class='card-expanded'>"
-                f"{expanded_html if 'expanded_html' in locals() else ''}"
+                f"{expanded_html}"
                 f"{save_button_html}"
                 f"</div>"
-            )
-
-            full_html = (
-                f"<div class='prop-card-wrapper'>"
-                f"{base_card_html}"
-                f"{expanded_html}"
                 f"</div>"
             )
 
-            st.markdown(full_html, unsafe_allow_html=True)
+            st.markdown(
+                full_card_html,
+                unsafe_allow_html=True,
+            )
 
-    st.markdown(f"</div>", unsafe_allow_html=True)
+        # -------------------------
+        # MEMORY DEBUG — AFTER CARD
+        # -------------------------
+        st.markdown(
+            f"<div style='font-size:0.7rem; color:#999; text-align:right;'>"
+            f"RAM after card: {get_mem_mb():.0f} MB"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+    # ------------------------------------------------------
+    # MEMORY DEBUG — END OF RERUN
+    # ------------------------------------------------------
+    st.sidebar.caption(
+        f"🔚 End of rerun RAM: {get_mem_mb():.0f} MB"
+    )
+
+    st.markdown(
+        f"</div>",
+        unsafe_allow_html=True,
+    )
 
 
 

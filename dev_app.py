@@ -3202,9 +3202,10 @@ def render_prop_cards(
             line = row.get("line")
 
             hit_val = row.get(hit_rate_col) or 0.0
-            l5_avg = get_l5_avg(row)
-            l10_avg = get_l10_avg(row)
-            l20_avg = get_l20_avg(row)
+            l5_avg = row.get("avg_last5")
+            l10_avg = row.get("avg_last10")
+            l20_avg = row.get("avg_last20")
+
 
             opp_rank = get_opponent_rank(row)
             rank_display = opp_rank if isinstance(opp_rank, int) else "-"

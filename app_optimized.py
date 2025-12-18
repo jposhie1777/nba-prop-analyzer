@@ -3266,7 +3266,7 @@ def render_prop_cards(
                     book_lines.append(
                         f"<div style='display:flex; align-items:center; gap:6px;'>"
                         f"<img src='{logo}' style='height:22px; object-fit:contain;' />"
-                        f"<div style='font-size:0.75rem; font-weight:800;'>{price:+d}</div>"
+                        f"<div style='font-size:0.75rem; font-weight:800;'>{price:+.0f}</div>"
                         f"</div>"
                     )
 

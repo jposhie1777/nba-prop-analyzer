@@ -1152,6 +1152,69 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+st.markdown(
+    f"""
+    <style>
+    .card-expanded {{
+        display: none;
+        margin-top: 8px;
+    }}
+
+    .card-expanded.open {{
+        display: block;
+    }}
+
+    .save-bet-btn {{
+        background: #2563eb;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        cursor: pointer;
+    }}
+
+    .save-bet-btn:hover {{
+        background: #1d4ed8;
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    f"""
+    <script>
+    function toggleExpand(id) {{
+        const el = document.getElementById(id + "_expanded");
+        if (el) {{
+            el.classList.toggle("open");
+        }}
+    }}
+
+    function saveBet(payload) {{
+        fetch("/save_bet", {{
+            method: "POST",
+            headers: {{
+                "Content-Type": "application/json"
+            }},
+            body: JSON.stringify(payload)
+        }})
+        .then(r => r.json())
+        .then(() => {{
+            alert("Bet saved");
+        }})
+        .catch(err => {{
+            console.error(err);
+            alert("Save failed");
+        }});
+    }}
+    </script>
+    """,
+    unsafe_allow_html=True,
+)
+
 
 # ------------------------------------------------------
 # AG-GRID MOBILE FIX (separate block)
@@ -3030,23 +3093,18 @@ def render_prop_cards(
     min_opp_rank: int | None = None,
     page_key: str = "ev",
 ):
-    """
-    Shared card-grid renderer for both EV+ Props and Available Props.
-    One card per unique prop. Multiple sportsbooks combined per card.
-    """
-
     if df.empty:
-        st.info("No props match your filters.")
+        st.info(f"No props match your filters.")
         return
 
-    # ------------------------------------------------------
+    # --------------------------------------------------
     # WOWY merge
-    # ------------------------------------------------------
+    # --------------------------------------------------
     card_df = attach_wowy_deltas(df, wowy_df)
 
-    # ------------------------------------------------------
-    # Restrict to DK / FD only
-    # ------------------------------------------------------
+    # --------------------------------------------------
+    # Restrict sportsbooks
+    # --------------------------------------------------
     card_df = card_df[
         card_df["bookmaker"].isin(
             [
@@ -3058,9 +3116,9 @@ def render_prop_cards(
         )
     ]
 
-    # ------------------------------------------------------
+    # --------------------------------------------------
     # Row filter
-    # ------------------------------------------------------
+    # --------------------------------------------------
     def card_good(row: pd.Series) -> bool:
         price = row.get("price")
         hit = row.get(hit_rate_col)
@@ -3089,12 +3147,12 @@ def render_prop_cards(
     card_df = card_df[card_df.apply(card_good, axis=1)]
 
     if card_df.empty:
-        st.info("No props match your filters (after EV / odds / hit-rate logic).")
+        st.info(f"No props match your filters (after EV / odds / hit-rate logic).")
         return
 
-    # ------------------------------------------------------
-    # GROUP INTO UNIQUE PROPS (combine sportsbooks)
-    # ------------------------------------------------------
+    # --------------------------------------------------
+    # GROUP INTO UNIQUE PROPS
+    # --------------------------------------------------
     PROP_KEY_COLS = [
         "player",
         "player_team",
@@ -3115,7 +3173,6 @@ def render_prop_cards(
             price = int(r.get("price")) if not pd.isna(r.get("price")) else None
 
             key = (book, price)
-
             if key in seen:
                 continue
 
@@ -3129,8 +3186,6 @@ def render_prop_cards(
             )
 
         base["book_prices"] = book_prices
-
-
         return base
 
     card_df = (
@@ -3140,17 +3195,17 @@ def render_prop_cards(
         .reset_index(drop=True)
     )
 
-    # ------------------------------------------------------
+    # --------------------------------------------------
     # Sorting
-    # ------------------------------------------------------
+    # --------------------------------------------------
     card_df = card_df.sort_values(
         by=[hit_rate_col],
         ascending=[False],
     ).reset_index(drop=True)
 
-    # ------------------------------------------------------
+    # --------------------------------------------------
     # Pagination
-    # ------------------------------------------------------
+    # --------------------------------------------------
     page_size = 30
     total_cards = len(card_df)
     total_pages = max(1, (total_cards + page_size - 1) // page_size)
@@ -3163,16 +3218,13 @@ def render_prop_cards(
         max_value=total_pages,
         value=1,
         step=1,
-        key=f"{page_key}_card_page",
+        key=f"{page_key}_page",
     )
 
     start = (page - 1) * page_size
     end = start + page_size
     page_df = card_df.iloc[start:end]
 
-    # ------------------------------------------------------
-    # Scroll wrapper
-    # ------------------------------------------------------
     st.markdown(
         f"<div style='max-height:1100px; overflow-y:auto; padding-right:12px;'>",
         unsafe_allow_html=True,
@@ -3180,85 +3232,34 @@ def render_prop_cards(
 
     cols = st.columns(4)
 
-    # ------------------------------------------------------
-    # Helper: stat-aware avg
-    # ------------------------------------------------------
-    def get_stat_avg(row, stat_prefix, window):
-        if stat_prefix:
-            val = row.get(f"{stat_prefix}_last{window}")
-            if val is not None:
-                return val
-        if window == 10:
-            return get_l10_avg(row)
-        return None
-
-    # ======================================================
+    # ==================================================
     # CARD LOOP
-    # ======================================================
+    # ==================================================
     for idx, row in page_df.iterrows():
         col = cols[idx % 4]
-    
-        # 🔍 MEMORY DEBUG (per card)
-        mem_mb = get_mem_mb()
-        st.markdown(
-            f"""
-            <div style="
-                font-size:0.7rem;
-                color:#999;
-                text-align:right;
-                margin-bottom:4px;
-            ">
-                RAM: {mem_mb:.0f} MB
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    
-        # ---- existing card rendering continues below ----
+        card_id = f"{page_key}_{idx}"
 
         with col:
-            player = row.get("player", "") or ""
-
+            player = row.get("player") or ""
             pretty_market = MARKET_DISPLAY_MAP.get(
-                row.get("market"), row.get("market")
+                row.get("market"),
+                row.get("market"),
             )
-
-            bet_type = str(row.get("bet_type", "")).upper()
+            bet_type = str(row.get("bet_type")).upper()
             line = row.get("line")
 
-            # ======================================================
-            # STEP 5 — POST-RENDER GC (ONCE PER RERUN)
-            # ======================================================
-            import gc
-            gc.collect()
-            
-            st.caption(f"After render + GC: {get_mem_mb():.0f} MB")
-            
-            
-            # ======================================================
-            # STEP 6 — FINAL END-OF-RERUN SNAPSHOT
-            # ======================================================
-            st.sidebar.caption(
-                f"🔚 End of rerun RAM: {get_mem_mb():.0f} MB"
-            )
-
-            # --------------------------------------------------
-            # Odds / hit info
-            # --------------------------------------------------
-            hit_val = row.get(hit_rate_col, 0.0) or 0.0
+            hit_val = row.get(hit_rate_col) or 0.0
             l10_avg = get_l10_avg(row)
             l10_avg_display = f"{l10_avg:.1f}" if l10_avg is not None else "-"
 
-            # --------------------------------------------------
-            # Opponent rank
-            # --------------------------------------------------
             opp_rank = get_opponent_rank(row)
             rank_display = opp_rank if isinstance(opp_rank, int) else "-"
-            rank_color = rank_to_color(opp_rank) if isinstance(opp_rank, int) else "#9ca3af"
+            rank_color = (
+                rank_to_color(opp_rank)
+                if isinstance(opp_rank, int)
+                else "#9ca3af"
+            )
 
-            # --------------------------------------------------
-            # Sparkline
-            # --------------------------------------------------
             spark_vals, spark_dates = get_spark_series(row)
             spark_html = build_sparkline_bars_hitmiss(
                 spark_vals,
@@ -3266,9 +3267,6 @@ def render_prop_cards(
                 float(line or 0),
             )
 
-            # --------------------------------------------------
-            # Logos
-            # --------------------------------------------------
             home_logo = TEAM_LOGOS_BASE64.get(
                 normalize_team_code(row.get("player_team", "")),
                 "",
@@ -3279,39 +3277,36 @@ def render_prop_cards(
                 "",
             )
 
-            # --------------------------------------------------
-            # BOOK PRICES (MULTI-BOOK)
-            # --------------------------------------------------
+            # --------------------------
+            # BOOK PRICES
+            # --------------------------
             book_lines = []
 
             for bp in row.get("book_prices", []):
                 book = bp.get("book")
                 price = bp.get("price")
-
                 logo = SPORTSBOOK_LOGOS_BASE64.get(book)
 
                 if logo and price is not None:
                     book_lines.append(
                         f"<div style='display:flex; align-items:center; gap:6px;'>"
-                        f"<img src='{logo}' style='height:22px; object-fit:contain;' />"
+                        f"<img src='{logo}' style='height:22px;' />"
                         f"<div style='font-size:0.75rem; font-weight:800;'>{price:+d}</div>"
                         f"</div>"
                     )
 
             books_html = (
-                f"<div style='display:flex; flex-direction:column; "
-                f"align-items:flex-end; gap:4px;'>"
+                f"<div style='display:flex; flex-direction:column; align-items:flex-end; gap:4px;'>"
                 f"{''.join(book_lines)}"
                 f"</div>"
             )
 
-            # --------------------------------------------------
-            # CARD HTML
-            # --------------------------------------------------
-            card_html = (
-                f"<div class='prop-card'>"
-                f"<div style='display:flex; justify-content:space-between; "
-                f"align-items:center; margin-bottom:10px;'>"
+            # --------------------------
+            # BASE CARD
+            # --------------------------
+            base_card_html = (
+                f"<div class='prop-card' onclick=\"toggleExpand('{card_id}')\">"
+                f"<div style='display:flex; justify-content:space-between; align-items:center;'>"
                 f"<div style='display:flex; align-items:center; gap:6px;'>"
                 f"<img src='{home_logo}' style='height:20px;border-radius:4px;' />"
                 f"<span style='font-size:0.7rem;color:#9ca3af;'>vs</span>"
@@ -3319,356 +3314,58 @@ def render_prop_cards(
                 f"</div>"
                 f"<div style='text-align:center; flex:1;'>"
                 f"<div style='font-size:1.05rem;font-weight:700;'>{player}</div>"
-                f"<div style='font-size:0.82rem;color:#9ca3af;'>"
-                f"{pretty_market} • {bet_type} {line}</div>"
+                f"<div style='font-size:0.82rem;color:#9ca3af;'>{pretty_market} • {bet_type} {line}</div>"
                 f"</div>"
                 f"{books_html}"
                 f"</div>"
-                f"<div style='display:flex; justify-content:center; margin:8px 0;'>"
-                f"{spark_html}</div>"
+                f"<div style='display:flex; justify-content:center; margin:8px 0;'>{spark_html}</div>"
                 f"<div class='prop-meta'>"
-                f"<div>"
-                f"<div style='font-size:0.8rem;'>{hit_label}: {hit_val:.0%}</div>"
-                f"<div style='font-size:0.7rem;'>L10 Avg: {l10_avg_display}</div>"
-                f"</div>"
-                f"<div>"
-                f"<div style='font-size:0.8rem; font-weight:700; color:{rank_color};'>"
-                f"{rank_display}</div>"
-                f"<div style='font-size:0.7rem;'>Opp Rank</div>"
-                f"</div>"
+                f"<div><div style='font-size:0.8rem;'>{hit_label}: {hit_val:.0%}</div>"
+                f"<div style='font-size:0.7rem;'>L10 Avg: {l10_avg_display}</div></div>"
+                f"<div><div style='font-size:0.8rem; font-weight:700; color:{rank_color};'>{rank_display}</div>"
+                f"<div style='font-size:0.7rem;'>Opp Rank</div></div>"
                 f"</div>"
                 f"</div>"
             )
 
-            # ------------------------------------------------------
-            # Stable keys
-            # ------------------------------------------------------
-            key_base = (
-                f"{page_key}_"
-                f"{row.get('player')}_"
-                f"{row.get('market')}_"
-                f"{row.get('line')}_"
-                f"{row.get('game_id', '')}"
-            )
-            
-            expand_key = f"{key_base}_expand"
-            
-            if expand_key not in st.session_state:
-                st.session_state[expand_key] = False
-            
-            
-            # ======================================================
-            # DERIVED METRICS (BUILT FIRST — IMPORTANT)
-            # ======================================================
-            display_market = row.get("market")
-            raw_stat = row.get("stat_type")
-            
-            STAT_PREFIX_MAP = {
-                "PTS": "pts",
-                "REB": "reb",
-                "AST": "ast",
-                "STL": "stl",
-                "BLK": "blk",
-                "PRA": "pra",
-                "PA":  "pa",
-                "PR":  "pr",
-                "RA":  "ra",
-                "POINTS": "pts",
-                "REBOUNDS": "reb",
-                "ASSISTS": "ast",
-                "STEALS": "stl",
-                "BLOCKS": "blk",
-            }
-            
-            stat_prefix = STAT_PREFIX_MAP.get(
-                str(raw_stat).strip().upper()
-                if raw_stat is not None
-                else None
-            )
-            
-            try:
-                line_val = float(row.get("line"))
-            except Exception:
-                line_val = None
-            
-            l5_avg  = get_stat_avg(row, stat_prefix, 5)
-            l10_avg = get_stat_avg(row, stat_prefix, 10)
-            l20_avg = get_stat_avg(row, stat_prefix, 20)
-            
-            delta_vs_line = (
-                (l10_avg - line_val)
-                if l10_avg is not None and line_val is not None
-                else None
-            )
-            
-            confidence_score, confidence_level = compute_confidence(
-                hit_rate_l10=row.get("hit_rate_last10"),
-                delta_vs_line=delta_vs_line,
-                opp_rank=row.get("opp_rank"),
-            )
-            
-            CONF_COLORS = {
-                "Strong": "#22c55e",
-                "Medium": "#eab308",
-                "Light":  "#60a5fa",
-            }
-            conf_color = CONF_COLORS.get(confidence_level, "#9ca3af")
-            
-            est_minutes = row.get("est_minutes")
-            l5_min_avg = row.get("l5_min_avg")
-            
-            minutes_delta = (
-                est_minutes - l5_min_avg
-                if est_minutes is not None and l5_min_avg is not None
-                else None
-            )
-            
-            # ======================================================
-            # DISTRIBUTION METRICS (L20 / L40)   ✅ ADD HERE
-            # ======================================================
-            dist20_hit = row.get("dist20_hit_rate")
-            dist20_c1 = row.get("dist20_clear_1p_rate")
-            dist20_c2 = row.get("dist20_clear_2p_rate")
-            dist20_bad = row.get("dist20_fail_bad_rate")
-            dist20_margin = row.get("dist20_avg_margin")
-
-            dist40_hit = row.get("dist40_hit_rate")
-            dist40_c1 = row.get("dist40_clear_1p_rate")
-            dist40_c2 = row.get("dist40_clear_2p_rate")
-            dist40_bad = row.get("dist40_fail_bad_rate")
-            dist40_margin = row.get("dist40_avg_margin")
-            
-            # ======================================================
-            # WOWY / INJURY LINES (BUILT FIRST)
-            # ======================================================
-            injury_lines = []
-            
-            stat_type = row.get("stat_type")
-            wowy_col = WOWY_MARKET_MAP.get(stat_type)
-            wowy_breakdown = row.get("breakdown")
-            
-            if wowy_col and isinstance(wowy_breakdown, str) and wowy_breakdown.strip():
-                blocks = [b.strip() for b in wowy_breakdown.split(";") if b.strip()]
-            
-                for block in blocks:
-                    if "→" not in block:
-                        continue
-            
-                    name_part, stats_part = block.split("→", 1)
-                    stats = [s.strip() for s in stats_part.split(",") if s.strip()]
-                    matched = [s for s in stats if s.startswith(f"{stat_type}=")]
-            
-                    if not matched:
-                        continue
-            
-                    injury_lines.extend([
-                        f"<div style='margin-top:6px; font-weight:800; font-size:0.8rem;'>"
-                        f"{name_part.strip()} (Out)</div>",
-                        f"<div style='font-size:0.74rem; padding-left:8px; color:#cbd5e1;'>"
-                        f"{matched[0]}</div>",
-                    ])
-            
-            
-            # ======================================================
-            # BUILD EXPANDED HTML (ALWAYS BUILT)
-            # ======================================================
-            expanded_lines = [
-                f"<div style='padding:12px; margin-top:8px; border-radius:12px;"
-                f"background:rgba(255,255,255,0.05);"
-                f"border:1px solid rgba(255,255,255,0.12);'>",
-
-                # -------------------------
-                # L5 / L10 / L20 averages
-                # -------------------------
-                f"<div style='display:flex; justify-content:space-between; "
-                f"font-size:0.78rem; margin-bottom:6px;'>",
-                f"<div>L5: {_fmt1(l5_avg)}</div>",
-                f"<div>L10: {_fmt1(l10_avg)}</div>",
-                f"<div>L20: {_fmt1(l20_avg)}</div>",
-                f"</div>",
-
-                # -------------------------
-                # Delta vs line + confidence
-                # -------------------------
-                f"<div style='display:flex; justify-content:space-between; "
-                f"font-size:0.8rem; margin-bottom:6px;'>",
-                f"<div>Δ Line: {_fmt_signed1(delta_vs_line)}</div>",
-                f"<div style='font-weight:800; color:{conf_color};'>"
-                f"Confidence: {confidence_level} ({confidence_score})</div>",
-                f"</div>",
-
-                # -------------------------
-                # Minutes
-                # -------------------------
-                f"<div style='display:flex; justify-content:space-between; "
-                f"font-size:0.78rem; margin-bottom:8px;'>",
-                f"<div>Proj Min: {_fmt1(est_minutes)}</div>",
-                f"<div>Δ Min (L5): {_fmt_signed1(minutes_delta)}</div>",
-                f"</div>",
-            ]
-
-            # ======================================================
-            # DISTRIBUTION METRICS (L20 / L40)
-            # ======================================================
-            expanded_lines.extend([
-                f"<div style='margin-top:10px;'>",
-
-                f"<div style='font-size:0.75rem; font-weight:800; opacity:0.9; margin-bottom:4px;'>"
-                f"Distribution vs Line"
-                f"</div>",
-
-                # -------- L20 --------
-                f"<div style='padding:8px; border-radius:10px; "
-                f"background:rgba(255,255,255,0.04); "
-                f"border:1px solid rgba(255,255,255,0.08); margin-bottom:6px;'>",
-
-                f"<div style='font-size:0.72rem; font-weight:700; margin-bottom:4px;'>"
-                f"Last 20 Games</div>",
-
-                f"<div style='display:flex; justify-content:space-between; font-size:0.7rem;'>"
-                f"<div>Hit: {_pct(dist20_hit)}</div>"
-                f"<div>+1: {_pct(dist20_c1)}</div>"
-                f"<div>+2: {_pct(dist20_c2)}</div>"
-                f"<div>Bad Miss: {_pct(dist20_bad)}</div>"
-                f"<div>Avg Δ: {_pm(dist20_margin)}</div>"
-                f"</div>",
-                f"</div>",
-
-                # -------- L40 --------
-                f"<div style='padding:8px; border-radius:10px; "
-                f"background:rgba(255,255,255,0.04); "
-                f"border:1px solid rgba(255,255,255,0.08);'>",
-
-                f"<div style='font-size:0.72rem; font-weight:700; margin-bottom:4px;'>"
-                f"Last 40 Games</div>",
-
-                f"<div style='display:flex; justify-content:space-between; font-size:0.7rem;'>"
-                f"<div>Hit: {_pct(dist40_hit)}</div>"
-                f"<div>+1: {_pct(dist40_c1)}</div>"
-                f"<div>+2: {_pct(dist40_c2)}</div>"
-                f"<div>Bad Miss: {_pct(dist40_bad)}</div>"
-                f"<div>Avg Δ: {_pm(dist40_margin)}</div>"
-                f"</div>",
-                f"</div>",
-
-                f"</div>",
-            ])
-
-            # ======================================================
-            # WOWY / INJURY IMPACT
-            # ======================================================
-            expanded_lines.extend([
-                f"<div style='font-size:0.82rem; font-weight:800; margin-top:10px; margin-bottom:4px;'>"
-                f"Injured Teammates (WOWY Impact)</div>",
-            ])
-
-            if injury_lines:
-                expanded_lines.extend(injury_lines)
-            else:
-                expanded_lines.append(
-                    f"<div style='font-size:0.75rem; color:#9ca3af;'>"
-                    f"No impactful teammate injuries</div>"
-                )
-
-            # Close wrapper
-            expanded_lines.append("</div>")
-
-            expanded_html = "\n".join(expanded_lines)
-
-            
-            
-            # ======================================================
-            # CARD + ATTACHED EXPAND BUTTON
-            # ======================================================
-            with st.container():
-            
-                # Render card
-                st.markdown(card_html, unsafe_allow_html=True)
-            
-                # Expand / collapse button
-                expand_label = (
-                    "Collapse ▴"
-                    if st.session_state.get(expand_key, False)
-                    else "Click to expand ▾"
-                )
-            
-                st.button(
-                    expand_label,
-                    key=f"{expand_key}_btn",
-                    on_click=toggle_expander,
-                    args=(expand_key,),
-                    use_container_width=True,
-                )
-            
-            
-            # ======================================================
-            # EXPANDED SECTION (RENDER ONLY WHEN OPEN)
-            # ======================================================
-            if st.session_state.get(expand_key, False):
-
-                # Render expanded analytics HTML
-                st.markdown(expanded_html, unsafe_allow_html=True)
-
-                # ------------------------
-                # Build canonical save payload
-                # ------------------------
-                save_payload = {
+            # --------------------------
+            # SAVE PAYLOAD
+            # --------------------------
+            save_payload = json.dumps(
+                {
                     "player": row.get("player"),
                     "market": row.get("market"),
                     "line": row.get("line"),
-                    "bet_type": str(row.get("bet_type")).upper(),
+                    "bet_type": bet_type,
                     "team": row.get("player_team"),
-                    "books": [
-                        {
-                            "bookmaker": bp.get("book"),
-                            "price": bp.get("price"),
-                        }
-                        for bp in row.get("book_prices", [])
-                        if bp.get("book") and bp.get("price") is not None
-                    ],
+                    "books": row.get("book_prices", []),
                 }
+            )
 
-                # ------------------------
-                # Real Save Bet button
-                # ------------------------
-                st.markdown(
-                    "<div style='display:flex; justify-content:flex-end;'>",
-                    unsafe_allow_html=True,
-                )
-                
-                saved = st.button(
-                    "💾 Save Bet",
-                    key=f"{key_base}_save",
-                )
-                
-                st.markdown("</div>", unsafe_allow_html=True)
-                
-                if saved:
-                    # 🔍 MEMORY DEBUG — BEFORE SAVE
-                    mem_before = get_mem_mb()
-                
-                    added = save_bet_for_user(
-                        user_id=current_user_id,
-                        bet=save_payload,
-                    )
-                
-                    # 🔍 MEMORY DEBUG — AFTER SAVE
-                    mem_after = get_mem_mb()
-                
-                    st.caption(
-                        f"Save Bet Δ: +{mem_after - mem_before:.0f} MB "
-                        f"(now {mem_after:.0f} MB)"
-                    )
-                
-                    if added:
-                        st.success("Bet saved")
-                    else:
-                        st.info("Bet already saved")
+            save_button_html = (
+                f"<div style='display:flex; justify-content:flex-end; margin-top:10px;'>"
+                f"<button class='save-bet-btn' onclick='saveBet({save_payload})'>"
+                f"💾 Save Bet</button>"
+                f"</div>"
+            )
 
-            
+            expanded_html = (
+                f"<div id='{card_id}_expanded' class='card-expanded'>"
+                f"{expanded_html if 'expanded_html' in locals() else ''}"
+                f"{save_button_html}"
+                f"</div>"
+            )
 
-    # Close scroll wrapper
-    st.markdown("</div>", unsafe_allow_html=True)
+            full_html = (
+                f"<div class='prop-card-wrapper'>"
+                f"{base_card_html}"
+                f"{expanded_html}"
+                f"</div>"
+            )
+
+            st.markdown(full_html, unsafe_allow_html=True)
+
+    st.markdown(f"</div>", unsafe_allow_html=True)
 
 
 

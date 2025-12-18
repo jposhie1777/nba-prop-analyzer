@@ -3123,10 +3123,11 @@ def render_prop_cards(
         card_df
         .groupby(PROP_KEY_COLS, dropna=False, as_index=False)
         .agg(
+            # sportsbooks
             book_prices=(
                 "price",
                 lambda s: [
-                    {"book": b, "price": p}
+                    {"book": b, "price": int(p) if not pd.isna(p) else None}
                     for b, p in zip(
                         card_df.loc[s.index, "bookmaker"],
                         s
@@ -3134,15 +3135,25 @@ def render_prop_cards(
                 ]
             ),
     
-            # keep ONE copy of all non-book columns
+            # hit rates
             hit_rate_last5=("hit_rate_last5", "first"),
             hit_rate_last10=("hit_rate_last10", "first"),
             hit_rate_last20=("hit_rate_last20", "first"),
+    
+            # edge / probability
             edge_pct=("edge_pct", "first"),
             implied_prob=("implied_prob", "first"),
+    
+            # card metadata
             player_team=("player_team", "first"),
             home_team=("home_team", "first"),
             visitor_team=("visitor_team", "first"),
+            game_id=("game_id", "first"),
+    
+            # OPTIONAL but likely used
+            opp_rank=("opp_rank", "first"),
+            est_minutes=("est_minutes", "first"),
+            matchup_difficulty_score=("matchup_difficulty_score", "first"),
         )
     )
 

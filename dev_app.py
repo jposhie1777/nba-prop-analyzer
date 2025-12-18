@@ -3247,39 +3247,64 @@ def render_prop_cards(
 
     cols = st.columns(4)
 
-    # ======================================================
-    # CLIENT-SIDE JS (MUST BE HERE)
-    # ======================================================
     st.markdown(
         f"""
         <script>
-        window.toggleExpand = function(id) {{
-            const el = document.getElementById(id + "_expanded");
-            if (el) {{
-                el.classList.toggle("open");
-            }}
-        }}
+        if (!window.__propCardDelegationAttached) {{
 
-        window.saveBet = function(payload) {{
-            fetch("/save_bet", {{
-                method: "POST",
-                headers: {{
-                    "Content-Type": "application/json"
-                }},
-                body: JSON.stringify(payload)
-            }})
-            .then(r => r.json())
-            .then(() => {{
-                console.log("Saved");
-            }})
-            .catch(err => {{
-                console.error(err);
+            document.addEventListener("click", function(event) {{
+
+                /* -------- Save bet FIRST -------- */
+                const saveBtn = event.target.closest(".save-bet-btn");
+                if (saveBtn) {{
+                    const payloadRaw = saveBtn.getAttribute("data-save-payload");
+                    if (payloadRaw) {{
+                        try {{
+                            const payload = JSON.parse(payloadRaw);
+                            fetch("/save_bet", {{
+                                method: "POST",
+                                headers: {{
+                                    "Content-Type": "application/json"
+                                }},
+                                body: JSON.stringify(payload)
+                            }})
+                            .then(r => r.json())
+                            .then(() => {{
+                                console.log("Bet saved");
+                            }})
+                            .catch(err => {{
+                                console.error("Save failed", err);
+                            }});
+                        }} catch (e) {{
+                            console.error("Invalid save payload", e);
+                        }}
+                    }}
+                    return;
+                }}
+
+                /* -------- Expand card -------- */
+                const card = event.target.closest(".prop-card-wrapper");
+                if (card) {{
+                    const cardId = card.getAttribute("data-card-id");
+                    if (cardId) {{
+                        const expanded = document.getElementById(cardId + "_expanded");
+                        if (expanded) {{
+                            expanded.classList.toggle("open");
+                        }}
+                    }}
+                }}
+
             }});
+
+            window.__propCardDelegationAttached = true;
+            console.log("Prop card delegation attached");
         }}
         </script>
         """,
         unsafe_allow_html=True,
     )
+
+
 
     # ======================================================
     # CARD LOOP
@@ -3449,8 +3474,9 @@ def render_prop_cards(
             save_button_html = (
                 f"<div style='display:flex; justify-content:flex-end; "
                 f"margin-top:10px;'>"
-                f"<button class='save-bet-btn' "
-                f"onclick='saveBet({save_payload_json})'>"
+                f"<button "
+                f"class='save-bet-btn' "
+                f"data-save-payload='{save_payload_json}'>"
                 f"💾 Save Bet"
                 f"</button>"
                 f"</div>"
@@ -3464,11 +3490,42 @@ def render_prop_cards(
                 f"{row.get('game_id', '')}"
             ).replace(" ", "_")
 
+            save_payload_json = json.dumps(
+                {
+                    "player": row.get("player"),
+                    "market": row.get("market"),
+                    "line": row.get("line"),
+                    "bet_type": str(row.get("bet_type")).upper(),
+                    "team": row.get("player_team"),
+                    "books": [
+                        {
+                            "bookmaker": bp.get("book"),
+                            "price": bp.get("price"),
+                        }
+                        for bp in row.get("book_prices", [])
+                        if bp.get("book") and bp.get("price") is not None
+                    ],
+                }
+            )
+
+            save_button_html = (
+                f"<div style='display:flex; justify-content:flex-end; margin-top:10px;'>"
+                f"<button "
+                f"class='save-bet-btn' "
+                f"data-save-payload='{save_payload_json}'>"
+                f"💾 Save Bet"
+                f"</button>"
+                f"</div>"
+            )
+
             full_card_html = (
-                f"<div class='prop-card-wrapper' "
-                f"onclick=\"toggleExpand('{card_id}')\">"
+                f"<div "
+                f"class='prop-card-wrapper' "
+                f"data-card-id='{card_id}'>"
                 f"{base_card_html}"
-                f"<div id='{card_id}_expanded' class='card-expanded'>"
+                f"<div "
+                f"id='{card_id}_expanded' "
+                f"class='card-expanded'>"
                 f"{expanded_html}"
                 f"{save_button_html}"
                 f"</div>"
@@ -3479,6 +3536,7 @@ def render_prop_cards(
                 full_card_html,
                 unsafe_allow_html=True,
             )
+
 
 
         # -------------------------

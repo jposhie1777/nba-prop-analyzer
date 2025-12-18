@@ -1944,15 +1944,20 @@ def format_wowy_html(wowy_raw, stat_prefix):
     return "<div class='wowy-container'>" + "".join(lines) + "</div>"
 
 def extract_wowy_value(stats_dict, stat_prefix):
-    if stat_prefix == "pa":
+    stat_prefix = stat_prefix.upper()
+
+    if stat_prefix == "PA":
         return stats_dict.get("PTS"), stats_dict.get("AST")
-    if stat_prefix == "pr":
+
+    if stat_prefix == "PR":
         return stats_dict.get("PTS"), stats_dict.get("REB")
-    if stat_prefix == "ra":
+
+    if stat_prefix == "RA":
         return stats_dict.get("REB"), stats_dict.get("AST")
 
-    # SINGLE STATS — RETURN SCALAR (NO COMMA)
-    return stats_dict.get(WOWY_STAT_MAP.get(stat_prefix))
+    # Single stat
+    return stats_dict.get(stat_prefix)
+
 
 
 def detect_stat(market: str) -> str:

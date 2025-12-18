@@ -1255,8 +1255,10 @@ st.markdown(
 
         e.preventDefault();
 
-        const payload = btn.dataset.savePayload;
-        if (!payload) return;
+        const raw = btn.dataset.savePayload;
+        if (!raw) return;
+
+        const payload = raw.replace(/&quot;/g, '"');
 
         fetch("/save_bet", {
             method: "POST",

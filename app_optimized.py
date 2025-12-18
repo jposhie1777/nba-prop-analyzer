@@ -3835,14 +3835,13 @@ def render_saved_bets_tab():
 
     lines = []
     for b in st.session_state.saved_bets:
-        lines.append(f"...")
+        lines.append(
+            f"{b.get('player','')} | {b.get('market','')} {b.get('line','')} | "
+            f"{b.get('bet_type','')} | Odds {b.get('price','')} | {b.get('bookmaker','')}"
+        )
     
     txt_export = "\n".join(lines)
-            f"{b.get('player', '')} | {b.get('market', '')} | "
-            f"{b.get('bet_type', '')} {b.get('line', '')} | "
-            f"Odds {b.get('price', '')} | {b.get('bookmaker', '')}\n"
-        )
-
+    
     st.download_button(
         "Download as Text",
         data=txt_export,

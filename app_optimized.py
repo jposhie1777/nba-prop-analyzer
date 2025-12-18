@@ -2372,12 +2372,11 @@ def toggle_expander(key: str):
 # ------------------------------------------------------
 # WOWY HELPERS
 # ------------------------------------------------------
-def attach_wowy_deltas(df, wowy_df_global):
-    """Attach WOWY rows (can be multiple injured teammates) to props by player + team."""
-    if wowy_df_global is None or wowy_df_global.empty:
-        return df
-
-    df = df.copy()
+@st.cache_data(ttl=300)
+def build_card_df(props_df, wowy_df):
+    if wowy_df is None or wowy_df.empty:
+        return props_df
+    return attach_wowy_deltas(props_df, wowy_df)
 
     def norm(x):
         if not isinstance(x, str):
@@ -5345,10 +5344,8 @@ if sport == "NBA":
         # Load saved bets
         # --------------------------------------------------
         slip = st.session_state.get("saved_bets", [])
-        slip_df = pd.DataFrame(slip)
-
-        if slip_df.empty:
-            st.info("You haven't saved any bets yet.")
+        if not slip:
+            st.info("You haven't saved any bets yet")
             st.stop()
 
         # --------------------------------------------------

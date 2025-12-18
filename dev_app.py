@@ -1596,7 +1596,7 @@ def _pm(v):
 # ======================================================
 # WOWY market → delta column mapping
 # ======================================================
-WOWY_MARKET_MAP = {
+WOWY_STAT_MAP = {
     "PTS": "pts_delta",
     "REB": "reb_delta",
     "AST": "ast_delta",
@@ -1898,24 +1898,35 @@ def format_moneyline(v):
     except Exception:
         return "—"
 
-def format_wowy_html(wowy_raw):
+def format_wowy_html(wowy_raw, stat_prefix):
     if not isinstance(wowy_raw, str) or not wowy_raw.strip():
+        return "<span class='wowy-empty'>No injury impact</span>"
+
+    stat_key = WOWY_STAT_MAP.get(stat_prefix)
+    if not stat_key:
         return "<span class='wowy-empty'>No injury impact</span>"
 
     blocks = [b.strip() for b in wowy_raw.split(";") if b.strip()]
     lines = []
 
     for block in blocks:
-        if "→" not in block:
+        if ":" not in block:
             continue
 
-        name_part, stats_part = block.split("→", 1)
+        name_part, stats_part = block.split(":", 1)
 
-        lines.append(
-            f"<div class='wowy-line'>"
-            f"<strong>{name_part.strip()}</strong>: {stats_part.strip()}"
-            f"</div>"
-        )
+        # Find the matching stat only
+        stats = [s.strip() for s in stats_part.split(",")]
+
+        for s in stats:
+            if s.startswith(stat_key + "="):
+                val = s.split("=", 1)[1]
+
+                lines.append(
+                    f"<div class='wowy-line'>"
+                    f"<strong>{name_part.strip()}</strong>: {val} {stat_key}"
+                    f"</div>"
+                )
 
     if not lines:
         return "<span class='wowy-empty'>No injury impact</span>"
@@ -3432,9 +3443,8 @@ def render_prop_cards(
                 # ROW 4 — INJURY / WOWY
                 # ==================================================
                 f"<div class='expanded-row wowy-row'>"
-                f"{format_wowy_html(row.get('breakdown'))}"
+                f"{format_wowy_html(row.get('breakdown'), stat_prefix)}"
                 f"</div>"
-
 
                 f"</div>"
             )

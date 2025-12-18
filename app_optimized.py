@@ -2372,32 +2372,36 @@ def toggle_expander(key: str):
 # ------------------------------------------------------
 # WOWY HELPERS
 # ------------------------------------------------------
-@st.cache_data(ttl=300)
-def build_card_df(props_df, wowy_df):
+def attach_wowy_deltas(props_df: pd.DataFrame, wowy_df: pd.DataFrame) -> pd.DataFrame:
     if wowy_df is None or wowy_df.empty:
         return props_df
-    return attach_wowy_deltas(props_df, wowy_df)
 
     def norm(x):
         if not isinstance(x, str):
             return ""
         return (
             x.lower()
-             .replace(".", "")
-             .replace("-", " ")
-             .replace("'", "")
-             .strip()
+            .replace(".", "")
+            .replace("-", " ")
+            .replace("'", "")
+            .strip()
         )
+
+    df = props_df  # IMPORTANT: no copy
 
     df["player_norm"] = df["player"].apply(norm)
 
+    wowy_df = wowy_df.copy()
+    wowy_df["player_norm"] = wowy_df["player"].apply(norm)
+
     merged = df.merge(
-        wowy_df_global,
+        wowy_df,
         how="left",
         left_on=["player_norm", "player_team"],
         right_on=["player_norm", "team_abbr"],
         suffixes=("", "_wowy"),
     )
+
     return merged
 
 

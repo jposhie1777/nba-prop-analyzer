@@ -1246,6 +1246,40 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+st.markdown(
+    """
+    <script>
+    document.addEventListener("click", function (e) {
+        const btn = e.target.closest(".save-bet-btn");
+        if (!btn) return;
+
+        e.preventDefault();
+
+        const payload = btn.dataset.savePayload;
+        if (!payload) return;
+
+        fetch("/save_bet", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: payload
+        })
+        .then(r => r.json())
+        .then(() => {
+            btn.innerText = "✓ Saved";
+            btn.style.opacity = "0.6";
+            btn.disabled = true;
+        })
+        .catch(err => {
+            console.error("Save failed", err);
+        });
+    });
+    </script>
+    """,
+    unsafe_allow_html=True,
+)
+
 
 
 # ------------------------------------------------------
@@ -3366,9 +3400,7 @@ def render_prop_cards(
             opp_rank = get_opponent_rank(row)
             rank_display = opp_rank if isinstance(opp_rank, int) else "-"
             rank_color = rank_to_color(opp_rank) if isinstance(opp_rank, int) else "#9ca3af"
-            if row.get("breakdown"):
-                st.caption(f"DEBUG breakdown: {row.get('breakdown')}")
-
+           
             stat_prefix = detect_stat(row.get("market"))
 
 
@@ -3486,24 +3518,40 @@ def render_prop_cards(
 
 
             # -------------------------
-            # SAVE BET
+            # SAVE BET (NO RERUN / NO MEMORY SPIKE)
             # -------------------------
+
             save_payload = json.dumps(
                 {
                     "player": row.get("player"),
                     "market": row.get("market"),
-                    "line": row.get("line"),
+                    "line": float(row.get("line")),
                     "bet_type": bet_type,
                     "team": row.get("player_team"),
                     "books": row.get("book_prices", []),
+                    "page": page_key,
                 }
-            )
+            ).replace('"', "&quot;")
 
             save_button_html = (
                 f"<div style='display:flex; justify-content:flex-end; margin-top:10px;'>"
-                f"<button class='save-bet-btn' data-save-payload='{save_payload}'>💾 Save Bet</button>"
+                f"<button "
+                f"class='save-bet-btn' "
+                f"data-save-payload=\"{save_payload}\" "
+                f"style='"
+                f"font-size:0.75rem;"
+                f"padding:6px 10px;"
+                f"border-radius:8px;"
+                f"border:1px solid rgba(255,255,255,0.2);"
+                f"background:rgba(255,255,255,0.08);"
+                f"color:#fff;"
+                f"cursor:pointer;"
+                f"'>"
+                f"💾 Save Bet"
+                f"</button>"
                 f"</div>"
             )
+
 
             # -------------------------
             # FULL CARD

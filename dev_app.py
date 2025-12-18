@@ -1910,13 +1910,12 @@ def format_wowy_html(wowy_raw, stat_prefix):
     lines = []
 
     for block in blocks:
-        if ":" not in block:
+        if "→" not in block:
             continue
 
-        name_part, stats_part = block.split(":", 1)
+        name_part, stats_part = block.split("→", 1)
 
-        # Find the matching stat only
-        stats = [s.strip() for s in stats_part.split(",")]
+        stats = [s.strip() for s in stats_part.split(",") if s.strip()]
 
         for s in stats:
             if s.startswith(stat_key + "="):
@@ -1929,7 +1928,7 @@ def format_wowy_html(wowy_raw, stat_prefix):
                 )
 
     if not lines:
-        return "<span class='wowy-empty'>No injury impact</span>"
+        return "<span class='wowy-empty'>No relevant injury impact</span>"
 
     return (
         "<div class='wowy-container'>"

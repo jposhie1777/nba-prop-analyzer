@@ -3063,15 +3063,8 @@ def render_prop_cards(
         st.info(f"No props match your filters.")
         return
 
-    # ======================================================
-    # MEMORY DEBUG — START OF RERUN
-    # ======================================================
-    st.sidebar.caption(
-        f"🔁 Rerun start RAM: {get_mem_mb():.0f} MB"
-    )
-
     # ------------------------------------------------------
-    # WOWY merge
+    # WOWY merge (already safe / cached)
     # ------------------------------------------------------
     card_df = attach_wowy_deltas(df, wowy_df)
 
@@ -3080,12 +3073,7 @@ def render_prop_cards(
     # ------------------------------------------------------
     card_df = card_df[
         card_df["bookmaker"].isin(
-            [
-                "DraftKings",
-                "FanDuel",
-                "draftkings",
-                "fanduel",
-            ]
+            ["DraftKings", "FanDuel", "draftkings", "fanduel"]
         )
     ]
 
@@ -3120,9 +3108,7 @@ def render_prop_cards(
     card_df = card_df[card_df.apply(card_good, axis=1)]
 
     if card_df.empty:
-        st.info(
-            f"No props match your filters (after EV / odds / hit-rate logic)."
-        )
+        st.info("No props match your filters (after logic).")
         return
 
     # ------------------------------------------------------
@@ -3139,9 +3125,8 @@ def render_prop_cards(
 
     def combine_books(g: pd.DataFrame) -> pd.Series:
         base = g.iloc[0].copy()
-
         seen = set()
-        book_prices = []
+        books = []
 
         for _, r in g.iterrows():
             book = normalize_bookmaker(r.get("bookmaker"))
@@ -3150,21 +3135,13 @@ def render_prop_cards(
                 if not pd.isna(r.get("price"))
                 else None
             )
-
             key = (book, price)
             if key in seen:
                 continue
-
             seen.add(key)
+            books.append({"book": book, "price": price})
 
-            book_prices.append(
-                {
-                    "book": book,
-                    "price": price,
-                }
-            )
-
-        base["book_prices"] = book_prices
+        base["book_prices"] = books
         return base
 
     card_df = (
@@ -3175,14 +3152,11 @@ def render_prop_cards(
     )
 
     # ------------------------------------------------------
-    # Sorting
+    # Sort
     # ------------------------------------------------------
     card_df = (
         card_df
-        .sort_values(
-            by=[hit_rate_col],
-            ascending=[False],
-        )
+        .sort_values(by=[hit_rate_col], ascending=False)
         .reset_index(drop=True)
     )
 
@@ -3191,17 +3165,10 @@ def render_prop_cards(
     # ------------------------------------------------------
     page_size = 30
     total_cards = len(card_df)
-    total_pages = max(
-        1,
-        (total_cards + page_size - 1) // page_size,
-    )
-
-    st.write(
-        f"Showing {total_cards} props • {total_pages} pages"
-    )
+    total_pages = max(1, (total_cards + page_size - 1) // page_size)
 
     page = st.number_input(
-        f"Page",
+        "Page",
         min_value=1,
         max_value=total_pages,
         value=1,
@@ -3209,9 +3176,9 @@ def render_prop_cards(
         key=f"{page_key}_page",
     )
 
-    start = (page - 1) * page_size
-    end = start + page_size
-    page_df = card_df.iloc[start:end]
+    page_df = card_df.iloc[
+        (page - 1) * page_size : page * page_size
+    ]
 
     # ------------------------------------------------------
     # Scroll wrapper
@@ -3223,109 +3190,25 @@ def render_prop_cards(
 
     cols = st.columns(4)
 
-    st.markdown(
-        f"""
-        <script>
-        if (!window.__propCardDelegationAttached) {{
-
-            document.addEventListener("click", function(event) {{
-
-                /* -------- Save bet FIRST -------- */
-                const saveBtn = event.target.closest(".save-bet-btn");
-                if (saveBtn) {{
-                    const payloadRaw = saveBtn.getAttribute("data-save-payload");
-                    if (payloadRaw) {{
-                        try {{
-                            const payload = JSON.parse(payloadRaw);
-                            fetch("/save_bet", {{
-                                method: "POST",
-                                headers: {{
-                                    "Content-Type": "application/json"
-                                }},
-                                body: JSON.stringify(payload)
-                            }})
-                            .then(r => r.json())
-                            .then(() => {{
-                                console.log("Bet saved");
-                            }})
-                            .catch(err => {{
-                                console.error("Save failed", err);
-                            }});
-                        }} catch (e) {{
-                            console.error("Invalid save payload", e);
-                        }}
-                    }}
-                    return;
-                }}
-
-                /* -------- Expand card -------- */
-                const card = event.target.closest(".prop-card-wrapper");
-                if (card) {{
-                    const cardId = card.getAttribute("data-card-id");
-                    if (cardId) {{
-                        const expanded = document.getElementById(cardId + "_expanded");
-                        if (expanded) {{
-                            expanded.classList.toggle("open");
-                        }}
-                    }}
-                }}
-
-            }});
-
-            window.__propCardDelegationAttached = true;
-            console.log("Prop card delegation attached");
-        }}
-        </script>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-
     # ======================================================
     # CARD LOOP
     # ======================================================
     for idx, row in page_df.iterrows():
-        col = cols[idx % 4]
+        with cols[idx % 4]:
 
-        # -------------------------
-        # MEMORY DEBUG — PER CARD
-        # -------------------------
-        st.markdown(
-            f"<div style='font-size:0.7rem; color:#999; text-align:right;'>"
-            f"RAM before card: {get_mem_mb():.0f} MB"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-
-        with col:
             player = row.get("player") or ""
-            pretty_market = MARKET_DISPLAY_MAP.get(
-                row.get("market"),
-                row.get("market"),
-            )
+            pretty_market = MARKET_DISPLAY_MAP.get(row.get("market"), row.get("market"))
             bet_type = str(row.get("bet_type")).upper()
             line = row.get("line")
 
             hit_val = row.get(hit_rate_col) or 0.0
+            l5_avg = get_l5_avg(row)
             l10_avg = get_l10_avg(row)
-            l10_avg_display = (
-                f"{l10_avg:.1f}"
-                if l10_avg is not None
-                else "-"
-            )
+            l20_avg = get_l20_avg(row)
 
             opp_rank = get_opponent_rank(row)
-            rank_display = (
-                opp_rank
-                if isinstance(opp_rank, int)
-                else "-"
-            )
-            rank_color = (
-                rank_to_color(opp_rank)
-                if isinstance(opp_rank, int)
-                else "#9ca3af"
-            )
+            rank_display = opp_rank if isinstance(opp_rank, int) else "-"
+            rank_color = rank_to_color(opp_rank) if isinstance(opp_rank, int) else "#9ca3af"
 
             spark_vals, spark_dates = get_spark_series(row)
             spark_html = build_sparkline_bars_hitmiss(
@@ -3335,90 +3218,58 @@ def render_prop_cards(
             )
 
             home_logo = TEAM_LOGOS_BASE64.get(
-                normalize_team_code(row.get("player_team", "")),
-                "",
+                normalize_team_code(row.get("player_team", "")), ""
             )
             opp_logo = TEAM_LOGOS_BASE64.get(
-                normalize_team_code(row.get("opponent_team", "")),
-                "",
+                normalize_team_code(row.get("opponent_team", "")), ""
             )
 
             # -------------------------
-            # BOOK PRICES
+            # Book prices
             # -------------------------
             book_lines = []
 
             for bp in row.get("book_prices", []):
-                book = bp.get("book")
+                logo = SPORTSBOOK_LOGOS_BASE64.get(bp.get("book"))
                 price = bp.get("price")
-                logo = SPORTSBOOK_LOGOS_BASE64.get(book)
-
                 if logo and price is not None:
                     book_lines.append(
                         f"<div style='display:flex; align-items:center; gap:6px;'>"
                         f"<img src='{logo}' style='height:22px;' />"
-                        f"<div style='font-size:0.75rem; font-weight:800;'>"
-                        f"{price:+d}"
-                        f"</div>"
+                        f"<div style='font-size:0.75rem;font-weight:800;'>{price:+d}</div>"
                         f"</div>"
                     )
 
             books_html = (
-                f"<div style='display:flex; flex-direction:column; "
-                f"align-items:flex-end; gap:4px;'>"
+                f"<div style='display:flex; flex-direction:column; align-items:flex-end; gap:4px;'>"
                 f"{''.join(book_lines)}"
                 f"</div>"
             )
 
             # -------------------------
-            # BASE CARD HTML
+            # BASE CARD
             # -------------------------
-            expand_hint_html = (
-                f"<div class='expand-hint'>"
-                f"Click to expand ▾"
-                f"</div>"
-            )
-
             base_card_html = (
                 f"<div class='prop-card'>"
-                f"<div style='display:flex; justify-content:space-between; "
-                f"align-items:center;'>"
+                f"<div style='display:flex; justify-content:space-between; align-items:center;'>"
                 f"<div style='display:flex; align-items:center; gap:6px;'>"
                 f"<img src='{home_logo}' style='height:20px;border-radius:4px;' />"
                 f"<span style='font-size:0.7rem;color:#9ca3af;'>vs</span>"
                 f"<img src='{opp_logo}' style='height:20px;border-radius:4px;' />"
                 f"</div>"
                 f"<div style='text-align:center; flex:1;'>"
-                f"<div style='font-size:1.05rem;font-weight:700;'>"
-                f"{player}"
-                f"</div>"
-                f"<div style='font-size:0.82rem;color:#9ca3af;'>"
-                f"{pretty_market} • {bet_type} {line}"
-                f"</div>"
+                f"<div style='font-size:1.05rem;font-weight:700;'>{player}</div>"
+                f"<div style='font-size:0.82rem;color:#9ca3af;'>{pretty_market} • {bet_type} {line}</div>"
                 f"</div>"
                 f"{books_html}"
                 f"</div>"
-                f"<div style='display:flex; justify-content:center; margin:8px 0;'>"
-                f"{spark_html}"
-                f"</div>"
+                f"<div style='display:flex; justify-content:center; margin:8px 0;'>{spark_html}</div>"
                 f"<div class='prop-meta'>"
-                f"<div>"
-                f"<div style='font-size:0.8rem;'>"
-                f"{hit_label}: {hit_val:.0%}"
+                f"<div><div style='font-size:0.8rem;'>{hit_label}: {hit_val:.0%}</div>"
+                f"<div style='font-size:0.7rem;'>L10 Avg: {_fmt1(l10_avg)}</div></div>"
+                f"<div><div style='font-size:0.8rem;font-weight:700;color:{rank_color};'>{rank_display}</div>"
+                f"<div style='font-size:0.7rem;'>Opp Rank</div></div>"
                 f"</div>"
-                f"<div style='font-size:0.7rem;'>"
-                f"L10 Avg: {l10_avg_display}"
-                f"</div>"
-                f"</div>"
-                f"<div>"
-                f"<div style='font-size:0.8rem; font-weight:700; "
-                f"color:{rank_color};'>"
-                f"{rank_display}"
-                f"</div>"
-                f"<div style='font-size:0.7rem;'>Opp Rank</div>"
-                f"</div>"
-                f"</div>"
-                f"{expand_hint_html}"
                 f"</div>"
             )
 
@@ -3426,17 +3277,42 @@ def render_prop_cards(
             # EXPANDED ANALYTICS
             # -------------------------
             expanded_html = (
-                f"<div style='padding:12px; border-radius:12px; "
-                f"background:rgba(255,255,255,0.05); "
-                f"border:1px solid rgba(255,255,255,0.12);'>"
-                f"<div style='font-size:0.8rem;'>Expanded analytics here</div>"
+                f"<div class='expanded-wrap'>"
+
+                f"<div class='expanded-row'>"
+                f"<div class='metric'><span>L5</span><strong>{_fmt1(l5_avg)}</strong></div>"
+                f"<div class='metric'><span>L10</span><strong>{_fmt1(l10_avg)}</strong></div>"
+                f"<div class='metric'><span>L20</span><strong>{_fmt1(l20_avg)}</strong></div>"
+                f"</div>"
+
+                f"<div class='dist-block'>"
+                f"<div class='dist-header'>L20 Distribution</div>"
+                f"<div class='expanded-row'>"
+                f"<div class='metric'><span>Hit</span><strong>{_pct(row.get('dist20_hit_rate'))}</strong></div>"
+                f"<div class='metric'><span>+1</span><strong>{_pct(row.get('dist20_clear_1p_rate'))}</strong></div>"
+                f"<div class='metric'><span>+2</span><strong>{_pct(row.get('dist20_clear_2p_rate'))}</strong></div>"
+                f"<div class='metric'><span>Bad</span><strong>{_pct(row.get('dist20_fail_bad_rate'))}</strong></div>"
+                f"<div class='metric'><span>Margin</span><strong>{_fmt1(row.get('dist20_avg_margin'))}</strong></div>"
+                f"</div>"
+
+                f"<div class='dist-header'>L40 Distribution</div>"
+                f"<div class='expanded-row'>"
+                f"<div class='metric'><span>Hit</span><strong>{_pct(row.get('dist40_hit_rate'))}</strong></div>"
+                f"<div class='metric'><span>+1</span><strong>{_pct(row.get('dist40_clear_1p_rate'))}</strong></div>"
+                f"<div class='metric'><span>+2</span><strong>{_pct(row.get('dist40_clear_2p_rate'))}</strong></div>"
+                f"<div class='metric'><span>Bad</span><strong>{_pct(row.get('dist40_fail_bad_rate'))}</strong></div>"
+                f"<div class='metric'><span>Margin</span><strong>{_fmt1(row.get('dist40_avg_margin'))}</strong></div>"
+                f"</div>"
+                f"</div>"
+
+                f"{row.get('wowy_html','')}"
                 f"</div>"
             )
 
             # -------------------------
-            # SAVE PAYLOAD
+            # SAVE BET
             # -------------------------
-            save_payload_json = json.dumps(
+            save_payload = json.dumps(
                 {
                     "player": row.get("player"),
                     "market": row.get("market"),
@@ -3448,95 +3324,23 @@ def render_prop_cards(
             )
 
             save_button_html = (
-                f"<div style='display:flex; justify-content:flex-end; "
-                f"margin-top:10px;'>"
-                f"<button "
-                f"class='save-bet-btn' "
-                f"data-save-payload='{save_payload_json}'>"
-                f"💾 Save Bet"
-                f"</button>"
-                f"</div>"
-            )
-
-            card_id = (
-                f"{page_key}_"
-                f"{row.get('player')}_"
-                f"{row.get('market')}_"
-                f"{row.get('line')}_"
-                f"{row.get('game_id', '')}"
-            ).replace(" ", "_")
-
-            save_payload_json = json.dumps(
-                {
-                    "player": row.get("player"),
-                    "market": row.get("market"),
-                    "line": row.get("line"),
-                    "bet_type": str(row.get("bet_type")).upper(),
-                    "team": row.get("player_team"),
-                    "books": [
-                        {
-                            "bookmaker": bp.get("book"),
-                            "price": bp.get("price"),
-                        }
-                        for bp in row.get("book_prices", [])
-                        if bp.get("book") and bp.get("price") is not None
-                    ],
-                }
-            )
-
-            save_button_html = (
                 f"<div style='display:flex; justify-content:flex-end; margin-top:10px;'>"
-                f"<button "
-                f"class='save-bet-btn' "
-                f"data-save-payload='{save_payload_json}'>"
-                f"💾 Save Bet"
-                f"</button>"
+                f"<button class='save-bet-btn' data-save-payload='{save_payload}'>💾 Save Bet</button>"
                 f"</div>"
             )
 
-            full_card_html = (
-                f"<details class='prop-card-wrapper'>"
-                f"<summary>"
-                f"{base_card_html}"
-                f"<div class='expand-hint'>Click to expand ▾</div>"
-                f"</summary>"
-                f"<div class='card-expanded'>"
-                f"{expanded_html}"
-                f"{save_button_html}"
-                f"</div>"
-                f"</details>"
-            )
-
-
-
+            # -------------------------
+            # FULL CARD
+            # -------------------------
             st.markdown(
-                full_card_html,
+                f"<details class='prop-card-wrapper'>"
+                f"<summary>{base_card_html}<div class='expand-hint'>Click to expand ▾</div></summary>"
+                f"<div class='card-expanded'>{expanded_html}{save_button_html}</div>"
+                f"</details>",
                 unsafe_allow_html=True,
             )
 
-
-
-        # -------------------------
-        # MEMORY DEBUG — AFTER CARD
-        # -------------------------
-        st.markdown(
-            f"<div style='font-size:0.7rem; color:#999; text-align:right;'>"
-            f"RAM after card: {get_mem_mb():.0f} MB"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-
-    # ------------------------------------------------------
-    # MEMORY DEBUG — END OF RERUN
-    # ------------------------------------------------------
-    st.sidebar.caption(
-        f"🔚 End of rerun RAM: {get_mem_mb():.0f} MB"
-    )
-
-    st.markdown(
-        f"</div>",
-        unsafe_allow_html=True,
-    )
+    st.markdown(f"</div>", unsafe_allow_html=True)
 
 
 

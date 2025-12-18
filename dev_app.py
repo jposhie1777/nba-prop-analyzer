@@ -2215,6 +2215,31 @@ def load_game_odds() -> pd.DataFrame:
 
     return df
 
+def get_stat_prefix(row):
+    market = str(row.get("market", "")).lower()
+
+    if "points" in market or market == "pts":
+        return "pts"
+    if "rebounds" in market or market == "reb":
+        return "reb"
+    if "assists" in market or market == "ast":
+        return "ast"
+    if "points_rebounds_assists" in market or "pra" in market:
+        return "pra"
+    if "points_assists" in market or "pa" in market:
+        return "pa"
+    if "points_rebounds" in market or "pr" in market:
+        return "pr"
+    if "rebounds_assists" in market or "ra" in market:
+        return "ra"
+
+    return None
+
+def get_rolling_avg(row, window: int):
+    prefix = get_stat_prefix(row)
+    if not prefix:
+        return None
+    return row.get(f"{prefix}_last{window}")
 
 
 # ------------------------------------------------------
@@ -3259,9 +3284,10 @@ def render_prop_cards(
             line = row.get("line")
 
             hit_val = row.get(hit_rate_col) or 0.0
-            l5_avg = row.get("avg_last5")
-            l10_avg = row.get("avg_last10")
-            l20_avg = row.get("avg_last20")
+            l5_avg = get_rolling_avg(row, 5)
+            l10_avg = get_rolling_avg(row, 10)
+            l20_avg = get_rolling_avg(row, 20)
+
 
 
             opp_rank = get_opponent_rank(row)

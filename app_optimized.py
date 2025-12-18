@@ -3119,40 +3119,32 @@ def render_prop_cards(
         "bet_type",
     ]
 
-    def combine_books(g: pd.DataFrame) -> pd.Series:
-        base = g.iloc[0].copy()
-
-        seen = set()
-        book_prices = []
-
-        for _, r in g.iterrows():
-            book = normalize_bookmaker(r.get("bookmaker"))
-            price = int(r.get("price")) if not pd.isna(r.get("price")) else None
-
-            key = (book, price)
-
-            if key in seen:
-                continue
-
-            seen.add(key)
-
-            book_prices.append(
-                {
-                    "book": book,
-                    "price": price,
-                }
-            )
-
-        base["book_prices"] = book_prices
-
-
-        return base
-
     card_df = (
         card_df
         .groupby(PROP_KEY_COLS, dropna=False, as_index=False)
-        .apply(combine_books)
-        .reset_index(drop=True)
+        .agg(
+            book_prices=(
+                "price",
+                lambda s: [
+                    {"book": b, "price": p}
+                    for b, p in zip(
+                        card_df.loc[s.index, "bookmaker"],
+                        s
+                    )
+                ]
+            ),
+    
+            # keep ONE copy of all non-book columns
+            hit_rate_last5=("hit_rate_last5", "first"),
+            hit_rate_last10=("hit_rate_last10", "first"),
+            hit_rate_last20=("hit_rate_last20", "first"),
+            edge_pct=("edge_pct", "first"),
+            implied_prob=("implied_prob", "first"),
+            player_team=("player_team", "first"),
+            home_team=("home_team", "first"),
+            visitor_team=("visitor_team", "first"),
+            game_id=("game_id", "first"),
+        )
     )
 
     # ------------------------------------------------------

@@ -1226,6 +1226,11 @@ st.markdown(
         font-size: 0.68rem;
     }
 
+    .wowy-line {
+        white-space: nowrap;
+        margin-right: 12px;
+    }
+
     .wowy-row {
         font-size: 0.72rem;
         color: #e5e7eb;
@@ -1892,6 +1897,34 @@ def format_moneyline(v):
         return f"+{v_int}" if v_int > 0 else str(v_int)
     except Exception:
         return "—"
+
+def format_wowy_html(wowy_raw):
+    if not isinstance(wowy_raw, str) or not wowy_raw.strip():
+        return "<span class='wowy-empty'>No injury impact</span>"
+
+    blocks = [b.strip() for b in wowy_raw.split(";") if b.strip()]
+    lines = []
+
+    for block in blocks:
+        if "→" not in block:
+            continue
+
+        name_part, stats_part = block.split("→", 1)
+
+        lines.append(
+            f"<div class='wowy-line'>"
+            f"<strong>{name_part.strip()}</strong>: {stats_part.strip()}"
+            f"</div>"
+        )
+
+    if not lines:
+        return "<span class='wowy-empty'>No injury impact</span>"
+
+    return (
+        "<div class='wowy-container'>"
+        + "".join(lines) +
+        "</div>"
+    )
 
 
 def detect_stat(market: str) -> str:
@@ -3399,8 +3432,9 @@ def render_prop_cards(
                 # ROW 4 — INJURY / WOWY
                 # ==================================================
                 f"<div class='expanded-row wowy-row'>"
-                f"{row.get('wowy_html','<span class=\"wowy-empty\">No injury impact</span>')}"
+                f"{format_wowy_html(row.get('breakdown'))}"
                 f"</div>"
+
 
                 f"</div>"
             )

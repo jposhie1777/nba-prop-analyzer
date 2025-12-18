@@ -3344,6 +3344,9 @@ def render_prop_cards(
             opp_rank = get_opponent_rank(row)
             rank_display = opp_rank if isinstance(opp_rank, int) else "-"
             rank_color = rank_to_color(opp_rank) if isinstance(opp_rank, int) else "#9ca3af"
+            if row.get("breakdown"):
+                st.caption(f"DEBUG breakdown: {row.get('breakdown')}")
+
             stat_prefix = get_stat_prefix(row)
 
 

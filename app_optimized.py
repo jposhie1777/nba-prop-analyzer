@@ -2387,17 +2387,17 @@ def attach_wowy_deltas(props_df: pd.DataFrame, wowy_df: pd.DataFrame) -> pd.Data
             .strip()
         )
 
-    # Build normalized join keys WITHOUT mutating props_df
-    props_player_norm = props_df["player"].apply(norm)
+    # IMPORTANT: WOWY uses player_a
+    df = props_df
+    wowy = wowy_df.copy()
 
-    # Copy wowy only (usually smaller) and build its join key
-    wowy2 = wowy_df.copy()
-    wowy2["player_norm"] = wowy2["player"].apply(norm)
+    df["player_norm"] = df["player"].apply(norm)
+    wowy["player_norm"] = wowy["player_a"].apply(norm)
 
-    merged = props_df.merge(
-        wowy2,
+    merged = df.merge(
+        wowy,
         how="left",
-        left_on=[props_player_norm, "player_team"],
+        left_on=["player_norm", "player_team"],
         right_on=["player_norm", "team_abbr"],
         suffixes=("", "_wowy"),
     )

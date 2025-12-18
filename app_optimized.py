@@ -3833,9 +3833,11 @@ def render_saved_bets_tab():
 
     st.write("---")
 
-    txt_export = ""
+    lines = []
     for b in st.session_state.saved_bets:
-        txt_export += (
+        lines.append(f"...")
+    
+    txt_export = "\n".join(lines)
             f"{b.get('player', '')} | {b.get('market', '')} | "
             f"{b.get('bet_type', '')} {b.get('line', '')} | "
             f"Odds {b.get('price', '')} | {b.get('bookmaker', '')}\n"

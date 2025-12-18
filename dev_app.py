@@ -2192,10 +2192,6 @@ history_df = load_history()
 depth_df = load_depth_charts()
 injury_df = load_injury_report()    # <-- MUST COME BEFORE FIX
 wowy_df = load_wowy_deltas()
-game_analytics_df = load_game_analytics()
-game_report_df = load_game_report()
-game_odds_df = load_game_odds()
-ncaab_game_analytics_df = load_ncaab_game_analytics()
 
 
 # ------------------------------------------------------
@@ -3252,6 +3248,40 @@ def render_prop_cards(
     cols = st.columns(4)
 
     # ======================================================
+    # CLIENT-SIDE JS (MUST BE HERE)
+    # ======================================================
+    st.markdown(
+        f"""
+        <script>
+        window.toggleExpand = function(id) {{
+            const el = document.getElementById(id + "_expanded");
+            if (el) {{
+                el.classList.toggle("open");
+            }}
+        }}
+
+        window.saveBet = function(payload) {{
+            fetch("/save_bet", {{
+                method: "POST",
+                headers: {{
+                    "Content-Type": "application/json"
+                }},
+                body: JSON.stringify(payload)
+            }})
+            .then(r => r.json())
+            .then(() => {{
+                console.log("Saved");
+            }})
+            .catch(err => {{
+                console.error(err);
+            }});
+        }}
+        </script>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # ======================================================
     # CARD LOOP
     # ======================================================
     for idx, row in page_df.iterrows():
@@ -3823,6 +3853,9 @@ if sport == "NBA":
     # ======================================================
     with tab2:
 
+        game_analytics_df = load_game_analytics()
+        game_report_df = load_game_report()
+        game_odds_df = load_game_odds()
         # ✅ CRITICAL: bind tab2 to game_report
         df = game_report_df.copy()
     
@@ -5319,7 +5352,7 @@ elif sport in ["NCAA Men's", "NCAA Women's"]:
             "📋 Saved Bets",
         ]
     )
-
+    ncaab_game_analytics_df = load_ncaab_game_analytics()
     # Load data
     df = ncaab_game_analytics_df.copy()
 

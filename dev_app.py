@@ -2262,22 +2262,31 @@ def load_game_odds() -> pd.DataFrame:
 def get_stat_prefix(row):
     market = str(row.get("market", "")).lower()
 
-    if "points" in market or market == "pts":
-        return "pts"
-    if "rebounds" in market or market == "reb":
-        return "reb"
-    if "assists" in market or market == "ast":
-        return "ast"
-    if "points_rebounds_assists" in market or "pra" in market:
+    # Normalize separators
+    market = market.replace("+", "_").replace("-", "_")
+
+    # Triple combo
+    if "pts_reb_ast" in market or "pra" in market:
         return "pra"
-    if "points_assists" in market or "pa" in market:
+
+    # Double combos
+    if "pts_ast" in market or "points_assists" in market or "pa" in market:
         return "pa"
-    if "points_rebounds" in market or "pr" in market:
+    if "pts_reb" in market or "points_rebounds" in market or "pr" in market:
         return "pr"
-    if "rebounds_assists" in market or "ra" in market:
+    if "reb_ast" in market or "rebounds_assists" in market or "ra" in market:
         return "ra"
 
+    # Singles
+    if "assists" in market or market == "ast":
+        return "ast"
+    if "rebounds" in market or market == "reb":
+        return "reb"
+    if "points" in market or market == "pts":
+        return "pts"
+
     return None
+
 
 def get_rolling_avg(row, window: int):
     prefix = get_stat_prefix(row)

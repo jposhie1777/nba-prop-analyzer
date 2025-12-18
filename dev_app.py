@@ -1127,28 +1127,36 @@ st.markdown(
         overflow: visible;
     }}
 
+    /* Card wrapper */
     .prop-card-wrapper {{
-        cursor: pointer;
         position: relative;
         z-index: 5;
+        border-radius: 14px;
     }}
 
-    /* Prevent children from stealing clicks */
-    .prop-card-wrapper * {{
+    /* Summary (clickable header) */
+    .prop-card-wrapper summary {{
+        cursor: pointer;
+        list-style: none;
+    }}
+
+    /* Hide default disclosure triangle */
+    .prop-card-wrapper summary::-webkit-details-marker {{
+        display: none;
+    }}
+
+    /* Prevent inner elements from stealing summary clicks */
+    .prop-card-wrapper summary * {{
         pointer-events: none;
     }}
 
-    /* Expanded section must be clickable */
-    .card-expanded {{
-        display: none;
+    /* Expanded content */
+    .prop-card-wrapper .card-expanded {{
         margin-top: 8px;
         pointer-events: auto;
     }}
 
-    .card-expanded.open {{
-        display: block;
-    }}
-
+    /* Expand hint */
     .expand-hint {{
         text-align: center;
         font-size: 0.7rem;
@@ -1156,6 +1164,7 @@ st.markdown(
         margin-top: 6px;
     }}
 
+    /* Save Bet button */
     .save-bet-btn {{
         background: #2563eb;
         color: white;
@@ -1165,7 +1174,6 @@ st.markdown(
         font-size: 0.8rem;
         font-weight: 700;
         cursor: pointer;
-        pointer-events: auto;
     }}
 
     .save-bet-btn:hover {{
@@ -1176,38 +1184,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-
-st.markdown(
-    f"""
-    <script>
-    function toggleExpand(id) {{
-        const el = document.getElementById(id + "_expanded");
-        if (el) {{
-            el.classList.toggle("open");
-        }}
-    }}
-
-    function saveBet(payload) {{
-        fetch("/save_bet", {{
-            method: "POST",
-            headers: {{
-                "Content-Type": "application/json"
-            }},
-            body: JSON.stringify(payload)
-        }})
-        .then(r => r.json())
-        .then(() => {{
-            alert("Bet saved");
-        }})
-        .catch(err => {{
-            console.error(err);
-            alert("Save failed");
-        }});
-    }}
-    </script>
-    """,
-    unsafe_allow_html=True,
-)
 
 
 # ------------------------------------------------------
@@ -3520,7 +3496,7 @@ def render_prop_cards(
 
             full_card_html = (
                 f"<details class='prop-card-wrapper'>"
-                f"<summary style='list-style:none; cursor:pointer;'>"
+                f"<summary>"
                 f"{base_card_html}"
                 f"<div class='expand-hint'>Click to expand ▾</div>"
                 f"</summary>"
@@ -3530,6 +3506,7 @@ def render_prop_cards(
                 f"</div>"
                 f"</details>"
             )
+
 
 
             st.markdown(

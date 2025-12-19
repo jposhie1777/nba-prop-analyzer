@@ -137,11 +137,14 @@ def trigger_apps_script(task: str):
             url,
             headers={
                 "Content-Type": "application/json",
-                "X-DEV-TOKEN": token,   # 👈 token used HERE
+            },
+            params={          # 👈 ADD THIS
+                "token": token
             },
             json={"task": task},
             timeout=60,
         )
+
 
         data = resp.json()
 

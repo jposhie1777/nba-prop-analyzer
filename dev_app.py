@@ -173,6 +173,31 @@ def trigger_bq_procedure(proc_name: str):
         st.error(f"❌ {proc_name} failed")
         st.code(str(e))
 
+from googleapiclient.discovery import build
+from google.oauth2 import service_account
+
+
+def read_sheet_values(sheet_id: str, range_name: str) -> list[list[str]]:
+    """
+    Read values from a Google Sheet range.
+    Read-only, no caching, no memory retention.
+    """
+    creds_dict = json.loads(os.getenv("GCP_SERVICE_ACCOUNT", ""))
+    creds = service_account.Credentials.from_service_account_info(
+        creds_dict,
+        scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"],
+    )
+
+    service = build("sheets", "v4", credentials=creds, cache_discovery=False)
+    resp = (
+        service.spreadsheets()
+        .values()
+        .get(spreadsheetId=sheet_id, range=range_name)
+        .execute()
+    )
+
+    return resp.get("values", [])
+
 
 # ======================================================
 # DEV PAGE OVERRIDE (CRASH-SAFE)
@@ -244,8 +269,72 @@ def render_dev_page():
                 with st.spinner(f"Running {label}…"):
                     trigger_apps_script(task)
 
+    st.divider()
+    st.subheader("📊 Google Sheet Sanity Checks")
 
-    st.success("DEV page loaded successfully.")
+    SHEET_ID = "1p_rmmiUgU18afioJJ3jCHh9XeX7V4gyHd_E0M3A8M3g"
+
+    # --------------------------------------------------
+    # 1) Odds tab checks
+    # --------------------------------------------------
+    try:
+        odds_rows = read_sheet_values(SHEET_ID, "Odds!A:I")
+
+        has_odds_data = len(odds_rows) > 1
+
+        labels = []
+        if has_odds_data:
+            labels = [
+                (r[8] or "").strip().lower()
+                for r in odds_rows[1:]
+                if len(r) >= 9
+            ]
+
+        has_over = any("over" in l for l in labels)
+        has_under = any("under" in l for l in labels)
+
+        st.markdown("**Odds Tab**")
+
+        if has_odds_data:
+            st.success("✅ Rows exist after header")
+        else:
+            st.error("❌ No rows found after header")
+
+        if has_over and has_under:
+            st.success("✅ Both Over and Under found in `label` column")
+        elif has_over:
+            st.warning("⚠️ Only Over found in `label` column")
+        elif has_under:
+            st.warning("⚠️ Only Under found in `label` column")
+        else:
+            st.error("❌ No Over / Under values found in `label` column")
+
+    except Exception as e:
+        st.error("❌ Failed to read Odds tab")
+        st.code(str(e))
+
+
+    # --------------------------------------------------
+    # 2) Game Odds Sheet checks
+    # --------------------------------------------------
+    try:
+        game_odds_rows = read_sheet_values(SHEET_ID, "Game Odds Sheet!A:A")
+
+        has_game_odds_data = len(game_odds_rows) > 1
+
+        st.markdown("**Game Odds Sheet**")
+
+        if has_game_odds_data:
+            st.success("✅ Rows exist after header")
+        else:
+            st.error("❌ No rows found after header")
+
+    except Exception as e:
+        st.error("❌ Failed to read Game Odds Sheet")
+        st.code(str(e))
+
+
+        st.success("DEV page loaded successfully.")
 
 
 # ======================================================

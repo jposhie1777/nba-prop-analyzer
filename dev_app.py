@@ -67,7 +67,12 @@ DEV_EMAILS = {
 }
 
 def get_user_email():
-    # Streamlit auth (prod / hosted)
+    # 1️⃣ Session state (DEV override)
+    user = st.session_state.get("user")
+    if user and user.get("email"):
+        return user["email"]
+
+    # 2️⃣ Streamlit hosted auth (prod)
     try:
         email = st.experimental_user.email
         if email:
@@ -75,11 +80,12 @@ def get_user_email():
     except Exception:
         pass
 
-    # DEV fallback
+    # 3️⃣ DEV fallback
     if IS_DEV:
-        return os.getenv("DEV_EMAIL", "benvrana@bottleking.com")
+        return "benvrana@bottleking.com"
 
     return None
+
 
 def is_dev_user():
     return get_user_email() in DEV_EMAILS

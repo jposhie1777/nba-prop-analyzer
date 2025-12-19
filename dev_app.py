@@ -104,10 +104,6 @@ def get_active_tab():
 # ------------------------------------------------------
 DEV_BQ_DATASET = os.getenv("BIGQUERY_DATASET", "nba_prop_analyzer")
 
-APPS_SCRIPT_URL=https://script.google.com/macros/s/AKfycbwVgAaexsbP1wMGL30z-YA3zFvRGsM8vKRRJB7jbZFeGtSfCQ-EpgYMrYxs7t6FNac/exec
-APPS_SCRIPT_DEV_TOKEN=pulse-dev-2025-9c8f4d2a6e1b7a3f4c9d8e2a1b6f5d0c
-
-
 # ======================================================
 # DEV: BigQuery Client (Explicit Credentials)
 # ======================================================
@@ -132,11 +128,16 @@ def trigger_apps_script(task: str):
         url = os.getenv("APPS_SCRIPT_URL")
         token = os.getenv("APPS_SCRIPT_DEV_TOKEN")
 
+        if not url:
+            raise RuntimeError("APPS_SCRIPT_URL is not set")
+        if not token:
+            raise RuntimeError("APPS_SCRIPT_DEV_TOKEN is not set")
+
         resp = requests.post(
             url,
             headers={
                 "Content-Type": "application/json",
-                "X-DEV-TOKEN": token,
+                "X-DEV-TOKEN": token,   # 👈 token used HERE
             },
             json={"task": task},
             timeout=60,
@@ -152,6 +153,7 @@ def trigger_apps_script(task: str):
     except Exception as e:
         st.error("❌ Apps Script trigger failed")
         st.code(str(e))
+
 
 
 # ======================================================

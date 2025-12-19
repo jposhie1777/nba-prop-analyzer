@@ -109,7 +109,16 @@ def get_user_email():
 def is_dev_user():
     return get_user_email() in DEV_EMAILS
 
-
+# ======================================================
+# SAFE TAB ROUTER (DEV + MAIN)
+# ======================================================
+def get_active_tab():
+    qp = st.query_params
+    tab = qp.get("tab")
+    if isinstance(tab, list):
+        tab = tab[0]
+    return tab or "main"
+    
 # ======================================================
 # DEV PAGE OVERRIDE (CRASH-SAFE)
 # ======================================================
@@ -146,7 +155,14 @@ def render_dev_page():
 # ======================================================
 # EARLY EXIT — NOTHING BELOW THIS CAN BLOCK DEV PAGE
 # ======================================================
-if is_dev_user() and st.query_params.get("dev") == "1":
+active_tab = get_active_tab()
+
+# ---------------- DEV TAB (CRASH SAFE) ----------------
+if active_tab == "dev":
+    if not is_dev_user():
+        st.error("⛔ Access denied")
+        st.stop()
+
     render_dev_page()
     st.stop()
 

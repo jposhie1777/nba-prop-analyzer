@@ -100,9 +100,13 @@ def get_active_tab():
     return tab or "main"
 
 # ------------------------------------------------------
-# DEV-SAFE BIGQUERY CONSTANTS
+# DEV-SAFE BIGQUERY and GAS CONSTANTS
 # ------------------------------------------------------
 DEV_BQ_DATASET = os.getenv("BIGQUERY_DATASET", "nba_prop_analyzer")
+
+APPS_SCRIPT_URL=https://script.google.com/macros/s/AKfycbwVgAaexsbP1wMGL30z-YA3zFvRGsM8vKRRJB7jbZFeGtSfCQ-EpgYMrYxs7t6FNac/exec
+APPS_SCRIPT_DEV_TOKEN=pulse-dev-2025-9c8f4d2a6e1b7a3f4c9d8e2a1b6f5d0c
+
 
 # ======================================================
 # DEV: BigQuery Client (Explicit Credentials)
@@ -119,6 +123,35 @@ def get_dev_bq_client():
     project_id = os.getenv("PROJECT_ID")
 
     return bigquery.Client(credentials=creds, project=project_id)
+
+# ======================================================
+# DEV: Google Apps Script Trigger
+# ======================================================
+def trigger_apps_script(task: str):
+    try:
+        url = os.getenv("APPS_SCRIPT_URL")
+        token = os.getenv("APPS_SCRIPT_DEV_TOKEN")
+
+        resp = requests.post(
+            url,
+            headers={
+                "Content-Type": "application/json",
+                "X-DEV-TOKEN": token,
+            },
+            json={"task": task},
+            timeout=60,
+        )
+
+        data = resp.json()
+
+        if not data.get("success"):
+            raise RuntimeError(data.get("message"))
+
+        st.success(f"✅ {data.get('message')}")
+
+    except Exception as e:
+        st.error("❌ Apps Script trigger failed")
+        st.code(str(e))
 
 
 # ======================================================
@@ -182,9 +215,30 @@ def render_dev_page():
 
     st.divider()
 
-    st.subheader("Google Apps Script")
-    if st.button("▶ Inventory Sync"):
-        trigger_apps_script("INVENTORY_SYNC")
+    st.subheader("📄 Google Apps Script")
+
+    APPS_TASKS = [
+        ("NBA Alternate Props", "NBA_ALT_PROPS"),
+        ("NBA Game Odds", "NBA_GAME_ODDS"),
+        ("NCAAB Game Odds", "NCAAB_GAME_ODDS"),
+        ("Run ALL (Daily Runner)", "ALL"),
+    ]
+
+    for label, task in APPS_TASKS:
+        col1, col2 = st.columns([3, 1])
+
+        with col1:
+            st.markdown(f"**{label}**")
+
+        with col2:
+            if st.button(
+                "▶ Run",
+                key=f"apps_{task}",
+                use_container_width=True
+            ):
+                with st.spinner(f"Running {label}…"):
+                    trigger_apps_script(task)
+
 
     st.success("DEV page loaded successfully.")
 

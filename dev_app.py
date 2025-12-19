@@ -104,13 +104,29 @@ def get_active_tab():
 # ------------------------------------------------------
 DEV_BQ_DATASET = os.getenv("BIGQUERY_DATASET", "nba_prop_analyzer")
 
+# ======================================================
+# DEV: BigQuery Client (Explicit Credentials)
+# ======================================================
+def get_dev_bq_client():
+    creds_dict = json.loads(os.getenv("GCP_SERVICE_ACCOUNT", ""))
+    creds = service_account.Credentials.from_service_account_info(
+        creds_dict,
+        scopes=[
+            "https://www.googleapis.com/auth/cloud-platform",
+            "https://www.googleapis.com/auth/bigquery",
+        ],
+    )
+    project_id = os.getenv("PROJECT_ID")
+
+    return bigquery.Client(credentials=creds, project=project_id)
+
 
 # ======================================================
 # DEV: BigQuery Stored Procedure Trigger (SAFE)
 # ======================================================
 def trigger_bq_procedure(proc_name: str):
     try:
-        client = bigquery.Client()
+        client = get_dev_bq_client()
         sql = f"CALL `{DEV_BQ_DATASET}.{proc_name}`()"
         job = client.query(sql)
         job.result()  # wait, but pull no data

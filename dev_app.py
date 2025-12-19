@@ -99,6 +99,12 @@ def get_active_tab():
         tab = tab[0]
     return tab or "main"
 
+# ------------------------------------------------------
+# DEV-SAFE BIGQUERY CONSTANTS
+# ------------------------------------------------------
+DEV_BQ_DATASET = os.getenv("BIGQUERY_DATASET", "nba_prop_analyzer")
+
+
 # ======================================================
 # DEV: BigQuery Stored Procedure Trigger (SAFE)
 # ======================================================

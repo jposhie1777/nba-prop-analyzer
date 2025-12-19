@@ -29,31 +29,6 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
-# ======================================================
-# DEV ACCESS CONTROL
-# ======================================================
-DEV_EMAILS = {
-    "benvrana@bottleking.com",
-    "jposhie1777@gmail.com",
-}
-
-def get_user_email():
-    # 1️⃣ Streamlit-auth environments
-    try:
-        email = st.experimental_user.email
-        if email:
-            return email
-    except Exception:
-        pass
-
-    # 2️⃣ DEV fallback
-    if IS_DEV:
-        return os.getenv("DEV_EMAIL", "benvrana@bottleking.com")
-
-    return None
-
-def is_dev_user():
-    return get_user_email() in DEV_EMAILS
 
 
 # ------------------------------------------------------
@@ -113,11 +88,11 @@ def is_dev_user():
 # SAFE TAB ROUTER (DEV + MAIN)
 # ======================================================
 def get_active_tab():
-    qp = st.query_params
-    tab = qp.get("tab")
+    tab = st.query_params.get("tab")
     if isinstance(tab, list):
         tab = tab[0]
     return tab or "main"
+
     
 # ======================================================
 # DEV PAGE OVERRIDE (CRASH-SAFE)
@@ -725,6 +700,7 @@ user = st.session_state["user"]
 user_id = st.session_state["user_id"]
 st.sidebar.markdown(f"**User:** {user.get('email') or 'Logged in'}")
 
+
 # ------------------------------------------------------
 # DEV TOOLS UI TAB (VISUAL ONLY)
 # ------------------------------------------------------
@@ -733,8 +709,9 @@ if IS_DEV and is_dev_user():
     st.sidebar.markdown("### ⚙️ Dev Tools")
 
     if st.sidebar.button("Open DEV Tools"):
-        st.experimental_set_query_params(tab="dev")
+        st.query_params["tab"] = "dev"
         st.rerun()
+
 
 # ------------------------------------------------------
 # THEME PRESETS (from dev)

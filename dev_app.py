@@ -725,6 +725,16 @@ user = st.session_state["user"]
 user_id = st.session_state["user_id"]
 st.sidebar.markdown(f"**User:** {user.get('email') or 'Logged in'}")
 
+# ------------------------------------------------------
+# DEV TOOLS UI TAB (VISUAL ONLY)
+# ------------------------------------------------------
+if IS_DEV and is_dev_user():
+    st.sidebar.divider()
+    st.sidebar.markdown("### ⚙️ Dev Tools")
+
+    if st.sidebar.button("Open DEV Tools"):
+        st.experimental_set_query_params(tab="dev")
+        st.rerun()
 
 # ------------------------------------------------------
 # THEME PRESETS (from dev)

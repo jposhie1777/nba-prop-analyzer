@@ -692,7 +692,7 @@ def ensure_logged_in():
 if IS_DEV:
     st.session_state["user"] = {
         "auth0_sub": "dev-user",
-        "email": "dev@local.test",
+        "email": "benvrana@bottleking.com",
     }
     st.session_state["user_id"] = -1
 else:

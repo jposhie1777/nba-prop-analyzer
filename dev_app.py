@@ -99,7 +99,21 @@ def get_active_tab():
         tab = tab[0]
     return tab or "main"
 
-    
+# ======================================================
+# DEV: BigQuery Stored Procedure Trigger (SAFE)
+# ======================================================
+def trigger_bq_procedure(proc_name: str):
+    try:
+        client = bigquery.Client()
+        sql = f"CALL `{DATASET}.{proc_name}`()"
+        job = client.query(sql)
+        job.result()  # wait, but pull no data
+        st.success(f"✅ {proc_name} completed")
+    except Exception as e:
+        st.error(f"❌ {proc_name} failed")
+        st.code(str(e))
+
+
 # ======================================================
 # DEV PAGE OVERRIDE (CRASH-SAFE)
 # ======================================================
@@ -111,12 +125,32 @@ def render_dev_page():
 
     st.divider()
 
-    st.subheader("BigQuery")
-    if st.button("▶ Run FULL Player Analytics"):
-        trigger_bq_procedure("sp_full_player_analytics")
+    st.subheader("🧪 BigQuery – Manual Stored Procedure Triggers")
 
-    if st.button("▶ Run Enriched Props"):
-        trigger_bq_procedure("sp_enriched_props")
+    BQ_PROCS = [
+        ("Game Analytics", "sp_game_analytics"),
+        ("Game Report", "sp_game_report"),
+        ("Historical Player Stats (Trends)", "sp_historical_player_stats_for_trends"),
+        ("Today's Props – Enriched", "sp_todays_props_enriched"),
+        ("Today's Props – Hit Rates", "sp_todays_props_with_hit_rates"),
+    ]
+
+    for label, proc in BQ_PROCS:
+        col1, col2 = st.columns([3, 1])
+
+        with col1:
+            st.markdown(f"**{label}**")
+            st.caption(f"`{DATASET}.{proc}`")
+
+        with col2:
+            if st.button(
+                "▶ Run",
+                key=f"run_{proc}",
+                use_container_width=True
+            ):
+                with st.spinner(f"Running {proc}…"):
+                    trigger_bq_procedure(proc)
+
 
     st.divider()
 

@@ -29,6 +29,33 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
+# ======================================================
+# DEV ACCESS CONTROL
+# ======================================================
+DEV_EMAILS = {
+    "benvrana@bottleking.com",
+    "jposhie1777@gmail.com",
+}
+
+def get_user_email():
+    # 1️⃣ Streamlit-auth environments
+    try:
+        email = st.experimental_user.email
+        if email:
+            return email
+    except Exception:
+        pass
+
+    # 2️⃣ DEV fallback
+    if IS_DEV:
+        return os.getenv("DEV_EMAIL", "benvrana@bottleking.com")
+
+    return None
+
+def is_dev_user():
+    return get_user_email() in DEV_EMAILS
+
+
 # ------------------------------------------------------
 # Memory debug helper
 # ------------------------------------------------------
@@ -55,6 +82,75 @@ st.sidebar.markdown("🧪 DEV_APP.PY RUNNING")
 IS_DEV = True
 
 st.caption(f"🧠 RAM usage: {get_mem_mb():.0f} MB")
+
+# ======================================================
+# DEV ACCESS CONTROL (EARLY)
+# ======================================================
+DEV_EMAILS = {
+    "benvrana@bottleking.com",
+    "jposhie1777@gmail.com",
+}
+
+def get_user_email():
+    # Streamlit auth (prod / hosted)
+    try:
+        email = st.experimental_user.email
+        if email:
+            return email
+    except Exception:
+        pass
+
+    # DEV fallback
+    if IS_DEV:
+        return os.getenv("DEV_EMAIL", "benvrana@bottleking.com")
+
+    return None
+
+def is_dev_user():
+    return get_user_email() in DEV_EMAILS
+
+
+# ======================================================
+# DEV PAGE OVERRIDE (CRASH-SAFE)
+# ======================================================
+def render_dev_page():
+    st.title("⚙️ DEV CONTROL PANEL")
+    st.caption("Always available • restricted access")
+
+    st.markdown(f"**Email:** `{get_user_email()}`")
+
+    st.divider()
+
+    st.subheader("BigQuery")
+    if st.button("▶ Run FULL Player Analytics"):
+        trigger_bq_procedure("sp_full_player_analytics")
+
+    if st.button("▶ Run Enriched Props"):
+        trigger_bq_procedure("sp_enriched_props")
+
+    st.divider()
+
+    st.subheader("Cloud Run")
+    if st.button("▶ Trigger ESPN Lineups"):
+        trigger_cloud_run("espn-nba-lineups")
+
+    st.divider()
+
+    st.subheader("Google Apps Script")
+    if st.button("▶ Inventory Sync"):
+        trigger_apps_script("INVENTORY_SYNC")
+
+    st.success("DEV page loaded successfully.")
+
+
+# ======================================================
+# EARLY EXIT — NOTHING BELOW THIS CAN BLOCK DEV PAGE
+# ======================================================
+if is_dev_user() and st.query_params.get("dev") == "1":
+    render_dev_page()
+    st.stop()
+
+
 # ------------------------------------------------------
 # ENVIRONMENT VARIABLES
 # ------------------------------------------------------
@@ -95,12 +191,19 @@ if not AUTH0_REDIRECT_URI:
 if not AUTH0_AUDIENCE:
     missing_env.append("AUTH0_AUDIENCE")
 
-if missing_env:
+if missing_env and not IS_DEV:
     st.error(
         "❌ Missing required environment variables:\n\n"
         + "\n".join(f"- {m}" for m in missing_env)
     )
     st.stop()
+
+if missing_env and IS_DEV:
+    st.warning(
+        "⚠️ DEV MODE: Missing env vars ignored:\n\n"
+        + "\n".join(f"- {m}" for m in missing_env)
+    )
+
 
 
 

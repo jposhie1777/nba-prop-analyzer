@@ -166,6 +166,8 @@ def trigger_apps_script(task: str):
         st.code(str(e))
 
 def get_table_schema(dataset: str, table: str):
+    client = get_dev_bq_client()
+
     query = f"""
     SELECT
         column_name,
@@ -174,7 +176,8 @@ def get_table_schema(dataset: str, table: str):
     WHERE table_name = '{table}'
     ORDER BY ordinal_position
     """
-    return bq_client.query(query).to_dataframe()
+
+    return client.query(query).to_dataframe()
 
 # ======================================================
 # DEV: BigQuery Stored Procedure Trigger (SAFE)

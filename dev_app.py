@@ -291,6 +291,27 @@ def render_dev_page():
 
     SHEET_ID = "1p_rmmiUgU18afioJJ3jCHh9XeX7V4gyHd_E0M3A8M3g"
 
+    st.markdown("## 🧪 Stored Procedure Outputs – Schema Preview")
+
+    for label, table in DEV_SP_TABLES.items():
+        st.subheader(label)
+    
+        with st.expander("📋 View Columns"):
+            try:
+                schema_df = get_table_schema("nba_prop_analyzer", table)
+    
+                if schema_df.empty:
+                    st.warning("No columns found (table may not exist yet).")
+                else:
+                    st.dataframe(
+                        schema_df,
+                        use_container_width=True,
+                        hide_index=True
+                    )
+    
+            except Exception as e:
+                st.error(f"Failed to load schema: {e}")
+
     # --------------------------------------------------
     # 1) Odds tab checks
     # --------------------------------------------------
@@ -353,26 +374,7 @@ def render_dev_page():
 
         st.success("DEV page loaded successfully.")
 
-st.markdown("## 🧪 Stored Procedure Outputs – Schema Preview")
 
-for label, table in DEV_SP_TABLES.items():
-    st.subheader(label)
-
-    with st.expander("📋 View Columns"):
-        try:
-            schema_df = get_table_schema("nba_prop_analyzer", table)
-
-            if schema_df.empty:
-                st.warning("No columns found (table may not exist yet).")
-            else:
-                st.dataframe(
-                    schema_df,
-                    use_container_width=True,
-                    hide_index=True
-                )
-
-        except Exception as e:
-            st.error(f"Failed to load schema: {e}")
 
 # ======================================================
 # EARLY EXIT — NOTHING BELOW THIS CAN BLOCK DEV PAGE

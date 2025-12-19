@@ -111,7 +111,7 @@ DEV_BQ_DATASET = os.getenv("BIGQUERY_DATASET", "nba_prop_analyzer")
 def trigger_bq_procedure(proc_name: str):
     try:
         client = bigquery.Client()
-        sql = f"CALL `{DATASET}.{proc_name}`()"
+        sql = f"CALL `{DEV_BQ_DATASET}.{proc_name}`()"
         job = client.query(sql)
         job.result()  # wait, but pull no data
         st.success(f"✅ {proc_name} completed")
@@ -146,7 +146,7 @@ def render_dev_page():
 
         with col1:
             st.markdown(f"**{label}**")
-            st.caption(f"`{DATASET}.{proc}`")
+            st.caption(f"`{DEV_BQ_DATASET}.{proc}`")
 
         with col2:
             if st.button(

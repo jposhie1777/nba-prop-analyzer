@@ -1,3 +1,9 @@
 git add app_optimized.py
 git commit -m "fix: patched app_optimized.py with working BigQuery and Sheets integration"
 git push origin main
+
+git add dev_app.py
+git commit -m "Changes"
+git push origin main
+
+streamlit run dev_app.py

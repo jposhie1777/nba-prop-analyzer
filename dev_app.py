@@ -5564,21 +5564,9 @@ if sport == "NBA":
             else:
                 st.markdown("- No odds available")
 
-            # REMOVE INDIVIDUAL
-            if st.button("❌ Remove", key=f"remove_{idx}"):
-                slip.pop(idx)
-                st.session_state["saved_bets"] = slip
-                st.rerun()
-
             st.markdown("---")
 
-        # --------------------------------------------------
-        # REMOVE ALL BETS
-        # --------------------------------------------------
-        if st.button("🗑️ Remove All Bets"):
-            st.session_state["saved_bets"] = []
-            st.success("All saved bets removed.")
-            st.rerun()
+        
 
         # ======================================================
         # 📲 EXPORT FOR PIKKIT — SELECTABLE TEXT BOX

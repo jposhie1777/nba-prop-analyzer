@@ -3790,9 +3790,7 @@ def render_prop_cards(
                 row.get("line"),
                 row.get("game_id"),
             )
-            mem_diff("before sparkline")
             spark_html = sparkline_map.get(spark_key, "")
-            mem_diff("after sparkline")
 
             home_logo = TEAM_LOGOS_BASE64.get(
                 normalize_team_code(row.get("player_team", "")), ""
@@ -3898,7 +3896,7 @@ def render_prop_cards(
                 f"</div>"
             )
 
-            mem_diff("after expanded_html build")
+            
             # -------------------------
             # SAVE BET (NO RERUN / NO MEMORY SPIKE)
             # -------------------------

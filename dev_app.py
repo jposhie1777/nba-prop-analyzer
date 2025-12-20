@@ -625,11 +625,11 @@ WHERE DATE(`Start Time`) = CURRENT_DATE()
 # ------------------------------------------------------
 # NCAA GAME ANALYTICS SQL
 # ------------------------------------------------------
-NCAAB_GAME_ANALYTICS_SQL = f"""
-SELECT *
-FROM `{PROJECT_ID}.ncaa_data.ncaab_game_analytics`
-ORDER BY start_time
-"""
+#NCAAB_GAME_ANALYTICS_SQL = f"""
+#SELECT *
+#FROM `{PROJECT_ID}.ncaa_data.ncaab_game_analytics`
+#ORDER BY start_time
+#"""
 
 
 # ------------------------------------------------------
@@ -2524,30 +2524,32 @@ def load_game_analytics() -> pd.DataFrame:
 # ------------------------------------------------------
 # LOAD NCAA GAME ANALYTICS
 # ------------------------------------------------------
-@st.cache_data(ttl=1800, show_spinner=True)
-def load_ncaab_game_analytics() -> pd.DataFrame:
-    df = load_bq_df(NCAAB_GAME_ANALYTICS_SQL).copy()
-    df.columns = df.columns.str.strip()
+if False:
+    @st.cache_data(ttl=1800, show_spinner=True)
+    def load_ncaab_game_analytics() -> pd.DataFrame:
+        df = load_bq_df(NCAAB_GAME_ANALYTICS_SQL).copy()
+        df.columns = df.columns.str.strip()
 
-    df["start_time"] = pd.to_datetime(df["start_time"], errors="coerce")
+        df["start_time"] = pd.to_datetime(df["start_time"], errors="coerce")
 
-    numeric_cols = [
-        "home_ml", "away_ml",
-        "home_spread", "away_spread",
-        "total_line",
-        "proj_home_points", "proj_away_points", "proj_total_points",
-        "proj_margin",
-        "spread_edge", "total_edge",
-        "l5_scoring_diff", "l10_scoring_diff",
-        "l5_margin_diff", "l10_margin_diff",
-        "pace_proxy",
-    ]
+        numeric_cols = [
+            "home_ml", "away_ml",
+            "home_spread", "away_spread",
+            "total_line",
+            "proj_home_points", "proj_away_points", "proj_total_points",
+            "proj_margin",
+            "spread_edge", "total_edge",
+            "l5_scoring_diff", "l10_scoring_diff",
+            "l5_margin_diff", "l10_margin_diff",
+            "pace_proxy",
+        ]
 
-    for col in numeric_cols:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    return df
+        return df
+
 
 @st.cache_data(ttl=1800, show_spinner=True)
 def load_game_report() -> pd.DataFrame:
@@ -3386,110 +3388,111 @@ def fmt1(x):
     except:
         return "-"
 
-def render_ncaab_overview_card(row):
+if False:
+    def render_ncaab_overview_card(row):
 
-    home = row.get("home_team", "")
-    away = row.get("away_team", "")
+        home = row.get("home_team", "")
+        away = row.get("away_team", "")
 
-    home_logo = ncaa_logo(row["home_espn_team_id"])
-    away_logo = ncaa_logo(row["away_espn_team_id"])
+        home_logo = ncaa_logo(row["home_espn_team_id"])
+        away_logo = ncaa_logo(row["away_espn_team_id"])
 
-    # ----------------------------------------
-    # CORRECT FIELD NAMES FROM GAME ANALYTICS
-    # ----------------------------------------
-    exp_home = row.get("proj_home_points")
-    exp_away = row.get("proj_away_points")
-    exp_total = row.get("proj_total_points")
-    exp_spread = row.get("proj_margin")  # home - away predicted margin
+        # ----------------------------------------
+        # CORRECT FIELD NAMES FROM GAME ANALYTICS
+        # ----------------------------------------
+        exp_home = row.get("proj_home_points")
+        exp_away = row.get("proj_away_points")
+        exp_total = row.get("proj_total_points")
+        exp_spread = row.get("proj_margin")  # home - away predicted margin
 
-    # ------------------------
-    # Pretty Time Conversion
-    # ------------------------
-    dt = row.get("start_time")
-    pretty_time = ""
-    if dt:
-        if not isinstance(dt, datetime):
-            dt = datetime.fromisoformat(str(dt).replace("Z", "+00:00"))
+        # ------------------------
+        # Pretty Time Conversion
+        # ------------------------
+        dt = row.get("start_time")
+        pretty_time = ""
+        if dt:
+            if not isinstance(dt, datetime):
+                dt = datetime.fromisoformat(str(dt).replace("Z", "+00:00"))
 
-        est = pytz.timezone("America/New_York")
-        dt_est = dt.astimezone(est)
-        pretty_time = dt_est.strftime("%a, %b %d • %I:%M %p ET")
+            est = pytz.timezone("America/New_York")
+            dt_est = dt.astimezone(est)
+            pretty_time = dt_est.strftime("%a, %b %d • %I:%M %p ET")
 
-    # ------------------------
-    # HTML CARD
-    # ------------------------
-    html = f"""
-    <div style="
-        width:100%;
-        background:rgba(255,255,255,0.06);
-        border:1px solid rgba(255,255,255,0.12);
-        border-radius:14px;
-        padding:14px 14px;
-        margin-bottom:12px;
-        color:#e5e7eb;
-        font-family:Inter, sans-serif;
-    ">
-
-        <!-- Logos Row -->
+        # ------------------------
+        # HTML CARD
+        # ------------------------
+        html = f"""
         <div style="
-            display:flex;
-            justify-content:center;
-            align-items:center;
-            gap:20px;
-            margin-bottom:8px;
+            width:100%;
+            background:rgba(255,255,255,0.06);
+            border:1px solid rgba(255,255,255,0.12);
+            border-radius:14px;
+            padding:14px 14px;
+            margin-bottom:12px;
+            color:#e5e7eb;
+            font-family:Inter, sans-serif;
         ">
-            <img src="{away_logo}" style="height:56px; width:auto;" />
-            <span style="font-size:1.15rem; font-weight:700;">VS</span>
-            <img src="{home_logo}" style="height:56px; width:auto;" />
+
+            <!-- Logos Row -->
+            <div style="
+                display:flex;
+                justify-content:center;
+                align-items:center;
+                gap:20px;
+                margin-bottom:8px;
+            ">
+                <img src="{away_logo}" style="height:56px; width:auto;" />
+                <span style="font-size:1.15rem; font-weight:700;">VS</span>
+                <img src="{home_logo}" style="height:56px; width:auto;" />
+            </div>
+
+            <!-- Team Names -->
+            <div style="
+                display:flex;
+                justify-content:space-between;
+                margin-bottom:6px;
+                font-size:0.95rem;
+                font-weight:700;
+            ">
+                <div style="flex:1; text-align:center;">{away}</div>
+                <div style="flex:1; text-align:center;">{home}</div>
+            </div>
+
+            <!-- Expected Points -->
+            <div style="
+                display:flex;
+                justify-content:space-between;
+                margin-bottom:6px;
+                font-size:0.9rem;
+                color:#d1d5db;
+            ">
+                <div style="flex:1; text-align:center;">Exp: {fmt1(exp_away)}</div>
+                <div style="flex:1; text-align:center;">Exp: {fmt1(exp_home)}</div>
+            </div>
+
+            <!-- Spread & Total -->
+            <div style="
+                text-align:center;
+                margin-bottom:6px;
+                font-size:0.9rem;
+            ">
+                Spread: {fmt1(exp_spread)} • Total: {fmt1(exp_total)}
+            </div>
+
+            <!-- Pretty Start Time -->
+            <div style="
+                text-align:center;
+                font-size:0.85rem;
+                color:#9ca3af;
+            ">
+                {pretty_time}
+            </div>
+
         </div>
-
-        <!-- Team Names -->
-        <div style="
-            display:flex;
-            justify-content:space-between;
-            margin-bottom:6px;
-            font-size:0.95rem;
-            font-weight:700;
-        ">
-            <div style="flex:1; text-align:center;">{away}</div>
-            <div style="flex:1; text-align:center;">{home}</div>
-        </div>
-
-        <!-- Expected Points -->
-        <div style="
-            display:flex;
-            justify-content:space-between;
-            margin-bottom:6px;
-            font-size:0.9rem;
-            color:#d1d5db;
-        ">
-            <div style="flex:1; text-align:center;">Exp: {fmt1(exp_away)}</div>
-            <div style="flex:1; text-align:center;">Exp: {fmt1(exp_home)}</div>
-        </div>
-
-        <!-- Spread & Total -->
-        <div style="
-            text-align:center;
-            margin-bottom:6px;
-            font-size:0.9rem;
-        ">
-            Spread: {fmt1(exp_spread)} • Total: {fmt1(exp_total)}
-        </div>
-
-        <!-- Pretty Start Time -->
-        <div style="
-            text-align:center;
-            font-size:0.85rem;
-            color:#9ca3af;
-        ">
-            {pretty_time}
-        </div>
-
-    </div>
-    """
+        """
 
 
-    components.html(html, height=280, scrolling=False)
+        components.html(html, height=280, scrolling=False)
 
 def render_prop_cards(
     df,
@@ -5668,118 +5671,11 @@ if sport == "NBA":
 
 
 # ------------------------------------------------------
-# NCAA MEN'S / WOMEN'S — REAL MODULE
+# NCAA MEN'S / WOMEN'S — DISABLED
 # ------------------------------------------------------
-elif sport in ["NCAA Men's", "NCAA Women's"]:
-
-    tabN1, tabN2, tabN3, tabN4, tabN5 = st.tabs(
-        [
-            "🏀 Game Overview",
-            "💰 Moneyline",
-            "📏 Spread",
-            "🔢 Totals",
-            "📋 Saved Bets",
-        ]
-    )
-    ncaab_game_analytics_df = load_ncaab_game_analytics()
-    # Load data
-    df = ncaab_game_analytics_df.copy()
-
-    if df.empty:
-        st.info("No NCAA game analytics loaded. Make sure the loader is running.")
-        st.stop()
-
-    # -------------------------------
-    # TAB 1 — OVERVIEW CARDS
-    # -------------------------------
-    with tabN1:
-        st.subheader(f"{sport} — Game Overview")
-
-        for idx, row in df.iterrows():
-            render_ncaab_overview_card(row)
-
-    # -------------------------------
-    # TAB 2 — MONEYLINE
-    # -------------------------------
-    with tabN2:
-        st.subheader(f"{sport} — Moneyline Analysis")
-
-        ml_df = df.copy()
-
-        # Ranking metric
-        if "proj_margin" in ml_df.columns:
-            ml_df["ml_strength"] = ml_df["proj_margin"]
-        elif "predicted_margin" in ml_df.columns:
-            ml_df["ml_strength"] = ml_df["predicted_margin"]
-
-        ml_df = ml_df.sort_values("ml_strength", ascending=False)
-
-        st.dataframe(
-            ml_df[
-                [
-                    "game",
-                    "start_time",
-                    "home_team",
-                    "away_team",
-                    "home_ml",
-                    "away_ml",
-                    "proj_home_points",
-                    "proj_away_points",
-                    "proj_margin",
-                ]
-            ],
-            use_container_width=True,
-        )
-
-    # -------------------------------
-    # TAB 3 — SPREAD ANALYSIS
-    # -------------------------------
-    with tabN3:
-        st.subheader(f"{sport} — Spread Analysis")
-
-        st.dataframe(
-            df.sort_values("spread_edge", ascending=False)[
-                [
-                    "game",
-                    "start_time",
-                    "home_team",
-                    "away_team",
-                    "home_spread",
-                    "away_spread",
-                    "proj_margin",
-                    "spread_edge",
-                ]
-            ],
-            use_container_width=True,
-        )
-
-    # -------------------------------
-    # TAB 4 — TOTALS ANALYSIS
-    # -------------------------------
-    with tabN4:
-        st.subheader(f"{sport} — Total Points Analysis")
-
-        st.dataframe(
-            df.sort_values("total_edge", ascending=False)[
-                [
-                    "game",
-                    "start_time",
-                    "home_team",
-                    "away_team",
-                    "total_line",
-                    "proj_total_points",
-                    "pace_proxy",
-                    "total_edge",
-                ]
-            ],
-            use_container_width=True,
-        )
-
-    # -------------------------------
-    # TAB 5 — SAVED BETS
-    # -------------------------------
-    with tabN5:
-        render_saved_bets_tab()
+if sport in ["NCAA Men's", "NCAA Women's"]:
+    st.info("NCAA modules are temporarily disabled.")
+    st.stop()
 
 
 

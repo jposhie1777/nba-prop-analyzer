@@ -2004,66 +2004,6 @@ def build_tags_html(tags):
         )
 
     return "".join(html_parts)
-    
-
-# ------------------------------------------------------
-# LOGO LOADERS
-# ------------------------------------------------------
-
-@st.cache_data(show_spinner=False)
-def logo_to_base64_local(path: str) -> str:
-    if not path:
-        return ""
-    try:
-        with open(path, "rb") as f:
-            b64 = base64.b64encode(f.read()).decode("utf-8")
-        return f"data:image/png;base64,{b64}"
-    except:
-        return ""
-
-@st.cache_data(show_spinner=False)
-def logo_to_base64_url(url: str) -> str:
-    if not url:
-        return ""
-    try:
-        r = requests.get(url, timeout=5)
-        r.raise_for_status()
-        b64 = base64.b64encode(r.content).decode("utf-8")
-        return f"data:image/png;base64,{b64}"
-    except:
-        return ""
-
-TEAM_LOGOS_BASE64 = {
-    code: logo_to_base64_url(url)
-    for code, url in TEAM_LOGOS.items()
-}
-
-SPORTSBOOK_LOGOS_BASE64 = {
-    name: logo_to_base64_local(path)
-    for name, path in SPORTSBOOK_LOGOS.items()
-}
-
-NO_IMAGE = "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
-
-import pandas as pd
-
-def ncaa_logo(espn_team_id):
-    """
-    Safe ESPN logo resolver.
-    Accepts int, str, or missing values.
-    """
-
-    # Handle missing / NaN / NA
-    if espn_team_id is None or pd.isna(espn_team_id):
-        return "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
-
-    try:
-        tid = int(espn_team_id)
-    except (ValueError, TypeError):
-        return "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
-
-    return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{tid}.png"
-
 
 def normalize_team_code(raw: str) -> str:
     if raw is None:

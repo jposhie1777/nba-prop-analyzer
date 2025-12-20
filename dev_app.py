@@ -1533,31 +1533,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.markdown(
-    """
-    <script>
-    document.addEventListener("click", function (e) {
-        const btn = e.target.closest(".save-bet-btn");
-        if (!btn) return;
-    
-        const payload = btn.dataset.savePayload.replace(/&quot;/g, '"');
-    
-        fetch("/save_bet", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: payload
-        }).then(() => {
-            btn.innerText = "✓ Saved";
-            btn.disabled = true;
-        });
-    });
-    </script>
-    """,
-    unsafe_allow_html=True,
-)
-
-
-
 # ------------------------------------------------------
 # AG-GRID MOBILE FIX (separate block)
 # ------------------------------------------------------

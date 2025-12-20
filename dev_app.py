@@ -3663,8 +3663,9 @@ def render_prop_cards(
             book_lines = []
 
             for bp in row.get("book_prices", []):
-                logo = SPORTSBOOK_LOGOS_BASE64.get(bp.get("book"))
+                logo = LOGOS["books"].get(bp.get("book"), "")
                 price = bp.get("price")
+
                 if logo and price is not None:
                     book_lines.append(
                         f"<div style='display:flex; align-items:center; gap:6px;'>"

@@ -692,33 +692,28 @@ def get_or_create_user(auth0_sub: str, email: str):
 def render_landing_nba_games():
     st.subheader("🏀 NBA Games Today")
 
-    try:
-        sql = """
-        SELECT
-            game_id,
-            game_date,
-            start_time_est,
-            start_time_formatted,
-            home_team,
-            visitor_team,
-            home_team_id,
-            visitor_team_id,
-            is_live,
-            is_upcoming
-        FROM `nba_prop_analyzer.game_report`
-        WHERE game_date = CURRENT_DATE("America/New_York")
-        ORDER BY start_time_est
-        """
+    sql = """
+    SELECT
+        game_id,
+        game_date,
+        start_time_est,
+        start_time_formatted,
+        home_team,
+        visitor_team,
+        home_team_id,
+        visitor_team_id,
+        is_live,
+        is_upcoming
+    FROM `nba_prop_analyzer.game_report`
+    WHERE game_date = CURRENT_DATE("America/New_York")
+    ORDER BY start_time_est
+    """
 
-        @st.cache_data(ttl=1800)
-        def load_props_df(sql: str):
-            return bq_client.query(sql).to_dataframe()
-        
-        df = load_props_df(sql)
+    df = load_bq_df(sql)
 
-        if df.empty:
-            st.info("No NBA games scheduled for today.")
-            return
+    if df.empty:
+        st.info("No NBA games scheduled for today.")
+        return
 
         # -------------------------------
         # Render game list cleanly

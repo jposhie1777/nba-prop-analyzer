@@ -677,36 +677,6 @@ def get_or_create_user(auth0_sub: str, email: str):
     return row
 
 
-def load_saved_bets_from_db(user_id: int):
-    """
-    Load saved bets from DB as a list of dicts.
-    Normalize any old 'Label' keys to 'bet_type'.
-    """
-    try:
-        conn = get_db_conn()
-        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cur.execute(
-            "SELECT bet_details FROM saved_bets WHERE user_id = %s ORDER BY created_at DESC",
-            (user_id,),
-        )
-        rows = cur.fetchall()
-        conn.close()
-
-        bets = []
-        for r in rows:
-            details = r.get("bet_details")
-            if isinstance(details, dict):
-                # Normalize: if old 'Label' is present, map it to 'bet_type'
-                if "bet_type" not in details and "Label" in details:
-                    details["bet_type"] = details.pop("Label")
-
-                bets.append(details)
-        return bets
-    except Exception as e:
-        st.sidebar.warning(f"Could not load saved bets from DB: {e}")
-        return []
-
-
 def render_landing_nba_games():
     st.subheader("🏀 NBA Games Today")
 

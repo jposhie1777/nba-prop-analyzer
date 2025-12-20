@@ -34,13 +34,12 @@ from google.oauth2 import service_account
 # ------------------------------------------------------
 # Memory debug helper
 # ------------------------------------------------------
-import os
 import psutil
-
-_process = psutil.Process(os.getpid())
+import os
 
 def get_mem_mb() -> float:
-    return _process.memory_info().rss / 1024 / 1024
+    process = psutil.Process(os.getpid())
+    return process.memory_info().rss / (1024 ** 2)
 
 # ------------------------------------------------------
 # STREAMLIT CONFIG (MUST BE FIRST STREAMLIT COMMAND)

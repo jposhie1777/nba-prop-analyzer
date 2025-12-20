@@ -32,13 +32,12 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
-from pympler import tracker
+import psutil, os
 
-from pympler import tracker
+def mem_diff(label: str):
+    rss_mb = psutil.Process(os.getpid()).memory_info().rss / (1024**2)
+    print(f"\n===== MEM (RSS) {label}: {rss_mb:,.1f} MB =====")
 
-if "mem_tracker" not in st.session_state:
-    st.session_state.mem_tracker = tracker.SummaryTracker()
-    st.session_state.mem_tracker.print_diff()  # 👈 baseline snapshot
 
 import gc
 
@@ -1934,13 +1933,6 @@ def _pm(v):
 
 from functools import lru_cache
 
-@lru_cache(maxsize=2048)
-def cached_sparkline_bars_hitmiss(values, dates, line_value):
-    return build_sparkline_bars_hitmiss(
-        values=list(values),
-        dates=list(dates),
-        line_value=line_value,
-    )
 # ======================================================
 # WOWY market → delta column mapping
 # ======================================================

@@ -2218,50 +2218,39 @@ if not st.session_state.saved_bets_loaded:
 
 
 
-def save_bet_for_user(user_id: int, bet: dict) -> bool:
+def save_bet_for_user(
+    *,
+    user_id: int,
+    player: str,
+    market: str,
+    line: float,
+    bet_type: str,
+) -> bool:
     """
-    Save a bet for the current user.
-    - Deduplicates by (player, market, line, bet_type)
-    - Appends to session_state
-    - Syncs full list to Postgres
-    Returns True if added, False if duplicate.
+    DB-only save.
+    - No session_state
+    - No list syncing
+    - Dedupe enforced by Postgres unique index
     """
 
-    # Ensure session list exists
-    if "saved_bets" not in st.session_state:
-        st.session_state["saved_bets"] = []
+    try:
+        conn = get_db_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO saved_bets (user_id, player, market, line, bet_type)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT DO NOTHING
+                """,
+                (user_id, player, market, line, bet_type),
+            )
+        conn.commit()
+        conn.close()
+        return True
 
-    saved = st.session_state["saved_bets"]
-
-    # Canonical dedupe key
-    dedupe_key = (
-        bet.get("player"),
-        bet.get("market"),
-        bet.get("line"),
-        bet.get("bet_type"),
-    )
-
-    existing_keys = {
-        (
-            b.get("player"),
-            b.get("market"),
-            b.get("line"),
-            b.get("bet_type"),
-        )
-        for b in saved
-    }
-
-    if dedupe_key in existing_keys:
+    except Exception as e:
+        st.sidebar.error(f"Save bet failed: {e}")
         return False
-
-    # Append (DO NOT mutate input)
-    saved.append(bet.copy())
-    st.session_state["saved_bets"] = saved
-
-    # Persist full list
-    replace_saved_bets_in_db(user_id, saved)
-
-    return True
 
 
 # ------------------------------------------------------

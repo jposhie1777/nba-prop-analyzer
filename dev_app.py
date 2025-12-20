@@ -2977,6 +2977,24 @@ def compute_confidence(
 
     return round(score, 1), level
 
+from functools import lru_cache
+
+@lru_cache(maxsize=2048)
+def cached_sparkline_bars_hitmiss(
+    values_tuple,
+    dates_tuple,
+    line_value,
+    width=110,
+    height=46,
+):
+    return build_sparkline_bars_hitmiss(
+        list(values_tuple),
+        list(dates_tuple),
+        float(line_value),
+        width=width,
+        height=height,
+    )
+
 
 def get_spark_series(row):
     stat = detect_stat(row.get("market", ""))
@@ -3687,11 +3705,13 @@ def render_prop_cards(
             stat_prefix = detect_stat(row.get("market"))
 
             spark_vals, spark_dates = get_spark_series(row)
-            spark_html = build_sparkline_bars_hitmiss(
-                spark_vals,
-                spark_dates,
+            
+            spark_html = cached_sparkline_bars_hitmiss(
+                tuple(spark_vals),
+                tuple(spark_dates),
                 float(line or 0),
             )
+
 
             home_logo = LOGOS["teams"].get(
                 normalize_team_code(row.get("player_team", "")), ""

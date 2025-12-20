@@ -3921,9 +3921,6 @@ def render_prop_cards(
                     "market": row.get("market"),
                     "line": float(row.get("line")),
                     "bet_type": bet_type,
-                    "team": row.get("player_team"),
-                    "books": row.get("book_prices", []),
-                    "page": page_key,
                 }
             ).replace('"', "&quot;")
 

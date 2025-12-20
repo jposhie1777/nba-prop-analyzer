@@ -118,6 +118,7 @@ DEV_SP_TABLES = {
 # ======================================================
 # DEV: BigQuery Client (Explicit Credentials)
 # ======================================================
+@st.cache_resource
 def get_dev_bq_client():
     creds_dict = json.loads(os.getenv("GCP_SERVICE_ACCOUNT", ""))
     creds = service_account.Credentials.from_service_account_info(
@@ -168,6 +169,7 @@ def trigger_apps_script(task: str):
         st.error("❌ Apps Script trigger failed")
         st.code(str(e))
 
+@st.cache_data(show_spinner=False)
 def get_table_schema(dataset: str, table: str):
     client = get_dev_bq_client()
 

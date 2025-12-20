@@ -2498,39 +2498,41 @@ def convert_list_columns(df):
 
 
 
-@st.cache_data(show_spinner=True)
-def load_history():
-    df = bq_client.query(HISTORICAL_SQL).to_dataframe()
+@st.cache_data(ttl=1800, show_spinner=True)
+def load_historical_df() -> pd.DataFrame:
+    df = load_bq_df(HISTORICAL_SQL).copy()
+
     df.columns = df.columns.str.strip()
     df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
     df["opponent_team"] = df["opponent_team"].fillna("").astype(str)
 
-    # 🔥 Convert stringified lists into real Python lists
+    # Convert stringified list columns
     df = convert_list_columns(df)
 
     return df
 
-@st.cache_data(show_spinner=True)
-def load_depth_charts():
-    df = bq_client.query(DEPTH_SQL).to_dataframe()
+@st.cache_data(ttl=1800, show_spinner=True)
+def load_depth_charts() -> pd.DataFrame:
+    df = load_bq_df(DEPTH_SQL).copy()
     df.columns = df.columns.str.strip()
     return df
 
 
-@st.cache_data(show_spinner=True)
-def load_injury_report():
-    df = bq_client.query(INJURY_SQL).to_dataframe()
+@st.cache_data(ttl=1800, show_spinner=True)
+def load_injury_report() -> pd.DataFrame:
+    df = load_bq_df(INJURY_SQL).copy()
+
     df.columns = df.columns.str.strip()
     df["snapshot_ts"] = pd.to_datetime(df["snapshot_ts"], errors="coerce")
+
     return df
 
 
-@st.cache_data(show_spinner=True)
-def load_wowy_deltas():
-    df = bq_client.query(DELTA_SQL).to_dataframe()
+@st.cache_data(ttl=1800, show_spinner=True)
+def load_wowy_deltas() -> pd.DataFrame:
+    df = load_bq_df(DELTA_SQL).copy()
     df.columns = df.columns.str.strip()
 
-    # Normalize player name for matching
     def norm(x):
         if not isinstance(x, str):
             return ""
@@ -2543,27 +2545,28 @@ def load_wowy_deltas():
         )
 
     df["player_norm"] = df["player_a"].apply(norm)
+
     return df
 
-@st.cache_data(show_spinner=True)
-def load_game_analytics():
-    df = bq_client.query(GAME_ANALYTICS_SQL).to_dataframe()
+@st.cache_data(ttl=1800, show_spinner=True)
+def load_game_analytics() -> pd.DataFrame:
+    df = load_bq_df(GAME_ANALYTICS_SQL).copy()
+
     df.columns = df.columns.str.strip()
     df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
+
     return df
 
 # ------------------------------------------------------
 # LOAD NCAA GAME ANALYTICS
 # ------------------------------------------------------
-@st.cache_data(show_spinner=True)
-def load_ncaab_game_analytics():
-    df = bq_client.query(NCAAB_GAME_ANALYTICS_SQL).to_dataframe()
+@st.cache_data(ttl=1800, show_spinner=True)
+def load_ncaab_game_analytics() -> pd.DataFrame:
+    df = load_bq_df(NCAAB_GAME_ANALYTICS_SQL).copy()
     df.columns = df.columns.str.strip()
 
-    # Datetime normalization
     df["start_time"] = pd.to_datetime(df["start_time"], errors="coerce")
 
-    # Numeric normalization
     numeric_cols = [
         "home_ml", "away_ml",
         "home_spread", "away_spread",
@@ -2573,7 +2576,7 @@ def load_ncaab_game_analytics():
         "spread_edge", "total_edge",
         "l5_scoring_diff", "l10_scoring_diff",
         "l5_margin_diff", "l10_margin_diff",
-        "pace_proxy"
+        "pace_proxy",
     ]
 
     for col in numeric_cols:
@@ -2582,18 +2585,19 @@ def load_ncaab_game_analytics():
 
     return df
 
-@st.cache_data(show_spinner=True)
-def load_game_report():
-    df = bq_client.query(GAME_REPORT_SQL).to_dataframe()
+@st.cache_data(ttl=1800, show_spinner=True)
+def load_game_report() -> pd.DataFrame:
+    df = load_bq_df(GAME_REPORT_SQL).copy()
+
     df.columns = df.columns.str.strip()
     df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
+
     return df
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=True)
 def load_game_odds() -> pd.DataFrame:
-    df = bq_client.query(GAME_ODDS_SQL).to_dataframe()
+    df = load_bq_df(GAME_ODDS_SQL).copy()
 
-    # Ensure snake_case columns exist and are typed correctly
     df["start_time"] = pd.to_datetime(df["start_time"], errors="coerce")
     df["line"] = pd.to_numeric(df["line"], errors="coerce")
     df["price"] = pd.to_numeric(df["price"], errors="coerce")

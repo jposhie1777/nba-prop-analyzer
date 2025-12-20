@@ -49,6 +49,13 @@ if "mem_baseline" not in st.session_state:
     st.session_state.mem_baseline = mem_mb()
 
 # ------------------------------------------------------
+# Save Bet rerun guard
+# ------------------------------------------------------
+if "saving_bet" not in st.session_state:
+    st.session_state.saving_bet = False
+
+
+# ------------------------------------------------------
 # STREAMLIT CONFIG (MUST BE FIRST STREAMLIT COMMAND)
 # ------------------------------------------------------
 st.set_page_config(
@@ -2342,7 +2349,12 @@ def load_props() -> pd.DataFrame:
     # --------------------------------------------------
     # Load once from BigQuery (ONLY entry point)
     # --------------------------------------------------
-    df = load_bq_df(PROPS_SQL)
+    if not st.session_state.saving_bet:
+        df = load_bq_df(PROPS_SQL)
+        st.session_state.df_props = df
+    else:
+        df = st.session_state.get("df_props")
+
 
     # --------------------------------------------------
     # Column normalization (safe)

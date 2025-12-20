@@ -22,7 +22,6 @@ import jwt
 import streamlit.components.v1 as components
 import textwrap
 import re
-import pathlib
 from functools import lru_cache
 from rapidfuzz import fuzz, process
 
@@ -30,7 +29,20 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
+from pympler import tracker
 
+from pympler import tracker
+
+if "mem_tracker" not in st.session_state:
+    st.session_state.mem_tracker = tracker.SummaryTracker()
+    st.session_state.mem_tracker.print_diff()  # 👈 baseline snapshot
+
+import gc
+
+def mem_diff(label: str):
+    gc.collect()
+    print(f"\n===== MEMORY DIFF: {label} =====")
+    st.session_state.mem_tracker.print_diff()
 
 # ------------------------------------------------------
 # Memory debug helper
@@ -47,13 +59,6 @@ def mem_mb():
     
 if "mem_baseline" not in st.session_state:
     st.session_state.mem_baseline = mem_mb()
-
-# ------------------------------------------------------
-# Save Bet rerun guard
-# ------------------------------------------------------
-if "saving_bet" not in st.session_state:
-    st.session_state.saving_bet = False
-
 
 # ------------------------------------------------------
 # STREAMLIT CONFIG (MUST BE FIRST STREAMLIT COMMAND)
@@ -625,11 +630,11 @@ WHERE DATE(`Start Time`) = CURRENT_DATE()
 # ------------------------------------------------------
 # NCAA GAME ANALYTICS SQL
 # ------------------------------------------------------
-#NCAAB_GAME_ANALYTICS_SQL = f"""
-#SELECT *
-#FROM `{PROJECT_ID}.ncaa_data.ncaab_game_analytics`
-#ORDER BY start_time
-#"""
+NCAAB_GAME_ANALYTICS_SQL = f"""
+SELECT *
+FROM `{PROJECT_ID}.ncaa_data.ncaab_game_analytics`
+ORDER BY start_time
+"""
 
 
 # ------------------------------------------------------
@@ -1541,6 +1546,31 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+st.markdown(
+    """
+    <script>
+    document.addEventListener("click", function (e) {
+        const btn = e.target.closest(".save-bet-btn");
+        if (!btn) return;
+    
+        const payload = btn.dataset.savePayload.replace(/&quot;/g, '"');
+    
+        fetch("/save_bet", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: payload
+        }).then(() => {
+            btn.innerText = "✓ Saved";
+            btn.disabled = true;
+        });
+    });
+    </script>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+
 # ------------------------------------------------------
 # AG-GRID MOBILE FIX (separate block)
 # ------------------------------------------------------
@@ -1664,7 +1694,7 @@ st.title("Pulse Sports Analytics")
 
 
 # ------------------------------------------------------
-# LOGOS (STATIC METADATA ONLY)
+# LOGOS (STATIC)
 # ------------------------------------------------------
 TEAM_LOGOS = {
     "ATL": "https://a.espncdn.com/i/teamlogos/nba/500/atl.png",
@@ -1732,45 +1762,6 @@ TEAM_NAME_TO_CODE = {
     "Utah Jazz": "UTA",
     "Washington Wizards": "WAS",
 }
-
-
-# Directory containing this Python file
-FILE_DIR = pathlib.Path(__file__).resolve().parent
-
-# Correct logo directory
-LOGO_DIR = FILE_DIR / "static" / "logos"
-
-SPORTSBOOK_LOGOS = {
-    "DraftKings": str(LOGO_DIR / "Draftkingssmall.png"),
-    "FanDuel": str(LOGO_DIR / "Fanduelsmall.png"),
-}
-
-@st.cache_resource
-def load_logo_assets():
-    teams = {}
-    for code, url in TEAM_LOGOS.items():
-        try:
-            r = requests.get(url, timeout=5)
-            r.raise_for_status()
-            teams[code] = f"data:image/png;base64,{base64.b64encode(r.content).decode()}"
-        except Exception:
-            teams[code] = ""
-
-    books = {}
-    for name, path in SPORTSBOOK_LOGOS.items():
-        try:
-            with open(path, "rb") as f:
-                books[name] = f"data:image/png;base64,{base64.b64encode(f.read()).decode()}"
-        except Exception:
-            books[name] = ""
-
-    return {
-        "teams": teams,
-        "books": books,
-    }
-
-LOGOS = load_logo_assets()
-
 
 def team_abbr(team_name: str) -> str:
     """
@@ -1991,6 +1982,34 @@ import os
 import base64
 import pathlib
 
+# Directory containing this Python file
+FILE_DIR = pathlib.Path(__file__).resolve().parent
+
+# Correct logo directory
+LOGO_DIR = FILE_DIR / "static" / "logos"
+
+def logo_to_base64_local(path: str) -> str:
+    try:
+        with open(path, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode("utf-8")
+            return f"data:image/png;base64,{encoded}"
+    except Exception as e:
+        print(f"Error loading logo {path}: {e}")
+        return ""
+
+SPORTSBOOK_LOGOS = {
+    "DraftKings": str(LOGO_DIR / "Draftkingssmall.png"),
+    "FanDuel": str(LOGO_DIR / "Fanduelsmall.png"),
+}
+
+SPORTSBOOK_LOGOS_BASE64 = {
+    name: logo_to_base64_local(path)
+    for name, path in SPORTSBOOK_LOGOS.items()
+}
+
+import os
+
+
 
 MARKET_DISPLAY_MAP = {
     "player_assists_alternate": "Assists",
@@ -2023,6 +2042,66 @@ def build_tags_html(tags):
         )
 
     return "".join(html_parts)
+    
+
+# ------------------------------------------------------
+# LOGO LOADERS
+# ------------------------------------------------------
+
+@st.cache_data(show_spinner=False)
+def logo_to_base64_local(path: str) -> str:
+    if not path:
+        return ""
+    try:
+        with open(path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("utf-8")
+        return f"data:image/png;base64,{b64}"
+    except:
+        return ""
+
+@st.cache_data(show_spinner=False)
+def logo_to_base64_url(url: str) -> str:
+    if not url:
+        return ""
+    try:
+        r = requests.get(url, timeout=5)
+        r.raise_for_status()
+        b64 = base64.b64encode(r.content).decode("utf-8")
+        return f"data:image/png;base64,{b64}"
+    except:
+        return ""
+
+TEAM_LOGOS_BASE64 = {
+    code: logo_to_base64_url(url)
+    for code, url in TEAM_LOGOS.items()
+}
+
+SPORTSBOOK_LOGOS_BASE64 = {
+    name: logo_to_base64_local(path)
+    for name, path in SPORTSBOOK_LOGOS.items()
+}
+
+NO_IMAGE = "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
+
+import pandas as pd
+
+def ncaa_logo(espn_team_id):
+    """
+    Safe ESPN logo resolver.
+    Accepts int, str, or missing values.
+    """
+
+    # Handle missing / NaN / NA
+    if espn_team_id is None or pd.isna(espn_team_id):
+        return "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
+
+    try:
+        tid = int(espn_team_id)
+    except (ValueError, TypeError):
+        return "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
+
+    return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{tid}.png"
+
 
 def normalize_team_code(raw: str) -> str:
     if raw is None:
@@ -2349,12 +2428,7 @@ def load_props() -> pd.DataFrame:
     # --------------------------------------------------
     # Load once from BigQuery (ONLY entry point)
     # --------------------------------------------------
-    if not st.session_state.saving_bet:
-        df = load_bq_df(PROPS_SQL)
-        st.session_state.df_props = df
-    else:
-        df = st.session_state.get("df_props")
-
+    df = load_bq_df(PROPS_SQL)
 
     # --------------------------------------------------
     # Column normalization (safe)
@@ -2524,32 +2598,30 @@ def load_game_analytics() -> pd.DataFrame:
 # ------------------------------------------------------
 # LOAD NCAA GAME ANALYTICS
 # ------------------------------------------------------
-if False:
-    @st.cache_data(ttl=1800, show_spinner=True)
-    def load_ncaab_game_analytics() -> pd.DataFrame:
-        df = load_bq_df(NCAAB_GAME_ANALYTICS_SQL).copy()
-        df.columns = df.columns.str.strip()
+@st.cache_data(ttl=1800, show_spinner=True)
+def load_ncaab_game_analytics() -> pd.DataFrame:
+    df = load_bq_df(NCAAB_GAME_ANALYTICS_SQL).copy()
+    df.columns = df.columns.str.strip()
 
-        df["start_time"] = pd.to_datetime(df["start_time"], errors="coerce")
+    df["start_time"] = pd.to_datetime(df["start_time"], errors="coerce")
 
-        numeric_cols = [
-            "home_ml", "away_ml",
-            "home_spread", "away_spread",
-            "total_line",
-            "proj_home_points", "proj_away_points", "proj_total_points",
-            "proj_margin",
-            "spread_edge", "total_edge",
-            "l5_scoring_diff", "l10_scoring_diff",
-            "l5_margin_diff", "l10_margin_diff",
-            "pace_proxy",
-        ]
+    numeric_cols = [
+        "home_ml", "away_ml",
+        "home_spread", "away_spread",
+        "total_line",
+        "proj_home_points", "proj_away_points", "proj_total_points",
+        "proj_margin",
+        "spread_edge", "total_edge",
+        "l5_scoring_diff", "l10_scoring_diff",
+        "l5_margin_diff", "l10_margin_diff",
+        "pace_proxy",
+    ]
 
-        for col in numeric_cols:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors="coerce")
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
 
-        return df
-
+    return df
 
 @st.cache_data(ttl=1800, show_spinner=True)
 def load_game_report() -> pd.DataFrame:
@@ -2977,24 +3049,6 @@ def compute_confidence(
 
     return round(score, 1), level
 
-from functools import lru_cache
-
-@lru_cache(maxsize=2048)
-def cached_sparkline_bars_hitmiss(
-    values_tuple,
-    dates_tuple,
-    line_value,
-    width=110,
-    height=46,
-):
-    return build_sparkline_bars_hitmiss(
-        list(values_tuple),
-        list(dates_tuple),
-        float(line_value),
-        width=width,
-        height=height,
-    )
-
 
 def get_spark_series(row):
     stat = detect_stat(row.get("market", ""))
@@ -3406,111 +3460,110 @@ def fmt1(x):
     except:
         return "-"
 
-if False:
-    def render_ncaab_overview_card(row):
+def render_ncaab_overview_card(row):
 
-        home = row.get("home_team", "")
-        away = row.get("away_team", "")
+    home = row.get("home_team", "")
+    away = row.get("away_team", "")
 
-        home_logo = ncaa_logo(row["home_espn_team_id"])
-        away_logo = ncaa_logo(row["away_espn_team_id"])
+    home_logo = ncaa_logo(row["home_espn_team_id"])
+    away_logo = ncaa_logo(row["away_espn_team_id"])
 
-        # ----------------------------------------
-        # CORRECT FIELD NAMES FROM GAME ANALYTICS
-        # ----------------------------------------
-        exp_home = row.get("proj_home_points")
-        exp_away = row.get("proj_away_points")
-        exp_total = row.get("proj_total_points")
-        exp_spread = row.get("proj_margin")  # home - away predicted margin
+    # ----------------------------------------
+    # CORRECT FIELD NAMES FROM GAME ANALYTICS
+    # ----------------------------------------
+    exp_home = row.get("proj_home_points")
+    exp_away = row.get("proj_away_points")
+    exp_total = row.get("proj_total_points")
+    exp_spread = row.get("proj_margin")  # home - away predicted margin
 
-        # ------------------------
-        # Pretty Time Conversion
-        # ------------------------
-        dt = row.get("start_time")
-        pretty_time = ""
-        if dt:
-            if not isinstance(dt, datetime):
-                dt = datetime.fromisoformat(str(dt).replace("Z", "+00:00"))
+    # ------------------------
+    # Pretty Time Conversion
+    # ------------------------
+    dt = row.get("start_time")
+    pretty_time = ""
+    if dt:
+        if not isinstance(dt, datetime):
+            dt = datetime.fromisoformat(str(dt).replace("Z", "+00:00"))
 
-            est = pytz.timezone("America/New_York")
-            dt_est = dt.astimezone(est)
-            pretty_time = dt_est.strftime("%a, %b %d • %I:%M %p ET")
+        est = pytz.timezone("America/New_York")
+        dt_est = dt.astimezone(est)
+        pretty_time = dt_est.strftime("%a, %b %d • %I:%M %p ET")
 
-        # ------------------------
-        # HTML CARD
-        # ------------------------
-        html = f"""
+    # ------------------------
+    # HTML CARD
+    # ------------------------
+    html = f"""
+    <div style="
+        width:100%;
+        background:rgba(255,255,255,0.06);
+        border:1px solid rgba(255,255,255,0.12);
+        border-radius:14px;
+        padding:14px 14px;
+        margin-bottom:12px;
+        color:#e5e7eb;
+        font-family:Inter, sans-serif;
+    ">
+
+        <!-- Logos Row -->
         <div style="
-            width:100%;
-            background:rgba(255,255,255,0.06);
-            border:1px solid rgba(255,255,255,0.12);
-            border-radius:14px;
-            padding:14px 14px;
-            margin-bottom:12px;
-            color:#e5e7eb;
-            font-family:Inter, sans-serif;
+            display:flex;
+            justify-content:center;
+            align-items:center;
+            gap:20px;
+            margin-bottom:8px;
         ">
-
-            <!-- Logos Row -->
-            <div style="
-                display:flex;
-                justify-content:center;
-                align-items:center;
-                gap:20px;
-                margin-bottom:8px;
-            ">
-                <img src="{away_logo}" style="height:56px; width:auto;" />
-                <span style="font-size:1.15rem; font-weight:700;">VS</span>
-                <img src="{home_logo}" style="height:56px; width:auto;" />
-            </div>
-
-            <!-- Team Names -->
-            <div style="
-                display:flex;
-                justify-content:space-between;
-                margin-bottom:6px;
-                font-size:0.95rem;
-                font-weight:700;
-            ">
-                <div style="flex:1; text-align:center;">{away}</div>
-                <div style="flex:1; text-align:center;">{home}</div>
-            </div>
-
-            <!-- Expected Points -->
-            <div style="
-                display:flex;
-                justify-content:space-between;
-                margin-bottom:6px;
-                font-size:0.9rem;
-                color:#d1d5db;
-            ">
-                <div style="flex:1; text-align:center;">Exp: {fmt1(exp_away)}</div>
-                <div style="flex:1; text-align:center;">Exp: {fmt1(exp_home)}</div>
-            </div>
-
-            <!-- Spread & Total -->
-            <div style="
-                text-align:center;
-                margin-bottom:6px;
-                font-size:0.9rem;
-            ">
-                Spread: {fmt1(exp_spread)} • Total: {fmt1(exp_total)}
-            </div>
-
-            <!-- Pretty Start Time -->
-            <div style="
-                text-align:center;
-                font-size:0.85rem;
-                color:#9ca3af;
-            ">
-                {pretty_time}
-            </div>
-
+            <img src="{away_logo}" style="height:56px; width:auto;" />
+            <span style="font-size:1.15rem; font-weight:700;">VS</span>
+            <img src="{home_logo}" style="height:56px; width:auto;" />
         </div>
-        """
+
+        <!-- Team Names -->
+        <div style="
+            display:flex;
+            justify-content:space-between;
+            margin-bottom:6px;
+            font-size:0.95rem;
+            font-weight:700;
+        ">
+            <div style="flex:1; text-align:center;">{away}</div>
+            <div style="flex:1; text-align:center;">{home}</div>
+        </div>
+
+        <!-- Expected Points -->
+        <div style="
+            display:flex;
+            justify-content:space-between;
+            margin-bottom:6px;
+            font-size:0.9rem;
+            color:#d1d5db;
+        ">
+            <div style="flex:1; text-align:center;">Exp: {fmt1(exp_away)}</div>
+            <div style="flex:1; text-align:center;">Exp: {fmt1(exp_home)}</div>
+        </div>
+
+        <!-- Spread & Total -->
+        <div style="
+            text-align:center;
+            margin-bottom:6px;
+            font-size:0.9rem;
+        ">
+            Spread: {fmt1(exp_spread)} • Total: {fmt1(exp_total)}
+        </div>
+
+        <!-- Pretty Start Time -->
+        <div style="
+            text-align:center;
+            font-size:0.85rem;
+            color:#9ca3af;
+        ">
+            {pretty_time}
+        </div>
+
+    </div>
+    """
 
 
-        components.html(html, height=280, scrolling=False)
+    components.html(html, height=280, scrolling=False)
 
 def render_prop_cards(
     df,
@@ -3641,16 +3694,9 @@ def render_prop_cards(
         key=f"{page_key}_page",
     )
 
-    if not st.session_state.saving_bet:
-        page_df = card_df.iloc[
-            (page - 1) * page_size : page * page_size
-        ]
-        st.session_state.page_df = page_df
-    else:
-        page_df = st.session_state.get("page_df", card_df.iloc[
-            (page - 1) * page_size : page * page_size
-        ])
-
+    page_df = card_df.iloc[
+        (page - 1) * page_size : page * page_size
+    ]
 
     # ------------------------------------------------------
     # Scroll wrapper
@@ -3665,27 +3711,7 @@ def render_prop_cards(
     # ======================================================
     # CARD LOOP
     # ======================================================
-    rows = page_df.to_dict("records")
-
-    for idx, row in enumerate(rows):
-
-        # 🔒 CRITICAL: Skip analytics during Save Bet reruns
-        if st.session_state.saving_bet:
-            with cols[idx % 4]:
-                st.markdown(
-                    f"""
-                    <div class="prop-card">
-                        <div class="prop-player">{row.get("player")}</div>
-                        <div class="prop-market">
-                            {MARKET_DISPLAY_MAP.get(row.get("market"), row.get("market"))}
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-            continue
-
-        # 👇 Normal heavy render path (only when NOT saving)
+    for idx, row in page_df.iterrows():
         with cols[idx % 4]:
 
             player = row.get("player") or ""
@@ -3701,26 +3727,24 @@ def render_prop_cards(
             opp_rank = get_opponent_rank(row)
             rank_display = opp_rank if isinstance(opp_rank, int) else "-"
             rank_color = rank_to_color(opp_rank) if isinstance(opp_rank, int) else "#9ca3af"
-
+           
             stat_prefix = detect_stat(row.get("market"))
 
+
+
             spark_vals, spark_dates = get_spark_series(row)
-            
-            spark_html = cached_sparkline_bars_hitmiss(
-                tuple(spark_vals),
-                tuple(spark_dates),
+            spark_html = build_sparkline_bars_hitmiss(
+                spark_vals,
+                spark_dates,
                 float(line or 0),
             )
 
-
-            home_logo = LOGOS["teams"].get(
+            home_logo = TEAM_LOGOS_BASE64.get(
                 normalize_team_code(row.get("player_team", "")), ""
             )
-            opp_logo = LOGOS["teams"].get(
+            opp_logo = TEAM_LOGOS_BASE64.get(
                 normalize_team_code(row.get("opponent_team", "")), ""
             )
-
-
 
             # -------------------------
             # Book prices
@@ -3728,9 +3752,8 @@ def render_prop_cards(
             book_lines = []
 
             for bp in row.get("book_prices", []):
-                logo = LOGOS["books"].get(bp.get("book"), "")
+                logo = SPORTSBOOK_LOGOS_BASE64.get(bp.get("book"))
                 price = bp.get("price")
-
                 if logo and price is not None:
                     book_lines.append(
                         f"<div style='display:flex; align-items:center; gap:6px;'>"
@@ -5691,11 +5714,118 @@ if sport == "NBA":
 
 
 # ------------------------------------------------------
-# NCAA MEN'S / WOMEN'S — DISABLED
+# NCAA MEN'S / WOMEN'S — REAL MODULE
 # ------------------------------------------------------
-if sport in ["NCAA Men's", "NCAA Women's"]:
-    st.info("NCAA modules are temporarily disabled.")
-    st.stop()
+elif sport in ["NCAA Men's", "NCAA Women's"]:
+
+    tabN1, tabN2, tabN3, tabN4, tabN5 = st.tabs(
+        [
+            "🏀 Game Overview",
+            "💰 Moneyline",
+            "📏 Spread",
+            "🔢 Totals",
+            "📋 Saved Bets",
+        ]
+    )
+    ncaab_game_analytics_df = load_ncaab_game_analytics()
+    # Load data
+    df = ncaab_game_analytics_df.copy()
+
+    if df.empty:
+        st.info("No NCAA game analytics loaded. Make sure the loader is running.")
+        st.stop()
+
+    # -------------------------------
+    # TAB 1 — OVERVIEW CARDS
+    # -------------------------------
+    with tabN1:
+        st.subheader(f"{sport} — Game Overview")
+
+        for idx, row in df.iterrows():
+            render_ncaab_overview_card(row)
+
+    # -------------------------------
+    # TAB 2 — MONEYLINE
+    # -------------------------------
+    with tabN2:
+        st.subheader(f"{sport} — Moneyline Analysis")
+
+        ml_df = df.copy()
+
+        # Ranking metric
+        if "proj_margin" in ml_df.columns:
+            ml_df["ml_strength"] = ml_df["proj_margin"]
+        elif "predicted_margin" in ml_df.columns:
+            ml_df["ml_strength"] = ml_df["predicted_margin"]
+
+        ml_df = ml_df.sort_values("ml_strength", ascending=False)
+
+        st.dataframe(
+            ml_df[
+                [
+                    "game",
+                    "start_time",
+                    "home_team",
+                    "away_team",
+                    "home_ml",
+                    "away_ml",
+                    "proj_home_points",
+                    "proj_away_points",
+                    "proj_margin",
+                ]
+            ],
+            use_container_width=True,
+        )
+
+    # -------------------------------
+    # TAB 3 — SPREAD ANALYSIS
+    # -------------------------------
+    with tabN3:
+        st.subheader(f"{sport} — Spread Analysis")
+
+        st.dataframe(
+            df.sort_values("spread_edge", ascending=False)[
+                [
+                    "game",
+                    "start_time",
+                    "home_team",
+                    "away_team",
+                    "home_spread",
+                    "away_spread",
+                    "proj_margin",
+                    "spread_edge",
+                ]
+            ],
+            use_container_width=True,
+        )
+
+    # -------------------------------
+    # TAB 4 — TOTALS ANALYSIS
+    # -------------------------------
+    with tabN4:
+        st.subheader(f"{sport} — Total Points Analysis")
+
+        st.dataframe(
+            df.sort_values("total_edge", ascending=False)[
+                [
+                    "game",
+                    "start_time",
+                    "home_team",
+                    "away_team",
+                    "total_line",
+                    "proj_total_points",
+                    "pace_proxy",
+                    "total_edge",
+                ]
+            ],
+            use_container_width=True,
+        )
+
+    # -------------------------------
+    # TAB 5 — SAVED BETS
+    # -------------------------------
+    with tabN5:
+        render_saved_bets_tab()
 
 
 

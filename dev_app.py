@@ -227,6 +227,12 @@ def read_sheet_values(sheet_id: str, range_name: str) -> list[list[str]]:
 # ======================================================
 def render_dev_page():
     st.title("⚙️ DEV CONTROL PANEL")
+
+    current = get_mem_mb()
+    delta = current - st.session_state.mem_baseline
+
+    st.caption(f"🧠 RAM: {current:.0f} MB  ({delta:+.1f} MB)")
+    
     if st.button("⬅ Back to Main App", use_container_width=False):
         st.query_params["tab"] = "main"
         st.rerun()

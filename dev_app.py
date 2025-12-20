@@ -1759,9 +1759,12 @@ with col1:
     )
 
 with col2:
+    current = get_mem_mb()
+    delta = current - st.session_state.mem_baseline
+
     st.markdown(
         f"<div style='text-align:right; font-size:0.75rem; opacity:0.7; margin-top:28px;'>"
-        f"🧠 {get_mem_mb():.0f} MB"
+        f"🧠 {current:.0f} MB ({delta:+.1f} MB)"
         f"</div>",
         unsafe_allow_html=True,
     )

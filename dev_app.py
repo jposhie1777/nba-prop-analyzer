@@ -651,9 +651,18 @@ except Exception as e:
 # ------------------------------------------------------
 # RENDER POSTGRES CONNECTION HELPERS
 # ------------------------------------------------------
+import os
+import psycopg2
+
 def get_db_conn():
-    """Create a new PostgreSQL connection to your Render database."""
-    return psycopg2.connect(DATABASE_URL, sslmode="require")
+    """
+    Create a new Postgres connection.
+    Short-lived, DB-only, safe for Streamlit reruns.
+    """
+    return psycopg2.connect(
+        os.environ["DATABASE_URL"],
+        sslmode="require",
+    )
 
 def get_or_create_user(auth0_sub: str, email: str):
     """Ensure a user exists in the 'users' table and return the row."""

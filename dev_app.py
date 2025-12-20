@@ -224,6 +224,10 @@ def read_sheet_values(sheet_id: str, range_name: str) -> list[list[str]]:
 # ======================================================
 def render_dev_page():
     st.title("⚙️ DEV CONTROL PANEL")
+    if st.button("⬅ Back to Main App", use_container_width=False):
+        st.query_params["tab"] = "main"
+        st.rerun()
+    
     st.caption("Always available • restricted access")
 
     st.markdown(f"**Email:** `{get_user_email()}`")

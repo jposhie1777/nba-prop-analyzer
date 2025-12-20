@@ -3817,7 +3817,7 @@ def render_prop_cards(
             st.markdown(
                 f"<details class='prop-card-wrapper'>"
                 f"<summary>{base_card_html}<div class='expand-hint'>Click to expand ▾</div></summary>"
-                f"<div class='card-expanded'>{expanded_html}{save_button_html}</div>"
+                f"<div class='card-expanded'>{expanded_html}</div>"
                 f"</details>",
                 unsafe_allow_html=True,
             )

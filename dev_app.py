@@ -3781,35 +3781,19 @@ def render_prop_cards(
             # -------------------------
             # SAVE BET (NO RERUN / NO MEMORY SPIKE)
             # -------------------------
-
-            save_payload = json.dumps(
-                {
-                    "player": row.get("player"),
-                    "market": row.get("market"),
-                    "line": float(row.get("line")),
-                    "bet_type": bet_type,
-                }
-            ).replace('"', "&quot;")
-
-            save_button_html = (
-                f"<div style='display:flex; justify-content:flex-end; margin-top:10px;'>"
-                f"<button "
-                f"class='save-bet-btn' "
-                f"data-save-payload=\"{save_payload}\" "
-                f"style='"
-                f"font-size:0.75rem;"
-                f"padding:6px 10px;"
-                f"border-radius:8px;"
-                f"border:1px solid rgba(255,255,255,0.2);"
-                f"background:rgba(255,255,255,0.08);"
-                f"color:#fff;"
-                f"cursor:pointer;"
-                f"'>"
-                f"💾 Save Bet"
-                f"</button>"
-                f"</div>"
-            )
-
+            if st.button(
+                "💾 Save Bet",
+                key=f"save_{idx}_{row.get('player')}_{row.get('market')}_{row.get('line')}",
+                use_container_width=True,
+            ):
+                save_bet_for_user(
+                    user_id=user_id,
+                    player=row.get("player"),
+                    market=row.get("market"),
+                    line=float(row.get("line")),
+                    bet_type=bet_type,
+                )
+                st.toast("✅ Bet saved", icon="💾")
 
             # -------------------------
             # FULL CARD

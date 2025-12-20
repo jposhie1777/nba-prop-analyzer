@@ -3733,11 +3733,13 @@ def render_prop_cards(
 
 
             spark_vals, spark_dates = get_spark_series(row)
-            spark_html = build_sparkline_bars_hitmiss(
-                spark_vals,
-                spark_dates,
+            mem_diff("before sparkline")
+            spark_html = cached_sparkline_bars_hitmiss(
+                tuple(spark_vals),
+                tuple(spark_dates),
                 float(line or 0),
             )
+            mem_diff("after sparkline")
 
             home_logo = TEAM_LOGOS_BASE64.get(
                 normalize_team_code(row.get("player_team", "")), ""

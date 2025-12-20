@@ -1,3 +1,6 @@
+import os
+os.environ["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
+
 # ------------------------------------------------------
 # NBA Prop Analyzer - Merged Production + Dev UI
 # ------------------------------------------------------
@@ -39,10 +42,10 @@ if "mem_tracker" not in st.session_state:
 
 import gc
 
-def mem_diff(label: str):
-    gc.collect()
-    print(f"\n===== MEMORY DIFF: {label} =====")
-    st.session_state.mem_tracker.print_diff()
+#def mem_diff(label: str):
+    #gc.collect()
+    #print(f"\n===== MEMORY DIFF: {label} =====")
+    #st.session_state.mem_tracker.print_diff()
 
 # ------------------------------------------------------
 # Memory debug helper
@@ -3920,7 +3923,7 @@ def render_prop_cards(
                     line=float(row.get("line")),
                     bet_type=bet_type,
                 )
-                mem_diff("after save bet")
+                #mem_diff("after save bet")
                 
                 st.toast("✅ Bet saved", icon="💾")
 

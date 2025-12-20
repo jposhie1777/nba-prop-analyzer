@@ -132,9 +132,11 @@ def get_dev_bq_client():
 
     return bigquery.Client(credentials=creds, project=project_id)
 
-@st.cache_data(ttl=1800)
-def load_bq_df(sql: str):
-    return bq_client.query(sql).to_dataframe()
+@st.cache_data(ttl=1800, show_spinner=False)
+def load_bq_df(sql: str) -> pd.DataFrame:
+    df = bq_client.query(sql).to_dataframe()
+    df.flags.writeable = False
+    return df
 
 # ======================================================
 # DEV: Google Apps Script Trigger

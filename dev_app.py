@@ -34,17 +34,20 @@ from google.oauth2 import service_account
 
 import psutil, os
 
-import re, inspect
-
-import inspect, re
+import inspect
 
 src = inspect.getsource(inspect.getmodule(inspect.currentframe()))
 
+bad_lines = []
 for i, line in enumerate(src.splitlines(), start=1):
-    if "<script>" in line.lower():
+    if "<script>" in line.lower() and "script> FOUND" not in line:
+        bad_lines.append((i, line))
+
+if bad_lines:
+    for i, line in bad_lines:
         st.error(f"❌ <script> FOUND on line {i}")
         st.code(line)
-        st.stop()
+    st.stop()
 
 
 

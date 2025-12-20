@@ -55,8 +55,6 @@ st.sidebar.markdown("🧪 DEV_APP.PY RUNNING")
 
 IS_DEV = True
 
-st.caption(f"🧠 RAM usage: {get_mem_mb():.0f} MB")
-
 # ======================================================
 # DEV ACCESS CONTROL (EARLY)
 # ======================================================
@@ -962,6 +960,8 @@ st.sidebar.markdown(f"**User:** {user.get('email') or 'Logged in'}")
 if IS_DEV and is_dev_user():
     st.sidebar.divider()
     st.sidebar.markdown("### ⚙️ Dev Tools")
+
+    st.caption(f"🧠 RAM usage: {get_mem_mb():.0f} MB")
 
     if st.sidebar.button("Open DEV Tools"):
         st.query_params["tab"] = "dev"

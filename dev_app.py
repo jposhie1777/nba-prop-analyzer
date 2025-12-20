@@ -1725,6 +1725,33 @@ TEAM_NAME_TO_CODE = {
     "Washington Wizards": "WAS",
 }
 
+@st.cache_resource
+def load_logo_assets():
+    teams = {}
+    for code, url in TEAM_LOGOS.items():
+        try:
+            r = requests.get(url, timeout=5)
+            r.raise_for_status()
+            teams[code] = f"data:image/png;base64,{base64.b64encode(r.content).decode()}"
+        except Exception:
+            teams[code] = ""
+
+    books = {}
+    for name, path in SPORTSBOOK_LOGOS.items():
+        try:
+            with open(path, "rb") as f:
+                books[name] = f"data:image/png;base64,{base64.b64encode(f.read()).decode()}"
+        except Exception:
+            books[name] = ""
+
+    return {
+        "teams": teams,
+        "books": books,
+    }
+
+LOGOS = load_logo_assets()
+
+
 def team_abbr(team_name: str) -> str:
     """
     Returns 3-letter NBA abbreviation.
@@ -1950,28 +1977,10 @@ FILE_DIR = pathlib.Path(__file__).resolve().parent
 # Correct logo directory
 LOGO_DIR = FILE_DIR / "static" / "logos"
 
-def logo_to_base64_local(path: str) -> str:
-    try:
-        with open(path, "rb") as f:
-            encoded = base64.b64encode(f.read()).decode("utf-8")
-            return f"data:image/png;base64,{encoded}"
-    except Exception as e:
-        print(f"Error loading logo {path}: {e}")
-        return ""
-
 SPORTSBOOK_LOGOS = {
     "DraftKings": str(LOGO_DIR / "Draftkingssmall.png"),
     "FanDuel": str(LOGO_DIR / "Fanduelsmall.png"),
 }
-
-SPORTSBOOK_LOGOS_BASE64 = {
-    name: logo_to_base64_local(path)
-    for name, path in SPORTSBOOK_LOGOS.items()
-}
-
-import os
-
-
 
 MARKET_DISPLAY_MAP = {
     "player_assists_alternate": "Assists",

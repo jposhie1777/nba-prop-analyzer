@@ -1929,7 +1929,15 @@ def _pct(v):
 def _pm(v):
     return f"{v:+.1f}" if v is not None else "—"
 
+from functools import lru_cache
 
+@lru_cache(maxsize=2048)
+def cached_sparkline_bars_hitmiss(values, dates, line_value):
+    return build_sparkline_bars_hitmiss(
+        values=list(values),
+        dates=list(dates),
+        line_value=line_value,
+    )
 # ======================================================
 # WOWY market → delta column mapping
 # ======================================================

@@ -2408,43 +2408,72 @@ def format_display(df):
 # ------------------------------------------------------
 # LOAD DATA (BIGQUERY)
 # ------------------------------------------------------
-@st.cache_data(show_spinner=True)
-def load_props():
-    df = bq_client.query(PROPS_SQL).to_dataframe()
+@st.cache_data(ttl=1800, show_spinner=True)
+def load_props() -> pd.DataFrame:
+    # --------------------------------------------------
+    # Load once from BigQuery (ONLY entry point)
+    # --------------------------------------------------
+    df = load_bq_df(PROPS_SQL)
+
+    # --------------------------------------------------
+    # Column normalization (safe)
+    # --------------------------------------------------
     df.columns = df.columns.str.strip()
 
-    df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
+    # --------------------------------------------------
+    # Datetime normalization
+    # --------------------------------------------------
+    if "game_date" in df.columns:
+        df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
 
-    for col in ["home_team", "visitor_team", "opponent_team"]:
-        df[col] = df[col].fillna("").astype(str)
+    # --------------------------------------------------
+    # String normalization
+    # --------------------------------------------------
+    for col in ("home_team", "visitor_team", "opponent_team"):
+        if col in df.columns:
+            df[col] = df[col].fillna("").astype(str)
 
+    # --------------------------------------------------
     # Core numerics
-    df["price"] = pd.to_numeric(df["price"], errors="coerce")
-    df["hit_rate_last5"] = pd.to_numeric(df.get("hit_rate_last5"), errors="coerce")
-    df["hit_rate_last10"] = pd.to_numeric(df.get("hit_rate_last10"), errors="coerce")
-    df["hit_rate_last20"] = pd.to_numeric(df.get("hit_rate_last20"), errors="coerce")
+    # --------------------------------------------------
+    if "price" in df.columns:
+        df["price"] = pd.to_numeric(df["price"], errors="coerce")
 
-    # Handle renamed matchup difficulty column
+    for col in ("hit_rate_last5", "hit_rate_last10", "hit_rate_last20"):
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    # --------------------------------------------------
+    # Matchup difficulty normalization
+    # --------------------------------------------------
     if "matchup_difficulty_by_stat" in df.columns:
         df["matchup_difficulty_score"] = pd.to_numeric(
             df["matchup_difficulty_by_stat"], errors="coerce"
         )
-    else:
+    elif "matchup_difficulty_score" in df.columns:
         df["matchup_difficulty_score"] = pd.to_numeric(
-            df.get("matchup_difficulty_score"), errors="coerce"
+            df["matchup_difficulty_score"], errors="coerce"
         )
 
-    # EV & edge / projection / minutes-usage numerics
-    num_cols = [
+    # --------------------------------------------------
+    # EV / edge / projection / minutes usage numerics
+    # --------------------------------------------------
+    numeric_cols = (
         "ev_last5", "ev_last10", "ev_last20",
         "implied_prob", "edge_raw", "edge_pct",
         "proj_last10", "proj_std_last10", "proj_volatility_index",
         "proj_diff_vs_line",
         "est_minutes", "usage_bump_pct",
-    ]
-    for c in num_cols:
-        if c in df.columns:
-            df[c] = pd.to_numeric(df[c], errors="coerce")
+    )
+
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    # --------------------------------------------------
+    # 🔒 Freeze dataframe to protect cache integrity
+    # --------------------------------------------------
+    df.flags.writeable = False
 
     return df
 

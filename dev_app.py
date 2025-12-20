@@ -3057,8 +3057,19 @@ def compute_confidence(
 
     return round(score, 1), level
 
+#=================================================
+# Sparkline Variables
+#=================================================
+def get_spark_series(row, max_points: int = 12):
+    """
+    Extract sparkline values + dates for a prop.
+    Priority: L10 → L7 → L5
+    Memory-safe:
+      - hard cap on points
+      - no unbounded list growth
+      - no pandas Series expansion
+    """
 
-def get_spark_series(row):
     stat = detect_stat(row.get("market", ""))
     if not stat:
         return [], []
@@ -3073,36 +3084,36 @@ def get_spark_series(row):
         vals = row.get(val_col)
         dates = row.get(date_col)
 
-        # Skip if either side is missing
         if vals is None or dates is None:
             continue
 
-        # Coerce to plain Python lists (handles list, ndarray, Series)
+        # ---- SAFE slicing BEFORE list coercion ----
         try:
-            vals = list(vals)
-            dates = list(dates)
+            vals_slice = vals[-max_points:]
+            dates_slice = dates[-max_points:]
         except Exception:
             continue
 
-        clean = []
-        for v, d in zip(vals, dates):
-            if isinstance(v, (int, float)):
-                clean.append((v, d))
+        clean_vals = []
+        clean_dates = []
 
-        if not clean:
+        for v, d in zip(vals_slice, dates_slice):
+            if not isinstance(v, (int, float)):
+                continue
+
+            clean_vals.append(float(v))
+
+            try:
+                clean_dates.append(
+                    pd.to_datetime(d).strftime("%m/%d")
+                )
+            except Exception:
+                clean_dates.append("")
+
+        if not clean_vals:
             continue
 
-        values, raw_dates = zip(*clean)
-
-        fmt_dates = []
-        for d in raw_dates:
-            try:
-                fmt_dates.append(pd.to_datetime(d).strftime("%m/%d"))
-            except Exception:
-                fmt_dates.append("")
-
-        return list(values), fmt_dates
-
+        return clean_vals, clean_dates
 
     return [], []
 
@@ -3269,7 +3280,34 @@ def build_sparkline_bars_hitmiss(
         {''.join(date_labels)}
     </svg>
     """
-    
+
+@st.cache_data(show_spinner=False)
+def precompute_sparklines(df):
+    out = {}
+
+    for i, row in df.iterrows():
+        key = (
+            row.get("player"),
+            row.get("market"),
+            row.get("line"),
+            row.get("game_id"),
+        )
+
+        vals, dates = get_spark_series(row)
+
+        if not vals:
+            out[key] = ""
+            continue
+
+        out[key] = build_sparkline_bars_hitmiss(
+            vals,
+            dates,
+            float(row.get("line") or 0),
+        )
+
+    return out
+
+
 def market_to_prefix(market: str | None) -> str | None:
     if not market:
         return None
@@ -3707,6 +3745,12 @@ def render_prop_cards(
     ]
 
     # ------------------------------------------------------
+    # Precompute sparklines ONCE (CRITICAL for memory)
+    # ------------------------------------------------------
+    sparkline_map = precompute_sparklines(page_df)
+
+
+    # ------------------------------------------------------
     # Scroll wrapper
     # ------------------------------------------------------
     st.markdown(
@@ -3740,13 +3784,14 @@ def render_prop_cards(
 
 
 
-            spark_vals, spark_dates = get_spark_series(row)
-            mem_diff("before sparkline")
-            spark_html = cached_sparkline_bars_hitmiss(
-                tuple(spark_vals),
-                tuple(spark_dates),
-                float(line or 0),
+            spark_key = (
+                row.get("player"),
+                row.get("market"),
+                row.get("line"),
+                row.get("game_id"),
             )
+            mem_diff("before sparkline")
+            spark_html = sparkline_map.get(spark_key, "")
             mem_diff("after sparkline")
 
             home_logo = TEAM_LOGOS_BASE64.get(

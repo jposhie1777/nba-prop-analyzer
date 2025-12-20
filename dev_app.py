@@ -2124,11 +2124,6 @@ def normalize_team_code(raw: str) -> str:
 # ------------------------------------------------------
 # SESSION STATE
 # ------------------------------------------------------
-if "saved_bets" not in st.session_state:
-    st.session_state.saved_bets = []
-
-if "saved_bets_loaded" not in st.session_state:
-    st.session_state.saved_bets_loaded = False
 
 # Trend lab state (optional)
 if "trend_player" not in st.session_state:

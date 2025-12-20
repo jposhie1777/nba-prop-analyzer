@@ -707,42 +707,6 @@ def load_saved_bets_from_db(user_id: int):
         return []
 
 
-def replace_saved_bets_in_db(user_id: int, bets: list[dict]):
-    """
-    Replace all saved bets for this user with the current list in memory.
-    Simple: DELETE then INSERT.
-    """
-    try:
-        conn = get_db_conn()
-        cur = conn.cursor()
-
-        cur.execute("DELETE FROM saved_bets WHERE user_id = %s", (user_id,))
-
-        for bet in bets:
-            # Normalize 'Label' -> 'bet_type' just in case
-            if "bet_type" not in bet and "Label" in bet:
-                bet["bet_type"] = bet.pop("Label")
-
-            bet_name = (
-                f"{bet.get('player', '')} "
-                f"{bet.get('market', '')} "
-                f"{bet.get('line', '')} "
-                f"{bet.get('bet_type', '')}"
-            ).strip() or "Bet"
-
-            cur.execute(
-                """
-                INSERT INTO saved_bets (user_id, bet_name, bet_details)
-                VALUES (%s, %s, %s)
-                """,
-                (user_id, bet_name, psycopg2.extras.Json(bet)),
-            )
-
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        st.sidebar.error(f"Error saving bets to DB: {e}")
-
 def render_landing_nba_games():
     st.subheader("🏀 NBA Games Today")
 
@@ -4022,54 +3986,39 @@ for _, row in props_df.iterrows():
 # ------------------------------------------------------
 # SHARED: RENDER SAVED BETS TAB (UNIVERSAL ACROSS SPORTS)
 # ------------------------------------------------------
-def render_saved_bets_tab():
+def render_saved_bets_tab(user_id: int):
     st.subheader("Saved Bets")
 
-    if not st.session_state.saved_bets:
+    bets = get_saved_bets_for_user(user_id)
+
+    if not bets:
         st.info("No saved bets yet.")
         return
 
-    # List saved bets
-    for i, bet in enumerate(st.session_state.saved_bets):
-        col1, col2 = st.columns([8, 1])
-
-        with col1:
-            st.markdown(
-                f"""
-                **{bet.get('player', '')}**  
-                {bet.get('market', '')} **{bet.get('bet_type', '')} {bet.get('line', '')}**  
-                Odds: **{bet.get('price', '')}** — Book: **{bet.get('bookmaker', '')}**
-                """
-            )
-        with col2:
-            if st.button("❌", key=f"remove_{i}"):
-                st.session_state.saved_bets.pop(i)
-                replace_saved_bets_in_db(user_id, st.session_state.saved_bets)
-                st.rerun()
-
-    st.write("---")
-
-    if st.button("🗑️ Clear All Saved Bets"):
-        st.session_state.saved_bets = []
-        replace_saved_bets_in_db(user_id, [])
-        st.success("All saved bets cleared.")
-        st.rerun()
-
-    st.write("---")
-
-    txt_export = ""
-    for b in st.session_state.saved_bets:
-        txt_export += (
-            f"{b.get('player', '')} | {b.get('market', '')} | "
-            f"{b.get('bet_type', '')} {b.get('line', '')} | "
-            f"Odds {b.get('price', '')} | {b.get('bookmaker', '')}\n"
+    # ---------------------------
+    # Display saved bets
+    # ---------------------------
+    for bet in bets:
+        st.markdown(
+            f"""
+            **{bet['player']}**  
+            {bet['market']} **{bet['bet_type']} {bet['line']}**
+            """
         )
+        st.divider()
 
-    st.download_button(
-        "Download as Text",
-        data=txt_export,
-        file_name="saved_bets.txt",
-        mime="text/plain",
+    # ---------------------------
+    # Export (Pikkit-friendly)
+    # ---------------------------
+    export_txt = "\n".join(
+        f"{b['player']} — {b['bet_type']} {b['line']} ({b['market']})"
+        for b in bets
+    )
+
+    st.text_area(
+        "Copy for Pikkit",
+        export_txt,
+        height=200,
     )
 
 # ------------------------------------------------------

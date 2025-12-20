@@ -709,53 +709,55 @@ def render_landing_nba_games():
     ORDER BY start_time_est
     """
 
-    df = load_bq_df(sql)
+    try:
+        df = load_bq_df(sql)
+    except Exception as e:
+        st.info("NBA games for today will appear here.")
+        st.caption(str(e))
+        return
 
     if df.empty:
         st.info("No NBA games scheduled for today.")
         return
 
-        # -------------------------------
-        # Render game list cleanly
-        # -------------------------------
-        for _, g in df.iterrows():
+    # -------------------------------
+    # Render game list cleanly
+    # -------------------------------
+    for _, g in df.iterrows():
 
-            # Team logos with safe fallback
-            try:
-                away_logo = f"https://a.espncdn.com/i/teamlogos/nba/500/{int(g['visitor_team_id'])}.png"
-                home_logo = f"https://a.espncdn.com/i/teamlogos/nba/500/{int(g['home_team_id'])}.png"
-            except Exception:
-                fallback = "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
-                away_logo = home_logo = fallback
+        # Team logos with safe fallback
+        try:
+            away_logo = f"https://a.espncdn.com/i/teamlogos/nba/500/{int(g['visitor_team_id'])}.png"
+            home_logo = f"https://a.espncdn.com/i/teamlogos/nba/500/{int(g['home_team_id'])}.png"
+        except Exception:
+            fallback = "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
+            away_logo = home_logo = fallback
 
-            # Status text
-            if g.get("is_live"):
-                status = "<span style='color:#ff4d4d; font-weight:600;'>LIVE</span>"
-            elif g.get("is_upcoming"):
-                status = "<span style='color:#4dabf5; font-weight:600;'>Upcoming</span>"
-            else:
-                status = "<span style='color:#9aa4b2;'>Final</span>"
+        # Status text
+        if g.get("is_live"):
+            status = "<span style='color:#ff4d4d; font-weight:600;'>LIVE</span>"
+        elif g.get("is_upcoming"):
+            status = "<span style='color:#4dabf5; font-weight:600;'>Upcoming</span>"
+        else:
+            status = "<span style='color:#9aa4b2;'>Final</span>"
 
-            # Render card
-            st.markdown(
-                f"""
-                <div style="display:flex; align-items:center; gap:14px; margin-bottom:6px;">
-                    <img src="{away_logo}" width="44" style="border-radius:6px;" />
-                    <span style="font-weight:600;">vs</span>
-                    <img src="{home_logo}" width="44" style="border-radius:6px;" />
-                </div>
+        # Render card
+        st.markdown(
+            f"""
+            <div style="display:flex; align-items:center; gap:14px; margin-bottom:6px;">
+                <img src="{away_logo}" width="44" style="border-radius:6px;" />
+                <span style="font-weight:600;">vs</span>
+                <img src="{home_logo}" width="44" style="border-radius:6px;" />
+            </div>
 
-                <div style="color:#9aa4b2; font-size:14px; margin-bottom:4px;">
-                    {g['start_time_formatted']} ET • {status}
-                </div>
+            <div style="color:#9aa4b2; font-size:14px; margin-bottom:4px;">
+                {g['start_time_formatted']} ET • {status}
+            </div>
 
-                <div style="height:12px"></div>
-                """,
-                unsafe_allow_html=True
-            )
-
-    except Exception:
-        st.info("NBA games for today will appear here.")
+            <div style="height:12px"></div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 # ------------------------------------------------------
 # AUTH0 HELPERS (LOGIN)

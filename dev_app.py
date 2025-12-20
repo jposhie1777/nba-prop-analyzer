@@ -3953,11 +3953,20 @@ for _, row in props_df.iterrows():
 def render_saved_bets_tab(user_id: int):
     st.subheader("Saved Bets")
 
-    bets = get_saved_bets_for_user(user_id)
+    rows = get_saved_bets_for_user(user_id)
 
-    if not bets:
+    if not rows:
         st.info("No saved bets yet.")
         return
+
+    for player, market, line, bet_type in rows:
+        st.markdown(
+            f"""
+            **{player}**  
+            {market} **{bet_type} {line}**
+            """
+        )
+        st.divider()
 
     # ---------------------------
     # Display saved bets

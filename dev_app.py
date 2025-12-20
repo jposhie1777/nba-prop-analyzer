@@ -36,10 +36,16 @@ import psutil, os
 
 import re, inspect
 
+import inspect, re
+
 src = inspect.getsource(inspect.getmodule(inspect.currentframe()))
-if "<script>" in src:
-    st.error("❌ SCRIPT TAG STILL PRESENT — MEMORY WILL LEAK")
-    st.stop()
+
+for i, line in enumerate(src.splitlines(), start=1):
+    if "<script>" in line.lower():
+        st.error(f"❌ <script> FOUND on line {i}")
+        st.code(line)
+        st.stop()
+
 
 
 def mem_diff(label: str):

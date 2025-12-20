@@ -1630,29 +1630,16 @@ st.markdown(
     document.addEventListener("click", function (e) {
         const btn = e.target.closest(".save-bet-btn");
         if (!btn) return;
-
-        e.preventDefault();
-
-        const raw = btn.dataset.savePayload;
-        if (!raw) return;
-
-        const payload = raw.replace(/&quot;/g, '"');
-
+    
+        const payload = btn.dataset.savePayload.replace(/&quot;/g, '"');
+    
         fetch("/save_bet", {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: { "Content-Type": "application/json" },
             body: payload
-        })
-        .then(r => r.json())
-        .then(() => {
+        }).then(() => {
             btn.innerText = "✓ Saved";
-            btn.style.opacity = "0.6";
             btn.disabled = true;
-        })
-        .catch(err => {
-            console.error("Save failed", err);
         });
     });
     </script>

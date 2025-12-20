@@ -41,6 +41,12 @@ def get_mem_mb() -> float:
     process = psutil.Process(os.getpid())
     return process.memory_info().rss / (1024 ** 2)
 
+def mem_mb():
+    return get_mem_mb()
+    
+if "mem_baseline" not in st.session_state:
+    st.session_state.mem_baseline = mem_mb()
+
 # ------------------------------------------------------
 # STREAMLIT CONFIG (MUST BE FIRST STREAMLIT COMMAND)
 # ------------------------------------------------------
@@ -961,7 +967,10 @@ if IS_DEV and is_dev_user():
     st.sidebar.divider()
     st.sidebar.markdown("### ⚙️ Dev Tools")
 
-    st.caption(f"🧠 RAM usage: {get_mem_mb():.0f} MB")
+    current = get_mem_mb()
+    delta = current - st.session_state.mem_baseline
+
+    st.sidebar.caption(f"🧠 {current:.0f} MB  ({delta:+.1f} MB)")
 
     if st.sidebar.button("Open DEV Tools"):
         st.query_params["tab"] = "dev"

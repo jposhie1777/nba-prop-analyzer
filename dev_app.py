@@ -2180,7 +2180,22 @@ def save_bet_for_user(
     except Exception as e:
         st.sidebar.error(f"Save bet failed: {e}")
         return False
-
+        
+def get_saved_bets_for_user(user_id: int):
+    conn = get_db_conn()
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT player, market, line, bet_type
+            FROM saved_bets
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+            """,
+            (user_id,),
+        )
+        rows = cur.fetchall()
+    conn.close()
+    return rows
 
 # ------------------------------------------------------
 # UTILITY FUNCTIONS (from production)

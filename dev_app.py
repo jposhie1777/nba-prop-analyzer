@@ -3620,9 +3620,16 @@ def render_prop_cards(
         key=f"{page_key}_page",
     )
 
-    page_df = card_df.iloc[
-        (page - 1) * page_size : page * page_size
-    ]
+    if not st.session_state.saving_bet:
+        page_df = card_df.iloc[
+            (page - 1) * page_size : page * page_size
+        ]
+        st.session_state.page_df = page_df
+    else:
+        page_df = st.session_state.get("page_df", card_df.iloc[
+            (page - 1) * page_size : page * page_size
+        ])
+
 
     # ------------------------------------------------------
     # Scroll wrapper
@@ -3640,6 +3647,24 @@ def render_prop_cards(
     rows = page_df.to_dict("records")
 
     for idx, row in enumerate(rows):
+
+        # 🔒 CRITICAL: Skip analytics during Save Bet reruns
+        if st.session_state.saving_bet:
+            with cols[idx % 4]:
+                st.markdown(
+                    f"""
+                    <div class="prop-card">
+                        <div class="prop-player">{row.get("player")}</div>
+                        <div class="prop-market">
+                            {MARKET_DISPLAY_MAP.get(row.get("market"), row.get("market"))}
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            continue
+
+        # 👇 Normal heavy render path (only when NOT saving)
         with cols[idx % 4]:
 
             player = row.get("player") or ""
@@ -3671,6 +3696,7 @@ def render_prop_cards(
             opp_logo = LOGOS["teams"].get(
                 normalize_team_code(row.get("opponent_team", "")), ""
             )
+
 
 
             # -------------------------

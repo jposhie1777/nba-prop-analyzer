@@ -3845,7 +3845,7 @@ def render_prop_cards(
                 f"</div>"
             )
 
-
+            mem_diff("after expanded_html build")
             # -------------------------
             # SAVE BET (NO RERUN / NO MEMORY SPIKE)
             # -------------------------

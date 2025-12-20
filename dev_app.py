@@ -3861,6 +3861,8 @@ def render_prop_cards(
                     line=float(row.get("line")),
                     bet_type=bet_type,
                 )
+                mem_diff("after save bet")
+                
                 st.toast("✅ Bet saved", icon="💾")
 
             # -------------------------

@@ -1656,7 +1656,7 @@ st.title("Pulse Sports Analytics")
 
 
 # ------------------------------------------------------
-# LOGOS (STATIC)
+# LOGOS (STATIC METADATA ONLY)
 # ------------------------------------------------------
 TEAM_LOGOS = {
     "ATL": "https://a.espncdn.com/i/teamlogos/nba/500/atl.png",
@@ -1723,6 +1723,18 @@ TEAM_NAME_TO_CODE = {
     "Toronto Raptors": "TOR",
     "Utah Jazz": "UTA",
     "Washington Wizards": "WAS",
+}
+
+
+# Directory containing this Python file
+FILE_DIR = pathlib.Path(__file__).resolve().parent
+
+# Correct logo directory
+LOGO_DIR = FILE_DIR / "static" / "logos"
+
+SPORTSBOOK_LOGOS = {
+    "DraftKings": str(LOGO_DIR / "Draftkingssmall.png"),
+    "FanDuel": str(LOGO_DIR / "Fanduelsmall.png"),
 }
 
 @st.cache_resource
@@ -1971,16 +1983,6 @@ import os
 import base64
 import pathlib
 
-# Directory containing this Python file
-FILE_DIR = pathlib.Path(__file__).resolve().parent
-
-# Correct logo directory
-LOGO_DIR = FILE_DIR / "static" / "logos"
-
-SPORTSBOOK_LOGOS = {
-    "DraftKings": str(LOGO_DIR / "Draftkingssmall.png"),
-    "FanDuel": str(LOGO_DIR / "Fanduelsmall.png"),
-}
 
 MARKET_DISPLAY_MAP = {
     "player_assists_alternate": "Assists",

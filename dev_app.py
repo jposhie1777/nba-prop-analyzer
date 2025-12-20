@@ -1548,31 +1548,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.markdown(
-    """
-    <script>
-    document.addEventListener("click", function (e) {
-        const btn = e.target.closest(".save-bet-btn");
-        if (!btn) return;
-    
-        const payload = btn.dataset.savePayload.replace(/&quot;/g, '"');
-    
-        fetch("/save_bet", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: payload
-        }).then(() => {
-            btn.innerText = "✓ Saved";
-            btn.disabled = true;
-        });
-    });
-    </script>
-    """,
-    unsafe_allow_html=True,
-)
-
-
-
 # ------------------------------------------------------
 # AG-GRID MOBILE FIX (separate block)
 # ------------------------------------------------------
@@ -1645,22 +1620,6 @@ st.markdown("""
     background-color: rgba(60, 60, 60, 0.9);
 }
 </style>
-
-<script>
-window.addEventListener('scroll', function() {
-    const btn = document.getElementById('scrollTopBtn');
-    if (btn) {
-        if (window.scrollY > 400) {
-            btn.style.display = "block";
-        } else {
-            btn.style.display = "none";
-        }
-    }
-});
-function scrollToTop() {
-    window.scrollTo({top: 0, behavior: 'smooth'});
-}
-</script>
 
 <div id="scrollTopBtn" onclick="scrollToTop()">▲ Top</div>
 """, unsafe_allow_html=True)
@@ -5736,34 +5695,18 @@ if sport == "NBA":
         # --------------------------------------------------
         # SELECT ALL & COPY BUTTON (JS - works on iPhone)
         # --------------------------------------------------
-        components.html(
-            f"""
-            <script>
-                function copyPikkit() {{
-                    const ta = parent.document.querySelector('textarea[id="pikkit_textbox"]');
-                    if (!ta) return;
-                    ta.focus();
-                    ta.select();
-                    document.execCommand('copy');
-                }}
-            </script>
-
-            <button onclick="copyPikkit()"
-                style="
-                    background-color:#4CAF50;
-                    color:white;
-                    padding:10px 18px;
-                    font-size:16px;
-                    border:none;
-                    border-radius:8px;
-                    cursor:pointer;
-                    margin-top:5px;
-                ">
-                📋 Select All & Copy
-            </button>
-            """,
-            height=70,
+        st.text_area(
+            "Pikkit Export",
+            pikkit_text,
+            key="pikkit_textbox",
+            height=120,
         )
+
+        st.button(
+            "📋 Copy",
+            help="Click inside the text box, then press Ctrl+C / Cmd+C",
+        )
+
 
         # --------------------------------------------------
         # OPEN PIKKIT BUTTON (Universal Link)

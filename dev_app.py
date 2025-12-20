@@ -655,44 +655,6 @@ def get_db_conn():
     """Create a new PostgreSQL connection to your Render database."""
     return psycopg2.connect(DATABASE_URL, sslmode="require")
 
-
-def init_db_schema():
-    """Create tables if they don't exist. Safe to run on every startup."""
-    try:
-        conn = get_db_conn()
-        cur = conn.cursor()
-
-        cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                auth0_sub TEXT UNIQUE NOT NULL,
-                email TEXT
-            );
-            """
-        )
-
-        cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS saved_bets (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER REFERENCES users(id),
-                bet_name TEXT,
-                bet_details JSONB,
-                created_at TIMESTAMP DEFAULT NOW()
-            );
-            """
-        )
-
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        st.sidebar.error(f"DB init error: {e}")
-
-
-init_db_schema()
-
-
 def get_or_create_user(auth0_sub: str, email: str):
     """Ensure a user exists in the 'users' table and return the row."""
     conn = get_db_conn()

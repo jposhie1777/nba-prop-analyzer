@@ -3625,7 +3625,9 @@ def render_prop_cards(
     # ======================================================
     # CARD LOOP
     # ======================================================
-    for idx, row in page_df.iterrows():
+    rows = page_df.to_dict("records")
+
+    for idx, row in enumerate(rows):
         with cols[idx % 4]:
 
             player = row.get("player") or ""
@@ -3641,10 +3643,8 @@ def render_prop_cards(
             opp_rank = get_opponent_rank(row)
             rank_display = opp_rank if isinstance(opp_rank, int) else "-"
             rank_color = rank_to_color(opp_rank) if isinstance(opp_rank, int) else "#9ca3af"
-           
+
             stat_prefix = detect_stat(row.get("market"))
-
-
 
             spark_vals, spark_dates = get_spark_series(row)
             spark_html = build_sparkline_bars_hitmiss(
@@ -3653,12 +3653,13 @@ def render_prop_cards(
                 float(line or 0),
             )
 
-            home_logo = TEAM_LOGOS_BASE64.get(
+            home_logo = LOGOS["teams"].get(
                 normalize_team_code(row.get("player_team", "")), ""
             )
-            opp_logo = TEAM_LOGOS_BASE64.get(
+            opp_logo = LOGOS["teams"].get(
                 normalize_team_code(row.get("opponent_team", "")), ""
             )
+
 
             # -------------------------
             # Book prices

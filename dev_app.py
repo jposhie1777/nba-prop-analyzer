@@ -34,6 +34,14 @@ from google.oauth2 import service_account
 
 import psutil, os
 
+import re, inspect
+
+src = inspect.getsource(inspect.getmodule(inspect.currentframe()))
+if "<script>" in src:
+    st.error("❌ SCRIPT TAG STILL PRESENT — MEMORY WILL LEAK")
+    st.stop()
+
+
 def mem_diff(label: str):
     rss_mb = psutil.Process(os.getpid()).memory_info().rss / (1024**2)
     print(f"\n===== MEM (RSS) {label}: {rss_mb:,.1f} MB =====")
@@ -1464,22 +1472,6 @@ st.markdown(
         font-size: 0.7rem;
         opacity: 0.65;
         margin-top: 6px;
-    }}
-
-    /* Save Bet button */
-    .save-bet-btn {{
-        background: #2563eb;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 6px 12px;
-        font-size: 0.8rem;
-        font-weight: 700;
-        cursor: pointer;
-    }}
-
-    .save-bet-btn:hover {{
-        background: #1d4ed8;
     }}
     </style>
     """,

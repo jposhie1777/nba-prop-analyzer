@@ -175,20 +175,17 @@ def trigger_apps_script(task: str):
         st.error("❌ Apps Script trigger failed")
         st.code(str(e))
 
-@st.cache_data(show_spinner=False)
-def get_table_schema(dataset: str, table: str):
-    client = get_dev_bq_client()
-
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_table_schema(dataset: str, table: str) -> pd.DataFrame:
     query = f"""
-    SELECT
-        column_name,
-        data_type
+    SELECT column_name, data_type
     FROM `{dataset}.INFORMATION_SCHEMA.COLUMNS`
     WHERE table_name = '{table}'
     ORDER BY ordinal_position
     """
-
-    return client.query(query).to_dataframe()
+    df = load_bq_df(query)
+    df.flags.writeable = False
+    return df
 
 # ======================================================
 # DEV: BigQuery Stored Procedure Trigger (SAFE)

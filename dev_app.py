@@ -1740,11 +1740,22 @@ function scrollToTop() {
 # ------------------------------------------------------
 # SPORT SELECTOR (TOP, ABOVE HEADER)
 # ------------------------------------------------------
-sport = st.selectbox(
-    "Sport",
-    ["NBA", "NCAA Men's"],
-    index=0,
-)
+col1, col2 = st.columns([4, 1])
+
+with col1:
+    sport = st.selectbox(
+        "Sport",
+        ["NBA", "NCAA Men's"],
+        index=0,
+    )
+
+with col2:
+    st.markdown(
+        f"<div style='text-align:right; font-size:0.75rem; opacity:0.7; margin-top:28px;'>"
+        f"🧠 {get_mem_mb():.0f} MB"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
 
 
 # ------------------------------------------------------

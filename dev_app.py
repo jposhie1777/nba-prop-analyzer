@@ -707,7 +707,11 @@ def render_landing_nba_games():
         ORDER BY start_time_est
         """
 
-        df = bq_client.query(sql).to_dataframe()
+        @st.cache_data(ttl=1800)
+        def load_props_df(sql: str):
+            return bq_client.query(sql).to_dataframe()
+        
+        df = load_props_df(sql)
 
         if df.empty:
             st.info("No NBA games scheduled for today.")

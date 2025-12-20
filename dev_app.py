@@ -2148,14 +2148,6 @@ if "trend_bet_type" not in st.session_state:
 if "open_prop_card" not in st.session_state:
     st.session_state.open_prop_card = None
 
-
-# Load saved bets once per session, after we know user_id
-if not st.session_state.saved_bets_loaded:
-    st.session_state.saved_bets = load_saved_bets_from_db(user_id)
-    st.session_state.saved_bets_loaded = True
-
-
-
 def save_bet_for_user(
     *,
     user_id: int,

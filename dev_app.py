@@ -49,7 +49,26 @@ if bad_lines:
         st.code(line)
     st.stop()
 
+import gc
+import tracemalloc
+import psutil
+import os
+from collections import Counter
 
+PROCESS = psutil.Process(os.getpid())
+
+def mem_rss_mb():
+    return PROCESS.memory_info().rss / (1024 ** 2)
+
+def snapshot(label: str):
+    gc.collect()
+    rss = mem_rss_mb()
+    print(f"\n🧠 [{label}] RSS: {rss:.2f} MB")
+    return rss
+    
+if "tracemalloc_started" not in st.session_state:
+    tracemalloc.start(25)
+    st.session_state.tracemalloc_started = True
 
 def mem_diff(label: str):
     rss_mb = psutil.Process(os.getpid()).memory_info().rss / (1024**2)

@@ -32,73 +32,11 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
-# ======================================================
-# DEBUG SWITCHES
-# ======================================================
-DEBUG_SAVE_BET = True   # turn ON only while debugging save bet
-
-# ======================================================
-# MEMORY FORENSICS (SAVE BET ONLY)
-# ======================================================
-import gc
-import tracemalloc
-import psutil
-import os
-
-PROCESS = psutil.Process(os.getpid())
-
-def mem_rss_mb():
-    return PROCESS.memory_info().rss / (1024 ** 2)
-
-def snapshot(label: str):
-    gc.collect()
-    rss = mem_rss_mb()
-    print(f"\n🧠 [{label}] RSS: {rss:.2f} MB")
-    return rss
-
-# ---- START TRACING ONLY IF DEBUGGING SAVE BET ----
-if DEBUG_SAVE_BET:
-    if "tracemalloc_started" not in st.session_state:
-        tracemalloc.start(25)
-        st.session_state.tracemalloc_started = True
-
-if DEBUG_SAVE_BET:
-    if "last_rss" not in st.session_state:
-        st.session_state.last_rss = mem_rss_mb()
-
-    current_rss = mem_rss_mb()
-    delta_rss = current_rss - st.session_state.last_rss
-    print(f"🔁 RERUN MEMORY DELTA: {delta_rss:+.2f} MB")
-
-    st.session_state.last_rss = current_rss
-
-def mem_diff(label: str):
-    rss_mb = psutil.Process(os.getpid()).memory_info().rss / (1024**2)
-    print(f"\n===== MEM (RSS) {label}: {rss_mb:,.1f} MB =====")
-
-
-import gc
 
 #def mem_diff(label: str):
     #gc.collect()
     #print(f"\n===== MEMORY DIFF: {label} =====")
     #st.session_state.mem_tracker.print_diff()
-
-# ------------------------------------------------------
-# Memory debug helper
-# ------------------------------------------------------
-import psutil
-import os
-
-def get_mem_mb() -> float:
-    process = psutil.Process(os.getpid())
-    return process.memory_info().rss / (1024 ** 2)
-
-def mem_mb():
-    return get_mem_mb()
-    
-if "mem_baseline" not in st.session_state:
-    st.session_state.mem_baseline = mem_mb()
 
 # ------------------------------------------------------
 # STREAMLIT CONFIG (MUST BE FIRST STREAMLIT COMMAND)

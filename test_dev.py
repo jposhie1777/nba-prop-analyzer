@@ -636,47 +636,18 @@ except Exception as e:
 # ------------------------------------------------------
 # RENDER POSTGRES CONNECTION HELPERS
 # ------------------------------------------------------
+import os
+import psycopg2
+
 def get_db_conn():
-    """Create a new PostgreSQL connection to your Render database."""
-    return psycopg2.connect(DATABASE_URL, sslmode="require")
-
-
-def init_db_schema():
-    """Create tables if they don't exist. Safe to run on every startup."""
-    try:
-        conn = get_db_conn()
-        cur = conn.cursor()
-
-        cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                auth0_sub TEXT UNIQUE NOT NULL,
-                email TEXT
-            );
-            """
-        )
-
-        cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS saved_bets (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER REFERENCES users(id),
-                bet_name TEXT,
-                bet_details JSONB,
-                created_at TIMESTAMP DEFAULT NOW()
-            );
-            """
-        )
-
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        st.sidebar.error(f"DB init error: {e}")
-
-
-init_db_schema()
-
+    """
+    Create a new Postgres connection.
+    Short-lived, DB-only, safe for Streamlit reruns.
+    """
+    return psycopg2.connect(
+        os.environ["DATABASE_URL"],
+        sslmode="require",
+    )
 
 def get_or_create_user(auth0_sub: str, email: str):
     """Ensure a user exists in the 'users' table and return the row."""
@@ -700,140 +671,75 @@ def get_or_create_user(auth0_sub: str, email: str):
     return row
 
 
-def load_saved_bets_from_db(user_id: int):
-    """
-    Load saved bets from DB as a list of dicts.
-    Normalize any old 'Label' keys to 'bet_type'.
-    """
-    try:
-        conn = get_db_conn()
-        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cur.execute(
-            "SELECT bet_details FROM saved_bets WHERE user_id = %s ORDER BY created_at DESC",
-            (user_id,),
-        )
-        rows = cur.fetchall()
-        conn.close()
-
-        bets = []
-        for r in rows:
-            details = r.get("bet_details")
-            if isinstance(details, dict):
-                # Normalize: if old 'Label' is present, map it to 'bet_type'
-                if "bet_type" not in details and "Label" in details:
-                    details["bet_type"] = details.pop("Label")
-
-                bets.append(details)
-        return bets
-    except Exception as e:
-        st.sidebar.warning(f"Could not load saved bets from DB: {e}")
-        return []
-
-
-def replace_saved_bets_in_db(user_id: int, bets: list[dict]):
-    """
-    Replace all saved bets for this user with the current list in memory.
-    Simple: DELETE then INSERT.
-    """
-    try:
-        conn = get_db_conn()
-        cur = conn.cursor()
-
-        cur.execute("DELETE FROM saved_bets WHERE user_id = %s", (user_id,))
-
-        for bet in bets:
-            # Normalize 'Label' -> 'bet_type' just in case
-            if "bet_type" not in bet and "Label" in bet:
-                bet["bet_type"] = bet.pop("Label")
-
-            bet_name = (
-                f"{bet.get('player', '')} "
-                f"{bet.get('market', '')} "
-                f"{bet.get('line', '')} "
-                f"{bet.get('bet_type', '')}"
-            ).strip() or "Bet"
-
-            cur.execute(
-                """
-                INSERT INTO saved_bets (user_id, bet_name, bet_details)
-                VALUES (%s, %s, %s)
-                """,
-                (user_id, bet_name, psycopg2.extras.Json(bet)),
-            )
-
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        st.sidebar.error(f"Error saving bets to DB: {e}")
-
 def render_landing_nba_games():
     st.subheader("🏀 NBA Games Today")
 
+    sql = """
+    SELECT
+        game_id,
+        game_date,
+        start_time_est,
+        start_time_formatted,
+        home_team,
+        visitor_team,
+        home_team_id,
+        visitor_team_id,
+        is_live,
+        is_upcoming
+    FROM `nba_prop_analyzer.game_report`
+    WHERE game_date = CURRENT_DATE("America/New_York")
+    ORDER BY start_time_est
+    """
+
     try:
-        sql = """
-        SELECT
-            game_id,
-            game_date,
-            start_time_est,
-            start_time_formatted,
-            home_team,
-            visitor_team,
-            home_team_id,
-            visitor_team_id,
-            is_live,
-            is_upcoming
-        FROM `nba_prop_analyzer.game_report`
-        WHERE game_date = CURRENT_DATE("America/New_York")
-        ORDER BY start_time_est
-        """
-
-        df = bq_client.query(sql).to_dataframe()
-
-        if df.empty:
-            st.info("No NBA games scheduled for today.")
-            return
-
-        # -------------------------------
-        # Render game list cleanly
-        # -------------------------------
-        for _, g in df.iterrows():
-
-            # Team logos with safe fallback
-            try:
-                away_logo = f"https://a.espncdn.com/i/teamlogos/nba/500/{int(g['visitor_team_id'])}.png"
-                home_logo = f"https://a.espncdn.com/i/teamlogos/nba/500/{int(g['home_team_id'])}.png"
-            except Exception:
-                fallback = "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
-                away_logo = home_logo = fallback
-
-            # Status text
-            if g.get("is_live"):
-                status = "<span style='color:#ff4d4d; font-weight:600;'>LIVE</span>"
-            elif g.get("is_upcoming"):
-                status = "<span style='color:#4dabf5; font-weight:600;'>Upcoming</span>"
-            else:
-                status = "<span style='color:#9aa4b2;'>Final</span>"
-
-            # Render card
-            st.markdown(
-                f"""
-                <div style="display:flex; align-items:center; gap:14px; margin-bottom:6px;">
-                    <img src="{away_logo}" width="44" style="border-radius:6px;" />
-                    <span style="font-weight:600;">vs</span>
-                    <img src="{home_logo}" width="44" style="border-radius:6px;" />
-                </div>
-
-                <div style="color:#9aa4b2; font-size:14px; margin-bottom:4px;">
-                    {g['start_time_formatted']} ET • {status}
-                </div>
-
-                <div style="height:12px"></div>
-                """,
-                unsafe_allow_html=True
-            )
-
-    except Exception:
+        df = load_bq_df(sql)
+    except Exception as e:
         st.info("NBA games for today will appear here.")
+        st.caption(str(e))
+        return
+
+    if df.empty:
+        st.info("No NBA games scheduled for today.")
+        return
+
+    # -------------------------------
+    # Render game list cleanly
+    # -------------------------------
+    for _, g in df.iterrows():
+
+        # Team logos with safe fallback
+        try:
+            away_logo = f"https://a.espncdn.com/i/teamlogos/nba/500/{int(g['visitor_team_id'])}.png"
+            home_logo = f"https://a.espncdn.com/i/teamlogos/nba/500/{int(g['home_team_id'])}.png"
+        except Exception:
+            fallback = "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
+            away_logo = home_logo = fallback
+
+        # Status text
+        if g.get("is_live"):
+            status = "<span style='color:#ff4d4d; font-weight:600;'>LIVE</span>"
+        elif g.get("is_upcoming"):
+            status = "<span style='color:#4dabf5; font-weight:600;'>Upcoming</span>"
+        else:
+            status = "<span style='color:#9aa4b2;'>Final</span>"
+
+        # Render card
+        st.markdown(
+            f"""
+            <div style="display:flex; align-items:center; gap:14px; margin-bottom:6px;">
+                <img src="{away_logo}" width="44" style="border-radius:6px;" />
+                <span style="font-weight:600;">vs</span>
+                <img src="{home_logo}" width="44" style="border-radius:6px;" />
+            </div>
+
+            <div style="color:#9aa4b2; font-size:14px; margin-bottom:4px;">
+                {g['start_time_formatted']} ET • {status}
+            </div>
+
+            <div style="height:12px"></div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 # ------------------------------------------------------
 # AUTH0 HELPERS (LOGIN)
@@ -914,47 +820,35 @@ def ensure_logged_in():
         st.stop()
 
 # ------------------------------------------------------
-# AUTH FLOW – HANDLE AUTH0 CALLBACK FIRST
+# AUTH FLOW
 # ------------------------------------------------------
-ensure_logged_in()
+if IS_DEV:
+    st.session_state["user"] = {
+        "auth0_sub": "dev-user",
+        "email": "benvrana@bottleking.com",
+    }
+    st.session_state["user_id"] = -1
+else:
+    ensure_logged_in()
 
 # ------------------------------------------------------
-# NOT LOGGED IN → SHOW LANDING SCREEN (ONLY PLACE)
+# NOT LOGGED IN → SHOW LANDING SCREEN (PROD ONLY)
 # ------------------------------------------------------
-if "user" not in st.session_state:
+if not IS_DEV and "user" not in st.session_state:
     st.title("Pulse Sports Analytics")
     st.caption("Daily games, props, trends, and analytics")
 
-    # 🔐 LOGIN CTA — TOP & PROMINENT
     login_url = get_auth0_authorize_url()
     st.markdown(
         f"""
-        <div style="
-            margin: 14px 0 22px 0;
-            padding: 14px 18px;
-            border-radius: 14px;
-            border: 1px solid rgba(148,163,184,0.35);
-            background: radial-gradient(circle at top left, rgba(15,23,42,0.95), rgba(15,23,42,0.85));
-            box-shadow: 0 16px 40px rgba(15,23,42,0.9);
-            text-align: center;
-        ">
-            <a href="{login_url}"
-               style="
-                   font-size: 1rem;
-                   font-weight: 700;
-                   color: #38bdf8;
-                   text-decoration: none;
-               ">
-                🔐 Log in with Auth0
-            </a>
+        <div style="margin: 14px 0;">
+            <a href="{login_url}">🔐 Log in with Auth0</a>
         </div>
         """,
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
 
-    # 🏀 Games list
     render_landing_nba_games()
-
     st.stop()
 
 # ------------------------------------------------------
@@ -963,6 +857,19 @@ if "user" not in st.session_state:
 user = st.session_state["user"]
 user_id = st.session_state["user_id"]
 st.sidebar.markdown(f"**User:** {user.get('email') or 'Logged in'}")
+
+
+# ------------------------------------------------------
+# DEV TOOLS UI TAB (VISUAL ONLY)
+# ------------------------------------------------------
+if IS_DEV and is_dev_user():
+    st.sidebar.divider()
+    st.sidebar.markdown("### ⚙️ Dev Tools")
+
+    if st.sidebar.button("Open DEV Tools"):
+        st.query_params["tab"] = "dev"
+        st.rerun()
+
 
 
 # ------------------------------------------------------

@@ -32,28 +32,18 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
-import psutil, os
+# ======================================================
+# DEBUG SWITCHES
+# ======================================================
+DEBUG_SAVE_BET = True   # turn ON only while debugging save bet
 
-import inspect
-
-src = inspect.getsource(inspect.getmodule(inspect.currentframe()))
-
-bad_lines = []
-for i, line in enumerate(src.splitlines(), start=1):
-    if "<script>" in line.lower() and "script> FOUND" not in line:
-        bad_lines.append((i, line))
-
-if bad_lines:
-    for i, line in bad_lines:
-        st.error(f"❌ <script> FOUND on line {i}")
-        st.code(line)
-    st.stop()
-
+# ======================================================
+# MEMORY FORENSICS (SAVE BET ONLY)
+# ======================================================
 import gc
 import tracemalloc
 import psutil
 import os
-from collections import Counter
 
 PROCESS = psutil.Process(os.getpid())
 
@@ -65,20 +55,22 @@ def snapshot(label: str):
     rss = mem_rss_mb()
     print(f"\n🧠 [{label}] RSS: {rss:.2f} MB")
     return rss
-    
-if "tracemalloc_started" not in st.session_state:
-    tracemalloc.start(25)
-    st.session_state.tracemalloc_started = True
 
-if "last_rss" not in st.session_state:
-    st.session_state.last_rss = mem_rss_mb()
+# ---- START TRACING ONLY IF DEBUGGING SAVE BET ----
+if DEBUG_SAVE_BET:
+    if "tracemalloc_started" not in st.session_state:
+        tracemalloc.start(25)
+        st.session_state.tracemalloc_started = True
 
-current_rss = mem_rss_mb()
-delta = current_rss - st.session_state.last_rss
+if DEBUG_SAVE_BET:
+    if "last_rss" not in st.session_state:
+        st.session_state.last_rss = mem_rss_mb()
 
-print(f"🔁 RERUN MEMORY DELTA: {delta:+.2f} MB")
+    current_rss = mem_rss_mb()
+    delta_rss = current_rss - st.session_state.last_rss
+    print(f"🔁 RERUN MEMORY DELTA: {delta_rss:+.2f} MB")
 
-st.session_state.last_rss = current_rss
+    st.session_state.last_rss = current_rss
 
 def mem_diff(label: str):
     rss_mb = psutil.Process(os.getpid()).memory_info().rss / (1024**2)

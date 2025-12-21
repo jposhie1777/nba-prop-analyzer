@@ -32,6 +32,27 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
+
+
+#def mem_diff(label: str):
+    #gc.collect()
+    #print(f"\n===== MEMORY DIFF: {label} =====")
+    #st.session_state.mem_tracker.print_diff()
+
+# ------------------------------------------------------
+# STREAMLIT CONFIG (MUST BE FIRST STREAMLIT COMMAND)
+# ------------------------------------------------------
+st.set_page_config(
+    page_title="NBA Prop Analyzer (DEV)",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
+# ✅ OK to call Streamlit stuff AFTER set_page_config
+st.sidebar.markdown("🧪 DEV_APP.PY RUNNING")
+
+IS_DEV = True
+
 import tracemalloc
 tracemalloc.start()
 
@@ -84,25 +105,6 @@ if (!window.__SAVE_BOUND__) {
 """,
 unsafe_allow_html=True
 )
-
-#def mem_diff(label: str):
-    #gc.collect()
-    #print(f"\n===== MEMORY DIFF: {label} =====")
-    #st.session_state.mem_tracker.print_diff()
-
-# ------------------------------------------------------
-# STREAMLIT CONFIG (MUST BE FIRST STREAMLIT COMMAND)
-# ------------------------------------------------------
-st.set_page_config(
-    page_title="NBA Prop Analyzer (DEV)",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
-
-# ✅ OK to call Streamlit stuff AFTER set_page_config
-st.sidebar.markdown("🧪 DEV_APP.PY RUNNING")
-
-IS_DEV = True
 
 # ======================================================
 # DEV ACCESS CONTROL (EARLY)

@@ -277,11 +277,6 @@ def read_sheet_values(sheet_id: str, range_name: str) -> list[list[str]]:
 # ======================================================
 def render_dev_page():
     st.title("⚙️ DEV CONTROL PANEL")
-
-    current = get_mem_mb()
-    delta = current - st.session_state.mem_baseline
-
-    st.caption(f"🧠 RAM: {current:.0f} MB  ({delta:+.1f} MB)")
     
     if st.button("⬅ Back to Main App", use_container_width=False):
         st.query_params["tab"] = "main"
@@ -928,11 +923,6 @@ st.sidebar.markdown(f"**User:** {user.get('email') or 'Logged in'}")
 if IS_DEV and is_dev_user():
     st.sidebar.divider()
     st.sidebar.markdown("### ⚙️ Dev Tools")
-
-    current = get_mem_mb()
-    delta = current - st.session_state.mem_baseline
-
-    st.sidebar.caption(f"🧠 {current:.0f} MB  ({delta:+.1f} MB)")
 
     if st.sidebar.button("Open DEV Tools"):
         st.query_params["tab"] = "dev"
@@ -1649,17 +1639,7 @@ with col1:
         ["NBA", "NCAA Men's"],
         index=0,
     )
-
-with col2:
-    current = get_mem_mb()
-    delta = current - st.session_state.mem_baseline
-
-    st.markdown(
-        f"<div style='text-align:right; font-size:0.75rem; opacity:0.7; margin-top:28px;'>"
-        f"🧠 {current:.0f} MB ({delta:+.1f} MB)"
-        f"</div>",
-        unsafe_allow_html=True,
-    )
+)
 
 
 # ------------------------------------------------------

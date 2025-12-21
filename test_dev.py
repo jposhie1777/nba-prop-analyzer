@@ -29,6 +29,12 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
+import psutil
+import os
+
+def get_mem_mb():
+    process = psutil.Process(os.getpid())
+    return process.memory_info().rss / (1024 * 1024)
 
 
 #def mem_diff(label: str):
@@ -1533,6 +1539,18 @@ sport = st.selectbox(
     index=0,
 )
 
+# -----------------------------
+# MEMORY USAGE (SINGLE SOURCE)
+# -----------------------------
+if IS_DEV:
+    mem_placeholder = st.empty()
+
+    def render_memory():
+        mem_placeholder.caption(
+            f"🧠 Current memory usage: `{get_mem_mb():.1f} MB`"
+        )
+
+    render_memory()
 
 # ------------------------------------------------------
 # HEADER

@@ -32,6 +32,41 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
+import tracemalloc
+tracemalloc.start()
+
+if "rerun_count" not in st.session_state:
+    st.session_state.rerun_count = 0
+
+st.session_state.rerun_count += 1
+st.caption(f"🔁 Rerun #{st.session_state.rerun_count}")
+
+st.markdown(
+"""
+<script>
+if (!window.__SAVE_BOUND__) {
+    window.__SAVE_BOUND__ = true;
+
+    document.addEventListener("click", (e) => {
+        const btn = e.target.closest(".save-bet-btn");
+        if (!btn) return;
+
+        console.count("🔥 save-bet handler fired");
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        fetch("/save_bet", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: btn.dataset.savePayload
+        });
+    });
+}
+</script>
+""",
+unsafe_allow_html=True
+)
 
 #def mem_diff(label: str):
     #gc.collect()
@@ -3820,16 +3855,32 @@ def render_prop_cards(
 
             
             # -------------------------
-            # SAVE BET (NO RERUN / NO MEMORY SPIKE)
+            # SAVE BET (FORENSIC DEBUG)
             # -------------------------
             if st.button("💾 Save Bet", key=f"save_{idx}"):
-
-                rss_before = snapshot("SAVE_CLICK_BEFORE")
             
-                # ---- TRACE PYTHON ALLOCATIONS (before) ----
-                snap_before = tracemalloc.take_snapshot()
+                st.markdown("## 🧪 SAVE BET DEBUG")
             
-                # ---- ACTUAL SAVE LOGIC ----
+                # ---- RERUN CHECK ----
+                st.write(f"🔁 Rerun #: {st.session_state.get('rerun_count')}")
+            
+                # ---- SESSION STATE BEFORE ----
+                state_before = session_state_sizes()
+            
+                # ---- HEAP BEFORE ----
+                dump_heap("BEFORE save_bet")
+            
+                # ---- PAYLOAD VISIBILITY (CRITICAL) ----
+                payload_preview = {
+                    "player": player,
+                    "market": market,
+                    "line": line,
+                    "bet_type": bet_type,
+                }
+                payload_size_kb = len(json.dumps(payload_preview)) / 1024
+                st.warning(f"📦 Save payload size: {payload_size_kb:.2f} KB")
+            
+                # ---- ACTUAL SAVE ----
                 save_bet_for_user(
                     user_id=user_id,
                     player=player,
@@ -3838,22 +3889,25 @@ def render_prop_cards(
                     bet_type=bet_type,
                 )
             
-                # ---- TRACE AFTER SAVE ----
-                snap_after = tracemalloc.take_snapshot()
-                rss_after = snapshot("SAVE_CLICK_AFTER")
+                # ---- SESSION STATE AFTER ----
+                state_after = session_state_sizes()
             
-                # ---- DIFF TOP ALLOCATIONS ----
-                top_stats = snap_after.compare_to(snap_before, "lineno")
+                delta = {
+                    k: state_after.get(k, 0) - state_before.get(k, 0)
+                    for k in state_after
+                    if state_after.get(k, 0) - state_before.get(k, 0) > 1024
+                }
             
-                print("\n🔥 TOP MEMORY ALLOCATIONS (SAVE BET)")
-                for stat in top_stats[:10]:
-                    print(stat)
+                if delta:
+                    st.error("📈 SESSION STATE GROWTH (bytes)")
+                    st.json(delta)
+                else:
+                    st.success("✅ No meaningful session_state growth")
             
-                print(
-                    f"\n📈 SAVE BET DELTA: {rss_after - rss_before:+.2f} MB"
-                )
+                # ---- HEAP AFTER ----
+                dump_heap("AFTER save_bet")
             
-                st.toast("Saved (debug logged)", icon="🧪")
+                st.toast("Saved (debug complete)", icon="🧪")
 
             # -------------------------
             # FULL CARD

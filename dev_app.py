@@ -70,6 +70,16 @@ if "tracemalloc_started" not in st.session_state:
     tracemalloc.start(25)
     st.session_state.tracemalloc_started = True
 
+if "last_rss" not in st.session_state:
+    st.session_state.last_rss = mem_rss_mb()
+
+current_rss = mem_rss_mb()
+delta = current_rss - st.session_state.last_rss
+
+print(f"🔁 RERUN MEMORY DELTA: {delta:+.2f} MB")
+
+st.session_state.last_rss = current_rss
+
 def mem_diff(label: str):
     rss_mb = psutil.Process(os.getpid()).memory_info().rss / (1024**2)
     print(f"\n===== MEM (RSS) {label}: {rss_mb:,.1f} MB =====")

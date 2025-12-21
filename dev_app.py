@@ -4304,249 +4304,178 @@ if sport == "NBA":
             collapsed_total = f"O/U {total_part}".strip()
 
             
-            html = f"""
-            <style>
-            .game-card {{
-                background: linear-gradient(145deg, #0f172a, #1e293b);
-                border-radius: 18px;
-                padding: 16px;
-                margin-bottom: 10px;
-                color: white;
-                border: 1px solid rgba(255,255,255,0.06);
-                transition: 0.15s ease-in-out;
-            }}
+            # -------------------------------
+            # GAME CARD (SAFE, NO JS)
+            # -------------------------------
             
-            .game-card.expanded-card {{
-                margin-bottom: 18px;
-            }}
+            st.markdown(
+                f"""
+                <style>
+                .game-card {{
+                    background: linear-gradient(145deg, #0f172a, #1e293b);
+                    border-radius: 18px;
+                    padding: 16px;
+                    margin-bottom: 12px;
+                    color: white;
+                    border: 1px solid rgba(255,255,255,0.06);
+                }}
             
-            .game-card:hover {{
-                background: linear-gradient(145deg, #162236, #253348);
-            }}
+                .team-col {{
+                    text-align: center;
+                    width: 120px;
+                }}
             
-            .expand-section {{
-                max-height: 0;
-                overflow: hidden;
-                transition: max-height 0.35s ease;
-            }}
+                .proj-pts {{
+                    margin-top: 4px;
+                    font-size: 0.9rem;
+                    color: #93c5fd;
+                    font-weight: 600;
+                }}
             
-            .expand-section.expanded {{
-                max-height: 900px;
-                margin-top: 8px;
-            }}
+                .center-col {{
+                    text-align: center;
+                    margin-top: 6px;
+                    min-width: 80px;
+                }}
             
-            .expand-hint {{
-                color: #94a3b8;
-                font-size: 0.8rem;
-                margin-top: 10px;
-                text-align: center;
-            }}
+                .summary-row {{
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 12px;
+                    margin-top: 10px;
+                    padding-top: 8px;
+                    border-top: 1px solid rgba(255,255,255,0.08);
+                    font-size: 0.75rem;
+                }}
             
-            .team-col {{
-                text-align: center;
-                width: 120px;
-            }}
+                .summary-title {{
+                    color: #94a3b8;
+                    font-size: 0.65rem;
+                    letter-spacing: 0.05em;
+                    text-transform: uppercase;
+                    margin-bottom: 2px;
+                }}
             
-            .proj-pts {{
-                margin-top: 4px;
-                font-size: 0.9rem;
-                color: #93c5fd;
-                font-weight: 600;
-            }}
+                .summary-line {{
+                    display: flex;
+                    justify-content: space-between;
+                    gap: 6px;
+                    white-space: nowrap;
+                }}
             
-            .center-col {{
-                text-align: center;
-                margin-top: 6px;
-                min-width: 80px;
-            }}
+                .expand-hint {{
+                    color: #94a3b8;
+                    font-size: 0.75rem;
+                    text-align: center;
+                    margin-top: 10px;
+                }}
             
-            .section-box {{
-                background: rgba(255,255,255,0.06);
-                padding: 12px;
-                border-radius: 12px;
-                font-size: 0.85rem;
-            }}
+                .section-box {{
+                    background: rgba(255,255,255,0.06);
+                    padding: 12px;
+                    border-radius: 12px;
+                    font-size: 0.85rem;
+                }}
             
-            .section-title {{
-                color: #94a3b8;
-                font-size: 0.8rem;
-                margin-bottom: 6px;
-            }}
+                .section-title {{
+                    color: #94a3b8;
+                    font-size: 0.8rem;
+                    margin-bottom: 6px;
+                }}
+                </style>
+                """,
+                unsafe_allow_html=True,
+            )
             
-            /* -------- COLLAPSED SUMMARY -------- */
-            
-            .summary-row {{
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 12px;
-                margin-top: 10px;
-                padding-top: 8px;
-                border-top: 1px solid rgba(255,255,255,0.08);
-                font-size: 0.75rem;
-            }}
-            
-            .summary-col {{
-                display: grid;
-                row-gap: 4px;
-            }}
-            
-            .summary-title {{
-                color: #94a3b8;
-                font-size: 0.65rem;
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                margin-bottom: 2px;
-            }}
-            
-            .summary-line {{
-                display: grid;
-                grid-template-columns: auto 1fr;
-                column-gap: 6px;
-                align-items: center;
-            }}
-            
-            .summary-label {{
-                color: #94a3b8;
-                white-space: nowrap;
-            }}
-            
-            .summary-value {{
-                color: #e5e7eb;
-                font-weight: 600;
-                text-align: right;
-                white-space: nowrap;
-            }}
-            </style>
-            
-            <div class="game-card" onclick="toggleExpand('{game_id}')">
-            
-                <!-- HEADER -->
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-            
-                    <!-- HOME -->
-                    <div class="team-col">
-                        <img src="{home_logo}" width="42" style="border-radius:6px;">
-                        <div style="font-weight:700;margin-top:4px;">{home}</div>
-                        <div class="proj-pts">{home_pts} pts</div>
-                    </div>
-            
-                    <!-- CENTER -->
-                    <div class="center-col">
-                        <div style="font-size:1.25rem;font-weight:700;color:#e5e7eb;">vs</div>
-                        <div style="margin-top:4px;font-size:0.85rem;color:#9ca3af;">
-                            {start_time}
+            # -------------------------------
+            # COLLAPSED CARD
+            # -------------------------------
+            st.markdown(
+                f"""
+                <div class="game-card">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                        <div class="team-col">
+                            <img src="{home_logo}" width="42" style="border-radius:6px;">
+                            <div style="font-weight:700;margin-top:4px;">{home}</div>
+                            <div class="proj-pts">{home_pts} pts</div>
                         </div>
-                    </div>
             
-                    <!-- AWAY -->
-                    <div class="team-col">
-                        <img src="{away_logo}" width="42" style="border-radius:6px;">
-                        <div style="font-weight:700;margin-top:4px;">{away}</div>
-                        <div class="proj-pts">{away_pts} pts</div>
-                    </div>
-            
-                </div>
-            
-                <!-- COLLAPSED SUMMARY -->
-                <div class="summary-row">
-                
-                    <!-- MODEL -->
-                    <div class="summary-col">
-                        <div class="summary-title">Model</div>
-                
-                        <div class="summary-line">
-                            <span class="summary-label">Total</span>
-                            <span class="summary-value">{tot_pts}</span>
-                        </div>
-                
-                        <div class="summary-line">
-                            <span class="summary-label">Spread</span>
-                            <span class="summary-value">{margin}</span>
-                        </div>
-                
-                        <div class="summary-line">
-                            <span class="summary-label">ML</span>
-                            <span class="summary-value">{home_win}%–{away_win}%</span>
-                        </div>
-                    </div>
-                
-                    <!-- MARKET -->
-                    <div class="summary-col">
-                        <div class="summary-title">Market</div>
-                
-                        <div class="summary-line">
-                            <span class="summary-label">Total</span>
-                            <span class="summary-value">{collapsed_total}</span>
-                        </div>
-                
-                        <div class="summary-line">
-                            <span class="summary-label">Spread</span>
-                            <span class="summary-value">{collapsed_spread}</span>
-                        </div>
-                
-                        <div class="summary-line">
-                            <span class="summary-label">ML</span>
-                            <span class="summary-value">
-                                {collapsed_home_ml} / {collapsed_away_ml}
-                            </span>
-                        </div>
-                    </div>
-                
-                </div>
-            
-                <div class="expand-hint">Tap to expand ↓</div>
-            
-                <!-- EXPANDED -->
-                <div id="expand-{game_id}" class="expand-section">
-                    <div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.08);">
-            
-                        <div style="display:flex;gap:18px;flex-wrap:wrap;">
-            
-                            <!-- MODEL -->
-                            <div style="flex:1;min-width:220px;">
-                                <div class="section-title">Model Projections</div>
-                                <div class="section-box">
-                                    Win %: {home_win}% / {away_win}%<br>
-                                    Projected Total: <b>{tot_pts}</b><br>
-                                    Model Spread: <b>{margin}</b><br>
-                                    Pace: {pace} ({pace_delta})<br>
-                                    L5 Diff: {home_l5} / {away_l5}
-                                </div>
+                        <div class="center-col">
+                            <div style="font-size:1.25rem;font-weight:700;">vs</div>
+                            <div style="margin-top:4px;font-size:0.85rem;color:#9ca3af;">
+                                {start_time}
                             </div>
+                        </div>
             
-                            <!-- MARKET -->
-                            <div style="flex:1;min-width:220px;">
-                                <div class="section-title">Market Lines</div>
-                                <div class="section-box">
-                                    <b>Moneyline</b><br>
-                                    {home_ml_text}<br>
-                                    {away_ml_text}<br><br>
+                        <div class="team-col">
+                            <img src="{away_logo}" width="42" style="border-radius:6px;">
+                            <div style="font-weight:700;margin-top:4px;">{away}</div>
+                            <div class="proj-pts">{away_pts} pts</div>
+                        </div>
+                    </div>
             
-                                    <b>Spread</b><br>
-                                    {spread_text}<br><br>
+                    <div class="summary-row">
+                        <div>
+                            <div class="summary-title">Model</div>
+                            <div class="summary-line"><span>Total</span><span>{tot_pts}</span></div>
+                            <div class="summary-line"><span>Spread</span><span>{margin}</span></div>
+                            <div class="summary-line"><span>ML</span><span>{home_win}%–{away_win}%</span></div>
+                        </div>
             
-                                    <b>Total</b><br>
-                                    {total_text}
-                                </div>
+                        <div>
+                            <div class="summary-title">Market</div>
+                            <div class="summary-line"><span>Total</span><span>{collapsed_total}</span></div>
+                            <div class="summary-line"><span>Spread</span><span>{collapsed_spread}</span></div>
+                            <div class="summary-line">
+                                <span>ML</span><span>{collapsed_home_ml} / {collapsed_away_ml}</span>
                             </div>
+                        </div>
+                    </div>
             
+                    <div class="expand-hint">Tap below to expand ↓</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            
+            # -------------------------------
+            # EXPANDED CONTENT (STREAMLIT-NATIVE)
+            # -------------------------------
+            with st.expander("Expanded details", expanded=False):
+                st.markdown(
+                    f"""
+                    <div style="display:flex;gap:18px;flex-wrap:wrap;">
+            
+                        <div style="flex:1;min-width:220px;">
+                            <div class="section-title">Model Projections</div>
+                            <div class="section-box">
+                                Win %: {home_win}% / {away_win}%<br>
+                                Projected Total: <b>{tot_pts}</b><br>
+                                Model Spread: <b>{margin}</b><br>
+                                Pace: {pace} ({pace_delta})<br>
+                                L5 Diff: {home_l5} / {away_l5}
+                            </div>
+                        </div>
+            
+                        <div style="flex:1;min-width:220px;">
+                            <div class="section-title">Market Lines</div>
+                            <div class="section-box">
+                                <b>Moneyline</b><br>
+                                {home_ml_text}<br>
+                                {away_ml_text}<br><br>
+            
+                                <b>Spread</b><br>
+                                {spread_text}<br><br>
+            
+                                <b>Total</b><br>
+                                {total_text}
+                            </div>
                         </div>
             
                     </div>
-                </div>
-            </div>
-            
-            <script>
-            function toggleExpand(id) {{
-                var section = document.getElementById("expand-" + id);
-                var card = section.closest(".game-card");
-            
-                section.classList.toggle("expanded");
-                card.classList.toggle("expanded-card");
-            }}
-            </script>
-            """
-            components.html(html, height=260)
+                    """,
+                    unsafe_allow_html=True,
+                )
     
         # ===============================================
         # RENDER GAME CARDS

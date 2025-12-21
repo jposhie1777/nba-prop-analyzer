@@ -41,6 +41,23 @@ if "rerun_count" not in st.session_state:
 st.session_state.rerun_count += 1
 st.caption(f"🔁 Rerun #{st.session_state.rerun_count}")
 
+def dump_heap(label: str, limit=8):
+    current, peak = tracemalloc.get_traced_memory()
+    snap = tracemalloc.take_snapshot()
+    top = snap.statistics("lineno")
+
+    st.markdown(f"### 🧠 HEAP — {label}")
+    st.write(f"Current: {current / 1024 / 1024:.2f} MB")
+    st.write(f"Peak: {peak / 1024 / 1024:.2f} MB")
+
+    for stat in top[:limit]:
+        st.text(stat)
+
+
+def session_state_sizes():
+    import sys
+    return {k: sys.getsizeof(v) for k, v in st.session_state.items()}
+
 st.markdown(
 """
 <script>

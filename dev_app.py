@@ -3882,21 +3882,38 @@ def render_prop_cards(
             # -------------------------
             # SAVE BET (NO RERUN / NO MEMORY SPIKE)
             # -------------------------
-            if st.button(
-                "💾 Save Bet",
-                key=f"save_{idx}_{row.get('player')}_{row.get('market')}_{row.get('line')}",
-                use_container_width=True,
-            ):
+            if st.button("💾 Save Bet", key=f"save_{idx}"):
+
+                rss_before = snapshot("SAVE_CLICK_BEFORE")
+            
+                # ---- TRACE PYTHON ALLOCATIONS (before) ----
+                snap_before = tracemalloc.take_snapshot()
+            
+                # ---- ACTUAL SAVE LOGIC ----
                 save_bet_for_user(
                     user_id=user_id,
-                    player=row.get("player"),
-                    market=row.get("market"),
-                    line=float(row.get("line")),
+                    player=player,
+                    market=market,
+                    line=line,
                     bet_type=bet_type,
                 )
-                #mem_diff("after save bet")
-                
-                st.toast("✅ Bet saved", icon="💾")
+            
+                # ---- TRACE AFTER SAVE ----
+                snap_after = tracemalloc.take_snapshot()
+                rss_after = snapshot("SAVE_CLICK_AFTER")
+            
+                # ---- DIFF TOP ALLOCATIONS ----
+                top_stats = snap_after.compare_to(snap_before, "lineno")
+            
+                print("\n🔥 TOP MEMORY ALLOCATIONS (SAVE BET)")
+                for stat in top_stats[:10]:
+                    print(stat)
+            
+                print(
+                    f"\n📈 SAVE BET DELTA: {rss_after - rss_before:+.2f} MB"
+                )
+            
+                st.toast("Saved (debug logged)", icon="🧪")
 
             # -------------------------
             # FULL CARD

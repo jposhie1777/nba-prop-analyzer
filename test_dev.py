@@ -1377,32 +1377,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-
-st.markdown("""
-<style>
-
-.card-tap-btn .stButton > button {
-    all: unset !important;
-    display: block !important;
-    width: 100% !important;
-    height: 50px !important;      /* tap area */
-    cursor: pointer !important;
-    background: transparent !important;
-}
-
-/* No visual change on hover/focus/active */
-.card-tap-btn .stButton > button:hover,
-.card-tap-btn .stButton > button:focus,
-.card-tap-btn .stButton > button:active {
-    all: unset !important;
-    display: block !important;
-    width: 100% !important;
-    height: 50px !important;
-}
-
-</style>
-""", unsafe_allow_html=True)
-
 components.html("""
 <style>
 .ncaab-card-container {
@@ -3290,21 +3264,14 @@ def render_prop_cards(
             # ------------------------------------------------------
             st.markdown(card_html, unsafe_allow_html=True)
 
-            # ------------------------------------------------------
-            # TAP-TO-EXPAND LOGIC
-            # ------------------------------------------------------
-            # Unique keys per card
-            key_base = f"{page_key}_{idx}_{player}_{row.get('market')}_{row.get('line')}"
-            expand_key = f"{key_base}_expand"
-            tap_key = f"{key_base}_tap"
+            # --------------------------------------------------
+            # EXPAND TOGGLE (NEW — SINGLE SOURCE OF TRUTH)
+            # --------------------------------------------------
+            is_open = (st.session_state.open_prop_card == idx)
 
-            # Invisible overlay button in .card-tap-btn wrapper
-            st.markdown('<div class="card-tap-btn">', unsafe_allow_html=True)
-            tapped = st.button("tap", key=tap_key)  # label hidden by CSS
-            st.markdown("</div>", unsafe_allow_html=True)
+            if st.button("▾" if is_open else "▸", key=f"expand_{idx}"):
+                st.session_state.open_prop_card = None if is_open else idx
 
-            if tapped:
-                toggle_expander(expand_key)
 
             # --------------------------------------------------
             # EXPANDED ANALYTICS (REPLACEMENT — CANONICAL)

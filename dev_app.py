@@ -465,6 +465,22 @@ if missing_env and IS_DEV:
 if "saved_bets" not in st.session_state:
     st.session_state.saved_bets = []
 
+# -------------------------------
+# Saved Bets (constant-memory)
+# -------------------------------
+MAX_SAVED_BETS = 150  # keep this small + stable
+
+def _bet_key(player, market, line, bet_type):
+    # minimal stable key — avoids duplicates + memory bloat
+    return f"{player}|{market}|{line}|{bet_type}".lower().strip()
+
+if "saved_bets" not in st.session_state:
+    st.session_state.saved_bets = []
+
+if "saved_bets_keys" not in st.session_state:
+    st.session_state.saved_bets_keys = set()
+
+
 # ------------------------------------------------------
 # SQL STATEMENTS (BIGQUERY)
 # ------------------------------------------------------
@@ -1712,13 +1728,32 @@ def build_prop_cards(card_df, hit_rate_col):
     return card_df
 
 def save_bet_simple(player, market, line, price, bet_type):
-    st.session_state.saved_bets.append({
-        "player": player,
-        "market": market,
-        "line": line,
-        "price": price,
-        "bet_type": bet_type,
-    })
+    bets = st.session_state.saved_bets
+    keys = st.session_state.saved_bets_keys
+
+    k = _bet_key(player, market, line, bet_type)
+    if k in keys:
+        return False  # already saved, no growth
+
+    bet = {
+        "player": str(player or ""),
+        "market": str(market or ""),
+        "line": float(line) if line is not None else None,
+        "price": int(price) if price is not None else None,
+        "bet_type": str(bet_type or ""),
+    }
+
+    bets.append(bet)
+    keys.add(k)
+
+    # hard cap (evict oldest)
+    if len(bets) > MAX_SAVED_BETS:
+        old = bets.pop(0)
+        oldk = _bet_key(old.get("player"), old.get("market"), old.get("line"), old.get("bet_type"))
+        keys.discard(oldk)
+
+    return True
+
 
 def detect_stat(market: str) -> str:
     """
@@ -3301,16 +3336,21 @@ def render_prop_cards(
 
             
             # -------------------------
-            # SAVE BET (FORENSIC DEBUG)
+            # SAVE BET (CONSTANT-MEMORY)
             # -------------------------
-            if st.button("💾 Save Bet", key=f"save_{idx}"):
-                save_bet_simple(
+            if st.button("💾 Save Bet", key=f"save_{row['player']}_{row['market']}_{row['line']}_{row['bet_type']}"):
+                ok = save_bet_simple(
                     player=row["player"],
                     market=row["market"],
                     line=row["line"],
                     price=row["price"],
                     bet_type=row["bet_type"],
                 )
+                if ok:
+                    st.toast("Saved ✅")
+                else:
+                    st.toast("Already saved")
+
 
             # -------------------------
             # FULL CARD

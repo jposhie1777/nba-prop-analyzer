@@ -3548,7 +3548,6 @@ if sport == "NBA":
         [
             "📈 Props",
             "🏀 Game Lines",
-            "📈 Trend Lab",
             "📋 Saved Bets",  # last in the bar
         ]
     )

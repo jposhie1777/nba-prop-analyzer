@@ -595,10 +595,10 @@ ORDER BY snapshot_ts DESC
 
 
 # NEW: WOWY delta SQL
-DELTA_SQL = f"""
-SELECT *
-FROM {PROJECT_ID}.nba_prop_analyzer.player_wowy_deltas
-"""
+#DELTA_SQL = f"""
+#SELECT *
+#FROM {PROJECT_ID}.nba_prop_analyzer.player_wowy_deltas
+#"""
 
 # ------------------------------------------------------
 # GAME ANALYTICS + GAME REPORT + GAME ODDS SQL
@@ -634,11 +634,11 @@ WHERE DATE(`Start Time`) = CURRENT_DATE()
 # ------------------------------------------------------
 # NCAA GAME ANALYTICS SQL
 # ------------------------------------------------------
-NCAAB_GAME_ANALYTICS_SQL = f"""
-SELECT *
-FROM `{PROJECT_ID}.ncaa_data.ncaab_game_analytics`
-ORDER BY start_time
-"""
+#NCAAB_GAME_ANALYTICS_SQL = f"""
+#SELECT *
+#FROM `{PROJECT_ID}.ncaa_data.ncaab_game_analytics`
+#ORDER BY start_time
+#"""
 
 
 # ------------------------------------------------------

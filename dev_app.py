@@ -2005,18 +2005,14 @@ def convert_list_columns(df):
 
 
 
-@st.cache_data(ttl=1800, show_spinner=True)
-def load_historical_df() -> pd.DataFrame:
+@st.cache_data(ttl=1800)
+def load_historical_df():
+    if not HISTORICAL_SQL:
+        return pd.DataFrame()
+
     df = load_bq_df(HISTORICAL_SQL).copy()
-
-    df.columns = df.columns.str.strip()
-    df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
-    df["opponent_team"] = df["opponent_team"].fillna("").astype(str)
-
-    # Convert stringified list columns
-    df = convert_list_columns(df)
-
     return df
+
 
 @st.cache_data(ttl=1800, show_spinner=True)
 def load_depth_charts() -> pd.DataFrame:
@@ -2152,6 +2148,10 @@ def get_rolling_avg(row, window: int):
 # ------------------------------------------------------
 props_df = load_props()
 history_df = load_historical_df()
+
+if history_df.empty:
+    st.info("Historical data disabled.")
+
 depth_df = load_depth_charts()
 injury_df = load_injury_report()    # <-- MUST COME BEFORE FIX
 #wowy_df = load_wowy_deltas()

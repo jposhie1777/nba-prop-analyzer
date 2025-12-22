@@ -2008,7 +2008,13 @@ def convert_list_columns(df):
 @st.cache_data(ttl=1800)
 def load_historical_df():
     if not HISTORICAL_SQL:
-        return pd.DataFrame(columns=["player"])
+        return pd.DataFrame(
+            columns=[
+                "player",
+                "game_date",
+                "player_norm",
+            ]
+        )
 
     return load_bq_df(HISTORICAL_SQL).copy()
 

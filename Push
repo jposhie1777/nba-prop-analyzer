@@ -7,3 +7,9 @@ git commit -m "Changes"
 git push origin main
 
 streamlit run dev_app.py
+
+git add test_dev.py
+git commit -m "Changes"
+git push origin main
+
+streamlit run test_dev.py

@@ -2601,19 +2601,6 @@ depth_df = load_depth_charts()
 injury_df = load_injury_report()    # <-- MUST COME BEFORE FIX
 wowy_df = load_wowy_deltas()
 
-def assert_df(name, obj):
-    if obj is None:
-        st.error(f"❌ {name} returned None")
-        st.stop()
-    if not isinstance(obj, pd.DataFrame):
-        st.error(f"❌ {name} returned {type(obj)}")
-        st.stop()
-
-assert_df("props_df", props_df)
-assert_df("history_df", history_df)
-assert_df("depth_df", depth_df)
-assert_df("injury_df", injury_df)
-assert_df("wowy_df", wowy_df)
 # ------------------------------------------------------
 # GLOBAL FILTER LISTS (used by Tab 1 & Tab 2)
 # ------------------------------------------------------
@@ -4019,13 +4006,6 @@ if sport == "NBA":
         # SOURCE DF + BASIC NORMALIZATION
         # ------------------------------------------
         df = props_df.copy()
-
-        st.write("DEBUG df value:", df)
-        st.write("DEBUG df type:", type(df))
-        
-        if df is None:
-            st.error("❌ df is None at top-level before price coercion")
-            st.stop()
 
         # Ensure numeric
         df["price"] = pd.to_numeric(df["price"], errors="coerce")

@@ -48,12 +48,24 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# ✅ OK to call Streamlit stuff AFTER set_page_config
+# ------------------------------------------------------
+# SESSION READY GUARD (RUN ONCE)
+# ------------------------------------------------------
+if "session_ready" not in st.session_state:
+    st.session_state["session_ready"] = True
+    st.stop()
+
+# ------------------------------------------------------
+# SAFE QUERY PARAM NAVIGATION (NO RERUN)
+# ------------------------------------------------------
+if "pending_tab" in st.session_state:
+    st.query_params["tab"] = st.session_state.pop("pending_tab")
+
+# ✅ OK to call Streamlit stuff AFTER this point
 st.sidebar.markdown("🧪 DEV_APP.PY RUNNING")
 
 IS_DEV = True
 
-import os
 import psutil
 
 def get_mem_mb() -> float:
@@ -232,8 +244,7 @@ def render_dev_page():
     st.title("⚙️ DEV CONTROL PANEL")
     
     if st.button("⬅ Back to Main App", use_container_width=False):
-        st.query_params["tab"] = "main"
-        st.rerun()
+    st.session_state["pending_tab"] = "main"
     
     st.caption("Always available • restricted access")
 

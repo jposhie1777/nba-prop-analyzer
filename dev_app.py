@@ -3891,37 +3891,28 @@ def filter_props(df):
     # ------------------------------------------------------
     # Saved Bets Filter
     # ------------------------------------------------------
-    try:
-        if show_only_saved_local:
-            saved_list = load_saved_bets()
-        else:
-            saved_list = []
-    except Exception:
-        saved_list = []
-
-    if show_only_saved_local and saved_list:
-        saved_df = pd.DataFrame(saved_list)
-
-        saved_df = saved_df.rename(
-            columns={
-                "market_code": "market",
-                "label": "bet_type",
-                "book": "bookmaker",
-            }
-        )
-
-        key_cols = ["player", "market", "line", "bet_type", "bookmaker"]
-
-        if all(col in d.columns for col in key_cols) and all(
-            col in saved_df.columns for col in key_cols
-        ):
-            d = d.merge(
-                saved_df[key_cols].drop_duplicates(),
-                on=key_cols,
-                how="inner",
+    if show_only_saved_local and st.session_state.saved_bets:
+        saved_keys = {
+            (
+                b["player"],
+                b["market"],
+                b["line"],
+                b["bet_type"],
             )
-
-    return d
+            for b in st.session_state.saved_bets
+        }
+    
+        d = d[
+            d.apply(
+                lambda r: (
+                    r["player"],
+                    r["market"],
+                    r["line"],
+                    r["bet_type"],
+                ) in saved_keys,
+                axis=1,
+            )
+        ]
 
 # Pretty labels for game dropdown with team logos
 game_pretty_labels = {}

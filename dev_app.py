@@ -2227,7 +2227,9 @@ def normalize_name(n):
     )
 
 props_df["player_norm"] = props_df["player"].apply(normalize_name)
-history_df["player_norm"] = history_df["player"].apply(normalize_name)
+if "player" in history_df.columns:
+    history_df["player_norm"] = history_df["player"].apply(normalize_name)
+
 
 
 # ------------------------------------------------------

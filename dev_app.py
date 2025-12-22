@@ -244,7 +244,7 @@ def render_dev_page():
     st.title("⚙️ DEV CONTROL PANEL")
     
     if st.button("⬅ Back to Main App", use_container_width=False):
-    st.session_state["pending_tab"] = "main"
+        st.session_state["pending_tab"] = "main"
     
     st.caption("Always available • restricted access")
 

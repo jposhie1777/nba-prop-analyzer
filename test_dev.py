@@ -3267,7 +3267,9 @@ def render_prop_cards(
             # --------------------------------------------------
             # EXPAND TOGGLE (MATCHES dev_app 1.py)
             # --------------------------------------------------
+            market = row.get("market", "")
             card_id = f"{player}_{market}_{line}_{idx}"
+
 
             is_open = (st.session_state.open_prop_card == card_id)
 

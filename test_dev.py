@@ -3280,19 +3280,6 @@ def render_prop_cards(
             if st.session_state.open_prop_card == card_id:
                 # render expanded analytics here
 
-
-
-            # --------------------------------------------------
-            # EXPANDED ANALYTICS (REPLACEMENT — CANONICAL)
-            # --------------------------------------------------
-            is_open = (st.session_state.open_prop_card == idx)
-
-            if st.button("▾" if is_open else "▸", key=f"expand_{idx}"):
-                st.session_state.open_prop_card = None if is_open else idx
-
-            if is_open:
-                spark_vals, spark_dates = get_spark_series(row)
-
                 sparkline_html = (
                     build_sparkline_bars_hitmiss(
                         values=spark_vals,

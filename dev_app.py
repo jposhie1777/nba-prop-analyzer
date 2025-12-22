@@ -5412,54 +5412,26 @@ if sport == "NBA":
     # 📋 SAVED BETS TAB — PIKKIT OPTIMIZED EXPORT
     # ======================================================
 
-    import pandas as pd
-    import streamlit.components.v1 as components
-
     with tab8:
-
         st.header("Saved Bets")
-
-        # --------------------------------------------------
-        # Load saved bets
-        # --------------------------------------------------
-        slip = st.session_state.get("saved_bets", [])
-        slip_df = pd.DataFrame(slip)
-
-        if slip_df.empty:
+    
+        saved = st.session_state.get("saved_bets", [])
+    
+        if not saved:
             st.info("You haven't saved any bets yet.")
-            st.stop()
-
-        # --------------------------------------------------
-        # Helper to normalize book structure
-        # --------------------------------------------------
-        def normalize_books(v):
-            """Ensure books=[{'bookmaker':..., 'price':...}]"""
-            if isinstance(v, list):
-                return v
-            if isinstance(v, dict):
-                return [{"bookmaker": k, "price": v[k]} for k in v]
-            return []
-
-        if "books" not in slip_df.columns:
-            slip_df["books"] = [[] for _ in range(len(slip_df))]
-        
-        slip_df["books"] = slip_df["books"].apply(normalize_books)
-
-        # --------------------------------------------------
-        # Display saved bets
-        # --------------------------------------------------
-        st.markdown("### 🧾 Your Saved Bets")
-
-        for i, bet in enumerate(st.session_state.saved_bets, start=1):
-            st.markdown(
-                f"""
-                **{i}. {bet['player']}**  
-                Market: {bet['market']}  
-                {bet['bet_type'].upper()} {bet['line']}  
-                Price: {bet['price']}
-                ---
-                """
-            )
+        else:
+            st.markdown("### 🧾 Your Saved Bets")
+    
+            for i, bet in enumerate(saved, start=1):
+                st.markdown(
+                    f"""
+                    **{i}. {bet['player']}**  
+                    Market: {bet['market']}  
+                    {bet['bet_type'].upper()} {bet['line']}  
+                    Price: {bet['price']}
+                    ---
+                    """
+                )
 
         
 

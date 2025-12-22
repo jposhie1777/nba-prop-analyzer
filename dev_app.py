@@ -2351,34 +2351,35 @@ def toggle_expander(key: str):
 # ------------------------------------------------------
 # WOWY HELPERS
 # ------------------------------------------------------
-def attach_wowy_deltas(df, wowy_df_global):
-    """Attach WOWY rows (can be multiple injured teammates) to props by player + team."""
-    if wowy_df_global is None or wowy_df_global.empty:
-        return df
+if False:
+    def attach_wowy_deltas(df, wowy_df_global):
+        """Attach WOWY rows (can be multiple injured teammates) to props by player + team."""
+        if wowy_df_global is None or wowy_df_global.empty:
+            return df
 
-    df = df.copy()
+        df = df.copy()
 
-    def norm(x):
-        if not isinstance(x, str):
-            return ""
-        return (
-            x.lower()
-             .replace(".", "")
-             .replace("-", " ")
-             .replace("'", "")
-             .strip()
+        def norm(x):
+            if not isinstance(x, str):
+                return ""
+            return (
+                x.lower()
+                .replace(".", "")
+                .replace("-", " ")
+                .replace("'", "")
+                .strip()
+            )
+
+        df["player_norm"] = df["player"].apply(norm)
+
+        merged = df.merge(
+            wowy_df_global,
+            how="left",
+            left_on=["player_norm", "player_team"],
+            right_on=["player_norm", "team_abbr"],
+            suffixes=("", "_wowy"),
         )
-
-    df["player_norm"] = df["player"].apply(norm)
-
-    merged = df.merge(
-        wowy_df_global,
-        how="left",
-        left_on=["player_norm", "player_team"],
-        right_on=["player_norm", "team_abbr"],
-        suffixes=("", "_wowy"),
-    )
-    return merged
+        return merged
 
 
 def group_wowy_rows(df):
@@ -3088,10 +3089,10 @@ def render_prop_cards(
     # ------------------------------------------------------
     # WOWY merge (already safe / cached)
     # ------------------------------------------------------
-    card_df = attach_wowy_deltas(df, wowy_df)
-    if card_df is None:
-        st.error("attach_wowy_deltas returned None")
-        st.stop()
+    #card_df = attach_wowy_deltas(df, wowy_df)
+    #if card_df is None:
+        #st.error("attach_wowy_deltas returned None")
+        #st.stop()
 
     # ------------------------------------------------------
     # Restrict sportsbooks

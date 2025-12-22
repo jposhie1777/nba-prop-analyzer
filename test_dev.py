@@ -3265,14 +3265,20 @@ def render_prop_cards(
             st.markdown(card_html, unsafe_allow_html=True)
 
             # --------------------------------------------------
-            # EXPAND TOGGLE (SAFE, UNIQUE)
+            # EXPAND TOGGLE (MATCHES dev_app 1.py)
             # --------------------------------------------------
-            expand_btn_key = f"{page_key}_expand_{idx}"
+            card_id = f"{player}_{market}_{line}_{idx}"
 
-            is_open = (st.session_state.open_prop_card == expand_btn_key)
+            is_open = (st.session_state.open_prop_card == card_id)
 
-            if st.button("▾" if is_open else "▸", key=expand_btn_key):
-                st.session_state.open_prop_card = None if is_open else expand_btn_key
+            if st.button("▾" if is_open else "▸", key=f"expand_btn_{card_id}"):
+                st.session_state.open_prop_card = None if is_open else card_id
+
+            # --------------------------------------------------
+            # EXPANDED ANALYTICS
+            # --------------------------------------------------
+            if st.session_state.open_prop_card == card_id:
+                # render expanded analytics here
 
 
 

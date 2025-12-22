@@ -143,9 +143,11 @@ def get_dev_bq_client():
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def load_bq_df(sql: str) -> pd.DataFrame:
-    df = bq_client.query(sql).to_dataframe()
+    client = get_dev_bq_client()   # 👈 THIS is the missing line
+    df = client.query(sql).to_dataframe()
     df.flags.writeable = False
     return df
+
 
 # ======================================================
 # DEV: Google Apps Script Trigger
@@ -422,7 +424,6 @@ PROJECT_ID = os.getenv("PROJECT_ID", "")
 
 DATASET = os.getenv("BIGQUERY_DATASET", "nba_prop_analyzer")
 PROPS_TABLE = "todays_props_enriched"
-HISTORICAL_TABLE = "historical_player_stats_for_trends"
 
 # SERVICE_JSON is a JSON string (not a filepath)
 SERVICE_JSON = os.getenv("GCP_SERVICE_ACCOUNT", "")

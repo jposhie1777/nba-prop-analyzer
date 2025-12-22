@@ -1006,6 +1006,26 @@ def load_static_ui():
             margin-top: 6px;
         }}
 
+        /* ---------- PROP CARD BASE (FIX BLENDING) ---------- */
+        .prop-card,
+        .prop-card-wrapper summary {{
+            background: rgba(15, 23, 42, 0.92); /* slate-900 */
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
+            box-shadow:
+                0 6px 18px rgba(0, 0, 0, 0.45),
+                inset 0 1px 0 rgba(255, 255, 255, 0.03);
+            padding: 12px 14px;
+        }}
+
+        /* Hover elevation */
+        .prop-card-wrapper:hover summary {{
+            border-color: rgba(14, 165, 233, 0.45); /* THEME_ACCENT */
+            box-shadow:
+                0 10px 28px rgba(0, 0, 0, 0.6),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }}
+
         /* ---------- EXPANDED METRICS ---------- */
         .expanded-wrap {{
             margin-top: 8px;

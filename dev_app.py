@@ -2155,10 +2155,11 @@ def get_rolling_avg(row, window: int):
 props_df = load_props()
 history_df = load_historical_df()
 
-if not history_df.empty and "player" in history_df.columns:
-    history_df["player_norm"] = history_df["player"].apply(normalize_name)
-else:
-    history_df = pd.DataFrame()
+if history_df.empty:
+    history_df = pd.DataFrame(
+        columns=["player", "player_norm", "game_date"]
+    )
+
 
 
 depth_df = load_depth_charts()

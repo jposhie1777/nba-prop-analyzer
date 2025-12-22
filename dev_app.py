@@ -3784,13 +3784,13 @@ def render_prop_cards(
             # SAVE BET (FORENSIC DEBUG)
             # -------------------------
             if st.button("💾 Save Bet", key=f"save_{idx}"):
-            save_bet_simple(
-                player=row["player"],
-                market=row["market"],
-                line=row["line"],
-                price=row["price"],
-                bet_type=row["bet_type"],
-            )
+                save_bet_simple(
+                    player=row["player"],
+                    market=row["market"],
+                    line=row["line"],
+                    price=row["price"],
+                    bet_type=row["bet_type"],
+                )
 
             # -------------------------
             # FULL CARD

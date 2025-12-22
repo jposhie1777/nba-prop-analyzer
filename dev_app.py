@@ -2032,26 +2032,26 @@ def load_injury_report() -> pd.DataFrame:
 
     return df
 
+if False:
+    @st.cache_data(ttl=1800, show_spinner=True)
+    def load_wowy_deltas() -> pd.DataFrame:
+        df = load_bq_df(DELTA_SQL).copy()
+        df.columns = df.columns.str.strip()
 
-@st.cache_data(ttl=1800, show_spinner=True)
-def load_wowy_deltas() -> pd.DataFrame:
-    df = load_bq_df(DELTA_SQL).copy()
-    df.columns = df.columns.str.strip()
+        def norm(x):
+            if not isinstance(x, str):
+                return ""
+            return (
+                x.lower()
+                .replace(".", "")
+                .replace("-", " ")
+                .replace("'", "")
+                .strip()
+            )
 
-    def norm(x):
-        if not isinstance(x, str):
-            return ""
-        return (
-            x.lower()
-             .replace(".", "")
-             .replace("-", " ")
-             .replace("'", "")
-             .strip()
-        )
+        df["player_norm"] = df["player_a"].apply(norm)
 
-    df["player_norm"] = df["player_a"].apply(norm)
-
-    return df
+        return df
 
 @st.cache_data(ttl=1800, show_spinner=True)
 def load_game_analytics() -> pd.DataFrame:

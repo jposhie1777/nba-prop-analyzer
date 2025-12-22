@@ -51,6 +51,7 @@ APPS_SCRIPT_DEV_TOKEN = os.getenv("APPS_SCRIPT_DEV_TOKEN", "")
 # Saved bets (constant memory)
 MAX_SAVED_BETS = 150
 
+missing_env = []
 if not SERVICE_JSON:
     missing_env.append("GCP_SERVICE_ACCOUNT")
 

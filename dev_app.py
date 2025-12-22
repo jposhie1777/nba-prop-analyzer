@@ -53,6 +53,12 @@ st.sidebar.markdown("🧪 DEV_APP.PY RUNNING")
 
 IS_DEV = True
 
+import os
+import psutil
+
+def get_mem_mb() -> float:
+    return psutil.Process(os.getpid()).memory_info().rss / 1e6
+
 # ======================================================
 # DEV ACCESS CONTROL (EARLY)
 # ======================================================

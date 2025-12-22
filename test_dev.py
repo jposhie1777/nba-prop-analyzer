@@ -469,92 +469,107 @@ if missing_env and IS_DEV:
         + "\n".join(f"- {m}" for m in missing_env)
     )
 
-# -------------------------------
-# Global Styles
-# -------------------------------
-/* ---------- PROP CARDS ---------- */
-.prop-card-wrapper {
-    position: relative;
-    z-index: 5;
-    border-radius: 14px;
-}
+# ------------------------------------------------------
+# LOCKED THEME (STATIC) AND GLOBAL STYLES
+# ------------------------------------------------------
+THEME_BG = "#020617"
+THEME_ACCENT = "#0ea5e9"
+THEME_ACCENT_SOFT = "#0369a1"
 
-.prop-card-wrapper summary {
-    cursor: pointer;
-    list-style: none;
-}
+@st.cache_resource
+def load_static_ui():
+    st.markdown(
+        """
+        <style>
+        /* ---------- PROP CARDS ---------- */
+        .prop-card-wrapper {
+            position: relative;
+            z-index: 5;
+            border-radius: 14px;
+        }
 
-.prop-card-wrapper summary::-webkit-details-marker {
-    display: none;
-}
+        .prop-card-wrapper summary {
+            cursor: pointer;
+            list-style: none;
+        }
 
-.prop-card-wrapper summary * {
-    pointer-events: none;
-}
+        .prop-card-wrapper summary::-webkit-details-marker {
+            display: none;
+        }
 
-.prop-card-wrapper .card-expanded {
-    margin-top: 8px;
-    pointer-events: auto;
-}
+        .prop-card-wrapper summary * {
+            pointer-events: none;
+        }
 
-.expand-hint {
-    text-align: center;
-    font-size: 0.7rem;
-    opacity: 0.65;
-    margin-top: 6px;
-}
+        .prop-card-wrapper .card-expanded {
+            margin-top: 8px;
+            pointer-events: auto;
+        }
 
-/* ---------- PROP CARD BASE ---------- */
-.prop-card,
-.prop-card-wrapper summary {
-    background: rgba(15, 23, 42, 0.92);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 14px;
-    box-shadow:
-        0 6px 18px rgba(0, 0, 0, 0.45),
-        inset 0 1px 0 rgba(255, 255, 255, 0.03);
-    padding: 12px 14px;
-}
+        .expand-hint {
+            text-align: center;
+            font-size: 0.7rem;
+            opacity: 0.65;
+            margin-top: 6px;
+        }
 
-.prop-card-wrapper:hover summary {
-    border-color: rgba(14, 165, 233, 0.45);
-    box-shadow:
-        0 10px 28px rgba(0, 0, 0, 0.6),
-        inset 0 1px 0 rgba(255, 255, 255, 0.05);
-}
+        /* ---------- PROP CARD BASE ---------- */
+        .prop-card,
+        .prop-card-wrapper summary {
+            background: rgba(15, 23, 42, 0.92);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
+            box-shadow:
+                0 6px 18px rgba(0, 0, 0, 0.45),
+                inset 0 1px 0 rgba(255, 255, 255, 0.03);
+            padding: 12px 14px;
+        }
 
-/* ---------- EXPANDED METRICS ---------- */
-.expanded-wrap {
-    margin-top: 8px;
-    padding: 10px;
-    border-radius: 12px;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.12);
-}
+        .prop-card-wrapper:hover summary {
+            border-color: rgba(14, 165, 233, 0.45);
+            box-shadow:
+                0 10px 28px rgba(0, 0, 0, 0.6),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
 
-.expanded-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 8px;
-    margin-bottom: 6px;
-}
+        /* ---------- EXPANDED METRICS ---------- */
+        .expanded-wrap {
+            margin-top: 8px;
+            padding: 10px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.12);
+        }
 
-.metric {
-    flex: 1;
-    text-align: center;
-    font-size: 0.72rem;
-}
+        .expanded-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
 
-.metric span {
-    display: block;
-    color: #9ca3af;
-}
+        .metric {
+            flex: 1;
+            text-align: center;
+            font-size: 0.72rem;
+        }
 
-.metric strong {
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: #ffffff;
-}
+        .metric span {
+            display: block;
+            color: #9ca3af;
+        }
+
+        .metric strong {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #ffffff;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+load_static_ui()
 
 
 # -------------------------------

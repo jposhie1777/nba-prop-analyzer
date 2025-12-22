@@ -2152,7 +2152,7 @@ props_df = load_props()
 history_df = load_historical_df()
 depth_df = load_depth_charts()
 injury_df = load_injury_report()    # <-- MUST COME BEFORE FIX
-wowy_df = load_wowy_deltas()
+#wowy_df = load_wowy_deltas()
 
 # ------------------------------------------------------
 # GLOBAL FILTER LISTS (used by Tab 1 & Tab 2)

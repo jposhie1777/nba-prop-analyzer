@@ -49,11 +49,10 @@ st.set_page_config(
 )
 
 # ------------------------------------------------------
-# SESSION READY GUARD (RUN ONCE)
+# SESSION INITIALIZATION (SAFE — NO STOP)
 # ------------------------------------------------------
-if "session_ready" not in st.session_state:
-    st.session_state["session_ready"] = True
-    st.stop()
+if "session_initialized" not in st.session_state:
+    st.session_state["session_initialized"] = True
 
 # ------------------------------------------------------
 # SAFE QUERY PARAM NAVIGATION (NO RERUN)

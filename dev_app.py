@@ -3537,6 +3537,9 @@ def render_prop_cards(
     # WOWY merge (already safe / cached)
     # ------------------------------------------------------
     card_df = attach_wowy_deltas(df, wowy_df)
+    if card_df is None:
+        st.error("attach_wowy_deltas returned None")
+        st.stop()
 
     # ------------------------------------------------------
     # Restrict sportsbooks

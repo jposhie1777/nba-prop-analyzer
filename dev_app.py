@@ -4018,7 +4018,7 @@ if sport == "NBA":
         # ------------------------------------------
         # SOURCE DF + BASIC NORMALIZATION
         # ------------------------------------------
-        df = filter_props(props_df)
+        df = props_df.copy()
 
         st.write("DEBUG df value:", df)
         st.write("DEBUG df type:", type(df))

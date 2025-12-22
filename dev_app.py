@@ -5450,43 +5450,16 @@ if sport == "NBA":
         # --------------------------------------------------
         st.markdown("### 🧾 Your Saved Bets")
 
-        for idx, row in slip_df.iterrows():
-
-            title = row.get("player") or row.get("team") or "Bet"
-            st.markdown(f"## 🎯 {title}")
-
-            is_prop = bool(row.get("bet_type"))
-            market = row.get("market", "—")
-            line = row.get("line", "—")
-
-            # PROP
-            if is_prop:
-                st.markdown(
-                    f"""
-                    **Player Prop — {market}**  
-                    **{row['bet_type'].upper()} {line}**
-                    """
-                )
-            # GAME LINE
-            else:
-                st.markdown(
-                    f"""
-                    **Game Line — {market}**  
-                    Team: **{row.get('team', '—')}**  
-                    Line: **{line}**
-                    """
-                )
-
-            # ODDS
-            st.markdown("**Available Odds:**")
-            books = normalize_books(row["books"])
-            if books:
-                for b in books:
-                    st.markdown(f"- **{b['bookmaker']}**: {b['price']}")
-            else:
-                st.markdown("- No odds available")
-
-            st.markdown("---")
+        for i, bet in enumerate(st.session_state.saved_bets, start=1):
+            st.markdown(
+                f"""
+                **{i}. {bet['player']}**  
+                Market: {bet['market']}  
+                {bet['bet_type'].upper()} {bet['line']}  
+                Price: {bet['price']}
+                ---
+                """
+            )
 
         
 

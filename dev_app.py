@@ -3522,50 +3522,50 @@ def render_prop_cards(
     # ------------------------------------------------------
     # GROUP INTO UNIQUE PROPS (MULTI-BOOK)  ✅ NO groupby.apply
     # ------------------------------------------------------
-    PROP_KEY_COLS = [
-        "player",
-        "player_team",
-        "opponent_team",
-        "market",
-        "line",
-        "bet_type",
-    ]
-
-    # normalize + clean just once
-    work = card_df.copy()
-
-    work["book_norm"] = work["bookmaker"].apply(normalize_bookmaker)
-    work["price_int"] = pd.to_numeric(work["price"], errors="coerce")
-
-    # keep Int-like values only
-    work = work.dropna(subset=["price_int"])
-    work["price_int"] = work["price_int"].astype(int)
-
-    # 1) Base rows: 1 row per prop (keeps all your other columns)
-    base = (
-        work.sort_values(by=[hit_rate_col], ascending=False)
-            .drop_duplicates(PROP_KEY_COLS, keep="first")
-            .copy()
-    )
-
-    # 2) Book lists: dedupe (prop, book, price) then build records WITHOUT apply
-    dedup_books = work.drop_duplicates(PROP_KEY_COLS + ["book_norm", "price_int"])
-
-    rows = []
-    for key, sub in dedup_books.groupby(PROP_KEY_COLS, dropna=False, sort=False):
-        # key is a tuple aligned with PROP_KEY_COLS
-        book_prices = [
-            {"book": b, "price": int(p)}
-            for b, p in zip(sub["book_norm"].tolist(), sub["price_int"].tolist())
-            if b is not None and p is not None
+    @st.cache_data(show_spinner=False)
+    def build_prop_cards(card_df, hit_rate_col):
+        PROP_KEY_COLS = [
+            "player",
+            "player_team",
+            "opponent_team",
+            "market",
+            "line",
+            "bet_type",
         ]
-        rows.append((*key, book_prices))
-
-    books_df = pd.DataFrame(rows, columns=PROP_KEY_COLS + ["book_prices"])
-
-    # 3) Merge back
-    card_df = base.merge(books_df, on=PROP_KEY_COLS, how="left")
-    card_df["book_prices"] = card_df["book_prices"].apply(lambda x: x if isinstance(x, list) else [])
+    
+        work = card_df.copy()
+    
+        work["book_norm"] = work["bookmaker"].apply(normalize_bookmaker)
+        work["price_int"] = pd.to_numeric(work["price"], errors="coerce")
+    
+        work = work.dropna(subset=["price_int"])
+        work["price_int"] = work["price_int"].astype(int)
+    
+        base = (
+            work.sort_values(by=[hit_rate_col], ascending=False)
+                .drop_duplicates(PROP_KEY_COLS, keep="first")
+                .copy()
+        )
+    
+        dedup_books = work.drop_duplicates(PROP_KEY_COLS + ["book_norm", "price_int"])
+    
+        rows = []
+        for key, sub in dedup_books.groupby(PROP_KEY_COLS, dropna=False, sort=False):
+            book_prices = [
+                {"book": b, "price": int(p)}
+                for b, p in zip(sub["book_norm"], sub["price_int"])
+                if b is not None and p is not None
+            ]
+            rows.append((*key, book_prices))
+    
+        books_df = pd.DataFrame(rows, columns=PROP_KEY_COLS + ["book_prices"])
+    
+        card_df = base.merge(books_df, on=PROP_KEY_COLS, how="left")
+        card_df["book_prices"] = card_df["book_prices"].apply(
+            lambda x: x if isinstance(x, list) else []
+        )
+    
+        return card_df
 
     # ------------------------------------------------------
     # Sort

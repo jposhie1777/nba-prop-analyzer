@@ -174,10 +174,20 @@ load_static_ui()
 # ------------------------------------------------------
 @st.cache_resource
 def get_bq_client() -> bigquery.Client:
+    # Prefer ADC (local dev)
+    try:
+        return bigquery.Client(project=PROJECT_ID)
+    except Exception:
+        pass
+
+    # Fallback: explicit service account JSON
     if not SERVICE_JSON:
-        raise RuntimeError("Missing env var: GCP_SERVICE_ACCOUNT (JSON string)")
-    if not PROJECT_ID:
-        raise RuntimeError("Missing env var: PROJECT_ID")
+        raise RuntimeError(
+            "Missing GCP credentials. "
+            "Run `gcloud auth application-default login` "
+            "or set GCP_SERVICE_ACCOUNT."
+        )
+
     creds_dict = json.loads(SERVICE_JSON)
     creds = service_account.Credentials.from_service_account_info(
         creds_dict,
@@ -187,6 +197,7 @@ def get_bq_client() -> bigquery.Client:
         ],
     )
     return bigquery.Client(credentials=creds, project=PROJECT_ID)
+
 
 @st.cache_data(ttl=900, show_spinner=True)
 def load_bq_df(sql: str) -> pd.DataFrame:

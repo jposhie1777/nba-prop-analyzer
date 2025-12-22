@@ -3630,6 +3630,11 @@ def render_prop_cards(
     # ======================================================
     for idx, row in page_df.iterrows():
         with cols[idx % 4]:
+        
+            # --------------------------------
+            # MEMORY READ (cheap, safe)
+            # --------------------------------
+            st.caption(f"🧠 RAM: {get_mem_mb():.0f} MB")
 
             player = row.get("player") or ""
             pretty_market = MARKET_DISPLAY_MAP.get(row.get("market"), row.get("market"))

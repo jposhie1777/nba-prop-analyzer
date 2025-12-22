@@ -3082,24 +3082,23 @@ def render_prop_cards(
     min_opp_rank: int | None = None,
     page_key: str = "ev",
 ):
-        if df.empty:
-            st.info(f"No props match your filters.")
-            return
+    if df.empty:
+        st.info("No props match your filters.")
+        return
 
-        # ------------------------------------------------------
-        # BASE DF (WOWY disabled)
-        # ------------------------------------------------------
-        card_df = df.copy()
+    # ------------------------------------------------------
+    # BASE DF (WOWY disabled)
+    # ------------------------------------------------------
+    card_df = df.copy()
 
-        # ------------------------------------------------------
-        # Restrict sportsbooks
-        # ------------------------------------------------------
-        card_df = card_df[
-            card_df["bookmaker"].isin(
-                ["DraftKings", "FanDuel", "draftkings", "fanduel"]
-            )
-        ]
-
+    # ------------------------------------------------------
+    # Restrict sportsbooks
+    # ------------------------------------------------------
+    card_df = card_df[
+        card_df["bookmaker"].isin(
+            ["DraftKings", "FanDuel", "draftkings", "fanduel"]
+        )
+    ]
 
     # ------------------------------------------------------
     # Row filter
@@ -3128,6 +3127,7 @@ def render_prop_cards(
                 return False
 
         return True
+
 
     card_df = card_df[card_df.apply(card_good, axis=1)]
 

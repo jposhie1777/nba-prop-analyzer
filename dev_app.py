@@ -493,66 +493,64 @@ SELECT *
 FROM {PROJECT_ID}.{DATASET}.{PROPS_TABLE}
 """
 
-if False:
-    HISTORICAL_SQL = f"""
-    SELECT
-    player,
-    player_team,
-    home_team,
-    visitor_team,
-    game_date,
-    opponent_team,
-    home_away,
+HISTORICAL_SQL = f"""
+SELECT
+player,
+player_team,
+home_team,
+visitor_team,
+game_date,
+opponent_team,
+home_away,
 
-    pts,
-    reb,
-    ast,
-    stl,
-    blk,
-    pra,
+pts,
+reb,
+ast,
+stl,
+blk,
+pra,
 
-    -- Last 5 (already arrays in your table)
-    pts_last5_list,
-    reb_last5_list,
-    ast_last5_list,
-    stl_last5_list,
-    blk_last5_list,
-    pra_last5_list,
-    pr_last5_list,
-    pa_last5_list,
-    ra_last5_list,
+-- Last 5 (already arrays in your table)
+pts_last5_list,
+reb_last5_list,
+ast_last5_list,
+stl_last5_list,
+blk_last5_list,
+pra_last5_list,
+pr_last5_list,
+pa_last5_list,
+ra_last5_list,
 
-    -- Last 7
-    pts_last7_list,
-    reb_last7_list,
-    ast_last7_list,
-    stl_last7_list,
-    blk_last7_list,
-    pra_last7_list,
-    pr_last7_list,
-    pa_last7_list,
-    ra_last7_list,
+-- Last 7
+pts_last7_list,
+reb_last7_list,
+ast_last7_list,
+stl_last7_list,
+blk_last7_list,
+pra_last7_list,
+pr_last7_list,
+pa_last7_list,
+ra_last7_list,
 
-    -- Last 10
-    pts_last10_list,
-    reb_last10_list,
-    ast_last10_list,
-    stl_last10_list,
-    blk_last10_list,
-    pra_last10_list,
-    pr_last10_list,
-    pa_last10_list,
-    ra_last10_list,
-    last5_dates,
-    last7_dates,
-    last10_dates,
-    last20_dates
+-- Last 10
+pts_last10_list,
+reb_last10_list,
+ast_last10_list,
+stl_last10_list,
+blk_last10_list,
+pra_last10_list,
+pr_last10_list,
+pa_last10_list,
+ra_last10_list,
+last5_dates,
+last7_dates,
+last10_dates,
+last20_dates
 
-    FROM `{PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}`
-    ORDER BY game_date DESC;
-    """
-else:
-    HISTORICAL_SQL = None
+FROM `{PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}`
+ORDER BY game_date DESC;
+"""
+
 
 
 # NEW: depth chart + injury SQL

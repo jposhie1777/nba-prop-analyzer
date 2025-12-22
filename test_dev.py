@@ -1450,6 +1450,44 @@ components.html("""
     font-size: 1.1rem;
     font-weight: 700;
 }
+.expanded-analytics {
+    margin-top: 6px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.04);
+}
+
+.expanded-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.metric {
+    text-align: center;
+    font-size: 0.72rem;
+}
+
+.metric span {
+    color: #9ca3af;
+    display: block;
+}
+
+.metric strong {
+    font-size: 0.85rem;
+    color: #e5e7eb;
+}
+
+.wowy-row {
+    font-size: 0.72rem;
+    color: #e5e7eb;
+}
+
+.wowy-empty {
+    color: #9ca3af;
+    font-style: italic;
+}
 </style>
 """, height=0)
 
@@ -3268,31 +3306,67 @@ def render_prop_cards(
             if tapped:
                 toggle_expander(expand_key)
 
-            # ------------------------------------------------------
-            # EXPANDED ANALYTICS + SAVE BET
-            # ------------------------------------------------------
-            if st.session_state.get(expand_key, False):
+            # --------------------------------------------------
+            # EXPANDED ANALYTICS (REPLACEMENT — CANONICAL)
+            # --------------------------------------------------
+            is_open = (st.session_state.open_prop_card == idx)
+
+            if st.button("▾" if is_open else "▸", key=f"expand_{idx}"):
+                st.session_state.open_prop_card = None if is_open else idx
+
+            if is_open:
+                spark_vals, spark_dates = get_spark_series(row)
+
+                sparkline_html = (
+                    build_sparkline_bars_hitmiss(
+                        values=spark_vals,
+                        dates=spark_dates,
+                        line_value=line,
+                    )
+                    if spark_vals
+                    else ""
+                )
+
+                if wowy_data:
+                    injury_impact_html = render_wowy_section(
+                        wowy_data=wowy_data,
+                        stat=stat_key,
+                    )
+                else:
+                    injury_impact_html = "<div class='wowy-empty'>No injury impact</div>"
+
                 st.markdown(
-                    """
-                    <div style='padding:10px 14px; margin-top:-10px;
-                                background:rgba(255,255,255,0.05);
-                                border-radius:10px;
-                                border:1px solid rgba(255,255,255,0.1);'>
+                    f"""
+                    <div class="expanded-analytics">
+
+                        <div class="expanded-row">
+                            <div class="metric">
+                                <span>L5</span>
+                                <strong>{_fmt1(l5_avg)}</strong>
+                            </div>
+                            <div class="metric">
+                                <span>L10</span>
+                                <strong>{_fmt1(l10_avg)}</strong>
+                            </div>
+                            <div class="metric">
+                                <span>L20</span>
+                                <strong>{_fmt1(l20_avg)}</strong>
+                            </div>
+                            <div class="metric">
+                                <span>Δ Line</span>
+                                <strong>{_fmt1(delta_line)}</strong>
+                            </div>
+                        </div>
+
+                        {sparkline_html}
+
+                        {injury_impact_html}
+
+                    </div>
                     """,
                     unsafe_allow_html=True,
                 )
 
-                st.markdown("### 📊 Additional Analytics (Placeholder)")
-                st.write(
-                    """
-                    - Trend model output: **Coming soon**  
-                    - Matchup difficulty: **Placeholder**  
-                    - Usage trend: **Placeholder**  
-                    - Pace factor: **Placeholder**  
-                    """
-                )
-
-                st.markdown("---")
 
                 bet_payload = {
                     "player": player,

@@ -459,7 +459,11 @@ if missing_env and IS_DEV:
     )
 
 
-
+# -------------------------------
+# Saved Bets (simple, lightweight)
+# -------------------------------
+if "saved_bets" not in st.session_state:
+    st.session_state.saved_bets = []
 
 # ------------------------------------------------------
 # SQL STATEMENTS (BIGQUERY)
@@ -2189,6 +2193,15 @@ def build_prop_cards(card_df, hit_rate_col):
 
     return card_df
 
+def save_bet_simple(player, market, line, price, bet_type):
+    st.session_state.saved_bets.append({
+        "player": player,
+        "market": market,
+        "line": line,
+        "price": price,
+        "bet_type": bet_type,
+    })
+
 def detect_stat(market: str) -> str:
     """
     Map a props 'market' string to a stat key:
@@ -3771,56 +3784,13 @@ def render_prop_cards(
             # SAVE BET (FORENSIC DEBUG)
             # -------------------------
             if st.button("💾 Save Bet", key=f"save_{idx}"):
-            
-                st.markdown("## 🧪 SAVE BET DEBUG")
-            
-                # ---- RERUN CHECK ----
-                st.write(f"🔁 Rerun #: {st.session_state.get('rerun_count')}")
-            
-                # ---- SESSION STATE BEFORE ----
-                state_before = session_state_sizes()
-            
-                # ---- HEAP BEFORE ----
-                dump_heap("BEFORE save_bet")
-            
-                # ---- PAYLOAD VISIBILITY (CRITICAL) ----
-                payload_preview = {
-                    "player": player,
-                    "market": market,
-                    "line": line,
-                    "bet_type": bet_type,
-                }
-                payload_size_kb = len(json.dumps(payload_preview)) / 1024
-                st.warning(f"📦 Save payload size: {payload_size_kb:.2f} KB")
-            
-                # ---- ACTUAL SAVE ----
-                save_bet_for_user(
-                    user_id=user_id,
-                    player=player,
-                    market=market,
-                    line=line,
-                    bet_type=bet_type,
-                )
-            
-                # ---- SESSION STATE AFTER ----
-                state_after = session_state_sizes()
-            
-                delta = {
-                    k: state_after.get(k, 0) - state_before.get(k, 0)
-                    for k in state_after
-                    if state_after.get(k, 0) - state_before.get(k, 0) > 1024
-                }
-            
-                if delta:
-                    st.error("📈 SESSION STATE GROWTH (bytes)")
-                    st.json(delta)
-                else:
-                    st.success("✅ No meaningful session_state growth")
-            
-                # ---- HEAP AFTER ----
-                dump_heap("AFTER save_bet")
-            
-                st.toast("Saved (debug complete)", icon="🧪")
+            save_bet_simple(
+                player=row["player"],
+                market=row["market"],
+                line=row["line"],
+                price=row["price"],
+                bet_type=row["bet_type"],
+            )
 
             # -------------------------
             # FULL CARD

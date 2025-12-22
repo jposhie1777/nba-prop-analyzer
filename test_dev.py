@@ -1,85 +1,90 @@
 import os
 os.environ["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
 
-# ======================================================
-# PULSE SPORTS ANALYTICS — MINIMAL DEV APP (LOW MEMORY)
-# Keeps:
-# - Prop cards (core UI + expander + styling)
-# - Dev tab (restricted to DEV_EMAILS)
-# - Simple Saved Bets (session-state, capped)
-# ======================================================
-
+# ------------------------------------------------------
+# NBA Prop Analyzer - Merged Production + Dev UI
+# ------------------------------------------------------
+import os
 import json
+from datetime import datetime
 from urllib.parse import urlencode
 
+from dotenv import load_dotenv
+load_dotenv()
+
+import base64
+import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
+import pytz
 import requests
 import streamlit as st
+import psycopg2
+import psycopg2.extras
+import jwt
 import streamlit.components.v1 as components
+import textwrap
+import re
+from functools import lru_cache
+from rapidfuzz import fuzz, process
 
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from google.cloud import bigquery
 from google.oauth2 import service_account
+
+
+
+#def mem_diff(label: str):
+    #gc.collect()
+    #print(f"\n===== MEMORY DIFF: {label} =====")
+    #st.session_state.mem_tracker.print_diff()
 
 # ------------------------------------------------------
 # STREAMLIT CONFIG (MUST BE FIRST STREAMLIT COMMAND)
 # ------------------------------------------------------
 st.set_page_config(
-    page_title="Pulse Sports Analytics (DEV Minimal)",
+    page_title="NBA Prop Analyzer (DEV)",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
 # ------------------------------------------------------
-# CONSTANTS
+# SESSION INITIALIZATION (SAFE — NO STOP)
 # ------------------------------------------------------
-IS_DEV = True  # local dev tool
+if "session_initialized" not in st.session_state:
+    st.session_state["session_initialized"] = True
+
+# ------------------------------------------------------
+# SAFE QUERY PARAM NAVIGATION (NO RERUN)
+# ------------------------------------------------------
+if "pending_tab" in st.session_state:
+    st.query_params["tab"] = st.session_state.pop("pending_tab")
+
+# ✅ OK to call Streamlit stuff AFTER this point
+st.sidebar.markdown("🧪 DEV_APP.PY RUNNING")
+
+IS_DEV = True
+
+import psutil
+
+def get_mem_mb() -> float:
+    return psutil.Process(os.getpid()).memory_info().rss / 1e6
+
+# ======================================================
+# DEV ACCESS CONTROL (EARLY)
+# ======================================================
 DEV_EMAILS = {
     "benvrana@bottleking.com",
     "jposhie1777@gmail.com",
 }
 
-PROJECT_ID = os.getenv("PROJECT_ID", "")
-DATASET = os.getenv("BIGQUERY_DATASET", "nba_prop_analyzer")
-PROPS_TABLE = os.getenv("PROPS_TABLE", "todays_props_enriched")
-
-# SERVICE_JSON is a JSON string (not a filepath)
-SERVICE_JSON = os.getenv("GCP_SERVICE_ACCOUNT", "")
-
-APPS_SCRIPT_URL = os.getenv("APPS_SCRIPT_URL", "")
-APPS_SCRIPT_DEV_TOKEN = os.getenv("APPS_SCRIPT_DEV_TOKEN", "")
-
-# Saved bets (constant memory)
-MAX_SAVED_BETS = 150
-
-missing_env = []
-if not SERVICE_JSON:
-    missing_env.append("GCP_SERVICE_ACCOUNT")
-
-# ------------------------------------------------------
-# SAFE QUERY PARAM TAB ROUTER (NO ACCIDENTAL RERUN LOOPS)
-# ------------------------------------------------------
-def get_active_tab() -> str:
-    tab = st.query_params.get("tab")
-    if isinstance(tab, list):
-        tab = tab[0]
-    return tab or "main"
-
-def nav_to(tab: str):
-    st.session_state["pending_tab"] = tab
-
-if "pending_tab" in st.session_state:
-    st.query_params["tab"] = st.session_state.pop("pending_tab")
-
-# ------------------------------------------------------
-# DEV ACCESS CONTROL
-# ------------------------------------------------------
-def get_user_email() -> str | None:
-    # 1) Session-state override
+def get_user_email():
+    # 1️⃣ Session state (DEV override)
     user = st.session_state.get("user")
     if user and user.get("email"):
         return user["email"]
 
-    # 2) Streamlit hosted auth (if ever used)
+    # 2️⃣ Streamlit hosted auth (prod)
     try:
         email = st.experimental_user.email
         if email:
@@ -87,108 +92,44 @@ def get_user_email() -> str | None:
     except Exception:
         pass
 
-    # 3) Dev fallback
+    # 3️⃣ DEV fallback
     if IS_DEV:
         return "benvrana@bottleking.com"
 
     return None
 
-def is_dev_user() -> bool:
-    return (get_user_email() or "") in DEV_EMAILS
+
+def is_dev_user():
+    return get_user_email() in DEV_EMAILS
+
+# ======================================================
+# SAFE TAB ROUTER (DEV + MAIN)
+# ======================================================
+def get_active_tab():
+    tab = st.query_params.get("tab")
+    if isinstance(tab, list):
+        tab = tab[0]
+    return tab or "main"
 
 # ------------------------------------------------------
-# LOW-MEM UI: STATIC CSS (only what's needed)
+# DEV-SAFE BIGQUERY and GAS CONSTANTS
 # ------------------------------------------------------
+DEV_BQ_DATASET = os.getenv("BIGQUERY_DATASET", "nba_prop_analyzer")
+
+DEV_SP_TABLES = {
+    "Game Analytics": "game_analytics",
+    "Game Report": "game_report",
+    "Historical Player Stats (Trends)": "historical_player_stats",
+    "Today's Props – Enriched": "todays_props_enriched",
+    "Today's Props – Hit Rates": "todays_props_hit_rates",
+}
+
+# ======================================================
+# DEV: BigQuery Client (Explicit Credentials)
+# ======================================================
 @st.cache_resource
-def load_static_ui():
-    st.markdown(
-        """
-        <style>
-        html, body, [class*="css"] {
-            font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        }
-        body {
-            background: radial-gradient(circle at top, #020617 0, #000 55%) !important;
-        }
-        .block-container {
-            padding-top: 1rem !important;
-            padding-bottom: 2rem !important;
-            max-width: 1400px !important;
-        }
-        /* Buttons */
-        .stButton > button {
-            border-radius: 999px !important;
-            padding: 0.35rem 0.95rem !important;
-            font-weight: 600 !important;
-            border: 1px solid rgba(148,163,184,0.4) !important;
-            background: radial-gradient(circle at 0 0, #0ea5e9, #0369a1 50%, #020617 100%);
-            color: #f9fafb !important;
-            box-shadow: 0 12px 30px rgba(8,47,73,0.9);
-        }
-        .stButton > button:hover {
-            transform: translateY(-1px) scale(1.01);
-            box-shadow: 0 16px 40px rgba(8,47,73,1);
-        }
-        /* Prop cards */
-        .prop-card-wrapper { position: relative; z-index: 5; border-radius: 14px; }
-        .prop-card-wrapper summary { cursor: pointer; list-style: none; }
-        .prop-card-wrapper summary::-webkit-details-marker { display: none; }
-        .prop-card-wrapper summary * { pointer-events: none; }
-        .prop-card-wrapper .card-expanded { margin-top: 8px; pointer-events: auto; }
-        .expand-hint { text-align: center; font-size: 0.7rem; opacity: 0.65; margin-top: 6px; }
-
-        .prop-card,
-        .prop-card-wrapper summary {
-            background: rgba(15, 23, 42, 0.92);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 14px;
-            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.03);
-            padding: 12px 14px;
-        }
-        .prop-card-wrapper:hover summary {
-            border-color: rgba(14, 165, 233, 0.45);
-            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-        }
-
-        .expanded-wrap {
-            margin-top: 8px;
-            padding: 10px;
-            border-radius: 12px;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.12);
-        }
-        .expanded-row { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
-        .metric { flex: 1; text-align: center; font-size: 0.72rem; }
-        .metric span { display: block; color: #9ca3af; }
-        .metric strong { font-size: 0.85rem; font-weight: 700; color: #ffffff; }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-    components.html("", height=0)
-
-load_static_ui()
-
-# ------------------------------------------------------
-# BIGQUERY CLIENT (RESOURCE CACHED)
-# ------------------------------------------------------
-@st.cache_resource
-def get_bq_client() -> bigquery.Client:
-    # Prefer ADC (local dev)
-    try:
-        return bigquery.Client(project=PROJECT_ID)
-    except Exception:
-        pass
-
-    # Fallback: explicit service account JSON
-    if not SERVICE_JSON:
-        raise RuntimeError(
-            "Missing GCP credentials. "
-            "Run `gcloud auth application-default login` "
-            "or set GCP_SERVICE_ACCOUNT."
-        )
-
-    creds_dict = json.loads(SERVICE_JSON)
+def get_dev_bq_client():
+    creds_dict = json.loads(os.getenv("GCP_SERVICE_ACCOUNT", ""))
     creds = service_account.Credentials.from_service_account_info(
         creds_dict,
         scopes=[
@@ -196,16 +137,353 @@ def get_bq_client() -> bigquery.Client:
             "https://www.googleapis.com/auth/bigquery",
         ],
     )
-    return bigquery.Client(credentials=creds, project=PROJECT_ID)
+    project_id = os.getenv("PROJECT_ID")
 
+    return bigquery.Client(credentials=creds, project=project_id)
 
-@st.cache_data(ttl=900, show_spinner=True)
+@st.cache_data(ttl=1800, show_spinner=False)
 def load_bq_df(sql: str) -> pd.DataFrame:
-    client = get_bq_client()
-    df = client.query(sql).to_dataframe()
-    df.columns = df.columns.str.strip()
+    df = bq_client.query(sql).to_dataframe()
     df.flags.writeable = False
     return df
+
+# ======================================================
+# DEV: Google Apps Script Trigger
+# ======================================================
+def trigger_apps_script(task: str):
+    try:
+        url = os.getenv("APPS_SCRIPT_URL")
+        token = os.getenv("APPS_SCRIPT_DEV_TOKEN")
+
+        if not url:
+            raise RuntimeError("APPS_SCRIPT_URL is not set")
+        if not token:
+            raise RuntimeError("APPS_SCRIPT_DEV_TOKEN is not set")
+
+        resp = requests.post(
+            url,
+            headers={
+                "Content-Type": "application/json",
+            },
+            params={          # 👈 ADD THIS
+                "token": token
+            },
+            json={"task": task},
+            timeout=60,
+        )
+
+
+        data = resp.json()
+
+        if not data.get("success"):
+            raise RuntimeError(data.get("message"))
+
+        st.success(f"✅ {data.get('message')}")
+
+    except Exception as e:
+        st.error("❌ Apps Script trigger failed")
+        st.code(str(e))
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_table_schema(dataset: str, table: str) -> pd.DataFrame:
+    query = f"""
+    SELECT column_name, data_type
+    FROM `{dataset}.INFORMATION_SCHEMA.COLUMNS`
+    WHERE table_name = '{table}'
+    ORDER BY ordinal_position
+    """
+    df = load_bq_df(query)
+    df.flags.writeable = False
+    return df
+
+# ======================================================
+# DEV: BigQuery Stored Procedure Trigger (SAFE)
+# ======================================================
+def trigger_bq_procedure(proc_name: str):
+    try:
+        client = get_dev_bq_client()
+        sql = f"CALL `{DEV_BQ_DATASET}.{proc_name}`()"
+        job = client.query(sql)
+        job.result()  # wait, but pull no data
+        st.success(f"✅ {proc_name} completed")
+    except Exception as e:
+        st.error(f"❌ {proc_name} failed")
+        st.code(str(e))
+
+from googleapiclient.discovery import build
+from google.oauth2 import service_account
+
+
+def read_sheet_values(sheet_id: str, range_name: str) -> list[list[str]]:
+    """
+    Read values from a Google Sheet range.
+    Read-only, no caching, no memory retention.
+    """
+    creds_dict = json.loads(os.getenv("GCP_SERVICE_ACCOUNT", ""))
+    creds = service_account.Credentials.from_service_account_info(
+        creds_dict,
+        scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"],
+    )
+
+    service = build("sheets", "v4", credentials=creds, cache_discovery=False)
+    resp = (
+        service.spreadsheets()
+        .values()
+        .get(spreadsheetId=sheet_id, range=range_name)
+        .execute()
+    )
+
+    return resp.get("values", [])
+
+
+# ======================================================
+# DEV PAGE OVERRIDE (CRASH-SAFE)
+# ======================================================
+def render_dev_page():
+    st.title("⚙️ DEV CONTROL PANEL")
+    
+    if st.button("⬅ Back to Main App", use_container_width=False):
+        st.session_state["pending_tab"] = "main"
+    
+    st.caption("Always available • restricted access")
+
+    st.markdown(f"**Email:** `{get_user_email()}`")
+
+    st.divider()
+
+    st.subheader("🧪 BigQuery – Manual Stored Procedure Triggers")
+
+    BQ_PROCS = [
+        ("Game Analytics", "sp_game_analytics"),
+        ("Game Report", "sp_game_report"),
+        ("Historical Player Stats (Trends)", "sp_historical_player_stats_for_trends"),
+        ("Today's Props – Enriched", "sp_todays_props_enriched"),
+        ("Today's Props – Hit Rates", "sp_todays_props_with_hit_rates"),
+    ]
+
+    for label, proc in BQ_PROCS:
+        col1, col2 = st.columns([3, 1])
+
+        with col1:
+            st.markdown(f"**{label}**")
+            st.caption(f"`{DEV_BQ_DATASET}.{proc}`")
+
+        with col2:
+            if st.button(
+                "▶ Run",
+                key=f"run_{proc}",
+                use_container_width=True
+            ):
+                with st.spinner(f"Running {proc}…"):
+                    trigger_bq_procedure(proc)
+
+
+    st.divider()
+
+    st.subheader("Cloud Run")
+    if st.button("▶ Trigger ESPN Lineups"):
+        trigger_cloud_run("espn-nba-lineups")
+
+    st.divider()
+
+    st.subheader("📄 Google Apps Script")
+
+    APPS_TASKS = [
+        ("NBA Alternate Props", "NBA_ALT_PROPS"),
+        ("NBA Game Odds", "NBA_GAME_ODDS"),
+        ("NCAAB Game Odds", "NCAAB_GAME_ODDS"),
+        ("Run ALL (Daily Runner)", "ALL"),
+    ]
+
+    for label, task in APPS_TASKS:
+        col1, col2 = st.columns([3, 1])
+
+        with col1:
+            st.markdown(f"**{label}**")
+
+        with col2:
+            if st.button(
+                "▶ Run",
+                key=f"apps_{task}",
+                use_container_width=True
+            ):
+                with st.spinner(f"Running {label}…"):
+                    trigger_apps_script(task)
+
+    st.divider()
+    st.subheader("📊 Google Sheet Sanity Checks")
+
+    SHEET_ID = "1p_rmmiUgU18afioJJ3jCHh9XeX7V4gyHd_E0M3A8M3g"
+
+    st.markdown("## 🧪 Stored Procedure Outputs – Schema Preview")
+
+    for label, table in DEV_SP_TABLES.items():
+        st.subheader(label)
+    
+        with st.expander("📋 View Columns"):
+            try:
+                schema_df = get_table_schema("nba_prop_analyzer", table)
+    
+                if schema_df.empty:
+                    st.warning("No columns found (table may not exist yet).")
+                else:
+                    st.dataframe(
+                        schema_df,
+                        use_container_width=True,
+                        hide_index=True
+                    )
+    
+            except Exception as e:
+                st.error(f"Failed to load schema: {e}")
+
+    # --------------------------------------------------
+    # 1) Odds tab checks
+    # --------------------------------------------------
+    try:
+        odds_rows = read_sheet_values(SHEET_ID, "Odds!A:I")
+
+        has_odds_data = len(odds_rows) > 1
+
+        labels = []
+        if has_odds_data:
+            labels = [
+                (r[8] or "").strip().lower()
+                for r in odds_rows[1:]
+                if len(r) >= 9
+            ]
+
+        has_over = any("over" in l for l in labels)
+        has_under = any("under" in l for l in labels)
+
+        st.markdown("**Odds Tab**")
+
+        if has_odds_data:
+            st.success("✅ Rows exist after header")
+        else:
+            st.error("❌ No rows found after header")
+
+        if has_over and has_under:
+            st.success("✅ Both Over and Under found in `label` column")
+        elif has_over:
+            st.warning("⚠️ Only Over found in `label` column")
+        elif has_under:
+            st.warning("⚠️ Only Under found in `label` column")
+        else:
+            st.error("❌ No Over / Under values found in `label` column")
+
+    except Exception as e:
+        st.error("❌ Failed to read Odds tab")
+        st.code(str(e))
+
+
+    # --------------------------------------------------
+    # 2) Game Odds Sheet checks
+    # --------------------------------------------------
+    try:
+        game_odds_rows = read_sheet_values(SHEET_ID, "Game Odds Sheet!A:A")
+
+        has_game_odds_data = len(game_odds_rows) > 1
+
+        st.markdown("**Game Odds Sheet**")
+
+        if has_game_odds_data:
+            st.success("✅ Rows exist after header")
+        else:
+            st.error("❌ No rows found after header")
+
+    except Exception as e:
+        st.error("❌ Failed to read Game Odds Sheet")
+        st.code(str(e))
+
+
+        st.success("DEV page loaded successfully.")
+
+
+
+# ======================================================
+# EARLY EXIT — NOTHING BELOW THIS CAN BLOCK DEV PAGE
+# ======================================================
+active_tab = get_active_tab()
+
+# ---------------- DEV TAB (CRASH SAFE) ----------------
+if active_tab == "dev":
+    if not is_dev_user():
+        st.error("⛔ Access denied")
+        st.stop()
+
+    render_dev_page()
+    st.stop()
+
+
+# ------------------------------------------------------
+# ENVIRONMENT VARIABLES
+# ------------------------------------------------------
+PROJECT_ID = os.getenv("PROJECT_ID", "")
+
+DATASET = os.getenv("BIGQUERY_DATASET", "nba_prop_analyzer")
+PROPS_TABLE = "todays_props_enriched"
+HISTORICAL_TABLE = "historical_player_stats_for_trends"
+
+# SERVICE_JSON is a JSON string (not a filepath)
+SERVICE_JSON = os.getenv("GCP_SERVICE_ACCOUNT", "")
+
+# Auth0
+AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN", "")
+AUTH0_CLIENT_ID = os.getenv("AUTH0_CLIENT_ID", "")
+AUTH0_CLIENT_SECRET = os.getenv("AUTH0_CLIENT_SECRET", "")
+AUTH0_REDIRECT_URI = os.getenv("AUTH0_REDIRECT_URI", "")
+AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE", "")
+
+# Render PostgreSQL
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+
+missing_env = []
+if not PROJECT_ID:
+    missing_env.append("PROJECT_ID")
+if not SERVICE_JSON:
+    missing_env.append("GCP_SERVICE_ACCOUNT")
+if not DATABASE_URL:
+    missing_env.append("DATABASE_URL")
+if not AUTH0_DOMAIN:
+    missing_env.append("AUTH0_DOMAIN")
+if not AUTH0_CLIENT_ID:
+    missing_env.append("AUTH0_CLIENT_ID")
+if not AUTH0_CLIENT_SECRET:
+    missing_env.append("AUTH0_CLIENT_SECRET")
+if not AUTH0_REDIRECT_URI:
+    missing_env.append("AUTH0_REDIRECT_URI")
+if not AUTH0_AUDIENCE:
+    missing_env.append("AUTH0_AUDIENCE")
+
+if missing_env and not IS_DEV:
+    st.error(
+        "❌ Missing required environment variables:\n\n"
+        + "\n".join(f"- {m}" for m in missing_env)
+    )
+    st.stop()
+
+if missing_env and IS_DEV:
+    st.warning(
+        "⚠️ DEV MODE: Missing env vars ignored:\n\n"
+        + "\n".join(f"- {m}" for m in missing_env)
+    )
+
+
+# -------------------------------
+# Saved Bets (constant-memory)
+# -------------------------------
+MAX_SAVED_BETS = 150  # keep this small + stable
+
+def _bet_key(player, market, line, bet_type):
+    # minimal stable key — avoids duplicates + memory bloat
+    return f"{player}|{market}|{line}|{bet_type}".lower().strip()
+
+if "saved_bets" not in st.session_state:
+    st.session_state.saved_bets = []
+
+if "saved_bets_keys" not in st.session_state:
+    st.session_state.saved_bets_keys = set()
+
 
 # ------------------------------------------------------
 # DATA: PROPS (ONLY TABLE WE LOAD)

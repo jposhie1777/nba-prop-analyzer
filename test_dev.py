@@ -469,6 +469,93 @@ if missing_env and IS_DEV:
         + "\n".join(f"- {m}" for m in missing_env)
     )
 
+# -------------------------------
+# Global Styles
+# -------------------------------
+/* ---------- PROP CARDS ---------- */
+.prop-card-wrapper {
+    position: relative;
+    z-index: 5;
+    border-radius: 14px;
+}
+
+.prop-card-wrapper summary {
+    cursor: pointer;
+    list-style: none;
+}
+
+.prop-card-wrapper summary::-webkit-details-marker {
+    display: none;
+}
+
+.prop-card-wrapper summary * {
+    pointer-events: none;
+}
+
+.prop-card-wrapper .card-expanded {
+    margin-top: 8px;
+    pointer-events: auto;
+}
+
+.expand-hint {
+    text-align: center;
+    font-size: 0.7rem;
+    opacity: 0.65;
+    margin-top: 6px;
+}
+
+/* ---------- PROP CARD BASE ---------- */
+.prop-card,
+.prop-card-wrapper summary {
+    background: rgba(15, 23, 42, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    box-shadow:
+        0 6px 18px rgba(0, 0, 0, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    padding: 12px 14px;
+}
+
+.prop-card-wrapper:hover summary {
+    border-color: rgba(14, 165, 233, 0.45);
+    box-shadow:
+        0 10px 28px rgba(0, 0, 0, 0.6),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* ---------- EXPANDED METRICS ---------- */
+.expanded-wrap {
+    margin-top: 8px;
+    padding: 10px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+}
+
+.expanded-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.metric {
+    flex: 1;
+    text-align: center;
+    font-size: 0.72rem;
+}
+
+.metric span {
+    display: block;
+    color: #9ca3af;
+}
+
+.metric strong {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #ffffff;
+}
+
 
 # -------------------------------
 # Saved Bets (constant-memory)
@@ -681,32 +768,29 @@ def build_prop_cards(card_df: pd.DataFrame, hit_rate_col: str) -> pd.DataFrame:
 
 def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
     if df.empty:
-        st.info("No props match your filters.")
+        st.info(f"No props match your filters.")
         return
 
-    # ensure column exists
     if hit_rate_col not in df.columns:
         st.warning(f"Missing column: {hit_rate_col}")
         return
 
-    # build compact card df
     card_df = build_prop_cards(df, hit_rate_col=hit_rate_col)
 
-    st.markdown("<div class='prop-grid'>", unsafe_allow_html=True)
-
-    # Render in a single column to keep DOM smaller (lower memory)
     for _, row in card_df.iterrows():
-        player = row.get("player", "")
-        market = row.get("market", "")
-        bet_type = row.get("bet_type", "")
-        line = row.get("line", None)
-        team = row.get("player_team", "")
-        opp = row.get("opponent_team", "")
-        odds = row.get("price", None)
 
-        hit = row.get(hit_rate_col, None)
-        implied = row.get("implied_prob", None)
-        if implied is None or (isinstance(implied, float) and pd.isna(implied)):
+        player = f"{row.get('player', '')}"
+        market = f"{row.get('market', '')}"
+        bet_type = f"{row.get('bet_type', '')}"
+        team = f"{row.get('player_team', '')}"
+        opp = f"{row.get('opponent_team', '')}"
+        line = row.get("line")
+        odds = row.get("price")
+
+        hit = row.get(hit_rate_col)
+        implied = row.get("implied_prob")
+
+        if implied is None or pd.isna(implied):
             implied = compute_implied_prob(odds)
 
         edge = None
@@ -714,8 +798,14 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
             edge = float(hit) - float(implied)
 
         books = row.get("book_prices", [])
-        books_line = " • ".join(f"{b.get('book','')} {fmt_odds(b.get('price'))}" for b in books[:4])  # cap
+        books_line = f" • ".join(
+            f"{b.get('book','')} {fmt_odds(b.get('price'))}"
+            for b in books[:4]
+        )
 
+        # --------------------------------------------------
+        # BASE CARD HTML (STRICT f-STRINGS)
+        # --------------------------------------------------
         base_card_html = (
             f"<div class='prop-card'>"
             f"<div style='display:flex;justify-content:space-between;gap:10px;'>"
@@ -734,6 +824,9 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
             f"</div>"
         )
 
+        # --------------------------------------------------
+        # EXPANDED HTML (STRICT f-STRINGS)
+        # --------------------------------------------------
         expanded_html = (
             f"<div class='expanded-wrap'>"
             f"  <div class='expanded-row'>"
@@ -744,22 +837,35 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
             f"</div>"
         )
 
-        # Save Bet (simple, constant memory)
+        # --------------------------------------------------
+        # SAVE BET (OUTSIDE SUMMARY)
+        # --------------------------------------------------
         save_key = f"save_{player}_{market}_{line}_{bet_type}"
-        if st.button("💾 Save Bet", key=save_key):
-            ok = save_bet_simple(player=player, market=market, line=line, price=odds, bet_type=bet_type)
-            st.toast("Saved ✅" if ok else "Already saved")
+        if st.button(f"💾 Save Bet", key=save_key):
+            ok = save_bet_simple(
+                player=player,
+                market=market,
+                line=line,
+                price=odds,
+                bet_type=bet_type,
+            )
+            st.toast(f"Saved ✅" if ok else f"Already saved")
 
-        # Card expand UI
+        # --------------------------------------------------
+        # CARD EXPAND UI (STRICT STRUCTURE)
+        # --------------------------------------------------
         st.markdown(
             f"<details class='prop-card-wrapper'>"
-            f"<summary>{base_card_html}<div class='expand-hint'>Click to expand ▾</div></summary>"
-            f"<div class='card-expanded'>{expanded_html}</div>"
+            f"<summary>"
+            f"{base_card_html}"
+            f"<div class='expand-hint'>Click to expand ▾</div>"
+            f"</summary>"
+            f"<div class='card-expanded'>"
+            f"{expanded_html}"
+            f"</div>"
             f"</details>",
             unsafe_allow_html=True,
         )
-
-    st.markdown("</div>", unsafe_allow_html=True)
 
 # ------------------------------------------------------
 # DEV TAB CONTENT (keep, but avoid heavy data pulls)

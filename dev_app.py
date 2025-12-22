@@ -4020,6 +4020,13 @@ if sport == "NBA":
         # ------------------------------------------
         df = filter_props(props_df)
 
+        st.write("DEBUG df value:", df)
+        st.write("DEBUG df type:", type(df))
+        
+        if df is None:
+            st.error("❌ df is None at top-level before price coercion")
+            st.stop()
+
         # Ensure numeric
         df["price"] = pd.to_numeric(df["price"], errors="coerce")
         df["hit_rate_last5"] = pd.to_numeric(df["hit_rate_last5"], errors="coerce")

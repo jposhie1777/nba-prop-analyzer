@@ -460,12 +460,6 @@ if missing_env and IS_DEV:
 
 
 # -------------------------------
-# Saved Bets (simple, lightweight)
-# -------------------------------
-if "saved_bets" not in st.session_state:
-    st.session_state.saved_bets = []
-
-# -------------------------------
 # Saved Bets (constant-memory)
 # -------------------------------
 MAX_SAVED_BETS = 150  # keep this small + stable
@@ -1434,28 +1428,12 @@ FILE_DIR = pathlib.Path(__file__).resolve().parent
 # Correct logo directory
 LOGO_DIR = FILE_DIR / "static" / "logos"
 
-def logo_to_base64_local(path: str) -> str:
-    try:
-        with open(path, "rb") as f:
-            encoded = base64.b64encode(f.read()).decode("utf-8")
-            return f"data:image/png;base64,{encoded}"
-    except Exception as e:
-        print(f"Error loading logo {path}: {e}")
-        return ""
-
 SPORTSBOOK_LOGOS = {
     "DraftKings": str(LOGO_DIR / "Draftkingssmall.png"),
     "FanDuel": str(LOGO_DIR / "Fanduelsmall.png"),
 }
 
-SPORTSBOOK_LOGOS_BASE64 = {
-    name: logo_to_base64_local(path)
-    for name, path in SPORTSBOOK_LOGOS.items()
-}
-
 import os
-
-
 
 MARKET_DISPLAY_MAP = {
     "player_assists_alternate": "Assists",
@@ -1517,15 +1495,27 @@ def logo_to_base64_url(url: str) -> str:
     except:
         return ""
 
-TEAM_LOGOS_BASE64 = {
-    code: logo_to_base64_url(url)
-    for code, url in TEAM_LOGOS.items()
-}
+# ------------------------------------------------------
+# CACHED TEAM LOGOS (BASE64) — RUNS ONCE PER SESSION
+# ------------------------------------------------------
+@st.cache_resource
+def get_team_logos_base64():
+    return {
+        code: logo_to_base64_url(url)
+        for code, url in TEAM_LOGOS.items()
+    }
 
-SPORTSBOOK_LOGOS_BASE64 = {
-    name: logo_to_base64_local(path)
-    for name, path in SPORTSBOOK_LOGOS.items()
-}
+TEAM_LOGOS_BASE64 = get_team_logos_base64()
+
+@st.cache_resource
+def get_sportsbook_logos_base64():
+    return {
+        name: logo_to_base64_local(path)
+        for name, path in SPORTSBOOK_LOGOS.items()
+    }
+
+SPORTSBOOK_LOGOS_BASE64 = get_sportsbook_logos_base64()
+
 
 NO_IMAGE = "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
 

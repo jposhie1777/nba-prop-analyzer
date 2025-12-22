@@ -3082,26 +3082,24 @@ def render_prop_cards(
     min_opp_rank: int | None = None,
     page_key: str = "ev",
 ):
-    if df.empty:
-        st.info(f"No props match your filters.")
-        return
+        if df.empty:
+            st.info(f"No props match your filters.")
+            return
 
-    # ------------------------------------------------------
-    # WOWY merge (already safe / cached)
-    # ------------------------------------------------------
-    #card_df = attach_wowy_deltas(df, wowy_df)
-    #if card_df is None:
-        #st.error("attach_wowy_deltas returned None")
-        #st.stop()
+        # ------------------------------------------------------
+        # BASE DF (WOWY disabled)
+        # ------------------------------------------------------
+        card_df = df.copy()
 
-    # ------------------------------------------------------
-    # Restrict sportsbooks
-    # ------------------------------------------------------
-    card_df = card_df[
-        card_df["bookmaker"].isin(
-            ["DraftKings", "FanDuel", "draftkings", "fanduel"]
-        )
-    ]
+        # ------------------------------------------------------
+        # Restrict sportsbooks
+        # ------------------------------------------------------
+        card_df = card_df[
+            card_df["bookmaker"].isin(
+                ["DraftKings", "FanDuel", "draftkings", "fanduel"]
+            )
+        ]
+
 
     # ------------------------------------------------------
     # Row filter

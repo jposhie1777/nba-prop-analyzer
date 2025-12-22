@@ -493,64 +493,66 @@ SELECT *
 FROM {PROJECT_ID}.{DATASET}.{PROPS_TABLE}
 """
 
-HISTORICAL_SQL = f"""
-SELECT
-  player,
-  player_team,
-  home_team,
-  visitor_team,
-  game_date,
-  opponent_team,
-  home_away,
+if False:
+    HISTORICAL_SQL = f"""
+    SELECT
+    player,
+    player_team,
+    home_team,
+    visitor_team,
+    game_date,
+    opponent_team,
+    home_away,
 
-  pts,
-  reb,
-  ast,
-  stl,
-  blk,
-  pra,
+    pts,
+    reb,
+    ast,
+    stl,
+    blk,
+    pra,
 
-  -- Last 5 (already arrays in your table)
-  pts_last5_list,
-  reb_last5_list,
-  ast_last5_list,
-  stl_last5_list,
-  blk_last5_list,
-  pra_last5_list,
-  pr_last5_list,
-  pa_last5_list,
-  ra_last5_list,
+    -- Last 5 (already arrays in your table)
+    pts_last5_list,
+    reb_last5_list,
+    ast_last5_list,
+    stl_last5_list,
+    blk_last5_list,
+    pra_last5_list,
+    pr_last5_list,
+    pa_last5_list,
+    ra_last5_list,
 
-  -- Last 7
-  pts_last7_list,
-  reb_last7_list,
-  ast_last7_list,
-  stl_last7_list,
-  blk_last7_list,
-  pra_last7_list,
-  pr_last7_list,
-  pa_last7_list,
-  ra_last7_list,
+    -- Last 7
+    pts_last7_list,
+    reb_last7_list,
+    ast_last7_list,
+    stl_last7_list,
+    blk_last7_list,
+    pra_last7_list,
+    pr_last7_list,
+    pa_last7_list,
+    ra_last7_list,
 
-  -- Last 10
-  pts_last10_list,
-  reb_last10_list,
-  ast_last10_list,
-  stl_last10_list,
-  blk_last10_list,
-  pra_last10_list,
-  pr_last10_list,
-  pa_last10_list,
-  ra_last10_list,
-  last5_dates,
-  last7_dates,
-  last10_dates,
-  last20_dates
+    -- Last 10
+    pts_last10_list,
+    reb_last10_list,
+    ast_last10_list,
+    stl_last10_list,
+    blk_last10_list,
+    pra_last10_list,
+    pr_last10_list,
+    pa_last10_list,
+    ra_last10_list,
+    last5_dates,
+    last7_dates,
+    last10_dates,
+    last20_dates
 
-FROM `{PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}`
-ORDER BY game_date DESC;
-"""
-
+    FROM `{PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}`
+    ORDER BY game_date DESC;
+    """
+else:
+    HISTORICAL_SQL = None
 
 
 # NEW: depth chart + injury SQL
@@ -3532,7 +3534,7 @@ def render_saved_bets_tab(user_id: int):
 
 if sport == "NBA":
     # Saved Bets moved to LAST position in the bar
-    tab1, tab2, tab3, tab4 = st.tabs(
+    tab1, tab2, tab4 = st.tabs(
         [
             "📈 Props",
             "🏀 Game Lines",
@@ -4105,197 +4107,6 @@ if sport == "NBA":
                 home_ml_text, away_ml_text,
                 spread_text, total_text
             )
-
-
-    # ------------------------------------------------------
-    # TAB 3 — TREND LAB (same as your old Tab 2)
-    # ------------------------------------------------------
-    with tab3:
-        st.subheader("Trend Lab (Real History + Dynamic Line)")
-
-        c1, c2, c3 = st.columns([1.2, 1.2, 1])
-        with c1:
-            player = st.selectbox(
-                "Player", sorted(props_df["player"].dropna().unique())
-            )
-        with c2:
-            stat_label = st.selectbox("Stat", ["Points", "Rebounds", "Assists", "P+R+A", "Steals", "Blocks"])
-        with c3:
-            n_games = st.slider("Last N games", 5, 25, 15)
-
-        stat_map = {
-            "Points": "pts",
-            "Rebounds": "reb",
-            "Assists": "ast",
-            "P+R+A": "pra",
-            "Steals": "stl",
-            "Blocks": "blk",
-        }
-
-        stat = stat_map[stat_label]
-
-        def clean_name(name):
-            if not isinstance(name, str):
-                return ""
-            return (
-                name.lower()
-                .replace(".", "")
-                .replace("-", " ")
-                .strip()
-            )
-
-        history_df["player_clean"] = history_df["player"].apply(clean_name)
-        player_clean = clean_name(player)
-
-        df_trend = history_df[history_df["player_clean"] == player_clean].copy()
-
-        df_trend[stat] = pd.to_numeric(df_trend[stat], errors="coerce")
-        df_trend = df_trend[df_trend[stat].notna()]
-
-        df_trend = (
-            df_trend.sort_values("game_date")
-            .drop_duplicates(subset=["game_date"], keep="last")
-            .reset_index(drop=True)
-        )
-
-        df_trend = df_trend.sort_values("game_date").tail(n_games).reset_index(drop=True)
-
-        if df_trend.empty:
-            st.info("No historical data found for this selection.")
-        else:
-            df_trend["date_str"] = df_trend["game_date"].dt.strftime("%b %d")
-
-            market_map = {
-                "Points": "player_points_alternate",
-                "Rebounds": "player_rebounds_alternate",
-                "Assists": "player_assists_alternate",
-                "P+R+A": "player_points_rebounds_assists_alternate",
-                "Steals": "player_steals_alternate",
-                "Blocks": "player_blocks_alternate",
-            }
-
-            selected_market_code = market_map[stat_label]
-
-            player_props = props_df[
-                (props_df["player"] == player)
-                & (props_df["market"] == selected_market_code)
-            ]
-
-            if not player_props.empty:
-                available_lines = sorted(
-                    player_props["line"].dropna().unique().astype(float)
-                )
-                line = st.selectbox("Line", available_lines, index=0)
-            else:
-                line = st.number_input(
-                    f"No real props found. Enter custom line for {stat_label}",
-                    min_value=0.0,
-                    value=10.0,
-                    step=0.5,
-                )
-
-            df_trend["hit"] = df_trend[stat] > float(line)
-            df_trend["rolling"] = df_trend[stat].rolling(window=5, min_periods=1).mean()
-
-            hit_rate = df_trend["hit"].mean()
-            avg_last5 = df_trend[stat].tail(5).mean()
-            std_dev = df_trend[stat].std()
-            last_game_value = df_trend[stat].iloc[-1]
-
-            metric_row = f"""
-            <div class="metric-grid" style="margin-top:0.25rem;margin-bottom:1rem;">
-                <div class="metric-card">
-                    <div class="metric-label">Hit Rate</div>
-                    <div class="metric-value">{hit_rate:.0%}</div>
-                    <div class="metric-sub">{df_trend['hit'].sum()} of {len(df_trend)} games</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">Avg Last 5</div>
-                    <div class="metric-value">{avg_last5:.1f}</div>
-                    <div class="metric-sub">recent form</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">Consistency</div>
-                    <div class="metric-value">{std_dev:.1f}</div>
-                    <div class="metric-sub">std deviation</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">Last Game</div>
-                    <div class="metric-value">{last_game_value:.0f}</div>
-                    <div class="metric-sub">{'Hit' if last_game_value > line else 'Miss'} vs {line}</div>
-                </div>
-            </div>
-            """
-            st.markdown(metric_row, unsafe_allow_html=True)
-
-            hover = [
-                (
-                    f"<b>{row['date_str']}</b><br>"
-                    f"{stat_label}: {row[stat]}<br>"
-                    f"5-game avg: {row['rolling']:.1f}<br>"
-                    f"Opponent: {row['opponent_team']}<br>"
-                    f"{'Hit' if row['hit'] else 'Miss'} vs line {line}"
-                )
-                for _, row in df_trend.iterrows()
-            ]
-
-            fig = go.Figure()
-
-            fig.add_bar(
-                x=df_trend["date_str"],
-                y=df_trend[stat],
-                marker_color=["#22c55e" if h else "#ef4444" for h in df_trend["hit"]],
-                hovertext=hover,
-                hoverinfo="text",
-                name="Game Result",
-            )
-
-            fig.add_trace(
-                go.Scatter(
-                    x=df_trend["date_str"],
-                    y=df_trend["rolling"],
-                    mode="lines+markers",
-                    line=dict(width=3, color=theme["accent"]),
-                    marker=dict(size=6),
-                    name="5-game Avg",
-                )
-            )
-
-            fig.add_hline(
-                y=line,
-                line_dash="dot",
-                line_color="#e5e7eb",
-                annotation_text=f"Line {line}",
-                annotation_position="top left",
-            )
-
-            fig.update_layout(
-                template="plotly_dark",
-                height=420,
-                margin=dict(l=30, r=20, t=40, b=30),
-                plot_bgcolor="rgba(0,0,0,0)",
-                paper_bgcolor="rgba(0,0,0,0)",
-                bargap=0.25,
-            )
-
-            st.plotly_chart(fig, use_container_width=True)
-
-            ribbon_html = "<div style='display:flex;gap:4px;margin:6px 0;'>"
-            for h in df_trend["hit"]:
-                ribbon_html += (
-                    "<div style='width:14px;height:14px;border-radius:3px;background:#22c55e;'></div>"
-                    if h
-                    else "<div style='width:14px;height:14px;border-radius:3px;background:#ef4444;'></div>"
-                )
-            ribbon_html += "</div>"
-            st.markdown(ribbon_html, unsafe_allow_html=True)
-
-            table_df = df_trend.copy()
-            table_df["Outcome"] = table_df["hit"].map({True: "Hit", False: "Miss"})
-            table_df_display = table_df[["date_str", "opponent_team", stat, "Outcome"]]
-            table_df_display.columns = ["Date", "Opponent", stat_label, "Outcome"]
-
-            st.dataframe(table_df_display, use_container_width=True, hide_index=True)
 
 
     # ======================================================

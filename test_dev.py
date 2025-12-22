@@ -3267,10 +3267,13 @@ def render_prop_cards(
             # --------------------------------------------------
             # EXPAND TOGGLE (NEW — SINGLE SOURCE OF TRUTH)
             # --------------------------------------------------
-            is_open = (st.session_state.open_prop_card == idx)
+            is_open = (st.session_state.open_prop_card == expand_btn_key)
 
-            if st.button("▾" if is_open else "▸", key=f"expand_{idx}"):
-                st.session_state.open_prop_card = None if is_open else idx
+            expand_btn_key = f"{page_key}_expand_{idx}"
+
+            if st.button("▾" if is_open else "▸", key=expand_btn_key):
+                st.session_state.open_prop_card = None if is_open else expand_btn_key
+
 
 
             # --------------------------------------------------

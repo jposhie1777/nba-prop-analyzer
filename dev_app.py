@@ -2008,10 +2008,10 @@ def convert_list_columns(df):
 @st.cache_data(ttl=1800)
 def load_historical_df():
     if not HISTORICAL_SQL:
-        return pd.DataFrame()
+        return pd.DataFrame(columns=["player"])
 
-    df = load_bq_df(HISTORICAL_SQL).copy()
-    return df
+    return load_bq_df(HISTORICAL_SQL).copy()
+
 
 
 @st.cache_data(ttl=1800, show_spinner=True)
@@ -2149,8 +2149,11 @@ def get_rolling_avg(row, window: int):
 props_df = load_props()
 history_df = load_historical_df()
 
-if history_df.empty:
-    st.info("Historical data disabled.")
+if not history_df.empty and "player" in history_df.columns:
+    history_df["player_norm"] = history_df["player"].apply(normalize_name)
+else:
+    history_df = pd.DataFrame()
+
 
 depth_df = load_depth_charts()
 injury_df = load_injury_report()    # <-- MUST COME BEFORE FIX

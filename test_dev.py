@@ -748,6 +748,17 @@ FROM `nba_prop_analyzer.historical_player_stats_for_trends`
 
 PROPS_SQL = f"SELECT * FROM `{PROJECT_ID}.{DATASET}.{PROPS_TABLE}`"
 
+@st.cache_data(ttl=1800, show_spinner=False)
+def load_trends() -> pd.DataFrame:
+    df = load_bq_df(TRENDS_SQL)
+
+    # Normalize player key
+    df["player"] = df["player"].astype(str)
+
+    df.flags.writeable = False
+    return df
+
+
 @st.cache_data(ttl=900, show_spinner=True)
 def load_props() -> pd.DataFrame:
     df = load_bq_df(PROPS_SQL)
@@ -945,21 +956,22 @@ def get_l10_values(row):
     key = normalize_market_key(row.get("market"))
 
     if key == "points":
-        return coerce_numeric_list(row.get("points_last10_list"))
+        return coerce_numeric_list(row.get("pts_last10_list"))
     if key == "rebounds":
-        return coerce_numeric_list(row.get("rebounds_last10_list"))
+        return coerce_numeric_list(row.get("reb_last10_list"))
     if key == "assists":
-        return coerce_numeric_list(row.get("assists_last10_list"))
+        return coerce_numeric_list(row.get("ast_last10_list"))
     if key == "pra":
         return coerce_numeric_list(row.get("pra_last10_list"))
     if key == "points_assists":
-        return coerce_numeric_list(row.get("points_assists_last10_list"))
+        return coerce_numeric_list(row.get("pa_last10_list"))
     if key == "points_rebounds":
-        return coerce_numeric_list(row.get("points_rebounds_last10_list"))
+        return coerce_numeric_list(row.get("pr_last10_list"))
     if key == "rebounds_assists":
-        return coerce_numeric_list(row.get("rebounds_assists_last10_list"))
+        return coerce_numeric_list(row.get("ra_last10_list"))
 
     return []
+
     
 def pretty_market_label(market: str) -> str:
     m = (market or "").lower()
@@ -1332,6 +1344,20 @@ with tab_props:
     if props_df.empty:
         st.info("No props returned from BigQuery.")
         st.stop()
+
+    # ------------------------------
+    # LOAD + MERGE HISTORICAL TRENDS (L10)
+    # ------------------------------
+    trends_df = load_trends()
+
+    props_df = props_df.merge(
+        trends_df,
+        on="player",
+        how="left",
+    )
+
+    record_memory_checkpoint()
+
 
     # ------------------------------
     # BUILD FILTER OPTIONS

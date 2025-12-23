@@ -723,30 +723,22 @@ if "saved_bets_keys" not in st.session_state:
 # ------------------------------------------------------
 # DATA: PROPS AND HISTOICAL STATS (minimal)
 # ------------------------------------------------------
-TRENDS_SQL = """
+PROPS_SQL = f"""
 SELECT
-    player,
+    p.*,
 
-    -- Core counting stats (L10 only)
-    pts_last10_list,
-    reb_last10_list,
-    ast_last10_list,
-    stl_last10_list,
-    blk_last10_list,
+    t.pts_last10_list,
+    t.reb_last10_list,
+    t.ast_last10_list,
+    t.pra_last10_list,
+    t.pr_last10_list,
+    t.pa_last10_list,
+    t.ra_last10_list
 
-    -- Combo stats (L10 only)
-    pra_last10_list,
-    pr_last10_list,
-    pa_last10_list,
-    ra_last10_list,
-
-    -- Optional (dates)
-    last10_dates
-
-FROM `nba_prop_analyzer.historical_player_stats_for_trends`
+FROM `{PROJECT_ID}.{DATASET}.todays_props_enriched` p
+LEFT JOIN `{PROJECT_ID}.{DATASET}.historical_player_stats_for_trends` t
+    ON p.player = t.player
 """
-
-PROPS_SQL = f"SELECT * FROM `{PROJECT_ID}.{DATASET}.{PROPS_TABLE}`"
 
 @st.cache_data(ttl=900, show_spinner=True)
 def load_props() -> pd.DataFrame:
@@ -754,14 +746,28 @@ def load_props() -> pd.DataFrame:
 
     # Keep only columns we actually use (cuts memory)
     keep = [
+        # --- Core prop fields ---
         "player", "player_team",
         "home_team", "visitor_team", "opponent_team",
         "market", "line", "bet_type",
         "bookmaker", "price",
+    
+        # --- Hit rates / EV ---
         "hit_rate_last5", "hit_rate_last10", "hit_rate_last20",
         "implied_prob",
         "edge_pct", "edge_raw",
+    
+        # --- Dates ---
         "game_date",
+    
+        # --- L10 sparkline lists (REQUIRED) ---
+        "points_last10_list",
+        "rebounds_last10_list",
+        "assists_last10_list",
+        "pra_last10_list",
+        "points_rebounds_last10_list",
+        "points_assists_last10_list",
+        "rebounds_assists_last10_list",
     ]
     cols = [c for c in keep if c in df.columns]
     df = df[cols].copy()

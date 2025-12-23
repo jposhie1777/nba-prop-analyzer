@@ -722,6 +722,7 @@ if "saved_bets_keys" not in st.session_state:
 # ------------------------------------------------------
 # DATA: PROPS AND HISTOICAL STATS (minimal)
 # ------------------------------------------------------
+PROPS_SQL = f"""
 SELECT
     p.player,
     p.player_team,
@@ -753,6 +754,8 @@ SELECT
 FROM `{PROJECT_ID}.{DATASET}.todays_props_enriched` p
 LEFT JOIN `{PROJECT_ID}.{DATASET}.historical_player_stats_for_trends` t
     ON p.player = t.player
+"""
+
 
 
 def load_props() -> pd.DataFrame:

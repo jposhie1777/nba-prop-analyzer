@@ -1229,40 +1229,46 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
             f"<div class='prop-card card-grid'>"
         
             # ==================================================
-            # HEADER: PLAYER + MATCHUP
+            # TOP BAR: MATCHUP | PLAYER + MARKET | BOOK + ODDS
             # ==================================================
-            f"<div style='display:flex;justify-content:space-between;align-items:flex-start;'>"
+            f"<div style='display:grid;grid-template-columns:1fr 2fr 1fr;align-items:center;'>"
         
-            f"<div style='font-weight:900;font-size:1.15rem;letter-spacing:-0.2px;'>"
-            f"{player}"
+            # ---------- LEFT: MATCHUP ----------
+            f"<div style='display:flex;align-items:center;gap:6px;font-size:0.7rem;opacity:0.75;'>"
+            f"<img src='{away_logo}' style='width:18px;height:18px;' />"
+            f"<span>vs</span>"
+            f"<img src='{home_logo}' style='width:18px;height:18px;' />"
             f"</div>"
         
-            f"<div style='display:flex;align-items:center;gap:6px;'>"
-            f"<img src='{away_logo}' style='width:20px;height:20px;' />"
-            f"<span style='opacity:0.5;font-size:0.7rem;'>vs</span>"
-            f"<img src='{home_logo}' style='width:20px;height:20px;' />"
+            # ---------- CENTER: PLAYER + MARKET ----------
+            f"<div style='text-align:center;'>"
+            f"  <div style='font-weight:900;font-size:1.15rem;letter-spacing:-0.2px;'>"
+            f"    {player}"
+            f"  </div>"
+            f"  <div style='font-size:0.85rem;opacity:0.7;'>"
+            f"    {market_label} · {bet_type.upper()} {fmt_num(line, 1)}"
+            f"  </div>"
             f"</div>"
         
+            # ---------- RIGHT: BOOK + ODDS ----------
+            f"<div style='display:flex;justify-content:flex-end;align-items:center;gap:6px;font-size:0.75rem;'>"
+            f"<img src='{book_logo}' style='height:14px;width:auto;' />"
+            f"<strong>{fmt_odds(odds)}</strong>"
             f"</div>"
         
-            # ==================================================
-            # SUBTITLE: MARKET · BET TYPE · LINE
-            # ==================================================
-            f"<div style='font-size:0.85rem;opacity:0.75;'>"
-            f"{market_label} · {bet_type.upper()} {fmt_num(line, 1)}"
             f"</div>"
         
             # ==================================================
             # SPARKLINE (CENTERPIECE)
             # ==================================================
-            f"<div style='display:flex;justify-content:center;'>"
+            f"<div style='display:flex;justify-content:center;margin-top:6px;'>"
             f"{spark_html}"
             f"</div>"
         
             # ==================================================
             # BOTTOM STATS ROW (ODDS | HIT RATE | RANK)
             # ==================================================
-            f"<div style='display:grid;grid-template-columns:1fr 1fr 1fr;font-size:0.75rem;opacity:0.85;'>"
+            f"<div style='display:grid;grid-template-columns:1fr 1fr 1fr;font-size:0.75rem;opacity:0.85;margin-top:6px;'>"
         
             f"<div>"
             f"<strong>{fmt_odds(odds)}</strong><br/>"

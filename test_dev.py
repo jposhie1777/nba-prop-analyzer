@@ -678,6 +678,26 @@ def logo(team_name: str) -> str:
         return "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
     return TEAM_LOGOS.get(code)
 
+# -------------------------------
+# Sportsbook Logos
+# -------------------------------
+import base64
+import pathlib
+
+@st.cache_resource
+def load_logo_base64(path: pathlib.Path) -> str:
+    if not path.exists():
+        return ""
+    encoded = base64.b64encode(path.read_bytes()).decode("utf-8")
+    return f"data:image/png;base64,{encoded}"
+
+FILE_DIR = pathlib.Path(__file__).resolve().parent
+LOGO_DIR = FILE_DIR / "static" / "logos"
+
+SPORTSBOOK_LOGOS = {
+    "DraftKings": load_logo_base64(LOGO_DIR / "Draftkingssmall.png"),
+    "FanDuel": load_logo_base64(LOGO_DIR / "Fanduelsmall.png"),
+}
 
 # -------------------------------
 # Saved Bets (constant-memory)
@@ -913,68 +933,74 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         line = row.get("line")
         odds = row.get("price")
     
+        bookmaker = f"{row.get('bookmaker', '')}"
+        book_logo = SPORTSBOOK_LOGOS.get(bookmaker, "")
+    
         # -----------------------------
-        # TEAM LOGOS (PART 2 GOES HERE)
+        # TEAM LOGOS
         # -----------------------------
         home_logo = logo(home_team)
         away_logo = logo(visitor_team)
-
+    
         hit = row.get(hit_rate_col)
         implied = row.get("implied_prob")
-
+    
         if implied is None or pd.isna(implied):
             implied = compute_implied_prob(odds)
-
+    
         edge = None
         if hit is not None and implied is not None and not pd.isna(hit) and not pd.isna(implied):
             edge = float(hit) - float(implied)
-
+    
         books = row.get("book_prices", [])
         books_line = f" • ".join(
             f"{b.get('book','')} {fmt_odds(b.get('price'))}"
             for b in books[:4]
         )
-
+    
         # --------------------------------------------------
         # BASE CARD HTML (STRICT f-STRINGS)
         # --------------------------------------------------
         base_card_html = (
             f"<div class='prop-card'>"
-        
+    
             # ---------------- TOP ROW ----------------
             f"<div style='display:flex;justify-content:space-between;align-items:center;gap:10px;'>"
-        
+    
             # LEFT: Player name
             f"  <div style='font-weight:800;font-size:1.02rem;line-height:1.1;'>"
             f"    {player}"
             f"  </div>"
-        
+    
             # RIGHT: Team logos
             f"  <div style='display:flex;align-items:center;gap:6px;'>"
             f"    <img src='{away_logo}' style='width:22px;height:22px;' />"
             f"    <span style='opacity:0.6;font-size:0.7rem;'>vs</span>"
             f"    <img src='{home_logo}' style='width:22px;height:22px;' />"
             f"  </div>"
-        
+    
             f"</div>"
-        
+    
             # ---------------- MARKET / LINE ----------------
             f"<div style='margin-top:6px;display:flex;justify-content:space-between;gap:10px;'>"
             f"  <div style='font-weight:650'>{market}</div>"
             f"  <div style='opacity:0.85'>{bet_type} {fmt_num(line, 1)}</div>"
             f"</div>"
-        
+    
             # ---------------- HIT RATE / ODDS ----------------
             f"<div style='margin-top:8px;display:flex;justify-content:space-between;gap:10px;'>"
             f"  <div style='opacity:0.85'>{hit_label}: <strong>{fmt_pct(hit)}</strong></div>"
-            f"  <div style='opacity:0.85'>Odds: <strong>{fmt_odds(odds)}</strong></div>"
+            f"  <div style='display:flex;align-items:center;gap:6px;opacity:0.9;'>"
+            f"    <img src='{book_logo}' style='height:16px;width:auto;' />"
+            f"    <strong>{fmt_odds(odds)}</strong>"
+            f"  </div>"
             f"</div>"
-        
+    
             # ---------------- BOOKS ----------------
             f"<div style='margin-top:6px;opacity:0.75;font-size:0.82rem'>"
             f"  {books_line}"
             f"</div>"
-        
+    
             f"</div>"
         )
 

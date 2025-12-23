@@ -65,6 +65,11 @@ st.sidebar.markdown("🧪 DEV_APP.PY RUNNING")
 
 IS_DEV = True
 
+# ------------------------------------------------------
+# MEMORY STATE INIT (MUST RUN BEFORE ANY CHECKPOINTS)
+# ------------------------------------------------------
+init_memory_state()
+
 import psutil
 import os
 

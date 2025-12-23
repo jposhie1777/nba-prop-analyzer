@@ -1085,3 +1085,4 @@ with tab_props:
         df = df.sort_values([window_col, "price"], ascending=[False, True])
 
     render_prop_cards(df=df, hit_rate_col=window_col, hit_label=f_window)
+    record_memory_checkpoint()

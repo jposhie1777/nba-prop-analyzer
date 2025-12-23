@@ -844,28 +844,40 @@ def save_bet_simple(player, market, line, price, bet_type) -> bool:
     return True
 
 def render_saved_bets():
-    init_saved_bets_state()
-    bets = st.session_state.saved_bets
+    # Always ensure key exists (ultra cheap)
+    if "saved_bets_text" not in st.session_state:
+        st.session_state.saved_bets_text = []
 
-    st.subheader("📋 Saved Bets")
-    st.caption(f"Stored in session only • capped at {MAX_SAVED_BETS}")
+    bets = st.session_state.saved_bets_text
 
+    # -------------------------
+    # HEADER + CLEAR BUTTON
+    # -------------------------
+    col1, col2 = st.columns([4, 1])
+
+    with col1:
+        st.subheader("📋 Saved Bets")
+        st.caption("Session-only • copy & paste into Pikkit")
+
+    with col2:
+        if st.button("🗑 Clear All", use_container_width=True):
+            st.session_state.saved_bets_text.clear()
+            st.toast("Cleared all saved bets")
+
+    st.divider()
+
+    # -------------------------
+    # CONTENT
+    # -------------------------
     if not bets:
         st.info("No saved bets yet.")
         return
 
-    # small rendering loop
-    export_lines = []
-    for b in bets:
-        player = b.get("player", "")
-        market = b.get("market", "")
-        bet_type = b.get("bet_type", "")
-        line = b.get("line", None)
-        st.markdown(f"**{player}**  \n{market} **{bet_type} {line}**")
-        st.divider()
-        export_lines.append(f"{player} — {bet_type} {line} ({market})")
-
-    st.text_area("Copy for Pikkit", "\n".join(export_lines), height=200)
+    st.text_area(
+        "Copy below",
+        value="\n".join(bets),
+        height=220,
+    )
 
 # ------------------------------------------------------
 # PROP CARD HELPERS
@@ -1284,18 +1296,18 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         )
 
         # -------------------------
-        # SAVE BET (OUTSIDE SUMMARY)
+        # SAVE BET (MINIMAL MEMORY)
         # -------------------------
         save_key = f"save_{player}_{raw_market}_{line}_{bet_type}"
+        
         if st.button("💾 Save Bet", key=save_key):
-            ok = save_bet_simple(
-                player=player,
-                market=market,
-                line=line,
-                price=odds,
-                bet_type=bet_type,
-            )
-            st.toast("Saved ✅" if ok else "Already saved")
+            line_str = fmt_num(line, 1)
+            odds_str = fmt_odds(odds)
+        
+            bet_line = f"{player} | {pretty_market_label(raw_market)} | {line_str} | {odds_str} | {bet_type}"
+        
+            st.session_state.saved_bets_text.append(bet_line)
+            st.toast("Saved ✅")
 
         # -------------------------
         # CARD EXPAND UI

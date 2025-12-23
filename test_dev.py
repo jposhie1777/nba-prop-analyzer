@@ -4,7 +4,6 @@ os.environ["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
 # ------------------------------------------------------
 # NBA Prop Analyzer - Merged Production + Dev UI
 # ------------------------------------------------------
-import os
 import json
 from datetime import datetime
 from urllib.parse import urlencode
@@ -32,12 +31,37 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
+import psutil  # ✅ must be before memory helpers
 
 
-#def mem_diff(label: str):
-    #gc.collect()
-    #print(f"\n===== MEMORY DIFF: {label} =====")
-    #st.session_state.mem_tracker.print_diff()
+# ======================================================
+# MEMORY TRACKING HELPERS (DEFINE BEFORE CALLING)
+# ======================================================
+def get_rss_mb() -> float:
+    return psutil.Process(os.getpid()).memory_info().rss / 1e6
+
+def init_memory_state():
+    if "mem_last_mb" not in st.session_state:
+        st.session_state.mem_last_mb = get_rss_mb()
+    if "mem_peak_mb" not in st.session_state:
+        st.session_state.mem_peak_mb = st.session_state.mem_last_mb
+    if "mem_render_peak_mb" not in st.session_state:
+        st.session_state.mem_render_peak_mb = st.session_state.mem_last_mb
+
+def record_memory_checkpoint():
+    current = get_rss_mb()
+    st.session_state.mem_peak_mb = max(st.session_state.mem_peak_mb, current)
+    st.session_state.mem_render_peak_mb = max(st.session_state.mem_render_peak_mb, current)
+    return current
+
+def finalize_render_memory():
+    current = get_rss_mb()
+    last = st.session_state.mem_last_mb
+    delta = current - last
+    st.session_state.mem_last_mb = current
+    st.session_state.mem_render_peak_mb = current
+    return current, delta
+
 
 # ------------------------------------------------------
 # STREAMLIT CONFIG (MUST BE FIRST STREAMLIT COMMAND)
@@ -60,49 +84,15 @@ if "session_initialized" not in st.session_state:
 if "pending_tab" in st.session_state:
     st.query_params["tab"] = st.session_state.pop("pending_tab")
 
-# ✅ OK to call Streamlit stuff AFTER this point
 st.sidebar.markdown("🧪 DEV_APP.PY RUNNING")
 
 IS_DEV = True
 
 # ------------------------------------------------------
-# MEMORY STATE INIT (MUST RUN BEFORE ANY CHECKPOINTS)
+# MEMORY STATE INIT (NOW SAFE)
 # ------------------------------------------------------
 init_memory_state()
 
-import psutil
-import os
-
-# =========================
-# MEMORY TRACKING HELPERS
-# =========================
-def get_rss_mb() -> float:
-    return psutil.Process(os.getpid()).memory_info().rss / 1e6
-
-def init_memory_state():
-    if "mem_last_mb" not in st.session_state:
-        st.session_state.mem_last_mb = get_rss_mb()
-    if "mem_peak_mb" not in st.session_state:
-        st.session_state.mem_peak_mb = st.session_state.mem_last_mb
-    if "mem_render_peak_mb" not in st.session_state:
-        st.session_state.mem_render_peak_mb = st.session_state.mem_last_mb
-
-def record_memory_checkpoint():
-    current = get_rss_mb()
-    st.session_state.mem_peak_mb = max(st.session_state.mem_peak_mb, current)
-    st.session_state.mem_render_peak_mb = max(
-        st.session_state.mem_render_peak_mb,
-        current
-    )
-    return current
-
-def finalize_render_memory():
-    current = get_rss_mb()
-    last = st.session_state.mem_last_mb
-    delta = current - last
-    st.session_state.mem_last_mb = current
-    st.session_state.mem_render_peak_mb = current
-    return current, delta
 
 # ======================================================
 # DEV ACCESS CONTROL (EARLY)

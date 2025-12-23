@@ -1069,17 +1069,16 @@ def pretty_market_label(market: str) -> str:
 def build_l10_sparkline_html(values, dates, line_value):
     if values is None or dates is None or line_value is None:
         return ""
-    
+
     if len(values) == 0 or len(dates) == 0:
         return ""
 
     try:
         vals = [float(v) for v in values]
-        if not vals:
-            return ""
+        line_val = float(line_value)
 
         vmin = min(vals)
-        vmax = max(vals + [line_value])
+        vmax = max(vals + [line_val])
         span = max(vmax - vmin, 1)
     except Exception:
         return ""
@@ -1088,11 +1087,8 @@ def build_l10_sparkline_html(values, dates, line_value):
 
     for v, d in zip(vals, dates):
         height = int(18 + 26 * ((v - vmin) / span))
-        hit = v >= line_value
-        color = "#22c55e" if hit else "#ef4444"
+        color = "#22c55e" if v >= line_val else "#ef4444"
 
-        # format date minimally (MM/DD)
-        date_str = ""
         try:
             date_str = pd.to_datetime(d).strftime("%m/%d")
         except Exception:
@@ -1101,42 +1097,24 @@ def build_l10_sparkline_html(values, dates, line_value):
         bars_html.append(
             f"""
             <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
-                
-                <!-- VALUE ABOVE BAR -->
-                <div style="font-size:0.6rem;opacity:0.8;">
-                    {int(v)}
-                </div>
-
-                <!-- BAR -->
-                <div style="
-                    width:7px;
-                    height:{height}px;
-                    background:{color};
-                    border-radius:2px;
-                "></div>
-
-                <!-- DATE BELOW BAR (VERTICAL) -->
+                <div style="font-size:0.6rem;opacity:0.8;">{int(v)}</div>
+                <div style="width:7px;height:{height}px;background:{color};border-radius:2px;"></div>
                 <div style="
                     font-size:0.55rem;
                     opacity:0.6;
                     writing-mode:vertical-rl;
                     transform:rotate(180deg);
-                    margin-top:2px;
-                ">
-                    {date_str}
-                </div>
-
+                ">{date_str}</div>
             </div>
             """
         )
 
-    # line position (relative to bar area)
-    line_offset_pct = 100 * (1 - (line_value - vmin) / span)
+    # Clamp line position to [0, 100]
+    line_offset_pct = 100 * (1 - (line_val - vmin) / span)
+    line_offset_pct = max(0, min(100, line_offset_pct))
 
     return f"""
     <div style="position:relative;display:flex;gap:6px;align-items:flex-end;">
-
-        <!-- HORIZONTAL LINE (PROP LINE) -->
         <div style="
             position:absolute;
             left:0;
@@ -1145,9 +1123,7 @@ def build_l10_sparkline_html(values, dates, line_value):
             height:1px;
             background:rgba(255,255,255,0.35);
         "></div>
-
         {''.join(bars_html)}
-
     </div>
     """
 

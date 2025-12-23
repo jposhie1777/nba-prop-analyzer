@@ -1002,6 +1002,9 @@ with tab_saved:
     render_saved_bets()
 
 with tab_props:
+    # ------------------------------
+    # LOAD DATA (MEMORY CHECKPOINT)
+    # ------------------------------
     props_df = load_props()
     record_memory_checkpoint()
 
@@ -1009,24 +1012,32 @@ with tab_props:
         st.info("No props returned from BigQuery.")
         st.stop()
 
-    # Build filter options lightly
+    # ------------------------------
+    # BUILD FILTER OPTIONS
+    # ------------------------------
     market_list = sorted(props_df["market"].dropna().unique().tolist()) if "market" in props_df.columns else []
     book_list = sorted(props_df["bookmaker"].dropna().unique().tolist()) if "bookmaker" in props_df.columns else []
+
     games_today = []
     if "home_team" in props_df.columns and "visitor_team" in props_df.columns:
         games_today = sorted(
-            (props_df["home_team"].astype(str) + " vs " + props_df["visitor_team"].astype(str)).dropna().unique().tolist()
+            (props_df["home_team"].astype(str) + " vs " + props_df["visitor_team"].astype(str))
+            .dropna()
+            .unique()
+            .tolist()
         )
 
-    # Collapsible filter panel (kept)
+    # ------------------------------
+    # FILTER UI (NO MEMORY CODE HERE)
+    # ------------------------------
     with st.expander("⚙️ Filters", expanded=False):
         c1, c2, c3 = st.columns([1.2, 1.7, 1.5])
         with c1:
-            f_bet_type = st.multiselect("Bet Type", options=["Over", "Under"], default=["Over", "Under"])
+            f_bet_type = st.multiselect("Bet Type", ["Over", "Under"], default=["Over", "Under"])
         with c2:
-            f_market = st.multiselect("Market", options=market_list, default=market_list)
+            f_market = st.multiselect("Market", market_list, default=market_list)
         with c3:
-            f_games = st.multiselect("Games", options=games_today, default=games_today)
+            f_games = st.multiselect("Games", games_today, default=games_today)
 
         c4, c5, c6 = st.columns([1, 1, 1])
         with c4:
@@ -1039,34 +1050,33 @@ with tab_props:
         c7 = st.columns([1])[0]
         with c7:
             default_books = [b for b in book_list if b.lower() in ("draftkings", "fanduel")] or book_list
-            f_books = st.multiselect("Books", options=book_list, default=default_books)
+            f_books = st.multiselect("Books", book_list, default=default_books)
 
         show_ev_only = st.checkbox(
             "Show only EV+ bets (Hit Rate > Implied Probability)",
-            value=False
+            value=False,
         )
 
         f_min_hit = st.slider("Min Hit Rate (%)", 0, 100, 80)
 
-        # ======================================================
-        # 👇 MEMORY WIDGET GOES **HERE**
-        # ======================================================
-        init_memory_state()
-        mem_now, mem_delta = finalize_render_memory()
-    
-        delta_icon = "🔴" if mem_delta > 5 else "🟢"
-    
-        st.caption(
-            f"🧠 RAM: **{mem_now:.0f} MB** "
-            f"{delta_icon} {mem_delta:+.1f} MB • "
-            f"Render Peak: **{st.session_state.mem_render_peak_mb:.0f} MB** • "
-            f"Session Peak: **{st.session_state.mem_peak_mb:.0f} MB**"
-        )
+    # ------------------------------
+    # MEMORY WIDGET (VISIBLE, CORRECT)
+    # ------------------------------
+    mem_now, mem_delta = finalize_render_memory()
+    delta_icon = "🔴" if mem_delta > 5 else "🟢"
 
- 
+    st.caption(
+        f"🧠 RAM: **{mem_now:.0f} MB** "
+        f"{delta_icon} {mem_delta:+.1f} MB • "
+        f"Render Peak: **{st.session_state.mem_render_peak_mb:.0f} MB** • "
+        f"Session Peak: **{st.session_state.mem_peak_mb:.0f} MB**"
+    )
 
-    # Apply filters without copying big DF too much
+    # ------------------------------
+    # APPLY FILTERS (DATA ONLY)
+    # ------------------------------
     df = props_df
+
     if "bet_type" in df.columns:
         df = df[df["bet_type"].isin(f_bet_type)]
     if "market" in df.columns and f_market:
@@ -1075,26 +1085,31 @@ with tab_props:
         df = df[df["bookmaker"].isin(f_books)]
     if "price" in df.columns:
         df = df[(df["price"] >= f_min_odds) & (df["price"] <= f_max_odds)]
+
     if games_today and f_games and "home_team" in df.columns and "visitor_team" in df.columns:
-        game_display = (df["home_team"].astype(str) + " vs " + df["visitor_team"].astype(str))
+        game_display = df["home_team"].astype(str) + " vs " + df["visitor_team"].astype(str)
         df = df[game_display.isin(f_games)]
 
-    window_col = {"L5": "hit_rate_last5", "L10": "hit_rate_last10", "L20": "hit_rate_last20"}[f_window]
+    window_col = {
+        "L5": "hit_rate_last5",
+        "L10": "hit_rate_last10",
+        "L20": "hit_rate_last20",
+    }[f_window]
+
     hit_rate_decimal = f_min_hit / 100.0
     if window_col in df.columns:
         df = df[df[window_col] >= hit_rate_decimal]
 
     if show_ev_only:
-        # vectorized where possible
-        if "implied_prob" in df.columns:
-            implied = df["implied_prob"]
-        else:
-            implied = df["price"].apply(compute_implied_prob) if "price" in df.columns else None
-        if implied is not None and window_col in df.columns:
+        implied = df["implied_prob"] if "implied_prob" in df.columns else df["price"].apply(compute_implied_prob)
+        if window_col in df.columns:
             df = df[df[window_col] > implied]
 
     if window_col in df.columns and "price" in df.columns:
         df = df.sort_values([window_col, "price"], ascending=[False, True])
 
+    # ------------------------------
+    # RENDER CARDS (FINAL CHECKPOINT)
+    # ------------------------------
     render_prop_cards(df=df, hit_rate_col=window_col, hit_label=f_window)
     record_memory_checkpoint()

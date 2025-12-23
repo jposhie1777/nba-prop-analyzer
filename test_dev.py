@@ -1066,39 +1066,87 @@ def pretty_market_label(market: str) -> str:
     )
 
 
-def build_l10_sparkline_html(values, line_value):
-    if not values or line_value is None:
+def build_l10_sparkline_html(values, dates, line_value):
+    if not values or not dates or line_value is None:
         return ""
 
     try:
-        vals = [float(v) for v in values if isinstance(v, (int, float))]
+        vals = [float(v) for v in values]
         if not vals:
             return ""
+
         vmin = min(vals)
-        vmax = max(vals)
+        vmax = max(vals + [line_value])
         span = max(vmax - vmin, 1)
     except Exception:
         return ""
 
-    bars = []
-    for v in vals:
-        height = int(8 + 20 * ((v - vmin) / span))
+    bars_html = []
+
+    for v, d in zip(vals, dates):
+        height = int(18 + 26 * ((v - vmin) / span))
         hit = v >= line_value
         color = "#22c55e" if hit else "#ef4444"
 
-        bars.append(
-            f"<div "
-            f"style='width:6px;height:{height}px;"
-            f"background:{color};border-radius:2px;'>"
-            f"</div>"
+        # format date minimally (MM/DD)
+        date_str = ""
+        try:
+            date_str = pd.to_datetime(d).strftime("%m/%d")
+        except Exception:
+            date_str = str(d)
+
+        bars_html.append(
+            f"""
+            <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+                
+                <!-- VALUE ABOVE BAR -->
+                <div style="font-size:0.6rem;opacity:0.8;">
+                    {int(v)}
+                </div>
+
+                <!-- BAR -->
+                <div style="
+                    width:7px;
+                    height:{height}px;
+                    background:{color};
+                    border-radius:2px;
+                "></div>
+
+                <!-- DATE BELOW BAR (VERTICAL) -->
+                <div style="
+                    font-size:0.55rem;
+                    opacity:0.6;
+                    writing-mode:vertical-rl;
+                    transform:rotate(180deg);
+                    margin-top:2px;
+                ">
+                    {date_str}
+                </div>
+
+            </div>
+            """
         )
 
-    return (
-        f"<div style='display:flex;align-items:flex-end;"
-        f"gap:3px;margin-top:6px;'>"
-        f"{''.join(bars)}"
-        f"</div>"
-    )
+    # line position (relative to bar area)
+    line_offset_pct = 100 * (1 - (line_value - vmin) / span)
+
+    return f"""
+    <div style="position:relative;display:flex;gap:6px;align-items:flex-end;">
+
+        <!-- HORIZONTAL LINE (PROP LINE) -->
+        <div style="
+            position:absolute;
+            left:0;
+            right:0;
+            top:{line_offset_pct}%;
+            height:1px;
+            background:rgba(255,255,255,0.35);
+        "></div>
+
+        {''.join(bars_html)}
+
+    </div>
+    """
 
 @st.cache_data(show_spinner=False)
 def build_prop_cards(card_df: pd.DataFrame, hit_rate_col: str) -> pd.DataFrame:

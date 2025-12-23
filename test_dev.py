@@ -894,7 +894,42 @@ import json
 
 import re
 
+import numpy as np
+
 def coerce_numeric_list(val):
+    if val is None:
+        return []
+
+    # ✅ HANDLE NUMPY ARRAYS (THIS IS THE FIX)
+    if isinstance(val, np.ndarray):
+        return [float(v) for v in val if isinstance(v, (int, float, np.number))]
+
+    if isinstance(val, list):
+        return [float(v) for v in val if isinstance(v, (int, float))]
+
+    if isinstance(val, str):
+        # handle BigQuery array string like "array([1., 2., 3.])"
+        if val.startswith("array("):
+            try:
+                inner = val.replace("array(", "").rstrip(")")
+                return [float(v) for v in inner.strip("[]").split(",")]
+            except Exception:
+                return []
+
+        try:
+            parsed = json.loads(val)
+            if isinstance(parsed, list):
+                return [float(v) for v in parsed if v is not None]
+        except Exception:
+            pass
+
+        try:
+            return [float(v) for v in val.split(",") if v.strip()]
+        except Exception:
+            return []
+
+    return []
+
     if val is None or pd.isna(val):
         return []
 

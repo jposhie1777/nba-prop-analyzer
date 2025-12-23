@@ -1075,19 +1075,26 @@ def build_l10_sparkline_html(values, line_value, dates=None):
         if not vals:
             return ""
 
-        vmin = min(min(vals), float(line_value))
-        vmax = max(max(vals), float(line_value))
-        span = max(vmax - vmin, 1)
+        line_f = float(line_value)
+
+        # same bar scale you already use
+        bar_min = 14
+        bar_span = 26
+        chart_h = bar_min + bar_span  # 40px
+
+        vmin = min(min(vals), line_f)
+        vmax = max(max(vals), line_f)
+        span = max(vmax - vmin, 1.0)
     except Exception:
         return ""
 
     bars_html = []
+    dates_html = []
 
     for i, v in enumerate(vals):
         pct = (v - vmin) / span
-        height = int(14 + 26 * pct)
-        color = "#22c55e" if v >= line_value else "#ef4444"
-
+        height = int(bar_min + bar_span * pct)
+        color = "#22c55e" if v >= line_f else "#ef4444"
         value_label = f"{v:.0f}"
 
         date_label = ""
@@ -1097,57 +1104,86 @@ def build_l10_sparkline_html(values, line_value, dates=None):
             except Exception:
                 date_label = str(dates[i])
 
-        bar_html = (
-            f"<div style='display:flex;flex-direction:column;align-items:center;'>"
-            f"<div style='font-size:9px;opacity:0.8;margin-bottom:2px;'>"
+        # BAR SLOT (fixed chart height; value label absolute; bar absolute)
+        bars_html.append(
+            f"<div style='"
+            f"position:relative;"
+            f"height:{chart_h}px;"
+            f"width:10px;"
+            f"display:flex;"
+            f"justify-content:center;"
+            f"'>"
+            f"<div style='"
+            f"position:absolute;"
+            f"left:50%;"
+            f"transform:translateX(-50%);"
+            f"bottom:{min(height + 2, chart_h - 1)}px;"
+            f"font-size:9px;"
+            f"opacity:0.85;"
+            f"line-height:1;"
+            f"white-space:nowrap;"
+            f"'>"
             f"{value_label}"
             f"</div>"
             f"<div style='"
+            f"position:absolute;"
+            f"left:50%;"
+            f"transform:translateX(-50%);"
+            f"bottom:0;"
             f"width:6px;"
             f"height:{height}px;"
             f"background:{color};"
             f"border-radius:2px;"
             f"'></div>"
-            f"<div style='"
-            f"font-size:9px;"
-            f"opacity:0.6;"
-            f"margin-top:4px;"
-            f"writing-mode:vertical-rl;"
-            f"text-orientation:mixed;"
-            f"'>"
-            f"{date_label}"
-            f"</div>"
             f"</div>"
         )
 
-        bars_html.append(bar_html)
+        # DATE SLOT (separate row so it doesn't mess with prop-line baseline)
+        dates_html.append(
+            f"<div style='"
+            f"width:10px;"
+            f"display:flex;"
+            f"justify-content:center;"
+            f"margin-top:3px;"
+            f"font-size:9px;"
+            f"opacity:0.6;"
+            f"writing-mode:vertical-rl;"
+            f"text-orientation:mixed;"
+            f"line-height:1;"
+            f"'>"
+            f"{date_label}"
+            f"</div>"
+        )
 
-    line_pct = (float(line_value) - vmin) / span
-    line_bottom = int(14 + 26 * line_pct)
+    # prop line inside chart area (measured from bar baseline)
+    line_pct = (line_f - vmin) / span
+    line_y = int(chart_h * line_pct)
 
-    spark_html = (
+    return (
+        f"<div style='display:flex;flex-direction:column;align-items:center;'>"
         f"<div style='"
         f"position:relative;"
         f"display:flex;"
         f"align-items:flex-end;"
         f"gap:4px;"
         f"margin-top:8px;"
-        f"padding-bottom:2px;"
+        f"height:{chart_h}px;"
         f"'>"
         f"<div style='"
         f"position:absolute;"
         f"left:0;"
         f"right:0;"
-        f"bottom:{line_bottom}px;"
+        f"bottom:{line_y}px;"
         f"height:1px;"
         f"background:rgba(255,255,255,0.35);"
         f"'></div>"
         f"{''.join(bars_html)}"
         f"</div>"
+        f"<div style='display:flex;gap:4px;align-items:flex-start;'>"
+        f"{''.join(dates_html)}"
+        f"</div>"
+        f"</div>"
     )
-
-    return spark_html
-
 
 
 @st.cache_data(show_spinner=False)

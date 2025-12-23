@@ -742,19 +742,19 @@ SELECT
     p.edge_raw,
     p.game_date,
 
-    -- ONLY the exact lists you render
-    t.points_last10_list,
-    t.rebounds_last10_list,
-    t.assists_last10_list,
-    t.pra_last10_list,
-    t.points_assists_last10_list,
-    t.points_rebounds_last10_list,
-    t.rebounds_assists_last10_list
+    -- L10 trend lists (aliased for Python)
+    t.pts_last10_list AS points_last10_list,
+    t.ast_last10_list AS assists_last10_list,
+    t.pra_last10_list AS pra_last10_list,
+    t.pr_last10_list  AS points_rebounds_last10_list,
+    t.pa_last10_list  AS points_assists_last10_list,
+    t.ra_last10_list  AS rebounds_assists_last10_list
 
 FROM `{PROJECT_ID}.{DATASET}.todays_props_enriched` p
 LEFT JOIN `{PROJECT_ID}.{DATASET}.historical_player_stats_for_trends` t
     ON p.player = t.player
 """
+
 
 
 

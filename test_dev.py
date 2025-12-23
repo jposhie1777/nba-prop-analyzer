@@ -136,6 +136,17 @@ def get_active_tab():
     return tab or "main"
 
 # ------------------------------------------------------
+# SIDEBAR: DEV NAV ENTRY (SAFE)
+# ------------------------------------------------------
+if IS_DEV and is_dev_user():
+    st.sidebar.divider()
+    st.sidebar.markdown("### ⚙️ Dev Tools")
+
+    if st.sidebar.button("Open Dev Panel"):
+        st.query_params["tab"] = "dev"
+        st.rerun()
+
+# ------------------------------------------------------
 # DEV-SAFE BIGQUERY and GAS CONSTANTS
 # ------------------------------------------------------
 DEV_BQ_DATASET = os.getenv("BIGQUERY_DATASET", "nba_prop_analyzer")

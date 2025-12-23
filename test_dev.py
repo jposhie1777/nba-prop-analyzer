@@ -1081,7 +1081,9 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
     for _, row in card_df.iterrows():
 
         player = f"{row.get('player', '')}"
-        raw_market = row.get("market", "")
+        raw_market = row.get("market")
+        norm = normalize_market_key(raw_market)
+        st.caption(f"DEBUG market: {raw_market} → {norm}")
         market_label = pretty_market_label(raw_market)
         bet_type = f"{row.get('bet_type', '')}"
 

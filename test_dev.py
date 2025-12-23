@@ -736,7 +736,9 @@ if "saved_bets" not in st.session_state:
 if "saved_bets_keys" not in st.session_state:
     st.session_state.saved_bets_keys = set()
 
-
+if "saved_bets_text" not in st.session_state:
+    st.session_state.saved_bets_text = []
+    
 # ------------------------------------------------------
 # DATA: PROPS AND HISTOICAL STATS (minimal)
 # ------------------------------------------------------

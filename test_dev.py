@@ -1053,6 +1053,23 @@ with tab_props:
 
         f_min_hit = st.slider("Min Hit Rate (%)", 0, 100, 80)
 
+        # ======================================================
+        # 👇 MEMORY WIDGET GOES **HERE**
+        # ======================================================
+        init_memory_state()
+        mem_now, mem_delta = finalize_render_memory()
+    
+        delta_icon = "🔴" if mem_delta > 5 else "🟢"
+    
+        st.caption(
+            f"🧠 RAM: **{mem_now:.0f} MB** "
+            f"{delta_icon} {mem_delta:+.1f} MB • "
+            f"Render Peak: **{st.session_state.mem_render_peak_mb:.0f} MB** • "
+            f"Session Peak: **{st.session_state.mem_peak_mb:.0f} MB**"
+        )
+
+ 
+
     # Apply filters without copying big DF too much
     df = props_df
     if "bet_type" in df.columns:

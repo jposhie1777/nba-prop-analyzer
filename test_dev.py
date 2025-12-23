@@ -32,7 +32,7 @@ from google.cloud import bigquery
 from google.oauth2 import service_account
 
 import psutil  # ✅ must be before memory helpers
-
+import streamlit.components.v1 as components
 
 # ======================================================
 # MEMORY TRACKING HELPERS (DEFINE BEFORE CALLING)
@@ -1288,13 +1288,6 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
             f"</div>"
         
             # ==================================================
-            # SPARKLINE (CENTERPIECE)
-            # ==================================================
-            f"<div style='display:flex;justify-content:center;margin-top:6px;'>"
-            f"{spark_html}"
-            f"</div>"
-        
-            # ==================================================
             # BOTTOM STATS ROW (ODDS | HIT RATE | RANK)
             # ==================================================
             f"<div style='display:grid;grid-template-columns:1fr 1fr 1fr;font-size:0.75rem;opacity:0.85;margin-top:6px;'>"
@@ -1346,6 +1339,18 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
             st.session_state.saved_bets_text.append(bet_line)
             st.toast("Saved ✅")
 
+        # -------------------------
+        # SPARKLINE (REAL HTML RENDER — MUST BE OUTSIDE <details>)
+        # -------------------------
+        components.html(
+            f"""
+            <div style="display:flex;justify-content:center;margin:6px 0 2px 0;">
+                {spark_html}
+            </div>
+            """,
+            height=90,
+        )
+        
         # -------------------------
         # CARD EXPAND UI
         # -------------------------

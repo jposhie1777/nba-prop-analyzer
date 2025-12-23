@@ -1097,68 +1097,51 @@ def build_l10_sparkline_html(values, line_value, dates=None):
             except Exception:
                 date_label = str(dates[i])
 
-        bars_html.append(f"""
-<div style="display:flex;flex-direction:column;align-items:center;">
-  <div style="font-size:9px;opacity:0.8;margin-bottom:2px;">
-    {value_label}
-  </div>
-  <div style="
-    width:6px;
-    height:{height}px;
-    background:{color};
-    border-radius:2px;
-  "></div>
-  <div style="font-size:9px;opacity:0.6;margin-top:2px;">
-    {date_label}
-  </div>
-</div>
-""")
+        bar_html = (
+            f"<div style='display:flex;flex-direction:column;align-items:center;'>"
+            f"<div style='font-size:9px;opacity:0.8;margin-bottom:2px;'>"
+            f"{value_label}"
+            f"</div>"
+            f"<div style='"
+            f"width:6px;"
+            f"height:{height}px;"
+            f"background:{color};"
+            f"border-radius:2px;"
+            f"'></div>"
+            f"<div style='font-size:9px;opacity:0.6;margin-top:2px;'>"
+            f"{date_label}"
+            f"</div>"
+            f"</div>"
+        )
+
+        bars_html.append(bar_html)
 
     line_pct = (float(line_value) - vmin) / span
     line_bottom = int(14 + 26 * line_pct)
 
-    return f"""
-<div style="
-  position:relative;
-  display:flex;
-  align-items:flex-end;
-  gap:4px;
-  margin-top:8px;
-  padding-bottom:2px;
-">
-  <div style="
-    position:absolute;
-    left:0;
-    right:0;
-    bottom:{line_bottom}px;
-    height:1px;
-    background:rgba(255,255,255,0.35);
-  "></div>
-  {''.join(bars_html)}
-</div>
-"""
+    spark_html = (
+        f"<div style='"
+        f"position:relative;"
+        f"display:flex;"
+        f"align-items:flex-end;"
+        f"gap:4px;"
+        f"margin-top:8px;"
+        f"padding-bottom:2px;"
+        f"'>"
+        f"<div style='"
+        f"position:absolute;"
+        f"left:0;"
+        f"right:0;"
+        f"bottom:{line_bottom}px;"
+        f"height:1px;"
+        f"background:rgba(255,255,255,0.35);"
+        f"'></div>"
+        f"{''.join(bars_html)}"
+        f"</div>"
+    )
 
-return f"""
-<div style="
-    position:relative;
-    display:flex;
-    align-items:flex-end;
-    gap:4px;
-    margin-top:8px;
-    padding-bottom:2px;
-">
-    <div style="
-        position:absolute;
-        left:0;
-        right:0;
-        bottom:{line_bottom}px;
-        height:1px;
-        background:rgba(255,255,255,0.35);
-    "></div>
+    return spark_html
 
-    {''.join(bars_html)}
-</div>
-"""
 
 
 @st.cache_data(show_spinner=False)

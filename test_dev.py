@@ -890,6 +890,30 @@ def fmt_num(x, d=1) -> str:
     except Exception:
         return "—"
 
+import json
+
+def coerce_numeric_list(val):
+    if val is None:
+        return []
+
+    if isinstance(val, list):
+        return [v for v in val if isinstance(v, (int, float))]
+
+    if isinstance(val, str):
+        try:
+            parsed = json.loads(val)
+            if isinstance(parsed, list):
+                return [float(v) for v in parsed if v is not None]
+        except Exception:
+            pass
+
+        try:
+            return [float(v) for v in val.split(",") if v.strip()]
+        except Exception:
+            return []
+
+    return []
+
 def normalize_market_key(market: str) -> str:
     m = (market or "").lower()
 
@@ -914,19 +938,19 @@ def get_l10_values(row):
     key = normalize_market_key(row.get("market"))
 
     if key == "points":
-        return row.get("points_last10_list", [])
+        return coerce_numeric_list(row.get("points_last10_list"))
     if key == "rebounds":
-        return row.get("rebounds_last10_list", [])
+        return coerce_numeric_list(row.get("rebounds_last10_list"))
     if key == "assists":
-        return row.get("assists_last10_list", [])
+        return coerce_numeric_list(row.get("assists_last10_list"))
     if key == "pra":
-        return row.get("pra_last10_list", [])
+        return coerce_numeric_list(row.get("pra_last10_list"))
     if key == "points_assists":
-        return row.get("points_assists_last10_list", [])
+        return coerce_numeric_list(row.get("points_assists_last10_list"))
     if key == "points_rebounds":
-        return row.get("points_rebounds_last10_list", [])
+        return coerce_numeric_list(row.get("points_rebounds_last10_list"))
     if key == "rebounds_assists":
-        return row.get("rebounds_assists_last10_list", [])
+        return coerce_numeric_list(row.get("rebounds_assists_last10_list"))
 
     return []
     
@@ -961,7 +985,7 @@ def build_l10_sparkline_html(values, line_value):
         return ""
 
     try:
-        vals = [float(v) for v in values if v is not None]
+        vals = [float(v) for v in values if isinstance(v, (int, float))]
         if not vals:
             return ""
         vmin = min(vals)

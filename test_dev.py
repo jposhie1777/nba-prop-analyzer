@@ -725,25 +725,18 @@ if "saved_bets_keys" not in st.session_state:
 # ------------------------------------------------------
 TRENDS_SQL = """
 SELECT
-    player,
-
-    -- Core counting stats (L10 only)
-    pts_last10_list,
-    reb_last10_list,
-    ast_last10_list,
-    stl_last10_list,
-    blk_last10_list,
-
-    -- Combo stats (L10 only)
-    pra_last10_list,
-    pr_last10_list,
-    pa_last10_list,
-    ra_last10_list,
-
-    -- Optional (dates)
-    last10_dates
-
-FROM `nba_prop_analyzer.historical_player_stats_for_trends`
+  player,
+  pts_last10_list,
+  reb_last10_list,
+  ast_last10_list,
+  stl_last10_list,
+  blk_last10_list,
+  pra_last10_list,
+  pr_last10_list,
+  pa_last10_list,
+  ra_last10_list,
+  last10_dates
+FROM `nba_prop_analyzer.historical_player_trends`
 """
 
 PROPS_SQL = f"SELECT * FROM `{PROJECT_ID}.{DATASET}.{PROPS_TABLE}`"
@@ -751,13 +744,9 @@ PROPS_SQL = f"SELECT * FROM `{PROJECT_ID}.{DATASET}.{PROPS_TABLE}`"
 @st.cache_data(ttl=1800, show_spinner=False)
 def load_trends() -> pd.DataFrame:
     df = load_bq_df(TRENDS_SQL)
-
-    # Normalize player key
     df["player"] = df["player"].astype(str)
-
     df.flags.writeable = False
     return df
-
 
 @st.cache_data(ttl=900, show_spinner=True)
 def load_props() -> pd.DataFrame:
@@ -1335,9 +1324,9 @@ with tab_saved:
     render_saved_bets()
 
 with tab_props:
-    # ------------------------------
-    # LOAD DATA (MEMORY CHECKPOINT)
-    # ------------------------------
+    # --------------------------------------------------
+    # LOAD PROPS (SLATE-DRIVEN)
+    # --------------------------------------------------
     props_df = load_props()
     record_memory_checkpoint()
 
@@ -1345,18 +1334,29 @@ with tab_props:
         st.info("No props returned from BigQuery.")
         st.stop()
 
-    # ------------------------------
-    # LOAD + MERGE HISTORICAL TRENDS (L10)
-    # ------------------------------
+    # --------------------------------------------------
+    # LOAD PLAYER TRENDS (1 ROW PER PLAYER)
+    # --------------------------------------------------
     trends_df = load_trends()
 
+    # 🔒 HARD SAFETY CHECK — prevents RAM explosion
+    if not trends_df["player"].is_unique:
+        st.error("❌ Trends table must be 1 row per player (merge aborted)")
+        st.stop()
+
+    # --------------------------------------------------
+    # MERGE TRENDS → PROPS (LEFT JOIN, SAFE)
+    # --------------------------------------------------
     props_df = props_df.merge(
         trends_df,
         on="player",
         how="left",
+        validate="many_to_one",  # 👈 critical safety net
     )
 
+    props_df.flags.writeable = False
     record_memory_checkpoint()
+
 
 
     # ------------------------------

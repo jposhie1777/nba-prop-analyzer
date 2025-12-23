@@ -890,29 +890,72 @@ def fmt_num(x, d=1) -> str:
     except Exception:
         return "—"
 
-# 1️⃣ L10 STAT MAPPING (pure logic, no HTML)
-def get_l10_values(row):
-    market = (row.get("market") or "").lower()
+def normalize_market_key(market: str) -> str:
+    m = (market or "").lower()
 
-    if "points" in market and "rebounds" not in market and "assists" not in market:
+    if "points_rebounds_assists" in m:
+        return "pra"
+    if "points_assists" in m:
+        return "points_assists"
+    if "points_rebounds" in m:
+        return "points_rebounds"
+    if "rebounds_assists" in m:
+        return "rebounds_assists"
+    if "points" in m:
+        return "points"
+    if "rebounds" in m:
+        return "rebounds"
+    if "assists" in m:
+        return "assists"
+
+    return ""
+
+def get_l10_values(row):
+    key = normalize_market_key(row.get("market"))
+
+    if key == "points":
         return row.get("points_last10_list", [])
-    if "rebounds" in market and "assists" not in market:
+    if key == "rebounds":
         return row.get("rebounds_last10_list", [])
-    if "assists" in market and "rebounds" not in market:
+    if key == "assists":
         return row.get("assists_last10_list", [])
-    if "points_rebounds_assists" in market or "pra" in market:
+    if key == "pra":
         return row.get("pra_last10_list", [])
-    if "points_assists" in market:
+    if key == "points_assists":
         return row.get("points_assists_last10_list", [])
-    if "points_rebounds" in market:
+    if key == "points_rebounds":
         return row.get("points_rebounds_last10_list", [])
-    if "rebounds_assists" in market:
+    if key == "rebounds_assists":
         return row.get("rebounds_assists_last10_list", [])
 
     return []
+    
+def pretty_market_label(market: str) -> str:
+    m = (market or "").lower()
+
+    if "points_rebounds_assists" in m:
+        return "PRA"
+    if "points_assists" in m:
+        return "Pts + Ast"
+    if "points_rebounds" in m:
+        return "Pts + Reb"
+    if "rebounds_assists" in m:
+        return "Reb + Ast"
+    if "points" in m:
+        return "Points"
+    if "rebounds" in m:
+        return "Rebounds"
+    if "assists" in m:
+        return "Assists"
+
+    return (
+        m.replace("player_", "")
+         .replace("_alternate", "")
+         .replace("_", " ")
+         .title()
+    )
 
 
-# 2️⃣ SPARKLINE RENDERER (presentation)
 def build_l10_sparkline_html(values, line_value):
     if not values or line_value is None:
         return ""
@@ -935,19 +978,14 @@ def build_l10_sparkline_html(values, line_value):
 
         bars.append(
             f"<div "
-            f"style='width:6px;"
-            f"height:{height}px;"
-            f"background:{color};"
-            f"border-radius:2px;'>"
+            f"style='width:6px;height:{height}px;"
+            f"background:{color};border-radius:2px;'>"
             f"</div>"
         )
 
     return (
-        f"<div "
-        f"style='display:flex;"
-        f"align-items:flex-end;"
-        f"gap:3px;"
-        f"margin-top:6px;'>"
+        f"<div style='display:flex;align-items:flex-end;"
+        f"gap:3px;margin-top:6px;'>"
         f"{''.join(bars)}"
         f"</div>"
     )

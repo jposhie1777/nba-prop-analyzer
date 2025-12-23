@@ -1261,7 +1261,7 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
             )
 
         l10_values = get_l10_values(row)
-        l10_dates = row.get("last10_dates") or []
+        l10_dates = row.get("last10_dates")
         
         if not l10_values:
             st.caption(f"⚠️ No L10 values for {player} | market={raw_market}")

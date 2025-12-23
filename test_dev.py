@@ -892,25 +892,37 @@ def fmt_num(x, d=1) -> str:
 
 import json
 
+import re
+
 def coerce_numeric_list(val):
-    if val is None:
+    if val is None or pd.isna(val):
         return []
 
+    # Already a Python list
     if isinstance(val, list):
-        return [v for v in val if isinstance(v, (int, float))]
+        return [float(v) for v in val if isinstance(v, (int, float))]
 
+    # NumPy array
+    if hasattr(val, "tolist"):
+        return [float(v) for v in val.tolist()]
+
+    # String case (BigQuery often returns ARRAYs like this)
     if isinstance(val, str):
-        try:
-            parsed = json.loads(val)
-            if isinstance(parsed, list):
-                return [float(v) for v in parsed if v is not None]
-        except Exception:
-            pass
+        s = val.strip()
 
-        try:
-            return [float(v) for v in val.split(",") if v.strip()]
-        except Exception:
-            return []
+        # Handle: array([1., 2., 3.])
+        if s.lower().startswith("array"):
+            nums = re.findall(r"-?\d+\.?\d*", s)
+            return [float(n) for n in nums]
+
+        # Handle: [1, 2, 3]
+        if s.startswith("["):
+            try:
+                parsed = json.loads(s)
+                if isinstance(parsed, list):
+                    return [float(v) for v in parsed if v is not None]
+            except Exception:
+                pass
 
     return []
 

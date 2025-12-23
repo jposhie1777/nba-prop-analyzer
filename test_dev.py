@@ -595,6 +595,89 @@ def load_static_ui():
 
 load_static_ui()
 
+# ------------------------------------------------------
+# LOGOS (STATIC)
+# ------------------------------------------------------
+TEAM_LOGOS = {
+    "ATL": "https://a.espncdn.com/i/teamlogos/nba/500/atl.png",
+    "BOS": "https://a.espncdn.com/i/teamlogos/nba/500/bos.png",
+    "BKN": "https://a.espncdn.com/i/teamlogos/nba/500/bkn.png",
+    "CHA": "https://a.espncdn.com/i/teamlogos/nba/500/cha.png",
+    "CHI": "https://a.espncdn.com/i/teamlogos/nba/500/chi.png",
+    "CLE": "https://a.espncdn.com/i/teamlogos/nba/500/cle.png",
+    "DAL": "https://a.espncdn.com/i/teamlogos/nba/500/dal.png",
+    "DEN": "https://a.espncdn.com/i/teamlogos/nba/500/den.png",
+    "DET": "https://a.espncdn.com/i/teamlogos/nba/500/det.png",
+    "GSW": "https://a.espncdn.com/i/teamlogos/nba/500/gs.png",
+    "HOU": "https://a.espncdn.com/i/teamlogos/nba/500/hou.png",
+    "IND": "https://a.espncdn.com/i/teamlogos/nba/500/ind.png",
+    "LAC": "https://a.espncdn.com/i/teamlogos/nba/500/lac.png",
+    "LAL": "https://a.espncdn.com/i/teamlogos/nba/500/lal.png",
+    "MEM": "https://a.espncdn.com/i/teamlogos/nba/500/mem.png",
+    "MIA": "https://a.espncdn.com/i/teamlogos/nba/500/mia.png",
+    "MIL": "https://a.espncdn.com/i/teamlogos/nba/500/mil.png",
+    "MIN": "https://a.espncdn.com/i/teamlogos/nba/500/min.png",
+    "NOP": "https://a.espncdn.com/i/teamlogos/nba/500/no.png",
+    "NYK": "https://a.espncdn.com/i/teamlogos/nba/500/ny.png",
+    "OKC": "https://a.espncdn.com/i/teamlogos/nba/500/okc.png",
+    "ORL": "https://a.espncdn.com/i/teamlogos/nba/500/orl.png",
+    "PHI": "https://a.espncdn.com/i/teamlogos/nba/500/phi.png",
+    "PHX": "https://a.espncdn.com/i/teamlogos/nba/500/phx.png",
+    "POR": "https://a.espncdn.com/i/teamlogos/nba/500/por.png",
+    "SAC": "https://a.espncdn.com/i/teamlogos/nba/500/sac.png",
+    "SAS": "https://a.espncdn.com/i/teamlogos/nba/500/sa.png",
+    "TOR": "https://a.espncdn.com/i/teamlogos/nba/500/tor.png",
+    "UTA": "https://a.espncdn.com/i/teamlogos/nba/500/utah.png",
+    "WAS": "https://a.espncdn.com/i/teamlogos/nba/500/wsh.png",
+}
+
+# Map full team names from BigQuery → 3-letter codes
+TEAM_NAME_TO_CODE = {
+    "Atlanta Hawks": "ATL",
+    "Boston Celtics": "BOS",
+    "Brooklyn Nets": "BKN",
+    "Charlotte Hornets": "CHA",
+    "Chicago Bulls": "CHI",
+    "Cleveland Cavaliers": "CLE",
+    "Dallas Mavericks": "DAL",
+    "Denver Nuggets": "DEN",
+    "Detroit Pistons": "DET",
+    "Golden State Warriors": "GSW",
+    "Houston Rockets": "HOU",
+    "Indiana Pacers": "IND",
+    "LA Clippers": "LAC",
+    "Los Angeles Lakers": "LAL",
+    "Memphis Grizzlies": "MEM",
+    "Miami Heat": "MIA",
+    "Milwaukee Bucks": "MIL",
+    "Minnesota Timberwolves": "MIN",
+    "New Orleans Pelicans": "NOP",
+    "New York Knicks": "NYK",
+    "Oklahoma City Thunder": "OKC",
+    "Orlando Magic": "ORL",
+    "Philadelphia 76ers": "PHI",
+    "Phoenix Suns": "PHX",
+    "Portland Trail Blazers": "POR",
+    "Sacramento Kings": "SAC",
+    "San Antonio Spurs": "SAS",
+    "Toronto Raptors": "TOR",
+    "Utah Jazz": "UTA",
+    "Washington Wizards": "WAS",
+}
+
+def team_abbr(team_name: str) -> str:
+    """
+    Returns 3-letter NBA abbreviation.
+    Falls back safely if name not found.
+    """
+    return TEAM_NAME_TO_CODE.get(team_name, team_name[:3].upper())
+
+def logo(team_name: str) -> str:
+    code = TEAM_NAME_TO_CODE.get(team_name)
+    if not code:
+        return "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
+    return TEAM_LOGOS.get(code)
+
 
 # -------------------------------
 # Saved Bets (constant-memory)
@@ -821,10 +904,20 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         player = f"{row.get('player', '')}"
         market = f"{row.get('market', '')}"
         bet_type = f"{row.get('bet_type', '')}"
+    
         team = f"{row.get('player_team', '')}"
+        home_team = f"{row.get('home_team', '')}"
+        visitor_team = f"{row.get('visitor_team', '')}"
+    
         opp = f"{row.get('opponent_team', '')}"
         line = row.get("line")
         odds = row.get("price")
+    
+        # -----------------------------
+        # TEAM LOGOS (PART 2 GOES HERE)
+        # -----------------------------
+        home_logo = logo(home_team)
+        away_logo = logo(visitor_team)
 
         hit = row.get(hit_rate_col)
         implied = row.get("implied_prob")
@@ -860,6 +953,11 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
             f"  <div style='opacity:0.85'>Odds: <strong>{fmt_odds(odds)}</strong></div>"
             f"</div>"
             f"<div style='margin-top:6px;opacity:0.75;font-size:0.82rem'>{books_line}</div>"
+            f"</div>"
+            f"<div style='display:flex;align-items:center;gap:6px;'>"
+            f"  <img src='{away_logo}' style='width:22px;height:22px;' />"
+            f"  <span style='opacity:0.6;font-size:0.75rem;'>vs</span>"
+            f"  <img src='{home_logo}' style='width:22px;height:22px;' />"
             f"</div>"
         )
 

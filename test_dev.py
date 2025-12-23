@@ -1116,6 +1116,9 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         # -----------------------------
         l10_values = get_l10_values(row)
 
+        if not l10_values:
+            st.caption(f"⚠️ No L10 values for {player} | market={raw_market}")
+
         spark_html = build_l10_sparkline_html(
             values=l10_values,
             line_value=line,

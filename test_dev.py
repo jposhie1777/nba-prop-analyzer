@@ -1050,7 +1050,8 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
     for _, row in card_df.iterrows():
 
         player = f"{row.get('player', '')}"
-        market = f"{row.get('market', '')}"
+        raw_market = row.get("market", "")
+        market_label = pretty_market_label(raw_market)
         bet_type = f"{row.get('bet_type', '')}"
 
         team = f"{row.get('player_team', '')}"
@@ -1090,6 +1091,7 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         # L10 SPARKLINE
         # -----------------------------
         l10_values = get_l10_values(row)
+
         spark_html = build_l10_sparkline_html(
             values=l10_values,
             line_value=line,
@@ -1120,7 +1122,7 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
 
             # ---------------- MARKET / LINE ----------------
             f"<div style='margin-top:6px;display:flex;justify-content:space-between;gap:10px;'>"
-            f"  <div style='font-weight:650'>{market}</div>"
+            f"  <div style='font-weight:650'>{market_label}</div>"
             f"  <div style='opacity:0.85'>{bet_type} {fmt_num(line, 1)}</div>"
             f"</div>"
 

@@ -510,11 +510,13 @@ def load_static_ui():
     st.markdown(
         """
         <style>
-        /* ---------- PROP CARDS ---------- */
+        /* ==================================================
+           EXPAND WRAPPER (UNCHANGED BEHAVIOR)
+        ================================================== */
         .prop-card-wrapper {
             position: relative;
             z-index: 5;
-            border-radius: 14px;
+            border-radius: 16px;
         }
 
         .prop-card-wrapper summary {
@@ -531,50 +533,65 @@ def load_static_ui():
         }
 
         .prop-card-wrapper .card-expanded {
-            margin-top: 8px;
+            margin-top: 6px;
             pointer-events: auto;
         }
 
         .expand-hint {
             text-align: center;
-            font-size: 0.7rem;
-            opacity: 0.65;
-            margin-top: 6px;
+            font-size: 0.65rem;
+            opacity: 0.55;
+            margin-top: 4px;
         }
 
-        /* ---------- PROP CARD BASE ---------- */
+        /* ==================================================
+           BASE CARD (MATCH TILE LAYOUT)
+        ================================================== */
         .prop-card,
         .prop-card-wrapper summary {
-            background: rgba(15, 23, 42, 0.92);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 14px;
+            background: linear-gradient(
+                180deg,
+                rgba(15, 23, 42, 0.92),
+                rgba(2, 6, 23, 0.95)
+            );
+            border: none;
+            border-radius: 16px;
+            padding: 16px 18px;
+            width: 100%;
             box-shadow:
-                0 6px 18px rgba(0, 0, 0, 0.45),
-                inset 0 1px 0 rgba(255, 255, 255, 0.03);
-            padding: 12px 14px;
+                0 10px 28px rgba(0, 0, 0, 0.55),
+                inset 0 1px 0 rgba(255, 255, 255, 0.04);
         }
 
         .prop-card-wrapper:hover summary {
-            border-color: rgba(14, 165, 233, 0.45);
             box-shadow:
-                0 10px 28px rgba(0, 0, 0, 0.6),
-                inset 0 1px 0 rgba(255, 255, 255, 0.05);
+                0 14px 36px rgba(0, 0, 0, 0.65),
+                inset 0 1px 0 rgba(255, 255, 255, 0.06);
         }
 
-        /* ---------- EXPANDED METRICS ---------- */
+        /* ==================================================
+           CARD GRID (VERTICAL TILE STRUCTURE)
+        ================================================== */
+        .card-grid {
+            display: grid;
+            grid-template-rows: auto auto auto auto;
+            row-gap: 10px;
+        }
+
+        /* ==================================================
+           EXPANDED METRICS (BLENDED)
+        ================================================== */
         .expanded-wrap {
-            margin-top: 8px;
+            background: rgba(255,255,255,0.03);
+            border: none;
             padding: 10px;
             border-radius: 12px;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.12);
         }
 
         .expanded-row {
             display: flex;
             justify-content: space-between;
             gap: 8px;
-            margin-bottom: 6px;
         }
 
         .metric {
@@ -1195,50 +1212,61 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         # BASE CARD HTML (STRICT f-STRINGS)
         # --------------------------------------------------
         base_card_html = (
-            f"<div class='prop-card'>"
-
-            # ---------------- TOP ROW ----------------
-            f"<div style='display:flex;justify-content:space-between;align-items:center;gap:10px;'>"
-
-            # LEFT: Player name
-            f"  <div style='font-weight:800;font-size:1.02rem;line-height:1.1;'>"
-            f"    {player}"
-            f"  </div>"
-
-            # RIGHT: Team logos
-            f"  <div style='display:flex;align-items:center;gap:6px;'>"
-            f"    <img src='{away_logo}' style='width:22px;height:22px;' />"
-            f"    <span style='opacity:0.6;font-size:0.7rem;'>vs</span>"
-            f"    <img src='{home_logo}' style='width:22px;height:22px;' />"
-            f"  </div>"
-
+            f"<div class='prop-card card-grid'>"
+        
+            # ==================================================
+            # HEADER: PLAYER + MATCHUP
+            # ==================================================
+            f"<div style='display:flex;justify-content:space-between;align-items:flex-start;'>"
+        
+            f"<div style='font-weight:900;font-size:1.15rem;letter-spacing:-0.2px;'>"
+            f"{player}"
             f"</div>"
-
-            # ---------------- MARKET / LINE ----------------
-            f"<div style='margin-top:6px;display:flex;justify-content:space-between;gap:10px;'>"
-            f"  <div style='font-weight:650'>{market_label}</div>"
-            f"  <div style='opacity:0.85'>{bet_type} {fmt_num(line, 1)}</div>"
+        
+            f"<div style='display:flex;align-items:center;gap:6px;'>"
+            f"<img src='{away_logo}' style='width:20px;height:20px;' />"
+            f"<span style='opacity:0.5;font-size:0.7rem;'>vs</span>"
+            f"<img src='{home_logo}' style='width:20px;height:20px;' />"
             f"</div>"
-
-            # ---------------- SPARKLINE ----------------
-            f"<div style='margin-top:6px;'>"
+        
+            f"</div>"
+        
+            # ==================================================
+            # SUBTITLE: MARKET · BET TYPE · LINE
+            # ==================================================
+            f"<div style='font-size:0.85rem;opacity:0.75;'>"
+            f"{market_label} · {bet_type.upper()} {fmt_num(line, 1)}"
+            f"</div>"
+        
+            # ==================================================
+            # SPARKLINE (CENTERPIECE)
+            # ==================================================
+            f"<div style='display:flex;justify-content:center;'>"
             f"{spark_html}"
             f"</div>"
-
-            # ---------------- HIT RATE / ODDS ----------------
-            f"<div style='margin-top:8px;display:flex;justify-content:space-between;gap:10px;'>"
-            f"  <div style='opacity:0.85'>{hit_label}: <strong>{fmt_pct(hit)}</strong></div>"
-            f"  <div style='display:flex;align-items:center;gap:6px;opacity:0.9;'>"
-            f"    <img src='{book_logo}' style='height:16px;width:auto;' />"
-            f"    <strong>{fmt_odds(odds)}</strong>"
-            f"  </div>"
+        
+            # ==================================================
+            # BOTTOM STATS ROW (ODDS | HIT RATE | RANK)
+            # ==================================================
+            f"<div style='display:grid;grid-template-columns:1fr 1fr 1fr;font-size:0.75rem;opacity:0.85;'>"
+        
+            f"<div>"
+            f"<strong>{fmt_odds(odds)}</strong><br/>"
+            f"<span style='opacity:0.6'>Odds</span>"
             f"</div>"
-
-            # ---------------- BOOKS ----------------
-            f"<div style='margin-top:6px;opacity:0.75;font-size:0.82rem'>"
-            f"  {books_line}"
+        
+            f"<div style='text-align:center;'>"
+            f"<strong>{fmt_pct(hit)}</strong><br/>"
+            f"<span style='opacity:0.6'>{hit_label}</span>"
             f"</div>"
-
+        
+            f"<div style='text-align:right;'>"
+            f"<strong>—</strong><br/>"
+            f"<span style='opacity:0.6'>Opp Rank</span>"
+            f"</div>"
+        
+            f"</div>"
+        
             f"</div>"
         )
 

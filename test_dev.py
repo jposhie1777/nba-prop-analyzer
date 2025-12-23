@@ -33,6 +33,7 @@ from google.oauth2 import service_account
 
 import psutil  # ✅ must be before memory helpers
 
+
 # ======================================================
 # MEMORY TRACKING HELPERS (DEFINE BEFORE CALLING)
 # ======================================================
@@ -722,69 +723,45 @@ if "saved_bets_keys" not in st.session_state:
 # ------------------------------------------------------
 # DATA: PROPS AND HISTOICAL STATS (minimal)
 # ------------------------------------------------------
-PROPS_SQL = f"""
+TRENDS_SQL = """
 SELECT
-    p.player,
-    p.player_team,
-    p.home_team,
-    p.visitor_team,
-    p.opponent_team,
-    p.market,
-    p.line,
-    p.bet_type,
-    p.bookmaker,
-    p.price,
-    p.hit_rate_last5,
-    p.hit_rate_last10,
-    p.hit_rate_last20,
-    p.implied_prob,
-    p.edge_pct,
-    p.edge_raw,
-    p.game_date,
+    player,
 
-    -- L10 trend lists (aliased for Python)
-    t.pts_last10_list AS points_last10_list,
-    t.ast_last10_list AS assists_last10_list,
-    t.pra_last10_list AS pra_last10_list,
-    t.pr_last10_list  AS points_rebounds_last10_list,
-    t.pa_last10_list  AS points_assists_last10_list,
-    t.ra_last10_list  AS rebounds_assists_last10_list
+    -- Core counting stats (L10 only)
+    pts_last10_list,
+    reb_last10_list,
+    ast_last10_list,
+    stl_last10_list,
+    blk_last10_list,
 
-FROM `{PROJECT_ID}.{DATASET}.todays_props_enriched` p
-LEFT JOIN `{PROJECT_ID}.{DATASET}.historical_player_stats_for_trends` t
-    ON p.player = t.player
+    -- Combo stats (L10 only)
+    pra_last10_list,
+    pr_last10_list,
+    pa_last10_list,
+    ra_last10_list,
+
+    -- Optional (dates)
+    last10_dates
+
+FROM `nba_prop_analyzer.historical_player_stats_for_trends`
 """
 
+PROPS_SQL = f"SELECT * FROM `{PROJECT_ID}.{DATASET}.{PROPS_TABLE}`"
 
-
-
+@st.cache_data(ttl=900, show_spinner=True)
 def load_props() -> pd.DataFrame:
     df = load_bq_df(PROPS_SQL)
 
     # Keep only columns we actually use (cuts memory)
     keep = [
-        # --- Core prop fields ---
         "player", "player_team",
         "home_team", "visitor_team", "opponent_team",
         "market", "line", "bet_type",
         "bookmaker", "price",
-    
-        # --- Hit rates / EV ---
         "hit_rate_last5", "hit_rate_last10", "hit_rate_last20",
         "implied_prob",
         "edge_pct", "edge_raw",
-    
-        # --- Dates ---
         "game_date",
-    
-        # --- L10 sparkline lists (REQUIRED) ---
-        "points_last10_list",
-        "rebounds_last10_list",
-        "assists_last10_list",
-        "pra_last10_list",
-        "points_rebounds_last10_list",
-        "points_assists_last10_list",
-        "rebounds_assists_last10_list",
     ]
     cols = [c for c in keep if c in df.columns]
     df = df[cols].copy()
@@ -1044,7 +1021,7 @@ def build_l10_sparkline_html(values, line_value):
         f"</div>"
     )
 
-
+@st.cache_data(show_spinner=False)
 def build_prop_cards(card_df: pd.DataFrame, hit_rate_col: str) -> pd.DataFrame:
     """
     Dedupe identical props across books and attach a compact list of book prices.

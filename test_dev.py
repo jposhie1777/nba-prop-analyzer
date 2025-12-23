@@ -940,24 +940,41 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         # --------------------------------------------------
         base_card_html = (
             f"<div class='prop-card'>"
-            f"<div style='display:flex;justify-content:space-between;gap:10px;'>"
-            f"  <div style='font-weight:800;font-size:1.02rem;line-height:1.1'>{player}</div>"
-            f"  <div style='opacity:0.75;font-size:0.85rem'>{team} vs {opp}</div>"
+        
+            # ---------------- TOP ROW ----------------
+            f"<div style='display:flex;justify-content:space-between;align-items:center;gap:10px;'>"
+        
+            # LEFT: Player name
+            f"  <div style='font-weight:800;font-size:1.02rem;line-height:1.1;'>"
+            f"    {player}"
+            f"  </div>"
+        
+            # RIGHT: Team logos
+            f"  <div style='display:flex;align-items:center;gap:6px;'>"
+            f"    <img src='{away_logo}' style='width:22px;height:22px;' />"
+            f"    <span style='opacity:0.6;font-size:0.7rem;'>vs</span>"
+            f"    <img src='{home_logo}' style='width:22px;height:22px;' />"
+            f"  </div>"
+        
             f"</div>"
+        
+            # ---------------- MARKET / LINE ----------------
             f"<div style='margin-top:6px;display:flex;justify-content:space-between;gap:10px;'>"
             f"  <div style='font-weight:650'>{market}</div>"
             f"  <div style='opacity:0.85'>{bet_type} {fmt_num(line, 1)}</div>"
             f"</div>"
+        
+            # ---------------- HIT RATE / ODDS ----------------
             f"<div style='margin-top:8px;display:flex;justify-content:space-between;gap:10px;'>"
             f"  <div style='opacity:0.85'>{hit_label}: <strong>{fmt_pct(hit)}</strong></div>"
             f"  <div style='opacity:0.85'>Odds: <strong>{fmt_odds(odds)}</strong></div>"
             f"</div>"
-            f"<div style='margin-top:6px;opacity:0.75;font-size:0.82rem'>{books_line}</div>"
+        
+            # ---------------- BOOKS ----------------
+            f"<div style='margin-top:6px;opacity:0.75;font-size:0.82rem'>"
+            f"  {books_line}"
             f"</div>"
-            f"<div style='display:flex;align-items:center;gap:6px;'>"
-            f"  <img src='{away_logo}' style='width:22px;height:22px;' />"
-            f"  <span style='opacity:0.6;font-size:0.75rem;'>vs</span>"
-            f"  <img src='{home_logo}' style='width:22px;height:22px;' />"
+        
             f"</div>"
         )
 

@@ -66,9 +66,38 @@ st.sidebar.markdown("🧪 DEV_APP.PY RUNNING")
 IS_DEV = True
 
 import psutil
+import os
 
-def get_mem_mb() -> float:
+# =========================
+# MEMORY TRACKING HELPERS
+# =========================
+def get_rss_mb() -> float:
     return psutil.Process(os.getpid()).memory_info().rss / 1e6
+
+def init_memory_state():
+    if "mem_last_mb" not in st.session_state:
+        st.session_state.mem_last_mb = get_rss_mb()
+    if "mem_peak_mb" not in st.session_state:
+        st.session_state.mem_peak_mb = st.session_state.mem_last_mb
+    if "mem_render_peak_mb" not in st.session_state:
+        st.session_state.mem_render_peak_mb = st.session_state.mem_last_mb
+
+def record_memory_checkpoint():
+    current = get_rss_mb()
+    st.session_state.mem_peak_mb = max(st.session_state.mem_peak_mb, current)
+    st.session_state.mem_render_peak_mb = max(
+        st.session_state.mem_render_peak_mb,
+        current
+    )
+    return current
+
+def finalize_render_memory():
+    current = get_rss_mb()
+    last = st.session_state.mem_last_mb
+    delta = current - last
+    st.session_state.mem_last_mb = current
+    st.session_state.mem_render_peak_mb = current
+    return current, delta
 
 # ======================================================
 # DEV ACCESS CONTROL (EARLY)
@@ -979,6 +1008,7 @@ with tab_saved:
 
 with tab_props:
     props_df = load_props()
+    record_memory_checkpoint()
 
     if props_df.empty:
         st.info("No props returned from BigQuery.")

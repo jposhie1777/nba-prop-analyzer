@@ -1394,6 +1394,8 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         
             st.session_state.saved_bets_text.append(bet_line)
             st.toast("Saved ✅")
+            st.rerun()
+
 
         # -------------------------
         # CARD EXPAND UI

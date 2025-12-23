@@ -1067,10 +1067,6 @@ def pretty_market_label(market: str) -> str:
 
 
 def build_l10_sparkline_html(values, line_value, dates=None):
-    """
-    values: list[float]   (L10 stat values)
-    dates:  list[str|date] optional (L10 dates)
-    """
     if not values or line_value is None:
         return ""
 
@@ -1090,67 +1086,79 @@ def build_l10_sparkline_html(values, line_value, dates=None):
     for i, v in enumerate(vals):
         pct = (v - vmin) / span
         height = int(14 + 26 * pct)
-        hit = v >= line_value
-        color = "#22c55e" if hit else "#ef4444"
+        color = "#22c55e" if v >= line_value else "#ef4444"
 
-        # value label (above bar)
         value_label = f"{v:.0f}"
 
-        # date label (below bar)
         date_label = ""
         if dates is not None and len(dates) > i:
             try:
-                d = pd.to_datetime(dates[i])
-                date_label = d.strftime("%m/%d")
+                date_label = pd.to_datetime(dates[i]).strftime("%m/%d")
             except Exception:
                 date_label = str(dates[i])
 
-        bars_html.append(
-            f"""
-            <div style="display:flex;flex-direction:column;align-items:center;">
-                <div style="font-size:9px;opacity:0.8;margin-bottom:2px;">
-                    {value_label}
-                </div>
+        bars_html.append(f"""
+<div style="display:flex;flex-direction:column;align-items:center;">
+  <div style="font-size:9px;opacity:0.8;margin-bottom:2px;">
+    {value_label}
+  </div>
+  <div style="
+    width:6px;
+    height:{height}px;
+    background:{color};
+    border-radius:2px;
+  "></div>
+  <div style="font-size:9px;opacity:0.6;margin-top:2px;">
+    {date_label}
+  </div>
+</div>
+""")
 
-                <div style="
-                    width:6px;
-                    height:{height}px;
-                    background:{color};
-                    border-radius:2px;
-                "></div>
-
-                <div style="font-size:9px;opacity:0.6;margin-top:2px;">
-                    {date_label}
-                </div>
-            </div>
-            """
-        )
-
-    # horizontal line position
     line_pct = (float(line_value) - vmin) / span
     line_bottom = int(14 + 26 * line_pct)
 
     return f"""
-    <div style="
-        position:relative;
-        display:flex;
-        align-items:flex-end;
-        gap:4px;
-        margin-top:8px;
-        padding-bottom:2px;
-    ">
-        <div style="
-            position:absolute;
-            left:0;
-            right:0;
-            bottom:{line_bottom}px;
-            height:1px;
-            background:rgba(255,255,255,0.35);
-        "></div>
+<div style="
+  position:relative;
+  display:flex;
+  align-items:flex-end;
+  gap:4px;
+  margin-top:8px;
+  padding-bottom:2px;
+">
+  <div style="
+    position:absolute;
+    left:0;
+    right:0;
+    bottom:{line_bottom}px;
+    height:1px;
+    background:rgba(255,255,255,0.35);
+  "></div>
+  {''.join(bars_html)}
+</div>
+"""
 
-        {''.join(bars_html)}
-    </div>
-    """
+return f"""
+<div style="
+    position:relative;
+    display:flex;
+    align-items:flex-end;
+    gap:4px;
+    margin-top:8px;
+    padding-bottom:2px;
+">
+    <div style="
+        position:absolute;
+        left:0;
+        right:0;
+        bottom:{line_bottom}px;
+        height:1px;
+        background:rgba(255,255,255,0.35);
+    "></div>
+
+    {''.join(bars_html)}
+</div>
+"""
 
 
 @st.cache_data(show_spinner=False)

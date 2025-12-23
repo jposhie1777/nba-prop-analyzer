@@ -124,7 +124,7 @@ def get_user_email():
 
 
 def is_dev_user():
-    return get_user_email() in DEV_EMAILS
+    return True
 
 # ======================================================
 # SAFE TAB ROUTER (DEV + MAIN)

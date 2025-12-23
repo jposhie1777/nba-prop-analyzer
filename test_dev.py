@@ -722,24 +722,39 @@ if "saved_bets_keys" not in st.session_state:
 # ------------------------------------------------------
 # DATA: PROPS AND HISTOICAL STATS (minimal)
 # ------------------------------------------------------
-PROPS_SQL = f"""
 SELECT
-    p.*,
+    p.player,
+    p.player_team,
+    p.home_team,
+    p.visitor_team,
+    p.opponent_team,
+    p.market,
+    p.line,
+    p.bet_type,
+    p.bookmaker,
+    p.price,
+    p.hit_rate_last5,
+    p.hit_rate_last10,
+    p.hit_rate_last20,
+    p.implied_prob,
+    p.edge_pct,
+    p.edge_raw,
+    p.game_date,
 
-    t.pts_last10_list,
-    t.reb_last10_list,
-    t.ast_last10_list,
+    -- ONLY the exact lists you render
+    t.points_last10_list,
+    t.rebounds_last10_list,
+    t.assists_last10_list,
     t.pra_last10_list,
-    t.pr_last10_list,
-    t.pa_last10_list,
-    t.ra_last10_list
+    t.points_assists_last10_list,
+    t.points_rebounds_last10_list,
+    t.rebounds_assists_last10_list
 
 FROM `{PROJECT_ID}.{DATASET}.todays_props_enriched` p
 LEFT JOIN `{PROJECT_ID}.{DATASET}.historical_player_stats_for_trends` t
     ON p.player = t.player
-"""
 
-@st.cache_data(ttl=900, show_spinner=True)
+
 def load_props() -> pd.DataFrame:
     df = load_bq_df(PROPS_SQL)
 
@@ -1026,7 +1041,7 @@ def build_l10_sparkline_html(values, line_value):
         f"</div>"
     )
 
-@st.cache_data(show_spinner=False)
+
 def build_prop_cards(card_df: pd.DataFrame, hit_rate_col: str) -> pd.DataFrame:
     """
     Dedupe identical props across books and attach a compact list of book prices.

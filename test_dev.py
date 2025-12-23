@@ -32,7 +32,7 @@ from google.cloud import bigquery
 from google.oauth2 import service_account
 
 import psutil  # ✅ must be before memory helpers
-import streamlit.components.v1 as components
+
 
 # ======================================================
 # MEMORY TRACKING HELPERS (DEFINE BEFORE CALLING)
@@ -1067,18 +1067,16 @@ def pretty_market_label(market: str) -> str:
 
 
 def build_l10_sparkline_html(values, dates, line_value):
-    if values is None or dates is None or line_value is None:
-        return ""
-
-    if len(values) == 0 or len(dates) == 0:
+    if not values or not dates or line_value is None:
         return ""
 
     try:
         vals = [float(v) for v in values]
-        line_val = float(line_value)
+        if not vals:
+            return ""
 
         vmin = min(vals)
-        vmax = max(vals + [line_val])
+        vmax = max(vals + [line_value])
         span = max(vmax - vmin, 1)
     except Exception:
         return ""
@@ -1087,8 +1085,11 @@ def build_l10_sparkline_html(values, dates, line_value):
 
     for v, d in zip(vals, dates):
         height = int(18 + 26 * ((v - vmin) / span))
-        color = "#22c55e" if v >= line_val else "#ef4444"
+        hit = v >= line_value
+        color = "#22c55e" if hit else "#ef4444"
 
+        # format date minimally (MM/DD)
+        date_str = ""
         try:
             date_str = pd.to_datetime(d).strftime("%m/%d")
         except Exception:
@@ -1097,24 +1098,42 @@ def build_l10_sparkline_html(values, dates, line_value):
         bars_html.append(
             f"""
             <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
-                <div style="font-size:0.6rem;opacity:0.8;">{int(v)}</div>
-                <div style="width:7px;height:{height}px;background:{color};border-radius:2px;"></div>
+                
+                <!-- VALUE ABOVE BAR -->
+                <div style="font-size:0.6rem;opacity:0.8;">
+                    {int(v)}
+                </div>
+
+                <!-- BAR -->
+                <div style="
+                    width:7px;
+                    height:{height}px;
+                    background:{color};
+                    border-radius:2px;
+                "></div>
+
+                <!-- DATE BELOW BAR (VERTICAL) -->
                 <div style="
                     font-size:0.55rem;
                     opacity:0.6;
                     writing-mode:vertical-rl;
                     transform:rotate(180deg);
-                ">{date_str}</div>
+                    margin-top:2px;
+                ">
+                    {date_str}
+                </div>
+
             </div>
             """
         )
 
-    # Clamp line position to [0, 100]
-    line_offset_pct = 100 * (1 - (line_val - vmin) / span)
-    line_offset_pct = max(0, min(100, line_offset_pct))
+    # line position (relative to bar area)
+    line_offset_pct = 100 * (1 - (line_value - vmin) / span)
 
     return f"""
     <div style="position:relative;display:flex;gap:6px;align-items:flex-end;">
+
+        <!-- HORIZONTAL LINE (PROP LINE) -->
         <div style="
             position:absolute;
             left:0;
@@ -1123,7 +1142,9 @@ def build_l10_sparkline_html(values, dates, line_value):
             height:1px;
             background:rgba(255,255,255,0.35);
         "></div>
+
         {''.join(bars_html)}
+
     </div>
     """
 
@@ -1175,7 +1196,7 @@ def build_prop_cards(card_df: pd.DataFrame, hit_rate_col: str) -> pd.DataFrame:
 
 def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
     if df.empty:
-        st.info("No props match your filters.")
+        st.info(f"No props match your filters.")
         return
 
     if hit_rate_col not in df.columns:
@@ -1186,32 +1207,30 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
 
     for _, row in card_df.iterrows():
 
-        # --------------------------------------------------
-        # CORE FIELDS
-        # --------------------------------------------------
-        player = str(row.get("player", ""))
+        player = f"{row.get('player', '')}"
         raw_market = row.get("market")
+        norm = normalize_market_key(raw_market)
+        st.caption(f"DEBUG market: {raw_market} → {norm}")
         market_label = pretty_market_label(raw_market)
-        bet_type = str(row.get("bet_type", "")).upper()
+        bet_type = f"{row.get('bet_type', '')}"
 
-        home_team = str(row.get("home_team", ""))
-        visitor_team = str(row.get("visitor_team", ""))
+        team = f"{row.get('player_team', '')}"
+        home_team = f"{row.get('home_team', '')}"
+        visitor_team = f"{row.get('visitor_team', '')}"
 
+        opp = f"{row.get('opponent_team', '')}"
         line = row.get("line")
         odds = row.get("price")
 
-        bookmaker = str(row.get("bookmaker", ""))
+        bookmaker = f"{row.get('bookmaker', '')}"
         book_logo = SPORTSBOOK_LOGOS.get(bookmaker, "")
 
-        # --------------------------------------------------
+        # -----------------------------
         # TEAM LOGOS
-        # --------------------------------------------------
+        # -----------------------------
         home_logo = logo(home_team)
         away_logo = logo(visitor_team)
 
-        # --------------------------------------------------
-        # HIT / IMPLIED / EDGE
-        # --------------------------------------------------
         hit = row.get(hit_rate_col)
         implied = row.get("implied_prob")
 
@@ -1219,26 +1238,35 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
             implied = compute_implied_prob(odds)
 
         edge = None
-        if (
-            hit is not None
-            and implied is not None
-            and not pd.isna(hit)
-            and not pd.isna(implied)
-        ):
+        if hit is not None and implied is not None and not pd.isna(hit) and not pd.isna(implied):
             edge = float(hit) - float(implied)
 
-        # --------------------------------------------------
-        # L10 DATA
-        # --------------------------------------------------
-        l10_values = get_l10_values(row)
-        l10_dates = row.get("last10_dates")
+        books = row.get("book_prices", [])
+        books_line = f" • ".join(
+            f"{b.get('book','')} {fmt_odds(b.get('price'))}"
+            for b in books[:4]
+        )
 
-        if l10_values is None or len(l10_values) == 0:
+        # -----------------------------
+        # L10 SPARKLINE
+        # -----------------------------
+        if player == "Victor Wembanyama":
+            st.write(
+                {
+                    "market": raw_market,
+                    "norm": norm,
+                    "reb_last10_list": row.get("reb_last10_list"),
+                    "pts_last10_list": row.get("pts_last10_list"),
+                }
+            )
+
+        l10_values = get_l10_values(row)
+
+        if not l10_values:
             st.caption(f"⚠️ No L10 values for {player} | market={raw_market}")
 
         spark_html = build_l10_sparkline_html(
             values=l10_values,
-            dates=l10_dates,
             line_value=line,
         )
 
@@ -1247,61 +1275,71 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         # --------------------------------------------------
         base_card_html = (
             f"<div class='prop-card card-grid'>"
-
-            # ================= TOP BAR =================
+        
+            # ==================================================
+            # TOP BAR: MATCHUP | PLAYER + MARKET | BOOK + ODDS
+            # ==================================================
             f"<div style='display:grid;grid-template-columns:1fr 2fr 1fr;align-items:center;'>"
-
-            # LEFT — MATCHUP
-            f"<div style='display:flex;align-items:center;gap:8px;font-size:0.85rem;'>"
-            f"<img src='{away_logo}' style='width:24px;height:24px;' />"
+        
+            # ---------- LEFT: MATCHUP ----------
+            f"<div style='display:flex;align-items:center;gap:8px;font-size:0.8rem;opacity:0.9;'>"
+            f"<img src='{away_logo}' style='width:22px;height:22px;' />"
             f"<span style='font-weight:600;'>vs</span>"
-            f"<img src='{home_logo}' style='width:24px;height:24px;' />"
+            f"<img src='{home_logo}' style='width:22px;height:22px;' />"
             f"</div>"
-
-            # CENTER — PLAYER + MARKET
+        
+            # ---------- CENTER: PLAYER + MARKET ----------
             f"<div style='text-align:center;'>"
-            f"  <div style='font-weight:900;font-size:1.2rem;letter-spacing:-0.2px;'>"
+            f"  <div style='font-weight:900;font-size:1.15rem;letter-spacing:-0.2px;'>"
             f"    {player}"
             f"  </div>"
-            f"  <div style='font-size:0.9rem;opacity:0.75;'>"
-            f"    {market_label} · {bet_type} {fmt_num(line, 1)}"
+            f"  <div style='font-size:0.85rem;opacity:0.7;'>"
+            f"    {market_label} · {bet_type.upper()} {fmt_num(line, 1)}"
             f"  </div>"
             f"</div>"
-
-            # RIGHT — BOOK + ODDS
+        
+            # ---------- RIGHT: BOOK + ODDS ----------
             f"<div style='display:flex;justify-content:flex-end;align-items:center;gap:8px;'>"
-            f"<img src='{book_logo}' style='height:18px;width:auto;' />"
-            f"<strong style='font-size:1rem;'>{fmt_odds(odds)}</strong>"
+            f"<img src='{book_logo}' style='height:16px;width:auto;' />"
+            f"<strong style='font-size:0.9rem;'>{fmt_odds(odds)}</strong>"
             f"</div>"
-
+        
             f"</div>"
-
-            # ================= BOTTOM STATS =================
-            f"<div style='display:grid;"
-            f"grid-template-columns:1fr 1fr 1fr;"
-            f"font-size:0.75rem;opacity:0.85;margin-top:8px;'>"
-
+        
+            # ==================================================
+            # SPARKLINE (CENTERPIECE)
+            # ==================================================
+            f"<div style='display:flex;justify-content:center;margin-top:6px;'>"
+            f"{spark_html}"
+            f"</div>"
+        
+            # ==================================================
+            # BOTTOM STATS ROW (ODDS | HIT RATE | RANK)
+            # ==================================================
+            f"<div style='display:grid;grid-template-columns:1fr 1fr 1fr;font-size:0.75rem;opacity:0.85;margin-top:6px;'>"
+        
             f"<div>"
             f"<strong>{fmt_odds(odds)}</strong><br/>"
             f"<span style='opacity:0.6'>Odds</span>"
             f"</div>"
-
+        
             f"<div style='text-align:center;'>"
             f"<strong>{fmt_pct(hit)}</strong><br/>"
             f"<span style='opacity:0.6'>{hit_label}</span>"
             f"</div>"
-
+        
             f"<div style='text-align:right;'>"
             f"<strong>—</strong><br/>"
             f"<span style='opacity:0.6'>Opp Rank</span>"
             f"</div>"
-
+        
             f"</div>"
+        
             f"</div>"
         )
 
         # --------------------------------------------------
-        # EXPANDED HTML
+        # EXPANDED HTML (UNCHANGED)
         # --------------------------------------------------
         expanded_html = (
             f"<div class='expanded-wrap'>"
@@ -1313,56 +1351,33 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
             f"</div>"
         )
 
-        # --------------------------------------------------
+        # -------------------------
         # SAVE BET (MINIMAL MEMORY)
-        # --------------------------------------------------
+        # -------------------------
         save_key = f"save_{player}_{raw_market}_{line}_{bet_type}"
-
+        
         if st.button("💾 Save Bet", key=save_key):
-            bet_line = (
-                f"{player} | "
-                f"{market_label} | "
-                f"{fmt_num(line, 1)} | "
-                f"{fmt_odds(odds)} | "
-                f"{bet_type}"
-            )
+            line_str = fmt_num(line, 1)
+            odds_str = fmt_odds(odds)
+        
+            bet_line = f"{player} | {pretty_market_label(raw_market)} | {line_str} | {odds_str} | {bet_type}"
+        
             st.session_state.saved_bets_text.append(bet_line)
             st.toast("Saved ✅")
 
-        # --------------------------------------------------
-        # SPARKLINE (REAL HTML — SAFE)
-        # --------------------------------------------------
-        components.html(
-            f"""
-            <div style="
-                position: relative;
-                z-index: 5;
-                margin: -6px 14px 6px 14px;
-                padding-top: 6px;
-                display: flex;
-                justify-content: center;
-            ">
-                {spark_html}
-            </div>
-            """,
-            height=100,
-        )
-
-        # --------------------------------------------------
+        # -------------------------
         # CARD EXPAND UI
-        # --------------------------------------------------
+        # -------------------------
         st.markdown(
-            f"""
-            <details class='prop-card-wrapper'>
-                <summary>
-                    {base_card_html}
-                    <div class='expand-hint'>Click to expand ▾</div>
-                </summary>
-                <div class='card-expanded'>
-                    {expanded_html}
-                </div>
-            </details>
-            """,
+            f"<details class='prop-card-wrapper'>"
+            f"<summary>"
+            f"{base_card_html}"
+            f"<div class='expand-hint'>Click to expand ▾</div>"
+            f"</summary>"
+            f"<div class='card-expanded'>"
+            f"{expanded_html}"
+            f"</div>"
+            f"</details>",
             unsafe_allow_html=True,
         )
 

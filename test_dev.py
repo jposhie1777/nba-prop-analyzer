@@ -103,10 +103,9 @@ DEV_EMAILS = {
 }
 
 def get_user_email():
-    # 1️⃣ Session state (DEV override)
-    user = st.session_state.get("user")
-    if user and user.get("email"):
-        return user["email"]
+    # 1️⃣ Explicit DEV override
+    if IS_DEV:
+        return "benvrana@bottleking.com"
 
     # 2️⃣ Streamlit hosted auth (prod)
     try:
@@ -116,15 +115,10 @@ def get_user_email():
     except Exception:
         pass
 
-    # 3️⃣ DEV fallback
-    if IS_DEV:
-        return "benvrana@bottleking.com"
-
     return None
 
-
 def is_dev_user():
-    return True
+    return get_user_email() in DEV_EMAILS
 
 # ======================================================
 # SAFE TAB ROUTER (DEV + MAIN)
@@ -154,7 +148,7 @@ DEV_BQ_DATASET = os.getenv("BIGQUERY_DATASET", "nba_prop_analyzer")
 DEV_SP_TABLES = {
     "Game Analytics": "game_analytics",
     "Game Report": "game_report",
-    "Historical Player Stats (Trends)": "historical_player_stats",
+    "Historical Player Stats (Trends)": "historical_player_stats_for_trends",
     "Today's Props – Enriched": "todays_props_enriched",
     "Today's Props – Hit Rates": "todays_props_hit_rates",
 }

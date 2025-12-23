@@ -1125,14 +1125,14 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         # L10 SPARKLINE
         # -----------------------------
         if player == "Victor Wembanyama":
-        st.write(
-            {
-                "market": raw_market,
-                "norm": norm,
-                "reb_last10_list": row.get("reb_last10_list"),
-                "pts_last10_list": row.get("pts_last10_list"),
-            }
-        )
+            st.write(
+                {
+                    "market": raw_market,
+                    "norm": norm,
+                    "reb_last10_list": row.get("reb_last10_list"),
+                    "pts_last10_list": row.get("pts_last10_list"),
+                }
+            )
 
         l10_values = get_l10_values(row)
 

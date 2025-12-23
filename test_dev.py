@@ -33,15 +33,6 @@ from google.oauth2 import service_account
 
 import psutil  # ✅ must be before memory helpers
 
-import os, streamlit as st
-
-st.code({
-    "has_gcp_service_account": bool(os.getenv("GCP_SERVICE_ACCOUNT")),
-    "project_id": os.getenv("PROJECT_ID"),
-})
-st.stop()
-
-
 # ======================================================
 # MEMORY TRACKING HELPERS (DEFINE BEFORE CALLING)
 # ======================================================

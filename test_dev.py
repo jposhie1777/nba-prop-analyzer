@@ -917,6 +917,11 @@ def coerce_numeric_list(val):
 def normalize_market_key(market: str) -> str:
     m = (market or "").lower()
 
+    # strip known wrappers
+    m = m.replace("player_", "")
+    m = m.replace("_alternate", "")
+
+    # normalize combos first
     if "points_rebounds_assists" in m:
         return "pra"
     if "points_assists" in m:
@@ -925,6 +930,8 @@ def normalize_market_key(market: str) -> str:
         return "points_rebounds"
     if "rebounds_assists" in m:
         return "rebounds_assists"
+
+    # singles
     if "points" in m:
         return "points"
     if "rebounds" in m:

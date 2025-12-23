@@ -1067,7 +1067,10 @@ def pretty_market_label(market: str) -> str:
 
 
 def build_l10_sparkline_html(values, dates, line_value):
-    if not values or not dates or line_value is None:
+    if values is None or dates is None or line_value is None:
+        return ""
+    
+    if len(values) == 0 or len(dates) == 0:
         return ""
 
     try:

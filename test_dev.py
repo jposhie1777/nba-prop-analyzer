@@ -721,8 +721,31 @@ if "saved_bets_keys" not in st.session_state:
 
 
 # ------------------------------------------------------
-# DATA: PROPS (ONLY TABLE WE LOAD)
+# DATA: PROPS AND HISTOICAL STATS (minimal)
 # ------------------------------------------------------
+TRENDS_SQL = """
+SELECT
+    player,
+
+    -- Core counting stats (L10 only)
+    pts_last10_list,
+    reb_last10_list,
+    ast_last10_list,
+    stl_last10_list,
+    blk_last10_list,
+
+    -- Combo stats (L10 only)
+    pra_last10_list,
+    pr_last10_list,
+    pa_last10_list,
+    ra_last10_list,
+
+    -- Optional (dates)
+    last10_dates
+
+FROM `nba_prop_analyzer.historical_player_stats_for_trends`
+"""
+
 PROPS_SQL = f"SELECT * FROM `{PROJECT_ID}.{DATASET}.{PROPS_TABLE}`"
 
 @st.cache_data(ttl=900, show_spinner=True)
@@ -867,6 +890,68 @@ def fmt_num(x, d=1) -> str:
     except Exception:
         return "—"
 
+# 1️⃣ L10 STAT MAPPING (pure logic, no HTML)
+def get_l10_values(row):
+    market = (row.get("market") or "").lower()
+
+    if "points" in market and "rebounds" not in market and "assists" not in market:
+        return row.get("points_last10_list", [])
+    if "rebounds" in market and "assists" not in market:
+        return row.get("rebounds_last10_list", [])
+    if "assists" in market and "rebounds" not in market:
+        return row.get("assists_last10_list", [])
+    if "points_rebounds_assists" in market or "pra" in market:
+        return row.get("pra_last10_list", [])
+    if "points_assists" in market:
+        return row.get("points_assists_last10_list", [])
+    if "points_rebounds" in market:
+        return row.get("points_rebounds_last10_list", [])
+    if "rebounds_assists" in market:
+        return row.get("rebounds_assists_last10_list", [])
+
+    return []
+
+
+# 2️⃣ SPARKLINE RENDERER (presentation)
+def build_l10_sparkline_html(values, line_value):
+    if not values or line_value is None:
+        return ""
+
+    try:
+        vals = [float(v) for v in values if v is not None]
+        if not vals:
+            return ""
+        vmin = min(vals)
+        vmax = max(vals)
+        span = max(vmax - vmin, 1)
+    except Exception:
+        return ""
+
+    bars = []
+    for v in vals:
+        height = int(8 + 20 * ((v - vmin) / span))
+        hit = v >= line_value
+        color = "#22c55e" if hit else "#ef4444"
+
+        bars.append(
+            f"<div "
+            f"style='width:6px;"
+            f"height:{height}px;"
+            f"background:{color};"
+            f"border-radius:2px;'>"
+            f"</div>"
+        )
+
+    return (
+        f"<div "
+        f"style='display:flex;"
+        f"align-items:flex-end;"
+        f"gap:3px;"
+        f"margin-top:6px;'>"
+        f"{''.join(bars)}"
+        f"</div>"
+    )
+
 @st.cache_data(show_spinner=False)
 def build_prop_cards(card_df: pd.DataFrame, hit_rate_col: str) -> pd.DataFrame:
     """
@@ -929,69 +1014,83 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         player = f"{row.get('player', '')}"
         market = f"{row.get('market', '')}"
         bet_type = f"{row.get('bet_type', '')}"
-    
+
         team = f"{row.get('player_team', '')}"
         home_team = f"{row.get('home_team', '')}"
         visitor_team = f"{row.get('visitor_team', '')}"
-    
+
         opp = f"{row.get('opponent_team', '')}"
         line = row.get("line")
         odds = row.get("price")
-    
+
         bookmaker = f"{row.get('bookmaker', '')}"
         book_logo = SPORTSBOOK_LOGOS.get(bookmaker, "")
-    
+
         # -----------------------------
         # TEAM LOGOS
         # -----------------------------
         home_logo = logo(home_team)
         away_logo = logo(visitor_team)
-    
+
         hit = row.get(hit_rate_col)
         implied = row.get("implied_prob")
-    
+
         if implied is None or pd.isna(implied):
             implied = compute_implied_prob(odds)
-    
+
         edge = None
         if hit is not None and implied is not None and not pd.isna(hit) and not pd.isna(implied):
             edge = float(hit) - float(implied)
-    
+
         books = row.get("book_prices", [])
         books_line = f" • ".join(
             f"{b.get('book','')} {fmt_odds(b.get('price'))}"
             for b in books[:4]
         )
-    
+
+        # -----------------------------
+        # L10 SPARKLINE
+        # -----------------------------
+        l10_values = get_l10_values(row)
+        spark_html = build_l10_sparkline_html(
+            values=l10_values,
+            line_value=line,
+        )
+
         # --------------------------------------------------
         # BASE CARD HTML (STRICT f-STRINGS)
         # --------------------------------------------------
         base_card_html = (
             f"<div class='prop-card'>"
-    
+
             # ---------------- TOP ROW ----------------
             f"<div style='display:flex;justify-content:space-between;align-items:center;gap:10px;'>"
-    
+
             # LEFT: Player name
             f"  <div style='font-weight:800;font-size:1.02rem;line-height:1.1;'>"
             f"    {player}"
             f"  </div>"
-    
+
             # RIGHT: Team logos
             f"  <div style='display:flex;align-items:center;gap:6px;'>"
             f"    <img src='{away_logo}' style='width:22px;height:22px;' />"
             f"    <span style='opacity:0.6;font-size:0.7rem;'>vs</span>"
             f"    <img src='{home_logo}' style='width:22px;height:22px;' />"
             f"  </div>"
-    
+
             f"</div>"
-    
+
             # ---------------- MARKET / LINE ----------------
             f"<div style='margin-top:6px;display:flex;justify-content:space-between;gap:10px;'>"
             f"  <div style='font-weight:650'>{market}</div>"
             f"  <div style='opacity:0.85'>{bet_type} {fmt_num(line, 1)}</div>"
             f"</div>"
-    
+
+            # ---------------- SPARKLINE ----------------
+            f"<div style='margin-top:6px;'>"
+            f"{spark_html}"
+            f"</div>"
+
             # ---------------- HIT RATE / ODDS ----------------
             f"<div style='margin-top:8px;display:flex;justify-content:space-between;gap:10px;'>"
             f"  <div style='opacity:0.85'>{hit_label}: <strong>{fmt_pct(hit)}</strong></div>"
@@ -1000,17 +1099,17 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
             f"    <strong>{fmt_odds(odds)}</strong>"
             f"  </div>"
             f"</div>"
-    
+
             # ---------------- BOOKS ----------------
             f"<div style='margin-top:6px;opacity:0.75;font-size:0.82rem'>"
             f"  {books_line}"
             f"</div>"
-    
+
             f"</div>"
         )
 
         # --------------------------------------------------
-        # EXPANDED HTML (STRICT f-STRINGS)
+        # EXPANDED HTML (UNCHANGED)
         # --------------------------------------------------
         expanded_html = (
             f"<div class='expanded-wrap'>"
@@ -1022,11 +1121,11 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
             f"</div>"
         )
 
-        # --------------------------------------------------
+        # -------------------------
         # SAVE BET (OUTSIDE SUMMARY)
-        # --------------------------------------------------
+        # -------------------------
         save_key = f"save_{player}_{market}_{line}_{bet_type}"
-        if st.button(f"💾 Save Bet", key=save_key):
+        if st.button("💾 Save Bet", key=save_key):
             ok = save_bet_simple(
                 player=player,
                 market=market,
@@ -1034,11 +1133,11 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
                 price=odds,
                 bet_type=bet_type,
             )
-            st.toast(f"Saved ✅" if ok else f"Already saved")
+            st.toast("Saved ✅" if ok else "Already saved")
 
-        # --------------------------------------------------
-        # CARD EXPAND UI (STRICT STRUCTURE)
-        # --------------------------------------------------
+        # -------------------------
+        # CARD EXPAND UI
+        # -------------------------
         st.markdown(
             f"<details class='prop-card-wrapper'>"
             f"<summary>"

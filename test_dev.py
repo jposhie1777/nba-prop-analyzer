@@ -1234,10 +1234,10 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
             f"<div style='display:grid;grid-template-columns:1fr 2fr 1fr;align-items:center;'>"
         
             # ---------- LEFT: MATCHUP ----------
-            f"<div style='display:flex;align-items:center;gap:6px;font-size:0.7rem;opacity:0.75;'>"
-            f"<img src='{away_logo}' style='width:18px;height:18px;' />"
-            f"<span>vs</span>"
-            f"<img src='{home_logo}' style='width:18px;height:18px;' />"
+            f"<div style='display:flex;align-items:center;gap:8px;font-size:0.8rem;opacity:0.9;'>"
+            f"<img src='{away_logo}' style='width:22px;height:22px;' />"
+            f"<span style='font-weight:600;'>vs</span>"
+            f"<img src='{home_logo}' style='width:22px;height:22px;' />"
             f"</div>"
         
             # ---------- CENTER: PLAYER + MARKET ----------
@@ -1251,9 +1251,9 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
             f"</div>"
         
             # ---------- RIGHT: BOOK + ODDS ----------
-            f"<div style='display:flex;justify-content:flex-end;align-items:center;gap:6px;font-size:0.75rem;'>"
-            f"<img src='{book_logo}' style='height:14px;width:auto;' />"
-            f"<strong>{fmt_odds(odds)}</strong>"
+            f"<div style='display:flex;justify-content:flex-end;align-items:center;gap:8px;'>"
+            f"<img src='{book_logo}' style='height:16px;width:auto;' />"
+            f"<strong style='font-size:0.9rem;'>{fmt_odds(odds)}</strong>"
             f"</div>"
         
             f"</div>"

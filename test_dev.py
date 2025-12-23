@@ -1139,8 +1139,6 @@ def build_l10_sparkline_html(values, line_value, dates=None):
         margin-top:8px;
         padding-bottom:2px;
     ">
-
-        <!-- horizontal prop line -->
         <div style="
             position:absolute;
             left:0;
@@ -1153,6 +1151,7 @@ def build_l10_sparkline_html(values, line_value, dates=None):
         {''.join(bars_html)}
     </div>
     """
+
 
 @st.cache_data(show_spinner=False)
 def build_prop_cards(card_df: pd.DataFrame, hit_rate_col: str) -> pd.DataFrame:

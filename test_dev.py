@@ -1164,7 +1164,7 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         # -------------------------
         # SAVE BET (OUTSIDE SUMMARY)
         # -------------------------
-        save_key = f"save_{player}_{market}_{line}_{bet_type}"
+        save_key = f"save_{player}_{raw_market}_{line}_{bet_type}"
         if st.button("💾 Save Bet", key=save_key):
             ok = save_bet_simple(
                 player=player,

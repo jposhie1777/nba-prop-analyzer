@@ -1102,20 +1102,28 @@ def get_l10_values(row):
 
     if key == "points":
         return coerce_numeric_list(row.get("pts_last10_list"))
+
     if key == "rebounds":
         return coerce_numeric_list(row.get("reb_last10_list"))
+
     if key == "assists":
         return coerce_numeric_list(row.get("ast_last10_list"))
+
     if key == "steals":
-        return coerce_numeric_list(row.get("stl_last10"))   # 👈 ADD
+        return coerce_numeric_list(row.get("stl_last10_list"))  # ✅ FIX
+
     if key == "blocks":
-        return coerce_numeric_list(row.get("blk_last10"))   # 👈 ADD
+        return coerce_numeric_list(row.get("blk_last10_list"))  # ✅ FIX
+
     if key == "pra":
         return coerce_numeric_list(row.get("pra_last10_list"))
+
     if key == "points_assists":
         return coerce_numeric_list(row.get("pa_last10_list"))
+
     if key == "points_rebounds":
         return coerce_numeric_list(row.get("pr_last10_list"))
+
     if key == "rebounds_assists":
         return coerce_numeric_list(row.get("ra_last10_list"))
 

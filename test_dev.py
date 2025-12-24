@@ -839,6 +839,21 @@ def load_props() -> pd.DataFrame:
         # MATCHUP DIFFICULTY
         # ---------------------------------
         "matchup_difficulty_by_stat",
+        
+        # ---------------------------------
+        # DISTRIBUTION (EXPANDED ANALYTICS)
+        # ---------------------------------
+        "dist20_hit_rate",
+        "dist20_clear_1p_rate",
+        "dist20_clear_2p_rate",
+        "dist20_fail_bad_rate",
+        "dist20_avg_margin",
+
+        "dist40_hit_rate",
+        "dist40_clear_1p_rate",
+        "dist40_clear_2p_rate",
+        "dist40_fail_bad_rate",
+        "dist40_avg_margin",
     
         # ---------------------------------
         # MINUTES / ROLE STABILITY

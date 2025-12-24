@@ -1036,7 +1036,6 @@ def compute_confidence(
 
     if hit is not None and implied is not None:
         edge = hit - implied
-        # normalize: +20% edge ~= max confidence
         edge_score = clamp((edge + 0.05) / 0.25)
     else:
         edge_score = 0.0
@@ -1052,10 +1051,9 @@ def compute_confidence(
 
     if hr5 is not None and hr10 is not None and hr20 is not None:
         spread = max(hr5, hr10, hr20) - min(hr5, hr10, hr20)
-        # smaller spread = more stable
         stability_score = clamp(1.0 - spread * 2.0)
     else:
-        stability_score = 0.5  # neutral
+        stability_score = 0.5
 
     components["stability"] = stability_score
 
@@ -1066,7 +1064,6 @@ def compute_confidence(
     diff = row.get("proj_diff_vs_line")
 
     if proj is not None and diff is not None:
-        # +2 units above line ~= strong
         projection_score = clamp((diff + 1.0) / 4.0)
     else:
         projection_score = 0.5
@@ -1082,7 +1079,6 @@ def compute_confidence(
     if vol is not None:
         volatility_score = clamp(1.0 - vol)
     elif std is not None:
-        # higher std = worse confidence
         volatility_score = clamp(1.0 - safe_div(std, proj or 1.0))
     else:
         volatility_score = 0.5
@@ -1090,13 +1086,13 @@ def compute_confidence(
     components["volatility"] = volatility_score
 
     # --------------------------------------------------
-    # 5) MATCHUP QUALITY
+    # 5) MATCHUP QUALITY (FIXED OPP RANK LOGIC)
+    # 1 = hardest, 30 = easiest
     # --------------------------------------------------
-    matchup = row.get("matchup_difficulty_by_stat")
+    opp_rank = row.get(f"opp_pos_{stat_key}_rank")
 
-    if matchup is not None:
-        # already assumed 0–1 (easy → hard)
-        matchup_score = clamp(1.0 - matchup)
+    if opp_rank is not None:
+        matchup_score = clamp((opp_rank - 1) / 29.0)
     else:
         matchup_score = 0.5
 
@@ -1118,6 +1114,24 @@ def compute_confidence(
     components["minutes"] = minutes_score
 
     # --------------------------------------------------
+    # 7) MOMENTUM REWARD (NEW)
+    # --------------------------------------------------
+    bad_miss = row.get("dist20_fail_bad_rate")
+
+    momentum_bonus = 0.0
+    if (
+        hr20 is not None
+        and bad_miss is not None
+        and diff is not None
+        and hr20 >= 0.95
+        and bad_miss <= 0.05
+        and diff >= 6
+    ):
+        momentum_bonus = 0.06  # +6 confidence points
+
+    components["momentum"] = momentum_bonus
+
+    # --------------------------------------------------
     # WEIGHTED COMBINATION
     # --------------------------------------------------
     weights = {
@@ -1132,6 +1146,8 @@ def compute_confidence(
     confidence = sum(
         components[k] * weights[k] for k in weights
     )
+
+    confidence += momentum_bonus
 
     confidence_score = round(clamp(confidence) * 100)
 

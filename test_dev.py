@@ -773,14 +773,40 @@ def load_props() -> pd.DataFrame:
 
     # Keep only columns we actually use (cuts memory)
     keep = [
+        # Identity
         "player", "player_team",
         "home_team", "visitor_team", "opponent_team",
         "market", "line", "bet_type",
         "bookmaker", "price",
-        "hit_rate_last5", "hit_rate_last10", "hit_rate_last20",
-        "implied_prob",
-        "edge_pct", "edge_raw",
         "game_date",
+    
+        # Hit rates / EV
+        "hit_rate_last5", "hit_rate_last10", "hit_rate_last20",
+        "implied_prob", "edge_pct", "edge_raw",
+    
+        # Rolling averages (stat-specific)
+        "pts_last5", "pts_last10", "pts_last20",
+        "reb_last5", "reb_last10", "reb_last20",
+        "ast_last5", "ast_last10", "ast_last20",
+        "pra_last5", "pra_last10", "pra_last20",
+        "pr_last5", "pr_last10", "pr_last20",
+        "pa_last5", "pa_last10", "pa_last20",
+        "ra_last5", "ra_last10", "ra_last20",
+    
+        # Projection delta
+        "proj_diff_vs_line",
+    
+        # Distribution analytics
+        "dist20_hit_rate",
+        "dist20_clear_1p_rate",
+        "dist20_clear_2p_rate",
+        "dist20_fail_bad_rate",
+        "dist20_avg_margin",
+        "dist40_hit_rate",
+        "dist40_clear_1p_rate",
+        "dist40_clear_2p_rate",
+        "dist40_fail_bad_rate",
+        "dist40_avg_margin",
     ]
     cols = [c for c in keep if c in df.columns]
     df = df[cols].copy()

@@ -970,26 +970,32 @@ import re
 
 import numpy as np
 
-def get_stat_avgs(row, market_key: str):
-    if market_key == "points":
+def get_stat_avgs(row, stat_key):
+    if stat_key == "points":
         return row.get("pts_last5"), row.get("pts_last10"), row.get("pts_last20")
 
-    if market_key == "rebounds":
+    if stat_key == "rebounds":
         return row.get("reb_last5"), row.get("reb_last10"), row.get("reb_last20")
 
-    if market_key == "assists":
+    if stat_key == "assists":
         return row.get("ast_last5"), row.get("ast_last10"), row.get("ast_last20")
 
-    if market_key == "pra":
+    if stat_key == "steals":   # ✅ ADD
+        return row.get("stl_last5"), row.get("stl_last10"), row.get("stl_last20")
+
+    if stat_key == "blocks":   # ✅ ADD
+        return row.get("blk_last5"), row.get("blk_last10"), row.get("blk_last20")
+
+    if stat_key == "pra":
         return row.get("pra_last5"), row.get("pra_last10"), row.get("pra_last20")
 
-    if market_key == "points_rebounds":
-        return row.get("pr_last5"), row.get("pr_last10"), row.get("pr_last20")
-
-    if market_key == "points_assists":
+    if stat_key == "points_assists":
         return row.get("pa_last5"), row.get("pa_last10"), row.get("pa_last20")
 
-    if market_key == "rebounds_assists":
+    if stat_key == "points_rebounds":
+        return row.get("pr_last5"), row.get("pr_last10"), row.get("pr_last20")
+
+    if stat_key == "rebounds_assists":
         return row.get("ra_last5"), row.get("ra_last10"), row.get("ra_last20")
 
     return None, None, None

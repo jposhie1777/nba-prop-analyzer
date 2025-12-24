@@ -1977,36 +1977,130 @@ with tab_props:
         )
 
     # ------------------------------
-    # FILTER UI (NO MEMORY CODE HERE)
+    # FILTER UI (CLEAN + MOBILE SAFE)
     # ------------------------------
     with st.expander("⚙️ Filters", expanded=False):
-        c1, c2, c3 = st.columns([1.2, 1.7, 1.5])
+    
+        # ---------------------------------
+        # ROW 1 — CORE FILTERS
+        # ---------------------------------
+        c1, c2 = st.columns([1.2, 1.8])
+    
         with c1:
-            f_bet_type = st.multiselect("Bet Type", ["Over", "Under"], default=["Over", "Under"])
+            f_bet_type = st.multiselect(
+                "Bet Type",
+                ["Over", "Under"],
+                default=["Over", "Under"],
+            )
+    
+        # -------- MARKET GROUPING --------
+        MARKET_GROUPS = {
+            "Points": [
+                "player_points",
+                "player_points_alternate",
+            ],
+            "Rebounds": [
+                "player_rebounds",
+                "player_rebounds_alternate",
+            ],
+            "Assists": [
+                "player_assists",
+                "player_assists_alternate",
+            ],
+            "Steals": [
+                "player_steals",
+                "player_steals_alternate",
+            ],
+            "Blocks": [
+                "player_blocks",
+                "player_blocks_alternate",
+            ],
+            "Combos": [
+                "player_points_rebounds",
+                "player_points_assists",
+                "player_rebounds_assists",
+                "player_points_rebounds_assists",
+            ],
+        }
+    
         with c2:
-            f_market = st.multiselect("Market", market_list, default=market_list)
+            selected_market_groups = st.multiselect(
+                "Markets",
+                list(MARKET_GROUPS.keys()),
+                default=["Points", "Rebounds", "Assists"],
+            )
+    
+        # Flatten selected groups → raw market keys
+        f_market = [
+            m
+            for g in selected_market_groups
+            for m in MARKET_GROUPS.get(g, [])
+        ]
+    
+        # ---------------------------------
+        # ROW 2 — ODDS + HIT WINDOW
+        # ---------------------------------
+        c3, c4 = st.columns([2, 1])
+    
         with c3:
-            f_games = st.multiselect("Games", games_today, default=games_today)
-
-        c4, c5, c6 = st.columns([1, 1, 1])
+            f_min_odds, f_max_odds = st.slider(
+                "Odds Range",
+                min_value=-1000,
+                max_value=1000,
+                value=(-600, 150),
+                step=25,
+            )
+    
         with c4:
-            f_min_odds = st.number_input("Min Odds", value=-600, step=10)
-        with c5:
-            f_max_odds = st.number_input("Max Odds", value=150, step=10)
-        with c6:
-            f_window = st.selectbox("Hit Window", ["L5", "L10", "L20"], index=1)
-
-        c7 = st.columns([1])[0]
-        with c7:
-            default_books = [b for b in book_list if b.lower() in ("draftkings", "fanduel")] or book_list
-            f_books = st.multiselect("Books", book_list, default=default_books)
-
-        show_ev_only = st.checkbox(
-            "Show only EV+ bets (Hit Rate > Implied Probability)",
-            value=False,
+            f_window = st.selectbox(
+                "Hit Window",
+                ["L5", "L10", "L20"],
+                index=1,
+            )
+    
+        # ---------------------------------
+        # ROW 3 — BOOKS
+        # ---------------------------------
+        default_books = [
+            b for b in book_list
+            if b.lower() in ("draftkings", "fanduel")
+        ] or book_list
+    
+        f_books = st.multiselect(
+            "Books",
+            book_list,
+            default=default_books,
         )
-
-        f_min_hit = st.slider("Min Hit Rate (%)", 0, 100, 80)
+    
+        # ---------------------------------
+        # ROW 4 — OPTIONAL GAME FILTER
+        # ---------------------------------
+        show_games = st.checkbox("Filter by Games", value=False)
+    
+        if show_games:
+            f_games = st.multiselect(
+                "Games",
+                games_today,
+                default=games_today,
+            )
+        else:
+            f_games = []
+    
+        # ---------------------------------
+        # ADVANCED FILTERS (COLLAPSED)
+        # ---------------------------------
+        with st.expander("Advanced Filters", expanded=False):
+            show_ev_only = st.checkbox(
+                "Show only EV+ bets (Hit Rate > Implied Probability)",
+                value=False,
+            )
+    
+            f_min_hit = st.slider(
+                "Min Hit Rate (%)",
+                min_value=0,
+                max_value=100,
+                value=80,
+            )
 
     # ------------------------------
     # MEMORY WIDGET (VISIBLE, CORRECT)

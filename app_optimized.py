@@ -98,26 +98,17 @@ init_memory_state()
 # ======================================================
 # DEV ACCESS CONTROL (EARLY)
 # ======================================================
-DEV_EMAILS = {
-    "benvrana@bottleking.com",
-    "jposhie1777@gmail.com",
-}
+DEV_EMAIL = "benvrana@bottleking.com"
 
-def get_user_email():
-    if IS_DEV:
-        return "benvrana@bottleking.com"
-
+def get_user_email() -> str | None:
     user = st.session_state.get("user")
-    if user:
-        return user.get("email")
-
-    return None
+    return user.get("email") if user else None
 
 
+def is_dev_user() -> bool:
+    return get_user_email() == DEV_EMAIL
 
 
-def is_dev_user():
-    return get_user_email() in DEV_EMAILS
 
 # ======================================================
 # SAFE TAB ROUTER (DEV + MAIN)
@@ -131,13 +122,14 @@ def get_active_tab():
 # ------------------------------------------------------
 # SIDEBAR: DEV NAV ENTRY (SAFE)
 # ------------------------------------------------------
-if IS_DEV and is_dev_user():
+if is_dev_user():
     st.sidebar.divider()
     st.sidebar.markdown("### ⚙️ Dev Tools")
 
     if st.sidebar.button("Open Dev Panel"):
         st.query_params["tab"] = "dev"
         st.rerun()
+
 
 # ------------------------------------------------------
 # DEV-SAFE BIGQUERY and GAS CONSTANTS
@@ -498,43 +490,138 @@ if missing_env:
     )
     st.stop()
 
+def get_db_conn():
+    return psycopg2.connect(DATABASE_URL, sslmode="require")
+
+
+def get_or_create_user(auth0_sub: str, email: str):
+    conn = get_db_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    cur.execute("SELECT * FROM users WHERE auth0_sub = %s", (auth0_sub,))
+    row = cur.fetchone()
+
+    if row:
+        conn.close()
+        return row
+
+    cur.execute(
+        "INSERT INTO users (auth0_sub, email) VALUES (%s, %s) RETURNING *",
+        (auth0_sub, email),
+    )
+    row = cur.fetchone()
+    conn.commit()
+    conn.close()
+    return row
+
 
 # ------------------------------------------------------
-# AUTH0 GATE (PROD ONLY)
+# AUTH0 HELPERS (LOGIN)
 # ------------------------------------------------------
-if not IS_DEV:
-    ensure_logged_in()
+def get_auth0_authorize_url():
+    params = {
+        "response_type": "code",
+        "client_id": AUTH0_CLIENT_ID,
+        "redirect_uri": AUTH0_REDIRECT_URI,
+        "scope": "openid profile email",
+        "audience": AUTH0_AUDIENCE,
+    }
+    return f"https://{AUTH0_DOMAIN}/authorize?{urlencode(params)}"
 
-    if "user" not in st.session_state:
-        st.title("Pulse Sports Analytics")
-        st.caption("Daily games, props, trends, and analytics")
 
-        login_url = get_auth0_authorize_url()
-        st.markdown(
-            f"""
-            <div style="
-                margin: 14px 0 22px 0;
-                padding: 14px 18px;
-                border-radius: 14px;
-                border: 1px solid rgba(148,163,184,0.35);
-                background: radial-gradient(circle at top left, rgba(15,23,42,0.95), rgba(15,23,42,0.85));
-                box-shadow: 0 16px 40px rgba(15,23,42,0.9);
-                text-align: center;
-            ">
-                <a href="{login_url}"
-                   style="
-                       font-size: 1rem;
-                       font-weight: 700;
-                       color: #38bdf8;
-                       text-decoration: none;
-                   ">
-                    🔐 Log in with Auth0
-                </a>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.stop()
+def exchange_code_for_token(code: str):
+    token_url = f"https://{AUTH0_DOMAIN}/oauth/token"
+    payload = {
+        "grant_type": "authorization_code",
+        "client_id": AUTH0_CLIENT_ID,
+        "client_secret": AUTH0_CLIENT_SECRET,
+        "code": code,
+        "redirect_uri": AUTH0_REDIRECT_URI,
+        "audience": AUTH0_AUDIENCE,
+    }
+    resp = requests.post(token_url, json=payload, timeout=10)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def decode_id_token(id_token: str):
+    return jwt.decode(
+        id_token,
+        options={"verify_signature": False, "verify_aud": False},
+    )
+
+
+# ------------------------------------------------------
+# AUTH FLOW – HANDLES AUTH0 CALLBACK
+# ------------------------------------------------------
+def ensure_logged_in():
+    if "user" in st.session_state and "user_id" in st.session_state:
+        return
+
+    qp = st.query_params
+    code = qp.get("code")
+    if isinstance(code, list):
+        code = code[0]
+
+    if not code:
+        return  # no callback yet
+
+    token_data = exchange_code_for_token(code)
+    id_token = token_data.get("id_token")
+    claims = decode_id_token(id_token)
+
+    auth0_sub = claims.get("sub")
+    email = claims.get("email", "")
+
+    user_row = get_or_create_user(auth0_sub, email)
+
+    st.session_state["user"] = {
+        "auth0_sub": auth0_sub,
+        "email": email,
+    }
+    st.session_state["user_id"] = user_row["id"]
+
+    # clear ?code from URL
+    st.query_params.clear()
+    st.rerun()
+
+
+
+# ------------------------------------------------------
+# AUTH0 GATE (ALWAYS REQUIRED)
+# ------------------------------------------------------
+ensure_logged_in()
+
+if "user" not in st.session_state:
+    st.title("Pulse Sports Analytics")
+    st.caption("Daily games, props, trends, and analytics")
+
+    login_url = get_auth0_authorize_url()
+    st.markdown(
+        f"""
+        <div style="
+            margin: 14px 0 22px 0;
+            padding: 14px 18px;
+            border-radius: 14px;
+            border: 1px solid rgba(148,163,184,0.35);
+            background: radial-gradient(circle at top left, rgba(15,23,42,0.95), rgba(15,23,42,0.85));
+            box-shadow: 0 16px 40px rgba(15,23,42,0.9);
+            text-align: center;
+        ">
+            <a href="{login_url}"
+               style="
+                   font-size: 1rem;
+                   font-weight: 700;
+                   color: #38bdf8;
+                   text-decoration: none;
+               ">
+                🔐 Log in with Auth0
+            </a>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.stop()
 
 
 # ------------------------------------------------------
@@ -1944,14 +2031,6 @@ if active_tab == "dev":
 # MAIN APP
 # ------------------------------------------------------
 st.title("Pulse Sports Analytics — Minimal Core")
-
-# Sidebar: Dev Tools link (no heavy work)
-if IS_DEV and is_dev_user():
-    st.sidebar.divider()
-    st.sidebar.markdown("### ⚙️ Dev Tools")
-    if st.sidebar.button("Open DEV Tools"):
-        st.query_params["tab"] = "dev"
-        st.rerun()
 
 st.sidebar.divider()
 if st.sidebar.button("🔄 Refresh Data"):

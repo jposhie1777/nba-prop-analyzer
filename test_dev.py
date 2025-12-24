@@ -617,6 +617,23 @@ def load_static_ui():
 
 load_static_ui()
 
+st.markdown("""
+<style>
+/* Multiselect pills */
+div[data-baseweb="tag"] {
+    padding: 3px 8px;
+    font-size: 0.75rem;
+    border-radius: 6px;
+    background-color: rgba(239,68,68,0.85);
+}
+
+/* Remove excess vertical spacing in multiselect */
+div[data-baseweb="select"] {
+    margin-bottom: 0.25rem;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # ------------------------------------------------------
 # LOGOS (STATIC)
 # ------------------------------------------------------

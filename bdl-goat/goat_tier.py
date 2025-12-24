@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 from flask import Flask, request, jsonify
 from google.cloud import bigquery
 from google.auth import default as google_auth_default
+from dotenv import load_dotenv
+load_dotenv()
 
 # ======================================================
 # CONFIG

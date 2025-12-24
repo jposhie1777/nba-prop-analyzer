@@ -925,6 +925,23 @@ def save_bet_simple(player, market, line, price, bet_type) -> bool:
 
     return True
 
+if "_clipboard" in st.session_state:
+    st.toast("Copied — paste into Gambly Bot 🤖")
+    st.write(
+        f"""
+        <textarea id="clip" style="position:fixed;opacity:0;">
+        {st.session_state["_clipboard"]}
+        </textarea>
+        <script>
+        navigator.clipboard.writeText(
+            document.getElementById("clip").value
+        );
+        </script>
+        """,
+        unsafe_allow_html=True,
+    )
+    del st.session_state["_clipboard"]
+
 def render_saved_bets():
     # Always ensure key exists (ultra cheap)
     if "saved_bets_text" not in st.session_state:
@@ -939,13 +956,24 @@ def render_saved_bets():
 
     with col1:
         st.subheader("📋 Saved Bets")
-        st.caption("Session-only • copy & paste into Pikkit")
+        st.caption("Session-only • copy & paste into Gambly")
 
     with col2:
         if st.button("🗑 Clear All", use_container_width=True):
             st.session_state.saved_bets_text.clear()
             st.toast("Cleared all saved bets")
 
+    st.divider()
+
+    # -------------------------
+    # 🤖 GAMBLy BOT LINK (STEP 3)
+    # -------------------------
+    st.markdown("### 🤖 Gambly Bot")
+    st.link_button(
+        "Open Gambly Bot",
+        "https://www.gambly.com/gambly-bot",
+    )
+    st.caption("Copy bets below, then paste into Gambly Bot")
     st.divider()
 
     # -------------------------
@@ -956,10 +984,13 @@ def render_saved_bets():
         return
 
     st.text_area(
-        "Copy below",
+        "Copy below (long-press on mobile)",
         value="\n".join(bets),
         height=220,
     )
+
+    if st.button("📋 Copy All for Gambly"):
+        st.session_state["_clipboard"] = "\n\n".join(bets)
 
 # ------------------------------------------------------
 # PROP CARD HELPERS

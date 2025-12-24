@@ -806,6 +806,8 @@ def load_props() -> pd.DataFrame:
         "opp_pos_pts_rank",
         "opp_pos_reb_rank",
         "opp_pos_ast_rank",
+        "opp_pos_stl_rank",
+        "opp_pos_blk_rank",
         "opp_pos_pra_rank",
         "opp_pos_pr_rank",
         "opp_pos_pa_rank",

@@ -132,34 +132,59 @@ def fetch_goat_player_game_stats(game_id: int):
     return r.json().get("data", [])
 
 
-def map_goat_stat_row(s: dict):
-    if not s.get("game") or not s.get("player") or not s.get("team"):
+def map_stat_to_row(s, stat_period="FULL"):
+    if not s or not s.get("player") or not s.get("game"):
         return None
 
-    if not s.get("minutes") or s.get("minutes") == 0:
-        return None
+    # Accept ANY stat row that exists
+    # Do NOT require points, minutes, or scoring
+
+    player = s.get("player", {})
+    team = s.get("team", {})
+    game = s.get("game", {})
+
+    # Minutes: keep as INT when possible, else NULL
+    try:
+        minutes = int(s.get("min")) if s.get("min") is not None else None
+    except ValueError:
+        minutes = None
 
     return {
-        "game_id": s["game"]["id"],
-        "player_id": s["player"]["id"],
-        "team_id": s["team"]["id"],
-        "stat_period": normalize_stat_period(s.get("period")),
-        "minutes": s.get("minutes"),
-        "points": s.get("points", 0),
-        "rebounds": s.get("rebounds", 0),
-        "assists": s.get("assists", 0),
-        "steals": s.get("steals", 0),
-        "blocks": s.get("blocks", 0),
-        "turnovers": s.get("turnovers", 0),
-        "fouls": s.get("fouls", 0),
-        "fg_made": s.get("field_goals_made", 0),
-        "fg_attempts": s.get("field_goals_attempted", 0),
-        "fg3_made": s.get("three_point_field_goals_made", 0),
-        "fg3_attempts": s.get("three_point_field_goals_attempted", 0),
-        "ft_made": s.get("free_throws_made", 0),
-        "ft_attempts": s.get("free_throws_attempted", 0),
-        "fetched_at": datetime.utcnow(),
+        "game_id": game.get("id"),
+        "game_date": game.get("date"),
+        "season": game.get("season"),
+        "stat_period": stat_period,   # FULL / Q1 / H1
+
+        "player_id": player.get("id"),
+        "player": f"{player.get('first_name', '')} {player.get('last_name', '')}".strip(),
+        "team_id": team.get("id"),
+        "team": team.get("full_name"),
+
+        "minutes": minutes,
+
+        # Core stats (NULL-safe)
+        "pts": s.get("pts", 0),
+        "reb": s.get("reb", 0),
+        "ast": s.get("ast", 0),
+        "stl": s.get("stl", 0),
+        "blk": s.get("blk", 0),
+        "turnover": s.get("turnover", 0),
+        "pf": s.get("pf", 0),
+
+        # Shooting
+        "fgm": s.get("fgm", 0),
+        "fga": s.get("fga", 0),
+        "fg3m": s.get("fg3m", 0),
+        "fg3a": s.get("fg3a", 0),
+        "ftm": s.get("ftm", 0),
+        "fta": s.get("fta", 0),
+
+        # Meta
+        "plus_minus": s.get("plus_minus"),
+        "data_quality": "RAW"
     }
+
+
 
 # ======================================================
 # ROUTES
@@ -186,9 +211,11 @@ def backfill_player_stats():
         for g in batch:
             stats = fetch_goat_player_game_stats(g["id"])
             for s in stats:
-                row = map_goat_stat_row(s)
+                row = map_stat_to_row(s, stat_period="FULL")
+                print("ROW BUILT:", row is not None)
                 if row:
                     rows.append(row)
+
 
         delay(RATE["batch_delay"])
 

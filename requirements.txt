@@ -52,3 +52,4 @@ rapidfuzz==3.8.1
 
 streamlit-cookies-controller
 
+psutil>=5.9.0

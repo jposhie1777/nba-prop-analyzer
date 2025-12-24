@@ -1088,6 +1088,10 @@ def normalize_market_key(market: str) -> str:
         return "rebounds"
     if "assists" in m:
         return "assists"
+    if "steals" in m:
+        return "steals"        # 👈 ADD
+    if "blocks" in m:
+        return "blocks"
 
     return ""
 
@@ -1100,6 +1104,10 @@ def get_l10_values(row):
         return coerce_numeric_list(row.get("reb_last10_list"))
     if key == "assists":
         return coerce_numeric_list(row.get("ast_last10_list"))
+    if key == "steals":
+        return coerce_numeric_list(row.get("stl_last10"))   # 👈 ADD
+    if key == "blocks":
+        return coerce_numeric_list(row.get("blk_last10"))   # 👈 ADD
     if key == "pra":
         return coerce_numeric_list(row.get("pra_last10_list"))
     if key == "points_assists":

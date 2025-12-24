@@ -1386,6 +1386,8 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
             "points": "opp_pos_pts_rank",
             "rebounds": "opp_pos_reb_rank",
             "assists": "opp_pos_ast_rank",
+            "steals": "opp_pos_stl_rank",   # 👈 ADD
+            "blocks": "opp_pos_blk_rank",
             "pra": "opp_pos_pra_rank",
             "points_rebounds": "opp_pos_pr_rank",
             "points_assists": "opp_pos_pa_rank",

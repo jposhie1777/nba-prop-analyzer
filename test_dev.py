@@ -983,6 +983,13 @@ def get_stat_avgs(row, market_key: str):
 
     return None, None, None
 
+def handle_save_bet(bet_line: str):
+    if "saved_bets_text" not in st.session_state:
+        st.session_state.saved_bets_text = []
+
+    if bet_line not in st.session_state.saved_bets_text:
+        st.session_state.saved_bets_text.append(bet_line)
+
 def coerce_numeric_list(val):
     if val is None:
         return []
@@ -1485,19 +1492,37 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         # -------------------------
         # SAVE BET (MINIMAL MEMORY)
         # -------------------------
-        save_key = f"save_{player}_{raw_market}_{line}_{bet_type}"
-
-        if st.button("💾 Save Bet", key=save_key):
-            line_str = fmt_num(line, 1)
-            odds_str = fmt_odds(odds)
+        line_str = fmt_num(line, 1)
+        odds_str = fmt_odds(odds)
         
-            bet_line = f"{player} | {pretty_market_label(raw_market)} | {line_str} | {odds_str} | {bet_type}"
+        bet_line = (
+            f"{player} | "
+            f"{pretty_market_label(raw_market)} | "
+            f"{line_str} | "
+            f"{odds_str} | "
+            f"{bet_type}"
+        )
         
-            # Prevent duplicates
-            if bet_line not in st.session_state.saved_bets_text:
-                st.session_state.saved_bets_text.append(bet_line)
+        save_key = (
+            f"save_"
+            f"{player}_"
+            f"{raw_market}_"
+            f"{line}_"
+            f"{bet_type}_"
+            f"page{st.session_state.page}_"
+            f"idx{_}"
+        )
         
-            st.toast("Saved ✅")
+        st.button(
+            "💾 Save Bet",
+            key=save_key,
+            on_click=handle_save_bet,
+            args=(bet_line,),
+        )
+        
+        # Optional instant visual confirmation
+        if bet_line in st.session_state.saved_bets_text:
+            st.caption("✅ Saved")
 
 
         # -------------------------

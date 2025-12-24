@@ -986,6 +986,142 @@ def fmt_num(x, d=1) -> str:
     except Exception:
         return "—"
 
+def clamp(x, lo=0.0, hi=1.0):
+    try:
+        return max(lo, min(hi, float(x)))
+    except Exception:
+        return lo
+
+
+def safe_div(n, d, default=0.0):
+    try:
+        return n / d if d else default
+    except Exception:
+        return default
+
+def compute_confidence(
+    row,
+    *,
+    hit_rate_col: str,      # e.g. "hit_rate_last10"
+    stat_key: str,          # normalized stat key (points, steals, pra, etc.)
+):
+    """
+    Returns:
+        confidence_score (0–100),
+        components dict (for debugging / tooltips)
+    """
+
+    components = {}
+
+    # --------------------------------------------------
+    # 1) EDGE SCORE (vs implied probability)
+    # --------------------------------------------------
+    hit = row.get(hit_rate_col)
+    implied = row.get("implied_prob")
+
+    if hit is not None and implied is not None:
+        edge = hit - implied
+        # normalize: +20% edge ~= max confidence
+        edge_score = clamp((edge + 0.05) / 0.25)
+    else:
+        edge_score = 0.0
+
+    components["edge"] = edge_score
+
+    # --------------------------------------------------
+    # 2) STABILITY SCORE (L5 / L10 / L20 agreement)
+    # --------------------------------------------------
+    hr5 = row.get("hit_rate_last5")
+    hr10 = row.get("hit_rate_last10")
+    hr20 = row.get("hit_rate_last20")
+
+    if hr5 is not None and hr10 is not None and hr20 is not None:
+        spread = max(hr5, hr10, hr20) - min(hr5, hr10, hr20)
+        # smaller spread = more stable
+        stability_score = clamp(1.0 - spread * 2.0)
+    else:
+        stability_score = 0.5  # neutral
+
+    components["stability"] = stability_score
+
+    # --------------------------------------------------
+    # 3) PROJECTION VS LINE
+    # --------------------------------------------------
+    proj = row.get("proj_last10")
+    diff = row.get("proj_diff_vs_line")
+
+    if proj is not None and diff is not None:
+        # +2 units above line ~= strong
+        projection_score = clamp((diff + 1.0) / 4.0)
+    else:
+        projection_score = 0.5
+
+    components["projection"] = projection_score
+
+    # --------------------------------------------------
+    # 4) VOLATILITY / RISK
+    # --------------------------------------------------
+    vol = row.get("proj_volatility_index")
+    std = row.get("proj_std_last10")
+
+    if vol is not None:
+        volatility_score = clamp(1.0 - vol)
+    elif std is not None:
+        # higher std = worse confidence
+        volatility_score = clamp(1.0 - safe_div(std, proj or 1.0))
+    else:
+        volatility_score = 0.5
+
+    components["volatility"] = volatility_score
+
+    # --------------------------------------------------
+    # 5) MATCHUP QUALITY
+    # --------------------------------------------------
+    matchup = row.get("matchup_difficulty_by_stat")
+
+    if matchup is not None:
+        # already assumed 0–1 (easy → hard)
+        matchup_score = clamp(1.0 - matchup)
+    else:
+        matchup_score = 0.5
+
+    components["matchup"] = matchup_score
+
+    # --------------------------------------------------
+    # 6) MINUTES / ROLE CONFIDENCE
+    # --------------------------------------------------
+    est_min = row.get("est_minutes")
+    delta_min = row.get("delta_minutes")
+
+    if est_min is not None:
+        minutes_score = clamp(est_min / 36.0)
+        if delta_min is not None and delta_min < 0:
+            minutes_score *= clamp(1.0 + delta_min / 10.0)
+    else:
+        minutes_score = 0.5
+
+    components["minutes"] = minutes_score
+
+    # --------------------------------------------------
+    # WEIGHTED COMBINATION
+    # --------------------------------------------------
+    weights = {
+        "edge": 0.32,
+        "stability": 0.20,
+        "projection": 0.16,
+        "volatility": 0.16,
+        "matchup": 0.10,
+        "minutes": 0.06,
+    }
+
+    confidence = sum(
+        components[k] * weights[k] for k in weights
+    )
+
+    confidence_score = round(clamp(confidence) * 100)
+
+    return confidence_score, components
+
 import json
 
 import re
@@ -1424,7 +1560,7 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
             "points": "opp_pos_pts_rank",
             "rebounds": "opp_pos_reb_rank",
             "assists": "opp_pos_ast_rank",
-            "steals": "opp_pos_stl_rank",   # 👈 ADD
+            "steals": "opp_pos_stl_rank",
             "blocks": "opp_pos_blk_rank",
             "pra": "opp_pos_pra_rank",
             "points_rebounds": "opp_pos_pr_rank",
@@ -1435,6 +1571,15 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         opp_rank_col = opp_rank_map.get(stat_key)
         opp_rank = row.get(opp_rank_col) if opp_rank_col else None
         
+        # -----------------------------
+        # CONFIDENCE SCORE
+        # -----------------------------
+        confidence, confidence_parts = compute_confidence(
+            row,
+            hit_rate_col=hit_rate_col,
+            stat_key=stat_key,
+        )
+                
         # -----------------------------
         # L10 SPARKLINE
         # -----------------------------
@@ -1489,12 +1634,12 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
             f"</div>"
         
             # ==================================================
-            # BOTTOM STATS ROW (L10 | OPP RANK | —)
+            # BOTTOM STATS ROW (L10 | OPP RANK | CONFIDENCE)
             # ==================================================
             f"<div style='display:grid;"
             f"grid-template-columns:1fr 1fr 1fr;"
             f"font-size:0.75rem;opacity:0.85;margin-top:6px;'>"
-        
+            
             # ---------- LEFT: L10 HIT + AVG ----------
             f"<div>"
             f"<strong>{fmt_pct(hit)}</strong>"
@@ -1502,19 +1647,19 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
             f"<strong>{fmt_num(l10_avg, 1)}</strong><br/>"
             f"<span style='opacity:0.6'>L10 Hit | Avg</span>"
             f"</div>"
-        
+            
             # ---------- CENTER: OPP RANK ----------
             f"<div style='text-align:center;'>"
             f"<strong>{opp_rank if opp_rank is not None else '—'}</strong><br/>"
             f"<span style='opacity:0.6'>Opp Rank</span>"
             f"</div>"
-        
-            # ---------- RIGHT: EMPTY (RESERVED) ----------
+            
+            # ---------- RIGHT: CONFIDENCE ----------
             f"<div style='text-align:right;'>"
-            f"<span style='opacity:0.4'>—</span><br/>"
-            f"<span style='opacity:0.4'></span>"
+            f"<strong>{confidence}</strong><br/>"
+            f"<span style='opacity:0.6'>Confidence</span>"
             f"</div>"
-        
+            
             f"</div>"
         
             f"</div>"

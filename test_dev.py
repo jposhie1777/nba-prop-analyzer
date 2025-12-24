@@ -1479,17 +1479,19 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         # -------------------------
         # SAVE BET (MINIMAL MEMORY)
         # -------------------------
-        save_key = f"save_{player}_{raw_market}_{line}_{bet_type}"
-        
+       save_key = f"save_{player}_{raw_market}_{line}_{bet_type}"
+
         if st.button("💾 Save Bet", key=save_key):
             line_str = fmt_num(line, 1)
             odds_str = fmt_odds(odds)
         
             bet_line = f"{player} | {pretty_market_label(raw_market)} | {line_str} | {odds_str} | {bet_type}"
         
-            st.session_state.saved_bets_text.append(bet_line)
+            # Prevent duplicates
+            if bet_line not in st.session_state.saved_bets_text:
+                st.session_state.saved_bets_text.append(bet_line)
+        
             st.toast("Saved ✅")
-            st.rerun()
 
 
         # -------------------------

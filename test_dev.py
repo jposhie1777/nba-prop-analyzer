@@ -1744,7 +1744,66 @@ with tab_props:
         df = df.sort_values([window_col, "price"], ascending=[False, True])
 
     # ------------------------------
-    # RENDER CARDS (FINAL CHECKPOINT)
+    # PAGINATION CONFIG
     # ------------------------------
-    render_prop_cards(df=df, hit_rate_col=window_col, hit_label=f_window)
+    PAGE_SIZE = 30
+    
+    if "page" not in st.session_state:
+        st.session_state.page = 0
+    
+    # ------------------------------
+    # RESET PAGE WHEN FILTERS CHANGE
+    # ------------------------------
+    page_key = (
+        f"{len(df)}|"
+        f"{window_col}|"
+        f"{','.join(sorted(f_market))}|"
+        f"{','.join(sorted(f_books))}|"
+        f"{','.join(sorted(f_games))}|"
+        f"{show_ev_only}"
+    )
+    
+    if st.session_state.get("_last_page_key") != page_key:
+        st.session_state.page = 0
+        st.session_state._last_page_key = page_key
+    
+    # ------------------------------
+    # SLICE DATAFRAME FOR PAGE
+    # ------------------------------
+    total_rows = len(df)
+    total_pages = max(1, math.ceil(total_rows / PAGE_SIZE))
+    
+    start = st.session_state.page * PAGE_SIZE
+    end = start + PAGE_SIZE
+    
+    page_df = df.iloc[start:end]
+    
+    # ------------------------------
+    # PAGE CONTROLS
+    # ------------------------------
+    col_prev, col_mid, col_next = st.columns([1, 2, 1])
+    
+    with col_prev:
+        if st.button("⬅ Prev", disabled=st.session_state.page == 0):
+            st.session_state.page -= 1
+    
+    with col_next:
+        if st.button("Next ➡", disabled=st.session_state.page >= total_pages - 1):
+            st.session_state.page += 1
+    
+    with col_mid:
+        st.caption(
+            f"Page {st.session_state.page + 1} of {total_pages} "
+            f"({total_rows} results)"
+        )
+    
+    # ------------------------------
+    # RENDER PAGE ONLY
+    # ------------------------------
+    render_prop_cards(
+        df=page_df,
+        hit_rate_col=window_col,
+        hit_label=f_window
+    )
+    
     record_memory_checkpoint()

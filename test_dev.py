@@ -927,6 +927,30 @@ import re
 
 import numpy as np
 
+def get_stat_avgs(row, market_key: str):
+    if market_key == "points":
+        return row.get("pts_last5"), row.get("pts_last10"), row.get("pts_last20")
+
+    if market_key == "rebounds":
+        return row.get("reb_last5"), row.get("reb_last10"), row.get("reb_last20")
+
+    if market_key == "assists":
+        return row.get("ast_last5"), row.get("ast_last10"), row.get("ast_last20")
+
+    if market_key == "pra":
+        return row.get("pra_last5"), row.get("pra_last10"), row.get("pra_last20")
+
+    if market_key == "points_rebounds":
+        return row.get("pr_last5"), row.get("pr_last10"), row.get("pr_last20")
+
+    if market_key == "points_assists":
+        return row.get("pa_last5"), row.get("pa_last10"), row.get("pa_last20")
+
+    if market_key == "rebounds_assists":
+        return row.get("ra_last5"), row.get("ra_last10"), row.get("ra_last20")
+
+    return None, None, None
+
 def coerce_numeric_list(val):
     if val is None:
         return []
@@ -1293,6 +1317,13 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         if not l10_values:
             st.caption(f"⚠️ No L10 values for {player} | market={raw_market}")
 
+        # -----------------------------
+        # STAT-SPECIFIC ROLLING AVERAGES
+        # -----------------------------
+        stat_key = normalize_market_key(raw_market)
+        
+        l5_avg, l10_avg, l20_avg = get_stat_avgs(row, stat_key)
+
         spark_html = build_l10_sparkline_html(
             values=l10_values,
             line_value=line,
@@ -1373,11 +1404,50 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         # --------------------------------------------------
         expanded_html = (
             f"<div class='expanded-wrap'>"
-            f"  <div class='expanded-row'>"
-            f"    <div class='metric'><span>Implied</span><strong>{fmt_pct(implied)}</strong></div>"
-            f"    <div class='metric'><span>Edge</span><strong>{fmt_pct(edge) if edge is not None else '—'}</strong></div>"
-            f"    <div class='metric'><span>Line</span><strong>{fmt_num(line, 1)}</strong></div>"
-            f"  </div>"
+        
+            # ==================================================
+            # ROW 1 — AVERAGES
+            # ==================================================
+            f"<div class='expanded-row'>"
+            f"<div class='metric'><span>L5</span><strong>{fmt_num(l5_avg, 1)}</strong></div>"
+            f"<div class='metric'><span>L10</span><strong>{fmt_num(l10_avg, 1)}</strong></div>"
+            f"<div class='metric'><span>L20</span><strong>{fmt_num(l20_avg, 1)}</strong></div>"
+            f"<div class='metric'><span>Δ Line</span>"
+            f"<strong>{fmt_num(row.get('proj_diff_vs_line'), 1)}</strong>"
+            f"</div>"
+            f"</div>"
+        
+            # ==================================================
+            # ROW 2 — L20 DISTRIBUTION
+            # ==================================================
+            f"<div class='expanded-row dist-row'>"
+            f"<div class='metric'><span>L20 Hit</span><strong>{fmt_pct(row.get('dist20_hit_rate'))}</strong></div>"
+            f"<div class='metric'><span>+1</span><strong>{fmt_pct(row.get('dist20_clear_1p_rate'))}</strong></div>"
+            f"<div class='metric'><span>+2</span><strong>{fmt_pct(row.get('dist20_clear_2p_rate'))}</strong></div>"
+            f"<div class='metric'><span>Bad</span><strong>{fmt_pct(row.get('dist20_fail_bad_rate'))}</strong></div>"
+            f"<div class='metric'><span>Margin</span><strong>{fmt_num(row.get('dist20_avg_margin'), 1)}</strong></div>"
+            f"</div>"
+        
+            # ==================================================
+            # ROW 3 — L40 DISTRIBUTION
+            # ==================================================
+            f"<div class='expanded-row dist-row'>"
+            f"<div class='metric'><span>L40 Hit</span><strong>{fmt_pct(row.get('dist40_hit_rate'))}</strong></div>"
+            f"<div class='metric'><span>+1</span><strong>{fmt_pct(row.get('dist40_clear_1p_rate'))}</strong></div>"
+            f"<div class='metric'><span>+2</span><strong>{fmt_pct(row.get('dist40_clear_2p_rate'))}</strong></div>"
+            f"<div class='metric'><span>Bad</span><strong>{fmt_pct(row.get('dist40_fail_bad_rate'))}</strong></div>"
+            f"<div class='metric'><span>Margin</span><strong>{fmt_num(row.get('dist40_avg_margin'), 1)}</strong></div>"
+            f"</div>"
+        
+            # ==================================================
+            # ROW 4 — WOWY / INJURY (SAFE PLACEHOLDER)
+            # ==================================================
+            f"<div class='expanded-row wowy-row'>"
+            f"<div class='metric' style='flex:1;opacity:0.6;'>"
+            f"Injury / WOWY data coming soon"
+            f"</div>"
+            f"</div>"
+        
             f"</div>"
         )
 

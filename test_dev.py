@@ -943,7 +943,6 @@ if "_clipboard" in st.session_state:
     del st.session_state["_clipboard"]
 
 def render_saved_bets():
-    # Always ensure key exists (ultra cheap)
     if "saved_bets_text" not in st.session_state:
         st.session_state.saved_bets_text = []
 
@@ -966,31 +965,31 @@ def render_saved_bets():
     st.divider()
 
     # -------------------------
-    # 🤖 GAMBLy BOT LINK (STEP 3)
+    # COPY AREA (MOVED UP)
+    # -------------------------
+    if not bets:
+        st.info("No saved bets yet.")
+        return
+
+    st.code(
+        "\n\n".join(bets),
+        language="text",
+    )
+
+    if st.button("📋 Copy All for Gambly"):
+        st.session_state["_clipboard"] = "\n\n".join(bets)
+
+    st.divider()
+
+    # -------------------------
+    # 🤖 GAMBLy BOT (MOVED DOWN)
     # -------------------------
     st.markdown("### 🤖 Gambly Bot")
     st.link_button(
         "Open Gambly Bot",
         "https://www.gambly.com/gambly-bot",
     )
-    st.caption("Copy bets below, then paste into Gambly Bot")
-    st.divider()
-
-    # -------------------------
-    # CONTENT
-    # -------------------------
-    if not bets:
-        st.info("No saved bets yet.")
-        return
-
-    st.text_area(
-        "Copy below (long-press on mobile)",
-        value="\n".join(bets),
-        height=220,
-    )
-
-    if st.button("📋 Copy All for Gambly"):
-        st.session_state["_clipboard"] = "\n\n".join(bets)
+    st.caption("Paste the copied bets into Gambly Bot")
 
 # ------------------------------------------------------
 # PROP CARD HELPERS

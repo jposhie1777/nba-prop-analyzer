@@ -1485,7 +1485,7 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         # -------------------------
         # SAVE BET (MINIMAL MEMORY)
         # -------------------------
-       save_key = f"save_{player}_{raw_market}_{line}_{bet_type}"
+        save_key = f"save_{player}_{raw_market}_{line}_{bet_type}"
 
         if st.button("💾 Save Bet", key=save_key):
             line_str = fmt_num(line, 1)

@@ -1977,12 +1977,12 @@ with tab_props:
         )
 
     # ------------------------------
-    # FILTER UI (CLEAN + MOBILE SAFE)
+    # FILTER UI (CLEAN + SAFE)
     # ------------------------------
     with st.expander("⚙️ Filters", expanded=False):
     
         # ---------------------------------
-        # ROW 1 — CORE FILTERS
+        # CORE FILTERS
         # ---------------------------------
         c1, c2 = st.columns([1.2, 1.8])
     
@@ -1993,28 +1993,12 @@ with tab_props:
                 default=["Over", "Under"],
             )
     
-        # -------- MARKET GROUPING --------
         MARKET_GROUPS = {
-            "Points": [
-                "player_points",
-                "player_points_alternate",
-            ],
-            "Rebounds": [
-                "player_rebounds",
-                "player_rebounds_alternate",
-            ],
-            "Assists": [
-                "player_assists",
-                "player_assists_alternate",
-            ],
-            "Steals": [
-                "player_steals",
-                "player_steals_alternate",
-            ],
-            "Blocks": [
-                "player_blocks",
-                "player_blocks_alternate",
-            ],
+            "Points": ["player_points", "player_points_alternate"],
+            "Rebounds": ["player_rebounds", "player_rebounds_alternate"],
+            "Assists": ["player_assists", "player_assists_alternate"],
+            "Steals": ["player_steals", "player_steals_alternate"],
+            "Blocks": ["player_blocks", "player_blocks_alternate"],
             "Combos": [
                 "player_points_rebounds",
                 "player_points_assists",
@@ -2030,24 +2014,23 @@ with tab_props:
                 default=["Points", "Rebounds", "Assists"],
             )
     
-        # Flatten selected groups → raw market keys
         f_market = [
             m
             for g in selected_market_groups
-            for m in MARKET_GROUPS.get(g, [])
+            for m in MARKET_GROUPS[g]
         ]
     
         # ---------------------------------
-        # ROW 2 — ODDS + HIT WINDOW
+        # ODDS + WINDOW
         # ---------------------------------
         c3, c4 = st.columns([2, 1])
     
         with c3:
             f_min_odds, f_max_odds = st.slider(
                 "Odds Range",
-                min_value=-1000,
-                max_value=1000,
-                value=(-600, 150),
+                -1000,
+                1000,
+                (-600, 150),
                 step=25,
             )
     
@@ -2059,7 +2042,7 @@ with tab_props:
             )
     
         # ---------------------------------
-        # ROW 3 — BOOKS
+        # BOOKS
         # ---------------------------------
         default_books = [
             b for b in book_list
@@ -2073,7 +2056,7 @@ with tab_props:
         )
     
         # ---------------------------------
-        # ROW 4 — OPTIONAL GAME FILTER
+        # GAMES (OPTIONAL)
         # ---------------------------------
         show_games = st.checkbox("Filter by Games", value=False)
     
@@ -2087,20 +2070,22 @@ with tab_props:
             f_games = []
     
         # ---------------------------------
-        # ADVANCED FILTERS (COLLAPSED)
+        # ADVANCED FILTERS (SECTION, NOT EXPANDER)
         # ---------------------------------
-        with st.expander("Advanced Filters", expanded=False):
-            show_ev_only = st.checkbox(
-                "Show only EV+ bets (Hit Rate > Implied Probability)",
-                value=False,
-            )
+        st.divider()
+        st.markdown("**Advanced Filters**")
     
-            f_min_hit = st.slider(
-                "Min Hit Rate (%)",
-                min_value=0,
-                max_value=100,
-                value=80,
-            )
+        show_ev_only = st.checkbox(
+            "Show only EV+ bets (Hit Rate > Implied Probability)",
+            value=False,
+        )
+    
+        f_min_hit = st.slider(
+            "Min Hit Rate (%)",
+            0,
+            100,
+            80,
+        )
 
     # ------------------------------
     # MEMORY WIDGET (VISIBLE, CORRECT)

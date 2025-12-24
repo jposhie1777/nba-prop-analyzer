@@ -739,6 +739,12 @@ if "saved_bets_keys" not in st.session_state:
 if "saved_bets_text" not in st.session_state:
     st.session_state.saved_bets_text = []
     
+
+PAGE_SIZE = 30
+
+if "page" not in st.session_state:
+    st.session_state.page = 0
+
 # ------------------------------------------------------
 # DATA: PROPS AND HISTOICAL STATS (minimal)
 # ------------------------------------------------------

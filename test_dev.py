@@ -801,7 +801,16 @@ def load_props() -> pd.DataFrame:
     
         # Projection delta
         "proj_diff_vs_line",
-    
+        
+        # 👇 ADD THESE
+        "opp_pos_pts_rank",
+        "opp_pos_reb_rank",
+        "opp_pos_ast_rank",
+        "opp_pos_pra_rank",
+        "opp_pos_pr_rank",
+        "opp_pos_pa_rank",
+        "opp_pos_ra_rank",
+        
         # Distribution analytics
         "dist20_hit_rate",
         "dist20_clear_1p_rate",

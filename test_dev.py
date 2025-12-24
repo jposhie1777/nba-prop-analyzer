@@ -32,7 +32,7 @@ from google.cloud import bigquery
 from google.oauth2 import service_account
 
 import psutil  # ✅ must be before memory helpers
-
+import math
 
 # ======================================================
 # MEMORY TRACKING HELPERS (DEFINE BEFORE CALLING)

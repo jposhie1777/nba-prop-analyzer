@@ -1361,7 +1361,26 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         stat_key = normalize_market_key(raw_market)
         
         l5_avg, l10_avg, l20_avg = get_stat_avgs(row, stat_key)
-
+        
+        # -----------------------------
+        # OPPONENT POSITIONAL RANK
+        # -----------------------------
+        opp_rank_map = {
+            "points": "opp_pos_pts_rank",
+            "rebounds": "opp_pos_reb_rank",
+            "assists": "opp_pos_ast_rank",
+            "pra": "opp_pos_pra_rank",
+            "points_rebounds": "opp_pos_pr_rank",
+            "points_assists": "opp_pos_pa_rank",
+            "rebounds_assists": "opp_pos_ra_rank",
+        }
+        
+        opp_rank_col = opp_rank_map.get(stat_key)
+        opp_rank = row.get(opp_rank_col) if opp_rank_col else None
+        
+        # -----------------------------
+        # L10 SPARKLINE
+        # -----------------------------
         spark_html = build_l10_sparkline_html(
             values=l10_values,
             line_value=line,
@@ -1389,12 +1408,12 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         
             # ---------- CENTER: PLAYER + MARKET ----------
             f"<div style='text-align:center;'>"
-            f"  <div style='font-weight:900;font-size:1.15rem;letter-spacing:-0.2px;'>"
-            f"    {player}"
-            f"  </div>"
-            f"  <div style='font-size:0.85rem;opacity:0.7;'>"
-            f"    {market_label} · {bet_type.upper()} {fmt_num(line, 1)}"
-            f"  </div>"
+            f"<div style='font-weight:900;font-size:1.15rem;letter-spacing:-0.2px;'>"
+            f"{player}"
+            f"</div>"
+            f"<div style='font-size:0.85rem;opacity:0.7;'>"
+            f"{market_label} · {bet_type.upper()} {fmt_num(line, 1)}"
+            f"</div>"
             f"</div>"
         
             # ---------- RIGHT: BOOK + ODDS ----------
@@ -1413,23 +1432,30 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
             f"</div>"
         
             # ==================================================
-            # BOTTOM STATS ROW (ODDS | HIT RATE | RANK)
+            # BOTTOM STATS ROW (L10 | OPP RANK | —)
             # ==================================================
-            f"<div style='display:grid;grid-template-columns:1fr 1fr 1fr;font-size:0.75rem;opacity:0.85;margin-top:6px;'>"
+            f"<div style='display:grid;"
+            f"grid-template-columns:1fr 1fr 1fr;"
+            f"font-size:0.75rem;opacity:0.85;margin-top:6px;'>"
         
+            # ---------- LEFT: L10 HIT + AVG ----------
             f"<div>"
-            f"<strong>{fmt_odds(odds)}</strong><br/>"
-            f"<span style='opacity:0.6'>Odds</span>"
+            f"<strong>{fmt_pct(hit)}</strong>"
+            f" <span style='opacity:0.5'>|</span> "
+            f"<strong>{fmt_num(l10_avg, 1)}</strong><br/>"
+            f"<span style='opacity:0.6'>L10 Hit | Avg</span>"
             f"</div>"
         
+            # ---------- CENTER: OPP RANK ----------
             f"<div style='text-align:center;'>"
-            f"<strong>{fmt_pct(hit)}</strong><br/>"
-            f"<span style='opacity:0.6'>{hit_label}</span>"
+            f"<strong>{opp_rank if opp_rank is not None else '—'}</strong><br/>"
+            f"<span style='opacity:0.6'>Opp Rank</span>"
             f"</div>"
         
+            # ---------- RIGHT: EMPTY (RESERVED) ----------
             f"<div style='text-align:right;'>"
-            f"<strong>—</strong><br/>"
-            f"<span style='opacity:0.6'>Opp Rank</span>"
+            f"<span style='opacity:0.4'>—</span><br/>"
+            f"<span style='opacity:0.4'></span>"
             f"</div>"
         
             f"</div>"

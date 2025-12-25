@@ -1,39 +1,54 @@
 import os
 import time
+import json
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Tuple
+
 from flask import Flask, request, jsonify
-from google.cloud import bigquery
-from google.auth import default as google_auth_default
 from dotenv import load_dotenv
+
+from google.cloud import bigquery
+
 load_dotenv()
 
 # ======================================================
 # CONFIG
 # ======================================================
-PROJECT_ID = "graphite-flare-477419-h7"
-GOAT_DATASET = "nba_goat_data"
-TABLE_PLAYER_STATS = "player_game_stats"
+PROJECT_ID = os.getenv("PROJECT_ID", "graphite-flare-477419-h7")
+GOAT_DATASET = os.getenv("GOAT_DATASET", "nba_goat_data")
 
-BALDONTLIE_BASE = "https://api.balldontlie.io/v1"
-API_KEY = os.getenv("BALDONTLIE_KEY")
+TABLE_STATE = os.getenv("TABLE_STATE", "ingest_state")
 
-RATE_PROFILE = os.getenv("BALLDONTLIE_TIER", "ALL_STAR")
+TABLE_ACTIVE_PLAYERS = os.getenv("TABLE_ACTIVE_PLAYERS", "active_players")
+TABLE_GAME_STATS_FULL = os.getenv("TABLE_GAME_STATS_FULL", "player_game_stats_full")
+TABLE_GAME_STATS_PERIOD = os.getenv("TABLE_GAME_STATS_PERIOD", "player_game_stats_period")
+TABLE_LINEUPS = os.getenv("TABLE_LINEUPS", "game_lineups")
+TABLE_PLAYER_PROPS = os.getenv("TABLE_PLAYER_PROPS", "player_prop_odds")
+
+BALDONTLIE_BASE = os.getenv("BALDONTLIE_BASE", "https://api.balldontlie.io/v1")
+API_KEY = os.getenv("BALDONTLIE_KEY", "")
+
+if not API_KEY:
+    print("⚠️ BALDONTLIE_KEY is missing. Set it in env / Cloud Run env vars.")
+
+HEADERS = {"Authorization": f"Bearer {API_KEY}"}
+
+RATE_PROFILE = os.getenv("BALLDONTLIE_TIER", "ALL_STAR").upper()
 
 RATE_LIMITS = {
-    "ALL_STAR": {
-        "batch_size": 5,
-        "page_delay": 1.2,
-        "batch_delay": 1.5,
-    },
-    "GOAT": {
-        "batch_size": 20,
-        "page_delay": 0.25,
-        "batch_delay": 0.3,
-    },
+    "ALL_STAR": {"batch_size": 5, "page_delay": 1.2, "batch_delay": 1.5, "retry_429": 10},
+    "GOAT": {"batch_size": 20, "page_delay": 0.25, "batch_delay": 0.30, "retry_429": 3},
 }
 
 RATE = RATE_LIMITS.get(RATE_PROFILE, RATE_LIMITS["ALL_STAR"])
+
+# Throttle defaults (so scheduler triggers don’t overlap)
+THROTTLE_SECONDS_FULL = int(os.getenv("THROTTLE_SECONDS_FULL", "600"))     # 10 min
+THROTTLE_SECONDS_PERIOD = int(os.getenv("THROTTLE_SECONDS_PERIOD", "900")) # 15 min
+THROTTLE_SECONDS_LINEUPS = int(os.getenv("THROTTLE_SECONDS_LINEUPS", "120")) # 2 min
+THROTTLE_SECONDS_PROPS = int(os.getenv("THROTTLE_SECONDS_PROPS", "120"))     # 2 min
+THROTTLE_SECONDS_PLAYERS = int(os.getenv("THROTTLE_SECONDS_PLAYERS", "3600"))# 1 hr
 
 # ======================================================
 # APP
@@ -41,216 +56,489 @@ RATE = RATE_LIMITS.get(RATE_PROFILE, RATE_LIMITS["ALL_STAR"])
 app = Flask(__name__)
 bq = bigquery.Client(project=PROJECT_ID)
 
-HEADERS = {
-    "Authorization": f"Bearer {API_KEY}"
-}
-
 # ======================================================
-# HELPERS
+# UTIL
 # ======================================================
-def delay(seconds: float):
-    time.sleep(seconds)
+def now_utc_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
-def fetch_games_range(start_date: str, end_date: str):
-    games = []
-    cursor = None
+def sleep_s(seconds: float) -> None:
+    time.sleep(max(0.0, seconds))
 
+def bq_table(table_name: str) -> str:
+    return f"{PROJECT_ID}.{GOAT_DATASET}.{table_name}"
+
+def http_get(path: str, params: Optional[Dict[str, Any]] = None, timeout: int = 25) -> Dict[str, Any]:
+    url = f"{BALDONTLIE_BASE}{path}"
     while True:
-        params = {
-            "per_page": 100,
-            "start_date": start_date,
-            "end_date": end_date,
-        }
-        if cursor:
-            params["cursor"] = cursor
-
-        r = requests.get(
-            f"{BALDONTLIE_BASE}/games",
-            headers=HEADERS,
-            params=params,
-            timeout=20,
-        )
-
+        r = requests.get(url, headers=HEADERS, params=params or {}, timeout=timeout)
         if r.status_code == 429:
-            delay(10)
+            sleep_s(RATE["retry_429"])
             continue
-
         r.raise_for_status()
-        data = r.json()
+        return r.json()
 
-        games.extend(data.get("data", []))
-        cursor = data.get("meta", {}).get("next_cursor")
-
-        if not cursor:
-            break
-
-        delay(RATE["page_delay"])
-
-    return games
-
-
-def fetch_goat_player_game_stats(game_id: int, period: int | None = None):
-    rows = []
+def paginate(path: str, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Cursor-based pagination (balldontlie style).
+    """
+    out: List[Dict[str, Any]] = []
     cursor = None
 
     while True:
-        params = {
-            "game_ids[]": game_id,
-            "per_page": 100,
-        }
-        if period:
-            params["period"] = period
+        p = dict(params)
         if cursor:
-            params["cursor"] = cursor
+            p["cursor"] = cursor
 
-        r = requests.get(
-            f"{BALDONTLIE_BASE}/game_player_stats",
-            headers=HEADERS,
-            params=params,
-            timeout=20,
-        )
+        data = http_get(path, params=p)
+        out.extend(data.get("data", []))
 
-        if r.status_code == 429:
-            delay(10)
-            continue
-
-        if not r.ok:
-            print("FETCH ERROR:", r.text)
-            break
-
-        payload = r.json()
-        rows.extend(payload.get("data", []))
-        cursor = payload.get("meta", {}).get("next_cursor")
-
+        cursor = (data.get("meta") or {}).get("next_cursor")
         if not cursor:
             break
 
-        delay(RATE["page_delay"])
+        sleep_s(RATE["page_delay"])
 
-    return rows
+    return out
 
+# ======================================================
+# STATE THROTTLE (BigQuery)
+# ======================================================
+def ensure_state_table() -> None:
+    """
+    Create state table if it doesn't exist.
+    """
+    sql = f"""
+    CREATE TABLE IF NOT EXISTS `{bq_table(TABLE_STATE)}`
+    (
+      job_name STRING NOT NULL,
+      last_run_ts TIMESTAMP,
+      meta STRING
+    )
+    """
+    bq.query(sql).result()
 
-def map_stat_to_row(s, stat_period: str):
-    if not s or not s.get("player") or not s.get("game"):
+def get_last_run(job_name: str) -> Optional[datetime]:
+    ensure_state_table()
+    sql = f"""
+    SELECT last_run_ts
+    FROM `{bq_table(TABLE_STATE)}`
+    WHERE job_name = @job_name
+    LIMIT 1
+    """
+    job = bq.query(
+        sql,
+        job_config=bigquery.QueryJobConfig(
+            query_parameters=[bigquery.ScalarQueryParameter("job_name", "STRING", job_name)]
+        ),
+    )
+    rows = list(job.result())
+    if not rows:
+        return None
+    return rows[0]["last_run_ts"]
+
+def set_last_run(job_name: str, meta: Optional[Dict[str, Any]] = None) -> None:
+    ensure_state_table()
+    meta_str = json.dumps(meta or {}, separators=(",", ":"))
+    sql = f"""
+    MERGE `{bq_table(TABLE_STATE)}` t
+    USING (SELECT @job_name AS job_name, CURRENT_TIMESTAMP() AS last_run_ts, @meta AS meta) s
+    ON t.job_name = s.job_name
+    WHEN MATCHED THEN
+      UPDATE SET last_run_ts = s.last_run_ts, meta = s.meta
+    WHEN NOT MATCHED THEN
+      INSERT (job_name, last_run_ts, meta) VALUES (s.job_name, s.last_run_ts, s.meta)
+    """
+    bq.query(
+        sql,
+        job_config=bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("job_name", "STRING", job_name),
+                bigquery.ScalarQueryParameter("meta", "STRING", meta_str),
+            ]
+        ),
+    ).result()
+
+def throttle_or_ok(job_name: str, throttle_seconds: int) -> Tuple[bool, Optional[int]]:
+    last = get_last_run(job_name)
+    if not last:
+        return True, None
+    age = int((datetime.now(timezone.utc) - last.replace(tzinfo=timezone.utc)).total_seconds())
+    if age < throttle_seconds:
+        return False, (throttle_seconds - age)
+    return True, None
+
+# ======================================================
+# GAME LOOKUP
+# ======================================================
+def fetch_games_range(start_date: str, end_date: str) -> List[Dict[str, Any]]:
+    # games endpoint supports start_date/end_date (you were using this already)
+    return paginate("/games", {"per_page": 100, "start_date": start_date, "end_date": end_date})
+
+# ======================================================
+# ACTIVE PLAYERS
+# ======================================================
+def fetch_active_players(season: int) -> List[Dict[str, Any]]:
+    # docs show /players/active (NBA site docs)
+    return paginate("/players/active", {"per_page": 100, "season": season})
+
+def map_active_player_row(p: Dict[str, Any], season: int) -> Dict[str, Any]:
+    return {
+        "season": season,
+        "player_id": p.get("id"),
+        "first_name": p.get("first_name"),
+        "last_name": p.get("last_name"),
+        "player_name": f"{p.get('first_name','')} {p.get('last_name','')}".strip(),
+        "position": p.get("position"),
+        "height": p.get("height"),
+        "weight": p.get("weight"),
+        "jersey_number": p.get("jersey_number"),
+        "college": p.get("college"),
+        "country": p.get("country"),
+        "draft_year": p.get("draft_year"),
+        "draft_round": p.get("draft_round"),
+        "draft_number": p.get("draft_number"),
+        "team_id": p.get("team_id"),
+        "updated_at_utc": now_utc_iso(),
+    }
+
+# ======================================================
+# FULL GAME STATS (stats endpoint)
+# ======================================================
+def fetch_full_game_stats(game_id: int) -> List[Dict[str, Any]]:
+    # You confirmed /stats works (and returns 200) with Bearer
+    return paginate("/stats", {"per_page": 100, "game_ids[]": game_id})
+
+def map_stat_row(s: Dict[str, Any], stat_period: str) -> Optional[Dict[str, Any]]:
+    if not s or not s.get("player") or not s.get("game") or not s.get("team"):
         return None
 
-    player = s["player"]
-    team = s["team"]
-    game = s["game"]
+    player = s.get("player", {})
+    team = s.get("team", {})
+    game = s.get("game", {})
 
+    # keep minutes as INT when possible
+    minutes = None
     try:
-        minutes = int(s["min"]) if s.get("min") else None
-    except ValueError:
+        if s.get("min") is not None and str(s.get("min")).strip() != "":
+            minutes = int(str(s.get("min")))
+    except Exception:
         minutes = None
 
     return {
-        "game_id": game["id"],
-        "game_date": game["date"],
-        "season": game["season"],
-        "stat_period": stat_period,
+        "stat_id": s.get("id"),
+        "game_id": game.get("id"),
+        "game_date": game.get("date"),
+        "season": game.get("season"),
+        "stat_period": stat_period,  # FULL or Q1-Q4
 
-        "player_id": player["id"],
-        "player": f"{player['first_name']} {player['last_name']}",
-        "team_id": team["id"],
-        "team": team["full_name"],
+        "player_id": player.get("id"),
+        "player_name": f"{player.get('first_name','')} {player.get('last_name','')}".strip(),
+        "team_id": team.get("id"),
+        "team_abbr": team.get("abbreviation"),
+        "team_name": team.get("full_name"),
 
         "minutes": minutes,
 
-        "pts": s.get("pts", 0),
-        "reb": s.get("reb", 0),
-        "ast": s.get("ast", 0),
-        "stl": s.get("stl", 0),
-        "blk": s.get("blk", 0),
-        "turnover": s.get("turnover", 0),
-        "pf": s.get("pf", 0),
+        "pts": s.get("pts"),
+        "reb": s.get("reb"),
+        "ast": s.get("ast"),
+        "stl": s.get("stl"),
+        "blk": s.get("blk"),
+        "turnover": s.get("turnover"),
+        "pf": s.get("pf"),
 
-        "fgm": s.get("fgm", 0),
-        "fga": s.get("fga", 0),
-        "fg3m": s.get("fg3m", 0),
-        "fg3a": s.get("fg3a", 0),
-        "ftm": s.get("ftm", 0),
-        "fta": s.get("fta", 0),
+        "fgm": s.get("fgm"),
+        "fga": s.get("fga"),
+        "fg3m": s.get("fg3m"),
+        "fg3a": s.get("fg3a"),
+        "ftm": s.get("ftm"),
+        "fta": s.get("fta"),
 
         "plus_minus": s.get("plus_minus"),
+
         "data_quality": "RAW",
+        "ingested_at_utc": now_utc_iso(),
     }
 
+# ======================================================
+# PERIOD STATS (game_player_stats endpoint)
+# ======================================================
+def fetch_period_stats(game_id: int, period: int) -> List[Dict[str, Any]]:
+    # docs show /game_player_stats?game_id=...&period=1..4
+    # (some variants accept game_ids[]; we’ll use game_id to match docs)
+    return paginate("/game_player_stats", {"per_page": 100, "game_id": game_id, "period": period})
 
+# ======================================================
+# LINEUPS
+# ======================================================
+def fetch_game_lineups(game_id: int) -> List[Dict[str, Any]]:
+    # docs show /lineups?game_id=... (lineups available starting 2025 season)
+    return paginate("/lineups", {"per_page": 100, "game_id": game_id})
+
+def map_lineup_row(lu: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    if not lu:
+        return None
+
+    # Keep raw nested payload too (future-proof)
+    return {
+        "lineup_id": lu.get("id"),
+        "game_id": lu.get("game_id"),
+        "team_id": lu.get("team_id"),
+        "team_abbr": (lu.get("team") or {}).get("abbreviation"),
+        "lineup_type": lu.get("lineup_type"),
+        "period": lu.get("period"),
+        "minutes": lu.get("minutes"),
+        "seconds": lu.get("seconds"),
+        "players": lu.get("players"),  # array of player objects / ids (docs)
+        "stats": lu.get("stats"),      # object (docs)
+        "raw_json": json.dumps(lu, separators=(",", ":")),
+        "ingested_at_utc": now_utc_iso(),
+    }
+
+# ======================================================
+# PLAYER PROP ODDS
+# ======================================================
+def fetch_player_props(game_id: int, vendor: Optional[str] = None) -> List[Dict[str, Any]]:
+    # docs show /player_props?game_id=... (and vendor filter exists in docs)
+    params: Dict[str, Any] = {"per_page": 100, "game_id": game_id}
+    if vendor:
+        params["vendor"] = vendor
+    return paginate("/player_props", params)
+
+def map_player_prop_row(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    if not p:
+        return None
+
+    market = p.get("market") or {}
+    return {
+        "prop_id": p.get("id"),
+        "game_id": p.get("game_id"),
+        "player_id": p.get("player_id"),
+        "vendor": p.get("vendor"),
+        "prop_type": p.get("prop_type"),
+        "line_value": p.get("line_value"),
+        "market_json": json.dumps(market, separators=(",", ":")),
+        "updated_at": p.get("updated_at"),
+        "raw_json": json.dumps(p, separators=(",", ":")),
+        "ingested_at_utc": now_utc_iso(),
+    }
+
+# ======================================================
+# BIGQUERY WRITE (JSON LOAD)
+# ======================================================
+def bq_append_json(table_name: str, rows: List[Dict[str, Any]]) -> None:
+    if not rows:
+        return
+
+    table_id = bq_table(table_name)
+
+    job_config = bigquery.LoadJobConfig(
+        write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
+        source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
+        ignore_unknown_values=False,  # fail loud if schema mismatch
+    )
+
+    # load_table_from_json is safer than insert_rows_json for volume
+    load_job = bq.load_table_from_json(rows, table_id, job_config=job_config)
+    load_job.result()
 
 # ======================================================
 # ROUTES
 # ======================================================
 @app.route("/")
 def health():
-    return "🏀 NBA GOAT Player Stats Service (Python) is alive"
+    return f"🏀 GOAT unified ingestion (Python) alive | tier={RATE_PROFILE}"
 
+@app.route("/goat/ingest/active-players")
+def ingest_active_players():
+    ok, wait = throttle_or_ok("active_players", THROTTLE_SECONDS_PLAYERS)
+    if not ok:
+        return jsonify({"status": "throttled", "wait_seconds": wait}), 200
 
-@app.route("/goat/player-stats-backfill")
-def backfill_player_stats():
+    season = request.args.get("season")
+    if not season:
+        return jsonify({"error": "Missing season (e.g. 2025)"}), 400
+
+    season_i = int(season)
+    players = fetch_active_players(season_i)
+    rows = [map_active_player_row(p, season_i) for p in players]
+
+    bq_append_json(TABLE_ACTIVE_PLAYERS, rows)
+    set_last_run("active_players", {"season": season_i, "rows": len(rows)})
+
+    return jsonify({"status": "ok", "season": season_i, "rows_inserted": len(rows)})
+
+@app.route("/goat/ingest/player-stats-full")
+def ingest_player_stats_full():
+    ok, wait = throttle_or_ok("player_stats_full", THROTTLE_SECONDS_FULL)
+    if not ok:
+        return jsonify({"status": "throttled", "wait_seconds": wait}), 200
+
     start = request.args.get("start")
     end = request.args.get("end")
-
     if not start or not end:
         return jsonify({"error": "Missing start or end (YYYY-MM-DD)"}), 400
 
     games = fetch_games_range(start, end)
-    rows = []
 
+    rows: List[Dict[str, Any]] = []
     for i in range(0, len(games), RATE["batch_size"]):
         batch = games[i:i + RATE["batch_size"]]
-
         for g in batch:
-            game_id = g["id"]
-        
-            # -----------------------
-            # FULL GAME STATS
-            # -----------------------
-            full_stats = fetch_goat_player_game_stats(game_id)
-            for s in full_stats:
-                row = map_stat_to_row(s, stat_period="FULL")
+            gid = g.get("id")
+            if not gid:
+                continue
+            stats = fetch_full_game_stats(int(gid))
+            for s in stats:
+                row = map_stat_row(s, "FULL")
                 if row:
                     rows.append(row)
-        
-            # -----------------------
-            # Q1–Q4 STATS
-            # -----------------------
+
+        sleep_s(RATE["batch_delay"])
+
+    bq_append_json(TABLE_GAME_STATS_FULL, rows)
+    set_last_run("player_stats_full", {"start": start, "end": end, "games": len(games), "rows": len(rows)})
+
+    return jsonify({"status": "ok", "games": len(games), "rows_inserted": len(rows)})
+
+@app.route("/goat/ingest/player-stats-periods")
+def ingest_player_stats_periods():
+    ok, wait = throttle_or_ok("player_stats_periods", THROTTLE_SECONDS_PERIOD)
+    if not ok:
+        return jsonify({"status": "throttled", "wait_seconds": wait}), 200
+
+    start = request.args.get("start")
+    end = request.args.get("end")
+    if not start or not end:
+        return jsonify({"error": "Missing start or end (YYYY-MM-DD)"}), 400
+
+    games = fetch_games_range(start, end)
+
+    rows: List[Dict[str, Any]] = []
+    for i in range(0, len(games), RATE["batch_size"]):
+        batch = games[i:i + RATE["batch_size"]]
+        for g in batch:
+            gid = g.get("id")
+            if not gid:
+                continue
+            gid_int = int(gid)
+
             for period in (1, 2, 3, 4):
-                q_stats = fetch_goat_player_game_stats(game_id, period=period)
-                for s in q_stats:
-                    row = map_stat_to_row(s, stat_period=f"Q{period}")
+                stats = fetch_period_stats(gid_int, period)
+                for s in stats:
+                    row = map_stat_row(s, f"Q{period}")
                     if row:
                         rows.append(row)
-        
-            delay(RATE["page_delay"])
 
+                sleep_s(RATE["page_delay"])
 
-    if rows:
-        table_id = f"{PROJECT_ID}.{GOAT_DATASET}.{TABLE_PLAYER_STATS}"
-        errors = bq.insert_rows_json(table_id, rows)
-        if errors:
-            return jsonify({"error": errors}), 500
+        sleep_s(RATE["batch_delay"])
+
+    bq_append_json(TABLE_GAME_STATS_PERIOD, rows)
+    set_last_run("player_stats_periods", {"start": start, "end": end, "games": len(games), "rows": len(rows)})
+
+    return jsonify({"status": "ok", "games": len(games), "rows_inserted": len(rows)})
+
+@app.route("/goat/ingest/lineups")
+def ingest_lineups():
+    ok, wait = throttle_or_ok("lineups", THROTTLE_SECONDS_LINEUPS)
+    if not ok:
+        return jsonify({"status": "throttled", "wait_seconds": wait}), 200
+
+    start = request.args.get("start")
+    end = request.args.get("end")
+    if not start or not end:
+        return jsonify({"error": "Missing start or end (YYYY-MM-DD)"}), 400
+
+    games = fetch_games_range(start, end)
+
+    rows: List[Dict[str, Any]] = []
+    for i in range(0, len(games), RATE["batch_size"]):
+        batch = games[i:i + RATE["batch_size"]]
+        for g in batch:
+            gid = g.get("id")
+            if not gid:
+                continue
+            lineups = fetch_game_lineups(int(gid))
+            for lu in lineups:
+                row = map_lineup_row(lu)
+                if row:
+                    rows.append(row)
+
+        sleep_s(RATE["batch_delay"])
+
+    bq_append_json(TABLE_LINEUPS, rows)
+    set_last_run("lineups", {"start": start, "end": end, "games": len(games), "rows": len(rows)})
+
+    return jsonify({"status": "ok", "games": len(games), "rows_inserted": len(rows)})
+
+@app.route("/goat/ingest/player-props")
+def ingest_player_props():
+    ok, wait = throttle_or_ok("player_props", THROTTLE_SECONDS_PROPS)
+    if not ok:
+        return jsonify({"status": "throttled", "wait_seconds": wait}), 200
+
+    start = request.args.get("start")
+    end = request.args.get("end")
+    vendor = request.args.get("vendor")  # optional
+    if not start or not end:
+        return jsonify({"error": "Missing start or end (YYYY-MM-DD)"}), 400
+
+    games = fetch_games_range(start, end)
+
+    rows: List[Dict[str, Any]] = []
+    for i in range(0, len(games), RATE["batch_size"]):
+        batch = games[i:i + RATE["batch_size"]]
+        for g in batch:
+            gid = g.get("id")
+            if not gid:
+                continue
+            props = fetch_player_props(int(gid), vendor=vendor)
+            for p in props:
+                row = map_player_prop_row(p)
+                if row:
+                    rows.append(row)
+
+        sleep_s(RATE["batch_delay"])
+
+    bq_append_json(TABLE_PLAYER_PROPS, rows)
+    set_last_run("player_props", {"start": start, "end": end, "vendor": vendor, "games": len(games), "rows": len(rows)})
+
+    return jsonify({"status": "ok", "games": len(games), "rows_inserted": len(rows), "vendor": vendor})
+
+@app.route("/goat/ingest/all")
+def ingest_all():
+    """
+    Convenience route: runs all pieces in order.
+    """
+    start = request.args.get("start")
+    end = request.args.get("end")
+    season = request.args.get("season")  # for active players
+    vendor = request.args.get("vendor")
+
+    if not start or not end or not season:
+        return jsonify({"error": "Missing required params: start, end, season"}), 400
+
+    # Run each “sub-job” (throttles will apply)
+    r1 = json.loads(ingest_active_players().get_data(as_text=True))
+    r2 = json.loads(ingest_player_stats_full().get_data(as_text=True))
+    r3 = json.loads(ingest_player_stats_periods().get_data(as_text=True))
+    r4 = json.loads(ingest_lineups().get_data(as_text=True))
+    r5 = json.loads(ingest_player_props().get_data(as_text=True))
 
     return jsonify({
         "status": "ok",
-        "games": len(games),
-        "rows_inserted": len(rows),
+        "active_players": r1,
+        "player_stats_full": r2,
+        "player_stats_periods": r3,
+        "lineups": r4,
+        "player_props": r5,
     })
-
-
-@app.route("/goat/player-stats-refresh")
-def refresh_player_stats():
-    today = datetime.utcnow().date()
-    yesterday = today - timedelta(days=1)
-
-    return backfill_player_stats.__wrapped__(
-        start=yesterday.isoformat(),
-        end=today.isoformat(),
-    )
-
 
 # ======================================================
 # MAIN
 # ======================================================
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8080))
+    port = int(os.getenv("PORT", "8080"))
     app.run(host="0.0.0.0", port=port)

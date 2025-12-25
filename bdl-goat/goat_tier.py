@@ -320,7 +320,7 @@ def fetch_all_player_props(vendor: str | None = None):
             params["cursor"] = cursor
 
         r = requests.get(
-            f"{BALDONTLIE_BASE}/player_props",
+            f"{BALDONTLIE_NBA_BASE}/player_props",
             headers=HEADERS,
             params=params,
             timeout=25,

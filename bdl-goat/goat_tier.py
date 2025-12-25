@@ -42,7 +42,7 @@ app = Flask(__name__)
 bq = bigquery.Client(project=PROJECT_ID)
 
 HEADERS = {
-    "Authorization": API_KEY
+    "Authorization": f"Bearer {API_KEY}"
 }
 
 # ======================================================
@@ -50,26 +50,6 @@ HEADERS = {
 # ======================================================
 def delay(seconds: float):
     time.sleep(seconds)
-
-
-def normalize_stat_period(p):
-    if not p:
-        return "FULL"
-
-    p = str(p).lower()
-    if p in ("1", "q1", "quarter_1"):
-        return "Q1"
-    if p in ("2", "q2", "quarter_2"):
-        return "Q2"
-    if p in ("first_half", "h1"):
-        return "H1"
-    if p in ("second_half", "h2"):
-        return "H2"
-    if p in ("full", "full_game"):
-        return "FULL"
-
-    return "FULL"
-
 
 def fetch_games_range(start_date: str, end_date: str):
     games = []
@@ -109,60 +89,73 @@ def fetch_games_range(start_date: str, end_date: str):
     return games
 
 
-def fetch_goat_player_game_stats(game_id: int):
-    params = {
-        "game_ids[]": game_id,
-        "per_page": 100,
-    }
+def fetch_goat_player_game_stats(game_id: int, period: int | None = None):
+    rows = []
+    cursor = None
 
-    r = requests.get(
-        f"{BALDONTLIE_BASE}/player_game_stats",
-        headers=HEADERS,
-        params=params,
-        timeout=20,
-    )
+    while True:
+        params = {
+            "game_ids[]": game_id,
+            "per_page": 100,
+        }
+        if period:
+            params["period"] = period
+        if cursor:
+            params["cursor"] = cursor
 
-    if r.status_code == 429:
-        delay(10)
-        return []
+        r = requests.get(
+            f"{BALDONTLIE_BASE}/game_player_stats",
+            headers=HEADERS,
+            params=params,
+            timeout=20,
+        )
 
-    if not r.ok:
-        return []
+        if r.status_code == 429:
+            delay(10)
+            continue
 
-    return r.json().get("data", [])
+        if not r.ok:
+            print("FETCH ERROR:", r.text)
+            break
+
+        payload = r.json()
+        rows.extend(payload.get("data", []))
+        cursor = payload.get("meta", {}).get("next_cursor")
+
+        if not cursor:
+            break
+
+        delay(RATE["page_delay"])
+
+    return rows
 
 
-def map_stat_to_row(s, stat_period="FULL"):
+def map_stat_to_row(s, stat_period: str):
     if not s or not s.get("player") or not s.get("game"):
         return None
 
-    # Accept ANY stat row that exists
-    # Do NOT require points, minutes, or scoring
+    player = s["player"]
+    team = s["team"]
+    game = s["game"]
 
-    player = s.get("player", {})
-    team = s.get("team", {})
-    game = s.get("game", {})
-
-    # Minutes: keep as INT when possible, else NULL
     try:
-        minutes = int(s.get("min")) if s.get("min") is not None else None
+        minutes = int(s["min"]) if s.get("min") else None
     except ValueError:
         minutes = None
 
     return {
-        "game_id": game.get("id"),
-        "game_date": game.get("date"),
-        "season": game.get("season"),
-        "stat_period": stat_period,   # FULL / Q1 / H1
+        "game_id": game["id"],
+        "game_date": game["date"],
+        "season": game["season"],
+        "stat_period": stat_period,
 
-        "player_id": player.get("id"),
-        "player": f"{player.get('first_name', '')} {player.get('last_name', '')}".strip(),
-        "team_id": team.get("id"),
-        "team": team.get("full_name"),
+        "player_id": player["id"],
+        "player": f"{player['first_name']} {player['last_name']}",
+        "team_id": team["id"],
+        "team": team["full_name"],
 
         "minutes": minutes,
 
-        # Core stats (NULL-safe)
         "pts": s.get("pts", 0),
         "reb": s.get("reb", 0),
         "ast": s.get("ast", 0),
@@ -171,7 +164,6 @@ def map_stat_to_row(s, stat_period="FULL"):
         "turnover": s.get("turnover", 0),
         "pf": s.get("pf", 0),
 
-        # Shooting
         "fgm": s.get("fgm", 0),
         "fga": s.get("fga", 0),
         "fg3m": s.get("fg3m", 0),
@@ -179,9 +171,8 @@ def map_stat_to_row(s, stat_period="FULL"):
         "ftm": s.get("ftm", 0),
         "fta": s.get("fta", 0),
 
-        # Meta
         "plus_minus": s.get("plus_minus"),
-        "data_quality": "RAW"
+        "data_quality": "RAW",
     }
 
 
@@ -209,15 +200,29 @@ def backfill_player_stats():
         batch = games[i:i + RATE["batch_size"]]
 
         for g in batch:
-            stats = fetch_goat_player_game_stats(g["id"])
-            for s in stats:
+            game_id = g["id"]
+        
+            # -----------------------
+            # FULL GAME STATS
+            # -----------------------
+            full_stats = fetch_goat_player_game_stats(game_id)
+            for s in full_stats:
                 row = map_stat_to_row(s, stat_period="FULL")
-                print("ROW BUILT:", row is not None)
                 if row:
                     rows.append(row)
+        
+            # -----------------------
+            # Q1–Q4 STATS
+            # -----------------------
+            for period in (1, 2, 3, 4):
+                q_stats = fetch_goat_player_game_stats(game_id, period=period)
+                for s in q_stats:
+                    row = map_stat_to_row(s, stat_period=f"Q{period}")
+                    if row:
+                        rows.append(row)
+        
+            delay(RATE["page_delay"])
 
-
-        delay(RATE["batch_delay"])
 
     if rows:
         table_id = f"{PROJECT_ID}.{GOAT_DATASET}.{TABLE_PLAYER_STATS}"

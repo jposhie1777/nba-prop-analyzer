@@ -331,6 +331,14 @@ def fetch_all_player_props(vendor: str | None = None):
             continue
 
         r.raise_for_status()
+        if not r.ok:
+            print("PLAYER PROPS ERROR:", r.status_code, r.text[:300])
+            return []
+        
+        if not r.text or not r.text.strip().startswith("{"):
+            print("PLAYER PROPS NON-JSON RESPONSE:", r.text[:300])
+            return []
+        
         payload = r.json()
 
         rows.extend(payload.get("data", []))

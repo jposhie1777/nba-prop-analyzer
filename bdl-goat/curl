@@ -1,1 +1,46 @@
-curl "http://127.0.0.1:8080/goat/player-stats-backfill?start=2025-11-01&end=2025-11-01"
+import os
+import requests
+from datetime import date
+
+API_KEY = os.getenv("BALDONTLIE_KEY")
+BASE = "https://api.balldontlie.io/v2"
+
+HEADERS = {"Authorization": API_KEY}
+
+def get_today_game_ids():
+    r = requests.get(
+        f"{BASE}/games",
+        headers=HEADERS,
+        params={"dates[]": date.today().isoformat()},
+        timeout=20,
+    )
+    r.raise_for_status()
+    return [g["id"] for g in r.json().get("data", [])]
+
+def get_props_for_game(game_id):
+    r = requests.get(
+        f"{BASE}/odds/player_props",
+        headers=HEADERS,
+        params={
+            "game_id": game_id,
+            "vendors[]": ["draftkings", "fanduel"],
+        },
+        timeout=20,
+    )
+    r.raise_for_status()
+    return r.json().get("data", [])
+
+game_ids = get_today_game_ids()
+
+print(f"Games today: {game_ids}")
+
+for gid in game_ids:
+    props = get_props_for_game(gid)
+    print(f"\nGame {gid}: {len(props)} props")
+    for p in props[:5]:  # preview
+        print(
+            p["player_id"],
+            p["prop_type"],
+            p["line_value"],
+            p["vendor"],
+        )

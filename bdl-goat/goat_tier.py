@@ -299,29 +299,64 @@ def map_lineup_row(lu: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 # ======================================================
 # PLAYER PROP ODDS
 # ======================================================
-def fetch_player_props(game_id: int, vendor: Optional[str] = None) -> List[Dict[str, Any]]:
-    # docs show /player_props?game_id=... (and vendor filter exists in docs)
-    params: Dict[str, Any] = {"per_page": 100, "game_id": game_id}
+def fetch_all_player_props(vendor: str | None = None):
+    params = {"per_page": 100}
     if vendor:
         params["vendor"] = vendor
-    return paginate("/player_props", params)
 
-def map_player_prop_row(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    if not p:
-        return None
+    rows = []
+    cursor = None
 
-    market = p.get("market") or {}
+    while True:
+        if cursor:
+            params["cursor"] = cursor
+
+        r = requests.get(
+            f"{BALDONTLIE_BASE}/player_props",
+            headers=HEADERS,
+            params=params,
+            timeout=25,
+        )
+
+        if r.status_code == 429:
+            time.sleep(RATE["retry_429"])
+            continue
+
+        r.raise_for_status()
+        payload = r.json()
+
+        rows.extend(payload.get("data", []))
+        cursor = payload.get("meta", {}).get("next_cursor")
+
+        if not cursor:
+            break
+
+        time.sleep(RATE["page_delay"])
+
+    return rows
+
+def map_player_prop_row(p: dict):
     return {
         "prop_id": p.get("id"),
+        "league": p.get("league"),
+        "vendor": p.get("vendor"),
+
         "game_id": p.get("game_id"),
         "player_id": p.get("player_id"),
-        "vendor": p.get("vendor"),
+
+        "market": p.get("market"),
         "prop_type": p.get("prop_type"),
-        "line_value": p.get("line_value"),
-        "market_json": json.dumps(market, separators=(",", ":")),
+        "line": p.get("line_value"),
+
+        "odds_over": p.get("odds_over"),
+        "odds_under": p.get("odds_under"),
+
+        "outcome": p.get("outcome"),
         "updated_at": p.get("updated_at"),
+
+        # Always keep raw JSON for safety
         "raw_json": json.dumps(p, separators=(",", ":")),
-        "ingested_at_utc": now_utc_iso(),
+        "ingested_at_utc": datetime.utcnow().isoformat(),
     }
 
 # ======================================================
@@ -477,35 +512,29 @@ def ingest_lineups():
 def ingest_player_props():
     ok, wait = throttle_or_ok("player_props", THROTTLE_SECONDS_PROPS)
     if not ok:
-        return jsonify({"status": "throttled", "wait_seconds": wait}), 200
+        return jsonify({"status": "throttled", "wait_seconds": wait})
 
-    start = request.args.get("start")
-    end = request.args.get("end")
     vendor = request.args.get("vendor")  # optional
-    if not start or not end:
-        return jsonify({"error": "Missing start or end (YYYY-MM-DD)"}), 400
 
-    games = fetch_games_range(start, end)
+    props = fetch_all_player_props(vendor=vendor)
+    rows = [map_player_prop_row(p) for p in props]
 
-    rows: List[Dict[str, Any]] = []
-    for i in range(0, len(games), RATE["batch_size"]):
-        batch = games[i:i + RATE["batch_size"]]
-        for g in batch:
-            gid = g.get("id")
-            if not gid:
-                continue
-            props = fetch_player_props(int(gid), vendor=vendor)
-            for p in props:
-                row = map_player_prop_row(p)
-                if row:
-                    rows.append(row)
+    if rows:
+        bq_append_json(TABLE_PLAYER_PROPS, rows)
 
-        sleep_s(RATE["batch_delay"])
+    set_last_run(
+        "player_props",
+        {
+            "vendor": vendor,
+            "rows": len(rows),
+        },
+    )
 
-    bq_append_json(TABLE_PLAYER_PROPS, rows)
-    set_last_run("player_props", {"start": start, "end": end, "vendor": vendor, "games": len(games), "rows": len(rows)})
-
-    return jsonify({"status": "ok", "games": len(games), "rows_inserted": len(rows), "vendor": vendor})
+    return jsonify({
+        "status": "ok",
+        "rows_inserted": len(rows),
+        "vendor": vendor,
+    })
 
 @app.route("/goat/ingest/all")
 def ingest_all():

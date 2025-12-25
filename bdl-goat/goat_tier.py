@@ -26,7 +26,15 @@ TABLE_GAME_STATS_PERIOD = os.getenv("TABLE_GAME_STATS_PERIOD", "player_game_stat
 TABLE_LINEUPS = os.getenv("TABLE_LINEUPS", "game_lineups")
 TABLE_PLAYER_PROPS = os.getenv("TABLE_PLAYER_PROPS", "player_prop_odds")
 
-BALDONTLIE_BASE = os.getenv("BALDONTLIE_BASE", "https://api.balldontlie.io/v1")
+BALDONTLIE_STATS_BASE = os.getenv(
+    "BALDONTLIE_STATS_BASE",
+    "https://api.balldontlie.io/v1"
+)
+
+BALDONTLIE_NBA_BASE = os.getenv(
+    "BALDONTLIE_NBA_BASE",
+    "https://nba.balldontlie.io/v1"
+)
 API_KEY = os.getenv("BALDONTLIE_KEY", "")
 
 if not API_KEY:

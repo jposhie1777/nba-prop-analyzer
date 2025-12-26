@@ -103,35 +103,64 @@ def paginate(base: str, path: str, params: Dict[str, Any]):
 def ensure_state():
     sql = f"""
     CREATE TABLE IF NOT EXISTS `{table(TABLE_STATE)}`
-    (job STRING, last_run TIMESTAMP, meta STRING)
+    (
+      job_name STRING NOT NULL,
+      last_run_ts TIMESTAMP,
+      meta STRING
+    )
     """
     bq.query(sql).result()
 
-def throttle(job: str):
+def throttle(job_name: str):
     ensure_state()
-    q = f"SELECT last_run FROM `{table(TABLE_STATE)}` WHERE job=@j"
-    rows = list(bq.query(q, job_config=bigquery.QueryJobConfig(
-        query_parameters=[bigquery.ScalarQueryParameter("j", "STRING", job)]
-    )))
-    if not rows:
-        return True
-    age = (datetime.now(timezone.utc) - rows[0]["last_run"]).total_seconds()
-    return age >= THROTTLES[job]
 
-def mark_run(job: str, meta: dict):
+    q = f"""
+    SELECT last_run_ts
+    FROM `{table(TABLE_STATE)}`
+    WHERE job_name = @job_name
+    LIMIT 1
+    """
+
+    rows = list(
+        bq.query(
+            q,
+            job_config=bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter("job_name", "STRING", job_name)
+                ]
+            ),
+        ).result()
+    )
+
+    if not rows or rows[0]["last_run_ts"] is None:
+        return True
+
+    age = (datetime.now(timezone.utc) - rows[0]["last_run_ts"].replace(tzinfo=timezone.utc)).total_seconds()
+    return age >= THROTTLES[job_name]
+
+def mark_run(job_name: str, meta: dict):
     ensure_state()
+
     bq.query(
         f"""
         MERGE `{table(TABLE_STATE)}` t
-        USING (SELECT @j job, CURRENT_TIMESTAMP() ts, @m meta) s
-        ON t.job=s.job
-        WHEN MATCHED THEN UPDATE SET last_run=s.ts, meta=s.meta
-        WHEN NOT MATCHED THEN INSERT (job,last_run,meta) VALUES (s.job,s.ts,s.meta)
+        USING (
+          SELECT
+            @job_name AS job_name,
+            CURRENT_TIMESTAMP() AS last_run_ts,
+            @meta AS meta
+        ) s
+        ON t.job_name = s.job_name
+        WHEN MATCHED THEN
+          UPDATE SET last_run_ts = s.last_run_ts, meta = s.meta
+        WHEN NOT MATCHED THEN
+          INSERT (job_name, last_run_ts, meta)
+          VALUES (s.job_name, s.last_run_ts, s.meta)
         """,
         job_config=bigquery.QueryJobConfig(
             query_parameters=[
-                bigquery.ScalarQueryParameter("j", "STRING", job),
-                bigquery.ScalarQueryParameter("m", "STRING", json.dumps(meta)),
+                bigquery.ScalarQueryParameter("job_name", "STRING", job_name),
+                bigquery.ScalarQueryParameter("meta", "STRING", json.dumps(meta)),
             ]
         ),
     ).result()

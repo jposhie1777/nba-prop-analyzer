@@ -27,6 +27,7 @@ TABLE_GAME_STATS_FULL = "player_game_stats_full"
 TABLE_GAME_STATS_PERIOD = "player_game_stats_period"
 TABLE_LINEUPS = "game_lineups"
 TABLE_PLAYER_PROPS = "player_prop_odds"
+TABLE_PLAYER_PROPS_STAGING = "player_prop_odds_staging"
 TABLE_GAME_STATS_ADVANCED = "player_game_stats_advanced"
 TABLE_GAME_STATS_ADVANCED_STAGING = "player_game_stats_advanced_staging"
 

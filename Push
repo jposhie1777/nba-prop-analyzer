@@ -19,6 +19,10 @@ git add season_backfill.yml
 git commit -m "Changes"
 git push origin main
 
+cd bdl-goat
+git add goat_tier.py
+git commit -m "Changes"
+git push origin main
 
 
 

@@ -255,46 +255,105 @@ def ingest_lineups(start: str, end: str):
 # ======================================================
 # PLAYER PROPS (V2 – CORRECT)
 # ======================================================
-def ingest_player_props(game_date: str, vendors: Optional[List[str]]):
+def ingest_player_props(game_date: str):
+    """
+    Pull LIVE player props for all NBA games on a given date.
+    Snapshot-based ingestion. No vendor filtering.
+    """
+
     if not throttle("props"):
         return {"status": "throttled"}
 
-    games = http_get(
+    # --------------------------------------------------
+    # 1️⃣ Get scheduled NBA games for the date
+    # --------------------------------------------------
+    games_resp = http_get(
         BALDONTLIE_NBA_BASE,
         "/games",
         {"dates[]": game_date},
-    ).get("data", [])
-    
+    )
+
+    games = games_resp.get("data", [])
+    if not games:
+        print(f"⚠️ No NBA games found for {game_date}")
+        return {"status": "no_games"}
+
     rows = []
+    games_with_props = 0
 
+    # --------------------------------------------------
+    # 2️⃣ Pull props per game_id (REQUIRED)
+    # --------------------------------------------------
     for g in games:
-        params = {"game_id": g["id"]}
-        if vendors:
-            params["vendors[]"] = vendors
+        game_id = g["id"]
 
-        props = http_get(BALDONTLIE_ODDS_BASE, "/odds/player_props", params).get("data", [])
+        try:
+            props_resp = http_get(
+                BALDONTLIE_ODDS_BASE,
+                "/odds/player_props",
+                {"game_id": game_id},
+            )
+        except Exception as e:
+            print(f"❌ Failed props pull for game {game_id}: {e}")
+            continue
+
+        props = props_resp.get("data", [])
+
+        if not props:
+            print(f"ℹ️ No props available for game {game_id}")
+            continue
+
+        games_with_props += 1
+
+        # --------------------------------------------------
+        # 3️⃣ Normalize props
+        # --------------------------------------------------
         for p in props:
-            m = p.get("market") or {}
+            market = p.get("market") or {}
+
             rows.append({
                 "prop_id": p["id"],
                 "game_id": p["game_id"],
                 "player_id": p["player_id"],
                 "vendor": p["vendor"],
                 "prop_type": p["prop_type"],
-                "line": p["line_value"],
-                "market_type": m.get("type"),
-                "odds_over": m.get("over_odds"),
-                "odds_under": m.get("under_odds"),
-                "milestone_odds": m.get("odds"),
+                "line_value": p["line_value"],
+                "market_type": market.get("type"),
+
+                # over / under
+                "odds_over": market.get("over_odds"),
+                "odds_under": market.get("under_odds"),
+
+                # milestone
+                "milestone_odds": market.get("odds"),
+
+                # timestamps
                 "updated_at": p["updated_at"],
+                "snapshot_ts": now_iso(),
                 "ingested_at": now_iso(),
             })
 
         sleep_s(RATE["delay"])
 
-    bq_append(TABLE_PLAYER_PROPS, rows)
-    mark_run("props", {"date": game_date, "rows": len(rows)})
-    return {"rows": len(rows)}
+    # --------------------------------------------------
+    # 4️⃣ Write snapshot rows
+    # --------------------------------------------------
+    if rows:
+        bq_append(TABLE_PLAYER_PROPS, rows)
+
+    mark_run("props", {
+        "date": game_date,
+        "games_checked": len(games),
+        "games_with_props": games_with_props,
+        "rows": len(rows),
+    })
+
+    return {
+        "date": game_date,
+        "games_checked": len(games),
+        "games_with_props": games_with_props,
+        "rows_inserted": len(rows),
+    }
 
 # ======================================================
 # ROUTES

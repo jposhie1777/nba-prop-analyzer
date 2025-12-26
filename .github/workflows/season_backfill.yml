@@ -10,7 +10,7 @@ jobs:
 
     env:
       RUN_BACKFILL: "true"
-      BACKFILL_START: "2025-10-20"
+      BACKFILL_START: "2025-12-01"
       BACKFILL_END: "2025-12-26"
       PROJECT_ID: ${{ secrets.PROJECT_ID }}
       GOAT_DATASET: ${{ secrets.GOAT_DATASET }}

@@ -37,4 +37,4 @@ jobs:
 
       - name: Run season backfill
         run: |
-          python YOUR_INGESTION_FILE.py
+          python bdl-goat/goat_tier.py

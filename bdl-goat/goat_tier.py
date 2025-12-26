@@ -27,6 +27,8 @@ TABLE_GAME_STATS_FULL = "player_game_stats_full"
 TABLE_GAME_STATS_PERIOD = "player_game_stats_period"
 TABLE_LINEUPS = "game_lineups"
 TABLE_PLAYER_PROPS = "player_prop_odds"
+TABLE_GAME_STATS_ADVANCED = "player_game_stats_advanced"
+TABLE_GAME_STATS_ADVANCED_STAGING = "player_game_stats_advanced_staging"
 
 BALDONTLIE_STATS_BASE = "https://api.balldontlie.io/v1"
 BALDONTLIE_NBA_BASE = "https://api.balldontlie.io/v1"
@@ -52,6 +54,7 @@ THROTTLES = {
     "lineups": 120,
     "props": 120,
 }
+THROTTLES["box_scores"] = 600
 
 # ======================================================
 # APP
@@ -107,6 +110,32 @@ def http_get(base: str, path: str, params=None):
 
     return r.json()
 
+def merge_stats_advanced():
+    bq.query(
+        f"""
+        MERGE `{table(TABLE_GAME_STATS_ADVANCED)}` t
+        USING `{table(TABLE_GAME_STATS_ADVANCED_STAGING)}` s
+        ON
+          t.game_id = s.game_id
+          AND t.player_id = s.player_id
+        WHEN NOT MATCHED THEN
+          INSERT ROW
+        """
+    ).result()
+
+def merge_team_box_scores():
+    bq.query(
+        f"""
+        MERGE `{table(TABLE_TEAM_BOX)}` t
+        USING `{table(TABLE_TEAM_BOX_STAGING)}` s
+        ON
+          t.game_id = s.game_id
+          AND t.team_id = s.team_id
+        WHEN NOT MATCHED THEN
+          INSERT ROW
+        """
+    ).result()
+
 
 def paginate(base: str, path: str, params: Dict[str, Any]):
     out, cursor = [], None
@@ -121,6 +150,14 @@ def paginate(base: str, path: str, params: Dict[str, Any]):
             break
         sleep_s(RATE["delay"])
     return out
+
+from datetime import timedelta
+
+def daterange(start_date: date, end_date: date):
+    d = start_date
+    while d <= end_date:
+        yield d
+        d += timedelta(days=1)
 
 # ======================================================
 # STATE / THROTTLE
@@ -190,6 +227,14 @@ def mark_run(job_name: str, meta: dict):
         ),
     ).result()
 
+def minutes_to_seconds(min_str: Optional[str]) -> Optional[int]:
+    try:
+        m, s = min_str.split(":")
+        return int(m) * 60 + int(s)
+    except Exception:
+        return None
+
+
 def bq_append(name: str, rows: list):
     if rows:
         bq.load_table_from_json(
@@ -203,6 +248,10 @@ def bq_append(name: str, rows: list):
 
 BALDONTLIE_GAMES_BASE = "https://api.balldontlie.io/v1"
 
+def truncate(table_name: str):
+    bq.query(f"TRUNCATE TABLE `{table(table_name)}`").result()
+
+
 def fetch_games_for_date(game_date: str):
     return http_get(
         BALDONTLIE_GAMES_BASE,
@@ -210,6 +259,45 @@ def fetch_games_for_date(game_date: str):
         params={"dates[]": game_date},
     ).get("data", [])
 
+def ensure_backfill_log():
+    bq.query(
+        f"""
+        CREATE TABLE IF NOT EXISTS `{table("backfill_log")}` (
+            run_id STRING,
+            log_ts TIMESTAMP,
+            level STRING,
+            scope STRING,
+            message STRING,
+            meta STRING
+        )
+        """
+    ).result()
+
+import uuid
+
+def log_event(
+    run_id: str,
+    level: str,
+    scope: str,
+    message: str,
+    meta: Optional[dict] = None,
+):
+    ensure_backfill_log()
+
+    row = {
+        "run_id": run_id,
+        "log_ts": datetime.now(timezone.utc).isoformat(),
+        "level": level,
+        "scope": scope,
+        "message": message,
+        "meta": json.dumps(meta or {}),
+    }
+
+    # stdout (real-time visibility)
+    print(f"[{level}] [{scope}] {message}")
+
+    # BigQuery
+    bq_append("backfill_log", [row])
 
 # ======================================================
 # ACTIVE PLAYERS
@@ -233,12 +321,25 @@ def ingest_active_players(season: int):
 # ======================================================
 # GAME STATS
 # ======================================================
-def ingest_stats(start: str, end: str, period: Optional[int]):
+def ingest_stats(
+    start: str,
+    end: str,
+    period: Optional[int],
+    *,
+    bypass_throttle: bool = False,
+):
     job = "stats_period" if period else "stats_full"
-    if not throttle(job):
+
+    # 🔒 Throttle unless explicitly bypassed (quarters wrapper)
+    if not bypass_throttle and not throttle(job):
         return {"status": "throttled"}
 
-    games = paginate(BALDONTLIE_NBA_BASE, "/games", {"start_date": start, "end_date": end})
+    games = paginate(
+        BALDONTLIE_NBA_BASE,
+        "/games",
+        {"start_date": start, "end_date": end},
+    )
+
     rows = []
 
     for g in games:
@@ -253,24 +354,165 @@ def ingest_stats(start: str, end: str, period: Optional[int]):
             },
         )
 
-
         for s in stats:
-            rows.append({
+            minutes = s.get("min")
+
+            # --------------------------------------------------
+            # 🚫 Skip players who did not play
+            # --------------------------------------------------
+            if not minutes or minutes in ("0:00", "00:00"):
+                continue
+
+            seconds_played = minutes_to_seconds(minutes)
+
+            row = {
+                # --------------------------------------------------
+                # CORE
+                # --------------------------------------------------
                 "game_id": gid,
+                "game_date": g["date"][:10],
+                "season": g["season"],
+
                 "player_id": s["player"]["id"],
+                "player": f'{s["player"]["first_name"]} {s["player"]["last_name"]}',
+
                 "team_id": s["team"]["id"],
+                "team": s["team"]["abbreviation"],
+
+                # --------------------------------------------------
+                # PLAYING TIME
+                # --------------------------------------------------
+                "minutes": minutes,
+                "seconds_played": seconds_played,
+
+                # --------------------------------------------------
+                # BASIC STATS
+                # --------------------------------------------------
                 "pts": s.get("pts"),
                 "reb": s.get("reb"),
                 "ast": s.get("ast"),
-                "period": f"Q{period}" if period else "FULL",
+                "stl": s.get("stl"),
+                "blk": s.get("blk"),
+
+                # --------------------------------------------------
+                # POSSESSION / FOULS
+                # --------------------------------------------------
+                "turnover": s.get("turnover"),
+                "pf": s.get("pf"),
+
+                # --------------------------------------------------
+                # SHOOTING
+                # --------------------------------------------------
+                "fgm": s.get("fgm"),
+                "fga": s.get("fga"),
+                "fg3m": s.get("fg3m"),
+                "fg3a": s.get("fg3a"),
+                "ftm": s.get("ftm"),
+                "fta": s.get("fta"),
+
+                # --------------------------------------------------
+                # MISC
+                # --------------------------------------------------
+                "plus_minus": s.get("plus_minus"),
+
+                # --------------------------------------------------
+                # METADATA
+                # --------------------------------------------------
+                "data_quality": "official",
+            }
+
+            # --------------------------------------------------
+            # PERIOD NORMALIZATION
+            # --------------------------------------------------
+            if period:
+                row["period"] = f"Q{period}"
+                row["period_num"] = period
+                row["ingested_at"] = now_iso()
+
+            rows.append(row)
+
+        sleep_s(RATE["delay"])
+
+
+
+    bq_append(
+        TABLE_GAME_STATS_PERIOD if period else TABLE_GAME_STATS_FULL,
+        rows,
+    )
+
+    mark_run(job, {"games": len(games), "rows": len(rows)})
+
+    return {"rows": len(rows)}
+
+def ingest_stats_advanced(start: str, end: str, *, bypass_throttle=False):
+    job = "stats_advanced"
+
+    if not bypass_throttle and not throttle(job):
+        return {"status": "throttled"}
+
+    games = paginate(
+        BALDONTLIE_NBA_BASE,
+        "/games",
+        {"start_date": start, "end_date": end},
+    )
+
+    rows = []
+
+    for g in games:
+        # Advanced stats only exist for completed games
+        if g.get("status") != "Final":
+            continue
+
+        stats = paginate(
+            BALDONTLIE_STATS_BASE,
+            "/stats/advanced",
+            {"game_ids[]": g["id"]},
+        )
+
+        for s in stats:
+            rows.append({
+                "game_id": g["id"],
+                "game_date": g["date"][:10],
+                "season": g["season"],
+
+                "player_id": s["player"]["id"],
+                "team_id": s["team"]["id"],
+
+                "pie": s.get("pie"),
+                "pace": s.get("pace"),
+                "assist_percentage": s.get("assist_percentage"),
+                "assist_ratio": s.get("assist_ratio"),
+                "assist_to_turnover": s.get("assist_to_turnover"),
+                "defensive_rating": s.get("defensive_rating"),
+                "defensive_rebound_percentage": s.get("defensive_rebound_percentage"),
+                "effective_field_goal_percentage": s.get("effective_field_goal_percentage"),
+                "net_rating": s.get("net_rating"),
+                "offensive_rating": s.get("offensive_rating"),
+                "offensive_rebound_percentage": s.get("offensive_rebound_percentage"),
+                "rebound_percentage": s.get("rebound_percentage"),
+                "true_shooting_percentage": s.get("true_shooting_percentage"),
+                "turnover_ratio": s.get("turnover_ratio"),
+                "usage_percentage": s.get("usage_percentage"),
+
+                "data_quality": "official",
                 "ingested_at": now_iso(),
             })
 
         sleep_s(RATE["delay"])
 
-    bq_append(TABLE_GAME_STATS_PERIOD if period else TABLE_GAME_STATS_FULL, rows)
-    mark_run(job, {"games": len(games), "rows": len(rows)})
-    return {"rows": len(rows)}
+    if rows:
+        bq_append(TABLE_GAME_STATS_ADVANCED_STAGING, rows)
+        merge_stats_advanced()
+        truncate(TABLE_GAME_STATS_ADVANCED_STAGING)
+
+    mark_run(job, {
+        "games_checked": len(games),
+        "rows_attempted": len(rows),
+    })
+
+    return {"rows_attempted": len(rows)}
+
+
 
 # ======================================================
 # LINEUPS
@@ -399,6 +641,147 @@ def ingest_player_props(game_date: str):
         "rows_inserted": len(rows),
     }
 
+# ======================================================
+# BACKFILL
+# ======================================================
+from datetime import timedelta
+
+def backfill_season(
+    start: str,
+    end: str,
+    *,
+    include_full=True,
+    include_quarters=True,
+    include_advanced=True,
+):
+    run_id = f"season_backfill_{uuid.uuid4().hex[:8]}"
+
+    start_d = datetime.fromisoformat(start).date()
+    end_d = datetime.fromisoformat(end).date()
+
+    totals = {
+        "days": 0,
+        "full_rows": 0,
+        "quarter_rows": 0,
+        "advanced_rows": 0,
+    }
+
+    log_event(
+        run_id,
+        "INFO",
+        "INIT",
+        f"Starting season backfill {start} → {end}",
+        totals,
+    )
+
+    for d in daterange(start_d, end_d):
+        day = d.isoformat()
+        totals["days"] += 1
+
+        log_event(run_id, "INFO", "DAY_START", f"Processing {day}")
+
+        # ----------------------------------
+        # FULL GAME STATS
+        # ----------------------------------
+        if include_full:
+            try:
+                r = ingest_stats(
+                    start=day,
+                    end=day,
+                    period=None,
+                    bypass_throttle=True,
+                )
+                rows = r.get("rows", 0)
+                totals["full_rows"] += rows
+
+                log_event(
+                    run_id,
+                    "SUCCESS",
+                    "STATS_FULL",
+                    f"{day} → {rows} rows",
+                )
+            except Exception as e:
+                log_event(
+                    run_id,
+                    "ERROR",
+                    "STATS_FULL",
+                    f"{day} failed",
+                    {"error": str(e)},
+                )
+
+        # ----------------------------------
+        # QUARTERS
+        # ----------------------------------
+        if include_quarters:
+            for q in (1, 2, 3, 4):
+                try:
+                    r = ingest_stats(
+                        start=day,
+                        end=day,
+                        period=q,
+                        bypass_throttle=True,
+                    )
+                    rows = r.get("rows", 0)
+                    totals["quarter_rows"] += rows
+
+                    log_event(
+                        run_id,
+                        "SUCCESS",
+                        f"STATS_Q{q}",
+                        f"{day} Q{q} → {rows} rows",
+                    )
+                except Exception as e:
+                    log_event(
+                        run_id,
+                        "ERROR",
+                        f"STATS_Q{q}",
+                        f"{day} Q{q} failed",
+                        {"error": str(e)},
+                    )
+
+        # ----------------------------------
+        # ADVANCED
+        # ----------------------------------
+        if include_advanced:
+            try:
+                r = ingest_stats_advanced(
+                    start=day,
+                    end=day,
+                    bypass_throttle=True,
+                )
+                rows = r.get("rows_attempted", 0)
+                totals["advanced_rows"] += rows
+
+                log_event(
+                    run_id,
+                    "SUCCESS",
+                    "STATS_ADVANCED",
+                    f"{day} → {rows} rows",
+                )
+            except Exception as e:
+                log_event(
+                    run_id,
+                    "ERROR",
+                    "STATS_ADVANCED",
+                    f"{day} failed",
+                    {"error": str(e)},
+                )
+
+        # 🛡️ Hard safety buffer
+        sleep_s(1.0)
+
+    log_event(
+        run_id,
+        "SUCCESS",
+        "COMPLETE",
+        "Season backfill completed",
+        totals,
+    )
+
+    return {
+        "run_id": run_id,
+        **totals,
+    }
 
 
 # ======================================================
@@ -437,6 +820,20 @@ def route_lineups():
 
     return jsonify(ingest_lineups(start, end))
 
+@app.route("/goat/ingest/stats/advanced")
+def route_stats_advanced():
+    start = request.args.get("start")
+    end = request.args.get("end")
+    bypass = request.args.get("bypass", "false").lower() == "true"
+
+    if not start or not end:
+        return {"error": "Missing start/end"}, 400
+
+    return jsonify(
+        ingest_stats_advanced(start, end, bypass_throttle=bypass)
+    )
+
+
 # ======================================================
 # GAME STATS ROUTES
 # ======================================================
@@ -472,7 +869,53 @@ def route_stats_period():
 
     return jsonify(ingest_stats(start, end, period=period))
 
+@app.route("/goat/ingest/stats/quarters")
+def route_stats_all_quarters():
+    start = request.args.get("start")
+    end = request.args.get("end")
 
+    if not start or not end:
+        return {"error": "Missing start/end"}, 400
+
+    total_rows = 0
+
+    for q in (1, 2, 3, 4):
+        result = ingest_stats(start, end, period=q, bypass_throttle=True)
+        total_rows += result.get("rows", 0)
+
+    return {
+        "quarters": [1, 2, 3, 4],
+        "rows_inserted": total_rows,
+    }
+
+@app.route("/goat/ingest/backfill/season")
+def route_backfill_season():
+    start = request.args.get("start")
+    end = request.args.get("end")
+
+    if not start or not end:
+        return {"error": "Missing start/end"}, 400
+
+    result = backfill_season(start, end)
+    return jsonify(result)
+
+def run_season_backfill_cli():
+    start = os.getenv("BACKFILL_START")
+    end = os.getenv("BACKFILL_END")
+
+    if not start or not end:
+        raise RuntimeError("BACKFILL_START and BACKFILL_END required")
+
+    result = backfill_season(start, end)
+    print("✅ BACKFILL COMPLETE")
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == "__main__":
+    if os.getenv("RUN_BACKFILL") == "true":
+        run_season_backfill_cli()
+    else:
+        app.run(host="0.0.0.0", port=8080, debug=True)
 
 # ======================================================
 # MAIN

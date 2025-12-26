@@ -259,7 +259,12 @@ def ingest_player_props(game_date: str, vendors: Optional[List[str]]):
     if not throttle("props"):
         return {"status": "throttled"}
 
-    games = http_get(BALDONTLIE_ODDS_BASE, "/games", {"dates[]": game_date}).get("data", [])
+    games = http_get(
+        BALDONTLIE_NBA_BASE,
+        "/games",
+        {"dates[]": game_date},
+    ).get("data", [])
+    
     rows = []
 
     for g in games:

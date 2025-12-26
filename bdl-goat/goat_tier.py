@@ -29,7 +29,7 @@ TABLE_LINEUPS = "game_lineups"
 TABLE_PLAYER_PROPS = "player_prop_odds"
 
 BALDONTLIE_STATS_BASE = "https://api.balldontlie.io/v1"
-BALDONTLIE_NBA_BASE = "https://nba.balldontlie.io/v1"
+BALDONTLIE_NBA_BASE = "https://api.balldontlie.io/v1"
 BALDONTLIE_ODDS_BASE = "https://api.balldontlie.io/v2"
 
 API_KEY = os.getenv("BALDONTLIE_KEY", "")
@@ -73,15 +73,40 @@ def table(name: str) -> str:
 
 def http_get(base: str, path: str, params=None):
     url = f"{base}{path}"
-    while True:
-        r = requests.get(url, headers=HEADERS, params=params or {}, timeout=25)
-        if r.status_code == 401:
-            r = requests.get(url, headers={"Authorization": f"Bearer {API_KEY}"}, params=params or {}, timeout=25)
-        if r.status_code == 429:
-            sleep_s(RATE["retry"])
-            continue
-        r.raise_for_status()
-        return r.json()
+
+    headers = {}
+    if "api.balldontlie.io" in base:
+        headers["Authorization"] = API_KEY
+
+    r = requests.get(
+        url,
+        headers=headers,
+        params=params or {},
+        timeout=25,
+    )
+
+    # Rate limit
+    if r.status_code == 429:
+        sleep_s(RATE["retry"])
+        return http_get(base, path, params)
+
+    # Hard failure
+    if not r.ok:
+        raise RuntimeError(
+            f"HTTP {r.status_code} from {r.url}\n{r.text[:500]}"
+        )
+
+    # 🔑 CRITICAL FIX: Check content type
+    content_type = r.headers.get("Content-Type", "")
+    if "application/json" not in content_type.lower():
+        raise RuntimeError(
+            f"NON-JSON RESPONSE from {r.url}\n"
+            f"Content-Type: {content_type}\n"
+            f"Body:\n{r.text[:500]}"
+        )
+
+    return r.json()
+
 
 def paginate(base: str, path: str, params: Dict[str, Any]):
     out, cursor = [], None
@@ -176,6 +201,16 @@ def bq_append(name: str, rows: list):
             ),
         ).result()
 
+BALDONTLIE_GAMES_BASE = "https://api.balldontlie.io/v1"
+
+def fetch_games_for_date(game_date: str):
+    return http_get(
+        BALDONTLIE_GAMES_BASE,
+        "/games",
+        params={"dates[]": game_date},
+    ).get("data", [])
+
+
 # ======================================================
 # ACTIVE PLAYERS
 # ======================================================
@@ -208,10 +243,16 @@ def ingest_stats(start: str, end: str, period: Optional[int]):
 
     for g in games:
         gid = g["id"]
-        if period:
-            stats = paginate(BALDONTLIE_NBA_BASE, "/game_player_stats", {"game_id": gid, "period": period})
-        else:
-            stats = paginate(BALDONTLIE_STATS_BASE, "/stats", {"game_ids[]": gid})
+
+        stats = paginate(
+            BALDONTLIE_STATS_BASE,
+            "/stats",
+            {
+                "game_ids[]": gid,
+                **({"period": period} if period else {}),
+            },
+        )
+
 
         for s in stats:
             rows.append({
@@ -240,11 +281,15 @@ def ingest_lineups(start: str, end: str):
     games = paginate(BALDONTLIE_NBA_BASE, "/games", {"start_date": start, "end_date": end})
     rows = []
     for g in games:
-        for lu in paginate(BALDONTLIE_NBA_BASE, "/lineups", {"game_id": g["id"]}):
+        for lu in paginate(
+            BALDONTLIE_NBA_BASE,
+            "/lineups",
+            {"game_ids[]": g["id"]},  # ✅ correct param
+        ):
             rows.append({
                 "game_id": g["id"],
-                "team_id": lu["team_id"],
-                "players": lu["players"],
+                "team_id": lu["team"]["id"] if lu.get("team") else None,
+                "players": lu.get("players") or lu.get("player_ids") or [],
                 "minutes": lu.get("minutes"),
                 "ingested_at": now_iso(),
             })
@@ -268,7 +313,7 @@ def ingest_player_props(game_date: str):
     # 1️⃣ Get scheduled NBA games for the date
     # --------------------------------------------------
     games_resp = http_get(
-        BALDONTLIE_NBA_BASE,
+        "https://api.balldontlie.io/v1",   # ✅ FIXED BASE
         "/games",
         {"dates[]": game_date},
     )
@@ -289,8 +334,8 @@ def ingest_player_props(game_date: str):
 
         try:
             props_resp = http_get(
-                BALDONTLIE_ODDS_BASE,
-                "/odds/player_props",
+                "https://api.balldontlie.io/v2/odds",  # ✅ FIXED BASE
+                "/player_props",                      # ✅ FIXED PATH
                 {"game_id": game_id},
             )
         except Exception as e:
@@ -298,7 +343,6 @@ def ingest_player_props(game_date: str):
             continue
 
         props = props_resp.get("data", [])
-
         if not props:
             print(f"ℹ️ No props available for game {game_id}")
             continue
@@ -355,6 +399,8 @@ def ingest_player_props(game_date: str):
         "rows_inserted": len(rows),
     }
 
+
+
 # ======================================================
 # ROUTES
 # ======================================================
@@ -366,6 +412,67 @@ def health():
 def route_props():
     date_q = request.args.get("date") or date.today().isoformat()
     return jsonify(ingest_player_props(date_q))
+
+@app.route("/goat/ingest/active-players")
+def route_active_players():
+    season = request.args.get("season", type=int)
+
+    if not season:
+        return jsonify({
+            "error": "Missing required query param: season"
+        }), 400
+
+    result = ingest_active_players(season)
+    return jsonify(result)
+
+@app.route("/goat/ingest/lineups")
+def route_lineups():
+    start = request.args.get("start")
+    end = request.args.get("end")
+
+    if not start or not end:
+        return jsonify({
+            "error": "Missing required query params: start, end (YYYY-MM-DD)"
+        }), 400
+
+    return jsonify(ingest_lineups(start, end))
+
+# ======================================================
+# GAME STATS ROUTES
+# ======================================================
+
+@app.route("/goat/ingest/stats/full")
+def route_stats_full():
+    start = request.args.get("start")
+    end = request.args.get("end")
+
+    if not start or not end:
+        return jsonify({
+            "error": "Missing required query params: start, end (YYYY-MM-DD)"
+        }), 400
+
+    return jsonify(ingest_stats(start, end, period=None))
+
+
+@app.route("/goat/ingest/stats/period")
+def route_stats_period():
+    start = request.args.get("start")
+    end = request.args.get("end")
+    period = request.args.get("period", type=int)
+
+    if not start or not end or not period:
+        return jsonify({
+            "error": "Missing required query params: start, end, period"
+        }), 400
+
+    if period not in (1, 2, 3, 4):
+        return jsonify({
+            "error": "period must be 1, 2, 3, or 4"
+        }), 400
+
+    return jsonify(ingest_stats(start, end, period=period))
+
+
 
 # ======================================================
 # MAIN

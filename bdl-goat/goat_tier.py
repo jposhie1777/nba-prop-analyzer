@@ -365,9 +365,7 @@ def health():
 @app.route("/goat/ingest/player-props")
 def route_props():
     date_q = request.args.get("date") or date.today().isoformat()
-    vendors = request.args.get("vendors")
-    vendor_list = vendors.split(",") if vendors else None
-    return jsonify(ingest_player_props(date_q, vendor_list))
+    return jsonify(ingest_player_props(date_q))
 
 # ======================================================
 # MAIN

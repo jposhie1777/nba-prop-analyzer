@@ -159,6 +159,33 @@ def daterange(start_date: date, end_date: date):
         yield d
         d += timedelta(days=1)
 
+def bq_overwrite(name: str, rows: list):
+    if rows:
+        bq.load_table_from_json(
+            rows,
+            table(name),
+            job_config=bigquery.LoadJobConfig(
+                write_disposition="WRITE_TRUNCATE",
+                source_format="NEWLINE_DELIMITED_JSON",
+            ),
+        ).result()
+
+
+def swap_tables(final_table: str, staging_table: str):
+    bq.query(
+        f"""
+        CREATE OR REPLACE TABLE `{table(final_table)}` AS
+        SELECT * FROM `{table(staging_table)}`
+        """
+    ).result()
+
+    bq.query(
+        f"TRUNCATE TABLE `{table(staging_table)}`"
+    ).result()
+
+
+
+
 # ======================================================
 # STATE / THROTTLE
 # ======================================================
@@ -625,7 +652,9 @@ def ingest_player_props(game_date: str):
     # 4️⃣ Write snapshot rows
     # --------------------------------------------------
     if rows:
-        bq_append(TABLE_PLAYER_PROPS, rows)
+        bq_overwrite(TABLE_PLAYER_PROPS_STAGING, rows)
+        swap_tables(TABLE_PLAYER_PROPS, TABLE_PLAYER_PROPS_STAGING)
+
 
     mark_run("props", {
         "date": game_date,

@@ -13,3 +13,16 @@ git commit -m "Changes"
 git push origin main
 
 streamlit run test_dev.py
+
+cd .github/workflows
+git add season_backfill.yml
+git commit -m "Changes"
+git push origin main
+
+
+
+
+
+git add Push
+git commit -m "Changes"
+git push origin main

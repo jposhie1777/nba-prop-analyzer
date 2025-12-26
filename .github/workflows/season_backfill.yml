@@ -1,0 +1,40 @@
+name: NBA Season Backfill
+
+on:
+  workflow_dispatch:   # manual trigger only
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    env:
+      RUN_BACKFILL: "true"
+      BACKFILL_START: "2025-10-20"
+      BACKFILL_END: "2025-12-26"
+      PROJECT_ID: ${{ secrets.PROJECT_ID }}
+      GOAT_DATASET: ${{ secrets.GOAT_DATASET }}
+      BALDONTLIE_KEY: ${{ secrets.BALDONTLIE_KEY }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install flask requests python-dotenv google-cloud-bigquery
+
+      - name: Configure GCP credentials
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
+
+      - name: Run season backfill
+        run: |
+          python YOUR_INGESTION_FILE.py

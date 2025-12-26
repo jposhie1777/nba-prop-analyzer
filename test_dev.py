@@ -153,6 +153,32 @@ DEV_SP_TABLES = {
     "Today's Props – Hit Rates": "todays_props_hit_rates",
 }
 
+# ------------------------------------------------------
+# DEV: GOAT BIGQUERY TABLES (SCHEMA ONLY)
+# ------------------------------------------------------
+DEV_GOAT_TABLES = {
+    "GOAT – Core Reference": {
+        "Active Players": {
+            "dataset": "nba_goat_data",
+            "table": "active_players",
+        },
+    },
+    "GOAT – Player Game Stats": {
+        "Player Game Stats (Full)": {
+            "dataset": "nba_goat_data",
+            "table": "player_game_stats_full",
+        },
+        "Player Game Stats (Period)": {
+            "dataset": "nba_goat_data",
+            "table": "player_game_stats_period",
+        },
+        "Player Game Stats (Advanced)": {
+            "dataset": "nba_goat_data",
+            "table": "player_game_stats_advanced",
+        },
+    },
+}
+
 # ======================================================
 # DEV: BigQuery Client (Explicit Credentials)
 # ======================================================
@@ -272,17 +298,22 @@ def read_sheet_values(sheet_id: str, range_name: str) -> list[list[str]]:
 # ======================================================
 def render_dev_page():
     st.title("⚙️ DEV CONTROL PANEL")
-    
+
+    # --------------------------------------------------
+    # NAV
+    # --------------------------------------------------
     if st.button("⬅ Back to Main App", use_container_width=False):
         st.session_state["pending_tab"] = "main"
-    
-    st.caption("Always available • restricted access")
 
+    st.caption("Always available • restricted access")
     st.markdown(f"**Email:** `{get_user_email()}`")
 
     st.divider()
 
-    st.subheader("🧪 BigQuery – Manual Stored Procedure Triggers")
+    # ==================================================
+    # BIGQUERY — STORED PROCEDURE TRIGGERS
+    # ==================================================
+    st.subheader("🧪 BigQuery — Manual Stored Procedure Triggers")
 
     BQ_PROCS = [
         ("Game Analytics", "sp_game_analytics"),
@@ -293,30 +324,32 @@ def render_dev_page():
     ]
 
     for label, proc in BQ_PROCS:
-        col1, col2 = st.columns([3, 1])
+        c1, c2 = st.columns([3, 1])
 
-        with col1:
+        with c1:
             st.markdown(f"**{label}**")
             st.caption(f"`{DEV_BQ_DATASET}.{proc}`")
 
-        with col2:
-            if st.button(
-                "▶ Run",
-                key=f"run_{proc}",
-                use_container_width=True
-            ):
+        with c2:
+            if st.button("▶ Run", key=f"run_{proc}", use_container_width=True):
                 with st.spinner(f"Running {proc}…"):
                     trigger_bq_procedure(proc)
 
-
     st.divider()
 
-    st.subheader("Cloud Run")
+    # ==================================================
+    # CLOUD RUN
+    # ==================================================
+    st.subheader("☁️ Cloud Run")
+
     if st.button("▶ Trigger ESPN Lineups"):
         trigger_cloud_run("espn-nba-lineups")
 
     st.divider()
 
+    # ==================================================
+    # GOOGLE APPS SCRIPT
+    # ==================================================
     st.subheader("📄 Google Apps Script")
 
     APPS_TASKS = [
@@ -327,97 +360,131 @@ def render_dev_page():
     ]
 
     for label, task in APPS_TASKS:
-        col1, col2 = st.columns([3, 1])
+        c1, c2 = st.columns([3, 1])
 
-        with col1:
+        with c1:
             st.markdown(f"**{label}**")
 
-        with col2:
-            if st.button(
-                "▶ Run",
-                key=f"apps_{task}",
-                use_container_width=True
-            ):
+        with c2:
+            if st.button("▶ Run", key=f"apps_{task}", use_container_width=True):
                 with st.spinner(f"Running {label}…"):
                     trigger_apps_script(task)
 
     st.divider()
-    st.subheader("📊 Google Sheet Sanity Checks")
 
-    SHEET_ID = "1p_rmmiUgU18afioJJ3jCHh9XeX7V4gyHd_E0M3A8M3g"
+    # ==================================================
+    # BIGQUERY — SCHEMA VIEWERS
+    # ==================================================
+    st.subheader("📋 BigQuery Schemas")
 
-    st.markdown("## 🧪 Stored Procedure Outputs – Schema Preview")
+    # -------------------------------
+    # Stored Procedure Output Tables
+    # -------------------------------
+    st.markdown("### 🧪 Stored Procedure Outputs")
 
     for label, table in DEV_SP_TABLES.items():
-        st.subheader(label)
-    
-        with st.expander("📋 View Columns"):
+        with st.expander(f"📄 {label}", expanded=False):
+            st.code(f"nba_prop_analyzer.{table}", language="text")
+
             try:
                 schema_df = get_table_schema("nba_prop_analyzer", table)
-    
+
                 if schema_df.empty:
                     st.warning("No columns found (table may not exist yet).")
                 else:
                     st.dataframe(
                         schema_df,
                         use_container_width=True,
-                        hide_index=True
+                        hide_index=True,
                     )
-    
-            except Exception as e:
-                st.error(f"Failed to load schema: {e}")
 
-    # --------------------------------------------------
-    # 1) Odds tab checks
-    # --------------------------------------------------
+            except Exception as e:
+                st.error("Failed to load schema")
+                st.code(str(e))
+
+    # -------------------------------
+    # GOAT Ingestion Tables (Schema Only)
+    # -------------------------------
+    st.markdown("### 🐐 GOAT Ingestion Tables")
+
+    for group, tables in DEV_GOAT_TABLES.items():
+        st.markdown(f"**{group}**")
+
+        for label, meta in tables.items():
+            dataset = meta["dataset"]
+            table = meta["table"]
+
+            with st.expander(f"📄 {label}", expanded=False):
+                st.code(f"{dataset}.{table}", language="text")
+
+                try:
+                    schema_df = get_table_schema(dataset, table)
+
+                    if schema_df.empty:
+                        st.warning("No columns found (table may not exist yet).")
+                    else:
+                        st.dataframe(
+                            schema_df,
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+
+                except Exception as e:
+                    st.error("Failed to load schema")
+                    st.code(str(e))
+
+    st.divider()
+
+    # ==================================================
+    # GOOGLE SHEETS — SANITY CHECKS
+    # ==================================================
+    st.subheader("📊 Google Sheet Sanity Checks")
+
+    SHEET_ID = "1p_rmmiUgU18afioJJ3jCHh9XeX7V4gyHd_E0M3A8M3g"
+
+    # -------------------------------
+    # Odds Sheet
+    # -------------------------------
     try:
         odds_rows = read_sheet_values(SHEET_ID, "Odds!A:I")
+        has_rows = len(odds_rows) > 1
 
-        has_odds_data = len(odds_rows) > 1
-
-        labels = []
-        if has_odds_data:
-            labels = [
-                (r[8] or "").strip().lower()
-                for r in odds_rows[1:]
-                if len(r) >= 9
-            ]
-
-        has_over = any("over" in l for l in labels)
-        has_under = any("under" in l for l in labels)
+        labels = [
+            (r[8] or "").strip().lower()
+            for r in odds_rows[1:]
+            if len(r) >= 9
+        ] if has_rows else []
 
         st.markdown("**Odds Tab**")
 
-        if has_odds_data:
+        if has_rows:
             st.success("✅ Rows exist after header")
         else:
             st.error("❌ No rows found after header")
 
-        if has_over and has_under:
-            st.success("✅ Both Over and Under found in `label` column")
-        elif has_over:
-            st.warning("⚠️ Only Over found in `label` column")
-        elif has_under:
-            st.warning("⚠️ Only Under found in `label` column")
+        if any("over" in l for l in labels) and any("under" in l for l in labels):
+            st.success("✅ Both Over and Under found")
+        elif any("over" in l for l in labels):
+            st.warning("⚠️ Only Over found")
+        elif any("under" in l for l in labels):
+            st.warning("⚠️ Only Under found")
         else:
-            st.error("❌ No Over / Under values found in `label` column")
+            st.error("❌ No Over / Under values found")
 
     except Exception as e:
         st.error("❌ Failed to read Odds tab")
         st.code(str(e))
 
-
-    # --------------------------------------------------
-    # 2) Game Odds Sheet checks
-    # --------------------------------------------------
+    # -------------------------------
+    # Game Odds Sheet
+    # -------------------------------
     try:
         game_odds_rows = read_sheet_values(SHEET_ID, "Game Odds Sheet!A:A")
-
-        has_game_odds_data = len(game_odds_rows) > 1
+        has_rows = len(game_odds_rows) > 1
 
         st.markdown("**Game Odds Sheet**")
 
-        if has_game_odds_data:
+        if has_rows:
             st.success("✅ Rows exist after header")
         else:
             st.error("❌ No rows found after header")
@@ -426,9 +493,7 @@ def render_dev_page():
         st.error("❌ Failed to read Game Odds Sheet")
         st.code(str(e))
 
-
-        st.success("DEV page loaded successfully.")
-
+    st.success("DEV page loaded successfully.")
 
 
 # ======================================================

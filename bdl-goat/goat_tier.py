@@ -57,6 +57,10 @@ THROTTLES = {
 }
 THROTTLES["box_scores"] = 600
 
+TABLE_GAMES = "games"
+
+THROTTLES["games"] = 120
+
 # ======================================================
 # APP
 # ======================================================
@@ -679,6 +683,94 @@ def ingest_player_props(game_date: str):
         "rows_inserted": len(rows),
     }
 
+from zoneinfo import ZoneInfo
+
+def ingest_games(game_date: Optional[str] = None):
+    """
+    Snapshot ingest of NBA games (game-level only).
+    Safe to overwrite.
+    """
+
+    if not throttle("games"):
+        return {"status": "throttled"}
+
+    params = {}
+    if game_date:
+        params["dates[]"] = game_date
+
+    games = paginate(
+        BALDONTLIE_GAMES_BASE,
+        "/games",
+        params,
+    )
+
+    rows = []
+
+    for g in games:
+        home_scores = g.get("home_team_scores") or []
+        away_scores = g.get("visitor_team_scores") or []
+
+        # quarters
+        def q(scores, i):
+            return scores[i] if len(scores) > i else None
+
+        # overtime
+        home_ot = home_scores[4:] if len(home_scores) > 4 else []
+        away_ot = away_scores[4:] if len(away_scores) > 4 else []
+
+        start_est = (
+            datetime.fromisoformat(g["date"].replace("Z", "+00:00"))
+            .astimezone(ZoneInfo("America/New_York"))
+        )
+
+        rows.append({
+            "game_id": g["id"],
+            "season": g["season"],
+            "game_date": g["date"][:10],
+            "start_time_est": start_est.isoformat(),
+
+            "status": g["status"],
+            "is_final": g["status"] == "Final",
+            "has_overtime": len(home_ot) > 0,
+            "num_overtimes": len(home_ot),
+
+            "home_team_id": g["home_team"]["id"],
+            "home_team_abbr": g["home_team"]["abbreviation"],
+
+            "away_team_id": g["visitor_team"]["id"],
+            "away_team_abbr": g["visitor_team"]["abbreviation"],
+
+            "home_score_q1": q(home_scores, 0),
+            "home_score_q2": q(home_scores, 1),
+            "home_score_q3": q(home_scores, 2),
+            "home_score_q4": q(home_scores, 3),
+            "home_score_ot": home_ot,
+            "home_score_final": g.get("home_team_score"),
+
+            "away_score_q1": q(away_scores, 0),
+            "away_score_q2": q(away_scores, 1),
+            "away_score_q3": q(away_scores, 2),
+            "away_score_q4": q(away_scores, 3),
+            "away_score_ot": away_ot,
+            "away_score_final": g.get("visitor_team_score"),
+
+            "last_updated": now_iso(),
+            "ingested_at": now_iso(),
+        })
+
+    if rows:
+        bq_overwrite(TABLE_GAMES, rows)
+
+    mark_run("games", {
+        "games": len(rows),
+        "date": game_date,
+    })
+
+    return {
+        "games": len(rows),
+        "date": game_date,
+    }
+    
 # ======================================================
 # BACKFILL
 # ======================================================
@@ -940,6 +1032,10 @@ def run_season_backfill_cli():
     print("✅ BACKFILL COMPLETE")
     print(json.dumps(result, indent=2))
 
+@app.route("/goat/ingest/games")
+def route_ingest_games():
+    game_date = request.args.get("date")
+    return jsonify(ingest_games(game_date))
 
 if __name__ == "__main__":
     if os.getenv("RUN_BACKFILL") == "true":

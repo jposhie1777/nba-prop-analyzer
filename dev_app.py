@@ -985,6 +985,10 @@ def load_props(table_name: str) -> pd.DataFrame:
         "opp_pos_pr_rank",
         "opp_pos_pa_rank",
         "opp_pos_ra_rank",
+        
+        "avg_stat_l5",
+        "avg_stat_l10",
+        "avg_stat_l20",
 
         # PROJECTION / CONFIDENCE
         "proj_last10",

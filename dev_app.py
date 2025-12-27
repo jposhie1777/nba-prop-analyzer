@@ -859,6 +859,13 @@ COLUMN_REMAP = {
     "implied_probability": "implied_prob",
     "clear_plus1_rate": "dist20_clear_1p_rate",
     "clear_plus2_rate": "dist20_clear_2p_rate",
+    "bad_miss_rate_l20": "dist20_fail_bad_rate",
+    "avg_margin_l20": "dist20_avg_margin",
+    "avg_stat_l5",
+    "avg_stat_l10",
+    "avg_stat_l20",
+    "bad_miss_rate_l40": "dist40_fail_bad_rate",
+    "avg_margin_l40": "dist40_avg_margin",
 }
 
 

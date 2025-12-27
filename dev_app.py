@@ -1786,7 +1786,9 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         # -----------------------------
         stat_key = normalize_market_key(raw_market)
         
-        l5_avg, l10_avg, l20_avg = get_stat_avgs(row, stat_key)
+        l5_avg  = row.get("avg_stat_l5")
+        l10_avg = row.get("avg_stat_l10")
+        l20_avg = row.get("avg_stat_l20")
         
         # -----------------------------
         # OPPONENT POSITIONAL RANK

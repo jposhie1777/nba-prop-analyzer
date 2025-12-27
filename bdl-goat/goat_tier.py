@@ -111,6 +111,14 @@ def http_get(base: str, path: str, params=None):
 
     return r.json()
 
+from datetime import timedelta
+import pytz
+
+def yesterday_ny():
+    ny = pytz.timezone("America/New_York")
+    return (datetime.now(ny).date() - timedelta(days=1)).isoformat()
+
+
 def merge_stats_advanced():
     bq.query(
         f"""
@@ -852,12 +860,9 @@ def route_lineups():
 
 @app.route("/goat/ingest/stats/advanced")
 def route_stats_advanced():
-    start = request.args.get("start")
-    end = request.args.get("end")
+    start = request.args.get("start") or yesterday_ny()
+    end = request.args.get("end") or start  
     bypass = request.args.get("bypass", "false").lower() == "true"
-
-    if not start or not end:
-        return {"error": "Missing start/end"}, 400
 
     return jsonify(
         ingest_stats_advanced(start, end, bypass_throttle=bypass)
@@ -870,15 +875,12 @@ def route_stats_advanced():
 
 @app.route("/goat/ingest/stats/full")
 def route_stats_full():
-    start = request.args.get("start")
-    end = request.args.get("end")
-
-    if not start or not end:
-        return jsonify({
-            "error": "Missing required query params: start, end (YYYY-MM-DD)"
-        }), 400
+    start = request.args.get("start") or yesterday_ny()
+    end = request.args.get("end") or start
 
     return jsonify(ingest_stats(start, end, period=None))
+
+
 
 
 @app.route("/goat/ingest/stats/period")
@@ -901,11 +903,9 @@ def route_stats_period():
 
 @app.route("/goat/ingest/stats/quarters")
 def route_stats_all_quarters():
-    start = request.args.get("start")
-    end = request.args.get("end")
+    start = request.args.get("start") or yesterday_ny()
+    end = request.args.get("end") or start
 
-    if not start or not end:
-        return {"error": "Missing start/end"}, 400
 
     total_rows = 0
 

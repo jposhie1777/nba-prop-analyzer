@@ -152,16 +152,38 @@ def merge_team_box_scores():
 
 def paginate(base: str, path: str, params: Dict[str, Any]):
     out, cursor = [], None
+    retries = 0
+
     while True:
         p = dict(params)
         if cursor:
             p["cursor"] = cursor
-        data = http_get(base, path, p)
+
+        try:
+            data = http_get(base, path, p)
+        except RuntimeError as e:
+            # 🔥 Ball Don't Lie pagination occasionally dies
+            print(f"⚠️ Pagination error at cursor={cursor}: {e}")
+
+            # retry once
+            if retries < 1:
+                retries += 1
+                sleep_s(1.5)
+                continue
+
+            # otherwise stop safely
+            break
+
+        retries = 0  # reset on success
+
         out.extend(data.get("data", []))
         cursor = (data.get("meta") or {}).get("next_cursor")
+
         if not cursor:
             break
+
         sleep_s(RATE["delay"])
+
     return out
 
 from datetime import timedelta

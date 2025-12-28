@@ -79,41 +79,52 @@ def sleep_s(sec: float):
 def table(name: str) -> str:
     return f"{PROJECT_ID}.{DATASET}.{name}"
 
-def http_get(base: str, path: str, params=None):
+from requests.exceptions import ReadTimeout, ConnectionError as ReqConnectionError
+
+def http_get(base: str, path: str, params=None, *, max_retries=3):
     url = f"{base}{path}"
 
     headers = {}
     if "api.balldontlie.io" in base:
         headers["Authorization"] = API_KEY
 
-    r = requests.get(
-        url,
-        headers=headers,
-        params=params or {},
-        timeout=25,
-    )
+    for attempt in range(max_retries):
+        try:
+            r = requests.get(
+                url,
+                headers=headers,
+                params=params or {},
+                timeout=25,
+            )
+        except (ReadTimeout, ReqConnectionError) as e:
+            print(f"⚠️ Network error ({attempt+1}/{max_retries}) for {url}: {e}")
+            sleep_s(1.5)
+            continue
 
-    # Rate limit
-    if r.status_code == 429:
-        sleep_s(RATE["retry"])
-        return http_get(base, path, params)
+        # Rate limit
+        if r.status_code == 429:
+            sleep_s(RATE["retry"])
+            continue
 
-    # Hard failure
-    if not r.ok:
-        raise RuntimeError(
-            f"HTTP {r.status_code} from {r.url}\n{r.text[:500]}"
-        )
+        # Hard failure
+        if not r.ok:
+            raise RuntimeError(
+                f"HTTP {r.status_code} from {r.url}\n{r.text[:500]}"
+            )
 
-    # 🔑 CRITICAL FIX: Check content type
-    content_type = r.headers.get("Content-Type", "")
-    if "application/json" not in content_type.lower():
-        raise RuntimeError(
-            f"NON-JSON RESPONSE from {r.url}\n"
-            f"Content-Type: {content_type}\n"
-            f"Body:\n{r.text[:500]}"
-        )
+        # Content type guard
+        content_type = r.headers.get("Content-Type", "")
+        if "application/json" not in content_type.lower():
+            raise RuntimeError(
+                f"NON-JSON RESPONSE from {r.url}\n"
+                f"Content-Type: {content_type}\n"
+                f"Body:\n{r.text[:500]}"
+            )
 
-    return r.json()
+        return r.json()
+
+    # If we exhaust retries
+    raise RuntimeError(f"Failed after {max_retries} retries: {url}")
 
 from datetime import timedelta
 import pytz
@@ -121,6 +132,26 @@ import pytz
 def yesterday_ny():
     ny = pytz.timezone("America/New_York")
     return (datetime.now(ny).date() - timedelta(days=1)).isoformat()
+
+def parse_start_time_est(g: dict) -> Optional[str]:
+    """
+    Safely extract game start time in EST from a Ball Don't Lie game payload.
+    Prefers true tip time fields and falls back only if needed.
+    """
+    raw = (
+        g.get("start_time")      # preferred
+        or g.get("scheduled")    # fallback
+        or g.get("date")         # last resort
+    )
+
+    if not raw:
+        return None
+
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return dt.astimezone(ZoneInfo("America/New_York")).isoformat()
+    except Exception:
+        return None
 
 
 def merge_stats_advanced():
@@ -204,6 +235,30 @@ def bq_overwrite(name: str, rows: list):
                 source_format="NEWLINE_DELIMITED_JSON",
             ),
         ).result()
+
+def bq_replace_by_date(table_name: str, game_date: str, rows: list):
+    """
+    Idempotent date-scoped overwrite.
+    Deletes only the target date, then inserts fresh rows.
+    """
+    if not rows:
+        return
+
+    # 1️⃣ Delete only that date
+    bq.query(
+        f"""
+        DELETE FROM `{table(table_name)}`
+        WHERE game_date = @game_date
+        """,
+        job_config=bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("game_date", "STRING", game_date)
+            ]
+        ),
+    ).result()
+
+    # 2️⃣ Insert fresh rows
+    bq_append(table_name, rows)
 
 
 def swap_tables(final_table: str, staging_table: str):
@@ -360,6 +415,43 @@ def log_event(
 
     # BigQuery
     bq_append("backfill_log", [row])
+
+import re
+from typing import Tuple, Optional
+
+WINDOW_PATTERNS = [
+    (r"(?:^|_)(1q|q1|first_quarter|1st_quarter)(?:_|$)", "Q1"),
+    (r"(?:^|_)(2q|q2|second_quarter|2nd_quarter)(?:_|$)", "Q2"),
+    (r"(?:^|_)(3q|q3|third_quarter|3rd_quarter)(?:_|$)", "Q3"),
+    (r"(?:^|_)(4q|q4|fourth_quarter|4th_quarter)(?:_|$)", "Q4"),
+    (r"(?:^|_)(1h|h1|first_half|1st_half)(?:_|$)", "H1"),
+    (r"(?:^|_)(2h|h2|second_half|2nd_half)(?:_|$)", "H2"),
+    (r"(?:^|_)(full|game|match)(?:_|$)", "FULL"),
+]
+
+SUFFIX_STRIP_RE = re.compile(r"(_(1q|2q|3q|4q|1h|2h|q1|q2|q3|q4|h1|h2))$", re.IGNORECASE)
+
+def infer_market_window(prop_type: str, market_type: str) -> str:
+    """
+    Returns one of: FULL, Q1, Q2, Q3, Q4, H1, H2
+    Default: FULL (so we never leave it NULL)
+    """
+    s = f"{prop_type or ''} {market_type or ''}".lower()
+
+    for pattern, win in WINDOW_PATTERNS:
+        if re.search(pattern, s):
+            return win
+
+    return "FULL"
+
+def base_prop_type(prop_type: str) -> str:
+    """
+    Strips trailing _1q/_1h/etc to create a stable join key.
+    """
+    if not prop_type:
+        return prop_type
+    return SUFFIX_STRIP_RE.sub("", prop_type)
+
 
 # ======================================================
 # ACTIVE PLAYERS
@@ -601,17 +693,19 @@ def ingest_lineups(start: str, end: str):
     mark_run("lineups", {"rows": len(rows)})
     return {"rows": len(rows)}
 
+
 # ======================================================
 # PLAYER PROPS (V2 – CORRECT)
 # ======================================================
-def ingest_player_props(game_date: str):
+def ingest_player_props(game_date: str, *, bypass_throttle: bool = False):
     """
     Pull LIVE player props for all NBA games on a given date.
     Snapshot-based ingestion. No vendor filtering.
     """
 
-    if not throttle("props"):
+    if not bypass_throttle and not throttle("props"):
         return {"status": "throttled"}
+
 
     # --------------------------------------------------
     # 1️⃣ Get scheduled NBA games for the date
@@ -638,10 +732,30 @@ def ingest_player_props(game_date: str):
 
         try:
             props_resp = http_get(
-                "https://api.balldontlie.io/v2/odds",  # ✅ FIXED BASE
-                "/player_props",                      # ✅ FIXED PATH
-                {"game_id": game_id},
+                "https://api.balldontlie.io/v2/odds",
+                "/player_props",
+                {
+                    "game_id": game_id,
+                    "prop_types[]": [
+                        "points",
+                        "points_1q",
+                        "points_first3min",
+                        "assists",
+                        "assists_1q",
+                        "assists_first3min",
+                        "rebounds",
+                        "rebounds_1q",
+                        "rebounds_first3min",
+                        "points_rebounds",
+                        "points_assists",
+                        "points_rebounds_assists",
+                        "double_double",
+                        "triple_double",
+                    ],
+                },
             )
+
+
         except Exception as e:
             print(f"❌ Failed props pull for game {game_id}: {e}")
             continue
@@ -659,14 +773,27 @@ def ingest_player_props(game_date: str):
         for p in props:
             market = p.get("market") or {}
 
+            raw_prop_type = p.get("prop_type") or ""
+            mkt_type = market.get("type") or ""
+
+            market_window = infer_market_window(raw_prop_type, mkt_type)
+            prop_type_base = base_prop_type(raw_prop_type)
+
             rows.append({
                 "prop_id": p["id"],
                 "game_id": p["game_id"],
                 "player_id": p["player_id"],
                 "vendor": p["vendor"],
-                "prop_type": p["prop_type"],
+
+                # keep the raw prop_type (so nothing breaks)
+                "prop_type": raw_prop_type,
+
+                # ✅ add these two
+                "market_window": market_window,
+                "prop_type_base": prop_type_base,
+
                 "line_value": p["line_value"],
-                "market_type": market.get("type"),
+                "market_type": mkt_type,
 
                 # over / under
                 "odds_over": market.get("over_odds"),
@@ -680,6 +807,7 @@ def ingest_player_props(game_date: str):
                 "snapshot_ts": now_iso(),
                 "ingested_at": now_iso(),
             })
+
 
         sleep_s(RATE["delay"])
 
@@ -707,18 +835,27 @@ def ingest_player_props(game_date: str):
 
 from zoneinfo import ZoneInfo
 
-def ingest_games(game_date: Optional[str] = None):
+def ingest_games(
+    game_date: Optional[str] = None,
+    *,
+    bypass_throttle: bool = False,
+):
     """
     Snapshot ingest of NBA games (game-level only).
-    Safe to overwrite.
+    Fully idempotent per game_date.
+    Handles multiple BDL response formats.
     """
 
-    if not throttle("games"):
+    if not bypass_throttle and not throttle("games"):
         return {"status": "throttled"}
 
-    params = {}
-    if game_date:
-        params["dates[]"] = game_date
+
+    # --------------------------------------------------
+    # IDPOTENT DATE SCOPE
+    # --------------------------------------------------
+    run_date = game_date or yesterday_ny()
+
+    params = {"dates[]": run_date}
 
     games = paginate(
         BALDONTLIE_GAMES_BASE,
@@ -729,27 +866,56 @@ def ingest_games(game_date: Optional[str] = None):
     rows = []
 
     for g in games:
-        home_scores = g.get("home_team_scores") or []
-        away_scores = g.get("visitor_team_scores") or []
+        # ---------------- START TIME (EST) ----------------
+        start_est = parse_start_time_est(g)
 
-        # quarters
-        def q(scores, i):
-            return scores[i] if len(scores) > i else None
 
-        # overtime
-        home_ot = home_scores[4:] if len(home_scores) > 4 else []
-        away_ot = away_scores[4:] if len(away_scores) > 4 else []
+        # ---------------- QUARTER SCORING ----------------
+        home_q = [
+            g.get("home_q1"),
+            g.get("home_q2"),
+            g.get("home_q3"),
+            g.get("home_q4"),
+        ]
+        away_q = [
+            g.get("visitor_q1"),
+            g.get("visitor_q2"),
+            g.get("visitor_q3"),
+            g.get("visitor_q4"),
+        ]
 
-        start_est = (
-            datetime.fromisoformat(g["date"].replace("Z", "+00:00"))
-            .astimezone(ZoneInfo("America/New_York"))
-        )
+        home_ot = [
+            g.get("home_ot1"),
+            g.get("home_ot2"),
+            g.get("home_ot3"),
+            g.get("home_ot4"),
+        ]
+        away_ot = [
+            g.get("visitor_ot1"),
+            g.get("visitor_ot2"),
+            g.get("visitor_ot3"),
+            g.get("visitor_ot4"),
+        ]
+
+        home_q = [x for x in home_q if x is not None]
+        away_q = [x for x in away_q if x is not None]
+        home_ot = [x for x in home_ot if x is not None]
+        away_ot = [x for x in away_ot if x is not None]
+
+        # Fallback to legacy arrays
+        if not home_q:
+            home_q = g.get("home_team_scores") or []
+        if not away_q:
+            away_q = g.get("visitor_team_scores") or []
+
+        def q(scores, idx):
+            return scores[idx] if len(scores) > idx else None
 
         rows.append({
             "game_id": g["id"],
             "season": g["season"],
-            "game_date": g["date"][:10],
-            "start_time_est": start_est.isoformat(),
+            "game_date": run_date,
+            "start_time_est": start_est,
 
             "status": g["status"],
             "is_final": g["status"] == "Final",
@@ -758,21 +924,20 @@ def ingest_games(game_date: Optional[str] = None):
 
             "home_team_id": g["home_team"]["id"],
             "home_team_abbr": g["home_team"]["abbreviation"],
-
             "away_team_id": g["visitor_team"]["id"],
             "away_team_abbr": g["visitor_team"]["abbreviation"],
 
-            "home_score_q1": q(home_scores, 0),
-            "home_score_q2": q(home_scores, 1),
-            "home_score_q3": q(home_scores, 2),
-            "home_score_q4": q(home_scores, 3),
+            "home_score_q1": q(home_q, 0),
+            "home_score_q2": q(home_q, 1),
+            "home_score_q3": q(home_q, 2),
+            "home_score_q4": q(home_q, 3),
             "home_score_ot": home_ot,
             "home_score_final": g.get("home_team_score"),
 
-            "away_score_q1": q(away_scores, 0),
-            "away_score_q2": q(away_scores, 1),
-            "away_score_q3": q(away_scores, 2),
-            "away_score_q4": q(away_scores, 3),
+            "away_score_q1": q(away_q, 0),
+            "away_score_q2": q(away_q, 1),
+            "away_score_q3": q(away_q, 2),
+            "away_score_q4": q(away_q, 3),
             "away_score_ot": away_ot,
             "away_score_final": g.get("visitor_team_score"),
 
@@ -780,19 +945,33 @@ def ingest_games(game_date: Optional[str] = None):
             "ingested_at": now_iso(),
         })
 
-    if rows:
-        bq_overwrite(TABLE_GAMES, rows)
+    # ---------------- SAFE DATE-SCOPED IDEMPOTENT WRITE ----------------
+    if not rows:
+        print(f"ℹ️ No games found for {run_date}, skipping write")
+        mark_run("games", {
+            "games": 0,
+            "date": run_date,
+            "status": "no_rows",
+        })
+        return {
+            "games": 0,
+            "date": run_date,
+            "status": "no_rows",
+        }
+
+    bq_replace_by_date(TABLE_GAMES, run_date, rows)
+
 
     mark_run("games", {
         "games": len(rows),
-        "date": game_date,
+        "date": run_date,
     })
 
     return {
         "games": len(rows),
-        "date": game_date,
+        "date": run_date,
     }
-    
+ 
 # ======================================================
 # BACKFILL
 # ======================================================
@@ -935,6 +1114,75 @@ def backfill_season(
         **totals,
     }
 
+def backfill_games(
+    start: str,
+    end: str,
+    *,
+    sleep_seconds: float = 1.0,
+):
+    """
+    Backfill NBA games table day-by-day.
+    Fully idempotent.
+    """
+
+    run_id = f"games_backfill_{uuid.uuid4().hex[:8]}"
+
+    start_d = datetime.fromisoformat(start).date()
+    end_d = datetime.fromisoformat(end).date()
+
+    totals = {
+        "days": 0,
+        "games": 0,
+    }
+
+    log_event(
+        run_id,
+        "INFO",
+        "INIT",
+        f"Starting games backfill {start} → {end}",
+        totals,
+    )
+
+    for d in daterange(start_d, end_d):
+        day = d.isoformat()
+        totals["days"] += 1
+
+        try:
+            result = ingest_games(day, bypass_throttle=True)
+            games = result.get("games", 0)
+            totals["games"] += games
+
+            log_event(
+                run_id,
+                "SUCCESS",
+                "GAMES",
+                f"{day} → {games} games",
+            )
+        except Exception as e:
+            log_event(
+                run_id,
+                "ERROR",
+                "GAMES",
+                f"{day} failed",
+                {"error": str(e)},
+            )
+
+        # Safety buffer
+        sleep_s(sleep_seconds)
+
+    log_event(
+        run_id,
+        "SUCCESS",
+        "COMPLETE",
+        "Games backfill completed",
+        totals,
+    )
+
+    return {
+        "run_id": run_id,
+        **totals,
+    }
+
 
 # ======================================================
 # ROUTES
@@ -946,7 +1194,9 @@ def health():
 @app.route("/goat/ingest/player-props")
 def route_props():
     date_q = request.args.get("date") or date.today().isoformat()
-    return jsonify(ingest_player_props(date_q))
+    bypass = request.args.get("bypass", "false").lower() == "true"
+    return jsonify(ingest_player_props(date_q, bypass_throttle=bypass))
+
 
 @app.route("/goat/ingest/active-players")
 def route_active_players():
@@ -1057,7 +1307,28 @@ def run_season_backfill_cli():
 @app.route("/goat/ingest/games")
 def route_ingest_games():
     game_date = request.args.get("date")
-    return jsonify(ingest_games(game_date))
+    bypass = request.args.get("bypass", "false").lower() == "true"
+
+    return jsonify(
+        ingest_games(
+            game_date,
+            bypass_throttle=bypass,
+        )
+    )
+
+
+@app.route("/goat/ingest/backfill/games")
+def route_backfill_games():
+    start = request.args.get("start")
+    end = request.args.get("end")
+
+    if not start or not end:
+        return jsonify({
+            "error": "Missing required query params: start, end (YYYY-MM-DD)"
+        }), 400
+
+    return jsonify(backfill_games(start, end))
+
 
 if __name__ == "__main__":
     if os.getenv("RUN_BACKFILL") == "true":

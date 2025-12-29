@@ -30,6 +30,8 @@ TABLE_PLAYER_PROPS = "player_prop_odds"
 TABLE_PLAYER_PROPS_STAGING = "player_prop_odds_staging"
 TABLE_GAME_STATS_ADVANCED = "player_game_stats_advanced"
 TABLE_GAME_STATS_ADVANCED_STAGING = "player_game_stats_advanced_staging"
+TABLE_GAME_PLAYS_FIRST3 = "game_plays_first3min"
+
 
 BALDONTLIE_STATS_BASE = "https://api.balldontlie.io/v1"
 BALDONTLIE_NBA_BASE = "https://api.balldontlie.io/v1"
@@ -273,7 +275,60 @@ def swap_tables(final_table: str, staging_table: str):
         f"TRUNCATE TABLE `{table(staging_table)}`"
     ).result()
 
+def is_obvious_fanduel_q1_milestone(
+    *,
+    vendor: str,
+    prop_type_norm: str,
+    raw_prop_type: str,
+    market_window: str,
+    line_value,
+    odds,
+) -> bool:
+    """
+    Correct FanDuel Q1 milestone detection.
 
+    FanDuel DOES offer FULL-game 10 & 15 milestones,
+    so we must not rely on line value alone.
+    """
+
+    # FanDuel only
+    if vendor != "fanduel":
+        return False
+
+    # Points only
+    if prop_type_norm != "points":
+        return False
+
+    # Already explicitly FULL → never override
+    if market_window == "FULL":
+        return False
+
+    # Already explicitly time-scoped → trust it
+    if raw_prop_type.endswith(("_1q", "_first3min")):
+        return True
+
+    # Milestone ladders have single odds (not O/U)
+    if odds is None:
+        return False
+
+    try:
+        int(float(line_value))
+    except (TypeError, ValueError):
+        return False
+
+    return True
+
+def apply_q1_prop_type(prop_type: str) -> str:
+    """
+    Convert base prop_type to Q1-specific prop_type.
+    """
+    if prop_type == "points":
+        return "points_1q"
+    if prop_type == "rebounds":
+        return "rebounds_1q"
+    if prop_type == "assists":
+        return "assists_1q"
+    return prop_type
 
 
 # ======================================================
@@ -348,6 +403,32 @@ def minutes_to_seconds(min_str: Optional[str]) -> Optional[int]:
     try:
         m, s = min_str.split(":")
         return int(m) * 60 + int(s)
+    except Exception:
+        return None
+
+def parse_clock_to_seconds(clock) -> Optional[int]:
+    """
+    Parse Ball Don't Lie play clock formats.
+
+    Supports:
+      - 'MM:SS'   (e.g. '11:43')
+      - 'SS.s'    (e.g. '54.2')
+      - int / float seconds
+    """
+    if clock is None:
+        return None
+
+    # MM:SS format
+    if isinstance(clock, str) and ":" in clock:
+        try:
+            m, s = clock.split(":")
+            return int(m) * 60 + int(float(s))
+        except Exception:
+            return None
+
+    # Seconds-only format ('54.2', 54.2, etc)
+    try:
+        return int(float(clock))
     except Exception:
         return None
 
@@ -433,24 +514,38 @@ SUFFIX_STRIP_RE = re.compile(r"(_(1q|2q|3q|4q|1h|2h|q1|q2|q3|q4|h1|h2))$", re.IG
 
 def infer_market_window(prop_type: str, market_type: str) -> str:
     """
-    Returns one of: FULL, Q1, Q2, Q3, Q4, H1, H2
-    Default: FULL (so we never leave it NULL)
+    Derive market window from prop_type / market_type.
     """
-    s = f"{prop_type or ''} {market_type or ''}".lower()
+    s = (prop_type or "").lower()
 
-    for pattern, win in WINDOW_PATTERNS:
-        if re.search(pattern, s):
-            return win
+    if s.endswith("_1q") or "_1q_" in s or "_q1" in s:
+        return "Q1"
+
+    if s.endswith("_first3min") or "first3min" in s:
+        return "Q1"   # or "Q1_OPENING" if you want a separate bucket
+
+    if s.endswith("_1h") or "_first_half" in s:
+        return "H1"
 
     return "FULL"
 
 def base_prop_type(prop_type: str) -> str:
     """
-    Strips trailing _1q/_1h/etc to create a stable join key.
+    Normalize prop_type by stripping period / time qualifiers.
     """
     if not prop_type:
         return prop_type
-    return SUFFIX_STRIP_RE.sub("", prop_type)
+
+    for suffix in (
+        "_1q",
+        "_q1",
+        "_1h",
+        "_first3min",
+    ):
+        if prop_type.endswith(suffix):
+            return prop_type.replace(suffix, "")
+
+    return prop_type
 
 
 # ======================================================
@@ -777,7 +872,29 @@ def ingest_player_props(game_date: str, *, bypass_throttle: bool = False):
             mkt_type = market.get("type") or ""
 
             market_window = infer_market_window(raw_prop_type, mkt_type)
+
+            # Default normalization
+            final_prop_type = raw_prop_type
             prop_type_base = base_prop_type(raw_prop_type)
+
+            # 🔴 FanDuel milestone ladder override (Q1)
+            if is_obvious_fanduel_q1_milestone(
+                vendor=p["vendor"],
+                prop_type_norm=prop_type_norm,
+                raw_prop_type=raw_prop_type,
+                market_window=market_window,
+                line_value=p.get("line_value"),
+                odds=market.get("odds"),
+            ):
+                market_window = "Q1"
+
+                # 👇 explicit, provider-scoped rename
+                final_prop_type = f"{raw_prop_type}_1q_fanduel"
+
+                # 👇 base stat stays clean
+                prop_type_base = raw_prop_type
+
+
 
             rows.append({
                 "prop_id": p["id"],
@@ -785,28 +902,23 @@ def ingest_player_props(game_date: str, *, bypass_throttle: bool = False):
                 "player_id": p["player_id"],
                 "vendor": p["vendor"],
 
-                # keep the raw prop_type (so nothing breaks)
-                "prop_type": raw_prop_type,
-
-                # ✅ add these two
-                "market_window": market_window,
+                # ✅ corrected prop_type
+                "prop_type": final_prop_type,
                 "prop_type_base": prop_type_base,
 
+                "market_window": market_window,
                 "line_value": p["line_value"],
                 "market_type": mkt_type,
 
-                # over / under
                 "odds_over": market.get("over_odds"),
                 "odds_under": market.get("under_odds"),
-
-                # milestone
                 "milestone_odds": market.get("odds"),
 
-                # timestamps
                 "updated_at": p["updated_at"],
                 "snapshot_ts": now_iso(),
                 "ingested_at": now_iso(),
             })
+
 
 
         sleep_s(RATE["delay"])
@@ -972,6 +1084,140 @@ def ingest_games(
         "date": run_date,
     }
  
+def ingest_game_plays_first3min(
+    game_date: str,
+    *,
+    bypass_throttle: bool = False,
+):
+    job = "plays_first3min"
+
+    # --------------------------------------------------
+    # Throttle
+    # --------------------------------------------------
+    if not bypass_throttle and not throttle(job):
+        print(f"[DEBUG] {job} throttled")
+        return {"status": "throttled"}
+
+    # --------------------------------------------------
+    # Fetch games
+    # --------------------------------------------------
+    games = fetch_games_for_date(game_date)
+    print(f"[DEBUG] {game_date} → games returned: {len(games)}")
+
+    if not games:
+        return {"status": "no_games"}
+
+    rows = []
+
+    # --------------------------------------------------
+    # Loop games
+    # --------------------------------------------------
+    for g in games:
+        game_id = g.get("id")
+        if not game_id:
+            continue
+
+        # --------------------------------------------------
+        # Fetch ALL plays (v1)
+        # --------------------------------------------------
+        plays = http_get(
+            BALDONTLIE_NBA_BASE,
+            "/plays",
+            {
+                "game_id": game_id,
+                "per_page": 200,   # plenty for Q1
+            },
+        ).get("data", [])
+
+        print(f"[DEBUG] game_id={game_id} plays_fetched={len(plays)}")
+
+        # --------------------------------------------------
+        # Loop plays
+        # --------------------------------------------------
+        for p in plays:
+            # ----------------------------
+            # Q1 only
+            # ----------------------------
+            if p.get("period") != 1:
+                continue
+
+            # ----------------------------
+            # Clock parsing
+            # ----------------------------
+            clock = p.get("clock")
+            seconds_remaining = parse_clock_to_seconds(clock)
+
+            if seconds_remaining is None:
+                continue
+
+            # ----------------------------
+            # First 3 minutes only (12:00 → 9:00)
+            # ----------------------------
+            if seconds_remaining < 9 * 60:
+                continue
+
+            # ----------------------------
+            # Stable play_id
+            # ----------------------------
+            play_id = p.get("id") or f"{game_id}_{p.get('order')}"
+
+            # ----------------------------
+            # Append RAW play row
+            # ----------------------------
+            rows.append({
+                "game_id": game_id,
+                "game_date": game_date,
+
+                "play_id": play_id,
+                "order": p.get("order"),
+
+                "period": p.get("period"),
+                "period_display": p.get("period_display"),
+
+                "clock": clock,
+                "seconds_remaining": seconds_remaining,
+
+                "type": p.get("type"),
+                "text": p.get("text"),
+
+                "scoring_play": p.get("scoring_play"),
+                "shooting_play": p.get("shooting_play"),
+                "score_value": p.get("score_value"),
+
+                "home_score": p.get("home_score"),
+                "away_score": p.get("away_score"),
+
+                "team_id": p.get("team", {}).get("id"),
+                "team_abbr": p.get("team", {}).get("abbreviation"),
+
+                "wallclock": p.get("wallclock"),
+                "ingested_at": now_iso(),
+            })
+
+        sleep_s(RATE["delay"])
+
+    # --------------------------------------------------
+    # Write (date-idempotent)
+    # --------------------------------------------------
+    print(f"[DEBUG] rows surviving filters: {len(rows)}")
+
+    if rows:
+        bq_replace_by_date(TABLE_GAME_PLAYS_FIRST3, game_date, rows)
+    else:
+        print(f"[DEBUG] no rows to write for {game_date}")
+
+    mark_run(job, {
+        "date": game_date,
+        "games": len(games),
+        "rows": len(rows),
+    })
+
+    return {
+        "date": game_date,
+        "games": len(games),
+        "rows_inserted": len(rows),
+    }
+
 # ======================================================
 # BACKFILL
 # ======================================================
@@ -1328,6 +1574,18 @@ def route_backfill_games():
         }), 400
 
     return jsonify(backfill_games(start, end))
+
+@app.route("/goat/ingest/plays/first3min")
+def route_ingest_plays_first3min():
+    game_date = request.args.get("date") or yesterday_ny()
+    bypass = request.args.get("bypass", "false").lower() == "true"
+
+    return jsonify(
+        ingest_game_plays_first3min(
+            game_date,
+            bypass_throttle=bypass,
+        )
+    )
 
 
 if __name__ == "__main__":

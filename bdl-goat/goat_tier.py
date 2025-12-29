@@ -1195,7 +1195,7 @@ def ingest_game_plays_first3min(
                 "wallclock": p.get("wallclock"),
 
                 # Audit
-                "ingested_at": datetime.utcnow(),
+                "ingested_at": datetime.utcnow().isoformat(),
             })
 
         print(f"[INGEST] game_id={game_id} rows_accumulated={len(rows)}")

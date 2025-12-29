@@ -24,6 +24,9 @@ git add goat_tier.py
 git commit -m "Changes"
 git push origin main
 
+cd bdl-goat
+source venv/bin/activate
+python goat_tier.py
 
 
 

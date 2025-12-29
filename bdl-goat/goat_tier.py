@@ -1091,23 +1091,25 @@ def ingest_game_plays_first3min(
 ):
     job = "plays_first3min"
 
+    print(f"[INGEST] START date={game_date}")
+
     # --------------------------------------------------
     # Throttle
     # --------------------------------------------------
     if not bypass_throttle and not throttle(job):
-        print(f"[DEBUG] {job} throttled")
+        print(f"[INGEST] throttled")
         return {"status": "throttled"}
 
     # --------------------------------------------------
     # Fetch games
     # --------------------------------------------------
     games = fetch_games_for_date(game_date)
-    print(f"[DEBUG] {game_date} → games returned: {len(games)}")
+    print(f"[INGEST] games_found={len(games)}")
 
     if not games:
         return {"status": "no_games"}
 
-    rows = []
+    rows: list[dict] = []
 
     # --------------------------------------------------
     # Loop games
@@ -1117,105 +1119,106 @@ def ingest_game_plays_first3min(
         if not game_id:
             continue
 
-        # --------------------------------------------------
-        # Fetch ALL plays (v1)
-        # --------------------------------------------------
-        plays = http_get(
-            BALDONTLIE_NBA_BASE,
-            "/plays",
-            {
-                "game_id": game_id,
-                "per_page": 200,   # plenty for Q1
-            },
-        ).get("data", [])
-
-        print(f"[DEBUG] game_id={game_id} plays_fetched={len(plays)}")
+        print(f"[INGEST] game_id={game_id} START")
 
         # --------------------------------------------------
-        # Loop plays
+        # Fetch plays (v1 ONLY)
+        # --------------------------------------------------
+        try:
+            resp = http_get(
+                BALDONTLIE_GAMES_BASE,   # https://api.balldontlie.io/v1
+                "/plays",
+                {
+                    "game_id": game_id,
+                    "per_page": 200,     # v1 max
+                },
+            )
+        except Exception as e:
+            print(f"[ERROR] game_id={game_id} plays_fetch_failed: {e}")
+            continue
+
+        plays = resp.get("data", [])
+        print(f"[INGEST] game_id={game_id} plays_fetched={len(plays)}")
+
+        # --------------------------------------------------
+        # Process plays
         # --------------------------------------------------
         for p in plays:
-            # ----------------------------
-            # Q1 only
-            # ----------------------------
-            if p.get("period") != 1:
-                continue
-
-            # ----------------------------
-            # Clock parsing
-            # ----------------------------
+            period = p.get("period")
             clock = p.get("clock")
-            seconds_remaining = parse_clock_to_seconds(clock)
 
-            if seconds_remaining is None:
+            # Guard rails
+            if period != 1 or not clock:
                 continue
 
-            # ----------------------------
-            # First 3 minutes only (12:00 → 9:00)
-            # ----------------------------
-            if seconds_remaining < 9 * 60:
+            try:
+                mm, ss = clock.split(":")
+                seconds_remaining = int(mm) * 60 + int(ss)
+            except Exception:
                 continue
 
-            # ----------------------------
-            # Stable play_id
-            # ----------------------------
-            play_id = p.get("id") or f"{game_id}_{p.get('order')}"
+            # Only first 3 minutes (12:00 → 9:00)
+            if seconds_remaining < 540:
+                continue
 
-            # ----------------------------
-            # Append RAW play row
-            # ----------------------------
             rows.append({
                 "game_id": game_id,
                 "game_date": game_date,
 
-                "play_id": play_id,
-                "order": p.get("order"),
+                # Play identity
+                "play_id": f"{game_id}_{p.get('order')}",
+                "play_order": p.get("order"),
 
-                "period": p.get("period"),
-                "period_display": p.get("period_display"),
-
-                "clock": clock,
-                "seconds_remaining": seconds_remaining,
-
+                # Raw play metadata
                 "type": p.get("type"),
-                "text": p.get("text"),
+                "description": p.get("text"),
 
-                "scoring_play": p.get("scoring_play"),
+                # Team
+                "team_id": (p.get("team") or {}).get("id"),
+                "team_abbr": (p.get("team") or {}).get("abbreviation"),
+
+                # Player (may be null in v1)
+                "player_id": None,
+                "player_name": None,
+
+                # Flags
                 "shooting_play": p.get("shooting_play"),
+                "scoring_play": p.get("scoring_play"),
+
+                # Scoring
                 "score_value": p.get("score_value"),
 
-                "home_score": p.get("home_score"),
-                "away_score": p.get("away_score"),
-
-                "team_id": p.get("team", {}).get("id"),
-                "team_abbr": p.get("team", {}).get("abbreviation"),
-
+                # Timing
+                "period": period,
+                "clock": clock,
+                "seconds_remaining": seconds_remaining,
                 "wallclock": p.get("wallclock"),
-                "ingested_at": now_iso(),
+
+                # Audit
+                "ingested_at": datetime.utcnow(),
             })
 
-        sleep_s(RATE["delay"])
+        print(f"[INGEST] game_id={game_id} rows_accumulated={len(rows)}")
 
     # --------------------------------------------------
     # Write (date-idempotent)
     # --------------------------------------------------
-    print(f"[DEBUG] rows surviving filters: {len(rows)}")
+    print(f"[INGEST] TOTAL rows_to_write={len(rows)}")
 
     if rows:
         bq_replace_by_date(TABLE_GAME_PLAYS_FIRST3, game_date, rows)
+        print(f"[INGEST] WRITE COMPLETE")
     else:
-        print(f"[DEBUG] no rows to write for {game_date}")
+        print(f"[INGEST] no rows to write")
 
-    mark_run(job, {
-        "date": game_date,
-        "games": len(games),
-        "rows": len(rows),
-    })
+    mark_run(job, {"date": game_date})
+
+    print(f"[INGEST] DONE date={game_date}")
 
     return {
-        "date": game_date,
+        "status": "ok",
         "games": len(games),
-        "rows_inserted": len(rows),
+        "rows": len(rows),
     }
 
 # ======================================================

@@ -1170,7 +1170,7 @@ def ingest_game_plays_first3min(
                 "play_order": p.get("order"),
 
                 # Raw play metadata
-                "type": p.get("type"),
+                "play_type": p.get("type"),
                 "description": p.get("text"),
 
                 # Team

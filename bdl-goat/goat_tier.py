@@ -1099,15 +1099,18 @@ def ingest_game_plays_first3min(
     game_date: str,
     *,
     bypass_throttle: bool = False,
-    debug: bool = True,
 ):
-    job = "game_plays_first3min"
+    job = "plays_first3min"
 
     if not bypass_throttle and not throttle(job):
+        print(f"[DEBUG] {job} throttled")
         return {"status": "throttled"}
 
     games = fetch_games_for_date(game_date)
+    print(f"[DEBUG] {game_date} → games returned: {len(games)}")
+
     rows = []
+    now_ts = datetime.utcnow().isoformat()
 
     for g in games:
         game_id = g.get("id")
@@ -1115,7 +1118,7 @@ def ingest_game_plays_first3min(
             continue
 
         plays = http_get(
-            BALDONTLIE_GAMES_BASE,  # v1 base
+            BALDONTLIE_GAMES_BASE,   # MUST BE v1
             "/plays",
             {
                 "game_id": game_id,
@@ -1124,65 +1127,72 @@ def ingest_game_plays_first3min(
         ).get("data", [])
 
         for p in plays:
-            if p.get("period") != 1:
+            # -----------------------------
+            # Guard: period 1 only
+            # -----------------------------
+            period = p.get("period")
+            if period != 1:
                 continue
 
-            clock = p.get("clock") or "12:00"
-            mins, secs = clock.split(":")
-            seconds_remaining = int(mins) * 60 + int(secs)
-
-            if seconds_remaining < 540:  # 9:00 left = first 3 min elapsed
+            clock = p.get("clock")
+            if not clock or ":" not in clock:
                 continue
+
+            try:
+                mins, secs = clock.split(":")
+                seconds_remaining = int(mins) * 60 + int(secs)
+            except Exception:
+                continue
+
+            # First 3 minutes only (12:00 → 9:00)
+            if seconds_remaining < 540:
+                continue
+
+            team = p.get("team") or {}
 
             row = {
                 "game_id": game_id,
                 "game_date": game_date,
 
                 "play_id": f"{game_id}_{p.get('order')}",
-                "play_sequence": p.get("order"),
+                "play_order": p.get("order"),
 
-                "period": p.get("period"),
+                "play_type": p.get("type"),
+                "play_text": p.get("text"),
+
+                "period": period,
                 "clock": clock,
                 "seconds_remaining": seconds_remaining,
 
-                "play_type": p.get("type"),
-                "description": p.get("text"),
-
-                "scoring_play": bool(p.get("scoring_play")),
-                "shooting_play": bool(p.get("shooting_play")),
+                "scoring_play": p.get("scoring_play", False),
+                "shooting_play": p.get("shooting_play", False),
                 "score_value": p.get("score_value"),
 
-                "player_id": None,
-                "player_name": None,
+                "team_id": team.get("id"),
+                "team_abbr": team.get("abbreviation"),
 
-                "team_id": p.get("team", {}).get("id"),
-                "team_abbr": p.get("team", {}).get("abbreviation"),
+                # Derived flags (basic)
+                "is_tipoff": p.get("type") == "Jumpball",
+                "is_made_shot": p.get("shooting_play") and p.get("scoring_play"),
+                "is_missed_shot": p.get("shooting_play") and not p.get("scoring_play"),
+                "is_first_basket": False,  # computed after ingest
 
                 "wallclock": p.get("wallclock"),
-                "ingested_at": datetime.utcnow().isoformat(),
+                "ingested_at": now_ts,
             }
 
             rows.append(row)
 
-    if debug:
-        print(f"[DEBUG] total rows collected: {len(rows)}")
-        if rows:
-            print("[DEBUG] sample row:")
-            print(json.dumps(rows[0], indent=2))
+    print(f"[DEBUG] rows surviving filters: {len(rows)}")
 
     if rows:
-        bq_replace_by_date(
-            "game_plays_first3min",
-            game_date,
-            rows,
-        )
+        bq_replace_by_date("game_plays_first3min", game_date, rows)
 
     mark_run(job, {"date": game_date})
-
     return {
         "status": "ok",
         "games": len(games),
-        "rows_inserted": len(rows),
+        "rows": len(rows),
     }
 
 # ======================================================

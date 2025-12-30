@@ -432,6 +432,17 @@ def parse_clock_to_seconds(clock) -> Optional[int]:
     except Exception:
         return None
 
+def clock_to_seconds(clock: str) -> int | None:
+    """
+    Converts 'MM:SS' to seconds remaining.
+    """
+    if not clock:
+        return None
+    try:
+        m, s = clock.split(":")
+        return int(m) * 60 + int(s)
+    except Exception:
+        return None
 
 def bq_append(name: str, rows: list):
     if rows:
@@ -1088,82 +1099,86 @@ def ingest_game_plays_first3min(
     game_date: str,
     *,
     bypass_throttle: bool = False,
+    debug: bool = True,
 ):
     job = "plays_first3min"
 
     if not bypass_throttle and not throttle(job):
-        print(f"[DEBUG] {job} throttled")
         return {"status": "throttled"}
 
     games = fetch_games_for_date(game_date)
-    print(f"[DEBUG] {game_date} → games returned: {len(games)}")
-
     if not games:
         return {"status": "no_games"}
 
     rows = []
+    games_checked = 0
+    plays_seen = 0
+    plays_kept = 0
 
     for g in games:
-        game_id = g["id"]
+        game_id = g.get("id")
+        if not game_id:
+            continue
 
-        plays = http_get(
-            BALDONTLIE_NBA_BASE,
+        games_checked += 1
+
+        # ⚠️ IMPORTANT: v1 endpoint
+        resp = http_get(
+            BALDONTLIE_GAMES_BASE,   # https://api.balldontlie.io/v1
             "/plays",
-            {"game_id": game_id, "per_page": 1000},
-        ).get("data", [])
+            {"game_id": game_id, "per_page": 200},
+        )
 
-        print(f"[DEBUG] game_id={game_id} plays_fetched={len(plays)}")
+        plays = resp.get("data", [])
+        plays_seen += len(plays)
 
         for p in plays:
-            # ---- only period 1
             if p.get("period") != 1:
                 continue
 
-            clock = p.get("clock")
-            if not clock or ":" not in clock:
-                continue
-
-            mm, ss = clock.split(":")
-            seconds_remaining = int(mm) * 60 + int(ss)
-
-            # ---- first 3 minutes (12:00 → 9:00)
-            if seconds_remaining < 540:
-                continue
+            seconds_left = clock_to_seconds(p.get("clock"))
+            if seconds_left is None or seconds_left < 9 * 60:
+                continue  # past first 3 minutes
 
             team = p.get("team") or {}
 
-            rows.append({
-                "game_id": game_id,
+            row = {
                 "game_date": game_date,
+                "game_id": game_id,
 
-                "play_id": f"{game_id}_{p.get('order')}",
-                "play_order": p.get("order"),
-
-                "period": p.get("period"),
-                "clock": clock,
-                "seconds_remaining": seconds_remaining,
-
-                "play_type": p.get("type"),
+                "play_index": p.get("order"),
+                "play_category": p.get("type"),
                 "description": p.get("text"),
 
-                "scoring_play": p.get("scoring_play"),
-                "shooting_play": p.get("shooting_play"),
+                "period": p.get("period"),
+                "period_display": p.get("period_display"),
+                "clock": p.get("clock"),
+
+                "home_score": p.get("home_score"),
+                "away_score": p.get("away_score"),
                 "score_value": p.get("score_value"),
 
-                "player_id": None,  # balldontlie v1 plays do NOT include player object
-                "player_name": None,
+                "scoring_play": bool(p.get("scoring_play")),
+                "shooting_play": bool(p.get("shooting_play")),
 
                 "team_id": team.get("id"),
                 "team_abbr": team.get("abbreviation"),
 
-                "wallclock": (
+                "wallclock_ts": (
                     datetime.fromisoformat(p["wallclock"].replace("Z", "+00:00"))
-                    if p.get("wallclock") else None
+                    if p.get("wallclock")
+                    else None
                 ),
                 "ingested_at": datetime.utcnow(),
-            })
+            }
 
-    print(f"[DEBUG] rows surviving filters: {len(rows)}")
+            rows.append(row)
+            plays_kept += 1
+
+    if debug:
+        print(f"[DEBUG] games checked: {games_checked}")
+        print(f"[DEBUG] plays seen: {plays_seen}")
+        print(f"[DEBUG] plays kept (Q1 ≤ 3:00): {plays_kept}")
 
     if rows:
         bq_replace_by_date(
@@ -1172,12 +1187,17 @@ def ingest_game_plays_first3min(
             rows,
         )
 
-    mark_run(job, {"date": game_date})
+    mark_run(job, {
+        "date": game_date,
+        "games": games_checked,
+        "plays_seen": plays_seen,
+        "plays_written": plays_kept,
+    })
 
     return {
         "status": "ok",
-        "games": len(games),
-        "rows": len(rows),
+        "games": games_checked,
+        "plays_written": plays_kept,
     }
 
 # ======================================================

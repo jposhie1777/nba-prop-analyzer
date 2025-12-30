@@ -255,6 +255,65 @@ def get_table_schema(dataset: str, table: str) -> pd.DataFrame:
     return df
 
 # ======================================================
+# DEV: INGEST STATE VIEW
+# ======================================================
+@st.cache_data(ttl=120, show_spinner=False)
+def load_ingest_state() -> pd.DataFrame:
+    sql = """
+    SELECT
+        job_name,
+        last_run_ts,
+        meta
+    FROM `nba_goat_data.ingest_state`
+    ORDER BY last_run_ts DESC
+    """
+    df = load_bq_df(sql)
+
+    if df.empty:
+        return df
+
+    # Parse meta JSON cleanly
+    def parse_meta(x):
+        if x is None:
+            return {}
+        if isinstance(x, dict):
+            return x
+        try:
+            return json.loads(x)
+        except Exception:
+            return {}
+
+    df["meta"] = df["meta"].apply(parse_meta)
+
+    # Optional: extract common fields for display
+    df["date"] = df["meta"].apply(lambda m: m.get("date"))
+    df["games"] = df["meta"].apply(lambda m: m.get("games") or m.get("games_checked"))
+    df["rows"] = df["meta"].apply(lambda m: m.get("rows"))
+
+    df.flags.writeable = False
+    return df
+
+# ======================================================
+# DEV: INGEST STATE HELPERS
+# ======================================================
+def minutes_since(ts):
+    if ts is None or pd.isna(ts):
+        return None
+    return (datetime.utcnow() - ts.replace(tzinfo=None)).total_seconds() / 60.0
+
+
+def stale_style(val):
+    if val is None:
+        return ""
+    # > 120 min = stale
+    if val > 120:
+        return "color:#ef4444;font-weight:700;"
+    # 60–120 min = warning
+    if val > 60:
+        return "color:#f59e0b;font-weight:600;"
+    return "color:#22c55e;"
+
+# ======================================================
 # DEV: BigQuery Stored Procedure Trigger (SAFE)
 # ======================================================
 def trigger_bq_procedure(proc_name: str):
@@ -310,6 +369,45 @@ def render_dev_page():
     st.markdown(f"**Email:** `{get_user_email()}`")
 
     st.divider()
+
+    # ==================================================
+    # 📡 INGESTION STATUS (GOAT)
+    # ==================================================
+    st.subheader("📡 Ingestion Status (GOAT)")
+
+    try:
+        ingest_df = load_ingest_state()
+
+        if ingest_df.empty:
+            st.warning("No ingestion state rows found.")
+        else:
+            ingest_df = ingest_df.copy()
+            ingest_df["mins_ago"] = ingest_df["last_run_ts"].apply(minutes_since)
+
+            display_df = ingest_df[
+                ["job_name", "last_run_ts", "mins_ago", "date", "games", "rows"]
+            ]
+
+            st.dataframe(
+                display_df.style.applymap(
+                    stale_style,
+                    subset=["mins_ago"],
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            st.caption(
+                "🟢 < 60 min • 🟠 60–120 min • 🔴 > 120 min since last successful run\n\n"
+                "Timestamps are UTC. Fields are parsed from ingest_state.meta."
+            )
+
+    except Exception as e:
+        st.error("❌ Failed to load ingestion status")
+        st.code(str(e))
+
+    st.divider()
+
 
     # ==================================================
     # BIGQUERY — STORED PROCEDURE TRIGGERS
@@ -952,7 +1050,7 @@ def load_props(table_name: str) -> pd.DataFrame:
     keep = [
         # IDENTITY / ROUTING
         "player", "player_team",
-        "home_team", "visitor_team", "opponent_team",
+        "home_team", "away_team",
         "market", "line", "bet_type",
         "bookmaker", "price",
         "game_date",
@@ -1096,6 +1194,15 @@ def save_bet_simple(player, market, line, price, bet_type) -> bool:
         keys.discard(_bet_key(old.get("player"), old.get("market"), old.get("line"), old.get("bet_type")))
 
     return True
+
+def safe_team_logo(team_abbr: str | None) -> str:
+    if not team_abbr:
+        return "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
+    return TEAM_LOGOS.get(
+        team_abbr,
+        "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
+    )
+
 
 if "_clipboard" in st.session_state:
     st.toast("Copied — paste into Gambly Bot 🤖")
@@ -1746,8 +1853,13 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         bet_type = f"{row.get('bet_type', '')}"
 
         team = f"{row.get('player_team', '')}"
-        home_team = f"{row.get('home_team', '')}"
-        visitor_team = f"{row.get('visitor_team', '')}"
+        home_team = row.get("home_team")
+        away_team = row.get("away_team")
+
+        home_team = home_team.strip().upper() if isinstance(home_team, str) else None
+        away_team = away_team.strip().upper() if isinstance(away_team, str) else None
+
+
 
         opp = f"{row.get('opponent_team', '')}"
         line = row.get("line")
@@ -1759,8 +1871,10 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         # -----------------------------
         # TEAM LOGOS
         # -----------------------------
-        home_logo = logo(home_team)
-        away_logo = logo(visitor_team)
+        home_logo = safe_team_logo(home_team)
+        away_logo = safe_team_logo(away_team)
+
+
 
         hit = row.get(hit_rate_col)
         implied = row.get("implied_prob")
@@ -1846,9 +1960,10 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
             # ---------- LEFT: MATCHUP ----------
             f"<div style='display:flex;align-items:center;gap:8px;font-size:0.8rem;opacity:0.9;'>"
             f"<img src='{away_logo}' style='width:22px;height:22px;' />"
-            f"<span style='font-weight:600;'>vs</span>"
+            f"<span style='font-weight:700;'>@</span>"
             f"<img src='{home_logo}' style='width:22px;height:22px;' />"
             f"</div>"
+
         
             # ---------- CENTER: PLAYER + MARKET ----------
             f"<div style='text-align:center;'>"

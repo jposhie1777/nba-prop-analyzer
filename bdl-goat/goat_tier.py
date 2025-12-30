@@ -790,29 +790,70 @@ def ingest_stats_advanced(start: str, end: str, *, bypass_throttle=False):
 
 
 # ======================================================
-# LINEUPS
+# LINEUPS (BDL v1 – CORRECT)
 # ======================================================
 def ingest_lineups(start: str, end: str):
-    if not throttle("lineups"):
+    job = "lineups"
+
+    if not throttle(job):
         return {"status": "throttled"}
-    games = paginate(BALDONTLIE_NBA_BASE, "/games", {"start_date": start, "end_date": end})
+
+    games = paginate(
+        BALDONTLIE_NBA_BASE,
+        "/games",
+        {"start_date": start, "end_date": end},
+    )
+
     rows = []
+
     for g in games:
-        for lu in paginate(
+        game_id = g["id"]
+        game_date = g["date"][:10]
+
+        lineups = paginate(
             BALDONTLIE_NBA_BASE,
             "/lineups",
-            {"game_ids[]": g["id"]},  # ✅ correct param
-        ):
+            {"game_ids[]": game_id},
+        )
+
+        for lu in lineups:
+            player = lu.get("player") or {}
+            team = lu.get("team") or {}
+
+            if not player:
+                continue
+
             rows.append({
-                "game_id": g["id"],
-                "team_id": lu["team"]["id"] if lu.get("team") else None,
-                "players": lu.get("players") or lu.get("player_ids") or [],
-                "minutes": lu.get("minutes"),
+                "game_id": game_id,
+                "game_date": game_date,
+
+                "team_id": team.get("id"),
+                "team_abbr": team.get("abbreviation"),
+
+                "player_id": player.get("id"),
+                "player": f'{player.get("first_name")} {player.get("last_name")}',
+
+                "is_starter": lu.get("starter", False),
+                "lineup_position": lu.get("position"),
+
                 "ingested_at": now_iso(),
             })
-    bq_append(TABLE_LINEUPS, rows)
-    mark_run("lineups", {"rows": len(rows)})
-    return {"rows": len(rows)}
+
+        sleep_s(RATE["delay"])
+
+    if rows:
+        # date-scoped idempotency
+        bq_replace_by_date(TABLE_LINEUPS, start, rows)
+
+    mark_run(job, {
+        "games": len(games),
+        "rows": len(rows),
+    })
+
+    return {
+        "games": len(games),
+        "rows": len(rows),
+    }
 
 
 # ======================================================

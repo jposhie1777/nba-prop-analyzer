@@ -1285,7 +1285,7 @@ def upsert_player_injuries(injuries: list[dict]):
 
             "injury_hash": ihash,
             "source": "balldontlie",
-            "updated_at": now,
+            "updated_at": now.isoformat(),
         })
 
     staging = f"{table}_staging"

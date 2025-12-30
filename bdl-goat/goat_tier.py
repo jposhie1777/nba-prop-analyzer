@@ -1292,6 +1292,21 @@ def upsert_player_injuries(injuries: list[dict]):
 
     job_config = bigquery.LoadJobConfig(
         write_disposition="WRITE_TRUNCATE",
+        source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
+        schema=[
+            bigquery.SchemaField("player_id", "INT64"),
+            bigquery.SchemaField("team_id", "INT64"),
+            bigquery.SchemaField("first_name", "STRING"),
+            bigquery.SchemaField("last_name", "STRING"),
+            bigquery.SchemaField("position", "STRING"),
+            bigquery.SchemaField("jersey_number", "STRING"),
+            bigquery.SchemaField("injury_status", "STRING"),
+            bigquery.SchemaField("injury_description", "STRING"),
+            bigquery.SchemaField("expected_return", "STRING"),
+            bigquery.SchemaField("injury_hash", "STRING"),
+            bigquery.SchemaField("source", "STRING"),
+            bigquery.SchemaField("updated_at", "TIMESTAMP"),
+        ],
     )
 
     bq.load_table_from_json(rows, staging, job_config=job_config).result()

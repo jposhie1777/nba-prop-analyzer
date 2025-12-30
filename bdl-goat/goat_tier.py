@@ -21,6 +21,11 @@ load_dotenv()
 PROJECT_ID = os.getenv("PROJECT_ID", "graphite-flare-477419-h7")
 DATASET = os.getenv("GOAT_DATASET", "nba_goat_data")
 
+# ======================================================
+# TABLES
+# ======================================================
+TABLE_PLAYER_INJURIES = "player_injuries"
+TABLE_PLAYER_INJURIES_STAGING = "player_injuries_staging"
 TABLE_STATE = "ingest_state"
 TABLE_ACTIVE_PLAYERS = "active_players"
 TABLE_GAME_STATS_FULL = "player_game_stats_full"
@@ -558,6 +563,16 @@ def base_prop_type(prop_type: str) -> str:
 
     return prop_type
 
+import hashlib
+
+def injury_hash(
+    player_id: int,
+    status: str,
+    description: str,
+    return_date: str,
+) -> str:
+    raw = f"{player_id}|{status}|{description}|{return_date}"
+    return hashlib.md5(raw.encode("utf-8")).hexdigest()
 
 # ======================================================
 # ACTIVE PLAYERS
@@ -1195,6 +1210,104 @@ def ingest_game_plays_first3min(
         "rows": len(rows),
     }
 
+BALDONTLIE_BASE = "https://api.balldontlie.io/v1"
+
+def fetch_all_player_injuries() -> list[dict]:
+    rows = []
+    cursor = None
+
+    headers = {
+        "Authorization": os.getenv("BALDONTLIE_KEY"),
+    }
+
+    while True:
+        params = {"per_page": 100}
+        if cursor:
+            params["cursor"] = cursor
+
+        r = requests.get(
+            f"{BALDONTLIE_BASE}/player_injuries",
+            headers=headers,
+            params=params,
+            timeout=30,
+        )
+        r.raise_for_status()
+
+        payload = r.json()
+        data = payload.get("data", [])
+        meta = payload.get("meta", {})
+
+        rows.extend(data)
+
+        cursor = meta.get("next_cursor")
+        if not cursor:
+            break
+
+    return rows
+    
+def upsert_player_injuries(injuries: list[dict]):
+    if not injuries:
+        return 0
+
+    bq = bigquery.Client(project=PROJECT_ID)
+    table = f"{PROJECT_ID}.{DATASET}.player_injuries"
+
+    now = datetime.now(timezone.utc)
+
+    rows = []
+
+    for item in injuries:
+        p = item.get("player", {})
+
+        status = item.get("status")
+        description = item.get("description")
+        return_date = item.get("return_date")
+
+        ihash = injury_hash(
+            player_id=p.get("id"),
+            status=status,
+            description=description,
+            return_date=return_date,
+        )
+
+        rows.append({
+            "player_id": p.get("id"),
+            "team_id": p.get("team_id"),
+
+            "first_name": p.get("first_name"),
+            "last_name": p.get("last_name"),
+            "position": p.get("position"),
+            "jersey_number": p.get("jersey_number"),
+
+            "injury_status": status,
+            "injury_description": description,
+            "expected_return": return_date,
+
+            "injury_hash": ihash,
+            "source": "balldontlie",
+            "updated_at": now,
+        })
+
+    staging = f"{table}_staging"
+
+    job_config = bigquery.LoadJobConfig(
+        write_disposition="WRITE_TRUNCATE",
+    )
+
+    bq.load_table_from_json(rows, staging, job_config=job_config).result()
+
+    merge_sql = f"""
+    MERGE `{table}` T
+    USING `{staging}` S
+    ON T.injury_hash = S.injury_hash
+    WHEN NOT MATCHED THEN
+      INSERT ROW
+    """
+
+    bq.query(merge_sql).result()
+
+    return len(rows)
+
 # ======================================================
 # BACKFILL
 # ======================================================
@@ -1564,6 +1677,22 @@ def route_ingest_plays_first3min():
         )
     )
 
+@app.route("/goat/ingest/player-injuries", methods=["GET"])
+def ingest_player_injuries():
+    job = "player_injuries"
+
+    if not throttle(job):
+        return jsonify({"status": "throttled"})
+
+    injuries = fetch_all_player_injuries()
+    inserted = upsert_player_injuries(injuries)
+
+    return jsonify({
+        "status": "ok",
+        "rows_seen": len(injuries),
+        "rows_inserted": inserted,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    })
 
 if __name__ == "__main__":
     if os.getenv("RUN_BACKFILL") == "true":

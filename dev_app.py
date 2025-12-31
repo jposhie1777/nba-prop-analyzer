@@ -2268,10 +2268,15 @@ if st.sidebar.button("🔄 Refresh Data"):
     st.rerun()
 
 # Tabs: Props + Saved Bets (only)
-tab_props, tab_saved = st.tabs(["📈 Props", "📋 Saved Bets"])
+tab_props, tab_first_basket, tab_saved = st.tabs(
+    ["📈 Props", "🥇 First Basket", "📋 Saved Bets"]
+)
 
 with tab_saved:
     render_saved_bets()
+    
+with tab_first_basket:
+    render_first_basket_tab()
 
 with tab_props:
     # --------------------------------------------------

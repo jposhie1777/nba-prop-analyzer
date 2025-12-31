@@ -1300,6 +1300,17 @@ def render_saved_bets():
     )
     st.caption("Paste the copied bets into Gambly Bot")
 
+def render_first_basket_tab():
+    st.subheader("🥇 First Basket Projections")
+
+    df = load_first_basket_today()
+
+    if df.empty:
+        st.info("No first basket projections available.")
+        return
+
+    render_first_basket_cards(df)
+
 # ------------------------------------------------------
 # PROP CARD HELPERS
 # ------------------------------------------------------

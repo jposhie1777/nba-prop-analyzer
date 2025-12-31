@@ -1936,10 +1936,15 @@ def render_prop_cards(
         # -----------------------------
         # L10 SPARKLINE
         # -----------------------------
-        l10_values = get_l10_values(row)
-
+        l10_values = get_l10_values(
+            row,
+            market_window=market_window,
+        )
+        
         if not l10_values:
-            st.caption(f"⚠️ No L10 values for {player} | market={raw_market}")
+            st.caption(
+                f"⚠️ No L10 values for {player} | market={raw_market} | window={market_window}"
+            )
 
         # -----------------------------
         # STAT-SPECIFIC ROLLING AVERAGES

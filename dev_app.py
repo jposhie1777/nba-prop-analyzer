@@ -1055,12 +1055,12 @@ def load_first_basket_today() -> pd.DataFrame:
     
 @st.cache_data(ttl=300)
 def load_team_most_used_lineups():
-    query = """
+    sql = """
     SELECT *
     FROM `nba_goat_data.team_most_used_lineups_ui`
     ORDER BY team_abbr
     """
-    return run_bq_query(query)
+    return load_bq_df(sql)
 
 @st.cache_data(ttl=900, show_spinner=True)
 def load_props(table_name: str) -> pd.DataFrame:

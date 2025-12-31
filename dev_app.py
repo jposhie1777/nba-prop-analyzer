@@ -2645,7 +2645,7 @@ with tab_first_basket:
     render_first_basket_tab()
     
 with tab_lineups:
-    render_lineups_tab(
+    render_lineups_tab()
 
 with tab_props:
     # --------------------------------------------------

@@ -203,6 +203,28 @@ def load_bq_df(sql: str) -> pd.DataFrame:
     df.flags.writeable = False
     return df
 
+@st.cache_data(ttl=300)
+def load_projected_starting_lineups_for_teams(team_abbrs: list[str]):
+    team_list = ",".join(f"'{t}'" for t in team_abbrs)
+
+    query = f"""
+    SELECT
+      team_abbr,
+      player,
+      player_id,
+      projected_lineup_spot AS lineup_slot,
+      projection_reason,
+      starter_score,
+      starter_pct,
+      avg_minutes,
+      rotation_tier,
+      projected_at
+    FROM `nba_goat_data.projected_starting_lineups`
+    WHERE team_abbr IN ({team_list})
+    ORDER BY team_abbr, projected_lineup_spot
+    """
+    return load_bq_df(query)
+
 
 # ======================================================
 # DEV: Google Apps Script Trigger
@@ -677,8 +699,22 @@ def load_static_ui():
     st.markdown(
         """
         <style>
+
         /* ==================================================
-           EXPAND WRAPPER (UNCHANGED BEHAVIOR)
+           GLOBAL IMAGE SAFETY CLAMP (CRITICAL)
+           Prevents runaway ESPN / SVG logos
+        ================================================== */
+        img {
+            max-width: 32px !important;
+            max-height: 32px !important;
+            width: auto !important;
+            height: auto !important;
+            object-fit: contain !important;
+            display: inline-block;
+        }
+
+        /* ==================================================
+           EXPAND / COLLAPSE WRAPPER (SHARED)
         ================================================== */
         .prop-card-wrapper {
             position: relative;
@@ -695,7 +731,8 @@ def load_static_ui():
             display: none;
         }
 
-        .prop-card-wrapper summary * {
+        /* Disable pointer events ONLY for collapsed summary content */
+        .prop-card-wrapper summary > * {
             pointer-events: none;
         }
 
@@ -709,11 +746,11 @@ def load_static_ui():
             text-align: center;
             font-size: 0.65rem;
             opacity: 0.55;
-            margin-top: 4px;
+            margin-top: 6px;
         }
 
         /* ==================================================
-           BASE CARD (MATCH TILE LAYOUT)
+           BASE CARD (PROPS / LINEUPS / FIRST BASKET)
         ================================================== */
         .prop-card,
         .prop-card-wrapper summary {
@@ -738,7 +775,7 @@ def load_static_ui():
         }
 
         /* ==================================================
-           CARD GRID (VERTICAL TILE STRUCTURE)
+           CARD GRID (VERTICAL LAYOUT)
         ================================================== */
         .card-grid {
             display: grid;
@@ -747,11 +784,10 @@ def load_static_ui():
         }
 
         /* ==================================================
-           EXPANDED METRICS (BLENDED)
+           EXPANDED METRICS
         ================================================== */
         .expanded-wrap {
             background: rgba(255,255,255,0.03);
-            border: none;
             padding: 10px;
             border-radius: 12px;
         }
@@ -780,25 +816,83 @@ def load_static_ui():
         }
 
         /* ==================================================
-           LINEUPS TAB — TEAM + LINEUP STYLES (NEW)
+           MATCHUP HEADER (CENTERED)
+        ================================================== */
+        .matchup-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            padding: 14px 18px;
+            margin: 28px 0 14px;
+            border-radius: 18px;
+            background: linear-gradient(
+                180deg,
+                rgba(30, 41, 59, 0.9),
+                rgba(2, 6, 23, 0.95)
+            );
+            box-shadow:
+                0 12px 28px rgba(0,0,0,0.6),
+                inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+
+        .matchup-team {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.95rem;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        .matchup-team img {
+            width: 22px !important;
+            height: 22px !important;
+        }
+
+        .matchup-at {
+            font-size: 0.9rem;
+            opacity: 0.6;
+        }
+
+        .matchup-time {
+            margin-left: 14px;
+            font-size: 0.75rem;
+            opacity: 0.6;
+            white-space: nowrap;
+        }
+
+        /* ==================================================
+           TEAM HEADER (LINEUPS)
         ================================================== */
         .team-header-card {
             display: flex;
             align-items: center;
-            padding: 12px 16px;
-            margin: 12px 0 6px 0;
+            justify-content: center;   /* ✅ CENTER CONTENT HORIZONTALLY */
+            gap: 10px;
+            padding: 10px 16px;
+            margin: 12px 0 8px;
             border-radius: 14px;
             background: rgba(255,255,255,0.04);
-            box-shadow:
-                inset 0 1px 0 rgba(255,255,255,0.04);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+            width: 100%;               /* ✅ ENSURE FULL-WIDTH FOR TRUE CENTERING */
+        }
+
+
+        .team-header-card img {
+            width: 22px !important;
+            height: 22px !important;
         }
 
         .team-header-name {
-            font-size: 0.95rem;
-            font-weight: 700;
-            letter-spacing: 0.3px;
+            font-size: 0.9rem;
+            font-weight: 800;
+            letter-spacing: 0.4px;
         }
 
+        /* ==================================================
+           LINEUP LIST
+        ================================================== */
         .lineup-list {
             margin-top: 6px;
         }
@@ -806,7 +900,7 @@ def load_static_ui():
         .lineup-player {
             font-size: 0.82rem;
             padding: 2px 0;
-            line-height: 1.2;
+            line-height: 1.25;
         }
 
         .lineup-player.empty {
@@ -824,11 +918,11 @@ def load_static_ui():
             font-weight: 700;
             margin-bottom: 6px;
         }
+
         </style>
         """,
         unsafe_allow_html=True,
     )
-
 
 load_static_ui()
 
@@ -908,6 +1002,12 @@ def team_abbr(team_name: str) -> str:
     Falls back safely if name not found.
     """
     return TEAM_NAME_TO_CODE.get(team_name, team_name[:3].upper())
+
+CODE_TO_TEAM_NAME = {v: k for k, v in TEAM_NAME_TO_CODE.items()}
+
+def team_full_name(team_abbr: str) -> str:
+    return CODE_TO_TEAM_NAME.get(team_abbr, team_abbr)
+
 
 def logo(team_name: str) -> str:
     code = TEAM_NAME_TO_CODE.get(team_name)
@@ -1054,13 +1154,39 @@ def load_first_basket_today() -> pd.DataFrame:
     return load_bq_df(sql)
     
 @st.cache_data(ttl=300)
-def load_team_most_used_lineups():
-    query = """
-    SELECT *
-    FROM `nba_goat_data.team_most_used_lineups_ui`
-    ORDER BY team_abbr
+def load_team_most_used_lineups_for_teams(team_abbrs: list[str]):
+    team_list = ",".join(f"'{t}'" for t in team_abbrs)
+
+    query = f"""
+    SELECT
+      team_abbr,
+      player,
+      player_id,
+      lineup_slot,
+      times_used,
+      first_used,
+      last_used
+    FROM `nba_goat_data.team_most_used_lineups`
+    WHERE team_abbr IN ({team_list})
+    ORDER BY team_abbr, lineup_slot
     """
     return load_bq_df(query)
+
+
+@st.cache_data(ttl=300)
+def load_todays_games():
+    query = """
+    SELECT
+      game_id,
+      home_team_abbr,
+      away_team_abbr
+    FROM `nba_goat_data.games`
+    WHERE game_date = CURRENT_DATE()
+      AND status != 'Final'
+    ORDER BY start_time_est
+    """
+    return load_bq_df(query)
+
 
 @st.cache_data(ttl=900, show_spinner=True)
 def load_props(table_name: str) -> pd.DataFrame:
@@ -2494,183 +2620,226 @@ def render_first_basket_cards(df: pd.DataFrame):
         for _, row in game_df.iterrows():
             render_first_basket_card(row)
 
-def render_lineup_players(players):
-    # -----------------------------
-    # Normalize first (CRITICAL)
-    # -----------------------------
-    if players is None:
-        names = []
-    elif hasattr(players, "tolist"):  # numpy / pandas
-        names = players.tolist()
-    elif isinstance(players, str):
-        try:
-            parsed = json.loads(players)
-            names = parsed if isinstance(parsed, list) else []
-        except Exception:
-            names = []
-    elif isinstance(players, list):
-        names = players
-    else:
-        names = []
+def render_lineup_player_row(row):
+    player = row.get("player") or "—"
+    slot = row.get("lineup_slot")
 
-    # -----------------------------
-    # Render
-    # -----------------------------
-    if len(names) == 0:
-        return "<div class='lineup-player empty'>No data</div>"
+    slot_html = f"#{int(slot)}" if pd.notna(slot) else ""
 
-    html = []
-    for p in names:
-        if isinstance(p, dict):
-            name = p.get("player_name")
-        else:
-            name = str(p)
+    return (
+        f"<div class='lineup-player'>"
+        f"<strong style='opacity:0.7;margin-right:6px;'>{slot_html}</strong>"
+        f"{player}"
+        f"</div>"
+    )
 
-        if name:
-            html.append(f"<div class='lineup-player'>{name}</div>")
+def render_most_used_lineup_card(team_df: pd.DataFrame):
+    team_df = team_df.sort_values("lineup_slot")
 
-    if not html:
-        return "<div class='lineup-player empty'>No data</div>"
+    players_html = "".join(
+        render_lineup_player_row(row)
+        for _, row in team_df.iterrows()
+    )
 
-    return "".join(html)
+    times_used = team_df["times_used"].iloc[0]
+    first_used = team_df["first_used"].iloc[0]
+    last_used  = team_df["last_used"].iloc[0]
 
-def render_most_used_lineup_card(row):
-    base_card_html = f"""
-    <div class="prop-card">
-        <div class="prop-card-title">Most Used Lineup</div>
+    base_card_html = (
+        f"<div class='prop-card card-grid'>"
+        f"<div class='prop-card-title'>Most Used Lineup</div>"
+        f"<div class='lineup-list'>{players_html}</div>"
+        f"<div class='lineup-subtitle'>Used {times_used} times</div>"
+        f"</div>"
+    )
 
-        <div class="lineup-list">
-            {render_lineup_players(row["most_used_lineup"])}
-        </div>
+    expanded_html = (
+        f"<div class='expanded-wrap'>"
+        f"<div class='expanded-row'>"
+        f"<div class='metric'><span>First Used</span><strong>{first_used}</strong></div>"
+        f"<div class='metric'><span>Last Used</span><strong>{last_used}</strong></div>"
+        f"</div>"
+        f"</div>"
+    )
 
-        <div class="lineup-subtitle">
-            Used {row["times_used"]} times
-        </div>
-    </div>
-    """
+    return (
+        f"<details class='prop-card-wrapper'>"
+        f"<summary>{base_card_html}<div class='expand-hint'>Click to expand ▾</div></summary>"
+        f"<div class='card-expanded'>{expanded_html}</div>"
+        f"</details>"
+    )
 
-    expanded_html = f"""
-    <div class="expanded-metric">First Used: {row["first_used"]}</div>
-    <div class="expanded-metric">Last Used: {row["last_used"]}</div>
-    """
+def render_projected_lineup_card(team_df: pd.DataFrame):
+    team_df = team_df.sort_values("lineup_slot")
 
-    return f"""
-    <details class="prop-card-wrapper">
-      <summary>
-        {base_card_html}
-        <div class="expand-hint">Click to expand ▾</div>
-      </summary>
+    players_html = "".join(
+        render_lineup_player_row(row)
+        for _, row in team_df.iterrows()
+    )
 
-      <div class="prop-card-expanded">
-        {expanded_html}
-      </div>
-    </details>
-    """
-    
-def render_team_header(team_abbr):
-    return f"""
-    <div class="team-header-card">
-        <div class="team-header-name">{team_abbr}</div>
-    </div>
-    """
-    
-def render_team_lineups(row):
-    st.markdown(render_team_header(row["team_abbr"]), unsafe_allow_html=True)
+    projection_reason = team_df["projection_reason"].iloc[0]
+    projected_at = team_df["projected_at"].iloc[0]
+    projected_at_str = (
+        pd.to_datetime(projected_at).strftime("%b %d · %I:%M %p ET")
+        if pd.notna(projected_at)
+        else "—"
+    )
 
-    col1, col2 = st.columns(2)
 
-    with col1:
+    base_card_html = (
+        f"<div class='prop-card card-grid'>"
+        f"<div class='prop-card-title'>Projected Lineup</div>"
+        f"<div class='lineup-list'>{players_html}</div>"
+        f"<div class='lineup-subtitle'>{projection_reason}</div>"
+        f"</div>"
+    )
+
+    expanded_html = (
+        f"<div class='expanded-wrap'>"
+        f"<div class='expanded-row'>"
+        f"<div class='metric'><span>Projected At</span><strong>{projected_at_str}</strong></div>"
+        f"</div>"
+        f"</div>"
+    )
+
+    return (
+        f"<details class='prop-card-wrapper'>"
+        f"<summary>{base_card_html}<div class='expand-hint'>Click to expand ▾</div></summary>"
+        f"<div class='card-expanded'>{expanded_html}</div>"
+        f"</details>"
+    )
+
+def render_matchup_header(row):
+    home = row["home_team_abbr"]
+    away = row["away_team_abbr"]
+
+    home_logo = safe_team_logo(home)
+    away_logo = safe_team_logo(away)
+
+    home_name = team_full_name(home)
+    away_name = team_full_name(away)
+
+    tip = row.get("start_time_est")
+    tip_str = (
+        pd.to_datetime(tip).strftime("%-I:%M %p ET")
+        if tip is not None and not pd.isna(tip)
+        else ""
+    )
+
+    return (
+        f"<div class='matchup-header'>"
+        f"<div class='matchup-team'>"
+        f"<img src='{away_logo}' />"
+        f"<span>{away_name}</span>"
+        f"</div>"
+        f"<div class='matchup-at'>@</div>"
+        f"<div class='matchup-team'>"
+        f"<img src='{home_logo}' />"
+        f"<span>{home_name}</span>"
+        f"</div>"
+        f"<div class='matchup-time'>{tip_str}</div>"
+        f"</div>"
+    )
+
+
+def render_team_header(team_abbr: str):
+    logo_url = safe_team_logo(team_abbr)
+    team_name = team_full_name(team_abbr)
+
+    return (
+        f"<div class='team-header-card'>"
+        f"<img src='{logo_url}' />"
+        f"<div class='team-header-name'>{team_name}</div>"
+        f"</div>"
+    )
+
+
+def render_lineups_tab():
+    # --------------------------------------------------
+    # Load today's games
+    # --------------------------------------------------
+    games_df = load_todays_games()
+
+    if games_df.empty:
+        st.warning("No games today.")
+        return
+
+    # --------------------------------------------------
+    # Determine teams playing today
+    # --------------------------------------------------
+    teams_today = sorted(
+        set(games_df["home_team_abbr"]).union(games_df["away_team_abbr"])
+    )
+
+    # --------------------------------------------------
+    # Load lineup data (filtered to teams playing today)
+    # --------------------------------------------------
+    most_used_df = load_team_most_used_lineups_for_teams(teams_today)
+    projected_df = load_projected_starting_lineups_for_teams(teams_today)
+
+    # --------------------------------------------------
+    # Render by matchup
+    # --------------------------------------------------
+    for _, game in games_df.iterrows():
+        away = game["away_team_abbr"]
+        home = game["home_team_abbr"]
+
+        # -----------------------------
+        # Matchup Header
+        # -----------------------------
         st.markdown(
-            render_most_used_lineup_card(row),
+            render_matchup_header(game),
             unsafe_allow_html=True,
         )
 
-    with col2:
-        st.info("Projected Lineup coming next")
 
-def render_lineups_tab():
-    df = load_team_most_used_lineups()
+        # -----------------------------
+        # Render both teams
+        # -----------------------------
+        for team_abbr in (away, home):
 
-    if df.empty:
-        st.warning("No lineup data available.")
-        return
+            # Team header (logo + name)
+            st.markdown(
+                render_team_header(team_abbr),
+                unsafe_allow_html=True,
+            )
 
-    for team_abbr, team_df in df.groupby("team_abbr"):
-        row = team_df.iloc[0]
-        render_team_lineups(row)
+            col1, col2 = st.columns(2)
 
-        st.markdown("<hr />", unsafe_allow_html=True)
+            team_most_used = most_used_df[
+                most_used_df["team_abbr"] == team_abbr
+            ]
 
-# ------------------------------------------------------
-# DEV TAB CONTENT (keep, but avoid heavy data pulls)
-# ------------------------------------------------------
-def trigger_apps_script(task: str):
-    if not APPS_SCRIPT_URL or not APPS_SCRIPT_DEV_TOKEN:
-        raise RuntimeError("Missing APPS_SCRIPT_URL or APPS_SCRIPT_DEV_TOKEN")
+            team_projected = projected_df[
+                projected_df["team_abbr"] == team_abbr
+            ]
 
-    resp = requests.post(
-        APPS_SCRIPT_URL,
-        headers={"Content-Type": "application/json"},
-        params={"token": APPS_SCRIPT_DEV_TOKEN},
-        json={"task": task},
-        timeout=60,
-    )
-    data = resp.json()
-    if not data.get("success"):
-        raise RuntimeError(data.get("message") or "Apps Script error")
-    return data.get("message") or "OK"
+            # -------------------------
+            # Most Used Lineup
+            # -------------------------
+            with col1:
+                if team_most_used.empty:
+                    st.info("No historical lineup available")
+                else:
+                    st.markdown(
+                        render_most_used_lineup_card(team_most_used),
+                        unsafe_allow_html=True,
+                    )
 
-def render_dev_page():
-    st.title("⚙️ DEV CONTROL PANEL (Minimal)")
-    st.caption("Restricted • low-memory tools only")
-    st.markdown(f"**Email:** `{get_user_email()}`")
+            # -------------------------
+            # Projected Lineup
+            # -------------------------
+            with col2:
+                if team_projected.empty:
+                    st.info("No projected lineup available")
+                else:
+                    st.markdown(
+                        render_projected_lineup_card(team_projected),
+                        unsafe_allow_html=True,
+                    )
 
-    if st.button("⬅ Back to Main App"):
-        nav_to("main")
-        st.rerun()
-
-    st.divider()
-    st.subheader("📄 Google Apps Script")
-    tasks = [
-        ("NBA Alternate Props", "NBA_ALT_PROPS"),
-        ("NBA Game Odds", "NBA_GAME_ODDS"),
-        ("NCAAB Game Odds", "NCAAB_GAME_ODDS"),
-        ("Run ALL (Daily Runner)", "ALL"),
-    ]
-    for label, task in tasks:
-        c1, c2 = st.columns([3, 1])
-        with c1:
-            st.markdown(f"**{label}**")
-        with c2:
-            if st.button("▶ Run", key=f"apps_{task}", use_container_width=True):
-                try:
-                    with st.spinner(f"Running {label}…"):
-                        msg = trigger_apps_script(task)
-                    st.success(f"✅ {msg}")
-                except Exception as e:
-                    st.error("❌ Apps Script trigger failed")
-                    st.code(str(e))
-
-    st.divider()
-    st.subheader("🔎 Quick Health Checks")
-    if st.button("Test BigQuery connection"):
-        try:
-            _ = load_bq_df("SELECT 1 AS ok")
-            st.success("✅ BigQuery OK")
-        except Exception as e:
-            st.error("❌ BigQuery failed")
-            st.code(str(e))
-
-# ------------------------------------------------------
-# EARLY ROUTE: DEV TAB MUST NOT LOAD MAIN DATA
-# ------------------------------------------------------
-active_tab = get_active_tab()
-if active_tab == "dev":
-    if not is_dev_user():
-        st.error("⛔ Access denied")
-        st.stop()
-    render_dev_page()
-    st.stop()
+        # Divider between matchups
+        st.markdown("<hr/>", unsafe_allow_html=True)
 
 # ------------------------------------------------------
 # MAIN APP

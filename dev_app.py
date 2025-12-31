@@ -1055,12 +1055,12 @@ def load_first_basket_today() -> pd.DataFrame:
     
 @st.cache_data(ttl=300)
 def load_team_most_used_lineups():
-    sql = """
+    query = """
     SELECT *
     FROM `nba_goat_data.team_most_used_lineups_ui`
     ORDER BY team_abbr
     """
-    return load_bq_df(sql)
+    return run_bq_query(query)
 
 @st.cache_data(ttl=900, show_spinner=True)
 def load_props(table_name: str) -> pd.DataFrame:
@@ -2469,13 +2469,26 @@ def render_first_basket_cards(df: pd.DataFrame):
             render_first_basket_card(row)
 
 def render_lineup_players(players):
-    if not players:
+    if players is None:
         return "<div class='lineup-player empty'>No data</div>"
 
-    return "".join(
-        f"<div class='lineup-player'>{p['player_name']}</div>"
-        for p in players
-    )
+    html = []
+
+    for p in players:
+        # Handle dict case (future-proof)
+        if isinstance(p, dict):
+            name = p.get("player_name", "")
+        else:
+            # Handle string / numpy scalar
+            name = str(p)
+
+        if name:
+            html.append(f"<div class='lineup-player'>{name}</div>")
+
+    if not html:
+        return "<div class='lineup-player empty'>No data</div>"
+
+    return "".join(html)
 
 def render_most_used_lineup_card(row):
     base_card_html = f"""

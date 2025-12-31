@@ -1004,6 +1004,15 @@ def load_first_basket_today() -> pd.DataFrame:
     WHERE fb.game_date = CURRENT_DATE("America/New_York")
     """
     return load_bq_df(sql)
+    
+@st.cache_data(ttl=300)
+def load_team_most_used_lineups():
+    query = """
+    SELECT *
+    FROM `nba_goat_data.team_most_used_lineups_ui`
+    ORDER BY team_abbr
+    """
+    return run_bq_query(query)
 
 @st.cache_data(ttl=900, show_spinner=True)
 def load_props(table_name: str) -> pd.DataFrame:
@@ -2411,6 +2420,82 @@ def render_first_basket_cards(df: pd.DataFrame):
         for _, row in game_df.iterrows():
             render_first_basket_card(row)
 
+def render_lineup_players(players):
+    if not players:
+        return "<div class='lineup-player empty'>No data</div>"
+
+    return "".join(
+        f"<div class='lineup-player'>{p['player_name']}</div>"
+        for p in players
+    )
+
+def render_most_used_lineup_card(row):
+    base_card_html = f"""
+    <div class="prop-card">
+        <div class="prop-card-title">Most Used Lineup</div>
+
+        <div class="lineup-list">
+            {render_lineup_players(row["most_used_lineup"])}
+        </div>
+
+        <div class="lineup-subtitle">
+            Used {row["times_used"]} times
+        </div>
+    </div>
+    """
+
+    expanded_html = f"""
+    <div class="expanded-metric">First Used: {row["first_used"]}</div>
+    <div class="expanded-metric">Last Used: {row["last_used"]}</div>
+    """
+
+    return f"""
+    <details class="prop-card-wrapper">
+      <summary>
+        {base_card_html}
+        <div class="expand-hint">Click to expand ▾</div>
+      </summary>
+
+      <div class="prop-card-expanded">
+        {expanded_html}
+      </div>
+    </details>
+    """
+    
+def render_team_header(team_abbr):
+    return f"""
+    <div class="team-header-card">
+        <div class="team-header-name">{team_abbr}</div>
+    </div>
+    """
+    
+def render_team_lineups(row):
+    st.markdown(render_team_header(row["team_abbr"]), unsafe_allow_html=True)
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown(
+            render_most_used_lineup_card(row),
+            unsafe_allow_html=True,
+        )
+
+    with col2:
+        st.info("Projected Lineup coming next")
+
+def render_lineups_tab():
+    df = load_team_most_used_lineups()
+
+    if df.empty:
+        st.warning("No lineup data available.")
+        return
+
+    for team_abbr, team_df in df.groupby("team_abbr"):
+        row = team_df.iloc[0]
+        render_team_lineups(row)
+
+        st.markdown("<hr />", unsafe_allow_html=True)
+
 # ------------------------------------------------------
 # DEV TAB CONTENT (keep, but avoid heavy data pulls)
 # ------------------------------------------------------
@@ -2510,6 +2595,9 @@ with tab_saved:
     
 with tab_first_basket:
     render_first_basket_tab()
+    
+with tab_lineups:
+    render_lineups_tab(
 
 with tab_props:
     # --------------------------------------------------

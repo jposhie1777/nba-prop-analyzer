@@ -2197,6 +2197,97 @@ def render_prop_cards(
             unsafe_allow_html=True,
         )
 
+def render_first_basket_card(row: pd.Series):
+    """
+    Renders a single First Basket prop-style card
+    """
+
+    player = row.get("player")
+    team = row.get("team_abbr")
+
+    home = row.get("home_team_abbr")
+    away = row.get("away_team_abbr")
+
+    prob = row.get("first_basket_probability")
+    rank_game = row.get("rank_within_game")
+    rank_team = row.get("rank_within_team")
+
+    starter_pct = row.get("starter_pct")
+    first_shot_share = row.get("first_shot_share")
+    pts_per_min = row.get("pts_per_min")
+    team_first_score_rate = row.get("team_first_score_rate")
+    tip_win_pct = row.get("tip_win_pct")
+
+    # logos (reuse your existing helpers)
+    home_logo = safe_team_logo(home)
+    away_logo = safe_team_logo(away)
+
+    # -----------------------------
+    # CARD HEADER (MATCHUP)
+    # -----------------------------
+    header_html = (
+        f"<div style='display:flex;align-items:center;gap:8px;'>"
+        f"<img src='{away_logo}' width='22' />"
+        f"<strong>@</strong>"
+        f"<img src='{home_logo}' width='22' />"
+        f"</div>"
+    )
+
+    # -----------------------------
+    # CENTER TITLE
+    # -----------------------------
+    title_html = (
+        f"<div style='text-align:center;'>"
+        f"<div style='font-weight:800;font-size:1.1rem;'>"
+        f"{player}"
+        f"</div>"
+        f"<div style='opacity:0.7;font-size:0.8rem;'>"
+        f"First Basket"
+        f"</div>"
+        f"</div>"
+    )
+
+    # -----------------------------
+    # RIGHT METRIC
+    # -----------------------------
+    right_html = (
+        f"<div style='text-align:right;'>"
+        f"<div style='font-size:1.1rem;font-weight:800;'>"
+        f"{fmt_pct(prob)}"
+        f"</div>"
+        f"<div style='opacity:0.6;font-size:0.7rem;'>"
+        f"Prob · #{rank_game}"
+        f"</div>"
+        f"</div>"
+    )
+
+    # -----------------------------
+    # BASE CARD
+    # -----------------------------
+    base_card_html = (
+        f"<div class='prop-card card-grid'>"
+        f"<div style='display:grid;grid-template-columns:1fr 2fr 1fr;'>"
+        f"{header_html}"
+        f"{title_html}"
+        f"{right_html}"
+        f"</div>"
+        f"</div>"
+    )
+
+    st.markdown(
+        f"<details class='prop-card-wrapper'>"
+        f"<summary>{base_card_html}</summary>"
+        f"</details>",
+        unsafe_allow_html=True,
+    )
+    
+def render_first_basket_cards(df: pd.DataFrame):
+    """
+    Renders all First Basket cards for the tab
+    """
+    for _, row in df.iterrows():
+        render_first_basket_card(row)
+
 # ------------------------------------------------------
 # DEV TAB CONTENT (keep, but avoid heavy data pulls)
 # ------------------------------------------------------

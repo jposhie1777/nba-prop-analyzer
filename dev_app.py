@@ -2210,64 +2210,51 @@ def render_prop_cards(
 
 def render_first_basket_card(row: pd.Series):
     """
-    Renders a single First Basket prop-style card
+    Renders a single First Basket PLAYER card
     """
 
     player = row.get("player")
     team = row.get("team_abbr")
 
-    home = row.get("home_team_abbr")
-    away = row.get("away_team_abbr")
-
     prob = row.get("first_basket_probability")
     rank_game = row.get("rank_within_game")
-    rank_team = row.get("rank_within_team")
 
-    starter_pct = row.get("starter_pct")
-    first_shot_share = row.get("first_shot_share")
-    pts_per_min = row.get("pts_per_min")
-    team_first_score_rate = row.get("team_first_score_rate")
-    tip_win_pct = row.get("tip_win_pct")
-
-    # logos (reuse your existing helpers)
-    home_logo = safe_team_logo(home)
-    away_logo = safe_team_logo(away)
+    # logo
+    team_logo = safe_team_logo(team)
 
     # -----------------------------
-    # CARD HEADER (MATCHUP)
+    # LEFT: TEAM LOGO
     # -----------------------------
-    header_html = (
-        f"<div style='display:flex;align-items:center;gap:8px;'>"
-        f"<img src='{away_logo}' width='22' />"
-        f"<strong>@</strong>"
-        f"<img src='{home_logo}' width='22' />"
+    left_html = (
+        f"<div style='display:flex;align-items:center;'>"
+        f"<img src='{team_logo}' width='26' />"
         f"</div>"
     )
 
     # -----------------------------
-    # CENTER TITLE
+    # CENTER: PLAYER + LABEL
     # -----------------------------
     title_html = (
         f"<div style='text-align:center;'>"
         f"<div style='font-weight:800;font-size:1.1rem;'>"
         f"{player}"
         f"</div>"
-        f"<div style='opacity:0.7;font-size:0.8rem;'>"
+        f"<div style='opacity:0.6;font-size:0.8rem;'>"
         f"First Basket"
         f"</div>"
         f"</div>"
     )
 
     # -----------------------------
-    # RIGHT METRIC
+    # RIGHT: PROBABILITY + RANK
     # -----------------------------
     right_html = (
         f"<div style='text-align:right;'>"
-        f"<div style='font-size:1.1rem;font-weight:800;'>"
+        f"<div style='font-size:1.15rem;font-weight:900;'>"
         f"{fmt_pct(prob)}"
         f"</div>"
         f"<div style='opacity:0.6;font-size:0.7rem;'>"
-        f"Prob · #{rank_game}"
+        f"#{rank_game} in game"
         f"</div>"
         f"</div>"
     )
@@ -2277,8 +2264,10 @@ def render_first_basket_card(row: pd.Series):
     # -----------------------------
     base_card_html = (
         f"<div class='prop-card card-grid'>"
-        f"<div style='display:grid;grid-template-columns:1fr 2fr 1fr;'>"
-        f"{header_html}"
+        f"<div style='display:grid;"
+        f"grid-template-columns:48px 1fr 80px;"
+        f"align-items:center;'>"
+        f"{left_html}"
         f"{title_html}"
         f"{right_html}"
         f"</div>"
@@ -2286,18 +2275,91 @@ def render_first_basket_card(row: pd.Series):
     )
 
     st.markdown(
-        f"<details class='prop-card-wrapper'>"
-        f"<summary>{base_card_html}</summary>"
-        f"</details>",
+        f"""
+        <details class="prop-card-wrapper">
+          <summary>
+            {base_card_html}
+            <div class="expand-hint">Click to expand ▾</div>
+          </summary>
+        </details>
+        """,
         unsafe_allow_html=True,
     )
     
 def render_first_basket_cards(df: pd.DataFrame):
     """
-    Renders all First Basket cards for the tab
+    Renders First Basket cards grouped by game
     """
-    for _, row in df.iterrows():
-        render_first_basket_card(row)
+
+    if df.empty:
+        return
+
+    # Ensure clean ordering
+    df = df.sort_values(["game_id", "rank_within_game"])
+
+    for game_id, game_df in df.groupby("game_id"):
+
+        # -----------------------------
+        # GAME MATCHUP HEADER
+        # -----------------------------
+        home = game_df["home_team_abbr"].iloc[0]
+        away = game_df["away_team_abbr"].iloc[0]
+
+        home_logo = safe_team_logo(home)
+        away_logo = safe_team_logo(away)
+
+        st.markdown(
+            f"""
+            <div style="
+                display:flex;
+                align-items:center;
+                gap:10px;
+                margin:18px 6px 8px;
+                font-weight:800;
+                font-size:1.0rem;
+                opacity:0.95;
+            ">
+                <img src="{away_logo}" width="22"/>
+                <span>@</span>
+                <img src="{home_logo}" width="22"/>
+                <span>{away} @ {home}</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # -----------------------------
+        # OPTIONAL GAME CONTEXT ROW
+        # -----------------------------
+        team_rate = game_df["team_first_score_rate"].iloc[0]
+        tip_pct = game_df["tip_win_pct"].iloc[0]
+
+        st.markdown(
+            f"""
+            <div style="
+                margin-left:40px;
+                margin-bottom:10px;
+                font-size:0.75rem;
+                opacity:0.65;
+            ">
+                Team First Score: <strong>{fmt_pct(team_rate)}</strong>
+                &nbsp;•&nbsp;
+                Tip Win Rate: <strong>{fmt_pct(tip_pct)}</strong>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # -----------------------------
+        # PLAYER CARDS (TOP N)
+        # -----------------------------
+        game_df = (
+            game_df
+            .sort_values("rank_within_game", ascending=True)
+        )
+        
+        for _, row in game_df.iterrows():
+            render_first_basket_card(row)
 
 # ------------------------------------------------------
 # DEV TAB CONTENT (keep, but avoid heavy data pulls)

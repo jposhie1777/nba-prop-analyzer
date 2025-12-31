@@ -2208,6 +2208,51 @@ def render_prop_cards(
             unsafe_allow_html=True,
         )
 
+def build_first_basket_expanded_html(row: pd.Series) -> str:
+    starter_pct = row.get("starter_pct")
+    first_shot_share = row.get("first_shot_share")
+    usage_l10 = row.get("usage_l10")
+    pts_per_min = row.get("pts_per_min")
+
+    team_first_score_rate = row.get("team_first_score_rate")
+    tip_win_pct = row.get("tip_win_pct")
+
+    return f"""
+    <div class="card-expanded">
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px;">
+        <div>
+          <div class="metric-label">Starter %</div>
+          <div class="metric-value">{fmt_pct(starter_pct)}</div>
+        </div>
+        <div>
+          <div class="metric-label">First Shot Share</div>
+          <div class="metric-value">{fmt_pct(first_shot_share)}</div>
+        </div>
+        <div>
+          <div class="metric-label">Usage (L10)</div>
+          <div class="metric-value">{fmt_pct(usage_l10)}</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+        <div>
+          <div class="metric-label">PTS / Min</div>
+          <div class="metric-value">{fmt_num(pts_per_min, 2)}</div>
+        </div>
+        <div>
+          <div class="metric-label">Team First Score</div>
+          <div class="metric-value">{fmt_pct(team_first_score_rate)}</div>
+        </div>
+        <div>
+          <div class="metric-label">Tip Win %</div>
+          <div class="metric-value">{fmt_pct(tip_win_pct)}</div>
+        </div>
+      </div>
+
+    </div>
+    """
+
 def render_first_basket_card(row: pd.Series):
     """
     Renders a single First Basket PLAYER card
@@ -2274,6 +2319,8 @@ def render_first_basket_card(row: pd.Series):
         f"</div>"
     )
 
+    expanded_html = build_first_basket_expanded_html(row)
+
     st.markdown(
         f"""
         <details class="prop-card-wrapper">
@@ -2281,6 +2328,9 @@ def render_first_basket_card(row: pd.Series):
             {base_card_html}
             <div class="expand-hint">Click to expand ▾</div>
           </summary>
+    
+          {expanded_html}
+    
         </details>
         """,
         unsafe_allow_html=True,

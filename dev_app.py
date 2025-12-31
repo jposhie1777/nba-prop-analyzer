@@ -986,6 +986,25 @@ def load_trends_q1() -> pd.DataFrame:
     df.flags.writeable = False
     return df
 
+@st.cache_data(ttl=300, show_spinner=True)
+def load_first_basket_today() -> pd.DataFrame:
+    sql = """
+    SELECT
+        fb.*,
+        g.home_team_abbr,
+        g.away_team_abbr,
+        t.tip_win_pct,
+        t.jump_attempts
+    FROM nba_goat_data.first_basket_projection_today fb
+    JOIN nba_goat_data.games g
+      ON fb.game_id = g.game_id
+    LEFT JOIN nba_goat_data.tip_win_metrics t
+      ON t.entity_type = 'team'
+     AND t.team_abbr = fb.team_abbr
+    WHERE fb.game_date = CURRENT_DATE("America/New_York")
+    """
+    return load_bq_df(sql)
+
 @st.cache_data(ttl=900, show_spinner=True)
 def load_props(table_name: str) -> pd.DataFrame:
     # --------------------------------------------------

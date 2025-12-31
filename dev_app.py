@@ -412,6 +412,44 @@ def read_sheet_values(sheet_id: str, range_name: str) -> list[list[str]]:
 
     return resp.get("values", [])
 
+def render_query_health_panel(domain="goat"):
+    st.subheader("📊 Query Health")
+
+    df = load_query_registry(domain)
+
+    if df.empty:
+        st.info("No queries registered.")
+        return
+
+    df = df.copy()
+    df["mins_ago"] = df["last_run_ts"].apply(minutes_ago)
+    df["status_icon"] = df["status"].map(QUERY_STATUS_ICON)
+
+    display_df = df[
+        [
+            "status_icon",
+            "query_name",
+            "mins_ago",
+            "expected_frequency_mins",
+            "target_table",
+        ]
+    ].rename(
+        columns={
+            "status_icon": "",
+            "query_name": "Query",
+            "mins_ago": "Last Run (min ago)",
+            "expected_frequency_mins": "Expected (min)",
+            "target_table": "Target Table",
+        }
+    )
+
+    st.dataframe(
+        display_df,
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    st.caption("🟢 healthy • 🟠 stale • ⚫ never run")
 
 # ======================================================
 # DEV PAGE OVERRIDE (CRASH-SAFE)
@@ -468,6 +506,14 @@ def render_dev_page():
 
     st.divider()
 
+    # ==================================================
+    # 📊 QUERY HEALTH (GOAT)
+    # ==================================================
+    try:
+        render_query_health_panel(domain="goat")
+    except Exception as e:
+        st.error("❌ Failed to load query health")
+        st.code(str(e))
 
     # ==================================================
     # BIGQUERY — STORED PROCEDURE TRIGGERS

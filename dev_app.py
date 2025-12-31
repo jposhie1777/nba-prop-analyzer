@@ -1982,7 +1982,7 @@ def render_prop_cards(
             f"{player}"
             f"</div>"
             f"<div style='font-size:0.85rem;opacity:0.7;'>"
-            f"{market_label} · {bet_type.upper()} {fmt_num(line, 1)}"
+            f"{market_label} – {bet_type.upper()} {fmt_num(line, 1)}"
             f"</div>"
             f"</div>"
         

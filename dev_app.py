@@ -1699,6 +1699,32 @@ def normalize_market_key(market: str) -> str:
 
     return ""
 
+def normalize_lineup_players(players):
+    """
+    Safely normalize BigQuery ARRAY / numpy / JSON into list[str]
+    """
+    if players is None:
+        return []
+
+    # NumPy array or pandas Series
+    if hasattr(players, "tolist"):
+        players = players.tolist()
+
+    # JSON string
+    if isinstance(players, str):
+        try:
+            parsed = json.loads(players)
+            if isinstance(parsed, list):
+                return [str(p) for p in parsed]
+        except Exception:
+            return []
+
+    # Python list
+    if isinstance(players, list):
+        return [str(p) for p in players if p]
+
+    return []
+
 def get_l10_values(row, *, market_window: str):
     key = normalize_market_key(row.get("market"))
 
@@ -2469,17 +2495,35 @@ def render_first_basket_cards(df: pd.DataFrame):
             render_first_basket_card(row)
 
 def render_lineup_players(players):
+    # -----------------------------
+    # Normalize first (CRITICAL)
+    # -----------------------------
     if players is None:
+        names = []
+    elif hasattr(players, "tolist"):  # numpy / pandas
+        names = players.tolist()
+    elif isinstance(players, str):
+        try:
+            parsed = json.loads(players)
+            names = parsed if isinstance(parsed, list) else []
+        except Exception:
+            names = []
+    elif isinstance(players, list):
+        names = players
+    else:
+        names = []
+
+    # -----------------------------
+    # Render
+    # -----------------------------
+    if len(names) == 0:
         return "<div class='lineup-player empty'>No data</div>"
 
     html = []
-
-    for p in players:
-        # Handle dict case (future-proof)
+    for p in names:
         if isinstance(p, dict):
-            name = p.get("player_name", "")
+            name = p.get("player_name")
         else:
-            # Handle string / numpy scalar
             name = str(p)
 
         if name:

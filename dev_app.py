@@ -1060,7 +1060,7 @@ def load_team_most_used_lineups():
     FROM `nba_goat_data.team_most_used_lineups_ui`
     ORDER BY team_abbr
     """
-    return run_bq_query(query)
+    return load_bq_df(query)
 
 @st.cache_data(ttl=900, show_spinner=True)
 def load_props(table_name: str) -> pd.DataFrame:

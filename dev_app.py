@@ -1833,7 +1833,13 @@ def build_prop_cards(card_df: pd.DataFrame, hit_rate_col: str) -> pd.DataFrame:
     out.flags.writeable = False
     return out
 
-def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
+def render_prop_cards(
+    df: pd.DataFrame,
+    hit_rate_col: str,
+    hit_label: str,
+    *,
+    market_window: str,
+):
     if df.empty:
         st.info(f"No props match your filters.")
         return
@@ -2503,6 +2509,7 @@ with tab_props:
         df=page_df,
         hit_rate_col=window_col,
         hit_label=f_window,
+        market_window=market_window,
     )
 
     record_memory_checkpoint()

@@ -1612,33 +1612,52 @@ def normalize_market_key(market: str) -> str:
 
     return ""
 
-def get_l10_values(row):
+def get_l10_values(row, *, market_window: str):
     key = normalize_market_key(row.get("market"))
 
+    # -----------------------
+    # Q1 PROPS
+    # -----------------------
+    if market_window == "Q1":
+        if key == "points":
+            return coerce_numeric_list(row.get("pts_q1_last10_list"))
+        if key == "rebounds":
+            return coerce_numeric_list(row.get("reb_q1_last10_list"))
+        if key == "assists":
+            return coerce_numeric_list(row.get("ast_q1_last10_list"))
+        if key == "steals":
+            return coerce_numeric_list(row.get("stl_q1_last10_list"))
+        if key == "blocks":
+            return coerce_numeric_list(row.get("blk_q1_last10_list"))
+        if key == "pra":
+            return coerce_numeric_list(row.get("pra_q1_last10_list"))
+        if key == "points_rebounds":
+            return coerce_numeric_list(row.get("pr_q1_last10_list"))
+        if key == "points_assists":
+            return coerce_numeric_list(row.get("pa_q1_last10_list"))
+        if key == "rebounds_assists":
+            return coerce_numeric_list(row.get("ra_q1_last10_list"))
+        return []
+
+    # -----------------------
+    # FULL GAME (EXISTING)
+    # -----------------------
     if key == "points":
         return coerce_numeric_list(row.get("pts_last10_list"))
-
     if key == "rebounds":
         return coerce_numeric_list(row.get("reb_last10_list"))
-
     if key == "assists":
         return coerce_numeric_list(row.get("ast_last10_list"))
-
     if key == "steals":
-        return coerce_numeric_list(row.get("stl_last10_list"))  # ✅ FIX
-
+        return coerce_numeric_list(row.get("stl_last10_list"))
     if key == "blocks":
-        return coerce_numeric_list(row.get("blk_last10_list"))  # ✅ FIX
-
+        return coerce_numeric_list(row.get("blk_last10_list"))
     if key == "pra":
         return coerce_numeric_list(row.get("pra_last10_list"))
-
-    if key == "points_assists":
-        return coerce_numeric_list(row.get("pa_last10_list"))
-
     if key == "points_rebounds":
         return coerce_numeric_list(row.get("pr_last10_list"))
-
+    if key == "points_assists":
+        return coerce_numeric_list(row.get("pa_last10_list"))
     if key == "rebounds_assists":
         return coerce_numeric_list(row.get("ra_last10_list"))
 

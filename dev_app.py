@@ -316,6 +316,32 @@ def load_ingest_state() -> pd.DataFrame:
     return df
 
 # ======================================================
+# DEV: QUERY REGISTRY (QUERY HEALTH)
+# ======================================================
+@st.cache_data(ttl=120, show_spinner=False)
+def load_query_registry(domain: str | None = None) -> pd.DataFrame:
+    where = ""
+    if domain:
+        where = f"WHERE domain = '{domain}'"
+
+    sql = f"""
+    SELECT
+        query_id,
+        query_name,
+        domain,
+        status,
+        last_run_ts,
+        expected_frequency_mins,
+        target_table
+    FROM `graphite-flare-477419-h7.ops.query_registry`
+    {where}
+    ORDER BY query_name
+    """
+    df = load_bq_df(sql)
+    df.flags.writeable = False
+    return df
+
+# ======================================================
 # DEV: INGEST STATE HELPERS
 # ======================================================
 def minutes_since(ts):
@@ -334,6 +360,18 @@ def stale_style(val):
     if val > 60:
         return "color:#f59e0b;font-weight:600;"
     return "color:#22c55e;"
+
+def minutes_ago(ts):
+    if ts is None or pd.isna(ts):
+        return None
+    return (datetime.utcnow() - ts.replace(tzinfo=None)).total_seconds() / 60.0
+
+
+QUERY_STATUS_ICON = {
+    "healthy": "🟢",
+    "stale": "🟠",
+    "never_run": "⚫",
+}
 
 # ======================================================
 # DEV: BigQuery Stored Procedure Trigger (SAFE)

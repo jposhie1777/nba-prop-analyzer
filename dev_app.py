@@ -1855,7 +1855,12 @@ def render_prop_cards(
         player = f"{row.get('player', '')}"
         raw_market = row.get("market")
         norm = normalize_market_key(raw_market)
-        market_label = pretty_market_label(raw_market)
+        base_label = pretty_market_label(raw_market)
+
+        if market_window == "Q1":
+            market_label = f"{base_label} 1st Quarter"
+        else:
+            market_label = base_label
         bet_type = f"{row.get('bet_type', '')}"
 
         team = f"{row.get('player_team', '')}"

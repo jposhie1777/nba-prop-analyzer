@@ -2272,7 +2272,10 @@ with tab_props:
     # --------------------------------------------------
     # LOAD PLAYER TRENDS (1 ROW PER PLAYER)
     # --------------------------------------------------
-    trends_df = load_trends()
+    if market_window == "Q1":
+        trends_df = load_trends_q1()
+    else:
+        trends_df = load_trends()
 
     if not trends_df["player"].is_unique:
         st.error("❌ Trends table must be 1 row per player (merge aborted)")

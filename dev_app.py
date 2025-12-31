@@ -699,7 +699,8 @@ def load_static_ui():
             pointer-events: none;
         }
 
-        .prop-card-wrapper .card-expanded {
+        .prop-card-wrapper .card-expanded,
+        .prop-card-expanded {
             margin-top: 6px;
             pointer-events: auto;
         }
@@ -777,10 +778,57 @@ def load_static_ui():
             font-weight: 700;
             color: #ffffff;
         }
+
+        /* ==================================================
+           LINEUPS TAB — TEAM + LINEUP STYLES (NEW)
+        ================================================== */
+        .team-header-card {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            margin: 12px 0 6px 0;
+            border-radius: 14px;
+            background: rgba(255,255,255,0.04);
+            box-shadow:
+                inset 0 1px 0 rgba(255,255,255,0.04);
+        }
+
+        .team-header-name {
+            font-size: 0.95rem;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+        }
+
+        .lineup-list {
+            margin-top: 6px;
+        }
+
+        .lineup-player {
+            font-size: 0.82rem;
+            padding: 2px 0;
+            line-height: 1.2;
+        }
+
+        .lineup-player.empty {
+            opacity: 0.5;
+        }
+
+        .lineup-subtitle {
+            margin-top: 8px;
+            font-size: 0.72rem;
+            opacity: 0.65;
+        }
+
+        .prop-card-title {
+            font-size: 0.9rem;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
         </style>
         """,
         unsafe_allow_html=True,
     )
+
 
 load_static_ui()
 
@@ -2585,9 +2633,9 @@ if st.sidebar.button("🔄 Refresh Data"):
     st.cache_data.clear()
     st.rerun()
 
-# Tabs: Props + Saved Bets (only)
-tab_props, tab_first_basket, tab_saved = st.tabs(
-    ["📈 Props", "🥇 First Basket", "📋 Saved Bets"]
+# Tabs: Props + Lineups + First Basket + Saved Bets
+tab_props, tab_lineups, tab_first_basket, tab_saved = st.tabs(
+    ["📈 Props", "🧩 Lineups", "🥇 First Basket", "📋 Saved Bets"]
 )
 
 with tab_saved:

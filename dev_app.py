@@ -1980,10 +1980,16 @@ def render_prop_cards(
         # -----------------------------
         # L10 SPARKLINE
         # -----------------------------
+        dates = (
+            row.get("last10_q1_dates")
+            if market_window == "Q1"
+            else row.get("last10_dates")
+        )
+        
         spark_html = build_l10_sparkline_html(
             values=l10_values,
             line_value=line,
-            dates=row.get("last10_dates"),
+            dates=dates,
         )
 
 

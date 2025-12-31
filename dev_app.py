@@ -975,6 +975,17 @@ def load_trends() -> pd.DataFrame:
     df.flags.writeable = False
     return df
 
+@st.cache_data(ttl=1800, show_spinner=False)
+def load_trends_q1() -> pd.DataFrame:
+    sql = """
+    SELECT *
+    FROM `nba_goat_data.historical_player_trends_q1`
+    """
+    df = load_bq_df(sql)
+    df["player"] = df["player"].astype(str)
+    df.flags.writeable = False
+    return df
+
 @st.cache_data(ttl=900, show_spinner=True)
 def load_props(table_name: str) -> pd.DataFrame:
     # --------------------------------------------------

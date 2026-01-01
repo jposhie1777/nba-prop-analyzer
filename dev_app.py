@@ -2378,13 +2378,6 @@ def render_prop_cards(
             f"</div>"
         
             # ==================================================
-            # SPARKLINE (CENTERPIECE)
-            # ==================================================
-            f"<div style='display:flex;justify-content:center;margin-top:6px;'>"
-            f"{spark_html}"
-            f"</div>"
-        
-            # ==================================================
             # BOTTOM STATS ROW (L10 | OPP RANK | CONFIDENCE)
             # ==================================================
             f"<div style='display:grid;"
@@ -2421,6 +2414,13 @@ def render_prop_cards(
         # --------------------------------------------------
         expanded_html = (
             f"<div class='expanded-wrap'>"
+        
+            # ==================================================
+            # SPARKLINE (MOVED HERE)
+            # ==================================================
+            f"<div style='display:flex;justify-content:center;margin-bottom:10px;'>"
+            f"{build_l10_sparkline_html(values=l10_values, line_value=line, dates=dates)}"
+            f"</div>"
         
             # ==================================================
             # ROW 1 — AVERAGES

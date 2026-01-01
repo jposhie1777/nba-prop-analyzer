@@ -2468,18 +2468,33 @@ def render_prop_cards(
         # RENDER CARD
         # ==================================================
         st.markdown(
-            f"<div class='prop-card-shell'>"
-            f"{save_icon_html}"
-            f"<details class='prop-card-wrapper'>"
-            f"<summary>"
-            f"{base_card_html}"
-            f"<div class='expand-hint'>View trends ▾</div>"
-            f"</summary>"
-            f"<div class='card-expanded'>"
-            f"{expanded_html}"
-            f"</div>"
-            f"</details>"
-            f"</div>",
+            f"""
+            <div class="prop-card-shell">
+        
+              <!-- 🔹 SAVE BUTTON (OUTSIDE SUMMARY) -->
+              <div class="card-actions">
+                <div class="card-action-btn{' saved' if is_saved else ''}"
+                     onclick="document.querySelector(
+                       'button[data-testid=\\\"baseButton-{save_key}\\\"]'
+                     )?.click(); event.stopPropagation();">
+                  💾
+                </div>
+              </div>
+        
+              <!-- 🔹 EXPANDABLE CARD -->
+              <details class="prop-card-wrapper">
+                <summary>
+                  {base_card_html}
+                  <div class="expand-hint">View trends ▾</div>
+                </summary>
+        
+                <div class="card-expanded">
+                  {expanded_html}
+                </div>
+              </details>
+        
+            </div>
+            """,
             unsafe_allow_html=True,
         )
         

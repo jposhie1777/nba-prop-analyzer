@@ -2372,12 +2372,14 @@ def render_prop_cards(
         # SAVE ICON (VISUAL ONLY)
         # ==================================================
         save_icon_html = (
-            "<div class='card-actions'>"
+            f"<div class='card-actions'>"
             f"<div class='card-action-btn{' saved' if is_saved else ''}' "
-            f"onclick=\"document.querySelector('button[data-testid=\\\"baseButton-{save_key}\\\"]').click();\">"
-            "💾"
-            "</div>"
-            "</div>"
+            f"onclick=\"document.querySelector("
+            f"'button[data-testid=\\\\\\\"baseButton-{save_key}\\\\\\\"']"
+            f")?.click();\">"
+            f"💾"
+            f"</div>"
+            f"</div>"
         )
 
         # ==================================================

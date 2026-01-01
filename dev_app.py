@@ -35,6 +35,12 @@ import psutil  # ✅ must be before memory helpers
 import math
 from goat_auth import call_goat
 
+# ------------------------------------------------------
+# ENV — MUST BE EARLY
+# ------------------------------------------------------
+PROJECT_ID = os.getenv("PROJECT_ID", "")
+DATASET = "nba_goat_data"
+
 
 # ======================================================
 # MEMORY TRACKING HELPERS (DEFINE BEFORE CALLING)
@@ -159,13 +165,25 @@ DEV_SP_TABLES = {
 # DEV: GOAT BIGQUERY TABLES (SCHEMA ONLY)
 # ------------------------------------------------------
 DEV_GOAT_TABLES = {
-    "GOAT – Core Reference": {
-        "Active Players": {
+    "GOAT – Ingest / Control": {
+        "Ingest State": {
             "dataset": "nba_goat_data",
-            "table": "active_players",
+            "table": "ingest_state",
         },
     },
-    "GOAT – Player Game Stats": {
+
+    "GOAT – Defense Metrics": {
+        "Opponent Position Defense (Full)": {
+            "dataset": "nba_goat_data",
+            "table": "opponent_position_defense",
+        },
+        "Opponent Position Defense (Q1)": {
+            "dataset": "nba_goat_data",
+            "table": "opponent_position_defense_q1",
+        },
+    },
+
+    "GOAT – Player Stats": {
         "Player Game Stats (Full)": {
             "dataset": "nba_goat_data",
             "table": "player_game_stats_full",
@@ -174,9 +192,35 @@ DEV_GOAT_TABLES = {
             "dataset": "nba_goat_data",
             "table": "player_game_stats_period",
         },
-        "Player Game Stats (Advanced)": {
+        "Player Advanced Rollups": {
             "dataset": "nba_goat_data",
-            "table": "player_game_stats_advanced",
+            "table": "player_advanced_rollups",
+        },
+    },
+
+    "GOAT – Props": {
+        "Props (Full Enriched)": {
+            "dataset": "nba_goat_data",
+            "table": "props_full_enriched",
+        },
+        "Props (Q1 Enriched)": {
+            "dataset": "nba_goat_data",
+            "table": "props_q1_enriched",
+        },
+        "Player Prop Odds": {
+            "dataset": "nba_goat_data",
+            "table": "player_prop_odds",
+        },
+    },
+
+    "GOAT – Other": {
+        "Player Injuries": {
+            "dataset": "nba_goat_data",
+            "table": "player_injuries",
+        },
+        "Tip Win Metrics": {
+            "dataset": "nba_goat_data",
+            "table": "tip_win_metrics",
         },
     },
 }
@@ -525,21 +569,25 @@ def render_dev_page():
 
     BQ_PROCS = [
         ("🐐 GOAT Daily Pipeline (ALL)", "run_daily_goat_pipeline"),
+        ("Defense + Tip Metrics", "build_defense_and_tip_metrics"),
+        ("Props Enriched (Full + Q1)", "build_props_enriched"),
+        ("Historical Player Trends", "build_historical_player_trends"),
     ]
-    
+
     for label, proc in BQ_PROCS:
         c1, c2 = st.columns([3, 1])
-    
+
         with c1:
             st.markdown(f"**{label}**")
-            st.caption(f"`{DEV_BQ_DATASET}.{proc}`")
-    
+            st.caption(f"`nba_goat_data.{proc}()`")
+
         with c2:
             if st.button("▶ Run", key=f"run_{proc}", use_container_width=True):
                 with st.spinner(f"Running {proc}…"):
                     trigger_bq_procedure(proc)
-    
+
     st.divider()
+
     
 
     # ==================================================
@@ -994,84 +1042,60 @@ def load_static_ui():
 
         </style>
 
-        <script>
-        (function () {
-
-            let startX = null;
-            let startY = null;
-            let activeCard = null;
-
-            // -----------------------------
-            // POINTER DOWN
-            // -----------------------------
-            document.addEventListener('pointerdown', function (e) {
-                console.log("🟢 POINTER DOWN");
-
-                const card = e.target.closest('.prop-card-wrapper');
-                if (!card) {
-                    console.log("❌ NO CARD FOUND");
-                    return;
-                }
-
-                startX = e.clientX;
-                startY = e.clientY;
-                activeCard = card;
-
-                console.log("✅ CARD SET");
-            }, { passive: true });
-
-            // -----------------------------
-            // POINTER UP
-            // -----------------------------
-            document.addEventListener('pointerup', function (e) {
-                console.log("🔵 POINTER UP");
-
-                if (!startX || !startY || !activeCard) {
-                    console.log("❌ MISSING STATE");
-                    return;
-                }
-
-                const dx = e.clientX - startX;
-                const dy = e.clientY - startY;
-
-                console.log("➡️ dx:", dx, "⬆️ dy:", dy);
-
-                startX = startY = null;
-
-                // Require horizontal intent
-                if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) {
-                    console.log("↕️ NOT A HORIZONTAL SWIPE");
-                    activeCard = null;
-                    return;
-                }
-
-                // Right swipe = save
-                if (dx > 0) {
-                    console.log("💾 RIGHT SWIPE — ATTEMPT SAVE");
-
-                    const btn = activeCard
-                        .closest('.prop-row')
-                        ?.querySelector('button');
-
-                    if (btn) {
-                        console.log("✅ BUTTON FOUND — CLICKING");
-                        btn.click();
-                    } else {
-                        console.log("❌ SAVE BUTTON NOT FOUND");
-                    }
-                }
-
-                activeCard = null;
-            }, { passive: true });
-
-        })();
-        </script>
-
         """,
         unsafe_allow_html=True,
     )
 
 load_static_ui()
+
+import streamlit.components.v1 as components
+
+def swipe_listener():
+    components.html(
+        """
+        <script>
+        (function () {
+            let startX = null;
+            let startY = null;
+            let lastCard = null;
+
+            window.addEventListener("pointerdown", e => {
+                lastCard = e.target.closest(".swipe-card");
+                if (!lastCard) return;
+                startX = e.clientX;
+                startY = e.clientY;
+            });
+
+            window.addEventListener("pointerup", e => {
+                if (!lastCard || startX === null) return;
+
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+
+                startX = startY = null;
+
+                if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) && dx > 0) {
+                    const betLine = lastCard.dataset.betLine;
+                    if (!betLine) return;
+
+                    window.parent.postMessage(
+                        {
+                            streamlit: true,
+                            key: "_swipe_bet_line",
+                            value: betLine
+                        },
+                        "*"
+                    );
+                }
+
+                lastCard = null;
+            });
+        })();
+        </script>
+        """,
+        height=0,
+    )
+
 
 # ------------------------------------------------------
 # LOGOS (STATIC)
@@ -1161,6 +1185,28 @@ def logo(team_name: str) -> str:
     if not code:
         return "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
     return TEAM_LOGOS.get(code)
+
+def render_props_last_updated():
+    df = load_ingest_state()
+    row = df[df["job_name"] == "Player Props"]
+
+    if row.empty:
+        st.caption("⚪ Props update time unknown")
+        return
+
+    ts = row["last_run_ts"].iloc[0]
+    mins = minutes_since(ts)
+
+    if mins is None:
+        label = "⚪ Unknown"
+    elif mins < 5:
+        label = "🟢 Updated just now"
+    elif mins < 15:
+        label = f"🟡 Updated {int(mins)} min ago"
+    else:
+        label = f"🔴 Updated {int(mins)} min ago"
+
+    st.caption(f"**Props Data:** {label}")
 
 # -------------------------------
 # Sportsbook Logos
@@ -2670,7 +2716,10 @@ def render_prop_cards(
             st.markdown(
                 f"""
                 <details class="prop-card-wrapper">
-                <summary class="swipe-card">
+                <summary
+                    class="swipe-card"
+                    data-bet-line="{bet_line}"
+                >
                     {base_card_html}
                     <div class="expand-hint">Click to expand ▾</div>
                 </summary>
@@ -3114,6 +3163,14 @@ def render_lineups_tab():
 # ------------------------------------------------------
 st.title("Pulse Sports Analytics — Minimal Core")
 
+# ✅ REGISTER SWIPE LISTENER (ONCE, GLOBAL)
+swipe_listener()
+
+# ✅ HANDLE SWIPE SAVE (PART 4)
+if "_swipe_bet_line" in st.session_state:
+    handle_save_bet(st.session_state["_swipe_bet_line"])
+    del st.session_state["_swipe_bet_line"]
+
 # Sidebar: Dev Tools link (no heavy work)
 if IS_DEV and is_dev_user():
     st.sidebar.divider()
@@ -3142,6 +3199,7 @@ with tab_lineups:
     render_lineups_tab()
 
 with tab_props:
+    render_props_last_updated()
     # --------------------------------------------------
     # MARKET WINDOW (FULL / Q1)
     # --------------------------------------------------

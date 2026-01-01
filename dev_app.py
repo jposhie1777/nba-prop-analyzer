@@ -2462,7 +2462,7 @@ def render_prop_cards(
             key=save_key,
             on_click=handle_save_bet,
             args=(bet_line,),
-        ))
+        )
 
 def build_first_basket_expanded_html(row: pd.Series) -> str:
     starter_pct = row.get("starter_pct")

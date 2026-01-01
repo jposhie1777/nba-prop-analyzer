@@ -2667,9 +2667,17 @@ def render_prop_cards(
         line_str = fmt_num(line, 1)
         odds_str = fmt_odds(odds)
 
+        # ----------------------------------
+        # MARKET LABEL (FULL vs Q1)
+        # ----------------------------------
+        if market_window == "Q1":
+            market_label_saved = f"{pretty_market_label(raw_market)} (Q1)"
+        else:
+            market_label_saved = pretty_market_label(raw_market)
+        
         bet_line = (
             f"{player} | "
-            f"{pretty_market_label(raw_market)} | "
+            f"{market_label_saved} | "
             f"{line_str} | "
             f"{odds_str} | "
             f"{bet_type}"

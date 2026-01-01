@@ -918,6 +918,47 @@ def load_static_ui():
             color: #ffffff;
         }
 
+        /* ================================
+           CARD SAVE ACTION
+        ================================ */
+        .prop-card {
+            position: relative;
+        }
+        
+        .card-actions {
+            position: absolute;
+            top: 12px;
+            right: 14px;
+            display: flex;
+            gap: 8px;
+            opacity: 0.55;
+            transition: opacity 0.15s ease;
+            z-index: 20;
+        }
+        
+        .prop-card:hover .card-actions {
+            opacity: 1;
+        }
+        
+        .card-action-btn {
+            cursor: pointer;
+            padding: 6px 7px;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.06);
+            font-size: 0.85rem;
+            transition: background 0.15s ease, transform 0.1s ease;
+        }
+        
+        .card-action-btn:hover {
+            background: rgba(255,255,255,0.12);
+            transform: translateY(-1px);
+        }
+        
+        .card-action-btn.saved {
+            background: rgba(34,197,94,0.18);
+            color: #22c55e;
+        }
+
         /* ==================================================
            MATCHUP HEADER (CENTERED)
         ================================================== */

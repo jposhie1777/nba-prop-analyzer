@@ -2582,17 +2582,16 @@ def render_first_basket_card(row: pd.Series):
     expanded_html = build_first_basket_expanded_html(row)
 
     st.markdown(
-        f"""
-        <details class="prop-card-wrapper">
-          <summary>
-            {base_card_html}
-            <div class="expand-hint">Click to expand ▾</div>
-          </summary>
-    
-          {expanded_html}
-    
-        </details>
-        """,
+        f"<div class='prop-card-shell'>"
+        f"{save_icon_html}"
+        f"<details class='prop-card-wrapper'>"
+        f"<summary>"
+        f"{base_card_html}"
+        f"<div class='expand-hint'>Click to expand ▾</div>"
+        f"</summary>"
+        f"{expanded_html}"
+        f"</details>"
+        f"</div>",
         unsafe_allow_html=True,
     )
     

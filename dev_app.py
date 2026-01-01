@@ -998,7 +998,7 @@ def load_static_ui():
             let activeCard = null;
 
             document.addEventListener('touchstart', function (e) {
-                const card = e.target.closest('.swipe-card');
+                const card = e.target.closest('.prop-card-wrapper');
                 if (!card) return;
 
                 const t = e.touches[0];

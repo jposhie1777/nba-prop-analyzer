@@ -31,7 +31,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
-import psutil  # must be before memory helpers
+import psutil # must be before memory helpers
 import math
 from goat_auth import call_goat
 

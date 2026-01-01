@@ -1418,20 +1418,34 @@ def load_props(table_name: str) -> pd.DataFrame:
         is_q1 = df["market_window"].eq("Q1")
     
         # -----------------------------
-        # Rolling averages
+        # Rolling averages (SAFE)
         # -----------------------------
-        df.loc[is_q1, "avg_stat_l5"]  = df.loc[is_q1, "avg_l5"]
-        df.loc[is_q1, "avg_stat_l10"] = df.loc[is_q1, "avg_l10"]
-        df.loc[is_q1, "avg_stat_l20"] = df.loc[is_q1, "avg_l20"]
+        if "avg_l5" in df.columns:
+            df.loc[is_q1, "avg_stat_l5"] = df.loc[is_q1, "avg_l5"]
+    
+        if "avg_l10" in df.columns:
+            df.loc[is_q1, "avg_stat_l10"] = df.loc[is_q1, "avg_l10"]
+    
+        if "avg_l20" in df.columns:
+            df.loc[is_q1, "avg_stat_l20"] = df.loc[is_q1, "avg_l20"]
     
         # -----------------------------
-        # L20 distribution
+        # L20 distribution (SAFE)
         # -----------------------------
-        df.loc[is_q1, "dist20_hit_rate"]        = df.loc[is_q1, "hit_rate_l20"]
-        df.loc[is_q1, "dist20_clear_1p_rate"]   = df.loc[is_q1, "clear_1p_pct_l20"]
-        df.loc[is_q1, "dist20_clear_2p_rate"]   = df.loc[is_q1, "clear_2p_pct_l20"]
-        df.loc[is_q1, "dist20_fail_bad_rate"]   = df.loc[is_q1, "bad_miss_pct_l20"]
-        df.loc[is_q1, "dist20_avg_margin"]      = df.loc[is_q1, "avg_margin_l20"]
+        if "hit_rate_l20" in df.columns:
+            df.loc[is_q1, "dist20_hit_rate"] = df.loc[is_q1, "hit_rate_l20"]
+    
+        if "clear_1p_pct_l20" in df.columns:
+            df.loc[is_q1, "dist20_clear_1p_rate"] = df.loc[is_q1, "clear_1p_pct_l20"]
+    
+        if "clear_2p_pct_l20" in df.columns:
+            df.loc[is_q1, "dist20_clear_2p_rate"] = df.loc[is_q1, "clear_2p_pct_l20"]
+    
+        if "bad_miss_pct_l20" in df.columns:
+            df.loc[is_q1, "dist20_fail_bad_rate"] = df.loc[is_q1, "bad_miss_pct_l20"]
+    
+        if "avg_margin_l20" in df.columns:
+            df.loc[is_q1, "dist20_avg_margin"] = df.loc[is_q1, "avg_margin_l20"]
 
     # --------------------------------------------------
     # Q1 OPPONENT DEFENSE → STAT-AWARE

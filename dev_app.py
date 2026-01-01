@@ -381,9 +381,9 @@ QUERY_STATUS_ICON = {
 def trigger_bq_procedure(proc_name: str):
     try:
         client = get_dev_bq_client()
-        sql = f"CALL `{DEV_BQ_DATASET}.{proc_name}`()"
+        sql = f"CALL `nba_goat_data.{proc_name}`()"
         job = client.query(sql)
-        job.result()  # wait, but pull no data
+        job.result()
         st.success(f"✅ {proc_name} completed")
     except Exception as e:
         st.error(f"❌ {proc_name} failed")

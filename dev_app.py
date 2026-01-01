@@ -979,6 +979,11 @@ def load_static_ui():
             right: 14px;
             z-index: 50; /* above summary */
         }
+        
+        button[data-testid^="baseButton-save_"] {
+            display: none !important;
+        }
+        
         /* ==================================================
            MATCHUP HEADER (CENTERED)
         ================================================== */

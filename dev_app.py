@@ -883,20 +883,24 @@ def load_static_ui():
         /* Mobile layout */
         @media (max-width: 640px) {
             .prop-row {
-                flex-direction: column;
-                gap: 8px;
+                flex-direction: row;          /* 👈 KEEP LEFT-SIDE */
+                align-items: stretch;
+                gap: 0;
             }
-
+        
             .prop-row .save-wrap {
-                margin-right: 0;
+                margin-right: -10px;
+                z-index: 10;
             }
-
+        
             .prop-row .save-wrap div[data-testid="stButton"] > button {
-                width: 100% !important;
-                min-width: 100% !important;
-                height: 44px !important;
-                min-height: 44px !important;
+                width: 44px !important;
+                min-width: 44px !important;
+                height: 100% !important;
+                min-height: 88px !important;
+        
                 font-size: 16px !important;
+                border-radius: 12px !important;
             }
         }
 

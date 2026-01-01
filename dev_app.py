@@ -1017,7 +1017,7 @@ def load_static_ui():
                 startX = startY = null;
 
                 /* Require strong horizontal intent */
-                if (Math.abs(dx) < 80 || Math.abs(dx) < Math.abs(dy)) {
+                if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) {
                     activeCard = null;
                     return;
                 }

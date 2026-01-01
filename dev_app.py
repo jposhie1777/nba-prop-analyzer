@@ -889,10 +889,17 @@ def load_static_ui():
             display: none;
         }
 
-        /* Prevent save button / swipe from triggering expand */
-        .prop-card-wrapper summary > * {
+        /* Allow swipe detection on summary */
+        .swipe-card {
+            pointer-events: auto;
+            touch-action: pan-y; /* allow vertical scroll, detect horizontal swipe */
+        }
+
+        /* Still prevent inner content from hijacking clicks */
+        .swipe-card > * {
             pointer-events: none;
         }
+
 
         .prop-card-wrapper .card-expanded {
             margin-top: 6px;
@@ -1016,18 +1023,16 @@ def load_static_ui():
                 }
 
                 if (dx > 0) {
-                    const saveKey = activeCard.dataset.saveKey;
-                    if (saveKey) {
-                        const btn = document.querySelector(
-                            `button[key="${saveKey}"]`
-                        );
-                        if (btn) {
-                            btn.click();
-                            activeCard.style.boxShadow = "0 0 0 2px #22c55e";
-                            setTimeout(() => {
-                                activeCard.style.boxShadow = "";
-                            }, 400);
-                        }
+                    const btn = activeCard
+                        .closest('.prop-row')
+                        ?.querySelector('button');
+
+                    if (btn) {
+                        btn.click();
+                        activeCard.style.boxShadow = "0 0 0 2px #22c55e";
+                        setTimeout(() => {
+                            activeCard.style.boxShadow = "";
+                        }, 400);
                     }
                 }
 
@@ -2638,7 +2643,7 @@ def render_prop_cards(
             st.markdown(
                 f"""
                 <details class="prop-card-wrapper">
-                <summary>
+                <summary class="swipe-card">
                     {base_card_html}
                     <div class="expand-hint">Click to expand ▾</div>
                 </summary>
@@ -2646,6 +2651,7 @@ def render_prop_cards(
                     {expanded_html}
                 </div>
                 </details>
+
                 """,
                 unsafe_allow_html=True,
             )

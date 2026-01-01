@@ -2357,7 +2357,10 @@ def render_prop_cards(
         # ==================================================
         save_icon_html = (
             "<div class='card-actions'>"
-            f"<div class='card-action-btn{' saved' if is_saved else ''}'>💾</div>"
+            f"<div class='card-action-btn{' saved' if is_saved else ''}' "
+            f"onclick=\"event.stopPropagation();\">"
+            "💾"
+            "</div>"
             "</div>"
         )
 

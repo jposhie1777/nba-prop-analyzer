@@ -1447,20 +1447,30 @@ def load_props(table_name: str) -> pd.DataFrame:
         if "avg_margin_l20" in df.columns:
             df.loc[is_q1, "dist20_avg_margin"] = df.loc[is_q1, "avg_margin_l20"]
 
+    
     # --------------------------------------------------
-    # Q1 OPPONENT DEFENSE → STAT-AWARE
+    # Q1 OPPONENT ALLOWED AVGS → STAT-AWARE (SAFE)
     # --------------------------------------------------
-    if "market_window" in df.columns:
+    if (
+        "market_window" in df.columns
+        and "market" in df.columns
+    ):
         is_q1 = df["market_window"].eq("Q1")
     
-        # rank
-        df.loc[is_q1 & df["market"].str.contains("assists", case=False), "opp_pos_ast_rank"] = df.loc[is_q1, "opp_def_rank"]
-        df.loc[is_q1 & df["market"].str.contains("points",  case=False), "opp_pos_pts_rank"] = df.loc[is_q1, "opp_def_rank"]
-        df.loc[is_q1 & df["market"].str.contains("rebounds",case=False), "opp_pos_reb_rank"] = df.loc[is_q1, "opp_def_rank"]
-
-        df.loc[is_q1 & df["market"].str.contains("assists", case=False), "opp_pos_ast_allowed_avg"] = df.loc[is_q1, "opp_ast_allowed_avg"]
-        df.loc[is_q1 & df["market"].str.contains("points",  case=False), "opp_pos_pts_allowed_avg"] = df.loc[is_q1, "opp_pts_allowed_avg"]
-        df.loc[is_q1 & df["market"].str.contains("rebounds",case=False), "opp_pos_reb_allowed_avg"] = df.loc[is_q1, "opp_reb_allowed_avg"]
+        # Assists
+        if "opp_ast_allowed_avg" in df.columns:
+            mask_ast = is_q1 & df["market"].str.contains("assists", case=False, na=False)
+            df.loc[mask_ast, "opp_pos_ast_allowed_avg"] = df.loc[mask_ast, "opp_ast_allowed_avg"]
+    
+        # Points
+        if "opp_pts_allowed_avg" in df.columns:
+            mask_pts = is_q1 & df["market"].str.contains("points", case=False, na=False)
+            df.loc[mask_pts, "opp_pos_pts_allowed_avg"] = df.loc[mask_pts, "opp_pts_allowed_avg"]
+    
+        # Rebounds
+        if "opp_reb_allowed_avg" in df.columns:
+            mask_reb = is_q1 & df["market"].str.contains("rebounds", case=False, na=False)
+            df.loc[mask_reb, "opp_pos_reb_allowed_avg"] = df.loc[mask_reb, "opp_reb_allowed_avg"]
         
     # -------------------------------------------------
     # MARKET NORMALIZATION (GOAT → APP)

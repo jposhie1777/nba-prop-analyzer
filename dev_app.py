@@ -2626,7 +2626,10 @@ def render_prop_cards(
         with card_col:
             st.markdown(
                 f"""
-                <details class="prop-card-wrapper">
+                <details
+                    class="prop-card-wrapper swipe-card"
+                    data-save-key="{save_key}"
+                >
                 <summary>
                     {base_card_html}
                     <div class="expand-hint">Click to expand ▾</div>

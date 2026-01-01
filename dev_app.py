@@ -842,21 +842,17 @@ def load_static_ui():
             min-width: 52px !important;
             height: 100% !important;
             min-height: 96px !important;
-
             padding: 0 !important;
             border-radius: 14px !important;
-
             border: 1px solid rgba(255,255,255,0.12) !important;
             background: linear-gradient(
                 180deg,
                 rgba(15, 23, 42, 0.95),
                 rgba(2, 6, 23, 0.98)
             ) !important;
-
             box-shadow:
                 0 12px 28px rgba(0,0,0,0.6),
                 inset 0 1px 0 rgba(255,255,255,0.05);
-
             font-size: 20px !important;
             line-height: 1 !important;
         }
@@ -893,7 +889,7 @@ def load_static_ui():
             display: none;
         }
 
-        /* Prevent save button from triggering expand */
+        /* Prevent save button / swipe from triggering expand */
         .prop-card-wrapper summary > * {
             pointer-events: none;
         }
@@ -976,7 +972,7 @@ def load_static_ui():
         }
 
         /* ==================================================
-           MOBILE SWIPE FEEDBACK (OPTIONAL VISUAL)
+           MOBILE SWIPE VISUAL FEEDBACK
         ================================================== */
         @media (max-width: 640px) {
             .swipe-card {
@@ -988,37 +984,55 @@ def load_static_ui():
 
         <script>
         (function () {
-          if (!('ontouchstart' in window)) return;
+            if (!('ontouchstart' in window)) return;
 
-          let startX = null;
-          let activeCard = null;
+            let startX = null;
+            let startY = null;
+            let activeCard = null;
 
-          document.addEventListener('touchstart', function (e) {
-            const card = e.target.closest('.swipe-card');
-            if (!card) return;
-            startX = e.touches[0].clientX;
-            activeCard = card;
-          }, { passive: true });
+            document.addEventListener('touchstart', function (e) {
+                const card = e.target.closest('.swipe-card');
+                if (!card) return;
 
-          document.addEventListener('touchend', function (e) {
-            if (!startX || !activeCard) return;
+                const t = e.touches[0];
+                startX = t.clientX;
+                startY = t.clientY;
+                activeCard = card;
+            }, { passive: true });
 
-            const endX = e.changedTouches[0].clientX;
-            const deltaX = endX - startX;
+            document.addEventListener('touchend', function (e) {
+                if (!startX || !startY || !activeCard) return;
 
-            if (deltaX > 80) {
-              const saveKey = activeCard.dataset.saveKey;
-              if (saveKey) {
-                const btn = document.querySelector(
-                  `button[key="${saveKey}"]`
-                );
-                if (btn) btn.click();
-              }
-            }
+                const t = e.changedTouches[0];
+                const dx = t.clientX - startX;
+                const dy = t.clientY - startY;
 
-            startX = null;
-            activeCard = null;
-          }, { passive: true });
+                startX = startY = null;
+
+                /* Require strong horizontal intent */
+                if (Math.abs(dx) < 80 || Math.abs(dx) < Math.abs(dy)) {
+                    activeCard = null;
+                    return;
+                }
+
+                if (dx > 0) {
+                    const saveKey = activeCard.dataset.saveKey;
+                    if (saveKey) {
+                        const btn = document.querySelector(
+                            `button[key="${saveKey}"]`
+                        );
+                        if (btn) {
+                            btn.click();
+                            activeCard.style.boxShadow = "0 0 0 2px #22c55e";
+                            setTimeout(() => {
+                                activeCard.style.boxShadow = "";
+                            }, 400);
+                        }
+                    }
+                }
+
+                activeCard = null;
+            }, { passive: true });
         })();
         </script>
         """,

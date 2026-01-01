@@ -521,12 +521,8 @@ def render_dev_page():
     st.subheader("🧪 BigQuery — Manual Stored Procedure Triggers")
 
     BQ_PROCS = [
-        ("Game Analytics", "sp_game_analytics"),
-        ("Game Report", "sp_game_report"),
-        ("Historical Player Stats (Trends)", "sp_historical_player_stats_for_trends"),
-        ("Today's Props – Enriched", "sp_todays_props_enriched"),
-        ("Today's Props – Hit Rates", "sp_todays_props_with_hit_rates"),
-    ]
+        ("🐐 GOAT Daily Pipeline (ALL)", "run_daily_goat_pipeline"),
+    ]]
 
     for label, proc in BQ_PROCS:
         c1, c2 = st.columns([3, 1])
@@ -542,70 +538,93 @@ def render_dev_page():
 
     st.divider()
 
-    # ==================================================
-    # CLOUD RUN
-    # ==================================================
-    st.subheader("☁️ Cloud Run")
+    from goat_auth import call_goat
+    
 
-    if st.button("▶ Trigger ESPN Lineups"):
-        trigger_cloud_run("espn-nba-lineups")
+    # ==================================================
+    # ☁️ GOAT Cloud Run Jobs
+    # ==================================================
+    GOAT_JOBS = {
+        # ----------------------------
+        # Core / Frequent
+        # ----------------------------
+        "Player Props": (
+            "https://goat-ingestion-763243624328.us-central1.run.app/goat/ingest/player-props",
+            {"bypass": True},
+        ),
+        "Player Injuries": (
+            "https://goat-ingestion-763243624328.us-central1.run.app/goat/ingest/player-injuries",
+            {},
+        ),
+    
+        # ----------------------------
+        # Games
+        # ----------------------------
+        "Games Today": (
+            "https://goat-ingestion-763243624328.us-central1.run.app/goat/ingest/games",
+            {"date": "today", "bypass": True},
+        ),
+        "Games Yesterday": (
+            "https://goat-ingestion-763243624328.us-central1.run.app/goat/ingest/games",
+            {"date": "yesterday", "bypass": True},
+        ),
+    
+        # ----------------------------
+        # Stats Pipelines
+        # ----------------------------
+        "Stats — Advanced": (
+            "https://goat-ingestion-763243624328.us-central1.run.app/goat/ingest/stats/advanced",
+            {"bypass": True},
+        ),
+        "Stats — Full": (
+            "https://goat-ingestion-763243624328.us-central1.run.app/goat/ingest/stats/full",
+            {},
+        ),
+        "Stats — Quarters": (
+            "https://goat-ingestion-763243624328.us-central1.run.app/goat/ingest/stats/quarters",
+            {},
+        ),
+    
+        # ----------------------------
+        # Plays / Lineups
+        # ----------------------------
+        "Plays — First 3 Min": (
+            "https://goat-ingestion-763243624328.us-central1.run.app/goat/ingest/plays/first3min",
+            {"bypass": True},
+        ),
+        "Lineups — Yesterday": (
+            "https://goat-ingestion-763243624328.us-central1.run.app/goat/ingest/lineups",
+            {
+                "start": (datetime.utcnow() - pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
+                "end": (datetime.utcnow() - pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
+            },
+        ),
+    }
+    
+    cols = st.columns(len(GOAT_JOBS))
 
+    for col, (label, (url, params)) in zip(cols, GOAT_JOBS.items()):
+        with col:
+            if st.button(f"▶ {label}", use_container_width=True):
+                with st.spinner(f"Triggering {label}…"):
+                    try:
+                        call_goat(url, params)
+                        st.success("Triggered")
+                    except Exception as e:
+                        st.error("Failed")
+                        st.code(str(e))
+    
+    st.caption("Secure direct trigger (same endpoints as Cloud Scheduler)")
     st.divider()
 
-    # ==================================================
-    # GOOGLE APPS SCRIPT
-    # ==================================================
-    st.subheader("📄 Google Apps Script")
-
-    APPS_TASKS = [
-        ("NBA Alternate Props", "NBA_ALT_PROPS"),
-        ("NBA Game Odds", "NBA_GAME_ODDS"),
-        ("NCAAB Game Odds", "NCAAB_GAME_ODDS"),
-        ("Run ALL (Daily Runner)", "ALL"),
-    ]
-
-    for label, task in APPS_TASKS:
-        c1, c2 = st.columns([3, 1])
-
-        with c1:
-            st.markdown(f"**{label}**")
-
-        with c2:
-            if st.button("▶ Run", key=f"apps_{task}", use_container_width=True):
-                with st.spinner(f"Running {label}…"):
-                    trigger_apps_script(task)
-
-    st.divider()
-
-    # ==================================================
-    # BIGQUERY — SCHEMA VIEWERS
-    # ==================================================
-    st.subheader("📋 BigQuery Schemas")
-
-    # -------------------------------
-    # Stored Procedure Output Tables
-    # -------------------------------
-    st.markdown("### 🧪 Stored Procedure Outputs")
-
-    for label, table in DEV_SP_TABLES.items():
-        with st.expander(f"📄 {label}", expanded=False):
-            st.code(f"nba_prop_analyzer.{table}", language="text")
-
-            try:
-                schema_df = get_table_schema("nba_prop_analyzer", table)
-
-                if schema_df.empty:
-                    st.warning("No columns found (table may not exist yet).")
-                else:
-                    st.dataframe(
-                        schema_df,
-                        use_container_width=True,
-                        hide_index=True,
-                    )
-
-            except Exception as e:
-                st.error("Failed to load schema")
-                st.code(str(e))
+    def trigger_goat_job(job_key: str):
+        try:
+            url, params = GOAT_ENDPOINTS[job_key]
+            call_goat(url, params)
+            st.success(f"✅ GOAT job `{job_key}` triggered")
+        except Exception as e:
+            st.error("❌ GOAT job failed")
+            st.code(str(e))
 
     # -------------------------------
     # GOAT Ingestion Tables (Schema Only)

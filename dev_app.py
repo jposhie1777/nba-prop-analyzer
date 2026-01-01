@@ -1412,6 +1412,43 @@ def load_props(table_name: str) -> pd.DataFrame:
     df = df.rename(columns=DISTRIBUTION_REMAP)
 
     # --------------------------------------------------
+    # Q1 NORMALIZATION (ALIGN Q1 → FULL SCHEMA)
+    # --------------------------------------------------
+    if "market_window" in df.columns:
+        is_q1 = df["market_window"].eq("Q1")
+    
+        # -----------------------------
+        # Rolling averages
+        # -----------------------------
+        df.loc[is_q1, "avg_stat_l5"]  = df.loc[is_q1, "avg_l5"]
+        df.loc[is_q1, "avg_stat_l10"] = df.loc[is_q1, "avg_l10"]
+        df.loc[is_q1, "avg_stat_l20"] = df.loc[is_q1, "avg_l20"]
+    
+        # -----------------------------
+        # L20 distribution
+        # -----------------------------
+        df.loc[is_q1, "dist20_hit_rate"]        = df.loc[is_q1, "hit_rate_l20"]
+        df.loc[is_q1, "dist20_clear_1p_rate"]   = df.loc[is_q1, "clear_1p_pct_l20"]
+        df.loc[is_q1, "dist20_clear_2p_rate"]   = df.loc[is_q1, "clear_2p_pct_l20"]
+        df.loc[is_q1, "dist20_fail_bad_rate"]   = df.loc[is_q1, "bad_miss_pct_l20"]
+        df.loc[is_q1, "dist20_avg_margin"]      = df.loc[is_q1, "avg_margin_l20"]
+
+    # --------------------------------------------------
+    # Q1 OPPONENT DEFENSE → STAT-AWARE
+    # --------------------------------------------------
+    if "market_window" in df.columns:
+        is_q1 = df["market_window"].eq("Q1")
+    
+        # rank
+        df.loc[is_q1 & df["market"].str.contains("assists", case=False), "opp_pos_ast_rank"] = df.loc[is_q1, "opp_def_rank"]
+        df.loc[is_q1 & df["market"].str.contains("points",  case=False), "opp_pos_pts_rank"] = df.loc[is_q1, "opp_def_rank"]
+        df.loc[is_q1 & df["market"].str.contains("rebounds",case=False), "opp_pos_reb_rank"] = df.loc[is_q1, "opp_def_rank"]
+
+        df.loc[is_q1 & df["market"].str.contains("assists", case=False), "opp_pos_ast_allowed_avg"] = df.loc[is_q1, "opp_ast_allowed_avg"]
+        df.loc[is_q1 & df["market"].str.contains("points",  case=False), "opp_pos_pts_allowed_avg"] = df.loc[is_q1, "opp_pts_allowed_avg"]
+        df.loc[is_q1 & df["market"].str.contains("rebounds",case=False), "opp_pos_reb_allowed_avg"] = df.loc[is_q1, "opp_reb_allowed_avg"]
+        
+    # -------------------------------------------------
     # MARKET NORMALIZATION (GOAT → APP)
     # --------------------------------------------------
     if "market" in df.columns:
@@ -1419,6 +1456,8 @@ def load_props(table_name: str) -> pd.DataFrame:
             df["market"]
             .astype(str)
             .str.strip()
+            .str.lower()                 # 👈 ADD (normalize first)
+            .str.replace("_1q", "", regex=False)  # 👈 ADD (Q1 FIX)
             .str.upper()
             .replace({
                 "PTS": "player_points",

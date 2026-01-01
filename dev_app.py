@@ -823,15 +823,15 @@ def load_static_ui():
         ================================================== */
         .prop-row {
             display: flex;
-            align-items: stretch;     /* full-height sync */
-            gap: 0;                   /* shared edge */
+            align-items: stretch;
+            gap: 0;
             margin: 10px 0 14px;
         }
 
         .prop-row .save-wrap {
             display: flex;
             align-items: stretch;
-            margin-right: -10px;      /* overlap into card */
+            margin-right: -10px;
             z-index: 10;
         }
 
@@ -880,25 +880,42 @@ def load_static_ui():
             border-bottom-left-radius: 12px;
         }
 
-        /* Mobile layout */
+        /* ==================================================
+           🔴 CRITICAL FIX
+           Force Streamlit columns to stay HORIZONTAL on mobile
+           (Streamlit stacks columns vertically by default)
+        ================================================== */
         @media (max-width: 640px) {
-            .prop-row {
-                flex-direction: row;          /* 👈 KEEP LEFT-SIDE */
-                align-items: stretch;
-                gap: 0;
+
+            /* Force column container to row layout */
+            div[data-testid="stHorizontalBlock"] {
+                flex-direction: row !important;
+                align-items: stretch !important;
+                gap: 0 !important;
             }
-        
-            .prop-row .save-wrap {
-                margin-right: -10px;
-                z-index: 10;
+
+            /* Prevent columns from going full-width */
+            div[data-testid="column"] {
+                flex: none !important;
             }
-        
-            .prop-row .save-wrap div[data-testid="stButton"] > button {
+
+            /* Save button column */
+            div[data-testid="column"]:first-child {
+                width: 44px !important;
+                min-width: 44px !important;
+            }
+
+            /* Card column */
+            div[data-testid="column"]:last-child {
+                flex: 1 1 auto !important;
+            }
+
+            /* Mobile save button sizing */
+            div[data-testid="stButton"] > button {
                 width: 44px !important;
                 min-width: 44px !important;
                 height: 100% !important;
                 min-height: 88px !important;
-        
                 font-size: 16px !important;
                 border-radius: 12px !important;
             }
@@ -941,7 +958,7 @@ def load_static_ui():
         }
 
         /* ==================================================
-           BASE CARD (PROPS / LINEUPS / FIRST BASKET)
+           BASE CARD
         ================================================== */
         .prop-card,
         .prop-card-wrapper summary {
@@ -966,7 +983,7 @@ def load_static_ui():
         }
 
         /* ==================================================
-           CARD GRID (VERTICAL LAYOUT)
+           CARD GRID
         ================================================== */
         .card-grid {
             display: grid;
@@ -1004,109 +1021,6 @@ def load_static_ui():
             font-size: 0.85rem;
             font-weight: 700;
             color: #ffffff;
-        }
-
-        /* ==================================================
-           MATCHUP HEADER (CENTERED)
-        ================================================== */
-        .matchup-header {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 14px;
-            padding: 14px 18px;
-            margin: 28px 0 14px;
-            border-radius: 18px;
-            background: linear-gradient(
-                180deg,
-                rgba(30, 41, 59, 0.9),
-                rgba(2, 6, 23, 0.95)
-            );
-            box-shadow:
-                0 12px 28px rgba(0,0,0,0.6),
-                inset 0 1px 0 rgba(255,255,255,0.05);
-        }
-
-        .matchup-team {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 0.95rem;
-            font-weight: 800;
-            white-space: nowrap;
-        }
-
-        .matchup-team img {
-            width: 22px !important;
-            height: 22px !important;
-        }
-
-        .matchup-at {
-            font-size: 0.9rem;
-            opacity: 0.6;
-        }
-
-        .matchup-time {
-            margin-left: 14px;
-            font-size: 0.75rem;
-            opacity: 0.6;
-            white-space: nowrap;
-        }
-
-        /* ==================================================
-           TEAM HEADER (LINEUPS)
-        ================================================== */
-        .team-header-card {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            padding: 10px 16px;
-            margin: 12px 0 8px;
-            border-radius: 14px;
-            background: rgba(255,255,255,0.04);
-            box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
-            width: 100%;
-        }
-
-        .team-header-card img {
-            width: 22px !important;
-            height: 22px !important;
-        }
-
-        .team-header-name {
-            font-size: 0.9rem;
-            font-weight: 800;
-            letter-spacing: 0.4px;
-        }
-
-        /* ==================================================
-           LINEUP LIST
-        ================================================== */
-        .lineup-list {
-            margin-top: 6px;
-        }
-
-        .lineup-player {
-            font-size: 0.82rem;
-            padding: 2px 0;
-            line-height: 1.25;
-        }
-
-        .lineup-player.empty {
-            opacity: 0.5;
-        }
-
-        .lineup-subtitle {
-            margin-top: 8px;
-            font-size: 0.72rem;
-            opacity: 0.65;
-        }
-
-        .prop-card-title {
-            font-size: 0.9rem;
-            font-weight: 700;
-            margin-bottom: 6px;
         }
 
         </style>

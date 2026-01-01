@@ -2387,7 +2387,6 @@ def render_prop_cards(
         # ==================================================
         base_card_html = (
             f"<div class='prop-card card-grid'>"
-            f"{save_icon_html}"
 
             # ---------------- TOP ROW ----------------
             f"<div style='display:grid;grid-template-columns:1fr 2fr 1fr;align-items:center;'>"

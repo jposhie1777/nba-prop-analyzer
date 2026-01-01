@@ -968,6 +968,17 @@ def load_static_ui():
         button[kind="secondary"] {
             display: none;
         }
+        
+        .prop-card-shell {
+            position: relative;
+        }
+        
+        .prop-card-shell .card-actions {
+            position: absolute;
+            top: 12px;
+            right: 14px;
+            z-index: 50; /* above summary */
+        }
         /* ==================================================
            MATCHUP HEADER (CENTERED)
         ================================================== */

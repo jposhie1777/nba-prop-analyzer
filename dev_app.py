@@ -889,6 +889,11 @@ def load_static_ui():
             display: none;
         }
 
+        /* Enable touch events on card wrapper (REQUIRED) */
+        .prop-card-wrapper {
+            pointer-events: auto;
+        }
+
         /* Allow swipe detection on summary */
         .swipe-card {
             pointer-events: auto;
@@ -998,8 +1003,15 @@ def load_static_ui():
             let activeCard = null;
 
             document.addEventListener('touchstart', function (e) {
+                console.log("🟢 TOUCH START");
+
                 const card = e.target.closest('.prop-card-wrapper');
-                if (!card) return;
+                if (!card) {
+                    console.log("❌ NO CARD FOUND");
+                    return;
+                }
+
+                console.log("✅ CARD FOUND");
 
                 const t = e.touches[0];
                 startX = t.clientX;
@@ -1008,31 +1020,39 @@ def load_static_ui():
             }, { passive: true });
 
             document.addEventListener('touchend', function (e) {
-                if (!startX || !startY || !activeCard) return;
+                console.log("🔵 TOUCH END");
+
+                if (!startX || !startY || !activeCard) {
+                    console.log("❌ MISSING STATE");
+                    return;
+                }
 
                 const t = e.changedTouches[0];
                 const dx = t.clientX - startX;
                 const dy = t.clientY - startY;
 
+                console.log("➡️ dx:", dx, "⬆️ dy:", dy);
+
                 startX = startY = null;
 
-                /* Require strong horizontal intent */
                 if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) {
+                    console.log("↕️ NOT A HORIZONTAL SWIPE");
                     activeCard = null;
                     return;
                 }
 
                 if (dx > 0) {
+                    console.log("💾 RIGHT SWIPE — ATTEMPT SAVE");
+
                     const btn = activeCard
                         .closest('.prop-row')
                         ?.querySelector('button');
 
                     if (btn) {
+                        console.log("✅ BUTTON FOUND — CLICKING");
                         btn.click();
-                        activeCard.style.boxShadow = "0 0 0 2px #22c55e";
-                        setTimeout(() => {
-                            activeCard.style.boxShadow = "";
-                        }, 400);
+                    } else {
+                        console.log("❌ SAVE BUTTON NOT FOUND");
                     }
                 }
 
@@ -1040,6 +1060,7 @@ def load_static_ui():
             }, { passive: true });
         })();
         </script>
+
         """,
         unsafe_allow_html=True,
     )

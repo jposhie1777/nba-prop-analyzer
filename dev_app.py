@@ -838,6 +838,12 @@ def load_static_ui():
         .prop-card-wrapper summary > * {
             pointer-events: none;
         }
+        
+        /* Allow card action buttons to receive clicks */
+        .prop-card-wrapper summary .card-actions,
+        .prop-card-wrapper summary .card-actions * {
+            pointer-events: auto;
+        }
 
         .prop-card-wrapper .card-expanded,
         .prop-card-expanded {
@@ -959,6 +965,9 @@ def load_static_ui():
             color: #22c55e;
         }
 
+        button[kind="secondary"] {
+            display: none;
+        }
         /* ==================================================
            MATCHUP HEADER (CENTERED)
         ================================================== */

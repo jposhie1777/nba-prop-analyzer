@@ -996,14 +996,16 @@ def load_static_ui():
 
         <script>
         (function () {
-            if (!('ontouchstart' in window)) return;
 
             let startX = null;
             let startY = null;
             let activeCard = null;
 
-            document.addEventListener('touchstart', function (e) {
-                console.log("🟢 TOUCH START");
+            // -----------------------------
+            // POINTER DOWN
+            // -----------------------------
+            document.addEventListener('pointerdown', function (e) {
+                console.log("🟢 POINTER DOWN");
 
                 const card = e.target.closest('.prop-card-wrapper');
                 if (!card) {
@@ -1011,36 +1013,39 @@ def load_static_ui():
                     return;
                 }
 
-                console.log("✅ CARD FOUND");
-
-                const t = e.touches[0];
-                startX = t.clientX;
-                startY = t.clientY;
+                startX = e.clientX;
+                startY = e.clientY;
                 activeCard = card;
+
+                console.log("✅ CARD SET");
             }, { passive: true });
 
-            document.addEventListener('touchend', function (e) {
-                console.log("🔵 TOUCH END");
+            // -----------------------------
+            // POINTER UP
+            // -----------------------------
+            document.addEventListener('pointerup', function (e) {
+                console.log("🔵 POINTER UP");
 
                 if (!startX || !startY || !activeCard) {
                     console.log("❌ MISSING STATE");
                     return;
                 }
 
-                const t = e.changedTouches[0];
-                const dx = t.clientX - startX;
-                const dy = t.clientY - startY;
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
 
                 console.log("➡️ dx:", dx, "⬆️ dy:", dy);
 
                 startX = startY = null;
 
+                // Require horizontal intent
                 if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) {
                     console.log("↕️ NOT A HORIZONTAL SWIPE");
                     activeCard = null;
                     return;
                 }
 
+                // Right swipe = save
                 if (dx > 0) {
                     console.log("💾 RIGHT SWIPE — ATTEMPT SAVE");
 
@@ -1058,6 +1063,7 @@ def load_static_ui():
 
                 activeCard = null;
             }, { passive: true });
+
         })();
         </script>
 

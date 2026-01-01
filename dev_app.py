@@ -2254,7 +2254,7 @@ def render_prop_cards(
     market_window: str,
 ):
     if df.empty:
-        st.info(f"No props match your filters.")
+        st.info("No props match your filters.")
         return
 
     if hit_rate_col not in df.columns:
@@ -2263,84 +2263,47 @@ def render_prop_cards(
 
     card_df = build_prop_cards(df, hit_rate_col=hit_rate_col)
 
-    for _, row in card_df.iterrows():
+    for idx, row in card_df.iterrows():
 
-        player = f"{row.get('player', '')}"
+        # ==================================================
+        # BASIC IDENTIFIERS
+        # ==================================================
+        player = str(row.get("player", ""))
         raw_market = row.get("market")
-        norm = normalize_market_key(raw_market)
         base_label = pretty_market_label(raw_market)
+        bet_type = str(row.get("bet_type", ""))
 
-        if market_window == "Q1":
-            market_label = f"{base_label} 1st Quarter"
-        else:
-            market_label = base_label
-        bet_type = f"{row.get('bet_type', '')}"
+        market_label = (
+            f"{base_label} 1st Quarter"
+            if market_window == "Q1"
+            else base_label
+        )
 
-        team = f"{row.get('player_team', '')}"
+        line = row.get("line")
+        odds = row.get("price")
+
+        # ==================================================
+        # TEAMS / LOGOS
+        # ==================================================
         home_team = row.get("home_team")
         away_team = row.get("away_team")
 
         home_team = home_team.strip().upper() if isinstance(home_team, str) else None
         away_team = away_team.strip().upper() if isinstance(away_team, str) else None
 
-
-
-        opp = f"{row.get('opponent_team', '')}"
-        line = row.get("line")
-        odds = row.get("price")
-
-        bookmaker = f"{row.get('bookmaker', '')}"
-        book_logo = SPORTSBOOK_LOGOS.get(bookmaker, "")
-
-        # -----------------------------
-        # TEAM LOGOS
-        # -----------------------------
         home_logo = safe_team_logo(home_team)
         away_logo = safe_team_logo(away_team)
 
+        bookmaker = str(row.get("bookmaker", ""))
+        book_logo = SPORTSBOOK_LOGOS.get(bookmaker, "")
 
-
+        # ==================================================
+        # METRICS
+        # ==================================================
         hit = row.get(hit_rate_col)
-        implied = row.get("implied_prob")
-
-        if implied is None or pd.isna(implied):
-            implied = compute_implied_prob(odds)
-
-        edge = None
-        if hit is not None and implied is not None and not pd.isna(hit) and not pd.isna(implied):
-            edge = float(hit) - float(implied)
-
-        books = row.get("book_prices", [])
-        books_line = f" • ".join(
-            f"{b.get('book','')} {fmt_odds(b.get('price'))}"
-            for b in books[:4]
-        )
-
-        # -----------------------------
-        # L10 SPARKLINE
-        # -----------------------------
-        l10_values = get_l10_values(
-            row,
-            market_window=market_window,
-        )
-        
-        if not l10_values:
-            st.caption(
-                f"⚠️ No L10 values for {player} | market={raw_market} | window={market_window}"
-            )
-
-        # -----------------------------
-        # STAT-SPECIFIC ROLLING AVERAGES
-        # -----------------------------
-        stat_key = normalize_market_key(raw_market)
-        
-        l5_avg  = row.get("avg_stat_l5")
         l10_avg = row.get("avg_stat_l10")
-        l20_avg = row.get("avg_stat_l20")
-        
-        # -----------------------------
-        # OPPONENT POSITIONAL RANK
-        # -----------------------------
+
+        stat_key = normalize_market_key(raw_market)
         opp_rank_map = {
             "points": "opp_pos_pts_rank",
             "rebounds": "opp_pos_reb_rank",
@@ -2352,214 +2315,145 @@ def render_prop_cards(
             "points_assists": "opp_pos_pa_rank",
             "rebounds_assists": "opp_pos_ra_rank",
         }
-        
-        opp_rank_col = opp_rank_map.get(stat_key)
-        opp_rank = row.get(opp_rank_col) if opp_rank_col else None
-        
-        # -----------------------------
-        # CONFIDENCE SCORE
-        # -----------------------------
-        confidence, confidence_parts = compute_confidence(
+
+        opp_rank = row.get(opp_rank_map.get(stat_key))
+
+        confidence, _ = compute_confidence(
             row,
             hit_rate_col=hit_rate_col,
             stat_key=stat_key,
         )
-                
-        # -----------------------------
-        # L10 SPARKLINE
-        # -----------------------------
-        dates = (
-            row.get("last10_q1_dates")
-            if market_window == "Q1"
-            else row.get("last10_dates")
-        )
-        
-        spark_html = build_l10_sparkline_html(
-            values=l10_values,
-            line_value=line,
-            dates=dates,
+
+        # ==================================================
+        # SAVE BET KEY / TEXT
+        # ==================================================
+        bet_line = (
+            f"{player} | "
+            f"{pretty_market_label(raw_market)} | "
+            f"{fmt_num(line, 1)} | "
+            f"{fmt_odds(odds)} | "
+            f"{bet_type}"
         )
 
+        save_key = (
+            f"save_"
+            f"{player}_{raw_market}_{line}_{bet_type}_"
+            f"page{st.session_state.page}_idx{idx}"
+        )
 
-        # --------------------------------------------------
-        # BASE CARD HTML (STRICT f-STRINGS)
-        # --------------------------------------------------
+        is_saved = bet_line in st.session_state.saved_bets_text
+
+        # ==================================================
+        # SAVE ICON (VISUAL ONLY)
+        # ==================================================
+        save_icon_html = (
+            "<div class='card-actions'>"
+            f"<div class='card-action-btn{' saved' if is_saved else ''}'>💾</div>"
+            "</div>"
+        )
+
+        # ==================================================
+        # BASE CARD (NO SPARKLINE)
+        # ==================================================
         base_card_html = (
             f"<div class='prop-card card-grid'>"
-        
-            # ==================================================
-            # TOP BAR: MATCHUP | PLAYER + MARKET | BOOK + ODDS
-            # ==================================================
+            f"{save_icon_html}"
+
+            # ---------------- TOP ROW ----------------
             f"<div style='display:grid;grid-template-columns:1fr 2fr 1fr;align-items:center;'>"
-        
-            # ---------- LEFT: MATCHUP ----------
+
             f"<div style='display:flex;align-items:center;gap:8px;font-size:0.8rem;opacity:0.9;'>"
             f"<img src='{away_logo}' style='width:22px;height:22px;' />"
             f"<span style='font-weight:700;'>@</span>"
             f"<img src='{home_logo}' style='width:22px;height:22px;' />"
             f"</div>"
 
-        
-            # ---------- CENTER: PLAYER + MARKET ----------
             f"<div style='text-align:center;'>"
-            f"<div style='font-weight:900;font-size:1.15rem;letter-spacing:-0.2px;'>"
+            f"<div style='font-weight:900;font-size:1.15rem;'>"
             f"{player}"
             f"</div>"
             f"<div style='font-size:0.85rem;opacity:0.7;'>"
             f"{market_label} – {bet_type.upper()} {fmt_num(line, 1)}"
             f"</div>"
             f"</div>"
-        
-            # ---------- RIGHT: BOOK + ODDS ----------
+
             f"<div style='display:flex;justify-content:flex-end;align-items:center;gap:8px;'>"
             f"<img src='{book_logo}' style='height:16px;width:auto;' />"
             f"<strong style='font-size:0.9rem;'>{fmt_odds(odds)}</strong>"
             f"</div>"
-        
+
             f"</div>"
-        
-            # ==================================================
-            # BOTTOM STATS ROW (L10 | OPP RANK | CONFIDENCE)
-            # ==================================================
-            f"<div style='display:grid;"
-            f"grid-template-columns:1fr 1fr 1fr;"
+
+            # ---------------- BOTTOM ROW ----------------
+            f"<div style='display:grid;grid-template-columns:1fr 1fr 1fr;"
             f"font-size:0.75rem;opacity:0.85;margin-top:6px;'>"
-            
-            # ---------- LEFT: L10 HIT + AVG ----------
+
             f"<div>"
-            f"<strong>{fmt_pct(hit)}</strong>"
-            f" <span style='opacity:0.5'>|</span> "
-            f"<strong>{fmt_num(l10_avg, 1)}</strong><br/>"
-            f"<span style='opacity:0.6'>L10 Hit | Avg</span>"
+            f"<strong>{fmt_pct(hit)}</strong><br/>"
+            f"<span style='opacity:0.6'>L10 Hit Rate</span>"
             f"</div>"
-            
-            # ---------- CENTER: OPP RANK ----------
+
             f"<div style='text-align:center;'>"
             f"<strong>{opp_rank if opp_rank is not None else '—'}</strong><br/>"
             f"<span style='opacity:0.6'>Opp Rank</span>"
             f"</div>"
-            
-            # ---------- RIGHT: CONFIDENCE ----------
+
             f"<div style='text-align:right;'>"
             f"<strong>{confidence}</strong><br/>"
             f"<span style='opacity:0.6'>Confidence</span>"
             f"</div>"
-            
+
             f"</div>"
-        
             f"</div>"
         )
 
-        # --------------------------------------------------
-        # EXPANDED HTML (UNCHANGED)
-        # --------------------------------------------------
+        # ==================================================
+        # EXPANDED SECTION (SPARKLINE LIVES HERE)
+        # ==================================================
+        dates = (
+            row.get("last10_q1_dates")
+            if market_window == "Q1"
+            else row.get("last10_dates")
+        )
+
         expanded_html = (
             f"<div class='expanded-wrap'>"
-        
-            # ==================================================
-            # SPARKLINE (MOVED HERE)
-            # ==================================================
+
             f"<div style='display:flex;justify-content:center;margin-bottom:10px;'>"
-            f"{build_l10_sparkline_html(values=l10_values, line_value=line, dates=dates)}"
+            f"{build_l10_sparkline_html(get_l10_values(row, market_window=market_window), line, dates)}"
             f"</div>"
-        
-            # ==================================================
-            # ROW 1 — AVERAGES
-            # ==================================================
+
             f"<div class='expanded-row'>"
-            f"<div class='metric'><span>L5</span><strong>{fmt_num(l5_avg, 1)}</strong></div>"
+            f"<div class='metric'><span>L5</span><strong>{fmt_num(row.get('avg_stat_l5'), 1)}</strong></div>"
             f"<div class='metric'><span>L10</span><strong>{fmt_num(l10_avg, 1)}</strong></div>"
-            f"<div class='metric'><span>L20</span><strong>{fmt_num(l20_avg, 1)}</strong></div>"
+            f"<div class='metric'><span>L20</span><strong>{fmt_num(row.get('avg_stat_l20'), 1)}</strong></div>"
             f"<div class='metric'><span>Δ Line</span>"
-            f"<strong>{fmt_num(row.get('proj_diff_vs_line'), 1)}</strong>"
+            f"<strong>{fmt_num(row.get('proj_diff_vs_line'), 1)}</strong></div>"
             f"</div>"
-            f"</div>"
-        
-            # ==================================================
-            # ROW 2 — L20 DISTRIBUTION
-            # ==================================================
-            f"<div class='expanded-row dist-row'>"
-            f"<div class='metric'><span>L20 Hit</span><strong>{fmt_pct(row.get('dist20_hit_rate'))}</strong></div>"
-            f"<div class='metric'><span>+1</span><strong>{fmt_pct(row.get('dist20_clear_1p_rate'))}</strong></div>"
-            f"<div class='metric'><span>+2</span><strong>{fmt_pct(row.get('dist20_clear_2p_rate'))}</strong></div>"
-            f"<div class='metric'><span>Bad</span><strong>{fmt_pct(row.get('dist20_fail_bad_rate'))}</strong></div>"
-            f"<div class='metric'><span>Margin</span><strong>{fmt_num(row.get('dist20_avg_margin'), 1)}</strong></div>"
-            f"</div>"
-        
-            # ==================================================
-            # ROW 3 — L40 DISTRIBUTION
-            # ==================================================
-            f"<div class='expanded-row dist-row'>"
-            f"<div class='metric'><span>L40 Hit</span><strong>{fmt_pct(row.get('dist40_hit_rate'))}</strong></div>"
-            f"<div class='metric'><span>+1</span><strong>{fmt_pct(row.get('dist40_clear_1p_rate'))}</strong></div>"
-            f"<div class='metric'><span>+2</span><strong>{fmt_pct(row.get('dist40_clear_2p_rate'))}</strong></div>"
-            f"<div class='metric'><span>Bad</span><strong>{fmt_pct(row.get('dist40_fail_bad_rate'))}</strong></div>"
-            f"<div class='metric'><span>Margin</span><strong>{fmt_num(row.get('dist40_avg_margin'), 1)}</strong></div>"
-            f"</div>"
-        
-            # ==================================================
-            # ROW 4 — WOWY / INJURY (SAFE PLACEHOLDER)
-            # ==================================================
-            f"<div class='expanded-row wowy-row'>"
-            f"<div class='metric' style='flex:1;opacity:0.6;'>"
-            f"Injury / WOWY data coming soon"
-            f"</div>"
-            f"</div>"
-        
+
             f"</div>"
         )
 
-        # -------------------------
-        # SAVE BET (MINIMAL MEMORY)
-        # -------------------------
-        line_str = fmt_num(line, 1)
-        odds_str = fmt_odds(odds)
-        
-        bet_line = (
-            f"{player} | "
-            f"{pretty_market_label(raw_market)} | "
-            f"{line_str} | "
-            f"{odds_str} | "
-            f"{bet_type}"
-        )
-        
-        save_key = (
-            f"save_"
-            f"{player}_"
-            f"{raw_market}_"
-            f"{line}_"
-            f"{bet_type}_"
-            f"page{st.session_state.page}_"
-            f"idx{_}"
-        )
-        
-        st.button(
-            "💾 Save Bet",
-            key=save_key,
-            on_click=handle_save_bet,
-            args=(bet_line,),
-        )
-        
-        # Optional instant visual confirmation
-        if bet_line in st.session_state.saved_bets_text:
-            st.caption("✅ Saved")
-
-
-        # -------------------------
-        # CARD EXPAND UI
-        # -------------------------
+        # ==================================================
+        # RENDER CARD
+        # ==================================================
         st.markdown(
             f"<details class='prop-card-wrapper'>"
-            f"<summary>"
-            f"{base_card_html}"
-            f"<div class='expand-hint'>Click to expand ▾</div>"
-            f"</summary>"
-            f"<div class='card-expanded'>"
-            f"{expanded_html}"
-            f"</div>"
+            f"<summary>{base_card_html}<div class='expand-hint'>View trends ▾</div></summary>"
+            f"<div class='card-expanded'>{expanded_html}</div>"
             f"</details>",
             unsafe_allow_html=True,
         )
+
+        # ==================================================
+        # REAL SAVE BUTTON (INVISIBLE)
+        # ==================================================
+        st.button(
+            "save",
+            key=save_key,
+            on_click=handle_save_bet,
+            args=(bet_line,),
+        ))
 
 def build_first_basket_expanded_html(row: pd.Series) -> str:
     starter_pct = row.get("starter_pct")

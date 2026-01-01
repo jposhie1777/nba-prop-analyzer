@@ -806,7 +806,6 @@ def load_static_ui():
 
         /* ==================================================
            GLOBAL IMAGE SAFETY CLAMP (CRITICAL)
-           Prevents runaway ESPN / SVG logos
         ================================================== */
         img {
             max-width: 32px !important;
@@ -819,7 +818,6 @@ def load_static_ui():
 
         /* ==================================================
            PROP ROW (SAVE BUTTON + CARD)
-           Button is OUTSIDE expand system but visually merged
         ================================================== */
         .prop-row {
             display: flex;
@@ -835,12 +833,10 @@ def load_static_ui():
             z-index: 10;
         }
 
-        /* Remove Streamlit button wrapper spacing */
         .prop-row .save-wrap div[data-testid="stButton"] {
             margin: 0 !important;
         }
 
-        /* HARD OVERRIDE: actual Streamlit button */
         .prop-row .save-wrap div[data-testid="stButton"] > button {
             width: 52px !important;
             min-width: 52px !important;
@@ -874,55 +870,13 @@ def load_static_ui():
             flex: 1 1 auto;
         }
 
-        /* Square card edge slightly where it meets button */
         .prop-row .card-wrap .prop-card-wrapper summary {
             border-top-left-radius: 12px;
             border-bottom-left-radius: 12px;
         }
 
         /* ==================================================
-           🔴 CRITICAL FIX
-           Force Streamlit columns to stay HORIZONTAL on mobile
-           (Streamlit stacks columns vertically by default)
-        ================================================== */
-        @media (max-width: 640px) {
-
-            /* Force column container to row layout */
-            div[data-testid="stHorizontalBlock"] {
-                flex-direction: row !important;
-                align-items: stretch !important;
-                gap: 0 !important;
-            }
-
-            /* Prevent columns from going full-width */
-            div[data-testid="column"] {
-                flex: none !important;
-            }
-
-            /* Save button column */
-            div[data-testid="column"]:first-child {
-                width: 44px !important;
-                min-width: 44px !important;
-            }
-
-            /* Card column */
-            div[data-testid="column"]:last-child {
-                flex: 1 1 auto !important;
-            }
-
-            /* Mobile save button sizing */
-            div[data-testid="stButton"] > button {
-                width: 44px !important;
-                min-width: 44px !important;
-                height: 100% !important;
-                min-height: 88px !important;
-                font-size: 16px !important;
-                border-radius: 12px !important;
-            }
-        }
-
-        /* ==================================================
-           EXPAND / COLLAPSE WRAPPER (SHARED)
+           EXPAND / COLLAPSE WRAPPER
         ================================================== */
         .prop-card-wrapper {
             position: relative;
@@ -939,13 +893,12 @@ def load_static_ui():
             display: none;
         }
 
-        /* Disable pointer events ONLY for collapsed summary content */
+        /* Prevent save button from triggering expand */
         .prop-card-wrapper summary > * {
             pointer-events: none;
         }
 
-        .prop-card-wrapper .card-expanded,
-        .prop-card-expanded {
+        .prop-card-wrapper .card-expanded {
             margin-top: 6px;
             pointer-events: auto;
         }
@@ -967,7 +920,6 @@ def load_static_ui():
                 rgba(15, 23, 42, 0.92),
                 rgba(2, 6, 23, 0.95)
             );
-            border: none;
             border-radius: 16px;
             padding: 16px 18px;
             width: 100%;
@@ -1023,7 +975,52 @@ def load_static_ui():
             color: #ffffff;
         }
 
+        /* ==================================================
+           MOBILE SWIPE FEEDBACK (OPTIONAL VISUAL)
+        ================================================== */
+        @media (max-width: 640px) {
+            .swipe-card {
+                transition: transform 0.15s ease;
+            }
+        }
+
         </style>
+
+        <script>
+        (function () {
+          if (!('ontouchstart' in window)) return;
+
+          let startX = null;
+          let activeCard = null;
+
+          document.addEventListener('touchstart', function (e) {
+            const card = e.target.closest('.swipe-card');
+            if (!card) return;
+            startX = e.touches[0].clientX;
+            activeCard = card;
+          }, { passive: true });
+
+          document.addEventListener('touchend', function (e) {
+            if (!startX || !activeCard) return;
+
+            const endX = e.changedTouches[0].clientX;
+            const deltaX = endX - startX;
+
+            if (deltaX > 80) {
+              const saveKey = activeCard.dataset.saveKey;
+              if (saveKey) {
+                const btn = document.querySelector(
+                  `button[key="${saveKey}"]`
+                );
+                if (btn) btn.click();
+              }
+            }
+
+            startX = null;
+            activeCard = null;
+          }, { passive: true });
+        })();
+        </script>
         """,
         unsafe_allow_html=True,
     )
@@ -2626,10 +2623,7 @@ def render_prop_cards(
         with card_col:
             st.markdown(
                 f"""
-                <details
-                    class="prop-card-wrapper swipe-card"
-                    data-save-key="{save_key}"
-                >
+                <details class="prop-card-wrapper">
                 <summary>
                     {base_card_html}
                     <div class="expand-hint">Click to expand ▾</div>

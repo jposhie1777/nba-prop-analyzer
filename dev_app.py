@@ -1095,6 +1095,34 @@ def load_static_ui():
 
 load_static_ui()
 
+components.html(
+    f"""
+    <script>
+    window.addEventListener("message", (event) => {{
+        if (!event.data) return;
+        if (event.data.type !== "SAVE_BET") return;
+
+        const input = document.getElementById("save-bet-input");
+        if (!input) return;
+
+        input.value = event.data.payload;
+        input.dispatchEvent(new Event("change", {{ bubbles: true }}));
+    }});
+    </script>
+    """,
+    height=0,
+)
+
+bet_payload = st.text_input(
+    f"_save_bet_bridge",
+    key=f"_save_bet_bridge",
+    label_visibility="collapsed",
+)
+
+if bet_payload:
+    handle_save_bet(bet_payload)
+    st.session_state["_save_bet_bridge"] = ""
+
 # ------------------------------------------------------
 # LOGOS (STATIC)
 # ------------------------------------------------------
@@ -2471,10 +2499,10 @@ def render_prop_cards(
             f"  <div class='card-actions'>"
             f"    <div class='card-action-btn{' saved' if is_saved else ''}' "
             f"         onclick=\""
-            f"           document.querySelector("
-            f"             'button[data-testid=\\\\\\\"baseButton-{save_key}\\\\\\\"]'"
-            f"           )?.click();"
-            f"           event.stopPropagation();"
+            f"           window.parent.postMessage({{"
+            f"             type: 'SAVE_BET',"
+            f"             payload: '{bet_line}'"
+            f"           }}, '*');"
             f"         \">"
             f"      💾"
             f"    </div>"

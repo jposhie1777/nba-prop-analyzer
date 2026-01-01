@@ -33,6 +33,8 @@ from google.oauth2 import service_account
 
 import psutil  # ✅ must be before memory helpers
 import math
+from goat_auth import call_goat
+
 
 # ======================================================
 # MEMORY TRACKING HELPERS (DEFINE BEFORE CALLING)
@@ -522,23 +524,21 @@ def render_dev_page():
 
     BQ_PROCS = [
         ("🐐 GOAT Daily Pipeline (ALL)", "run_daily_goat_pipeline"),
-    ]]
-
+    ]
+    
     for label, proc in BQ_PROCS:
         c1, c2 = st.columns([3, 1])
-
+    
         with c1:
             st.markdown(f"**{label}**")
             st.caption(f"`{DEV_BQ_DATASET}.{proc}`")
-
+    
         with c2:
             if st.button("▶ Run", key=f"run_{proc}", use_container_width=True):
                 with st.spinner(f"Running {proc}…"):
                     trigger_bq_procedure(proc)
-
+    
     st.divider()
-
-    from goat_auth import call_goat
     
 
     # ==================================================
@@ -601,10 +601,10 @@ def render_dev_page():
         ),
     }
     
-    cols = st.columns(len(GOAT_JOBS))
+    cols = st.columns(3)
 
-    for col, (label, (url, params)) in zip(cols, GOAT_JOBS.items()):
-        with col:
+    for i, (label, (url, params)) in enumerate(GOAT_JOBS.items()):
+        with cols[i % 3]:
             if st.button(f"▶ {label}", use_container_width=True):
                 with st.spinner(f"Triggering {label}…"):
                     try:

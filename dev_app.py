@@ -2461,13 +2461,21 @@ def render_prop_cards(
         # RENDER CARD
         # ==================================================
         st.markdown(
+            f"<div class='prop-card-shell'>"
+            f"{save_icon_html}"
             f"<details class='prop-card-wrapper'>"
-            f"<summary>{base_card_html}<div class='expand-hint'>View trends ▾</div></summary>"
-            f"<div class='card-expanded'>{expanded_html}</div>"
-            f"</details>",
+            f"<summary>"
+            f"{base_card_html}"
+            f"<div class='expand-hint'>View trends ▾</div>"
+            f"</summary>"
+            f"<div class='card-expanded'>"
+            f"{expanded_html}"
+            f"</div>"
+            f"</details>"
+            f"</div>",
             unsafe_allow_html=True,
         )
-
+        
         # ==================================================
         # REAL SAVE BUTTON (INVISIBLE)
         # ==================================================
@@ -2593,7 +2601,6 @@ def render_first_basket_card(row: pd.Series):
 
     st.markdown(
         f"<div class='prop-card-shell'>"
-        f"{save_icon_html}"
         f"<details class='prop-card-wrapper'>"
         f"<summary>"
         f"{base_card_html}"

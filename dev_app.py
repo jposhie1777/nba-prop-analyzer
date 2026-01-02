@@ -1453,26 +1453,26 @@ def load_team_most_used_lineups_for_teams(team_abbrs: list[str]):
     return load_bq_df(query)
 
 
-@st.cache_data(ttl=300)
-def load_todays_games():
-    query = """
+@st.cache_data(ttl=300, show_spinner=False)
+def load_today_games():
+    sql = """
     SELECT
       game_id,
       home_team_abbr,
-      away_team_abbr
-    FROM `nba_goat_data.games`
-    WHERE game_date = CURRENT_DATE()
-      AND status != 'Final'
-    ORDER BY start_time_est
+      away_team_abbr,
+      start_time_est,
+      status
+    FROM `graphite-flare-477419-h7.nba_goat_data.games`
+    WHERE game_date = CURRENT_DATE("America/New_York")
     """
-    return load_bq_df(query)
+    return load_bq_df(sql)
+
 
 @st.cache_data(ttl=30, show_spinner=False)
 def load_live_games():
     sql = """
     SELECT *
     FROM `graphite-flare-477419-h7.nba_goat_data.live_games`
-    ORDER BY updated_at DESC
     """
     return load_bq_df(sql)
 
@@ -2105,6 +2105,12 @@ def handle_save_bet(bet_line: str):
         st.session_state.saved_bets_text.append(bet_line)
         st.toast("✅ Saved bet")
 
+def classify_game_state(game_id, status, live_map):
+    if game_id in live_map:
+        return "LIVE"
+    if status and status.lower() == "final":
+        return "FINAL"
+    return "UPCOMING"
 
 def coerce_numeric_list(val):
     if val is None:
@@ -2824,7 +2830,71 @@ def render_prop_cards(
                 unsafe_allow_html=True,
             )
 
+def render_placeholder_game(g):
+    c1, c2, c3 = st.columns([2, 3, 2])
 
+    with c1:
+        st.image(team_logo_url(g.home_team_abbr), width=48)
+        st.markdown("—")
+        st.caption(g.home_team_abbr)
+
+    with c2:
+        st.markdown(
+            f"<div style='text-align:center;'>"
+            f"<h4>{g.start_time_est}</h4>"
+            f"<p style='opacity:.6;'>Not Started</p>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+    with c3:
+        st.image(team_logo_url(g.away_team_abbr), width=48)
+        st.markdown("—")
+        st.caption(g.away_team_abbr)
+
+    st.divider()
+    
+def render_live_game(g, live):
+    c1, c2, c3 = st.columns([2, 3, 2])
+
+    with c1:
+        st.image(team_logo_url(g.home_team_abbr), width=48)
+        st.markdown(f"## {live.home_score}")
+
+    with c2:
+        st.markdown(
+            f"<div style='text-align:center;'>"
+            f"<h4>🔴 {live.period}</h4>"
+            f"<p style='opacity:.6;'>LIVE</p>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+    with c3:
+        st.image(team_logo_url(g.away_team_abbr), width=48)
+        st.markdown(f"## {live.away_score}")
+
+    st.divider()
+    
+def render_final_game(g):
+    c1, c2, c3 = st.columns([2, 3, 2])
+
+    with c1:
+        st.image(team_logo_url(g.home_team_abbr), width=48)
+        st.markdown("Final")
+        st.caption(g.home_team_abbr)
+
+    with c2:
+        st.markdown(
+            "<div style='text-align:center; opacity:.5;'>FINAL</div>",
+            unsafe_allow_html=True,
+        )
+
+    with c3:
+        st.image(team_logo_url(g.away_team_abbr), width=48)
+        st.caption(g.away_team_abbr)
+
+    st.divider()
 
 def build_first_basket_expanded_html(row: pd.Series) -> str:
     starter_pct = row.get("starter_pct")
@@ -3330,15 +3400,76 @@ with tab_lineups:
 
 with tab_live:
     from streamlit_autorefresh import st_autorefresh
+
+    # --------------------------------------------
+    # Auto-refresh (every 30 seconds)
+    # --------------------------------------------
     st_autorefresh(interval=30_000, key="live_now")
 
-    live_df = load_live_games()
+    # --------------------------------------------
+    # Load data
+    # --------------------------------------------
+    today_df = load_today_games()   # all scheduled games today (EST)
+    live_df  = load_live_games()    # live snapshot table
 
-    if live_df.empty:
-        st.info("No live games right now")
-    else:
-        for _, game in live_df.iterrows():
-            render_live_game(game)
+    if today_df.empty:
+        st.info("No games scheduled today")
+        st.stop()
+
+    # --------------------------------------------
+    # Build lookup for live games
+    # --------------------------------------------
+    live_map = {r.game_id: r for _, r in live_df.iterrows()}
+
+    # --------------------------------------------
+    # Normalize start time (EST)
+    # --------------------------------------------
+    today_df["start_time_est"] = pd.to_datetime(
+        today_df["start_time_est"],
+        errors="coerce"
+    )
+
+    # --------------------------------------------
+    # Classify game state
+    # --------------------------------------------
+    today_df["game_state"] = today_df.apply(
+        lambda r: (
+            "LIVE"
+            if r.game_id in live_map
+            else "FINAL"
+            if (r.status or "").lower() == "final"
+            else "UPCOMING"
+        ),
+        axis=1,
+    )
+
+    # --------------------------------------------
+    # Rank for sorting
+    # --------------------------------------------
+    today_df["state_rank"] = today_df["game_state"].map({
+        "LIVE": 0,
+        "UPCOMING": 1,
+        "FINAL": 2,
+    })
+
+    # --------------------------------------------
+    # Sort: LIVE → UPCOMING → FINAL, then by start time
+    # --------------------------------------------
+    today_df = today_df.sort_values(
+        by=["state_rank", "start_time_est"],
+        ascending=[True, True],
+    )
+
+    # --------------------------------------------
+    # Render games
+    # --------------------------------------------
+    for _, g in today_df.iterrows():
+        if g.game_state == "LIVE":
+            render_live_game(g, live_map[g.game_id])
+        elif g.game_state == "FINAL":
+            render_final_game(g)
+        else:
+            render_placeholder_game(g)
 
 with tab_props:
     render_props_last_updated()

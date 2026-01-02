@@ -1467,15 +1467,14 @@ def load_todays_games():
     """
     return load_bq_df(query)
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=30, show_spinner=False)
 def load_live_games():
-    return bq.query(
-        f"""
-        SELECT *
-        FROM `{PROJECT_ID}.nba_goat_data.live_games`
-        ORDER BY updated_at DESC
-        """
-    ).to_dataframe()
+    sql = """
+    SELECT *
+    FROM `graphite-flare-477419-h7.nba_goat_data.live_games`
+    ORDER BY updated_at DESC
+    """
+    return load_bq_df(sql)
 
 @st.cache_data(ttl=900, show_spinner=True)
 def load_props(table_name: str) -> pd.DataFrame:

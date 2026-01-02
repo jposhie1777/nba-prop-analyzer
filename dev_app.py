@@ -3362,76 +3362,50 @@ with tab_lineups:
 with tab_live:
     from streamlit_autorefresh import st_autorefresh
 
-    # --------------------------------------------
-    # Auto-refresh (every 30 seconds)
-    # --------------------------------------------
     st_autorefresh(interval=30_000, key="live_now")
 
-    # --------------------------------------------
-    # Load data
-    # --------------------------------------------
-    today_df = load_today_games()   # all scheduled games today (EST)
-    live_df  = load_live_games()    # live snapshot table
+    today_df = load_today_games()
+    live_df  = load_live_games()
 
     if today_df.empty:
         st.info("No games scheduled today")
     else:
-        # rest of Live Now rendering
+        live_map = {r.game_id: r for _, r in live_df.iterrows()}
 
-    # --------------------------------------------
-    # Build lookup for live games
-    # --------------------------------------------
-    live_map = {r.game_id: r for _, r in live_df.iterrows()}
+        today_df["start_time_est"] = pd.to_datetime(
+            today_df["start_time_est"],
+            errors="coerce"
+        )
 
-    # --------------------------------------------
-    # Normalize start time (EST)
-    # --------------------------------------------
-    today_df["start_time_est"] = pd.to_datetime(
-        today_df["start_time_est"],
-        errors="coerce"
-    )
+        today_df["game_state"] = today_df.apply(
+            lambda r: (
+                "LIVE"
+                if r.game_id in live_map
+                else "FINAL"
+                if (r.status or "").lower() == "final"
+                else "UPCOMING"
+            ),
+            axis=1,
+        )
 
-    # --------------------------------------------
-    # Classify game state
-    # --------------------------------------------
-    today_df["game_state"] = today_df.apply(
-        lambda r: (
-            "LIVE"
-            if r.game_id in live_map
-            else "FINAL"
-            if (r.status or "").lower() == "final"
-            else "UPCOMING"
-        ),
-        axis=1,
-    )
+        today_df["state_rank"] = today_df["game_state"].map({
+            "LIVE": 0,
+            "UPCOMING": 1,
+            "FINAL": 2,
+        })
 
-    # --------------------------------------------
-    # Rank for sorting
-    # --------------------------------------------
-    today_df["state_rank"] = today_df["game_state"].map({
-        "LIVE": 0,
-        "UPCOMING": 1,
-        "FINAL": 2,
-    })
+        today_df = today_df.sort_values(
+            by=["state_rank", "start_time_est"],
+            ascending=[True, True],
+        )
 
-    # --------------------------------------------
-    # Sort: LIVE → UPCOMING → FINAL, then by start time
-    # --------------------------------------------
-    today_df = today_df.sort_values(
-        by=["state_rank", "start_time_est"],
-        ascending=[True, True],
-    )
-
-    # --------------------------------------------
-    # Render games
-    # --------------------------------------------
-    for _, g in today_df.iterrows():
-        if g.game_state == "LIVE":
-            render_live_game(g, live_map[g.game_id])
-        elif g.game_state == "FINAL":
-            render_final_game(g)
-        else:
-            render_placeholder_game(g)
+        for _, g in today_df.iterrows():
+            if g.game_state == "LIVE":
+                render_live_game(g, live_map[g.game_id])
+            elif g.game_state == "FINAL":
+                render_final_game(g)
+            else:
+                render_placeholder_game(g)
 
 with tab_props:
     render_props_last_updated()

@@ -991,6 +991,47 @@ def load_static_ui():
         }
 
         /* ==================================================
+           INJURY STATUS PILL
+        ================================================== */
+        .injury-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            line-height: 1;
+            white-space: nowrap;
+        }
+        
+        /* Status colors */
+        .injury-questionable {
+            background: rgba(245, 158, 11, 0.18);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.45);
+        }
+        
+        .injury-out {
+            background: rgba(239, 68, 68, 0.18);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.45);
+        }
+        
+        .injury-doubtful {
+            background: rgba(249, 115, 22, 0.18);
+            color: #fb923c;
+            border: 1px solid rgba(249, 115, 22, 0.45);
+        }
+        
+        .injury-probable {
+            background: rgba(34, 197, 94, 0.18);
+            color: #4ade80;
+            border: 1px solid rgba(34, 197, 94, 0.45);
+        }
+        /* ==================================================
            CARD GRID
         ================================================== */
         .card-grid {
@@ -1324,6 +1365,33 @@ DISTRIBUTION_REMAP = {
     "avg_margin_l40": "dist40_avg_margin",
 }
 
+def render_injury_pill(status: str | None, description: str | None) -> str:
+    if not status:
+        return ""
+
+    s = status.strip().lower()
+
+    if s in ("healthy", "active", "available"):
+        return ""
+
+    cls_map = {
+        "questionable": "injury-questionable",
+        "out": "injury-out",
+        "doubtful": "injury-doubtful",
+        "probable": "injury-probable",
+    }
+
+    cls = cls_map.get(s)
+    if not cls:
+        return ""
+
+    title = description or status
+
+    return (
+        f"<div class='injury-pill {cls}' title='{title}'>"
+        f"{status}"
+        f"</div>"
+    )
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def load_trends() -> pd.DataFrame:
@@ -1548,6 +1616,12 @@ def load_props(table_name: str) -> pd.DataFrame:
         "price",
         "game_date",
 
+        # --------------------------------------------------
+        # INJURY STATUS
+        # --------------------------------------------------
+        "injury_status",
+        "injury_description",
+        
         # --------------------------------------------------
         # ROLLING HIT RATES (FOR SORT / FILTER / CONFIDENCE)
         # --------------------------------------------------
@@ -2539,7 +2613,10 @@ def render_prop_cards(
             dates=dates,
         )
 
-
+        injury_html = render_injury_pill(
+            row.get("injury_status"),
+            row.get("injury_description"),
+        )
         # --------------------------------------------------
         # BASE CARD HTML (STRICT f-STRINGS)
         # --------------------------------------------------
@@ -2564,6 +2641,10 @@ def render_prop_cards(
             f"<div style='font-weight:900;font-size:1.15rem;letter-spacing:-0.2px;'>"
             f"{player}"
             f"</div>"
+            
+            # 👇 INJURY PILL (CONDITIONAL)
+            f"{injury_html}"
+            
             f"<div style='font-size:0.85rem;opacity:0.7;'>"
             f"{market_label} – {bet_type.upper()} {fmt_num(line, 1)}"
             f"</div>"

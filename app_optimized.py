@@ -106,6 +106,225 @@ if "session_initialized" not in st.session_state:
     st.session_state.session_initialized = True
 
 # ======================================================
+# AUTH0 + USER AUTH (STREAMLIT SAFE, RENDER READY)
+# ======================================================
+
+import requests
+import jwt
+import psycopg2
+import psycopg2.extras
+from urllib.parse import urlencode
+import streamlit as st
+
+# ------------------------------------------------------
+# REQUIRED ENV VARS (ALREADY LOADED VIA get_secret)
+# ------------------------------------------------------
+# AUTH0_DOMAIN
+# AUTH0_CLIENT_ID
+# AUTH0_CLIENT_SECRET
+# AUTH0_REDIRECT_URI
+# AUTH0_AUDIENCE
+# DATABASE_URL
+# IS_DEV
+
+# ======================================================
+# DATABASE HELPERS (OPTIONAL BUT RECOMMENDED)
+# ======================================================
+def get_db_conn():
+    return psycopg2.connect(
+        DATABASE_URL,
+        sslmode="require",
+    )
+
+
+def get_or_create_user(auth0_sub: str, email: str):
+    """
+    Persist Auth0 users in Postgres.
+    Safe to remove if you do not want DB-backed users.
+    """
+    conn = get_db_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    cur.execute(
+        "SELECT * FROM users WHERE auth0_sub = %s",
+        (auth0_sub,),
+    )
+    row = cur.fetchone()
+
+    if row:
+        conn.close()
+        return row
+
+    cur.execute(
+        """
+        INSERT INTO users (auth0_sub, email)
+        VALUES (%s, %s)
+        RETURNING *
+        """,
+        (auth0_sub, email),
+    )
+
+    row = cur.fetchone()
+    conn.commit()
+    conn.close()
+    return row
+
+
+# ======================================================
+# AUTH0 HELPERS
+# ======================================================
+def get_auth0_authorize_url():
+    params = {
+        "response_type": "code",
+        "client_id": AUTH0_CLIENT_ID,
+        "redirect_uri": AUTH0_REDIRECT_URI,
+        "scope": "openid profile email",
+        "audience": AUTH0_AUDIENCE,
+    }
+    return f"https://{AUTH0_DOMAIN}/authorize?{urlencode(params)}"
+
+
+def exchange_code_for_token(code: str):
+    token_url = f"https://{AUTH0_DOMAIN}/oauth/token"
+    payload = {
+        "grant_type": "authorization_code",
+        "client_id": AUTH0_CLIENT_ID,
+        "client_secret": AUTH0_CLIENT_SECRET,
+        "code": code,
+        "redirect_uri": AUTH0_REDIRECT_URI,
+        "audience": AUTH0_AUDIENCE,
+    }
+
+    resp = requests.post(token_url, json=payload, timeout=10)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def decode_id_token(id_token: str) -> dict:
+    """
+    Signature verification intentionally disabled.
+    Auth0 already verified this token.
+    """
+    return jwt.decode(
+        id_token,
+        options={
+            "verify_signature": False,
+            "verify_aud": False,
+        },
+    )
+
+
+# ======================================================
+# AUTH FLOW — CALLBACK + SESSION
+# ======================================================
+def ensure_logged_in():
+    """
+    Handles Auth0 callback and populates session_state["user"].
+    Safe to call every rerun.
+    """
+
+    # DEV BYPASS (LOCAL / TESTING)
+    if IS_DEV:
+        st.session_state.setdefault(
+            "user",
+            {
+                "auth0_sub": "dev|local",
+                "email": "dev@local",
+            },
+        )
+        return
+
+    # Already authenticated
+    if "user" in st.session_state:
+        return
+
+    # Handle Auth0 callback
+    qp = st.query_params
+    code = qp.get("code")
+    if isinstance(code, list):
+        code = code[0]
+
+    if not code:
+        return
+
+    token_data = exchange_code_for_token(code)
+    id_token = token_data.get("id_token")
+
+    claims = decode_id_token(id_token)
+    auth0_sub = claims.get("sub")
+    email = claims.get("email", "")
+
+    # Optional DB persistence
+    try:
+        user_row = get_or_create_user(auth0_sub, email)
+        user_id = user_row.get("id")
+    except Exception:
+        user_id = None
+
+    st.session_state["user"] = {
+        "auth0_sub": auth0_sub,
+        "email": email,
+        "user_id": user_id,
+    }
+
+    # Clean URL
+    st.query_params.clear()
+    st.rerun()
+
+
+# ======================================================
+# AUTH0 LOGIN GATE (MUST RUN EARLY)
+# ======================================================
+def auth_gate():
+    """
+    Hard stop unauthenticated users.
+    Must be called before rendering any app UI.
+    """
+    ensure_logged_in()
+
+    if "user" not in st.session_state:
+        st.title("Pulse Sports Analytics")
+        st.caption("Daily games, props, trends, and analytics")
+
+        login_url = get_auth0_authorize_url()
+
+        st.markdown(
+            f"""
+            <div style="
+                margin: 24px auto;
+                padding: 18px;
+                max-width: 420px;
+                text-align: center;
+                border-radius: 14px;
+                border: 1px solid rgba(148,163,184,0.35);
+                background: radial-gradient(
+                    circle at top left,
+                    rgba(15,23,42,0.95),
+                    rgba(2,6,23,0.95)
+                );
+                box-shadow: 0 18px 48px rgba(0,0,0,0.75);
+            ">
+                <a href="{login_url}"
+                   style="
+                       font-size: 1.1rem;
+                       font-weight: 800;
+                       color: #38bdf8;
+                       text-decoration: none;
+                   ">
+                    🔐 Log in with Auth0
+                </a>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.stop()
+
+# ======================================================
+# AUTH0 ENFORCEMENT (MUST RUN BEFORE ANY APP LOGIC)
+# ======================================================
+auth_gate()
+
+# ======================================================
 # SAFE QUERY PARAM NAV (NO RERUN LOOPS)
 # ======================================================
 if "pending_tab" in st.session_state:

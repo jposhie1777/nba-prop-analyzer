@@ -1650,14 +1650,32 @@ def classify_games_by_state(games):
     live, upcoming, final = [], [], []
 
     for g in games:
-        status = (g.get("status") or "").lower()
+        raw_status = g.get("status") or ""
+        status = raw_status.lower()
 
-        if status in ("in progress", "live"):
-            live.append(g["id"])
-        elif status == "final":
+        # Final is explicit
+        if status == "final":
             final.append(g["id"])
-        else:
+            continue
+
+        # Upcoming games usually say "Scheduled"
+        if status in ("scheduled", "pre-game", "pregame"):
             upcoming.append(g["id"])
+            continue
+
+        # Anything else with a quarter / halftime / OT is LIVE
+        if (
+            "qtr" in status
+            or "quarter" in status
+            or "half" in status
+            or "ot" in status
+            or status.startswith("end of")
+        ):
+            live.append(g["id"])
+            continue
+
+        # Fallback: treat unknown as upcoming
+        upcoming.append(g["id"])
 
     return live, upcoming, final
 

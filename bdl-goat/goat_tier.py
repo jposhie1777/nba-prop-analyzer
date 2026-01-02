@@ -1640,6 +1640,21 @@ def route_stats_advanced():
         ingest_stats_advanced(start, end, bypass_throttle=bypass)
     )
 
+def classify_games_by_state(games):
+    live, upcoming, final = [], [], []
+
+    for g in games:
+        status = (g.get("status") or "").lower()
+
+        if status in ("in progress", "live"):
+            live.append(g["id"])
+        elif status == "final":
+            final.append(g["id"])
+        else:
+            upcoming.append(g["id"])
+
+    return live, upcoming, final
+
 def test_raw_game_odds(game_ids: list[int], label: str):
     results = {}
 
@@ -1685,6 +1700,7 @@ def run_odds_diagnostic_for_today():
     if final_ids:
         test_raw_game_odds(final_ids[:2], "final")
         
+
 # ======================================================
 # GAME STATS ROUTES
 # ======================================================

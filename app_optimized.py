@@ -1,15 +1,26 @@
+# ======================================================
+# STREAMLIT + ENV BOOTSTRAP (LOCAL / RENDER / CLOUD)
+# ======================================================
 import os
-os.environ["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
+
+# Prevent file watcher churn (safe everywhere)
+os.environ.setdefault("STREAMLIT_SERVER_FILE_WATCHER_TYPE", "none")
 
 # ------------------------------------------------------
-# NBA Prop Analyzer - Merged Production + Dev UI
+# Load .env ONLY for local dev (safe no-op elsewhere)
 # ------------------------------------------------------
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
+
+# ======================================================
+# IMPORTS (UNCHANGED)
+# ======================================================
 import json
 from datetime import datetime
 from urllib.parse import urlencode
-
-from dotenv import load_dotenv
-load_dotenv()
 
 import base64
 import numpy as np
@@ -31,11 +42,77 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
-import psutil  # ✅ must be before memory helpers
+import psutil   # ⚠️ must be before memory helpers
 import math
 
+from goat_auth import call_goat
+
 # ======================================================
-# MEMORY TRACKING HELPERS (DEFINE BEFORE CALLING)
+# SECRET RESOLUTION (STREAMLIT > ENV)
+# ======================================================
+def get_secret(key: str, default: str = "") -> str:
+    """
+    Resolution order:
+      1) Streamlit Cloud (st.secrets)
+      2) Environment variables (Render / local .env)
+    """
+    try:
+        if key in st.secrets:
+            return str(st.secrets.get(key) or "")
+    except Exception:
+        pass
+
+    return os.getenv(key, default) or ""
+
+# ======================================================
+# ENVIRONMENT FLAGS
+# ======================================================
+APP_ENV = get_secret("APP_ENV", "prod").lower()
+IS_DEV = APP_ENV == "dev"
+
+# ======================================================
+# CORE ENV VARS (USED THROUGHOUT APP)
+# ======================================================
+PROJECT_ID = get_secret("PROJECT_ID")
+DATASET = "nba_goat_data"
+PROPS_TABLE_FULL = "props_full_enriched"
+PROPS_TABLE_Q1   = "props_q1_enriched"
+
+
+SERVICE_JSON = get_secret("GCP_SERVICE_ACCOUNT")
+
+DATABASE_URL = get_secret("DATABASE_URL")
+
+# Auth0
+AUTH0_DOMAIN        = get_secret("AUTH0_DOMAIN")
+AUTH0_CLIENT_ID     = get_secret("AUTH0_CLIENT_ID")
+AUTH0_CLIENT_SECRET = get_secret("AUTH0_CLIENT_SECRET")
+AUTH0_REDIRECT_URI  = get_secret("AUTH0_REDIRECT_URI")
+AUTH0_AUDIENCE      = get_secret("AUTH0_AUDIENCE")
+
+# ======================================================
+# STREAMLIT CONFIG (MUST BE FIRST st.* CALL)
+# ======================================================
+st.set_page_config(
+    page_title="Pulse Sports Analytics",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
+# ======================================================
+# SESSION INITIALIZATION (SAFE)
+# ======================================================
+if "session_initialized" not in st.session_state:
+    st.session_state.session_initialized = True
+
+# ======================================================
+# SAFE QUERY PARAM NAV (NO RERUN LOOPS)
+# ======================================================
+if "pending_tab" in st.session_state:
+    st.query_params["tab"] = st.session_state.pop("pending_tab")
+
+# ======================================================
+# MEMORY TRACKING (UNCHANGED)
 # ======================================================
 def get_rss_mb() -> float:
     return psutil.Process(os.getpid()).memory_info().rss / 1e6
@@ -62,79 +139,91 @@ def finalize_render_memory():
     st.session_state.mem_render_peak_mb = current
     return current, delta
 
-
-# ------------------------------------------------------
-# STREAMLIT CONFIG (MUST BE FIRST STREAMLIT COMMAND)
-# ------------------------------------------------------
-st.set_page_config(
-    page_title="NBA Prop Analyzer (DEV)",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
-
-# ------------------------------------------------------
-# SESSION INITIALIZATION (SAFE — NO STOP)
-# ------------------------------------------------------
-if "session_initialized" not in st.session_state:
-    st.session_state["session_initialized"] = True
-
-# ------------------------------------------------------
-# SAFE QUERY PARAM NAVIGATION (NO RERUN)
-# ------------------------------------------------------
-if "pending_tab" in st.session_state:
-    st.query_params["tab"] = st.session_state.pop("pending_tab")
-
-st.sidebar.markdown("🧪 DEV_APP.PY RUNNING")
-
-IS_DEV = os.getenv("APP_ENV", "prod") == "dev"
-
-
-# ------------------------------------------------------
-# MEMORY STATE INIT (NOW SAFE)
-# ------------------------------------------------------
 init_memory_state()
 
-
 # ======================================================
-# DEV ACCESS CONTROL (EARLY)
+# DEV ACCESS CONTROL (EMAIL-BASED, AUTH0-AWARE)
 # ======================================================
-DEV_EMAIL = "benvrana@bottleking.com"
+DEV_EMAILS = {
+    "benvrana@bottleking.com",
+    "jposhie1777@gmail.com",
+}
 
 def get_user_email() -> str | None:
-    user = st.session_state.get("user")
-    return user.get("email") if user else None
+    # DEV override for local work
+    if IS_DEV:
+        return DEV_EMAILS.copy().pop()
 
+    # Auth0 / Streamlit session
+    user = st.session_state.get("user")
+    if user:
+        return user.get("email")
+
+    # Streamlit hosted auth (fallback)
+    try:
+        return st.experimental_user.email
+    except Exception:
+        return None
 
 def is_dev_user() -> bool:
-    return get_user_email() == DEV_EMAIL
-
-
+    email = get_user_email()
+    return bool(email and email in DEV_EMAILS)
 
 # ======================================================
-# SAFE TAB ROUTER (DEV + MAIN)
+# TAB ROUTER (SAFE)
 # ======================================================
-def get_active_tab():
+def get_active_tab() -> str:
     tab = st.query_params.get("tab")
     if isinstance(tab, list):
         tab = tab[0]
     return tab or "main"
 
-# ------------------------------------------------------
-# SIDEBAR: DEV NAV ENTRY (SAFE)
-# ------------------------------------------------------
+# ======================================================
+# DEV SIDEBAR ENTRY (SAFE EVERYWHERE)
+# ======================================================
 if is_dev_user():
     st.sidebar.divider()
     st.sidebar.markdown("### ⚙️ Dev Tools")
 
     if st.sidebar.button("Open Dev Panel"):
-        st.query_params["tab"] = "dev"
+        st.session_state["pending_tab"] = "dev"
         st.rerun()
+
+# ======================================================
+# ENV VALIDATION (STRICT IN PROD ONLY)
+# ======================================================
+REQUIRED_ENV = [
+    "PROJECT_ID",
+    "GCP_SERVICE_ACCOUNT",
+    "DATABASE_URL",
+    "AUTH0_DOMAIN",
+    "AUTH0_CLIENT_ID",
+    "AUTH0_CLIENT_SECRET",
+    "AUTH0_REDIRECT_URI",
+    "AUTH0_AUDIENCE",
+]
+
+missing = [k for k in REQUIRED_ENV if not get_secret(k)]
+
+if missing and not IS_DEV:
+    st.error(
+        "❌ Missing required environment variables:\n\n"
+        + "\n".join(f"- {m}" for m in missing)
+    )
+    st.stop()
+
+if missing and IS_DEV:
+    st.warning(
+        "⚠️ DEV MODE — Missing env vars ignored:\n\n"
+        + "\n".join(f"- {m}" for m in missing)
+    )
 
 
 # ------------------------------------------------------
 # DEV-SAFE BIGQUERY and GAS CONSTANTS
 # ------------------------------------------------------
-DEV_BQ_DATASET = os.getenv("BIGQUERY_DATASET", "nba_prop_analyzer")
+DEV_BQ_DATASET = get_secret("BIGQUERY_DATASET", "nba_prop_analyzer")
+
 
 DEV_SP_TABLES = {
     "Game Analytics": "game_analytics",
@@ -142,6 +231,70 @@ DEV_SP_TABLES = {
     "Historical Player Stats (Trends)": "historical_player_stats_for_trends",
     "Today's Props – Enriched": "todays_props_enriched",
     "Today's Props – Hit Rates": "todays_props_hit_rates",
+}
+
+# ------------------------------------------------------
+# DEV: GOAT BIGQUERY TABLES (SCHEMA ONLY)
+# ------------------------------------------------------
+DEV_GOAT_TABLES = {
+    "GOAT – Ingest / Control": {
+        "Ingest State": {
+            "dataset": "nba_goat_data",
+            "table": "ingest_state",
+        },
+    },
+
+    "GOAT – Defense Metrics": {
+        "Opponent Position Defense (Full)": {
+            "dataset": "nba_goat_data",
+            "table": "opponent_position_defense",
+        },
+        "Opponent Position Defense (Q1)": {
+            "dataset": "nba_goat_data",
+            "table": "opponent_position_defense_q1",
+        },
+    },
+
+    "GOAT – Player Stats": {
+        "Player Game Stats (Full)": {
+            "dataset": "nba_goat_data",
+            "table": "player_game_stats_full",
+        },
+        "Player Game Stats (Period)": {
+            "dataset": "nba_goat_data",
+            "table": "player_game_stats_period",
+        },
+        "Player Advanced Rollups": {
+            "dataset": "nba_goat_data",
+            "table": "player_advanced_rollups",
+        },
+    },
+
+    "GOAT – Props": {
+        "Props (Full Enriched)": {
+            "dataset": "nba_goat_data",
+            "table": "props_full_enriched",
+        },
+        "Props (Q1 Enriched)": {
+            "dataset": "nba_goat_data",
+            "table": "props_q1_enriched",
+        },
+        "Player Prop Odds": {
+            "dataset": "nba_goat_data",
+            "table": "player_prop_odds",
+        },
+    },
+
+    "GOAT – Other": {
+        "Player Injuries": {
+            "dataset": "nba_goat_data",
+            "table": "player_injuries",
+        },
+        "Tip Win Metrics": {
+            "dataset": "nba_goat_data",
+            "table": "tip_win_metrics",
+        },
+    },
 }
 
 # ======================================================
@@ -167,6 +320,28 @@ def load_bq_df(sql: str) -> pd.DataFrame:
     df = client.query(sql).to_dataframe()
     df.flags.writeable = False
     return df
+
+@st.cache_data(ttl=300)
+def load_projected_starting_lineups_for_teams(team_abbrs: list[str]):
+    team_list = ",".join(f"'{t}'" for t in team_abbrs)
+
+    query = f"""
+    SELECT
+      team_abbr,
+      player,
+      player_id,
+      projected_lineup_spot AS lineup_slot,
+      projection_reason,
+      starter_score,
+      starter_pct,
+      avg_minutes,
+      rotation_tier,
+      projected_at
+    FROM `nba_goat_data.projected_starting_lineups`
+    WHERE team_abbr IN ({team_list})
+    ORDER BY team_abbr, projected_lineup_spot
+    """
+    return load_bq_df(query)
 
 
 # ======================================================
@@ -210,13 +385,112 @@ def trigger_apps_script(task: str):
 def get_table_schema(dataset: str, table: str) -> pd.DataFrame:
     query = f"""
     SELECT column_name, data_type
-    FROM `{dataset}.INFORMATION_SCHEMA.COLUMNS`
+    FROM `{PROJECT_ID}.{dataset}.INFORMATION_SCHEMA.COLUMNS`
     WHERE table_name = '{table}'
     ORDER BY ordinal_position
     """
+
     df = load_bq_df(query)
     df.flags.writeable = False
     return df
+
+# ======================================================
+# DEV: INGEST STATE VIEW
+# ======================================================
+@st.cache_data(ttl=120, show_spinner=False)
+def load_ingest_state() -> pd.DataFrame:
+    sql = """
+    SELECT
+        job_name,
+        last_run_ts,
+        meta
+    FROM `nba_goat_data.ingest_state`
+    ORDER BY last_run_ts DESC
+    """
+    df = load_bq_df(sql)
+
+    if df.empty:
+        return df
+
+    # Parse meta JSON cleanly
+    def parse_meta(x):
+        if x is None:
+            return {}
+        if isinstance(x, dict):
+            return x
+        try:
+            return json.loads(x)
+        except Exception:
+            return {}
+
+    df["meta"] = df["meta"].apply(parse_meta)
+
+    # Optional: extract common fields for display
+    df["date"] = df["meta"].apply(lambda m: m.get("date"))
+    df["games"] = df["meta"].apply(lambda m: m.get("games") or m.get("games_checked"))
+    df["rows"] = df["meta"].apply(lambda m: m.get("rows"))
+
+    df.flags.writeable = False
+    return df
+
+
+# ======================================================
+# DEV: QUERY REGISTRY (QUERY HEALTH)
+# ======================================================
+@st.cache_data(ttl=120, show_spinner=False)
+def load_query_registry(domain: str | None = None) -> pd.DataFrame:
+    where = ""
+    if domain:
+        where = f"WHERE domain = '{domain}'"
+
+    sql = f"""
+    SELECT
+        query_id,
+        query_name,
+        domain,
+        status,
+        last_run_ts,
+        expected_frequency_mins,
+        target_table
+    FROM `graphite-flare-477419-h7.ops.query_registry`
+    {where}
+    ORDER BY query_name
+    """
+    df = load_bq_df(sql)
+    df.flags.writeable = False
+    return df
+
+# ======================================================
+# DEV: INGEST STATE HELPERS
+# ======================================================
+def minutes_since(ts):
+    if ts is None or pd.isna(ts):
+        return None
+    return (datetime.utcnow() - ts.replace(tzinfo=None)).total_seconds() / 60.0
+
+
+def stale_style(val):
+    if val is None:
+        return ""
+    # > 120 min = stale
+    if val > 120:
+        return "color:#ef4444;font-weight:700;"
+    # 60–120 min = warning
+    if val > 60:
+        return "color:#f59e0b;font-weight:600;"
+    return "color:#22c55e;"
+
+def minutes_ago(ts):
+    if ts is None or pd.isna(ts):
+        return None
+    return (datetime.utcnow() - ts.replace(tzinfo=None)).total_seconds() / 60.0
+
+
+QUERY_STATUS_ICON = {
+    "healthy": "🟢",
+    "stale": "🟠",
+    "never_run": "⚫",
+}
 
 # ======================================================
 # DEV: BigQuery Stored Procedure Trigger (SAFE)
@@ -224,9 +498,9 @@ def get_table_schema(dataset: str, table: str) -> pd.DataFrame:
 def trigger_bq_procedure(proc_name: str):
     try:
         client = get_dev_bq_client()
-        sql = f"CALL `{DEV_BQ_DATASET}.{proc_name}`()"
+        sql = f"CALL `nba_goat_data.{proc_name}`()"
         job = client.query(sql)
-        job.result()  # wait, but pull no data
+        job.result()
         st.success(f"✅ {proc_name} completed")
     except Exception as e:
         st.error(f"❌ {proc_name} failed")
@@ -257,158 +531,305 @@ def read_sheet_values(sheet_id: str, range_name: str) -> list[list[str]]:
 
     return resp.get("values", [])
 
+def render_query_health_panel(domain="goat"):
+    st.subheader("📊 Query Health")
+
+    df = load_query_registry(domain)
+
+    if df.empty:
+        st.info("No queries registered.")
+        return
+
+    df = df.copy()
+    df["mins_ago"] = df["last_run_ts"].apply(minutes_ago)
+    df["status_icon"] = df["status"].map(QUERY_STATUS_ICON)
+
+    display_df = df[
+        [
+            "status_icon",
+            "query_name",
+            "mins_ago",
+            "expected_frequency_mins",
+            "target_table",
+        ]
+    ].rename(
+        columns={
+            "status_icon": "",
+            "query_name": "Query",
+            "mins_ago": "Last Run (min ago)",
+            "expected_frequency_mins": "Expected (min)",
+            "target_table": "Target Table",
+        }
+    )
+
+    st.dataframe(
+        display_df,
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    st.caption("🟢 healthy • 🟠 stale • ⚫ never run")
 
 # ======================================================
 # DEV PAGE OVERRIDE (CRASH-SAFE)
 # ======================================================
 def render_dev_page():
     st.title("⚙️ DEV CONTROL PANEL")
-    
+
+    # --------------------------------------------------
+    # NAV
+    # --------------------------------------------------
     if st.button("⬅ Back to Main App", use_container_width=False):
         st.session_state["pending_tab"] = "main"
-    
-    st.caption("Always available • restricted access")
 
+    st.caption("Always available • restricted access")
     st.markdown(f"**Email:** `{get_user_email()}`")
 
     st.divider()
 
-    st.subheader("🧪 BigQuery – Manual Stored Procedure Triggers")
+    # ==================================================
+    # 📡 INGESTION STATUS (GOAT)
+    # ==================================================
+    st.subheader("📡 Ingestion Status (GOAT)")
+
+    try:
+        ingest_df = load_ingest_state()
+
+        if ingest_df.empty:
+            st.warning("No ingestion state rows found.")
+        else:
+            ingest_df = ingest_df.copy()
+            ingest_df["mins_ago"] = ingest_df["last_run_ts"].apply(minutes_since)
+
+            display_df = ingest_df[
+                ["job_name", "last_run_ts", "mins_ago", "date", "games", "rows"]
+            ]
+
+            st.dataframe(
+                display_df.style.applymap(
+                    stale_style,
+                    subset=["mins_ago"],
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            st.caption(
+                "🟢 < 60 min • 🟠 60–120 min • 🔴 > 120 min since last successful run\n\n"
+                "Timestamps are UTC. Fields are parsed from ingest_state.meta."
+            )
+
+    except Exception as e:
+        st.error("❌ Failed to load ingestion status")
+        st.code(str(e))
+
+    st.divider()
+
+    # ==================================================
+    # 📊 QUERY HEALTH (GOAT)
+    # ==================================================
+    try:
+        render_query_health_panel(domain="goat")
+    except Exception as e:
+        st.error("❌ Failed to load query health")
+        st.code(str(e))
+
+    # ==================================================
+    # BIGQUERY — STORED PROCEDURE TRIGGERS
+    # ==================================================
+    st.subheader("🧪 BigQuery — Manual Stored Procedure Triggers")
 
     BQ_PROCS = [
-        ("Game Analytics", "sp_game_analytics"),
-        ("Game Report", "sp_game_report"),
-        ("Historical Player Stats (Trends)", "sp_historical_player_stats_for_trends"),
-        ("Today's Props – Enriched", "sp_todays_props_enriched"),
-        ("Today's Props – Hit Rates", "sp_todays_props_with_hit_rates"),
+        ("🐐 GOAT Daily Pipeline (ALL)", "run_daily_goat_pipeline"),
+        ("Defense + Tip Metrics", "build_defense_and_tip_metrics"),
+        ("Props Enriched (Full + Q1)", "build_props_enriched"),
+        ("Historical Player Trends", "build_historical_player_trends"),
     ]
 
     for label, proc in BQ_PROCS:
-        col1, col2 = st.columns([3, 1])
+        c1, c2 = st.columns([3, 1])
 
-        with col1:
+        with c1:
             st.markdown(f"**{label}**")
-            st.caption(f"`{DEV_BQ_DATASET}.{proc}`")
+            st.caption(f"`nba_goat_data.{proc}()`")
 
-        with col2:
-            if st.button(
-                "▶ Run",
-                key=f"run_{proc}",
-                use_container_width=True
-            ):
+        with c2:
+            if st.button("▶ Run", key=f"run_{proc}", use_container_width=True):
                 with st.spinner(f"Running {proc}…"):
                     trigger_bq_procedure(proc)
 
+    st.divider()
+
+    
+
+    # ==================================================
+    # ☁️ GOAT Cloud Run Jobs
+    # ==================================================
+    GOAT_JOBS = {
+        # ----------------------------
+        # Core / Frequent
+        # ----------------------------
+        "Player Props": (
+            "https://goat-ingestion-763243624328.us-central1.run.app/goat/ingest/player-props",
+            {"bypass": True},
+        ),
+        "Player Injuries": (
+            "https://goat-ingestion-763243624328.us-central1.run.app/goat/ingest/player-injuries",
+            {},
+        ),
+    
+        # ----------------------------
+        # Games
+        # ----------------------------
+        "Games Today": (
+            "https://goat-ingestion-763243624328.us-central1.run.app/goat/ingest/games",
+            {"date": "today", "bypass": True},
+        ),
+        "Games Yesterday": (
+            "https://goat-ingestion-763243624328.us-central1.run.app/goat/ingest/games",
+            {"date": "yesterday", "bypass": True},
+        ),
+    
+        # ----------------------------
+        # Stats Pipelines
+        # ----------------------------
+        "Stats — Advanced": (
+            "https://goat-ingestion-763243624328.us-central1.run.app/goat/ingest/stats/advanced",
+            {"bypass": True},
+        ),
+        "Stats — Full": (
+            "https://goat-ingestion-763243624328.us-central1.run.app/goat/ingest/stats/full",
+            {},
+        ),
+        "Stats — Quarters": (
+            "https://goat-ingestion-763243624328.us-central1.run.app/goat/ingest/stats/quarters",
+            {},
+        ),
+    
+        # ----------------------------
+        # Plays / Lineups
+        # ----------------------------
+        "Plays — First 3 Min": (
+            "https://goat-ingestion-763243624328.us-central1.run.app/goat/ingest/plays/first3min",
+            {"bypass": True},
+        ),
+        "Lineups — Yesterday": (
+            "https://goat-ingestion-763243624328.us-central1.run.app/goat/ingest/lineups",
+            {
+                "start": (datetime.utcnow() - pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
+                "end": (datetime.utcnow() - pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
+            },
+        ),
+    }
+    
+    cols = st.columns(3)
+
+    for i, (label, (url, params)) in enumerate(GOAT_JOBS.items()):
+        with cols[i % 3]:
+            if st.button(f"▶ {label}", use_container_width=True):
+                with st.spinner(f"Triggering {label}…"):
+                    try:
+                        call_goat(url, params)
+                        st.success("Triggered")
+                    except Exception as e:
+                        st.error("Failed")
+                        st.code(str(e))
+    
+    st.caption("Secure direct trigger (same endpoints as Cloud Scheduler)")
+    st.divider()
+
+    def trigger_goat_job(job_key: str):
+        try:
+            url, params = GOAT_ENDPOINTS[job_key]
+            call_goat(url, params)
+            st.success(f"✅ GOAT job `{job_key}` triggered")
+        except Exception as e:
+            st.error("❌ GOAT job failed")
+            st.code(str(e))
+
+    # -------------------------------
+    # GOAT Ingestion Tables (Schema Only)
+    # -------------------------------
+    st.markdown("### 🐐 GOAT Ingestion Tables")
+
+    for group, tables in DEV_GOAT_TABLES.items():
+        st.markdown(f"**{group}**")
+
+        for label, meta in tables.items():
+            dataset = meta["dataset"]
+            table = meta["table"]
+
+            with st.expander(f"📄 {label}", expanded=False):
+                st.code(f"{dataset}.{table}", language="text")
+
+                try:
+                    schema_df = get_table_schema(dataset, table)
+
+                    if schema_df.empty:
+                        st.warning("No columns found (table may not exist yet).")
+                    else:
+                        st.dataframe(
+                            schema_df,
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+
+                except Exception as e:
+                    st.error("Failed to load schema")
+                    st.code(str(e))
 
     st.divider()
 
-    st.subheader("Cloud Run")
-    if st.button("▶ Trigger ESPN Lineups"):
-        trigger_cloud_run("espn-nba-lineups")
-
-    st.divider()
-
-    st.subheader("📄 Google Apps Script")
-
-    APPS_TASKS = [
-        ("NBA Alternate Props", "NBA_ALT_PROPS"),
-        ("NBA Game Odds", "NBA_GAME_ODDS"),
-        ("NCAAB Game Odds", "NCAAB_GAME_ODDS"),
-        ("Run ALL (Daily Runner)", "ALL"),
-    ]
-
-    for label, task in APPS_TASKS:
-        col1, col2 = st.columns([3, 1])
-
-        with col1:
-            st.markdown(f"**{label}**")
-
-        with col2:
-            if st.button(
-                "▶ Run",
-                key=f"apps_{task}",
-                use_container_width=True
-            ):
-                with st.spinner(f"Running {label}…"):
-                    trigger_apps_script(task)
-
-    st.divider()
+    # ==================================================
+    # GOOGLE SHEETS — SANITY CHECKS
+    # ==================================================
     st.subheader("📊 Google Sheet Sanity Checks")
 
     SHEET_ID = "1p_rmmiUgU18afioJJ3jCHh9XeX7V4gyHd_E0M3A8M3g"
 
-    st.markdown("## 🧪 Stored Procedure Outputs – Schema Preview")
-
-    for label, table in DEV_SP_TABLES.items():
-        st.subheader(label)
-    
-        with st.expander("📋 View Columns"):
-            try:
-                schema_df = get_table_schema("nba_prop_analyzer", table)
-    
-                if schema_df.empty:
-                    st.warning("No columns found (table may not exist yet).")
-                else:
-                    st.dataframe(
-                        schema_df,
-                        use_container_width=True,
-                        hide_index=True
-                    )
-    
-            except Exception as e:
-                st.error(f"Failed to load schema: {e}")
-
-    # --------------------------------------------------
-    # 1) Odds tab checks
-    # --------------------------------------------------
+    # -------------------------------
+    # Odds Sheet
+    # -------------------------------
     try:
         odds_rows = read_sheet_values(SHEET_ID, "Odds!A:I")
+        has_rows = len(odds_rows) > 1
 
-        has_odds_data = len(odds_rows) > 1
-
-        labels = []
-        if has_odds_data:
-            labels = [
-                (r[8] or "").strip().lower()
-                for r in odds_rows[1:]
-                if len(r) >= 9
-            ]
-
-        has_over = any("over" in l for l in labels)
-        has_under = any("under" in l for l in labels)
+        labels = [
+            (r[8] or "").strip().lower()
+            for r in odds_rows[1:]
+            if len(r) >= 9
+        ] if has_rows else []
 
         st.markdown("**Odds Tab**")
 
-        if has_odds_data:
+        if has_rows:
             st.success("✅ Rows exist after header")
         else:
             st.error("❌ No rows found after header")
 
-        if has_over and has_under:
-            st.success("✅ Both Over and Under found in `label` column")
-        elif has_over:
-            st.warning("⚠️ Only Over found in `label` column")
-        elif has_under:
-            st.warning("⚠️ Only Under found in `label` column")
+        if any("over" in l for l in labels) and any("under" in l for l in labels):
+            st.success("✅ Both Over and Under found")
+        elif any("over" in l for l in labels):
+            st.warning("⚠️ Only Over found")
+        elif any("under" in l for l in labels):
+            st.warning("⚠️ Only Under found")
         else:
-            st.error("❌ No Over / Under values found in `label` column")
+            st.error("❌ No Over / Under values found")
 
     except Exception as e:
         st.error("❌ Failed to read Odds tab")
         st.code(str(e))
 
-
-    # --------------------------------------------------
-    # 2) Game Odds Sheet checks
-    # --------------------------------------------------
+    # -------------------------------
+    # Game Odds Sheet
+    # -------------------------------
     try:
         game_odds_rows = read_sheet_values(SHEET_ID, "Game Odds Sheet!A:A")
-
-        has_game_odds_data = len(game_odds_rows) > 1
+        has_rows = len(game_odds_rows) > 1
 
         st.markdown("**Game Odds Sheet**")
 
-        if has_game_odds_data:
+        if has_rows:
             st.success("✅ Rows exist after header")
         else:
             st.error("❌ No rows found after header")
@@ -417,9 +838,7 @@ def render_dev_page():
         st.error("❌ Failed to read Game Odds Sheet")
         st.code(str(e))
 
-
-        st.success("DEV page loaded successfully.")
-
+    st.success("DEV page loaded successfully.")
 
 
 # ======================================================
@@ -436,194 +855,6 @@ if active_tab == "dev":
     render_dev_page()
     st.stop()
 
-
-# ------------------------------------------------------
-# ENVIRONMENT VARIABLES
-# ------------------------------------------------------
-PROJECT_ID = os.getenv("PROJECT_ID", "")
-
-DATASET = os.getenv("BIGQUERY_DATASET", "nba_prop_analyzer")
-PROPS_TABLE = "todays_props_enriched"
-
-# SERVICE_JSON is a JSON string (not a filepath)
-SERVICE_JSON = os.getenv("GCP_SERVICE_ACCOUNT", "")
-
-# Auth0
-AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN", "")
-AUTH0_CLIENT_ID = os.getenv("AUTH0_CLIENT_ID", "")
-AUTH0_CLIENT_SECRET = os.getenv("AUTH0_CLIENT_SECRET", "")
-AUTH0_REDIRECT_URI = os.getenv("AUTH0_REDIRECT_URI", "")
-AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE", "")
-
-# Render PostgreSQL
-DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
-
-missing_env = []
-if not PROJECT_ID:
-    missing_env.append("PROJECT_ID")
-if not SERVICE_JSON:
-    missing_env.append("GCP_SERVICE_ACCOUNT")
-if not DATABASE_URL:
-    missing_env.append("DATABASE_URL")
-if not AUTH0_DOMAIN:
-    missing_env.append("AUTH0_DOMAIN")
-if not AUTH0_CLIENT_ID:
-    missing_env.append("AUTH0_CLIENT_ID")
-if not AUTH0_CLIENT_SECRET:
-    missing_env.append("AUTH0_CLIENT_SECRET")
-if not AUTH0_REDIRECT_URI:
-    missing_env.append("AUTH0_REDIRECT_URI")
-if not AUTH0_AUDIENCE:
-    missing_env.append("AUTH0_AUDIENCE")
-
-if missing_env and not IS_DEV:
-    st.error(
-        "❌ Missing required environment variables:\n\n"
-        + "\n".join(f"- {m}" for m in missing_env)
-    )
-    st.stop()
-
-if missing_env:
-    st.error(
-        "❌ Missing required environment variables:\n\n"
-        + "\n".join(f"- {m}" for m in missing_env)
-    )
-    st.stop()
-
-def get_db_conn():
-    return psycopg2.connect(DATABASE_URL, sslmode="require")
-
-
-def get_or_create_user(auth0_sub: str, email: str):
-    conn = get_db_conn()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-
-    cur.execute("SELECT * FROM users WHERE auth0_sub = %s", (auth0_sub,))
-    row = cur.fetchone()
-
-    if row:
-        conn.close()
-        return row
-
-    cur.execute(
-        "INSERT INTO users (auth0_sub, email) VALUES (%s, %s) RETURNING *",
-        (auth0_sub, email),
-    )
-    row = cur.fetchone()
-    conn.commit()
-    conn.close()
-    return row
-
-
-# ------------------------------------------------------
-# AUTH0 HELPERS (LOGIN)
-# ------------------------------------------------------
-def get_auth0_authorize_url():
-    params = {
-        "response_type": "code",
-        "client_id": AUTH0_CLIENT_ID,
-        "redirect_uri": AUTH0_REDIRECT_URI,
-        "scope": "openid profile email",
-        "audience": AUTH0_AUDIENCE,
-    }
-    return f"https://{AUTH0_DOMAIN}/authorize?{urlencode(params)}"
-
-
-def exchange_code_for_token(code: str):
-    token_url = f"https://{AUTH0_DOMAIN}/oauth/token"
-    payload = {
-        "grant_type": "authorization_code",
-        "client_id": AUTH0_CLIENT_ID,
-        "client_secret": AUTH0_CLIENT_SECRET,
-        "code": code,
-        "redirect_uri": AUTH0_REDIRECT_URI,
-        "audience": AUTH0_AUDIENCE,
-    }
-    resp = requests.post(token_url, json=payload, timeout=10)
-    resp.raise_for_status()
-    return resp.json()
-
-
-def decode_id_token(id_token: str):
-    return jwt.decode(
-        id_token,
-        options={"verify_signature": False, "verify_aud": False},
-    )
-
-
-# ------------------------------------------------------
-# AUTH FLOW – HANDLES AUTH0 CALLBACK
-# ------------------------------------------------------
-def ensure_logged_in():
-    if "user" in st.session_state and "user_id" in st.session_state:
-        return
-
-    qp = st.query_params
-    code = qp.get("code")
-    if isinstance(code, list):
-        code = code[0]
-
-    if not code:
-        return  # no callback yet
-
-    token_data = exchange_code_for_token(code)
-    id_token = token_data.get("id_token")
-    claims = decode_id_token(id_token)
-
-    auth0_sub = claims.get("sub")
-    email = claims.get("email", "")
-
-    user_row = get_or_create_user(auth0_sub, email)
-
-    st.session_state["user"] = {
-        "auth0_sub": auth0_sub,
-        "email": email,
-    }
-    st.session_state["user_id"] = user_row["id"]
-
-    # clear ?code from URL
-    st.query_params.clear()
-    st.rerun()
-
-
-
-# ------------------------------------------------------
-# AUTH0 GATE (ALWAYS REQUIRED)
-# ------------------------------------------------------
-ensure_logged_in()
-
-if "user" not in st.session_state:
-    st.title("Pulse Sports Analytics")
-    st.caption("Daily games, props, trends, and analytics")
-
-    login_url = get_auth0_authorize_url()
-    st.markdown(
-        f"""
-        <div style="
-            margin: 14px 0 22px 0;
-            padding: 14px 18px;
-            border-radius: 14px;
-            border: 1px solid rgba(148,163,184,0.35);
-            background: radial-gradient(circle at top left, rgba(15,23,42,0.95), rgba(15,23,42,0.85));
-            box-shadow: 0 16px 40px rgba(15,23,42,0.9);
-            text-align: center;
-        ">
-            <a href="{login_url}"
-               style="
-                   font-size: 1rem;
-                   font-weight: 700;
-                   color: #38bdf8;
-                   text-decoration: none;
-               ">
-                🔐 Log in with Auth0
-            </a>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.stop()
-
-
 # ------------------------------------------------------
 # LOCKED THEME (STATIC) AND GLOBAL STYLES
 # ------------------------------------------------------
@@ -636,8 +867,76 @@ def load_static_ui():
     st.markdown(
         """
         <style>
+
         /* ==================================================
-           EXPAND WRAPPER (UNCHANGED BEHAVIOR)
+           GLOBAL IMAGE SAFETY CLAMP (CRITICAL)
+        ================================================== */
+        img {
+            max-width: 32px !important;
+            max-height: 32px !important;
+            width: auto !important;
+            height: auto !important;
+            object-fit: contain !important;
+            display: inline-block;
+        }
+
+        /* ==================================================
+           PROP ROW (SAVE BUTTON + CARD)
+        ================================================== */
+        .prop-row {
+            display: flex;
+            align-items: stretch;
+            gap: 0;
+            margin: 10px 0 14px;
+        }
+
+        .prop-row .save-wrap {
+            display: flex;
+            align-items: stretch;
+            margin-right: -10px;
+            z-index: 10;
+        }
+
+        .prop-row .save-wrap div[data-testid="stButton"] {
+            margin: 0 !important;
+        }
+
+        .prop-row .save-wrap div[data-testid="stButton"] > button {
+            width: 52px !important;
+            min-width: 52px !important;
+            height: 100% !important;
+            min-height: 96px !important;
+            padding: 0 !important;
+            border-radius: 14px !important;
+            border: 1px solid rgba(255,255,255,0.12) !important;
+            background: linear-gradient(
+                180deg,
+                rgba(15, 23, 42, 0.95),
+                rgba(2, 6, 23, 0.98)
+            ) !important;
+            box-shadow:
+                0 12px 28px rgba(0,0,0,0.6),
+                inset 0 1px 0 rgba(255,255,255,0.05);
+            font-size: 20px !important;
+            line-height: 1 !important;
+        }
+
+        .prop-row .save-wrap div[data-testid="stButton"] > button:hover {
+            transform: translateY(-1px);
+            border-color: rgba(14,165,233,0.5) !important;
+        }
+
+        .prop-row .card-wrap {
+            flex: 1 1 auto;
+        }
+
+        .prop-row .card-wrap .prop-card-wrapper summary {
+            border-top-left-radius: 12px;
+            border-bottom-left-radius: 12px;
+        }
+
+        /* ==================================================
+           EXPAND / COLLAPSE WRAPPER
         ================================================== */
         .prop-card-wrapper {
             position: relative;
@@ -654,9 +953,22 @@ def load_static_ui():
             display: none;
         }
 
-        .prop-card-wrapper summary * {
+        /* Enable touch events on card wrapper (REQUIRED) */
+        .prop-card-wrapper {
+            pointer-events: auto;
+        }
+
+        /* Allow swipe detection on summary */
+        .swipe-card {
+            pointer-events: auto;
+            touch-action: pan-y; /* allow vertical scroll, detect horizontal swipe */
+        }
+
+        /* Still prevent inner content from hijacking clicks */
+        .swipe-card > * {
             pointer-events: none;
         }
+
 
         .prop-card-wrapper .card-expanded {
             margin-top: 6px;
@@ -667,11 +979,11 @@ def load_static_ui():
             text-align: center;
             font-size: 0.65rem;
             opacity: 0.55;
-            margin-top: 4px;
+            margin-top: 6px;
         }
 
         /* ==================================================
-           BASE CARD (MATCH TILE LAYOUT)
+           BASE CARD
         ================================================== */
         .prop-card,
         .prop-card-wrapper summary {
@@ -680,7 +992,6 @@ def load_static_ui():
                 rgba(15, 23, 42, 0.92),
                 rgba(2, 6, 23, 0.95)
             );
-            border: none;
             border-radius: 16px;
             padding: 16px 18px;
             width: 100%;
@@ -696,7 +1007,48 @@ def load_static_ui():
         }
 
         /* ==================================================
-           CARD GRID (VERTICAL TILE STRUCTURE)
+           INJURY STATUS PILL
+        ================================================== */
+        .injury-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            line-height: 1;
+            white-space: nowrap;
+        }
+        
+        /* Status colors */
+        .injury-questionable {
+            background: rgba(245, 158, 11, 0.18);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.45);
+        }
+        
+        .injury-out {
+            background: rgba(239, 68, 68, 0.18);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.45);
+        }
+        
+        .injury-doubtful {
+            background: rgba(249, 115, 22, 0.18);
+            color: #fb923c;
+            border: 1px solid rgba(249, 115, 22, 0.45);
+        }
+        
+        .injury-probable {
+            background: rgba(34, 197, 94, 0.18);
+            color: #4ade80;
+            border: 1px solid rgba(34, 197, 94, 0.45);
+        }
+        /* ==================================================
+           CARD GRID
         ================================================== */
         .card-grid {
             display: grid;
@@ -705,11 +1057,10 @@ def load_static_ui():
         }
 
         /* ==================================================
-           EXPANDED METRICS (BLENDED)
+           EXPANDED METRICS
         ================================================== */
         .expanded-wrap {
             background: rgba(255,255,255,0.03);
-            border: none;
             padding: 10px;
             border-radius: 12px;
         }
@@ -736,12 +1087,149 @@ def load_static_ui():
             font-weight: 700;
             color: #ffffff;
         }
+
+        /* ==================================================
+           LIVE SCOREBOARD (LIVE / UPCOMING / FINAL)
+        ================================================== */
+        .live-scoreboard {
+            background: radial-gradient(
+                circle at 30% 50%,
+                rgba(34,197,94,0.18),
+                rgba(2,6,23,0.96) 55%
+            );
+            border-radius: 20px;
+            padding: 22px 28px;
+            margin-bottom: 18px;
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            box-shadow:
+                0 20px 40px rgba(0,0,0,0.65),
+                inset 0 1px 0 rgba(255,255,255,0.04);
+        }
+        
+        .live-score {
+            font-size: 4.2rem;
+            font-weight: 900;
+            line-height: 1;
+        }
+        
+        .live-team {
+            font-size: 0.95rem;
+            opacity: 0.75;
+            margin-top: 6px;
+        }
+        
+        .live-center {
+            text-align: center;
+            padding: 0 24px;
+        }
+        
+        .live-period {
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+        }
+        
+        .live-status {
+            font-size: 0.7rem;
+            opacity: 0.55;
+            margin-top: 4px;
+        }
+        
+        /* ==================================================
+           LIVE QUARTER BREAKDOWN
+        ================================================== */
+        .live-quarters {
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.08);
+            display: grid;
+            grid-template-columns: 60px repeat(5, 1fr);
+            row-gap: 6px;
+            font-size: 0.75rem;
+            opacity: 0.75;
+        }
+        
+        .live-quarters .hdr {
+            text-align: center;
+            font-weight: 700;
+            opacity: 0.6;
+        }
+        
+        .live-quarters .team {
+            font-weight: 700;
+            text-align: left;
+        }
+        
+        .live-quarters .cell {
+            text-align: center;
+        }
+        /* ==================================================
+           MOBILE SWIPE VISUAL FEEDBACK
+        ================================================== */
+        @media (max-width: 640px) {
+            .swipe-card {
+                transition: transform 0.15s ease;
+            }
+        }
+
         </style>
+
         """,
         unsafe_allow_html=True,
     )
 
 load_static_ui()
+
+import streamlit.components.v1 as components
+
+def swipe_listener():
+    components.html(
+        """
+        <script>
+        (function () {
+            let startX = null;
+            let startY = null;
+            let lastCard = null;
+
+            window.addEventListener("pointerdown", e => {
+                lastCard = e.target.closest(".swipe-card");
+                if (!lastCard) return;
+                startX = e.clientX;
+                startY = e.clientY;
+            });
+
+            window.addEventListener("pointerup", e => {
+                if (!lastCard || startX === null) return;
+
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+
+                startX = startY = null;
+
+                if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) && dx > 0) {
+                    const betLine = lastCard.dataset.betLine;
+                    if (!betLine) return;
+
+                    window.parent.postMessage(
+                        {
+                            streamlit: true,
+                            key: "_swipe_bet_line",
+                            value: betLine
+                        },
+                        "*"
+                    );
+                }
+
+                lastCard = null;
+            });
+        })();
+        </script>
+        """,
+        height=0,
+    )
+
 
 # ------------------------------------------------------
 # LOGOS (STATIC)
@@ -820,11 +1308,39 @@ def team_abbr(team_name: str) -> str:
     """
     return TEAM_NAME_TO_CODE.get(team_name, team_name[:3].upper())
 
+CODE_TO_TEAM_NAME = {v: k for k, v in TEAM_NAME_TO_CODE.items()}
+
+def team_full_name(team_abbr: str) -> str:
+    return CODE_TO_TEAM_NAME.get(team_abbr, team_abbr)
+
+
 def logo(team_name: str) -> str:
     code = TEAM_NAME_TO_CODE.get(team_name)
     if not code:
         return "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
     return TEAM_LOGOS.get(code)
+
+def render_props_last_updated():
+    df = load_ingest_state()
+    row = df[df["job_name"] == "Player Props"]
+
+    if row.empty:
+        st.caption("⚪ Props update time unknown")
+        return
+
+    ts = row["last_run_ts"].iloc[0]
+    mins = minutes_since(ts)
+
+    if mins is None:
+        label = "⚪ Unknown"
+    elif mins < 5:
+        label = "🟢 Updated just now"
+    elif mins < 15:
+        label = f"🟡 Updated {int(mins)} min ago"
+    else:
+        label = f"🔴 Updated {int(mins)} min ago"
+
+    st.caption(f"**Props Data:** {label}")
 
 # -------------------------------
 # Sportsbook Logos
@@ -846,6 +1362,9 @@ SPORTSBOOK_LOGOS = {
     "DraftKings": load_logo_base64(LOGO_DIR / "Draftkingssmall.png"),
     "FanDuel": load_logo_base64(LOGO_DIR / "Fanduelsmall.png"),
 }
+
+def team_logo_url(abbr: str) -> str:
+    return f"https://a.espncdn.com/i/teamlogos/nba/500/{abbr.lower()}.png"
 
 # -------------------------------
 # Saved Bets (constant-memory)
@@ -877,20 +1396,98 @@ if "page" not in st.session_state:
 TRENDS_SQL = """
 SELECT
   player,
+
+  -- Core box score
   pts_last10_list,
   reb_last10_list,
   ast_last10_list,
   stl_last10_list,
   blk_last10_list,
+
+  -- Combos
   pra_last10_list,
   pr_last10_list,
   pa_last10_list,
   ra_last10_list,
+
+  -- Shooting / misc (new, safe to include)
+  fgm_last10_list,
+  fga_last10_list,
+  fg3m_last10_list,
+  fg3a_last10_list,
+  ftm_last10_list,
+  fta_last10_list,
+  turnover_last10_list,
+  pf_last10_list,
+
   last10_dates
-FROM `nba_prop_analyzer.historical_player_trends`
+FROM `nba_goat_data.historical_player_trends`
 """
 
-PROPS_SQL = f"SELECT * FROM `{PROJECT_ID}.{DATASET}.{PROPS_TABLE}`"
+COLUMN_REMAP = {
+    "team": "player_team",
+    "stat_type": "market",
+    "prop_class": "bet_type",
+
+    "implied_probability": "implied_prob",
+
+    "clear_plus1_rate": "dist20_clear_1p_rate",
+    "clear_plus2_rate": "dist20_clear_2p_rate",
+    "bad_miss_rate_l20": "dist20_fail_bad_rate",
+    "avg_margin_l20": "dist20_avg_margin",
+
+    "bad_miss_rate_l40": "dist40_fail_bad_rate",
+    "avg_margin_l40": "dist40_avg_margin",
+}
+
+DISTRIBUTION_REMAP = {
+    # averages
+    "avg_l5": "avg_stat_l5",
+    "avg_l10": "avg_stat_l10",
+    "avg_l20": "avg_stat_l20",
+
+    # L20 distribution
+    "hit_rate_l20": "dist20_hit_rate",
+    "clear_1p_pct_l20": "dist20_clear_1p_rate",
+    "clear_2p_pct_l20": "dist20_clear_2p_rate",
+    "bad_miss_pct_l20": "dist20_fail_bad_rate",
+    "avg_margin_l20": "dist20_avg_margin",
+
+    # L40 distribution
+    "hit_rate_l40": "dist40_hit_rate",
+    "clear_1p_pct_l40": "dist40_clear_1p_rate",
+    "clear_2p_pct_l40": "dist40_clear_2p_rate",
+    "bad_miss_pct_l40": "dist40_fail_bad_rate",
+    "avg_margin_l40": "dist40_avg_margin",
+}
+
+def render_injury_pill(status: str | None, description: str | None) -> str:
+    if not status:
+        return ""
+
+    s = status.strip().lower()
+
+    if s in ("healthy", "active", "available"):
+        return ""
+
+    cls_map = {
+        "questionable": "injury-questionable",
+        "out": "injury-out",
+        "doubtful": "injury-doubtful",
+        "probable": "injury-probable",
+    }
+
+    cls = cls_map.get(s)
+    if not cls:
+        return ""
+
+    title = description or status
+
+    return (
+        f"<div class='injury-pill {cls}' title='{title}'>"
+        f"{status}"
+        f"</div>"
+    )
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def load_trends() -> pd.DataFrame:
@@ -899,50 +1496,290 @@ def load_trends() -> pd.DataFrame:
     df.flags.writeable = False
     return df
 
-@st.cache_data(ttl=900, show_spinner=True)
-def load_props() -> pd.DataFrame:
-    df = load_bq_df(PROPS_SQL)
+@st.cache_data(ttl=1800, show_spinner=False)
+def load_trends_q1() -> pd.DataFrame:
+    sql = """
+    SELECT *
+    FROM `nba_goat_data.historical_player_trends_q1`
+    """
+    df = load_bq_df(sql)
+    df["player"] = df["player"].astype(str)
+    df.flags.writeable = False
+    return df
 
-    # Keep only columns we actually use (cuts memory)
+@st.cache_data(ttl=300, show_spinner=True)
+def load_first_basket_today() -> pd.DataFrame:
+    sql = """
+    SELECT
+        fb.*,
+        g.home_team_abbr,
+        g.away_team_abbr,
+        t.tip_win_pct,
+        t.jump_attempts
+    FROM nba_goat_data.first_basket_projection_today fb
+    JOIN nba_goat_data.games g
+      ON fb.game_id = g.game_id
+    LEFT JOIN nba_goat_data.tip_win_metrics t
+      ON t.entity_type = 'team'
+     AND t.team_abbr = fb.team_abbr
+    WHERE fb.game_date = CURRENT_DATE("America/New_York")
+    """
+    return load_bq_df(sql)
+    
+@st.cache_data(ttl=300)
+def load_team_most_used_lineups_for_teams(team_abbrs: list[str]):
+    team_list = ",".join(f"'{t}'" for t in team_abbrs)
+
+    query = f"""
+    SELECT
+      team_abbr,
+      player,
+      player_id,
+      lineup_slot,
+      times_used,
+      first_used,
+      last_used
+    FROM `nba_goat_data.team_most_used_lineups`
+    WHERE team_abbr IN ({team_list})
+    ORDER BY team_abbr, lineup_slot
+    """
+    return load_bq_df(query)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def load_today_games():
+    sql = """
+    SELECT
+      game_id,
+      home_team_abbr,
+      away_team_abbr,
+      start_time_est,
+      status
+    FROM `graphite-flare-477419-h7.nba_goat_data.games`
+    WHERE game_date = CURRENT_DATE("America/New_York")
+    """
+    return load_bq_df(sql)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def load_live_games():
+    sql = """
+    SELECT *
+    FROM `graphite-flare-477419-h7.nba_goat_data.live_games`
+    """
+    return load_bq_df(sql)
+
+@st.cache_data(ttl=900, show_spinner=True)
+def load_props(table_name: str) -> pd.DataFrame:
+    # --------------------------------------------------
+    # LOAD FROM BIGQUERY (DYNAMIC TABLE)
+    # --------------------------------------------------
+    sql = f"""
+    SELECT *
+    FROM `{PROJECT_ID}.{DATASET}.{table_name}`
+    """
+    df = load_bq_df(sql)
+
+    if df.empty:
+        df.flags.writeable = False
+        return df
+
+    # --------------------------------------------------
+    # NORMALIZE GOAT → APP SCHEMA
+    # --------------------------------------------------
+    df = df.rename(columns=COLUMN_REMAP)
+    df = df.rename(columns=DISTRIBUTION_REMAP)
+
+    # --------------------------------------------------
+    # Q1 NORMALIZATION (ALIGN Q1 → FULL SCHEMA)
+    # --------------------------------------------------
+    if "market_window" in df.columns:
+        is_q1 = df["market_window"].eq("Q1")
+    
+        # -----------------------------
+        # Rolling averages (SAFE)
+        # -----------------------------
+        if "avg_l5" in df.columns:
+            df.loc[is_q1, "avg_stat_l5"] = df.loc[is_q1, "avg_l5"]
+    
+        if "avg_l10" in df.columns:
+            df.loc[is_q1, "avg_stat_l10"] = df.loc[is_q1, "avg_l10"]
+    
+        if "avg_l20" in df.columns:
+            df.loc[is_q1, "avg_stat_l20"] = df.loc[is_q1, "avg_l20"]
+    
+        # -----------------------------
+        # L20 distribution (SAFE)
+        # -----------------------------
+        if "hit_rate_l20" in df.columns:
+            df.loc[is_q1, "dist20_hit_rate"] = df.loc[is_q1, "hit_rate_l20"]
+    
+        if "clear_1p_pct_l20" in df.columns:
+            df.loc[is_q1, "dist20_clear_1p_rate"] = df.loc[is_q1, "clear_1p_pct_l20"]
+    
+        if "clear_2p_pct_l20" in df.columns:
+            df.loc[is_q1, "dist20_clear_2p_rate"] = df.loc[is_q1, "clear_2p_pct_l20"]
+    
+        if "bad_miss_pct_l20" in df.columns:
+            df.loc[is_q1, "dist20_fail_bad_rate"] = df.loc[is_q1, "bad_miss_pct_l20"]
+    
+        if "avg_margin_l20" in df.columns:
+            df.loc[is_q1, "dist20_avg_margin"] = df.loc[is_q1, "avg_margin_l20"]
+
+    
+    # --------------------------------------------------
+    # Q1 OPPONENT ALLOWED AVGS → STAT-AWARE (SAFE)
+    # --------------------------------------------------
+    if (
+        "market_window" in df.columns
+        and "market" in df.columns
+    ):
+        is_q1 = df["market_window"].eq("Q1")
+    
+        # Assists
+        if "opp_ast_allowed_avg" in df.columns:
+            mask_ast = is_q1 & df["market"].str.contains("assists", case=False, na=False)
+            df.loc[mask_ast, "opp_pos_ast_allowed_avg"] = df.loc[mask_ast, "opp_ast_allowed_avg"]
+    
+        # Points
+        if "opp_pts_allowed_avg" in df.columns:
+            mask_pts = is_q1 & df["market"].str.contains("points", case=False, na=False)
+            df.loc[mask_pts, "opp_pos_pts_allowed_avg"] = df.loc[mask_pts, "opp_pts_allowed_avg"]
+    
+        # Rebounds
+        if "opp_reb_allowed_avg" in df.columns:
+            mask_reb = is_q1 & df["market"].str.contains("rebounds", case=False, na=False)
+            df.loc[mask_reb, "opp_pos_reb_allowed_avg"] = df.loc[mask_reb, "opp_reb_allowed_avg"]
+        
+    # -------------------------------------------------
+    # MARKET NORMALIZATION (GOAT → APP)
+    # --------------------------------------------------
+    if "market" in df.columns:
+        df["market"] = (
+            df["market"]
+            .astype(str)
+            .str.strip()
+            .str.lower()                 # 👈 ADD (normalize first)
+            .str.replace("_1q", "", regex=False)  # 👈 ADD (Q1 FIX)
+            .str.upper()
+            .replace({
+                "PTS": "player_points",
+                "REB": "player_rebounds",
+                "AST": "player_assists",
+                "STL": "player_steals",
+                "BLK": "player_blocks",
+                "DD":  "player_double_double",
+                "TD":  "player_triple_double",
+                # ✅ ADD THIS
+                "THREES": "threes",
+                "3PM": "threes",
+                })
+        )
+
+    # --------------------------------------------------
+    # BOOKMAKER NORMALIZATION
+    # --------------------------------------------------
+    if "bookmaker" in df.columns:
+        df["bookmaker"] = (
+            df["bookmaker"]
+            .astype(str)
+            .str.strip()
+            .str.lower()
+            .replace({
+                "draftkings": "DraftKings",
+                "fanduel": "FanDuel",
+            })
+        )
+
+
+    # --------------------------------------------------
+    # CRITICAL SEMANTIC FIX
+    # GOAT uses "Count" (binary props)
+    # App expects Over / Under
+    # --------------------------------------------------
+    if "bet_type" in df.columns:
+        df["bet_type"] = (
+            df["bet_type"]
+            .astype(str)
+            .str.strip()
+            .replace({"Count": "Over"})
+        )
+
+    # --------------------------------------------------
+    # KEEP ONLY REQUIRED COLUMNS (MEMORY SAFE)
+    # --------------------------------------------------
     keep = [
-        # ---------------------------------
+        # --------------------------------------------------
         # IDENTITY / ROUTING
-        # ---------------------------------
-        "player", "player_team",
-        "home_team", "visitor_team", "opponent_team",
-        "market", "line", "bet_type",
-        "bookmaker", "price",
+        # --------------------------------------------------
+        "player",
+        "player_team",
+        "home_team",
+        "away_team",
+        "market",
+        "line",
+        "bet_type",
+        "bookmaker",
+        "price",
         "game_date",
-    
-        # ---------------------------------
-        # HIT RATES / EDGE (CORE SIGNAL)
-        # ---------------------------------
-        "hit_rate_last5", "hit_rate_last10", "hit_rate_last20",
+
+        # --------------------------------------------------
+        # INJURY STATUS
+        # --------------------------------------------------
+        "injury_status",
+        "injury_description",
+        
+        # --------------------------------------------------
+        # ROLLING HIT RATES (FOR SORT / FILTER / CONFIDENCE)
+        # --------------------------------------------------
+        "hit_rate_l5",
+        "hit_rate_l10",
+        "hit_rate_l20",
+
+        # --------------------------------------------------
+        # IMPLIED / EDGE
+        # --------------------------------------------------
         "implied_prob",
-        "edge_raw", "edge_pct",
-    
-        # ---------------------------------
-        # SCALAR ROLLING AVERAGES
-        # ---------------------------------
-        "pts_last5", "pts_last10", "pts_last20",
-        "reb_last5", "reb_last10", "reb_last20",
-        "ast_last5", "ast_last10", "ast_last20",
-    
-        # STEALS
-        "stl_last5", "stl_last10", "stl_last20",
-    
-        # BLOCKS
-        "blk_last5", "blk_last10", "blk_last20",
-    
-        # COMBOS
-        "pra_last5", "pra_last10", "pra_last20",
-        "pr_last5",  "pr_last10",  "pr_last20",
-        "pa_last5",  "pa_last10",  "pa_last20",
-        "ra_last5",  "ra_last10",  "ra_last20",
-    
-        # ---------------------------------
-        # OPPONENT / MATCHUP
-        # ---------------------------------
+        "edge_pct",
+        "edge_raw",
+
+        # --------------------------------------------------
+        # STAT-AWARE AVERAGES (RENAMED)
+        # --------------------------------------------------
+        "avg_stat_l5",
+        "avg_stat_l10",
+        "avg_stat_l20",
+
+        # --------------------------------------------------
+        # DISTRIBUTION — LAST 20
+        # --------------------------------------------------
+        "dist20_hit_rate",
+        "dist20_clear_1p_rate",
+        "dist20_clear_2p_rate",
+        "dist20_fail_bad_rate",
+        "dist20_avg_margin",
+
+        # --------------------------------------------------
+        # DISTRIBUTION — LAST 40
+        # --------------------------------------------------
+        "dist40_hit_rate",
+        "dist40_clear_1p_rate",
+        "dist40_clear_2p_rate",
+        "dist40_fail_bad_rate",
+        "dist40_avg_margin",
+
+        # --------------------------------------------------
+        # PROJECTION / CONFIDENCE INPUTS
+        # --------------------------------------------------
+        "proj_last10",
+        "proj_diff_vs_line",
+        "proj_std_last10",
+        "proj_volatility_index",
+        "matchup_difficulty_by_stat",
+
+        # --------------------------------------------------
+        # OPPONENT POSITIONAL RANKS (STAT-AWARE)
+        # --------------------------------------------------
         "opp_pos_pts_rank",
         "opp_pos_reb_rank",
         "opp_pos_ast_rank",
@@ -952,60 +1789,52 @@ def load_props() -> pd.DataFrame:
         "opp_pos_pr_rank",
         "opp_pos_pa_rank",
         "opp_pos_ra_rank",
-    
-        # ---------------------------------
-        # CONFIDENCE / PROJECTION SIGNALS
-        # ---------------------------------
-        "proj_last10",
-        "proj_diff_vs_line",
-        "proj_std_last10",
-        "proj_volatility_index",
-    
-        # ---------------------------------
-        # MATCHUP DIFFICULTY
-        # ---------------------------------
-        "matchup_difficulty_by_stat",
-        
-        # ---------------------------------
-        # DISTRIBUTION (EXPANDED ANALYTICS)
-        # ---------------------------------
-        "dist20_hit_rate",
-        "dist20_clear_1p_rate",
-        "dist20_clear_2p_rate",
-        "dist20_fail_bad_rate",
-        "dist20_avg_margin",
 
-        "dist40_hit_rate",
-        "dist40_clear_1p_rate",
-        "dist40_clear_2p_rate",
-        "dist40_fail_bad_rate",
-        "dist40_avg_margin",
-    
-        # ---------------------------------
-        # MINUTES / ROLE STABILITY
-        # ---------------------------------
+        # --------------------------------------------------
+        # MINUTES / ROLE
+        # --------------------------------------------------
         "est_minutes",
         "delta_minutes",
         "usage_bump_pct",
     ]
-    cols = [c for c in keep if c in df.columns]
-    df = df[cols].copy()
 
-    # Light normalization
-    if "price" in df.columns:
-        df["price"] = pd.to_numeric(df["price"], errors="coerce")
-    if "line" in df.columns:
-        df["line"] = pd.to_numeric(df["line"], errors="coerce")
 
-    for c in ("hit_rate_last5", "hit_rate_last10", "hit_rate_last20", "implied_prob", "edge_pct", "edge_raw"):
+    df = df[[c for c in keep if c in df.columns]].copy()
+
+    # --------------------------------------------------
+    # TYPE COERCION (SAFE)
+    # --------------------------------------------------
+    for c in ("price", "line"):
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
+
+    for c in (
+        "hit_rate_last5",
+        "hit_rate_last10",
+        "hit_rate_last20",
+        "implied_prob",
+        "edge_pct",
+        "edge_raw",
+    ):
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
     if "game_date" in df.columns:
         df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
 
-    # Fill strings without expanding memory too much
-    for c in ("player", "market", "bet_type", "bookmaker", "player_team", "home_team", "visitor_team", "opponent_team"):
+    # --------------------------------------------------
+    # STRING NORMALIZATION (LOW MEMORY)
+    # --------------------------------------------------
+    for c in (
+        "player",
+        "market",
+        "bet_type",
+        "bookmaker",
+        "player_team",
+        "home_team",
+        "visitor_team",
+        "opponent_team",
+    ):
         if c in df.columns:
             df[c] = df[c].fillna("").astype(str)
 
@@ -1050,6 +1879,15 @@ def save_bet_simple(player, market, line, price, bet_type) -> bool:
         keys.discard(_bet_key(old.get("player"), old.get("market"), old.get("line"), old.get("bet_type")))
 
     return True
+
+def safe_team_logo(team_abbr: str | None) -> str:
+    if not team_abbr:
+        return "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
+    return TEAM_LOGOS.get(
+        team_abbr,
+        "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
+    )
+
 
 if "_clipboard" in st.session_state:
     st.toast("Copied — paste into Gambly Bot 🤖")
@@ -1116,6 +1954,17 @@ def render_saved_bets():
         "https://www.gambly.com/gambly-bot",
     )
     st.caption("Paste the copied bets into Gambly Bot")
+
+def render_first_basket_tab():
+    st.subheader("🥇 First Basket Projections")
+
+    df = load_first_basket_today()
+
+    if df.empty:
+        st.info("No first basket projections available.")
+        return
+
+    render_first_basket_cards(df)
 
 # ------------------------------------------------------
 # PROP CARD HELPERS
@@ -1348,9 +2197,16 @@ def get_stat_avgs(row, stat_key):
 def handle_save_bet(bet_line: str):
     if "saved_bets_text" not in st.session_state:
         st.session_state.saved_bets_text = []
-
     if bet_line not in st.session_state.saved_bets_text:
         st.session_state.saved_bets_text.append(bet_line)
+        st.toast("✅ Saved bet")
+
+def classify_game_state(game_id, status, live_map):
+    if game_id in live_map:
+        return "LIVE"
+    if status and status.lower() == "final":
+        return "FINAL"
+    return "UPCOMING"
 
 def coerce_numeric_list(val):
     if val is None:
@@ -1437,6 +2293,8 @@ def normalize_market_key(market: str) -> str:
     # singles
     if "points" in m:
         return "points"
+    if "fg3m" in m or "3pt" in m or "three" in m:
+        return "threes"    
     if "rebounds" in m:
         return "rebounds"
     if "assists" in m:
@@ -1448,35 +2306,86 @@ def normalize_market_key(market: str) -> str:
 
     return ""
 
-def get_l10_values(row):
+def normalize_lineup_players(players):
+    """
+    Safely normalize BigQuery ARRAY / numpy / JSON into list[str]
+    """
+    if players is None:
+        return []
+
+    # NumPy array or pandas Series
+    if hasattr(players, "tolist"):
+        players = players.tolist()
+
+    # JSON string
+    if isinstance(players, str):
+        try:
+            parsed = json.loads(players)
+            if isinstance(parsed, list):
+                return [str(p) for p in parsed]
+        except Exception:
+            return []
+
+    # Python list
+    if isinstance(players, list):
+        return [str(p) for p in players if p]
+
+    return []
+
+def get_l10_values(row, *, market_window: str):
     key = normalize_market_key(row.get("market"))
 
+    # -----------------------
+    # Q1 PROPS
+    # -----------------------
+    if market_window == "Q1":
+        if key == "points":
+            return coerce_numeric_list(row.get("pts_q1_last10_list"))
+        if key == "rebounds":
+            return coerce_numeric_list(row.get("reb_q1_last10_list"))
+        if key == "assists":
+            return coerce_numeric_list(row.get("ast_q1_last10_list"))
+        if key == "steals":
+            return coerce_numeric_list(row.get("stl_q1_last10_list"))
+        if key == "blocks":
+            return coerce_numeric_list(row.get("blk_q1_last10_list"))
+        if key == "pra":
+            return coerce_numeric_list(row.get("pra_q1_last10_list"))
+        if key == "points_rebounds":
+            return coerce_numeric_list(row.get("pr_q1_last10_list"))
+        if key == "points_assists":
+            return coerce_numeric_list(row.get("pa_q1_last10_list"))
+        if key == "rebounds_assists":
+            return coerce_numeric_list(row.get("ra_q1_last10_list"))
+        if key == "threes":
+            return coerce_numeric_list(row.get("fg3m_q1_last10_list"))
+    
+        return []
+
+    # -----------------------
+    # FULL GAME (EXISTING)
+    # -----------------------
     if key == "points":
         return coerce_numeric_list(row.get("pts_last10_list"))
-
     if key == "rebounds":
         return coerce_numeric_list(row.get("reb_last10_list"))
-
     if key == "assists":
         return coerce_numeric_list(row.get("ast_last10_list"))
-
     if key == "steals":
-        return coerce_numeric_list(row.get("stl_last10_list"))  # ✅ FIX
-
+        return coerce_numeric_list(row.get("stl_last10_list"))
     if key == "blocks":
-        return coerce_numeric_list(row.get("blk_last10_list"))  # ✅ FIX
-
+        return coerce_numeric_list(row.get("blk_last10_list"))
     if key == "pra":
         return coerce_numeric_list(row.get("pra_last10_list"))
-
-    if key == "points_assists":
-        return coerce_numeric_list(row.get("pa_last10_list"))
-
     if key == "points_rebounds":
         return coerce_numeric_list(row.get("pr_last10_list"))
-
+    if key == "points_assists":
+        return coerce_numeric_list(row.get("pa_last10_list"))
     if key == "rebounds_assists":
         return coerce_numeric_list(row.get("ra_last10_list"))
+    if key == "threes":
+        return coerce_numeric_list(row.get("fg3m_last10_list"))
+
 
     return []
 
@@ -1498,6 +2407,8 @@ def pretty_market_label(market: str) -> str:
         return "Rebounds"
     if "assists" in m:
         return "Assists"
+    if m in {"threes", "3pm", "player_threes"}:
+        return "3-Pointers Made"
 
     return (
         m.replace("player_", "")
@@ -1636,8 +2547,15 @@ def build_prop_cards(card_df: pd.DataFrame, hit_rate_col: str) -> pd.DataFrame:
     if card_df.empty:
         return card_df
 
-    key_cols = ["player", "player_team", "opponent_team", "market", "line", "bet_type"]
+    # Use only columns that actually exist
+    key_cols = [
+        c for c in
+        ["player", "player_team", "opponent_team", "market", "line", "bet_type"]
+        if c in card_df.columns
+    ]
+
     work = card_df.copy()
+
 
     # Normalize bookmaker + price
     if "bookmaker" in work.columns:
@@ -1673,7 +2591,13 @@ def build_prop_cards(card_df: pd.DataFrame, hit_rate_col: str) -> pd.DataFrame:
     out.flags.writeable = False
     return out
 
-def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
+def render_prop_cards(
+    df: pd.DataFrame,
+    hit_rate_col: str,
+    hit_label: str,
+    *,
+    market_window: str,
+):
     if df.empty:
         st.info(f"No props match your filters.")
         return
@@ -1684,17 +2608,28 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
 
     card_df = build_prop_cards(df, hit_rate_col=hit_rate_col)
 
-    for _, row in card_df.iterrows():
+    for i, row in enumerate(card_df.itertuples(index=False)):
+        row = row._asdict()   # 👈 ADD THIS LINE
 
         player = f"{row.get('player', '')}"
         raw_market = row.get("market")
         norm = normalize_market_key(raw_market)
-        market_label = pretty_market_label(raw_market)
+        base_label = pretty_market_label(raw_market)
+
+        if market_window == "Q1":
+            market_label = f"{base_label} 1st Quarter"
+        else:
+            market_label = base_label
         bet_type = f"{row.get('bet_type', '')}"
 
         team = f"{row.get('player_team', '')}"
-        home_team = f"{row.get('home_team', '')}"
-        visitor_team = f"{row.get('visitor_team', '')}"
+        home_team = row.get("home_team")
+        away_team = row.get("away_team")
+
+        home_team = home_team.strip().upper() if isinstance(home_team, str) else None
+        away_team = away_team.strip().upper() if isinstance(away_team, str) else None
+
+
 
         opp = f"{row.get('opponent_team', '')}"
         line = row.get("line")
@@ -1706,18 +2641,26 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         # -----------------------------
         # TEAM LOGOS
         # -----------------------------
-        home_logo = logo(home_team)
-        away_logo = logo(visitor_team)
+        home_logo = safe_team_logo(home_team)
+        away_logo = safe_team_logo(away_team)
 
-        hit = row.get(hit_rate_col)
+
+
+        rolling_hit = row.get(hit_rate_col)
         implied = row.get("implied_prob")
 
         if implied is None or pd.isna(implied):
             implied = compute_implied_prob(odds)
 
         edge = None
-        if hit is not None and implied is not None and not pd.isna(hit) and not pd.isna(implied):
-            edge = float(hit) - float(implied)
+        if (
+            rolling_hit is not None
+            and implied is not None
+            and not pd.isna(rolling_hit)
+            and not pd.isna(implied)
+        ):
+            edge = float(rolling_hit) - float(implied)
+
 
         books = row.get("book_prices", [])
         books_line = f" • ".join(
@@ -1728,17 +2671,29 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         # -----------------------------
         # L10 SPARKLINE
         # -----------------------------
-        l10_values = get_l10_values(row)
-
+        l10_values = get_l10_values(
+            row,
+            market_window=market_window,
+        )
+        
         if not l10_values:
-            st.caption(f"⚠️ No L10 values for {player} | market={raw_market}")
+            st.caption(
+                f"⚠️ No L10 values for {player} | market={raw_market} | window={market_window}"
+            )
 
         # -----------------------------
         # STAT-SPECIFIC ROLLING AVERAGES
         # -----------------------------
         stat_key = normalize_market_key(raw_market)
         
-        l5_avg, l10_avg, l20_avg = get_stat_avgs(row, stat_key)
+        l5_avg  = row.get("avg_stat_l5")
+        l10_avg = row.get("avg_stat_l10")
+        l20_avg = row.get("avg_stat_l20")
+
+        # SAFETY FALLBACK (stat-specific rolling avgs)
+        if l5_avg is None or pd.isna(l5_avg):
+            l5_avg, l10_avg, l20_avg = get_stat_avgs(row, stat_key)
+
         
         # -----------------------------
         # OPPONENT POSITIONAL RANK
@@ -1749,6 +2704,7 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
             "assists": "opp_pos_ast_rank",
             "steals": "opp_pos_stl_rank",
             "blocks": "opp_pos_blk_rank",
+            "threes": "opp_pos_fg3m_rank",
             "pra": "opp_pos_pra_rank",
             "points_rebounds": "opp_pos_pr_rank",
             "points_assists": "opp_pos_pa_rank",
@@ -1770,13 +2726,22 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         # -----------------------------
         # L10 SPARKLINE
         # -----------------------------
+        dates = (
+            row.get("last10_q1_dates")
+            if market_window == "Q1"
+            else row.get("last10_dates")
+        )
+        
         spark_html = build_l10_sparkline_html(
             values=l10_values,
             line_value=line,
-            dates=row.get("last10_dates"),
+            dates=dates,
         )
 
-
+        injury_html = render_injury_pill(
+            row.get("injury_status"),
+            row.get("injury_description"),
+        )
         # --------------------------------------------------
         # BASE CARD HTML (STRICT f-STRINGS)
         # --------------------------------------------------
@@ -1791,17 +2756,22 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
             # ---------- LEFT: MATCHUP ----------
             f"<div style='display:flex;align-items:center;gap:8px;font-size:0.8rem;opacity:0.9;'>"
             f"<img src='{away_logo}' style='width:22px;height:22px;' />"
-            f"<span style='font-weight:600;'>vs</span>"
+            f"<span style='font-weight:700;'>@</span>"
             f"<img src='{home_logo}' style='width:22px;height:22px;' />"
             f"</div>"
+
         
             # ---------- CENTER: PLAYER + MARKET ----------
             f"<div style='text-align:center;'>"
             f"<div style='font-weight:900;font-size:1.15rem;letter-spacing:-0.2px;'>"
             f"{player}"
             f"</div>"
+            
+            # 👇 INJURY PILL (CONDITIONAL)
+            f"{injury_html}"
+            
             f"<div style='font-size:0.85rem;opacity:0.7;'>"
-            f"{market_label} · {bet_type.upper()} {fmt_num(line, 1)}"
+            f"{market_label} – {bet_type.upper()} {fmt_num(line, 1)}"
             f"</div>"
             f"</div>"
         
@@ -1814,13 +2784,6 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
             f"</div>"
         
             # ==================================================
-            # SPARKLINE (CENTERPIECE)
-            # ==================================================
-            f"<div style='display:flex;justify-content:center;margin-top:6px;'>"
-            f"{spark_html}"
-            f"</div>"
-        
-            # ==================================================
             # BOTTOM STATS ROW (L10 | OPP RANK | CONFIDENCE)
             # ==================================================
             f"<div style='display:grid;"
@@ -1829,7 +2792,7 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
             
             # ---------- LEFT: L10 HIT + AVG ----------
             f"<div>"
-            f"<strong>{fmt_pct(hit)}</strong>"
+            f"<strong>{fmt_pct(rolling_hit)}</strong>"
             f" <span style='opacity:0.5'>|</span> "
             f"<strong>{fmt_num(l10_avg, 1)}</strong><br/>"
             f"<span style='opacity:0.6'>L10 Hit | Avg</span>"
@@ -1857,6 +2820,13 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         # --------------------------------------------------
         expanded_html = (
             f"<div class='expanded-wrap'>"
+        
+            # ==================================================
+            # SPARKLINE (MOVED HERE)
+            # ==================================================
+            f"<div style='display:flex;justify-content:center;margin-bottom:10px;'>"
+            f"{build_l10_sparkline_html(values=l10_values, line_value=line, dates=dates)}"
+            f"</div>"
         
             # ==================================================
             # ROW 1 — AVERAGES
@@ -1905,19 +2875,27 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
         )
 
         # -------------------------
-        # SAVE BET (MINIMAL MEMORY)
+        # SAVE BET (DOCKED, NOT INSIDE CARD)
         # -------------------------
         line_str = fmt_num(line, 1)
         odds_str = fmt_odds(odds)
+
+        # ----------------------------------
+        # MARKET LABEL (FULL vs Q1)
+        # ----------------------------------
+        if market_window == "Q1":
+            market_label_saved = f"{pretty_market_label(raw_market)} (Q1)"
+        else:
+            market_label_saved = pretty_market_label(raw_market)
         
         bet_line = (
             f"{player} | "
-            f"{pretty_market_label(raw_market)} | "
+            f"{market_label_saved} | "
             f"{line_str} | "
             f"{odds_str} | "
             f"{bet_type}"
         )
-        
+
         save_key = (
             f"save_"
             f"{player}_"
@@ -1927,127 +2905,737 @@ def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
             f"page{st.session_state.page}_"
             f"idx{_}"
         )
-        
-        st.button(
-            "💾 Save Bet",
-            key=save_key,
-            on_click=handle_save_bet,
-            args=(bet_line,),
-        )
-        
-        # Optional instant visual confirmation
-        if bet_line in st.session_state.saved_bets_text:
-            st.caption("✅ Saved")
+
+        save_col, card_col = st.columns([0.075, 0.925], gap="small")
+
+        with save_col:
+            st.button(
+                "💾",
+                key=save_key,
+                help=f"Save: {player} {pretty_market_label(raw_market)} {line_str} ({odds_str})",
+                on_click=handle_save_bet,
+                args=(bet_line,),
+                use_container_width=True,
+            )
+
+        with card_col:
+            st.markdown(
+                f"""
+                <details class="prop-card-wrapper">
+                <summary
+                    class="swipe-card"
+                    data-bet-line="{bet_line}"
+                >
+                    {base_card_html}
+                    <div class="expand-hint">Click to expand ▾</div>
+                </summary>
+                <div class="card-expanded">
+                    {expanded_html}
+                </div>
+                </details>
+
+                """,
+                unsafe_allow_html=True,
+            )
+
+def render_scoreboard_card(
+    *,
+    home,
+    away,
+    home_score,
+    away_score,
+    center_top,
+    center_bottom,
+    quarters=None,
+):
+    home_logo = team_logo_url(home)
+    away_logo = team_logo_url(away)
+
+    def q(team, qtr):
+        if not quarters:
+            return "—"
+        return quarters.get(f"{qtr}_{team}", "—")
+
+    html = (
+        f"<div class='live-scoreboard'>"
+
+        # ---------------- LEFT (AWAY) ----------------
+        f"<div style='text-align:left;'>"
+        f"<div class='live-score'>{away_score}</div>"
+        f"<div class='live-team'>"
+        f"<img src='{away_logo}' width='26' style='vertical-align:middle;margin-right:6px;' />"
+        f"{away}"
+        f"</div>"
+        f"</div>"
+
+        # ---------------- CENTER ----------------
+        f"<div class='live-center'>"
+        f"<div class='live-period'>{center_top}</div>"
+        f"<div class='live-status'>{center_bottom}</div>"
+        f"</div>"
+
+        # ---------------- RIGHT (HOME) ----------------
+        f"<div style='text-align:right;'>"
+        f"<div class='live-score'>{home_score}</div>"
+        f"<div class='live-team'>"
+        f"{home}"
+        f"<img src='{home_logo}' width='26' style='vertical-align:middle;margin-left:6px;' />"
+        f"</div>"
+        f"</div>"
+
+        # ---------------- QUARTERS ----------------
+        f"<div class='live-quarters' style='grid-column:1 / -1;'>"
+
+        f"<div></div>"
+        f"<div class='hdr'>1</div>"
+        f"<div class='hdr'>2</div>"
+        f"<div class='hdr'>3</div>"
+        f"<div class='hdr'>4</div>"
+        f"<div class='hdr'>T</div>"
+
+        f"<div class='team'>{away}</div>"
+        f"<div class='cell'>{q('away','q1')}</div>"
+        f"<div class='cell'>{q('away','q2')}</div>"
+        f"<div class='cell'>{q('away','q3')}</div>"
+        f"<div class='cell'>{q('away','q4')}</div>"
+        f"<div class='cell'><strong>{away_score}</strong></div>"
+
+        f"<div class='team'>{home}</div>"
+        f"<div class='cell'>{q('home','q1')}</div>"
+        f"<div class='cell'>{q('home','q2')}</div>"
+        f"<div class='cell'>{q('home','q3')}</div>"
+        f"<div class='cell'>{q('home','q4')}</div>"
+        f"<div class='cell'><strong>{home_score}</strong></div>"
+
+        f"</div>"  # quarters
+        f"</div>"  # scoreboard
+    )
+
+    st.markdown(html, unsafe_allow_html=True)
+
+def render_placeholder_game(g):
+    tip = g.start_time_est
+    tip_str = (
+        pd.to_datetime(tip).strftime("%-I:%M %p ET")
+        if pd.notna(tip)
+        else "—"
+    )
+
+    render_scoreboard_card(
+        home=g.home_team_abbr,
+        away=g.away_team_abbr,
+        home_score="—",
+        away_score="—",
+        center_top=tip_str,
+        center_bottom="UPCOMING",
+        quarters=None,
+    )
+
+def render_live_game(g, live):
+    render_scoreboard_card(
+        home=g.home_team_abbr,
+        away=g.away_team_abbr,
+        home_score=live.home_score,
+        away_score=live.away_score,
+        center_top=live.period,
+        center_bottom="LIVE",
+        quarters={
+            "q1_home": live.q1_home,
+            "q2_home": live.q2_home,
+            "q3_home": live.q3_home,
+            "q4_home": live.q4_home,
+            "q1_away": live.q1_away,
+            "q2_away": live.q2_away,
+            "q3_away": live.q3_away,
+            "q4_away": live.q4_away,
+        },
+    )
+
+def render_final_game(g):
+    render_scoreboard_card(
+        home=g.home_team_abbr,
+        away=g.away_team_abbr,
+        home_score=g.home_score,
+        away_score=g.away_score,
+        center_top="FINAL",
+        center_bottom="",
+        quarters={
+            "q1_home": g.q1_home,
+            "q2_home": g.q2_home,
+            "q3_home": g.q3_home,
+            "q4_home": g.q4_home,
+            "q1_away": g.q1_away,
+            "q2_away": g.q2_away,
+            "q3_away": g.q3_away,
+            "q4_away": g.q4_away,
+        },
+    )
 
 
-        # -------------------------
-        # CARD EXPAND UI
-        # -------------------------
+def build_first_basket_expanded_html(row: pd.Series) -> str:
+    starter_pct = row.get("starter_pct")
+    first_shot_share = row.get("first_shot_share")
+    usage_l10 = row.get("usage_l10")
+    pts_per_min = row.get("pts_per_min")
+
+    team_first_score_rate = row.get("team_first_score_rate")
+    tip_win_pct = row.get("tip_win_pct")
+
+    return f"""
+    <div class="card-expanded">
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px;">
+        <div>
+          <div class="metric-label">Starter %</div>
+          <div class="metric-value">{fmt_pct(starter_pct)}</div>
+        </div>
+        <div>
+          <div class="metric-label">First Shot Share</div>
+          <div class="metric-value">{fmt_pct(first_shot_share)}</div>
+        </div>
+        <div>
+          <div class="metric-label">Usage (L10)</div>
+          <div class="metric-value">{fmt_pct(usage_l10)}</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+        <div>
+          <div class="metric-label">PTS / Min</div>
+          <div class="metric-value">{fmt_num(pts_per_min, 2)}</div>
+        </div>
+        <div>
+          <div class="metric-label">Team First Score</div>
+          <div class="metric-value">{fmt_pct(team_first_score_rate)}</div>
+        </div>
+        <div>
+          <div class="metric-label">Tip Win %</div>
+          <div class="metric-value">{fmt_pct(tip_win_pct)}</div>
+        </div>
+      </div>
+
+    </div>
+    """
+
+def render_first_basket_card(row: pd.Series):
+    """
+    Renders a single First Basket PLAYER card
+    """
+
+    player = row.get("player")
+    team = row.get("team_abbr")
+
+    prob = row.get("first_basket_probability")
+    rank_game = row.get("rank_within_game")
+
+    # logo
+    team_logo = safe_team_logo(team)
+
+    # -----------------------------
+    # LEFT: TEAM LOGO
+    # -----------------------------
+    left_html = (
+        f"<div style='display:flex;align-items:center;'>"
+        f"<img src='{team_logo}' width='26' />"
+        f"</div>"
+    )
+
+    # -----------------------------
+    # CENTER: PLAYER + LABEL
+    # -----------------------------
+    title_html = (
+        f"<div style='text-align:center;'>"
+        f"<div style='font-weight:800;font-size:1.1rem;'>"
+        f"{player}"
+        f"</div>"
+        f"<div style='opacity:0.6;font-size:0.8rem;'>"
+        f"First Basket"
+        f"</div>"
+        f"</div>"
+    )
+
+    # -----------------------------
+    # RIGHT: PROBABILITY + RANK
+    # -----------------------------
+    right_html = (
+        f"<div style='text-align:right;'>"
+        f"<div style='font-size:1.15rem;font-weight:900;'>"
+        f"{fmt_pct(prob)}"
+        f"</div>"
+        f"<div style='opacity:0.6;font-size:0.7rem;'>"
+        f"#{rank_game} in game"
+        f"</div>"
+        f"</div>"
+    )
+
+    # -----------------------------
+    # BASE CARD
+    # -----------------------------
+    base_card_html = (
+        f"<div class='prop-card card-grid'>"
+        f"<div style='display:grid;"
+        f"grid-template-columns:48px 1fr 80px;"
+        f"align-items:center;'>"
+        f"{left_html}"
+        f"{title_html}"
+        f"{right_html}"
+        f"</div>"
+        f"</div>"
+    )
+
+    expanded_html = build_first_basket_expanded_html(row)
+
+    st.markdown(
+        f"""
+        <details class="prop-card-wrapper">
+          <summary>
+            {base_card_html}
+            <div class="expand-hint">Click to expand ▾</div>
+          </summary>
+    
+          {expanded_html}
+    
+        </details>
+        """,
+        unsafe_allow_html=True,
+    )
+    
+def render_first_basket_cards(df: pd.DataFrame):
+    """
+    Renders First Basket cards grouped by game
+    """
+
+    if df.empty:
+        return
+
+    # Ensure clean ordering
+    df = df.sort_values(["game_id", "rank_within_game"])
+
+    for game_id, game_df in df.groupby("game_id"):
+
+        # -----------------------------
+        # GAME MATCHUP HEADER
+        # -----------------------------
+        home = game_df["home_team_abbr"].iloc[0]
+        away = game_df["away_team_abbr"].iloc[0]
+
+        home_logo = safe_team_logo(home)
+        away_logo = safe_team_logo(away)
+
         st.markdown(
-            f"<details class='prop-card-wrapper'>"
-            f"<summary>"
-            f"{base_card_html}"
-            f"<div class='expand-hint'>Click to expand ▾</div>"
-            f"</summary>"
-            f"<div class='card-expanded'>"
-            f"{expanded_html}"
-            f"</div>"
-            f"</details>",
+            f"""
+            <div style="
+                display:flex;
+                align-items:center;
+                gap:10px;
+                margin:18px 6px 8px;
+                font-weight:800;
+                font-size:1.0rem;
+                opacity:0.95;
+            ">
+                <img src="{away_logo}" width="22"/>
+                <span>@</span>
+                <img src="{home_logo}" width="22"/>
+                <span>{away} @ {home}</span>
+            </div>
+            """,
             unsafe_allow_html=True,
         )
 
-# ------------------------------------------------------
-# DEV TAB CONTENT (keep, but avoid heavy data pulls)
-# ------------------------------------------------------
-def trigger_apps_script(task: str):
-    if not APPS_SCRIPT_URL or not APPS_SCRIPT_DEV_TOKEN:
-        raise RuntimeError("Missing APPS_SCRIPT_URL or APPS_SCRIPT_DEV_TOKEN")
+        # -----------------------------
+        # OPTIONAL GAME CONTEXT ROW
+        # -----------------------------
+        team_rate = game_df["team_first_score_rate"].iloc[0]
+        tip_pct = game_df["tip_win_pct"].iloc[0]
 
-    resp = requests.post(
-        APPS_SCRIPT_URL,
-        headers={"Content-Type": "application/json"},
-        params={"token": APPS_SCRIPT_DEV_TOKEN},
-        json={"task": task},
-        timeout=60,
+        st.markdown(
+            f"""
+            <div style="
+                margin-left:40px;
+                margin-bottom:10px;
+                font-size:0.75rem;
+                opacity:0.65;
+            ">
+                Team First Score: <strong>{fmt_pct(team_rate)}</strong>
+                &nbsp;•&nbsp;
+                Tip Win Rate: <strong>{fmt_pct(tip_pct)}</strong>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # -----------------------------
+        # PLAYER CARDS (TOP N)
+        # -----------------------------
+        game_df = (
+            game_df
+            .sort_values("rank_within_game", ascending=True)
+        )
+        
+        for _, row in game_df.iterrows():
+            render_first_basket_card(row)
+
+def render_lineup_player_row(row):
+    player = row.get("player") or "—"
+    slot = row.get("lineup_slot")
+
+    slot_html = f"#{int(slot)}" if pd.notna(slot) else ""
+
+    return (
+        f"<div class='lineup-player'>"
+        f"<strong style='opacity:0.7;margin-right:6px;'>{slot_html}</strong>"
+        f"{player}"
+        f"</div>"
     )
-    data = resp.json()
-    if not data.get("success"):
-        raise RuntimeError(data.get("message") or "Apps Script error")
-    return data.get("message") or "OK"
 
-def render_dev_page():
-    st.title("⚙️ DEV CONTROL PANEL (Minimal)")
-    st.caption("Restricted • low-memory tools only")
-    st.markdown(f"**Email:** `{get_user_email()}`")
+def render_most_used_lineup_card(team_df: pd.DataFrame):
+    team_df = team_df.sort_values("lineup_slot")
 
-    if st.button("⬅ Back to Main App"):
-        nav_to("main")
-        st.rerun()
+    players_html = "".join(
+        render_lineup_player_row(row)
+        for _, row in team_df.iterrows()
+    )
 
-    st.divider()
-    st.subheader("📄 Google Apps Script")
-    tasks = [
-        ("NBA Alternate Props", "NBA_ALT_PROPS"),
-        ("NBA Game Odds", "NBA_GAME_ODDS"),
-        ("NCAAB Game Odds", "NCAAB_GAME_ODDS"),
-        ("Run ALL (Daily Runner)", "ALL"),
-    ]
-    for label, task in tasks:
-        c1, c2 = st.columns([3, 1])
-        with c1:
-            st.markdown(f"**{label}**")
-        with c2:
-            if st.button("▶ Run", key=f"apps_{task}", use_container_width=True):
-                try:
-                    with st.spinner(f"Running {label}…"):
-                        msg = trigger_apps_script(task)
-                    st.success(f"✅ {msg}")
-                except Exception as e:
-                    st.error("❌ Apps Script trigger failed")
-                    st.code(str(e))
+    times_used = team_df["times_used"].iloc[0]
+    first_used = team_df["first_used"].iloc[0]
+    last_used  = team_df["last_used"].iloc[0]
 
-    st.divider()
-    st.subheader("🔎 Quick Health Checks")
-    if st.button("Test BigQuery connection"):
-        try:
-            _ = load_bq_df("SELECT 1 AS ok")
-            st.success("✅ BigQuery OK")
-        except Exception as e:
-            st.error("❌ BigQuery failed")
-            st.code(str(e))
+    base_card_html = (
+        f"<div class='prop-card card-grid'>"
+        f"<div class='prop-card-title'>Most Used Lineup</div>"
+        f"<div class='lineup-list'>{players_html}</div>"
+        f"<div class='lineup-subtitle'>Used {times_used} times</div>"
+        f"</div>"
+    )
 
-# ------------------------------------------------------
-# EARLY ROUTE: DEV TAB MUST NOT LOAD MAIN DATA
-# ------------------------------------------------------
-active_tab = get_active_tab()
-if active_tab == "dev":
-    if not is_dev_user():
-        st.error("⛔ Access denied")
-        st.stop()
-    render_dev_page()
-    st.stop()
+    expanded_html = (
+        f"<div class='expanded-wrap'>"
+        f"<div class='expanded-row'>"
+        f"<div class='metric'><span>First Used</span><strong>{first_used}</strong></div>"
+        f"<div class='metric'><span>Last Used</span><strong>{last_used}</strong></div>"
+        f"</div>"
+        f"</div>"
+    )
+
+    return (
+        f"<details class='prop-card-wrapper'>"
+        f"<summary>{base_card_html}<div class='expand-hint'>Click to expand ▾</div></summary>"
+        f"<div class='card-expanded'>{expanded_html}</div>"
+        f"</details>"
+    )
+
+def render_projected_lineup_card(team_df: pd.DataFrame):
+    team_df = team_df.sort_values("lineup_slot")
+
+    players_html = "".join(
+        render_lineup_player_row(row)
+        for _, row in team_df.iterrows()
+    )
+
+    projection_reason = team_df["projection_reason"].iloc[0]
+    projected_at = team_df["projected_at"].iloc[0]
+    projected_at_str = (
+        pd.to_datetime(projected_at).strftime("%b %d · %I:%M %p ET")
+        if pd.notna(projected_at)
+        else "—"
+    )
+
+
+    base_card_html = (
+        f"<div class='prop-card card-grid'>"
+        f"<div class='prop-card-title'>Projected Lineup</div>"
+        f"<div class='lineup-list'>{players_html}</div>"
+        f"<div class='lineup-subtitle'>{projection_reason}</div>"
+        f"</div>"
+    )
+
+    expanded_html = (
+        f"<div class='expanded-wrap'>"
+        f"<div class='expanded-row'>"
+        f"<div class='metric'><span>Projected At</span><strong>{projected_at_str}</strong></div>"
+        f"</div>"
+        f"</div>"
+    )
+
+    return (
+        f"<details class='prop-card-wrapper'>"
+        f"<summary>{base_card_html}<div class='expand-hint'>Click to expand ▾</div></summary>"
+        f"<div class='card-expanded'>{expanded_html}</div>"
+        f"</details>"
+    )
+
+def render_matchup_header(row):
+    home = row["home_team_abbr"]
+    away = row["away_team_abbr"]
+
+    home_logo = safe_team_logo(home)
+    away_logo = safe_team_logo(away)
+
+    home_name = team_full_name(home)
+    away_name = team_full_name(away)
+
+    tip = row.get("start_time_est")
+    tip_str = (
+        pd.to_datetime(tip).strftime("%-I:%M %p ET")
+        if tip is not None and not pd.isna(tip)
+        else ""
+    )
+
+    return (
+        f"<div class='matchup-header'>"
+        f"<div class='matchup-team'>"
+        f"<img src='{away_logo}' />"
+        f"<span>{away_name}</span>"
+        f"</div>"
+        f"<div class='matchup-at'>@</div>"
+        f"<div class='matchup-team'>"
+        f"<img src='{home_logo}' />"
+        f"<span>{home_name}</span>"
+        f"</div>"
+        f"<div class='matchup-time'>{tip_str}</div>"
+        f"</div>"
+    )
+
+
+def render_team_header(team_abbr: str):
+    logo_url = safe_team_logo(team_abbr)
+    team_name = team_full_name(team_abbr)
+
+    return (
+        f"<div class='team-header-card'>"
+        f"<img src='{logo_url}' />"
+        f"<div class='team-header-name'>{team_name}</div>"
+        f"</div>"
+    )
+
+def render_lineups_tab():
+    # --------------------------------------------------
+    # Load today's games
+    # --------------------------------------------------
+    games_df = load_today_games()
+
+    if games_df.empty:
+        st.warning("No games today.")
+        return
+
+    # --------------------------------------------------
+    # Determine teams playing today
+    # --------------------------------------------------
+    teams_today = sorted(
+        set(games_df["home_team_abbr"]).union(games_df["away_team_abbr"])
+    )
+
+    # --------------------------------------------------
+    # Load lineup data (filtered to teams playing today)
+    # --------------------------------------------------
+    most_used_df = load_team_most_used_lineups_for_teams(teams_today)
+    projected_df = load_projected_starting_lineups_for_teams(teams_today)
+
+    # --------------------------------------------------
+    # Render by matchup
+    # --------------------------------------------------
+    for _, game in games_df.iterrows():
+        away = game["away_team_abbr"]
+        home = game["home_team_abbr"]
+
+        # -----------------------------
+        # Matchup Header
+        # -----------------------------
+        st.markdown(
+            render_matchup_header(game),
+            unsafe_allow_html=True,
+        )
+
+
+        # -----------------------------
+        # Render both teams
+        # -----------------------------
+        for team_abbr in (away, home):
+
+            # Team header (logo + name)
+            st.markdown(
+                render_team_header(team_abbr),
+                unsafe_allow_html=True,
+            )
+
+            col1, col2 = st.columns(2)
+
+            team_most_used = most_used_df[
+                most_used_df["team_abbr"] == team_abbr
+            ]
+
+            team_projected = projected_df[
+                projected_df["team_abbr"] == team_abbr
+            ]
+
+            # -------------------------
+            # Most Used Lineup
+            # -------------------------
+            with col1:
+                if team_most_used.empty:
+                    st.info("No historical lineup available")
+                else:
+                    st.markdown(
+                        render_most_used_lineup_card(team_most_used),
+                        unsafe_allow_html=True,
+                    )
+
+            # -------------------------
+            # Projected Lineup
+            # -------------------------
+            with col2:
+                if team_projected.empty:
+                    st.info("No projected lineup available")
+                else:
+                    st.markdown(
+                        render_projected_lineup_card(team_projected),
+                        unsafe_allow_html=True,
+                    )
+
+        # Divider between matchups
+        st.markdown("<hr/>", unsafe_allow_html=True)
 
 # ------------------------------------------------------
 # MAIN APP
 # ------------------------------------------------------
 st.title("Pulse Sports Analytics — Minimal Core")
 
+# ✅ REGISTER SWIPE LISTENER (ONCE, GLOBAL)
+swipe_listener()
+
+# ✅ HANDLE SWIPE SAVE (PART 4)
+if "_swipe_bet_line" in st.session_state:
+    handle_save_bet(st.session_state["_swipe_bet_line"])
+    del st.session_state["_swipe_bet_line"]
+
+# Sidebar: Dev Tools link (no heavy work)
+if IS_DEV and is_dev_user():
+    st.sidebar.divider()
+    st.sidebar.markdown("### ⚙️ Dev Tools")
+    if st.sidebar.button("Open DEV Tools"):
+        st.query_params["tab"] = "dev"
+        st.rerun()
+
 st.sidebar.divider()
 if st.sidebar.button("🔄 Refresh Data"):
     st.cache_data.clear()
     st.rerun()
 
-# Tabs: Props + Saved Bets (only)
-tab_props, tab_saved = st.tabs(["📈 Props", "📋 Saved Bets"])
+# Tabs: Props + Lineups + First Basket + Saved Bets
+tab_props, tab_live, tab_lineups, tab_first_basket, tab_saved = st.tabs(
+    ["📈 Props", "🔴 Live Now", "🧩 Lineups", "🥇 First Basket", "📋 Saved Bets"]
+)
 
 with tab_saved:
     render_saved_bets()
+    
+with tab_first_basket:
+    render_first_basket_tab()
+    
+with tab_lineups:
+    render_lineups_tab()
+
+with tab_live:
+    st.markdown(
+        (
+            f"<div style='"
+            f"text-align:center;"
+            f"padding:40px 20px;"
+            f"border-radius:16px;"
+            f"background:linear-gradient(135deg, rgba(239,68,68,0.12), rgba(239,68,68,0.04));"
+            f"border:1px solid rgba(239,68,68,0.25);"
+            f"margin-bottom:24px;"
+            f"'>"
+
+            f"<div style='"
+            f"font-size:1.6rem;"
+            f"font-weight:900;"
+            f"letter-spacing:-0.3px;"
+            f"'>"
+            f"🔴 Live Odds Coming Soon!"
+            f"</div>"
+
+            f"<div style='"
+            f"margin-top:8px;"
+            f"font-size:0.9rem;"
+            f"opacity:0.75;"
+            f"'>"
+            f"Real-time markets will appear here once live ingestion is enabled."
+            f"</div>"
+
+            f"</div>"
+        ),
+        unsafe_allow_html=True,
+    )
+
+    from streamlit_autorefresh import st_autorefresh
+
+    st_autorefresh(interval=30_000, key="live_now")
+
+    today_df = load_today_games()
+    live_df  = load_live_games()
+
+    if today_df.empty:
+        st.info("No games scheduled today")
+    else:
+        live_map = {r.game_id: r for _, r in live_df.iterrows()}
+
+        today_df["start_time_est"] = pd.to_datetime(
+            today_df["start_time_est"],
+            errors="coerce"
+        )
+
+        today_df["game_state"] = today_df.apply(
+            lambda r: (
+                "LIVE"
+                if r.game_id in live_map
+                else "FINAL"
+                if (r.status or "").lower() == "final"
+                else "UPCOMING"
+            ),
+            axis=1,
+        )
+
+        today_df["state_rank"] = today_df["game_state"].map({
+            "LIVE": 0,
+            "UPCOMING": 1,
+            "FINAL": 2,
+        })
+
+        today_df = today_df.sort_values(
+            by=["state_rank", "start_time_est"],
+            ascending=[True, True],
+        )
+
+        for _, g in today_df.iterrows():
+            if g.game_state == "LIVE":
+                render_live_game(g, live_map[g.game_id])
+            elif g.game_state == "FINAL":
+                render_final_game(g)
+            else:
+                render_placeholder_game(g)
 
 with tab_props:
+    render_props_last_updated()
     # --------------------------------------------------
-    # LOAD PROPS (SLATE-DRIVEN)
+    # MARKET WINDOW (FULL / Q1)
     # --------------------------------------------------
-    props_df = load_props()
+    market_window = st.radio(
+        "Market Window",
+        ["FULL", "Q1"],
+        horizontal=True,
+    )
+
+    PROPS_TABLE = (
+        "props_full_enriched"
+        if market_window == "FULL"
+        else "props_q1_enriched"
+    )
+
+    # --------------------------------------------------
+    # LOAD PROPS
+    # --------------------------------------------------
+    props_df = load_props(PROPS_TABLE)
     record_memory_checkpoint()
 
     if props_df.empty:
@@ -2057,33 +3645,36 @@ with tab_props:
     # --------------------------------------------------
     # LOAD PLAYER TRENDS (1 ROW PER PLAYER)
     # --------------------------------------------------
-    trends_df = load_trends()
+    if market_window == "Q1":
+        trends_df = load_trends_q1()
+    else:
+        trends_df = load_trends()
 
-    # 🔒 HARD SAFETY CHECK — prevents RAM explosion
     if not trends_df["player"].is_unique:
         st.error("❌ Trends table must be 1 row per player (merge aborted)")
         st.stop()
 
     # --------------------------------------------------
-    # MERGE TRENDS → PROPS (LEFT JOIN, SAFE)
+    # MERGE TRENDS → PROPS (SAFE)
     # --------------------------------------------------
     props_df = props_df.merge(
         trends_df,
         on="player",
         how="left",
-        validate="many_to_one",  # 👈 critical safety net
+        validate="many_to_one",
     )
 
     props_df.flags.writeable = False
     record_memory_checkpoint()
 
-
-
-    # ------------------------------
+    # --------------------------------------------------
     # BUILD FILTER OPTIONS
-    # ------------------------------
-    market_list = sorted(props_df["market"].dropna().unique().tolist()) if "market" in props_df.columns else []
-    book_list = sorted(props_df["bookmaker"].dropna().unique().tolist()) if "bookmaker" in props_df.columns else []
+    # --------------------------------------------------
+    book_list = (
+        sorted(props_df["bookmaker"].dropna().unique().tolist())
+        if "bookmaker" in props_df.columns
+        else []
+    )
 
     games_today = []
     if "home_team" in props_df.columns and "visitor_team" in props_df.columns:
@@ -2094,55 +3685,53 @@ with tab_props:
             .tolist()
         )
 
-    # ------------------------------
-    # FILTER UI (CLEAN + SAFE)
-    # ------------------------------
+    # --------------------------------------------------
+    # FILTER UI
+    # --------------------------------------------------
     with st.expander("⚙️ Filters", expanded=False):
-    
-        # ---------------------------------
-        # CORE FILTERS
-        # ---------------------------------
+
         c1, c2 = st.columns([1.2, 1.8])
-    
+
         with c1:
             f_bet_type = st.multiselect(
                 "Bet Type",
                 ["Over", "Under"],
                 default=["Over", "Under"],
             )
-    
+
         MARKET_GROUPS = {
-            "Points": ["player_points", "player_points_alternate"],
-            "Rebounds": ["player_rebounds", "player_rebounds_alternate"],
-            "Assists": ["player_assists", "player_assists_alternate"],
-            "Steals": ["player_steals", "player_steals_alternate"],
-            "Blocks": ["player_blocks", "player_blocks_alternate"],
+            "Points": ["player_points"],
+            "Rebounds": ["player_rebounds"],
+            "Assists": ["player_assists"],
+            "Steals": ["player_steals"],
+            "Blocks": ["player_blocks"],
+            "Threes": ["threes"],    # 👈 ADD THIS
             "Combos": [
-                "player_points_rebounds",
-                "player_points_assists",
-                "player_rebounds_assists",
-                "player_points_rebounds_assists",
+                "player_pra",
+                "player_pr",
+                "player_pa",
+                "player_ra",
+            ],
+            "Milestones": [
+                "player_double_double",
+                "player_triple_double",
             ],
         }
-    
+
+
         with c2:
             selected_market_groups = st.multiselect(
                 "Markets",
                 list(MARKET_GROUPS.keys()),
                 default=list(MARKET_GROUPS.keys()),
             )
-    
+
         f_market = [
-            m
-            for g in selected_market_groups
-            for m in MARKET_GROUPS[g]
+            m for g in selected_market_groups for m in MARKET_GROUPS[g]
         ]
-    
-        # ---------------------------------
-        # ODDS + WINDOW
-        # ---------------------------------
+
         c3, c4 = st.columns([2, 1])
-    
+
         with c3:
             f_min_odds, f_max_odds = st.slider(
                 "Odds Range",
@@ -2151,33 +3740,27 @@ with tab_props:
                 (-600, 150),
                 step=25,
             )
-    
+
         with c4:
             f_window = st.selectbox(
                 "Hit Window",
                 ["L5", "L10", "L20"],
                 index=1,
             )
-    
-        # ---------------------------------
-        # BOOKS
-        # ---------------------------------
+
         default_books = [
             b for b in book_list
             if b.lower() in ("draftkings", "fanduel")
         ] or book_list
-    
+
         f_books = st.multiselect(
             "Books",
             book_list,
             default=default_books,
         )
-    
-        # ---------------------------------
-        # GAMES (OPTIONAL)
-        # ---------------------------------
+
         show_games = st.checkbox("Filter by Games", value=False)
-    
+
         if show_games:
             f_games = st.multiselect(
                 "Games",
@@ -2186,18 +3769,15 @@ with tab_props:
             )
         else:
             f_games = []
-    
-        # ---------------------------------
-        # ADVANCED FILTERS (SECTION, NOT EXPANDER)
-        # ---------------------------------
+
         st.divider()
         st.markdown("**Advanced Filters**")
-    
+
         show_ev_only = st.checkbox(
             "Show only EV+ bets (Hit Rate > Implied Probability)",
             value=False,
         )
-    
+
         f_min_hit = st.slider(
             "Min Hit Rate (%)",
             0,
@@ -2205,9 +3785,9 @@ with tab_props:
             80,
         )
 
-    # ------------------------------
-    # MEMORY WIDGET (VISIBLE, CORRECT)
-    # ------------------------------
+    # --------------------------------------------------
+    # MEMORY WIDGET
+    # --------------------------------------------------
     mem_now, mem_delta = finalize_render_memory()
     delta_icon = "🔴" if mem_delta > 5 else "🟢"
 
@@ -2218,103 +3798,117 @@ with tab_props:
         f"Session Peak: **{st.session_state.mem_peak_mb:.0f} MB**"
     )
 
-    # ------------------------------
-    # APPLY FILTERS (DATA ONLY)
-    # ------------------------------
-    df = props_df
+    # --------------------------------------------------
+    # APPLY FILTERS
+    # --------------------------------------------------
+    df = props_df.copy()
+
+    if "bet_type" in df.columns:
+        df["bet_type"] = (
+            df["bet_type"]
+            .astype(str)
+            .str.strip()
+            .str.lower()
+            .replace({
+                "count": "Over",
+                "binary": "Over",
+                "yes": "Over",
+                "over": "Over",
+                "under": "Under",
+            })
+        )
 
     if "bet_type" in df.columns:
         df = df[df["bet_type"].isin(f_bet_type)]
-    if "market" in df.columns and f_market:
-        df = df[df["market"].isin(f_market)]
+
+    if f_market:
+        if "prop_type" in df.columns:
+            df = df[df["prop_type"].isin(f_market)]
+        elif "market" in df.columns:
+            df = df[df["market"].isin(f_market)]
+
+
     if "bookmaker" in df.columns and f_books:
         df = df[df["bookmaker"].isin(f_books)]
+
     if "price" in df.columns:
         df = df[(df["price"] >= f_min_odds) & (df["price"] <= f_max_odds)]
 
-    if games_today and f_games and "home_team" in df.columns and "visitor_team" in df.columns:
+    if show_games and f_games and "home_team" in df.columns and "visitor_team" in df.columns:
         game_display = df["home_team"].astype(str) + " vs " + df["visitor_team"].astype(str)
         df = df[game_display.isin(f_games)]
 
     window_col = {
-        "L5": "hit_rate_last5",
-        "L10": "hit_rate_last10",
-        "L20": "hit_rate_last20",
+        "L5": "hit_rate_l5",
+        "L10": "hit_rate_l10",
+        "L20": "hit_rate_l20",
     }[f_window]
+
 
     hit_rate_decimal = f_min_hit / 100.0
     if window_col in df.columns:
         df = df[df[window_col] >= hit_rate_decimal]
 
-    if show_ev_only:
-        implied = df["implied_prob"] if "implied_prob" in df.columns else df["price"].apply(compute_implied_prob)
-        if window_col in df.columns:
-            df = df[df[window_col] > implied]
+    if show_ev_only and window_col in df.columns:
+        implied = df["implied_prob"].fillna(
+            df["price"].apply(compute_implied_prob)
+        )
+        df = df[df[window_col] > implied]
 
     if window_col in df.columns and "price" in df.columns:
         df = df.sort_values([window_col, "price"], ascending=[False, True])
 
-    # ------------------------------
-    # PAGINATION CONFIG
-    # ------------------------------
+    # --------------------------------------------------
+    # PAGINATION
+    # --------------------------------------------------
     PAGE_SIZE = 30
-    
+
     if "page" not in st.session_state:
         st.session_state.page = 0
-    
-    # ------------------------------
-    # RESET PAGE WHEN FILTERS CHANGE
-    # ------------------------------
+
     page_key = (
-        f"{len(df)}|"
-        f"{window_col}|"
+        f"{len(df)}|{window_col}|"
         f"{','.join(sorted(f_market))}|"
         f"{','.join(sorted(f_books))}|"
         f"{','.join(sorted(f_games))}|"
         f"{show_ev_only}"
     )
-    
+
     if st.session_state.get("_last_page_key") != page_key:
         st.session_state.page = 0
         st.session_state._last_page_key = page_key
-    
-    # ------------------------------
-    # SLICE DATAFRAME FOR PAGE
-    # ------------------------------
+
     total_rows = len(df)
     total_pages = max(1, math.ceil(total_rows / PAGE_SIZE))
-    
+
     start = st.session_state.page * PAGE_SIZE
     end = start + PAGE_SIZE
-    
     page_df = df.iloc[start:end]
-    
-    # ------------------------------
-    # PAGE CONTROLS
-    # ------------------------------
+
     col_prev, col_mid, col_next = st.columns([1, 2, 1])
-    
+
     with col_prev:
         if st.button("⬅ Prev", disabled=st.session_state.page == 0):
             st.session_state.page -= 1
-    
+
     with col_next:
         if st.button("Next ➡", disabled=st.session_state.page >= total_pages - 1):
             st.session_state.page += 1
-    
+
     with col_mid:
         st.caption(
             f"Page {st.session_state.page + 1} of {total_pages} "
             f"({total_rows} results)"
         )
-    
-    # ------------------------------
-    # RENDER PAGE ONLY
-    # ------------------------------
+
+    # --------------------------------------------------
+    # RENDER CARDS
+    # --------------------------------------------------
     render_prop_cards(
         df=page_df,
         hit_rate_col=window_col,
-        hit_label=f_window
+        hit_label=f_window,
+        market_window=market_window,
     )
-    
+
     record_memory_checkpoint()

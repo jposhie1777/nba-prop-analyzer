@@ -3163,6 +3163,44 @@ def render_team_header(team_abbr: str):
         f"</div>"
     )
 
+def render_live_game(game):
+    st.markdown("### 🔴 LIVE")
+
+    left, center, right = st.columns([2, 3, 2])
+
+    with left:
+        st.image(team_logo_url(game.home_team_abbr), width=64)
+        st.markdown(f"## {game.home_score_final}")
+        st.caption(game.home_team_abbr)
+
+    with center:
+        st.markdown(
+            f"""
+            <div style="text-align:center;">
+              <h4>{game.status}</h4>
+              <p style="opacity:.6;">Updated {game.last_updated}</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with right:
+        st.image(team_logo_url(game.away_team_abbr), width=64)
+        st.markdown(f"## {game.away_score_final}")
+        st.caption(game.away_team_abbr)
+
+    # Score by quarter
+    q_df = pd.DataFrame({
+        "": [game.home_team_abbr, game.away_team_abbr],
+        "Q1": [game.home_score_q1, game.away_score_q1],
+        "Q2": [game.home_score_q2, game.away_score_q2],
+        "Q3": [game.home_score_q3, game.away_score_q3],
+        "Q4": [game.home_score_q4, game.away_score_q4],
+        "T":  [game.home_score_final, game.away_score_final],
+    })
+
+    st.table(q_df)
+    st.divider()
 
 def render_lineups_tab():
     # --------------------------------------------------
@@ -3278,8 +3316,8 @@ if st.sidebar.button("🔄 Refresh Data"):
     st.rerun()
 
 # Tabs: Props + Lineups + First Basket + Saved Bets
-tab_props, tab_lineups, tab_first_basket, tab_saved = st.tabs(
-    ["📈 Props", "🧩 Lineups", "🥇 First Basket", "📋 Saved Bets"]
+tab_props, tab_live, tab_lineups, tab_first_basket, tab_saved = st.tabs(
+    ["📈 Props", "🔴 Live Now", "🧩 Lineups", "🥇 First Basket", "📋 Saved Bets"]
 )
 
 with tab_saved:
@@ -3290,6 +3328,18 @@ with tab_first_basket:
     
 with tab_lineups:
     render_lineups_tab()
+
+with tab_live:
+    from streamlit_autorefresh import st_autorefresh
+    st_autorefresh(interval=30_000, key="live_now")
+
+    live_df = load_live_games()
+
+    if live_df.empty:
+        st.info("No live games right now")
+    else:
+        for _, game in live_df.iterrows():
+            render_live_game(game)
 
 with tab_props:
     render_props_last_updated()

@@ -1679,27 +1679,38 @@ def classify_games_by_state(games):
 
     return live, upcoming, final
 
-def test_raw_game_odds(game_ids: list[int], label: str):
+def test_raw_game_odds(
+    game_ids: list[int],
+    label: str,
+    vendors: list[str] | None = None,
+):
     results = {}
 
     for gid in game_ids:
+        params = {"game_ids[]": gid}
+
+        if vendors:
+            for v in vendors:
+                params.setdefault("vendors[]", []).append(v)
+
         try:
             payload = http_get(
                 BALDONTLIE_ODDS_BASE,
                 "/odds",
-                {"game_ids[]": gid},
+                params,
             )
-            results[gid] = payload
+            results[str(gid)] = payload
         except Exception as e:
-            results[gid] = {"error": str(e)}
+            results[str(gid)] = {"error": str(e)}
 
         sleep_s(0.3)
 
-    # Save locally or log
-    with open(f"/tmp/odds_test_{label}.json", "w") as f:
+    path = f"/tmp/odds_test_{label}.json"
+    with open(path, "w") as f:
         json.dump(results, f, indent=2)
 
-    return results
+    print(f"🧪 wrote {path}")
+    return path
     
 def run_odds_diagnostic_for_today():
     today = today_ny()

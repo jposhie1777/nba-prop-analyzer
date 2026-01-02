@@ -3236,7 +3236,7 @@ def render_lineups_tab():
     # --------------------------------------------------
     # Load today's games
     # --------------------------------------------------
-    games_df = load_todays_games()
+    games_df = load_today_games()
 
     if games_df.empty:
         st.warning("No games today.")

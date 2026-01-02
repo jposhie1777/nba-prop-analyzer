@@ -140,6 +140,12 @@ def yesterday_ny():
     ny = pytz.timezone("America/New_York")
     return (datetime.now(ny).date() - timedelta(days=1)).isoformat()
 
+from zoneinfo import ZoneInfo
+from datetime import datetime
+
+def today_ny() -> str:
+    return datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+
 def parse_start_time_est(g: dict) -> Optional[str]:
     """
     Safely extract game start time in EST from a Ball Don't Lie game payload.
@@ -1678,7 +1684,7 @@ def test_raw_game_odds(game_ids: list[int], label: str):
     return results
     
 def run_odds_diagnostic_for_today():
-    today = date.today().isoformat()
+    today = today_ny()
 
     games = fetch_games_for_date(today)
     if not games:

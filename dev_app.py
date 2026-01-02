@@ -1073,6 +1073,83 @@ def load_static_ui():
         }
 
         /* ==================================================
+           LIVE SCOREBOARD (LIVE / UPCOMING / FINAL)
+        ================================================== */
+        .live-scoreboard {
+            background: radial-gradient(
+                circle at 30% 50%,
+                rgba(34,197,94,0.18),
+                rgba(2,6,23,0.96) 55%
+            );
+            border-radius: 20px;
+            padding: 22px 28px;
+            margin-bottom: 18px;
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            box-shadow:
+                0 20px 40px rgba(0,0,0,0.65),
+                inset 0 1px 0 rgba(255,255,255,0.04);
+        }
+        
+        .live-score {
+            font-size: 4.2rem;
+            font-weight: 900;
+            line-height: 1;
+        }
+        
+        .live-team {
+            font-size: 0.95rem;
+            opacity: 0.75;
+            margin-top: 6px;
+        }
+        
+        .live-center {
+            text-align: center;
+            padding: 0 24px;
+        }
+        
+        .live-period {
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+        }
+        
+        .live-status {
+            font-size: 0.7rem;
+            opacity: 0.55;
+            margin-top: 4px;
+        }
+        
+        /* ==================================================
+           LIVE QUARTER BREAKDOWN
+        ================================================== */
+        .live-quarters {
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.08);
+            display: grid;
+            grid-template-columns: 60px repeat(5, 1fr);
+            row-gap: 6px;
+            font-size: 0.75rem;
+            opacity: 0.75;
+        }
+        
+        .live-quarters .hdr {
+            text-align: center;
+            font-weight: 700;
+            opacity: 0.6;
+        }
+        
+        .live-quarters .team {
+            font-weight: 700;
+            text-align: left;
+        }
+        
+        .live-quarters .cell {
+            text-align: center;
+        }
+        /* ==================================================
            MOBILE SWIPE VISUAL FEEDBACK
         ================================================== */
         @media (max-width: 640px) {

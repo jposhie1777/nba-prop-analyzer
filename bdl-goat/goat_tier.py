@@ -855,7 +855,23 @@ def ingest_lineups(start: str, end: str):
         "rows": len(rows),
     }
 
+def classify_games(games):
+    live = []
+    upcoming = []
+    final = []
 
+    for g in games:
+        status = g.get("status", "").lower()
+
+        if status in ("in progress", "live"):
+            live.append(g["id"])
+        elif status == "final":
+            final.append(g["id"])
+        else:
+            upcoming.append(g["id"])
+
+    return live, upcoming, final
+    
 # ======================================================
 # PLAYER PROPS (V2 – CORRECT)
 # ======================================================
@@ -1624,7 +1640,51 @@ def route_stats_advanced():
         ingest_stats_advanced(start, end, bypass_throttle=bypass)
     )
 
+def test_raw_game_odds(game_ids: list[int], label: str):
+    results = {}
 
+    for gid in game_ids:
+        try:
+            payload = http_get(
+                BALDONTLIE_ODDS_BASE,
+                "/odds",
+                {"game_ids[]": gid},
+            )
+            results[gid] = payload
+        except Exception as e:
+            results[gid] = {"error": str(e)}
+
+        sleep_s(0.3)
+
+    # Save locally or log
+    with open(f"/tmp/odds_test_{label}.json", "w") as f:
+        json.dump(results, f, indent=2)
+
+    return results
+    
+def run_odds_diagnostic_for_today():
+    today = date.today().isoformat()
+
+    games = fetch_games_for_date(today)
+    if not games:
+        print("⚠️ No games today")
+        return
+
+    live_ids, upcoming_ids, final_ids = classify_games_by_state(games)
+
+    print(f"Live: {live_ids}")
+    print(f"Upcoming: {upcoming_ids}")
+    print(f"Final: {final_ids}")
+
+    if live_ids:
+        test_raw_game_odds(live_ids[:2], "live")
+
+    if upcoming_ids:
+        test_raw_game_odds(upcoming_ids[:2], "upcoming")
+
+    if final_ids:
+        test_raw_game_odds(final_ids[:2], "final")
+        
 # ======================================================
 # GAME STATS ROUTES
 # ======================================================
@@ -1749,6 +1809,11 @@ def ingest_player_injuries():
         "rows_inserted": inserted,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     })
+
+@app.route("/goat/debug/odds-diagnostic")
+def route_odds_diagnostic():
+    run_odds_diagnostic_for_today()
+    return {"status": "ok", "output": "/tmp/odds_test_*.json"}
 
 if __name__ == "__main__":
     if os.getenv("RUN_BACKFILL") == "true":

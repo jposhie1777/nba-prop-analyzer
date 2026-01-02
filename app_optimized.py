@@ -1766,7 +1766,7 @@ def load_today_games():
       game_id,
       home_team_abbr,
       away_team_abbr,
-      start_time_est,
+      start_time_utc,
       status
     FROM `graphite-flare-477419-h7.nba_goat_data.games`
     WHERE game_date = CURRENT_DATE("America/New_York")

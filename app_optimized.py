@@ -3787,6 +3787,18 @@ with tab_live:
 
     today_df = load_today_games()
     live_df  = load_live_games()
+    
+    # --------------------------------------------------
+    # Normalize UTC start time → EST (UI-only)
+    # --------------------------------------------------
+    if not today_df.empty and "start_time_utc" in today_df.columns:
+        today_df["start_time_est"] = (
+            pd.to_datetime(today_df["start_time_utc"], utc=True, errors="coerce")
+              .dt.tz_convert("America/New_York")
+              .dt.tz_localize(None)
+        )
+    else:
+        today_df["start_time_est"] = pd.NaT
 
     if today_df.empty:
         st.info("No games scheduled today")

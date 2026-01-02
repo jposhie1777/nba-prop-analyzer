@@ -1726,6 +1726,9 @@ def run_odds_diagnostic_for_today():
     print(f"Upcoming: {upcoming_ids}")
     print(f"Final: {final_ids}")
 
+    # -------------------------------
+    # Part 1: ALL vendors (baseline)
+    # -------------------------------
     if live_ids:
         test_raw_game_odds(live_ids[:2], "live")
 
@@ -1734,7 +1737,23 @@ def run_odds_diagnostic_for_today():
 
     if final_ids:
         test_raw_game_odds(final_ids[:2], "final")
-        
+
+    # ----------------------------------------
+    # Part 2: FanDuel + DraftKings ONLY
+    # ----------------------------------------
+    if live_ids:
+        test_raw_game_odds(
+            live_ids[:2],
+            "live_fanduel_dk",
+            vendors=["fanduel", "draftkings"],
+        )
+
+    if upcoming_ids:
+        test_raw_game_odds(
+            upcoming_ids[:2],
+            "upcoming_fanduel_dk",
+            vendors=["fanduel", "draftkings"],
+        )
 
 # ======================================================
 # GAME STATS ROUTES

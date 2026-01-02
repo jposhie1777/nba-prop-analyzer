@@ -109,13 +109,6 @@ if "session_initialized" not in st.session_state:
 # AUTH0 + USER AUTH (STREAMLIT SAFE, RENDER READY)
 # ======================================================
 
-import requests
-import jwt
-import psycopg2
-import psycopg2.extras
-from urllib.parse import urlencode
-import streamlit as st
-
 # ------------------------------------------------------
 # REQUIRED ENV VARS (ALREADY LOADED VIA get_secret)
 # ------------------------------------------------------
@@ -224,12 +217,13 @@ def ensure_logged_in():
     """
 
     # DEV BYPASS (LOCAL / TESTING)
-    if IS_DEV:
+    if IS_DEV and not AUTH0_DOMAIN:
         st.session_state.setdefault(
             "user",
             {
                 "auth0_sub": "dev|local",
                 "email": "dev@local",
+                "user_id": None,
             },
         )
         return

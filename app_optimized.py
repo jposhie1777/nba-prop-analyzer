@@ -3805,11 +3805,6 @@ with tab_live:
     else:
         live_map = {r.game_id: r for _, r in live_df.iterrows()}
 
-        today_df["start_time_est"] = pd.to_datetime(
-            today_df["start_time_est"],
-            errors="coerce"
-        )
-
         today_df["game_state"] = today_df.apply(
             lambda r: (
                 "LIVE"

@@ -1270,6 +1270,9 @@ SPORTSBOOK_LOGOS = {
     "FanDuel": load_logo_base64(LOGO_DIR / "Fanduelsmall.png"),
 }
 
+def team_logo_url(abbr: str) -> str:
+    return f"https://a.espncdn.com/i/teamlogos/nba/500/{abbr.lower()}.png"
+
 # -------------------------------
 # Saved Bets (constant-memory)
 # -------------------------------
@@ -1464,6 +1467,15 @@ def load_todays_games():
     """
     return load_bq_df(query)
 
+@st.cache_data(ttl=30)
+def load_live_games():
+    return bq.query(
+        f"""
+        SELECT *
+        FROM `{PROJECT_ID}.nba_goat_data.live_games`
+        ORDER BY updated_at DESC
+        """
+    ).to_dataframe()
 
 @st.cache_data(ttl=900, show_spinner=True)
 def load_props(table_name: str) -> pd.DataFrame:

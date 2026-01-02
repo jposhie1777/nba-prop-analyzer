@@ -3375,7 +3375,8 @@ with tab_live:
 
     if today_df.empty:
         st.info("No games scheduled today")
-        st.stop()
+    else:
+        # rest of Live Now rendering
 
     # --------------------------------------------
     # Build lookup for live games

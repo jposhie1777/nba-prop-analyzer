@@ -1,83 +1,155 @@
-# ------------------------------------------------------
-# IMPORTS
-# ------------------------------------------------------
 import os
+os.environ["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
+
+# ------------------------------------------------------
+# NBA Prop Analyzer - Merged Production + Dev UI
+# ------------------------------------------------------
 import json
+from datetime import datetime
+from urllib.parse import urlencode
+
+from dotenv import load_dotenv
+load_dotenv()
+
+import base64
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-import streamlit as st
 import pytz
-from datetime import datetime
-from google.oauth2 import service_account
+import requests
+import streamlit as st
+import psycopg2
+import psycopg2.extras
+import jwt
+import streamlit.components.v1 as components
+import textwrap
+import re
+from functools import lru_cache
+from rapidfuzz import fuzz, process
+
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from google.cloud import bigquery
+from google.oauth2 import service_account
+
+import psutil  # ✅ must be before memory helpers
+import math
+
+# ======================================================
+# MEMORY TRACKING HELPERS (DEFINE BEFORE CALLING)
+# ======================================================
+def get_rss_mb() -> float:
+    return psutil.Process(os.getpid()).memory_info().rss / 1e6
+
+def init_memory_state():
+    if "mem_last_mb" not in st.session_state:
+        st.session_state.mem_last_mb = get_rss_mb()
+    if "mem_peak_mb" not in st.session_state:
+        st.session_state.mem_peak_mb = st.session_state.mem_last_mb
+    if "mem_render_peak_mb" not in st.session_state:
+        st.session_state.mem_render_peak_mb = st.session_state.mem_last_mb
+
+def record_memory_checkpoint():
+    current = get_rss_mb()
+    st.session_state.mem_peak_mb = max(st.session_state.mem_peak_mb, current)
+    st.session_state.mem_render_peak_mb = max(st.session_state.mem_render_peak_mb, current)
+    return current
+
+def finalize_render_memory():
+    current = get_rss_mb()
+    last = st.session_state.mem_last_mb
+    delta = current - last
+    st.session_state.mem_last_mb = current
+    st.session_state.mem_render_peak_mb = current
+    return current, delta
+
 
 # ------------------------------------------------------
-# TIMEZONE (EST)
+# STREAMLIT CONFIG (MUST BE FIRST STREAMLIT COMMAND)
 # ------------------------------------------------------
-EST = pytz.timezone("America/New_York")
-
-# ------------------------------------------------------
-# STREAMLIT CONFIG
-# ------------------------------------------------------
-st.set_page_config(page_title="NBA Prop Analyzer", layout="wide")
-
-# Global CSS to center table text
-st.markdown(
-    """
-    <style>
-    table td, table th {
-        text-align: center !important;
-        vertical-align: middle !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
+st.set_page_config(
+    page_title="NBA Prop Analyzer (DEV)",
+    layout="wide",
+    initial_sidebar_state="collapsed",
 )
 
 # ------------------------------------------------------
-# ENVIRONMENT VARIABLES
+# SESSION INITIALIZATION (SAFE — NO STOP)
 # ------------------------------------------------------
-PROJECT_ID = os.getenv("PROJECT_ID", "")
-DATASET = "nba_prop_analyzer"
-PROPS_TABLE = "todays_props_with_hit_rates"
-HISTORICAL_TABLE = "historical_player_stats_for_trends"
-SERVICE_JSON = os.getenv("GCP_SERVICE_ACCOUNT", "")
-
-if not PROJECT_ID or not SERVICE_JSON:
-    st.error("❌ Missing PROJECT_ID or GCP_SERVICE_ACCOUNT environment variables.")
-    st.stop()
+if "session_initialized" not in st.session_state:
+    st.session_state["session_initialized"] = True
 
 # ------------------------------------------------------
-# SQL STATEMENTS
+# SAFE QUERY PARAM NAVIGATION (NO RERUN)
 # ------------------------------------------------------
-PROPS_SQL = f"""
-SELECT *
-FROM `{PROJECT_ID}.{DATASET}.{PROPS_TABLE}`
-"""
+if "pending_tab" in st.session_state:
+    st.query_params["tab"] = st.session_state.pop("pending_tab")
 
-HISTORICAL_SQL = f"""
-SELECT
-  player,
-  player_team,
-  home_team,
-  visitor_team,
-  game_date,
-  opponent_team,
-  home_away,
-  pts,
-  reb,
-  ast,
-  pra
-FROM `{PROJECT_ID}.{DATASET}.{HISTORICAL_TABLE}`
-ORDER BY game_date
-"""
+st.sidebar.markdown("🧪 DEV_APP.PY RUNNING")
+
+IS_DEV = os.getenv("APP_ENV", "prod") == "dev"
+
 
 # ------------------------------------------------------
-# AUTHENTICATION
+# MEMORY STATE INIT (NOW SAFE)
 # ------------------------------------------------------
-try:
-    creds_dict = json.loads(SERVICE_JSON)
+init_memory_state()
+
+
+# ======================================================
+# DEV ACCESS CONTROL (EARLY)
+# ======================================================
+DEV_EMAIL = "benvrana@bottleking.com"
+
+def get_user_email() -> str | None:
+    user = st.session_state.get("user")
+    return user.get("email") if user else None
+
+
+def is_dev_user() -> bool:
+    return get_user_email() == DEV_EMAIL
+
+
+
+# ======================================================
+# SAFE TAB ROUTER (DEV + MAIN)
+# ======================================================
+def get_active_tab():
+    tab = st.query_params.get("tab")
+    if isinstance(tab, list):
+        tab = tab[0]
+    return tab or "main"
+
+# ------------------------------------------------------
+# SIDEBAR: DEV NAV ENTRY (SAFE)
+# ------------------------------------------------------
+if is_dev_user():
+    st.sidebar.divider()
+    st.sidebar.markdown("### ⚙️ Dev Tools")
+
+    if st.sidebar.button("Open Dev Panel"):
+        st.query_params["tab"] = "dev"
+        st.rerun()
+
+
+# ------------------------------------------------------
+# DEV-SAFE BIGQUERY and GAS CONSTANTS
+# ------------------------------------------------------
+DEV_BQ_DATASET = os.getenv("BIGQUERY_DATASET", "nba_prop_analyzer")
+
+DEV_SP_TABLES = {
+    "Game Analytics": "game_analytics",
+    "Game Report": "game_report",
+    "Historical Player Stats (Trends)": "historical_player_stats_for_trends",
+    "Today's Props – Enriched": "todays_props_enriched",
+    "Today's Props – Hit Rates": "todays_props_hit_rates",
+}
+
+# ======================================================
+# DEV: BigQuery Client (Explicit Credentials)
+# ======================================================
+@st.cache_resource
+def get_dev_bq_client():
+    creds_dict = json.loads(os.getenv("GCP_SERVICE_ACCOUNT", ""))
     creds = service_account.Credentials.from_service_account_info(
         creds_dict,
         scopes=[
@@ -85,21 +157,591 @@ try:
             "https://www.googleapis.com/auth/bigquery",
         ],
     )
-    st.write("✅ Credentials loaded.")
-except Exception as e:
-    st.error(f"❌ Credential error: {e}")
+    project_id = os.getenv("PROJECT_ID")
+
+    return bigquery.Client(credentials=creds, project=project_id)
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def load_bq_df(sql: str) -> pd.DataFrame:
+    client = get_dev_bq_client()   # 👈 THIS is the missing line
+    df = client.query(sql).to_dataframe()
+    df.flags.writeable = False
+    return df
+
+
+# ======================================================
+# DEV: Google Apps Script Trigger
+# ======================================================
+def trigger_apps_script(task: str):
+    try:
+        url = os.getenv("APPS_SCRIPT_URL")
+        token = os.getenv("APPS_SCRIPT_DEV_TOKEN")
+
+        if not url:
+            raise RuntimeError("APPS_SCRIPT_URL is not set")
+        if not token:
+            raise RuntimeError("APPS_SCRIPT_DEV_TOKEN is not set")
+
+        resp = requests.post(
+            url,
+            headers={
+                "Content-Type": "application/json",
+            },
+            params={          # 👈 ADD THIS
+                "token": token
+            },
+            json={"task": task},
+            timeout=60,
+        )
+
+
+        data = resp.json()
+
+        if not data.get("success"):
+            raise RuntimeError(data.get("message"))
+
+        st.success(f"✅ {data.get('message')}")
+
+    except Exception as e:
+        st.error("❌ Apps Script trigger failed")
+        st.code(str(e))
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_table_schema(dataset: str, table: str) -> pd.DataFrame:
+    query = f"""
+    SELECT column_name, data_type
+    FROM `{dataset}.INFORMATION_SCHEMA.COLUMNS`
+    WHERE table_name = '{table}'
+    ORDER BY ordinal_position
+    """
+    df = load_bq_df(query)
+    df.flags.writeable = False
+    return df
+
+# ======================================================
+# DEV: BigQuery Stored Procedure Trigger (SAFE)
+# ======================================================
+def trigger_bq_procedure(proc_name: str):
+    try:
+        client = get_dev_bq_client()
+        sql = f"CALL `{DEV_BQ_DATASET}.{proc_name}`()"
+        job = client.query(sql)
+        job.result()  # wait, but pull no data
+        st.success(f"✅ {proc_name} completed")
+    except Exception as e:
+        st.error(f"❌ {proc_name} failed")
+        st.code(str(e))
+
+from googleapiclient.discovery import build
+from google.oauth2 import service_account
+
+
+def read_sheet_values(sheet_id: str, range_name: str) -> list[list[str]]:
+    """
+    Read values from a Google Sheet range.
+    Read-only, no caching, no memory retention.
+    """
+    creds_dict = json.loads(os.getenv("GCP_SERVICE_ACCOUNT", ""))
+    creds = service_account.Credentials.from_service_account_info(
+        creds_dict,
+        scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"],
+    )
+
+    service = build("sheets", "v4", credentials=creds, cache_discovery=False)
+    resp = (
+        service.spreadsheets()
+        .values()
+        .get(spreadsheetId=sheet_id, range=range_name)
+        .execute()
+    )
+
+    return resp.get("values", [])
+
+
+# ======================================================
+# DEV PAGE OVERRIDE (CRASH-SAFE)
+# ======================================================
+def render_dev_page():
+    st.title("⚙️ DEV CONTROL PANEL")
+    
+    if st.button("⬅ Back to Main App", use_container_width=False):
+        st.session_state["pending_tab"] = "main"
+    
+    st.caption("Always available • restricted access")
+
+    st.markdown(f"**Email:** `{get_user_email()}`")
+
+    st.divider()
+
+    st.subheader("🧪 BigQuery – Manual Stored Procedure Triggers")
+
+    BQ_PROCS = [
+        ("Game Analytics", "sp_game_analytics"),
+        ("Game Report", "sp_game_report"),
+        ("Historical Player Stats (Trends)", "sp_historical_player_stats_for_trends"),
+        ("Today's Props – Enriched", "sp_todays_props_enriched"),
+        ("Today's Props – Hit Rates", "sp_todays_props_with_hit_rates"),
+    ]
+
+    for label, proc in BQ_PROCS:
+        col1, col2 = st.columns([3, 1])
+
+        with col1:
+            st.markdown(f"**{label}**")
+            st.caption(f"`{DEV_BQ_DATASET}.{proc}`")
+
+        with col2:
+            if st.button(
+                "▶ Run",
+                key=f"run_{proc}",
+                use_container_width=True
+            ):
+                with st.spinner(f"Running {proc}…"):
+                    trigger_bq_procedure(proc)
+
+
+    st.divider()
+
+    st.subheader("Cloud Run")
+    if st.button("▶ Trigger ESPN Lineups"):
+        trigger_cloud_run("espn-nba-lineups")
+
+    st.divider()
+
+    st.subheader("📄 Google Apps Script")
+
+    APPS_TASKS = [
+        ("NBA Alternate Props", "NBA_ALT_PROPS"),
+        ("NBA Game Odds", "NBA_GAME_ODDS"),
+        ("NCAAB Game Odds", "NCAAB_GAME_ODDS"),
+        ("Run ALL (Daily Runner)", "ALL"),
+    ]
+
+    for label, task in APPS_TASKS:
+        col1, col2 = st.columns([3, 1])
+
+        with col1:
+            st.markdown(f"**{label}**")
+
+        with col2:
+            if st.button(
+                "▶ Run",
+                key=f"apps_{task}",
+                use_container_width=True
+            ):
+                with st.spinner(f"Running {label}…"):
+                    trigger_apps_script(task)
+
+    st.divider()
+    st.subheader("📊 Google Sheet Sanity Checks")
+
+    SHEET_ID = "1p_rmmiUgU18afioJJ3jCHh9XeX7V4gyHd_E0M3A8M3g"
+
+    st.markdown("## 🧪 Stored Procedure Outputs – Schema Preview")
+
+    for label, table in DEV_SP_TABLES.items():
+        st.subheader(label)
+    
+        with st.expander("📋 View Columns"):
+            try:
+                schema_df = get_table_schema("nba_prop_analyzer", table)
+    
+                if schema_df.empty:
+                    st.warning("No columns found (table may not exist yet).")
+                else:
+                    st.dataframe(
+                        schema_df,
+                        use_container_width=True,
+                        hide_index=True
+                    )
+    
+            except Exception as e:
+                st.error(f"Failed to load schema: {e}")
+
+    # --------------------------------------------------
+    # 1) Odds tab checks
+    # --------------------------------------------------
+    try:
+        odds_rows = read_sheet_values(SHEET_ID, "Odds!A:I")
+
+        has_odds_data = len(odds_rows) > 1
+
+        labels = []
+        if has_odds_data:
+            labels = [
+                (r[8] or "").strip().lower()
+                for r in odds_rows[1:]
+                if len(r) >= 9
+            ]
+
+        has_over = any("over" in l for l in labels)
+        has_under = any("under" in l for l in labels)
+
+        st.markdown("**Odds Tab**")
+
+        if has_odds_data:
+            st.success("✅ Rows exist after header")
+        else:
+            st.error("❌ No rows found after header")
+
+        if has_over and has_under:
+            st.success("✅ Both Over and Under found in `label` column")
+        elif has_over:
+            st.warning("⚠️ Only Over found in `label` column")
+        elif has_under:
+            st.warning("⚠️ Only Under found in `label` column")
+        else:
+            st.error("❌ No Over / Under values found in `label` column")
+
+    except Exception as e:
+        st.error("❌ Failed to read Odds tab")
+        st.code(str(e))
+
+
+    # --------------------------------------------------
+    # 2) Game Odds Sheet checks
+    # --------------------------------------------------
+    try:
+        game_odds_rows = read_sheet_values(SHEET_ID, "Game Odds Sheet!A:A")
+
+        has_game_odds_data = len(game_odds_rows) > 1
+
+        st.markdown("**Game Odds Sheet**")
+
+        if has_game_odds_data:
+            st.success("✅ Rows exist after header")
+        else:
+            st.error("❌ No rows found after header")
+
+    except Exception as e:
+        st.error("❌ Failed to read Game Odds Sheet")
+        st.code(str(e))
+
+
+        st.success("DEV page loaded successfully.")
+
+
+
+# ======================================================
+# EARLY EXIT — NOTHING BELOW THIS CAN BLOCK DEV PAGE
+# ======================================================
+active_tab = get_active_tab()
+
+# ---------------- DEV TAB (CRASH SAFE) ----------------
+if active_tab == "dev":
+    if not is_dev_user():
+        st.error("⛔ Access denied")
+        st.stop()
+
+    render_dev_page()
     st.stop()
 
+
 # ------------------------------------------------------
-# BIGQUERY CLIENT
+# ENVIRONMENT VARIABLES
 # ------------------------------------------------------
-try:
-    bq_client = bigquery.Client(credentials=creds, project=PROJECT_ID)
-    _ = bq_client.query("SELECT 1").result()
-    st.sidebar.success("Connected to BigQuery")
-except Exception as e:
-    st.sidebar.error(f"BigQuery connection failed: {e}")
+PROJECT_ID = os.getenv("PROJECT_ID", "")
+
+DATASET = os.getenv("BIGQUERY_DATASET", "nba_prop_analyzer")
+PROPS_TABLE = "todays_props_enriched"
+
+# SERVICE_JSON is a JSON string (not a filepath)
+SERVICE_JSON = os.getenv("GCP_SERVICE_ACCOUNT", "")
+
+# Auth0
+AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN", "")
+AUTH0_CLIENT_ID = os.getenv("AUTH0_CLIENT_ID", "")
+AUTH0_CLIENT_SECRET = os.getenv("AUTH0_CLIENT_SECRET", "")
+AUTH0_REDIRECT_URI = os.getenv("AUTH0_REDIRECT_URI", "")
+AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE", "")
+
+# Render PostgreSQL
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+
+missing_env = []
+if not PROJECT_ID:
+    missing_env.append("PROJECT_ID")
+if not SERVICE_JSON:
+    missing_env.append("GCP_SERVICE_ACCOUNT")
+if not DATABASE_URL:
+    missing_env.append("DATABASE_URL")
+if not AUTH0_DOMAIN:
+    missing_env.append("AUTH0_DOMAIN")
+if not AUTH0_CLIENT_ID:
+    missing_env.append("AUTH0_CLIENT_ID")
+if not AUTH0_CLIENT_SECRET:
+    missing_env.append("AUTH0_CLIENT_SECRET")
+if not AUTH0_REDIRECT_URI:
+    missing_env.append("AUTH0_REDIRECT_URI")
+if not AUTH0_AUDIENCE:
+    missing_env.append("AUTH0_AUDIENCE")
+
+if missing_env and not IS_DEV:
+    st.error(
+        "❌ Missing required environment variables:\n\n"
+        + "\n".join(f"- {m}" for m in missing_env)
+    )
     st.stop()
+
+if missing_env:
+    st.error(
+        "❌ Missing required environment variables:\n\n"
+        + "\n".join(f"- {m}" for m in missing_env)
+    )
+    st.stop()
+
+def get_db_conn():
+    return psycopg2.connect(DATABASE_URL, sslmode="require")
+
+
+def get_or_create_user(auth0_sub: str, email: str):
+    conn = get_db_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    cur.execute("SELECT * FROM users WHERE auth0_sub = %s", (auth0_sub,))
+    row = cur.fetchone()
+
+    if row:
+        conn.close()
+        return row
+
+    cur.execute(
+        "INSERT INTO users (auth0_sub, email) VALUES (%s, %s) RETURNING *",
+        (auth0_sub, email),
+    )
+    row = cur.fetchone()
+    conn.commit()
+    conn.close()
+    return row
+
+
+# ------------------------------------------------------
+# AUTH0 HELPERS (LOGIN)
+# ------------------------------------------------------
+def get_auth0_authorize_url():
+    params = {
+        "response_type": "code",
+        "client_id": AUTH0_CLIENT_ID,
+        "redirect_uri": AUTH0_REDIRECT_URI,
+        "scope": "openid profile email",
+        "audience": AUTH0_AUDIENCE,
+    }
+    return f"https://{AUTH0_DOMAIN}/authorize?{urlencode(params)}"
+
+
+def exchange_code_for_token(code: str):
+    token_url = f"https://{AUTH0_DOMAIN}/oauth/token"
+    payload = {
+        "grant_type": "authorization_code",
+        "client_id": AUTH0_CLIENT_ID,
+        "client_secret": AUTH0_CLIENT_SECRET,
+        "code": code,
+        "redirect_uri": AUTH0_REDIRECT_URI,
+        "audience": AUTH0_AUDIENCE,
+    }
+    resp = requests.post(token_url, json=payload, timeout=10)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def decode_id_token(id_token: str):
+    return jwt.decode(
+        id_token,
+        options={"verify_signature": False, "verify_aud": False},
+    )
+
+
+# ------------------------------------------------------
+# AUTH FLOW – HANDLES AUTH0 CALLBACK
+# ------------------------------------------------------
+def ensure_logged_in():
+    if "user" in st.session_state and "user_id" in st.session_state:
+        return
+
+    qp = st.query_params
+    code = qp.get("code")
+    if isinstance(code, list):
+        code = code[0]
+
+    if not code:
+        return  # no callback yet
+
+    token_data = exchange_code_for_token(code)
+    id_token = token_data.get("id_token")
+    claims = decode_id_token(id_token)
+
+    auth0_sub = claims.get("sub")
+    email = claims.get("email", "")
+
+    user_row = get_or_create_user(auth0_sub, email)
+
+    st.session_state["user"] = {
+        "auth0_sub": auth0_sub,
+        "email": email,
+    }
+    st.session_state["user_id"] = user_row["id"]
+
+    # clear ?code from URL
+    st.query_params.clear()
+    st.rerun()
+
+
+
+# ------------------------------------------------------
+# AUTH0 GATE (ALWAYS REQUIRED)
+# ------------------------------------------------------
+ensure_logged_in()
+
+if "user" not in st.session_state:
+    st.title("Pulse Sports Analytics")
+    st.caption("Daily games, props, trends, and analytics")
+
+    login_url = get_auth0_authorize_url()
+    st.markdown(
+        f"""
+        <div style="
+            margin: 14px 0 22px 0;
+            padding: 14px 18px;
+            border-radius: 14px;
+            border: 1px solid rgba(148,163,184,0.35);
+            background: radial-gradient(circle at top left, rgba(15,23,42,0.95), rgba(15,23,42,0.85));
+            box-shadow: 0 16px 40px rgba(15,23,42,0.9);
+            text-align: center;
+        ">
+            <a href="{login_url}"
+               style="
+                   font-size: 1rem;
+                   font-weight: 700;
+                   color: #38bdf8;
+                   text-decoration: none;
+               ">
+                🔐 Log in with Auth0
+            </a>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.stop()
+
+
+# ------------------------------------------------------
+# LOCKED THEME (STATIC) AND GLOBAL STYLES
+# ------------------------------------------------------
+THEME_BG = "#020617"
+THEME_ACCENT = "#0ea5e9"
+THEME_ACCENT_SOFT = "#0369a1"
+
+@st.cache_resource
+def load_static_ui():
+    st.markdown(
+        """
+        <style>
+        /* ==================================================
+           EXPAND WRAPPER (UNCHANGED BEHAVIOR)
+        ================================================== */
+        .prop-card-wrapper {
+            position: relative;
+            z-index: 5;
+            border-radius: 16px;
+        }
+
+        .prop-card-wrapper summary {
+            cursor: pointer;
+            list-style: none;
+        }
+
+        .prop-card-wrapper summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .prop-card-wrapper summary * {
+            pointer-events: none;
+        }
+
+        .prop-card-wrapper .card-expanded {
+            margin-top: 6px;
+            pointer-events: auto;
+        }
+
+        .expand-hint {
+            text-align: center;
+            font-size: 0.65rem;
+            opacity: 0.55;
+            margin-top: 4px;
+        }
+
+        /* ==================================================
+           BASE CARD (MATCH TILE LAYOUT)
+        ================================================== */
+        .prop-card,
+        .prop-card-wrapper summary {
+            background: linear-gradient(
+                180deg,
+                rgba(15, 23, 42, 0.92),
+                rgba(2, 6, 23, 0.95)
+            );
+            border: none;
+            border-radius: 16px;
+            padding: 16px 18px;
+            width: 100%;
+            box-shadow:
+                0 10px 28px rgba(0, 0, 0, 0.55),
+                inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        }
+
+        .prop-card-wrapper:hover summary {
+            box-shadow:
+                0 14px 36px rgba(0, 0, 0, 0.65),
+                inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        }
+
+        /* ==================================================
+           CARD GRID (VERTICAL TILE STRUCTURE)
+        ================================================== */
+        .card-grid {
+            display: grid;
+            grid-template-rows: auto auto auto auto;
+            row-gap: 10px;
+        }
+
+        /* ==================================================
+           EXPANDED METRICS (BLENDED)
+        ================================================== */
+        .expanded-wrap {
+            background: rgba(255,255,255,0.03);
+            border: none;
+            padding: 10px;
+            border-radius: 12px;
+        }
+
+        .expanded-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .metric {
+            flex: 1;
+            text-align: center;
+            font-size: 0.72rem;
+        }
+
+        .metric span {
+            display: block;
+            color: #9ca3af;
+        }
+
+        .metric strong {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #ffffff;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+load_static_ui()
 
 # ------------------------------------------------------
 # LOGOS (STATIC)
@@ -137,439 +779,1542 @@ TEAM_LOGOS = {
     "WAS": "https://a.espncdn.com/i/teamlogos/nba/500/wsh.png",
 }
 
+# Map full team names from BigQuery → 3-letter codes
+TEAM_NAME_TO_CODE = {
+    "Atlanta Hawks": "ATL",
+    "Boston Celtics": "BOS",
+    "Brooklyn Nets": "BKN",
+    "Charlotte Hornets": "CHA",
+    "Chicago Bulls": "CHI",
+    "Cleveland Cavaliers": "CLE",
+    "Dallas Mavericks": "DAL",
+    "Denver Nuggets": "DEN",
+    "Detroit Pistons": "DET",
+    "Golden State Warriors": "GSW",
+    "Houston Rockets": "HOU",
+    "Indiana Pacers": "IND",
+    "LA Clippers": "LAC",
+    "Los Angeles Lakers": "LAL",
+    "Memphis Grizzlies": "MEM",
+    "Miami Heat": "MIA",
+    "Milwaukee Bucks": "MIL",
+    "Minnesota Timberwolves": "MIN",
+    "New Orleans Pelicans": "NOP",
+    "New York Knicks": "NYK",
+    "Oklahoma City Thunder": "OKC",
+    "Orlando Magic": "ORL",
+    "Philadelphia 76ers": "PHI",
+    "Phoenix Suns": "PHX",
+    "Portland Trail Blazers": "POR",
+    "Sacramento Kings": "SAC",
+    "San Antonio Spurs": "SAS",
+    "Toronto Raptors": "TOR",
+    "Utah Jazz": "UTA",
+    "Washington Wizards": "WAS",
+}
+
+def team_abbr(team_name: str) -> str:
+    """
+    Returns 3-letter NBA abbreviation.
+    Falls back safely if name not found.
+    """
+    return TEAM_NAME_TO_CODE.get(team_name, team_name[:3].upper())
+
+def logo(team_name: str) -> str:
+    code = TEAM_NAME_TO_CODE.get(team_name)
+    if not code:
+        return "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
+    return TEAM_LOGOS.get(code)
+
+# -------------------------------
+# Sportsbook Logos
+# -------------------------------
+import base64
+import pathlib
+
+@st.cache_resource
+def load_logo_base64(path: pathlib.Path) -> str:
+    if not path.exists():
+        return ""
+    encoded = base64.b64encode(path.read_bytes()).decode("utf-8")
+    return f"data:image/png;base64,{encoded}"
+
+FILE_DIR = pathlib.Path(__file__).resolve().parent
+LOGO_DIR = FILE_DIR / "static" / "logos"
+
+SPORTSBOOK_LOGOS = {
+    "DraftKings": load_logo_base64(LOGO_DIR / "Draftkingssmall.png"),
+    "FanDuel": load_logo_base64(LOGO_DIR / "Fanduelsmall.png"),
+}
+
+# -------------------------------
+# Saved Bets (constant-memory)
+# -------------------------------
+MAX_SAVED_BETS = 150  # keep this small + stable
+
+def _bet_key(player, market, line, bet_type):
+    # minimal stable key — avoids duplicates + memory bloat
+    return f"{player}|{market}|{line}|{bet_type}".lower().strip()
+
+if "saved_bets" not in st.session_state:
+    st.session_state.saved_bets = []
+
+if "saved_bets_keys" not in st.session_state:
+    st.session_state.saved_bets_keys = set()
+
+if "saved_bets_text" not in st.session_state:
+    st.session_state.saved_bets_text = []
+    
+
+PAGE_SIZE = 30
+
+if "page" not in st.session_state:
+    st.session_state.page = 0
+
 # ------------------------------------------------------
-# UTILITY FUNCTIONS
+# DATA: PROPS AND HISTOICAL STATS (minimal)
 # ------------------------------------------------------
-def format_moneyline(v):
+TRENDS_SQL = """
+SELECT
+  player,
+  pts_last10_list,
+  reb_last10_list,
+  ast_last10_list,
+  stl_last10_list,
+  blk_last10_list,
+  pra_last10_list,
+  pr_last10_list,
+  pa_last10_list,
+  ra_last10_list,
+  last10_dates
+FROM `nba_prop_analyzer.historical_player_trends`
+"""
+
+PROPS_SQL = f"SELECT * FROM `{PROJECT_ID}.{DATASET}.{PROPS_TABLE}`"
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def load_trends() -> pd.DataFrame:
+    df = load_bq_df(TRENDS_SQL)
+    df["player"] = df["player"].astype(str)
+    df.flags.writeable = False
+    return df
+
+@st.cache_data(ttl=900, show_spinner=True)
+def load_props() -> pd.DataFrame:
+    df = load_bq_df(PROPS_SQL)
+
+    # Keep only columns we actually use (cuts memory)
+    keep = [
+        # ---------------------------------
+        # IDENTITY / ROUTING
+        # ---------------------------------
+        "player", "player_team",
+        "home_team", "visitor_team", "opponent_team",
+        "market", "line", "bet_type",
+        "bookmaker", "price",
+        "game_date",
+    
+        # ---------------------------------
+        # HIT RATES / EDGE (CORE SIGNAL)
+        # ---------------------------------
+        "hit_rate_last5", "hit_rate_last10", "hit_rate_last20",
+        "implied_prob",
+        "edge_raw", "edge_pct",
+    
+        # ---------------------------------
+        # SCALAR ROLLING AVERAGES
+        # ---------------------------------
+        "pts_last5", "pts_last10", "pts_last20",
+        "reb_last5", "reb_last10", "reb_last20",
+        "ast_last5", "ast_last10", "ast_last20",
+    
+        # STEALS
+        "stl_last5", "stl_last10", "stl_last20",
+    
+        # BLOCKS
+        "blk_last5", "blk_last10", "blk_last20",
+    
+        # COMBOS
+        "pra_last5", "pra_last10", "pra_last20",
+        "pr_last5",  "pr_last10",  "pr_last20",
+        "pa_last5",  "pa_last10",  "pa_last20",
+        "ra_last5",  "ra_last10",  "ra_last20",
+    
+        # ---------------------------------
+        # OPPONENT / MATCHUP
+        # ---------------------------------
+        "opp_pos_pts_rank",
+        "opp_pos_reb_rank",
+        "opp_pos_ast_rank",
+        "opp_pos_stl_rank",
+        "opp_pos_blk_rank",
+        "opp_pos_pra_rank",
+        "opp_pos_pr_rank",
+        "opp_pos_pa_rank",
+        "opp_pos_ra_rank",
+    
+        # ---------------------------------
+        # CONFIDENCE / PROJECTION SIGNALS
+        # ---------------------------------
+        "proj_last10",
+        "proj_diff_vs_line",
+        "proj_std_last10",
+        "proj_volatility_index",
+    
+        # ---------------------------------
+        # MATCHUP DIFFICULTY
+        # ---------------------------------
+        "matchup_difficulty_by_stat",
+        
+        # ---------------------------------
+        # DISTRIBUTION (EXPANDED ANALYTICS)
+        # ---------------------------------
+        "dist20_hit_rate",
+        "dist20_clear_1p_rate",
+        "dist20_clear_2p_rate",
+        "dist20_fail_bad_rate",
+        "dist20_avg_margin",
+
+        "dist40_hit_rate",
+        "dist40_clear_1p_rate",
+        "dist40_clear_2p_rate",
+        "dist40_fail_bad_rate",
+        "dist40_avg_margin",
+    
+        # ---------------------------------
+        # MINUTES / ROLE STABILITY
+        # ---------------------------------
+        "est_minutes",
+        "delta_minutes",
+        "usage_bump_pct",
+    ]
+    cols = [c for c in keep if c in df.columns]
+    df = df[cols].copy()
+
+    # Light normalization
+    if "price" in df.columns:
+        df["price"] = pd.to_numeric(df["price"], errors="coerce")
+    if "line" in df.columns:
+        df["line"] = pd.to_numeric(df["line"], errors="coerce")
+
+    for c in ("hit_rate_last5", "hit_rate_last10", "hit_rate_last20", "implied_prob", "edge_pct", "edge_raw"):
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
+
+    if "game_date" in df.columns:
+        df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
+
+    # Fill strings without expanding memory too much
+    for c in ("player", "market", "bet_type", "bookmaker", "player_team", "home_team", "visitor_team", "opponent_team"):
+        if c in df.columns:
+            df[c] = df[c].fillna("").astype(str)
+
+    df.flags.writeable = False
+    return df
+
+# ------------------------------------------------------
+# SAVED BETS (SESSION ONLY)
+# ------------------------------------------------------
+def _bet_key(player, market, line, bet_type) -> str:
+    return f"{player}|{market}|{line}|{bet_type}".lower().strip()
+
+def init_saved_bets_state():
+    if "saved_bets" not in st.session_state:
+        st.session_state.saved_bets = []
+    if "saved_bets_keys" not in st.session_state:
+        st.session_state.saved_bets_keys = set()
+
+def save_bet_simple(player, market, line, price, bet_type) -> bool:
+    init_saved_bets_state()
+    bets = st.session_state.saved_bets
+    keys = st.session_state.saved_bets_keys
+
+    k = _bet_key(player, market, line, bet_type)
+    if k in keys:
+        return False
+
+    bet = {
+        "player": str(player or ""),
+        "market": str(market or ""),
+        "line": float(line) if line is not None else None,
+        "price": int(price) if price is not None else None,
+        "bet_type": str(bet_type or ""),
+    }
+
+    bets.append(bet)
+    keys.add(k)
+
+    # hard cap (evict oldest)
+    if len(bets) > MAX_SAVED_BETS:
+        old = bets.pop(0)
+        keys.discard(_bet_key(old.get("player"), old.get("market"), old.get("line"), old.get("bet_type")))
+
+    return True
+
+if "_clipboard" in st.session_state:
+    st.toast("Copied — paste into Gambly Bot 🤖")
+    st.write(
+        f"""
+        <textarea id="clip" style="position:fixed;opacity:0;">
+        {st.session_state["_clipboard"]}
+        </textarea>
+        <script>
+        navigator.clipboard.writeText(
+            document.getElementById("clip").value
+        );
+        </script>
+        """,
+        unsafe_allow_html=True,
+    )
+    del st.session_state["_clipboard"]
+
+def render_saved_bets():
+    if "saved_bets_text" not in st.session_state:
+        st.session_state.saved_bets_text = []
+
+    bets = st.session_state.saved_bets_text
+
+    # -------------------------
+    # HEADER + CLEAR BUTTON
+    # -------------------------
+    col1, col2 = st.columns([4, 1])
+
+    with col1:
+        st.subheader("📋 Saved Bets")
+        st.caption("Session-only • copy & paste into Gambly")
+
+    with col2:
+        if st.button("🗑 Clear All", use_container_width=True):
+            st.session_state.saved_bets_text.clear()
+            st.toast("Cleared all saved bets")
+
+    st.divider()
+
+    # -------------------------
+    # COPY AREA (MOVED UP)
+    # -------------------------
+    if not bets:
+        st.info("No saved bets yet.")
+        return
+
+    st.code(
+        "\n\n".join(bets),
+        language="text",
+    )
+
+    if st.button("📋 Copy All for Gambly"):
+        st.session_state["_clipboard"] = "\n\n".join(bets)
+
+    st.divider()
+
+    # -------------------------
+    # 🤖 GAMBLy BOT (MOVED DOWN)
+    # -------------------------
+    st.markdown("### 🤖 Gambly Bot")
+    st.link_button(
+        "Open Gambly Bot",
+        "https://www.gambly.com/gambly-bot",
+    )
+    st.caption("Paste the copied bets into Gambly Bot")
+
+# ------------------------------------------------------
+# PROP CARD HELPERS
+# ------------------------------------------------------
+def compute_implied_prob(price) -> float | None:
     try:
-        v = float(v)
-        v = int(round(v))
+        p = float(price)
+    except Exception:
+        return None
+    if p == 0:
+        return None
+    # American odds
+    if p < 0:
+        return abs(p) / (abs(p) + 100.0)
+    return 100.0 / (p + 100.0)
+
+def fmt_pct(x) -> str:
+    try:
+        if x is None or pd.isna(x):
+            return "—"
+        return f"{float(x) * 100:.0f}%"
+    except Exception:
+        return "—"
+
+def fmt_odds(x) -> str:
+    try:
+        if x is None or pd.isna(x):
+            return "—"
+        v = int(round(float(x)))
         return f"+{v}" if v > 0 else str(v)
     except Exception:
         return "—"
 
-def detect_stat(market):
+def fmt_num(x, d=1) -> str:
+    try:
+        if x is None or pd.isna(x):
+            return "—"
+        return f"{float(x):.{d}f}"
+    except Exception:
+        return "—"
+
+def clamp(x, lo=0.0, hi=1.0):
+    try:
+        return max(lo, min(hi, float(x)))
+    except Exception:
+        return lo
+
+
+def safe_div(n, d, default=0.0):
+    try:
+        return n / d if d else default
+    except Exception:
+        return default
+
+def compute_confidence(
+    row,
+    *,
+    hit_rate_col: str,      # e.g. "hit_rate_last10"
+    stat_key: str,          # normalized stat key (points, steals, pra, etc.)
+):
+    """
+    Returns:
+        confidence_score (0–100),
+        components dict (for debugging / tooltips)
+    """
+
+    components = {}
+
+    # --------------------------------------------------
+    # 1) EDGE SCORE (vs implied probability)
+    # --------------------------------------------------
+    hit = row.get(hit_rate_col)
+    implied = row.get("implied_prob")
+
+    if hit is not None and implied is not None:
+        edge = hit - implied
+        edge_score = clamp((edge + 0.05) / 0.25)
+    else:
+        edge_score = 0.0
+
+    components["edge"] = edge_score
+
+    # --------------------------------------------------
+    # 2) STABILITY SCORE (L5 / L10 / L20 agreement)
+    # --------------------------------------------------
+    hr5 = row.get("hit_rate_last5")
+    hr10 = row.get("hit_rate_last10")
+    hr20 = row.get("hit_rate_last20")
+
+    if hr5 is not None and hr10 is not None and hr20 is not None:
+        spread = max(hr5, hr10, hr20) - min(hr5, hr10, hr20)
+        stability_score = clamp(1.0 - spread * 2.0)
+    else:
+        stability_score = 0.5
+
+    components["stability"] = stability_score
+
+    # --------------------------------------------------
+    # 3) PROJECTION VS LINE
+    # --------------------------------------------------
+    proj = row.get("proj_last10")
+    diff = row.get("proj_diff_vs_line")
+
+    if proj is not None and diff is not None:
+        projection_score = clamp((diff + 1.0) / 4.0)
+    else:
+        projection_score = 0.5
+
+    components["projection"] = projection_score
+
+    # --------------------------------------------------
+    # 4) VOLATILITY / RISK
+    # --------------------------------------------------
+    vol = row.get("proj_volatility_index")
+    std = row.get("proj_std_last10")
+
+    if vol is not None:
+        volatility_score = clamp(1.0 - vol)
+    elif std is not None:
+        volatility_score = clamp(1.0 - safe_div(std, proj or 1.0))
+    else:
+        volatility_score = 0.5
+
+    components["volatility"] = volatility_score
+
+    # --------------------------------------------------
+    # 5) MATCHUP QUALITY (FIXED OPP RANK LOGIC)
+    # 1 = hardest, 30 = easiest
+    # --------------------------------------------------
+    opp_rank = row.get(f"opp_pos_{stat_key}_rank")
+
+    if opp_rank is not None:
+        matchup_score = clamp((opp_rank - 1) / 29.0)
+    else:
+        matchup_score = 0.5
+
+    components["matchup"] = matchup_score
+
+    # --------------------------------------------------
+    # 6) MINUTES / ROLE CONFIDENCE
+    # --------------------------------------------------
+    est_min = row.get("est_minutes")
+    delta_min = row.get("delta_minutes")
+
+    if est_min is not None:
+        minutes_score = clamp(est_min / 36.0)
+        if delta_min is not None and delta_min < 0:
+            minutes_score *= clamp(1.0 + delta_min / 10.0)
+    else:
+        minutes_score = 0.5
+
+    components["minutes"] = minutes_score
+
+    # --------------------------------------------------
+    # 7) MOMENTUM REWARD (NEW)
+    # --------------------------------------------------
+    bad_miss = row.get("dist20_fail_bad_rate")
+
+    momentum_bonus = 0.0
+    if (
+        hr20 is not None
+        and bad_miss is not None
+        and diff is not None
+        and hr20 >= 0.95
+        and bad_miss <= 0.05
+        and diff >= 6
+    ):
+        momentum_bonus = 0.06  # +6 confidence points
+
+    components["momentum"] = momentum_bonus
+
+    # --------------------------------------------------
+    # WEIGHTED COMBINATION
+    # --------------------------------------------------
+    weights = {
+        "edge": 0.32,
+        "stability": 0.20,
+        "projection": 0.16,
+        "volatility": 0.16,
+        "matchup": 0.10,
+        "minutes": 0.06,
+    }
+
+    confidence = sum(
+        components[k] * weights[k] for k in weights
+    )
+
+    confidence += momentum_bonus
+
+    confidence_score = round(clamp(confidence) * 100)
+
+    return confidence_score, components
+
+import json
+
+import re
+
+import numpy as np
+
+def get_stat_avgs(row, stat_key):
+    if stat_key == "points":
+        return row.get("pts_last5"), row.get("pts_last10"), row.get("pts_last20")
+
+    if stat_key == "rebounds":
+        return row.get("reb_last5"), row.get("reb_last10"), row.get("reb_last20")
+
+    if stat_key == "assists":
+        return row.get("ast_last5"), row.get("ast_last10"), row.get("ast_last20")
+
+    if stat_key == "steals":   # ✅ ADD
+        return row.get("stl_last5"), row.get("stl_last10"), row.get("stl_last20")
+
+    if stat_key == "blocks":   # ✅ ADD
+        return row.get("blk_last5"), row.get("blk_last10"), row.get("blk_last20")
+
+    if stat_key == "pra":
+        return row.get("pra_last5"), row.get("pra_last10"), row.get("pra_last20")
+
+    if stat_key == "points_assists":
+        return row.get("pa_last5"), row.get("pa_last10"), row.get("pa_last20")
+
+    if stat_key == "points_rebounds":
+        return row.get("pr_last5"), row.get("pr_last10"), row.get("pr_last20")
+
+    if stat_key == "rebounds_assists":
+        return row.get("ra_last5"), row.get("ra_last10"), row.get("ra_last20")
+
+    return None, None, None
+
+def handle_save_bet(bet_line: str):
+    if "saved_bets_text" not in st.session_state:
+        st.session_state.saved_bets_text = []
+
+    if bet_line not in st.session_state.saved_bets_text:
+        st.session_state.saved_bets_text.append(bet_line)
+
+def coerce_numeric_list(val):
+    if val is None:
+        return []
+
+    # ✅ HANDLE NUMPY ARRAYS (THIS IS THE FIX)
+    if isinstance(val, np.ndarray):
+        return [float(v) for v in val if isinstance(v, (int, float, np.number))]
+
+    if isinstance(val, list):
+        return [float(v) for v in val if isinstance(v, (int, float))]
+
+    if isinstance(val, str):
+        # handle BigQuery array string like "array([1., 2., 3.])"
+        if val.startswith("array("):
+            try:
+                inner = val.replace("array(", "").rstrip(")")
+                return [float(v) for v in inner.strip("[]").split(",")]
+            except Exception:
+                return []
+
+        try:
+            parsed = json.loads(val)
+            if isinstance(parsed, list):
+                return [float(v) for v in parsed if v is not None]
+        except Exception:
+            pass
+
+        try:
+            return [float(v) for v in val.split(",") if v.strip()]
+        except Exception:
+            return []
+
+    return []
+
+    if val is None or pd.isna(val):
+        return []
+
+    # Already a Python list
+    if isinstance(val, list):
+        return [float(v) for v in val if isinstance(v, (int, float))]
+
+    # NumPy array
+    if hasattr(val, "tolist"):
+        return [float(v) for v in val.tolist()]
+
+    # String case (BigQuery often returns ARRAYs like this)
+    if isinstance(val, str):
+        s = val.strip()
+
+        # Handle: array([1., 2., 3.])
+        if s.lower().startswith("array"):
+            nums = re.findall(r"-?\d+\.?\d*", s)
+            return [float(n) for n in nums]
+
+        # Handle: [1, 2, 3]
+        if s.startswith("["):
+            try:
+                parsed = json.loads(s)
+                if isinstance(parsed, list):
+                    return [float(v) for v in parsed if v is not None]
+            except Exception:
+                pass
+
+    return []
+
+def normalize_market_key(market: str) -> str:
     m = (market or "").lower()
-    if "p+r+a" in m or "pra" in m:
+
+    # strip known wrappers
+    m = m.replace("player_", "")
+    m = m.replace("_alternate", "")
+
+    # normalize combos first
+    if "points_rebounds_assists" in m:
         return "pra"
-    if "assist" in m or "ast" in m:
-        return "ast"
-    if "reb" in m:
-        return "reb"
-    if "pt" in m or "point" in m:
-        return "pts"
+    if "points_assists" in m:
+        return "points_assists"
+    if "points_rebounds" in m:
+        return "points_rebounds"
+    if "rebounds_assists" in m:
+        return "rebounds_assists"
+
+    # singles
+    if "points" in m:
+        return "points"
+    if "rebounds" in m:
+        return "rebounds"
+    if "assists" in m:
+        return "assists"
+    if "steals" in m:
+        return "steals"        # 👈 ADD
+    if "blocks" in m:
+        return "blocks"
+
     return ""
 
-def get_dynamic_averages(df):
-    df = df.copy()
+def get_l10_values(row):
+    key = normalize_market_key(row.get("market"))
 
-    def pull(row, n):
-        stat = detect_stat(row["market"])
-        col = f"{stat}_last{n}"
-        return row.get(col, np.nan)
+    if key == "points":
+        return coerce_numeric_list(row.get("pts_last10_list"))
 
-    df["L5 Avg"] = df.apply(lambda r: pull(r, 5), axis=1)
-    df["L10 Avg"] = df.apply(lambda r: pull(r, 10), axis=1)
-    df["L20 Avg"] = df.apply(lambda r: pull(r, 20), axis=1)
-    return df
+    if key == "rebounds":
+        return coerce_numeric_list(row.get("reb_last10_list"))
 
-def defense_color(v):
-    if pd.isna(v) or v == "":
-        return "background-color:#444;color:white;"
-    v = int(v)
-    if v <= 5:
-        return "background-color:#d9534f;color:white;"
-    if v <= 15:
-        return "background-color:#f0ad4e;color:black;"
-    if v <= 25:
-        return "background-color:#ffd500;color:black;"
-    return "background-color:#5cb85c;color:white;"
+    if key == "assists":
+        return coerce_numeric_list(row.get("ast_last10_list"))
 
-def add_defense(df):
-    df = df.copy()
-    stat = df["market"].apply(detect_stat)
+    if key == "steals":
+        return coerce_numeric_list(row.get("stl_last10_list"))  # ✅ FIX
 
-    pos = {
-        "pts": "opp_pos_pts_rank",
-        "reb": "opp_pos_reb_rank",
-        "ast": "opp_pos_ast_rank",
-        "pra": "opp_pos_pra_rank",
-    }
-    overall = {
-        "pts": "opp_overall_pts_rank",
-        "reb": "opp_overall_reb_rank",
-        "ast": "opp_overall_ast_rank",
-        "pra": "opp_overall_pra_rank",
-    }
+    if key == "blocks":
+        return coerce_numeric_list(row.get("blk_last10_list"))  # ✅ FIX
 
-    df["Pos Def Rank"] = [
-        df.loc[i, pos.get(stat[i])] if pos.get(stat[i]) in df.columns else ""
-        for i in df.index
+    if key == "pra":
+        return coerce_numeric_list(row.get("pra_last10_list"))
+
+    if key == "points_assists":
+        return coerce_numeric_list(row.get("pa_last10_list"))
+
+    if key == "points_rebounds":
+        return coerce_numeric_list(row.get("pr_last10_list"))
+
+    if key == "rebounds_assists":
+        return coerce_numeric_list(row.get("ra_last10_list"))
+
+    return []
+
+    
+def pretty_market_label(market: str) -> str:
+    m = (market or "").lower()
+
+    if "points_rebounds_assists" in m:
+        return "PRA"
+    if "points_assists" in m:
+        return "Pts + Ast"
+    if "points_rebounds" in m:
+        return "Pts + Reb"
+    if "rebounds_assists" in m:
+        return "Reb + Ast"
+    if "points" in m:
+        return "Points"
+    if "rebounds" in m:
+        return "Rebounds"
+    if "assists" in m:
+        return "Assists"
+
+    return (
+        m.replace("player_", "")
+         .replace("_alternate", "")
+         .replace("_", " ")
+         .title()
+    )
+
+
+def build_l10_sparkline_html(values, line_value, dates=None):
+    if not values or line_value is None:
+        return ""
+
+    try:
+        vals = [float(v) for v in values if isinstance(v, (int, float))]
+        if not vals:
+            return ""
+
+        line_f = float(line_value)
+
+        # same bar scale you already use
+        bar_min = 14
+        bar_span = 26
+        chart_h = bar_min + bar_span  # 40px
+
+        vmin = min(min(vals), line_f)
+        vmax = max(max(vals), line_f)
+        span = max(vmax - vmin, 1.0)
+    except Exception:
+        return ""
+
+    bars_html = []
+    dates_html = []
+
+    for i, v in enumerate(vals):
+        pct = (v - vmin) / span
+        height = int(bar_min + bar_span * pct)
+        color = "#22c55e" if v >= line_f else "#ef4444"
+        value_label = f"{v:.0f}"
+
+        date_label = ""
+        if dates is not None and len(dates) > i:
+            try:
+                date_label = pd.to_datetime(dates[i]).strftime("%m/%d")
+            except Exception:
+                date_label = str(dates[i])
+
+        # BAR SLOT (fixed chart height; value label absolute; bar absolute)
+        bars_html.append(
+            f"<div style='"
+            f"position:relative;"
+            f"height:{chart_h}px;"
+            f"width:10px;"
+            f"display:flex;"
+            f"justify-content:center;"
+            f"'>"
+            f"<div style='"
+            f"position:absolute;"
+            f"left:50%;"
+            f"transform:translateX(-50%);"
+            f"bottom:{min(height + 2, chart_h - 1)}px;"
+            f"font-size:9px;"
+            f"opacity:0.85;"
+            f"line-height:1;"
+            f"white-space:nowrap;"
+            f"'>"
+            f"{value_label}"
+            f"</div>"
+            f"<div style='"
+            f"position:absolute;"
+            f"left:50%;"
+            f"transform:translateX(-50%);"
+            f"bottom:0;"
+            f"width:6px;"
+            f"height:{height}px;"
+            f"background:{color};"
+            f"border-radius:2px;"
+            f"'></div>"
+            f"</div>"
+        )
+
+        # DATE SLOT (separate row so it doesn't mess with prop-line baseline)
+        dates_html.append(
+            f"<div style='"
+            f"width:10px;"
+            f"display:flex;"
+            f"justify-content:center;"
+            f"margin-top:3px;"
+            f"font-size:9px;"
+            f"opacity:0.6;"
+            f"writing-mode:vertical-rl;"
+            f"text-orientation:mixed;"
+            f"line-height:1;"
+            f"'>"
+            f"{date_label}"
+            f"</div>"
+        )
+
+    # prop line inside chart area (measured from bar baseline)
+    line_pct = (line_f - vmin) / span
+    line_y = int(chart_h * line_pct)
+
+    return (
+        f"<div style='display:flex;flex-direction:column;align-items:center;'>"
+        f"<div style='"
+        f"position:relative;"
+        f"display:flex;"
+        f"align-items:flex-end;"
+        f"gap:4px;"
+        f"margin-top:8px;"
+        f"height:{chart_h}px;"
+        f"'>"
+        f"<div style='"
+        f"position:absolute;"
+        f"left:0;"
+        f"right:0;"
+        f"bottom:{line_y}px;"
+        f"height:1px;"
+        f"background:rgba(255,255,255,0.35);"
+        f"'></div>"
+        f"{''.join(bars_html)}"
+        f"</div>"
+        f"<div style='display:flex;gap:4px;align-items:flex-start;'>"
+        f"{''.join(dates_html)}"
+        f"</div>"
+        f"</div>"
+    )
+
+
+@st.cache_data(show_spinner=False)
+def build_prop_cards(card_df: pd.DataFrame, hit_rate_col: str) -> pd.DataFrame:
+    """
+    Dedupe identical props across books and attach a compact list of book prices.
+    This keeps render loops smaller and avoids repeated cards.
+    """
+    if card_df.empty:
+        return card_df
+
+    key_cols = ["player", "player_team", "opponent_team", "market", "line", "bet_type"]
+    work = card_df.copy()
+
+    # Normalize bookmaker + price
+    if "bookmaker" in work.columns:
+        work["book_norm"] = work["bookmaker"].astype(str).str.strip()
+    else:
+        work["book_norm"] = ""
+
+    work["price_int"] = pd.to_numeric(work.get("price"), errors="coerce").fillna(0).astype(int)
+
+    # Pick best row per prop (highest hit rate, then best odds)
+    base = (
+        work.sort_values(by=[hit_rate_col, "price_int"], ascending=[False, True])
+            .drop_duplicates(key_cols, keep="first")
+            .copy()
+    )
+
+    # Compact book list
+    rows = []
+    for _, sub in work.groupby(key_cols, dropna=False, sort=False):
+        book_prices = []
+        seen = set()
+        for b, p in zip(sub["book_norm"], sub["price_int"]):
+            bp = (b, int(p))
+            if bp in seen:
+                continue
+            seen.add(bp)
+            book_prices.append({"book": b, "price": int(p)})
+        rows.append((*[sub.iloc[0][c] for c in key_cols], book_prices))
+
+    books_df = pd.DataFrame(rows, columns=key_cols + ["book_prices"])
+    out = base.merge(books_df, on=key_cols, how="left")
+    out["book_prices"] = out["book_prices"].apply(lambda x: x if isinstance(x, list) else [])
+    out.flags.writeable = False
+    return out
+
+def render_prop_cards(df: pd.DataFrame, hit_rate_col: str, hit_label: str):
+    if df.empty:
+        st.info(f"No props match your filters.")
+        return
+
+    if hit_rate_col not in df.columns:
+        st.warning(f"Missing column: {hit_rate_col}")
+        return
+
+    card_df = build_prop_cards(df, hit_rate_col=hit_rate_col)
+
+    for _, row in card_df.iterrows():
+
+        player = f"{row.get('player', '')}"
+        raw_market = row.get("market")
+        norm = normalize_market_key(raw_market)
+        market_label = pretty_market_label(raw_market)
+        bet_type = f"{row.get('bet_type', '')}"
+
+        team = f"{row.get('player_team', '')}"
+        home_team = f"{row.get('home_team', '')}"
+        visitor_team = f"{row.get('visitor_team', '')}"
+
+        opp = f"{row.get('opponent_team', '')}"
+        line = row.get("line")
+        odds = row.get("price")
+
+        bookmaker = f"{row.get('bookmaker', '')}"
+        book_logo = SPORTSBOOK_LOGOS.get(bookmaker, "")
+
+        # -----------------------------
+        # TEAM LOGOS
+        # -----------------------------
+        home_logo = logo(home_team)
+        away_logo = logo(visitor_team)
+
+        hit = row.get(hit_rate_col)
+        implied = row.get("implied_prob")
+
+        if implied is None or pd.isna(implied):
+            implied = compute_implied_prob(odds)
+
+        edge = None
+        if hit is not None and implied is not None and not pd.isna(hit) and not pd.isna(implied):
+            edge = float(hit) - float(implied)
+
+        books = row.get("book_prices", [])
+        books_line = f" • ".join(
+            f"{b.get('book','')} {fmt_odds(b.get('price'))}"
+            for b in books[:4]
+        )
+
+        # -----------------------------
+        # L10 SPARKLINE
+        # -----------------------------
+        l10_values = get_l10_values(row)
+
+        if not l10_values:
+            st.caption(f"⚠️ No L10 values for {player} | market={raw_market}")
+
+        # -----------------------------
+        # STAT-SPECIFIC ROLLING AVERAGES
+        # -----------------------------
+        stat_key = normalize_market_key(raw_market)
+        
+        l5_avg, l10_avg, l20_avg = get_stat_avgs(row, stat_key)
+        
+        # -----------------------------
+        # OPPONENT POSITIONAL RANK
+        # -----------------------------
+        opp_rank_map = {
+            "points": "opp_pos_pts_rank",
+            "rebounds": "opp_pos_reb_rank",
+            "assists": "opp_pos_ast_rank",
+            "steals": "opp_pos_stl_rank",
+            "blocks": "opp_pos_blk_rank",
+            "pra": "opp_pos_pra_rank",
+            "points_rebounds": "opp_pos_pr_rank",
+            "points_assists": "opp_pos_pa_rank",
+            "rebounds_assists": "opp_pos_ra_rank",
+        }
+        
+        opp_rank_col = opp_rank_map.get(stat_key)
+        opp_rank = row.get(opp_rank_col) if opp_rank_col else None
+        
+        # -----------------------------
+        # CONFIDENCE SCORE
+        # -----------------------------
+        confidence, confidence_parts = compute_confidence(
+            row,
+            hit_rate_col=hit_rate_col,
+            stat_key=stat_key,
+        )
+                
+        # -----------------------------
+        # L10 SPARKLINE
+        # -----------------------------
+        spark_html = build_l10_sparkline_html(
+            values=l10_values,
+            line_value=line,
+            dates=row.get("last10_dates"),
+        )
+
+
+        # --------------------------------------------------
+        # BASE CARD HTML (STRICT f-STRINGS)
+        # --------------------------------------------------
+        base_card_html = (
+            f"<div class='prop-card card-grid'>"
+        
+            # ==================================================
+            # TOP BAR: MATCHUP | PLAYER + MARKET | BOOK + ODDS
+            # ==================================================
+            f"<div style='display:grid;grid-template-columns:1fr 2fr 1fr;align-items:center;'>"
+        
+            # ---------- LEFT: MATCHUP ----------
+            f"<div style='display:flex;align-items:center;gap:8px;font-size:0.8rem;opacity:0.9;'>"
+            f"<img src='{away_logo}' style='width:22px;height:22px;' />"
+            f"<span style='font-weight:600;'>vs</span>"
+            f"<img src='{home_logo}' style='width:22px;height:22px;' />"
+            f"</div>"
+        
+            # ---------- CENTER: PLAYER + MARKET ----------
+            f"<div style='text-align:center;'>"
+            f"<div style='font-weight:900;font-size:1.15rem;letter-spacing:-0.2px;'>"
+            f"{player}"
+            f"</div>"
+            f"<div style='font-size:0.85rem;opacity:0.7;'>"
+            f"{market_label} · {bet_type.upper()} {fmt_num(line, 1)}"
+            f"</div>"
+            f"</div>"
+        
+            # ---------- RIGHT: BOOK + ODDS ----------
+            f"<div style='display:flex;justify-content:flex-end;align-items:center;gap:8px;'>"
+            f"<img src='{book_logo}' style='height:16px;width:auto;' />"
+            f"<strong style='font-size:0.9rem;'>{fmt_odds(odds)}</strong>"
+            f"</div>"
+        
+            f"</div>"
+        
+            # ==================================================
+            # SPARKLINE (CENTERPIECE)
+            # ==================================================
+            f"<div style='display:flex;justify-content:center;margin-top:6px;'>"
+            f"{spark_html}"
+            f"</div>"
+        
+            # ==================================================
+            # BOTTOM STATS ROW (L10 | OPP RANK | CONFIDENCE)
+            # ==================================================
+            f"<div style='display:grid;"
+            f"grid-template-columns:1fr 1fr 1fr;"
+            f"font-size:0.75rem;opacity:0.85;margin-top:6px;'>"
+            
+            # ---------- LEFT: L10 HIT + AVG ----------
+            f"<div>"
+            f"<strong>{fmt_pct(hit)}</strong>"
+            f" <span style='opacity:0.5'>|</span> "
+            f"<strong>{fmt_num(l10_avg, 1)}</strong><br/>"
+            f"<span style='opacity:0.6'>L10 Hit | Avg</span>"
+            f"</div>"
+            
+            # ---------- CENTER: OPP RANK ----------
+            f"<div style='text-align:center;'>"
+            f"<strong>{opp_rank if opp_rank is not None else '—'}</strong><br/>"
+            f"<span style='opacity:0.6'>Opp Rank</span>"
+            f"</div>"
+            
+            # ---------- RIGHT: CONFIDENCE ----------
+            f"<div style='text-align:right;'>"
+            f"<strong>{confidence}</strong><br/>"
+            f"<span style='opacity:0.6'>Confidence</span>"
+            f"</div>"
+            
+            f"</div>"
+        
+            f"</div>"
+        )
+
+        # --------------------------------------------------
+        # EXPANDED HTML (UNCHANGED)
+        # --------------------------------------------------
+        expanded_html = (
+            f"<div class='expanded-wrap'>"
+        
+            # ==================================================
+            # ROW 1 — AVERAGES
+            # ==================================================
+            f"<div class='expanded-row'>"
+            f"<div class='metric'><span>L5</span><strong>{fmt_num(l5_avg, 1)}</strong></div>"
+            f"<div class='metric'><span>L10</span><strong>{fmt_num(l10_avg, 1)}</strong></div>"
+            f"<div class='metric'><span>L20</span><strong>{fmt_num(l20_avg, 1)}</strong></div>"
+            f"<div class='metric'><span>Δ Line</span>"
+            f"<strong>{fmt_num(row.get('proj_diff_vs_line'), 1)}</strong>"
+            f"</div>"
+            f"</div>"
+        
+            # ==================================================
+            # ROW 2 — L20 DISTRIBUTION
+            # ==================================================
+            f"<div class='expanded-row dist-row'>"
+            f"<div class='metric'><span>L20 Hit</span><strong>{fmt_pct(row.get('dist20_hit_rate'))}</strong></div>"
+            f"<div class='metric'><span>+1</span><strong>{fmt_pct(row.get('dist20_clear_1p_rate'))}</strong></div>"
+            f"<div class='metric'><span>+2</span><strong>{fmt_pct(row.get('dist20_clear_2p_rate'))}</strong></div>"
+            f"<div class='metric'><span>Bad</span><strong>{fmt_pct(row.get('dist20_fail_bad_rate'))}</strong></div>"
+            f"<div class='metric'><span>Margin</span><strong>{fmt_num(row.get('dist20_avg_margin'), 1)}</strong></div>"
+            f"</div>"
+        
+            # ==================================================
+            # ROW 3 — L40 DISTRIBUTION
+            # ==================================================
+            f"<div class='expanded-row dist-row'>"
+            f"<div class='metric'><span>L40 Hit</span><strong>{fmt_pct(row.get('dist40_hit_rate'))}</strong></div>"
+            f"<div class='metric'><span>+1</span><strong>{fmt_pct(row.get('dist40_clear_1p_rate'))}</strong></div>"
+            f"<div class='metric'><span>+2</span><strong>{fmt_pct(row.get('dist40_clear_2p_rate'))}</strong></div>"
+            f"<div class='metric'><span>Bad</span><strong>{fmt_pct(row.get('dist40_fail_bad_rate'))}</strong></div>"
+            f"<div class='metric'><span>Margin</span><strong>{fmt_num(row.get('dist40_avg_margin'), 1)}</strong></div>"
+            f"</div>"
+        
+            # ==================================================
+            # ROW 4 — WOWY / INJURY (SAFE PLACEHOLDER)
+            # ==================================================
+            f"<div class='expanded-row wowy-row'>"
+            f"<div class='metric' style='flex:1;opacity:0.6;'>"
+            f"Injury / WOWY data coming soon"
+            f"</div>"
+            f"</div>"
+        
+            f"</div>"
+        )
+
+        # -------------------------
+        # SAVE BET (MINIMAL MEMORY)
+        # -------------------------
+        line_str = fmt_num(line, 1)
+        odds_str = fmt_odds(odds)
+        
+        bet_line = (
+            f"{player} | "
+            f"{pretty_market_label(raw_market)} | "
+            f"{line_str} | "
+            f"{odds_str} | "
+            f"{bet_type}"
+        )
+        
+        save_key = (
+            f"save_"
+            f"{player}_"
+            f"{raw_market}_"
+            f"{line}_"
+            f"{bet_type}_"
+            f"page{st.session_state.page}_"
+            f"idx{_}"
+        )
+        
+        st.button(
+            "💾 Save Bet",
+            key=save_key,
+            on_click=handle_save_bet,
+            args=(bet_line,),
+        )
+        
+        # Optional instant visual confirmation
+        if bet_line in st.session_state.saved_bets_text:
+            st.caption("✅ Saved")
+
+
+        # -------------------------
+        # CARD EXPAND UI
+        # -------------------------
+        st.markdown(
+            f"<details class='prop-card-wrapper'>"
+            f"<summary>"
+            f"{base_card_html}"
+            f"<div class='expand-hint'>Click to expand ▾</div>"
+            f"</summary>"
+            f"<div class='card-expanded'>"
+            f"{expanded_html}"
+            f"</div>"
+            f"</details>",
+            unsafe_allow_html=True,
+        )
+
+# ------------------------------------------------------
+# DEV TAB CONTENT (keep, but avoid heavy data pulls)
+# ------------------------------------------------------
+def trigger_apps_script(task: str):
+    if not APPS_SCRIPT_URL or not APPS_SCRIPT_DEV_TOKEN:
+        raise RuntimeError("Missing APPS_SCRIPT_URL or APPS_SCRIPT_DEV_TOKEN")
+
+    resp = requests.post(
+        APPS_SCRIPT_URL,
+        headers={"Content-Type": "application/json"},
+        params={"token": APPS_SCRIPT_DEV_TOKEN},
+        json={"task": task},
+        timeout=60,
+    )
+    data = resp.json()
+    if not data.get("success"):
+        raise RuntimeError(data.get("message") or "Apps Script error")
+    return data.get("message") or "OK"
+
+def render_dev_page():
+    st.title("⚙️ DEV CONTROL PANEL (Minimal)")
+    st.caption("Restricted • low-memory tools only")
+    st.markdown(f"**Email:** `{get_user_email()}`")
+
+    if st.button("⬅ Back to Main App"):
+        nav_to("main")
+        st.rerun()
+
+    st.divider()
+    st.subheader("📄 Google Apps Script")
+    tasks = [
+        ("NBA Alternate Props", "NBA_ALT_PROPS"),
+        ("NBA Game Odds", "NBA_GAME_ODDS"),
+        ("NCAAB Game Odds", "NCAAB_GAME_ODDS"),
+        ("Run ALL (Daily Runner)", "ALL"),
     ]
-    df["Overall Def Rank"] = [
-        df.loc[i, overall.get(stat[i])] if overall.get(stat[i]) in df.columns else ""
-        for i in df.index
-    ]
-    df["Matchup Difficulty"] = df.get("matchup_difficulty_score", np.nan)
-    return df
+    for label, task in tasks:
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            st.markdown(f"**{label}**")
+        with c2:
+            if st.button("▶ Run", key=f"apps_{task}", use_container_width=True):
+                try:
+                    with st.spinner(f"Running {label}…"):
+                        msg = trigger_apps_script(task)
+                    st.success(f"✅ {msg}")
+                except Exception as e:
+                    st.error("❌ Apps Script trigger failed")
+                    st.code(str(e))
 
-def format_display(df):
-    df = df.copy()
+    st.divider()
+    st.subheader("🔎 Quick Health Checks")
+    if st.button("Test BigQuery connection"):
+        try:
+            _ = load_bq_df("SELECT 1 AS ok")
+            st.success("✅ BigQuery OK")
+        except Exception as e:
+            st.error("❌ BigQuery failed")
+            st.code(str(e))
 
-    # matchup difficulty -> 0 decimals
-    df["Matchup Difficulty"] = df["Matchup Difficulty"].apply(
-        lambda x: f"{int(round(x))}" if pd.notna(x) else ""
+# ------------------------------------------------------
+# EARLY ROUTE: DEV TAB MUST NOT LOAD MAIN DATA
+# ------------------------------------------------------
+active_tab = get_active_tab()
+if active_tab == "dev":
+    if not is_dev_user():
+        st.error("⛔ Access denied")
+        st.stop()
+    render_dev_page()
+    st.stop()
+
+# ------------------------------------------------------
+# MAIN APP
+# ------------------------------------------------------
+st.title("Pulse Sports Analytics — Minimal Core")
+
+st.sidebar.divider()
+if st.sidebar.button("🔄 Refresh Data"):
+    st.cache_data.clear()
+    st.rerun()
+
+# Tabs: Props + Saved Bets (only)
+tab_props, tab_saved = st.tabs(["📈 Props", "📋 Saved Bets"])
+
+with tab_saved:
+    render_saved_bets()
+
+with tab_props:
+    # --------------------------------------------------
+    # LOAD PROPS (SLATE-DRIVEN)
+    # --------------------------------------------------
+    props_df = load_props()
+    record_memory_checkpoint()
+
+    if props_df.empty:
+        st.info("No props returned from BigQuery.")
+        st.stop()
+
+    # --------------------------------------------------
+    # LOAD PLAYER TRENDS (1 ROW PER PLAYER)
+    # --------------------------------------------------
+    trends_df = load_trends()
+
+    # 🔒 HARD SAFETY CHECK — prevents RAM explosion
+    if not trends_df["player"].is_unique:
+        st.error("❌ Trends table must be 1 row per player (merge aborted)")
+        st.stop()
+
+    # --------------------------------------------------
+    # MERGE TRENDS → PROPS (LEFT JOIN, SAFE)
+    # --------------------------------------------------
+    props_df = props_df.merge(
+        trends_df,
+        on="player",
+        how="left",
+        validate="many_to_one",  # 👈 critical safety net
     )
 
-    # hit rate percent formatting
-    for col in ["hit_rate_last5", "hit_rate_last10", "hit_rate_last20"]:
-        def fmt(x):
-            if pd.isna(x):
-                return ""
-            if 0 <= x <= 1:
-                return f"{int(round(x * 100))}%"
-            return f"{int(round(x))}%"
+    props_df.flags.writeable = False
+    record_memory_checkpoint()
 
-        df[col] = df[col].apply(fmt)
 
-    # averages -> 1 decimal place
-    for col in ["L5 Avg", "L10 Avg", "L20 Avg"]:
-        df[col] = df[col].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "")
 
-    return df
+    # ------------------------------
+    # BUILD FILTER OPTIONS
+    # ------------------------------
+    market_list = sorted(props_df["market"].dropna().unique().tolist()) if "market" in props_df.columns else []
+    book_list = sorted(props_df["bookmaker"].dropna().unique().tolist()) if "bookmaker" in props_df.columns else []
 
-# ------------------------------------------------------
-# LOAD DATA (EST-CONVERTED)
-# ------------------------------------------------------
-@st.cache_data
-def load_props():
-    df = bq_client.query(PROPS_SQL).to_dataframe()
-    df.columns = df.columns.str.strip()
+    games_today = []
+    if "home_team" in props_df.columns and "visitor_team" in props_df.columns:
+        games_today = sorted(
+            (props_df["home_team"].astype(str) + " vs " + props_df["visitor_team"].astype(str))
+            .dropna()
+            .unique()
+            .tolist()
+        )
 
-    df["game_date"] = (
-        pd.to_datetime(df["game_date"], errors="coerce")
-        .dt.tz_localize("UTC")
-        .dt.tz_convert(EST)
+    # ------------------------------
+    # FILTER UI (CLEAN + SAFE)
+    # ------------------------------
+    with st.expander("⚙️ Filters", expanded=False):
+    
+        # ---------------------------------
+        # CORE FILTERS
+        # ---------------------------------
+        c1, c2 = st.columns([1.2, 1.8])
+    
+        with c1:
+            f_bet_type = st.multiselect(
+                "Bet Type",
+                ["Over", "Under"],
+                default=["Over", "Under"],
+            )
+    
+        MARKET_GROUPS = {
+            "Points": ["player_points", "player_points_alternate"],
+            "Rebounds": ["player_rebounds", "player_rebounds_alternate"],
+            "Assists": ["player_assists", "player_assists_alternate"],
+            "Steals": ["player_steals", "player_steals_alternate"],
+            "Blocks": ["player_blocks", "player_blocks_alternate"],
+            "Combos": [
+                "player_points_rebounds",
+                "player_points_assists",
+                "player_rebounds_assists",
+                "player_points_rebounds_assists",
+            ],
+        }
+    
+        with c2:
+            selected_market_groups = st.multiselect(
+                "Markets",
+                list(MARKET_GROUPS.keys()),
+                default=list(MARKET_GROUPS.keys()),
+            )
+    
+        f_market = [
+            m
+            for g in selected_market_groups
+            for m in MARKET_GROUPS[g]
+        ]
+    
+        # ---------------------------------
+        # ODDS + WINDOW
+        # ---------------------------------
+        c3, c4 = st.columns([2, 1])
+    
+        with c3:
+            f_min_odds, f_max_odds = st.slider(
+                "Odds Range",
+                -1000,
+                1000,
+                (-600, 150),
+                step=25,
+            )
+    
+        with c4:
+            f_window = st.selectbox(
+                "Hit Window",
+                ["L5", "L10", "L20"],
+                index=1,
+            )
+    
+        # ---------------------------------
+        # BOOKS
+        # ---------------------------------
+        default_books = [
+            b for b in book_list
+            if b.lower() in ("draftkings", "fanduel")
+        ] or book_list
+    
+        f_books = st.multiselect(
+            "Books",
+            book_list,
+            default=default_books,
+        )
+    
+        # ---------------------------------
+        # GAMES (OPTIONAL)
+        # ---------------------------------
+        show_games = st.checkbox("Filter by Games", value=False)
+    
+        if show_games:
+            f_games = st.multiselect(
+                "Games",
+                games_today,
+                default=games_today,
+            )
+        else:
+            f_games = []
+    
+        # ---------------------------------
+        # ADVANCED FILTERS (SECTION, NOT EXPANDER)
+        # ---------------------------------
+        st.divider()
+        st.markdown("**Advanced Filters**")
+    
+        show_ev_only = st.checkbox(
+            "Show only EV+ bets (Hit Rate > Implied Probability)",
+            value=False,
+        )
+    
+        f_min_hit = st.slider(
+            "Min Hit Rate (%)",
+            0,
+            100,
+            80,
+        )
+
+    # ------------------------------
+    # MEMORY WIDGET (VISIBLE, CORRECT)
+    # ------------------------------
+    mem_now, mem_delta = finalize_render_memory()
+    delta_icon = "🔴" if mem_delta > 5 else "🟢"
+
+    st.caption(
+        f"🧠 RAM: **{mem_now:.0f} MB** "
+        f"{delta_icon} {mem_delta:+.1f} MB • "
+        f"Render Peak: **{st.session_state.mem_render_peak_mb:.0f} MB** • "
+        f"Session Peak: **{st.session_state.mem_peak_mb:.0f} MB**"
     )
 
-    # team fields as strings
-    df["home_team"] = df["home_team"].fillna("").astype(str)
-    df["visitor_team"] = df["visitor_team"].fillna("").astype(str)
-    df["opponent_team"] = df["opponent_team"].fillna("").astype(str)
+    # ------------------------------
+    # APPLY FILTERS (DATA ONLY)
+    # ------------------------------
+    df = props_df
 
-    # numeric fields we know we'll filter/sort on
-    df["price"] = pd.to_numeric(df["price"], errors="coerce")
-    df["hit_rate_last10"] = pd.to_numeric(df["hit_rate_last10"], errors="coerce")
+    if "bet_type" in df.columns:
+        df = df[df["bet_type"].isin(f_bet_type)]
+    if "market" in df.columns and f_market:
+        df = df[df["market"].isin(f_market)]
+    if "bookmaker" in df.columns and f_books:
+        df = df[df["bookmaker"].isin(f_books)]
+    if "price" in df.columns:
+        df = df[(df["price"] >= f_min_odds) & (df["price"] <= f_max_odds)]
 
-    return df
+    if games_today and f_games and "home_team" in df.columns and "visitor_team" in df.columns:
+        game_display = df["home_team"].astype(str) + " vs " + df["visitor_team"].astype(str)
+        df = df[game_display.isin(f_games)]
 
-@st.cache_data
-def load_historical():
-    df = bq_client.query(HISTORICAL_SQL).to_dataframe()
-    df.columns = df.columns.str.strip()
+    window_col = {
+        "L5": "hit_rate_last5",
+        "L10": "hit_rate_last10",
+        "L20": "hit_rate_last20",
+    }[f_window]
 
-    df["game_date"] = (
-        pd.to_datetime(df["game_date"], errors="coerce")
-        .dt.tz_localize("UTC")
-        .dt.tz_convert(EST)
+    hit_rate_decimal = f_min_hit / 100.0
+    if window_col in df.columns:
+        df = df[df[window_col] >= hit_rate_decimal]
+
+    if show_ev_only:
+        implied = df["implied_prob"] if "implied_prob" in df.columns else df["price"].apply(compute_implied_prob)
+        if window_col in df.columns:
+            df = df[df[window_col] > implied]
+
+    if window_col in df.columns and "price" in df.columns:
+        df = df.sort_values([window_col, "price"], ascending=[False, True])
+
+    # ------------------------------
+    # PAGINATION CONFIG
+    # ------------------------------
+    PAGE_SIZE = 30
+    
+    if "page" not in st.session_state:
+        st.session_state.page = 0
+    
+    # ------------------------------
+    # RESET PAGE WHEN FILTERS CHANGE
+    # ------------------------------
+    page_key = (
+        f"{len(df)}|"
+        f"{window_col}|"
+        f"{','.join(sorted(f_market))}|"
+        f"{','.join(sorted(f_books))}|"
+        f"{','.join(sorted(f_games))}|"
+        f"{show_ev_only}"
     )
-    df["opponent_team"] = df["opponent_team"].fillna("").astype(str)
-    return df
-
-props_df = load_props()
-historical_df = load_historical()
-
-# ------------------------------------------------------
-# SIDEBAR FILTERS
-# ------------------------------------------------------
-if "saved_bets" not in st.session_state:
-    st.session_state.saved_bets = []
-
-st.sidebar.header("Filters")
-
-games_list = (props_df["home_team"] + " vs " + props_df["visitor_team"]).astype(str)
-games = ["All games"] + sorted(games_list.unique())
-sel_game = st.sidebar.selectbox("Game", games)
-
-players = ["All players"] + sorted(props_df["player"].fillna("").astype(str).unique())
-sel_player = st.sidebar.selectbox("Player", players)
-
-markets = ["All Stats"] + sorted(props_df["market"].fillna("").astype(str).unique())
-sel_market = st.sidebar.selectbox("Market", markets)
-
-books = sorted(props_df["bookmaker"].fillna("").astype(str).unique())
-default_books = [b for b in books if b.lower() in ("draftkings", "fanduel")] or books
-sel_books = st.sidebar.multiselect("Bookmaker", books, default=default_books)
-
-od_min = int(props_df["price"].min())
-od_max = int(props_df["price"].max())
-sel_odds = st.sidebar.slider("Odds Range", od_min, od_max, (od_min, od_max))
-
-sel_hit10 = st.sidebar.slider("Min Hit Rate L10", 0.0, 1.0, 0.5)
-
-# ------------------------------------------------------
-# FILTER FUNCTION (NUMERIC-SAFE)
-# ------------------------------------------------------
-def filter_props(df):
-    d = df.copy()
-
-    # enforce numeric before comparisons
-    d["price"] = pd.to_numeric(d["price"], errors="coerce")
-    d["hit_rate_last10"] = pd.to_numeric(d["hit_rate_last10"], errors="coerce")
-
-    if sel_game != "All games":
-        home, away = sel_game.split(" vs ")
-        d = d[(d["home_team"] == home) & (d["visitor_team"] == away)]
-
-    if sel_player != "All players":
-        d = d[d["player"] == sel_player]
-
-    if sel_market != "All Stats":
-        d = d[d["market"] == sel_market]
-
-    d = d[d["bookmaker"].isin(sel_books)]
-    d = d[d["price"].between(sel_odds[0], sel_odds[1])]
-    d = d[d["hit_rate_last10"] >= sel_hit10]
-
-    return d
-
-# ------------------------------------------------------
-# TABS
-# ------------------------------------------------------
-tab1, tab2, tab3, tab4 = st.tabs(
-    ["🧮 Props Overview", "📈 Trend Analysis", "📋 Saved Bets", "📊 Prop Analytics"]
-)
-
-# ------------------------------------------------------
-# TAB 1 — PROPS OVERVIEW
-# ------------------------------------------------------
-with tab1:
-    st.subheader("Props Overview")
-
-    d = filter_props(props_df)
-
-    if d.empty:
-        st.info("No props match your filters.")
-    else:
-        d = get_dynamic_averages(d)
-        d = add_defense(d)
-        d["Price"] = d["price"].apply(format_moneyline)
-        d = format_display(d)
-
-        d["Opponent Logo"] = d["opponent_team"].apply(lambda t: TEAM_LOGOS.get(t, ""))
-
-        # sort by hit rate 10 (still numeric in underlying df before formatting)
-        d = d.sort_values("hit_rate_last10", ascending=False)
-
-        cols = [
-            "player",
-            "market",
-            "line",
-            "Price",
-            "bookmaker",
-            "Pos Def Rank",
-            "Overall Def Rank",
-            "Matchup Difficulty",
-            "hit_rate_last5",
-            "hit_rate_last10",
-            "hit_rate_last20",
-            "L5 Avg",
-            "L10 Avg",
-            "L20 Avg",
-        ]
-
-        html = "<table style='width:100%;border-collapse:collapse;'>"
-        html += "<tr>"
-        for c in cols + ["Opponent Logo"]:
-            html += (
-                "<th style='text-align:center;padding:6px;border-bottom:1px solid #444'>"
-                f"{c}</th>"
-            )
-        html += "</tr>"
-
-        for _, row in d.iterrows():
-            html += "<tr>"
-            for c in cols:
-                val = row[c]
-                style = ""
-                if c in ["Pos Def Rank", "Overall Def Rank", "Matchup Difficulty"]:
-                    style = defense_color(val)
-                html += (
-                    f"<td style='text-align:center;padding:6px;{style}'>{val}</td>"
-                )
-
-            logo = TEAM_LOGOS.get(row["opponent_team"], "")
-            html += (
-                f"<td style='text-align:center;'><img src='{logo}' width='32'></td>"
-            )
-            html += "</tr>"
-
-        html += "</table>"
-        st.markdown(html, unsafe_allow_html=True)
-
-# ------------------------------------------------------
-# TAB 2 — TREND ANALYSIS
-# ------------------------------------------------------
-with tab2:
-    st.subheader("Trend Analysis")
-
-    p = st.selectbox("Player", ["(select)"] + sorted(props_df["player"].unique()))
-    if p != "(select)":
-        markets = sorted(props_df[props_df["player"] == p]["market"].unique())
-        m = st.selectbox("Market", markets)
-
-        lines = sorted(
-            props_df[(props_df["player"] == p) & (props_df["market"] == m)]["line"].unique()
+    
+    if st.session_state.get("_last_page_key") != page_key:
+        st.session_state.page = 0
+        st.session_state._last_page_key = page_key
+    
+    # ------------------------------
+    # SLICE DATAFRAME FOR PAGE
+    # ------------------------------
+    total_rows = len(df)
+    total_pages = max(1, math.ceil(total_rows / PAGE_SIZE))
+    
+    start = st.session_state.page * PAGE_SIZE
+    end = start + PAGE_SIZE
+    
+    page_df = df.iloc[start:end]
+    
+    # ------------------------------
+    # PAGE CONTROLS
+    # ------------------------------
+    col_prev, col_mid, col_next = st.columns([1, 2, 1])
+    
+    with col_prev:
+        if st.button("⬅ Prev", disabled=st.session_state.page == 0):
+            st.session_state.page -= 1
+    
+    with col_next:
+        if st.button("Next ➡", disabled=st.session_state.page >= total_pages - 1):
+            st.session_state.page += 1
+    
+    with col_mid:
+        st.caption(
+            f"Page {st.session_state.page + 1} of {total_pages} "
+            f"({total_rows} results)"
         )
-        line_pick = st.selectbox("Select Line", lines)
-
-        stat = detect_stat(m)
-
-        df_hist = (
-            historical_df[
-                (historical_df["player"] == p) & (historical_df[stat].notna())
-            ]
-            .sort_values("game_date")
-            .tail(20)
-        )
-
-        df_hist["date"] = df_hist["game_date"].dt.strftime("%b %d")
-        df_hist["color"] = np.where(df_hist[stat] > line_pick, "green", "red")
-
-        hover = [
-            f"<b>{d}</b><br>{stat.upper()}: {v}<br>Opponent: {opp}"
-            for d, opp, v in zip(
-                df_hist["date"], df_hist["opponent_team"], df_hist[stat]
-            )
-        ]
-
-        fig = go.Figure()
-
-        fig.add_bar(
-            x=df_hist["date"],
-            y=df_hist[stat],
-            marker_color=df_hist["color"],
-            hovertext=hover,
-            hoverinfo="text",
-        )
-
-        # Show dates as tick labels
-        fig.update_xaxes(tickvals=df_hist["date"], ticktext=df_hist["date"])
-
-        # Add opponent logos under the x-axis using layout images
-        for date_label, opp_team in zip(
-            df_hist["date"], df_hist["opponent_team"]
-        ):
-            logo_url = TEAM_LOGOS.get(opp_team, "")
-            if logo_url:
-                fig.add_layout_image(
-                    dict(
-                        source=logo_url,
-                        xref="x",
-                        yref="paper",
-                        x=date_label,
-                        y=-0.15,
-                        sizex=0.2,
-                        sizey=0.2,
-                        xanchor="center",
-                        yanchor="top",
-                    )
-                )
-
-        fig.add_hline(
-            y=line_pick,
-            line_dash="dash",
-            line_color="white",
-            annotation_text=f"Line: {line_pick}",
-            annotation_position="top left",
-        )
-
-        fig.update_layout(
-            height=450,
-            plot_bgcolor="#222",
-            paper_bgcolor="#222",
-            font=dict(color="white"),
-            margin=dict(b=80, t=40, l=40, r=20),
-        )
-
-        st.plotly_chart(fig, use_container_width=True)
-
-# ------------------------------------------------------
-# TAB 3 — SAVED BETS
-# ------------------------------------------------------
-with tab3:
-    st.subheader("Saved Bets")
-
-    if not st.session_state.saved_bets:
-        st.info("No saved bets yet.")
-    else:
-        df_save = pd.DataFrame(st.session_state.saved_bets)
-        st.dataframe(df_save, use_container_width=True)
-
-        csv = df_save.to_csv(index=False).encode("utf-8")
-        st.download_button("Download CSV", csv, "saved_bets.csv", "text/csv")
-
-# ------------------------------------------------------
-# TAB 4 — PROP ANALYTICS
-# ------------------------------------------------------
-with tab4:
-    st.subheader("Prop Analytics")
-
-    d = filter_props(props_df)
-
-    if d.empty:
-        st.info("No props match your filters.")
-    else:
-        d = get_dynamic_averages(d)
-        d = add_defense(d)
-        d = format_display(d)
-        d["Price"] = d["price"].apply(format_moneyline)
-
-        if "ev" not in d.columns:
-            st.error("❌ EV column missing from the database.")
-            st.stop()
-
-        d["ev"] = pd.to_numeric(d["ev"], errors="coerce")
-        d["Hit Rate 10"] = d["hit_rate_last10"]
-
-        d = d.sort_values("ev", ascending=False)
-
-        cols = [
-            "player",
-            "market",
-            "line",
-            "Price",
-            "bookmaker",
-            "ev",
-            "Matchup Difficulty",
-            "Hit Rate 10",
-            "L10 Avg",
-        ]
-
-        html = "<table style='width:100%;border-collapse:collapse;'>"
-        html += "<tr>"
-        for c in cols:
-            html += (
-                "<th style='text-align:center;padding:6px;border-bottom:1px solid #444'>"
-                f"{c}</th>"
-            )
-        html += "</tr>"
-
-        for _, row in d.iterrows():
-            html += "<tr>"
-            for c in cols:
-                v = row[c]
-                style = ""
-                if c == "Matchup Difficulty":
-                    style = defense_color(v)
-                html += f"<td style='text-align:center;padding:6px;{style}'>{v}</td>"
-            html += "</tr>"
-
-        html += "</table>"
-        st.markdown(html, unsafe_allow_html=True)
-
-# ------------------------------------------------------
-# LAST UPDATED
-# ------------------------------------------------------
-now = datetime.now(EST)
-st.sidebar.markdown(f"**Last Updated:** {now.strftime('%b %d, %I:%M %p')} ET")
+    
+    # ------------------------------
+    # RENDER PAGE ONLY
+    # ------------------------------
+    render_prop_cards(
+        df=page_df,
+        hit_rate_col=window_col,
+        hit_label=f_window
+    )
+    
+    record_memory_checkpoint()

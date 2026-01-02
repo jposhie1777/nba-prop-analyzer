@@ -1597,55 +1597,56 @@ def backfill_games(
         **totals,
     }
 
+def ingest_live_games():
+    today = today_ny()
 
-# ======================================================
-# ROUTES
-# ======================================================
-@app.route("/")
-def health():
-    return "🏀 GOAT NBA ingestion alive"
+    games = http_get(
+        BALDONTLIE_GAMES_BASE,
+        "/games",
+        {"dates[]": today},
+    ).get("data", [])
 
-@app.route("/goat/ingest/player-props")
-def route_props():
-    date_q = request.args.get("date") or date.today().isoformat()
-    bypass = request.args.get("bypass", "false").lower() == "true"
-    return jsonify(ingest_player_props(date_q, bypass_throttle=bypass))
+    rows = []
 
+    for g in games:
+        status = (g.get("status") or "").lower()
 
-@app.route("/goat/ingest/active-players")
-def route_active_players():
-    season = request.args.get("season", type=int)
+        # Live detection
+        if status in ("final", "scheduled", "pregame"):
+            continue
 
-    if not season:
-        return jsonify({
-            "error": "Missing required query param: season"
-        }), 400
+        rows.append({
+            "game_id": g["id"],
+            "game_date": today,
 
-    result = ingest_active_players(season)
-    return jsonify(result)
+            "home_team_abbr": g["home_team"]["abbreviation"],
+            "away_team_abbr": g["visitor_team"]["abbreviation"],
 
-@app.route("/goat/ingest/lineups")
-def route_lineups():
-    start = request.args.get("start")
-    end = request.args.get("end")
+            "home_score_q1": g.get("home_q1"),
+            "home_score_q2": g.get("home_q2"),
+            "home_score_q3": g.get("home_q3"),
+            "home_score_q4": g.get("home_q4"),
 
-    if not start or not end:
-        return jsonify({
-            "error": "Missing required query params: start, end (YYYY-MM-DD)"
-        }), 400
+            "away_score_q1": g.get("visitor_q1"),
+            "away_score_q2": g.get("visitor_q2"),
+            "away_score_q3": g.get("visitor_q3"),
+            "away_score_q4": g.get("visitor_q4"),
 
-    return jsonify(ingest_lineups(start, end))
+            "home_score": g.get("home_team_score"),
+            "away_score": g.get("visitor_team_score"),
 
-@app.route("/goat/ingest/stats/advanced")
-def route_stats_advanced():
-    start = request.args.get("start") or yesterday_ny()
-    end = request.args.get("end") or start  
-    bypass = request.args.get("bypass", "false").lower() == "true"
+            "period": g.get("status"),
+            "status": g.get("status"),
 
-    return jsonify(
-        ingest_stats_advanced(start, end, bypass_throttle=bypass)
-    )
+            "updated_at": now_iso(),
+        })
 
+    # 🔁 overwrite snapshot
+    truncate("live_games")
+    bq_append("live_games", rows)
+
+    return {"live_games": len(rows)}
+    
 def classify_games_by_state(games):
     live, upcoming, final = [], [], []
 
@@ -1754,6 +1755,55 @@ def run_odds_diagnostic_for_today():
             "upcoming_fanduel_dk",
             vendors=["fanduel", "draftkings"],
         )
+# ======================================================
+# ROUTES
+# ======================================================
+@app.route("/")
+def health():
+    return "🏀 GOAT NBA ingestion alive"
+
+@app.route("/goat/ingest/player-props")
+def route_props():
+    date_q = request.args.get("date") or date.today().isoformat()
+    bypass = request.args.get("bypass", "false").lower() == "true"
+    return jsonify(ingest_player_props(date_q, bypass_throttle=bypass))
+
+
+@app.route("/goat/ingest/active-players")
+def route_active_players():
+    season = request.args.get("season", type=int)
+
+    if not season:
+        return jsonify({
+            "error": "Missing required query param: season"
+        }), 400
+
+    result = ingest_active_players(season)
+    return jsonify(result)
+
+@app.route("/goat/ingest/lineups")
+def route_lineups():
+    start = request.args.get("start")
+    end = request.args.get("end")
+
+    if not start or not end:
+        return jsonify({
+            "error": "Missing required query params: start, end (YYYY-MM-DD)"
+        }), 400
+
+    return jsonify(ingest_lineups(start, end))
+
+@app.route("/goat/ingest/stats/advanced")
+def route_stats_advanced():
+    start = request.args.get("start") or yesterday_ny()
+    end = request.args.get("end") or start  
+    bypass = request.args.get("bypass", "false").lower() == "true"
+
+    return jsonify(
+        ingest_stats_advanced(start, end, bypass_throttle=bypass)
+    )
+
+
 
 # ======================================================
 # GAME STATS ROUTES
@@ -1884,6 +1934,10 @@ def ingest_player_injuries():
 def route_odds_diagnostic():
     run_odds_diagnostic_for_today()
     return {"status": "ok", "output": "/tmp/odds_test_*.json"}
+
+@app.route("/goat/ingest/live-games")
+def route_ingest_live_games():
+    return jsonify(ingest_live_games())
 
 if __name__ == "__main__":
     if os.getenv("RUN_BACKFILL") == "true":

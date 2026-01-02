@@ -2831,71 +2831,141 @@ def render_prop_cards(
                 unsafe_allow_html=True,
             )
 
+def render_scoreboard_card(
+    *,
+    home,
+    away,
+    home_score,
+    away_score,
+    center_top,
+    center_bottom,
+    quarters=None,   # dict or None
+):
+    home_logo = team_logo_url(home)
+    away_logo = team_logo_url(away)
+
+    # Quarter fallbacks
+    def q(team, q):
+        if not quarters:
+            return "—"
+        return quarters.get(f"{q}_{team.lower()}", "—")
+
+    st.markdown(
+        f"""
+        <div class="live-scoreboard">
+
+          <!-- AWAY -->
+          <div style="text-align:left;">
+            <div class="live-score">{away_score}</div>
+            <div class="live-team">
+              <img src="{away_logo}" width="26" style="vertical-align:middle;margin-right:6px;" />
+              {away}
+            </div>
+          </div>
+
+          <!-- CENTER -->
+          <div class="live-center">
+            <div class="live-period">{center_top}</div>
+            <div class="live-status">{center_bottom}</div>
+          </div>
+
+          <!-- HOME -->
+          <div style="text-align:right;">
+            <div class="live-score">{home_score}</div>
+            <div class="live-team">
+              {home}
+              <img src="{home_logo}" width="26" style="vertical-align:middle;margin-left:6px;" />
+            </div>
+          </div>
+
+          <!-- QUARTERS -->
+          <div class="live-quarters" style="grid-column:1 / -1;">
+
+            <div></div>
+            <div class="hdr">1</div>
+            <div class="hdr">2</div>
+            <div class="hdr">3</div>
+            <div class="hdr">4</div>
+            <div class="hdr">T</div>
+
+            <div class="team">{away}</div>
+            <div class="cell">{q("away","q1")}</div>
+            <div class="cell">{q("away","q2")}</div>
+            <div class="cell">{q("away","q3")}</div>
+            <div class="cell">{q("away","q4")}</div>
+            <div class="cell"><strong>{away_score}</strong></div>
+
+            <div class="team">{home}</div>
+            <div class="cell">{q("home","q1")}</div>
+            <div class="cell">{q("home","q2")}</div>
+            <div class="cell">{q("home","q3")}</div>
+            <div class="cell">{q("home","q4")}</div>
+            <div class="cell"><strong>{home_score}</strong></div>
+
+          </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    
 def render_placeholder_game(g):
-    c1, c2, c3 = st.columns([2, 3, 2])
+    tip = g.start_time_est
+    tip_str = (
+        pd.to_datetime(tip).strftime("%-I:%M %p ET")
+        if pd.notna(tip)
+        else "—"
+    )
 
-    with c1:
-        st.image(team_logo_url(g.home_team_abbr), width=48)
-        st.markdown("—")
-        st.caption(g.home_team_abbr)
-
-    with c2:
-        st.markdown(
-            f"<div style='text-align:center;'>"
-            f"<h4>{g.start_time_est}</h4>"
-            f"<p style='opacity:.6;'>Not Started</p>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-
-    with c3:
-        st.image(team_logo_url(g.away_team_abbr), width=48)
-        st.markdown("—")
-        st.caption(g.away_team_abbr)
-
-    st.divider()
+    render_scoreboard_card(
+        home=g.home_team_abbr,
+        away=g.away_team_abbr,
+        home_score="—",
+        away_score="—",
+        center_top=tip_str,
+        center_bottom="UPCOMING",
+        quarters=None,   # shows dashes
+    )
     
 def render_live_game(g, live):
-    c1, c2, c3 = st.columns([2, 3, 2])
-
-    with c1:
-        st.image(team_logo_url(g.home_team_abbr), width=48)
-        st.markdown(f"## {live.home_score}")
-
-    with c2:
-        st.markdown(
-            f"<div style='text-align:center;'>"
-            f"<h4>🔴 {live.period}</h4>"
-            f"<p style='opacity:.6;'>LIVE</p>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-
-    with c3:
-        st.image(team_logo_url(g.away_team_abbr), width=48)
-        st.markdown(f"## {live.away_score}")
-
-    st.divider()
+    render_scoreboard_card(
+        home=g.home_team_abbr,
+        away=g.away_team_abbr,
+        home_score=live.home_score,
+        away_score=live.away_score,
+        center_top=live.period,
+        center_bottom="LIVE",
+        quarters={
+            "q1_home": live.q1_home,
+            "q2_home": live.q2_home,
+            "q3_home": live.q3_home,
+            "q4_home": live.q4_home,
+            "q1_away": live.q1_away,
+            "q2_away": live.q2_away,
+            "q3_away": live.q3_away,
+            "q4_away": live.q4_away,
+        },
+    )
     
 def render_final_game(g):
-    c1, c2, c3 = st.columns([2, 3, 2])
-
-    with c1:
-        st.image(team_logo_url(g.home_team_abbr), width=48)
-        st.markdown("Final")
-        st.caption(g.home_team_abbr)
-
-    with c2:
-        st.markdown(
-            "<div style='text-align:center; opacity:.5;'>FINAL</div>",
-            unsafe_allow_html=True,
-        )
-
-    with c3:
-        st.image(team_logo_url(g.away_team_abbr), width=48)
-        st.caption(g.away_team_abbr)
-
-    st.divider()
+    render_scoreboard_card(
+        home=g.home_team_abbr,
+        away=g.away_team_abbr,
+        home_score=g.home_score if hasattr(g, "home_score") else "—",
+        away_score=g.away_score if hasattr(g, "away_score") else "—",
+        center_top="FINAL",
+        center_bottom="",
+        quarters={
+            "q1_home": g.q1_home,
+            "q2_home": g.q2_home,
+            "q3_home": g.q3_home,
+            "q4_home": g.q4_home,
+            "q1_away": g.q1_away,
+            "q2_away": g.q2_away,
+            "q3_away": g.q3_away,
+            "q4_away": g.q4_away,
+        },
+    )
 
 def build_first_basket_expanded_html(row: pd.Series) -> str:
     starter_pct = row.get("starter_pct")

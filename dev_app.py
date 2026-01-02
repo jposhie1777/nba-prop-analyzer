@@ -1,15 +1,26 @@
+# ======================================================
+# STREAMLIT + ENV BOOTSTRAP (LOCAL / RENDER / CLOUD)
+# ======================================================
 import os
-os.environ["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
+
+# Prevent file watcher churn (safe everywhere)
+os.environ.setdefault("STREAMLIT_SERVER_FILE_WATCHER_TYPE", "none")
 
 # ------------------------------------------------------
-# NBA Prop Analyzer - Merged Production + Dev UI
+# Load .env ONLY for local dev (safe no-op elsewhere)
 # ------------------------------------------------------
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
+
+# ======================================================
+# IMPORTS (UNCHANGED)
+# ======================================================
 import json
 from datetime import datetime
 from urllib.parse import urlencode
-
-from dotenv import load_dotenv
-load_dotenv()
 
 import base64
 import numpy as np
@@ -31,19 +42,77 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
-import psutil  # ✅ must be before memory helpers
+import psutil   # ⚠️ must be before memory helpers
 import math
+
 from goat_auth import call_goat
 
-# ------------------------------------------------------
-# ENV — MUST BE EARLY
-# ------------------------------------------------------
-PROJECT_ID = os.getenv("PROJECT_ID", "")
-DATASET = "nba_goat_data"
+# ======================================================
+# SECRET RESOLUTION (STREAMLIT > ENV)
+# ======================================================
+def get_secret(key: str, default: str = "") -> str:
+    """
+    Resolution order:
+      1) Streamlit Cloud (st.secrets)
+      2) Environment variables (Render / local .env)
+    """
+    try:
+        if key in st.secrets:
+            return str(st.secrets.get(key) or "")
+    except Exception:
+        pass
 
+    return os.getenv(key, default) or ""
 
 # ======================================================
-# MEMORY TRACKING HELPERS (DEFINE BEFORE CALLING)
+# ENVIRONMENT FLAGS
+# ======================================================
+APP_ENV = get_secret("APP_ENV", "prod").lower()
+IS_DEV = APP_ENV == "dev"
+
+# ======================================================
+# CORE ENV VARS (USED THROUGHOUT APP)
+# ======================================================
+PROJECT_ID = get_secret("PROJECT_ID")
+DATASET = "nba_goat_data"
+PROPS_TABLE_FULL = "props_full_enriched"
+PROPS_TABLE_Q1   = "props_q1_enriched"
+
+
+SERVICE_JSON = get_secret("GCP_SERVICE_ACCOUNT")
+
+DATABASE_URL = get_secret("DATABASE_URL")
+
+# Auth0
+AUTH0_DOMAIN        = get_secret("AUTH0_DOMAIN")
+AUTH0_CLIENT_ID     = get_secret("AUTH0_CLIENT_ID")
+AUTH0_CLIENT_SECRET = get_secret("AUTH0_CLIENT_SECRET")
+AUTH0_REDIRECT_URI  = get_secret("AUTH0_REDIRECT_URI")
+AUTH0_AUDIENCE      = get_secret("AUTH0_AUDIENCE")
+
+# ======================================================
+# STREAMLIT CONFIG (MUST BE FIRST st.* CALL)
+# ======================================================
+st.set_page_config(
+    page_title="Pulse Sports Analytics",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
+# ======================================================
+# SESSION INITIALIZATION (SAFE)
+# ======================================================
+if "session_initialized" not in st.session_state:
+    st.session_state.session_initialized = True
+
+# ======================================================
+# SAFE QUERY PARAM NAV (NO RERUN LOOPS)
+# ======================================================
+if "pending_tab" in st.session_state:
+    st.query_params["tab"] = st.session_state.pop("pending_tab")
+
+# ======================================================
+# MEMORY TRACKING (UNCHANGED)
 # ======================================================
 def get_rss_mb() -> float:
     return psutil.Process(os.getpid()).memory_info().rss / 1e6
@@ -70,88 +139,91 @@ def finalize_render_memory():
     st.session_state.mem_render_peak_mb = current
     return current, delta
 
-
-# ------------------------------------------------------
-# STREAMLIT CONFIG (MUST BE FIRST STREAMLIT COMMAND)
-# ------------------------------------------------------
-st.set_page_config(
-    page_title="NBA Prop Analyzer (DEV)",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
-
-# ------------------------------------------------------
-# SESSION INITIALIZATION (SAFE — NO STOP)
-# ------------------------------------------------------
-if "session_initialized" not in st.session_state:
-    st.session_state["session_initialized"] = True
-
-# ------------------------------------------------------
-# SAFE QUERY PARAM NAVIGATION (NO RERUN)
-# ------------------------------------------------------
-if "pending_tab" in st.session_state:
-    st.query_params["tab"] = st.session_state.pop("pending_tab")
-
-st.sidebar.markdown("🧪 DEV_APP.PY RUNNING")
-
-IS_DEV = True
-
-# ------------------------------------------------------
-# MEMORY STATE INIT (NOW SAFE)
-# ------------------------------------------------------
 init_memory_state()
 
-
 # ======================================================
-# DEV ACCESS CONTROL (EARLY)
+# DEV ACCESS CONTROL (EMAIL-BASED, AUTH0-AWARE)
 # ======================================================
 DEV_EMAILS = {
     "benvrana@bottleking.com",
     "jposhie1777@gmail.com",
 }
 
-def get_user_email():
-    # 1️⃣ Explicit DEV override
+def get_user_email() -> str | None:
+    # DEV override for local work
     if IS_DEV:
-        return "benvrana@bottleking.com"
+        return DEV_EMAILS.copy().pop()
 
-    # 2️⃣ Streamlit hosted auth (prod)
+    # Auth0 / Streamlit session
+    user = st.session_state.get("user")
+    if user:
+        return user.get("email")
+
+    # Streamlit hosted auth (fallback)
     try:
-        email = st.experimental_user.email
-        if email:
-            return email
+        return st.experimental_user.email
     except Exception:
-        pass
+        return None
 
-    return None
-
-def is_dev_user():
-    return get_user_email() in DEV_EMAILS
+def is_dev_user() -> bool:
+    email = get_user_email()
+    return bool(email and email in DEV_EMAILS)
 
 # ======================================================
-# SAFE TAB ROUTER (DEV + MAIN)
+# TAB ROUTER (SAFE)
 # ======================================================
-def get_active_tab():
+def get_active_tab() -> str:
     tab = st.query_params.get("tab")
     if isinstance(tab, list):
         tab = tab[0]
     return tab or "main"
 
-# ------------------------------------------------------
-# SIDEBAR: DEV NAV ENTRY (SAFE)
-# ------------------------------------------------------
-if IS_DEV and is_dev_user():
+# ======================================================
+# DEV SIDEBAR ENTRY (SAFE EVERYWHERE)
+# ======================================================
+if is_dev_user():
     st.sidebar.divider()
     st.sidebar.markdown("### ⚙️ Dev Tools")
 
     if st.sidebar.button("Open Dev Panel"):
-        st.query_params["tab"] = "dev"
+        st.session_state["pending_tab"] = "dev"
         st.rerun()
+
+# ======================================================
+# ENV VALIDATION (STRICT IN PROD ONLY)
+# ======================================================
+REQUIRED_ENV = [
+    "PROJECT_ID",
+    "GCP_SERVICE_ACCOUNT",
+    "DATABASE_URL",
+    "AUTH0_DOMAIN",
+    "AUTH0_CLIENT_ID",
+    "AUTH0_CLIENT_SECRET",
+    "AUTH0_REDIRECT_URI",
+    "AUTH0_AUDIENCE",
+]
+
+missing = [k for k in REQUIRED_ENV if not get_secret(k)]
+
+if missing and not IS_DEV:
+    st.error(
+        "❌ Missing required environment variables:\n\n"
+        + "\n".join(f"- {m}" for m in missing)
+    )
+    st.stop()
+
+if missing and IS_DEV:
+    st.warning(
+        "⚠️ DEV MODE — Missing env vars ignored:\n\n"
+        + "\n".join(f"- {m}" for m in missing)
+    )
+
 
 # ------------------------------------------------------
 # DEV-SAFE BIGQUERY and GAS CONSTANTS
 # ------------------------------------------------------
-DEV_BQ_DATASET = os.getenv("BIGQUERY_DATASET", "nba_prop_analyzer")
+DEV_BQ_DATASET = get_secret("BIGQUERY_DATASET", "nba_prop_analyzer")
+
 
 DEV_SP_TABLES = {
     "Game Analytics": "game_analytics",
@@ -782,62 +854,6 @@ if active_tab == "dev":
 
     render_dev_page()
     st.stop()
-
-
-# ------------------------------------------------------
-# ENVIRONMENT VARIABLES
-# ------------------------------------------------------
-PROJECT_ID = os.getenv("PROJECT_ID", "")
-
-DATASET = "nba_goat_data"
-
-PROPS_TABLE_FULL = "props_full_enriched"
-PROPS_TABLE_Q1   = "props_q1_enriched"
-
-
-# SERVICE_JSON is a JSON string (not a filepath)
-SERVICE_JSON = os.getenv("GCP_SERVICE_ACCOUNT", "")
-
-# Auth0
-AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN", "")
-AUTH0_CLIENT_ID = os.getenv("AUTH0_CLIENT_ID", "")
-AUTH0_CLIENT_SECRET = os.getenv("AUTH0_CLIENT_SECRET", "")
-AUTH0_REDIRECT_URI = os.getenv("AUTH0_REDIRECT_URI", "")
-AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE", "")
-
-# Render PostgreSQL
-DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
-
-missing_env = []
-if not PROJECT_ID:
-    missing_env.append("PROJECT_ID")
-if not SERVICE_JSON:
-    missing_env.append("GCP_SERVICE_ACCOUNT")
-if not DATABASE_URL:
-    missing_env.append("DATABASE_URL")
-if not AUTH0_DOMAIN:
-    missing_env.append("AUTH0_DOMAIN")
-if not AUTH0_CLIENT_ID:
-    missing_env.append("AUTH0_CLIENT_ID")
-if not AUTH0_CLIENT_SECRET:
-    missing_env.append("AUTH0_CLIENT_SECRET")
-if not AUTH0_REDIRECT_URI:
-    missing_env.append("AUTH0_REDIRECT_URI")
-if not AUTH0_AUDIENCE:
-    missing_env.append("AUTH0_AUDIENCE")
-
-if missing_env and not IS_DEV:
-    st.error(
-        "❌ Missing required environment variables:\n\n"
-        + "\n".join(f"- {m}" for m in missing_env)
-    )
-    st.stop()
-
-if missing_env and IS_DEV:
-    st.warning(
-        "⚠️ DEV MODE: Missing env vars ignored:\n\n"
-        + "\n".join(f"- {m}" for m in missing_env)
-    )
 
 # ------------------------------------------------------
 # LOCKED THEME (STATIC) AND GLOBAL STYLES
@@ -1654,7 +1670,10 @@ def load_props(table_name: str) -> pd.DataFrame:
                 "BLK": "player_blocks",
                 "DD":  "player_double_double",
                 "TD":  "player_triple_double",
-            })
+                # ✅ ADD THIS
+                "THREES": "threes",
+                "3PM": "threes",
+                })
         )
 
     # --------------------------------------------------
@@ -2274,6 +2293,8 @@ def normalize_market_key(market: str) -> str:
     # singles
     if "points" in m:
         return "points"
+    if "fg3m" in m or "3pt" in m or "three" in m:
+        return "threes"    
     if "rebounds" in m:
         return "rebounds"
     if "assists" in m:
@@ -2336,6 +2357,9 @@ def get_l10_values(row, *, market_window: str):
             return coerce_numeric_list(row.get("pa_q1_last10_list"))
         if key == "rebounds_assists":
             return coerce_numeric_list(row.get("ra_q1_last10_list"))
+        if key == "threes":
+            return coerce_numeric_list(row.get("fg3m_q1_last10_list"))
+    
         return []
 
     # -----------------------
@@ -2359,6 +2383,9 @@ def get_l10_values(row, *, market_window: str):
         return coerce_numeric_list(row.get("pa_last10_list"))
     if key == "rebounds_assists":
         return coerce_numeric_list(row.get("ra_last10_list"))
+    if key == "threes":
+        return coerce_numeric_list(row.get("fg3m_last10_list"))
+
 
     return []
 
@@ -2380,6 +2407,8 @@ def pretty_market_label(market: str) -> str:
         return "Rebounds"
     if "assists" in m:
         return "Assists"
+    if m in {"threes", "3pm", "player_threes"}:
+        return "3-Pointers Made"
 
     return (
         m.replace("player_", "")
@@ -2675,6 +2704,7 @@ def render_prop_cards(
             "assists": "opp_pos_ast_rank",
             "steals": "opp_pos_stl_rank",
             "blocks": "opp_pos_blk_rank",
+            "threes": "opp_pos_fg3m_rank",
             "pra": "opp_pos_pra_rank",
             "points_rebounds": "opp_pos_pr_rank",
             "points_assists": "opp_pos_pa_rank",
@@ -2916,76 +2946,73 @@ def render_scoreboard_card(
     away_score,
     center_top,
     center_bottom,
-    quarters=None,   # dict or None
+    quarters=None,
 ):
     home_logo = team_logo_url(home)
     away_logo = team_logo_url(away)
 
-    # Quarter fallbacks
-    def q(team, q):
+    def q(team, qtr):
         if not quarters:
             return "—"
-        return quarters.get(f"{q}_{team.lower()}", "—")
+        return quarters.get(f"{qtr}_{team}", "—")
 
-    st.markdown(
-        f"""
-        <div class="live-scoreboard">
+    html = (
+        f"<div class='live-scoreboard'>"
 
-          <!-- AWAY -->
-          <div style="text-align:left;">
-            <div class="live-score">{away_score}</div>
-            <div class="live-team">
-              <img src="{away_logo}" width="26" style="vertical-align:middle;margin-right:6px;" />
-              {away}
-            </div>
-          </div>
+        # ---------------- LEFT (AWAY) ----------------
+        f"<div style='text-align:left;'>"
+        f"<div class='live-score'>{away_score}</div>"
+        f"<div class='live-team'>"
+        f"<img src='{away_logo}' width='26' style='vertical-align:middle;margin-right:6px;' />"
+        f"{away}"
+        f"</div>"
+        f"</div>"
 
-          <!-- CENTER -->
-          <div class="live-center">
-            <div class="live-period">{center_top}</div>
-            <div class="live-status">{center_bottom}</div>
-          </div>
+        # ---------------- CENTER ----------------
+        f"<div class='live-center'>"
+        f"<div class='live-period'>{center_top}</div>"
+        f"<div class='live-status'>{center_bottom}</div>"
+        f"</div>"
 
-          <!-- HOME -->
-          <div style="text-align:right;">
-            <div class="live-score">{home_score}</div>
-            <div class="live-team">
-              {home}
-              <img src="{home_logo}" width="26" style="vertical-align:middle;margin-left:6px;" />
-            </div>
-          </div>
+        # ---------------- RIGHT (HOME) ----------------
+        f"<div style='text-align:right;'>"
+        f"<div class='live-score'>{home_score}</div>"
+        f"<div class='live-team'>"
+        f"{home}"
+        f"<img src='{home_logo}' width='26' style='vertical-align:middle;margin-left:6px;' />"
+        f"</div>"
+        f"</div>"
 
-          <!-- QUARTERS -->
-          <div class="live-quarters" style="grid-column:1 / -1;">
+        # ---------------- QUARTERS ----------------
+        f"<div class='live-quarters' style='grid-column:1 / -1;'>"
 
-            <div></div>
-            <div class="hdr">1</div>
-            <div class="hdr">2</div>
-            <div class="hdr">3</div>
-            <div class="hdr">4</div>
-            <div class="hdr">T</div>
+        f"<div></div>"
+        f"<div class='hdr'>1</div>"
+        f"<div class='hdr'>2</div>"
+        f"<div class='hdr'>3</div>"
+        f"<div class='hdr'>4</div>"
+        f"<div class='hdr'>T</div>"
 
-            <div class="team">{away}</div>
-            <div class="cell">{q("away","q1")}</div>
-            <div class="cell">{q("away","q2")}</div>
-            <div class="cell">{q("away","q3")}</div>
-            <div class="cell">{q("away","q4")}</div>
-            <div class="cell"><strong>{away_score}</strong></div>
+        f"<div class='team'>{away}</div>"
+        f"<div class='cell'>{q('away','q1')}</div>"
+        f"<div class='cell'>{q('away','q2')}</div>"
+        f"<div class='cell'>{q('away','q3')}</div>"
+        f"<div class='cell'>{q('away','q4')}</div>"
+        f"<div class='cell'><strong>{away_score}</strong></div>"
 
-            <div class="team">{home}</div>
-            <div class="cell">{q("home","q1")}</div>
-            <div class="cell">{q("home","q2")}</div>
-            <div class="cell">{q("home","q3")}</div>
-            <div class="cell">{q("home","q4")}</div>
-            <div class="cell"><strong>{home_score}</strong></div>
+        f"<div class='team'>{home}</div>"
+        f"<div class='cell'>{q('home','q1')}</div>"
+        f"<div class='cell'>{q('home','q2')}</div>"
+        f"<div class='cell'>{q('home','q3')}</div>"
+        f"<div class='cell'>{q('home','q4')}</div>"
+        f"<div class='cell'><strong>{home_score}</strong></div>"
 
-          </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True,
+        f"</div>"  # quarters
+        f"</div>"  # scoreboard
     )
-    
+
+    st.markdown(html, unsafe_allow_html=True)
+
 def render_placeholder_game(g):
     tip = g.start_time_est
     tip_str = (
@@ -3001,9 +3028,9 @@ def render_placeholder_game(g):
         away_score="—",
         center_top=tip_str,
         center_bottom="UPCOMING",
-        quarters=None,   # shows dashes
+        quarters=None,
     )
-    
+
 def render_live_game(g, live):
     render_scoreboard_card(
         home=g.home_team_abbr,
@@ -3023,13 +3050,13 @@ def render_live_game(g, live):
             "q4_away": live.q4_away,
         },
     )
-    
+
 def render_final_game(g):
     render_scoreboard_card(
         home=g.home_team_abbr,
         away=g.away_team_abbr,
-        home_score=g.home_score if hasattr(g, "home_score") else "—",
-        away_score=g.away_score if hasattr(g, "away_score") else "—",
+        home_score=g.home_score,
+        away_score=g.away_score,
         center_top="FINAL",
         center_bottom="",
         quarters={
@@ -3043,6 +3070,7 @@ def render_final_game(g):
             "q4_away": g.q4_away,
         },
     )
+
 
 def build_first_basket_expanded_html(row: pd.Series) -> str:
     starter_pct = row.get("starter_pct")
@@ -3508,6 +3536,38 @@ with tab_lineups:
     render_lineups_tab()
 
 with tab_live:
+    st.markdown(
+        (
+            f"<div style='"
+            f"text-align:center;"
+            f"padding:40px 20px;"
+            f"border-radius:16px;"
+            f"background:linear-gradient(135deg, rgba(239,68,68,0.12), rgba(239,68,68,0.04));"
+            f"border:1px solid rgba(239,68,68,0.25);"
+            f"margin-bottom:24px;"
+            f"'>"
+
+            f"<div style='"
+            f"font-size:1.6rem;"
+            f"font-weight:900;"
+            f"letter-spacing:-0.3px;"
+            f"'>"
+            f"🔴 Live Odds Coming Soon!"
+            f"</div>"
+
+            f"<div style='"
+            f"margin-top:8px;"
+            f"font-size:0.9rem;"
+            f"opacity:0.75;"
+            f"'>"
+            f"Real-time markets will appear here once live ingestion is enabled."
+            f"</div>"
+
+            f"</div>"
+        ),
+        unsafe_allow_html=True,
+    )
+
     from streamlit_autorefresh import st_autorefresh
 
     st_autorefresh(interval=30_000, key="live_now")
@@ -3645,6 +3705,7 @@ with tab_props:
             "Assists": ["player_assists"],
             "Steals": ["player_steals"],
             "Blocks": ["player_blocks"],
+            "Threes": ["threes"],    # 👈 ADD THIS
             "Combos": [
                 "player_pra",
                 "player_pr",
@@ -3656,6 +3717,7 @@ with tab_props:
                 "player_triple_double",
             ],
         }
+
 
         with c2:
             selected_market_groups = st.multiselect(
@@ -3759,8 +3821,12 @@ with tab_props:
     if "bet_type" in df.columns:
         df = df[df["bet_type"].isin(f_bet_type)]
 
-    if "market" in df.columns and f_market:
-        df = df[df["market"].isin(f_market)]
+    if f_market:
+        if "prop_type" in df.columns:
+            df = df[df["prop_type"].isin(f_market)]
+        elif "market" in df.columns:
+            df = df[df["market"].isin(f_market)]
+
 
     if "bookmaker" in df.columns and f_books:
         df = df[df["bookmaker"].isin(f_books)]

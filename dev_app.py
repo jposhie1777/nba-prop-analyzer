@@ -2502,7 +2502,7 @@ def render_prop_cards(
 
     card_df = build_prop_cards(df, hit_rate_col=hit_rate_col)
 
-    for _, row in card_df.iterrows():
+    for i, row in enumerate(card_df.itertuples(index=False)):
 
         player = f"{row.get('player', '')}"
         raw_market = row.get("market")

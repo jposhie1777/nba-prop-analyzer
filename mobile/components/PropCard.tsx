@@ -353,21 +353,23 @@ const styles = StyleSheet.create({
   },
 
   card: {
-    backgroundColor: colors.card,
+    backgroundColor: "#FFFFFF",
     borderRadius: 18,
     paddingVertical: 14,
     paddingHorizontal: 14,
+
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
+    borderColor: "#E5E7EB",
 
     shadowColor: "#000",
-    shadowOpacity: 0.26,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
 
     overflow: "hidden",
   },
+
 
   accentStrip: {
     position: "absolute",
@@ -389,10 +391,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.06)",
+
+    backgroundColor: "#F3F4F6",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
+    borderColor: "#E5E7EB",
   },
+
   saveStar: {
     fontSize: 18,
     fontWeight: "900",
@@ -423,16 +427,18 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 6,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "#F3F4F6",
   },
+
   teamLogoPlaceholder: {
     width: 22,
     height: 22,
     borderRadius: 6,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "#F3F4F6",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
+    borderColor: "#E5E7EB",
   },
+
 
   center: {
     flex: 1,
@@ -471,10 +477,12 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 8,
     borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.06)",
+
+    backgroundColor: "#F3F4F6",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
+    borderColor: "#E5E7EB",
   },
+
   bookLogo: {
     width: 16,
     height: 16,
@@ -483,8 +491,9 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 4,
-    backgroundColor: "rgba(255,255,255,0.05)",
+    backgroundColor: "#E5E7EB",
   },
+
   oddsText: {
     color: colors.textPrimary,
     fontSize: textStyles.label,
@@ -499,10 +508,12 @@ const styles = StyleSheet.create({
 
   divider: {
     height: 1,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "#D1D5DB", // slightly darker than E5E7EB
     marginTop: 12,
     marginBottom: 10,
   },
+
+
 
   metricsRow: {
     flexDirection: "row",
@@ -534,10 +545,12 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 12,
-    backgroundColor: "rgba(0,0,0,0.18)",
+
+    backgroundColor: "#F9FAFB",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
+    borderColor: "#E5E7EB",
   },
+
   badgeLabel: {
     color: colors.textSecondary,
     fontSize: 10,
@@ -556,11 +569,11 @@ const styles = StyleSheet.create({
   barTrack: {
     height: 8,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "#E5E7EB",
     overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
+    borderWidth: 0,
   },
+
   barFill: {
     height: "100%",
     borderRadius: 999,

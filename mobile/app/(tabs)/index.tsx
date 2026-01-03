@@ -1,5 +1,10 @@
-import { View, ScrollView, Text } from "react-native";
-import { useMemo, useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+} from "react-native";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import Slider from "@react-native-community/slider";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -19,12 +24,12 @@ const SAVED_PROPS_KEY = "saved_props_v1";
 // ---------------------------
 type UIProp = MobileProp & {
   id: string;
-  edge: number;        // 0–1 (proxy for now)
-  confidence: number;  // 0–100
+  edge: number;
+  confidence: number;
 };
 
 // ---------------------------
-// MULTI-BOOK GROUPING (ADD)
+// MULTI-BOOK GROUPING
 // ---------------------------
 type GroupedProp = UIProp & {
   books?: {
@@ -32,7 +37,6 @@ type GroupedProp = UIProp & {
     odds: number;
   }[];
 };
-
 
 export default function HomeScreen() {
   // ---------------------------
@@ -75,7 +79,6 @@ export default function HomeScreen() {
         if (!raw) return;
 
         const saved = JSON.parse(raw);
-
         setMarketFilter(saved.marketFilter ?? null);
         setEvOnly(saved.evOnly ?? false);
         setSortBy(saved.sortBy ?? "edge");
@@ -145,20 +148,19 @@ export default function HomeScreen() {
   // ---------------------------
   // TOGGLE SAVE
   // ---------------------------
-  const toggleSave = (id: string) => {
+  const toggleSave = useCallback((id: string) => {
     setSavedIds((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  };
+  }, []);
 
   // ---------------------------
   // LOAD PROPS FROM API
   // ---------------------------
   useEffect(() => {
     let mounted = true;
-
     setLoading(true);
     setError(null);
 
@@ -172,7 +174,6 @@ export default function HomeScreen() {
 
         const normalized: UIProp[] = res.props.map((p) => {
           const hitRate = p.hitRateL10 ?? 0;
-
           return {
             ...p,
             id: `${p.player}-${p.market}-${p.line}`,
@@ -189,7 +190,6 @@ export default function HomeScreen() {
         setLoading(false);
       })
       .catch((err) => {
-        console.error("FETCH ERROR:", err);
         if (!mounted) return;
         setError(String(err));
         setLoading(false);
@@ -208,7 +208,7 @@ export default function HomeScreen() {
   }, [props]);
 
   // ---------------------------
-  // FILTER + SORT + GROUP (ONLY ADDITION)
+  // FILTER + SORT + GROUP
   // ---------------------------
   const filteredProps = useMemo(() => {
     const base = props
@@ -226,21 +226,16 @@ export default function HomeScreen() {
       });
 
     const map = new Map<string, GroupedProp>();
-
     base.forEach((p) => {
       const key = `${p.player}-${p.market}-${p.line}`;
-
-      if (!map.has(key)) {
-        map.set(key, { ...p, books: [] });
-      }
-
+      if (!map.has(key)) map.set(key, { ...p, books: [] });
       if (p.bookmaker) {
         map.get(key)!.books!.push({
           bookmaker: p.bookmaker,
           odds: p.odds,
         });
       }
-    }); // ✅ THIS WAS MISSING
+    });
 
     return Array.from(map.values());
   }, [
@@ -255,44 +250,39 @@ export default function HomeScreen() {
     sortBy,
   ]);
 
+  // ---------------------------
+  // FLATLIST RENDER ITEM
+  // ---------------------------
+  const renderItem = useCallback(
+    ({ item }: { item: GroupedProp }) => (
+      <PropCard
+        {...item}
+        books={item.books}
+        saved={savedIds.has(item.id)}
+        onToggleSave={() => toggleSave(item.id)}
+      />
+    ),
+    [savedIds, toggleSave]
+  );
 
   // ---------------------------
-  // ERROR STATE
+  // STATES
   // ---------------------------
   if (error) {
     return (
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: colors.bg,
-            justifyContent: "center",
-          }}
-        >
-          <Text style={{ color: "red", textAlign: "center" }}>
-            {error}
-          </Text>
+      <GestureHandlerRootView style={styles.root}>
+        <View style={styles.center}>
+          <Text style={styles.error}>{error}</Text>
         </View>
       </GestureHandlerRootView>
     );
   }
 
-  // ---------------------------
-  // LOADING STATE
-  // ---------------------------
   if (loading) {
     return (
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: colors.bg,
-            justifyContent: "center",
-          }}
-        >
-          <Text style={{ color: colors.textSecondary, textAlign: "center" }}>
-            Loading today’s props…
-          </Text>
+      <GestureHandlerRootView style={styles.root}>
+        <View style={styles.center}>
+          <Text style={styles.loading}>Loading today’s props…</Text>
         </View>
       </GestureHandlerRootView>
     );
@@ -302,42 +292,21 @@ export default function HomeScreen() {
   // RENDER
   // ---------------------------
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+    <GestureHandlerRootView style={styles.root}>
+      <View style={styles.screen}>
         {/* =========================
             TOP TABS
         ========================== */}
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-around",
-            paddingVertical: 10,
-            borderBottomWidth: 1,
-            borderBottomColor: colors.divider,
-          }}
-        >
+        <View style={styles.tabs}>
           <Text
             onPress={() => setActiveTab("all")}
-            style={{
-              color:
-                activeTab === "all"
-                  ? colors.accent
-                  : colors.textSecondary,
-              fontWeight: "700",
-            }}
+            style={[styles.tab, activeTab === "all" && styles.tabActive]}
           >
             All
           </Text>
-
           <Text
             onPress={() => setActiveTab("saved")}
-            style={{
-              color:
-                activeTab === "saved"
-                  ? colors.accent
-                  : colors.textSecondary,
-              fontWeight: "700",
-            }}
+            style={[styles.tab, activeTab === "saved" && styles.tabActive]}
           >
             Saved
           </Text>
@@ -346,35 +315,18 @@ export default function HomeScreen() {
         {/* =========================
             FILTERS
         ========================== */}
-        <View style={{ padding: 12 }}>
+        <View style={styles.filters}>
           <Text
             onPress={() => setFiltersOpen((v) => !v)}
-            style={{
-              color: colors.textPrimary,
-              fontWeight: "700",
-              fontSize: 16,
-            }}
+            style={styles.filtersTitle}
           >
             Filters {filtersOpen ? "▲" : "▼"}
           </Text>
 
           {filtersOpen && (
-            <View
-              style={{
-                backgroundColor: colors.card,
-                borderRadius: 14,
-                padding: 12,
-                marginTop: 10,
-              }}
-            >
+            <View style={styles.filtersCard}>
               {/* MARKET PILLS */}
-              <View
-                style={{
-                  flexDirection: "row",
-                  flexWrap: "wrap",
-                  marginBottom: 12,
-                }}
-              >
+              <View style={styles.pills}>
                 {markets.map((mkt) => {
                   const active = marketFilter === mkt;
                   return (
@@ -383,20 +335,10 @@ export default function HomeScreen() {
                       onPress={() =>
                         setMarketFilter(active ? null : mkt)
                       }
-                      style={{
-                        color: active
-                          ? colors.bg
-                          : colors.textSecondary,
-                        backgroundColor: active
-                          ? colors.accent
-                          : "rgba(255,255,255,0.08)",
-                        paddingHorizontal: 12,
-                        paddingVertical: 6,
-                        borderRadius: 14,
-                        marginRight: 8,
-                        marginBottom: 8,
-                        fontWeight: "600",
-                      }}
+                      style={[
+                        styles.pill,
+                        active && styles.pillActive,
+                      ]}
                     >
                       {mkt}
                     </Text>
@@ -404,99 +346,161 @@ export default function HomeScreen() {
                 })}
               </View>
 
-              {/* CONFIDENCE SLIDER */}
-              <View style={{ marginBottom: 16 }}>
-                <Text style={{ color: colors.textSecondary, marginBottom: 4 }}>
-                  Confidence ≥ {minConfidence}
-                </Text>
-                <Slider
-                  minimumValue={0}
-                  maximumValue={100}
-                  step={5}
-                  value={minConfidence}
-                  onValueChange={setMinConfidence}
-                  minimumTrackTintColor={colors.accent}
-                  maximumTrackTintColor="rgba(255,255,255,0.2)"
-                  thumbTintColor={colors.accent}
-                />
-              </View>
+              {/* CONFIDENCE */}
+              <Text style={styles.sliderLabel}>
+                Confidence ≥ {minConfidence}
+              </Text>
+              <Slider
+                minimumValue={0}
+                maximumValue={100}
+                step={5}
+                value={minConfidence}
+                onValueChange={setMinConfidence}
+                minimumTrackTintColor={colors.accent}
+                maximumTrackTintColor="#E5E7EB"
+                thumbTintColor={colors.accent}
+              />
 
-              {/* ODDS SLIDERS */}
-              <View>
-                <Text style={{ color: colors.textSecondary, marginBottom: 4 }}>
-                  Min Odds: {minOdds}
-                </Text>
-                <Slider
-                  minimumValue={-1000}
-                  maximumValue={1000}
-                  step={25}
-                  value={minOdds}
-                  onValueChange={setMinOdds}
-                  minimumTrackTintColor={colors.accent}
-                  maximumTrackTintColor="rgba(255,255,255,0.2)"
-                  thumbTintColor={colors.accent}
-                />
+              {/* ODDS */}
+              <Text style={styles.sliderLabel}>Min Odds: {minOdds}</Text>
+              <Slider
+                minimumValue={-1000}
+                maximumValue={1000}
+                step={25}
+                value={minOdds}
+                onValueChange={setMinOdds}
+                minimumTrackTintColor={colors.accent}
+                maximumTrackTintColor="#E5E7EB"
+                thumbTintColor={colors.accent}
+              />
 
-                <Text
-                  style={{
-                    color: colors.textSecondary,
-                    marginTop: 12,
-                    marginBottom: 4,
-                  }}
-                >
-                  Max Odds: {maxOdds}
-                </Text>
-                <Slider
-                  minimumValue={-1000}
-                  maximumValue={1000}
-                  step={25}
-                  value={maxOdds}
-                  onValueChange={setMaxOdds}
-                  minimumTrackTintColor={colors.accent}
-                  maximumTrackTintColor="rgba(255,255,255,0.2)"
-                  thumbTintColor={colors.accent}
-                />
-              </View>
-
-              {/* RESET */}
-              <View style={{ marginTop: 12 }}>
-                <Text
-                  onPress={() => {
-                    setMarketFilter(null);
-                    setEvOnly(false);
-                    setSortBy("edge");
-                    setMinConfidence(0);
-                    setMinOdds(-300);
-                    setMaxOdds(300);
-                  }}
-                  style={{
-                    color: colors.accent,
-                    fontWeight: "700",
-                    textAlign: "right",
-                  }}
-                >
-                  Reset
-                </Text>
-              </View>
+              <Text style={styles.sliderLabel}>Max Odds: {maxOdds}</Text>
+              <Slider
+                minimumValue={-1000}
+                maximumValue={1000}
+                step={25}
+                value={maxOdds}
+                onValueChange={setMaxOdds}
+                minimumTrackTintColor={colors.accent}
+                maximumTrackTintColor="#E5E7EB"
+                thumbTintColor={colors.accent}
+              />
             </View>
           )}
         </View>
 
         {/* =========================
-            PROP CARDS
+            PROP LIST
         ========================== */}
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {filteredProps.map((prop) => (
-            <PropCard
-              key={prop.id}
-              {...prop}
-              books={prop.books} // ✅ EXPLICIT FIX
-              saved={savedIds.has(prop.id)}
-              onToggleSave={() => toggleSave(prop.id)}
-            />
-          ))}
-        </ScrollView>
+        <FlatList
+          data={filteredProps}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.list}
+          ListFooterComponent={<View style={{ height: 40 }} />}
+        />
       </View>
     </GestureHandlerRootView>
   );
 }
+
+// ---------------------------
+// STYLES — LIGHT MODE
+// ---------------------------
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+
+  screen: {
+    flex: 1,
+    backgroundColor: "#F5F7FB",
+  },
+
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  error: {
+    color: "#DC2626",
+    fontWeight: "600",
+  },
+
+  loading: {
+    color: "#6B7280",
+  },
+
+  tabs: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    paddingVertical: 12,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+
+  tab: {
+    fontWeight: "700",
+    color: "#6B7280",
+  },
+
+  tabActive: {
+    color: colors.accent,
+  },
+
+  filters: {
+    padding: 14,
+    backgroundColor: "#F9FAFB",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+
+  filtersTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111827",
+  },
+
+  filtersCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 12,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+
+  pills: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginBottom: 12,
+  },
+
+  pill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    marginRight: 8,
+    marginBottom: 8,
+    fontWeight: "600",
+    color: "#374151",
+    backgroundColor: "#E5E7EB",
+  },
+
+  pillActive: {
+    backgroundColor: colors.accent,
+    color: "#FFFFFF",
+  },
+
+  sliderLabel: {
+    marginTop: 10,
+    marginBottom: 4,
+    color: "#374151",
+    fontWeight: "600",
+  },
+
+  list: {
+    paddingTop: 8,
+  },
+});

@@ -23,6 +23,17 @@ type UIProp = MobileProp & {
   confidence: number;  // 0–100
 };
 
+// ---------------------------
+// MULTI-BOOK GROUPING (ADD)
+// ---------------------------
+type GroupedProp = UIProp & {
+  books?: {
+    bookmaker: string;
+    odds: number;
+  }[];
+};
+
+
 export default function HomeScreen() {
   // ---------------------------
   // TAB STATE
@@ -152,7 +163,7 @@ export default function HomeScreen() {
     setError(null);
 
     fetchProps({
-      gameDate: "2026-01-03", // later: derive dynamically
+      gameDate: "2026-01-03",
       minHitRate: 0,
       limit: 200,
     })
@@ -164,20 +175,14 @@ export default function HomeScreen() {
 
           return {
             ...p,
-
-            // ---------- REQUIRED UI FIELDS ----------
             id: `${p.player}-${p.market}-${p.line}`,
-
             edge: hitRate,
             confidence: Math.round(hitRate * 100),
-
-            // ---------- CARD DISPLAY FIELDS ----------
-            matchup: p.matchup,                 // "MIN @ MIA"
-            bookmaker: p.bookmaker,             // "fanduel" | "draftkings"
-            home: p.home_team,                  // "MIA"
-            away: p.away_team,                  // "MIN"
+            matchup: p.matchup,
+            bookmaker: p.bookmaker,
+            home: p.home_team,
+            away: p.away_team,
           };
-
         });
 
         setProps(normalized);
@@ -203,25 +208,41 @@ export default function HomeScreen() {
   }, [props]);
 
   // ---------------------------
-  // FILTER + SORT DATA
+  // FILTER + SORT + GROUP (ONLY ADDITION)
   // ---------------------------
   const filteredProps = useMemo(() => {
-    return props
+    const base = props
       .filter((p) => {
         if (activeTab === "saved" && !savedIds.has(p.id)) return false;
-
         if (marketFilter && p.market !== marketFilter) return false;
         if (evOnly && p.edge < 0.1) return false;
-
         if (p.confidence < minConfidence) return false;
         if (p.odds < minOdds || p.odds > maxOdds) return false;
-
         return true;
       })
       .sort((a, b) => {
         if (sortBy === "edge") return b.edge - a.edge;
         return b.confidence - a.confidence;
       });
+
+    const map = new Map<string, GroupedProp>();
+
+    base.forEach((p) => {
+      const key = `${p.player}-${p.market}-${p.line}`;
+
+      if (!map.has(key)) {
+        map.set(key, { ...p, books: [] });
+      }
+
+      if (p.bookmaker) {
+        map.get(key)!.books!.push({
+          bookmaker: p.bookmaker,
+          odds: p.odds,
+        });
+      }
+    }); // ✅ THIS WAS MISSING
+
+    return Array.from(map.values());
   }, [
     props,
     activeTab,
@@ -233,6 +254,7 @@ export default function HomeScreen() {
     maxOdds,
     sortBy,
   ]);
+
 
   // ---------------------------
   // ERROR STATE
@@ -468,6 +490,7 @@ export default function HomeScreen() {
             <PropCard
               key={prop.id}
               {...prop}
+              books={prop.books} // ✅ EXPLICIT FIX
               saved={savedIds.has(prop.id)}
               onToggleSave={() => toggleSave(prop.id)}
             />

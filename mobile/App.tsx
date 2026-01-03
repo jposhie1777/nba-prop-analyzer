@@ -1,5 +1,5 @@
-import { SafeAreaView, ScrollView } from "react-native";
 import PropCard from "./components/PropCard";
+import colors from "./theme/color";
 
 export default function App() {
   return (

@@ -77,20 +77,20 @@ const styles = StyleSheet.create({
 
   matchup: {
     color: colors.textSecondary,
-    fontSize: text.label,
+    fontSize: textStyles.label,
     marginBottom: 6,
   },
 
   player: {
     color: colors.textPrimary,
-    fontSize: text.title,
+    fontSize: textStyles.title,
     fontWeight: "600",
     marginBottom: 2,
   },
 
   market: {
     color: colors.textSecondary,
-    fontSize: text.subtitle,
+    fontSize: textStyles.subtitle,
     marginBottom: 12,
   },
 
@@ -103,13 +103,13 @@ const styles = StyleSheet.create({
 
   hit: {
     color: colors.success,
-    fontSize: text.stat,
+    fontSize: textStyles.stat,
     fontWeight: "600",
   },
 
   edge: {
     color: colors.accent,
-    fontSize: text.stat,
+    fontSize: textStyles.stat,
     fontWeight: "600",
   },
 
@@ -121,6 +121,6 @@ const styles = StyleSheet.create({
 
   confidence: {
     color: colors.textSecondary,
-    fontSize: text.label,
+    fontSize: textStyles.label,
   },
 });

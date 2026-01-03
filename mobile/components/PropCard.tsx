@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet } from "react-native";
+import { Swipeable } from "react-native-gesture-handler";
 import colors from "../theme/color";
 import textStyles from "../theme/text";
 
@@ -49,96 +50,113 @@ export default function PropCard({
       ? colors.accent
       : colors.textSecondary;
 
-  return (
-    <View style={styles.card}>
-      {/* SAVE BUTTON */}
-      <View style={styles.saveButton}>
-        <Text
-          onPress={onToggleSave}
-          style={{
-            color: saved ? colors.accent : colors.textSecondary,
-            fontSize: 18,
-            fontWeight: "700",
-          }}
-        >
-          {saved ? "★" : "☆"}
-        </Text>
-      </View>
-
-      {/* Matchup */}
-      <Text style={styles.matchup}>
-        {away} @ {home}
+  // ---------------------------
+  // SWIPE ACTION (RIGHT)
+  // ---------------------------
+  const renderRightActions = () => (
+    <View style={styles.swipeAction}>
+      <Text style={styles.swipeText}>
+        {saved ? "Unsave" : "Save"}
       </Text>
+    </View>
+  );
 
-      {/* Player */}
-      <Text style={styles.player}>{player}</Text>
+  return (
+    <Swipeable
+      renderRightActions={renderRightActions}
+      onSwipeableOpen={onToggleSave}
+      overshootRight={false}
+    >
+      <View style={styles.card}>
+        {/* STAR SAVE BUTTON */}
+        <View style={styles.saveButton}>
+          <Text
+            onPress={onToggleSave}
+            style={{
+              color: saved ? colors.accent : colors.textSecondary,
+              fontSize: 18,
+              fontWeight: "700",
+            }}
+          >
+            {saved ? "★" : "☆"}
+          </Text>
+        </View>
 
-      {/* Market + Odds */}
-      <View style={styles.marketRow}>
-        <Text style={styles.market}>
-          {market} • {line}
+        {/* Matchup */}
+        <Text style={styles.matchup}>
+          {away} @ {home}
         </Text>
 
-        <Text style={styles.odds}>{oddsLabel}</Text>
-      </View>
+        {/* Player */}
+        <Text style={styles.player}>{player}</Text>
 
-      {/* Decision row */}
-      <View style={styles.row}>
-        <Text style={styles.hit}>{hitPct}% HIT</Text>
+        {/* Market + Odds */}
+        <View style={styles.marketRow}>
+          <Text style={styles.market}>
+            {market} • {line}
+          </Text>
 
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <Text style={styles.edge}>+{edgePct}% EDGE</Text>
-
-          <View
-            style={[
-              styles.evBadge,
-              isPositiveEV
-                ? styles.evPositive
-                : isNeutralEV
-                ? styles.evNeutral
-                : styles.evNegative,
-            ]}
-          >
-            <Text
-              style={[
-                styles.evText,
-                {
-                  color: isPositiveEV
-                    ? colors.success
-                    : isNeutralEV
-                    ? colors.accent
-                    : colors.textSecondary,
-                },
-              ]}
-            >
-              {isPositiveEV ? "+EV" : isNeutralEV ? "EV" : "LOW"}
-            </Text>
-          </View>
+          <Text style={styles.odds}>{oddsLabel}</Text>
         </View>
-      </View>
 
-      {/* Divider */}
-      <View style={styles.divider} />
+        {/* Decision row */}
+        <View style={styles.row}>
+          <Text style={styles.hit}>{hitPct}% HIT</Text>
 
-      {/* Confidence */}
-      {confidence !== undefined && (
-        <View style={styles.confidenceRow}>
-          <View style={styles.confidenceBar}>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Text style={styles.edge}>+{edgePct}% EDGE</Text>
+
             <View
               style={[
-                styles.confidenceFill,
-                {
-                  width: `${confidence}%`,
-                  backgroundColor: confidenceColor,
-                },
+                styles.evBadge,
+                isPositiveEV
+                  ? styles.evPositive
+                  : isNeutralEV
+                  ? styles.evNeutral
+                  : styles.evNegative,
               ]}
-            />
+            >
+              <Text
+                style={[
+                  styles.evText,
+                  {
+                    color: isPositiveEV
+                      ? colors.success
+                      : isNeutralEV
+                      ? colors.accent
+                      : colors.textSecondary,
+                  },
+                ]}
+              >
+                {isPositiveEV ? "+EV" : isNeutralEV ? "EV" : "LOW"}
+              </Text>
+            </View>
           </View>
-
-          <Text style={styles.confidenceLabel}>{confidence}</Text>
         </View>
-      )}
-    </View>
+
+        {/* Divider */}
+        <View style={styles.divider} />
+
+        {/* Confidence */}
+        {confidence !== undefined && (
+          <View style={styles.confidenceRow}>
+            <View style={styles.confidenceBar}>
+              <View
+                style={[
+                  styles.confidenceFill,
+                  {
+                    width: `${confidence}%`,
+                    backgroundColor: confidenceColor,
+                  },
+                ]}
+              />
+            </View>
+
+            <Text style={styles.confidenceLabel}>{confidence}</Text>
+          </View>
+        )}
+      </View>
+    </Swipeable>
   );
 }
 
@@ -152,6 +170,7 @@ const styles = StyleSheet.create({
     position: "relative",
   },
 
+  // ---------- SAVE ----------
   saveButton: {
     position: "absolute",
     top: 10,
@@ -159,6 +178,22 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
 
+  swipeAction: {
+    backgroundColor: colors.accent,
+    justifyContent: "center",
+    alignItems: "center",
+    width: 90,
+    marginVertical: 12,
+    borderRadius: 20,
+  },
+
+  swipeText: {
+    color: colors.bg,
+    fontWeight: "700",
+    fontSize: textStyles.label,
+  },
+
+  // ---------- TEXT ----------
   matchup: {
     color: colors.textSecondary,
     fontSize: textStyles.label,
@@ -215,6 +250,7 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
 
+  // ---------- CONFIDENCE ----------
   confidenceRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -241,6 +277,7 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
 
+  // ---------- EV ----------
   evBadge: {
     paddingHorizontal: 8,
     paddingVertical: 3,

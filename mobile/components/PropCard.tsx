@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet } from "react-native";
 import colors from "../theme/color";
-import { text as textStyles } from "../theme/text";
+import textStyles from "../theme/text";
 
 type PropCardProps = {
   player: string;

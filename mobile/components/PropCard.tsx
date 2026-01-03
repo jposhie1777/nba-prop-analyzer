@@ -16,6 +16,10 @@ type PropCardProps = {
   away: string;
 
   confidence?: number;
+
+  // SAVE BET
+  saved?: boolean;
+  onToggleSave?: () => void;
 };
 
 export default function PropCard({
@@ -28,10 +32,13 @@ export default function PropCard({
   home,
   away,
   confidence,
+  saved = false,
+  onToggleSave,
 }: PropCardProps) {
   const hitPct = Math.round(hitRate * 100);
   const edgePct = Math.round(edge * 100);
   const oddsLabel = odds > 0 ? `+${odds}` : `${odds}`;
+
   const isPositiveEV = edge >= 0.1;   // 10%+
   const isNeutralEV = edge >= 0.05;   // 5–10%
 
@@ -44,6 +51,20 @@ export default function PropCard({
 
   return (
     <View style={styles.card}>
+      {/* SAVE BUTTON */}
+      <View style={styles.saveButton}>
+        <Text
+          onPress={onToggleSave}
+          style={{
+            color: saved ? colors.accent : colors.textSecondary,
+            fontSize: 18,
+            fontWeight: "700",
+          }}
+        >
+          {saved ? "★" : "☆"}
+        </Text>
+      </View>
+
       {/* Matchup */}
       <Text style={styles.matchup}>
         {away} @ {home}
@@ -57,19 +78,17 @@ export default function PropCard({
         <Text style={styles.market}>
           {market} • {line}
         </Text>
-      
-        <Text style={styles.odds}>
-          {oddsLabel}
-        </Text>
+
+        <Text style={styles.odds}>{oddsLabel}</Text>
       </View>
 
       {/* Decision row */}
       <View style={styles.row}>
         <Text style={styles.hit}>{hitPct}% HIT</Text>
-      
+
         <View style={{ flexDirection: "row", alignItems: "center" }}>
           <Text style={styles.edge}>+{edgePct}% EDGE</Text>
-      
+
           <View
             style={[
               styles.evBadge,
@@ -115,10 +134,8 @@ export default function PropCard({
               ]}
             />
           </View>
-      
-          <Text style={styles.confidenceLabel}>
-            {confidence}
-          </Text>
+
+          <Text style={styles.confidenceLabel}>{confidence}</Text>
         </View>
       )}
     </View>
@@ -132,6 +149,14 @@ const styles = StyleSheet.create({
     padding: 16,
     marginHorizontal: 16,
     marginVertical: 12,
+    position: "relative",
+  },
+
+  saveButton: {
+    position: "absolute",
+    top: 10,
+    right: 12,
+    zIndex: 10,
   },
 
   matchup: {
@@ -147,9 +172,22 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
 
+  marketRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+
   market: {
     color: colors.textSecondary,
     fontSize: textStyles.subtitle,
+  },
+
+  odds: {
+    color: colors.textSecondary,
+    fontSize: textStyles.label,
+    fontWeight: "600",
   },
 
   row: {
@@ -177,16 +215,12 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
 
-  confidence: {
-    color: colors.textSecondary,
-    fontSize: textStyles.label,
-  },
   confidenceRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
   },
-  
+
   confidenceBar: {
     flex: 1,
     height: 6,
@@ -194,52 +228,39 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.08)",
     overflow: "hidden",
   },
-  
+
   confidenceFill: {
     height: "100%",
     borderRadius: 4,
-    backgroundColor: colors.accent,
   },
-  
+
   confidenceLabel: {
     color: colors.textSecondary,
     fontSize: textStyles.label,
     width: 32,
     textAlign: "right",
   },
+
   evBadge: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
     marginLeft: 8,
   },
-  
+
   evPositive: {
     backgroundColor: "rgba(61,255,181,0.15)",
   },
-  
+
   evNeutral: {
     backgroundColor: "rgba(108,124,255,0.15)",
   },
-  
+
   evNegative: {
     backgroundColor: "rgba(255,255,255,0.08)",
   },
-  
+
   evText: {
-    fontSize: textStyles.label,
-    fontWeight: "600",
-  },
-  
-  marketRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  
-  odds: {
-    color: colors.textSecondary,
     fontSize: textStyles.label,
     fontWeight: "600",
   },

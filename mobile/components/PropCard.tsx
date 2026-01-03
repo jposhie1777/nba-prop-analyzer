@@ -175,7 +175,6 @@ export default function PropCard({
   // SAVE ANIMATION
   // ---------------------------
   const scale = useSharedValue(1);
-  const opacity = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -185,11 +184,7 @@ export default function PropCard({
     if (saved) {
       scale.value = withSpring(1.05, { damping: 12 });
       scale.value = withSpring(1, { damping: 14 });
-    } else {
-      opacity.value = withTiming(0.85, { duration: 110 }, () => {
-        opacity.value = withTiming(1, { duration: 160 });
-      });
-    }
+    } 
   }, [saved]);
 
   const handleToggleSave = () => {

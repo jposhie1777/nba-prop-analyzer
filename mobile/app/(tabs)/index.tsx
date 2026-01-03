@@ -13,6 +13,8 @@ export default function HomeScreen() {
   const [evOnly, setEvOnly] = useState(false);
   const [sortBy, setSortBy] = useState<"edge" | "confidence">("edge");
   const [minConfidence, setMinConfidence] = useState(0);
+  const [minOdds, setMinOdds] = useState(-300);
+  const [maxOdds, setMaxOdds] = useState(300);
 
   // ---------------------------
   // DERIVE AVAILABLE MARKETS
@@ -31,13 +33,14 @@ export default function HomeScreen() {
         if (marketFilter && p.market !== marketFilter) return false;
         if (evOnly && p.edge < 0.1) return false;
         if (p.confidence !== undefined && p.confidence < minConfidence) return false;
+        if (p.odds < minOdds || p.odds > maxOdds) return false;
         return true;
       })
       .sort((a, b) => {
         if (sortBy === "edge") return b.edge - a.edge;
         return (b.confidence ?? 0) - (a.confidence ?? 0);
       });
-  }, [marketFilter, evOnly, sortBy, minConfidence]);
+  }, [marketFilter, evOnly, minConfidence, minOdds, maxOdds, sortBy]);
 
   // ---------------------------
   // RENDER
@@ -107,6 +110,42 @@ export default function HomeScreen() {
           />
         </View>
 
+        {/* ODDS FILTER */}
+        <View style={{ marginTop: 16 }}>
+          <Text style={{ color: colors.textSecondary, marginBottom: 6 }}>
+            Odds Range
+          </Text>
+        
+          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+            Min: {minOdds}
+          </Text>
+        
+          <Slider
+            minimumValue={-300}
+            maximumValue={300}
+            step={10}
+            value={minOdds}
+            onValueChange={setMinOdds}
+            minimumTrackTintColor={colors.accent}
+            maximumTrackTintColor="rgba(255,255,255,0.2)"
+            thumbTintColor={colors.accent}
+          />
+        
+          <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 8 }}>
+            Max: {maxOdds}
+          </Text>
+        
+          <Slider
+            minimumValue={-300}
+            maximumValue={300}
+            step={10}
+            value={maxOdds}
+            onValueChange={setMaxOdds}
+            minimumTrackTintColor={colors.accent}
+            maximumTrackTintColor="rgba(255,255,255,0.2)"
+            thumbTintColor={colors.accent}
+          />
+        </View>
         {/* SORT TOGGLE */}
         <Text
           style={{ color: colors.accent, marginTop: 4 }}

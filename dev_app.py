@@ -3765,6 +3765,15 @@ with tab_props:
                 index=1,
             )
 
+        window_col = {
+            "L5": "hit_rate_l5",
+            "L10": "hit_rate_l10",
+            "L20": "hit_rate_l20",
+        }.get(f_window)
+        if window_col is None:
+            st.error("Invalid hit window selected")
+            st.stop()
+        
         default_books = [
             b for b in book_list
             if b.lower() in ("draftkings", "fanduel")

@@ -475,13 +475,14 @@ const styles = StyleSheet.create({
   },
 
   player: {
-    color: "red",
+    color: "#0F172A", // slate-900
     fontSize: textStyles.title,
     fontWeight: "800",
+    letterSpacing: 0.2,
   },
 
   marketLine: {
-    color: colors.textSecondary,
+    color: "#334155", // slate-700
     fontSize: textStyles.subtitle,
     fontWeight: "700",
     marginTop: 2,
@@ -489,7 +490,7 @@ const styles = StyleSheet.create({
   },
 
   matchup: {
-    color: colors.textSecondary,
+    color: "#475569", // slate-600
     fontSize: textStyles.label,
     marginTop: 2,
   },

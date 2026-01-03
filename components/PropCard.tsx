@@ -1,62 +1,107 @@
 import { View, Text, StyleSheet } from "react-native";
+import colors from "../theme/colors";
+import text from "../theme/text";
 
-export default function PropCard() {
+type PropCardProps = {
+  matchup?: string;
+  player?: string;
+  market?: string;
+  hitRate?: number;
+  edge?: number;
+  confidence?: number;
+};
+
+export default function PropCard({
+  matchup = "CHA @ MIL",
+  player = "Miles Bridges",
+  market = "Points • Over 18.5",
+  hitRate = 82,
+  edge = 11,
+  confidence = 78,
+}: PropCardProps) {
   return (
     <View style={styles.card}>
-      <Text style={styles.matchup}>CHA @ MIL</Text>
+      {/* Matchup */}
+      <Text style={styles.matchup}>{matchup}</Text>
 
-      <Text style={styles.player}>Miles Bridges</Text>
-      <Text style={styles.market}>Points • Over 18.5</Text>
+      {/* Player */}
+      <Text style={styles.player}>{player}</Text>
 
+      {/* Market */}
+      <Text style={styles.market}>{market}</Text>
+
+      {/* Decision row */}
       <View style={styles.row}>
-        <Text style={styles.stat}>82% HIT</Text>
-        <Text style={styles.edge}>+11% EDGE</Text>
+        <Text style={styles.hit}>{hitRate}% HIT</Text>
+        <Text style={styles.edge}>+{edge}% EDGE</Text>
       </View>
 
-      <Text style={styles.confidence}>Confidence ▰▰▰▰▰▰▱▱ 78</Text>
+      {/* Divider */}
+      <View style={styles.divider} />
+
+      {/* Confidence */}
+      <Text style={styles.confidence}>
+        Confidence ▰▰▰▰▰▰▱▱ {confidence}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "#141A2E",
+    backgroundColor: colors.card,
     borderRadius: 20,
     padding: 16,
-    margin: 16,
+    marginHorizontal: 16,
+    marginVertical: 12,
   },
+
   matchup: {
-    color: "#A8B0D3",
-    fontSize: 12,
+    color: colors.textSecondary,
+    fontSize: text.label,
     marginBottom: 6,
   },
+
   player: {
-    color: "#FFFFFF",
-    fontSize: 18,
+    color: colors.textPrimary,
+    fontSize: text.title,
     fontWeight: "600",
+    marginBottom: 2,
   },
+
   market: {
-    color: "#A8B0D3",
-    fontSize: 14,
+    color: colors.textSecondary,
+    fontSize: text.subtitle,
     marginBottom: 12,
   },
+
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 10,
   },
-  stat: {
-    color: "#3DFFB5",
-    fontSize: 16,
+
+  hit: {
+    color: colors.success,
+    fontSize: text.stat,
     fontWeight: "600",
   },
+
   edge: {
-    color: "#6C7CFF",
-    fontSize: 16,
+    color: colors.accent,
+    fontSize: text.stat,
     fontWeight: "600",
   },
+
+  divider: {
+    height: 1,
+    backgroundColor: colors.divider,
+    marginVertical: 8,
+  },
+
   confidence: {
-    color: "#A8B0D3",
-    fontSize: 12,
+    color: colors.textSecondary,
+    fontSize: text.label,
   },
 });

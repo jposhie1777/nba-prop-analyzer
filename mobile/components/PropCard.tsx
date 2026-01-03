@@ -31,6 +31,8 @@ export default function PropCard({
 }: PropCardProps) {
   const hitPct = Math.round(hitRate * 100);
   const edgePct = Math.round(edge * 100);
+  const isPositiveEV = edge >= 0.1;   // 10%+
+  const isNeutralEV = edge >= 0.05;   // 5–10%
 
   const confidenceColor =
     confidence !== undefined && confidence >= 75
@@ -57,7 +59,36 @@ export default function PropCard({
       {/* Decision row */}
       <View style={styles.row}>
         <Text style={styles.hit}>{hitPct}% HIT</Text>
-        <Text style={styles.edge}>+{edgePct}% EDGE</Text>
+      
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Text style={styles.edge}>+{edgePct}% EDGE</Text>
+      
+          <View
+            style={[
+              styles.evBadge,
+              isPositiveEV
+                ? styles.evPositive
+                : isNeutralEV
+                ? styles.evNeutral
+                : styles.evNegative,
+            ]}
+          >
+            <Text
+              style={[
+                styles.evText,
+                {
+                  color: isPositiveEV
+                    ? colors.success
+                    : isNeutralEV
+                    ? colors.accent
+                    : colors.textSecondary,
+                },
+              ]}
+            >
+              {isPositiveEV ? "+EV" : isNeutralEV ? "EV" : "LOW"}
+            </Text>
+          </View>
+        </View>
       </View>
 
       {/* Divider */}
@@ -169,5 +200,28 @@ const styles = StyleSheet.create({
     fontSize: textStyles.label,
     width: 32,
     textAlign: "right",
+  },
+  evBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  
+  evPositive: {
+    backgroundColor: "rgba(61,255,181,0.15)",
+  },
+  
+  evNeutral: {
+    backgroundColor: "rgba(108,124,255,0.15)",
+  },
+  
+  evNegative: {
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  
+  evText: {
+    fontSize: textStyles.label,
+    fontWeight: "600",
   },
 });

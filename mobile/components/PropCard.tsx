@@ -352,20 +352,20 @@ const styles = StyleSheet.create({
   // ---------------------------
   outer: {
     marginHorizontal: 14,
-    marginVertical: 10, // ↑ slightly more breathing room
+    marginVertical: 10, // was 9
   },
 
   card: {
     backgroundColor: "#FFFFFF",
     borderRadius: 18,
-    paddingVertical: 16, // ↑ vertical rhythm
+    paddingVertical: 16, // was 14
     paddingHorizontal: 14,
 
     borderWidth: 1,
     borderColor: "#E5E7EB",
 
-    shadowColor: "#000",
-    shadowOpacity: 0.06, // ↓ softer shadow
+    shadowColor: "#0F172A", // was #000
+    shadowOpacity: 0.06,    // was 0.08
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 5 },
     elevation: 3,
@@ -401,8 +401,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
 
-    backgroundColor: "#FFFFFF",
-    borderWidth: 0,
+    backgroundColor: "#FFFFFF", // was #F3F4F6
+    borderWidth: 0,             // was 1
+    borderColor: "#E5E7EB",
 
     shadowColor: "#000",
     shadowOpacity: 0.05,
@@ -445,20 +446,24 @@ const styles = StyleSheet.create({
   },
 
   teamLogo: {
-    width: 20, // ↓ slightly smaller
+    width: 20, // was 22
     height: 20,
-    borderRadius: 5,
-    backgroundColor: "#F3F4F6",
-    opacity: 0.9,
+    borderRadius: 6,
+    backgroundColor: "#FFFFFF", // was #F3F4F6
+
+    borderWidth: 1,             // added
+    borderColor: "#E5E7EB",     // added
+
+    padding: 2,                 // added
   },
 
   teamLogoPlaceholder: {
-    width: 20,
+    width: 20, // was 22
     height: 20,
-    borderRadius: 5,
-    backgroundColor: "#F3F4F6",
+    borderRadius: 6,
+    backgroundColor: "#E5E7EB", // was #F3F4F6
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#D1D5DB",     // was #E5E7EB
   },
 
   // ---------------------------
@@ -466,7 +471,7 @@ const styles = StyleSheet.create({
   // ---------------------------
   center: {
     flex: 1,
-    alignItems: "flex-start", // ⬅️ key hierarchy fix
+    alignItems: "flex-start", // was center
     paddingHorizontal: 6,
   },
 
@@ -495,7 +500,8 @@ const styles = StyleSheet.create({
   // ODDS (RIGHT COLUMN)
   // ---------------------------
   right: {
-    width: 108,
+    width: 120,      // was 108
+    paddingTop: 36,  // added
     alignItems: "flex-end",
     justifyContent: "center",
     gap: 6,
@@ -510,9 +516,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 10,
 
-    backgroundColor: "#F9FAFB", // ↓ softer than save button
+    backgroundColor: "#F1F5F9", // was #F3F4F6
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#E2E8F0",     // was #E5E7EB
   },
 
   bookLogo: {
@@ -545,9 +551,9 @@ const styles = StyleSheet.create({
   // ---------------------------
   divider: {
     height: 1,
-    backgroundColor: "#E5E7EB", // ↓ lighter
-    marginTop: 10,
-    marginBottom: 8,
+    backgroundColor: "#E5E7EB", // was #D1D5DB
+    marginTop: 10,              // was 12
+    marginBottom: 8,            // was 10
   },
 
   // ---------------------------
@@ -588,8 +594,8 @@ const styles = StyleSheet.create({
     alignItems: "baseline",
     gap: 6,
 
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    paddingVertical: 4,   // was 6
+    paddingHorizontal: 8, // was 10
     borderRadius: 10,
 
     backgroundColor: "#FFFFFF",
@@ -599,13 +605,13 @@ const styles = StyleSheet.create({
 
   badgeLabel: {
     color: colors.textSecondary,
-    fontSize: 9,
+    fontSize: 9,          // was 10
     fontWeight: "900",
     letterSpacing: 0.8,
   },
 
   badgeValue: {
-    fontSize: 15,
+    fontSize: 15,         // was 14
     fontWeight: "900",
     letterSpacing: 0.2,
   },
@@ -618,9 +624,9 @@ const styles = StyleSheet.create({
   },
 
   barTrack: {
-    height: 6, // ↓ slimmer, status-like
+    height: 6,                     // was 8
     borderRadius: 999,
-    backgroundColor: "#EEF2F7",
+    backgroundColor: "#D1FAE5",    // was #E5E7EB
     overflow: "hidden",
   },
 

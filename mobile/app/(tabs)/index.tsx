@@ -1,5 +1,6 @@
 import { View, ScrollView, Text } from "react-native";
 import { useMemo, useState } from "react";
+import Slider from "@react-native-community/slider";
 import PropCard from "../../components/PropCard";
 import colors from "../../theme/color";
 import { MOCK_PROPS } from "../../data/props";
@@ -11,6 +12,7 @@ export default function HomeScreen() {
   const [marketFilter, setMarketFilter] = useState<string | null>(null);
   const [evOnly, setEvOnly] = useState(false);
   const [sortBy, setSortBy] = useState<"edge" | "confidence">("edge");
+  const [minConfidence, setMinConfidence] = useState(0);
 
   // ---------------------------
   // DERIVE AVAILABLE MARKETS
@@ -28,13 +30,14 @@ export default function HomeScreen() {
       .filter((p) => {
         if (marketFilter && p.market !== marketFilter) return false;
         if (evOnly && p.edge < 0.1) return false;
+        if (p.confidence !== undefined && p.confidence < minConfidence) return false;
         return true;
       })
       .sort((a, b) => {
         if (sortBy === "edge") return b.edge - a.edge;
         return (b.confidence ?? 0) - (a.confidence ?? 0);
       });
-  }, [marketFilter, evOnly, sortBy]);
+  }, [marketFilter, evOnly, sortBy, minConfidence]);
 
   // ---------------------------
   // RENDER
@@ -84,6 +87,24 @@ export default function HomeScreen() {
               </Text>
             );
           })}
+        </View>
+
+        {/* CONFIDENCE SLIDER */}
+        <View style={{ marginTop: 12 }}>
+          <Text style={{ color: colors.textSecondary, marginBottom: 4 }}>
+            Confidence ≥ {minConfidence}
+          </Text>
+        
+          <Slider
+            minimumValue={0}
+            maximumValue={100}
+            step={5}
+            value={minConfidence}
+            onValueChange={setMinConfidence}
+            minimumTrackTintColor={colors.accent}
+            maximumTrackTintColor="rgba(255,255,255,0.2)"
+            thumbTintColor={colors.accent}
+          />
         </View>
 
         {/* SORT TOGGLE */}

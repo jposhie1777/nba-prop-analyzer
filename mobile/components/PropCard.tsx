@@ -179,7 +179,6 @@ export default function PropCard({
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
-    opacity: opacity.value,
   }));
 
   useEffect(() => {

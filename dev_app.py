@@ -3801,62 +3801,20 @@ with tab_props:
     # --------------------------------------------------
     # APPLY FILTERS
     # --------------------------------------------------
-    df = props_df.copy()
+    from services.edges import get_edges_dataframe
 
-    if "bet_type" in df.columns:
-        df["bet_type"] = (
-            df["bet_type"]
-            .astype(str)
-            .str.strip()
-            .str.lower()
-            .replace({
-                "count": "Over",
-                "binary": "Over",
-                "yes": "Over",
-                "over": "Over",
-                "under": "Under",
-            })
-        )
-
-    if "bet_type" in df.columns:
-        df = df[df["bet_type"].isin(f_bet_type)]
-
-    if f_market:
-        if "prop_type" in df.columns:
-            df = df[df["prop_type"].isin(f_market)]
-        elif "market" in df.columns:
-            df = df[df["market"].isin(f_market)]
-
-
-    if "bookmaker" in df.columns and f_books:
-        df = df[df["bookmaker"].isin(f_books)]
-
-    if "price" in df.columns:
-        df = df[(df["price"] >= f_min_odds) & (df["price"] <= f_max_odds)]
-
-    if show_games and f_games and "home_team" in df.columns and "visitor_team" in df.columns:
-        game_display = df["home_team"].astype(str) + " vs " + df["visitor_team"].astype(str)
-        df = df[game_display.isin(f_games)]
-
-    window_col = {
-        "L5": "hit_rate_l5",
-        "L10": "hit_rate_l10",
-        "L20": "hit_rate_l20",
-    }[f_window]
-
-
-    hit_rate_decimal = f_min_hit / 100.0
-    if window_col in df.columns:
-        df = df[df[window_col] >= hit_rate_decimal]
-
-    if show_ev_only and window_col in df.columns:
-        implied = df["implied_prob"].fillna(
-            df["price"].apply(compute_implied_prob)
-        )
-        df = df[df[window_col] > implied]
-
-    if window_col in df.columns and "price" in df.columns:
-        df = df.sort_values([window_col, "price"], ascending=[False, True])
+    df = get_edges_dataframe(
+        props_df=props_df,
+        window_col=window_col,
+        bet_types=f_bet_type,
+        markets=f_market,
+        books=f_books,
+        odds_range=(f_min_odds, f_max_odds),
+        min_hit_rate=f_min_hit / 100.0,
+        show_games=show_games,
+        games=f_games,
+        ev_only=show_ev_only,
+    )
 
     # --------------------------------------------------
     # PAGINATION

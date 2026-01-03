@@ -3832,13 +3832,9 @@ with tab_props:
     df = get_edges_dataframe(
         props_df=props_df,
         window_col=window_col,
-        bet_types=f_bet_type,
-        markets=f_market,
+        min_hit_rate=f_min_hit / 100.0,
         books=f_books,
         odds_range=(f_min_odds, f_max_odds),
-        min_hit_rate=f_min_hit / 100.0,
-        show_games=show_games,
-        games=f_games,
         ev_only=show_ev_only,
     )
 

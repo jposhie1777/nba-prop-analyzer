@@ -3245,6 +3245,23 @@ def render_placeholder_game(g):
     )
 
 def render_live_game(g, live):
+    # -----------------------------------
+    # Defensive guard: live data integrity
+    # -----------------------------------
+    required = [
+        "home_score", "away_score", "period",
+        "q1_home", "q2_home", "q3_home", "q4_home",
+        "q1_away", "q2_away", "q3_away", "q4_away",
+    ]
+
+    missing = [c for c in required if c not in live.index]
+    if missing:
+        st.warning(f"Live data missing columns: {missing}")
+        return
+
+    # -----------------------------------
+    # Safe render
+    # -----------------------------------
     render_scoreboard_card(
         home=g.home_team_abbr,
         away=g.away_team_abbr,
@@ -3253,14 +3270,14 @@ def render_live_game(g, live):
         center_top=live["period"],
         center_bottom="LIVE",
         quarters={
-            "q1_home": live.get("q1_home"),
-            "q2_home": live.get("q2_home"),
-            "q3_home": live.get("q3_home"),
-            "q4_home": live.get("q4_home"),
-            "q1_away": live.get("q1_away"),
-            "q2_away": live.get("q2_away"),
-            "q3_away": live.get("q3_away"),
-            "q4_away": live.get("q4_away"),
+            "q1_home": live["q1_home"],
+            "q2_home": live["q2_home"],
+            "q3_home": live["q3_home"],
+            "q4_home": live["q4_home"],
+            "q1_away": live["q1_away"],
+            "q2_away": live["q2_away"],
+            "q3_away": live["q3_away"],
+            "q4_away": live["q4_away"],
         },
     )
 

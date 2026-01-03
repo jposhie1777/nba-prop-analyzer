@@ -31,6 +31,7 @@ export default function PropCard({
 }: PropCardProps) {
   const hitPct = Math.round(hitRate * 100);
   const edgePct = Math.round(edge * 100);
+  const oddsLabel = odds > 0 ? `+${odds}` : `${odds}`;
   const isPositiveEV = edge >= 0.1;   // 10%+
   const isNeutralEV = edge >= 0.05;   // 5–10%
 
@@ -51,10 +52,16 @@ export default function PropCard({
       {/* Player */}
       <Text style={styles.player}>{player}</Text>
 
-      {/* Market */}
-      <Text style={styles.market}>
-        {market} • {line}
-      </Text>
+      {/* Market + Odds */}
+      <View style={styles.marketRow}>
+        <Text style={styles.market}>
+          {market} • {line}
+        </Text>
+      
+        <Text style={styles.odds}>
+          {oddsLabel}
+        </Text>
+      </View>
 
       {/* Decision row */}
       <View style={styles.row}>
@@ -143,7 +150,6 @@ const styles = StyleSheet.create({
   market: {
     color: colors.textSecondary,
     fontSize: textStyles.subtitle,
-    marginBottom: 12,
   },
 
   row: {
@@ -221,6 +227,19 @@ const styles = StyleSheet.create({
   },
   
   evText: {
+    fontSize: textStyles.label,
+    fontWeight: "600",
+  },
+  
+  marketRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  
+  odds: {
+    color: colors.textSecondary,
     fontSize: textStyles.label,
     fontWeight: "600",
   },

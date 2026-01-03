@@ -3248,21 +3248,22 @@ def render_live_game(g, live):
     render_scoreboard_card(
         home=g.home_team_abbr,
         away=g.away_team_abbr,
-        home_score=live.home_score,
-        away_score=live.away_score,
-        center_top=live.period,
+        home_score=live["home_score"],
+        away_score=live["away_score"],
+        center_top=live["period"],
         center_bottom="LIVE",
         quarters={
-            "q1_home": live.q1_home,
-            "q2_home": live.q2_home,
-            "q3_home": live.q3_home,
-            "q4_home": live.q4_home,
-            "q1_away": live.q1_away,
-            "q2_away": live.q2_away,
-            "q3_away": live.q3_away,
-            "q4_away": live.q4_away,
+            "q1_home": live.get("q1_home"),
+            "q2_home": live.get("q2_home"),
+            "q3_home": live.get("q3_home"),
+            "q4_home": live.get("q4_home"),
+            "q1_away": live.get("q1_away"),
+            "q2_away": live.get("q2_away"),
+            "q3_away": live.get("q3_away"),
+            "q4_away": live.get("q4_away"),
         },
     )
+
 
 def render_final_game(g):
     render_scoreboard_card(
@@ -3788,6 +3789,30 @@ with tab_live:
     today_df = load_today_games()
     live_df  = load_live_games()
     
+    if not live_df.empty:
+        live_df = live_df.rename(columns={
+            "home_score_q1": "q1_home",
+            "home_score_q2": "q2_home",
+            "home_score_q3": "q3_home",
+            "home_score_q4": "q4_home",
+
+            "away_score_q1": "q1_away",
+            "away_score_q2": "q2_away",
+            "away_score_q3": "q3_away",
+            "away_score_q4": "q4_away",
+        })
+
+        # Derive display period (UI-only)
+        def derive_period(row):
+            if row.get("state") != "LIVE":
+                return ""
+            for q in ("4", "3", "2", "1"):
+                if pd.notna(row.get(f"q{q}_home")) or pd.notna(row.get(f"q{q}_away")):
+                    return f"Q{q}"
+            return "LIVE"
+
+        live_df["period"] = live_df.apply(derive_period, axis=1)
+
     # --------------------------------------------------
     # Normalize UTC start time → EST (UI-only)
     # --------------------------------------------------
@@ -3816,6 +3841,7 @@ with tab_live:
             axis=1,
         )
 
+        # Primary sort: game state
         today_df["state_rank"] = today_df["game_state"].map({
             "LIVE": 0,
             "UPCOMING": 1,
@@ -3823,9 +3849,17 @@ with tab_live:
         })
 
         today_df = today_df.sort_values(
-            by=["state_rank", "start_time_est"],
-            ascending=[True, True],
+            by=["state_rank"],
+            ascending=True,
         )
+
+        # Secondary sort ONLY for upcoming games
+        upcoming_mask = today_df["game_state"] == "UPCOMING"
+        today_df.loc[upcoming_mask] = (
+            today_df.loc[upcoming_mask]
+            .sort_values("start_time_est")
+        )
+
 
         for _, g in today_df.iterrows():
             if g.game_state == "LIVE":

@@ -1,4 +1,5 @@
-import { View, ScrollView } from "react-native";
+import { View, ScrollView, Text } from "react-native";
+import { useMemo, useState } from "react";
 import PropCard from "../../components/PropCard";
 import colors from "../../theme/color";
 import { MOCK_PROPS } from "../../data/props";

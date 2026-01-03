@@ -161,10 +161,15 @@ export default function PropCard({
     }
   }, [resolvedBooks]);
 
-  const flashStyle = useAnimatedStyle(() => ({
-    backgroundColor:
-      flash.value > 0 ? "rgba(61,255,181,0.10)" : "rgba(0,0,0,0)",
-  }));
+  const flashStyle = useAnimatedStyle(() => {
+    if (flash.value > 0) {
+      return {
+        backgroundColor: "rgba(61,255,181,0.10)",
+      };
+    }
+  
+    return {};
+  });
 
   // ---------------------------
   // SAVE ANIMATION

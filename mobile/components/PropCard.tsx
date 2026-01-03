@@ -32,6 +32,13 @@ export default function PropCard({
   const hitPct = Math.round(hitRate * 100);
   const edgePct = Math.round(edge * 100);
 
+  const confidenceColor =
+    confidence !== undefined && confidence >= 75
+      ? colors.success
+      : confidence !== undefined && confidence >= 60
+      ? colors.accent
+      : colors.textSecondary;
+
   return (
     <View style={styles.card}>
       {/* Matchup */}
@@ -58,9 +65,23 @@ export default function PropCard({
 
       {/* Confidence */}
       {confidence !== undefined && (
-        <Text style={styles.confidence}>
-          Confidence ▰▰▰▰▰▰▱▱ {confidence}
-        </Text>
+        <View style={styles.confidenceRow}>
+          <View style={styles.confidenceBar}>
+            <View
+              style={[
+                styles.confidenceFill,
+                {
+                  width: `${confidence}%`,
+                  backgroundColor: confidenceColor,
+                },
+              ]}
+            />
+          </View>
+      
+          <Text style={styles.confidenceLabel}>
+            {confidence}
+          </Text>
+        </View>
       )}
     </View>
   );
@@ -122,5 +143,31 @@ const styles = StyleSheet.create({
   confidence: {
     color: colors.textSecondary,
     fontSize: textStyles.label,
+  },
+  confidenceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  
+  confidenceBar: {
+    flex: 1,
+    height: 6,
+    borderRadius: 4,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    overflow: "hidden",
+  },
+  
+  confidenceFill: {
+    height: "100%",
+    borderRadius: 4,
+    backgroundColor: colors.accent,
+  },
+  
+  confidenceLabel: {
+    color: colors.textSecondary,
+    fontSize: textStyles.label,
+    width: 32,
+    textAlign: "right",
   },
 });

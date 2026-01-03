@@ -1,6 +1,6 @@
-import { View, Text, StyleSheet, Image } from "react-native";
+import { View, Text, StyleSheet, Image, Pressable } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import * as Haptics from "expo-haptics";
 import Animated, {
   useSharedValue,
@@ -80,6 +80,14 @@ type PropCardProps = {
   onToggleSave: () => void;
 };
 
+function normalizeBookKey(name: string) {
+  return name.toLowerCase().replace(/[\s_]/g, "");
+}
+
+function formatOdds(o: number) {
+  return o > 0 ? `+${o}` : `${o}`;
+}
+
 export default function PropCard({
   player,
   market,
@@ -95,24 +103,39 @@ export default function PropCard({
   saved,
   onToggleSave,
 }: PropCardProps) {
-  const hitPct = Math.round(hitRateL10 * 100);
-
-  const confidenceColor =
-    confidence >= 75
-      ? colors.success
-      : confidence >= 60
-      ? colors.accent
-      : colors.textSecondary;
+  const hitPct = Math.round((hitRateL10 ?? 0) * 100);
 
   // ---------------------------
   // MULTI-BOOK NORMALIZATION
   // ---------------------------
-  const resolvedBooks: BookOdds[] =
-    books && books.length > 0
-      ? books
-      : bookmaker
-      ? [{ bookmaker, odds }]
-      : [];
+  const resolvedBooks: BookOdds[] = useMemo(() => {
+    if (books && books.length > 0) return books;
+    if (bookmaker) return [{ bookmaker, odds }];
+    return [];
+  }, [books, bookmaker, odds]);
+
+  // ---------------------------
+  // CONFIDENCE TIER STYLING
+  // ---------------------------
+  const tier = useMemo(() => {
+    if (confidence >= 80) return "elite";
+    if (confidence >= 65) return "good";
+    return "mid";
+  }, [confidence]);
+
+  const accentColor =
+    tier === "elite"
+      ? colors.success
+      : tier === "good"
+      ? colors.accent
+      : "rgba(255,255,255,0.30)";
+
+  const confidenceColor =
+    tier === "elite"
+      ? colors.success
+      : tier === "good"
+      ? colors.accent
+      : colors.textSecondary;
 
   // ---------------------------
   // ODDS CHANGE ANIMATION
@@ -124,28 +147,23 @@ export default function PropCard({
     let changed = false;
 
     resolvedBooks.forEach(({ bookmaker, odds }) => {
-      const key = bookmaker.toLowerCase().replace(/[\s_]/g, "");
+      const key = normalizeBookKey(bookmaker);
       const prev = prevOddsRef.current[key];
 
-      if (prev !== undefined && prev !== odds) {
-        changed = true;
-      }
-
+      if (prev !== undefined && prev !== odds) changed = true;
       prevOddsRef.current[key] = odds;
     });
 
     if (changed) {
       flash.value = withTiming(1, { duration: 120 }, () => {
-        flash.value = withTiming(0, { duration: 500 });
+        flash.value = withTiming(0, { duration: 520 });
       });
     }
   }, [resolvedBooks]);
 
   const flashStyle = useAnimatedStyle(() => ({
     backgroundColor:
-      flash.value > 0
-        ? "rgba(61,255,181,0.12)"
-        : "transparent",
+      flash.value > 0 ? "rgba(61,255,181,0.10)" : "rgba(0,0,0,0)",
   }));
 
   // ---------------------------
@@ -161,213 +179,390 @@ export default function PropCard({
 
   useEffect(() => {
     if (saved) {
-      scale.value = withSpring(1.08, { damping: 12 });
-      scale.value = withSpring(1);
+      scale.value = withSpring(1.05, { damping: 12 });
+      scale.value = withSpring(1, { damping: 14 });
     } else {
-      opacity.value = withTiming(0.7, { duration: 120 });
-      opacity.value = withTiming(1, { duration: 160 });
+      opacity.value = withTiming(0.85, { duration: 110 }, () => {
+        opacity.value = withTiming(1, { duration: 160 });
+      });
     }
   }, [saved]);
 
   const handleToggleSave = () => {
     Haptics.impactAsync(
-      saved
-        ? Haptics.ImpactFeedbackStyle.Light
-        : Haptics.ImpactFeedbackStyle.Medium
+      saved ? Haptics.ImpactFeedbackStyle.Light : Haptics.ImpactFeedbackStyle.Medium
     );
     onToggleSave();
   };
 
+  // ---------------------------
+  // PRESS FEEDBACK (PRO)
+  // ---------------------------
+  const pressScale = useSharedValue(1);
+  const pressAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pressScale.value }],
+  }));
+
+  const onPressIn = () => {
+    pressScale.value = withSpring(0.985, { damping: 18 });
+  };
+
+  const onPressOut = () => {
+    pressScale.value = withSpring(1, { damping: 18 });
+  };
+
   return (
-    <Swipeable
-      overshootRight={false}
-      onSwipeableOpen={handleToggleSave}
-    >
-      <Animated.View style={animatedStyle}>
+    <Swipeable overshootRight={false} onSwipeableOpen={handleToggleSave}>
+      <Animated.View style={[animatedStyle, styles.outer]}>
         <Animated.View style={[styles.card, flashStyle]}>
-          {/* SAVE STAR */}
-          <View style={styles.saveButton}>
-            <Text
-              onPress={handleToggleSave}
-              style={{
-                color: saved ? colors.accent : colors.textSecondary,
-                fontSize: 18,
-                fontWeight: "700",
-              }}
-            >
+          {/* LEFT ACCENT STRIP */}
+          <View style={[styles.accentStrip, { backgroundColor: accentColor }]} />
+
+          {/* TOP-RIGHT SAVE BUTTON */}
+          <Pressable
+            onPress={handleToggleSave}
+            hitSlop={10}
+            style={styles.saveButton}
+          >
+            <Text style={[styles.saveStar, saved ? styles.saveStarOn : styles.saveStarOff]}>
               {saved ? "★" : "☆"}
             </Text>
-          </View>
+          </Pressable>
 
-          {/* HEADER */}
-          <View style={styles.headerRow}>
-            <View style={styles.matchupLeft}>
-              {away && TEAM_LOGOS[away] && (
-                <Image source={{ uri: TEAM_LOGOS[away] }} style={styles.teamLogo} />
-              )}
-              {home && TEAM_LOGOS[home] && (
-                <Image source={{ uri: TEAM_LOGOS[home] }} style={styles.teamLogo} />
-              )}
-            </View>
-
-            <View style={styles.headerCenter}>
-              <Text style={styles.player}>{player}</Text>
-              <Text style={styles.marketCenter}>
-                {market} • {line}
-              </Text>
-              {matchup && (
-                <Text style={styles.matchupText}>{matchup}</Text>
-              )}
-            </View>
-
-            {/* MULTI BOOK ODDS */}
-            <View style={styles.headerRight}>
-              {resolvedBooks.map((b) => {
-                const key = b.bookmaker
-                  .toLowerCase()
-                  .replace(/[\s_]/g, "");
-
-                return (
-                  <View key={key} style={styles.oddsRow}>
-                    {BOOKMAKER_LOGOS[key] && (
-                      <Image
-                        source={BOOKMAKER_LOGOS[key]}
-                        style={styles.bookLogo}
-                        resizeMode="contain"
-                      />
+          {/* WHOLE CARD PRESS FEEL (no action, just feel “native”) */}
+          <Pressable onPressIn={onPressIn} onPressOut={onPressOut}>
+            <Animated.View style={pressAnimStyle}>
+              {/* HEADER */}
+              <View style={styles.headerRow}>
+                {/* LEFT: TEAM LOGOS */}
+                <View style={styles.teams}>
+                  <View style={styles.teamStack}>
+                    {away && TEAM_LOGOS[away] ? (
+                      <Image source={{ uri: TEAM_LOGOS[away] }} style={styles.teamLogo} />
+                    ) : (
+                      <View style={styles.teamLogoPlaceholder} />
                     )}
-                    <Text style={styles.oddsTop}>
-                      {b.odds > 0 ? `+${b.odds}` : b.odds}
+
+                    {home && TEAM_LOGOS[home] ? (
+                      <Image source={{ uri: TEAM_LOGOS[home] }} style={styles.teamLogo} />
+                    ) : (
+                      <View style={styles.teamLogoPlaceholder} />
+                    )}
+                  </View>
+                </View>
+
+                {/* CENTER: TEXT */}
+                <View style={styles.center}>
+                  <Text numberOfLines={1} style={styles.player}>
+                    {player}
+                  </Text>
+
+                  <Text numberOfLines={1} style={styles.marketLine}>
+                    {market} • {line}
+                  </Text>
+
+                  {matchup ? (
+                    <Text numberOfLines={1} style={styles.matchup}>
+                      {matchup}
+                    </Text>
+                  ) : (
+                    <Text numberOfLines={1} style={styles.matchup}>
+                      {" "}
+                    </Text>
+                  )}
+                </View>
+
+                {/* RIGHT: ODDS STACK */}
+                <View style={styles.right}>
+                  {resolvedBooks.length === 0 ? (
+                    <View style={styles.oddsPill}>
+                      <Text style={styles.oddsTextMuted}>—</Text>
+                    </View>
+                  ) : (
+                    resolvedBooks.slice(0, 3).map((b) => {
+                      const key = normalizeBookKey(b.bookmaker);
+
+                      return (
+                        <View key={key} style={styles.oddsPill}>
+                          {BOOKMAKER_LOGOS[key] ? (
+                            <Image
+                              source={BOOKMAKER_LOGOS[key]}
+                              style={styles.bookLogo}
+                              resizeMode="contain"
+                            />
+                          ) : (
+                            <View style={styles.bookLogoPlaceholder} />
+                          )}
+
+                          <Text style={styles.oddsText}>{formatOdds(b.odds)}</Text>
+                        </View>
+                      );
+                    })
+                  )}
+                </View>
+              </View>
+
+              {/* DIVIDER */}
+              <View style={styles.divider} />
+
+              {/* METRICS ROW */}
+              <View style={styles.metricsRow}>
+                <View style={styles.metricLeft}>
+                  <Text style={[styles.hitText, { color: confidenceColor }]}>
+                    {hitPct}% HIT
+                  </Text>
+                  <Text style={styles.metricSub}>Last 10</Text>
+                </View>
+
+                <View style={styles.metricRight}>
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeLabel}>CONF</Text>
+                    <Text style={[styles.badgeValue, { color: confidenceColor }]}>
+                      {confidence}
                     </Text>
                   </View>
-                );
-              })}
-            </View>
-          </View>
+                </View>
+              </View>
 
-          {/* METRICS */}
-          <View style={styles.row}>
-            <Text style={styles.hit}>{hitPct}% HIT</Text>
-          </View>
-
-          {/* CONFIDENCE */}
-          <View style={styles.confidenceRow}>
-            <View style={styles.confidenceBar}>
-              <View
-                style={[
-                  styles.confidenceFill,
-                  {
-                    width: `${confidence}%`,
-                    backgroundColor: confidenceColor,
-                  },
-                ]}
-              />
-            </View>
-            <Text style={styles.confidenceLabel}>{confidence}</Text>
-          </View>
+              {/* CONFIDENCE BAR (TRACK + FILL) */}
+              <View style={styles.barRow}>
+                <View style={styles.barTrack}>
+                  <View
+                    style={[
+                      styles.barFill,
+                      {
+                        width: `${Math.max(0, Math.min(100, confidence))}%`,
+                        backgroundColor: confidenceColor,
+                      },
+                    ]}
+                  />
+                </View>
+              </View>
+            </Animated.View>
+          </Pressable>
         </Animated.View>
       </Animated.View>
     </Swipeable>
   );
 }
 
-// ---------------------------
-// STYLES
-// ---------------------------
 const styles = StyleSheet.create({
+  outer: {
+    marginHorizontal: 14,
+    marginVertical: 9,
+  },
+
   card: {
     backgroundColor: colors.card,
-    borderRadius: 20,
-    padding: 16,
-    marginHorizontal: 16,
-    marginVertical: 12,
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+
+    shadowColor: "#000",
+    shadowOpacity: 0.26,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
+
+    overflow: "hidden",
   },
+
+  accentStrip: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    borderTopLeftRadius: 18,
+    borderBottomLeftRadius: 18,
+  },
+
   saveButton: {
     position: "absolute",
     top: 10,
     right: 12,
     zIndex: 10,
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
   },
+  saveStar: {
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  saveStarOn: {
+    color: colors.accent,
+  },
+  saveStarOff: {
+    color: colors.textSecondary,
+  },
+
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 10,
+    gap: 10,
   },
-  matchupLeft: {
-    width: 60,
+
+  teams: {
+    width: 56,
+    alignItems: "flex-start",
+    justifyContent: "center",
+  },
+  teamStack: {
     flexDirection: "row",
     gap: 6,
   },
   teamLogo: {
     width: 22,
     height: 22,
+    borderRadius: 6,
+    backgroundColor: "rgba(255,255,255,0.06)",
   },
-  headerCenter: {
+  teamLogoPlaceholder: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+  },
+
+  center: {
     flex: 1,
     alignItems: "center",
+    paddingHorizontal: 6,
   },
-  headerRight: {
-    width: 90,
+  player: {
+    color: colors.textPrimary,
+    fontSize: textStyles.title,
+    fontWeight: "800",
+    letterSpacing: 0.2,
+  },
+  marketLine: {
+    color: colors.textSecondary,
+    fontSize: textStyles.subtitle,
+    fontWeight: "700",
+    marginTop: 2,
+    letterSpacing: 0.2,
+  },
+  matchup: {
+    color: colors.textSecondary,
+    fontSize: textStyles.label,
+    marginTop: 2,
+  },
+
+  right: {
+    width: 108,
     alignItems: "flex-end",
+    justifyContent: "center",
+    gap: 6,
   },
-  oddsRow: {
+  oddsPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    marginBottom: 2,
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
   },
   bookLogo: {
     width: 16,
     height: 16,
   },
-  player: {
+  bookLogoPlaceholder: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  oddsText: {
     color: colors.textPrimary,
-    fontSize: textStyles.title,
-    fontWeight: "600",
+    fontSize: textStyles.label,
+    fontWeight: "800",
+    letterSpacing: 0.2,
   },
-  marketCenter: {
-    color: colors.textSecondary,
-    fontSize: textStyles.subtitle,
-  },
-  matchupText: {
+  oddsTextMuted: {
     color: colors.textSecondary,
     fontSize: textStyles.label,
-    marginTop: 2,
+    fontWeight: "800",
   },
-  oddsTop: {
-    color: colors.textSecondary,
-    fontSize: textStyles.label,
-    fontWeight: "600",
-  },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+
+  divider: {
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    marginTop: 12,
     marginBottom: 10,
   },
-  hit: {
-    color: colors.success,
-    fontSize: textStyles.stat,
-    fontWeight: "600",
-  },
-  confidenceRow: {
+
+  metricsRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    justifyContent: "space-between",
   },
-  confidenceBar: {
-    flex: 1,
-    height: 6,
-    borderRadius: 4,
-    backgroundColor: "rgba(255,255,255,0.08)",
+  metricLeft: {
+    flexDirection: "column",
   },
-  confidenceFill: {
-    height: "100%",
-    borderRadius: 4,
+  hitText: {
+    fontSize: textStyles.stat,
+    fontWeight: "900",
+    letterSpacing: 0.3,
   },
-  confidenceLabel: {
+  metricSub: {
     color: colors.textSecondary,
-    fontSize: textStyles.label,
-    width: 32,
-    textAlign: "right",
+    fontSize: 12,
+    marginTop: 2,
+    fontWeight: "700",
+  },
+
+  metricRight: {
+    alignItems: "flex-end",
+  },
+  badge: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: "rgba(0,0,0,0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+  },
+  badgeLabel: {
+    color: colors.textSecondary,
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.6,
+  },
+  badgeValue: {
+    fontSize: 14,
+    fontWeight: "900",
+    letterSpacing: 0.2,
+  },
+
+  barRow: {
+    marginTop: 10,
+  },
+  barTrack: {
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.10)",
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+  },
+  barFill: {
+    height: "100%",
+    borderRadius: 999,
   },
 });

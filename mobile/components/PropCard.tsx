@@ -515,9 +515,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 10,
 
-    backgroundColor: "#F1F5F9", // was #F3F4F6
+    backgroundColor: "#E5E7EB", // was #F3F4F6
     borderWidth: 1,
-    borderColor: "#E2E8F0",     // was #E5E7EB
+    borderColor: "#CBD5E1",     // was #E5E7EB
   },
 
   bookLogo: {
@@ -529,12 +529,12 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 4,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#CBD5E1",
   },
 
   oddsText: {
-    color: colors.textPrimary,
-    fontSize: textStyles.label,
+    color: "#020617", // near-black (slate-950)
+    fontSize: 12,
     fontWeight: "800",
     letterSpacing: 0.2,
   },

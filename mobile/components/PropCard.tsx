@@ -347,30 +347,35 @@ export default function PropCard({
 }
 
 const styles = StyleSheet.create({
+  // ---------------------------
+  // CARD WRAPPER
+  // ---------------------------
   outer: {
     marginHorizontal: 14,
-    marginVertical: 9,
+    marginVertical: 10, // ↑ slightly more breathing room
   },
 
   card: {
     backgroundColor: "#FFFFFF",
     borderRadius: 18,
-    paddingVertical: 14,
+    paddingVertical: 16, // ↑ vertical rhythm
     paddingHorizontal: 14,
 
     borderWidth: 1,
     borderColor: "#E5E7EB",
 
     shadowColor: "#000",
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.06, // ↓ softer shadow
     shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: { width: 0, height: 5 },
     elevation: 3,
 
     overflow: "hidden",
   },
 
-
+  // ---------------------------
+  // LEFT CONFIDENCE STRIP
+  // ---------------------------
   accentStrip: {
     position: "absolute",
     left: 0,
@@ -381,20 +386,28 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 18,
   },
 
+  // ---------------------------
+  // SAVE BUTTON
+  // ---------------------------
   saveButton: {
     position: "absolute",
     top: 10,
     right: 12,
     zIndex: 10,
+
     width: 34,
     height: 34,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
 
-    backgroundColor: "#F3F4F6",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 0,
+
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
   },
 
   saveStar: {
@@ -408,49 +421,62 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
 
+  // ---------------------------
+  // HEADER ROW
+  // ---------------------------
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
   },
 
+  // ---------------------------
+  // TEAM LOGOS
+  // ---------------------------
   teams: {
     width: 56,
     alignItems: "flex-start",
     justifyContent: "center",
   },
+
   teamStack: {
     flexDirection: "row",
     gap: 6,
   },
+
   teamLogo: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
+    width: 20, // ↓ slightly smaller
+    height: 20,
+    borderRadius: 5,
     backgroundColor: "#F3F4F6",
+    opacity: 0.9,
   },
 
   teamLogoPlaceholder: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
+    width: 20,
+    height: 20,
+    borderRadius: 5,
     backgroundColor: "#F3F4F6",
     borderWidth: 1,
     borderColor: "#E5E7EB",
   },
 
-
+  // ---------------------------
+  // CENTER TEXT
+  // ---------------------------
   center: {
     flex: 1,
-    alignItems: "center",
+    alignItems: "flex-start", // ⬅️ key hierarchy fix
     paddingHorizontal: 6,
   },
+
   player: {
     color: colors.textPrimary,
     fontSize: textStyles.title,
     fontWeight: "800",
     letterSpacing: 0.2,
   },
+
   marketLine: {
     color: colors.textSecondary,
     fontSize: textStyles.subtitle,
@@ -458,27 +484,33 @@ const styles = StyleSheet.create({
     marginTop: 2,
     letterSpacing: 0.2,
   },
+
   matchup: {
     color: colors.textSecondary,
     fontSize: textStyles.label,
     marginTop: 2,
   },
 
+  // ---------------------------
+  // ODDS (RIGHT COLUMN)
+  // ---------------------------
   right: {
     width: 108,
     alignItems: "flex-end",
     justifyContent: "center",
     gap: 6,
   },
+
   oddsPill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: 12,
 
-    backgroundColor: "#F3F4F6",
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+
+    backgroundColor: "#F9FAFB", // ↓ softer than save button
     borderWidth: 1,
     borderColor: "#E5E7EB",
   },
@@ -487,6 +519,7 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
   },
+
   bookLogoPlaceholder: {
     width: 16,
     height: 16,
@@ -500,34 +533,42 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 0.2,
   },
+
   oddsTextMuted: {
     color: colors.textSecondary,
     fontSize: textStyles.label,
     fontWeight: "800",
   },
 
+  // ---------------------------
+  // DIVIDER
+  // ---------------------------
   divider: {
     height: 1,
-    backgroundColor: "#D1D5DB", // slightly darker than E5E7EB
-    marginTop: 12,
-    marginBottom: 10,
+    backgroundColor: "#E5E7EB", // ↓ lighter
+    marginTop: 10,
+    marginBottom: 8,
   },
 
-
-
+  // ---------------------------
+  // METRICS ROW
+  // ---------------------------
   metricsRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
+
   metricLeft: {
     flexDirection: "column",
   },
+
   hitText: {
     fontSize: textStyles.stat,
     fontWeight: "900",
     letterSpacing: 0.3,
   },
+
   metricSub: {
     color: colors.textSecondary,
     fontSize: 12,
@@ -538,40 +579,49 @@ const styles = StyleSheet.create({
   metricRight: {
     alignItems: "flex-end",
   },
+
+  // ---------------------------
+  // CONFIDENCE BADGE
+  // ---------------------------
   badge: {
     flexDirection: "row",
     alignItems: "baseline",
-    gap: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 12,
+    gap: 6,
 
-    backgroundColor: "#F9FAFB",
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#E5E7EB",
   },
 
   badgeLabel: {
     color: colors.textSecondary,
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: "900",
-    letterSpacing: 0.6,
+    letterSpacing: 0.8,
   },
+
   badgeValue: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "900",
     letterSpacing: 0.2,
   },
 
+  // ---------------------------
+  // CONFIDENCE BAR
+  // ---------------------------
   barRow: {
     marginTop: 10,
   },
+
   barTrack: {
-    height: 8,
+    height: 6, // ↓ slimmer, status-like
     borderRadius: 999,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#EEF2F7",
     overflow: "hidden",
-    borderWidth: 0,
   },
 
   barFill: {

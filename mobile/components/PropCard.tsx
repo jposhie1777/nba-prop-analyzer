@@ -475,10 +475,9 @@ const styles = StyleSheet.create({
   },
 
   player: {
-    color: colors.textPrimary,
+    color: "red",
     fontSize: textStyles.title,
     fontWeight: "800",
-    letterSpacing: 0.2,
   },
 
   marketLine: {

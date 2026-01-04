@@ -30,6 +30,7 @@ export type MobileProp = {
   // -----------------------
   hitRateL10: number;
   edgePct: number;
+  confidence_score: number;
 
   // -----------------------
   // WINDOW METRICS

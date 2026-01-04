@@ -148,7 +148,7 @@ export default function PropCard(props: PropCardProps) {
     onToggleExpand,
   } = props;
 
-  const hitPct = Math.round((hitRateL10 ?? 0) * 100);
+  const hitPct = Math.round(((props.hit_rate_l10 ?? 0) as number) * 100);
 
   /* =========================
      WINDOW TOGGLE
@@ -185,17 +185,19 @@ export default function PropCard(props: PropCardProps) {
 
   const accentColor =
     tier === "elite"
-      ? colors.success
+      ? colors.accent.success
       : tier === "good"
-      ? colors.accent
-      : "rgba(255,255,255,0.30)";
+      ? colors.accent.warning
+      : colors.border.strong;
 
   const confidenceColor =
     tier === "elite"
-      ? colors.success
+      ? colors.accent.success
       : tier === "good"
-      ? colors.accent
-      : colors.textSecondary;
+      ? colors.accent.warning
+      : colors.text.muted;
+
+
 
   /* =========================
      ODDS FLASH
@@ -222,7 +224,7 @@ export default function PropCard(props: PropCardProps) {
 
   const flashStyle = useAnimatedStyle(() => {
     if (flash.value > 0) {
-      return { backgroundColor: "rgba(61,255,181,0.10)" };
+      return { backgroundColor: colors.glow.success };
     }
     return {};
   });
@@ -238,14 +240,20 @@ export default function PropCard(props: PropCardProps) {
         flex: 1,
         justifyContent: "center",
         paddingLeft: 24,
-        backgroundColor: saved ? "#E5E7EB" : "#D1FAE5",
+        backgroundColor: saved
+          ? colors.surface.cardSoft
+          : colors.glow.success,
+
       }}
     >
       <Text
         style={{
           fontSize: 16,
           fontWeight: "900",
-          color: saved ? "#475569" : "#047857",
+          color: saved
+            ? colors.text.secondary
+            : colors.accent.success,
+
         }}
       >
         {saved ? "Unsave" : "Save"}
@@ -394,7 +402,9 @@ export default function PropCard(props: PropCardProps) {
 
               <View style={styles.metricsRow}>
                 <View>
-                  <Text style={[styles.hitText, { color: confidenceColor }]}>{hitPct}% HIT</Text>
+                  <Text style={[styles.hitText, { color: colors.text.primary }]}>
+                    {hitPct}% HIT
+                  </Text>
                   <Text style={styles.metricSub}>Last 10</Text>
                 </View>
                 <View style={styles.badge}>
@@ -511,22 +521,34 @@ export default function PropCard(props: PropCardProps) {
    STYLES
 ====================================================== */
 const styles = StyleSheet.create({
-  outer: { marginHorizontal: 14, marginVertical: 10 },
+  outer: {
+    marginHorizontal: 14,
+    marginVertical: 10,
+  },
+
   card: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.surface.card,
     borderRadius: 18,
     paddingVertical: 16,
     paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.06,
+    borderColor: colors.border.subtle,
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
     shadowRadius: 10,
-    shadowOffset: { width: 0, height: 5 },
-    elevation: 3,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
     overflow: "hidden",
   },
-  accentStrip: { position: "absolute", left: 0, top: 0, bottom: 0, width: 4 },
+
+  accentStrip: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+  },
+
   saveButton: {
     position: "absolute",
     top: 10,
@@ -536,33 +558,97 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surface.elevated,
   },
-  saveStar: { fontSize: 18, fontWeight: "900" },
-  saveStarOn: { color: colors.accent },
-  saveStarOff: { color: colors.textSecondary },
 
-  headerRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  saveStar: {
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  saveStarOn: { color: colors.accent.primary },
+  saveStarOff: { color: colors.text.muted },
+
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+
   teams: { width: 56 },
   teamStack: { flexDirection: "row", gap: 6 },
   teamLogo: { width: 20, height: 20 },
-  teamLogoPlaceholder: { width: 20, height: 20, backgroundColor: "#E5E7EB" },
+
+  teamLogoPlaceholder: {
+    width: 20,
+    height: 20,
+    backgroundColor: colors.surface.cardSoft,
+    borderRadius: 4,
+  },
 
   center: { flex: 1, paddingHorizontal: 6 },
-  player: { fontSize: textStyles.title, fontWeight: "800" },
-  marketLine: { fontSize: textStyles.subtitle, fontWeight: "700" },
-  matchup: { fontSize: textStyles.label },
+
+  player: {
+    fontSize: textStyles.title,
+    fontWeight: "800",
+    color: colors.text.primary,
+  },
+
+  marketLine: {
+    fontSize: textStyles.subtitle,
+    fontWeight: "700",
+    color: colors.text.secondary,
+  },
+
+  matchup: {
+    fontSize: textStyles.label,
+    color: colors.text.muted,
+  },
 
   right: { width: 120, alignItems: "flex-end", gap: 6 },
-  oddsPill: { flexDirection: "row", gap: 6, padding: 6, borderRadius: 10, backgroundColor: "#E5E7EB" },
-  bookLogo: { width: 16, height: 16 },
-  bookLogoPlaceholder: { width: 16, height: 16, backgroundColor: "#CBD5E1" },
-  oddsText: { fontSize: 12, fontWeight: "800" },
 
-  divider: { height: 1, backgroundColor: "#E5E7EB", marginVertical: 8 },
-  metricsRow: { flexDirection: "row", justifyContent: "space-between" },
-  hitText: { fontSize: textStyles.stat, fontWeight: "900" },
-  metricSub: { fontSize: 12, color: colors.textSecondary },
+  oddsPill: {
+    flexDirection: "row",
+    gap: 6,
+    padding: 6,
+    borderRadius: 10,
+    backgroundColor: colors.surface.cardSoft,
+  },
+
+  bookLogo: { width: 16, height: 16 },
+
+  bookLogoPlaceholder: {
+    width: 16,
+    height: 16,
+    backgroundColor: colors.surface.cardSoft,
+    borderRadius: 4,
+  },
+
+  oddsText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: colors.text.primary,
+  },
+
+  divider: {
+    height: 1,
+    backgroundColor: colors.border.subtle,
+    marginVertical: 8,
+  },
+
+  metricsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+
+  hitText: {
+    fontSize: textStyles.stat,
+    fontWeight: "900",
+  },
+
+  metricSub: {
+    fontSize: 12,
+    color: colors.text.muted,
+  },
 
   badge: {
     flexDirection: "row",
@@ -571,47 +657,104 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: colors.border.subtle,
   },
-  badgeLabel: { fontSize: 9, fontWeight: "900", color: colors.textSecondary },
-  badgeValue: { fontSize: 15, fontWeight: "900" },
+
+  badgeLabel: {
+    fontSize: 9,
+    fontWeight: "900",
+    color: colors.text.muted,
+  },
+
+  badgeValue: {
+    fontSize: 15,
+    fontWeight: "900",
+  },
 
   barRow: { marginTop: 10 },
-  barTrack: { height: 6, borderRadius: 999, backgroundColor: "#D1FAE5" },
-  barFill: { height: "100%", borderRadius: 999 },
+
+  barTrack: {
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: colors.surface.cardSoft,
+  },
+
+  barFill: {
+    height: "100%",
+    borderRadius: 999,
+  },
 
   expandWrap: { overflow: "hidden" },
-  expandInner: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#E5E7EB" },
-  expandTitle: { fontSize: 12, fontWeight: "900", marginBottom: 6 },
 
-  expandRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
-  expandLabel: { fontSize: 12, color: "#475569" },
-  expandValue: { fontSize: 12, fontWeight: "800" },
-  expandDivider: { height: 1, backgroundColor: "#E5E7EB", marginVertical: 10 },
+  expandInner: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.subtle,
+  },
 
-  windowToggle: { flexDirection: "row", marginTop: 10 },
-  windowBtn: { flex: 1, marginHorizontal: 4, paddingVertical: 6, borderRadius: 8, backgroundColor: "#E5E7EB" },
-  windowBtnActive: { backgroundColor: colors.accent },
-  windowLabel: { fontSize: 12, fontWeight: "800", color: "#334155" },
-  windowLabelActive: { color: "#FFFFFF" },
+  expandRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
+
+  expandLabel: {
+    fontSize: 12,
+    color: colors.text.muted,
+  },
+
+  expandValue: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: colors.text.primary,
+  },
+
+  windowToggle: {
+    flexDirection: "row",
+    marginTop: 12,
+  },
+
+  windowBtn: {
+    flex: 1,
+    marginHorizontal: 4,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: colors.surface.cardSoft,
+  },
+
+  windowBtnActive: {
+    backgroundColor: colors.accent.primary,
+  },
+
+  windowLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: colors.text.secondary,
+  },
+
+  windowLabelActive: {
+    color: colors.text.primary,
+  },
+
   gridRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     marginBottom: 4,
   },
-  
+
   statLabel: {
     flex: 1,
     textAlign: "center",
     fontSize: 11,
-    color: "#94A3B8",
+    color: colors.text.muted,
   },
-  
+
   statValue: {
     flex: 1,
     textAlign: "center",
     fontSize: 15,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text.primary,
   },
 });

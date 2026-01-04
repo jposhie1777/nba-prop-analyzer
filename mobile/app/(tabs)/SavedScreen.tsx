@@ -158,3 +158,146 @@ export default function SavedScreen() {
     </View>
   );
 }
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: "#F5F7FB",
+  },
+
+  scroll: {
+    padding: 16,
+  },
+
+  empty: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 32,
+  },
+
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#111827",
+  },
+
+  emptySub: {
+    marginTop: 6,
+    color: "#6B7280",
+    textAlign: "center",
+  },
+
+  clearAllBtn: {
+    alignSelf: "flex-end",
+    marginBottom: 10,
+  },
+
+  clearAllText: {
+    color: "#DC2626",
+    fontWeight: "800",
+  },
+
+  gameBlock: {
+    marginBottom: 20,
+  },
+
+  gameHeader: {
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+    color: "#6B7280",
+    marginBottom: 8,
+    textTransform: "uppercase",
+  },
+
+  betRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+
+  betLeft: {
+    flex: 1,
+  },
+
+  player: {
+    fontWeight: "700",
+    color: "#111827",
+  },
+
+  market: {
+    marginTop: 2,
+    fontWeight: "600",
+    color: "#374151",
+    fontSize: 12,
+  },
+
+  ou: {
+    fontWeight: "900",
+    color: colors.accent,
+  },
+
+  price: {
+    width: 60,
+    textAlign: "right",
+    fontWeight: "800",
+    color: "#020617",
+    marginRight: 8,
+  },
+
+  removeBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+
+  removeText: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#9CA3AF",
+  },
+
+  actionBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    gap: 12,
+    padding: 12,
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+  },
+
+  copyBtn: {
+    flex: 1,
+    backgroundColor: "#111827",
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: "center",
+  },
+
+  copyText: {
+    color: "#FFFFFF",
+    fontWeight: "900",
+  },
+
+  gamblyBtn: {
+    flex: 1,
+    backgroundColor: colors.accent,
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: "center",
+  },
+
+  gamblyText: {
+    color: "#FFFFFF",
+    fontWeight: "900",
+  },
+});

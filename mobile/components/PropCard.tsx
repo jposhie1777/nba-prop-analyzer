@@ -546,4 +546,19 @@ const styles = StyleSheet.create({
   windowBtnActive: { backgroundColor: colors.accent },
   windowLabel: { fontSize: 12, fontWeight: "800", color: "#334155" },
   windowLabelActive: { color: "#FFFFFF" },
+  expandedContainer: { marginTop: 12 },
+  
+  sectionHeader: { flexDirection: "row", alignItems: "center", marginTop: 14, marginBottom: 6 },
+  
+  sectionIcon: { fontSize: 13, marginRight: 6 },
+  
+  sectionText: { fontSize: 12, fontWeight: "700", color: "#64748B" },
+  
+  gridRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
+  
+  stat: { flex: 1, alignItems: "center" },
+  
+  statLabel: { fontSize: 11, color: "#94A3B8", marginBottom: 2 },
+  
+  statValue: { fontSize: 15, fontWeight: "800", color: "#0F172A" },
 });

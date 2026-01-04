@@ -38,7 +38,12 @@ type GroupedProp = UIProp & {
   }[];
 };
 
-export default function HomeScreen() {
+type Props = {
+  savedIds: Set<string>;
+  onToggleSave: (id: string) => void;
+};
+
+export default function HomeScreen({ savedIds, onToggleSave }: Props) {
   // ---------------------------
   // TAB STATE
   // ---------------------------
@@ -63,11 +68,6 @@ export default function HomeScreen() {
   const [maxOdds, setMaxOdds] = useState(300);
 
   const [filtersOpen, setFiltersOpen] = useState(true);
-
-  // ---------------------------
-  // SAVED PROPS STATE
-  // ---------------------------
-  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
 
   // ---------------------------
   // EXPANDED CARD STATE (ONLY ONE OPEN)
@@ -102,23 +102,6 @@ export default function HomeScreen() {
   }, []);
 
   // ---------------------------
-  // LOAD SAVED PROPS
-  // ---------------------------
-  useEffect(() => {
-    (async () => {
-      try {
-        const raw = await AsyncStorage.getItem(SAVED_PROPS_KEY);
-        if (!raw) return;
-
-        const ids: string[] = JSON.parse(raw);
-        setSavedIds(new Set(ids));
-      } catch (e) {
-        console.warn("Failed to load saved props", e);
-      }
-    })();
-  }, []);
-
-  // ---------------------------
   // SAVE FILTERS
   // ---------------------------
   useEffect(() => {
@@ -143,27 +126,6 @@ export default function HomeScreen() {
     maxOdds,
     filtersOpen,
   ]);
-
-  // ---------------------------
-  // SAVE SAVED PROPS
-  // ---------------------------
-  useEffect(() => {
-    AsyncStorage.setItem(
-      SAVED_PROPS_KEY,
-      JSON.stringify(Array.from(savedIds))
-    );
-  }, [savedIds]);
-
-  // ---------------------------
-  // TOGGLE SAVE
-  // ---------------------------
-  const toggleSave = useCallback((id: string) => {
-    setSavedIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }, []);
 
   // ---------------------------
   // LOAD PROPS FROM API

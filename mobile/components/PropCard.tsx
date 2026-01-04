@@ -142,56 +142,85 @@ export default function PropCard({
   // ---------------------------
   const prevOddsRef = useRef<Record<string, number>>({});
   const flash = useSharedValue(0);
-
+  
   useEffect(() => {
     let changed = false;
-
+  
     resolvedBooks.forEach(({ bookmaker, odds }) => {
       const key = normalizeBookKey(bookmaker);
       const prev = prevOddsRef.current[key];
-
+  
       if (prev !== undefined && prev !== odds) changed = true;
       prevOddsRef.current[key] = odds;
     });
-
+  
     if (changed) {
       flash.value = withTiming(1, { duration: 120 }, () => {
         flash.value = withTiming(0, { duration: 520 });
       });
     }
   }, [resolvedBooks]);
-
+  
   const flashStyle = useAnimatedStyle(() => {
     if (flash.value > 0) {
-      return {
-        backgroundColor: "rgba(61,255,181,0.10)",
-      };
+      return { backgroundColor: "rgba(61,255,181,0.10)" };
     }
-  
     return {};
   });
-
+  
   // ---------------------------
-  // SAVE ANIMATION
+  // SWIPE SAVE HELPERS  ✅ ADD HERE
+  // ---------------------------
+  const swipeLock = useRef(false);
+  
+  const renderSaveAction = () => {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          paddingLeft: 24,
+          backgroundColor: saved ? "#E5E7EB" : "#D1FAE5",
+        }}
+      >
+        <Text
+          style={{
+            fontSize: 16,
+            fontWeight: "900",
+            color: saved ? "#475569" : "#047857",
+          }}
+        >
+          {saved ? "Unsave" : "Save"}
+        </Text>
+      </View>
+    );
+  };
+  
+  // ---------------------------
+  // SAVE ANIMATION (TAP + SWIPE)
   // ---------------------------
   const scale = useSharedValue(1);
-
+  
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));
-
+  
   useEffect(() => {
     if (saved) {
       scale.value = withSpring(1.05, { damping: 12 });
       scale.value = withSpring(1, { damping: 14 });
-    } 
+    }
   }, [saved]);
-
+  
   const handleToggleSave = () => {
-    Haptics.impactAsync(
-      saved ? Haptics.ImpactFeedbackStyle.Light : Haptics.ImpactFeedbackStyle.Medium
-    );
+    if (swipeLock.current) return;
+    swipeLock.current = true;
+  
     onToggleSave();
+  
+    setTimeout(() => {
+      swipeLock.current = false;
+    }, 300);
   };
 
   // ---------------------------

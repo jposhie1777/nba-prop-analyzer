@@ -12,31 +12,31 @@ import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 
 import colors from "../../theme/color";
-import { MOCK_PROPS } from "../../data/props";
+import { useSavedBets } from "@/store/useSavedBets";
+import { usePropsStore } from "@/store/usePropsStore"; // 🔑 assumes your live props store
 
-type Props = {
-  savedIds: Set<string>;
-  onToggleSave: (id: string) => void;
-  onClearAll: () => void;
-};
+const GAMBLY_URL = "https://www.gambly.com/gambly-bot";
 
-const GAMBLy_URL = "https://www.gambly.com/gambly-bot";
+export default function SavedScreen() {
+  // ---------------------------
+  // GLOBAL STORES
+  // ---------------------------
+  const savedIds = useSavedBets((s) => s.savedIds);
+  const toggleSave = useSavedBets((s) => s.toggleSave);
+  const clearAll = useSavedBets((s) => s.clearAll);
 
-export default function SavedScreen({
-  savedIds,
-  onToggleSave,
-  onClearAll,
-}: Props) {
+  const allProps = usePropsStore((s) => s.props); // live props already loaded elsewhere
+
   // ---------------------------
   // DERIVE SAVED PROPS
   // ---------------------------
-  const savedProps = useMemo(
-    () => MOCK_PROPS.filter((p) => savedIds.has(p.id)),
-    [savedIds]
-  );
+  const savedProps = useMemo(() => {
+    if (!savedIds.size) return [];
+    return allProps.filter((p) => savedIds.has(p.id));
+  }, [allProps, savedIds]);
 
   // ---------------------------
-  // GROUP BY MATCHUP
+  // GROUP BY GAME
   // ---------------------------
   const grouped = useMemo(() => {
     const map = new Map<string, typeof savedProps>();
@@ -51,7 +51,7 @@ export default function SavedScreen({
   }, [savedProps]);
 
   // ---------------------------
-  // GAMBLy COPY FORMAT
+  // GAMBLY COPY FORMAT
   // ---------------------------
   const gamblyText = useMemo(() => {
     return savedProps
@@ -65,23 +65,25 @@ export default function SavedScreen({
   const handleCopy = async () => {
     if (!gamblyText) return;
     await Clipboard.setStringAsync(gamblyText);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Haptics.notificationAsync(
+      Haptics.NotificationFeedbackType.Success
+    );
   };
 
   const openGambly = () => {
-    Linking.openURL(GAMBLy_URL);
+    Linking.openURL(GAMBLY_URL);
   };
 
   const confirmClearAll = () => {
     Alert.alert(
       "Clear all saved bets?",
-      "This will remove all saved bets.",
+      "This will permanently remove all saved bets.",
       [
         { text: "Cancel", style: "cancel" },
         {
           text: "Clear All",
           style: "destructive",
-          onPress: onClearAll,
+          onPress: clearAll,
         },
       ]
     );
@@ -93,9 +95,9 @@ export default function SavedScreen({
   if (savedProps.length === 0) {
     return (
       <View style={styles.empty}>
-        <Text style={styles.emptyTitle}>No saved bets yet</Text>
+        <Text style={styles.emptyTitle}>No saved bets</Text>
         <Text style={styles.emptySub}>
-          Save props from the main tab to export them here.
+          Save props from the Home tab to export them here.
         </Text>
       </View>
     );
@@ -127,9 +129,9 @@ export default function SavedScreen({
 
                 <Text style={styles.price}>{bet.odds}</Text>
 
-                {/* REMOVE ICON */}
+                {/* REMOVE */}
                 <Pressable
-                  onPress={() => onToggleSave(bet.id)}
+                  onPress={() => toggleSave(bet.id)}
                   hitSlop={12}
                   style={styles.removeBtn}
                 >
@@ -156,156 +158,3 @@ export default function SavedScreen({
     </View>
   );
 }
-
-// ---------------------------
-// STYLES
-// ---------------------------
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: "#F5F7FB",
-  },
-
-  scroll: {
-    padding: 16,
-  },
-
-  // EMPTY
-  empty: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 32,
-    backgroundColor: "#F5F7FB",
-  },
-
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#111827",
-  },
-
-  emptySub: {
-    marginTop: 6,
-    color: "#6B7280",
-    textAlign: "center",
-  },
-
-  // CLEAR ALL
-  clearAllBtn: {
-    alignSelf: "flex-end",
-    marginBottom: 10,
-  },
-
-  clearAllText: {
-    color: "#DC2626",
-    fontWeight: "800",
-  },
-
-  // GAME GROUP
-  gameBlock: {
-    marginBottom: 20,
-  },
-
-  gameHeader: {
-    fontSize: 12,
-    fontWeight: "900",
-    letterSpacing: 0.8,
-    color: "#6B7280",
-    marginBottom: 8,
-    textTransform: "uppercase",
-  },
-
-  // BET ROW
-  betRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginBottom: 6,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-
-  betLeft: {
-    flex: 1,
-  },
-
-  player: {
-    fontWeight: "700",
-    color: "#111827",
-  },
-
-  market: {
-    marginTop: 2,
-    fontWeight: "600",
-    color: "#374151",
-    fontSize: 12,
-  },
-
-  ou: {
-    fontWeight: "900",
-    color: colors.accent,
-  },
-
-  price: {
-    width: 60,
-    textAlign: "right",
-    fontWeight: "800",
-    color: "#020617",
-    marginRight: 8,
-  },
-
-  removeBtn: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-
-  removeText: {
-    fontSize: 16,
-    fontWeight: "900",
-    color: "#9CA3AF",
-  },
-
-  // ACTION BAR
-  actionBar: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    gap: 12,
-    padding: 12,
-    backgroundColor: "#FFFFFF",
-    borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
-  },
-
-  copyBtn: {
-    flex: 1,
-    backgroundColor: "#111827",
-    paddingVertical: 14,
-    borderRadius: 14,
-    alignItems: "center",
-  },
-
-  copyText: {
-    color: "#FFFFFF",
-    fontWeight: "900",
-  },
-
-  gamblyBtn: {
-    flex: 1,
-    backgroundColor: colors.accent,
-    paddingVertical: 14,
-    borderRadius: 14,
-    alignItems: "center",
-  },
-
-  gamblyText: {
-    color: "#FFFFFF",
-    fontWeight: "900",
-  },
-});

@@ -13,6 +13,7 @@ import PropCard from "../../components/PropCard";
 import colors from "../../theme/color";
 import { fetchProps, MobileProp } from "../../lib/api";
 import { useSavedBets } from "@/store/useSavedBets";
+import { usePropsStore } from "@/store/usePropsStore";
 
 // ---------------------------
 // STORAGE KEYS
@@ -50,6 +51,8 @@ export default function HomeScreen() {
   // ---------------------------
   const savedIds = useSavedBets((s) => s.savedIds);
   const toggleSave = useSavedBets((s) => s.toggleSave);
+  
+  const setPropsStore = usePropsStore((s) => s.setProps);
 
   // ---------------------------
   // REAL PROPS DATA

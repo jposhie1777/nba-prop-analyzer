@@ -78,6 +78,8 @@ type PropCardProps = {
 
   saved: boolean;
   onToggleSave: () => void;
+  expanded: boolean;
+  onToggleExpand: () => void;
 };
 
 function normalizeBookKey(name: string) {
@@ -102,7 +104,10 @@ export default function PropCard({
   books,
   saved,
   onToggleSave,
-}: PropCardProps) {
+  /* NEW */
+  expanded,
+  onToggleExpand,
+}: PropCardProps) 
   const hitPct = Math.round((hitRateL10 ?? 0) * 100);
 
   // ---------------------------
@@ -231,6 +236,23 @@ export default function PropCard({
   };
 
   // ---------------------------
+  // EXPAND / COLLAPSE ANIMATION
+  // ---------------------------
+  const expand = useSharedValue(0);
+  
+  useEffect(() => {
+    expand.value = withSpring(expanded ? 1 : 0, {
+      damping: 18,
+      stiffness: 180,
+    });
+  }, [expanded]);
+  
+  const expandStyle = useAnimatedStyle(() => ({
+    opacity: expand.value,
+    transform: [{ scaleY: expand.value }],
+  }));
+
+  // ---------------------------
   // PRESS FEEDBACK (PRO)
   // ---------------------------
   const pressScale = useSharedValue(1);
@@ -273,7 +295,11 @@ export default function PropCard({
           </Pressable>
 
           {/* WHOLE CARD PRESS FEEL (no action, just feel “native”) */}
-          <Pressable onPressIn={onPressIn} onPressOut={onPressOut}>
+          <Pressable
+            onPress={onToggleExpand}
+            onPressIn={onPressIn}
+            onPressOut={onPressOut}
+          >
             <Animated.View style={pressAnimStyle}>
               {/* HEADER */}
               <View style={styles.headerRow}>
@@ -381,6 +407,20 @@ export default function PropCard({
                   />
                 </View>
               </View>
+              {/* EXPANDED DETAILS */}
+              <Animated.View style={[styles.expandWrap, expandStyle]}>
+                <View style={styles.expandInner}>
+                  <Text style={styles.expandTitle}>Details</Text>
+              
+                  {/* Placeholder content */}
+                  <Text style={styles.expandText}>
+                    • L5 avg: TBD{"\n"}
+                    • Opponent rank: TBD{"\n"}
+                    • Line movement: TBD{"\n"}
+                    • Injury impact: TBD
+                  </Text>
+                </View>
+              </Animated.View>
             </Animated.View>
           </Pressable>
         </Animated.View>
@@ -676,5 +716,33 @@ const styles = StyleSheet.create({
   barFill: {
     height: "100%",
     borderRadius: 999,
+  },
+  // ---------------------------
+  // EXPANDED SECTION
+  // ---------------------------
+  expandWrap: {
+    overflow: "hidden",
+  },
+  
+  expandInner: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+  },
+  
+  expandTitle: {
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0.6,
+    color: "#334155",
+    marginBottom: 6,
+  },
+  
+  expandText: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: "#475569",
+    fontWeight: "600",
   },
 });

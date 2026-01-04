@@ -162,13 +162,16 @@ export default function HomeScreen() {
       .then((res) => {
         if (!mounted) return;
 
+        console.log("📦 RAW API SAMPLE", res.props[0]);
+
+
         const normalized: UIProp[] = res.props.map((p) => {
           const hitRate = p.hitRateL10 ?? 0;
           return {
             ...p,
             id: `${p.player}-${p.market}-${p.line}`,
             edge: hitRate,
-            confidence: Math.round(hitRate * 100),
+            confidence: p.confidence_score,
             matchup: p.matchup,
             bookmaker: p.bookmaker,
             home: p.home_team,
@@ -437,9 +440,10 @@ export default function HomeScreen() {
                 step={5}
                 value={minConfidence}
                 onValueChange={setMinConfidence}
-                minimumTrackTintColor={colors.accent}
-                maximumTrackTintColor="#E5E7EB"
-                thumbTintColor={colors.accent}
+                minimumTrackTintColor={colors.accent.primary}
+                maximumTrackTintColor={colors.surface.cardSoft}
+                thumbTintColor={colors.accent.primary}
+
               />
 
               {/* ODDS */}
@@ -487,14 +491,15 @@ export default function HomeScreen() {
 }
 
 // ---------------------------
-// STYLES — LIGHT MODE
+// STYLES — HOME SCREEN
 // ---------------------------
+
 const styles = StyleSheet.create({
   root: { flex: 1 },
 
   screen: {
     flex: 1,
-    backgroundColor: "#F5F7FB",
+    backgroundColor: colors.surface.screen,
   },
 
   center: {
@@ -504,53 +509,56 @@ const styles = StyleSheet.create({
   },
 
   error: {
-    color: "#DC2626",
+    color: colors.accent.danger,
     fontWeight: "600",
   },
-
   loading: {
-    color: "#6B7280",
+    color: colors.text.muted,
   },
+
 
   tabs: {
     flexDirection: "row",
     justifyContent: "space-around",
     paddingVertical: 12,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surface.card,
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+    borderBottomColor: colors.border.subtle,
   },
 
   tab: {
     fontWeight: "700",
-    color: "#6B7280",
+    color: colors.text.muted,
   },
 
   tabActive: {
-    color: colors.accent,
+    color: colors.accent.primary,
   },
+
 
   filters: {
     padding: 14,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: colors.surface.card,
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+    borderBottomColor: colors.border.subtle,
   },
 
   filtersTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#111827",
+    color: colors.text.primary,
   },
 
+
   filtersCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surface.cardSoft,
     borderRadius: 14,
     padding: 12,
     marginTop: 10,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: colors.border.subtle,
   },
+
 
   pills: {
     flexDirection: "row",
@@ -565,21 +573,23 @@ const styles = StyleSheet.create({
     marginRight: 8,
     marginBottom: 8,
     fontWeight: "600",
-    color: "#374151",
-    backgroundColor: "#E5E7EB",
+    color: colors.text.secondary,
+    backgroundColor: colors.surface.elevated,
   },
 
   pillActive: {
-    backgroundColor: colors.accent,
-    color: "#FFFFFF",
+    backgroundColor: colors.accent.primary,
+    color: colors.text.primary,
   },
+
 
   sliderLabel: {
     marginTop: 10,
     marginBottom: 4,
-    color: "#374151",
+    color: colors.text.secondary,
     fontWeight: "600",
   },
+
 
   list: {
     paddingTop: 8,

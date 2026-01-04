@@ -161,8 +161,9 @@ export default function SavedScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: "#F5F7FB",
+    backgroundColor: colors.surface.screen,
   },
+
 
   scroll: {
     padding: 16,
@@ -178,14 +179,14 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#111827",
+    color: colors.text.primary,
   },
-
   emptySub: {
     marginTop: 6,
-    color: "#6B7280",
+    color: colors.text.secondary,
     textAlign: "center",
   },
+
 
   clearAllBtn: {
     alignSelf: "flex-end",
@@ -193,9 +194,10 @@ const styles = StyleSheet.create({
   },
 
   clearAllText: {
-    color: "#DC2626",
+    color: colors.accent.danger,
     fontWeight: "800",
   },
+
 
   gameBlock: {
     marginBottom: 20,
@@ -205,7 +207,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "900",
     letterSpacing: 0.8,
-    color: "#6B7280",
+    color: colors.text.muted,
     marginBottom: 8,
     textTransform: "uppercase",
   },
@@ -213,14 +215,15 @@ const styles = StyleSheet.create({
   betRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surface.card,
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 12,
     marginBottom: 6,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: colors.border.subtle,
   },
+
 
   betLeft: {
     flex: 1,
@@ -228,15 +231,17 @@ const styles = StyleSheet.create({
 
   player: {
     fontWeight: "700",
-    color: "#111827",
+    color: colors.text.primary,
   },
+
 
   market: {
     marginTop: 2,
     fontWeight: "600",
-    color: "#374151",
+    color: colors.text.secondary,
     fontSize: 12,
   },
+
 
   ou: {
     fontWeight: "900",
@@ -247,9 +252,10 @@ const styles = StyleSheet.create({
     width: 60,
     textAlign: "right",
     fontWeight: "800",
-    color: "#020617",
+    color: colors.text.primary,
     marginRight: 8,
   },
+
 
   removeBtn: {
     paddingHorizontal: 6,
@@ -259,8 +265,9 @@ const styles = StyleSheet.create({
   removeText: {
     fontSize: 16,
     fontWeight: "900",
-    color: "#9CA3AF",
+    color: colors.text.muted,
   },
+
 
   actionBar: {
     position: "absolute",
@@ -270,34 +277,35 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 12,
     padding: 12,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surface.card,
     borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
+    borderTopColor: colors.border.subtle,
   },
+
 
   copyBtn: {
     flex: 1,
-    backgroundColor: "#111827",
+    backgroundColor: colors.surface.elevated,
     paddingVertical: 14,
     borderRadius: 14,
     alignItems: "center",
   },
-
   copyText: {
-    color: "#FFFFFF",
+    color: colors.text.primary,
     fontWeight: "900",
   },
+
 
   gamblyBtn: {
     flex: 1,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.accent.primary,
     paddingVertical: 14,
     borderRadius: 14,
     alignItems: "center",
   },
-
   gamblyText: {
-    color: "#FFFFFF",
+    color: colors.text.primary,
     fontWeight: "900",
   },
+
 });

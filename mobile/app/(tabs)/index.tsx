@@ -70,6 +70,15 @@ export default function HomeScreen() {
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
 
   // ---------------------------
+  // EXPANDED CARD STATE (ONLY ONE OPEN)
+  // ---------------------------
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  
+  const toggleExpand = useCallback((id: string) => {
+    setExpandedId((prev) => (prev === id ? null : id));
+  }, []);
+
+  // ---------------------------
   // LOAD SAVED FILTERS
   // ---------------------------
   useEffect(() => {
@@ -260,9 +269,13 @@ export default function HomeScreen() {
         books={item.books}
         saved={savedIds.has(item.id)}
         onToggleSave={() => toggleSave(item.id)}
+  
+        /* EXPAND CONTROL */
+        expanded={expandedId === item.id}
+        onToggleExpand={() => toggleExpand(item.id)}
       />
     ),
-    [savedIds, toggleSave]
+    [savedIds, toggleSave, expandedId, toggleExpand]
   );
 
   // ---------------------------

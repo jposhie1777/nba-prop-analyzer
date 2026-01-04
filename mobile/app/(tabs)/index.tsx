@@ -163,6 +163,8 @@ export default function HomeScreen() {
         });
 
         setProps(normalized);
+        setPropsStore(normalized);
+
         setLoading(false);
       })
       .catch((err) => {

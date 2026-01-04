@@ -172,7 +172,8 @@ export default function PropCard({
   // SWIPE SAVE HELPERS  ✅ ADD HERE
   // ---------------------------
   const swipeLock = useRef(false);
-  
+  const swipeableRef = useRef<Swipeable>(null);
+
   const renderSaveAction = () => {
     return (
       <View
@@ -212,15 +213,21 @@ export default function PropCard({
     }
   }, [saved]);
   
-  const handleToggleSave = () => {
-    if (swipeLock.current) return;
-    swipeLock.current = true;
+  const handleSwipeHaptic = () => {
+    Haptics.impactAsync(
+      saved
+        ? Haptics.ImpactFeedbackStyle.Light
+        : Haptics.ImpactFeedbackStyle.Medium
+    );
+  };
   
+  const handleSwipeOpen = () => {
     onToggleSave();
   
+    // let the save register visually, then snap back
     setTimeout(() => {
-      swipeLock.current = false;
-    }, 300);
+      swipeableRef.current?.close();
+    }, 120);
   };
 
   // ---------------------------
@@ -241,11 +248,14 @@ export default function PropCard({
 
   return (
     <Swipeable
+      ref={swipeableRef}
       overshootRight={false}
       renderLeftActions={renderSaveAction}
       leftThreshold={60}
       friction={2}
-      onSwipeableWillOpen={() => {
+      onSwipeableWillOpen={handleSwipeHaptic}
+      onSwipeableOpen={handleSwipeOpen}
+    >
         Haptics.impactAsync(
           saved
             ? Haptics.ImpactFeedbackStyle.Light

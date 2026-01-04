@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, Image, Pressable } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as Haptics from "expo-haptics";
 import Animated, {
   useSharedValue,
@@ -13,9 +13,9 @@ import colors from "../theme/color";
 import textStyles from "../theme/text";
 import { BOOKMAKER_LOGOS } from "../utils/bookmakerLogos";
 
-// ---------------------------
-// TEAM LOGOS
-// ---------------------------
+/* ======================================================
+   TEAM LOGOS
+====================================================== */
 const TEAM_LOGOS: Record<string, string> = {
   ATL: "https://a.espncdn.com/i/teamlogos/nba/500/atl.png",
   BOS: "https://a.espncdn.com/i/teamlogos/nba/500/bos.png",
@@ -49,9 +49,9 @@ const TEAM_LOGOS: Record<string, string> = {
   WAS: "https://a.espncdn.com/i/teamlogos/nba/500/was.png",
 };
 
-// ---------------------------
-// PROPS
-// ---------------------------
+/* ======================================================
+   TYPES
+====================================================== */
 type BookOdds = {
   bookmaker: string;
   odds: number;
@@ -67,13 +67,46 @@ type PropCardProps = {
   edge: number;
   confidence: number;
 
+  avg_l5?: number;
+  avg_l10?: number;
+  avg_l20?: number;
+
+  hit_rate_l5?: number;
+  hit_rate_l10?: number;
+  hit_rate_l20?: number;
+
+  clear_1p_pct_l5?: number;
+  clear_1p_pct_l10?: number;
+  clear_1p_pct_l20?: number;
+
+  clear_2p_pct_l5?: number;
+  clear_2p_pct_l10?: number;
+  clear_2p_pct_l20?: number;
+
+  avg_margin_l5?: number;
+  avg_margin_l10?: number;
+  avg_margin_l20?: number;
+
+  bad_miss_pct_l5?: number;
+  bad_miss_pct_l10?: number;
+  bad_miss_pct_l20?: number;
+
+  pace_l5?: number;
+  pace_l10?: number;
+  pace_l20?: number;
+
+  usage_l5?: number;
+  usage_l10?: number;
+  usage_l20?: number;
+
+  ts_l10?: number;
+  pace_delta?: number;
+  delta_vs_line?: number;
+
   matchup?: string;
   home?: string;
   away?: string;
-
   bookmaker?: string;
-
-  // 🔥 MULTI-BOOK (NEW, OPTIONAL)
   books?: BookOdds[];
 
   saved: boolean;
@@ -82,6 +115,9 @@ type PropCardProps = {
   onToggleExpand: () => void;
 };
 
+/* ======================================================
+   HELPERS
+====================================================== */
 function normalizeBookKey(name: string) {
   return name.toLowerCase().replace(/[\s_]/g, "");
 }
@@ -90,38 +126,57 @@ function formatOdds(o: number) {
   return o > 0 ? `+${o}` : `${o}`;
 }
 
-export default function PropCard({
-  player,
-  market,
-  line,
-  odds,
-  hitRateL10,
-  confidence,
-  matchup,
-  home,
-  away,
-  bookmaker,
-  books,
-  saved,
-  onToggleSave,
-  /* NEW */
-  expanded,
-  onToggleExpand,
-}: PropCardProps) {
+/* ======================================================
+   COMPONENT
+====================================================== */
+export default function PropCard(props: PropCardProps) {
+  const {
+    player,
+    market,
+    line,
+    odds,
+    hitRateL10,
+    confidence,
+    matchup,
+    home,
+    away,
+    bookmaker,
+    books,
+    saved,
+    onToggleSave,
+    expanded,
+    onToggleExpand,
+  } = props;
+
   const hitPct = Math.round((hitRateL10 ?? 0) * 100);
 
-  // ---------------------------
-  // MULTI-BOOK NORMALIZATION
-  // ---------------------------
+  /* =========================
+     WINDOW TOGGLE
+  ========================= */
+  const [window, setWindow] = useState<5 | 10 | 20>(10);
+  const w = window === 5 ? "l5" : window === 20 ? "l20" : "l10";
+
+  const avg = w === "l5" ? props.avg_l5 : w === "l20" ? props.avg_l20 : props.avg_l10;
+  const hitRate = w === "l5" ? props.hit_rate_l5 : w === "l20" ? props.hit_rate_l20 : props.hit_rate_l10;
+  const clear1 = w === "l5" ? props.clear_1p_pct_l5 : w === "l20" ? props.clear_1p_pct_l20 : props.clear_1p_pct_l10;
+  const clear2 = w === "l5" ? props.clear_2p_pct_l5 : w === "l20" ? props.clear_2p_pct_l20 : props.clear_2p_pct_l10;
+  const margin = w === "l5" ? props.avg_margin_l5 : w === "l20" ? props.avg_margin_l20 : props.avg_margin_l10;
+  const badMiss = w === "l5" ? props.bad_miss_pct_l5 : w === "l20" ? props.bad_miss_pct_l20 : props.bad_miss_pct_l10;
+  const pace = w === "l5" ? props.pace_l5 : w === "l20" ? props.pace_l20 : props.pace_l10;
+  const usage = w === "l5" ? props.usage_l5 : w === "l20" ? props.usage_l20 : props.usage_l10;
+
+  /* =========================
+     MULTI-BOOK NORMALIZATION
+  ========================= */
   const resolvedBooks: BookOdds[] = useMemo(() => {
     if (books && books.length > 0) return books;
     if (bookmaker) return [{ bookmaker, odds }];
     return [];
   }, [books, bookmaker, odds]);
 
-  // ---------------------------
-  // CONFIDENCE TIER STYLING
-  // ---------------------------
+  /* =========================
+     CONFIDENCE TIER
+  ========================= */
   const tier = useMemo(() => {
     if (confidence >= 80) return "elite";
     if (confidence >= 65) return "good";
@@ -142,82 +197,62 @@ export default function PropCard({
       ? colors.accent
       : colors.textSecondary;
 
-  // ---------------------------
-  // ODDS CHANGE ANIMATION
-  // ---------------------------
+  /* =========================
+     ODDS FLASH
+  ========================= */
   const prevOddsRef = useRef<Record<string, number>>({});
   const flash = useSharedValue(0);
-  
+
   useEffect(() => {
     let changed = false;
-  
+
     resolvedBooks.forEach(({ bookmaker, odds }) => {
       const key = normalizeBookKey(bookmaker);
       const prev = prevOddsRef.current[key];
-  
       if (prev !== undefined && prev !== odds) changed = true;
       prevOddsRef.current[key] = odds;
     });
-  
+
     if (changed) {
       flash.value = withTiming(1, { duration: 120 }, () => {
         flash.value = withTiming(0, { duration: 520 });
       });
     }
   }, [resolvedBooks]);
-  
+
   const flashStyle = useAnimatedStyle(() => {
     if (flash.value > 0) {
       return { backgroundColor: "rgba(61,255,181,0.10)" };
     }
     return {};
   });
-  
-  // ---------------------------
-  // SWIPE SAVE HELPERS  ✅ ADD HERE
-  // ---------------------------
-  const swipeLock = useRef(false);
+
+  /* =========================
+     SWIPE SAVE
+  ========================= */
   const swipeableRef = useRef<Swipeable>(null);
 
-  const renderSaveAction = () => {
-    return (
-      <View
+  const renderSaveAction = () => (
+    <View
+      style={{
+        flex: 1,
+        justifyContent: "center",
+        paddingLeft: 24,
+        backgroundColor: saved ? "#E5E7EB" : "#D1FAE5",
+      }}
+    >
+      <Text
         style={{
-          flex: 1,
-          justifyContent: "center",
-          paddingLeft: 24,
-          backgroundColor: saved ? "#E5E7EB" : "#D1FAE5",
+          fontSize: 16,
+          fontWeight: "900",
+          color: saved ? "#475569" : "#047857",
         }}
       >
-        <Text
-          style={{
-            fontSize: 16,
-            fontWeight: "900",
-            color: saved ? "#475569" : "#047857",
-          }}
-        >
-          {saved ? "Unsave" : "Save"}
-        </Text>
-      </View>
-    );
-  };
-  
-  // ---------------------------
-  // SAVE ANIMATION (TAP + SWIPE)
-  // ---------------------------
-  const scale = useSharedValue(1);
-  
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-  
-  useEffect(() => {
-    if (saved) {
-      scale.value = withSpring(1.05, { damping: 12 });
-      scale.value = withSpring(1, { damping: 14 });
-    }
-  }, [saved]);
-  
+        {saved ? "Unsave" : "Save"}
+      </Text>
+    </View>
+  );
+
   const handleSwipeHaptic = () => {
     Haptics.impactAsync(
       saved
@@ -225,21 +260,32 @@ export default function PropCard({
         : Haptics.ImpactFeedbackStyle.Medium
     );
   };
-  
+
   const handleSwipeOpen = () => {
     onToggleSave();
-  
-    // let the save register visually, then snap back
-    setTimeout(() => {
-      swipeableRef.current?.close();
-    }, 120);
+    setTimeout(() => swipeableRef.current?.close(), 120);
   };
 
-  // ---------------------------
-  // EXPAND / COLLAPSE ANIMATION
-  // ---------------------------
+  /* =========================
+     SAVE SCALE
+  ========================= */
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  useEffect(() => {
+    if (saved) {
+      scale.value = withSpring(1.05, { damping: 12 });
+      scale.value = withSpring(1, { damping: 14 });
+    }
+  }, [saved]);
+
+  /* =========================
+     EXPAND ANIMATION
+  ========================= */
   const expand = useSharedValue(0);
-  const EXPANDED_HEIGHT = 180; // tweak later
+  const EXPANDED_HEIGHT = 420;
 
   useEffect(() => {
     expand.value = withSpring(expanded ? EXPANDED_HEIGHT : 0, {
@@ -247,15 +293,15 @@ export default function PropCard({
       stiffness: 180,
     });
   }, [expanded]);
-  
+
   const expandStyle = useAnimatedStyle(() => ({
     height: expand.value,
     opacity: expand.value === 0 ? 0 : 1,
   }));
 
-  // ---------------------------
-  // PRESS FEEDBACK (PRO)
-  // ---------------------------
+  /* =========================
+     PRESS FEEDBACK
+  ========================= */
   const pressScale = useSharedValue(1);
   const pressAnimStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pressScale.value }],
@@ -269,6 +315,19 @@ export default function PropCard({
     pressScale.value = withSpring(1, { damping: 18 });
   };
 
+  /* =========================
+     ROW COMPONENT
+  ========================= */
+  const ExpandRow = ({ label, value }: { label: string; value?: string }) => (
+    <View style={styles.expandRow}>
+      <Text style={styles.expandLabel}>{label}</Text>
+      <Text style={styles.expandValue}>{value ?? "—"}</Text>
+    </View>
+  );
+
+  /* ======================================================
+     RENDER
+  ======================================================= */
   return (
     <Swipeable
       ref={swipeableRef}
@@ -281,30 +340,18 @@ export default function PropCard({
     >
       <Animated.View style={[animatedStyle, styles.outer]}>
         <Animated.View style={[styles.card, flashStyle]}>
-          {/* LEFT ACCENT STRIP */}
           <View style={[styles.accentStrip, { backgroundColor: accentColor }]} />
 
-          {/* TOP-RIGHT SAVE BUTTON */}
-          <Pressable
-            onPress={onToggleSave}
-            hitSlop={10}
-            style={styles.saveButton}
-          >
+          <Pressable onPress={onToggleSave} hitSlop={10} style={styles.saveButton}>
             <Text style={[styles.saveStar, saved ? styles.saveStarOn : styles.saveStarOff]}>
               {saved ? "★" : "☆"}
             </Text>
           </Pressable>
 
-          {/* WHOLE CARD PRESS FEEL (no action, just feel “native”) */}
-          <Pressable
-            onPress={onToggleExpand}
-            onPressIn={onPressIn}
-            onPressOut={onPressOut}
-          >
+          <Pressable onPress={onToggleExpand} onPressIn={onPressIn} onPressOut={onPressOut} android_ripple={null} hitSlop={4}>
             <Animated.View style={pressAnimStyle}>
               {/* HEADER */}
               <View style={styles.headerRow}>
-                {/* LEFT: TEAM LOGOS */}
                 <View style={styles.teams}>
                   <View style={styles.teamStack}>
                     {away && TEAM_LOGOS[away] ? (
@@ -312,7 +359,6 @@ export default function PropCard({
                     ) : (
                       <View style={styles.teamLogoPlaceholder} />
                     )}
-
                     {home && TEAM_LOGOS[home] ? (
                       <Image source={{ uri: TEAM_LOGOS[home] }} style={styles.teamLogo} />
                     ) : (
@@ -321,105 +367,88 @@ export default function PropCard({
                   </View>
                 </View>
 
-                {/* CENTER: TEXT */}
                 <View style={styles.center}>
-                  <Text numberOfLines={1} style={styles.player}>
-                    {player}
-                  </Text>
-
-                  <Text numberOfLines={1} style={styles.marketLine}>
-                    {market} • {line}
-                  </Text>
-
-                  {matchup ? (
-                    <Text numberOfLines={1} style={styles.matchup}>
-                      {matchup}
-                    </Text>
-                  ) : (
-                    <Text numberOfLines={1} style={styles.matchup}>
-                      {" "}
-                    </Text>
-                  )}
+                  <Text numberOfLines={1} style={styles.player}>{player}</Text>
+                  <Text numberOfLines={1} style={styles.marketLine}>{market} • {line}</Text>
+                  <Text numberOfLines={1} style={styles.matchup}>{matchup ?? " "}</Text>
                 </View>
 
-                {/* RIGHT: ODDS STACK */}
                 <View style={styles.right}>
-                  {resolvedBooks.length === 0 ? (
-                    <View style={styles.oddsPill}>
-                      <Text style={styles.oddsTextMuted}>—</Text>
-                    </View>
-                  ) : (
-                    resolvedBooks.slice(0, 3).map((b) => {
-                      const key = normalizeBookKey(b.bookmaker);
-
-                      return (
-                        <View key={key} style={styles.oddsPill}>
-                          {BOOKMAKER_LOGOS[key] ? (
-                            <Image
-                              source={BOOKMAKER_LOGOS[key]}
-                              style={styles.bookLogo}
-                              resizeMode="contain"
-                            />
-                          ) : (
-                            <View style={styles.bookLogoPlaceholder} />
-                          )}
-
-                          <Text style={styles.oddsText}>{formatOdds(b.odds)}</Text>
-                        </View>
-                      );
-                    })
-                  )}
+                  {resolvedBooks.slice(0, 3).map((b) => {
+                    const key = normalizeBookKey(b.bookmaker);
+                    return (
+                      <View key={key} style={styles.oddsPill}>
+                        {BOOKMAKER_LOGOS[key] ? (
+                          <Image source={BOOKMAKER_LOGOS[key]} style={styles.bookLogo} />
+                        ) : (
+                          <View style={styles.bookLogoPlaceholder} />
+                        )}
+                        <Text style={styles.oddsText}>{formatOdds(b.odds)}</Text>
+                      </View>
+                    );
+                  })}
                 </View>
               </View>
 
-              {/* DIVIDER */}
               <View style={styles.divider} />
 
-              {/* METRICS ROW */}
               <View style={styles.metricsRow}>
-                <View style={styles.metricLeft}>
-                  <Text style={[styles.hitText, { color: confidenceColor }]}>
-                    {hitPct}% HIT
-                  </Text>
+                <View>
+                  <Text style={[styles.hitText, { color: confidenceColor }]}>{hitPct}% HIT</Text>
                   <Text style={styles.metricSub}>Last 10</Text>
                 </View>
-
-                <View style={styles.metricRight}>
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeLabel}>CONF</Text>
-                    <Text style={[styles.badgeValue, { color: confidenceColor }]}>
-                      {confidence}
-                    </Text>
-                  </View>
+                <View style={styles.badge}>
+                  <Text style={styles.badgeLabel}>CONF</Text>
+                  <Text style={[styles.badgeValue, { color: confidenceColor }]}>{confidence}</Text>
                 </View>
               </View>
 
-              {/* CONFIDENCE BAR (TRACK + FILL) */}
               <View style={styles.barRow}>
                 <View style={styles.barTrack}>
-                  <View
-                    style={[
-                      styles.barFill,
-                      {
-                        width: `${Math.max(0, Math.min(100, confidence))}%`,
-                        backgroundColor: confidenceColor,
-                      },
-                    ]}
-                  />
+                  <View style={[styles.barFill, { width: `${confidence}%`, backgroundColor: confidenceColor }]} />
                 </View>
               </View>
-              {/* EXPANDED DETAILS */}
+
               <Animated.View style={[styles.expandWrap, expandStyle]}>
                 <View style={styles.expandInner}>
                   <Text style={styles.expandTitle}>Details</Text>
-              
-                  {/* Placeholder content */}
-                  <Text style={styles.expandText}>
-                    • L5 avg: TBD{"\n"}
-                    • Opponent rank: TBD{"\n"}
-                    • Line movement: TBD{"\n"}
-                    • Injury impact: TBD
-                  </Text>
+
+                  <ExpandRow label={`Avg (L${window})`} value={avg != null ? avg.toFixed(1) : "—"} />
+                  <ExpandRow label="Hit Rate" value={`${Math.round((hitRate ?? 0) * 100)}%`} />
+                  <ExpandRow label="Clear 1+" value={`${Math.round((clear1 ?? 0) * 100)}%`} />
+                  <ExpandRow label="Clear 2+" value={`${Math.round((clear2 ?? 0) * 100)}%`} />
+                  <ExpandRow label="Avg Margin" value={margin?.toFixed(1)} />
+                  <ExpandRow label="Bad Miss" value={`${Math.round((badMiss ?? 0) * 100)}%`} />
+                  <ExpandRow label="Pace" value={pace?.toFixed(1)} />
+                  <ExpandRow label="Usage" value={`${Math.round((usage ?? 0) * 100)}%`} />
+
+                  <View style={styles.expandDivider} />
+
+                  <ExpandRow label="TS (L10)" value={props.ts_l10?.toFixed(3)} />
+                  <ExpandRow label="Pace Δ" value={props.pace_delta?.toFixed(1)} />
+                  <ExpandRow label="Δ vs Line" value={props.delta_vs_line?.toFixed(1)} />
+
+                  <View style={styles.windowToggle}>
+                    {[5, 10, 20].map((n) => (
+                      <Pressable
+                        key={n}
+                        onPress={() => setWindow(n as 5 | 10 | 20)}
+                        style={[
+                          styles.windowBtn,
+                          window === n && styles.windowBtnActive,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.windowLabel,
+                            window === n && styles.windowLabelActive,
+                          ]}
+                        >
+                          L{n}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
                 </View>
               </Animated.View>
             </Animated.View>
@@ -430,320 +459,91 @@ export default function PropCard({
   );
 }
 
+/* ======================================================
+   STYLES
+====================================================== */
 const styles = StyleSheet.create({
-  // ---------------------------
-  // CARD WRAPPER
-  // ---------------------------
-  outer: {
-    marginHorizontal: 14,
-    marginVertical: 10, // was 9
-  },
-
+  outer: { marginHorizontal: 14, marginVertical: 10 },
   card: {
     backgroundColor: "#F8FAFC",
     borderRadius: 18,
-    paddingVertical: 16, // was 14
+    paddingVertical: 16,
     paddingHorizontal: 14,
-
     borderWidth: 1,
     borderColor: "#E5E7EB",
-
-    shadowColor: "#0F172A", // was #000
-    shadowOpacity: 0.06,    // was 0.08
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.06,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 5 },
     elevation: 3,
-
     overflow: "hidden",
   },
-
-  // ---------------------------
-  // LEFT CONFIDENCE STRIP
-  // ---------------------------
-  accentStrip: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 4,
-    borderTopLeftRadius: 18,
-    borderBottomLeftRadius: 18,
-  },
-
-  // ---------------------------
-  // SAVE BUTTON
-  // ---------------------------
+  accentStrip: { position: "absolute", left: 0, top: 0, bottom: 0, width: 4 },
   saveButton: {
     position: "absolute",
     top: 10,
     right: 12,
-    zIndex: 10,
-
     width: 34,
     height: 34,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-
-    backgroundColor: "#FFFFFF", // was #F3F4F6
-    borderWidth: 0,             // was 1
-    borderColor: "#E5E7EB",
-
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
+    backgroundColor: "#FFFFFF",
   },
+  saveStar: { fontSize: 18, fontWeight: "900" },
+  saveStarOn: { color: colors.accent },
+  saveStarOff: { color: colors.textSecondary },
 
-  saveStar: {
-    fontSize: 18,
-    fontWeight: "900",
-  },
-  saveStarOn: {
-    color: colors.accent,
-  },
-  saveStarOff: {
-    color: colors.textSecondary,
-  },
+  headerRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  teams: { width: 56 },
+  teamStack: { flexDirection: "row", gap: 6 },
+  teamLogo: { width: 20, height: 20 },
+  teamLogoPlaceholder: { width: 20, height: 20, backgroundColor: "#E5E7EB" },
 
-  // ---------------------------
-  // HEADER ROW
-  // ---------------------------
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
+  center: { flex: 1, paddingHorizontal: 6 },
+  player: { fontSize: textStyles.title, fontWeight: "800" },
+  marketLine: { fontSize: textStyles.subtitle, fontWeight: "700" },
+  matchup: { fontSize: textStyles.label },
 
-  // ---------------------------
-  // TEAM LOGOS
-  // ---------------------------
-  teams: {
-    width: 56,
-    alignItems: "flex-start",
-    justifyContent: "center",
-  },
+  right: { width: 120, alignItems: "flex-end", gap: 6 },
+  oddsPill: { flexDirection: "row", gap: 6, padding: 6, borderRadius: 10, backgroundColor: "#E5E7EB" },
+  bookLogo: { width: 16, height: 16 },
+  bookLogoPlaceholder: { width: 16, height: 16, backgroundColor: "#CBD5E1" },
+  oddsText: { fontSize: 12, fontWeight: "800" },
 
-  teamStack: {
-    flexDirection: "row",
-    gap: 6,
-  },
+  divider: { height: 1, backgroundColor: "#E5E7EB", marginVertical: 8 },
+  metricsRow: { flexDirection: "row", justifyContent: "space-between" },
+  hitText: { fontSize: textStyles.stat, fontWeight: "900" },
+  metricSub: { fontSize: 12, color: colors.textSecondary },
 
-  teamLogo: {
-    width: 20, // was 22
-    height: 20,
-    borderRadius: 6,
-    backgroundColor: "#FFFFFF", // was #F3F4F6
-
-    borderWidth: 1,             // added
-    borderColor: "#E5E7EB",     // added
-
-    padding: 2,                 // added
-  },
-
-  teamLogoPlaceholder: {
-    width: 20, // was 22
-    height: 20,
-    borderRadius: 6,
-    backgroundColor: "#E5E7EB", // was #F3F4F6
-    borderWidth: 1,
-    borderColor: "#D1D5DB",     // was #E5E7EB
-  },
-
-  // ---------------------------
-  // CENTER TEXT
-  // ---------------------------
-  center: {
-    flex: 1,
-    alignItems: "flex-start", // was center
-    paddingHorizontal: 6,
-  },
-
-  player: {
-    color: "#0F172A", // slate-900
-    fontSize: textStyles.title,
-    fontWeight: "800",
-    letterSpacing: 0.2,
-  },
-
-  marketLine: {
-    color: "#334155", // slate-700
-    fontSize: textStyles.subtitle,
-    fontWeight: "700",
-    marginTop: 2,
-    letterSpacing: 0.2,
-  },
-
-  matchup: {
-    color: "#475569", // slate-600
-    fontSize: textStyles.label,
-    marginTop: 2,
-  },
-
-  // ---------------------------
-  // ODDS (RIGHT COLUMN)
-  // ---------------------------
-  right: {
-    width: 120,      // was 108
-    paddingTop: 36,  // added
-    alignItems: "flex-end",
-    justifyContent: "center",
-    gap: 6,
-  },
-
-  oddsPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-
-    paddingVertical: 5,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-
-    backgroundColor: "#E5E7EB", // was #F3F4F6
-    borderWidth: 1,
-    borderColor: "#CBD5E1",     // was #E5E7EB
-  },
-
-  bookLogo: {
-    width: 16,
-    height: 16,
-  },
-
-  bookLogoPlaceholder: {
-    width: 16,
-    height: 16,
-    borderRadius: 4,
-    backgroundColor: "#CBD5E1",
-  },
-
-  oddsText: {
-    color: "#020617", // near-black (slate-950)
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 0.2,
-  },
-
-  oddsTextMuted: {
-    color: colors.textSecondary,
-    fontSize: textStyles.label,
-    fontWeight: "800",
-  },
-
-  // ---------------------------
-  // DIVIDER
-  // ---------------------------
-  divider: {
-    height: 1,
-    backgroundColor: "#E5E7EB", // was #D1D5DB
-    marginTop: 10,              // was 12
-    marginBottom: 8,            // was 10
-  },
-
-  // ---------------------------
-  // METRICS ROW
-  // ---------------------------
-  metricsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  metricLeft: {
-    flexDirection: "column",
-  },
-
-  hitText: {
-    fontSize: textStyles.stat,
-    fontWeight: "900",
-    letterSpacing: 0.3,
-  },
-
-  metricSub: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    marginTop: 2,
-    fontWeight: "700",
-  },
-
-  metricRight: {
-    alignItems: "flex-end",
-  },
-
-  // ---------------------------
-  // CONFIDENCE BADGE
-  // ---------------------------
   badge: {
     flexDirection: "row",
-    alignItems: "baseline",
     gap: 6,
-
-    paddingVertical: 4,   // was 6
-    paddingHorizontal: 8, // was 10
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 10,
-
-    backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#E5E7EB",
   },
+  badgeLabel: { fontSize: 9, fontWeight: "900", color: colors.textSecondary },
+  badgeValue: { fontSize: 15, fontWeight: "900" },
 
-  badgeLabel: {
-    color: colors.textSecondary,
-    fontSize: 9,          // was 10
-    fontWeight: "900",
-    letterSpacing: 0.8,
-  },
+  barRow: { marginTop: 10 },
+  barTrack: { height: 6, borderRadius: 999, backgroundColor: "#D1FAE5" },
+  barFill: { height: "100%", borderRadius: 999 },
 
-  badgeValue: {
-    fontSize: 15,         // was 14
-    fontWeight: "900",
-    letterSpacing: 0.2,
-  },
+  expandWrap: { overflow: "hidden" },
+  expandInner: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#E5E7EB" },
+  expandTitle: { fontSize: 12, fontWeight: "900", marginBottom: 6 },
 
-  // ---------------------------
-  // CONFIDENCE BAR
-  // ---------------------------
-  barRow: {
-    marginTop: 10,
-  },
+  expandRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
+  expandLabel: { fontSize: 12, color: "#475569" },
+  expandValue: { fontSize: 12, fontWeight: "800" },
+  expandDivider: { height: 1, backgroundColor: "#E5E7EB", marginVertical: 10 },
 
-  barTrack: {
-    height: 6,                     // was 8
-    borderRadius: 999,
-    backgroundColor: "#D1FAE5",    // was #E5E7EB
-    overflow: "hidden",
-  },
-
-  barFill: {
-    height: "100%",
-    borderRadius: 999,
-  },
-  // ---------------------------
-  // EXPANDED SECTION
-  // ---------------------------
-  expandWrap: {
-    overflow: "hidden",
-  },
-  
-  expandInner: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
-  },
-  
-  expandTitle: {
-    fontSize: 12,
-    fontWeight: "900",
-    letterSpacing: 0.6,
-    color: "#334155",
-    marginBottom: 6,
-  },
-  
-  expandText: {
-    fontSize: 12,
-    lineHeight: 18,
-    color: "#475569",
-    fontWeight: "600",
-  },
+  windowToggle: { flexDirection: "row", marginTop: 10 },
+  windowBtn: { flex: 1, marginHorizontal: 4, paddingVertical: 6, borderRadius: 8, backgroundColor: "#E5E7EB" },
+  windowBtnActive: { backgroundColor: colors.accent },
+  windowLabel: { fontSize: 12, fontWeight: "800", color: "#334155" },
+  windowLabelActive: { color: "#FFFFFF" },
 });

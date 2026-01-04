@@ -25,21 +25,68 @@ export type MobileProp = {
   line: number;
   odds: number;
 
-  avgL10?: number | null;
+  // -----------------------
+  // BASE METRICS
+  // -----------------------
   hitRateL10: number;
   edgePct: number;
 
-  // ✅ ADD THESE (optional for safety)
-  matchup?: string;            // "MIN @ MIA"
-  bookmaker?: string;          // "fanduel" | "draftkings"
-  home_team?: string;          // "MIA"
-  away_team?: string;          // "MIN"
+  // -----------------------
+  // WINDOW METRICS
+  // -----------------------
+  avg_l5?: number | null;
+  avg_l10?: number | null;
+  avg_l20?: number | null;
+
+  hit_rate_l5?: number | null;
+  hit_rate_l10?: number | null;
+  hit_rate_l20?: number | null;
+
+  clear_1p_pct_l5?: number | null;
+  clear_1p_pct_l10?: number | null;
+  clear_1p_pct_l20?: number | null;
+
+  clear_2p_pct_l5?: number | null;
+  clear_2p_pct_l10?: number | null;
+  clear_2p_pct_l20?: number | null;
+
+  avg_margin_l5?: number | null;
+  avg_margin_l10?: number | null;
+  avg_margin_l20?: number | null;
+
+  bad_miss_pct_l5?: number | null;
+  bad_miss_pct_l10?: number | null;
+  bad_miss_pct_l20?: number | null;
+
+  pace_l5?: number | null;
+  pace_l10?: number | null;
+  pace_l20?: number | null;
+
+  usage_l5?: number | null;
+  usage_l10?: number | null;
+  usage_l20?: number | null;
+
+  // -----------------------
+  // STATIC CONTEXT
+  // -----------------------
+  ts_l10?: number | null;
+  pace_delta?: number | null;
+  delta_vs_line?: number | null;
+
+  // -----------------------
+  // META
+  // -----------------------
+  matchup?: string;
+  bookmaker?: string;
+  home_team?: string;
+  away_team?: string;
 
   injuryStatus?: string | null;
   injuryNote?: string | null;
 
   updatedAt: string;
 };
+
 
 
 export type FetchPropsResponse = {

@@ -411,22 +411,77 @@ export default function PropCard(props: PropCardProps) {
 
               <Animated.View style={[styles.expandWrap, expandStyle]}>
                 <View style={styles.expandInner}>
-                  <Text style={styles.expandTitle}>Details</Text>
+                  <View style={styles.expandedContainer}>
 
-                  <ExpandRow label={`Avg (L${window})`} value={avg != null ? avg.toFixed(1) : "—"} />
-                  <ExpandRow label="Hit Rate" value={`${Math.round((hitRate ?? 0) * 100)}%`} />
-                  <ExpandRow label="Clear 1+" value={`${Math.round((clear1 ?? 0) * 100)}%`} />
-                  <ExpandRow label="Clear 2+" value={`${Math.round((clear2 ?? 0) * 100)}%`} />
-                  <ExpandRow label="Avg Margin" value={margin?.toFixed(1)} />
-                  <ExpandRow label="Bad Miss" value={`${Math.round((badMiss ?? 0) * 100)}%`} />
-                  <ExpandRow label="Pace" value={pace?.toFixed(1)} />
-                  <ExpandRow label="Usage" value={`${Math.round((usage ?? 0) * 100)}%`} />
-
-                  <View style={styles.expandDivider} />
-
-                  <ExpandRow label="TS (L10)" value={props.ts_l10?.toFixed(3)} />
-                  <ExpandRow label="Pace Δ" value={props.pace_delta?.toFixed(1)} />
-                  <ExpandRow label="Δ vs Line" value={props.delta_vs_line?.toFixed(1)} />
+                    {/* ROW 1 — PERFORMANCE */}
+                    <View style={styles.sectionHeader}>
+                      <Text style={styles.sectionIcon}>📊</Text>
+                      <Text style={styles.sectionText}>Performance</Text>
+                    </View>
+                    <View style={styles.gridRow}>
+                      <View style={styles.stat}>
+                        <Text style={styles.statLabel}>AVG</Text>
+                        <Text style={styles.statValue}>{avg != null ? avg.toFixed(1) : "—"}</Text>
+                      </View>
+                      <View style={styles.stat}>
+                        <Text style={styles.statLabel}>HIT%</Text>
+                        <Text style={styles.statValue}>{Math.round((hitRate ?? 0) * 100)}%</Text>
+                      </View>
+                      <View style={styles.stat}>
+                        <Text style={styles.statLabel}>BAD MISS</Text>
+                        <Text style={styles.statValue}>{Math.round((badMiss ?? 0) * 100)}%</Text>
+                      </View>
+                      <View style={styles.stat}>
+                        <Text style={styles.statLabel}>PACE</Text>
+                        <Text style={styles.statValue}>{pace?.toFixed(1) ?? "—"}</Text>
+                      </View>
+                    </View>
+                  
+                    {/* ROW 2 — EDGE */}
+                    <View style={styles.sectionHeader}>
+                      <Text style={styles.sectionIcon}>🎯</Text>
+                      <Text style={styles.sectionText}>Edge</Text>
+                    </View>
+                    <View style={styles.gridRow}>
+                      <View style={styles.stat}>
+                        <Text style={styles.statLabel}>+1</Text>
+                        <Text style={styles.statValue}>{Math.round((clear1 ?? 0) * 100)}%</Text>
+                      </View>
+                      <View style={styles.stat}>
+                        <Text style={styles.statLabel}>+2</Text>
+                        <Text style={styles.statValue}>{Math.round((clear2 ?? 0) * 100)}%</Text>
+                      </View>
+                      <View style={styles.stat}>
+                        <Text style={styles.statLabel}>MARGIN</Text>
+                        <Text style={styles.statValue}>{margin?.toFixed(1) ?? "—"}</Text>
+                      </View>
+                      <View style={styles.stat}>
+                        <Text style={styles.statLabel}>Δ LINE</Text>
+                        <Text style={styles.statValue}>{props.delta_vs_line?.toFixed(1) ?? "—"}</Text>
+                      </View>
+                    </View>
+                  
+                    {/* ROW 3 — CONTEXT */}
+                    <View style={styles.sectionHeader}>
+                      <Text style={styles.sectionIcon}>⚡</Text>
+                      <Text style={styles.sectionText}>Context</Text>
+                    </View>
+                    <View style={styles.gridRow}>
+                      <View style={styles.stat}>
+                        <Text style={styles.statLabel}>TS%</Text>
+                        <Text style={styles.statValue}>{props.ts_l10?.toFixed(3) ?? "—"}</Text>
+                      </View>
+                      <View style={styles.stat}>
+                        <Text style={styles.statLabel}>USG%</Text>
+                        <Text style={styles.statValue}>{Math.round((usage ?? 0) * 100)}%</Text>
+                      </View>
+                      <View style={styles.stat}>
+                        <Text style={styles.statLabel}>PACE Δ</Text>
+                        <Text style={styles.statValue}>{props.pace_delta?.toFixed(1) ?? "—"}</Text>
+                      </View>
+                    </View>
+                  
+                  </View>
 
                   <View style={styles.windowToggle}>
                     {[5, 10, 20].map((n) => (
@@ -546,19 +601,4 @@ const styles = StyleSheet.create({
   windowBtnActive: { backgroundColor: colors.accent },
   windowLabel: { fontSize: 12, fontWeight: "800", color: "#334155" },
   windowLabelActive: { color: "#FFFFFF" },
-  expandedContainer: { marginTop: 12 },
-  
-  sectionHeader: { flexDirection: "row", alignItems: "center", marginTop: 14, marginBottom: 6 },
-  
-  sectionIcon: { fontSize: 13, marginRight: 6 },
-  
-  sectionText: { fontSize: 12, fontWeight: "700", color: "#64748B" },
-  
-  gridRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
-  
-  stat: { flex: 1, alignItems: "center" },
-  
-  statLabel: { fontSize: 11, color: "#94A3B8", marginBottom: 2 },
-  
-  statValue: { fontSize: 15, fontWeight: "800", color: "#0F172A" },
 });

@@ -239,17 +239,18 @@ export default function PropCard({
   // EXPAND / COLLAPSE ANIMATION
   // ---------------------------
   const expand = useSharedValue(0);
-  
+  const EXPANDED_HEIGHT = 180; // tweak later
+
   useEffect(() => {
-    expand.value = withSpring(expanded ? 1 : 0, {
+    expand.value = withSpring(expanded ? EXPANDED_HEIGHT : 0, {
       damping: 18,
       stiffness: 180,
     });
   }, [expanded]);
   
   const expandStyle = useAnimatedStyle(() => ({
-    opacity: expand.value,
-    transform: [{ scaleY: expand.value }],
+    height: expand.value,
+    opacity: expand.value === 0 ? 0 : 1,
   }));
 
   // ---------------------------

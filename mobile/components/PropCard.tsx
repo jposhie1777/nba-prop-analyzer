@@ -256,14 +256,6 @@ export default function PropCard({
       onSwipeableWillOpen={handleSwipeHaptic}
       onSwipeableOpen={handleSwipeOpen}
     >
-        Haptics.impactAsync(
-          saved
-            ? Haptics.ImpactFeedbackStyle.Light
-            : Haptics.ImpactFeedbackStyle.Medium
-        );
-      }}
-      onSwipeableOpen={handleToggleSave}
-    >
       <Animated.View style={[animatedStyle, styles.outer]}>
         <Animated.View style={[styles.card, flashStyle]}>
           {/* LEFT ACCENT STRIP */}
@@ -271,7 +263,7 @@ export default function PropCard({
 
           {/* TOP-RIGHT SAVE BUTTON */}
           <Pressable
-            onPress={handleToggleSave}
+            onPress={onToggleSave}
             hitSlop={10}
             style={styles.saveButton}
           >

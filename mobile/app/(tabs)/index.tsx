@@ -12,6 +12,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import PropCard from "../../components/PropCard";
 import colors from "../../theme/color";
 import { fetchProps, MobileProp } from "../../lib/api";
+import { useSavedBets } from "@/store/useSavedBets";
 
 // ---------------------------
 // STORAGE KEYS
@@ -38,16 +39,17 @@ type GroupedProp = UIProp & {
   }[];
 };
 
-type Props = {
-  savedIds: Set<string>;
-  onToggleSave: (id: string) => void;
-};
-
-export default function HomeScreen({ savedIds, onToggleSave }: Props) {
+export default function HomeScreen() {
   // ---------------------------
   // TAB STATE
   // ---------------------------
   const [activeTab, setActiveTab] = useState<"all" | "saved">("all");
+
+  // ---------------------------
+  // SAVED BETS (GLOBAL STORE)
+  // ---------------------------
+  const savedIds = useSavedBets((s) => s.savedIds);
+  const toggleSave = useSavedBets((s) => s.toggleSave);
 
   // ---------------------------
   // REAL PROPS DATA

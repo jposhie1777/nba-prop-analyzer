@@ -240,7 +240,20 @@ export default function PropCard({
   };
 
   return (
-    <Swipeable overshootRight={false} onSwipeableOpen={handleToggleSave}>
+    <Swipeable
+      overshootRight={false}
+      renderLeftActions={renderSaveAction}
+      leftThreshold={60}
+      friction={2}
+      onSwipeableWillOpen={() => {
+        Haptics.impactAsync(
+          saved
+            ? Haptics.ImpactFeedbackStyle.Light
+            : Haptics.ImpactFeedbackStyle.Medium
+        );
+      }}
+      onSwipeableOpen={handleToggleSave}
+    >
       <Animated.View style={[animatedStyle, styles.outer]}>
         <Animated.View style={[styles.card, flashStyle]}>
           {/* LEFT ACCENT STRIP */}

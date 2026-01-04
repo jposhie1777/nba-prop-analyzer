@@ -24,11 +24,16 @@ const SAVED_PROPS_KEY = "saved_props_v1";
 // ---------------------------
 // UI-SAFE PROP MODEL
 // ---------------------------
-type UIProp = MobileProp & {
+type UIProp = {
   id: string;
   edge: number;
   confidence: number;
-};
+
+  home?: string;
+  away?: string;
+} & MobileProp;
+
+
 
 // ---------------------------
 // MULTI-BOOK GROUPING
@@ -60,6 +65,16 @@ export default function HomeScreen() {
   const [props, setProps] = useState<UIProp[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!props.length) return;
+
+    console.log(
+      "Bobby Portis rows:",
+      props.filter(p => p.player === "Bobby Portis")
+    );
+  }, [props]);
+
 
   // ---------------------------
   // FILTER + SORT STATE
@@ -141,7 +156,6 @@ export default function HomeScreen() {
     setError(null);
 
     fetchProps({
-      gameDate: "2026-01-03",
       minHitRate: 0,
       limit: 200,
     })
@@ -161,6 +175,36 @@ export default function HomeScreen() {
             away: p.away_team,
           };
         });
+
+        // ---------------------------
+        // EXPANDED DATA SANITY CHECK
+        // ---------------------------
+        if (__DEV__ && normalized.length > 0) {
+          const p = normalized[0];
+
+          console.log("🧪 EXPANDED SANITY CHECK", {
+            avg_l5: p.avg_l5,
+            avg_l10: p.avg_l10,
+            avg_l20: p.avg_l20,
+
+            hit_rate_l5: p.hit_rate_l5,
+            hit_rate_l10: p.hit_rate_l10,
+            hit_rate_l20: p.hit_rate_l20,
+
+            clear_1p_pct_l10: p.clear_1p_pct_l10,
+            clear_2p_pct_l10: p.clear_2p_pct_l10,
+
+            avg_margin_l10: p.avg_margin_l10,
+            bad_miss_pct_l10: p.bad_miss_pct_l10,
+
+            pace_l10: p.pace_l10,
+            usage_l10: p.usage_l10,
+
+            ts_l10: p.ts_l10,
+            pace_delta: p.pace_delta,
+            delta_vs_line: p.delta_vs_line,
+          });
+        }
 
         setProps(normalized);
         setPropsStore(normalized);
@@ -228,24 +272,79 @@ export default function HomeScreen() {
     sortBy,
   ]);
 
+  // helper: normalize null → undefined for PropCard props
+  const n = (v: number | null | undefined) => v ?? undefined;
+
   // ---------------------------
   // FLATLIST RENDER ITEM
   // ---------------------------
   const renderItem = useCallback(
     ({ item }: { item: GroupedProp }) => (
       <PropCard
-        {...item}
+        /* CORE */
+        player={item.player}
+        market={item.market}
+        line={item.line}
+        odds={item.odds}
+
+        hitRateL10={item.hitRateL10}
+        edge={item.edge}
+        confidence={item.confidence}
+
+        /* WINDOW METRICS */
+        avg_l5={n(item.avg_l5)}
+        avg_l10={n(item.avg_l10)}
+        avg_l20={n(item.avg_l20)}
+
+        hit_rate_l5={n(item.hit_rate_l5)}
+        hit_rate_l10={n(item.hit_rate_l10)}
+        hit_rate_l20={n(item.hit_rate_l20)}
+
+        clear_1p_pct_l5={n(item.clear_1p_pct_l5)}
+        clear_1p_pct_l10={n(item.clear_1p_pct_l10)}
+        clear_1p_pct_l20={n(item.clear_1p_pct_l20)}
+
+        clear_2p_pct_l5={n(item.clear_2p_pct_l5)}
+        clear_2p_pct_l10={n(item.clear_2p_pct_l10)}
+        clear_2p_pct_l20={n(item.clear_2p_pct_l20)}
+
+        avg_margin_l5={n(item.avg_margin_l5)}
+        avg_margin_l10={n(item.avg_margin_l10)}
+        avg_margin_l20={n(item.avg_margin_l20)}
+
+        bad_miss_pct_l5={n(item.bad_miss_pct_l5)}
+        bad_miss_pct_l10={n(item.bad_miss_pct_l10)}
+        bad_miss_pct_l20={n(item.bad_miss_pct_l20)}
+
+        pace_l5={n(item.pace_l5)}
+        pace_l10={n(item.pace_l10)}
+        pace_l20={n(item.pace_l20)}
+
+        usage_l5={n(item.usage_l5)}
+        usage_l10={n(item.usage_l10)}
+        usage_l20={n(item.usage_l20)}
+
+        /* CONTEXT */
+        ts_l10={n(item.ts_l10)}
+        pace_delta={n(item.pace_delta)}
+        delta_vs_line={n(item.delta_vs_line)}
+
+        matchup={item.matchup}
+        home={item.home}
+        away={item.away}
         books={item.books}
+
+        /* STATE */
         saved={savedIds.has(item.id)}
         onToggleSave={() => toggleSave(item.id)}
-  
-        /* EXPAND CONTROL */
+
         expanded={expandedId === item.id}
         onToggleExpand={() => toggleExpand(item.id)}
       />
     ),
     [savedIds, toggleSave, expandedId, toggleExpand]
   );
+
 
   // ---------------------------
   // STATES

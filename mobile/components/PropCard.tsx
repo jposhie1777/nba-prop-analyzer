@@ -107,7 +107,7 @@ export default function PropCard({
   /* NEW */
   expanded,
   onToggleExpand,
-}: PropCardProps) 
+}: PropCardProps) {
   const hitPct = Math.round((hitRateL10 ?? 0) * 100);
 
   // ---------------------------

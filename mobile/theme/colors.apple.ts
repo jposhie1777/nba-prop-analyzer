@@ -1,20 +1,20 @@
-// theme/apple.ts
+// theme/colors.apple.ts
 import { ThemeColors } from "./types";
 
-export const apple: ThemeColors = {
+const apple: ThemeColors = {
   surface: {
-    screen: "#0A1A33",
-    card: "#0E223F",
-    cardSoft: "#102A4F",
-    elevated: "#14325C",
+    screen: "#0B1D3A",
+    card: "#102A4C",
+    cardSoft: "#143A63",
+    elevated: "#1B4A7A",
   },
 
   text: {
     primary: "#FFFFFF",
-    secondary: "#C7D2E0",
-    muted: "#8CA3C0",
+    secondary: "#C7D2FE",
+    muted: "#94A3B8",
     disabled: "#64748B",
-    inverse: "#0A1A33",
+    inverse: "#020617",
   },
 
   border: {
@@ -23,22 +23,24 @@ export const apple: ThemeColors = {
   },
 
   accent: {
-    primary: "#4DA3FF",
-    success: "#34D399",
-    warning: "#FBBF24",
-    danger: "#EF4444",
-    info: "#60A5FA",
+    primary: "#0A84FF",
+    success: "#30D158",
+    warning: "#FFD60A",
+    danger: "#FF453A",
+    info: "#64D2FF",
   },
 
   state: {
-    active: "#4DA3FF",
-    hover: "#0F2A4F",
-    selected: "#163A6B",
+    active: "#0A84FF",
+    hover: "#1E40AF",
+    selected: "#1E3A8A",
     disabled: "#334155",
   },
 
   glow: {
-    success: "rgba(52,211,153,0.18)",
-    primary: "rgba(77,163,255,0.18)",
+    success: "rgba(48,209,88,0.22)",
+    primary: "rgba(10,132,255,0.22)",
   },
 };
+
+export default apple;

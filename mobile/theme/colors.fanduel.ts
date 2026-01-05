@@ -1,7 +1,7 @@
 // theme/fanduel.ts
 import { ThemeColors } from "./types";
 
-export const fanduel: ThemeColors = { ... };
+export const fanduel: ThemeColors = {
   surface: {
     screen: "#0B0F14",
     card: "#121720",

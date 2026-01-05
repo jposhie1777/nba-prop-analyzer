@@ -42,3 +42,5 @@ export const fanduel: ThemeColors = {
     primary: "rgba(31,122,255,0.22)",
   },
 };
+
+export default fanduel;

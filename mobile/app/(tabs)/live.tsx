@@ -1,3 +1,5 @@
-import LiveGamesScreen from “@/screens/LiveGamesScreen”;
+import LiveGamesScreen from "../../screens/LiveGameScreen";
 
-export default LiveGamesScreen;
+export default function LiveTab() {
+  return <LiveGamesScreen />;
+}

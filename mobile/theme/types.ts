@@ -1,3 +1,3 @@
-import baseColors from "./colors";
+import baseColors from "./color";
 
 export type ThemeColors = typeof baseColors;

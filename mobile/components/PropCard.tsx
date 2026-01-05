@@ -9,7 +9,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
-import colors from "../theme/color";
+import { useTheme } from "@/store/useTheme";
 import textStyles from "../theme/text";
 import { BOOKMAKER_LOGOS } from "../utils/bookmakerLogos";
 
@@ -198,7 +198,7 @@ export default function PropCard(props: PropCardProps) {
       : colors.text.muted;
 
 
-
+  const colors = useTheme((s) => s.colors);
   /* =========================
      ODDS FLASH
   ========================= */

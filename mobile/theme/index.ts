@@ -1,6 +1,6 @@
 // theme/index.ts
 
-import base from "./colors";
+import base from "./color"; // ✅ CORRECT
 import { apple } from "./apple";
 import { fanduel } from "./fanduel";
 import { fanduelLight } from "./fanduelLight";

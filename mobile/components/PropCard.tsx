@@ -413,11 +413,24 @@ export default function PropCard(props: PropCardProps) {
                 </View>
               </View>
 
-              <View style={styles.barRow}>
-                <View style={styles.barTrack}>
-                  <View style={[styles.barFill, { width: `${confidence}%`, backgroundColor: confidenceColor }]} />
+              <View style={styles.confidenceRow}>
+                <View style={styles.confidenceSpacer} />
+
+                <View style={styles.confidenceBarWrap}>
+                  <View style={styles.confidenceBarTrack}>
+                    <View
+                      style={[
+                        styles.confidenceBarFill,
+                        {
+                          width: `${confidence}%`,
+                          backgroundColor: confidenceColor,
+                        },
+                      ]}
+                    />
+                  </View>
                 </View>
               </View>
+
 
               <Animated.View style={[styles.expandWrap, expandStyle]}>
                 <View style={styles.expandInner}>
@@ -486,26 +499,32 @@ export default function PropCard(props: PropCardProps) {
               
                   {/* KEEP TOGGLE BELOW */}
                   <View style={styles.windowToggle}>
-                    {[5, 10, 20].map((n) => (
-                      <Pressable
-                        key={n}
-                        onPress={() => setWindow(n as 5 | 10 | 20)}
-                        style={[
-                          styles.windowBtn,
-                          window === n && styles.windowBtnActive,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.windowLabel,
-                            window === n && styles.windowLabelActive,
-                          ]}
-                        >
-                          L{n}
-                        </Text>
-                      </Pressable>
-                    ))}
+                    <View style={styles.windowPillGroup}>
+                      {[5, 10, 20].map((n) => {
+                        const active = window === n;
+                        return (
+                          <Pressable
+                            key={n}
+                            onPress={() => setWindow(n as 5 | 10 | 20)}
+                            style={[
+                              styles.windowPill,
+                              active && styles.windowPillActive,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.windowPillLabel,
+                                active && styles.windowPillLabelActive,
+                              ]}
+                            >
+                              L{n}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
                   </View>
+
               
                 </View>
               </Animated.View>
@@ -715,27 +734,46 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
 
-  windowBtn: {
-    flex: 1,
-    marginHorizontal: 4,
-    paddingVertical: 6,
-    borderRadius: 8,
+  windowToggle: {
+    marginTop: 14,
+    alignItems: "center",
+  },
+
+  windowPillGroup: {
+    flexDirection: "row",
     backgroundColor: colors.surface.cardSoft,
+    borderRadius: 999,
+    padding: 4,
+    gap: 6,
   },
 
-  windowBtnActive: {
-    backgroundColor: colors.accent.primary,
+  windowPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "transparent",
   },
 
-  windowLabel: {
+  windowPillActive: {
+    backgroundColor: colors.surface.card,
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
+  },
+
+  windowPillLabel: {
     fontSize: 12,
     fontWeight: "800",
-    color: colors.text.secondary,
+    color: colors.text.muted,
+    letterSpacing: 0.4,
   },
 
-  windowLabelActive: {
+  windowPillLabelActive: {
     color: colors.text.primary,
   },
+
 
   gridRow: {
     flexDirection: "row",
@@ -757,4 +795,52 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: colors.text.primary,
   },
+  confidenceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 6,
+  },
+
+  confidenceSpacer: {
+    flex: 3, // 👈 left 75% empty
+  },
+
+  confidenceBarWrap: {
+    flex: 1, // 👈 right 25%
+    alignItems: "flex-end",
+  },
+
+  confidenceBarTrack: {
+    width: "100%",
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: colors.surface.cardSoft,
+    opacity: 0.6, // quieter
+  },
+
+  confidenceBarFill: {
+    height: "100%",
+    borderRadius: 999,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 14,
+    marginBottom: 6,
+  },
+
+  sectionIcon: {
+    fontSize: 14,
+    opacity: 0.9,
+  },
+
+  sectionText: {
+    fontSize: 13,
+    fontWeight: "900",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    color: colors.text.secondary,
+  },
+
 });

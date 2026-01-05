@@ -1,5 +1,5 @@
 // theme/apple.ts
-import type { ThemeColors } from "./types";
+import { ThemeColors } from "./types";
 
 export const apple: ThemeColors = {
   surface: {

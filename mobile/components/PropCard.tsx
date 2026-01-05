@@ -597,7 +597,7 @@ return (
                     })}
                   </View>
                 </View>
-              </Animated.View>
+              </View>
             )}
           </Animated.View>
         </Pressable>

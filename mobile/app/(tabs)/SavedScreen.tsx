@@ -18,15 +18,16 @@ import { usePropsStore } from "@/store/usePropsStore"; // 🔑 assumes your live
 const GAMBLY_URL = "https://www.gambly.com/gambly-bot";
 
 export default function SavedScreen() {
-  // ---------------------------
-  // GLOBAL STORES
-  // ---------------------------
+  // 🔹 THEME
+  const colors = useTheme((s) => s.colors);
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  // 🔹 STORES
   const savedIds = useSavedBets((s) => s.savedIds);
   const toggleSave = useSavedBets((s) => s.toggleSave);
   const clearAll = useSavedBets((s) => s.clearAll);
 
   const allProps = usePropsStore((s) => s.props); // live props already loaded elsewhere
-  const colors = useTheme((s) => s.colors);
   // ---------------------------
   // DERIVE SAVED PROPS
   // ---------------------------
@@ -158,154 +159,147 @@ export default function SavedScreen() {
     </View>
   );
 }
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: colors.surface.screen,
-  },
+const makeStyles = (colors: any) =>
+  StyleSheet.create({
+    root: {
+      flex: 1,
+      backgroundColor: colors.surface.screen,
+    },
 
+    scroll: {
+      padding: 16,
+    },
 
-  scroll: {
-    padding: 16,
-  },
+    empty: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 32,
+    },
 
-  empty: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 32,
-  },
+    emptyTitle: {
+      fontSize: 18,
+      fontWeight: "800",
+      color: colors.text.primary,
+    },
 
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: colors.text.primary,
-  },
-  emptySub: {
-    marginTop: 6,
-    color: colors.text.secondary,
-    textAlign: "center",
-  },
+    emptySub: {
+      marginTop: 6,
+      color: colors.text.secondary,
+      textAlign: "center",
+    },
 
+    clearAllBtn: {
+      alignSelf: "flex-end",
+      marginBottom: 10,
+    },
 
-  clearAllBtn: {
-    alignSelf: "flex-end",
-    marginBottom: 10,
-  },
+    clearAllText: {
+      color: colors.accent.danger,
+      fontWeight: "800",
+    },
 
-  clearAllText: {
-    color: colors.accent.danger,
-    fontWeight: "800",
-  },
+    gameBlock: {
+      marginBottom: 20,
+    },
 
+    gameHeader: {
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 0.8,
+      color: colors.text.muted,
+      marginBottom: 8,
+      textTransform: "uppercase",
+    },
 
-  gameBlock: {
-    marginBottom: 20,
-  },
+    betRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.surface.card,
+      borderRadius: 12,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      marginBottom: 6,
+      borderWidth: 1,
+      borderColor: colors.border.subtle,
+    },
 
-  gameHeader: {
-    fontSize: 12,
-    fontWeight: "900",
-    letterSpacing: 0.8,
-    color: colors.text.muted,
-    marginBottom: 8,
-    textTransform: "uppercase",
-  },
+    betLeft: {
+      flex: 1,
+    },
 
-  betRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.surface.card,
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginBottom: 6,
-    borderWidth: 1,
-    borderColor: colors.border.subtle,
-  },
+    player: {
+      fontWeight: "700",
+      color: colors.text.primary,
+    },
 
+    market: {
+      marginTop: 2,
+      fontWeight: "600",
+      color: colors.text.secondary,
+      fontSize: 12,
+    },
 
-  betLeft: {
-    flex: 1,
-  },
+    ou: {
+      fontWeight: "900",
+      color: colors.accent.primary,
+    },
 
-  player: {
-    fontWeight: "700",
-    color: colors.text.primary,
-  },
+    price: {
+      width: 60,
+      textAlign: "right",
+      fontWeight: "800",
+      color: colors.text.primary,
+      marginRight: 8,
+    },
 
+    removeBtn: {
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+    },
 
-  market: {
-    marginTop: 2,
-    fontWeight: "600",
-    color: colors.text.secondary,
-    fontSize: 12,
-  },
+    removeText: {
+      fontSize: 16,
+      fontWeight: "900",
+      color: colors.text.muted,
+    },
 
+    actionBar: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      flexDirection: "row",
+      gap: 12,
+      padding: 12,
+      backgroundColor: colors.surface.card,
+      borderTopWidth: 1,
+      borderTopColor: colors.border.subtle,
+    },
 
-  ou: {
-    fontWeight: "900",
-    color: colors.accent,
-  },
+    copyBtn: {
+      flex: 1,
+      backgroundColor: colors.surface.elevated,
+      paddingVertical: 14,
+      borderRadius: 14,
+      alignItems: "center",
+    },
 
-  price: {
-    width: 60,
-    textAlign: "right",
-    fontWeight: "800",
-    color: colors.text.primary,
-    marginRight: 8,
-  },
+    copyText: {
+      color: colors.text.primary,
+      fontWeight: "900",
+    },
 
+    gamblyBtn: {
+      flex: 1,
+      backgroundColor: colors.accent.primary,
+      paddingVertical: 14,
+      borderRadius: 14,
+      alignItems: "center",
+    },
 
-  removeBtn: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-
-  removeText: {
-    fontSize: 16,
-    fontWeight: "900",
-    color: colors.text.muted,
-  },
-
-
-  actionBar: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    gap: 12,
-    padding: 12,
-    backgroundColor: colors.surface.card,
-    borderTopWidth: 1,
-    borderTopColor: colors.border.subtle,
-  },
-
-
-  copyBtn: {
-    flex: 1,
-    backgroundColor: colors.surface.elevated,
-    paddingVertical: 14,
-    borderRadius: 14,
-    alignItems: "center",
-  },
-  copyText: {
-    color: colors.text.primary,
-    fontWeight: "900",
-  },
-
-
-  gamblyBtn: {
-    flex: 1,
-    backgroundColor: colors.accent.primary,
-    paddingVertical: 14,
-    borderRadius: 14,
-    alignItems: "center",
-  },
-  gamblyText: {
-    color: colors.text.primary,
-    fontWeight: "900",
-  },
-
-});
+    gamblyText: {
+      color: colors.text.primary,
+      fontWeight: "900",
+    },
+  });

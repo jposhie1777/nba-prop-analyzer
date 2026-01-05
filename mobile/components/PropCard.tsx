@@ -857,3 +857,4 @@ const makeStyles = (colors: any) =>
       color: colors.text.primary,
     },
   });
+}

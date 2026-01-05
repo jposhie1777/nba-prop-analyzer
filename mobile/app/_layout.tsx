@@ -6,6 +6,7 @@ import "react-native-reanimated";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useSavedBets } from "@/store/useSavedBets";
+import DebugMemory from "@/components/debug/DebugMemory";
 
 export const unstable_settings = {
   anchor: "(tabs)",
@@ -24,19 +25,24 @@ export default function RootLayout() {
   }, [hydrateSavedBets]);
 
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <Stack>
-        {/* MAIN TAB STACK */}
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+    <>
+      {/* DEV-ONLY GLOBAL OVERLAY */}
+      <DebugMemory />
 
-        {/* MODALS */}
-        <Stack.Screen
-          name="modal"
-          options={{ presentation: "modal", title: "Modal" }}
-        />
-      </Stack>
+      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+        <Stack>
+          {/* MAIN TAB STACK */}
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 
-      <StatusBar style="auto" />
-    </ThemeProvider>
+          {/* MODALS */}
+          <Stack.Screen
+            name="modal"
+            options={{ presentation: "modal", title: "Modal" }}
+          />
+        </Stack>
+
+        <StatusBar style="auto" />
+      </ThemeProvider>
+    </>
   );
 }

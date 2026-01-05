@@ -419,28 +419,23 @@ return (
                 </Text>
               </View>
 
-              <View style={styles.right}>
+              <View style={styles.oddsTopRight}>
                 {resolvedBooks.slice(0, 3).map((b) => {
                   const key = normalizeBookKey(b.bookmaker);
                   return (
                     <View key={key} style={styles.oddsPill}>
                       {BOOKMAKER_LOGOS[key] ? (
-                        <Image
-                          source={BOOKMAKER_LOGOS[key]}
-                          style={styles.bookLogo}
-                        />
+                        <Image source={BOOKMAKER_LOGOS[key]} style={styles.bookLogo} />
                       ) : (
                         <View style={styles.bookLogoPlaceholder} />
                       )}
-                      <Text style={styles.oddsText}>
-                        {formatOdds(b.odds)}
-                      </Text>
+                      <Text style={styles.oddsText}>{formatOdds(b.odds)}</Text>
                     </View>
                   );
                 })}
               </View>
-            </View>
 
+            </View>
             {/* DIVIDER */}
             <View style={styles.divider} />
 
@@ -605,12 +600,13 @@ return (
     </Animated.View>
   </Swipeable>
 );
+}
 
 /* ======================================================
    STYLES
 ====================================================== */
-const makeStyles = (colors: any) =>
-  StyleSheet.create({
+function makeStyles(colors: any) {
+  return StyleSheet.create({
     outer: {
       marginHorizontal: 14,
       marginVertical: 10,
@@ -665,14 +661,19 @@ const makeStyles = (colors: any) =>
       gap: 10,
     },
 
-    teamLogo: { width: 20, height: 20 },
+    teamLogo: {
+      width: 18,
+      height: 18,
+      resizeMode: "contain",
+    },
 
     teamLogoPlaceholder: {
-      width: 20,
-      height: 20,
-      backgroundColor: colors.surface.cardSoft,
+      width: 18,
+      height: 18,
       borderRadius: 4,
+      backgroundColor: colors.surface.cardSoft,
     },
+
 
     player: {
       fontWeight: "800",
@@ -690,11 +691,14 @@ const makeStyles = (colors: any) =>
 
     oddsPill: {
       flexDirection: "row",
+      alignItems: "center",
       gap: 6,
-      padding: 6,
-      borderRadius: 10,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 999,
       backgroundColor: colors.surface.cardSoft,
     },
+
 
     oddsText: {
       fontWeight: "800",
@@ -709,7 +713,10 @@ const makeStyles = (colors: any) =>
 
     hitText: {
       fontWeight: "900",
+      color: colors.text.primary,
+      letterSpacing: 0.3,
     },
+
 
     metricSub: {
       color: colors.text.muted,
@@ -717,13 +724,15 @@ const makeStyles = (colors: any) =>
 
     badge: {
       flexDirection: "row",
+      alignItems: "center",
       gap: 6,
       paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 10,
+      paddingVertical: 3,
+      borderRadius: 999,
       borderWidth: 1,
       borderColor: colors.border.subtle,
-    },
+},
+
 
     badgeLabel: {
       fontSize: 9,
@@ -855,5 +864,31 @@ const makeStyles = (colors: any) =>
     windowPillLabelActive: {
       color: colors.text.primary,
     },
+    bookLogo: {
+      width: 14,
+      height: 14,
+      resizeMode: "contain",
+    },
+
+    bookLogoPlaceholder: {
+      width: 14,
+      height: 14,
+      borderRadius: 3,
+      backgroundColor: colors.surface.cardSoft,
+    },
+    metricsRow: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      justifyContent: "space-between",
+      marginTop: 6,
+    },
+    oddsTopRight: {
+      position: "absolute",
+      top: 12,
+      right: 46, // 👈 pushes left so it doesn't collide with save star
+      flexDirection: "row",
+      gap: 6,
+    },
+
   });
 }

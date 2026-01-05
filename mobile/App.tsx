@@ -4,11 +4,16 @@ import { SafeAreaView, ScrollView } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import PropCard from "./components/PropCard";
+import DebugMemory from "./components/debug/DebugMemory";
 import colors from "./theme/color";
 
 export default function App() {
+  console.log("__DEV__", __DEV__);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <DebugMemory />
+
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
         <ScrollView contentInsetAdjustmentBehavior="automatic">
           <PropCard

@@ -1,45 +1,16 @@
 import { FlatList, View, ActivityIndicator, Text } from "react-native";
-import { useEffect, useRef, useState } from "react";
 
 import { useTheme } from "@/store/useTheme";
 import { LiveGameCard } from "@/components/live/LiveGameCard";
-import { LiveGame } from "@/types/live";
-import { fetchLiveGames } from "@/services/liveGames";
-
-const POLL_INTERVAL_MS = 20_000; // 20 seconds
+import { useLiveGames } from "@/hooks/useLiveGames";
 
 export default function LiveGamesScreen() {
   const { colors } = useTheme();
 
-  const [games, setGames] = useState<LiveGame[]>([]);
-  const [loading, setLoading] = useState(true);
-  const pollRef = useRef<NodeJS.Timeout | null>(null);
+  // 🔴 Live data now comes from the hybrid hook
+  const { games, mode } = useLiveGames();
 
-  useEffect(() => {
-    let mounted = true;
-
-    const load = async () => {
-      const data = await fetchLiveGames();
-      if (!mounted) return;
-
-      setGames(data);
-      setLoading(false);
-    };
-
-    // Initial fetch immediately
-    load();
-
-    // Poll every 20 seconds
-    pollRef.current = setInterval(load, POLL_INTERVAL_MS);
-
-    // Cleanup
-    return () => {
-      mounted = false;
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-      }
-    };
-  }, []);
+  const loading = !games; // initial mount safety
 
   /* =============================
      Loading
@@ -84,6 +55,18 @@ export default function LiveGamesScreen() {
   ============================== */
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface.screen }}>
+      {/* Optional debug / status */}
+      <Text
+        style={{
+          color: colors.text.muted,
+          fontSize: 12,
+          paddingHorizontal: 12,
+          paddingVertical: 6,
+        }}
+      >
+        {mode === "sse" ? "LIVE" : "REFRESHING"}
+      </Text>
+
       <FlatList
         data={games}
         keyExtractor={(g) => g.gameId}

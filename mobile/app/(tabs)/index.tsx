@@ -14,7 +14,7 @@ import { useTheme } from "@/store/useTheme";
 import { fetchProps, MobileProp } from "../../lib/api";
 import { useSavedBets } from "@/store/useSavedBets";
 import { usePropsStore } from "@/store/usePropsStore";
-
+import { themeMeta } from "@/theme/meta";
 // ---------------------------
 // STORAGE KEYS
 // ---------------------------
@@ -90,6 +90,8 @@ export default function HomeScreen() {
   const [filtersOpen, setFiltersOpen] = useState(true);
   const colors = useTheme((s) => s.colors);
   const setTheme = useTheme((s) => s.setTheme);
+  
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   
   const [themeOpen, setThemeOpen] = useState(false);
   // ---------------------------
@@ -528,124 +530,147 @@ export default function HomeScreen() {
 // STYLES — HOME SCREEN
 // ---------------------------
 
-const styles = StyleSheet.create({
-  root: { flex: 1 },
+const makeStyles = (colors: any) =>
+  StyleSheet.create({
+    root: { flex: 1 },
 
-  screen: {
-    flex: 1,
-    backgroundColor: colors.surface.screen,
-  },
+    screen: {
+      flex: 1,
+      backgroundColor: colors.surface.screen,
+    },
 
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+    center: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+    },
 
-  error: {
-    color: colors.accent.danger,
-    fontWeight: "600",
-  },
-  loading: {
-    color: colors.text.muted,
-  },
+    error: {
+      color: colors.accent.danger,
+      fontWeight: "600",
+    },
 
+    loading: {
+      color: colors.text.muted,
+    },
 
-  tabs: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    paddingVertical: 12,
-    backgroundColor: colors.surface.card,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.subtle,
-  },
+    tabs: {
+      flexDirection: "row",
+      justifyContent: "space-around",
+      paddingVertical: 12,
+      backgroundColor: colors.surface.card,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border.subtle,
+    },
 
-  tab: {
-    fontWeight: "700",
-    color: colors.text.muted,
-  },
+    tab: {
+      fontWeight: "700",
+      color: colors.text.muted,
+    },
 
-  tabActive: {
-    color: colors.accent.primary,
-  },
+    tabActive: {
+      color: colors.accent.primary,
+    },
 
+    filters: {
+      padding: 14,
+      backgroundColor: colors.surface.card,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border.subtle,
+    },
 
-  filters: {
-    padding: 14,
-    backgroundColor: colors.surface.card,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.subtle,
-  },
+    filterHeaderRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
 
-  filtersTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: colors.text.primary,
-  },
+    filtersTitle: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.text.primary,
+    },
 
+    filtersCard: {
+      backgroundColor: colors.surface.cardSoft,
+      borderRadius: 14,
+      padding: 12,
+      marginTop: 10,
+      borderWidth: 1,
+      borderColor: colors.border.subtle,
+    },
 
-  filtersCard: {
-    backgroundColor: colors.surface.cardSoft,
-    borderRadius: 14,
-    padding: 12,
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: colors.border.subtle,
-  },
+    pills: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      marginBottom: 12,
+    },
 
+    pill: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 14,
+      marginRight: 8,
+      marginBottom: 8,
+      fontWeight: "600",
+      color: colors.text.secondary,
+      backgroundColor: colors.surface.elevated,
+    },
 
-  pills: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginBottom: 12,
-  },
+    pillActive: {
+      backgroundColor: colors.accent.primary,
+      color: colors.text.primary,
+    },
 
-  pill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-    marginRight: 8,
-    marginBottom: 8,
-    fontWeight: "600",
-    color: colors.text.secondary,
-    backgroundColor: colors.surface.elevated,
-  },
+    sliderLabel: {
+      marginTop: 10,
+      marginBottom: 4,
+      color: colors.text.secondary,
+      fontWeight: "600",
+    },
 
-  pillActive: {
-    backgroundColor: colors.accent.primary,
-    color: colors.text.primary,
-  },
+    list: {
+      paddingTop: 8,
+    },
 
+    themeBtn: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 10,
+      backgroundColor: colors.surface.elevated,
+      borderWidth: 1,
+      borderColor: colors.border.subtle,
+    },
 
-  sliderLabel: {
-    marginTop: 10,
-    marginBottom: 4,
-    color: colors.text.secondary,
-    fontWeight: "600",
-  },
+    themeBtnText: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: colors.text.primary,
+    },
 
+    themeOverlay: {
+      position: "absolute",
+      inset: 0,
+      backgroundColor: "rgba(0,0,0,0.4)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
 
-  list: {
-    paddingTop: 8,
-  },
-  filterHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  
-  themeBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-    backgroundColor: colors.surface.elevated,
-    borderWidth: 1,
-    borderColor: colors.border.subtle,
-  },
-  
-  themeBtnText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: colors.text.primary,
-  },
-});
+    themeModal: {
+      backgroundColor: colors.surface.card,
+      padding: 16,
+      borderRadius: 16,
+      width: "80%",
+      gap: 10,
+    },
+
+    themeOption: {
+      padding: 12,
+      borderRadius: 12,
+    },
+
+    themeLabel: {
+      fontWeight: "800",
+      color: colors.text.primary,
+    },
+  });

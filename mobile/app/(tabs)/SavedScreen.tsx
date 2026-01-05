@@ -11,7 +11,7 @@ import { useMemo } from "react";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 
-import colors from "../../theme/color";
+import { useTheme } from "@/store/useTheme";
 import { useSavedBets } from "@/store/useSavedBets";
 import { usePropsStore } from "@/store/usePropsStore"; // 🔑 assumes your live props store
 
@@ -26,7 +26,7 @@ export default function SavedScreen() {
   const clearAll = useSavedBets((s) => s.clearAll);
 
   const allProps = usePropsStore((s) => s.props); // live props already loaded elsewhere
-
+  const colors = useTheme((s) => s.colors);
   // ---------------------------
   // DERIVE SAVED PROPS
   // ---------------------------

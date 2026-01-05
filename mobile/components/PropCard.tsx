@@ -145,6 +145,9 @@ export default function PropCard(props: PropCardProps) {
     away,
     bookmaker,
     books,
+    pace_delta,        // ✅ ADD THIS
+    delta_vs_line,     // (you already use this too)
+    ts_l10,
     saved,
     onToggleSave,
     expanded,

@@ -89,6 +89,9 @@ export default function HomeScreen() {
 
   const [filtersOpen, setFiltersOpen] = useState(true);
   const colors = useTheme((s) => s.colors);
+  const setTheme = useTheme((s) => s.setTheme);
+  
+  const [themeOpen, setThemeOpen] = useState(false);
   // ---------------------------
   // EXPANDED CARD STATE (ONLY ONE OPEN)
   // ---------------------------
@@ -400,12 +403,22 @@ export default function HomeScreen() {
             FILTERS
         ========================== */}
         <View style={styles.filters}>
-          <Text
-            onPress={() => setFiltersOpen((v) => !v)}
-            style={styles.filtersTitle}
-          >
-            Filters {filtersOpen ? "▲" : "▼"}
-          </Text>
+          {/* HEADER ROW */}
+          <View style={styles.filterHeaderRow}>
+            <Text
+              onPress={() => setFiltersOpen((v) => !v)}
+              style={styles.filtersTitle}
+            >
+              Filters {filtersOpen ? "▲" : "▼"}
+            </Text>
+        
+            <Pressable
+              onPress={() => setThemeOpen(true)}
+              style={styles.themeBtn}
+            >
+              <Text style={styles.themeBtnText}>🎨 Theme</Text>
+            </Pressable>
+          </View>
 
           {filtersOpen && (
             <View style={styles.filtersCard}>
@@ -485,6 +498,27 @@ export default function HomeScreen() {
           contentContainerStyle={styles.list}
           ListFooterComponent={<View style={{ height: 40 }} />}
         />
+        {themeOpen && (
+          <View style={styles.themeOverlay}>
+            <View style={styles.themeModal}>
+              {Object.entries(themeMeta).map(([key, meta]) => (
+                <Pressable
+                  key={key}
+                  onPress={() => {
+                    setTheme(key as any);
+                    setThemeOpen(false);
+                  }}
+                  style={[
+                    styles.themeOption,
+                    { backgroundColor: meta.preview },
+                  ]}
+                >
+                  <Text style={styles.themeLabel}>{meta.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
       </View>
     </GestureHandlerRootView>
   );
@@ -593,5 +627,25 @@ const styles = StyleSheet.create({
 
   list: {
     paddingTop: 8,
+  },
+  filterHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  
+  themeBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: colors.surface.elevated,
+    borderWidth: 1,
+    borderColor: colors.border.subtle,
+  },
+  
+  themeBtnText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: colors.text.primary,
   },
 });

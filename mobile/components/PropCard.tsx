@@ -337,207 +337,275 @@ export default function PropCard(props: PropCardProps) {
   );
 
   /* ======================================================
-     RENDER
-  ======================================================= */
-  return (
-    <Swipeable
-      ref={swipeableRef}
-      overshootRight={false}
-      renderLeftActions={renderSaveAction}
-      leftThreshold={60}
-      friction={2}
-      onSwipeableWillOpen={handleSwipeHaptic}
-      onSwipeableOpen={handleSwipeOpen}
-    >
-      <Animated.View style={[animatedStyle, styles.outer]}>
-        <Animated.View style={[styles.card, flashStyle]}>
-          <View style={[styles.accentStrip, { backgroundColor: accentColor }]} />
+   RENDER
+====================================================== */
+return (
+  <Swipeable
+    ref={swipeableRef}
+    overshootRight={false}
+    renderLeftActions={renderSaveAction}
+    leftThreshold={60}
+    friction={2}
+    onSwipeableWillOpen={handleSwipeHaptic}
+    onSwipeableOpen={handleSwipeOpen}
+  >
+    <Animated.View style={[animatedStyle, styles.outer]}>
+      <Animated.View style={[styles.card, flashStyle]}>
+        {/* ACCENT STRIP */}
+        <View
+          style={[styles.accentStrip, { backgroundColor: accentColor }]}
+        />
 
-          <Pressable onPress={onToggleSave} hitSlop={10} style={styles.saveButton}>
-            <Text style={[styles.saveStar, saved ? styles.saveStarOn : styles.saveStarOff]}>
-              {saved ? "★" : "☆"}
-            </Text>
-          </Pressable>
+        {/* SAVE BUTTON */}
+        <Pressable
+          onPress={onToggleSave}
+          hitSlop={10}
+          style={styles.saveButton}
+        >
+          <Text
+            style={[
+              styles.saveStar,
+              saved ? styles.saveStarOn : styles.saveStarOff,
+            ]}
+          >
+            {saved ? "★" : "☆"}
+          </Text>
+        </Pressable>
 
-          <Pressable onPress={onToggleExpand} onPressIn={onPressIn} onPressOut={onPressOut} android_ripple={null} hitSlop={4}>
-            <Animated.View style={pressAnimStyle}>
-              {/* HEADER */}
-              <View style={styles.headerRow}>
-                <View style={styles.teams}>
-                  <View style={styles.teamStack}>
-                    {away && TEAM_LOGOS[away] ? (
-                      <Image source={{ uri: TEAM_LOGOS[away] }} style={styles.teamLogo} />
-                    ) : (
-                      <View style={styles.teamLogoPlaceholder} />
-                    )}
-                    {home && TEAM_LOGOS[home] ? (
-                      <Image source={{ uri: TEAM_LOGOS[home] }} style={styles.teamLogo} />
-                    ) : (
-                      <View style={styles.teamLogoPlaceholder} />
-                    )}
-                  </View>
-                </View>
-
-                <View style={styles.center}>
-                  <Text numberOfLines={1} style={styles.player}>{player}</Text>
-                  <Text numberOfLines={1} style={styles.marketLine}>{market} • {line}</Text>
-                  <Text numberOfLines={1} style={styles.matchup}>{matchup ?? " "}</Text>
-                </View>
-
-                <View style={styles.right}>
-                  {resolvedBooks.slice(0, 3).map((b) => {
-                    const key = normalizeBookKey(b.bookmaker);
-                    return (
-                      <View key={key} style={styles.oddsPill}>
-                        {BOOKMAKER_LOGOS[key] ? (
-                          <Image source={BOOKMAKER_LOGOS[key]} style={styles.bookLogo} />
-                        ) : (
-                          <View style={styles.bookLogoPlaceholder} />
-                        )}
-                        <Text style={styles.oddsText}>{formatOdds(b.odds)}</Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-
-              <View style={styles.divider} />
-
-              <View style={styles.metricsRow}>
-                <View>
-                  <Text style={[styles.hitText, { color: colors.text.primary }]}>
-                    {hitPct}% HIT
-                  </Text>
-                  <Text style={styles.metricSub}>Last 10</Text>
-                </View>
-                <View style={styles.badge}>
-                  <Text style={styles.badgeLabel}>CONF</Text>
-                  <Text style={[styles.badgeValue, { color: confidenceColor }]}>{confidence}</Text>
-                </View>
-              </View>
-
-              <View style={styles.confidenceRow}>
-                <View style={styles.confidenceSpacer} />
-
-                <View style={styles.confidenceBarWrap}>
-                  <View style={styles.confidenceBarTrack}>
-                    <View
-                      style={[
-                        styles.confidenceBarFill,
-                        {
-                          width: `${confidence}%`,
-                          backgroundColor: confidenceColor,
-                        },
-                      ]}
+        {/* MAIN CARD PRESS */}
+        <Pressable
+          onPress={onToggleExpand}
+          onPressIn={onPressIn}
+          onPressOut={onPressOut}
+          hitSlop={4}
+        >
+          <Animated.View style={pressAnimStyle}>
+            {/* HEADER */}
+            <View style={styles.headerRow}>
+              <View style={styles.teams}>
+                <View style={styles.teamStack}>
+                  {away && TEAM_LOGOS[away] ? (
+                    <Image
+                      source={{ uri: TEAM_LOGOS[away] }}
+                      style={styles.teamLogo}
                     />
-                  </View>
+                  ) : (
+                    <View style={styles.teamLogoPlaceholder} />
+                  )}
+
+                  {home && TEAM_LOGOS[home] ? (
+                    <Image
+                      source={{ uri: TEAM_LOGOS[home] }}
+                      style={styles.teamLogo}
+                    />
+                  ) : (
+                    <View style={styles.teamLogoPlaceholder} />
+                  )}
                 </View>
               </View>
 
+              <View style={styles.center}>
+                <Text numberOfLines={1} style={styles.player}>
+                  {player}
+                </Text>
+                <Text numberOfLines={1} style={styles.marketLine}>
+                  {market} • {line}
+                </Text>
+                <Text numberOfLines={1} style={styles.matchup}>
+                  {matchup ?? " "}
+                </Text>
+              </View>
 
-              <Animated.View style={[styles.expandWrap, expandStyle]}>
+              <View style={styles.right}>
+                {resolvedBooks.slice(0, 3).map((b) => {
+                  const key = normalizeBookKey(b.bookmaker);
+                  return (
+                    <View key={key} style={styles.oddsPill}>
+                      {BOOKMAKER_LOGOS[key] ? (
+                        <Image
+                          source={BOOKMAKER_LOGOS[key]}
+                          style={styles.bookLogo}
+                        />
+                      ) : (
+                        <View style={styles.bookLogoPlaceholder} />
+                      )}
+                      <Text style={styles.oddsText}>
+                        {formatOdds(b.odds)}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* DIVIDER */}
+            <View style={styles.divider} />
+
+            {/* METRICS */}
+            <View style={styles.metricsRow}>
+              <View>
+                <Text style={styles.hitText}>{hitPct}% HIT</Text>
+                <Text style={styles.metricSub}>Last 10</Text>
+              </View>
+
+              <View style={styles.badge}>
+                <Text style={styles.badgeLabel}>CONF</Text>
+                <Text
+                  style={[
+                    styles.badgeValue,
+                    { color: confidenceColor },
+                  ]}
+                >
+                  {confidence}
+                </Text>
+              </View>
+            </View>
+
+            {/* CONFIDENCE BAR */}
+            <View style={styles.confidenceRow}>
+              <View style={styles.confidenceSpacer} />
+              <View style={styles.confidenceBarWrap}>
+                <View style={styles.confidenceBarTrack}>
+                  <View
+                    style={[
+                      styles.confidenceBarFill,
+                      {
+                        width: `${confidence}%`,
+                        backgroundColor: confidenceColor,
+                      },
+                    ]}
+                  />
+                </View>
+              </View>
+            </View>
+
+            {/* EXPANDED SECTION (AUTO HEIGHT) */}
+            {expanded && (
+              <Animated.View
+                entering={Animated.FadeInDown.duration(120)}
+                exiting={Animated.FadeOutUp.duration(90)}
+                style={styles.expandWrap}
+              >
                 <View style={styles.expandInner}>
-              
-                  <View style={styles.expandedContainer}>
-              
-                    {/* PERFORMANCE */}
-                    <View style={styles.sectionHeader}>
-                      <Text style={styles.sectionIcon} allowFontScaling={false}>📊</Text>
-                      <Text style={styles.sectionText}>Performance</Text>
-                    </View>
-              
-                    <View style={styles.gridRow}>
-                      <Text style={styles.statLabel}>AVG</Text>
-                      <Text style={styles.statLabel}>HIT%</Text>
-                      <Text style={styles.statLabel}>BAD MISS</Text>
-                      <Text style={styles.statLabel}>PACE</Text>
-                    </View>
-              
-                    <View style={styles.gridRow}>
-                      <Text style={styles.statValue}>{avg != null ? avg.toFixed(1) : "—"}</Text>
-                      <Text style={styles.statValue}>{Math.round((hitRate ?? 0) * 100)}%</Text>
-                      <Text style={styles.statValue}>{Math.round((badMiss ?? 0) * 100)}%</Text>
-                      <Text style={styles.statValue}>{pace?.toFixed(1) ?? "—"}</Text>
-                    </View>
-              
-                    {/* EDGE */}
-                    <View style={styles.sectionHeader}>
-                      <Text style={styles.sectionIcon}>🎯</Text>
-                      <Text style={styles.sectionText}>Edge</Text>
-                    </View>
-              
-                    <View style={styles.gridRow}>
-                      <Text style={styles.statLabel}>+1</Text>
-                      <Text style={styles.statLabel}>+2</Text>
-                      <Text style={styles.statLabel}>MARGIN</Text>
-                      <Text style={styles.statLabel}>Δ LINE</Text>
-                    </View>
-              
-                    <View style={styles.gridRow}>
-                      <Text style={styles.statValue}>{Math.round((clear1 ?? 0) * 100)}%</Text>
-                      <Text style={styles.statValue}>{Math.round((clear2 ?? 0) * 100)}%</Text>
-                      <Text style={styles.statValue}>{margin?.toFixed(1) ?? "—"}</Text>
-                      <Text style={styles.statValue}>{props.delta_vs_line?.toFixed(1) ?? "—"}</Text>
-                    </View>
-              
-                    {/* CONTEXT */}
-                    <View style={styles.sectionHeader}>
-                      <Text style={styles.sectionIcon}>⚡</Text>
-                      <Text style={styles.sectionText}>Context</Text>
-                    </View>
-              
-                    <View style={styles.gridRow}>
-                      <Text style={styles.statLabel}>TS%</Text>
-                      <Text style={styles.statLabel}>USG%</Text>
-                      <Text style={styles.statLabel}>PACE Δ</Text>
-                    </View>
-              
-                    <View style={styles.gridRow}>
-                      <Text style={styles.statValue}>{props.ts_l10?.toFixed(3) ?? "—"}</Text>
-                      <Text style={styles.statValue}>{Math.round((usage ?? 0) * 100)}%</Text>
-                      <Text style={styles.statValue}>{props.pace_delta?.toFixed(1) ?? "—"}</Text>
-                    </View>
-              
+                  {/* PERFORMANCE */}
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionIcon}>📊</Text>
+                    <Text style={styles.sectionText}>Performance</Text>
                   </View>
-              
-                  {/* KEEP TOGGLE BELOW */}
-                  <View style={styles.windowToggle}>
-                    <View style={styles.windowPillGroup}>
-                      {[5, 10, 20].map((n) => {
-                        const active = window === n;
-                        return (
-                          <Pressable
-                            key={n}
-                            onPress={() => setWindow(n as 5 | 10 | 20)}
+
+                  <View style={styles.gridRow}>
+                    <Text style={styles.statLabel}>AVG</Text>
+                    <Text style={styles.statLabel}>HIT%</Text>
+                    <Text style={styles.statLabel}>BAD MISS</Text>
+                    <Text style={styles.statLabel}>PACE</Text>
+                  </View>
+
+                  <View style={styles.gridRow}>
+                    <Text style={styles.statValue}>
+                      {avg != null ? avg.toFixed(1) : "—"}
+                    </Text>
+                    <Text style={styles.statValue}>
+                      {Math.round((hitRate ?? 0) * 100)}%
+                    </Text>
+                    <Text style={styles.statValue}>
+                      {Math.round((badMiss ?? 0) * 100)}%
+                    </Text>
+                    <Text style={styles.statValue}>
+                      {pace?.toFixed(1) ?? "—"}
+                    </Text>
+                  </View>
+
+                  {/* EDGE */}
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionIcon}>🎯</Text>
+                    <Text style={styles.sectionText}>Edge</Text>
+                  </View>
+
+                  <View style={styles.gridRow}>
+                    <Text style={styles.statLabel}>+1</Text>
+                    <Text style={styles.statLabel}>+2</Text>
+                    <Text style={styles.statLabel}>MARGIN</Text>
+                    <Text style={styles.statLabel}>Δ LINE</Text>
+                  </View>
+
+                  <View style={styles.gridRow}>
+                    <Text style={styles.statValue}>
+                      {Math.round((clear1 ?? 0) * 100)}%
+                    </Text>
+                    <Text style={styles.statValue}>
+                      {Math.round((clear2 ?? 0) * 100)}%
+                    </Text>
+                    <Text style={styles.statValue}>
+                      {margin?.toFixed(1) ?? "—"}
+                    </Text>
+                    <Text style={styles.statValue}>
+                      {props.delta_vs_line?.toFixed(1) ?? "—"}
+                    </Text>
+                  </View>
+
+                  {/* CONTEXT */}
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionIcon}>⚡</Text>
+                    <Text style={styles.sectionText}>Context</Text>
+                  </View>
+
+                  <View style={styles.gridRow}>
+                    <Text style={styles.statLabel}>TS%</Text>
+                    <Text style={styles.statLabel}>USG%</Text>
+                    <Text style={styles.statLabel}>PACE Δ</Text>
+                  </View>
+
+                  <View style={styles.gridRow}>
+                    <Text style={styles.statValue}>
+                      {props.ts_l10?.toFixed(3) ?? "—"}
+                    </Text>
+                    <Text style={styles.statValue}>
+                      {Math.round((usage ?? 0) * 100)}%
+                    </Text>
+                    <Text style={styles.statValue}>
+                      {props.pace_delta?.toFixed(1) ?? "—"}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* WINDOW TOGGLE */}
+                <View style={styles.windowToggle}>
+                  <View style={styles.windowPillGroup}>
+                    {[5, 10, 20].map((n) => {
+                      const active = window === n;
+                      return (
+                        <Pressable
+                          key={n}
+                          onPress={() =>
+                            setWindow(n as 5 | 10 | 20)
+                          }
+                          style={[
+                            styles.windowPill,
+                            active && styles.windowPillActive,
+                          ]}
+                        >
+                          <Text
                             style={[
-                              styles.windowPill,
-                              active && styles.windowPillActive,
+                              styles.windowPillLabel,
+                              active &&
+                                styles.windowPillLabelActive,
                             ]}
                           >
-                            <Text
-                              style={[
-                                styles.windowPillLabel,
-                                active && styles.windowPillLabelActive,
-                              ]}
-                            >
-                              L{n}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
+                            L{n}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
                   </View>
-
-              
                 </View>
               </Animated.View>
-            </Animated.View>
-          </Pressable>
-        </Animated.View>
+            )}
+          </Animated.View>
+        </Pressable>
       </Animated.View>
-    </Swipeable>
-  );
-}
+    </Animated.View>
+  </Swipeable>
+);
 
 /* ======================================================
    STYLES
@@ -748,5 +816,44 @@ const makeStyles = (colors: any) =>
     confidenceBarFill: {
       height: "100%",
       borderRadius: 999,
+    },
+    windowToggle: {
+      marginTop: 14,
+      alignItems: "center",
+    },
+    
+    windowPillGroup: {
+      flexDirection: "row",
+      backgroundColor: colors.surface.cardSoft,
+      borderRadius: 999,
+      padding: 4,
+      gap: 6,
+    },
+    
+    windowPill: {
+      paddingHorizontal: 14,
+      paddingVertical: 6,
+      borderRadius: 999,
+      backgroundColor: "transparent",
+    },
+    
+    windowPillActive: {
+      backgroundColor: colors.surface.card,
+      shadowColor: "#000",
+      shadowOpacity: 0.18,
+      shadowRadius: 6,
+      shadowOffset: { width: 0, height: 3 },
+      elevation: 3,
+    },
+    
+    windowPillLabel: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: colors.text.muted,
+      letterSpacing: 0.4,
+    },
+    
+    windowPillLabelActive: {
+      color: colors.text.primary,
     },
   });

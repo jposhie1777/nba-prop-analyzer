@@ -8,14 +8,15 @@ export function subscribeLiveGames(
 ) {
   if (!API_URL) return () => {};
 
-  const es = new EventSource(`${API_URL}/live/games/stream`);
+  const es = new EventSource(`${API_URL}/live/scores/stream`);
 
-  es.onmessage = (e) => {
+  es.addEventListener("snapshot", (e) => {
     try {
       const raw = JSON.parse(e.data);
-      onUpdate(adaptLiveGames(raw.games ?? raw));
+      onUpdate(adaptLiveGames(raw.games ?? []));
     } catch {}
-  };
+  });
+
 
   es.onerror = () => {
     es.close();

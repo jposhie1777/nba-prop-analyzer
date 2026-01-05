@@ -8,7 +8,12 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
-
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+} from "react-native";
 import { useTheme } from "@/store/useTheme";
 import textStyles from "../theme/text";
 import { BOOKMAKER_LOGOS } from "../utils/bookmakerLogos";

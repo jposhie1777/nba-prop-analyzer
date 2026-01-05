@@ -3,6 +3,7 @@ import {
   Text,
   StyleSheet,
   FlatList,
+  Pressable, // ✅ ADD THIS
 } from "react-native";
 import { useMemo, useState, useEffect, useCallback } from "react";
 import Slider from "@react-native-community/slider";

@@ -1,28 +1,44 @@
-const appleSports = {
+// theme/apple.ts
+import type { ThemeColors } from "./types";
+
+export const apple: ThemeColors = {
   surface: {
-    screen: "#0B1F3A",       // deep navy background
-    card: "#102A4C",         // primary card
-    cardSoft: "#0E2542",     // inner sections
-    elevated: "#14335E",     // pills / tabs
+    screen: "#0A1A33",
+    card: "#0E223F",
+    cardSoft: "#102A4F",
+    elevated: "#14325C",
   },
 
   text: {
     primary: "#FFFFFF",
-    secondary: "#C7D2E3",
-    muted: "#8FA6C7",
+    secondary: "#C7D2E0",
+    muted: "#8CA3C0",
+    disabled: "#64748B",
+    inverse: "#0A1A33",
   },
 
   border: {
     subtle: "rgba(255,255,255,0.08)",
-    strong: "rgba(255,255,255,0.14)",
+    strong: "rgba(255,255,255,0.16)",
   },
 
   accent: {
-    primary: "#4DA3FF",      // Apple blue
-    success: "#4ADE80",
-    warning: "#FACC15",
-    danger: "#F87171",
+    primary: "#4DA3FF",
+    success: "#34D399",
+    warning: "#FBBF24",
+    danger: "#EF4444",
+    info: "#60A5FA",
+  },
+
+  state: {
+    active: "#4DA3FF",
+    hover: "#0F2A4F",
+    selected: "#163A6B",
+    disabled: "#334155",
+  },
+
+  glow: {
+    success: "rgba(52,211,153,0.18)",
+    primary: "rgba(77,163,255,0.18)",
   },
 };
-
-export default appleSports;

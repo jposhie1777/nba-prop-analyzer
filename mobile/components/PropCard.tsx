@@ -442,7 +442,7 @@ export default function PropCard(props: PropCardProps) {
               
                     {/* PERFORMANCE */}
                     <View style={styles.sectionHeader}>
-                      <Text style={styles.sectionIcon}>📊</Text>
+                      <Text style={styles.sectionIcon} allowFontScaling={false}>📊</Text>
                       <Text style={styles.sectionText}>Performance</Text>
                     </View>
               
@@ -691,5 +691,62 @@ const makeStyles = (colors: any) =>
       letterSpacing: 0.6,
       textTransform: "uppercase",
       color: colors.text.secondary,
+    },
+    sectionIcon: {
+      fontSize: 13,
+      lineHeight: 13,
+      opacity: 0.85,
+    },
+    expandedContainer: {
+      gap: 12,
+    },
+    
+    gridRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+    },
+    
+    statLabel: {
+      flex: 1,
+      textAlign: "center",
+      fontSize: 11,
+      fontWeight: "700",
+      letterSpacing: 0.4,
+      color: colors.text.muted,
+    },
+    
+    statValue: {
+      flex: 1,
+      textAlign: "center",
+      fontSize: 14,
+      fontWeight: "900",
+      color: colors.text.primary,
+    },
+    confidenceRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginTop: 6,
+    },
+    
+    confidenceSpacer: {
+      flex: 3, // 👈 left 75% empty
+    },
+    
+    confidenceBarWrap: {
+      flex: 1, // 👈 right 25%
+      alignItems: "flex-end",
+    },
+    
+    confidenceBarTrack: {
+      width: "100%",
+      height: 4,
+      borderRadius: 999,
+      backgroundColor: colors.surface.cardSoft,
+      opacity: 0.6, // quieter
+    },
+    
+    confidenceBarFill: {
+      height: "100%",
+      borderRadius: 999,
     },
   });

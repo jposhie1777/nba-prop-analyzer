@@ -484,11 +484,7 @@ return (
 
             {/* EXPANDED SECTION (AUTO HEIGHT) */}
             {expanded && (
-              <Animated.View
-                entering={Animated.FadeInDown.duration(120)}
-                exiting={Animated.FadeOutUp.duration(90)}
-                style={styles.expandWrap}
-              >
+              <View style={styles.expandWrap}>
                 <View style={styles.expandInner}>
                   {/* PERFORMANCE */}
                   <View style={styles.sectionHeader}>

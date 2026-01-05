@@ -1,21 +1,24 @@
 // theme/meta.ts
-import { themes } from "./index";
+import base from "./color";
+import apple from "./colors.apple";
+import fanduel from "./colors.fanduel";
+import fanduelLight from "./colors.fanduelLight";
 
 export const themeMeta = {
   base: {
     label: "Pulse Default",
-    preview: themes.base.surface.card,
+    preview: base.surface.card,
   },
   apple: {
     label: "Apple Sports",
-    preview: themes.apple.surface.card,
+    preview: apple.surface.card,
   },
   fanduel: {
     label: "FanDuel Dark",
-    preview: themes.fanduel.surface.card,
+    preview: fanduel.surface.card,
   },
   fanduelLight: {
     label: "FanDuel Light",
-    preview: themes.fanduelLight.surface.card,
+    preview: fanduelLight.surface.card,
   },
 };

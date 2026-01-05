@@ -10,7 +10,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import PropCard from "../../components/PropCard";
-import colors from "../../theme/color";
+import { useTheme } from "@/store/useTheme";
 import { fetchProps, MobileProp } from "../../lib/api";
 import { useSavedBets } from "@/store/useSavedBets";
 import { usePropsStore } from "@/store/usePropsStore";
@@ -88,7 +88,7 @@ export default function HomeScreen() {
   const [maxOdds, setMaxOdds] = useState(300);
 
   const [filtersOpen, setFiltersOpen] = useState(true);
-
+  const colors = useTheme((s) => s.colors);
   // ---------------------------
   // EXPANDED CARD STATE (ONLY ONE OPEN)
   // ---------------------------

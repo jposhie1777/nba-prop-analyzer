@@ -1,10 +1,15 @@
 // theme/index.ts
 
-import base from "./color"; // ✅ CORRECT
-import { apple } from "./apple";
-import { fanduel } from "./fanduel";
-import { fanduelLight } from "./fanduelLight";
-import { ThemeColors } from "./types";
+import base from "./color";
+import apple from "./colors.apple";
+import fanduel from "./colors.fanduel";
+import fanduelLight from "./colors.fanduelLight";
+
+import type { ThemeColors } from "./types";
+
+/* ======================================================
+   THEMES MAP
+====================================================== */
 
 export const themes: Record<string, ThemeColors> = {
   base,
@@ -13,18 +18,8 @@ export const themes: Record<string, ThemeColors> = {
   fanduelLight,
 };
 
-/**
- * Theme name union
- */
-export type ThemeName = keyof typeof themes;
+/* ======================================================
+   DEFAULT EXPORT
+====================================================== */
 
-/**
- * Theme shape (typed off base)
- */
-export type Theme = typeof base;
-
-/**
- * Backwards compatibility:
- * Allows `import colors from "@/theme"`
- */
 export default themes;

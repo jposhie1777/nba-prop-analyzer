@@ -566,7 +566,7 @@ return (
                       {Math.round((usage ?? 0) * 100)}%
                     </Text>
                     <Text style={styles.statValue}>
-                      {props.pace_delta?.toFixed(1) ?? "—"}
+                      {pace_delta != null ? pace_delta.toFixed(1) : "—"}
                     </Text>
                   </View>
                 </View>

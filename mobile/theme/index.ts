@@ -1,18 +1,16 @@
 // theme/index.ts
 
-import base from "./color";               // default export ✔
-import apple from "./colors.apple";
-import fanduel from "./colors.fanduel";
-import fanduelLight from "./colors.fanduelLight";
+import base from "./colors";
+import { apple } from "./apple";
+import { fanduel } from "./fanduel";
+import { fanduelLight } from "./fanduelLight";
+import { ThemeColors } from "./types";
 
-/**
- * All available themes
- */
-export const themes = {
-  base,          // existing default theme
-  apple,         // Apple Sports
-  fanduel,       // FanDuel Dark
-  fanduelLight,  // FanDuel Light
+export const themes: Record<string, ThemeColors> = {
+  base,
+  apple,
+  fanduel,
+  fanduelLight,
 };
 
 /**

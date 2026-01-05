@@ -470,10 +470,11 @@ export default function HomeScreen() {
                 step={25}
                 value={minOdds}
                 onValueChange={setMinOdds}
-                minimumTrackTintColor={colors.accent}
-                maximumTrackTintColor="#E5E7EB"
-                thumbTintColor={colors.accent}
+                minimumTrackTintColor={colors.accent.primary}
+                maximumTrackTintColor={colors.surface.cardSoft}
+                thumbTintColor={colors.accent.primary}
               />
+
 
               <Text style={styles.sliderLabel}>Max Odds: {maxOdds}</Text>
               <Slider
@@ -482,10 +483,11 @@ export default function HomeScreen() {
                 step={25}
                 value={maxOdds}
                 onValueChange={setMaxOdds}
-                minimumTrackTintColor={colors.accent}
-                maximumTrackTintColor="#E5E7EB"
-                thumbTintColor={colors.accent}
+                minimumTrackTintColor={colors.accent.primary}
+                maximumTrackTintColor={colors.surface.cardSoft}
+                thumbTintColor={colors.accent.primary}
               />
+
             </View>
           )}
         </View>

@@ -1,8 +1,8 @@
 // useLiveScores.ts
 import { useEffect, useRef, useState } from "react";
-import EventSource from "react-native-sse";
 
 const API = "https://pulse-mobile-api-763243624328.us-central1.run.app";
+const POLL_INTERVAL_MS = 20_000;
 
 type LiveSnapshot = {
   games: any[];
@@ -17,74 +17,36 @@ type LiveSnapshot = {
 
 export function useLiveScores() {
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
-  const [connected, setConnected] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
 
-  const esRef = useRef<any>(null);
-  const backoffRef = useRef(1000); // start 1s
-  const lastMessageAtRef = useRef<number | null>(null);
+  const fetchSnapshot = async () => {
+    try {
+      const res = await fetch(`${API}/live/scores`);
+      if (!res.ok) throw new Error("API error");
 
-  const scheduleReconnect = () => {
-    const wait = Math.min(30000, backoffRef.current);
-    backoffRef.current = Math.min(30000, backoffRef.current * 2);
-    setTimeout(connect, wait);
+      const data: LiveSnapshot = await res.json();
+      setSnapshot(data);
+    } catch (err) {
+      console.warn("Live scores fetch failed", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const connect = () => {
-    try { esRef.current?.close?.(); } catch {}
-
-    setConnected(false);
-
-    const es = new EventSource(`${API}/live/scores/stream`);
-    esRef.current = es;
-
-    es.addEventListener("open", () => {
-      setConnected(true);
-      backoffRef.current = 1000;
-    });
-
-    es.addEventListener("snapshot", (event: any) => {
-      try {
-        const data = JSON.parse(event.data);
-        lastMessageAtRef.current = Date.now();
-        setSnapshot(data);
-      } catch {}
-    });
-
-    es.addEventListener("error", () => {
-      setConnected(false);
-      try { es.close(); } catch {}
-      scheduleReconnect();
-    });
-  };
-
-  // Initial connect
   useEffect(() => {
-    connect();
+    // initial fetch
+    fetchSnapshot();
+
+    // poll every 20s
+    pollRef.current = setInterval(fetchSnapshot, POLL_INTERVAL_MS);
+
     return () => {
-      try { esRef.current?.close?.(); } catch {}
+      if (pollRef.current) clearInterval(pollRef.current);
     };
   }, []);
 
-  // Watchdog for silent SSE hangs
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (!lastMessageAtRef.current) return;
+  const isStale = snapshot?.meta?.status === "DEGRADED";
 
-      const ageMs = Date.now() - lastMessageAtRef.current;
-      if (ageMs > 45_000) {
-        setConnected(false);
-        try { esRef.current?.close?.(); } catch {}
-        scheduleReconnect();
-      }
-    }, 10_000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const isStale =
-    snapshot?.meta?.status === "DEGRADED" ||
-    (lastMessageAtRef.current &&
-      Date.now() - lastMessageAtRef.current > 30_000);
-
-  return { snapshot, connected, isStale };
+  return { snapshot, loading, isStale };
 }

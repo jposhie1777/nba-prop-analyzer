@@ -74,6 +74,16 @@ export default function TabLayout() {
           toggleSave,
         }}
       />
+      {/* LIVE TAB */}
+      <Tabs.Screen
+        name="live"
+        options={{
+          title: "Live",
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={28} name="dot.radiowaves.left.and.right" color={color} />
+          ),
+        }}
+      />
 
       {/* SAVED TAB */}
       <Tabs.Screen

@@ -130,6 +130,9 @@ function formatOdds(o: number) {
    COMPONENT
 ====================================================== */
 export default function PropCard(props: PropCardProps) {
+  const colors = useTheme((s) => s.colors);
+
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const {
     player,
     market,
@@ -149,7 +152,7 @@ export default function PropCard(props: PropCardProps) {
   } = props;
 
   const hitPct = Math.round(((props.hit_rate_l10 ?? 0) as number) * 100);
-
+  
   /* =========================
      WINDOW TOGGLE
   ========================= */
@@ -198,7 +201,7 @@ export default function PropCard(props: PropCardProps) {
       : colors.text.muted;
 
 
-  const colors = useTheme((s) => s.colors);
+  
   /* =========================
      ODDS FLASH
   ========================= */
@@ -539,308 +542,154 @@ export default function PropCard(props: PropCardProps) {
 /* ======================================================
    STYLES
 ====================================================== */
-const styles = StyleSheet.create({
-  outer: {
-    marginHorizontal: 14,
-    marginVertical: 10,
-  },
+const makeStyles = (colors: any) =>
+  StyleSheet.create({
+    outer: {
+      marginHorizontal: 14,
+      marginVertical: 10,
+    },
 
-  card: {
-    backgroundColor: colors.surface.card,
-    borderRadius: 18,
-    paddingVertical: 16,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: colors.border.subtle,
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
-    overflow: "hidden",
-  },
+    card: {
+      backgroundColor: colors.surface.card,
+      borderRadius: 18,
+      paddingVertical: 16,
+      paddingHorizontal: 14,
+      borderWidth: 1,
+      borderColor: colors.border.subtle,
+      shadowColor: "#000",
+      shadowOpacity: 0.25,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 4,
+      overflow: "hidden",
+    },
 
-  accentStrip: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 4,
-  },
+    accentStrip: {
+      position: "absolute",
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: 4,
+    },
 
-  saveButton: {
-    position: "absolute",
-    top: 10,
-    right: 12,
-    width: 34,
-    height: 34,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.surface.elevated,
-  },
+    saveButton: {
+      position: "absolute",
+      top: 10,
+      right: 12,
+      width: 34,
+      height: 34,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.surface.elevated,
+    },
 
-  saveStar: {
-    fontSize: 18,
-    fontWeight: "900",
-  },
-  saveStarOn: { color: colors.accent.primary },
-  saveStarOff: { color: colors.text.muted },
+    saveStar: {
+      fontSize: 18,
+      fontWeight: "900",
+    },
 
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
+    saveStarOn: { color: colors.accent.primary },
+    saveStarOff: { color: colors.text.muted },
 
-  teams: { width: 56 },
-  teamStack: { flexDirection: "row", gap: 6 },
-  teamLogo: { width: 20, height: 20 },
+    headerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
 
-  teamLogoPlaceholder: {
-    width: 20,
-    height: 20,
-    backgroundColor: colors.surface.cardSoft,
-    borderRadius: 4,
-  },
+    teamLogo: { width: 20, height: 20 },
 
-  center: { flex: 1, paddingHorizontal: 6 },
+    teamLogoPlaceholder: {
+      width: 20,
+      height: 20,
+      backgroundColor: colors.surface.cardSoft,
+      borderRadius: 4,
+    },
 
-  player: {
-    fontSize: textStyles.title,
-    fontWeight: "800",
-    color: colors.text.primary,
-  },
+    player: {
+      fontWeight: "800",
+      color: colors.text.primary,
+    },
 
-  marketLine: {
-    fontSize: textStyles.subtitle,
-    fontWeight: "700",
-    color: colors.text.secondary,
-  },
+    marketLine: {
+      fontWeight: "700",
+      color: colors.text.secondary,
+    },
 
-  matchup: {
-    fontSize: textStyles.label,
-    color: colors.text.muted,
-  },
+    matchup: {
+      color: colors.text.muted,
+    },
 
-  right: { width: 120, alignItems: "flex-end", gap: 6 },
+    oddsPill: {
+      flexDirection: "row",
+      gap: 6,
+      padding: 6,
+      borderRadius: 10,
+      backgroundColor: colors.surface.cardSoft,
+    },
 
-  oddsPill: {
-    flexDirection: "row",
-    gap: 6,
-    padding: 6,
-    borderRadius: 10,
-    backgroundColor: colors.surface.cardSoft,
-  },
+    oddsText: {
+      fontWeight: "800",
+      color: colors.text.primary,
+    },
 
-  bookLogo: { width: 16, height: 16 },
+    divider: {
+      height: 1,
+      backgroundColor: colors.border.subtle,
+      marginVertical: 8,
+    },
 
-  bookLogoPlaceholder: {
-    width: 16,
-    height: 16,
-    backgroundColor: colors.surface.cardSoft,
-    borderRadius: 4,
-  },
+    hitText: {
+      fontWeight: "900",
+    },
 
-  oddsText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: colors.text.primary,
-  },
+    metricSub: {
+      color: colors.text.muted,
+    },
 
-  divider: {
-    height: 1,
-    backgroundColor: colors.border.subtle,
-    marginVertical: 8,
-  },
+    badge: {
+      flexDirection: "row",
+      gap: 6,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border.subtle,
+    },
 
-  metricsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
+    badgeLabel: {
+      fontSize: 9,
+      fontWeight: "900",
+      color: colors.text.muted,
+    },
 
-  hitText: {
-    fontSize: textStyles.stat,
-    fontWeight: "900",
-  },
+    badgeValue: {
+      fontSize: 15,
+      fontWeight: "900",
+    },
 
-  metricSub: {
-    fontSize: 12,
-    color: colors.text.muted,
-  },
+    expandWrap: { overflow: "hidden" },
 
-  badge: {
-    flexDirection: "row",
-    gap: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border.subtle,
-  },
+    expandInner: {
+      marginTop: 12,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.border.subtle,
+    },
 
-  badgeLabel: {
-    fontSize: 9,
-    fontWeight: "900",
-    color: colors.text.muted,
-  },
+    sectionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginTop: 14,
+      marginBottom: 6,
+    },
 
-  badgeValue: {
-    fontSize: 15,
-    fontWeight: "900",
-  },
-
-  barRow: { marginTop: 10 },
-
-  barTrack: {
-    height: 6,
-    borderRadius: 999,
-    backgroundColor: colors.surface.cardSoft,
-  },
-
-  barFill: {
-    height: "100%",
-    borderRadius: 999,
-  },
-
-  expandWrap: { overflow: "hidden" },
-
-  expandInner: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.border.subtle,
-  },
-
-  expandRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 6,
-  },
-
-  expandLabel: {
-    fontSize: 12,
-    color: colors.text.muted,
-  },
-
-  expandValue: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: colors.text.primary,
-  },
-
-  windowToggle: {
-    flexDirection: "row",
-    marginTop: 12,
-  },
-
-  windowToggle: {
-    marginTop: 14,
-    alignItems: "center",
-  },
-
-  windowPillGroup: {
-    flexDirection: "row",
-    backgroundColor: colors.surface.cardSoft,
-    borderRadius: 999,
-    padding: 4,
-    gap: 6,
-  },
-
-  windowPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: "transparent",
-  },
-
-  windowPillActive: {
-    backgroundColor: colors.surface.card,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3,
-  },
-
-  windowPillLabel: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: colors.text.muted,
-    letterSpacing: 0.4,
-  },
-
-  windowPillLabelActive: {
-    color: colors.text.primary,
-  },
-
-
-  gridRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 4,
-  },
-
-  statLabel: {
-    flex: 1,
-    textAlign: "center",
-    fontSize: 11,
-    color: colors.text.muted,
-  },
-
-  statValue: {
-    flex: 1,
-    textAlign: "center",
-    fontSize: 15,
-    fontWeight: "800",
-    color: colors.text.primary,
-  },
-  confidenceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 6,
-  },
-
-  confidenceSpacer: {
-    flex: 3, // 👈 left 75% empty
-  },
-
-  confidenceBarWrap: {
-    flex: 1, // 👈 right 25%
-    alignItems: "flex-end",
-  },
-
-  confidenceBarTrack: {
-    width: "100%",
-    height: 4,
-    borderRadius: 999,
-    backgroundColor: colors.surface.cardSoft,
-    opacity: 0.6, // quieter
-  },
-
-  confidenceBarFill: {
-    height: "100%",
-    borderRadius: 999,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 14,
-    marginBottom: 6,
-  },
-
-  sectionIcon: {
-    fontSize: 14,
-    opacity: 0.9,
-  },
-
-  sectionText: {
-    fontSize: 13,
-    fontWeight: "900",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-    color: colors.text.secondary,
-  },
-
-});
+    sectionText: {
+      fontWeight: "900",
+      letterSpacing: 0.6,
+      textTransform: "uppercase",
+      color: colors.text.secondary,
+    },
+  });

@@ -3,7 +3,10 @@ import { AppState } from "react-native";
 import { LiveGame } from "@/types/live";
 import { adaptLiveGames } from "@/services/adapters/liveAdapter";
 
-const API = process.env.EXPO_PUBLIC_LIVE_API!;
+import Constants from "expo-constants";
+
+const API = Constants.expoConfig?.extra?.API_URL!;
+
 const POLL_INTERVAL_MS = 20_000;
 
 type Mode = "sse" | "poll";

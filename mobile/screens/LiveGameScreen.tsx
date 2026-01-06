@@ -10,7 +10,7 @@ export default function LiveGamesScreen() {
   // 🔴 Live data now comes from the hybrid hook
   const { games, mode } = useLiveGames();
 
-  const loading = !games; // initial mount safety
+const loading = games.length === 0 && mode === "sse";
 
   /* =============================
      Loading

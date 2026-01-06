@@ -31,7 +31,7 @@ export default function LiveGamesScreen() {
           justifyContent: "center",
         }}
       >
-        <ActivityIndicator size="large" color={colors.brand.primary} />
+        <ActivityIndicator size="large" color={colors.accent.primary} />
       </View>
     );
   }

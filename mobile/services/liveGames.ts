@@ -2,9 +2,7 @@ import Constants from "expo-constants";
 import { adaptLiveGames } from "./adapters/liveAdapter";
 import { LiveGame } from "@/types/live";
 
-const API_URL =
-  Constants.expoConfig?.extra?.API_URL ??
-  Constants.manifest?.extra?.API_URL;
+const API_URL = Constants.expoConfig?.extra?.API_URL as string | undefined;
 
 export function subscribeLiveGames(
   onUpdate: (games: LiveGame[]) => void
@@ -14,7 +12,10 @@ export function subscribeLiveGames(
     return () => {};
   }
 
-  const es = new EventSource(`${API_URL}/live/scores/stream`);
+  const url = `${API_URL}/live/scores/stream`;
+  console.log("📡 Connecting to live SSE:", url);
+
+  const es = new EventSource(url);
 
   es.addEventListener("snapshot", (e) => {
     try {

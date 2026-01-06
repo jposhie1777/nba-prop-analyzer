@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
 import { LiveGame } from "@/types/live";
-import { adaptLiveGames } from "@/services/adapters/liveAdapters";
+import { adaptLiveGames } from "@/services/adapters/liveAdapter";
 
 const API = process.env.EXPO_PUBLIC_LIVE_API!;
 const POLL_INTERVAL_MS = 20_000;
@@ -13,7 +13,7 @@ export function useLiveGames() {
   const [mode, setMode] = useState<Mode>("sse");
 
   const esRef = useRef<EventSource | null>(null);
-  const pollRef = useRef<NodeJS.Timeout | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const appStateRef = useRef(AppState.currentState);
 
   /* =============================

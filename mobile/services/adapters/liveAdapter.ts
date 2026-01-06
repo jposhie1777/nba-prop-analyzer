@@ -19,34 +19,34 @@ import { LiveGame, PeriodScore } from "@/types/live";
  * This file is the ONLY place backend shapes are handled.
  */
 export function adaptLiveGames(apiGames: any[]): LiveGame[] {
+  console.log(
+    "🔧 adaptLiveGames input:",
+    Array.isArray(apiGames) ? apiGames.length : apiGames
+  );
+
   if (!Array.isArray(apiGames)) return [];
 
-  return apiGames.map((g): LiveGame => ({
+  const out = apiGames.map((g): LiveGame => ({
     gameId: String(g.game_id),
-
-    // Backend only streams LIVE games right now
     status: "live",
-
     clock: g.clock ?? undefined,
     period: g.period ?? undefined,
-
     home: {
       team: g.home_team,
       abbrev: g.home_team,
       score: numberOrUndefined(g.home_score),
     },
-
     away: {
       team: g.away_team,
       abbrev: g.away_team,
       score: numberOrUndefined(g.away_score),
     },
-
     lineScore: adaptQuarterScores(g),
-
-    // Odds not wired yet on backend — safe empty array
     odds: [],
   }));
+
+  console.log("🔧 adaptLiveGames output:", out.length);
+  return out;
 }
 
 /* =============================

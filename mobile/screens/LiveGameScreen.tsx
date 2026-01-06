@@ -10,7 +10,13 @@ export default function LiveGamesScreen() {
   // 🔴 Live data now comes from the hybrid hook
   const { games, mode } = useLiveGames();
 
-const loading = games.length === 0 && mode === "sse";
+  // ✅ ADD THIS RIGHT HERE ⬇️
+  console.log("🖥️ LiveGameScreen render", {
+    mode,
+    gameCount: games.length,
+  });
+
+  const loading = games.length === 0 && mode === "sse";
 
   /* =============================
      Loading

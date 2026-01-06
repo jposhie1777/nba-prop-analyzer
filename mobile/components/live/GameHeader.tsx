@@ -1,6 +1,7 @@
 import { View, Text, Image, StyleSheet } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { TeamSide } from "@/types/live";
+import { TEAM_LOGOS } from "@/utils/teamLogos";
 
 type Props = {
   home: TeamSide;
@@ -20,9 +21,13 @@ export function GameHeader({ home, away }: Props) {
 function Team({ team }: { team: TeamSide }) {
   const { colors } = useTheme();
 
+  const logoUri =
+    TEAM_LOGOS[team.abbrev] ??
+    "https://a.espncdn.com/i/teamlogos/nba/500/nba.png";
+
   return (
     <View style={styles.team}>
-      <Image source={{ uri: team.logo }} style={styles.logo} />
+      <Image source={{ uri: logoUri }} style={styles.logo} />
       <Text style={[styles.text, { color: colors.text.primary }]}>
         {team.abbrev}
       </Text>
@@ -35,10 +40,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    marginBottom: 4,
   },
   team: {
     flexDirection: "row",
     alignItems: "center",
+    minWidth: 72, // keeps alignment stable
   },
   logo: {
     width: 28,
@@ -52,6 +59,6 @@ const styles = StyleSheet.create({
   },
   at: {
     fontSize: 12,
-    opacity: 0.5,
+    opacity: 0.45,
   },
 });

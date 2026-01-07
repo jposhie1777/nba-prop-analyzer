@@ -5,7 +5,7 @@ import { LiveGame } from "@/types/live";
 import { GameHeader } from "./GameHeader";
 import { ScoreRow } from "./ScoreRow";
 import { GameStatus } from "./GameStatus";
-import { BoxScore } from "./BoxScore";
+import { BoxScore } from "./boxscore/BoxScore";
 import { LiveOdds } from "./LiveOdds";
 
 import { useLivePlayerStats } from "@/hooks/useLivePlayerStats";

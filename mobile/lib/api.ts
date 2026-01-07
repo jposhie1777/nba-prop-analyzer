@@ -88,8 +88,6 @@ export type MobileProp = {
   updatedAt: string;
 };
 
-
-
 export type FetchPropsResponse = {
   date: string;
   minHitRate: number;
@@ -157,4 +155,50 @@ export async function fetchProps(params?: {
     console.error("❌ JSON PARSE ERROR:", err);
     throw new Error("Invalid JSON response from API");
   }
+}
+
+//
+// ===================================================================
+// 🔽 ADDITIONS BELOW — BACKEND CODE VIEWER (READ-ONLY)
+// ===================================================================
+//
+
+/**
+ * Fetch list of exposed backend files
+ * GET /debug/code
+ */
+export async function fetchBackendFiles(): Promise<string[]> {
+  const url = `${API_BASE}/debug/code`;
+  console.log("📡 FETCHING BACKEND FILE LIST:", url);
+
+  const res = await fetch(url);
+  const text = await res.text();
+
+  if (!res.ok) {
+    throw new Error(`Backend files error ${res.status}: ${text}`);
+  }
+
+  const json = JSON.parse(text);
+  return json.files as string[];
+}
+
+/**
+ * Fetch contents of a single backend file
+ * GET /debug/code/{filename}
+ */
+export async function fetchBackendFile(
+  filename: string
+): Promise<string> {
+  const url = `${API_BASE}/debug/code/${filename}`;
+  console.log("📡 FETCHING BACKEND FILE:", url);
+
+  const res = await fetch(url);
+  const text = await res.text();
+
+  if (!res.ok) {
+    throw new Error(`Backend file error ${res.status}: ${text}`);
+  }
+
+  const json = JSON.parse(text);
+  return json.content as string;
 }

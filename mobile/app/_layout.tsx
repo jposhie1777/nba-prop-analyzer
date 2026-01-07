@@ -1,17 +1,49 @@
+import "react-native-reanimated";
+import { useEffect } from "react";
 import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
-import "react-native-reanimated";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useSavedBets } from "@/store/useSavedBets";
 import DebugMemory from "@/components/debug/DebugMemory";
+import { useDevStore } from "@/lib/dev/devStore";
 
+/* -------------------------------------------------
+   Expo Router settings
+-------------------------------------------------- */
 export const unstable_settings = {
   anchor: "(tabs)",
 };
 
+/* -------------------------------------------------
+   GLOBAL ERROR CAPTURE (DEV ONLY)
+   - Registered once
+   - Memory safe
+   - Preserves RedBox
+-------------------------------------------------- */
+if (__DEV__) {
+  // @ts-ignore
+  const defaultHandler = global.ErrorUtils?.getGlobalHandler?.();
+
+  // @ts-ignore
+  global.ErrorUtils?.setGlobalHandler?.((error: Error, isFatal?: boolean) => {
+    try {
+      useDevStore.getState().actions.logError(error);
+    } catch {
+      // never allow logging failure to crash the app
+    }
+
+    // Preserve default behavior (RedBox, logs, etc.)
+    if (defaultHandler) {
+      defaultHandler(error, isFatal);
+    }
+  });
+}
+
+/* -------------------------------------------------
+   ROOT LAYOUT
+-------------------------------------------------- */
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
@@ -26,8 +58,8 @@ export default function RootLayout() {
 
   return (
     <>
-      {/* DEV-ONLY GLOBAL OVERLAY */}
-      <DebugMemory />
+      {/* DEV-ONLY MEMORY OVERLAY */}
+      {__DEV__ && <DebugMemory />}
 
       <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
         <Stack>

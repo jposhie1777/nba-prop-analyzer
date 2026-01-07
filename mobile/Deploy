@@ -1,0 +1,10 @@
+git fetch --all
+git reset --hard origin/main
+
+git fetch --all
+git reset --hard origin/main
+cd mobile
+npx expo start -c --web
+
+cd mobile
+npx expo start -c --web

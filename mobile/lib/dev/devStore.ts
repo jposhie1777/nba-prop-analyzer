@@ -2,6 +2,7 @@
 import { create } from "zustand";
 import * as Clipboard from "expo-clipboard";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Constants from "expo-constants";
 
 /* --------------------------------------------------
    CONSTANTS
@@ -14,7 +15,11 @@ const DEV_FLAGS_STORAGE_KEY = "__DEV_FLAGS__";
 /* 🔴 NEW: DEV UNLOCK CONFIG */
 const DEV_UNLOCK_TAPS_REQUIRED = 7;
 const DEV_UNLOCK_TAP_WINDOW_MS = 2000;
-
+const API_URL =
+  Constants.expoConfig?.extra?.API_URL ??
+  // @ts-ignore
+  Constants.manifest?.extra?.API_URL ??
+  "";
 /* --------------------------------------------------
    TYPES
 -------------------------------------------------- */
@@ -450,20 +455,30 @@ export const useDevStore = create<DevStore>((set, get) => ({
 
     async fetchFreshness(key) {
       try {
-        const res = await fetch(`/debug/freshness/${key}`);
-        const json = await res.json();
+        const url = `${API_URL}/debug/freshness/${key}`;
+
+        const start = Date.now();
+        const res = await fetch(url);
+        const text = await res.text();
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${text.slice(0, 120)}`);
+        }
+
+        const json = JSON.parse(text);
 
         get().actions.updateFreshness(key, {
           lastUpdatedTs: json.last_updated_ts
             ? new Date(json.last_updated_ts).getTime()
             : undefined,
           rowCount: json.row_count,
+          error: undefined,
         });
       } catch (err: any) {
         get().actions.updateFreshness(key, {
           error: err?.message ?? "Failed to fetch freshness",
         });
       }
-    },
+    }
   },
 }));

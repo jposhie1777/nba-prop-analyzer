@@ -5,7 +5,7 @@ import fanduel from "./colors.fanduel";
 import fanduelLight from "./colors.fanduelLight";
 
 export const themes = {
-  base,
+  base: fanduelLight,   // 👈 DEFAULT THEME
   apple,
   fanduel,
   fanduelLight,

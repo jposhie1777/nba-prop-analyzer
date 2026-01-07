@@ -5,11 +5,16 @@ import { LiveGame } from "@/types/live";
 import { GameHeader } from "./GameHeader";
 import { ScoreRow } from "./ScoreRow";
 import { GameStatus } from "./GameStatus";
-import { BoxScoreStub } from "./BoxScoreStub";
+import { BoxScore } from "./BoxScore";
 import { LiveOdds } from "./LiveOdds";
+
+import { useLivePlayerStats } from "@/hooks/useLivePlayerStats";
 
 export function LiveGameCard({ game }: { game: LiveGame }) {
   const { colors } = useTheme();
+  const { playersByGame } = useLivePlayerStats();
+
+  const players = playersByGame(game.id);
 
   const hasOdds =
     !!game.odds?.spread?.length ||
@@ -29,24 +34,27 @@ export function LiveGameCard({ game }: { game: LiveGame }) {
         ]}
       />
 
-      <BoxScoreStub />
+      <BoxScore
+        homeTeam={game.home.abbreviation}
+        awayTeam={game.away.abbreviation}
+        players={players}
+      />
 
       {hasOdds && (
         <>
-            <View
+          <View
             style={[
-                styles.divider,
-                { backgroundColor: colors.border.subtle },
+              styles.divider,
+              { backgroundColor: colors.border.subtle },
             ]}
-            />
-            <LiveOdds
+          />
+          <LiveOdds
             odds={game.odds!}
             home={game.home}
             away={game.away}
-            />
+          />
         </>
-        )}
-
+      )}
     </View>
   );
 }

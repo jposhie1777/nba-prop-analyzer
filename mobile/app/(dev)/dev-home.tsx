@@ -6,8 +6,6 @@ import { useRouter } from "expo-router";
 
 import { useTheme } from "@/store/useTheme";
 import { createDevStyles } from "./devStyles";
-
-/* 🔴 DEV STORE */
 import { useDevStore } from "@/lib/dev/devStore";
 
 export default function DevHomeScreen() {
@@ -15,8 +13,7 @@ export default function DevHomeScreen() {
   const styles = React.useMemo(() => createDevStyles(colors), [colors]);
   const router = useRouter();
 
-  /* 🔴 DEV STORE STATE */
-  const { health, actions } = useDevStore();
+  const { health, flags, actions } = useDevStore();
 
   const appVersion =
     Constants.expoConfig?.version ??
@@ -72,8 +69,7 @@ export default function DevHomeScreen() {
 
             {check.lastOkTs && (
               <Text style={styles.mutedText}>
-                Last OK:{" "}
-                {new Date(check.lastOkTs).toLocaleTimeString()}
+                Last OK: {new Date(check.lastOkTs).toLocaleTimeString()}
               </Text>
             )}
 
@@ -84,6 +80,36 @@ export default function DevHomeScreen() {
               <Text style={styles.toolTitle}>Run Check</Text>
             </Pressable>
           </View>
+        ))}
+      </Section>
+
+      {/* 🔴 NEW: FEATURE FLAGS */}
+      <Section title="Feature Flags" styles={styles}>
+        {Object.entries(flags.values).map(([key, enabled]) => (
+          <Pressable
+            key={key}
+            style={[
+              styles.card,
+              enabled && { borderColor: colors.accent.primary },
+            ]}
+            onPress={() => actions.toggleFlag(key)}
+          >
+            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+              <Text style={styles.cardTitle}>{key}</Text>
+              <Text
+                style={[
+                  styles.cardTitle,
+                  enabled ? styles.on : styles.mutedText,
+                ]}
+              >
+                {enabled ? "ON" : "OFF"}
+              </Text>
+            </View>
+
+            <Text style={styles.mutedText}>
+              Tap to toggle (local only)
+            </Text>
+          </Pressable>
         ))}
       </Section>
 
@@ -103,7 +129,6 @@ export default function DevHomeScreen() {
           styles={styles}
         />
 
-        {/* 🔴 NEW: NETWORK LOG VIEWER */}
         <ToolButton
           label="Network Logs"
           subtitle="Inspect API calls, latency, and errors"

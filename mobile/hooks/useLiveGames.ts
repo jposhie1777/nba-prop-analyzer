@@ -4,6 +4,9 @@ import { LiveGame } from "@/types/live";
 import { adaptLiveGames } from "@/services/adapters/liveAdapter";
 import Constants from "expo-constants";
 
+/* 🔴 ADD */
+import { useDevStore } from "@/lib/dev/devStore";
+
 /* ======================================================
    Config
 ====================================================== */
@@ -100,9 +103,15 @@ export function useLiveGames() {
 
       es.addEventListener("open", () => {
         console.log("🟢 [LiveGames] SSE connection opened");
+
+        /* 🔴 ADD */
+        useDevStore.getState().actions.reportSSEConnect();
       });
 
       es.addEventListener("snapshot", (e: MessageEvent) => {
+        /* 🔴 ADD */
+        useDevStore.getState().actions.reportSSEEvent();
+
         try {
           const raw = JSON.parse(e.data);
           const adapted = adaptLiveGames(raw.games ?? []);
@@ -126,12 +135,23 @@ export function useLiveGames() {
           err
         );
 
+        /* 🔴 ADD */
+        useDevStore
+          .getState()
+          .actions.reportSSEDisconnect("LiveGames SSE error");
+
         es.close();
         esRef.current = null;
         startPolling();
       };
     } catch (err) {
       console.error("❌ [LiveGames] Failed to start SSE", err);
+
+      /* 🔴 ADD */
+      useDevStore
+        .getState()
+        .actions.reportSSEDisconnect("SSE init failed");
+
       startPolling();
     }
   };
@@ -139,6 +159,12 @@ export function useLiveGames() {
   const stopSSE = () => {
     if (esRef.current) {
       console.log("⛔ [LiveGames] Closing SSE connection");
+
+      /* 🔴 ADD */
+      useDevStore
+        .getState()
+        .actions.reportSSEDisconnect("SSE closed");
+
       esRef.current.close();
       esRef.current = null;
     }
@@ -166,6 +192,12 @@ export function useLiveGames() {
       // App resumed
       if (prev.match(/inactive|background/) && nextState === "active") {
         console.log("▶️ [LiveGames] App resumed — restarting SSE");
+
+        /* 🔴 ADD */
+        useDevStore
+          .getState()
+          .actions.reportSSEDisconnect("App resumed — restarting SSE");
+
         stopPolling();
         stopSSE();
         startSSE();
@@ -174,6 +206,12 @@ export function useLiveGames() {
       // App backgrounded
       if (nextState === "background") {
         console.log("⏸️ [LiveGames] App backgrounded — switching to polling");
+
+        /* 🔴 ADD */
+        useDevStore
+          .getState()
+          .actions.reportSSEDisconnect("App backgrounded");
+
         stopSSE();
         startPolling();
       }
@@ -181,6 +219,12 @@ export function useLiveGames() {
 
     return () => {
       console.log("🧹 [LiveGames] Hook unmount — cleaning up");
+
+      /* 🔴 ADD */
+      useDevStore
+        .getState()
+        .actions.reportSSEDisconnect("Hook unmounted");
+
       stopSSE();
       stopPolling();
       sub.remove();

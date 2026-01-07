@@ -100,6 +100,16 @@ export default function TabLayout() {
           clearAllSaved,
         }}
       />
+      {/* DEV TAB */}
+      <Tabs.Screen
+        name="dev"
+        options={{
+          title: "Dev",
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={28} name="wrench.and.screwdriver.fill" color={color} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }

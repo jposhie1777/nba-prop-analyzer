@@ -1,22 +1,41 @@
 import { useEffect, useState } from "react";
 import { View, Text, Pressable, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
+
 import { fetchBackendFiles } from "@/lib/api";
+import { useTheme } from "@/store/useTheme";
 
 export default function BackendFilesScreen() {
   const [files, setFiles] = useState<string[]>([]);
   const router = useRouter();
+  const { colors } = useTheme();
 
   useEffect(() => {
     fetchBackendFiles().then(setFiles);
   }, []);
 
   return (
-    <ScrollView style={{ padding: 16 }}>
-      <Text style={{ fontSize: 20, fontWeight: "600", marginBottom: 12 }}>
+    <ScrollView
+      style={{
+        flex: 1,
+        backgroundColor: colors.background.primary,
+        padding: 16,
+      }}
+      contentContainerStyle={{ paddingBottom: 24 }}
+    >
+      {/* Header */}
+      <Text
+        style={{
+          fontSize: 20,
+          fontWeight: "600",
+          marginBottom: 16,
+          color: colors.text.primary,
+        }}
+      >
         Backend Files
       </Text>
 
+      {/* File list */}
       {files.map((file) => (
         <Pressable
           key={file}
@@ -27,14 +46,35 @@ export default function BackendFilesScreen() {
             })
           }
           style={{
-            paddingVertical: 12,
+            paddingVertical: 14,
+            paddingHorizontal: 4,
             borderBottomWidth: 1,
-            borderBottomColor: "#eee",
+            borderBottomColor: colors.border.subtle,
           }}
         >
-          <Text style={{ fontSize: 16 }}>{file}</Text>
+          <Text
+            style={{
+              fontSize: 16,
+              color: colors.text.primary,
+            }}
+          >
+            {file}
+          </Text>
         </Pressable>
       ))}
+
+      {/* Empty state */}
+      {files.length === 0 && (
+        <Text
+          style={{
+            marginTop: 24,
+            fontSize: 14,
+            color: colors.text.muted,
+          }}
+        >
+          No backend files found.
+        </Text>
+      )}
     </ScrollView>
   );
 }

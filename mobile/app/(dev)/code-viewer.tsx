@@ -1,11 +1,16 @@
 import { useEffect, useState } from "react";
-import { ScrollView, Text } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { ScrollView, Text, View, Pressable } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+
 import { fetchBackendFile } from "@/lib/api";
+import { useTheme } from "@/store/useTheme";
 
 export default function CodeViewerScreen() {
   const { file } = useLocalSearchParams<{ file: string }>();
-  const [code, setCode] = useState("");
+  const router = useRouter();
+  const { colors } = useTheme();
+
+  const [code, setCode] = useState<string>("");
 
   useEffect(() => {
     if (file) {
@@ -14,20 +19,68 @@ export default function CodeViewerScreen() {
   }, [file]);
 
   return (
-    <ScrollView
-      style={{ padding: 12 }}
-      contentContainerStyle={{ paddingBottom: 40 }}
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: colors.surface.screen,
+      }}
     >
-      <Text
-        selectable
+      {/* Header */}
+      <View
         style={{
-          fontFamily: "monospace",
-          fontSize: 12,
-          lineHeight: 18,
+          flexDirection: "row",
+          alignItems: "center",
+          paddingHorizontal: 12,
+          paddingVertical: 10,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.border.subtle,
         }}
       >
-        {code}
-      </Text>
-    </ScrollView>
+        <Pressable onPress={() => router.back()}>
+          <Text
+            style={{
+              fontSize: 18,
+              marginRight: 12,
+              color: colors.accent.primary,
+            }}
+          >
+            ←
+          </Text>
+        </Pressable>
+
+        <Text
+          numberOfLines={1}
+          style={{
+            flex: 1,
+            fontSize: 16,
+            fontWeight: "600",
+            color: colors.text.primary,
+          }}
+        >
+          {file}
+        </Text>
+      </View>
+
+      {/* Code */}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          padding: 16,
+          paddingBottom: 40,
+        }}
+      >
+        <Text
+          selectable
+          style={{
+            fontFamily: "monospace",
+            fontSize: 12,
+            lineHeight: 18,
+            color: colors.text.primary,
+          }}
+        >
+          {code || "// Loading…"}
+        </Text>
+      </ScrollView>
+    </View>
   );
 }

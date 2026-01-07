@@ -90,7 +90,7 @@ type DevStore = {
 /* --------------------------------------------------
    STORE IMPLEMENTATION
 -------------------------------------------------- */
-export const useDevStore = create<DevStore>((set, get) => ({
++ export const useDevStore = create((set, get) => ({
   /* ---------------- NETWORK ---------------- */
   network: {
     items: [],

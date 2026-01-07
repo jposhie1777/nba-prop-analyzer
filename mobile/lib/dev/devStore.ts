@@ -2,11 +2,17 @@
 import { create } from "zustand";
 import * as Clipboard from "expo-clipboard";
 
+/* 🔴 NEW */
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
 /* --------------------------------------------------
    CONSTANTS
 -------------------------------------------------- */
 const MAX_NETWORK_ITEMS = 50;
 const MAX_ERROR_ITEMS = 30;
+
+/* 🔴 NEW */
+const DEV_FLAGS_STORAGE_KEY = "__DEV_FLAGS__";
 
 /* --------------------------------------------------
    TYPES
@@ -48,7 +54,7 @@ type SSEStatus = {
   lastError?: string;
 };
 
-/* 🔴 NEW: DATA FRESHNESS TYPE */
+/* DATA FRESHNESS TYPE */
 type DataFreshness = {
   key: string;
   label: string;
@@ -61,37 +67,30 @@ type DataFreshness = {
    STORE SHAPE
 -------------------------------------------------- */
 type DevStore = {
-  /* ---------------- NETWORK ---------------- */
   network: {
     items: NetworkLog[];
     maxItems: number;
   };
 
-  /* ---------------- ERRORS ---------------- */
   errors: {
     items: ErrorLog[];
     maxItems: number;
   };
 
-  /* ---------------- FLAGS ---------------- */
   flags: {
     values: Record<string, boolean>;
   };
 
-  /* ---------------- HEALTH ---------------- */
   health: {
     checks: HealthCheck[];
   };
 
-  /* ---------------- SSE ---------------- */
   sse: SSEStatus;
 
-  /* 🔴 NEW: DATA FRESHNESS ---------------- */
   freshness: {
     datasets: DataFreshness[];
   };
 
-  /* ---------------- ACTIONS ---------------- */
   actions: {
     logNetwork: (entry: Omit<NetworkLog, "id" | "ts">) => void;
     logError: (err: Error | string) => void;
@@ -100,6 +99,10 @@ type DevStore = {
     clearErrors: () => void;
 
     toggleFlag: (key: string) => void;
+
+    /* 🔴 NEW */
+    hydrateFlags: () => Promise<void>;
+    persistFlags: () => Promise<void>;
 
     copyDevReport: (
       section?:
@@ -113,16 +116,13 @@ type DevStore = {
 
     testCrash: () => never;
 
-    /* HEALTH */
     runHealthCheck: (key: string) => Promise<void>;
     runAllHealthChecks: () => Promise<void>;
 
-    /* SSE */
     reportSSEConnect: () => void;
     reportSSEDisconnect: (err?: string) => void;
     reportSSEEvent: () => void;
 
-    /* 🔴 NEW: DATA FRESHNESS */
     updateFreshness: (
       key: string,
       data: {
@@ -140,19 +140,16 @@ type DevStore = {
    STORE IMPLEMENTATION
 -------------------------------------------------- */
 export const useDevStore = create<DevStore>((set, get) => ({
-  /* ---------------- NETWORK ---------------- */
   network: {
     items: [],
     maxItems: MAX_NETWORK_ITEMS,
   },
 
-  /* ---------------- ERRORS ---------------- */
   errors: {
     items: [],
     maxItems: MAX_ERROR_ITEMS,
   },
 
-  /* ---------------- FLAGS ---------------- */
   flags: {
     values: {
       ENABLE_LIVE_GAMES: true,
@@ -162,7 +159,6 @@ export const useDevStore = create<DevStore>((set, get) => ({
     },
   },
 
-  /* ---------------- HEALTH ---------------- */
   health: {
     checks: [
       { key: "health", label: "API Health", url: "/health" },
@@ -171,13 +167,11 @@ export const useDevStore = create<DevStore>((set, get) => ({
     ],
   },
 
-  /* ---------------- SSE ---------------- */
   sse: {
     connected: false,
     eventCount: 0,
   },
 
-  /* 🔴 NEW: DATA FRESHNESS ---------------- */
   freshness: {
     datasets: [
       { key: "live_games", label: "Live Games" },
@@ -186,30 +180,27 @@ export const useDevStore = create<DevStore>((set, get) => ({
     ],
   },
 
-  /* ---------------- ACTIONS ---------------- */
   actions: {
-    /* NETWORK */
+    /* ---------------- NETWORK ---------------- */
     logNetwork(entry) {
-      set((state) => {
-        const next: NetworkLog = {
-          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          ts: Date.now(),
-          ...entry,
-        };
-
-        return {
-          network: {
-            ...state.network,
-            items: [next, ...state.network.items].slice(
-              0,
-              state.network.maxItems
-            ),
-          },
-        };
-      });
+      set((state) => ({
+        network: {
+          ...state.network,
+          items: [
+            {
+              id: `${Date.now()}-${Math.random()
+                .toString(36)
+                .slice(2, 8)}`,
+              ts: Date.now(),
+              ...entry,
+            },
+            ...state.network.items,
+          ].slice(0, state.network.maxItems),
+        },
+      }));
     },
 
-    /* ERRORS */
+    /* ---------------- ERRORS ---------------- */
     logError(err) {
       const error =
         typeof err === "string"
@@ -218,25 +209,23 @@ export const useDevStore = create<DevStore>((set, get) => ({
           ? err
           : new Error("Unknown error");
 
-      set((state) => {
-        const next: ErrorLog = {
-          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          ts: Date.now(),
-          name: error.name || "Error",
-          message: error.message || String(error),
-          stack: error.stack,
-        };
-
-        return {
-          errors: {
-            ...state.errors,
-            items: [next, ...state.errors.items].slice(
-              0,
-              state.errors.maxItems
-            ),
-          },
-        };
-      });
+      set((state) => ({
+        errors: {
+          ...state.errors,
+          items: [
+            {
+              id: `${Date.now()}-${Math.random()
+                .toString(36)
+                .slice(2, 8)}`,
+              ts: Date.now(),
+              name: error.name || "Error",
+              message: error.message || String(error),
+              stack: error.stack,
+            },
+            ...state.errors.items,
+          ].slice(0, state.errors.maxItems),
+        },
+      }));
     },
 
     clearNetwork() {
@@ -251,6 +240,7 @@ export const useDevStore = create<DevStore>((set, get) => ({
       }));
     },
 
+    /* ---------------- FLAGS ---------------- */
     toggleFlag(key) {
       set((state) => ({
         flags: {
@@ -260,8 +250,44 @@ export const useDevStore = create<DevStore>((set, get) => ({
           },
         },
       }));
+
+      // 🔴 NEW: persist after change
+      get().actions.persistFlags();
     },
 
+    async hydrateFlags() {
+      try {
+        const raw = await AsyncStorage.getItem(DEV_FLAGS_STORAGE_KEY);
+        if (!raw) return;
+
+        const parsed = JSON.parse(raw);
+        if (typeof parsed !== "object" || !parsed) return;
+
+        set((state) => ({
+          flags: {
+            values: {
+              ...state.flags.values,
+              ...parsed,
+            },
+          },
+        }));
+      } catch {
+        // dev-only, ignore
+      }
+    },
+
+    async persistFlags() {
+      try {
+        await AsyncStorage.setItem(
+          DEV_FLAGS_STORAGE_KEY,
+          JSON.stringify(get().flags.values)
+        );
+      } catch {
+        // dev-only, ignore
+      }
+    },
+
+    /* ---------------- REPORT ---------------- */
     async copyDevReport(section) {
       const s = get();
       const payload =
@@ -293,14 +319,13 @@ export const useDevStore = create<DevStore>((set, get) => ({
       throw new Error("💥 Dev crash test triggered");
     },
 
-    /* HEALTH */
+    /* ---------------- HEALTH ---------------- */
     async runHealthCheck(key) {
       const check = get().health.checks.find((c) => c.key === key);
       if (!check) return;
 
-      const start = Date.now();
-
       try {
+        const start = Date.now();
         const res = await fetch(check.url);
         const ms = Date.now() - start;
 
@@ -338,7 +363,7 @@ export const useDevStore = create<DevStore>((set, get) => ({
       }
     },
 
-    /* SSE */
+    /* ---------------- SSE ---------------- */
     reportSSEConnect() {
       set(() => ({
         sse: { connected: true, eventCount: 0, lastError: undefined },
@@ -361,7 +386,7 @@ export const useDevStore = create<DevStore>((set, get) => ({
       }));
     },
 
-    /* 🔴 DATA FRESHNESS */
+    /* ---------------- DATA FRESHNESS ---------------- */
     updateFreshness(key, data) {
       set((state) => ({
         freshness: {
@@ -382,7 +407,6 @@ export const useDevStore = create<DevStore>((set, get) => ({
             ? new Date(json.last_updated_ts).getTime()
             : undefined,
           rowCount: json.row_count,
-          error: undefined,
         });
       } catch (err: any) {
         get().actions.updateFreshness(key, {

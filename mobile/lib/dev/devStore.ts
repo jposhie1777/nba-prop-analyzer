@@ -1,6 +1,7 @@
 // /lib/dev/devStore.ts
 import { create } from "zustand";
-import * as Clipboard from "expo-clipboard";
+// 🔴 TEMP DISABLED — native module isolation
+// import * as Clipboard from "expo-clipboard";
 
 /* --------------------------------------------------
    CONSTANTS
@@ -68,7 +69,6 @@ type DevStore = {
 
   /* ---------------- ACTIONS ---------------- */
   actions: {
-    /* EXISTING */
     logNetwork: (entry: Omit<NetworkLog, "id" | "ts">) => void;
     logError: (err: Error | string) => void;
 
@@ -77,11 +77,11 @@ type DevStore = {
 
     toggleFlag: (key: string) => void;
 
-    copyDevReport: (section?: "network" | "errors" | "flags" | "health") => void;
+    // 🔴 TEMP DISABLED
+    // copyDevReport: (section?: "network" | "errors" | "flags" | "health") => void;
 
     testCrash: () => never;
 
-    /* 🔴 NEW: HEALTH ACTIONS */
     runHealthCheck: (key: string) => Promise<void>;
     runAllHealthChecks: () => Promise<void>;
   };
@@ -124,7 +124,6 @@ export const useDevStore = create<DevStore>((set, get) => ({
 
   /* ---------------- ACTIONS ---------------- */
   actions: {
-    /* ---------- EXISTING ---------- */
     logNetwork(entry) {
       set((state) => {
         const next: NetworkLog = {
@@ -207,6 +206,8 @@ export const useDevStore = create<DevStore>((set, get) => ({
       }));
     },
 
+    // 🔴 TEMP DISABLED — clipboard/native isolation
+    /*
     async copyDevReport(section) {
       const state = get();
 
@@ -236,12 +237,12 @@ export const useDevStore = create<DevStore>((set, get) => ({
 
       await Clipboard.setStringAsync(JSON.stringify(payload, null, 2));
     },
+    */
 
     testCrash() {
       throw new Error("💥 Dev crash test triggered");
     },
 
-    /* ---------- 🔴 NEW: HEALTH ---------- */
     async runHealthCheck(key) {
       const check = get().health.checks.find((c) => c.key === key);
       if (!check) return;

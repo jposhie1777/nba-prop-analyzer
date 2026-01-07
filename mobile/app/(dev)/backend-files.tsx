@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View, Text, Pressable, ScrollView } from "react-native";
+import { Text, Pressable, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 
 import { fetchBackendFiles } from "@/lib/api";
@@ -18,7 +18,7 @@ export default function BackendFilesScreen() {
     <ScrollView
       style={{
         flex: 1,
-        backgroundColor: colors.background.primary,
+        backgroundColor: colors.surface.screen,
         padding: 16,
       }}
       contentContainerStyle={{ paddingBottom: 24 }}
@@ -47,7 +47,7 @@ export default function BackendFilesScreen() {
           }
           style={{
             paddingVertical: 14,
-            paddingHorizontal: 4,
+            paddingHorizontal: 6,
             borderBottomWidth: 1,
             borderBottomColor: colors.border.subtle,
           }}

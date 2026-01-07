@@ -1,7 +1,6 @@
 // /lib/dev/devStore.ts
 import { create } from "zustand";
-// 🔴 TEMP DISABLED — native module isolation
-// import * as Clipboard from "expo-clipboard";
+import * as Clipboard from "expo-clipboard";
 
 /* --------------------------------------------------
    CONSTANTS
@@ -69,6 +68,7 @@ type DevStore = {
 
   /* ---------------- ACTIONS ---------------- */
   actions: {
+    /* EXISTING */
     logNetwork: (entry: Omit<NetworkLog, "id" | "ts">) => void;
     logError: (err: Error | string) => void;
 
@@ -77,11 +77,11 @@ type DevStore = {
 
     toggleFlag: (key: string) => void;
 
-    // 🔴 TEMP DISABLED
-    // copyDevReport: (section?: "network" | "errors" | "flags" | "health") => void;
+    copyDevReport: (section?: "network" | "errors" | "flags" | "health") => void;
 
     testCrash: () => never;
 
+    /* 🔴 NEW: HEALTH ACTIONS */
     runHealthCheck: (key: string) => Promise<void>;
     runAllHealthChecks: () => Promise<void>;
   };
@@ -90,7 +90,7 @@ type DevStore = {
 /* --------------------------------------------------
    STORE IMPLEMENTATION
 -------------------------------------------------- */
-+ export const useDevStore = create((set, get) => ({
+export const useDevStore = create<DevStore>((set, get) => ({
   /* ---------------- NETWORK ---------------- */
   network: {
     items: [],
@@ -124,6 +124,7 @@ type DevStore = {
 
   /* ---------------- ACTIONS ---------------- */
   actions: {
+    /* ---------- EXISTING ---------- */
     logNetwork(entry) {
       set((state) => {
         const next: NetworkLog = {
@@ -206,8 +207,6 @@ type DevStore = {
       }));
     },
 
-    // 🔴 TEMP DISABLED — clipboard/native isolation
-    /*
     async copyDevReport(section) {
       const state = get();
 
@@ -237,12 +236,12 @@ type DevStore = {
 
       await Clipboard.setStringAsync(JSON.stringify(payload, null, 2));
     },
-    */
 
     testCrash() {
       throw new Error("💥 Dev crash test triggered");
     },
 
+    /* ---------- 🔴 NEW: HEALTH ---------- */
     async runHealthCheck(key) {
       const check = get().health.checks.find((c) => c.key === key);
       if (!check) return;

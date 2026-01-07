@@ -7,10 +7,16 @@ import { useRouter } from "expo-router";
 import { useTheme } from "@/store/useTheme";
 import { createDevStyles } from "./devStyles";
 
+/* 🔴 NEW */
+import { useDevStore } from "@/lib/dev/devStore";
+
 export default function DevHomeScreen() {
   const { colors } = useTheme();
   const styles = React.useMemo(() => createDevStyles(colors), [colors]);
   const router = useRouter();
+
+  /* 🔴 NEW */
+  const { health, actions } = useDevStore();
 
   const appVersion =
     Constants.expoConfig?.version ??
@@ -39,6 +45,46 @@ export default function DevHomeScreen() {
         <KV label="ENV" value={runtimeEnv} styles={styles} />
         <KV label="API_URL" value={apiUrl} styles={styles} />
         <KV label="APP_VERSION" value={appVersion} styles={styles} />
+      </Section>
+
+      {/* 🔴 NEW: API HEALTH */}
+      <Section title="API Health" styles={styles}>
+        <ToolButton
+          label="Run All Health Checks"
+          subtitle="Ping backend debug endpoints"
+          onPress={actions.runAllHealthChecks}
+          styles={styles}
+        />
+
+        {health.checks.map((check) => (
+          <View key={check.key} style={styles.card}>
+            <Text style={styles.cardTitle}>{check.label}</Text>
+
+            <Text style={styles.mutedText}>
+              {check.lastStatus
+                ? `Status ${check.lastStatus} • ${check.lastMs}ms`
+                : "Not checked yet"}
+            </Text>
+
+            {check.error && (
+              <Text style={styles.dangerText}>{check.error}</Text>
+            )}
+
+            {check.lastOkTs && (
+              <Text style={styles.mutedText}>
+                Last OK:{" "}
+                {new Date(check.lastOkTs).toLocaleTimeString()}
+              </Text>
+            )}
+
+            <Pressable
+              style={[styles.toolButton, { marginTop: 8 }]}
+              onPress={() => actions.runHealthCheck(check.key)}
+            >
+              <Text style={styles.toolTitle}>Run Check</Text>
+            </Pressable>
+          </View>
+        ))}
       </Section>
 
       {/* TOOLS */}

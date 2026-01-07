@@ -13,8 +13,7 @@ export default function DevHomeScreen() {
   const styles = React.useMemo(() => createDevStyles(colors), [colors]);
   const router = useRouter();
 
-  const { devUnlocked, unlockTaps, health, flags, sse, freshness, actions } =
-    useDevStore();
+  const { health, flags, sse, freshness, actions } = useDevStore();
 
   const appVersion =
     Constants.expoConfig?.version ??
@@ -35,72 +34,38 @@ export default function DevHomeScreen() {
     "unknown";
 
   /* --------------------------------------------------
-     🔴 4D: AUTO-REFRESH ON RESUME (DEV ONLY)
-     - no polling
-     - memory safe (single listener, removed on unmount)
+     🔴 4D: AUTO-REFRESH ON APP RESUME (DEV ONLY)
 -------------------------------------------------- */
   React.useEffect(() => {
     if (!__DEV__) return;
 
     const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active" && devUnlocked) {
+      if (state === "active") {
         actions.runAllHealthChecks();
-        freshness.datasets.forEach((d) => actions.fetchFreshness(d.key));
+        freshness.datasets.forEach((d) =>
+          actions.fetchFreshness(d.key)
+        );
       }
     });
 
     return () => {
       sub.remove();
     };
-  }, [devUnlocked, actions, freshness.datasets]);
+  }, [actions, freshness.datasets]);
 
-  /* 🔴 ALSO: run once immediately upon unlocking */
+  /* 🔴 ALSO: run once on initial mount */
   React.useEffect(() => {
     if (!__DEV__) return;
-    if (!devUnlocked) return;
 
     actions.runAllHealthChecks();
-    freshness.datasets.forEach((d) => actions.fetchFreshness(d.key));
-  }, [devUnlocked]);
-
-  /* --------------------------------------------------
-     🔐 4C: LOCKED SCREEN (B + C)
-     - Tap anywhere 7 times => unlock
-     - Long press title => unlock immediately
--------------------------------------------------- */
-  if (__DEV__ && !devUnlocked) {
-    const tapsRemaining = Math.max(0, 7 - unlockTaps);
-
-    return (
-      <Pressable
-        style={styles.screen}
-        onPress={actions.registerDevTap}
-        android_ripple={{ color: colors.state.hover }}
-      >
-        <View style={[styles.content, { justifyContent: "center", flex: 1 }]}>
-          <Pressable onLongPress={actions.unlockDev}>
-            <Text style={styles.title}>Dev Console</Text>
-          </Pressable>
-
-          <Text style={styles.mutedText} numberOfLines={2}>
-            Tap anywhere {tapsRemaining} more{" "}
-            {tapsRemaining === 1 ? "time" : "times"} to unlock.
-          </Text>
-
-          <Text style={[styles.mutedText, { marginTop: 6 }]} numberOfLines={2}>
-            Tip: long-press the title to unlock instantly.
-          </Text>
-        </View>
-      </Pressable>
+    freshness.datasets.forEach((d) =>
+      actions.fetchFreshness(d.key)
     );
-  }
+  }, []);
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      {/* 🔴 NEW: title long-press can also re-unlock if you ever reset later */}
-      <Pressable onLongPress={actions.unlockDev}>
-        <Text style={styles.title}>Dev Console</Text>
-      </Pressable>
+      <Text style={styles.title}>Dev Console</Text>
 
       {/* ENVIRONMENT */}
       <Section title="Environment & Build" styles={styles}>

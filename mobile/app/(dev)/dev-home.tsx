@@ -13,7 +13,7 @@ export default function DevHomeScreen() {
   const styles = React.useMemo(() => createDevStyles(colors), [colors]);
   const router = useRouter();
 
-  const { health, flags, sse, actions } = useDevStore();
+  const { health, flags, sse, freshness, actions } = useDevStore();
 
   const appVersion =
     Constants.expoConfig?.version ??
@@ -115,7 +115,7 @@ export default function DevHomeScreen() {
         ))}
       </Section>
 
-      {/* 🔴 NEW: LIVE STREAM (SSE) */}
+      {/* LIVE STREAM (SSE) */}
       <Section title="Live Stream (SSE)" styles={styles}>
         <View style={styles.card}>
           <Text style={styles.cardTitle}>
@@ -151,6 +151,45 @@ export default function DevHomeScreen() {
 
         <Text style={styles.mutedText}>
           Reflects the current live score stream connection state.
+        </Text>
+      </Section>
+
+      {/* 🔴 NEW: DATA FRESHNESS */}
+      <Section title="Data Freshness" styles={styles}>
+        {freshness.datasets.map((d) => (
+          <View key={d.key} style={styles.card}>
+            <Text style={styles.cardTitle}>{d.label}</Text>
+
+            {d.lastUpdatedTs ? (
+              <Text style={styles.mutedText}>
+                Last updated:{" "}
+                {new Date(d.lastUpdatedTs).toLocaleString()}
+              </Text>
+            ) : (
+              <Text style={styles.mutedText}>No timestamp yet</Text>
+            )}
+
+            {typeof d.rowCount === "number" && (
+              <Text style={styles.mutedText}>
+                Rows: {d.rowCount.toLocaleString()}
+              </Text>
+            )}
+
+            {d.error && (
+              <Text style={styles.dangerText}>{d.error}</Text>
+            )}
+
+            <Pressable
+              style={[styles.toolButton, { marginTop: 8 }]}
+              onPress={() => actions.fetchFreshness(d.key)}
+            >
+              <Text style={styles.toolTitle}>Refresh</Text>
+            </Pressable>
+          </View>
+        ))}
+
+        <Text style={styles.mutedText}>
+          Confirms backend ingestion & BigQuery freshness.
         </Text>
       </Section>
 

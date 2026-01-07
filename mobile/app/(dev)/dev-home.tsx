@@ -8,7 +8,7 @@ import { useTheme } from "@/store/useTheme";
 import { createDevStyles } from "./devStyles";
 
 /* 🔴 NEW */
-import { useDevStore } from "@/lib/dev/devStore";
+import { useDevStore } from "../../lib/dev/devStore";
 
 export default function DevHomeScreen() {
   const { colors } = useTheme();

@@ -7,7 +7,7 @@ import { useRouter } from "expo-router";
 import { useTheme } from "@/store/useTheme";
 import { createDevStyles } from "./devStyles";
 
-/* 🔴 NEW */
+/* 🔴 DEV STORE */
 import { useDevStore } from "@/lib/dev/devStore";
 
 export default function DevHomeScreen() {
@@ -15,7 +15,7 @@ export default function DevHomeScreen() {
   const styles = React.useMemo(() => createDevStyles(colors), [colors]);
   const router = useRouter();
 
-  /* 🔴 NEW */
+  /* 🔴 DEV STORE STATE */
   const { health, actions } = useDevStore();
 
   const appVersion =
@@ -47,7 +47,7 @@ export default function DevHomeScreen() {
         <KV label="APP_VERSION" value={appVersion} styles={styles} />
       </Section>
 
-      {/* 🔴 NEW: API HEALTH */}
+      {/* API HEALTH */}
       <Section title="API Health" styles={styles}>
         <ToolButton
           label="Run All Health Checks"
@@ -87,7 +87,7 @@ export default function DevHomeScreen() {
         ))}
       </Section>
 
-      {/* TOOLS */}
+      {/* DEVELOPER TOOLS */}
       <Section title="Developer Tools" styles={styles}>
         <ToolButton
           label="Backend Files"
@@ -95,10 +95,19 @@ export default function DevHomeScreen() {
           onPress={() => router.push("/(dev)/backend-files")}
           styles={styles}
         />
+
         <ToolButton
           label="Code Viewer"
           subtitle="Quick access to important source files"
           onPress={() => router.push("/(dev)/code-viewer")}
+          styles={styles}
+        />
+
+        {/* 🔴 NEW: NETWORK LOG VIEWER */}
+        <ToolButton
+          label="Network Logs"
+          subtitle="Inspect API calls, latency, and errors"
+          onPress={() => router.push("/(dev)/network-logs")}
           styles={styles}
         />
       </Section>

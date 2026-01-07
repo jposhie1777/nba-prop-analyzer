@@ -13,7 +13,7 @@ export default function DevHomeScreen() {
   const styles = React.useMemo(() => createDevStyles(colors), [colors]);
   const router = useRouter();
 
-  const { health, flags, actions } = useDevStore();
+  const { health, flags, sse, actions } = useDevStore();
 
   const appVersion =
     Constants.expoConfig?.version ??
@@ -83,7 +83,7 @@ export default function DevHomeScreen() {
         ))}
       </Section>
 
-      {/* 🔴 NEW: FEATURE FLAGS */}
+      {/* FEATURE FLAGS */}
       <Section title="Feature Flags" styles={styles}>
         {Object.entries(flags.values).map(([key, enabled]) => (
           <Pressable
@@ -94,7 +94,9 @@ export default function DevHomeScreen() {
             ]}
             onPress={() => actions.toggleFlag(key)}
           >
-            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+            <View
+              style={{ flexDirection: "row", justifyContent: "space-between" }}
+            >
               <Text style={styles.cardTitle}>{key}</Text>
               <Text
                 style={[
@@ -111,6 +113,45 @@ export default function DevHomeScreen() {
             </Text>
           </Pressable>
         ))}
+      </Section>
+
+      {/* 🔴 NEW: LIVE STREAM (SSE) */}
+      <Section title="Live Stream (SSE)" styles={styles}>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>
+            Status:{" "}
+            <Text
+              style={{
+                color: sse.connected
+                  ? colors.accent.success
+                  : colors.accent.danger,
+              }}
+            >
+              {sse.connected ? "CONNECTED" : "DISCONNECTED"}
+            </Text>
+          </Text>
+
+          <Text style={styles.mutedText}>
+            Events received: {sse.eventCount}
+          </Text>
+
+          {sse.lastEventTs && (
+            <Text style={styles.mutedText}>
+              Last event:{" "}
+              {new Date(sse.lastEventTs).toLocaleTimeString()}
+            </Text>
+          )}
+
+          {sse.lastError && (
+            <Text style={styles.dangerText}>
+              Error: {sse.lastError}
+            </Text>
+          )}
+        </View>
+
+        <Text style={styles.mutedText}>
+          Reflects the current live score stream connection state.
+        </Text>
       </Section>
 
       {/* DEVELOPER TOOLS */}

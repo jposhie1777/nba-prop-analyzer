@@ -1,6 +1,6 @@
 // /app/(dev)/dev-home.tsx
 import React from "react";
-import { ScrollView, View, Text, Pressable } from "react-native";
+import { ScrollView, View, Text, Pressable, AppState } from "react-native";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 
@@ -13,7 +13,8 @@ export default function DevHomeScreen() {
   const styles = React.useMemo(() => createDevStyles(colors), [colors]);
   const router = useRouter();
 
-  const { health, flags, sse, freshness, actions } = useDevStore();
+  const { devUnlocked, unlockTaps, health, flags, sse, freshness, actions } =
+    useDevStore();
 
   const appVersion =
     Constants.expoConfig?.version ??
@@ -33,9 +34,73 @@ export default function DevHomeScreen() {
     Constants.manifest?.extra?.API_URL ??
     "unknown";
 
+  /* --------------------------------------------------
+     🔴 4D: AUTO-REFRESH ON RESUME (DEV ONLY)
+     - no polling
+     - memory safe (single listener, removed on unmount)
+-------------------------------------------------- */
+  React.useEffect(() => {
+    if (!__DEV__) return;
+
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active" && devUnlocked) {
+        actions.runAllHealthChecks();
+        freshness.datasets.forEach((d) => actions.fetchFreshness(d.key));
+      }
+    });
+
+    return () => {
+      sub.remove();
+    };
+  }, [devUnlocked, actions, freshness.datasets]);
+
+  /* 🔴 ALSO: run once immediately upon unlocking */
+  React.useEffect(() => {
+    if (!__DEV__) return;
+    if (!devUnlocked) return;
+
+    actions.runAllHealthChecks();
+    freshness.datasets.forEach((d) => actions.fetchFreshness(d.key));
+  }, [devUnlocked]);
+
+  /* --------------------------------------------------
+     🔐 4C: LOCKED SCREEN (B + C)
+     - Tap anywhere 7 times => unlock
+     - Long press title => unlock immediately
+-------------------------------------------------- */
+  if (__DEV__ && !devUnlocked) {
+    const tapsRemaining = Math.max(0, 7 - unlockTaps);
+
+    return (
+      <Pressable
+        style={styles.screen}
+        onPress={actions.registerDevTap}
+        android_ripple={{ color: colors.state.hover }}
+      >
+        <View style={[styles.content, { justifyContent: "center", flex: 1 }]}>
+          <Pressable onLongPress={actions.unlockDev}>
+            <Text style={styles.title}>Dev Console</Text>
+          </Pressable>
+
+          <Text style={styles.mutedText} numberOfLines={2}>
+            Tap anywhere {tapsRemaining} more{" "}
+            {tapsRemaining === 1 ? "time" : "times"} to unlock.
+          </Text>
+
+          <Text style={[styles.mutedText, { marginTop: 6 }]} numberOfLines={2}>
+            Tip: long-press the title to unlock instantly.
+          </Text>
+        </View>
+      </Pressable>
+    );
+  }
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Dev Console</Text>
+      {/* 🔴 NEW: title long-press can also re-unlock if you ever reset later */}
+      <Pressable onLongPress={actions.unlockDev}>
+        <Text style={styles.title}>Dev Console</Text>
+      </Pressable>
 
       {/* ENVIRONMENT */}
       <Section title="Environment & Build" styles={styles}>
@@ -108,9 +173,7 @@ export default function DevHomeScreen() {
               </Text>
             </View>
 
-            <Text style={styles.mutedText}>
-              Tap to toggle (local only)
-            </Text>
+            <Text style={styles.mutedText}>Tap to toggle (local only)</Text>
           </Pressable>
         ))}
       </Section>
@@ -131,21 +194,16 @@ export default function DevHomeScreen() {
             </Text>
           </Text>
 
-          <Text style={styles.mutedText}>
-            Events received: {sse.eventCount}
-          </Text>
+          <Text style={styles.mutedText}>Events received: {sse.eventCount}</Text>
 
           {sse.lastEventTs && (
             <Text style={styles.mutedText}>
-              Last event:{" "}
-              {new Date(sse.lastEventTs).toLocaleTimeString()}
+              Last event: {new Date(sse.lastEventTs).toLocaleTimeString()}
             </Text>
           )}
 
           {sse.lastError && (
-            <Text style={styles.dangerText}>
-              Error: {sse.lastError}
-            </Text>
+            <Text style={styles.dangerText}>Error: {sse.lastError}</Text>
           )}
         </View>
 
@@ -154,7 +212,7 @@ export default function DevHomeScreen() {
         </Text>
       </Section>
 
-      {/* 🔴 NEW: DATA FRESHNESS */}
+      {/* DATA FRESHNESS */}
       <Section title="Data Freshness" styles={styles}>
         {freshness.datasets.map((d) => (
           <View key={d.key} style={styles.card}>
@@ -162,8 +220,7 @@ export default function DevHomeScreen() {
 
             {d.lastUpdatedTs ? (
               <Text style={styles.mutedText}>
-                Last updated:{" "}
-                {new Date(d.lastUpdatedTs).toLocaleString()}
+                Last updated: {new Date(d.lastUpdatedTs).toLocaleString()}
               </Text>
             ) : (
               <Text style={styles.mutedText}>No timestamp yet</Text>
@@ -175,9 +232,7 @@ export default function DevHomeScreen() {
               </Text>
             )}
 
-            {d.error && (
-              <Text style={styles.dangerText}>{d.error}</Text>
-            )}
+            {d.error && <Text style={styles.dangerText}>{d.error}</Text>}
 
             <Pressable
               style={[styles.toolButton, { marginTop: 8 }]}

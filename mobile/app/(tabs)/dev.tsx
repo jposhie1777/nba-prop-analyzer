@@ -1,5 +1,5 @@
-import BackendFilesScreen from "@/app/(dev)/backend-files";
+import DevHomeScreen from "@/app/(dev)/dev-home";
 
 export default function DevTab() {
-  return <BackendFilesScreen />;
+  return <DevHomeScreen />;
 }

@@ -1,0 +1,160 @@
+// hooks/useLivePlayerStats.ts
+import { useEffect, useRef, useState } from "react";
+import { AppState } from "react-native";
+import Constants from "expo-constants";
+
+const API = Constants.expoConfig?.extra?.API_URL!;
+const POLL_INTERVAL_MS = 20_000;
+
+export type LivePlayerStat = {
+  game_id: number;
+  player_id: number;
+  name: string;
+  team: string;
+  opponent: string;
+  minutes: string | null;
+  pts: number;
+  reb: number;
+  ast: number;
+  stl: number;
+  blk: number;
+  tov: number;
+  fg: [number, number];
+  fg3: [number, number];
+  ft: [number, number];
+  plus_minus: number;
+  period: number | null;
+  clock: string | null;
+};
+
+type Snapshot = {
+  players: LivePlayerStat[];
+  meta: {
+    status: "OK" | "DEGRADED" | "BOOTING";
+    server_updated_at?: string;
+    source_updated_at?: string;
+  };
+};
+
+type Mode = "sse" | "poll";
+
+export function useLivePlayerStats() {
+  const [players, setPlayers] = useState<LivePlayerStat[]>([]);
+  const [mode, setMode] = useState<Mode>("sse");
+
+  const esRef = useRef<EventSource | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const appStateRef = useRef(AppState.currentState);
+
+  /* ===========================
+     Polling
+  =========================== */
+
+  const startPolling = () => {
+    if (pollRef.current) return;
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`${API}/live/player-stats`);
+        if (!res.ok) throw new Error("poll failed");
+
+        const json: Snapshot = await res.json();
+        setPlayers(json.players ?? []);
+        setMode("poll");
+      } catch (e) {
+        console.warn("⚠️ PlayerStats poll failed", e);
+      }
+    };
+
+    poll();
+    pollRef.current = setInterval(poll, POLL_INTERVAL_MS);
+  };
+
+  const stopPolling = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  };
+
+  /* ===========================
+     SSE
+  =========================== */
+
+  const startSSE = () => {
+    if (esRef.current) return;
+
+    try {
+      const es = new EventSource(`${API}/live/player-stats/stream`);
+      esRef.current = es;
+
+      es.addEventListener("snapshot", (e: MessageEvent) => {
+        try {
+          const json: Snapshot = JSON.parse(e.data);
+          setPlayers(json.players ?? []);
+          setMode("sse");
+        } catch (err) {
+          console.error("❌ PlayerStats SSE parse error", err);
+        }
+      });
+
+      es.onerror = () => {
+        es.close();
+        esRef.current = null;
+        startPolling();
+      };
+    } catch {
+      startPolling();
+    }
+  };
+
+  const stopSSE = () => {
+    if (esRef.current) {
+      esRef.current.close();
+      esRef.current = null;
+    }
+  };
+
+  /* ===========================
+     App lifecycle
+  =========================== */
+
+  useEffect(() => {
+    startSSE();
+
+    const sub = AppState.addEventListener("change", (next) => {
+      const prev = appStateRef.current;
+      appStateRef.current = next;
+
+      if (prev.match(/inactive|background/) && next === "active") {
+        stopPolling();
+        stopSSE();
+        startSSE();
+      }
+
+      if (next === "background") {
+        stopSSE();
+        startPolling();
+      }
+    });
+
+    return () => {
+      stopSSE();
+      stopPolling();
+      sub.remove();
+    };
+  }, []);
+
+  /* ===========================
+     Helper selector
+  =========================== */
+
+  const playersByGame = (gameId: number) =>
+    players.filter((p) => p.game_id === gameId);
+
+  return {
+    players,
+    playersByGame,
+    mode,
+  };
+}

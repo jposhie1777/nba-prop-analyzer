@@ -8,6 +8,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useSavedBets } from "@/store/useSavedBets";
 import DebugMemory from "@/components/debug/DebugMemory";
 import { useDevStore } from "@/lib/dev/devStore";
+import { installFetchInterceptor } from "@/lib/dev/interceptFetch";
 
 /* -------------------------------------------------
    Expo Router settings
@@ -23,6 +24,9 @@ export const unstable_settings = {
    - Preserves RedBox
 -------------------------------------------------- */
 if (__DEV__) {
+  // -----------------------------
+  // Global error capture
+  // -----------------------------
   // @ts-ignore
   const defaultHandler = global.ErrorUtils?.getGlobalHandler?.();
 
@@ -30,16 +34,18 @@ if (__DEV__) {
   global.ErrorUtils?.setGlobalHandler?.((error: Error, isFatal?: boolean) => {
     try {
       useDevStore.getState().actions.logError(error);
-    } catch {
-      // never allow logging failure to crash the app
-    }
+    } catch {}
 
-    // Preserve default behavior (RedBox, logs, etc.)
     if (defaultHandler) {
       defaultHandler(error, isFatal);
     }
   });
-}
+
+  // -----------------------------
+  // Fetch interceptor
+  // -----------------------------
+  installFetchInterceptor();
+
 
 /* -------------------------------------------------
    ROOT LAYOUT

@@ -2,9 +2,15 @@
 import { create } from "zustand";
 import * as Clipboard from "expo-clipboard";
 
+/* --------------------------------------------------
+   CONSTANTS
+-------------------------------------------------- */
 const MAX_NETWORK_ITEMS = 50;
 const MAX_ERROR_ITEMS = 30;
 
+/* --------------------------------------------------
+   TYPES
+-------------------------------------------------- */
 type NetworkLog = {
   id: string;
   ts: number;
@@ -23,6 +29,20 @@ type ErrorLog = {
   stack?: string;
 };
 
+/* 🔴 NEW: HEALTH CHECK TYPE */
+type HealthCheck = {
+  key: string;
+  label: string;
+  url: string;
+  lastStatus?: number;
+  lastMs?: number;
+  lastOkTs?: number;
+  error?: string;
+};
+
+/* --------------------------------------------------
+   STORE SHAPE
+-------------------------------------------------- */
 type DevStore = {
   /* ---------------- NETWORK ---------------- */
   network: {
@@ -41,8 +61,14 @@ type DevStore = {
     values: Record<string, boolean>;
   };
 
+  /* 🔴 NEW: HEALTH ---------------- */
+  health: {
+    checks: HealthCheck[];
+  };
+
   /* ---------------- ACTIONS ---------------- */
   actions: {
+    /* EXISTING */
     logNetwork: (entry: Omit<NetworkLog, "id" | "ts">) => void;
     logError: (err: Error | string) => void;
 
@@ -51,12 +77,19 @@ type DevStore = {
 
     toggleFlag: (key: string) => void;
 
-    copyDevReport: (section?: "network" | "errors" | "flags") => void;
+    copyDevReport: (section?: "network" | "errors" | "flags" | "health") => void;
 
     testCrash: () => never;
+
+    /* 🔴 NEW: HEALTH ACTIONS */
+    runHealthCheck: (key: string) => Promise<void>;
+    runAllHealthChecks: () => Promise<void>;
   };
 };
 
+/* --------------------------------------------------
+   STORE IMPLEMENTATION
+-------------------------------------------------- */
 export const useDevStore = create<DevStore>((set, get) => ({
   /* ---------------- NETWORK ---------------- */
   network: {
@@ -80,8 +113,18 @@ export const useDevStore = create<DevStore>((set, get) => ({
     },
   },
 
+  /* 🔴 NEW: HEALTH ---------------- */
+  health: {
+    checks: [
+      { key: "health", label: "API Health", url: "/health" },
+      { key: "live", label: "Live Scores Debug", url: "/live/scores/debug" },
+      { key: "props", label: "Props", url: "/props" },
+    ],
+  },
+
   /* ---------------- ACTIONS ---------------- */
   actions: {
+    /* ---------- EXISTING ---------- */
     logNetwork(entry) {
       set((state) => {
         const next: NetworkLog = {
@@ -106,7 +149,11 @@ export const useDevStore = create<DevStore>((set, get) => ({
 
     logError(err) {
       const error =
-        typeof err === "string" ? new Error(err) : err instanceof Error ? err : new Error("Unknown error");
+        typeof err === "string"
+          ? new Error(err)
+          : err instanceof Error
+          ? err
+          : new Error("Unknown error");
 
       set((state) => {
         const next: ErrorLog = {
@@ -175,21 +222,75 @@ export const useDevStore = create<DevStore>((set, get) => ({
         case "flags":
           payload = state.flags.values;
           break;
+        case "health":
+          payload = state.health.checks;
+          break;
         default:
           payload = {
             network: state.network.items,
             errors: state.errors.items,
             flags: state.flags.values,
+            health: state.health.checks,
           };
       }
 
-      await Clipboard.setStringAsync(
-        JSON.stringify(payload, null, 2)
-      );
+      await Clipboard.setStringAsync(JSON.stringify(payload, null, 2));
     },
 
     testCrash() {
       throw new Error("💥 Dev crash test triggered");
+    },
+
+    /* ---------- 🔴 NEW: HEALTH ---------- */
+    async runHealthCheck(key) {
+      const check = get().health.checks.find((c) => c.key === key);
+      if (!check) return;
+
+      const start = Date.now();
+
+      try {
+        const res = await fetch(check.url);
+        const ms = Date.now() - start;
+
+        set((state) => ({
+          health: {
+            checks: state.health.checks.map((c) =>
+              c.key === key
+                ? {
+                    ...c,
+                    lastStatus: res.status,
+                    lastMs: ms,
+                    lastOkTs: res.ok ? Date.now() : c.lastOkTs,
+                    error: res.ok ? undefined : `HTTP ${res.status}`,
+                  }
+                : c
+            ),
+          },
+        }));
+      } catch (err: any) {
+        const ms = Date.now() - start;
+
+        set((state) => ({
+          health: {
+            checks: state.health.checks.map((c) =>
+              c.key === key
+                ? {
+                    ...c,
+                    lastMs: ms,
+                    error: err?.message ?? "Network error",
+                  }
+                : c
+            ),
+          },
+        }));
+      }
+    },
+
+    async runAllHealthChecks() {
+      const { checks } = get().health;
+      for (const c of checks) {
+        await get().actions.runHealthCheck(c.key);
+      }
     },
   },
 }));

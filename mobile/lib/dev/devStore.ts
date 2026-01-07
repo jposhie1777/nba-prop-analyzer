@@ -1,8 +1,6 @@
 // /lib/dev/devStore.ts
 import { create } from "zustand";
 import * as Clipboard from "expo-clipboard";
-
-/* 🔴 NEW */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 /* --------------------------------------------------
@@ -11,12 +9,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const MAX_NETWORK_ITEMS = 50;
 const MAX_ERROR_ITEMS = 30;
 
-/* 🔴 NEW */
 const DEV_FLAGS_STORAGE_KEY = "__DEV_FLAGS__";
 
-/* 🔴 NEW (4C): DEV UNLOCK */
+/* 🔴 NEW: DEV UNLOCK CONFIG */
 const DEV_UNLOCK_TAPS_REQUIRED = 7;
-const DEV_UNLOCK_RESET_MS = 2500;
+const DEV_UNLOCK_TAP_WINDOW_MS = 2000;
 
 /* --------------------------------------------------
    TYPES
@@ -39,7 +36,6 @@ type ErrorLog = {
   stack?: string;
 };
 
-/* HEALTH CHECK TYPE */
 type HealthCheck = {
   key: string;
   label: string;
@@ -50,7 +46,6 @@ type HealthCheck = {
   error?: string;
 };
 
-/* SSE STATUS TYPE */
 type SSEStatus = {
   connected: boolean;
   eventCount: number;
@@ -58,7 +53,6 @@ type SSEStatus = {
   lastError?: string;
 };
 
-/* DATA FRESHNESS TYPE */
 type DataFreshness = {
   key: string;
   label: string;
@@ -71,12 +65,10 @@ type DataFreshness = {
    STORE SHAPE
 -------------------------------------------------- */
 type DevStore = {
-  /* 🔴 NEW: DEV LOCK (4C) */
-  dev: {
-    unlocked: boolean;
-    tapCount: number;
-    lastTapTs?: number;
-  };
+  /* 🔴 NEW: DEV LOCK */
+  devUnlocked: boolean;
+  unlockTaps: number;
+  lastUnlockTapTs?: number;
 
   network: {
     items: NetworkLog[];
@@ -114,12 +106,10 @@ type DevStore = {
     hydrateFlags: () => Promise<void>;
     persistFlags: () => Promise<void>;
 
-    /* 🔴 NEW (4B): FULL SNAPSHOT */
-    copyFullSnapshot: (meta: {
-      env: string;
-      apiUrl: string;
-      appVersion: string;
-    }) => Promise<void>;
+    /* 🔴 NEW: DEV LOCK ACTIONS */
+    registerDevTap: () => void;   // B: tap anywhere
+    unlockDev: () => void;        // C: long press title
+    resetDevUnlock: () => void;
 
     copyDevReport: (
       section?:
@@ -150,13 +140,6 @@ type DevStore = {
     ) => void;
 
     fetchFreshness: (key: string) => Promise<void>;
-
-    /* 🔴 NEW (4D): refresh everything (health + freshness) */
-    refreshOnResume: () => Promise<void>;
-
-    /* 🔴 NEW (4C): unlock gesture */
-    registerDevTap: () => void;
-    lockDev: () => void;
   };
 };
 
@@ -164,12 +147,10 @@ type DevStore = {
    STORE IMPLEMENTATION
 -------------------------------------------------- */
 export const useDevStore = create<DevStore>((set, get) => ({
-  /* 🔴 NEW: DEV LOCK (4C) */
-  dev: {
-    unlocked: false,
-    tapCount: 0,
-    lastTapTs: undefined,
-  },
+  /* 🔴 NEW: DEV LOCK */
+  devUnlocked: false,
+  unlockTaps: 0,
+  lastUnlockTapTs: undefined,
 
   network: {
     items: [],
@@ -278,7 +259,6 @@ export const useDevStore = create<DevStore>((set, get) => ({
         },
       }));
 
-      // persist after change
       get().actions.persistFlags();
     },
 
@@ -314,6 +294,50 @@ export const useDevStore = create<DevStore>((set, get) => ({
       }
     },
 
+    /* ---------------- 🔴 DEV LOCK ---------------- */
+    registerDevTap() {
+      const now = Date.now();
+      const { devUnlocked, unlockTaps, lastUnlockTapTs } = get();
+
+      if (devUnlocked) return;
+
+      const withinWindow =
+        typeof lastUnlockTapTs === "number" &&
+        now - lastUnlockTapTs <= DEV_UNLOCK_TAP_WINDOW_MS;
+
+      const nextTaps = withinWindow ? unlockTaps + 1 : 1;
+
+      if (nextTaps >= DEV_UNLOCK_TAPS_REQUIRED) {
+        set({
+          devUnlocked: true,
+          unlockTaps: 0,
+          lastUnlockTapTs: undefined,
+        });
+        return;
+      }
+
+      set({
+        unlockTaps: nextTaps,
+        lastUnlockTapTs: now,
+      });
+    },
+
+    unlockDev() {
+      set({
+        devUnlocked: true,
+        unlockTaps: 0,
+        lastUnlockTapTs: undefined,
+      });
+    },
+
+    resetDevUnlock() {
+      set({
+        devUnlocked: false,
+        unlockTaps: 0,
+        lastUnlockTapTs: undefined,
+      });
+    },
+
     /* ---------------- REPORT ---------------- */
     async copyDevReport(section) {
       const s = get();
@@ -338,25 +362,6 @@ export const useDevStore = create<DevStore>((set, get) => ({
               sse: s.sse,
               freshness: s.freshness.datasets,
             };
-
-      await Clipboard.setStringAsync(JSON.stringify(payload, null, 2));
-    },
-
-    /* 🔴 NEW (4B): FULL DEV SNAPSHOT */
-    async copyFullSnapshot(meta) {
-      const s = get();
-      const payload = {
-        meta: {
-          ...meta,
-          capturedAt: new Date().toISOString(),
-        },
-        flags: s.flags.values,
-        health: s.health.checks,
-        sse: s.sse,
-        freshness: s.freshness.datasets,
-        network: s.network.items,
-        errors: s.errors.items,
-      };
 
       await Clipboard.setStringAsync(JSON.stringify(payload, null, 2));
     },
@@ -459,60 +464,6 @@ export const useDevStore = create<DevStore>((set, get) => ({
           error: err?.message ?? "Failed to fetch freshness",
         });
       }
-    },
-
-    /* 🔴 NEW (4D): refresh everything on resume */
-    async refreshOnResume() {
-      try {
-        await get().actions.runAllHealthChecks();
-      } catch {}
-
-      try {
-        const datasets = get().freshness.datasets;
-        for (const d of datasets) {
-          await get().actions.fetchFreshness(d.key);
-        }
-      } catch {}
-    },
-
-    /* 🔴 NEW (4C): unlock gesture */
-    registerDevTap() {
-      const now = Date.now();
-
-      set((state) => {
-        const last = state.dev.lastTapTs ?? 0;
-        const withinWindow = now - last <= DEV_UNLOCK_RESET_MS;
-
-        const nextCount = withinWindow ? state.dev.tapCount + 1 : 1;
-
-        if (nextCount >= DEV_UNLOCK_TAPS_REQUIRED) {
-          return {
-            dev: {
-              unlocked: true,
-              tapCount: 0,
-              lastTapTs: now,
-            },
-          };
-        }
-
-        return {
-          dev: {
-            ...state.dev,
-            tapCount: nextCount,
-            lastTapTs: now,
-          },
-        };
-      });
-    },
-
-    lockDev() {
-      set(() => ({
-        dev: {
-          unlocked: false,
-          tapCount: 0,
-          lastTapTs: undefined,
-        },
-      }));
     },
   },
 }));

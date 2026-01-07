@@ -1,6 +1,10 @@
 import "react-native-reanimated";
 import { useEffect } from "react";
-import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
+import {
+  DarkTheme,
+  DefaultTheme,
+  ThemeProvider,
+} from "@react-navigation/native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 
@@ -18,7 +22,7 @@ export const unstable_settings = {
 };
 
 /* -------------------------------------------------
-   GLOBAL ERROR CAPTURE (DEV ONLY)
+   GLOBAL DEV INSTRUMENTATION (DEV ONLY)
    - Registered once
    - Memory safe
    - Preserves RedBox
@@ -31,21 +35,23 @@ if (__DEV__) {
   const defaultHandler = global.ErrorUtils?.getGlobalHandler?.();
 
   // @ts-ignore
-  global.ErrorUtils?.setGlobalHandler?.((error: Error, isFatal?: boolean) => {
-    try {
-      useDevStore.getState().actions.logError(error);
-    } catch {}
+  global.ErrorUtils?.setGlobalHandler?.(
+    (error: Error, isFatal?: boolean) => {
+      try {
+        useDevStore.getState().actions.logError(error);
+      } catch {}
 
-    if (defaultHandler) {
-      defaultHandler(error, isFatal);
+      if (defaultHandler) {
+        defaultHandler(error, isFatal);
+      }
     }
-  });
+  );
 
   // -----------------------------
   // Fetch interceptor
   // -----------------------------
   installFetchInterceptor();
-
+}
 
 /* -------------------------------------------------
    ROOT LAYOUT
@@ -62,12 +68,23 @@ export default function RootLayout() {
     hydrateSavedBets();
   }, [hydrateSavedBets]);
 
+  // ---------------------------
+  // 🔴 NEW: HYDRATE DEV FLAGS ON BOOT (4A)
+  // ---------------------------
+  useEffect(() => {
+    if (__DEV__) {
+      useDevStore.getState().actions.hydrateFlags();
+    }
+  }, []);
+
   return (
     <>
       {/* DEV-ONLY MEMORY OVERLAY */}
       {__DEV__ && <DebugMemory />}
 
-      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+      <ThemeProvider
+        value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
+      >
         <Stack>
           {/* MAIN TAB STACK */}
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

@@ -105,3 +105,77 @@ export default function TrendChartScreen() {
     </View>
   );
 }
+
+const makeStyles = (colors: any) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: colors.surface.screen,
+      padding: 14,
+    },
+
+    center: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+
+    muted: {
+      color: colors.text.muted,
+      fontWeight: "600",
+    },
+
+    controls: {
+      gap: 10,
+      marginBottom: 14,
+    },
+
+    select: {
+      padding: 12,
+      borderRadius: 12,
+      backgroundColor: colors.surface.card,
+      borderWidth: 1,
+      borderColor: colors.border.subtle,
+    },
+
+    selectLabel: {
+      fontWeight: "800",
+      color: colors.text.primary,
+    },
+
+    toggleGroup: {
+      flexDirection: "row",
+      justifyContent: "center",
+      gap: 10,
+    },
+
+    toggle: {
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: colors.surface.cardSoft,
+    },
+
+    toggleActive: {
+      backgroundColor: colors.surface.card,
+      borderWidth: 1,
+      borderColor: colors.border.subtle,
+    },
+
+    toggleLabel: {
+      fontWeight: "800",
+      color: colors.text.muted,
+    },
+
+    toggleLabelActive: {
+      color: colors.text.primary,
+    },
+
+    chartCard: {
+      flex: 1,
+      borderRadius: 16,
+      backgroundColor: colors.surface.card,
+      padding: 14,
+      justifyContent: "center",
+    },
+  });

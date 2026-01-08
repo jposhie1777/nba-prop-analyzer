@@ -79,34 +79,52 @@ async def startup():
 
     print("🟢 Live ingest ENABLED — starting background loops")
 
-    # ----------------------------------------------
-    # Read-side refresher (SSE cache)
-    # ----------------------------------------------
+    # -----------------------------
+    # READ-SIDE (BQ → memory)
+    # -----------------------------
     asyncio.create_task(refresher_loop())
-
-    # ----------------------------------------------
-    # 🔴 ADDITION: player box read-side refresher
-    # ----------------------------------------------
     asyncio.create_task(player_box_refresher())
-
-    # ----------------------------------------------
-    # 🔴 ADDITION: player stats read-side refresher
-    # ----------------------------------------------
     asyncio.create_task(player_stats_refresher())
 
-    # ----------------------------------------------
-    # Write-side live ingest loop (BallDontLie → BQ)
-    # ----------------------------------------------
+    # -----------------------------
+    # WRITE-SIDE: games snapshot
+    # -----------------------------
     async def live_ingest_loop():
         while True:
             try:
                 await asyncio.to_thread(ingest_live_games_snapshot)
             except Exception as e:
-                print("❌ Live ingest failed:", e)
+                print("❌ Live games ingest failed:", e)
 
             await asyncio.sleep(15)
 
     asyncio.create_task(live_ingest_loop())
+
+    # -----------------------------
+    # 🔴 WRITE-SIDE: box scores snapshot
+    # -----------------------------
+    async def live_boxscore_snapshot_loop():
+        SNAPSHOT_URL = os.environ.get(
+            "BOXSCORE_SNAPSHOT_URL",
+            "http://localhost:8080/debug/box-scores/snapshot",
+        )
+
+        while True:
+            try:
+                import requests
+
+                resp = requests.get(SNAPSHOT_URL, timeout=10)
+                resp.raise_for_status()
+
+                print("📸 Live boxscore snapshot written")
+
+            except Exception as e:
+                print("❌ Live boxscore snapshot failed:", e)
+
+            await asyncio.sleep(30)
+
+    asyncio.create_task(live_boxscore_snapshot_loop())
+
 
 # ==================================================
 # Health check

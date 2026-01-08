@@ -1,6 +1,9 @@
 cd ~/workspaces/nba-prop-analyzer
 git pull
 
+export BALLDONTLIE_API_KEY=61082ce1-607a-4404-b059-2365d7649102
+export ENABLE_LIVE_INGEST=true
+export BOXSCORE_SNAPSHOT_URL=http://localhost:8080/debug/box-scores/snapshot
 
 
 

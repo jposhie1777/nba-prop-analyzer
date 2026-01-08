@@ -86,5 +86,6 @@ export function useHistoricalPlayerTrends() {
     ready,
     error,
     getByPlayer,
+    players,
   };
 }

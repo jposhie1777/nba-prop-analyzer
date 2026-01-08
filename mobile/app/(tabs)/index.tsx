@@ -16,6 +16,9 @@ import { fetchProps, MobileProp } from "../../lib/api";
 import { useSavedBets } from "@/store/useSavedBets";
 import { usePropsStore } from "@/store/usePropsStore";
 import { themeMeta } from "@/theme/meta";
+import { useHistoricalPlayerTrends } from "@/hooks/useHistoricalPlayerTrends";
+import { resolveSparklineByMarket } from "@/utils/resolveSparkline";
+
 // ---------------------------
 // STORAGE KEYS
 // ---------------------------
@@ -66,6 +69,7 @@ export default function HomeScreen() {
   const [props, setProps] = useState<UIProp[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { ready: trendsReady, getByPlayer } = useHistoricalPlayerTrends();
 
   useEffect(() => {
     if (!props.length) return;
@@ -288,70 +292,79 @@ export default function HomeScreen() {
   // FLATLIST RENDER ITEM
   // ---------------------------
   const renderItem = useCallback(
-    ({ item }: { item: GroupedProp }) => (
-      <PropCard
-        /* CORE */
-        player={item.player}
-        market={item.market}
-        line={item.line}
-        odds={item.odds}
-
-        hitRateL10={item.hitRateL10}
-        edge={item.edge}
-        confidence={item.confidence}
-
-        /* WINDOW METRICS */
-        avg_l5={n(item.avg_l5)}
-        avg_l10={n(item.avg_l10)}
-        avg_l20={n(item.avg_l20)}
-
-        hit_rate_l5={n(item.hit_rate_l5)}
-        hit_rate_l10={n(item.hit_rate_l10)}
-        hit_rate_l20={n(item.hit_rate_l20)}
-
-        clear_1p_pct_l5={n(item.clear_1p_pct_l5)}
-        clear_1p_pct_l10={n(item.clear_1p_pct_l10)}
-        clear_1p_pct_l20={n(item.clear_1p_pct_l20)}
-
-        clear_2p_pct_l5={n(item.clear_2p_pct_l5)}
-        clear_2p_pct_l10={n(item.clear_2p_pct_l10)}
-        clear_2p_pct_l20={n(item.clear_2p_pct_l20)}
-
-        avg_margin_l5={n(item.avg_margin_l5)}
-        avg_margin_l10={n(item.avg_margin_l10)}
-        avg_margin_l20={n(item.avg_margin_l20)}
-
-        bad_miss_pct_l5={n(item.bad_miss_pct_l5)}
-        bad_miss_pct_l10={n(item.bad_miss_pct_l10)}
-        bad_miss_pct_l20={n(item.bad_miss_pct_l20)}
-
-        pace_l5={n(item.pace_l5)}
-        pace_l10={n(item.pace_l10)}
-        pace_l20={n(item.pace_l20)}
-
-        usage_l5={n(item.usage_l5)}
-        usage_l10={n(item.usage_l10)}
-        usage_l20={n(item.usage_l20)}
-
-        /* CONTEXT */
-        ts_l10={n(item.ts_l10)}
-        pace_delta={n(item.pace_delta)}
-        delta_vs_line={n(item.delta_vs_line)}
-
-        matchup={item.matchup}
-        home={item.home}
-        away={item.away}
-        books={item.books}
-
-        /* STATE */
-        saved={savedIds.has(item.id)}
-        onToggleSave={() => toggleSave(item.id)}
-
-        expanded={expandedId === item.id}
-        onToggleExpand={() => toggleExpand(item.id)}
-      />
-    ),
-    [savedIds, toggleSave, expandedId, toggleExpand]
+    ({ item }: { item: GroupedProp }) => {
+      const trend = getByPlayer(item.player);
+      const spark = resolveSparklineByMarket(item.market, trend);
+  
+      return (
+        <PropCard
+          /* CORE */
+          player={item.player}
+          market={item.market}
+          line={item.line}
+          odds={item.odds}
+  
+          hitRateL10={item.hitRateL10}
+          edge={item.edge}
+          confidence={item.confidence}
+  
+          /* WINDOW METRICS */
+          avg_l5={n(item.avg_l5)}
+          avg_l10={n(item.avg_l10)}
+          avg_l20={n(item.avg_l20)}
+  
+          hit_rate_l5={n(item.hit_rate_l5)}
+          hit_rate_l10={n(item.hit_rate_l10)}
+          hit_rate_l20={n(item.hit_rate_l20)}
+  
+          clear_1p_pct_l5={n(item.clear_1p_pct_l5)}
+          clear_1p_pct_l10={n(item.clear_1p_pct_l10)}
+          clear_1p_pct_l20={n(item.clear_1p_pct_l20)}
+  
+          clear_2p_pct_l5={n(item.clear_2p_pct_l5)}
+          clear_2p_pct_l10={n(item.clear_2p_pct_l10)}
+          clear_2p_pct_l20={n(item.clear_2p_pct_l20)}
+  
+          avg_margin_l5={n(item.avg_margin_l5)}
+          avg_margin_l10={n(item.avg_margin_l10)}
+          avg_margin_l20={n(item.avg_margin_l20)}
+  
+          bad_miss_pct_l5={n(item.bad_miss_pct_l5)}
+          bad_miss_pct_l10={n(item.bad_miss_pct_l10)}
+          bad_miss_pct_l20={n(item.bad_miss_pct_l20)}
+  
+          pace_l5={n(item.pace_l5)}
+          pace_l10={n(item.pace_l10)}
+          pace_l20={n(item.pace_l20)}
+  
+          usage_l5={n(item.usage_l5)}
+          usage_l10={n(item.usage_l10)}
+          usage_l20={n(item.usage_l20)}
+  
+          /* CONTEXT */
+          ts_l10={n(item.ts_l10)}
+          pace_delta={n(item.pace_delta)}
+          delta_vs_line={n(item.delta_vs_line)}
+  
+          sparkline_l5={spark.sparkline_l5}
+          sparkline_l10={spark.sparkline_l10}
+          sparkline_l20={spark.sparkline_l20}
+  
+          matchup={item.matchup}
+          home={item.home}
+          away={item.away}
+          books={item.books}
+  
+          /* STATE */
+          saved={savedIds.has(item.id)}
+          onToggleSave={() => toggleSave(item.id)}
+  
+          expanded={expandedId === item.id}
+          onToggleExpand={() => toggleExpand(item.id)}
+        />
+      );
+    },
+    [savedIds, toggleSave, expandedId, toggleExpand, getByPlayer]
   );
 
 

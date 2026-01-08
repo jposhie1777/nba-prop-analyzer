@@ -1,4 +1,4 @@
-#//components/PropCard.tsx
+// components/PropCard.tsx
 import { View, Text, StyleSheet, Image, Pressable } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import { useEffect, useMemo, useRef, useState } from "react";

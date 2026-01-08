@@ -35,8 +35,27 @@ MAX_BACKOFF_SEC = 120
 # ======================================================
 # BigQuery
 # ======================================================
+from google.cloud import bigquery
+import os
 
-bq = bigquery.Client()
+def get_bq_client() -> bigquery.Client:
+    """
+    Unified BigQuery client initializer.
+
+    Works in:
+    - Cloud Run (auto project)
+    - Local dev / Codespaces (env-based)
+    """
+
+    project = os.environ.get("GCP_PROJECT") or os.environ.get("GOOGLE_CLOUD_PROJECT")
+
+    if project:
+        return bigquery.Client(project=project)
+
+    # Cloud Run / gcloud auth fallback
+    return bigquery.Client()
+
+
 
 PLAYER_STATS_QUERY = """
 WITH ranked AS (
@@ -99,7 +118,8 @@ async def fetch_player_stats_snapshot() -> Dict[str, Any]:
     nba_today = datetime.now(ZoneInfo("America/New_York")).date()
 
     def _run():
-        job = bq.query(
+        client = get_bq_client()
+        job = client.query(
             PLAYER_STATS_QUERY,
             job_config=bigquery.QueryJobConfig(
                 query_parameters=[

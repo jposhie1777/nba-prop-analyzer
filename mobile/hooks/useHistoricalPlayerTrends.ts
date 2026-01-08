@@ -82,6 +82,9 @@ export function useHistoricalPlayerTrends() {
   const getByPlayer = (player: string) =>
     cacheRef.current[player];
 
+  // 👇 ADD THIS
+  const players = Object.keys(cacheRef.current).sort();
+
   return {
     ready,
     error,

@@ -6,14 +6,12 @@ import { resolveSparklineByMarket } from "@/utils/resolveSparkline";
 import { Sparkline } from "@/components/Sparkline";
 import { PlayerDropdown } from "@/components/PlayerDropdown";
 
-/* ======================================================
-   SCREEN
-====================================================== */
 export default function TrendChartScreen() {
   const colors = useTheme((s) => s.colors);
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  const { ready, getByPlayer } = useHistoricalPlayerTrends();
+  // ✅ SINGLE HOOK CALL
+  const { ready, players, getByPlayer } = useHistoricalPlayerTrends();
 
   /* ---------------------------
      LOCAL STATE
@@ -27,7 +25,6 @@ export default function TrendChartScreen() {
   --------------------------- */
   const trend = player ? getByPlayer(player) : undefined;
   const spark = resolveSparklineByMarket(market, trend);
-  const { ready, players, getByPlayer } = useHistoricalPlayerTrends();
 
   const data =
     window === 5
@@ -53,19 +50,16 @@ export default function TrendChartScreen() {
           CONTROLS
       ========================== */}
       <View style={styles.controls}>
-        {/* PLAYER SELECT (stub for now) */}
         <PlayerDropdown
           players={players}
           value={player}
           onSelect={setPlayer}
         />
 
-        {/* MARKET SELECT */}
         <Pressable style={styles.select}>
           <Text style={styles.selectLabel}>{market}</Text>
         </Pressable>
 
-        {/* WINDOW TOGGLE */}
         <View style={styles.toggleGroup}>
           {[5, 10, 20].map((n) => {
             const active = window === n;
@@ -110,12 +104,73 @@ export default function TrendChartScreen() {
 
 const makeStyles = (colors: any) =>
   StyleSheet.create({
+    root: { flex: 1 },
     screen: {
       flex: 1,
       backgroundColor: colors.surface.screen,
       padding: 14,
     },
 
+    title: {
+      fontSize: 18,
+      fontWeight: "900",
+      color: colors.text.primary,
+      marginBottom: 10,
+    },
+
+    section: {
+      marginTop: 12,
+      gap: 8,
+    },
+
+    label: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: colors.text.muted,
+      letterSpacing: 0.3,
+    },
+
+    card: {
+      backgroundColor: colors.surface.card,
+      borderRadius: 16,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: colors.border.subtle,
+    },
+
+    row: {
+      flexDirection: "row",
+      gap: 10,
+      alignItems: "center",
+    },
+
+    pillGroup: {
+      flexDirection: "row",
+      backgroundColor: colors.surface.cardSoft,
+      borderRadius: 999,
+      padding: 4,
+      gap: 6,
+      alignSelf: "flex-start",
+    },
+
+    pill: {
+      paddingHorizontal: 14,
+      paddingVertical: 6,
+      borderRadius: 999,
+      backgroundColor: "transparent",
+    },
+
+    pillActive: {
+      backgroundColor: colors.surface.card,
+      borderWidth: 1,
+      borderColor: colors.border.subtle,
+    },
+
+    pillLabel: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: colors.text.muted,
+    },
     center: {
       flex: 1,
       justifyContent: "center",
@@ -128,14 +183,15 @@ const makeStyles = (colors: any) =>
     },
 
     controls: {
-      gap: 10,
+      gap: 12,
       marginBottom: 14,
     },
 
     select: {
-      padding: 12,
-      borderRadius: 12,
       backgroundColor: colors.surface.card,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 12,
       borderWidth: 1,
       borderColor: colors.border.subtle,
     },
@@ -147,15 +203,17 @@ const makeStyles = (colors: any) =>
 
     toggleGroup: {
       flexDirection: "row",
-      justifyContent: "center",
-      gap: 10,
+      backgroundColor: colors.surface.cardSoft,
+      borderRadius: 999,
+      padding: 4,
+      gap: 6,
+      alignSelf: "flex-start",
     },
 
     toggle: {
-      paddingHorizontal: 16,
-      paddingVertical: 8,
+      paddingHorizontal: 14,
+      paddingVertical: 6,
       borderRadius: 999,
-      backgroundColor: colors.surface.cardSoft,
     },
 
     toggleActive: {
@@ -165,6 +223,7 @@ const makeStyles = (colors: any) =>
     },
 
     toggleLabel: {
+      fontSize: 12,
       fontWeight: "800",
       color: colors.text.muted,
     },
@@ -174,10 +233,15 @@ const makeStyles = (colors: any) =>
     },
 
     chartCard: {
-      flex: 1,
-      borderRadius: 16,
       backgroundColor: colors.surface.card,
+      borderRadius: 18,
       padding: 14,
-      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: colors.border.subtle,
+    },
+
+
+    pillLabelActive: {
+      color: colors.text.primary,
     },
   });

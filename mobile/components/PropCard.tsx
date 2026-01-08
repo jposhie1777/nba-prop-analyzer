@@ -13,6 +13,7 @@ import Animated, {
 import { useTheme } from "@/store/useTheme";
 import textStyles from "../theme/text";
 import { BOOKMAKER_LOGOS } from "../utils/bookmakerLogos";
+import { Sparkline } from "./Sparkline";
 
 /* ======================================================
    TEAM LOGOS
@@ -110,6 +111,10 @@ type PropCardProps = {
   bookmaker?: string;
   books?: BookOdds[];
 
+  sparkline_l5?: number[];
+  sparkline_l10?: number[];
+  sparkline_l20?: number[];
+
   saved: boolean;
   onToggleSave: () => void;
   expanded: boolean;
@@ -171,6 +176,12 @@ export default function PropCard(props: PropCardProps) {
   const badMiss = w === "l5" ? props.bad_miss_pct_l5 : w === "l20" ? props.bad_miss_pct_l20 : props.bad_miss_pct_l10;
   const pace = w === "l5" ? props.pace_l5 : w === "l20" ? props.pace_l20 : props.pace_l10;
   const usage = w === "l5" ? props.usage_l5 : w === "l20" ? props.usage_l20 : props.usage_l10;
+  const sparkline =
+    w === "l5"
+      ? props.sparkline_l5
+      : w === "l20"
+      ? props.sparkline_l20
+      : props.sparkline_l10;
 
   /* =========================
      MULTI-BOOK NORMALIZATION
@@ -340,7 +351,7 @@ export default function PropCard(props: PropCardProps) {
     </View>
   );
 
-  /* ======================================================
+/* ======================================================
    RENDER
 ====================================================== */
 return (
@@ -426,17 +437,22 @@ return (
                   return (
                     <View key={key} style={styles.oddsPill}>
                       {BOOKMAKER_LOGOS[key] ? (
-                        <Image source={BOOKMAKER_LOGOS[key]} style={styles.bookLogo} />
+                        <Image
+                          source={BOOKMAKER_LOGOS[key]}
+                          style={styles.bookLogo}
+                        />
                       ) : (
                         <View style={styles.bookLogoPlaceholder} />
                       )}
-                      <Text style={styles.oddsText}>{formatOdds(b.odds)}</Text>
+                      <Text style={styles.oddsText}>
+                        {formatOdds(b.odds)}
+                      </Text>
                     </View>
                   );
                 })}
               </View>
-
             </View>
+
             {/* DIVIDER */}
             <View style={styles.divider} />
 
@@ -487,6 +503,9 @@ return (
                     <Text style={styles.sectionIcon}>📊</Text>
                     <Text style={styles.sectionText}>Performance</Text>
                   </View>
+
+                  {/* 👇 ADD: SPARKLINE (WINDOW-AWARE) */}
+                  <Sparkline data={sparkline} />
 
                   <View style={styles.gridRow}>
                     <Text style={styles.statLabel}>AVG</Text>
@@ -558,7 +577,9 @@ return (
                       {Math.round((usage ?? 0) * 100)}%
                     </Text>
                     <Text style={styles.statValue}>
-                      {pace_delta != null ? pace_delta.toFixed(1) : "—"}
+                      {pace_delta != null
+                        ? pace_delta.toFixed(1)
+                        : "—"}
                     </Text>
                   </View>
                 </View>
@@ -601,7 +622,6 @@ return (
     </Animated.View>
   </Swipeable>
 );
-}
 
 /* ======================================================
    STYLES

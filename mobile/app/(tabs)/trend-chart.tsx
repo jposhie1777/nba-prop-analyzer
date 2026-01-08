@@ -4,6 +4,7 @@ import { useTheme } from "@/store/useTheme";
 import { useHistoricalPlayerTrends } from "@/hooks/useHistoricalPlayerTrends";
 import { resolveSparklineByMarket } from "@/utils/resolveSparkline";
 import { Sparkline } from "@/components/Sparkline";
+import { PlayerDropdown } from "@/components/PlayerDropdown";
 
 /* ======================================================
    SCREEN
@@ -26,6 +27,7 @@ export default function TrendChartScreen() {
   --------------------------- */
   const trend = player ? getByPlayer(player) : undefined;
   const spark = resolveSparklineByMarket(market, trend);
+  const { ready, players, getByPlayer } = useHistoricalPlayerTrends();
 
   const data =
     window === 5
@@ -52,11 +54,11 @@ export default function TrendChartScreen() {
       ========================== */}
       <View style={styles.controls}>
         {/* PLAYER SELECT (stub for now) */}
-        <Pressable style={styles.select}>
-          <Text style={styles.selectLabel}>
-            {player ?? "Select Player"}
-          </Text>
-        </Pressable>
+        <PlayerDropdown
+          players={players}
+          value={player}
+          onSelect={setPlayer}
+        />
 
         {/* MARKET SELECT */}
         <Pressable style={styles.select}>

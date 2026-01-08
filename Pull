@@ -1,3 +1,9 @@
+cd ~/workspaces/nba-prop-analyzer
+git pull
+
+
+
+
 git fetch --all
 git reset --hard origin/main
 
@@ -5,3 +11,4 @@ rm -rf node_modules
 npm install
 expo install
 expo start -c
+

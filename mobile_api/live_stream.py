@@ -35,7 +35,27 @@ RAW_SNAPSHOT_TABLE = (
 # ======================================================
 # BigQuery
 # ======================================================
-bq_client = bigquery.Client()
+from google.cloud import bigquery
+import os
+
+def get_bq_client() -> bigquery.Client:
+    """
+    Unified BigQuery client initializer.
+
+    Works in:
+    - Cloud Run (auto project)
+    - Local dev / Codespaces (env-based)
+    """
+
+    project = os.environ.get("GCP_PROJECT") or os.environ.get("GOOGLE_CLOUD_PROJECT")
+
+    if project:
+        return bigquery.Client(project=project)
+
+    # Cloud Run / gcloud auth fallback
+    return bigquery.Client()
+
+
 
 LIVE_GAMES_QUERY = """
 WITH ranked AS (
@@ -123,7 +143,9 @@ async def fetch_live_snapshot_from_bigquery() -> Dict[str, Any]:
     """
 
     def _run_query():
-        return list(bq_client.query(LIVE_GAMES_QUERY).result())
+        client = get_bq_client()
+        return list(client.query(LIVE_GAMES_QUERY).result())
+
 
     rows = await asyncio.to_thread(_run_query)
 
@@ -180,13 +202,15 @@ def write_raw_snapshot(snapshot: dict):
     NEVER raises. NEVER blocks the event loop.
     """
     try:
+        client = get_bq_client()
+
         row = {
             "snapshot_ts": datetime.now(timezone.utc).isoformat(),
             "source": "ball_dont_lie",
             "payload_json": json.dumps(snapshot),
         }
 
-        errors = bq_client.insert_rows_json(
+        errors = client.insert_rows_json(
             RAW_SNAPSHOT_TABLE,
             [row],
         )
@@ -196,6 +220,7 @@ def write_raw_snapshot(snapshot: dict):
 
     except Exception as e:
         print("⚠️ Raw snapshot insert failed:", str(e))
+
 
 # ======================================================
 # Background refresher loop (ONE per container)

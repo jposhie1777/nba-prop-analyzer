@@ -1,9 +1,12 @@
 cd ~/workspaces/nba-prop-analyzer
 git pull
 
-export BALLDONTLIE_API_KEY=61082ce1-607a-4404-b059-2365d7649102
+export GCP_PROJECT=graphite-flare-477419-h7
 export ENABLE_LIVE_INGEST=true
-export BOXSCORE_SNAPSHOT_URL=http://localhost:8080/debug/box-scores/snapshot
+export BALLDONTLIE_API_KEY=61082ce1-607a-4404-b059-2365d7649102
+export LOCAL_DEV=true
+python -m uvicorn mobile_api.main:app --reload --port 8080
+
 
 
 

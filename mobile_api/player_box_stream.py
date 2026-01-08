@@ -55,8 +55,27 @@ MAX_BACKOFF_SEC = 180
 # ======================================================
 # BigQuery
 # ======================================================
+from google.cloud import bigquery
+import os
 
-bq = bigquery.Client()
+def get_bq_client() -> bigquery.Client:
+    """
+    Unified BigQuery client initializer.
+
+    Works in:
+    - Cloud Run (auto project)
+    - Local dev / Codespaces (env-based)
+    """
+
+    project = os.environ.get("GCP_PROJECT") or os.environ.get("GOOGLE_CLOUD_PROJECT")
+
+    if project:
+        return bigquery.Client(project=project)
+
+    # Cloud Run / gcloud auth fallback
+    return bigquery.Client()
+
+
 
 BOX_SCORES_QUERY = """
 SELECT
@@ -114,7 +133,8 @@ async def fetch_latest_box_scores(
         game_date = nba_today()
 
     def _run():
-        job = bq.query(
+        client = get_bq_client()
+        job = client.query(
             BOX_SCORES_QUERY,
             job_config=bigquery.QueryJobConfig(
                 query_parameters=[
@@ -158,7 +178,8 @@ def flatten_and_write_player_stats(
     if not ENABLE_PLAYER_STATS_INGEST:
         return
 
-    client = bigquery.Client()
+    client = get_bq_client()
+    errors = client.insert_rows_json(table_id, rows)
     table_id = "graphite-flare-477419-h7.nba_live.live_player_stats"
 
     now = datetime.now(timezone.utc).isoformat()

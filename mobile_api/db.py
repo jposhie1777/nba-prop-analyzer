@@ -1,18 +1,35 @@
-# db.py
+#db.py
 from google.cloud import bigquery
 from time import time
-from typing import List, Dict
-from datetime import datetime, timezone
-import os
-import requests
+from typing import Dict, List, Tuple
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from typing import Dict, List, Tuple
+import os
+import requests
 
 # --------------------------------------------------
-# BigQuery client (Cloud Run auto-auth)
+# BigQuery client (LAZY INIT)
 # --------------------------------------------------
-client = bigquery.Client()
+from google.cloud import bigquery
+import os
+
+def get_bq_client() -> bigquery.Client:
+    """
+    Unified BigQuery client initializer.
+
+    Works in:
+    - Cloud Run (auto project)
+    - Local dev / Codespaces (env-based)
+    """
+
+    project = os.environ.get("GCP_PROJECT") or os.environ.get("GOOGLE_CLOUD_PROJECT")
+
+    if project:
+        return bigquery.Client(project=project)
+
+    # Cloud Run / gcloud auth fallback
+    return bigquery.Client()
+
 
 # --------------------------------------------------
 # Simple in-memory cache
@@ -21,7 +38,7 @@ _CACHE: Dict[str, Tuple[float, List[Dict]]] = {}
 _TTL_SECONDS = 60
 
 # --------------------------------------------------
-# Core fetch function (UNCHANGED)
+# Core fetch function
 # --------------------------------------------------
 def fetch_mobile_props(
     *,
@@ -30,9 +47,7 @@ def fetch_mobile_props(
     limit: int = 200,
     offset: int = 0,
 ) -> List[Dict]:
-    """
-    Fetch mobile-ready props from BigQuery.
-    """
+
     cache_key = f"{game_date}:{min_hit_rate}:{limit}:{offset}"
     now = time()
 
@@ -45,12 +60,13 @@ def fetch_mobile_props(
     SELECT *
     FROM `nba_goat_data.props_mobile_v1`
     WHERE gameDate = @game_date
-    AND hit_rate_l10 >= @min_hit_rate
+      AND hit_rate_l10 >= @min_hit_rate
     ORDER BY hit_rate_l10 DESC, edge_pct DESC
     LIMIT @limit
     OFFSET @offset
     """
 
+    client = get_bq_client()
     job = client.query(
         query,
         job_config=bigquery.QueryJobConfig(
@@ -74,18 +90,21 @@ def fetch_mobile_props(
 
 BDL_BASE = "https://api.balldontlie.io/v1"
 
-def ingest_live_games_snapshot():
+def ingest_live_games_snapshot() -> None:
     """
-    Poll BallDontLie games endpoint and snapshot games
+    Poll BallDontLie /games endpoint and snapshot games
     into nba_live.live_games.
 
     WRITE-ONLY.
-    Called by Cloud Run background loop.
+    Safe for Cloud Run background execution.
     """
 
+    # --------------------------------------------------
+    # Imports (local-only to avoid import-time failures)
+    # --------------------------------------------------
     import os
     import requests
-    from datetime import datetime
+    from datetime import datetime, timedelta
     from zoneinfo import ZoneInfo
 
     # --------------------------------------------------
@@ -95,23 +114,28 @@ def ingest_live_games_snapshot():
     if not BALLDONTLIE_API_KEY:
         raise RuntimeError("BALLDONTLIE_API_KEY is missing")
 
+    BDL_BASE = "https://api.balldontlie.io/v1"
+    NY_TZ = ZoneInfo("America/New_York")
+    UTC_TZ = ZoneInfo("UTC")
+
+    client = get_bq_client()
+
     headers = {
         "Authorization": f"Bearer {BALLDONTLIE_API_KEY}",
+        "Accept": "application/json",
     }
 
-    NY_TZ = ZoneInfo("America/New_York")
-    today = datetime.now(NY_TZ).date().isoformat()
-    now_dt = datetime.now(tz=ZoneInfo("UTC"))
-    now = now_dt.isoformat()
+    # --------------------------------------------------
+    # Date window (NY authoritative)
+    # --------------------------------------------------
+    today_ny = datetime.now(NY_TZ).date()
+    tomorrow_ny = today_ny + timedelta(days=1)
+
+    poll_ts = datetime.now(UTC_TZ).isoformat()
 
     # --------------------------------------------------
     # Fetch games
     # --------------------------------------------------
-    from datetime import timedelta
-
-    today_ny = datetime.now(NY_TZ).date()
-    tomorrow_ny = today_ny + timedelta(days=1)
-
     resp = requests.get(
         f"{BDL_BASE}/games",
         params={
@@ -128,22 +152,23 @@ def ingest_live_games_snapshot():
     games = resp.json().get("data", [])
 
     if not games:
-        print("ℹ️ No games returned from BallDontLie")
+        print("ℹ️ ingest_live_games_snapshot: no games returned")
         return
 
-    rows: List[Dict] = []
     # --------------------------------------------------
     # Normalize rows
     # --------------------------------------------------
+    rows = []
+
     for g in games:
         status_raw = (g.get("status") or "").lower()
+
+        home_score = g.get("home_team_score")
+        away_score = g.get("visitor_team_score")
 
         # ---------------------------
         # Game state
         # ---------------------------
-        home_score = g.get("home_team_score")
-        away_score = g.get("visitor_team_score")
-
         if "final" in status_raw:
             state = "FINAL"
         elif home_score is not None and away_score is not None:
@@ -151,9 +176,8 @@ def ingest_live_games_snapshot():
         else:
             state = "UPCOMING"
 
-
         # ---------------------------
-        # Period
+        # Period (best-effort)
         # ---------------------------
         period = None
         if "q1" in status_raw:
@@ -179,14 +203,13 @@ def ingest_live_games_snapshot():
         rows.append(
             {
                 "game_id": g["id"],
-                "game_date": today,
+                "game_date": today_ny.isoformat(),
 
                 "state": state,
 
                 "home_team_abbr": g["home_team"]["abbreviation"],
                 "away_team_abbr": g["visitor_team"]["abbreviation"],
 
-                # Quarter scores (nullable-safe)
                 "home_score_q1": g.get("home_q1"),
                 "home_score_q2": g.get("home_q2"),
                 "home_score_q3": g.get("home_q3"),
@@ -197,31 +220,33 @@ def ingest_live_games_snapshot():
                 "away_score_q3": g.get("visitor_q3"),
                 "away_score_q4": g.get("visitor_q4"),
 
-                "home_score": g.get("home_team_score"),
-                "away_score": g.get("visitor_team_score"),
+                "home_score": home_score,
+                "away_score": away_score,
 
                 "period": period,
                 "clock": clock,
-                "wall_clock": now,
 
-                # Ingestion metadata
-                "poll_ts": now,
-                "ingested_at": now,
+                # Metadata
+                "poll_ts": poll_ts,
+                "ingested_at": poll_ts,
             }
         )
 
     # --------------------------------------------------
-    # Write snapshot
+    # Write snapshot (authoritative)
     # --------------------------------------------------
-    if rows:
-        print(f"📥 Ingesting {len(rows)} games for {today}")
+    print(f"📥 ingest_live_games_snapshot: writing {len(rows)} games")
 
-        # Snapshot semantics (authoritative table)
-        client.query("TRUNCATE TABLE `nba_live.live_games`").result()
+    client.query(
+        "TRUNCATE TABLE `nba_live.live_games`"
+    ).result()
 
-        errors = client.insert_rows_json("nba_live.live_games", rows)
+    errors = client.insert_rows_json(
+        "nba_live.live_games",
+        rows,
+    )
 
-        if errors:
-            raise RuntimeError(f"BigQuery insert errors: {errors}")
+    if errors:
+        raise RuntimeError(f"BigQuery insert errors: {errors}")
 
-        print("✅ Live games snapshot updated successfully")
+    print("✅ ingest_live_games_snapshot: snapshot updated")

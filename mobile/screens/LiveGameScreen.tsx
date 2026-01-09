@@ -3,6 +3,7 @@ import { FlatList, View, ActivityIndicator, Text } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { LiveGameCard } from "@/components/live/LiveGameCard";
 import { useLiveGames } from "@/hooks/useLiveGames";
+import { useLivePlayerStats } from "@/hooks/useLivePlayerStats";
 
 export default function LiveGamesScreen() {
   const { colors } = useTheme();
@@ -17,6 +18,10 @@ export default function LiveGamesScreen() {
   });
 
   const loading = games.length === 0 && mode === "sse";
+  const { playersByGame, players, mode: playerMode } = useLivePlayerStats();
+  console.log("👥 Live players snapshot", {
+    totalPlayers: players.length,
+  });
 
   /* =============================
      Loading

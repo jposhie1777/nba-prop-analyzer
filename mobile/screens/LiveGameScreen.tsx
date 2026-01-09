@@ -1,3 +1,4 @@
+// /screens/liveGamesScreen.tsx
 import { FlatList, View, ActivityIndicator, Text } from "react-native";
 
 import { useTheme } from "@/store/useTheme";

@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from google.cloud import bigquery
+from datetime import date, datetime
 
 router = APIRouter(
     prefix="/historical",
@@ -22,10 +23,17 @@ def get_player_trends():
     for row in rows:
         r = dict(row)
 
-        # 🔴 CRITICAL: convert BigQuery REPEATED fields
         for k, v in r.items():
+            # REPEATED fields
             if isinstance(v, (list, tuple)):
-                r[k] = list(v)
+                r[k] = [
+                    x.isoformat() if isinstance(x, (date, datetime)) else x
+                    for x in v
+                ]
+
+            # Scalar DATE / DATETIME (just in case)
+            elif isinstance(v, (date, datetime)):
+                r[k] = v.isoformat()
 
         out.append(r)
 

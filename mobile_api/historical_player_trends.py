@@ -1,7 +1,6 @@
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 from google.cloud import bigquery
-from typing import List, Dict, Any
-from fastapi.encoders import jsonable_encoder
 
 router = APIRouter(
     prefix="/historical",
@@ -45,4 +44,4 @@ FROM `graphite-flare-477419-h7.nba_live.historical_player_trends`
 def get_player_trends():
     rows = bq.query(QUERY).result()
     data = [dict(row) for row in rows]
-    return jsonable_encoder(data)
+    return JSONResponse(content=data)

@@ -59,3 +59,16 @@ export function LiveGameCard({ game, players }: Props) {
     </View>
   );
 }
+const styles = StyleSheet.create({
+  card: {
+    borderRadius: 16,
+    marginHorizontal: 12,
+    marginTop: 12,
+    padding: 12,
+  },
+
+  divider: {
+    height: 1,
+    marginVertical: 8,
+  },
+});

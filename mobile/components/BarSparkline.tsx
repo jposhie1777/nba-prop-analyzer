@@ -1,7 +1,7 @@
-// components/BarSparkline
+// components/BarSparkline.tsx
 import { View, StyleSheet } from "react-native";
-import { useTheme } from "@/store/useTheme";
 import { useMemo } from "react";
+import { useTheme } from "@/store/useTheme";
 
 type Props = {
   data?: number[];
@@ -16,9 +16,13 @@ export function BarSparkline({ data = [], height = 48 }: Props) {
     return Math.max(...data.map((v) => Math.abs(v)));
   }, [data]);
 
-  if (!data || data.length === 0) {
+  // ✅ Empty state (renders spacer only)
+  if (!data.length) {
+    return <View style={[styles.wrap, { height }]} />;
+  }
+
   return (
-    <View style={[styles.wrap, { height }]} />
+    <View style={[styles.wrap, { height }]}>
       {data.map((v, i) => {
         const pct = Math.abs(v) / max;
         const barHeight = Math.max(2, pct * height);

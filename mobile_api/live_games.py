@@ -60,14 +60,13 @@ def get_live_games() -> Dict[str, Any]:
     job = bq.query(LIVE_GAMES_QUERY)
     rows = list(job.result())
 
-    if not rows:
-        return {"count": 0, "games": []}
+    games: List[Dict[str, Any]] = []  # ✅ FIX
 
     for r in rows:
         games.append({
             "game_id": r.game_id,
-            "home_team": r.home_team,
-            "away_team": r.away_team,
+            "home": r.home_team,
+            "away": r.away_team,
             "home_score": r.home_score,
             "away_score": r.away_score,
             "period": r.period,
@@ -83,3 +82,4 @@ def get_live_games() -> Dict[str, Any]:
         "count": len(games),
         "games": games,
     }
+

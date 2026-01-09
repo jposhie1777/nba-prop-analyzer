@@ -61,13 +61,13 @@ export function useLiveGames() {
         const json = await res.json();
         const adapted = adaptLiveGames(json.games ?? []);
 
-        console.log(
-          "📥 [LiveGames] Poll response:",
-          adapted.length,
-          "games"
-        );
-
-        setGames(adapted);
+        setGames((prev) => {
+          if (prev.length > 0 && adapted.length === 0) {
+            return prev;
+          }
+          return adapted;
+        });
+        
         setMode("poll");
       } catch (e) {
         console.warn("⚠️ [LiveGames] Polling error", e);
@@ -117,13 +117,13 @@ export function useLiveGames() {
           const raw = JSON.parse(e.data);
           const adapted = adaptLiveGames(raw.games ?? []);
 
-          console.log(
-            "📥 [LiveGames] SSE snapshot:",
-            adapted.length,
-            "games"
-          );
-
-          setGames(adapted);
+          setGames((prev) => {
+            if (prev.length > 0 && adapted.length === 0) {
+              return prev;
+            }
+            return adapted;
+          });
+          
           setMode("sse");
         } catch (err) {
           console.error("❌ [LiveGames] SSE snapshot parse error", err);

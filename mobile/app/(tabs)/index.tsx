@@ -1,3 +1,4 @@
+// app/(tabs)/index
 import {
   View,
   Text,

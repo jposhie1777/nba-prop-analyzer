@@ -11,7 +11,7 @@ bq = bigquery.Client()
 
 QUERY = """
 SELECT *
-FROM `graphite-flare-477419-h7.nba_live.historical_player_trends`
+FROM `graphite-flare-477419-h7.nba_goat_data.historical_player_trends`
 """
 
 @router.get("/player-trends")

@@ -16,7 +16,6 @@ export function BarSparkline({ data = [], height = 48 }: Props) {
     return Math.max(...data.map((v) => Math.abs(v)));
   }, [data]);
 
-  // ✅ Empty state (renders spacer only)
   if (!data.length) {
     return <View style={[styles.wrap, { height }]} />;
   }

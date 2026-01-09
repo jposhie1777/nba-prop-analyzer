@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from google.cloud import bigquery
 from typing import List, Dict, Any
 
-router = APIRouter(prefix="/historical", tags=["historical"])
+router = APIRouter(prefix="/historical")
 
 bq = bigquery.Client()
 

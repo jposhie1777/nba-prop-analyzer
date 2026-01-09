@@ -38,7 +38,7 @@ PROJECT_ID = os.environ.get(
     os.environ.get("GOOGLE_CLOUD_PROJECT"),
 )
 
-BQ_TABLE = "nba_live.box_scores_raw"
+BQ_TABLE = f"{PROJECT_ID}.nba_live.box_scores_raw"
 
 BASE_URL = "https://api.balldontlie.io/v1/box_scores/live"
 TIMEOUT_SEC = 15

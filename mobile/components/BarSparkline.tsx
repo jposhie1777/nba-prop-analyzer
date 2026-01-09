@@ -1,19 +1,24 @@
 // components/BarSparkline.tsx
-import { View, StyleSheet } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { useMemo } from "react";
 import { useTheme } from "@/store/useTheme";
 
 type Props = {
   data?: number[];
+  dates?: string[];
   height?: number;
 };
 
-export function BarSparkline({ data = [], height = 48 }: Props) {
+export function BarSparkline({
+  data = [],
+  dates = [],
+  height = 56,
+}: Props) {
   const colors = useTheme((s) => s.colors);
 
   const max = useMemo(() => {
-    if (!data.length) return 1;
-    return Math.max(...data.map((v) => Math.abs(v)));
+    const vals = data.map((v) => Math.abs(v)).filter(Boolean);
+    return vals.length ? Math.max(...vals) : 1;
   }, [data]);
 
   if (!data.length) {
@@ -24,15 +29,24 @@ export function BarSparkline({ data = [], height = 48 }: Props) {
     <View style={[styles.wrap, { height }]}>
       {data.map((v, i) => {
         const pct = Math.abs(v) / max;
-        const barHeight = Math.max(2, pct * height);
+        const barHeight = Math.max(4, pct * (height - 24));
 
         const color =
           v >= 0
             ? colors.accent.success
             : colors.accent.danger;
 
+        const date =
+          dates[i]?.slice(5) ?? ""; // MM-DD (clean + compact)
+
         return (
           <View key={i} style={styles.barSlot}>
+            {/* VALUE ABOVE */}
+            <Text style={styles.value}>
+              {Number.isFinite(v) ? v.toFixed(0) : "—"}
+            </Text>
+
+            {/* BAR */}
             <View
               style={[
                 styles.bar,
@@ -42,6 +56,9 @@ export function BarSparkline({ data = [], height = 48 }: Props) {
                 },
               ]}
             />
+
+            {/* DATE BELOW */}
+            <Text style={styles.date}>{date}</Text>
           </View>
         );
       })}
@@ -54,17 +71,26 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     justifyContent: "center",
-    gap: 4,
-    marginVertical: 6,
+    gap: 8,          // 👈 wider spacing
+    marginVertical: 10,
   },
   barSlot: {
-    width: 6,
+    width: 16,       // 👈 wider bars
     alignItems: "center",
-    justifyContent: "flex-end",
+  },
+  value: {
+    fontSize: 10,
+    fontWeight: "700",
+    marginBottom: 2,
   },
   bar: {
     width: "100%",
-    borderRadius: 3,
-    opacity: 0.85,
+    borderRadius: 4,
+    opacity: 0.9,
+  },
+  date: {
+    fontSize: 9,
+    marginTop: 4,
+    opacity: 0.6,
   },
 });

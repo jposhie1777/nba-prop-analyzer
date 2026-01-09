@@ -1,4 +1,4 @@
-// components/live/
+// components/live/ScoreRow
 import { View, Text, StyleSheet } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { LiveGame } from "@/types/live";

@@ -1,6 +1,7 @@
 import { View, StyleSheet } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { LiveGame } from "@/types/live";
+import { LivePlayerStat } from "@/hooks/useLivePlayerStats";
 
 import { GameHeader } from "./GameHeader";
 import { ScoreRow } from "./ScoreRow";
@@ -8,13 +9,13 @@ import { GameStatus } from "./GameStatus";
 import { BoxScore } from "./boxscore/BoxScore";
 import { LiveOdds } from "./LiveOdds";
 
-import { useLivePlayerStats } from "@/hooks/useLivePlayerStats";
+type Props = {
+  game: LiveGame;
+  players: LivePlayerStat[];
+};
 
-export function LiveGameCard({ game }: { game: LiveGame }) {
+export function LiveGameCard({ game, players }: Props) {
   const { colors } = useTheme();
-  const { playersByGame } = useLivePlayerStats();
-
-  const players = playersByGame(game.id);
 
   const hasOdds =
     !!game.odds?.spread?.length ||
@@ -58,16 +59,3 @@ export function LiveGameCard({ game }: { game: LiveGame }) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  card: {
-    borderRadius: 16,
-    marginHorizontal: 12,
-    marginTop: 12,
-    padding: 12,
-  },
-  divider: {
-    height: 1,
-    marginVertical: 8,
-  },
-});

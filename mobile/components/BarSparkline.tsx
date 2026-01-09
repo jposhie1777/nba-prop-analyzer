@@ -16,10 +16,9 @@ export function BarSparkline({ data = [], height = 48 }: Props) {
     return Math.max(...data.map((v) => Math.abs(v)));
   }, [data]);
 
-  if (!data.length) return null;
-
+  if (!data || data.length === 0) {
   return (
-    <View style={[styles.wrap, { height }]}>
+    <View style={[styles.wrap, { height }]} />
       {data.map((v, i) => {
         const pct = Math.abs(v) / max;
         const barHeight = Math.max(2, pct * height);

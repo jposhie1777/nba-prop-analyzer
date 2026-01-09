@@ -82,7 +82,12 @@ export default function LiveGamesScreen() {
         data={games}
         keyExtractor={(g) => g.gameId}
         contentContainerStyle={{ paddingBottom: 24 }}
-        renderItem={({ item }) => <LiveGameCard game={item} />}
+        renderItem={({ item }) => (
+          <LiveGameCard
+            game={item}
+            players={playersByGame(Number(item.gameId))}
+          />
+        )}
       />
     </View>
   );

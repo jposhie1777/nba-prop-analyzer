@@ -1,4 +1,4 @@
-// components/live/BoxScore
+// components/live/BoxScoreStub
 import { View, Text, StyleSheet } from "react-native";
 import { useTheme } from "@/store/useTheme";
 

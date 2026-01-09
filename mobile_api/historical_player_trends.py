@@ -38,7 +38,7 @@ SELECT
   pf_last5_list, pf_last10_list, pf_last20_list,
 
   last5_dates, last10_dates, last20_dates
-FROM `graphite-flare-477419-h7.nba_live.player_trends`
+FROM `graphite-flare-477419-h7.nba_live.historical_player_trends`
 """
 
 @router.get("/player-trends")

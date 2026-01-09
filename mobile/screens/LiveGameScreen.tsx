@@ -10,77 +10,26 @@ import { formatET } from "@/lib/time/formatET";
 
 export default function LiveGamesScreen() {
   const { colors } = useTheme();
-
-  // 🔴 Live data now comes from the hybrid hook
   const { games, mode } = useLiveGames();
   const { games: scheduleGames } = useLiveGameSchedule();
-
-  // ✅ ADD THIS RIGHT HERE ⬇️
-  console.log("🖥️ LiveGameScreen render", {
-    mode,
-    gameCount: games.length,
-  });
-
-  const loading = games.length === 0 && mode === "sse";
-  const { playersByGame, players, mode: playerMode } = useLivePlayerStats();
-  console.log("👥 Live players snapshot", {
-    totalPlayers: players.length,
-  });
+  const { playersByGame } = useLivePlayerStats();
 
   const upcomingGames = scheduleGames.filter(
     (g) => g.state === "UPCOMING"
   );
+
   const liveGameIds = new Set(games.map((g) => g.gameId));
 
   const upcoming = upcomingGames.filter(
     (g) => !liveGameIds.has(g.game_id)
   );
 
-  /* =============================
-     Loading
-  ============================== */
-  if (loading) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: colors.surface.screen,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <ActivityIndicator size="large" color={colors.accent.primary} />
-      </View>
-    );
-  }
+  const isConnecting = mode === "sse" && games.length === 0;
 
-/* =============================
-   Empty
-============================== */
-if (!games.length && !upcoming.length) {
-  return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: colors.surface.screen,
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <Text style={{ color: colors.text.muted }}>
-        No games right now
-      </Text>
-    </View>
-  );
-}
-
-
-  /* =============================
-     List
-  ============================== */
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface.screen }}>
-      {/* Optional debug / status */}
+
+      {/* Status bar (never replaces UI) */}
       <Text
         style={{
           color: colors.text.muted,
@@ -89,12 +38,29 @@ if (!games.length && !upcoming.length) {
           paddingVertical: 6,
         }}
       >
-        {mode === "sse" ? "LIVE" : "REFRESHING"}
+        {mode === "sse"
+          ? games.length
+            ? "LIVE"
+            : "Connecting live…"
+          : "Refreshing"}
       </Text>
 
-      {/* 🆕 UPCOMING GAMES (NEW SECTION) */}
+      {/* LIVE GAMES — ALWAYS SHOWN */}
+      <FlatList
+        data={games}
+        keyExtractor={(g) => g.gameId}
+        contentContainerStyle={{ paddingBottom: 16 }}
+        renderItem={({ item }) => (
+          <LiveGameCard
+            game={item}
+            players={playersByGame(Number(item.gameId))}
+          />
+        )}
+      />
+
+      {/* UPCOMING GAMES (below live) */}
       {upcoming.length > 0 && (
-        <View style={{ paddingBottom: 8 }}>
+        <View style={{ paddingBottom: 24 }}>
           {upcoming.map((g) => (
             <View
               key={g.game_id}
@@ -109,7 +75,6 @@ if (!games.length && !upcoming.length) {
               <Text style={{ color: colors.text.secondary }}>
                 {g.away} @ {g.home}
               </Text>
-
               <Text
                 style={{
                   color: colors.text.muted,
@@ -124,18 +89,19 @@ if (!games.length && !upcoming.length) {
         </View>
       )}
 
-      {/* ✅ EXISTING LIVE LIST (UNCHANGED) */}
-      <FlatList
-        data={games}
-        keyExtractor={(g) => g.gameId}
-        contentContainerStyle={{ paddingBottom: 24 }}
-        renderItem={({ item }) => (
-          <LiveGameCard
-            game={item}
-            players={playersByGame(Number(item.gameId))}
-          />
-        )}
-      />
+      {/* EMPTY STATE — ONLY IF ABSOLUTELY NOTHING */}
+      {games.length === 0 && upcoming.length === 0 && !isConnecting && (
+        <View
+          style={{
+            padding: 24,
+            alignItems: "center",
+          }}
+        >
+          <Text style={{ color: colors.text.muted }}>
+            No games right now
+          </Text>
+        </View>
+      )}
     </View>
   );
-}
+}}

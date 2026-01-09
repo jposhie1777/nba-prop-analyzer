@@ -33,12 +33,7 @@ def require_api_key() -> str:
     return key
 
 
-PROJECT_ID = os.environ.get(
-    "GCP_PROJECT",
-    os.environ.get("GOOGLE_CLOUD_PROJECT"),
-)
-
-BQ_TABLE = f"{PROJECT_ID}.nba_live.box_scores_raw"
+BQ_TABLE = "nba_live.box_scores_raw"
 
 BASE_URL = "https://api.balldontlie.io/v1/box_scores/live"
 TIMEOUT_SEC = 15
@@ -49,9 +44,7 @@ TIMEOUT_SEC = 15
 # ======================================================
 
 def get_bq_client() -> bigquery.Client:
-    if not PROJECT_ID:
-        return bigquery.Client()
-    return bigquery.Client(project=PROJECT_ID)
+    return bigquery.Client()
 
 
 # ======================================================

@@ -505,8 +505,10 @@ return (
                     <Text style={styles.sectionText}>Performance</Text>
                   </View>
 
-                  {/* 👇 ADD: SPARKLINE (WINDOW-AWARE) */}
-                  <Sparkline data={sparkline} />
+                  {/* 👇 BAR CHART ROW */}
+                  <View style={{ alignItems: "center" }}>
+                    <BarSparkline data={sparkline} height={42} />
+                  </View>
 
                   <View style={styles.gridRow}>
                     <Text style={styles.statLabel}>AVG</Text>

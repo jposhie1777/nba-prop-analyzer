@@ -178,11 +178,15 @@ export default function PropCard(props: PropCardProps) {
   const pace = w === "l5" ? props.pace_l5 : w === "l20" ? props.pace_l20 : props.pace_l10;
   const usage = w === "l5" ? props.usage_l5 : w === "l20" ? props.usage_l20 : props.usage_l10;
   const sparkline =
-    w === "l5"
+    (w === "l5" && props.sparkline_l5?.length)
       ? props.sparkline_l5
-      : w === "l20"
+      : (w === "l20" && props.sparkline_l20?.length)
       ? props.sparkline_l20
-      : props.sparkline_l10;
+      : props.sparkline_l10?.length
+      ? props.sparkline_l10
+      : props.sparkline_l5?.length
+      ? props.sparkline_l5
+      : props.sparkline_l20;
 
   /* =========================
      MULTI-BOOK NORMALIZATION

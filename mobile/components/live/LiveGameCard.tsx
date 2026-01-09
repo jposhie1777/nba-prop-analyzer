@@ -1,3 +1,4 @@
+// components/live/liveGameCard
 import { View, StyleSheet } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { LiveGame } from "@/types/live";

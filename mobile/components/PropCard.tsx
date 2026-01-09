@@ -14,6 +14,7 @@ import { useTheme } from "@/store/useTheme";
 import textStyles from "../theme/text";
 import { BOOKMAKER_LOGOS } from "../utils/bookmakerLogos";
 import { Sparkline } from "./Sparkline";
+import { BarSparkline } from "./BarSparkline";
 
 /* ======================================================
    TEAM LOGOS

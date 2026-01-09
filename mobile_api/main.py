@@ -7,9 +7,9 @@ from zoneinfo import ZoneInfo
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from .db import fetch_mobile_props, ingest_live_games_snapshot
-from .live_stream import router as live_stream_router, refresher_loop
-from .box_scores_snapshot import (
+from db import fetch_mobile_props, ingest_live_games_snapshot
+from live_stream import router as live_stream_router, refresher_loop
+from box_scores_snapshot import (
     router as box_scores_router,
     run_box_scores_snapshot,
 )
@@ -17,7 +17,7 @@ from .box_scores_snapshot import (
 # ==================================================
 # 🔴 ADDITION: player box stream imports
 # ==================================================
-from .player_box_stream import (
+from player_box_stream import (
     router as player_box_router,
     player_box_refresher,
 )
@@ -25,12 +25,12 @@ from .player_box_stream import (
 # ==================================================
 # 🔴 ADDITION: player stats stream imports
 # ==================================================
-from .player_stats_stream import (
+from player_stats_stream import (
     router as player_stats_router,
     player_stats_refresher,
 )
 
-from .debug_code import register as register_debug_code
+from debug_code import register as register_debug_code
 
 # ==================================================
 # App (CREATE ONCE)

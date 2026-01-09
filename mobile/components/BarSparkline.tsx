@@ -1,3 +1,4 @@
+// components/BarSparkline
 import { View, StyleSheet } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { useMemo } from "react";

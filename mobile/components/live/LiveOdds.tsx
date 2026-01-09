@@ -1,3 +1,4 @@
+// components/live/LiveOdds
 import { View, Text, StyleSheet } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { OddsValue, TeamSide } from "@/types/live";

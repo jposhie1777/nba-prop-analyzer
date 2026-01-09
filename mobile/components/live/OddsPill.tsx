@@ -1,3 +1,4 @@
+// components/live/OddsPill
 import { View, Text, StyleSheet } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { OddsValue } from "@/types/live";

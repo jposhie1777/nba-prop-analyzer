@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 
+from live_games import router as live_games_router
 from db import fetch_mobile_props, ingest_live_games_snapshot
 from live_stream import router as live_stream_router, refresher_loop
 from box_scores_snapshot import (
@@ -62,6 +63,7 @@ app.add_middleware(
 # ==================================================
 app.include_router(live_stream_router)
 app.include_router(box_scores_router)
+app.include_router(live_games_router)
 
 # ==================================================
 # 🔴 ADDITION: player box + player stats routers

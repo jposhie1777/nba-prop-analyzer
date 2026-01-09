@@ -1,3 +1,4 @@
+// components/live/GameHeader
 import { View, Text, Image, StyleSheet } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { TeamSide } from "@/types/live";

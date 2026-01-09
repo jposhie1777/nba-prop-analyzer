@@ -1,3 +1,6 @@
+cd nba-prop-analyzer
+git pull
+cd mobile_api
 gcloud run deploy pulse-mobile-api \
   --source . \
   --region us-central1 \

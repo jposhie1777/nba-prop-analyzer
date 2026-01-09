@@ -1,3 +1,4 @@
+// hooks/useLiveGames.ts
 import { useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
 import { LiveGame } from "@/types/live";

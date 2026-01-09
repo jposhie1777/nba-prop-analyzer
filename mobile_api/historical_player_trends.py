@@ -20,20 +20,25 @@ def get_player_trends():
     rows = bq.query(QUERY).result()
 
     out = []
-    for row in rows:
-        r = dict(row)
 
-        for k, v in r.items():
-            # REPEATED fields
-            if isinstance(v, (list, tuple)):
+    for row in rows:
+        r = {}
+
+        for k, v in dict(row).items():
+
+            # 🔴 Convert DATE / DATETIME
+            if isinstance(v, (date, datetime)):
+                r[k] = v.isoformat()
+
+            # 🔴 Convert REPEATED fields
+            elif isinstance(v, (list, tuple)):
                 r[k] = [
                     x.isoformat() if isinstance(x, (date, datetime)) else x
                     for x in v
                 ]
 
-            # Scalar DATE / DATETIME (just in case)
-            elif isinstance(v, (date, datetime)):
-                r[k] = v.isoformat()
+            else:
+                r[k] = v
 
         out.append(r)
 

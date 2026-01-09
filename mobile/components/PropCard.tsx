@@ -507,6 +507,10 @@ return (
 
                   {/* 👇 BAR CHART ROW */}
                   <View style={{ alignItems: "center" }}>
+                    <Text style={{ color: "red", fontSize: 12 }}>
+                      sparkline len: {sparkline?.length ?? "undefined"}
+                    </Text>
+                  
                     <BarSparkline data={sparkline} height={42} />
                   </View>
 

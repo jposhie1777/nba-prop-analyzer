@@ -149,8 +149,18 @@ export function useLivePlayerStats() {
      Helper selector
   =========================== */
 
-  const playersByGame = (gameId: number) =>
-    players.filter((p) => p.game_id === gameId);
+  const playersByGame = (gameId: number) => {
+    const filtered = players.filter((p) => p.game_id === gameId);
+  
+    console.log("🟡 DEBUG playersByGame", {
+      gameId,
+      totalPlayers: players.length,
+      matchedPlayers: filtered.length,
+      samplePlayerGameId: players[0]?.game_id,
+    });
+  
+    return filtered;
+  };
 
   return {
     players,

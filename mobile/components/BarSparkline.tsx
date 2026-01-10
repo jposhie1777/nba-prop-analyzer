@@ -47,7 +47,7 @@ export function BarSparkline({
         return (
           <View key={i} style={styles.barSlot}>
             <Text style={styles.value}>{Math.round(v)}</Text>
-
+          
             <View style={styles.barArea}>
               <View
                 style={[
@@ -56,20 +56,20 @@ export function BarSparkline({
                 ]}
               />
             </View>
-
+          
             {showDate ? (
               <View style={styles.dateWrap}>
                 <Text
                   numberOfLines={1}
-                  ellipsizeMode="clip"     // ✅ never "..."
-                  allowFontScaling={false} // ✅ prevents random truncation
+                  ellipsizeMode="clip"
+                  allowFontScaling={false}
                   style={styles.date}
                 >
                   {dateLabel}
                 </Text>
               </View>
             ) : (
-              <View style={{ height: 11 }} />
+              <View style={styles.dateWrap} />   // 👈 SAME CONTAINER, EMPTY
             )}
           </View>
         );
@@ -87,16 +87,22 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
 
-  // ✅ bars can stay narrow, dates no longer depend on this width
   barSlot: {
     width: 18,
     alignItems: "center",
   },
-
+  
   barArea: {
-    height: 44,
-    justifyContent: "flex-end",
+    height: 44,                 // 👈 fixed bar baseline
+    justifyContent: "flex-end", // 👈 bars sit on same floor
     alignItems: "center",
+  },
+  
+  dateWrap: {
+    height: 12,                 // 👈 fixed date baseline
+    width: 34,
+    alignItems: "center",
+    marginTop: 6,
   },
 
   value: {
@@ -111,13 +117,6 @@ const styles = StyleSheet.create({
     width: 14,
     borderRadius: 4,
     opacity: 0.9,
-  },
-
-  // ✅ NEW: date container wider than the bar slot
-  dateWrap: {
-    width: 34,          // ✅ enough for "12-30"
-    alignItems: "center",
-    marginTop: 6,
   },
 
   date: {

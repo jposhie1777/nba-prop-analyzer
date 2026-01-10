@@ -129,48 +129,68 @@ async def fetch_player_stats_snapshot() -> Dict[str, Any]:
 
     rows = await asyncio.to_thread(_run)
 
+    # 🔎 DEBUG 2 — inspect raw BigQuery row
+    print(f"[DEBUG] BQ rows fetched: {len(rows)}")
+    
+    if rows:
+        r = rows[0]
+        print("[DEBUG] SAMPLE BQ ROW:", {
+            "game_id": r.game_id,
+            "player_id": r.player_id,
+            "player_name": r.player_name,
+            "team_abbr": r.team_abbr,
+            "minutes": r.minutes,
+            "period": r.period,
+            "fg_made": r.fg_made,
+            "fg_att": r.fg_att,
+            "ingested_at": str(r.ingested_at),
+        })
+    
     players: List[Dict[str, Any]] = []
     max_ingested_at: Optional[datetime] = None
-
+    
     for r in rows:
         updated_at = r.ingested_at.replace(tzinfo=timezone.utc)
-
+    
         if not max_ingested_at or updated_at > max_ingested_at:
             max_ingested_at = updated_at
-
+    
         players.append(
             {
                 "game_id": r.game_id,
                 "player_id": r.player_id,
-                "name": r.player_name or "—",                    # 🔧 FIX
+                "name": r.player_name or "—",
                 "team": r.team_abbr,
                 "opponent": r.opponent_abbr,
-                "minutes": float(r.minutes) if r.minutes is not None else None,  # 🔧 FIX
-                "pts": r.pts or 0,                                # 🔧 FIX
-                "reb": r.reb or 0,                                # 🔧 FIX
-                "ast": r.ast or 0,                                # 🔧 FIX
-                "stl": r.stl or 0,                                # 🔧 FIX
-                "blk": r.blk or 0,                                # 🔧 FIX
-                "tov": r.tov or 0,                                # 🔧 FIX
-                "fg": [r.fg_made or 0, r.fg_att or 0],            # 🔧 FIX
-                "fg3": [r.fg3_made or 0, r.fg3_att or 0],         # 🔧 FIX
-                "ft": [r.ft_made or 0, r.ft_att or 0],            # 🔧 FIX
-                "plus_minus": r.plus_minus or 0,                  # 🔧 FIX
+                "minutes": float(r.minutes) if r.minutes is not None else None,
+                "pts": r.pts or 0,
+                "reb": r.reb or 0,
+                "ast": r.ast or 0,
+                "stl": r.stl or 0,
+                "blk": r.blk or 0,
+                "tov": r.tov or 0,
+                "fg": [r.fg_made or 0, r.fg_att or 0],
+                "fg3": [r.fg3_made or 0, r.fg3_att or 0],
+                "ft": [r.ft_made or 0, r.ft_att or 0],
+                "plus_minus": r.plus_minus or 0,
                 "period": (
                     int(r.period)
                     if r.period and str(r.period).isdigit()
                     else None
-                ),                                                # 🔧 FIX
+                ),
                 "clock": r.clock,
             }
         )
-
-    return {
-        "players": players,
-        "source_updated_at": (
-            max_ingested_at.isoformat() if max_ingested_at else None
-        ),
-    }
+    
+        # 🔎 DEBUG 3 — normalized payload size
+        print(f"[DEBUG] Normalized players sent: {len(players)}")
+    
+        return {
+            "players": players,
+            "source_updated_at": (
+                max_ingested_at.isoformat() if max_ingested_at else None
+            ),
+        }
 
 
 # ======================================================
@@ -281,13 +301,16 @@ def get_player_stats():
 
 @router.get("/debug")
 def debug_player_stats():
+    players = STATE.payload.get("players", [])
+
     return {
+        "status": STATE.payload.get("meta", {}).get("status"),
+        "player_count": len(players),
+        "sample_player": players[0] if players else None,
         "last_good_seconds_ago": (
             int(_now() - STATE.last_good_ts)
             if STATE.last_good_ts
             else None
         ),
         "consecutive_failures": STATE.consecutive_failures,
-        "player_count": len(STATE.payload.get("players", [])),
-        "meta": STATE.payload.get("meta"),
     }

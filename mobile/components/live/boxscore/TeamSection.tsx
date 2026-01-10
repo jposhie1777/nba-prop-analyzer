@@ -1,4 +1,5 @@
 // components/live/boxscore/TeamSection.tsx
+
 import { useState } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { LivePlayerStat } from "@/hooks/useLivePlayerStats";
@@ -15,10 +16,25 @@ export function TeamSection({
   const { colors } = useTheme();
   const [expanded, setExpanded] = useState(false);
 
-  if (!players.length) return null;
+  // 🔴 DEBUG: confirm section receives players
+  if (!players.length) {
+    return (
+      <Text
+        style={{
+          fontSize: 10,
+          textAlign: "center",
+          color: colors.text.muted,
+          marginBottom: 4,
+        }}
+      >
+        DEBUG TeamSection ({label}): no players
+      </Text>
+    );
+  }
 
+  // 🔧 FIX: safe numeric sorting (minutes is number | null now)
   const sorted = [...players].sort(
-    (a, b) => parseFloat(b.minutes || "0") - parseFloat(a.minutes || "0")
+    (a, b) => (b.minutes ?? 0) - (a.minutes ?? 0)
   );
 
   const starters = sorted.slice(0, 5);
@@ -31,6 +47,17 @@ export function TeamSection({
           {label} {expanded ? "▾" : "▸"}
         </Text>
       </Pressable>
+
+      {/* 🔴 DEBUG 8: show first player seen by TeamSection */}
+      <Text
+        style={{
+          fontSize: 10,
+          color: colors.text.muted,
+          marginBottom: 2,
+        }}
+      >
+        DEBUG first player: {players[0]?.name} ({players[0]?.team})
+      </Text>
 
       {starters.map((p) => (
         <PlayerRow key={p.player_id} player={p} active />

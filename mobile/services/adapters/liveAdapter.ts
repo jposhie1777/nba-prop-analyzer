@@ -28,17 +28,10 @@ export function adaptLiveGames(apiGames: any[]): LiveGame[] {
   if (!Array.isArray(apiGames)) return [];
 
   const out = apiGames.map((g): LiveGame => {
-    // ---------------------------
-    // Game ID (authoritative)
-    // ---------------------------
     const gameId = g.game_id ?? g.id;
   
-    // ---------------------------
-    // Team abbreviations (robust)
-    // ---------------------------
     const homeAbbrev =
       g.home_team_abbr ??
-      g.home_abbr ??
       g.home_team?.abbreviation ??
       g.home_team ??
       undefined;
@@ -46,16 +39,17 @@ export function adaptLiveGames(apiGames: any[]): LiveGame[] {
     const awayAbbrev =
       g.away_team_abbr ??
       g.visitor_team_abbr ??
-      g.away_abbr ??
       g.away_team?.abbreviation ??
       g.away_team ??
       undefined;
   
-    console.log("🟢 adaptLiveGames resolved", {
-      gameId,
-      homeAbbrev,
-      awayAbbrev,
-    });
+    if (__DEV__) {
+      console.log("🟢 adaptLiveGames resolved", {
+        gameId,
+        homeAbbrev,
+        awayAbbrev,
+      });
+    }
   
     return {
       gameId: String(gameId),

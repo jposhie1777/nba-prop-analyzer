@@ -165,13 +165,6 @@ export default function PropCard(props: PropCardProps) {
     onToggleExpand,
   } = props;
 
-  const dates =
-    w === "l5"
-      ? props.last5_dates
-      : w === "l20"
-      ? props.last20_dates
-      : props.last10_dates;
-
   const hitPct = Math.round(((props.hit_rate_l10 ?? 0) as number) * 100);
   
   /* =========================
@@ -188,6 +181,13 @@ export default function PropCard(props: PropCardProps) {
   const badMiss = w === "l5" ? props.bad_miss_pct_l5 : w === "l20" ? props.bad_miss_pct_l20 : props.bad_miss_pct_l10;
   const pace = w === "l5" ? props.pace_l5 : w === "l20" ? props.pace_l20 : props.pace_l10;
   const usage = w === "l5" ? props.usage_l5 : w === "l20" ? props.usage_l20 : props.usage_l10;
+  
+  const dates =
+    w === "l5"
+      ? props.last5_dates
+      : w === "l20"
+      ? props.last20_dates
+      : props.last10_dates;
   const sparkline =
     (w === "l5" && props.sparkline_l5?.length)
       ? props.sparkline_l5

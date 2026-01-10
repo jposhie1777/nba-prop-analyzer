@@ -23,14 +23,14 @@ function Team({ team }: { team: TeamSide }) {
   const { colors } = useTheme();
 
   const logoUri =
-    TEAM_LOGOS[team.abbrev] ??
+    TEAM_LOGOS[team.abbreviation] ??
     "https://a.espncdn.com/i/teamlogos/nba/500/nba.png";
 
   return (
     <View style={styles.team}>
       <Image source={{ uri: logoUri }} style={styles.logo} />
       <Text style={[styles.text, { color: colors.text.primary }]}>
-        {team.abbrev}
+        {team.abbreviation}
       </Text>
     </View>
   );

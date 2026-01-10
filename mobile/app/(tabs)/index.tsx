@@ -296,7 +296,9 @@ export default function HomeScreen() {
     ({ item }: { item: GroupedProp }) => {
       const trend = getByPlayer(item.player);
       const spark = resolveSparklineByMarket(item.market, trend);
-  
+      const last5_dates = trend?.last5_dates;
+      const last10_dates = trend?.last10_dates;
+      const last20_dates = trend?.last20_dates;
       return (
         <PropCard
           /* CORE */
@@ -350,11 +352,14 @@ export default function HomeScreen() {
           sparkline_l5={spark.sparkline_l5}
           sparkline_l10={spark.sparkline_l10}
           sparkline_l20={spark.sparkline_l20}
-  
+        
+          last5_dates={last5_dates}
+          last10_dates={last10_dates}
+          last20_dates={last20_dates}
+        
           matchup={item.matchup}
           home={item.home}
           away={item.away}
-          books={item.books}
   
           /* STATE */
           saved={savedIds.has(item.id)}

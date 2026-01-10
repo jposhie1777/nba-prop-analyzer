@@ -44,8 +44,8 @@ export function LiveGameCard({ game, players }: Props) {
       </Text>
       
       <BoxScore
-        homeTeam={game.home.abbreviation}
-        awayTeam={game.away.abbreviation}
+        homeTeam={game.home.abbrev}
+        awayTeam={game.away.abbrev}
         players={players}
       />
 

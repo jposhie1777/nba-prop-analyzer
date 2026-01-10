@@ -36,7 +36,7 @@ function Team({ team }: { team: TeamSide }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = {
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -46,7 +46,7 @@ const styles = StyleSheet.create({
   team: {
     flexDirection: "row",
     alignItems: "center",
-    minWidth: 72, // keeps alignment stable
+    minWidth: 72,
   },
   logo: {
     width: 28,
@@ -62,4 +62,4 @@ const styles = StyleSheet.create({
     fontSize: 12,
     opacity: 0.45,
   },
-});
+} as const;

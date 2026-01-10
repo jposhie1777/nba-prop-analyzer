@@ -71,8 +71,9 @@ const styles = StyleSheet.create({
     marginVertical: 10,
   },
   barSlot: {
-    width: 18,           // wider bars
+    width: 16,
     alignItems: "center",
+    justifyContent: "flex-end", // 👈 ADD THIS
   },
   value: {
     fontSize: 11,

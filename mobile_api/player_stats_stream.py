@@ -182,15 +182,15 @@ async def fetch_player_stats_snapshot() -> Dict[str, Any]:
             }
         )
     
-        # 🔎 DEBUG 3 — normalized payload size
-        print(f"[DEBUG] Normalized players sent: {len(players)}")
+    # 🔎 DEBUG — final payload size
+    print(f"[DEBUG] Normalized players sent: {len(players)}")
     
-        return {
-            "players": players,
-            "source_updated_at": (
-                max_ingested_at.isoformat() if max_ingested_at else None
-            ),
-        }
+    return {
+        "players": players,
+        "source_updated_at": (
+            max_ingested_at.isoformat() if max_ingested_at else None
+        ),
+    }
 
 
 # ======================================================

@@ -183,11 +183,14 @@ export default function PropCard(props: PropCardProps) {
   const usage = w === "l5" ? props.usage_l5 : w === "l20" ? props.usage_l20 : props.usage_l10;
   
   const dates =
-    w === "l5"
+    (w === "l5" && props.last5_dates?.length)
       ? props.last5_dates
-      : w === "l20"
+      : (w === "l20" && props.last20_dates?.length)
       ? props.last20_dates
-      : props.last10_dates;
+      : props.last10_dates?.length
+      ? props.last10_dates
+      : props.last5_dates ?? props.last20_dates ?? [];
+
   const sparkline =
     (w === "l5" && props.sparkline_l5?.length)
       ? props.sparkline_l5

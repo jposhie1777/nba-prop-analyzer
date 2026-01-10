@@ -91,68 +91,83 @@ export function useLiveGames() {
   ====================================================== */
 
   const startSSE = () => {
+    // 🚫 EventSource does NOT exist in React Native (iOS/Android)
+    if (typeof EventSource === "undefined") {
+      console.log(
+        "📡 [LiveGames] SSE not supported on native — falling back to polling"
+      );
+  
+      /* 🔴 DEV */
+      useDevStore
+        .getState()
+        .actions.reportSSEDisconnect("SSE unsupported on native");
+  
+      startPolling();
+      return;
+    }
+  
     if (esRef.current) {
       console.log("📡 [LiveGames] SSE already active — skipping");
       return;
     }
-
+  
     console.log("📡 [LiveGames] Starting SSE → /live/scores/stream");
-
+  
     try {
       const es = new EventSource(`${API}/live/scores/stream`);
       esRef.current = es;
-
+  
       es.addEventListener("open", () => {
         console.log("🟢 [LiveGames] SSE connection opened");
-
-        /* 🔴 ADD */
+  
+        /* 🔴 DEV */
         useDevStore.getState().actions.reportSSEConnect();
       });
-
+  
       es.addEventListener("snapshot", (e: MessageEvent) => {
-        /* 🔴 ADD */
+        /* 🔴 DEV */
         useDevStore.getState().actions.reportSSEEvent();
-
+  
         try {
           const raw = JSON.parse(e.data);
           const adapted = adaptLiveGames(raw.games ?? []);
-
+  
           setGames((prev) => {
             if (prev.length > 0 && adapted.length === 0) {
               return prev;
             }
             return adapted;
           });
-          
+  
           setMode("sse");
         } catch (err) {
           console.error("❌ [LiveGames] SSE snapshot parse error", err);
         }
       });
-
+  
       es.onerror = (err) => {
         console.error(
           "🔴 [LiveGames] SSE error — falling back to polling",
           err
         );
-
-        /* 🔴 ADD */
+  
+        /* 🔴 DEV */
         useDevStore
           .getState()
           .actions.reportSSEDisconnect("LiveGames SSE error");
-
+  
         es.close();
         esRef.current = null;
         startPolling();
       };
     } catch (err) {
       console.error("❌ [LiveGames] Failed to start SSE", err);
-
-      /* 🔴 ADD */
+  
+      /* 🔴 DEV */
       useDevStore
         .getState()
         .actions.reportSSEDisconnect("SSE init failed");
-
+  
       startPolling();
     }
   };

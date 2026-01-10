@@ -178,9 +178,8 @@ def flatten_and_write_player_stats(
     if not ENABLE_PLAYER_STATS_INGEST:
         return
 
-    client = get_bq_client()
-    errors = client.insert_rows_json(table_id, rows)
     table_id = "graphite-flare-477419-h7.nba_live.live_player_stats"
+    client = get_bq_client()
 
     now = datetime.now(timezone.utc).isoformat()
     rows: List[Dict[str, Any]] = []
@@ -202,9 +201,9 @@ def flatten_and_write_player_stats(
         period = game.get("period")
         clock = game.get("clock")
 
-        for side, team_key, opp_key in [
-            ("HOME", "home_team", "visitor_team"),
-            ("AWAY", "visitor_team", "home_team"),
+        for team_key, opp_key in [
+            ("home_team", "visitor_team"),
+            ("visitor_team", "home_team"),
         ]:
             team = game.get(team_key) or {}
             opponent_team = game.get(opp_key) or {}
@@ -251,8 +250,7 @@ def flatten_and_write_player_stats(
         errors = client.insert_rows_json(table_id, rows)
         if errors:
             raise RuntimeError(f"Player stat insert errors: {errors}")
-
-
+            
 # ======================================================
 # Background Refresher Loop (READ SIDE ONLY)
 # ======================================================
@@ -266,7 +264,8 @@ async def player_box_refresher():
 
         try:
             snapshot = await fetch_latest_box_scores()
-
+            flatten_and_write_player_stats(snapshot, nba_today())
+            
             # Do NOT wipe last good payload on empty snapshot
             if not snapshot["games"]:
                 await asyncio.sleep(REFRESH_INTERVAL_SEC)

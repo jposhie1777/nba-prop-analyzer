@@ -27,24 +27,34 @@ export function adaptLiveGames(apiGames: any[]): LiveGame[] {
 
   if (!Array.isArray(apiGames)) return [];
 
-  const out = apiGames.map((g): LiveGame => ({
-    gameId: String(g.game_id),
-    status: "live",
-    clock: g.clock ?? undefined,
-    period: g.period ?? undefined,
-    home: {
-      team: g.home_team,
-      abbrev: g.home_team,
-      score: numberOrUndefined(g.home_score),
-    },
-    away: {
-      team: g.away_team,
-      abbrev: g.away_team,
-      score: numberOrUndefined(g.away_score),
-    },
-    lineScore: adaptQuarterScores(g),
-    odds: [],
-  }));
+  const out = apiGames.map((g): LiveGame => {
+    const gameId = g.game_id ?? g.id;
+  
+    console.log("🟢 adaptLiveGames gameId", {
+      raw_game_id: g.game_id,
+      raw_id: g.id,
+      resolved: gameId,
+    });
+  
+    return {
+      gameId: String(gameId),
+      status: "live",
+      clock: g.clock ?? undefined,
+      period: g.period ?? undefined,
+      home: {
+        team: g.home_team,
+        abbrev: g.home_team,
+        score: numberOrUndefined(g.home_score),
+      },
+      away: {
+        team: g.away_team,
+        abbrev: g.away_team,
+        score: numberOrUndefined(g.away_score),
+      },
+      lineScore: adaptQuarterScores(g),
+      odds: [],
+    };
+  });
 
   console.log("🔧 adaptLiveGames output:", out.length);
   return out;

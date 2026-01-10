@@ -28,12 +28,33 @@ export function adaptLiveGames(apiGames: any[]): LiveGame[] {
   if (!Array.isArray(apiGames)) return [];
 
   const out = apiGames.map((g): LiveGame => {
+    // ---------------------------
+    // Game ID (authoritative)
+    // ---------------------------
     const gameId = g.game_id ?? g.id;
   
-    console.log("🟢 adaptLiveGames gameId", {
-      raw_game_id: g.game_id,
-      raw_id: g.id,
-      resolved: gameId,
+    // ---------------------------
+    // Team abbreviations (robust)
+    // ---------------------------
+    const homeAbbrev =
+      g.home_team_abbr ??
+      g.home_abbr ??
+      g.home_team?.abbreviation ??
+      g.home_team ??
+      undefined;
+  
+    const awayAbbrev =
+      g.away_team_abbr ??
+      g.visitor_team_abbr ??
+      g.away_abbr ??
+      g.away_team?.abbreviation ??
+      g.away_team ??
+      undefined;
+  
+    console.log("🟢 adaptLiveGames resolved", {
+      gameId,
+      homeAbbrev,
+      awayAbbrev,
     });
   
     return {
@@ -41,16 +62,19 @@ export function adaptLiveGames(apiGames: any[]): LiveGame[] {
       status: "live",
       clock: g.clock ?? undefined,
       period: g.period ?? undefined,
+  
       home: {
-        team: g.home_team,
-        abbrev: g.home_team,
+        team: homeAbbrev,
+        abbrev: homeAbbrev,
         score: numberOrUndefined(g.home_score),
       },
+  
       away: {
-        team: g.away_team,
-        abbrev: g.away_team,
+        team: awayAbbrev,
+        abbrev: awayAbbrev,
         score: numberOrUndefined(g.away_score),
       },
+  
       lineScore: adaptQuarterScores(g),
       odds: [],
     };

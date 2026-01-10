@@ -28,14 +28,21 @@ export function LiveGameCard({ game, players }: Props) {
       <GameHeader home={game.home} away={game.away} />
       <ScoreRow game={game} />
       <GameStatus game={game} />
-
-      <View
-        style={[
-          styles.divider,
-          { backgroundColor: colors.border.subtle },
-        ]}
-      />
-
+      
+      <View style={[styles.divider, { backgroundColor: colors.border.subtle }]} />
+      
+      {/* 🔴 DEBUG 5 */}
+      <Text
+        style={{
+          fontSize: 10,
+          color: colors.text.muted,
+          textAlign: "center",
+          marginBottom: 4,
+        }}
+      >
+        DEBUG players for game {game.game_id}: {players.length}
+      </Text>
+      
       <BoxScore
         homeTeam={game.home.abbreviation}
         awayTeam={game.away.abbreviation}

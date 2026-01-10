@@ -522,6 +522,13 @@ return (
             
                   {/* 👇 BAR CHART ROW */}
                   <View style={{ alignItems: "center" }}>
+                    {__DEV__ && (
+                      <>
+                        {console.log("BAR → sparkline", sparkline)}
+                        {console.log("BAR → dates", dates)}
+                      </>
+                    )}
+                  
                     <BarSparkline
                       data={sparkline}
                       dates={dates}

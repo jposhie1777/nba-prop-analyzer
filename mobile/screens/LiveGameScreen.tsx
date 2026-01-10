@@ -32,7 +32,16 @@ export default function LiveGamesScreen() {
             : "Waiting for games to go live…"
           : "Refreshing"}
       </Text>
-
+      <Text
+        style={{
+          color: colors.text.muted,
+          fontSize: 10,
+          paddingHorizontal: 12,
+          paddingBottom: 6,
+        }}
+      >
+        DEBUG player-stats mode: {mode}
+      </Text>
       {/* LIVE GAMES */}
       <FlatList
         data={games}

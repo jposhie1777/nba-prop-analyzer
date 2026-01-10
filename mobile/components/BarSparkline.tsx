@@ -20,6 +20,7 @@ export function BarSparkline({
     return vals.length ? Math.max(...vals) : 1;
   }, [data]);
 
+  // ⬇️ unchanged logic, just clearer intent
   const showEvery =
     data.length <= 5 ? 1 :
     data.length <= 10 ? 2 :
@@ -29,7 +30,9 @@ export function BarSparkline({
     <View style={[styles.wrap, { height }]}>
       {data.map((v, i) => {
         const pct = Math.abs(v) / max;
-        const barHeight = Math.max(4, pct * (height - 28));
+
+        // ⬇️ small tweak: bar area is fixed, bars scale inside it
+        const barHeight = Math.max(4, pct * styles.barArea.height!);
 
         const color =
           v >= 0
@@ -37,6 +40,7 @@ export function BarSparkline({
             : colors.accent.danger;
 
         const showDate = i % showEvery === 0;
+
         const dateLabel =
           typeof dates?.[i] === "string"
             ? dates[i].slice(5).replace("-", "/")
@@ -44,21 +48,26 @@ export function BarSparkline({
 
         return (
           <View key={i} style={styles.barSlot}>
+            {/* VALUE ABOVE */}
             <Text style={styles.value}>{Math.round(v)}</Text>
 
-            <View
-              style={[
-                styles.bar,
-                { height: barHeight, backgroundColor: color },
-              ]}
-            />
+            {/* FIXED BAR BASELINE */}
+            <View style={styles.barArea}>
+              <View
+                style={[
+                  styles.bar,
+                  { height: barHeight, backgroundColor: color },
+                ]}
+              />
+            </View>
 
+            {/* DATE BELOW (SPARSE) */}
             {showDate ? (
               <Text numberOfLines={1} style={styles.date}>
                 {dateLabel}
               </Text>
             ) : (
-              <View style={{ height: 11 }} />
+              <View style={{ height: styles.date.fontSize }} />
             )}
           </View>
         );
@@ -72,26 +81,25 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     justifyContent: "center",
-    gap: 10,
+    gap: 8,                 // ⬅️ slightly tighter = fits L20 better
     marginVertical: 8,
   },
 
   barSlot: {
-    width: 22,              // 👈 prevents date wrapping
+    width: 20,              // ⬅️ enough for MM/DD without wrapping
     alignItems: "center",
   },
 
   barArea: {
-    height: 44,             // 👈 FIXED baseline
+    height: 40,             // ⬅️ SINGLE shared baseline
     justifyContent: "flex-end",
     alignItems: "center",
   },
 
   value: {
-    position: "absolute",
-    top: -14,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "800",
+    marginBottom: 2,
     color: "#222",
   },
 
@@ -102,7 +110,7 @@ const styles = StyleSheet.create({
   },
 
   date: {
-    marginTop: 6,
+    marginTop: 4,
     fontSize: 9,
     color: "#888",
   },

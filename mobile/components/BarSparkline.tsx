@@ -1,4 +1,3 @@
-// components/BarSparkline.tsx
 import { View, Text, StyleSheet } from "react-native";
 import { useMemo } from "react";
 import { useTheme } from "@/store/useTheme";
@@ -12,12 +11,12 @@ type Props = {
 export function BarSparkline({
   data = [],
   dates = [],
-  height = 56,
+  height = 64,
 }: Props) {
   const colors = useTheme((s) => s.colors);
 
   const max = useMemo(() => {
-    const vals = data.map((v) => Math.abs(v)).filter(Boolean);
+    const vals = data.map(v => Math.abs(v)).filter(Boolean);
     return vals.length ? Math.max(...vals) : 1;
   }, [data]);
 
@@ -36,14 +35,15 @@ export function BarSparkline({
             ? colors.accent.success
             : colors.accent.danger;
 
-        const date =
-          dates[i]?.slice(5) ?? ""; // MM-DD (clean + compact)
+        const dateLabel = dates?.[i]
+          ? dates[i].slice(5) // MM-DD from YYYY-MM-DD
+          : "";
 
         return (
           <View key={i} style={styles.barSlot}>
             {/* VALUE ABOVE */}
             <Text style={styles.value}>
-              {Number.isFinite(v) ? v.toFixed(0) : "—"}
+              {v}
             </Text>
 
             {/* BAR */}
@@ -58,7 +58,9 @@ export function BarSparkline({
             />
 
             {/* DATE BELOW */}
-            <Text style={styles.date}>{date}</Text>
+            <Text style={styles.date}>
+              {dateLabel}
+            </Text>
           </View>
         );
       })}
@@ -71,17 +73,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     justifyContent: "center",
-    gap: 8,          // 👈 wider spacing
+    gap: 8,              // wider spacing
     marginVertical: 10,
   },
   barSlot: {
-    width: 16,       // 👈 wider bars
+    width: 18,           // wider bars
     alignItems: "center",
   },
   value: {
-    fontSize: 10,
-    fontWeight: "700",
-    marginBottom: 2,
+    fontSize: 11,
+    fontWeight: "800",
+    marginBottom: 4,
+    color: "#222",
   },
   bar: {
     width: "100%",
@@ -89,8 +92,8 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   date: {
-    fontSize: 9,
     marginTop: 4,
-    opacity: 0.6,
+    fontSize: 9,
+    color: "#888",
   },
 });

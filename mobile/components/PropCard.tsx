@@ -116,6 +116,10 @@ type PropCardProps = {
   sparkline_l10?: number[];
   sparkline_l20?: number[];
 
+  last5_dates?: string[];
+  last10_dates?: string[];
+  last20_dates?: string[];
+
   saved: boolean;
   onToggleSave: () => void;
   expanded: boolean;
@@ -160,6 +164,13 @@ export default function PropCard(props: PropCardProps) {
     expanded,
     onToggleExpand,
   } = props;
+
+  const dates =
+    w === "l5"
+      ? props.last5_dates
+      : w === "l20"
+      ? props.last20_dates
+      : props.last10_dates;
 
   const hitPct = Math.round(((props.hit_rate_l10 ?? 0) as number) * 100);
   
@@ -508,16 +519,16 @@ return (
                     <Text style={styles.sectionIcon}>📊</Text>
                     <Text style={styles.sectionText}>Performance</Text>
                   </View>
-
+            
                   {/* 👇 BAR CHART ROW */}
                   <View style={{ alignItems: "center" }}>
-                    <Text style={{ color: "red", fontSize: 12 }}>
-                      sparkline len: {sparkline?.length ?? "undefined"}
-                    </Text>
-                  
-                    <BarSparkline data={sparkline} height={42} />
+                    <BarSparkline
+                      data={sparkline}
+                      dates={dates}
+                      height={64}
+                    />
                   </View>
-
+            
                   <View style={styles.gridRow}>
                     <Text style={styles.statLabel}>AVG</Text>
                     <Text style={styles.statLabel}>HIT%</Text>

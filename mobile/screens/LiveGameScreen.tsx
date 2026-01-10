@@ -41,7 +41,7 @@ export default function LiveGamesScreen() {
         renderItem={({ item }) => (
           <LiveGameCard
             game={item}
-            players={playersByGame(Number(item.gameId))}
+            players={playersByGame(item.game_id)}
           />
         )}
       />

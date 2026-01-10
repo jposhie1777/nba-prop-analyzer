@@ -1,3 +1,4 @@
+// services/adapters/liveAdapter
 import { LiveGame, PeriodScore } from "@/types/live";
 
 /**

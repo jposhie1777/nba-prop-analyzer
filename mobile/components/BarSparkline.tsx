@@ -14,7 +14,14 @@ export function BarSparkline({
   height = 64,
 }: Props) {
   const colors = useTheme((s) => s.colors);
-
+  const shouldShowDate = (i: number, total: number) => {
+    if (total <= 6) return true; // short sparklines show all
+    return (
+      i === 0 ||
+      i === Math.floor(total / 2) ||
+      i === total - 1
+    );
+  };
   const max = useMemo(() => {
     const vals = data.map(v => Math.abs(v)).filter(Boolean);
     return vals.length ? Math.max(...vals) : 1;
@@ -36,7 +43,7 @@ export function BarSparkline({
             : colors.accent.danger;
       
         const dateLabel =
-          dates?.[i] && typeof dates[i] === "string"
+          dates?.[i] && shouldShowDate(i, data.length)
             ? dates[i].slice(5)
             : "";
       

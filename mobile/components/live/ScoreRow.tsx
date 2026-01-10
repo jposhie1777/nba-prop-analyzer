@@ -23,6 +23,14 @@ export function ScoreRow({ game }: { game: LiveGame }) {
 
         {/* Center */}
         <View style={styles.midCol}>
+          {/* Quarter */}
+          {game.period && (
+            <Text style={[styles.quarter, { color: colors.text.muted }]}>
+              {game.period}
+            </Text>
+          )}
+        
+          {/* LIVE pill */}
           <View
             style={[
               styles.livePill,
@@ -38,10 +46,11 @@ export function ScoreRow({ game }: { game: LiveGame }) {
               LIVE
             </Text>
           </View>
-
-          {game.period && game.clock && (
-            <Text style={[styles.status, { color: colors.text.muted }]}>
-              {game.period} • {game.clock}
+        
+          {/* Clock */}
+          {game.clock && (
+            <Text style={[styles.clock, { color: colors.text.muted }]}>
+              {game.clock}
             </Text>
           )}
         </View>
@@ -180,6 +189,16 @@ const styles = StyleSheet.create({
     width: "24%",
     alignItems: "center",
     gap: 6,
+  },
+  quarter: {
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  
+  clock: {
+    fontSize: 11,
+    fontWeight: "600",
   },
 
   livePill: {

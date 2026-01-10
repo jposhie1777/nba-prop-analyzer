@@ -143,7 +143,6 @@ export async function fetchProps(params?: {
   const text = await res.text();
 
   console.log("📥 STATUS:", res.status);
-  console.log("📥 BODY:", text);
 
   if (!res.ok) {
     throw new Error(`API ${res.status}: ${text}`);

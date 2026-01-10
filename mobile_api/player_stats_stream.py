@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter
 from google.cloud import bigquery
 from starlette.responses import StreamingResponse
+import os
 
 # ======================================================
 # Router
@@ -35,8 +36,6 @@ MAX_BACKOFF_SEC = 120
 # ======================================================
 # BigQuery
 # ======================================================
-from google.cloud import bigquery
-import os
 
 def get_bq_client() -> bigquery.Client:
     """
@@ -46,15 +45,10 @@ def get_bq_client() -> bigquery.Client:
     - Cloud Run (auto project)
     - Local dev / Codespaces (env-based)
     """
-
     project = os.environ.get("GCP_PROJECT") or os.environ.get("GOOGLE_CLOUD_PROJECT")
-
     if project:
         return bigquery.Client(project=project)
-
-    # Cloud Run / gcloud auth fallback
     return bigquery.Client()
-
 
 
 PLAYER_STATS_QUERY = """
@@ -66,7 +60,7 @@ WITH ranked AS (
       ORDER BY ingested_at DESC
     ) AS rn
   FROM `graphite-flare-477419-h7.nba_live.live_player_stats`
-  WHERE game_date = @game_date
+  WHERE game_date >= DATE_SUB(@game_date, INTERVAL 1 DAY)  -- 🔧 FIX (midnight safety)
 )
 SELECT *
 FROM ranked
@@ -111,7 +105,7 @@ def _compute_backoff(failures: int) -> float:
 
 
 # ======================================================
-# BigQuery fetch (TODAY ONLY – NBA TIME)
+# BigQuery fetch (TODAY – NBA TIME)
 # ======================================================
 
 async def fetch_player_stats_snapshot() -> Dict[str, Any]:
@@ -148,21 +142,25 @@ async def fetch_player_stats_snapshot() -> Dict[str, Any]:
             {
                 "game_id": r.game_id,
                 "player_id": r.player_id,
-                "name": r.player_name,
+                "name": r.player_name or "—",                    # 🔧 FIX
                 "team": r.team_abbr,
                 "opponent": r.opponent_abbr,
-                "minutes": r.minutes,
-                "pts": r.pts,
-                "reb": r.reb,
-                "ast": r.ast,
-                "stl": r.stl,
-                "blk": r.blk,
-                "tov": r.tov,
-                "fg": [r.fg_made, r.fg_att],
-                "fg3": [r.fg3_made, r.fg3_att],
-                "ft": [r.ft_made, r.ft_att],
-                "plus_minus": r.plus_minus,
-                "period": r.period,
+                "minutes": float(r.minutes) if r.minutes is not None else None,  # 🔧 FIX
+                "pts": r.pts or 0,                                # 🔧 FIX
+                "reb": r.reb or 0,                                # 🔧 FIX
+                "ast": r.ast or 0,                                # 🔧 FIX
+                "stl": r.stl or 0,                                # 🔧 FIX
+                "blk": r.blk or 0,                                # 🔧 FIX
+                "tov": r.tov or 0,                                # 🔧 FIX
+                "fg": [r.fg_made or 0, r.fg_att or 0],            # 🔧 FIX
+                "fg3": [r.fg3_made or 0, r.fg3_att or 0],         # 🔧 FIX
+                "ft": [r.ft_made or 0, r.ft_att or 0],            # 🔧 FIX
+                "plus_minus": r.plus_minus or 0,                  # 🔧 FIX
+                "period": (
+                    int(r.period)
+                    if r.period and str(r.period).isdigit()
+                    else None
+                ),                                                # 🔧 FIX
                 "clock": r.clock,
             }
         )

@@ -20,7 +20,6 @@ export function BarSparkline({
     return vals.length ? Math.max(...vals) : 1;
   }, [data]);
 
-  // ⬇️ unchanged logic, just clearer intent
   const showEvery =
     data.length <= 5 ? 1 :
     data.length <= 10 ? 2 :
@@ -30,9 +29,7 @@ export function BarSparkline({
     <View style={[styles.wrap, { height }]}>
       {data.map((v, i) => {
         const pct = Math.abs(v) / max;
-
-        // ⬇️ small tweak: bar area is fixed, bars scale inside it
-        const barHeight = Math.max(4, pct * styles.barArea.height!);
+        const barHeight = Math.max(4, pct * (height - 28));
 
         const color =
           v >= 0
@@ -41,17 +38,16 @@ export function BarSparkline({
 
         const showDate = i % showEvery === 0;
 
+        // ✅ keep single-line "MM-DD" (no wrapping)
         const dateLabel =
           typeof dates?.[i] === "string"
-            ? dates[i].slice(5).replace("-", "/")
+            ? dates[i].slice(5) // "MM-DD"
             : "";
 
         return (
           <View key={i} style={styles.barSlot}>
-            {/* VALUE ABOVE */}
             <Text style={styles.value}>{Math.round(v)}</Text>
 
-            {/* FIXED BAR BASELINE */}
             <View style={styles.barArea}>
               <View
                 style={[
@@ -61,13 +57,19 @@ export function BarSparkline({
               />
             </View>
 
-            {/* DATE BELOW (SPARSE) */}
             {showDate ? (
-              <Text numberOfLines={1} style={styles.date}>
-                {dateLabel}
-              </Text>
+              <View style={styles.dateWrap}>
+                <Text
+                  numberOfLines={1}
+                  ellipsizeMode="clip"     // ✅ never "..."
+                  allowFontScaling={false} // ✅ prevents random truncation
+                  style={styles.date}
+                >
+                  {dateLabel}
+                </Text>
+              </View>
             ) : (
-              <View style={{ height: styles.date.fontSize }} />
+              <View style={{ height: 11 }} />
             )}
           </View>
         );
@@ -81,25 +83,27 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     justifyContent: "center",
-    gap: 8,                 // ⬅️ slightly tighter = fits L20 better
+    gap: 10,
     marginVertical: 8,
   },
 
+  // ✅ bars can stay narrow, dates no longer depend on this width
   barSlot: {
-    width: 20,              // ⬅️ enough for MM/DD without wrapping
+    width: 18,
     alignItems: "center",
   },
 
   barArea: {
-    height: 40,             // ⬅️ SINGLE shared baseline
+    height: 44,
     justifyContent: "flex-end",
     alignItems: "center",
   },
 
   value: {
-    fontSize: 10,
+    position: "absolute",
+    top: -14,
+    fontSize: 11,
     fontWeight: "800",
-    marginBottom: 2,
     color: "#222",
   },
 
@@ -109,8 +113,14 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
 
+  // ✅ NEW: date container wider than the bar slot
+  dateWrap: {
+    width: 34,          // ✅ enough for "12-30"
+    alignItems: "center",
+    marginTop: 6,
+  },
+
   date: {
-    marginTop: 4,
     fontSize: 9,
     color: "#888",
   },

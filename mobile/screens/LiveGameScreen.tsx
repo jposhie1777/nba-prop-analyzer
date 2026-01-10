@@ -13,6 +13,30 @@ export default function LiveGamesScreen() {
   const { playersByGame } = useLivePlayerStats();
 
   const isConnecting = mode === "sse" && games.length === 0;
+  
+    /* ===========================
+       DEV GUARD: players ↔ game
+    =========================== */
+    const guardedPlayersByGame = (gameId: string) => {
+      const players = playersByGame(gameId);
+  
+      if (__DEV__) {
+        if (players.length === 0) {
+          console.warn("🟠 GUARD: no players for game", gameId);
+        } else {
+          const teams = new Set(players.map((p) => p.team));
+          if (teams.size < 2) {
+            console.warn("🔴 GUARD: players not split by team", {
+              gameId,
+              teams: Array.from(teams),
+              samplePlayer: players[0],
+            });
+          }
+        }
+      }
+  
+      return players;
+    };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface.screen }}>
@@ -50,7 +74,7 @@ export default function LiveGamesScreen() {
         renderItem={({ item }) => (
           <LiveGameCard
             game={item}
-            players={playersByGame(item.gameId)}
+            players={guardedPlayersByGame(item.gameId)}
           />
         )}
       />

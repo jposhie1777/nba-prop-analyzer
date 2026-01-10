@@ -29,38 +29,32 @@ export function BarSparkline({
       {data.map((v, i) => {
         const pct = Math.abs(v) / max;
         const barHeight = Math.max(4, pct * (height - 24));
-
+      
         const color =
           v >= 0
             ? colors.accent.success
             : colors.accent.danger;
-
-        const dateLabel = dates?.[i]
-          ? dates[i].slice(5) // MM-DD from YYYY-MM-DD
-          : "";
-
+      
+        const dateLabel =
+          dates?.[i] && typeof dates[i] === "string"
+            ? dates[i].slice(5)
+            : "";
+      
         return (
           <View key={i} style={styles.barSlot}>
             {/* VALUE ABOVE */}
-            <Text style={styles.value}>
-              {v}
-            </Text>
-
+            <Text style={styles.value}>{Math.round(v)}</Text>
+      
             {/* BAR */}
             <View
               style={[
                 styles.bar,
-                {
-                  height: barHeight,
-                  backgroundColor: color,
-                },
+                { height: barHeight, backgroundColor: color },
               ]}
             />
-
+      
             {/* DATE BELOW */}
-            <Text style={styles.date}>
-              {dateLabel}
-            </Text>
+            <Text style={styles.date}>{dateLabel}</Text>
           </View>
         );
       })}

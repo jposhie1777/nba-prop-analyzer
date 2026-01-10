@@ -126,6 +126,24 @@ def ingest_live_games_snapshot() -> None:
     }
 
     # --------------------------------------------------
+    # Fetch LIVE BOX SCORES (authoritative clock)
+    # --------------------------------------------------
+    box_resp = requests.get(
+        f"{BDL_BASE}/box_scores/live",
+        headers=headers,
+        timeout=15,
+    )
+    box_resp.raise_for_status()
+    
+    box_games = box_resp.json().get("data", [])
+    
+    # Index by game_id for fast lookup
+    box_by_game_id = {
+        bg.get("id"): bg
+        for bg in box_games
+        if bg.get("id") is not None
+    }
+    # --------------------------------------------------
     # Date window (NY authoritative)
     # --------------------------------------------------
     today_ny = datetime.now(NY_TZ).date()
@@ -161,72 +179,68 @@ def ingest_live_games_snapshot() -> None:
     rows = []
 
     for g in games:
-        status_raw = (g.get("status") or "").lower()
-
         home_score = g.get("home_team_score")
         away_score = g.get("visitor_team_score")
-
+    
+        # ---------------------------
+        # Box score lookup (authoritative)
+        # ---------------------------
+        box = box_by_game_id.get(g["id"], {})
+    
+        raw_period = box.get("period")
+        raw_time = box.get("time")
+    
         # ---------------------------
         # Game state
         # ---------------------------
-        if "final" in status_raw:
+        if raw_time == "Final":
             state = "FINAL"
         elif home_score is not None and away_score is not None:
             state = "LIVE"
         else:
             state = "UPCOMING"
-
+    
         # ---------------------------
-        # Period (best-effort)
+        # Period + Clock
         # ---------------------------
-        period = None
-        if "q1" in status_raw:
-            period = "Q1"
-        elif "q2" in status_raw:
-            period = "Q2"
-        elif "q3" in status_raw:
-            period = "Q3"
-        elif "q4" in status_raw:
-            period = "Q4"
-        elif "ot" in status_raw:
-            period = "OT"
-
-        # ---------------------------
-        # Clock (best-effort)
-        # ---------------------------
-        clock = None
-        for token in status_raw.split():
-            if ":" in token and len(token) <= 5:
-                clock = token
-                break
-
+        period = (
+            f"Q{raw_period}"
+            if isinstance(raw_period, int)
+            else None
+        )
+    
+        clock = (
+            raw_time
+            if isinstance(raw_time, str) and ":" in raw_time
+            else None
+        )
+    
         rows.append(
             {
                 "game_id": g["id"],
                 "game_date": today_ny.isoformat(),
-
+    
                 "state": state,
-
+    
                 "home_team_abbr": g["home_team"]["abbreviation"],
                 "away_team_abbr": g["visitor_team"]["abbreviation"],
-
+    
                 "home_score_q1": g.get("home_q1"),
                 "home_score_q2": g.get("home_q2"),
                 "home_score_q3": g.get("home_q3"),
                 "home_score_q4": g.get("home_q4"),
-
+    
                 "away_score_q1": g.get("visitor_q1"),
                 "away_score_q2": g.get("visitor_q2"),
                 "away_score_q3": g.get("visitor_q3"),
                 "away_score_q4": g.get("visitor_q4"),
-
+    
                 "home_score": home_score,
                 "away_score": away_score,
-
+    
                 "period": period,
                 "clock": clock,
-
-                # Metadata
+    
                 "poll_ts": poll_ts,
                 "ingested_at": poll_ts,
             }

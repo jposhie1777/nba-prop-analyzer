@@ -20,10 +20,23 @@ export function BarSparkline({
     return vals.length ? Math.max(...vals) : 1;
   }, [data]);
 
-  const showEvery =
-    data.length <= 5 ? 1 :
-    data.length <= 10 ? 2 :
-    4;
+  const dateIndexesToShow = useMemo(() => {
+    if (data.length === 5) {
+      return new Set([0, 2, 4]); // first · middle · last
+    }
+  
+    if (data.length <= 3) {
+      return new Set(data.map((_, i) => i));
+    }
+  
+    // fallback for L10 / L20 etc (keep your spacing logic)
+    const step =
+      data.length <= 10 ? 2 : 4;
+  
+    return new Set(
+      data.map((_, i) => i).filter(i => i % step === 0)
+    );
+  }, [data.length]);
 
   return (
     <View style={[styles.wrap, { height }]}>
@@ -36,7 +49,7 @@ export function BarSparkline({
             ? colors.accent.success
             : colors.accent.danger;
 
-        const showDate = i % showEvery === 0;
+        const showDate = dateIndexesToShow.has(i);
 
         // ✅ keep single-line "MM-DD" (no wrapping)
         const dateLabel =

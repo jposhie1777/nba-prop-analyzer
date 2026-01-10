@@ -1,3 +1,4 @@
+// services/liveGame
 import Constants from "expo-constants";
 import { adaptLiveGames } from "./adapters/liveAdapter";
 import { LiveGame } from "@/types/live";

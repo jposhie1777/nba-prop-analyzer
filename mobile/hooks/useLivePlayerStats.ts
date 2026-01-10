@@ -145,20 +145,22 @@ export function useLivePlayerStats() {
     };
   }, []);
 
-  /* ===========================
+    /* ===========================
      Helper selector
   =========================== */
 
-  const playersByGame = (gameId: number | string) =>
-    players.filter((p) => String(p.game_id) === String(gameId));
-  
+  const playersByGame = (gameId: number | string) => {
+    const filtered = players.filter(
+      (p) => String(p.game_id) === String(gameId)
+    );
+
     console.log("🟡 DEBUG playersByGame", {
       gameId,
       totalPlayers: players.length,
       matchedPlayers: filtered.length,
       samplePlayerGameId: players[0]?.game_id,
     });
-  
+
     return filtered;
   };
 

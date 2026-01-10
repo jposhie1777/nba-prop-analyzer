@@ -20,11 +20,10 @@ export function BarSparkline({
     return vals.length ? Math.max(...vals) : 1;
   }, [data]);
 
-  if (!data.length) {
-    return <View style={[styles.wrap, { height }]} />;
-  }
-
-  const count = data.length;
+  const showEvery =
+    data.length <= 5 ? 1 :
+    data.length <= 10 ? 2 :
+    4;
 
   return (
     <View style={[styles.wrap, { height }]}>
@@ -37,41 +36,30 @@ export function BarSparkline({
             ? colors.accent.success
             : colors.accent.danger;
 
-        // ─────────────────────────────
-        // DATE VISIBILITY LOGIC
-        // L5  → all
-        // L10 → every 2
-        // L20 → every 4 + last
-        // ─────────────────────────────
-        let showDate = true;
-        if (count > 15) showDate = i % 4 === 0 || i === count - 1;
-        else if (count > 7) showDate = i % 2 === 0;
-
+        const showDate = i % showEvery === 0;
         const dateLabel =
-          showDate && typeof dates?.[i] === "string"
-            ? dates[i].slice(5) // "MM-DD"
+          typeof dates?.[i] === "string"
+            ? dates[i].slice(5).replace("-", "/")
             : "";
 
         return (
           <View key={i} style={styles.barSlot}>
-            {/* BAR AREA */}
-            <View style={styles.barArea}>
-              <Text style={styles.value}>{Math.round(v)}</Text>
-              <View
-                style={[
-                  styles.bar,
-                  { height: barHeight, backgroundColor: color },
-                ]}
-              />
-            </View>
+            <Text style={styles.value}>{Math.round(v)}</Text>
 
-            {/* DATE */}
-            <Text
-              style={styles.date}
-              numberOfLines={1}
-            >
-              {dateLabel}
-            </Text>
+            <View
+              style={[
+                styles.bar,
+                { height: barHeight, backgroundColor: color },
+              ]}
+            />
+
+            {showDate ? (
+              <Text numberOfLines={1} style={styles.date}>
+                {dateLabel}
+              </Text>
+            ) : (
+              <View style={{ height: 11 }} />
+            )}
           </View>
         );
       })}

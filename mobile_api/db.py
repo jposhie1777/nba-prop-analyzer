@@ -57,11 +57,15 @@ def fetch_mobile_props(
             return data
 
     query = """
-    SELECT *
-    FROM `nba_goat_data.props_mobile_v1`
-    WHERE gameDate = @game_date
-      AND hit_rate_l10 >= @min_hit_rate
-    ORDER BY hit_rate_l10 DESC, edge_pct DESC
+    SELECT
+      p.*,
+      l.player_image_url
+    FROM `nba_goat_data.props_mobile_v1` p
+    LEFT JOIN `nba_goat_data.player_lookup` l
+      ON l.player_name = p.player
+    WHERE p.gameDate = @game_date
+      AND p.hit_rate_l10 >= @min_hit_rate
+    ORDER BY p.hit_rate_l10 DESC, p.edge_pct DESC
     LIMIT @limit
     OFFSET @offset
     """

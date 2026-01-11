@@ -18,6 +18,7 @@ from box_scores_snapshot import (
 from live_game_odds_ingest import ingest_live_game_odds
 from live_player_prop_odds_ingest import ingest_live_player_prop_odds
 from live_odds_routes import router as live_odds_router
+from live_odds_flatten import run_live_odds_flatten
 
 # ==================================================
 # 🔴 ADDITION: player box stream imports
@@ -167,6 +168,24 @@ async def startup():
             await asyncio.sleep(30)
     
     asyncio.create_task(live_player_prop_odds_loop())
+
+    # -----------------------------
+    # 🔴 WRITE-SIDE: live odds FLATTEN (IDEMPOTENT)
+    # -----------------------------
+    async def live_odds_flatten_loop():
+        # Let first RAW snapshots land
+        await asyncio.sleep(20)
+    
+        while True:
+            try:
+                await asyncio.to_thread(run_live_odds_flatten)
+                print("🧮 Live odds flatten complete")
+            except Exception as e:
+                print("❌ Live odds flatten failed:", e)
+    
+            await asyncio.sleep(30)
+    
+    asyncio.create_task(live_odds_flatten_loop())
 
 # ==================================================
 # Health check

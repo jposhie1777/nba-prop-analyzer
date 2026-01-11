@@ -1,6 +1,8 @@
+# live_game_odds_ingest.py
 from datetime import datetime, timezone
 import json
 import requests
+from live_odds_common import LIVE_ODDS_BOOKS
 
 from live_odds_common import (
     BDL_V2,
@@ -40,6 +42,11 @@ def ingest_live_game_odds() -> dict:
 
     rows = []
     for game in payload.get("data", []):
+        book = game.get("book")
+    
+        if book not in LIVE_ODDS_BOOKS:
+            continue
+    
         rows.append(
             {
                 "snapshot_ts": now.isoformat(),

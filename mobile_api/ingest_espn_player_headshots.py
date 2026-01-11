@@ -7,7 +7,15 @@ import time
 # ======================================================
 # CONFIG
 # ======================================================
-PROJECT_ID = "YOUR_PROJECT_ID"
+import os
+
+PROJECT_ID = (
+    os.environ.get("GCP_PROJECT")
+    or os.environ.get("GOOGLE_CLOUD_PROJECT")
+)
+
+if not PROJECT_ID:
+    raise RuntimeError("❌ GCP_PROJECT / GOOGLE_CLOUD_PROJECT not set")
 TABLE_ID = f"{PROJECT_ID}.nba_goat_data.player_lookup"
 
 ESPN_SEARCH_URL = "https://site.web.api.espn.com/apis/common/v3/search"

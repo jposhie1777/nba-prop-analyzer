@@ -12,6 +12,7 @@ import { LiveOdds } from "./LiveOdds";
 import { useLivePlayerProps } from "@/hooks/useLivePlayerProps";
 import { groupLiveProps } from "@/utils/groupLiveProps";
 import { useMemo } from "react";
+import { useLiveGameOdds } from "@/hooks/useLiveGameOdds";
 
 type Props = {
   game: LiveGame;
@@ -27,7 +28,7 @@ export function LiveGameCard({ game, players }: Props) {
   } = useLivePlayerProps(game.gameId);
 
   console.log("🧪 Live props raw", {
-    gameId: game.game_id,
+    gameId: game.gameId,    // ✅ CORRECT
     count: liveProps.length,
     sample: liveProps[0],
   });
@@ -36,6 +37,17 @@ export function LiveGameCard({ game, players }: Props) {
     () => groupLiveProps(liveProps),
     [liveProps]
   );
+
+  const {
+    odds: gameOdds,
+    loading: gameOddsLoading,
+  } = useLiveGameOdds(game.gameId);
+  
+  console.log("🎯 GAME ODDS DEBUG", {
+    gameId: game.gameId,
+    count: gameOdds.length,
+    sample: gameOdds[0],
+  });
 
   const hasLiveOdds = Object.keys(groupedLiveProps).length > 0;
 

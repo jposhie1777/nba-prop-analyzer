@@ -48,11 +48,21 @@ export function PlayerRow({
       ]}
     >
       <Text style={styles.name}>{player.name}</Text>
-
+  
       <Text style={styles.stat}>{player.pts}</Text>
       <Text style={styles.stat}>{player.reb}</Text>
       <Text style={styles.stat}>{player.ast}</Text>
-
+  
+      {/* 🔴 NEW */}
+      <Text style={styles.stat}>
+        {player.minutes ?? "—"}
+      </Text>
+  
+      {/* 🔴 NEW */}
+      <Text style={styles.stat}>
+        {player.fg3?.[0] ?? 0}-{player.fg3?.[1] ?? 0}
+      </Text>
+  
       <StatPill value={player.plus_minus} />
     </Animated.View>
   );
@@ -72,8 +82,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   stat: {
-    width: 28,
-    textAlign: "right",
+    width: 36,        // ⬅️ change from 28
+    textAlign: "center",
     fontSize: 12,
   },
 });

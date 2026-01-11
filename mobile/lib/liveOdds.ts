@@ -75,27 +75,25 @@ export async function fetchLivePlayerProps(gameId: number) {
   return payload;
 }
 export async function fetchLiveGameOdds(gameId: number) {
-  const res = await fetch(
-    `${API}/live/odds/games?game_id=${gameId}`
-  );
+  const res = await fetch(`${API}/live/odds/games?game_id=${gameId}`);
+  const text = await res.text();
 
-  if (!res.ok) {
-    throw new Error("Failed to fetch live game odds");
+  let json: any;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error("Invalid JSON from game odds");
   }
 
-  const json = await res.json();
+  const odds =
+    json.odds ??
+    json.items ??
+    json.data ??
+    [];
 
-  if (__DEV__) {
-    console.log("🌐 fetchLiveGameOdds()", {
-      gameId,
-      count: json.odds?.length,
-      sample: json.odds?.[0],
-    });
-  }
-
-  return json as {
-    game_id: number;
-    updated_at: string | null;
-    odds: LiveGameOdds[];
+  return {
+    game_id: json.game_id ?? json.gameId ?? gameId,
+    updated_at: json.updated_at ?? json.updatedAt ?? null,
+    odds,
   };
 }

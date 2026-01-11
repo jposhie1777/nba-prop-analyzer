@@ -735,7 +735,7 @@ function makeStyles(colors: any) {
     player: {
       fontWeight: "800",
       color: colors.text.primary,
-      textAlign: "left",   // 👈 not center
+      textAlign: "left",
     },
     
     marketLine: {

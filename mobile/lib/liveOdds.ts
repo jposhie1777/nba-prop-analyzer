@@ -30,29 +30,46 @@ export type LiveGameOdds = {
 // ------------------------------
 
 export async function fetchLivePlayerProps(gameId: number) {
-  const res = await fetch(
-    `${API}/live/odds/player-props?game_id=${gameId}`
-  );
+  const url = `${API}/live/odds/player-props?game_id=${gameId}`;
+  console.log("🚨 LIVE PROPS FETCH URL", url);
+
+  const res = await fetch(url);
+
+  const text = await res.text();
+  console.log("🧨 RAW LIVE PROPS RESPONSE", text);
 
   if (!res.ok) {
-    throw new Error("Failed to fetch live player props");
+    throw new Error(`Failed to fetch live player props: ${res.status}`);
   }
 
-  const json = await res.json();
+  let json: any;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error("Invalid JSON from live props endpoint");
+  }
+
+  const props =
+    json.props ??
+    json.items ??
+    json.data ??
+    [];
+
+  const payload = {
+    game_id: json.game_id ?? json.gameId ?? gameId,
+    updated_at: json.updated_at ?? json.updatedAt ?? null,
+    props,
+  };
 
   if (__DEV__) {
-    console.log("🌐 fetchLivePlayerProps()", {
-      gameId,
-      count: json.props?.length,
-      sample: json.props?.[0],
+    console.log("✅ NORMALIZED LIVE PROPS", {
+      gameId: payload.game_id,
+      count: payload.props.length,
+      sample: payload.props[0],
     });
   }
 
-  return json as {
-    game_id: number;
-    updated_at: string | null;
-    props: LivePlayerProp[];
-  };
+  return payload;
 }
 export async function fetchLiveGameOdds(gameId: number) {
   const res = await fetch(

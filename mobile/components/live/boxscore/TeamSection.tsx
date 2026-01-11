@@ -61,14 +61,14 @@ export function TeamSection({
   
       {/* STAT HEADERS */}
       <View style={styles.statHeaderRow}>
-        <Text style={styles.nameSpacer}> </Text>
-        <Text style={styles.statHeader}>PTS</Text>
-        <Text style={styles.statHeader}>REB</Text>
-        <Text style={styles.statHeader}>AST</Text>
-        <Text style={styles.statHeader}>MIN</Text>
-        <Text style={styles.statHeader}>3PT</Text>
-        <Text style={styles.pmHeader}>+/-</Text>
-      </View>
+      <Text style={styles.nameSpacer}> </Text>
+      <Text style={[styles.statHeader, { color: colors.text.muted }]}>PTS</Text>
+      <Text style={[styles.statHeader, { color: colors.text.muted }]}>REB</Text>
+      <Text style={[styles.statHeader, { color: colors.text.muted }]}>AST</Text>
+      <Text style={[styles.statHeader, { color: colors.text.muted }]}>MIN</Text>
+      <Text style={[styles.statHeader, { color: colors.text.muted }]}>3PT</Text>
+      <Text style={[styles.pmHeader, { color: colors.text.muted }]}>+/-</Text>
+    </View>
   
       {/* PLAYERS */}
       {starters.map((p) => (
@@ -106,14 +106,12 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 11,
     fontWeight: "600",
-    color: "#9CA3AF", // or colors.text.muted
   },
   pmHeader: {
-    width: 44,          // MUST match StatPill width
+    width: 44,
     textAlign: "center",
     fontSize: 11,
     fontWeight: "600",
-    color: "#9CA3AF",
   },
 });
   

@@ -89,4 +89,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginBottom: 4,
   },
+  statHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 4,
+    marginBottom: 4,
+  },
+  
+  nameSpacer: {
+    flex: 1, // aligns with player name column
+  },
+  
+  statHeader: {
+    width: 36,
+    textAlign: "center",
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#9CA3AF", // or colors.text.muted
+  },
 });
+  

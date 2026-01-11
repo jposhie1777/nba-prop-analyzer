@@ -135,33 +135,45 @@ ON
 
 WHEN MATCHED THEN
   UPDATE SET
-    snapshot_ts = S.snapshot_ts,
-    spread      = S.spread,
-    spread_odds = S.spread_odds,
-    total       = S.total,
-    over_odds   = S.over_odds,
-    under_odds  = S.under_odds
+    snapshot_ts            = S.snapshot_ts,
+    spread_home            = S.spread_home,
+    spread_away            = S.spread_away,
+    spread_home_odds       = S.spread_home_odds,
+    spread_away_odds       = S.spread_away_odds,
+    total                  = S.total,
+    over_odds              = S.over_odds,
+    under_odds             = S.under_odds,
+    moneyline_home_odds    = S.moneyline_home_odds,
+    moneyline_away_odds    = S.moneyline_away_odds
 
 WHEN NOT MATCHED THEN
   INSERT (
     snapshot_ts,
     game_id,
     book,
-    spread,
-    spread_odds,
+    spread_home,
+    spread_away,
+    spread_home_odds,
+    spread_away_odds,
     total,
     over_odds,
-    under_odds
+    under_odds,
+    moneyline_home_odds,
+    moneyline_away_odds
   )
   VALUES (
     S.snapshot_ts,
     S.game_id,
     S.book,
-    S.spread,
-    S.spread_odds,
+    S.spread_home,
+    S.spread_away,
+    S.spread_home_odds,
+    S.spread_away_odds,
     S.total,
     S.over_odds,
-    S.under_odds
+    S.under_odds,
+    S.moneyline_home_odds,
+    S.moneyline_away_odds
   );
 """
 

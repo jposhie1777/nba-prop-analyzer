@@ -108,8 +108,12 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#9CA3AF", // or colors.text.muted
   },
-  pmSpacer: {
-    width: 44, // must match StatPill width
+  pmHeader: {
+    width: 44,          // MUST match StatPill width
+    textAlign: "center",
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#9CA3AF",
   },
 });
   

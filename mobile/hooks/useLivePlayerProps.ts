@@ -18,12 +18,21 @@ export function useLivePlayerProps(gameId?: number) {
     async function load() {
       try {
         setLoading(true);
+    
         const data = await fetchLivePlayerProps(gameId);
-
+    
+        if (__DEV__) {
+          console.log("🎣 useLivePlayerProps.load()", {
+            gameId,
+            count: data.props?.length,
+            sample: data.props?.[0],
+          });
+        }
+    
         // prevent unnecessary re-renders
         const payloadStr = JSON.stringify(data.props);
         if (payloadStr === lastPayloadRef.current) return;
-
+    
         lastPayloadRef.current = payloadStr;
         if (mounted) setProps(data.props ?? []);
       } catch (err) {
@@ -31,7 +40,7 @@ export function useLivePlayerProps(gameId?: number) {
       } finally {
         setLoading(false);
       }
-    }
+}
 
     load();
     const id = setInterval(load, 30_000);

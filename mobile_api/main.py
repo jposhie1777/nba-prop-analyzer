@@ -17,6 +17,7 @@ from box_scores_snapshot import (
 )
 from live_game_odds_ingest import ingest_live_game_odds
 from live_player_prop_odds_ingest import ingest_live_player_prop_odds
+from live_odds_routes import router as live_odds_router
 
 # ==================================================
 # 🔴 ADDITION: player box stream imports
@@ -68,6 +69,7 @@ app.include_router(live_stream_router)
 app.include_router(box_scores_router)
 app.include_router(live_games_router)
 app.include_router(historical_player_trends_router)
+app.include_router(live_odds_router
 
 # ==================================================
 # 🔴 ADDITION: player box + player stats routers

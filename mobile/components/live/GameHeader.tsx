@@ -22,8 +22,10 @@ export function GameHeader({ home, away }: Props) {
 function Team({ team }: { team: TeamSide }) {
   const { colors } = useTheme();
 
+  const key = team.abbrev?.trim().toUpperCase();
+
   const logoUri =
-    TEAM_LOGOS[team.abbrev]
+    (key && TEAM_LOGOS[key]) ??
     "https://a.espncdn.com/i/teamlogos/nba/500/nba.png";
 
   return (

@@ -306,6 +306,7 @@ export default function HomeScreen() {
           market={item.market}
           line={item.line}
           odds={item.odds}
+          books={item.books}
   
           hitRateL10={item.hitRateL10}
           edge={item.edge}

@@ -11,13 +11,23 @@ export function useLiveGameOdds(gameId?: number) {
 
   useEffect(() => {
     if (!gameId) return;
-
+  
     let mounted = true;
-
+  
     async function load() {
       try {
         setLoading(true);
+  
         const data = await fetchLiveGameOdds(gameId);
+  
+        if (__DEV__) {
+          console.log("🎣 useLiveGameOdds", {
+            gameId,
+            oddsCount: data.odds?.length,
+            sample: data.odds?.[0],
+          });
+        }
+  
         if (mounted) setOdds(data.odds ?? []);
       } catch (err) {
         console.warn("live game odds error", err);
@@ -25,10 +35,10 @@ export function useLiveGameOdds(gameId?: number) {
         setLoading(false);
       }
     }
-
+  
     load();
     const id = setInterval(load, 30_000);
-
+  
     return () => {
       mounted = false;
       clearInterval(id);

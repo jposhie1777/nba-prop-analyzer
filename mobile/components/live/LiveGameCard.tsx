@@ -9,6 +9,9 @@ import { ScoreRow } from "./ScoreRow";
 import { GameStatus } from "./GameStatus";
 import { BoxScore } from "./boxscore/BoxScore";
 import { LiveOdds } from "./LiveOdds";
+import { useLivePlayerProps } from "@/hooks/useLivePlayerProps";
+import { groupLiveProps } from "@/utils/groupLiveProps";
+import { useMemo } from "react";
 
 type Props = {
   game: LiveGame;
@@ -18,10 +21,17 @@ type Props = {
 export function LiveGameCard({ game, players }: Props) {
   const { colors } = useTheme();
 
-  const hasOdds =
-    !!game.odds?.spread?.length ||
-    !!game.odds?.total?.length ||
-    !!game.odds?.moneyline?.length;
+  const {
+    props: liveProps,
+    loading: oddsLoading,
+  } = useLivePlayerProps(game.game_id);
+
+  const groupedLiveProps = useMemo(
+    () => groupLiveProps(liveProps),
+    [liveProps]
+  );
+
+  const hasLiveOdds = Object.keys(groupedLiveProps).length > 0;
 
   return (
     <View style={[styles.card, { backgroundColor: colors.surface.card }]}>
@@ -49,7 +59,7 @@ export function LiveGameCard({ game, players }: Props) {
         players={players}
       />
 
-      {hasOdds && (
+      {hasLiveOdds && (
         <>
           <View
             style={[
@@ -57,8 +67,10 @@ export function LiveGameCard({ game, players }: Props) {
               { backgroundColor: colors.border.subtle },
             ]}
           />
+      
           <LiveOdds
-            odds={game.odds!}
+            groupedProps={groupedLiveProps}
+            loading={oddsLoading}
             home={game.home}
             away={game.away}
           />

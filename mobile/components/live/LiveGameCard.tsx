@@ -26,6 +26,12 @@ export function LiveGameCard({ game, players }: Props) {
     loading: oddsLoading,
   } = useLivePlayerProps(game.game_id);
 
+  console.log("🧪 Live props raw", {
+    gameId: game.game_id,
+    count: liveProps.length,
+    sample: liveProps[0],
+  });
+
   const groupedLiveProps = useMemo(
     () => groupLiveProps(liveProps),
     [liveProps]
@@ -59,23 +65,21 @@ export function LiveGameCard({ game, players }: Props) {
         players={players}
       />
 
-      {hasLiveOdds && (
-        <>
-          <View
-            style={[
-              styles.divider,
-              { backgroundColor: colors.border.subtle },
-            ]}
-          />
+      <>
+        <View
+          style={[
+            styles.divider,
+            { backgroundColor: colors.border.subtle },
+          ]}
+        />
       
-          <LiveOdds
-            groupedProps={groupedLiveProps}
-            loading={oddsLoading}
-            home={game.home}
-            away={game.away}
-          />
-        </>
-      )}
+        <LiveOdds
+          groupedProps={groupedLiveProps}
+          loading={oddsLoading}
+          home={game.home}
+          away={game.away}
+        />
+      </>
     </View>
   );
 }

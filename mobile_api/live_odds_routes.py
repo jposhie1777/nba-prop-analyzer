@@ -148,11 +148,18 @@ def get_live_game_odds(
         odds.append(
             {
                 "book": r.book,
-                "spread": r.spread,
-                "spread_odds": r.spread_odds,
+        
+                "spread_home": r.spread_home,
+                "spread_away": r.spread_away,
+                "spread_home_odds": r.spread_home_odds,
+                "spread_away_odds": r.spread_away_odds,
+        
                 "total": r.total,
                 "over": r.over_odds,
                 "under": r.under_odds,
+        
+                "moneyline_home_odds": r.moneyline_home_odds,
+                "moneyline_away_odds": r.moneyline_away_odds,
             }
         )
 

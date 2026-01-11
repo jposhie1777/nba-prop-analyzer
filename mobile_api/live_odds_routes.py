@@ -95,11 +95,19 @@ GAME_ODDS_QUERY = """
 SELECT
   game_id,
   book,
-  spread,
-  spread_odds,
+
+  spread_home,
+  spread_away,
+  spread_home_odds,
+  spread_away_odds,
+
   total,
   over_odds,
   under_odds,
+
+  moneyline_home_odds,
+  moneyline_away_odds,
+
   snapshot_ts
 FROM `graphite-flare-477419-h7.nba_live.live_game_odds_flat`
 WHERE game_id = @game_id

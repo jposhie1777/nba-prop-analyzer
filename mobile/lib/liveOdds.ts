@@ -1,6 +1,8 @@
 // lib/liveOdds.ts
 import { API_BASE } from "./config";
 
+throw new Error("🔥 FORCE CRASH — useLivePlayerProps reached");
+
 const API = API_BASE;
 
 // ------------------------------

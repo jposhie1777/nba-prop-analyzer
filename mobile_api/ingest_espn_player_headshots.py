@@ -23,10 +23,15 @@ HEADSHOT_TEMPLATE = (
     "https://a.espncdn.com/i/headshots/nba/players/full/{id}.png"
 )
 
-PLAYERS = [
-    "CJ McCollum",
-    # add more later
-]
+def fetch_players_from_bq():
+    query = """
+    SELECT DISTINCT player
+    FROM `nba_goat_data.props_mobile_v1`
+    WHERE player IS NOT NULL
+    ORDER BY player
+    """
+    rows = bq.query(query).result()
+    return [r.player for r in rows]
 
 REQUEST_DELAY_SEC = 0.5  # be polite to ESPN
 
@@ -114,7 +119,9 @@ def upsert_player(row: dict):
 
 
 def main():
-    for name in PLAYERS:
+    players = fetch_players_from_bq()
+
+    for name in players:
         print(f"🔍 Fetching ESPN ID for {name}")
         row = fetch_espn_player(name)
 

@@ -23,7 +23,7 @@ function Team({ team }: { team: TeamSide }) {
   const { colors } = useTheme();
 
   const logoUri =
-    TEAM_LOGOS[team.abbreviation] ??
+    TEAM_LOGOS[team.abbrev]
     "https://a.espncdn.com/i/teamlogos/nba/500/nba.png";
 
   return (

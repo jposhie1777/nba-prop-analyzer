@@ -28,9 +28,11 @@ USING (
 
       CAST(JSON_VALUE(m, '$.player_id') AS INT64) AS player_id,
       JSON_VALUE(m, '$.market') AS market,
-      CAST(JSON_VALUE(m, '$.line') AS FLOAT64) AS line,
-      JSON_VALUE(m, '$.book') AS book,
 
+      -- keep FLOAT for output
+      CAST(JSON_VALUE(m, '$.line') AS FLOAT64) AS line,
+
+      JSON_VALUE(m, '$.book') AS book,
       CAST(JSON_VALUE(m, '$.odds.over') AS INT64)  AS over_odds,
       CAST(JSON_VALUE(m, '$.odds.under') AS INT64) AS under_odds,
 
@@ -39,7 +41,10 @@ USING (
           game_id,
           CAST(JSON_VALUE(m, '$.player_id') AS INT64),
           JSON_VALUE(m, '$.market'),
-          CAST(JSON_VALUE(m, '$.line') AS FLOAT64),
+
+          -- ✅ STRING version ONLY for partitioning
+          JSON_VALUE(m, '$.line'),
+
           JSON_VALUE(m, '$.book')
         ORDER BY TIMESTAMP(snapshot_ts) DESC
       ) AS rn

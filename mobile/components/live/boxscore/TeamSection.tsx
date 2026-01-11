@@ -80,7 +80,7 @@ export function TeamSection({
         ))}
     </View>
   );
-
+}
 const styles = StyleSheet.create({
   section: {
     marginBottom: 8,

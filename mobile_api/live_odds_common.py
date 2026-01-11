@@ -52,17 +52,18 @@ def require_api_key() -> str:
     return key
 
 def fetch_live_game_ids() -> list[int]:
-    """
-    Authoritative LIVE gate.
-    """
     client = get_bq_client()
 
-    rows = client.query(
-        """
-        SELECT DISTINCT game_id
-        FROM `graphite-flare-477419-h7.nba_live.live_games`
-        WHERE state = 'LIVE'
-        """
-    ).result()
+    rows = list(
+        client.query(
+            """
+            SELECT DISTINCT game_id
+            FROM `graphite-flare-477419-h7.nba_live.live_games`
+            WHERE state = 'LIVE'
+            """
+        ).result()
+    )
+
+    print("🟡 LIVE GAME IDS:", [r.game_id for r in rows])
 
     return [r.game_id for r in rows]

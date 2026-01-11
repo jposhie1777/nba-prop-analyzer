@@ -59,7 +59,7 @@ export function TeamSection({
         DEBUG first player: {players[0]?.name} ({players[0]?.team})
       </Text>
   
-      {/* ✅ STAT HEADERS — ADD THIS */}
+      {/* STAT HEADERS */}
       <View style={styles.statHeaderRow}>
         <Text style={styles.nameSpacer}> </Text>
         <Text style={styles.statHeader}>PTS</Text>
@@ -67,9 +67,7 @@ export function TeamSection({
         <Text style={styles.statHeader}>AST</Text>
         <Text style={styles.statHeader}>MIN</Text>
         <Text style={styles.statHeader}>3PT</Text>
-      
-        {/* 👇 spacer for +/- pill */}
-        <View style={styles.pmSpacer} />
+        <Text style={styles.pmHeader}>+/-</Text>
       </View>
   
       {/* PLAYERS */}

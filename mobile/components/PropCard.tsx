@@ -440,10 +440,21 @@ return (
               
                 {/* CENTER: PLAYER + MARKET */}
                 <View style={styles.centerBlock}>
-                  <Text numberOfLines={1} style={styles.player}>
-                    {player}
-                  </Text>
-              
+                  <View style={styles.playerRow}>
+                    {props.playerImageUrl ? (
+                      <Image
+                        source={{ uri: props.playerImageUrl }}
+                        style={styles.playerHeadshot}
+                      />
+                    ) : (
+                      <View style={styles.playerHeadshotPlaceholder} />
+                    )}
+                
+                    <Text numberOfLines={1} style={styles.player}>
+                      {player}
+                    </Text>
+                  </View>
+                
                   <Text numberOfLines={1} style={styles.marketLine}>
                     {formatSideLabel(props.side)} {market} • {line}
                   </Text>
@@ -973,6 +984,26 @@ function makeStyles(colors: any) {
       flex: 1,
       justifyContent: "center",
       paddingLeft: 8,      // 👈 subtle bias back toward center
+    },
+    playerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    
+    playerHeadshot: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: colors.surface.cardSoft,
+    },
+    
+    playerHeadshotPlaceholder: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: colors.surface.cardSoft,
+      opacity: 0.5,
     },
   });
 }

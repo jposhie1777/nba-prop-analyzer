@@ -112,6 +112,7 @@ type PropCardProps = {
   away?: string;
   bookmaker?: string;
   books?: BookOdds[];
+  playerImageUrl?: string;
 
   sparkline_l5?: number[];
   sparkline_l10?: number[];

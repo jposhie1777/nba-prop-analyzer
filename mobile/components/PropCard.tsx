@@ -15,6 +15,7 @@ import textStyles from "../theme/text";
 import { BOOKMAKER_LOGOS } from "../utils/bookmakerLogos";
 import { Sparkline } from "./Sparkline";
 import { BarSparkline } from "./BarSparkline";
+import { formatMarketLabel } from "@/utils/formatMarket";
 
 /* ======================================================
    TEAM LOGOS
@@ -442,7 +443,7 @@ return (
                     </Text>
             
                     <Text numberOfLines={1} style={styles.marketLine}>
-                      {formatSideLabel(props.side)} {market} • {line}
+                      {formatSideLabel(props.side)} {formatMarketLabel(market)} • {line}
                     </Text>
                   </View>
                 </View>

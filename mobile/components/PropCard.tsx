@@ -420,48 +420,35 @@ return (
         >
           <Animated.View style={pressAnimStyle}>
             {/* HEADER */}
-            <View style={styles.headerRow}>
-                {/* LEFT: LOGOS + MATCHUP */}
-                <View style={styles.leftBlock}>
-                  <View style={styles.logoRow}>
-                    {away && TEAM_LOGOS[away] && (
-                      <Image source={{ uri: TEAM_LOGOS[away] }} style={styles.teamLogoLg} />
-                    )}
-                    <Text style={styles.vs}>vs</Text>
-                    {home && TEAM_LOGOS[home] && (
-                      <Image source={{ uri: TEAM_LOGOS[home] }} style={styles.teamLogoLg} />
-                    )}
-                  </View>
-              
-                  <Text style={styles.matchupTop}>
-                    {away} @ {home}
-                  </Text>
-                </View>
-              
-                {/* CENTER: PLAYER + MARKET */}
-                <View style={styles.centerBlock}>
-                  <View style={styles.playerRow}>
-                    {props.playerImageUrl ? (
+            <View style={styles.headerWrap}>
+            
+              {/* TOP: PLAYER + BET */}
+              <View style={styles.topRow}>
+                <View style={styles.playerRow}>
+                  {props.playerImageUrl ? (
+                    <View style={styles.headshotWrap}>
                       <Image
                         source={{ uri: props.playerImageUrl }}
                         style={styles.playerHeadshot}
                       />
-                    ) : (
-                      <View style={styles.playerHeadshotPlaceholder} />
-                    )}
-                
+                    </View>
+                  ) : (
+                    <View style={styles.playerHeadshotPlaceholder} />
+                  )}
+            
+                  <View style={styles.playerText}>
                     <Text numberOfLines={1} style={styles.player}>
                       {player}
                     </Text>
+            
+                    <Text numberOfLines={1} style={styles.marketLine}>
+                      {formatSideLabel(props.side)} {market} • {line}
+                    </Text>
                   </View>
-                
-                  <Text numberOfLines={1} style={styles.marketLine}>
-                    {formatSideLabel(props.side)} {market} • {line}
-                  </Text>
                 </View>
-              
-                {/* RIGHT: ODDS */}
-                <View style={styles.oddsTopRight}>
+            
+                {/* ODDS */}
+                <View style={styles.oddsInline}>
                   {resolvedBooks.slice(0, 2).map((b) => {
                     const key = normalizeBookKey(b.bookmaker);
                     return (
@@ -475,6 +462,25 @@ return (
                   })}
                 </View>
               </View>
+            
+              {/* MATCHUP (BOTTOM CENTER) */}
+              <View style={styles.matchupRow}>
+                <View style={styles.logoRow}>
+                  {away && TEAM_LOGOS[away] && (
+                    <Image source={{ uri: TEAM_LOGOS[away] }} style={styles.teamLogoSm} />
+                  )}
+                  <Text style={styles.vs}>vs</Text>
+                  {home && TEAM_LOGOS[home] && (
+                    <Image source={{ uri: TEAM_LOGOS[home] }} style={styles.teamLogoSm} />
+                  )}
+                </View>
+            
+                <Text style={styles.matchupText}>
+                  {away} @ {home}
+                </Text>
+              </View>
+            
+            </View>
 
             {/* DIVIDER */}
             <View style={styles.divider} />
@@ -991,11 +997,21 @@ function makeStyles(colors: any) {
       gap: 8,
     },
     
+    headshotWrap: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.surface.card,
+      overflow: "hidden",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    
     playerHeadshot: {
       width: 34,
       height: 34,
       borderRadius: 17,
-      backgroundColor: colors.surface.cardSoft,
+      resizeMode: "cover",
     },
     
     playerHeadshotPlaceholder: {
@@ -1004,6 +1020,42 @@ function makeStyles(colors: any) {
       borderRadius: 17,
       backgroundColor: colors.surface.cardSoft,
       opacity: 0.5,
+    },
+    headerWrap: {
+      gap: 6,
+    },
+    
+    topRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    
+    playerText: {
+      flexShrink: 1,
+    },
+    
+    oddsInline: {
+      flexDirection: "row",
+      gap: 6,
+    },
+    
+    matchupRow: {
+      alignItems: "center",
+      marginTop: 2,
+    },
+    
+    teamLogoSm: {
+      width: 16,
+      height: 16,
+      resizeMode: "contain",
+    },
+    
+    matchupText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.text.muted,
+      marginTop: 2,
     },
   });
 }

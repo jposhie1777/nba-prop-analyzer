@@ -6,7 +6,7 @@ import {
   FlatList,
   Pressable, // ✅ ADD THIS
 } from "react-native";
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import Slider from "@react-native-community/slider";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -19,6 +19,7 @@ import { usePropsStore } from "@/store/usePropsStore";
 import { themeMeta } from "@/theme/meta";
 import { useHistoricalPlayerTrends } from "@/hooks/useHistoricalPlayerTrends";
 import { resolveSparklineByMarket } from "@/utils/resolveSparkline";
+
 
 // ---------------------------
 // STORAGE KEYS
@@ -67,19 +68,17 @@ export default function HomeScreen() {
   // ---------------------------
   // REAL PROPS DATA
   // ---------------------------
-  const [props, setProps] = useState<UIProp[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { ready: trendsReady, getByPlayer } = useHistoricalPlayerTrends();
+  const PAGE_SIZE = 200;
 
-  useEffect(() => {
-    if (!props.length) return;
+  const [props, setProps] = useState<UIProp[]>([]);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-    console.log(
-      "Bobby Portis rows:",
-      props.filter(p => p.player === "Bobby Portis")
-    );
-  }, [props]);
+  
 
 
   // ---------------------------
@@ -161,80 +160,77 @@ export default function HomeScreen() {
   // ---------------------------
   // LOAD PROPS FROM API
   // ---------------------------
-  useEffect(() => {
-    let mounted = true;
-    setLoading(true);
+  const loadMoreProps = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+  
+    setLoadingMore(true);
     setError(null);
-
-    fetchProps({
-      minHitRate: 0,
-      limit: 200,
-    })
-      .then((res) => {
-        if (!mounted) return;
-
-        console.log("📦 RAW API SAMPLE", res.props[0]);
-
-
-        const normalized: UIProp[] = res.props.map((p) => {
-          const hitRate = p.hitRateL10 ?? 0;
-          return {
-            ...p,
-            id: `${p.player}-${p.market}-${p.line}`,
-            edge: hitRate,
-            confidence: p.confidence_score,
-            matchup: p.matchup,
-            bookmaker: p.bookmaker,
-            home: p.home_team,
-            away: p.away_team,
-          };
-        });
-
-        // ---------------------------
-        // EXPANDED DATA SANITY CHECK
-        // ---------------------------
-        if (__DEV__ && normalized.length > 0) {
-          const p = normalized[0];
-
-          console.log("🧪 EXPANDED SANITY CHECK", {
-            avg_l5: p.avg_l5,
-            avg_l10: p.avg_l10,
-            avg_l20: p.avg_l20,
-
-            hit_rate_l5: p.hit_rate_l5,
-            hit_rate_l10: p.hit_rate_l10,
-            hit_rate_l20: p.hit_rate_l20,
-
-            clear_1p_pct_l10: p.clear_1p_pct_l10,
-            clear_2p_pct_l10: p.clear_2p_pct_l10,
-
-            avg_margin_l10: p.avg_margin_l10,
-            bad_miss_pct_l10: p.bad_miss_pct_l10,
-
-            pace_l10: p.pace_l10,
-            usage_l10: p.usage_l10,
-
-            ts_l10: p.ts_l10,
-            pace_delta: p.pace_delta,
-            delta_vs_line: p.delta_vs_line,
-          });
-        }
-
-        setProps(normalized);
-        setPropsStore(normalized);
-
-        setLoading(false);
-      })
-      .catch((err) => {
-        if (!mounted) return;
-        setError(String(err));
-        setLoading(false);
+  
+    try {
+      const res = await fetchProps({
+        minHitRate: 0,
+        limit: PAGE_SIZE,
+        offset,
       });
+  
+      if (__DEV__ && offset === 0) {
+        console.log("📦 FIRST PAGE SAMPLE", res.props[0]);
+      }
+  
+      const normalized: UIProp[] = res.props.map((p) => ({
+        ...p,
+        id: `${p.player}-${p.market}-${p.line}`,
+        edge: p.hitRateL10 ?? 0,
+        confidence: p.confidence_score,
+        matchup: p.matchup,
+        bookmaker: p.bookmaker,
+        home: p.home_team,
+        away: p.away_team,
+      }));
+  
+      setProps((prev) => {
+        const next = [...prev, ...normalized];
+        setPropsStore(next);
+        return next;
+      });
+  
+      setOffset((prev) => prev + PAGE_SIZE);
+  
+      if (res.props.length < PAGE_SIZE) {
+        setHasMore(false); // ✅ no more pages
+      }
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setLoading(false);        // initial screen only
+      setLoadingMore(false);   // pagination spinner
+    }
+  }, [offset, loadingMore, hasMore, setPropsStore]);
 
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  const didInit = useRef(false);
+
+  /* ---------------------------
+     INITIAL LOAD (STRICT-MODE SAFE)
+  --------------------------- */
+  useEffect(() => {
+    if (didInit.current) return;
+    didInit.current = true;
+  
+    setLoading(true);
+    loadMoreProps();
+  }, [loadMoreProps]);
+  
+  /* ---------------------------
+     DEBUG LOG (SAFE)
+  --------------------------- */
+  useEffect(() => {
+    if (!props.length) return;
+  
+    console.log(
+      "Bobby Portis rows:",
+      props.filter((p) => p.player === "Bobby Portis")
+    );
+  }, [props]);
 
   // ---------------------------
   // DERIVE MARKETS
@@ -523,8 +519,34 @@ export default function HomeScreen() {
           renderItem={renderItem}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.list}
-          ListFooterComponent={<View style={{ height: 40 }} />}
-        />
+        
+          /* 🔽 PAGINATION */
+          onEndReached={() => {
+            if (!loadingMore && hasMore) {
+              loadMoreProps();
+            }
+          }}
+          onEndReachedThreshold={0.6}
+        
+          /* 🔽 FOOTER */
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={{ paddingVertical: 24 }}>
+                <Text style={{ textAlign: "center", color: colors.text.muted }}>
+                  Loading more props…
+                </Text>
+              </View>
+            ) : (
+              <View style={{ height: 40 }} />
+            )
+          }
+        
+          /* 🔽 PERF (IMPORTANT) */
+          removeClippedSubviews
+          initialNumToRender={10}
+          maxToRenderPerBatch={12}
+          windowSize={7}
+/>
         {themeOpen && (
           <View style={styles.themeOverlay}>
             <View style={styles.themeModal}>

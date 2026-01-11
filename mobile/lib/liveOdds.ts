@@ -1,5 +1,7 @@
 // lib/liveOdds.ts
-const API = process.env.EXPO_PUBLIC_API_URL!;
+import { API_BASE } from "./config";
+
+const API = API_BASE;
 
 // ------------------------------
 // Types

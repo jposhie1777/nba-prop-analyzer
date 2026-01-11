@@ -934,6 +934,42 @@ function makeStyles(colors: any) {
       flexDirection: "row",
       gap: 6,
     },
-
+    leftBlock: {
+      width: 72,            // 👈 prevents logo collapse
+      gap: 4,
+    },
+    
+    logoRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+    },
+    
+    teamLogoLg: {
+      width: 22,
+      height: 22,
+      resizeMode: "contain",
+    },
+    
+    vs: {
+      fontSize: 9,
+      fontWeight: "800",
+      color: colors.text.muted,
+      opacity: 0.7,
+    },
+    
+    matchupTop: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.text.muted,
+      textAlign: "center",
+    },
+    
+    centerBlock: {
+      flex: 1,
+      alignItems: "center", // 👈 true visual centering
+      paddingHorizontal: 8,
+    },
   });
 }

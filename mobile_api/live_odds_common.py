@@ -2,8 +2,38 @@ import os
 import requests
 from google.cloud import bigquery
 
+# ==================================================
+# Live Odds Constants (SINGLE SOURCE OF TRUTH)
+# ==================================================
+
 BDL_V2 = "https://api.balldontlie.io/v2"
 TIMEOUT_SEC = 15
+
+# --------------------------------------------------
+# Allowed sportsbooks (LIVE ONLY)
+# --------------------------------------------------
+LIVE_ODDS_BOOKS = {
+    "draftkings",
+    "fanduel",
+}
+
+# --------------------------------------------------
+# Allowed LIVE player prop markets
+# --------------------------------------------------
+LIVE_PLAYER_PROP_MARKETS = {
+    "points",
+    "assists",
+    "rebounds",
+    "three_pointers_made",
+}
+
+# Optional display aliases (for flattening / UI later)
+LIVE_PLAYER_PROP_ALIASES = {
+    "points": "PTS",
+    "assists": "AST",
+    "rebounds": "REB",
+    "three_pointers_made": "3PM",
+}
 
 def get_bq_client() -> bigquery.Client:
     project = os.getenv("GCP_PROJECT") or os.getenv("GOOGLE_CLOUD_PROJECT")

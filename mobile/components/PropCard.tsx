@@ -138,12 +138,8 @@ function formatOdds(o: number) {
   return o > 0 ? `+${o}` : `${o}`;
 }
 
-function formatSideLabel(p: {
-  side?: string;
-  is_under?: boolean;
-}) {
-  if (p.side === "under" || p.is_under === true) return "Under";
-  return "Over";
+function formatSideLabel(side?: "over" | "under") {
+  return side === "under" ? "Under" : "Over";
 }
 /* ======================================================
    COMPONENT
@@ -448,7 +444,7 @@ return (
                   </Text>
               
                   <Text numberOfLines={1} style={styles.marketLine}>
-                    {formatSideLabel(props)} {market} • {line}
+                    {formatSideLabel(props.side)} {market} • {line}
                   </Text>
                 </View>
               

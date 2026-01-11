@@ -41,7 +41,7 @@ const styles = {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 4,
+    marginBottom: 8, // 👈 increase
   },
   team: {
     flexDirection: "row",

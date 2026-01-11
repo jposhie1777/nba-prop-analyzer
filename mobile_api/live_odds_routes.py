@@ -1,0 +1,158 @@
+from fastapi import APIRouter, Query
+from google.cloud import bigquery
+from typing import Dict, Any, List
+import os
+
+# ======================================================
+# Router
+# ======================================================
+
+router = APIRouter(
+    prefix="/live/odds",
+    tags=["live-odds"],
+)
+
+PROJECT_ID = os.getenv("GCP_PROJECT", "graphite-flare-477419-h7")
+bq = bigquery.Client(project=PROJECT_ID)
+
+# ======================================================
+# Live PLAYER PROPS query
+# ======================================================
+
+PLAYER_PROPS_QUERY = """
+SELECT
+  game_id,
+  player_id,
+  market,
+  line,
+  book,
+  over_odds,
+  under_odds,
+  snapshot_ts
+FROM `graphite-flare-477419-h7.nba_live.live_player_prop_odds_flat`
+WHERE game_id = @game_id
+ORDER BY market, player_id, book
+"""
+
+@router.get("/player-props")
+def get_live_player_props(
+    game_id: int = Query(..., description="BallDontLie game_id"),
+) -> Dict[str, Any]:
+    """
+    Returns LIVE player prop odds (PTS / AST / REB / 3PM)
+    for DraftKings + FanDuel only.
+
+    Source: live_player_prop_odds_flat
+    """
+
+    job = bq.query(
+        PLAYER_PROPS_QUERY,
+        job_config=bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter(
+                    "game_id",
+                    "INT64",
+                    game_id,
+                )
+            ]
+        ),
+    )
+
+    rows = list(job.result())
+
+    props: List[Dict[str, Any]] = []
+    last_updated = None
+
+    for r in rows:
+        last_updated = r.snapshot_ts
+        props.append(
+            {
+                "player_id": r.player_id,
+                "market": r.market,
+                "line": r.line,
+                "book": r.book,
+                "over": r.over_odds,
+                "under": r.under_odds,
+            }
+        )
+
+    return {
+        "game_id": game_id,
+        "updated_at": (
+            last_updated.isoformat()
+            if last_updated else None
+        ),
+        "count": len(props),
+        "props": props,
+    }
+
+# ======================================================
+# Live GAME ODDS query
+# ======================================================
+
+GAME_ODDS_QUERY = """
+SELECT
+  game_id,
+  book,
+  spread,
+  spread_odds,
+  total,
+  over_odds,
+  under_odds,
+  snapshot_ts
+FROM `graphite-flare-477419-h7.nba_live.live_game_odds_flat`
+WHERE game_id = @game_id
+ORDER BY book
+"""
+
+@router.get("/games")
+def get_live_game_odds(
+    game_id: int = Query(..., description="BallDontLie game_id"),
+) -> Dict[str, Any]:
+    """
+    Returns LIVE game betting odds
+    (spread + total) for DraftKings + FanDuel.
+
+    Source: live_game_odds_flat
+    """
+
+    job = bq.query(
+        GAME_ODDS_QUERY,
+        job_config=bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter(
+                    "game_id",
+                    "INT64",
+                    game_id,
+                )
+            ]
+        ),
+    )
+
+    rows = list(job.result())
+
+    odds: List[Dict[str, Any]] = []
+    last_updated = None
+
+    for r in rows:
+        last_updated = r.snapshot_ts
+        odds.append(
+            {
+                "book": r.book,
+                "spread": r.spread,
+                "spread_odds": r.spread_odds,
+                "total": r.total,
+                "over": r.over_odds,
+                "under": r.under_odds,
+            }
+        )
+
+    return {
+        "game_id": game_id,
+        "updated_at": (
+            last_updated.isoformat()
+            if last_updated else None
+        ),
+        "count": len(odds),
+        "odds": odds,
+    }

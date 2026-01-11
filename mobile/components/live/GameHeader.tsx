@@ -53,6 +53,7 @@ const styles = {
     height: 28,
     marginRight: 6,
     resizeMode: "contain",
+    opacity: 0.95,
   },
   text: {
     fontSize: 14,

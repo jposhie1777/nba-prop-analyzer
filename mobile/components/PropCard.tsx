@@ -63,6 +63,7 @@ type BookOdds = {
 type PropCardProps = {
   player: string;
   market: string;
+  side?: "over" | "under";
   line: number;
   odds: number;
 
@@ -137,6 +138,13 @@ function formatOdds(o: number) {
   return o > 0 ? `+${o}` : `${o}`;
 }
 
+function formatSideLabel(p: {
+  side?: string;
+  is_under?: boolean;
+}) {
+  if (p.side === "under" || p.is_under === true) return "Under";
+  return "Over";
+}
 /* ======================================================
    COMPONENT
 ====================================================== */
@@ -416,61 +424,49 @@ return (
           <Animated.View style={pressAnimStyle}>
             {/* HEADER */}
             <View style={styles.headerRow}>
-              <View style={styles.teams}>
-                <View style={styles.teamStack}>
-                  {away && TEAM_LOGOS[away] ? (
-                    <Image
-                      source={{ uri: TEAM_LOGOS[away] }}
-                      style={styles.teamLogo}
-                    />
-                  ) : (
-                    <View style={styles.teamLogoPlaceholder} />
-                  )}
-
-                  {home && TEAM_LOGOS[home] ? (
-                    <Image
-                      source={{ uri: TEAM_LOGOS[home] }}
-                      style={styles.teamLogo}
-                    />
-                  ) : (
-                    <View style={styles.teamLogoPlaceholder} />
-                  )}
+                {/* LEFT: LOGOS + MATCHUP */}
+                <View style={styles.leftBlock}>
+                  <View style={styles.logoRow}>
+                    {away && TEAM_LOGOS[away] && (
+                      <Image source={{ uri: TEAM_LOGOS[away] }} style={styles.teamLogoLg} />
+                    )}
+                    <Text style={styles.vs}>vs</Text>
+                    {home && TEAM_LOGOS[home] && (
+                      <Image source={{ uri: TEAM_LOGOS[home] }} style={styles.teamLogoLg} />
+                    )}
+                  </View>
+              
+                  <Text style={styles.matchupTop}>
+                    {away} @ {home}
+                  </Text>
+                </View>
+              
+                {/* CENTER: PLAYER + MARKET */}
+                <View style={styles.centerBlock}>
+                  <Text numberOfLines={1} style={styles.player}>
+                    {player}
+                  </Text>
+              
+                  <Text numberOfLines={1} style={styles.marketLine}>
+                    {formatSideLabel(props)} {market} • {line}
+                  </Text>
+                </View>
+              
+                {/* RIGHT: ODDS */}
+                <View style={styles.oddsTopRight}>
+                  {resolvedBooks.slice(0, 2).map((b) => {
+                    const key = normalizeBookKey(b.bookmaker);
+                    return (
+                      <View key={key} style={styles.oddsPill}>
+                        {BOOKMAKER_LOGOS[key] && (
+                          <Image source={BOOKMAKER_LOGOS[key]} style={styles.bookLogo} />
+                        )}
+                        <Text style={styles.oddsText}>{formatOdds(b.odds)}</Text>
+                      </View>
+                    );
+                  })}
                 </View>
               </View>
-
-              <View style={styles.center}>
-                <Text numberOfLines={1} style={styles.player}>
-                  {player}
-                </Text>
-                <Text numberOfLines={1} style={styles.marketLine}>
-                  {market} • {line}
-                </Text>
-                <Text numberOfLines={1} style={styles.matchup}>
-                  {matchup ?? " "}
-                </Text>
-              </View>
-
-              <View style={styles.oddsTopRight}>
-                {resolvedBooks.slice(0, 3).map((b) => {
-                  const key = normalizeBookKey(b.bookmaker);
-                  return (
-                    <View key={key} style={styles.oddsPill}>
-                      {BOOKMAKER_LOGOS[key] ? (
-                        <Image
-                          source={BOOKMAKER_LOGOS[key]}
-                          style={styles.bookLogo}
-                        />
-                      ) : (
-                        <View style={styles.bookLogoPlaceholder} />
-                      )}
-                      <Text style={styles.oddsText}>
-                        {formatOdds(b.odds)}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
-            </View>
 
             {/* DIVIDER */}
             <View style={styles.divider} />

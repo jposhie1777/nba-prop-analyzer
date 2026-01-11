@@ -57,21 +57,38 @@ def ingest_live_player_prop_odds() -> dict:
 
         for market in payload.get("data", []):
             market_key = market.get("market")
-            book = normalize_book(market.get("book"))
-
-            # Hard filters
-            if book not in LIVE_ODDS_BOOKS:
-                continue
-
+        
+            # Only keep markets we care about
             if market_key not in LIVE_PLAYER_PROP_MARKETS:
                 continue
-
-            filtered_markets.append(market)
-
+        
+            player_id = market.get("player_id")
+            line = market.get("line")
+        
+            # 🔑 BDL v2: outcomes[] contains books + prices
+            for outcome in market.get("outcomes", []):
+                book = normalize_book(outcome.get("book"))
+        
+                if book not in LIVE_ODDS_BOOKS:
+                    continue
+        
+                filtered_markets.append(
+                    {
+                        "player_id": player_id,
+                        "market": market_key,
+                        "line": line,
+                        "book": book,
+                        "odds": {
+                            "over": outcome.get("over"),
+                            "under": outcome.get("under"),
+                        },
+                    }
+                )
+        
         # Nothing we care about for this game
         if not filtered_markets:
             continue
-
+        
         row = {
             "snapshot_ts": now.isoformat(),
             "game_id": game_id,
@@ -82,11 +99,11 @@ def ingest_live_player_prop_odds() -> dict:
                 }
             ),
         }
-
+        
         errors = client.insert_rows_json(BQ_TABLE, [row])
         if errors:
             raise RuntimeError(f"Player prop odds insert errors: {errors}")
-
+        
         games_written += 1
 
     return {

@@ -24,7 +24,7 @@ export function LiveGameCard({ game, players }: Props) {
   const {
     props: liveProps,
     loading: oddsLoading,
-  } = useLivePlayerProps(game.game_id);
+  } = useLivePlayerProps(game.gameId);
 
   console.log("🧪 Live props raw", {
     gameId: game.game_id,

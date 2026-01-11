@@ -67,6 +67,9 @@ export function TeamSection({
         <Text style={styles.statHeader}>AST</Text>
         <Text style={styles.statHeader}>MIN</Text>
         <Text style={styles.statHeader}>3PT</Text>
+      
+        {/* 👇 spacer for +/- pill */}
+        <View style={styles.pmSpacer} />
       </View>
   
       {/* PLAYERS */}
@@ -106,6 +109,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
     color: "#9CA3AF", // or colors.text.muted
+  },
+  pmSpacer: {
+    width: 44, // must match StatPill width
   },
 });
   

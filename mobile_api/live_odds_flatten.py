@@ -108,11 +108,18 @@ USING (
       game_id,
       JSON_VALUE(payload, '$.book') AS book,
 
-      CAST(JSON_VALUE(payload, '$.spread') AS FLOAT64) AS spread,
-      CAST(JSON_VALUE(payload, '$.spread_odds') AS INT64) AS spread_odds,
+      CAST(JSON_VALUE(payload, '$.spread_home') AS FLOAT64) AS spread_home,
+      CAST(JSON_VALUE(payload, '$.spread_away') AS FLOAT64) AS spread_away,
+
+      CAST(JSON_VALUE(payload, '$.spread_home_odds') AS INT64) AS spread_home_odds,
+      CAST(JSON_VALUE(payload, '$.spread_away_odds') AS INT64) AS spread_away_odds,
+
       CAST(JSON_VALUE(payload, '$.total') AS FLOAT64) AS total,
-      CAST(JSON_VALUE(payload, '$.over_odds') AS INT64) AS over_odds,
-      CAST(JSON_VALUE(payload, '$.under_odds') AS INT64) AS under_odds,
+      CAST(JSON_VALUE(payload, '$.total_over_odds') AS INT64) AS over_odds,
+      CAST(JSON_VALUE(payload, '$.total_under_odds') AS INT64) AS under_odds,
+
+      CAST(JSON_VALUE(payload, '$.moneyline_home_odds') AS INT64) AS moneyline_home_odds,
+      CAST(JSON_VALUE(payload, '$.moneyline_away_odds') AS INT64) AS moneyline_away_odds,
 
       ROW_NUMBER() OVER (
         PARTITION BY game_id, JSON_VALUE(payload, '$.book')

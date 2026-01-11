@@ -1,7 +1,7 @@
 // lib/liveOdds.ts
 import { API_BASE } from "./config";
 
-throw new Error("🔥 FORCE CRASH — useLivePlayerProps reached");
+console.log("🧠 liveOdds.ts LOADED");
 
 const API = API_BASE;
 
@@ -32,6 +32,7 @@ export type LiveGameOdds = {
 // ------------------------------
 
 export async function fetchLivePlayerProps(gameId: number) {
+  console.log("🔥 fetchLivePlayerProps CALLED", gameId);
   const url = `${API}/live/odds/player-props?game_id=${gameId}`;
   console.log("🚨 LIVE PROPS FETCH URL", url);
 

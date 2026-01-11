@@ -723,11 +723,13 @@ function makeStyles(colors: any) {
     player: {
       fontWeight: "800",
       color: colors.text.primary,
+      textAlign: "left",   // 👈 not center
     },
-
+    
     marketLine: {
       fontWeight: "700",
       color: colors.text.secondary,
+      textAlign: "left",
     },
 
     matchup: {
@@ -968,8 +970,8 @@ function makeStyles(colors: any) {
     
     centerBlock: {
       flex: 1,
-      alignItems: "center", // 👈 true visual centering
-      paddingHorizontal: 8,
+      justifyContent: "center",
+      paddingLeft: 8,      // 👈 subtle bias back toward center
     },
   });
 }

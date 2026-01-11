@@ -4,8 +4,7 @@ import { API_BASE } from "./config";
 // --------------------------------------------------
 // API base
 // --------------------------------------------------
-const API_BASE =
-  "https://pulse-mobile-api-763243624328.us-central1.run.app";
+const API = API_BASE;
 
 // --------------------------------------------------
 // Types

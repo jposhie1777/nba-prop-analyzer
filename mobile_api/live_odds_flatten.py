@@ -26,24 +26,21 @@ USING (
 
     CAST(JSON_VALUE(m, '$.player_id') AS INT64) AS player_id,
 
-    CASE JSON_VALUE(m, '$.market')
-      WHEN 'points' THEN 'PTS'
-      WHEN 'assists' THEN 'AST'
-      WHEN 'rebounds' THEN 'REB'
-      WHEN 'three_pointers_made' THEN '3PM'
-    END AS market,
+    -- ✅ keep raw market string (recommended)
+    JSON_VALUE(m, '$.market') AS market,
 
     CAST(JSON_VALUE(m, '$.line') AS FLOAT64) AS line,
     JSON_VALUE(m, '$.book') AS book,
 
-    CAST(JSON_VALUE(m, '$.odds.over') AS INT64) AS over_odds,
+    CAST(JSON_VALUE(m, '$.odds.over') AS INT64)  AS over_odds,
     CAST(JSON_VALUE(m, '$.odds.under') AS INT64) AS under_odds
   FROM `graphite-flare-477419-h7.nba_live.live_player_prop_odds_raw`,
-  UNNEST(JSON_QUERY_ARRAY(payload, '$.markets')) AS m
-  WHERE JSON_VALUE(m, '$.market') IS NOT NULL
+  UNNEST(
+    JSON_QUERY_ARRAY(PARSE_JSON(payload), '$.markets')
+  ) AS m
 ) S
 ON
-  T.game_id   = S.game_id
+  T.game_id    = S.game_id
   AND T.player_id = S.player_id
   AND T.market = S.market
   AND T.line   = S.line
@@ -93,14 +90,15 @@ USING (
   SELECT
     TIMESTAMP(snapshot_ts) AS snapshot_ts,
     game_id,
-    JSON_VALUE(payload, '$.book') AS book,
-
-    CAST(JSON_VALUE(payload, '$.spread') AS FLOAT64) AS spread,
-    CAST(JSON_VALUE(payload, '$.spread_odds') AS INT64) AS spread_odds,
-
-    CAST(JSON_VALUE(payload, '$.total') AS FLOAT64) AS total,
-    CAST(JSON_VALUE(payload, '$.over_odds') AS INT64) AS over_odds,
-    CAST(JSON_VALUE(payload, '$.under_odds') AS INT64) AS under_odds
+  
+    JSON_VALUE(PARSE_JSON(payload), '$.book') AS book,
+  
+    CAST(JSON_VALUE(PARSE_JSON(payload), '$.spread') AS FLOAT64) AS spread,
+    CAST(JSON_VALUE(PARSE_JSON(payload), '$.spread_odds') AS INT64) AS spread_odds,
+  
+    CAST(JSON_VALUE(PARSE_JSON(payload), '$.total') AS FLOAT64) AS total,
+    CAST(JSON_VALUE(PARSE_JSON(payload), '$.over_odds') AS INT64) AS over_odds,
+    CAST(JSON_VALUE(PARSE_JSON(payload), '$.under_odds') AS INT64) AS under_odds
   FROM `graphite-flare-477419-h7.nba_live.live_game_odds_raw`
 ) S
 ON

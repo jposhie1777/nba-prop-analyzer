@@ -44,9 +44,7 @@ USING (
         ORDER BY TIMESTAMP(snapshot_ts) DESC
       ) AS rn
     FROM `graphite-flare-477419-h7.nba_live.live_player_prop_odds_raw`,
-    UNNEST(
-      JSON_QUERY_ARRAY(PARSE_JSON(payload), '$.markets')
-    ) AS m
+    UNNEST(JSON_QUERY_ARRAY(payload, '$.markets')) AS m
   )
   WHERE rn = 1
 ) S
@@ -98,19 +96,26 @@ WHEN NOT MATCHED THEN
 GAME_ODDS_FLATTEN_SQL = """
 MERGE `graphite-flare-477419-h7.nba_live.live_game_odds_flat` T
 USING (
-  SELECT
-    TIMESTAMP(snapshot_ts) AS snapshot_ts,
-    game_id,
-  
-    JSON_VALUE(PARSE_JSON(payload), '$.book') AS book,
-  
-    CAST(JSON_VALUE(PARSE_JSON(payload), '$.spread') AS FLOAT64) AS spread,
-    CAST(JSON_VALUE(PARSE_JSON(payload), '$.spread_odds') AS INT64) AS spread_odds,
-  
-    CAST(JSON_VALUE(PARSE_JSON(payload), '$.total') AS FLOAT64) AS total,
-    CAST(JSON_VALUE(PARSE_JSON(payload), '$.over_odds') AS INT64) AS over_odds,
-    CAST(JSON_VALUE(PARSE_JSON(payload), '$.under_odds') AS INT64) AS under_odds
-  FROM `graphite-flare-477419-h7.nba_live.live_game_odds_raw`
+  SELECT *
+  FROM (
+    SELECT
+      TIMESTAMP(snapshot_ts) AS snapshot_ts,
+      game_id,
+      JSON_VALUE(payload, '$.book') AS book,
+
+      CAST(JSON_VALUE(payload, '$.spread') AS FLOAT64) AS spread,
+      CAST(JSON_VALUE(payload, '$.spread_odds') AS INT64) AS spread_odds,
+      CAST(JSON_VALUE(payload, '$.total') AS FLOAT64) AS total,
+      CAST(JSON_VALUE(payload, '$.over_odds') AS INT64) AS over_odds,
+      CAST(JSON_VALUE(payload, '$.under_odds') AS INT64) AS under_odds,
+
+      ROW_NUMBER() OVER (
+        PARTITION BY game_id, JSON_VALUE(payload, '$.book')
+        ORDER BY TIMESTAMP(snapshot_ts) DESC
+      ) AS rn
+    FROM `graphite-flare-477419-h7.nba_live.live_game_odds_raw`
+  )
+  WHERE rn = 1
 ) S
 ON
   T.game_id = S.game_id

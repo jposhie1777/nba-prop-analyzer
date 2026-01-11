@@ -44,21 +44,37 @@ def ingest_live_game_odds() -> dict:
     rows = []
 
     for game in payload.get("data", []):
-        game_id = game.get("game_id")
-        if not game_id:
-            continue
+    game_id = game.get("game_id")
+    if not game_id:
+        continue
 
-        book = normalize_book(game.get("book"))
-        if book not in LIVE_ODDS_BOOKS:
-            continue
+    book = normalize_book(game.get("vendor"))
+    if book not in LIVE_ODDS_BOOKS:
+        continue
 
-        rows.append(
-            {
-                "snapshot_ts": now.isoformat(),
-                "game_id": game_id,
-                "payload": json.dumps(game),
-            }
-        )
+    rows.append(
+        {
+            "snapshot_ts": now.isoformat(),
+            "game_id": game_id,
+            "payload": json.dumps({
+                "book": book,
+
+                "spread_home": game.get("spread_home_value"),
+                "spread_home_odds": game.get("spread_home_odds"),
+                "spread_away": game.get("spread_away_value"),
+                "spread_away_odds": game.get("spread_away_odds"),
+
+                "total": game.get("total_value"),
+                "total_over_odds": game.get("total_over_odds"),
+                "total_under_odds": game.get("total_under_odds"),
+
+                "moneyline_home_odds": game.get("moneyline_home_odds"),
+                "moneyline_away_odds": game.get("moneyline_away_odds"),
+
+                "updated_at": game.get("updated_at"),
+            }),
+        }
+    )
 
     if rows:
         client = get_bq_client()

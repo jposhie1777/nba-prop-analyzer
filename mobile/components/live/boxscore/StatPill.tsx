@@ -30,10 +30,12 @@ export function StatPill({ value }: { value: number }) {
 
 const styles = StyleSheet.create({
   pill: {
+    width: 44,                 // ✅ FIXED
     marginLeft: 6,
-    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 10,
+    alignItems: "center",      // ✅ CENTER TEXT
+    justifyContent: "center",
   },
   text: {
     fontSize: 11,

@@ -35,13 +35,22 @@ export async function fetchLivePlayerProps(gameId: number) {
     throw new Error("Failed to fetch live player props");
   }
 
-  return res.json() as Promise<{
+  const json = await res.json();
+
+  if (__DEV__) {
+    console.log("🌐 fetchLivePlayerProps()", {
+      gameId,
+      count: json.props?.length,
+      sample: json.props?.[0],
+    });
+  }
+
+  return json as {
     game_id: number;
     updated_at: string | null;
     props: LivePlayerProp[];
-  }>;
+  };
 }
-
 export async function fetchLiveGameOdds(gameId: number) {
   const res = await fetch(
     `${API}/live/odds/games?game_id=${gameId}`
@@ -51,9 +60,19 @@ export async function fetchLiveGameOdds(gameId: number) {
     throw new Error("Failed to fetch live game odds");
   }
 
-  return res.json() as Promise<{
+  const json = await res.json();
+
+  if (__DEV__) {
+    console.log("🌐 fetchLiveGameOdds()", {
+      gameId,
+      count: json.odds?.length,
+      sample: json.odds?.[0],
+    });
+  }
+
+  return json as {
     game_id: number;
     updated_at: string | null;
     odds: LiveGameOdds[];
-  }>;
+  };
 }

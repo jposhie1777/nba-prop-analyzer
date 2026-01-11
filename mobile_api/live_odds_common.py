@@ -39,6 +39,11 @@ def get_bq_client() -> bigquery.Client:
     project = os.getenv("GCP_PROJECT") or os.getenv("GOOGLE_CLOUD_PROJECT")
     return bigquery.Client(project=project) if project else bigquery.Client()
 
+def normalize_book(book: str | None) -> str | None:
+    if not book:
+        return None
+    return book.strip().lower().replace("-", "").replace("_", "")
+    
 def require_api_key() -> str:
     key = os.getenv("BALLDONTLIE_API_KEY")
     if not key:

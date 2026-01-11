@@ -20,24 +20,35 @@ client = bigquery.Client(project=PROJECT_ID)
 PLAYER_PROP_FLATTEN_SQL = """
 MERGE `graphite-flare-477419-h7.nba_live.live_player_prop_odds_flat` T
 USING (
-  SELECT
-    TIMESTAMP(snapshot_ts) AS snapshot_ts,
-    game_id,
+  SELECT *
+  FROM (
+    SELECT
+      TIMESTAMP(snapshot_ts) AS snapshot_ts,
+      game_id,
 
-    CAST(JSON_VALUE(m, '$.player_id') AS INT64) AS player_id,
+      CAST(JSON_VALUE(m, '$.player_id') AS INT64) AS player_id,
+      JSON_VALUE(m, '$.market') AS market,
+      CAST(JSON_VALUE(m, '$.line') AS FLOAT64) AS line,
+      JSON_VALUE(m, '$.book') AS book,
 
-    -- ✅ keep raw market string (recommended)
-    JSON_VALUE(m, '$.market') AS market,
+      CAST(JSON_VALUE(m, '$.odds.over') AS INT64)  AS over_odds,
+      CAST(JSON_VALUE(m, '$.odds.under') AS INT64) AS under_odds,
 
-    CAST(JSON_VALUE(m, '$.line') AS FLOAT64) AS line,
-    JSON_VALUE(m, '$.book') AS book,
-
-    CAST(JSON_VALUE(m, '$.odds.over') AS INT64)  AS over_odds,
-    CAST(JSON_VALUE(m, '$.odds.under') AS INT64) AS under_odds
-  FROM `graphite-flare-477419-h7.nba_live.live_player_prop_odds_raw`,
-  UNNEST(
-    JSON_QUERY_ARRAY(PARSE_JSON(payload), '$.markets')
-  ) AS m
+      ROW_NUMBER() OVER (
+        PARTITION BY
+          game_id,
+          CAST(JSON_VALUE(m, '$.player_id') AS INT64),
+          JSON_VALUE(m, '$.market'),
+          CAST(JSON_VALUE(m, '$.line') AS FLOAT64),
+          JSON_VALUE(m, '$.book')
+        ORDER BY TIMESTAMP(snapshot_ts) DESC
+      ) AS rn
+    FROM `graphite-flare-477419-h7.nba_live.live_player_prop_odds_raw`,
+    UNNEST(
+      JSON_QUERY_ARRAY(PARSE_JSON(payload), '$.markets')
+    ) AS m
+  )
+  WHERE rn = 1
 ) S
 ON
   T.game_id    = S.game_id

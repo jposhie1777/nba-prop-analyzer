@@ -55,35 +55,35 @@ def ingest_live_player_prop_odds() -> dict:
         # ----------------------------------
         filtered_markets = []
 
-        for market in payload.get("data", []):
-            market_key = market.get("market")
+        for item in payload.get("data", []):
+            prop_type = item.get("prop_type")          # points / assists / rebounds
+            book = normalize_book(item.get("vendor"))
         
-            # Only keep markets we care about
-            if market_key not in LIVE_PLAYER_PROP_MARKETS:
+            # Hard filters
+            if prop_type not in LIVE_PLAYER_PROP_MARKETS:
                 continue
         
-            player_id = market.get("player_id")
-            line = market.get("line")
+            if book not in LIVE_ODDS_BOOKS:
+                continue
         
-            # 🔑 BDL v2: outcomes[] contains books + prices
-            for outcome in market.get("outcomes", []):
-                book = normalize_book(outcome.get("book"))
+            market_data = item.get("market") or {}
+            if market_data.get("type") != "over_under":
+                continue
         
-                if book not in LIVE_ODDS_BOOKS:
-                    continue
-        
-                filtered_markets.append(
-                    {
-                        "player_id": player_id,
-                        "market": market_key,
-                        "line": line,
-                        "book": book,
-                        "odds": {
-                            "over": outcome.get("over"),
-                            "under": outcome.get("under"),
-                        },
-                    }
-                )
+            filtered_markets.append(
+                {
+                    "player_id": item.get("player_id"),
+                    "market": prop_type,
+                    "line": float(item.get("line_value"))
+                    if item.get("line_value") is not None
+                    else None,
+                    "book": book,
+                    "odds": {
+                        "over": market_data.get("over_odds"),
+                        "under": market_data.get("under_odds"),
+                    },
+                }
+            )
         
         # Nothing we care about for this game
         if not filtered_markets:

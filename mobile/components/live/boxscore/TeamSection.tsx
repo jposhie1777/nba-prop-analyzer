@@ -47,8 +47,8 @@ export function TeamSection({
           {label} {expanded ? "▾" : "▸"}
         </Text>
       </Pressable>
-
-      {/* 🔴 DEBUG 8: show first player seen by TeamSection */}
+  
+      {/* 🔴 DEBUG 8 (optional, can remove later) */}
       <Text
         style={{
           fontSize: 10,
@@ -58,18 +58,28 @@ export function TeamSection({
       >
         DEBUG first player: {players[0]?.name} ({players[0]?.team})
       </Text>
-
+  
+      {/* ✅ STAT HEADERS — ADD THIS */}
+      <View style={styles.statHeaderRow}>
+        <Text style={styles.nameSpacer}> </Text>
+        <Text style={styles.statHeader}>PTS</Text>
+        <Text style={styles.statHeader}>REB</Text>
+        <Text style={styles.statHeader}>AST</Text>
+        <Text style={styles.statHeader}>MIN</Text>
+        <Text style={styles.statHeader}>3PT</Text>
+      </View>
+  
+      {/* PLAYERS */}
       {starters.map((p) => (
         <PlayerRow key={p.player_id} player={p} active />
       ))}
-
+  
       {expanded &&
         bench.map((p) => (
           <PlayerRow key={p.player_id} player={p} />
         ))}
     </View>
   );
-}
 
 const styles = StyleSheet.create({
   section: {

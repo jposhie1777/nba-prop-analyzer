@@ -209,11 +209,7 @@ def ingest_live_games_snapshot() -> None:
             else None
         )
     
-        clock = (
-            raw_time
-            if isinstance(raw_time, str) and ":" in raw_time
-            else None
-        )
+        clock = raw_time if isinstance(raw_time, str) else None
     
         rows.append(
             {

@@ -307,6 +307,8 @@ export default function HomeScreen() {
           line={item.line}
           odds={item.odds}
           books={item.books}
+          playerImageUrl={item.player_image_url}
+          side={item.side}
   
           hitRateL10={item.hitRateL10}
           edge={item.edge}

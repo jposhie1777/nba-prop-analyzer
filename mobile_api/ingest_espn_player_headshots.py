@@ -1,3 +1,4 @@
+# ingest_espn_player_headshots.py
 import requests
 from google.cloud import bigquery
 from datetime import datetime, timezone

@@ -15,6 +15,8 @@ from box_scores_snapshot import (
     router as box_scores_router,
     run_box_scores_snapshot,
 )
+from live_game_odds_ingest import ingest_live_game_odds
+from live_player_prop_odds_ingest import ingest_live_player_prop_odds
 
 # ==================================================
 # 🔴 ADDITION: player box stream imports
@@ -128,7 +130,41 @@ async def startup():
 
 
     asyncio.create_task(live_boxscore_snapshot_loop())
-
+    
+    # -----------------------------
+    # 🔴 WRITE-SIDE: live game odds
+    # -----------------------------
+    async def live_game_odds_loop():
+        await asyncio.sleep(10)
+    
+        while True:
+            try:
+                await asyncio.to_thread(ingest_live_game_odds)
+                print("📈 Live game odds snapshot written")
+            except Exception as e:
+                print("❌ Live game odds ingest failed:", e)
+    
+            await asyncio.sleep(30)
+    
+    asyncio.create_task(live_game_odds_loop())
+    
+    
+    # -----------------------------
+    # 🔴 WRITE-SIDE: live player props
+    # -----------------------------
+    async def live_player_prop_odds_loop():
+        await asyncio.sleep(12)
+    
+        while True:
+            try:
+                await asyncio.to_thread(ingest_live_player_prop_odds)
+                print("🎯 Live player prop odds snapshot written")
+            except Exception as e:
+                print("❌ Live player prop odds ingest failed:", e)
+    
+            await asyncio.sleep(30)
+    
+    asyncio.create_task(live_player_prop_odds_loop())
 
 # ==================================================
 # Health check

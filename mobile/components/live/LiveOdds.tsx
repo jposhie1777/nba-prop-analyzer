@@ -12,7 +12,11 @@ type Props = {
   playerNameById: Map<number, string>;
 };
 
-export function LiveOdds({ groupedProps, loading }: Props) {
+export function LiveOdds({
+  groupedProps,
+  loading,
+  playerNameById,
+}: Props) {
   const { colors } = useTheme();
 
   if (loading) {

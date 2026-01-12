@@ -6,6 +6,38 @@ import { LiveGameCard } from "@/components/live/LiveGameCard";
 import { useLiveGames } from "@/hooks/useLiveGames";
 import { useLivePlayerStats } from "@/hooks/useLivePlayerStats";
 import { BetSlipBar } from "@/components/bets/BetSlipBar"; // ✅ ADD
+import { useEffect } from "react";
+
+useEffect(() => {
+  console.log(
+    "🧪 DISCORD WEBHOOK LOADED:",
+    process.env.EXPO_PUBLIC_DISCORD_GAMBLY_WEBHOOK?.slice(0, 40)
+  );
+
+  // 🔴 TEMP TEST — REMOVE AFTER CONFIRMATION
+  async function testDiscord() {
+    try {
+      await fetch(
+        process.env.EXPO_PUBLIC_DISCORD_GAMBLY_WEBHOOK!,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: "🧪 Pulse test message (ignore)",
+          }),
+        }
+      );
+      console.log("✅ Discord test sent");
+    } catch (err) {
+      console.error("❌ Discord test failed", err);
+    }
+  }
+
+  if (__DEV__) {
+    testDiscord();
+  }
+}, []);
+
 
 export default function LiveGamesScreen() {
   const { colors } = useTheme();

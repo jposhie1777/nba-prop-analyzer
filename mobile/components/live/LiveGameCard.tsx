@@ -12,8 +12,8 @@ import { BoxScore } from "./boxscore/BoxScore";
 import { LiveOdds } from "./LiveOdds";
 
 type Props = {
-  game: any;              // already adapted LiveGame
-  players: any[];         // LivePlayerStat[]
+  game: any;      // adapted LiveGame
+  players: any[]; // LivePlayerStat[]
 };
 
 export function LiveGameCard({ game, players }: Props) {
@@ -49,9 +49,9 @@ export function LiveGameCard({ game, players }: Props) {
   }, [players]);
 
   // ------------------------------------
-  // Build grouped props for UI
+  // Build player blocks for LiveOdds
   // ------------------------------------
-  const groupedProps = useMemo(() => {
+  const playersForOdds = useMemo(() => {
     if (!playerIds) return [];
 
     const out: any[] = [];
@@ -109,7 +109,21 @@ export function LiveGameCard({ game, players }: Props) {
 
       <View style={[styles.divider, { backgroundColor: colors.border.subtle }]} />
 
-      <LiveOdds groupedProps={groupedProps} />
+      {/* 🟢 PLAYER PROPS (NEW MODEL) */}
+      <LiveOdds players={playersForOdds} />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    borderRadius: 16,
+    marginHorizontal: 12,
+    marginTop: 12,
+    padding: 12,
+  },
+  divider: {
+    height: 1,
+    marginVertical: 8,
+  },
+});

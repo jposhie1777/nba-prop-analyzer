@@ -1,227 +1,115 @@
-// components/live/liveGameCard
+// components/live/LiveGameCard.tsx
 import { View, Text, StyleSheet } from "react-native";
+import { useMemo } from "react";
+
 import { useTheme } from "@/store/useTheme";
-import { LiveGame } from "@/types/live";
-import { LivePlayerStat } from "@/hooks/useLivePlayerStats";
+import { useLiveStore } from "@/store/liveStore";
 
 import { GameHeader } from "./GameHeader";
 import { ScoreRow } from "./ScoreRow";
 import { GameStatus } from "./GameStatus";
 import { BoxScore } from "./boxscore/BoxScore";
 import { LiveOdds } from "./LiveOdds";
-import { useLivePlayerProps } from "@/hooks/useLivePlayerProps";
-import { groupLiveProps } from "@/utils/groupLiveProps";
-import { useMemo } from "react";
-import { useLiveGameOdds } from "@/hooks/useLiveGameOdds";
 
 type Props = {
-  game: LiveGame;
-  players: LivePlayerStat[];
+  game: any;              // already adapted LiveGame
+  players: any[];         // LivePlayerStat[]
 };
 
 export function LiveGameCard({ game, players }: Props) {
   const { colors } = useTheme();
 
-  const {
-    props: liveProps,
-    loading: oddsLoading,
-  } = useLivePlayerProps(game.gameId);
-
-  console.log("🧪 Live props raw", {
-    gameId: game.gameId,    // ✅ CORRECT
-    count: liveProps.length,
-    sample: liveProps[0],
-  });
-
-  const groupedLiveProps = useMemo(
-    () => groupLiveProps(liveProps),
-    [liveProps]
+  // ------------------------------------
+  // 🧠 GAME ODDS (from store)
+  // ------------------------------------
+  const gameOdds = useLiveStore(
+    (s) => s.oddsByGameId[game.gameId]
   );
-  
+
+  // ------------------------------------
+  // 🧠 PLAYER PROP MARKETS (from store)
+  // ------------------------------------
+  const playerIds = useLiveStore(
+    (s) => s.playerIdsByGame[game.gameId]
+  );
+
+  const propMarketsByKey = useLiveStore(
+    (s) => s.propMarketsByKey
+  );
+
+  // ------------------------------------
+  // Player metadata lookup
+  // ------------------------------------
   const playerMetaById = useMemo(() => {
-    const map = new Map<number, {
-      minutes: number;
-      pts: number;
-      reb: number;
-      ast: number;
-      stl: number;
-      blk: number;
-      tov: number;
-    }>();
-  
+    const map = new Map<number, any>();
     for (const p of players) {
-      map.set(p.player_id, {
-        minutes: p.minutes ?? 0,
-        pts: p.pts ?? 0,
-        reb: p.reb ?? 0,
-        ast: p.ast ?? 0,
-        stl: p.stl ?? 0,
-        blk: p.blk ?? 0,
-        tov: p.tov ?? 0,
-      });
+      map.set(p.player_id, p);
     }
-  
     return map;
   }, [players]);
-  
-  const filteredGroupedProps = useMemo(() => {
-    const out: Record<number, any> = {};
-  
-    for (const [playerIdStr, player] of Object.entries(groupedLiveProps)) {
-      const playerId = Number(playerIdStr);
+
+  // ------------------------------------
+  // Build grouped props for UI
+  // ------------------------------------
+  const groupedProps = useMemo(() => {
+    if (!playerIds) return [];
+
+    const out: any[] = [];
+
+    for (const playerId of playerIds) {
       const meta = playerMetaById.get(playerId);
-  
       if (!meta) continue;
-  
-      const validMarkets: Record<string, any> = {};
-  
-      for (const [market, marketData] of Object.entries(player.markets)) {
-        const normalizedMarket = market.toUpperCase();
-        let current = 0;
 
-        switch (normalizedMarket) {
-          case "PTS":
-          case "POINTS":
-            current = meta.pts;
-            break;
-        
-          case "REB":
-          case "REBOUNDS":
-            current = meta.reb;
-            break;
-        
-          case "AST":
-          case "ASSISTS":
-            current = meta.ast;
-            break;
-        
-          case "3PM":
-            // ⚠️ you do NOT yet track this correctly
-            continue;
-        
-          default:
-            continue;
-        }
-  
-        // ❌ REMOVE DEAD LINES
-        if (current >= marketData.line) continue;
-  
-        validMarkets[market] = marketData;
-      }
-  
-      if (Object.keys(validMarkets).length > 0) {
-        out[playerId] = {
-          ...player,
-          markets: validMarkets,
-        };
-      }
-    }
-  
-    return out;
-  }, [groupedLiveProps, playerMetaById]);
-  
-  const sortedGroupedProps = useMemo(() => {
-    return Object.values(filteredGroupedProps).sort((a: any, b: any) => {
-      const minA = playerMetaById.get(a.player_id)?.minutes ?? 0;
-      const minB = playerMetaById.get(b.player_id)?.minutes ?? 0;
-      return minB - minA;
-    });
-  }, [filteredGroupedProps, playerMetaById]);
+      const keyPrefix = `${game.gameId}:${playerId}:`;
 
-  const {
-    odds: gameOdds,
-    loading: gameOddsLoading,
-  } = useLiveGameOdds(game.gameId);
-  
-  console.log("🎯 GAME ODDS DEBUG", {
-    gameId: game.gameId,
-    count: gameOdds.length,
-    sample: gameOdds[0],
-  });
-  
-    // ------------------------------------
-    // 🧠 Player ID → Name lookup (STEP 1)
-    // ------------------------------------
-    const playerNameById = useMemo(() => {
-      const map = new Map<number, string>();
-  
-      players.forEach((p) => {
-        map.set(p.player_id, p.name);
+      const markets = Object.entries(propMarketsByKey)
+        .filter(([k]) => k.startsWith(keyPrefix))
+        .map(([, v]) => v);
+
+      if (markets.length === 0) continue;
+
+      out.push({
+        player_id: playerId,
+        name: meta.name,
+        team: meta.team,
+        markets,
       });
-  
-      return map;
-    }, [players]);
+    }
 
-  const hasLiveOdds = sortedGroupedProps.length > 0;
+    return out;
+  }, [playerIds, propMarketsByKey, playerMetaById, game.gameId]);
 
   return (
     <View style={[styles.card, { backgroundColor: colors.surface.card }]}>
       <GameHeader home={game.home} away={game.away} />
       <ScoreRow game={game} />
       <GameStatus game={game} />
-      
+
       <View style={[styles.divider, { backgroundColor: colors.border.subtle }]} />
-      
-      {/* 🔴 DEBUG 5 */}
-      <Text
-        style={{
-          fontSize: 10,
-          color: colors.text.muted,
-          textAlign: "center",
-          marginBottom: 4,
-        }}
-      >
-        DEBUG players for game {game.game_id}: {players.length}
-      </Text>
-      
+
       <BoxScore
-        homeTeam={game.home.abbrev}
-        awayTeam={game.away.abbrev}
+        homeTeam={game.home.team}
+        awayTeam={game.away.team}
         players={players}
       />
-      
-      {/* 🟢 LIVE GAME ODDS */}
-      {gameOdds?.length > 0 && (
+
+      {/* 🟢 GAME ODDS (spread / total) */}
+      {gameOdds && (
         <View style={{ marginBottom: 8 }}>
-          {gameOdds.map((o) => (
+          {gameOdds.spread?.map((s) => (
             <Text
-              key={o.book}
+              key={s.selectionId}
               style={{ color: colors.text.muted, fontSize: 12 }}
             >
-              {o.book.toUpperCase()} —{" "}
-              {game.away.abbrev} {o.spread_away} ({o.spread_away_odds}) ·{" "}
-              {game.home.abbrev} {o.spread_home} ({o.spread_home_odds}) ·{" "}
-              Total {o.total} O {o.over} / U {o.under}
+              {s.outcome} {s.line} ({s.best.odds})
             </Text>
           ))}
         </View>
       )}
-      
-      <View
-        style={[
-          styles.divider,
-          { backgroundColor: colors.border.subtle },
-        ]}
-      />
-      
-      <LiveOdds
-        groupedProps={sortedGroupedProps}
-        loading={oddsLoading}
-        playerNameById={playerNameById}
-      />
+
+      <View style={[styles.divider, { backgroundColor: colors.border.subtle }]} />
+
+      <LiveOdds groupedProps={groupedProps} />
     </View>
   );
 }
-const styles = StyleSheet.create({
-  card: {
-    borderRadius: 16,
-    marginHorizontal: 12,
-    marginTop: 12,
-    padding: 12,
-  },
-
-  divider: {
-    height: 1,
-    marginVertical: 8,
-  },
-});

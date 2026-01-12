@@ -25,6 +25,7 @@ export default function SavedScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   // 🔹 STORES
+  const TAB_BAR_HEIGHT = 56;
   const savedIds = useSavedBets((s) => s.savedIds);
   const toggleSave = useSavedBets((s) => s.toggleSave);
   const clearAll = useSavedBets((s) => s.clearAll);
@@ -37,7 +38,7 @@ export default function SavedScreen() {
     if (!savedIds.size) return [];
     return allProps.filter((p) => savedIds.has(p.id));
   }, [allProps, savedIds]);
-
+  
   // ---------------------------
   // GROUP BY GAME
   // ---------------------------
@@ -187,7 +188,7 @@ export default function SavedScreen() {
       <View
         style={[
           styles.actionBar,
-          { bottom: insets.bottom + 12 },
+          { bottom: insets.bottom + TAB_BAR_HEIGHT },
         ]}
       >
         {/* COPY (legacy – keep for now) */}
@@ -331,6 +332,9 @@ const makeStyles = (colors: any) =>
       backgroundColor: colors.surface.card,
       borderTopWidth: 1,
       borderTopColor: colors.border.subtle,
+    
+      zIndex: 50,        // ✅ REQUIRED
+      elevation: 50,     // ✅ Android
     },
 
     copyBtn: {

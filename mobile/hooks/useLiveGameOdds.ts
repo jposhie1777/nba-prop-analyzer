@@ -1,5 +1,5 @@
 // hooks/useLiveGameOdds
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   fetchLiveGameOdds,
   LiveGameOdds,
@@ -8,37 +8,42 @@ import {
 export function useLiveGameOdds(gameId?: number) {
   const [odds, setOdds] = useState<LiveGameOdds[]>([]);
   const [loading, setLoading] = useState(false);
+  const lastPayloadRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!gameId) return;
-  
+
     let mounted = true;
-  
+
     async function load() {
       try {
-        setLoading(true);
-  
         const data = await fetchLiveGameOdds(gameId);
-  
-        if (__DEV__) {
-          console.log("🎣 useLiveGameOdds", {
-            gameId,
-            oddsCount: data.odds?.length,
-            sample: data.odds?.[0],
-          });
+
+        const payloadStr = JSON.stringify(data.odds);
+
+        // ⛔️ NO-OP GUARD (MOST IMPORTANT)
+        if (payloadStr === lastPayloadRef.current) {
+          return;
         }
-  
-        if (mounted) setOdds(data.odds ?? []);
+
+        lastPayloadRef.current = payloadStr;
+
+        if (mounted) {
+          setLoading(true);
+          setOdds(data.odds ?? []);
+        }
       } catch (err) {
         console.warn("live game odds error", err);
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     }
-  
+
     load();
     const id = setInterval(load, 30_000);
-  
+
     return () => {
       mounted = false;
       clearInterval(id);

@@ -1,16 +1,19 @@
 // components/live/props/LinePill.tsx
-import { Pressable, Text, StyleSheet, View } from "react-native";
+import { Pressable, Text, StyleSheet } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { MarketSelection } from "@/types/betting";
+import { useBetsStore } from "@/store/useBetsStore";
 
 type Props = {
   selection: MarketSelection;
-  onPress?: (selection: MarketSelection) => void;
-  selected?: boolean;
 };
 
-export function LinePill({ selection, onPress, selected }: Props) {
+export function LinePill({ selection }: Props) {
   const { colors } = useTheme();
+  const toggleBet = useBetsStore((s) => s.toggleBet);
+  const isSelected = useBetsStore((s) =>
+    s.isSelected(selection.selectionId)
+  );
 
   const odds =
     selection.best.odds > 0
@@ -19,11 +22,11 @@ export function LinePill({ selection, onPress, selected }: Props) {
 
   return (
     <Pressable
-      onPress={() => onPress?.(selection)}
+      onPress={() => toggleBet(selection)}
       style={({ pressed }) => [
         styles.pill,
         {
-          backgroundColor: selected
+          backgroundColor: isSelected
             ? colors.accent.primary
             : colors.surface.elevated,
           opacity: pressed ? 0.85 : 1,
@@ -34,7 +37,7 @@ export function LinePill({ selection, onPress, selected }: Props) {
         style={[
           styles.lineText,
           {
-            color: selected
+            color: isSelected
               ? colors.text.inverse
               : colors.text.primary,
           },
@@ -47,7 +50,7 @@ export function LinePill({ selection, onPress, selected }: Props) {
         style={[
           styles.oddsText,
           {
-            color: selected
+            color: isSelected
               ? colors.text.inverse
               : colors.text.secondary,
           },

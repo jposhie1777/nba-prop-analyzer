@@ -17,7 +17,7 @@ import { usePropsStore } from "@/store/usePropsStore"; // 🔑 assumes your live
 import { sendBetsToDiscord } from "@/lib/export/sendToDiscord";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const GAMBLY_URL = "https://www.gambly.com/gambly-bot";
+const GAMBLY_WEB_URL = "https://www.gambly.com/gambly-bot";
 
 export default function SavedScreen() {
   // 🔹 THEME

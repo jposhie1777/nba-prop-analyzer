@@ -200,7 +200,7 @@ export default function SavedScreen() {
           <Text style={styles.copyText}>Copy Bets</Text>
         </Pressable>
       
-        {/* SEND TO GAMBLy (NEW) */}
+        {/* SEND TO DISCORD */}
         <Pressable
           style={[
             styles.gamblyBtn,
@@ -210,7 +210,7 @@ export default function SavedScreen() {
           disabled={sending}
         >
           <Text style={styles.gamblyText}>
-            {sending ? "Sending…" : "Send to Gambly"}
+            {sending ? "Sending…" : "Send to Discord"}
           </Text>
         </Pressable>
       </View>

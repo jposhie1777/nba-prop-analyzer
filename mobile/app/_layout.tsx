@@ -1,6 +1,6 @@
 // app/_layout
 import "react-native-reanimated";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   DarkTheme,
   DefaultTheme,
@@ -14,6 +14,10 @@ import { useSavedBets } from "@/store/useSavedBets";
 import DebugMemory from "@/components/debug/DebugMemory";
 import { useDevStore } from "@/lib/dev/devStore";
 import { installFetchInterceptor } from "@/lib/dev/interceptFetch";
+import { View, ActivityIndicator } from "react-native";
+import { useAuth } from "@/lib/auth/useAuth";
+import { login } from "@/lib/auth/login";
+
 
 /* -------------------------------------------------
    Expo Router settings
@@ -59,6 +63,26 @@ if (__DEV__) {
 -------------------------------------------------- */
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const accessToken = useAuth((s) => s.accessToken);
+
+  // 🔐 Prevent multiple redirects
+  const hasTriggeredLogin = useRef(false);
+
+  useEffect(() => {
+    if (!accessToken && !hasTriggeredLogin.current) {
+      hasTriggeredLogin.current = true;
+      login();
+    }
+  }, [accessToken]);
+
+  // ⏳ Block UI until auth completes
+  if (!accessToken) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
 
   // ---------------------------
   // HYDRATE SAVED BETS ON BOOT

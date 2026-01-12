@@ -1,9 +1,5 @@
 //. /services/adapters/adaptPlayerProps
-import {
-  PlayerPropMarket,
-  MarketSelection,
-  MarketKey,
-} from "@/types/betting";
+import { PlayerPropMarket, MarketKey } from "@/types/betting";
 import { makeSelectionId } from "@/lib/ids";
 
 type RawLivePlayerProp = {

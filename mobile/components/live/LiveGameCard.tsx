@@ -88,6 +88,7 @@ export function LiveGameCard({ game, players }: Props) {
         <LiveOdds
           groupedProps={groupedLiveProps}
           loading={oddsLoading}
+          gameOdds={gameOdds}
           home={game.home}
           away={game.away}
         />

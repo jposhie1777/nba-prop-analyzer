@@ -189,30 +189,23 @@ export default function SavedScreen() {
       <View
         style={[
           styles.actionBar,
-          { bottom: insets.bottom + TAB_BAR_HEIGHT },
+          { bottom: insets.bottom + 12 },
         ]}
       >
-        {/* COPY (legacy – keep for now) */}
+        {/* COPY BETS */}
         <Pressable
           style={styles.copyBtn}
           onPress={handleCopy}
-          disabled={sending}
         >
           <Text style={styles.copyText}>Copy Bets</Text>
         </Pressable>
       
-        {/* SEND TO DISCORD */}
+        {/* OPEN GAMBLy */}
         <Pressable
-          style={[
-            styles.gamblyBtn,
-            sending && { opacity: 0.6 },
-          ]}
-          onPress={handleSendToGambly}
-          disabled={sending}
+          style={styles.gamblyBtn}
+          onPress={() => Linking.openURL(GAMBLY_WEB_URL)}
         >
-          <Text style={styles.gamblyText}>
-            {sending ? "Sending…" : "Send to Discord"}
-          </Text>
+          <Text style={styles.gamblyText}>Open Gambly</Text>
         </Pressable>
       </View>
     </View>

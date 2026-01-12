@@ -121,16 +121,11 @@ export function LiveGameCard({ game, players }: Props) {
   }, [groupedLiveProps, playerMetaById]);
   
   const sortedGroupedProps = useMemo(() => {
-    return Object.values(filteredGroupedProps)
-      .sort((a: any, b: any) => {
-        const minA = playerMetaById.get(a.player_id)?.minutes ?? 0;
-        const minB = playerMetaById.get(b.player_id)?.minutes ?? 0;
-        return minB - minA;
-      })
-      .reduce((acc: any, p: any) => {
-        acc[p.player_id] = p;
-        return acc;
-      }, {});
+    return Object.values(filteredGroupedProps).sort((a: any, b: any) => {
+      const minA = playerMetaById.get(a.player_id)?.minutes ?? 0;
+      const minB = playerMetaById.get(b.player_id)?.minutes ?? 0;
+      return minB - minA;
+    });
   }, [filteredGroupedProps, playerMetaById]);
 
   const {
@@ -157,7 +152,7 @@ export function LiveGameCard({ game, players }: Props) {
       return map;
     }, [players]);
 
-  const hasLiveOdds = Object.keys(sortedGroupedProps).length > 0;
+  const hasLiveOdds = sortedGroupedProps.length > 0;
 
   return (
     <View style={[styles.card, { backgroundColor: colors.surface.card }]}>

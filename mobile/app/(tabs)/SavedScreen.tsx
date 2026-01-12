@@ -7,7 +7,7 @@ import {
   Linking,
   Alert,
 } from "react-native";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 

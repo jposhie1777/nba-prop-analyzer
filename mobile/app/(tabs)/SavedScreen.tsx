@@ -184,7 +184,12 @@ export default function SavedScreen() {
       </ScrollView>
 
       {/* ACTION BAR */}
-      <View style={styles.actionBar}>
+      <View
+        style={[
+          styles.actionBar,
+          { bottom: insets.bottom + 12 },
+        ]}
+      >
         {/* COPY (legacy – keep for now) */}
         <Pressable
           style={styles.copyBtn}
@@ -320,7 +325,6 @@ const makeStyles = (colors: any) =>
       position: "absolute",
       left: 0,
       right: 0,
-      bottom: insets.bottom + 12, // ✅ THIS IS THE FIX
       flexDirection: "row",
       gap: 12,
       padding: 12,

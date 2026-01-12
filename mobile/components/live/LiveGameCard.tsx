@@ -37,6 +37,101 @@ export function LiveGameCard({ game, players }: Props) {
     () => groupLiveProps(liveProps),
     [liveProps]
   );
+  
+  const playerMetaById = useMemo(() => {
+    const map = new Map<number, {
+      minutes: number;
+      pts: number;
+      reb: number;
+      ast: number;
+      stl: number;
+      blk: number;
+      tov: number;
+    }>();
+  
+    for (const p of players) {
+      map.set(p.player_id, {
+        minutes: p.minutes ?? 0,
+        pts: p.pts ?? 0,
+        reb: p.reb ?? 0,
+        ast: p.ast ?? 0,
+        stl: p.stl ?? 0,
+        blk: p.blk ?? 0,
+        tov: p.tov ?? 0,
+      });
+    }
+  
+    return map;
+  }, [players]);
+  
+  const filteredGroupedProps = useMemo(() => {
+    const out: Record<number, any> = {};
+  
+    for (const [playerIdStr, player] of Object.entries(groupedLiveProps)) {
+      const playerId = Number(playerIdStr);
+      const meta = playerMetaById.get(playerId);
+  
+      if (!meta) continue;
+  
+      const validMarkets: Record<string, any> = {};
+  
+      for (const [market, marketData] of Object.entries(player.markets)) {
+        const normalizedMarket = market.toUpperCase();
+        let current = 0;
+
+        switch (normalizedMarket) {
+          case "PTS":
+          case "POINTS":
+            current = meta.pts;
+            break;
+        
+          case "REB":
+          case "REBOUNDS":
+            current = meta.reb;
+            break;
+        
+          case "AST":
+          case "ASSISTS":
+            current = meta.ast;
+            break;
+        
+          case "3PM":
+            // ⚠️ you do NOT yet track this correctly
+            continue;
+        
+          default:
+            continue;
+        }
+  
+        // ❌ REMOVE DEAD LINES
+        if (current >= marketData.line) continue;
+  
+        validMarkets[market] = marketData;
+      }
+  
+      if (Object.keys(validMarkets).length > 0) {
+        out[playerId] = {
+          ...player,
+          markets: validMarkets,
+        };
+      }
+    }
+  
+    return out;
+  }, [groupedLiveProps, playerMetaById]);
+  
+  const sortedGroupedProps = useMemo(() => {
+    return Object.values(filteredGroupedProps)
+      .sort((a: any, b: any) => {
+        const minA = playerMetaById.get(a.player_id)?.minutes ?? 0;
+        const minB = playerMetaById.get(b.player_id)?.minutes ?? 0;
+        return minB - minA;
+      })
+      .reduce((acc: any, p: any) => {
+        acc[p.player_id] = p;
+        return acc;
+      }, {});
+  }, [filteredGroupedProps, playerMetaById]);
 
   const {
     odds: gameOdds,
@@ -62,7 +157,7 @@ export function LiveGameCard({ game, players }: Props) {
       return map;
     }, [players]);
 
-  const hasLiveOdds = Object.keys(groupedLiveProps).length > 0;
+  const hasLiveOdds = Object.keys(sortedGroupedProps).length > 0;
 
   return (
     <View style={[styles.card, { backgroundColor: colors.surface.card }]}>
@@ -114,13 +209,13 @@ export function LiveGameCard({ game, players }: Props) {
         ]}
       />
       
-      <LiveOdds
-        groupedProps={groupedLiveProps}
-        loading={oddsLoading}
-        home={game.home}
-        away={game.away}
-        playerNameById={playerNameById}
-      />
+      {hasLiveOdds && (
+        <LiveOdds
+          groupedProps={sortedGroupedProps}
+          loading={oddsLoading}
+          playerNameById={playerNameById}
+        />
+      )}
     </View>
   );
 }

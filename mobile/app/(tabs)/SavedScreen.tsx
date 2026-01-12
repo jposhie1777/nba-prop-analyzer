@@ -14,6 +14,7 @@ import * as Haptics from "expo-haptics";
 import { useTheme } from "@/store/useTheme";
 import { useSavedBets } from "@/store/useSavedBets";
 import { usePropsStore } from "@/store/usePropsStore"; // 🔑 assumes your live props store
+import { sendBetsToDiscord } from "@/lib/export/sendToDiscord";
 
 const GAMBLY_URL = "https://www.gambly.com/gambly-bot";
 
@@ -89,6 +90,40 @@ export default function SavedScreen() {
       ]
     );
   };
+  const [sending, setSending] = useState(false);
+
+  const handleSendToGambly = async () => {
+    if (!savedProps.length || sending) return;
+  
+    try {
+      setSending(true);
+      await sendBetsToDiscord(
+        savedProps.map((p) => ({
+          // map SavedScreen shape → SavedBet shape
+          selectionId: p.id,
+          gameId: p.game_id,
+          playerId: p.player_id,
+          marketKey: p.market,
+          outcome: "OVER", // or p.outcome if you have it
+          line: p.line,
+          odds: p.odds,
+          book: p.book,
+        }))
+      );
+  
+      Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Success
+      );
+    } catch (err) {
+      console.error("❌ Failed to send saved bets to Gambly", err);
+      Alert.alert(
+        "Export failed",
+        "Could not send bets to Gambly. Please try again."
+      );
+    } finally {
+      setSending(false);
+    }
+  };
 
   // ---------------------------
   // EMPTY STATE
@@ -148,12 +183,27 @@ export default function SavedScreen() {
 
       {/* ACTION BAR */}
       <View style={styles.actionBar}>
-        <Pressable style={styles.copyBtn} onPress={handleCopy}>
+        {/* COPY (legacy – keep for now) */}
+        <Pressable
+          style={styles.copyBtn}
+          onPress={handleCopy}
+          disabled={sending}
+        >
           <Text style={styles.copyText}>Copy Bets</Text>
         </Pressable>
-
-        <Pressable style={styles.gamblyBtn} onPress={openGambly}>
-          <Text style={styles.gamblyText}>Open Gambly Bot</Text>
+      
+        {/* SEND TO GAMBLy (NEW) */}
+        <Pressable
+          style={[
+            styles.gamblyBtn,
+            sending && { opacity: 0.6 },
+          ]}
+          onPress={handleSendToGambly}
+          disabled={sending}
+        >
+          <Text style={styles.gamblyText}>
+            {sending ? "Sending…" : "Send to Gambly"}
+          </Text>
         </Pressable>
       </View>
     </View>

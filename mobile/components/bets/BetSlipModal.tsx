@@ -6,12 +6,13 @@ import {
   Pressable,
   StyleSheet,
   FlatList,
+  ActivityIndicator,
 } from "react-native";
-import * as Clipboard from "expo-clipboard";
+import { useState } from "react";
 
 import { useTheme } from "@/store/useTheme";
 import { useBetsStore } from "@/store/useBetsStore";
-import { formatBetsForGambly } from "@/lib/export/gambly";
+import { sendBetsToDiscord } from "@/lib/export/sendToDiscord";
 
 type Props = {
   visible: boolean;
@@ -20,6 +21,7 @@ type Props = {
 
 export function BetSlipModal({ visible, onClose }: Props) {
   const { colors } = useTheme();
+  const [sending, setSending] = useState(false);
 
   const betsById = useBetsStore((s) => s.betsById);
   const removeBet = useBetsStore((s) => s.removeBet);
@@ -27,10 +29,18 @@ export function BetSlipModal({ visible, onClose }: Props) {
 
   const bets = Object.values(betsById);
 
-  async function handleExport() {
-    const text = formatBetsForGambly(bets);
-    await Clipboard.setStringAsync(text);
-    console.log("📤 GAMBLY EXPORT\n" + text);
+  async function handleSend() {
+    if (sending || bets.length === 0) return;
+
+    try {
+      setSending(true);
+      await sendBetsToDiscord(bets);
+      onClose();
+    } catch (err) {
+      console.error("❌ Failed to send bets to Discord", err);
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -54,8 +64,10 @@ export function BetSlipModal({ visible, onClose }: Props) {
             Bet Slip
           </Text>
 
-          <Pressable onPress={onClose}>
-            <Text style={{ color: colors.text.secondary }}>Done</Text>
+          <Pressable onPress={onClose} disabled={sending}>
+            <Text style={{ color: colors.text.secondary }}>
+              Done
+            </Text>
           </Pressable>
         </View>
 
@@ -117,6 +129,7 @@ export function BetSlipModal({ visible, onClose }: Props) {
               <Pressable
                 onPress={() => removeBet(item.selectionId)}
                 hitSlop={8}
+                disabled={sending}
               >
                 <Text style={{ color: colors.accent.danger }}>
                   Remove
@@ -136,27 +149,41 @@ export function BetSlipModal({ visible, onClose }: Props) {
               { borderColor: colors.border.subtle },
             ]}
           >
-            <Pressable onPress={clearAll}>
+            <Pressable
+              onPress={clearAll}
+              disabled={sending}
+            >
               <Text style={{ color: colors.text.muted }}>
                 Clear all
               </Text>
             </Pressable>
 
             <Pressable
-              onPress={handleExport}
+              onPress={handleSend}
+              disabled={sending}
               style={[
                 styles.confirm,
-                { backgroundColor: colors.accent.primary },
+                {
+                  backgroundColor: sending
+                    ? colors.surface.disabled
+                    : colors.accent.primary,
+                },
               ]}
             >
-              <Text
-                style={[
-                  styles.confirmText,
-                  { color: colors.text.inverse },
-                ]}
-              >
-                Copy for Gambly
-              </Text>
+              {sending ? (
+                <ActivityIndicator
+                  color={colors.text.inverse}
+                />
+              ) : (
+                <Text
+                  style={[
+                    styles.confirmText,
+                    { color: colors.text.inverse },
+                  ]}
+                >
+                  Send to Gambly
+                </Text>
+              )}
             </Pressable>
           </View>
         )}
@@ -225,6 +252,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 10,
     borderRadius: 999,
+    minWidth: 140,
+    alignItems: "center",
   },
 
   confirmText: {

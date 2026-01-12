@@ -1,43 +1,40 @@
-// hooks/useLivePlayerProps
-import { useEffect, useState, useRef } from "react";
-import {
-  fetchLivePlayerProps,
-  LivePlayerProp,
-} from "@/lib/liveOdds";
+// hooks/useLivePlayerProps.ts
+import { useEffect, useRef } from "react";
+
+import { fetchLivePlayerProps } from "@/lib/liveOdds";
+import { adaptPlayerProps } from "@/services/adapters/adaptPlayerProps";
+import { useLiveStore } from "@/store/liveStore";
 
 export function useLivePlayerProps(gameId?: number) {
-  const [props, setProps] = useState<LivePlayerProp[]>([]);
-  const [loading, setLoading] = useState(false);
   const lastPayloadRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!gameId) return;
 
-    let mounted = true;
+    let cancelled = false;
 
     async function load() {
       try {
-        const data = await fetchLivePlayerProps(gameId);
-    
-        const payloadStr = JSON.stringify(data.props);
-    
-        // ⛔️ no-op update guard (MOST IMPORTANT)
+        const raw = await fetchLivePlayerProps(gameId);
+        if (cancelled) return;
+
+        // 🔒 no-op guard (prevents pointless upserts)
+        const payloadStr = JSON.stringify(raw.props);
         if (payloadStr === lastPayloadRef.current) {
           return;
         }
-    
         lastPayloadRef.current = payloadStr;
-    
-        if (mounted) {
-          setLoading(true);
-          setProps(data.props ?? []);
+
+        // 🔁 ADAPT
+        const adaptedPlayers = adaptPlayerProps(raw);
+
+        // 🧠 UPSERT (THIS IS WHERE getState() GOES)
+        const store = useLiveStore.getState();
+        for (const p of adaptedPlayers) {
+          store.upsertPropMarkets(p.gameId, p.playerId, p.markets);
         }
       } catch (err) {
-        console.warn("live player props error", err);
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
+        console.warn("❌ live player props poll failed", err);
       }
     }
 
@@ -45,10 +42,8 @@ export function useLivePlayerProps(gameId?: number) {
     const id = setInterval(load, 30_000);
 
     return () => {
-      mounted = false;
+      cancelled = true;
       clearInterval(id);
     };
   }, [gameId]);
-
-  return { props, loading };
 }

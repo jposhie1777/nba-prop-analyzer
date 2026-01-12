@@ -1,6 +1,8 @@
+//   /app/(abs)/_layout.tsx
 import { Tabs } from "expo-router";
 import React, { useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuth } from "@/lib/auth/useAuth";
 
 import { HapticTab } from "@/components/haptic-tab";
 import { IconSymbol } from "@/components/ui/icon-symbol";
@@ -11,6 +13,7 @@ const SAVED_PROPS_KEY = "saved_props_v1";
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const role = useAuth((s) => s.role);
 
   // ---------------------------
   // GLOBAL SAVED BETS STATE
@@ -100,16 +103,22 @@ export default function TabLayout() {
           clearAllSaved,
         }}
       />
-      {/* DEV TAB */}
-      <Tabs.Screen
-        name="dev"
-        options={{
-          title: "Dev",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="wrench.and.screwdriver.fill" color={color} />
-          ),
-        }}
-      />
+      {/* DEV TAB (DEV ONLY) */}
+      {role === "dev" && (
+        <Tabs.Screen
+          name="dev"
+          options={{
+            title: "Dev",
+            tabBarIcon: ({ color }) => (
+              <IconSymbol
+                size={28}
+                name="wrench.and.screwdriver.fill"
+                color={color}
+              />
+            ),
+          }}
+        />
+      )}
     </Tabs>
   );
 }

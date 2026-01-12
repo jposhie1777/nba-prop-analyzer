@@ -5,6 +5,7 @@ import { useTheme } from "@/store/useTheme";
 type Props = {
   groupedProps: Record<number, any>;
   loading: boolean;
+  gameOdds?: any[];
   home: any;
   away: any;
 };

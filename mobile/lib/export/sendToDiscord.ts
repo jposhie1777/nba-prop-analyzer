@@ -7,6 +7,7 @@ const DISCORD_WEBHOOK =
 export async function sendBetsToDiscord(bets: SavedBet[]) {
   const content = [
     `📤 **Pulse Bets (${bets.length})**`,
+    `@gamblyBot`, // ✅ REQUIRED
     "",
     formatBetsForGambly(bets),
   ].join("\n");

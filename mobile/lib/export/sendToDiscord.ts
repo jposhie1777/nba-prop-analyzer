@@ -5,15 +5,16 @@ import { formatBetsForGambly } from "./gambly";
 const DISCORD_WEBHOOK =
   process.env.EXPO_PUBLIC_DISCORD_GAMBLY_WEBHOOK!;
 
-// ✅ REAL Gambly Bot ID
-const GAMBLy_BOT_ID = "1338973806383071392";
+// ✅ Playbook Bot ID
+const PLAYBOOK_BOT_ID = "1408438245594763375";
 
 export async function sendBetsToDiscord(bets: SavedBet[]) {
   if (!bets.length) return;
 
   const content = [
+    `<@${PLAYBOOK_BOT_ID}>`,
+    "",
     "📤 **Pulse Bets**",
-    "_Run `/betslip` to import these into Gambly_",
     "",
     formatBetsForGambly(bets),
   ].join("\n");
@@ -23,9 +24,9 @@ export async function sendBetsToDiscord(bets: SavedBet[]) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       content,
-      // 🔑 REQUIRED or Discord will silently ignore the mention
+      // 🔑 REQUIRED — otherwise the mention is ignored
       allowed_mentions: {
-        users: [GAMBLy_BOT_ID],
+        users: [PLAYBOOK_BOT_ID],
       },
     }),
   });

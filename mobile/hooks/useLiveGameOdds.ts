@@ -1,43 +1,37 @@
-// hooks/useLiveGameOdds
-import { useEffect, useState, useRef } from "react";
-import {
-  fetchLiveGameOdds,
-  LiveGameOdds,
-} from "@/lib/liveOdds";
+// hooks/useLiveGameOdds.ts
+import { useEffect, useRef } from "react";
+
+import { fetchLiveGameOdds } from "@/lib/liveOdds";
+import { adaptGameOdds } from "@/services/adapters/adaptGameOdds";
+import { useLiveStore } from "@/store/liveStore";
 
 export function useLiveGameOdds(gameId?: number) {
-  const [odds, setOdds] = useState<LiveGameOdds[]>([]);
-  const [loading, setLoading] = useState(false);
   const lastPayloadRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!gameId) return;
 
-    let mounted = true;
+    let cancelled = false;
 
     async function load() {
       try {
-        const data = await fetchLiveGameOdds(gameId);
+        const raw = await fetchLiveGameOdds(gameId);
+        if (cancelled) return;
 
-        const payloadStr = JSON.stringify(data.odds);
-
-        // ⛔️ NO-OP GUARD (MOST IMPORTANT)
+        // 🔒 NO-OP GUARD (prevents pointless upserts / rerenders)
+        const payloadStr = JSON.stringify(raw.odds);
         if (payloadStr === lastPayloadRef.current) {
           return;
         }
-
         lastPayloadRef.current = payloadStr;
 
-        if (mounted) {
-          setLoading(true);
-          setOdds(data.odds ?? []);
-        }
+        // 🔁 ADAPT
+        const adapted = adaptGameOdds(raw);
+
+        // 🧠 UPSERT (this is where getState() belongs)
+        useLiveStore.getState().upsertOdds([adapted]);
       } catch (err) {
-        console.warn("live game odds error", err);
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
+        console.warn("❌ live game odds poll failed", err);
       }
     }
 
@@ -45,10 +39,8 @@ export function useLiveGameOdds(gameId?: number) {
     const id = setInterval(load, 30_000);
 
     return () => {
-      mounted = false;
+      cancelled = true;
       clearInterval(id);
     };
   }, [gameId]);
-
-  return { odds, loading };
 }

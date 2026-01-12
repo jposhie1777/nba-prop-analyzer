@@ -17,7 +17,7 @@ useEffect(() => {
   // 🔴 TEMP TEST — REMOVE AFTER CONFIRMATION
   async function testDiscord() {
     try {
-      await fetch(
+      const res = await fetch(
         process.env.EXPO_PUBLIC_DISCORD_GAMBLY_WEBHOOK!,
         {
           method: "POST",
@@ -27,9 +27,13 @@ useEffect(() => {
           }),
         }
       );
-      console.log("✅ Discord test sent");
+  
+      const text = await res.text();
+  
+      console.log("DISCORD STATUS:", res.status);
+      console.log("DISCORD RESPONSE:", text);
     } catch (err) {
-      console.error("❌ Discord test failed", err);
+      console.error("❌ Discord fetch threw error:", err);
     }
   }
 

@@ -13,7 +13,7 @@ export async function sendBetsToDiscord(bets: SavedBet[]) {
 
   const content = [
     "📤 **Pulse Bets**",
-    `<@${GAMBLy_BOT_ID}>`, // 👈 THIS is the real mention
+    "_Run `/betslip` to import these into Gambly_",
     "",
     formatBetsForGambly(bets),
   ].join("\n");

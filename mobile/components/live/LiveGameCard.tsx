@@ -48,6 +48,19 @@ export function LiveGameCard({ game, players }: Props) {
     count: gameOdds.length,
     sample: gameOdds[0],
   });
+  
+    // ------------------------------------
+    // 🧠 Player ID → Name lookup (STEP 1)
+    // ------------------------------------
+    const playerNameById = useMemo(() => {
+      const map = new Map<number, string>();
+  
+      players.forEach((p) => {
+        map.set(p.player_id, p.name);
+      });
+  
+      return map;
+    }, [players]);
 
   const hasLiveOdds = Object.keys(groupedLiveProps).length > 0;
 

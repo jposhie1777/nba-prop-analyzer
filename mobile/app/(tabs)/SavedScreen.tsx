@@ -181,7 +181,7 @@ export default function SavedScreen() {
           </View>
         ))}
 
-        <View style={{ height: 90 }} />
+        <View style={{ height: 32 }} />
       </ScrollView>
 
       {/* ACTION BAR */}

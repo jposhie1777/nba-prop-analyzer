@@ -1,11 +1,14 @@
-import { Client, GatewayIntentBits } from "discord.js";
+import 'dotenv/config';
+import { Client, GatewayIntentBits, ChannelType } from "discord.js";
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
-const SOURCE_CHANNEL = "pulse-bets"; // channel name
-const GAMBLY_BOT_ID = "1338973806383071392"; // GamblyBot ID
+
+// 🔧 CONFIG
+const SOURCE_CHANNEL_NAME = "pulse-bets";
+const GAMBLY_BOT_ID = "1338973806383071392";
 
 if (!DISCORD_TOKEN) {
-  throw new Error("Missing DISCORD_TOKEN");
+  throw new Error("❌ Missing DISCORD_TOKEN");
 }
 
 const client = new Client({
@@ -17,25 +20,35 @@ const client = new Client({
 });
 
 client.once("ready", () => {
-  console.log(`✅ Pulse Relay logged in as ${client.user.tag}`);
+  console.log(`✅ Pulse Relay logged in as ${client.user?.tag}`);
 });
 
 client.on("messageCreate", async (message) => {
-  // Ignore bots (including ourselves)
-  if (message.author.bot) return;
-
-  // Ignore other channels
-  if (message.channel.name !== SOURCE_CHANNEL) return;
-
-  // Ignore empty messages
-  if (!message.content?.trim()) return;
-
   try {
-    const relayMessage = `<@${GAMBLY_BOT_ID}>\n${message.content}`;
+    // -------------------------
+    // HARD GUARDS
+    // -------------------------
+    if (message.author.bot) return;
+    if (!message.guild) return;
 
-    await message.channel.send(relayMessage);
+    if (
+      message.channel.type !== ChannelType.GuildText ||
+      message.channel.name !== SOURCE_CHANNEL_NAME
+    ) {
+      return;
+    }
 
-    console.log("🔁 Relayed message to Gambly");
+    const content = message.content?.trim();
+    if (!content) return;
+
+    // -------------------------
+    // RELAY TO GAMBLY
+    // -------------------------
+    const relay = `<@${GAMBLY_BOT_ID}>\n${content}`;
+
+    await message.channel.send({ content: relay });
+
+    console.log("🔁 Relayed Pulse bets → Gambly");
   } catch (err) {
     console.error("❌ Relay failed:", err);
   }

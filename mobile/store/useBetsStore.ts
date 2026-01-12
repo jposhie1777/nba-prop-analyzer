@@ -8,7 +8,7 @@ export type SavedBet = {
 
   gameId: string;
   playerId?: string;
-
+  playerName?: string;
   marketKey: string;
   outcome: string;
   line: number;

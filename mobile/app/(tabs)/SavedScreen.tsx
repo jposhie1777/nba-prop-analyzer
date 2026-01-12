@@ -332,7 +332,8 @@ const makeStyles = (colors: any) =>
       backgroundColor: colors.surface.card,
       borderTopWidth: 1,
       borderTopColor: colors.border.subtle,
-    
+      borderTopWidth: 2,
+      borderTopColor: "red",
       zIndex: 50,        // ✅ REQUIRED
       elevation: 50,     // ✅ Android
     },

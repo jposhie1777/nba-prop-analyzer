@@ -204,13 +204,11 @@ export function LiveGameCard({ game, players }: Props) {
         ]}
       />
       
-      {hasLiveOdds && (
-        <LiveOdds
-          groupedProps={sortedGroupedProps}
-          loading={oddsLoading}
-          playerNameById={playerNameById}
-        />
-      )}
+      <LiveOdds
+        groupedProps={sortedGroupedProps}
+        loading={oddsLoading}
+        playerNameById={playerNameById}
+      />
     </View>
   );
 }

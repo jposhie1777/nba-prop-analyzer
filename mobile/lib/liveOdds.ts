@@ -20,12 +20,19 @@ export type LivePlayerProp = {
 
 export type LiveGameOdds = {
   book: "draftkings" | "fanduel";
-  spread: number | null;
-  spread_odds: number | null;
+
+  spread_home: number | null;
+  spread_away: number | null;
+  spread_home_odds: number | null;
+  spread_away_odds: number | null;
+
   total: number | null;
   over: number | null;
   under: number | null;
-};
+
+  moneyline_home_odds?: number | null;
+  moneyline_away_odds?: number | null;
+};};
 
 // ------------------------------
 // API calls

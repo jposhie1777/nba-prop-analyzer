@@ -119,6 +119,7 @@ export function LiveGameCard({ game, players }: Props) {
         loading={oddsLoading}
         home={game.home}
         away={game.away}
+        playerNameById={playerNameById}
       />
     </View>
   );

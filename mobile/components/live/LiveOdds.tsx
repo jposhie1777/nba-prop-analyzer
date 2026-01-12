@@ -1,35 +1,22 @@
 // components/live/LiveOdds.tsx
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, ScrollView } from "react-native";
 import { useTheme } from "@/store/useTheme";
+import { PlayerPropMarket } from "@/types/betting";
 
-type Props = {
-  groupedProps: Record<number, any>;
-  loading: boolean;
-  home: any;
-  away: any;
-
-  // 🔴 ADD THIS
-  playerNameById: Map<number, string>;
+type PlayerBlock = {
+  player_id: number;
+  name: string;
+  markets: PlayerPropMarket[];
 };
 
-export function LiveOdds({
-  groupedProps,
-  loading,
-  playerNameById,
-}: Props) {
+type Props = {
+  players: PlayerBlock[];
+};
+
+export function LiveOdds({ players }: Props) {
   const { colors } = useTheme();
 
-  if (loading) {
-    return (
-      <Text style={{ color: colors.text.muted, marginTop: 8 }}>
-        Loading live props…
-      </Text>
-    );
-  }
-
-  const players = groupedProps;
-
-  if (players.length === 0) {
+  if (!players.length) {
     return (
       <Text style={{ color: colors.text.muted, marginTop: 8 }}>
         No live props available
@@ -39,7 +26,7 @@ export function LiveOdds({
 
   return (
     <View style={styles.wrap}>
-      {players.map((player: any) => (
+      {players.map((player) => (
         <View
           key={player.player_id}
           style={[
@@ -47,43 +34,67 @@ export function LiveOdds({
             { borderColor: colors.border.subtle },
           ]}
         >
+          {/* PLAYER NAME */}
           <Text
             style={[
-              styles.playerLabel,
+              styles.playerName,
               { color: colors.text.primary },
             ]}
           >
-            {playerNameById.get(player.player_id) ?? `Player ${player.player_id}`}
+            {player.name}
           </Text>
 
-          {Object.entries(player.markets).map(
-            ([market, marketData]: any) => (
-              <View key={market} style={styles.marketRow}>
-                <Text
-                  style={[
-                    styles.marketLabel,
-                    { color: colors.text.secondary },
-                  ]}
-                >
-                  {market} — Line {marketData.line}
-                </Text>
+          {/* MARKETS */}
+          {player.markets.map((market) => (
+            <View key={market.marketKey} style={styles.marketBlock}>
+              {/* MARKET LABEL */}
+              <Text
+                style={[
+                  styles.marketLabel,
+                  { color: colors.text.secondary },
+                ]}
+              >
+                {market.marketKey}
+              </Text>
 
-                <View style={styles.bookRow}>
-                  {Object.entries(marketData.books).map(
-                    ([book, odds]: any) => (
-                      <Text
-                        key={book}
-                        style={{ color: colors.text.muted }}
-                      >
-                        {book.toUpperCase()}: O {odds.over} / U{" "}
-                        {odds.under}
-                      </Text>
-                    )
-                  )}
-                </View>
-              </View>
-            )
-          )}
+              {/* HORIZONTAL RAIL */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.rail}
+              >
+                {market.selections.map((sel) => (
+                  <View
+                    key={sel.selectionId}
+                    style={[
+                      styles.linePill,
+                      { backgroundColor: colors.surface.elevated },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.lineText,
+                        { color: colors.text.primary },
+                      ]}
+                    >
+                      {sel.outcome === "OVER" ? "O" : "U"} {sel.line}
+                    </Text>
+
+                    <Text
+                      style={[
+                        styles.oddsText,
+                        { color: colors.text.secondary },
+                      ]}
+                    >
+                      {sel.best.odds > 0
+                        ? `+${sel.best.odds}`
+                        : sel.best.odds}
+                    </Text>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          ))}
         </View>
       ))}
     </View>
@@ -100,16 +111,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 12,
     padding: 10,
-    gap: 6,
+    gap: 8,
   },
 
-  playerLabel: {
+  playerName: {
     fontSize: 13,
     fontWeight: "800",
   },
 
-  marketRow: {
-    gap: 2,
+  marketBlock: {
+    gap: 4,
   },
 
   marketLabel: {
@@ -117,8 +128,26 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  bookRow: {
-    flexDirection: "row",
-    gap: 12,
+  rail: {
+    gap: 8,
+    paddingVertical: 2,
+  },
+
+  linePill: {
+    minWidth: 72,
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    alignItems: "center",
+  },
+
+  lineText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+
+  oddsText: {
+    fontSize: 11,
+    marginTop: 2,
   },
 });

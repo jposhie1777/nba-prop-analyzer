@@ -5,6 +5,7 @@ import { useTheme } from "@/store/useTheme";
 import { LiveGameCard } from "@/components/live/LiveGameCard";
 import { useLiveGames } from "@/hooks/useLiveGames";
 import { useLivePlayerStats } from "@/hooks/useLivePlayerStats";
+import { BetSlipBar } from "@/components/bets/BetSlipBar"; // ✅ ADD
 
 export default function LiveGamesScreen() {
   const { colors } = useTheme();
@@ -13,34 +14,33 @@ export default function LiveGamesScreen() {
   const { playersByGame } = useLivePlayerStats();
 
   const isConnecting = mode === "sse" && games.length === 0;
-  
-    /* ===========================
-       DEV GUARD: players ↔ game
-    =========================== */
-    const guardedPlayersByGame = (gameId: string) => {
-      const players = playersByGame(gameId);
-  
-      if (__DEV__) {
-        if (players.length === 0) {
-          console.warn("🟠 GUARD: no players for game", gameId);
-        } else {
-          const teams = new Set(players.map((p) => p.team));
-          if (teams.size < 2) {
-            console.warn("🔴 GUARD: players not split by team", {
-              gameId,
-              teams: Array.from(teams),
-              samplePlayer: players[0],
-            });
-          }
+
+  /* ===========================
+     DEV GUARD: players ↔ game
+  =========================== */
+  const guardedPlayersByGame = (gameId: string) => {
+    const players = playersByGame(gameId);
+
+    if (__DEV__) {
+      if (players.length === 0) {
+        console.warn("🟠 GUARD: no players for game", gameId);
+      } else {
+        const teams = new Set(players.map((p) => p.team));
+        if (teams.size < 2) {
+          console.warn("🔴 GUARD: players not split by team", {
+            gameId,
+            teams: Array.from(teams),
+            samplePlayer: players[0],
+          });
         }
       }
-  
-      return players;
-    };
+    }
+
+    return players;
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface.screen }}>
-
       {/* Status row */}
       <Text
         style={{
@@ -56,6 +56,7 @@ export default function LiveGamesScreen() {
             : "Waiting for games to go live…"
           : "Refreshing"}
       </Text>
+
       <Text
         style={{
           color: colors.text.muted,
@@ -66,11 +67,12 @@ export default function LiveGamesScreen() {
       >
         DEBUG player-stats mode: {mode}
       </Text>
+
       {/* LIVE GAMES */}
       <FlatList
         data={games}
         keyExtractor={(g) => g.gameId}
-        contentContainerStyle={{ paddingBottom: 16 }}
+        contentContainerStyle={{ paddingBottom: 96 }} // 👈 IMPORTANT
         renderItem={({ item }) => (
           <LiveGameCard
             game={item}
@@ -92,6 +94,9 @@ export default function LiveGamesScreen() {
           </Text>
         </View>
       )}
+
+      {/* 🧾 BET SLIP BAR (FLOATING) */}
+      <BetSlipBar />
     </View>
   );
 }

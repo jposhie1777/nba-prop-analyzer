@@ -76,23 +76,37 @@ export function LiveGameCard({ game, players }: Props) {
         awayTeam={game.away.abbrev}
         players={players}
       />
-
-      <>
-        <View
-          style={[
-            styles.divider,
-            { backgroundColor: colors.border.subtle },
-          ]}
-        />
       
-        <LiveOdds
-          groupedProps={groupedLiveProps}
-          loading={oddsLoading}
-          gameOdds={gameOdds}
-          home={game.home}
-          away={game.away}
-        />
-      </>
+      {/* 🟢 LIVE GAME ODDS */}
+      {gameOdds?.length > 0 && (
+        <View style={{ marginBottom: 8 }}>
+          {gameOdds.map((o) => (
+            <Text
+              key={o.book}
+              style={{ color: colors.text.muted, fontSize: 12 }}
+            >
+              {o.book.toUpperCase()} —{" "}
+              {game.away.abbrev} {o.spread_away} ({o.spread_away_odds}) ·{" "}
+              {game.home.abbrev} {o.spread_home} ({o.spread_home_odds}) ·{" "}
+              Total {o.total} O {o.over} / U {o.under}
+            </Text>
+          ))}
+        </View>
+      )}
+      
+      <View
+        style={[
+          styles.divider,
+          { backgroundColor: colors.border.subtle },
+        ]}
+      />
+      
+      <LiveOdds
+        groupedProps={groupedLiveProps}
+        loading={oddsLoading}
+        home={game.home}
+        away={game.away}
+      />
     </View>
   );
 }

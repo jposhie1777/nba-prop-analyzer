@@ -1,22 +1,17 @@
 // lib/export/gambly.ts
 import { SavedBet } from "@/store/useBetsStore";
 
-type PlayerNameLookup = (playerId?: string) => string | undefined;
-
-export function formatBetsForGambly(
-  bets: SavedBet[],
-  getPlayerName?: PlayerNameLookup
-): string {
+export function formatBetsForGambly(bets: SavedBet[]): string {
   if (!bets.length) return "";
 
   return bets
     .map((b) => {
       // -----------------------------
-      // PLAYER
+      // CORE FIELDS
       // -----------------------------
-      const player =
-        getPlayerName?.(b.playerId) ??
-        (b.playerId ? `Player ${b.playerId}` : "GAME");
+      const league = "NBA";
+      const gameId = b.gameId ?? "—";
+      const player = b.playerName ?? "GAME";
 
       // -----------------------------
       // MARKET / OUTCOME
@@ -25,29 +20,32 @@ export function formatBetsForGambly(
       const outcome = b.outcome ?? "OVER";
 
       // -----------------------------
-      // LINE / ODDS
+      // LINE
       // -----------------------------
       const line =
         b.line !== undefined && b.line !== null ? b.line : "—";
 
+      // -----------------------------
+      // ODDS
+      // -----------------------------
       const odds =
         typeof b.odds === "number"
           ? b.odds > 0
             ? `+${b.odds}`
-            : String(b.odds)
+            : `${b.odds}`
           : "—";
 
       // -----------------------------
       // BOOK
       // -----------------------------
-      const book = b.book ? b.book.toUpperCase() : "SAVED";
+      const book = b.book?.toUpperCase() ?? "SAVED";
 
       // -----------------------------
-      // FINAL FORMAT (GAMBLY FRIENDLY)
+      // FINAL OUTPUT (Discord / Gambly)
       // -----------------------------
       return [
-        "NBA",
-        b.gameId ?? "—",
+        league,
+        gameId,
         player,
         market,
         outcome,

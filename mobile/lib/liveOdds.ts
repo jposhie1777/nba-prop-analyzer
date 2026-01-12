@@ -32,7 +32,7 @@ export type LiveGameOdds = {
 
   moneyline_home_odds?: number | null;
   moneyline_away_odds?: number | null;
-};};
+};
 
 // ------------------------------
 // API calls

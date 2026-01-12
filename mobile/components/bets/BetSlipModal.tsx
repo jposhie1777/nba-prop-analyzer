@@ -1,7 +1,17 @@
 // components/bets/BetSlipModal.tsx
-import { Modal, View, Text, Pressable, StyleSheet, FlatList } from "react-native";
+import {
+  Modal,
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  FlatList,
+} from "react-native";
+import * as Clipboard from "expo-clipboard";
+
 import { useTheme } from "@/store/useTheme";
 import { useBetsStore } from "@/store/useBetsStore";
+import { formatBetsForGambly } from "@/lib/export/gambly";
 
 type Props = {
   visible: boolean;
@@ -17,6 +27,12 @@ export function BetSlipModal({ visible, onClose }: Props) {
 
   const bets = Object.values(betsById);
 
+  async function handleExport() {
+    const text = formatBetsForGambly(bets);
+    await Clipboard.setStringAsync(text);
+    console.log("📤 GAMBLY EXPORT\n" + text);
+  }
+
   return (
     <Modal
       visible={visible}
@@ -24,8 +40,15 @@ export function BetSlipModal({ visible, onClose }: Props) {
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <View style={[styles.container, { backgroundColor: colors.surface.screen }]}>
-        {/* HEADER */}
+      <View
+        style={[
+          styles.container,
+          { backgroundColor: colors.surface.screen },
+        ]}
+      >
+        {/* ======================
+            HEADER
+        ====================== */}
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.text.primary }]}>
             Bet Slip
@@ -36,7 +59,9 @@ export function BetSlipModal({ visible, onClose }: Props) {
           </Pressable>
         </View>
 
-        {/* EMPTY STATE */}
+        {/* ======================
+            EMPTY STATE
+        ====================== */}
         {bets.length === 0 && (
           <View style={styles.empty}>
             <Text style={{ color: colors.text.muted }}>
@@ -45,7 +70,9 @@ export function BetSlipModal({ visible, onClose }: Props) {
           </View>
         )}
 
-        {/* BET LIST */}
+        {/* ======================
+            BET LIST
+        ====================== */}
         <FlatList
           data={bets}
           keyExtractor={(b) => b.selectionId}
@@ -87,7 +114,10 @@ export function BetSlipModal({ visible, onClose }: Props) {
                 </Text>
               </View>
 
-              <Pressable onPress={() => removeBet(item.selectionId)}>
+              <Pressable
+                onPress={() => removeBet(item.selectionId)}
+                hitSlop={8}
+              >
                 <Text style={{ color: colors.accent.danger }}>
                   Remove
                 </Text>
@@ -96,7 +126,9 @@ export function BetSlipModal({ visible, onClose }: Props) {
           )}
         />
 
-        {/* FOOTER */}
+        {/* ======================
+            FOOTER
+        ====================== */}
         {bets.length > 0 && (
           <View
             style={[
@@ -111,10 +143,7 @@ export function BetSlipModal({ visible, onClose }: Props) {
             </Pressable>
 
             <Pressable
-              onPress={() => {
-                // 🔜 export / submit
-                console.log("EXPORT BETS", bets);
-              }}
+              onPress={handleExport}
               style={[
                 styles.confirm,
                 { backgroundColor: colors.accent.primary },
@@ -126,7 +155,7 @@ export function BetSlipModal({ visible, onClose }: Props) {
                   { color: colors.text.inverse },
                 ]}
               >
-                Export Bets
+                Copy for Gambly
               </Text>
             </Pressable>
           </View>

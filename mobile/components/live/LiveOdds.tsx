@@ -49,7 +49,7 @@ export function LiveOdds({ groupedProps, loading }: Props) {
               { color: colors.text.primary },
             ]}
           >
-            Player {player.player_id}
+            {playerNameById.get(player.player_id) ?? `Player ${player.player_id}`}
           </Text>
 
           {Object.entries(player.markets).map(

@@ -14,7 +14,6 @@ export async function sendBetsToDiscord(bets: SavedBet[]) {
   const content = [
     `<@${PLAYBOOK_BOT_ID}>`,
     "",
-    "📤 **Pulse Bets**",
     "",
     formatBetsForGambly(bets),
   ].join("\n");

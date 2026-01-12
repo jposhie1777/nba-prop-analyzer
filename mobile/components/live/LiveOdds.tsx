@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from "react-native";
 import { useTheme } from "@/store/useTheme";
 
 type Props = {
-  groupedProps: any[];
+  groupedProps: Record<number, any>;
   loading: boolean;
   home: any;
   away: any;
@@ -27,7 +27,7 @@ export function LiveOdds({
     );
   }
 
-  const players = Object.values(groupedProps);
+  const players = groupedProps;
 
   if (players.length === 0) {
     return (

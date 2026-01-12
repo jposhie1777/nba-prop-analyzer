@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from "react-native";
 import { useTheme } from "@/store/useTheme";
 
 type Props = {
-  groupedProps: Record<number, any>;
+  groupedProps: any[];
   loading: boolean;
   home: any;
   away: any;

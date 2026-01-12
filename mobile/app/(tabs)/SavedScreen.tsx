@@ -106,6 +106,7 @@ export default function SavedScreen() {
           selectionId: p.id,
           gameId: p.game_id,
           playerId: p.player_id,
+          playerName: p.player,
           marketKey: p.market,
           outcome: "OVER", // or p.outcome if you have it
           line: p.line,

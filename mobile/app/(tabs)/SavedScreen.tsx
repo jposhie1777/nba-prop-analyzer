@@ -15,6 +15,7 @@ import { useTheme } from "@/store/useTheme";
 import { useSavedBets } from "@/store/useSavedBets";
 import { usePropsStore } from "@/store/usePropsStore"; // 🔑 assumes your live props store
 import { sendBetsToDiscord } from "@/lib/export/sendToDiscord";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const GAMBLY_URL = "https://www.gambly.com/gambly-bot";
 
@@ -55,6 +56,7 @@ export default function SavedScreen() {
   // ---------------------------
   // GAMBLY COPY FORMAT
   // ---------------------------
+  const insets = useSafeAreaInsets();
   const gamblyText = useMemo(() => {
     return savedProps
       .map(
@@ -316,9 +318,9 @@ const makeStyles = (colors: any) =>
 
     actionBar: {
       position: "absolute",
-      bottom: 0,
       left: 0,
       right: 0,
+      bottom: insets.bottom + 12, // ✅ THIS IS THE FIX
       flexDirection: "row",
       gap: 12,
       padding: 12,

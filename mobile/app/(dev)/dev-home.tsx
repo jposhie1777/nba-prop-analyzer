@@ -8,12 +8,14 @@ import { useTheme } from "@/store/useTheme";
 import { createDevStyles } from "./devStyles";
 import { useDevStore } from "@/lib/dev/devStore";
 import { BqTableCard } from "./components/BqTableCard";
+import { useBqDatasetTables } from "@/lib/dev/useBqDatasetTables";
 
 export default function DevHomeScreen() {
   const { colors } = useTheme();
   const styles = React.useMemo(() => createDevStyles(colors), [colors]);
   const router = useRouter();
-
+  const goatTables = useBqDatasetTables("nba_goat_data");
+  const liveTables = useBqDatasetTables("nba_live");
   const { health, flags, sse, freshness, actions } = useDevStore();
 
   const appVersion =
@@ -201,21 +203,36 @@ export default function DevHomeScreen() {
           Schema + latest row (dev only, safe preview)
         </Text>
  
-        {[
-          "props_mobile_v1",
-          "props_full_enriched",
-          "live_games",
-          "live_player_stats",
-          "player_game_stats",
-          "player_advanced_rollups",
-          "historical_player_trends",
-        ].map((table) => (
-          <BqTableCard
-            key={table}
-            dataset="nba_goat_data"
-            table={table}
-          />
-        ))}
+        {goatTables.loading ? (
+          <Text style={styles.mutedText}>Loading nba_goat_data tables…</Text>
+        ) : goatTables.error ? (
+          <Text style={styles.dangerText}>{goatTables.error}</Text>
+        ) : (
+          goatTables.tables.map((table) => (
+            <BqTableCard
+              key={table}
+              dataset="nba_goat_data"
+              table={table}
+            />
+          ))
+        )}
+        <Text style={[styles.sectionSubtitle, { marginTop: 12 }]}>
+          nba_live
+        </Text>
+        
+        {liveTables.loading ? (
+          <Text style={styles.mutedText}>Loading nba_live tables…</Text>
+        ) : liveTables.error ? (
+          <Text style={styles.dangerText}>{liveTables.error}</Text>
+        ) : (
+          liveTables.tables.map((table) => (
+            <BqTableCard
+              key={table}
+              dataset="nba_live"
+              table={table}
+            />
+          ))
+        )}
       </Section>
 
       {/* DEVELOPER TOOLS */}

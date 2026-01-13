@@ -134,7 +134,13 @@ export async function fetchProps(params?: {
   let res: Response;
 
   try {
-    res = await fetch(url);
+    res = await fetch(url, {
+      method: "GET",
+      credentials: "omit", // 🔑 REQUIRED for Expo Web / Safari
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
   } catch (err) {
     console.error("❌ NETWORK ERROR:", err);
     throw new Error("Network request failed");
@@ -170,7 +176,9 @@ export async function fetchBackendFiles(): Promise<string[]> {
   const url = `${API_BASE}/debug/code`;
   console.log("📡 FETCHING BACKEND FILE LIST:", url);
 
-  const res = await fetch(url);
+  const res = await fetch(url, {
+    credentials: "omit", // 🔑 REQUIRED for Expo Web / Safari
+  });
   const text = await res.text();
 
   if (!res.ok) {
@@ -191,7 +199,9 @@ export async function fetchBackendFile(
   const url = `${API_BASE}/debug/code/${filename}`;
   console.log("📡 FETCHING BACKEND FILE:", url);
 
-  const res = await fetch(url);
+  const res = await fetch(url, {
+    credentials: "omit", // 🔑 REQUIRED for Expo Web / Safari
+  });
   const text = await res.text();
 
   if (!res.ok) {

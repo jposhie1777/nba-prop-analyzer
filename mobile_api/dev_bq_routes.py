@@ -3,7 +3,8 @@ from fastapi import APIRouter, Query
 from google.cloud import bigquery
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
-
+import asyncio
+from ingest_espn_player_headshots import run_headshot_ingest
 from bq import get_bq_client
 
 router = APIRouter(prefix="/dev/bq", tags=["dev"])
@@ -132,3 +133,24 @@ def preview_table(
         "columns": columns,
         "example_row": example_row,
     }    
+# ======================================================
+# 🔴 Manual ESPN player headshot refresh (DEV ONLY)
+# ======================================================
+@router.post("/refresh-player-headshots")
+async def refresh_player_headshots():
+    """
+    Triggers ESPN player headshot ingestion.
+    - Safe (rate-limited)
+    - Runs in background thread
+    - Returns immediately
+    """
+
+    asyncio.create_task(
+        asyncio.to_thread(run_headshot_ingest)
+    )
+
+    return {
+        "task": "refresh_player_headshots",
+        "status": "started",
+        "started_at": datetime.utcnow().isoformat(),
+    }

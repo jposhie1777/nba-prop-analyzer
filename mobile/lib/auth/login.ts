@@ -1,31 +1,39 @@
 // lib/auth/login.ts
 import * as AuthSession from "expo-auth-session";
+import * as WebBrowser from "expo-web-browser";
+import { Platform } from "react-native";
 import { useAuth } from "./useAuth";
 
+WebBrowser.maybeCompleteAuthSession();
+
+const domain = process.env.EXPO_PUBLIC_AUTH0_DOMAIN!;
+const clientId = process.env.EXPO_PUBLIC_AUTH0_CLIENT_ID!;
+
+const redirectUri = AuthSession.makeRedirectUri({
+  useProxy: Platform.select({ web: false, default: true }),
+});
+
 export async function login() {
-  const redirectUri = AuthSession.makeRedirectUri({ useProxy: true });
-
   const authUrl =
-    `https://${process.env.EXPO_PUBLIC_AUTH0_DOMAIN}/authorize` +
-    `?client_id=${process.env.EXPO_PUBLIC_AUTH0_CLIENT_ID}` +
-    `&response_type=token` +
-    `&scope=openid profile email` +
-    `&audience=https://api.pulse.app` +
-    `&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    `https://${domain}/authorize?` +
+    new URLSearchParams({
+      client_id: clientId,
+      response_type: "token",
+      scope: "openid profile email",
+      redirect_uri: redirectUri,
+    }).toString();
 
-  const result = await AuthSession.startAsync({ authUrl });
+  const result = await WebBrowser.openAuthSessionAsync(
+    authUrl,
+    redirectUri
+  );
 
-  if (result.type === "success") {
-    const { access_token } = result.params as any;
+  if (result.type !== "success") return;
 
-    // decode role from JWT payload
-    const payload = JSON.parse(
-      atob(access_token.split(".")[1])
-    );
+  const params = AuthSession.parseRedirectUri(result.url);
+  const accessToken = params.access_token;
 
-    useAuth.getState().setAuth(
-      access_token,
-      payload.role
-    );
-  }
+  if (!accessToken) return;
+
+  useAuth.getState().actions.setAccessToken(accessToken);
 }

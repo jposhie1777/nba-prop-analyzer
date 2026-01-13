@@ -5,8 +5,9 @@ import Constants from "expo-constants";
 WebBrowser.maybeCompleteAuthSession();
 
 export async function login() {
-  const domain = process.env.EXPO_PUBLIC_AUTH0_DOMAIN!;
-  const clientId = process.env.EXPO_PUBLIC_AUTH0_CLIENT_ID!;
+  
+  const domain = Constants.expoConfig?.extra?.AUTH0_DOMAIN;
+  const clientId = Constants.expoConfig?.extra?.AUTH0_CLIENT_ID;
 
   if (!domain || !clientId) {
     throw new Error("Missing Auth0 environment variables");

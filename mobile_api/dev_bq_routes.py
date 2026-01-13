@@ -1,23 +1,22 @@
-# dev_bq_routes.py
 from fastapi import APIRouter, Query
 from google.cloud import bigquery
-import os
-import json
+
+from bq import get_bq_client  # 👈 your existing helper
 
 router = APIRouter(prefix="/dev/bq", tags=["dev"])
-
-PROJECT_ID = os.getenv("GCP_PROJECT")
-bq = bigquery.Client(project=PROJECT_ID)
 
 @router.get("/table-preview")
 def preview_table(
     dataset: str = Query(...),
     table: str = Query(...),
 ):
-    # 1️⃣ Columns
+    bq = get_bq_client()              # ✅ lazy, safe
+    project_id = bq.project           # ✅ ALWAYS defined
+
+    # 1️⃣ Columns (metadata only)
     cols_query = f"""
     SELECT column_name, data_type, is_nullable
-    FROM `{PROJECT_ID}.{dataset}.INFORMATION_SCHEMA.COLUMNS`
+    FROM `{project_id}.{dataset}.INFORMATION_SCHEMA.COLUMNS`
     WHERE table_name = @table
     ORDER BY ordinal_position
     """
@@ -34,12 +33,10 @@ def preview_table(
     # 2️⃣ One example row (safe)
     row_query = f"""
     SELECT *
-    FROM `{PROJECT_ID}.{dataset}.{table}`
+    FROM `{project_id}.{dataset}.{table}`
     LIMIT 1
     """
-    row_job = bq.query(row_query)
-    rows = list(row_job.result())
-
+    rows = list(bq.query(row_query).result())
     example_row = dict(rows[0]) if rows else None
 
     return {

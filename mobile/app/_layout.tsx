@@ -1,12 +1,12 @@
-// app/_layout
+// app/_layout.tsx
 import "react-native-reanimated";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import {
   DarkTheme,
   DefaultTheme,
   ThemeProvider,
 } from "@react-navigation/native";
-import { Stack } from "expo-router";
+import { Stack, Redirect } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -14,10 +14,7 @@ import { useSavedBets } from "@/store/useSavedBets";
 import DebugMemory from "@/components/debug/DebugMemory";
 import { useDevStore } from "@/lib/dev/devStore";
 import { installFetchInterceptor } from "@/lib/dev/interceptFetch";
-import { View, ActivityIndicator } from "react-native";
 import { useAuth } from "@/lib/auth/useAuth";
-import { login } from "@/lib/auth/login";
-
 
 /* -------------------------------------------------
    Expo Router settings
@@ -75,13 +72,20 @@ export default function RootLayout() {
   }, [hydrateSavedBets]);
 
   // ---------------------------
-  // 🔴 NEW: HYDRATE DEV FLAGS ON BOOT (4A)
+  // HYDRATE DEV FLAGS ON BOOT
   // ---------------------------
   useEffect(() => {
     if (__DEV__) {
       useDevStore.getState().actions.hydrateFlags();
     }
   }, []);
+
+  // ---------------------------
+  // 🔒 AUTH GATE (NO SIDE EFFECTS)
+  // ---------------------------
+  if (!accessToken) {
+    return <Redirect href="/login" />;
+  }
 
   return (
     <>

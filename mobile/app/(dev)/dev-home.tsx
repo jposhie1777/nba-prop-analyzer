@@ -202,7 +202,25 @@ export default function DevHomeScreen() {
         <Text style={styles.mutedText}>
           Schema + latest row (dev only, safe preview)
         </Text>
- 
+        {goatTables.lastRefreshed && (
+          <Text style={styles.mutedText}>
+            Last updated:{" "}
+            {new Date(goatTables.lastRefreshed).toLocaleString()}
+          </Text>
+        )}
+        
+        <Pressable
+          style={[styles.toolButton, { marginTop: 6 }]}
+          onPress={async () => {
+            await fetch(
+              `${apiUrl}/dev/bq/refresh-metadata?dataset=nba_goat_data`,
+              { method: "POST" }
+            );
+            goatTables.reload();
+          }}
+        >
+          <Text style={styles.toolTitle}>Refresh nba_goat_data now</Text>
+        </Pressable>
         {goatTables.loading ? (
           <Text style={styles.mutedText}>Loading nba_goat_data tables…</Text>
         ) : goatTables.error ? (
@@ -219,7 +237,25 @@ export default function DevHomeScreen() {
         <Text style={[styles.sectionSubtitle, { marginTop: 12 }]}>
           nba_live
         </Text>
+        {liveTables.lastRefreshed && (
+          <Text style={styles.mutedText}>
+            Last updated:{" "}
+            {new Date(liveTables.lastRefreshed).toLocaleString()}
+          </Text>
+        )}
         
+        <Pressable
+          style={[styles.toolButton, { marginTop: 6 }]}
+          onPress={async () => {
+            await fetch(
+              `${apiUrl}/dev/bq/refresh-metadata?dataset=nba_live`,
+              { method: "POST" }
+            );
+            liveTables.reload();
+          }}
+        >
+          <Text style={styles.toolTitle}>Refresh nba_live now</Text>
+        </Pressable>
         {liveTables.loading ? (
           <Text style={styles.mutedText}>Loading nba_live tables…</Text>
         ) : liveTables.error ? (

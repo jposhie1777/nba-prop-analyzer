@@ -77,6 +77,7 @@ export function adaptPlayerProps(
           odds: row.over,
           updatedAt,
         },
+        playerName: row.player_name,
       });
     }
 

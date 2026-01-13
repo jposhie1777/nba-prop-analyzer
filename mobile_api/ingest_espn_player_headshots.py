@@ -135,6 +135,9 @@ def main():
         time.sleep(REQUEST_DELAY_SEC)
 
 def run_headshot_ingest():
+    """
+    Safe entrypoint for Cloud Run / background thread
+    """
     main()
 
 if __name__ == "__main__":

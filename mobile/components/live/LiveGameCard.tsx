@@ -59,32 +59,49 @@ export function LiveGameCard({ game, players }: Props) {
   // Build player blocks for LiveOdds
   // ------------------------------------
   const playersForOdds = useMemo(() => {
-    if (!playerIds) return [];
-
     const out: any[] = [];
-
-    for (const playerId of playerIds) {
-      const meta = playerMetaById.get(playerId);
+  
+    // group prop markets by prop playerId
+    const marketsByPropPlayerId: Record<string, any[]> = {};
+  
+    for (const [key, market] of Object.entries(propMarketsByKey)) {
+      if (!key.startsWith(`${game.gameId}:`)) continue;
+  
+      // key format: gameId:playerId:marketKey
+      const [, propPlayerId] = key.split(":");
+  
+      if (!marketsByPropPlayerId[propPlayerId]) {
+        marketsByPropPlayerId[propPlayerId] = [];
+      }
+  
+      marketsByPropPlayerId[propPlayerId].push(market);
+    }
+  
+    // attempt to match each prop player to a boxscore player BY NAME
+    for (const markets of Object.values(marketsByPropPlayerId)) {
+      const sampleMarket = markets[0];
+      const rowPlayerName = sampleMarket?.playerName;
+  
+      if (!rowPlayerName) continue;
+  
+      const meta = players.find(
+        (p) =>
+          p.name &&
+          p.name.toLowerCase() === rowPlayerName.toLowerCase()
+      );
+  
       if (!meta) continue;
-
-      const keyPrefix = `${game.gameId}:${playerId}:`;
-
-      const markets = Object.entries(propMarketsByKey)
-        .filter(([k]) => k.startsWith(keyPrefix))
-        .map(([, v]) => v);
-
-      if (markets.length === 0) continue;
-
+  
       out.push({
-        player_id: playerId,
+        player_id: meta.player_id,
         name: meta.name,
         team: meta.team,
         markets,
       });
     }
-
+  
     return out;
-  }, [playerIds, propMarketsByKey, playerMetaById, game.gameId]);
+  }, [players, propMarketsByKey, game.gameId]);
 
   return (
     <View style={[styles.card, { backgroundColor: colors.surface.card }]}>

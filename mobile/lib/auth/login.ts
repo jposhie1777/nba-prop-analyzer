@@ -1,44 +1,42 @@
-import * as WebBrowser from "expo-web-browser";
 import * as AuthSession from "expo-auth-session";
-import Constants from "expo-constants";
-
-WebBrowser.maybeCompleteAuthSession();
+import { useAuth } from "./useAuth";
 
 export async function login() {
-  
-  const domain = Constants.expoConfig?.extra?.AUTH0_DOMAIN;
-  const clientId = Constants.expoConfig?.extra?.AUTH0_CLIENT_ID;
+  const domain = process.env.EXPO_PUBLIC_AUTH0_DOMAIN;
+  const clientId = process.env.EXPO_PUBLIC_AUTH0_CLIENT_ID;
 
   if (!domain || !clientId) {
     throw new Error("Missing Auth0 environment variables");
   }
 
+  // ✅ Let Expo generate the correct redirect (works with tunnel, LAN, Go)
   const redirectUri = AuthSession.makeRedirectUri({
     useProxy: true,
   });
 
   const authUrl =
     `https://${domain}/authorize` +
-    `?response_type=token` +
-    `&client_id=${clientId}` +
-    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-    `&scope=openid profile email`;
+    `?client_id=${clientId}` +
+    `&response_type=token` +
+    `&scope=openid profile email` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}`;
 
-  const result = await WebBrowser.openAuthSessionAsync(
+  const result = await AuthSession.startAsync({
     authUrl,
-    redirectUri
-  );
+  });
 
   if (result.type !== "success") {
     throw new Error("Login cancelled");
   }
 
-  const params = AuthSession.getQueryParams(result.url);
-  const accessToken = params.access_token;
+  const accessToken = result.params?.access_token;
 
   if (!accessToken) {
     throw new Error("No access token returned");
   }
+
+  // Optional: store globally
+  useAuth.getState().setAccessToken(accessToken);
 
   return accessToken;
 }

@@ -1,4 +1,6 @@
+# db_bq_routes.py
 # curl "https://pulse-mobile-api-763243624328.us-central1.run.app/dev/bq/table-preview?dataset=nba_goat_data&table=props_mobile_v1"
+import os
 from fastapi import APIRouter, Query
 from google.cloud import bigquery
 from datetime import datetime, timedelta
@@ -138,12 +140,12 @@ def preview_table(
 # ======================================================
 @router.post("/refresh-player-headshots")
 async def refresh_player_headshots():
-    """
-    Triggers ESPN player headshot ingestion.
-    - Safe (rate-limited)
-    - Runs in background thread
-    - Returns immediately
-    """
+    if os.environ.get("RUNTIME_ENV") == "production":
+        return {
+            "task": "refresh_player_headshots",
+            "status": "blocked",
+            "reason": "Not allowed in production",
+        }
 
     asyncio.create_task(
         asyncio.to_thread(run_headshot_ingest)

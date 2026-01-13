@@ -22,3 +22,7 @@ const config = {
 };
 
 module.exports = config;
+extra: {
+  API_URL: "https://pulse-mobile-api-763243624328.us-central1.run.app",
+  buildId: Date.now(),
+},

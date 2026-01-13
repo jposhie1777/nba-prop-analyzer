@@ -443,7 +443,7 @@ return (
                     </Text>
             
                     <Text numberOfLines={1} style={styles.marketLine}>
-                      {formatSideLabel(props.side)} {formatMarketLabel(market)} • {line}
+                      {formatMarketLabel(market)} • {formatSideLabel(props.side)} {line}
                     </Text>
                   </View>
                 </View>

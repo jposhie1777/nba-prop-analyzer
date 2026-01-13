@@ -7,6 +7,13 @@ const config = {
   web: {
     bundler: "metro",
     output: "static",
+
+    // 🔥 FORCE NEW ASSET HASHES EVERY BUILD
+    build: {
+      babel: {
+        cacheIdentifier: String(Date.now()),
+      },
+    },
   },
 
   extra: {

@@ -1,6 +1,6 @@
-// lib/auth/login.ts
 import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
+import Constants from "expo-constants";
 import { Platform } from "react-native";
 import { useAuth } from "./useAuth";
 
@@ -9,8 +9,10 @@ WebBrowser.maybeCompleteAuthSession();
 const domain = process.env.EXPO_PUBLIC_AUTH0_DOMAIN!;
 const clientId = process.env.EXPO_PUBLIC_AUTH0_CLIENT_ID!;
 
+// ✅ SAFE redirect resolution for ALL platforms
 const redirectUri = AuthSession.makeRedirectUri({
-  useProxy: Platform.select({ web: false, default: true }),
+  scheme: "pulse",
+  useProxy: Platform.OS !== "web",
 });
 
 export async function login() {

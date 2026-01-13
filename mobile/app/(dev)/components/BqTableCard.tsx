@@ -1,3 +1,4 @@
+// app/(dv)/components/bqTablePeview
 import React from "react";
 import { View, Text, Pressable } from "react-native";
 import { useTheme } from "@/store/useTheme";

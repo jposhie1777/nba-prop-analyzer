@@ -1,20 +1,14 @@
-// /screens/liveGamesScreen.tsx
+// mobile/screens/LiveGameScreen.tsx
 import { FlatList, View, Text } from "react-native";
 
 import { useTheme } from "@/store/useTheme";
 import { LiveGameCard } from "@/components/live/LiveGameCard";
 import { useLiveGames } from "@/hooks/useLiveGames";
 import { useLivePlayerStats } from "@/hooks/useLivePlayerStats";
-import { BetSlipBar } from "@/components/bets/BetSlipBar"; // ✅ ADD
-import { useLiveGameOdds } from "@/hooks/useLiveGameOdds";
-import { useLivePlayerProps } from "@/hooks/useLivePlayerProps";
+import { BetSlipBar } from "@/components/bets/BetSlipBar";
 
-export function LiveGameCard({ game, players }: Props) {
+export default function LiveGameScreen() {
   const { colors } = useTheme();
-
-  // 🔥 THIS IS THE MISSING LINK
-  useLiveGameOdds(Number(game.gameId));
-  useLivePlayerProps(Number(game.gameId));
 
   const { games, mode } = useLiveGames();
   const { playersByGame } = useLivePlayerStats();

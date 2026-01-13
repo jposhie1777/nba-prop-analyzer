@@ -13,6 +13,7 @@ import { useLivePlayerProps } from "@/hooks/useLivePlayerProps";
 import { groupLiveProps } from "@/utils/groupLiveProps";
 import { useMemo, useState } from "react";
 import { useLiveGameOdds } from "@/hooks/useLiveGameOdds";
+import { OddsButton } from "./OddsButton";
 
 type Props = {
   game: LiveGame;

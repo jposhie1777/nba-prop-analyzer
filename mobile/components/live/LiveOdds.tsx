@@ -59,28 +59,30 @@ export function LiveOdds({
           {Object.entries(player.markets).map(
             ([market, marketData]: any) => (
               <View key={market} style={styles.marketRow}>
-                <Text
-                  style={[
-                    styles.marketLabel,
-                    { color: colors.text.secondary },
-                  ]}
-                >
-                  {market} — Line {marketData.line}
+                <Text style={[styles.marketLabel, { color: colors.text.secondary }]}>
+                  {market}
                 </Text>
-
-                <View style={styles.bookRow}>
-                  {Object.entries(marketData.books).map(
-                    ([book, odds]: any) => (
-                      <Text
-                        key={book}
-                        style={{ color: colors.text.muted }}
-                      >
-                        {book.toUpperCase()}: O {odds.over} / U{" "}
-                        {odds.under}
-                      </Text>
-                    )
-                  )}
-                </View>
+          
+                {marketData.lines.map((lineEntry: any) => (
+                  <View key={lineEntry.line} style={styles.lineRow}>
+                    <Text style={styles.lineLabel}>
+                      Line {lineEntry.line}
+                    </Text>
+          
+                    <View style={styles.bookRow}>
+                      {Object.entries(lineEntry.books).map(
+                        ([book, odds]: any) => (
+                          <Text
+                            key={book}
+                            style={{ color: colors.text.muted }}
+                          >
+                            {book.toUpperCase()}: O {odds.over} / U {odds.under}
+                          </Text>
+                        )
+                      )}
+                    </View>
+                  </View>
+                ))}
               </View>
             )
           )}

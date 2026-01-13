@@ -18,7 +18,7 @@ export function BqTableCard({ dataset, table }: Props) {
   const preview = useBqTablePreview();
 
   async function toggle() {
-    if (!open && !preview.columns) {
+    if (!open) {
       await preview.load(dataset, table);
     }
     setOpen(!open);

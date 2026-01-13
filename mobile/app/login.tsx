@@ -1,38 +1,35 @@
 // app/login.tsx
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, ActivityIndicator } from "react-native";
+import { useAuth } from "@/lib/auth/useAuth";
 import { login } from "@/lib/auth/login";
+import { Redirect } from "expo-router";
 
 export default function LoginScreen() {
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Pulse</Text>
+  const accessToken = useAuth((s) => s.accessToken);
+  const loading = useAuth((s) => s.loading);
 
-      <Pressable style={styles.button} onPress={login}>
-        <Text style={styles.buttonText}>Sign in</Text>
-      </Pressable>
+  if (accessToken) {
+    return <Redirect href="/" />;
+  }
+
+  return (
+    <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+      {loading ? (
+        <ActivityIndicator size="large" />
+      ) : (
+        <Pressable
+          onPress={login}
+          style={{
+            padding: 16,
+            backgroundColor: "#4f46e5",
+            borderRadius: 10,
+          }}
+        >
+          <Text style={{ color: "white", fontSize: 16 }}>
+            Sign in with Auth0
+          </Text>
+        </Pressable>
+      )}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  title: {
-    fontSize: 28,
-    marginBottom: 24,
-    fontWeight: "600",
-  },
-  button: {
-    backgroundColor: "#000",
-    paddingVertical: 14,
-    paddingHorizontal: 28,
-    borderRadius: 8,
-  },
-  buttonText: {
-    color: "#fff",
-    fontSize: 16,
-  },
-});

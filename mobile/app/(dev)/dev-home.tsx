@@ -7,6 +7,7 @@ import { useRouter } from "expo-router";
 import { useTheme } from "@/store/useTheme";
 import { createDevStyles } from "./devStyles";
 import { useDevStore } from "@/lib/dev/devStore";
+import { BqTableCard } from "./components/BqTableCard";
 
 export default function DevHomeScreen() {
   const { colors } = useTheme();
@@ -181,36 +182,40 @@ export default function DevHomeScreen() {
       <Section title="Data Freshness" styles={styles}>
         {freshness.datasets.map((d) => (
           <View key={d.key} style={styles.card}>
-            <Text style={styles.cardTitle}>{d.label}</Text>
-
-            {d.lastUpdatedTs ? (
-              <Text style={styles.mutedText}>
-                Last updated: {new Date(d.lastUpdatedTs).toLocaleString()}
-              </Text>
-            ) : (
-              <Text style={styles.mutedText}>No timestamp yet</Text>
-            )}
-
-            {typeof d.rowCount === "number" && (
-              <Text style={styles.mutedText}>
-                Rows: {d.rowCount.toLocaleString()}
-              </Text>
-            )}
-
-            {d.error && <Text style={styles.dangerText}>{d.error}</Text>}
-
-            <Pressable
-              style={[styles.toolButton, { marginTop: 8 }]}
-              onPress={() => actions.fetchFreshness(d.key)}
-            >
-              <Text style={styles.toolTitle}>Refresh</Text>
-            </Pressable>
+            ...
           </View>
         ))}
-
+      
         <Text style={styles.mutedText}>
           Confirms backend ingestion & BigQuery freshness.
         </Text>
+      </Section>
+      
+      {/* BIGQUERY TABLE INSPECTOR */}
+      <Section
+        title="BigQuery Tables"
+        styles={styles}
+        defaultOpen={false}
+      >
+        <Text style={styles.mutedText}>
+          Schema + latest row (dev only, safe preview)
+        </Text>
+ 
+        {[
+          "props_mobile_v1",
+          "props_full_enriched",
+          "live_games",
+          "live_player_stats",
+          "player_game_stats",
+          "player_advanced_rollups",
+          "historical_player_trends",
+        ].map((table) => (
+          <BqTableCard
+            key={table}
+            dataset="nba_goat_data"
+            table={table}
+          />
+        ))}
       </Section>
 
       {/* DEVELOPER TOOLS */}
@@ -248,12 +253,14 @@ function Section({
   title,
   children,
   styles,
+  defaultOpen = true,
 }: {
   title: string;
   children: React.ReactNode;
   styles: any;
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = React.useState(true);
+  const [open, setOpen] = React.useState(defaultOpen);
 
   return (
     <View style={styles.section}>

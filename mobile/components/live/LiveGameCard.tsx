@@ -178,18 +178,47 @@ export function LiveGameCard({ game, players }: Props) {
       {/* -----------------------------
          🟢 LIVE GAME ODDS (ALWAYS VISIBLE)
       ----------------------------- */}
+      {/* 🟢 LIVE GAME ODDS (BUTTONS) */}
       {gameOdds?.length > 0 && (
-        <View style={{ marginTop: 8 }}>
+        <View style={{ marginBottom: 10, gap: 6 }}>
           {gameOdds.map((o) => (
-            <Text
+            <View
               key={o.book}
-              style={{ color: colors.text.muted, fontSize: 12 }}
+              style={{ gap: 6 }}
             >
-              {o.book.toUpperCase()} —{" "}
-              {game.away.abbrev} {o.spread_away} ({o.spread_away_odds}) ·{" "}
-              {game.home.abbrev} {o.spread_home} ({o.spread_home_odds}) ·{" "}
-              Total {o.total} O {o.over} / U {o.under}
-            </Text>
+              <Text
+                style={{
+                  fontSize: 11,
+                  color: colors.text.muted,
+                  fontWeight: "700",
+                }}
+              >
+                {o.book.toUpperCase()}
+              </Text>
+      
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                {o.spread_away !== null && (
+                  <OddsButton
+                    label={`${game.away.abbrev} ${o.spread_away}`}
+                    odds={o.spread_away_odds}
+                  />
+                )}
+      
+                {o.spread_home !== null && (
+                  <OddsButton
+                    label={`${game.home.abbrev} ${o.spread_home}`}
+                    odds={o.spread_home_odds}
+                  />
+                )}
+      
+                {o.total !== null && (
+                  <>
+                    <OddsButton label={`O ${o.total}`} odds={o.over} />
+                    <OddsButton label={`U ${o.total}`} odds={o.under} />
+                  </>
+                )}
+              </View>
+            </View>
           ))}
         </View>
       )}

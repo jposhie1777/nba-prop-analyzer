@@ -1,21 +1,19 @@
-// components/live/LiveOdds.tsx
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text } from "react-native";
 import { useTheme } from "@/store/useTheme";
+import { PlayerPropCard } from "./PlayerPropCard";
 
 type Props = {
-  groupedProps: Record<number, any>;
+  groupedProps: any[]; // already filtered + sorted
   loading: boolean;
-  home: any;
-  away: any;
-
-  // 🔴 ADD THIS
   playerNameById: Map<number, string>;
+  playerMetaById: Map<number, any>;
 };
 
 export function LiveOdds({
   groupedProps,
   loading,
   playerNameById,
+  playerMetaById,
 }: Props) {
   const { colors } = useTheme();
 
@@ -27,9 +25,7 @@ export function LiveOdds({
     );
   }
 
-  const players = groupedProps;
-
-  if (players.length === 0) {
+  if (!groupedProps.length) {
     return (
       <Text style={{ color: colors.text.muted, marginTop: 8 }}>
         No live props available
@@ -38,89 +34,21 @@ export function LiveOdds({
   }
 
   return (
-    <View style={styles.wrap}>
-      {players.map((player: any) => (
-        <View
-          key={player.player_id}
-          style={[
-            styles.playerBlock,
-            { borderColor: colors.border.subtle },
-          ]}
-        >
-          <Text
-            style={[
-              styles.playerLabel,
-              { color: colors.text.primary },
-            ]}
-          >
-            {playerNameById.get(player.player_id) ?? `Player ${player.player_id}`}
-          </Text>
+    <View style={{ gap: 12, marginTop: 8 }}>
+      {groupedProps.map((player) => {
+        const meta = playerMetaById.get(player.player_id);
+        if (!meta) return null;
 
-          {Object.entries(player.markets).map(
-            ([market, marketData]: any) => (
-              <View key={market} style={styles.marketRow}>
-                <Text style={[styles.marketLabel, { color: colors.text.secondary }]}>
-                  {market}
-                </Text>
-          
-                {marketData.lines.map((lineEntry: any) => (
-                  <View key={lineEntry.line} style={styles.lineRow}>
-                    <Text style={styles.lineLabel}>
-                      Line {lineEntry.line}
-                    </Text>
-          
-                    <View style={styles.bookRow}>
-                      {Object.entries(lineEntry.books).map(
-                        ([book, odds]: any) => (
-                          <Text
-                            key={book}
-                            style={{ color: colors.text.muted }}
-                          >
-                            {book.toUpperCase()}: O {odds.over} / U {odds.under}
-                          </Text>
-                        )
-                      )}
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )
-          )}
-        </View>
-      ))}
+        return (
+          <PlayerPropCard
+            key={player.player_id}
+            player={player}
+            name={playerNameById.get(player.player_id)}
+            minutes={meta.minutes}
+            current={meta}
+          />
+        );
+      })}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: {
-    marginTop: 12,
-    gap: 12,
-  },
-
-  playerBlock: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 10,
-    gap: 6,
-  },
-
-  playerLabel: {
-    fontSize: 13,
-    fontWeight: "800",
-  },
-
-  marketRow: {
-    gap: 2,
-  },
-
-  marketLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-  },
-
-  bookRow: {
-    flexDirection: "row",
-    gap: 12,
-  },
-});

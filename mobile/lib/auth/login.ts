@@ -2,6 +2,7 @@
 import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 
+// REQUIRED for Expo Go + iOS
 WebBrowser.maybeCompleteAuthSession();
 
 export async function login() {
@@ -23,16 +24,15 @@ export async function login() {
     `&redirect_uri=${encodeURIComponent(redirectUri)}` +
     `&scope=openid profile email`;
 
-  const result = await AuthSession.openAuthSessionAsync(
+  const result = await WebBrowser.openAuthSessionAsync(
     authUrl,
     redirectUri
   );
 
-  if (result.type !== "success") {
+  if (result.type !== "success" || !result.url) {
     throw new Error("Authentication cancelled");
   }
 
-  // access_token is returned in the URL fragment
   const params = new URLSearchParams(
     result.url.split("#")[1]
   );

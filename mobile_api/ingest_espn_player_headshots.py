@@ -134,6 +134,8 @@ def main():
 
         time.sleep(REQUEST_DELAY_SEC)
 
+def run_headshot_ingest():
+    main()
 
 if __name__ == "__main__":
     main()

@@ -1,16 +1,19 @@
 import * as WebBrowser from "expo-web-browser";
 import * as AuthSession from "expo-auth-session";
+import Constants from "expo-constants";
 
-// REQUIRED for Expo Go + Web
 WebBrowser.maybeCompleteAuthSession();
 
-const domain = process.env.EXPO_PUBLIC_AUTH0_DOMAIN!;
-const clientId = process.env.EXPO_PUBLIC_AUTH0_CLIENT_ID!;
-
 export async function login() {
-  // ✅ Correct redirect for Expo Go, iOS, Android, Web
+  const domain = process.env.EXPO_PUBLIC_AUTH0_DOMAIN!;
+  const clientId = process.env.EXPO_PUBLIC_AUTH0_CLIENT_ID!;
+
+  if (!domain || !clientId) {
+    throw new Error("Missing Auth0 environment variables");
+  }
+
   const redirectUri = AuthSession.makeRedirectUri({
-    useProxy: true, // CRITICAL for Expo Go
+    useProxy: true,
   });
 
   const authUrl =
@@ -20,14 +23,21 @@ export async function login() {
     `&redirect_uri=${encodeURIComponent(redirectUri)}` +
     `&scope=openid profile email`;
 
-  const result = await AuthSession.startAsync({
+  const result = await WebBrowser.openAuthSessionAsync(
     authUrl,
-  });
+    redirectUri
+  );
 
-  if (result.type !== "success") return;
+  if (result.type !== "success") {
+    throw new Error("Login cancelled");
+  }
 
-  const accessToken = (result.params as any)?.access_token;
-  if (!accessToken) return;
+  const params = AuthSession.getQueryParams(result.url);
+  const accessToken = params.access_token;
 
-  useAuth.getState().actions.setAccessToken(accessToken);
+  if (!accessToken) {
+    throw new Error("No access token returned");
+  }
+
+  return accessToken;
 }

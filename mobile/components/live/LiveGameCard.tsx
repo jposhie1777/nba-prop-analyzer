@@ -25,7 +25,17 @@ export function LiveGameCard({ game, players }: Props) {
   useLiveGameOdds(Number(game.gameId));
   useLivePlayerProps(Number(game.gameId));
 
-
+  if (__DEV__) {
+    const propKeysForGame = Object.keys(propMarketsByKey || {}).filter(
+      (k) => k.startsWith(`${game.gameId}:`)
+    );
+  
+    console.log("🧪 PROP KEYS FOR GAME", {
+      gameId: game.gameId,
+      count: propKeysForGame.length,
+      sample: propKeysForGame.slice(0, 3),
+    });
+  }
   // ------------------------------------
   // 🧠 GAME ODDS (from store)
   // ------------------------------------
@@ -61,7 +71,9 @@ export function LiveGameCard({ game, players }: Props) {
   const playersForOdds = useMemo(() => {
     const out: any[] = [];
   
-    // group prop markets by prop playerId
+    // ------------------------------------
+    // Group prop markets by propPlayerId
+    // ------------------------------------
     const marketsByPropPlayerId: Record<string, any[]> = {};
   
     for (const [key, market] of Object.entries(propMarketsByKey)) {
@@ -77,18 +89,59 @@ export function LiveGameCard({ game, players }: Props) {
       marketsByPropPlayerId[propPlayerId].push(market);
     }
   
-    // attempt to match each prop player to a boxscore player BY NAME
+    // ------------------------------------
+    // 🧪 DEBUG A — Do props exist for this game?
+    // ------------------------------------
+    if (__DEV__) {
+      console.log("🧪 DEBUG A — marketsByPropPlayerId", {
+        gameId: game.gameId,
+        propPlayerCount: Object.keys(marketsByPropPlayerId).length,
+        sampleKeys: Object.keys(marketsByPropPlayerId).slice(0, 3),
+      });
+    }
+  
+    // ------------------------------------
+    // 🧪 DEBUG B — Do prop markets have player names?
+    // ------------------------------------
+    if (__DEV__) {
+      const samples = Object.values(marketsByPropPlayerId)
+        .slice(0, 3)
+        .map((markets: any[]) => ({
+          playerName: markets[0]?.playerName,
+          marketKey: markets[0]?.marketKey,
+        }));
+  
+      console.log("🧪 DEBUG B — prop name samples", samples);
+    }
+  
+    // ------------------------------------
+    // Match prop players → boxscore players BY NAME
+    // ------------------------------------
     for (const markets of Object.values(marketsByPropPlayerId)) {
       const sampleMarket = markets[0];
       const rowPlayerName = sampleMarket?.playerName;
   
       if (!rowPlayerName) continue;
   
-      const meta = players.find(
-        (p) =>
-          p.name &&
-          p.name.toLowerCase() === rowPlayerName.toLowerCase()
-      );
+      const meta = players.find((p) => {
+        if (!p.name) return false;
+  
+        const match =
+          p.name.toLowerCase() === rowPlayerName.toLowerCase();
+  
+        // ------------------------------------
+        // 🧪 DEBUG C — Name match confirmation
+        // ------------------------------------
+        if (__DEV__ && match) {
+          console.log("🟢 DEBUG C — NAME MATCH", {
+            propName: rowPlayerName,
+            statName: p.name,
+            player_id: p.player_id,
+          });
+        }
+  
+        return match;
+      });
   
       if (!meta) continue;
   
@@ -97,6 +150,17 @@ export function LiveGameCard({ game, players }: Props) {
         name: meta.name,
         team: meta.team,
         markets,
+      });
+    }
+  
+    // ------------------------------------
+    // 🧪 FINAL — What actually made it through?
+    // ------------------------------------
+    if (__DEV__) {
+      console.log("🧪 FINAL — playersForOdds result", {
+        gameId: game.gameId,
+        matchedPlayers: out.length,
+        names: out.map((p) => p.name),
       });
     }
   

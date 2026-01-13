@@ -254,6 +254,7 @@ export function LiveGameCard({ game, players }: Props) {
           groupedProps={sortedGroupedProps}
           loading={oddsLoading}
           playerNameById={playerNameById}
+          playerMetaById={playerMetaById}   // ✅ REQUIRED
         />
       )}
     </View>

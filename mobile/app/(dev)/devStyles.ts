@@ -118,5 +118,14 @@ export function createDevStyles(colors: ThemeColors) {
     mutedText: {
       color: colors.text.muted,
     },
+    codeBlock: {
+      fontFamily: "Menlo",
+      fontSize: 12,
+      color: colors.text.muted,
+      backgroundColor: colors.surface.subtle,
+      padding: 8,
+      borderRadius: 6,
+      marginTop: 4,
+    },
   });
 }

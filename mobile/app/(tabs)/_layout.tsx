@@ -1,9 +1,9 @@
-//   /app/(tabs)/_layout.tsx
-import { Tabs } from "expo-router";
-import React, { useEffect, useState } from "react";
+// app/(tabs)/_layout.tsx
+import React, { useEffect, useState, useCallback } from "react";
+import { Tabs, Redirect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useAuth } from "@/lib/auth/useAuth";
 
+import { useAuth } from "@/lib/auth/useAuth";
 import { HapticTab } from "@/components/haptic-tab";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { Colors } from "@/constants/theme";
@@ -13,26 +13,38 @@ const SAVED_PROPS_KEY = "saved_props_v1";
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+
+  const accessToken = useAuth((s) => s.accessToken);
   const role = useAuth((s) => s.role);
 
-  // ---------------------------
-  // GLOBAL SAVED BETS STATE
-  // ---------------------------
+  /* -------------------------------------------------
+     🔐 PASSIVE AUTH GATE (SAFE)
+     - No login()
+     - No effects
+     - No loops
+  -------------------------------------------------- */
+  if (!accessToken) {
+    return <Redirect href="/login" />;
+  }
+
+  /* -------------------------------------------------
+     SAVED BETS STATE
+  -------------------------------------------------- */
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
 
-  // ---------------------------
-  // LOAD SAVED BETS
-  // ---------------------------
+  // Load saved bets once
   useEffect(() => {
     AsyncStorage.getItem(SAVED_PROPS_KEY).then((raw) => {
       if (!raw) return;
-      setSavedIds(new Set(JSON.parse(raw)));
+      try {
+        setSavedIds(new Set(JSON.parse(raw)));
+      } catch {
+        setSavedIds(new Set());
+      }
     });
   }, []);
 
-  // ---------------------------
-  // PERSIST SAVED BETS
-  // ---------------------------
+  // Persist saved bets
   useEffect(() => {
     AsyncStorage.setItem(
       SAVED_PROPS_KEY,
@@ -40,30 +52,33 @@ export default function TabLayout() {
     );
   }, [savedIds]);
 
-  // ---------------------------
-  // HELPERS
-  // ---------------------------
-  const toggleSave = (id: string) => {
+  /* -------------------------------------------------
+     HELPERS (MEMOIZED)
+  -------------------------------------------------- */
+  const toggleSave = useCallback((id: string) => {
     setSavedIds((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  };
+  }, []);
 
-  const clearAllSaved = () => {
+  const clearAllSaved = useCallback(() => {
     setSavedIds(new Set());
-  };
+  }, []);
 
+  /* -------------------------------------------------
+     TABS
+  -------------------------------------------------- */
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
         headerShown: false,
         tabBarButton: HapticTab,
+        tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
       }}
     >
-      {/* HOME TAB */}
+      {/* HOME */}
       <Tabs.Screen
         name="index"
         options={{
@@ -77,18 +92,23 @@ export default function TabLayout() {
           toggleSave,
         }}
       />
-      {/* LIVE TAB */}
+
+      {/* LIVE */}
       <Tabs.Screen
         name="live"
         options={{
           title: "Live",
           tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="dot.radiowaves.left.and.right" color={color} />
+            <IconSymbol
+              size={28}
+              name="dot.radiowaves.left.and.right"
+              color={color}
+            />
           ),
         }}
       />
 
-      {/* SAVED TAB */}
+      {/* SAVED */}
       <Tabs.Screen
         name="saved"
         options={{
@@ -103,7 +123,8 @@ export default function TabLayout() {
           clearAllSaved,
         }}
       />
-      {/* DEV TAB (DEV ONLY) */}
+
+      {/* DEV (ROLE-GATED) */}
       {role === "dev" && (
         <Tabs.Screen
           name="dev"

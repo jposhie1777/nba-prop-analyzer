@@ -65,25 +65,6 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   const accessToken = useAuth((s) => s.accessToken);
 
-  // 🔐 Prevent multiple redirects
-  const hasTriggeredLogin = useRef(false);
-
-  useEffect(() => {
-    if (!accessToken && !hasTriggeredLogin.current) {
-      hasTriggeredLogin.current = true;
-      login();
-    }
-  }, [accessToken]);
-
-  // ⏳ Block UI until auth completes
-  if (!accessToken) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
-
   // ---------------------------
   // HYDRATE SAVED BETS ON BOOT
   // ---------------------------

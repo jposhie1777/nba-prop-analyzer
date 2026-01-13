@@ -49,6 +49,21 @@ app = FastAPI(
 register_debug_code(app)
 
 # ==================================================
+# CORS (REQUIRED for Expo Web)
+# ==================================================
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://pulse-web-indol-seven.vercel.app",
+        "http://localhost:3000",
+        "http://localhost:8081",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ==================================================
 # Timezone (AUTHORITATIVE)
 # ==================================================
 NY_TZ = ZoneInfo("America/New_York")

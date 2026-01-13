@@ -1,3 +1,4 @@
+# curl "https://pulse-mobile-api-763243624328.us-central1.run.app/dev/bq/table-preview?dataset=nba_goat_data&table=props_mobile_v1"
 from fastapi import APIRouter, Query
 from google.cloud import bigquery
 

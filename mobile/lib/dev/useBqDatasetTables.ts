@@ -9,19 +9,24 @@ const API_URL =
 
 export function useBqDatasetTables(dataset: string) {
   const [tables, setTables] = useState<string[]>([]);
+  const [lastRefreshed, setLastRefreshed] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
+    setError(null);
+
     try {
       const res = await fetch(
         `${API_URL}/dev/bq/datasets/${dataset}/tables`
       );
       const json = await res.json();
+
       setTables(json.tables ?? []);
+      setLastRefreshed(json.last_refreshed ?? null);
     } catch (e: any) {
-      setError(e.message);
+      setError(e.message ?? "Failed to load tables");
     } finally {
       setLoading(false);
     }
@@ -31,5 +36,11 @@ export function useBqDatasetTables(dataset: string) {
     load();
   }, [dataset]);
 
-  return { tables, loading, error, reload: load };
+  return {
+    tables,
+    lastRefreshed,
+    loading,
+    error,
+    reload: load,
+  };
 }

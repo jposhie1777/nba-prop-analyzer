@@ -1,5 +1,5 @@
 // components/live/liveGameCard
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, Pressable } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { LiveGame } from "@/types/live";
 import { LivePlayerStat } from "@/hooks/useLivePlayerStats";
@@ -11,7 +11,7 @@ import { BoxScore } from "./boxscore/BoxScore";
 import { LiveOdds } from "./LiveOdds";
 import { useLivePlayerProps } from "@/hooks/useLivePlayerProps";
 import { groupLiveProps } from "@/utils/groupLiveProps";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useLiveGameOdds } from "@/hooks/useLiveGameOdds";
 
 type Props = {
@@ -26,12 +26,7 @@ export function LiveGameCard({ game, players }: Props) {
     props: liveProps,
     loading: oddsLoading,
   } = useLivePlayerProps(game.gameId);
-
-  console.log("🧪 Live props raw", {
-    gameId: game.gameId,    // ✅ CORRECT
-    count: liveProps.length,
-    sample: liveProps[0],
-  });
+  const [showPlayerProps, setShowPlayerProps] = useState(false);
 
   const groupedLiveProps = useMemo(
     () => groupLiveProps(liveProps),
@@ -180,9 +175,11 @@ export function LiveGameCard({ game, players }: Props) {
         players={players}
       />
       
-      {/* 🟢 LIVE GAME ODDS */}
+      {/* -----------------------------
+         🟢 LIVE GAME ODDS (ALWAYS VISIBLE)
+      ----------------------------- */}
       {gameOdds?.length > 0 && (
-        <View style={{ marginBottom: 8 }}>
+        <View style={{ marginTop: 8 }}>
           {gameOdds.map((o) => (
             <Text
               key={o.book}
@@ -204,11 +201,31 @@ export function LiveGameCard({ game, players }: Props) {
         ]}
       />
       
-      <LiveOdds
-        groupedProps={sortedGroupedProps}
-        loading={oddsLoading}
-        playerNameById={playerNameById}
-      />
+      {/* -----------------------------
+         🔽 PLAYER PROPS (COLLAPSIBLE)
+      ----------------------------- */}
+      <Pressable
+        onPress={() => setShowPlayerProps((v) => !v)}
+        style={{ marginTop: 6 }}
+      >
+        <Text
+          style={{
+            color: colors.text.secondary,
+            fontSize: 12,
+            fontWeight: "600",
+          }}
+        >
+          Player Props {showPlayerProps ? "▾" : "▸"}
+        </Text>
+      </Pressable>
+      
+      {showPlayerProps && !oddsLoading && sortedGroupedProps.length > 0 && (
+        <LiveOdds
+          groupedProps={sortedGroupedProps}
+          loading={oddsLoading}
+          playerNameById={playerNameById}
+        />
+      )}
     </View>
   );
 }

@@ -10,6 +10,8 @@ import { ScoreRow } from "./ScoreRow";
 import { GameStatus } from "./GameStatus";
 import { BoxScore } from "./boxscore/BoxScore";
 import { LiveOdds } from "./LiveOdds";
+import { useLiveGameOdds } from "@/hooks/useLiveGameOdds";
+import { useLivePlayerProps } from "@/hooks/useLivePlayerProps";
 
 type Props = {
   game: any;      // adapted LiveGame
@@ -18,6 +20,11 @@ type Props = {
 
 export function LiveGameCard({ game, players }: Props) {
   const { colors } = useTheme();
+
+  // 🔥 PER-GAME ODDS POLLING
+  useLiveGameOdds(Number(game.gameId));
+  useLivePlayerProps(Number(game.gameId));
+
 
   // ------------------------------------
   // 🧠 GAME ODDS (from store)

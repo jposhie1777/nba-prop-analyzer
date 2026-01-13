@@ -1,40 +1,32 @@
 import * as AuthSession from "expo-auth-session";
-import * as WebBrowser from "expo-web-browser";
-import Constants from "expo-constants";
-import { Platform } from "react-native";
 import { useAuth } from "./useAuth";
 
-WebBrowser.maybeCompleteAuthSession();
+// REQUIRED for Expo Go + Web
+AuthSession.maybeCompleteAuthSession();
 
 const domain = process.env.EXPO_PUBLIC_AUTH0_DOMAIN!;
 const clientId = process.env.EXPO_PUBLIC_AUTH0_CLIENT_ID!;
 
-// ✅ SAFE redirect resolution for ALL platforms
-const redirectUri = AuthSession.makeRedirectUri({
-  scheme: "pulse",
-  useProxy: Platform.OS !== "web",
-});
-
 export async function login() {
-  const authUrl =
-    `https://${domain}/authorize?` +
-    new URLSearchParams({
-      client_id: clientId,
-      response_type: "token",
-      scope: "openid profile email",
-      redirect_uri: redirectUri,
-    }).toString();
+  // ✅ Correct redirect for Expo Go, iOS, Android, Web
+  const redirectUri = AuthSession.makeRedirectUri({
+    useProxy: true, // CRITICAL for Expo Go
+  });
 
-  const result = await WebBrowser.openAuthSessionAsync(
+  const authUrl =
+    `https://${domain}/authorize` +
+    `?response_type=token` +
+    `&client_id=${clientId}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&scope=openid profile email`;
+
+  const result = await AuthSession.startAsync({
     authUrl,
-    redirectUri
-  );
+  });
 
   if (result.type !== "success") return;
 
-  const params = AuthSession.parseRedirectUri(result.url);
-  const accessToken = params.access_token;
-
+  const accessToken = (result.params as any)?.access_token;
   if (!accessToken) return;
 
   useAuth.getState().actions.setAccessToken(accessToken);

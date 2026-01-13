@@ -1,45 +1,64 @@
 # ingest_espn_player_headshots.py
-import requests
-from google.cloud import bigquery
-from datetime import datetime, timezone
-import time
 
-# ======================================================
-# CONFIG
-# ======================================================
 import os
+import time
+import requests
+from datetime import datetime, timezone
 
-PROJECT_ID = (
-    os.environ.get("GCP_PROJECT")
-    or os.environ.get("GOOGLE_CLOUD_PROJECT")
-)
+from google.cloud import bigquery
+from bq import get_bq_client
 
-if not PROJECT_ID:
-    raise RuntimeError("❌ GCP_PROJECT / GOOGLE_CLOUD_PROJECT not set")
-TABLE_ID = f"{PROJECT_ID}.nba_goat_data.player_lookup"
+# ======================================================
+# CONFIG (LAZY + CLOUD-RUN SAFE)
+# ======================================================
+
+def get_project_id() -> str:
+    project = (
+        os.environ.get("GCP_PROJECT")
+        or os.environ.get("GOOGLE_CLOUD_PROJECT")
+    )
+    if not project:
+        raise RuntimeError("❌ GCP_PROJECT / GOOGLE_CLOUD_PROJECT not set")
+    return project
+
+
+def get_table_id() -> str:
+    return f"{get_project_id()}.nba_goat_data.player_lookup"
+
+
+def get_bq():
+    return get_bq_client()
+
 
 ESPN_SEARCH_URL = "https://site.web.api.espn.com/apis/common/v3/search"
+
 HEADSHOT_TEMPLATE = (
     "https://a.espncdn.com/i/headshots/nba/players/full/{id}.png"
 )
 
-def fetch_players_from_bq():
-    query = """
-    SELECT DISTINCT player
-    FROM `nba_goat_data.props_mobile_v1`
-    WHERE player IS NOT NULL
-    ORDER BY player
-    """
-    rows = bq.query(query).result()
-    return [r.player for r in rows]
-
 REQUEST_DELAY_SEC = 0.5  # be polite to ESPN
 
 # ======================================================
-# CLIENT
+# BIGQUERY READ
 # ======================================================
-bq = bigquery.Client(project=PROJECT_ID)
 
+def fetch_players_from_bq():
+    bq = get_bq()
+    project = get_project_id()
+
+    query = f"""
+    SELECT DISTINCT player
+    FROM `{project}.nba_goat_data.props_mobile_v1`
+    WHERE player IS NOT NULL
+    ORDER BY player
+    """
+
+    rows = bq.query(query).result()
+    return [r.player for r in rows]
+
+# ======================================================
+# ESPN LOOKUP
+# ======================================================
 
 def fetch_espn_player(player_name: str):
     resp = requests.get(
@@ -68,10 +87,16 @@ def fetch_espn_player(player_name: str):
 
     return None
 
+# ======================================================
+# BIGQUERY UPSERT
+# ======================================================
 
 def upsert_player(row: dict):
+    bq = get_bq()
+    table_id = get_table_id()
+
     query = f"""
-    MERGE `{TABLE_ID}` t
+    MERGE `{table_id}` t
     USING (SELECT @player_name AS player_name) s
     ON t.player_name = s.player_name
     WHEN MATCHED THEN
@@ -117,14 +142,17 @@ def upsert_player(row: dict):
 
     bq.query(query, job_config=job_config).result()
 
+# ======================================================
+# MAIN LOOP
+# ======================================================
 
 def main():
     players = fetch_players_from_bq()
 
     for name in players:
         print(f"🔍 Fetching ESPN ID for {name}")
-        row = fetch_espn_player(name)
 
+        row = fetch_espn_player(name)
         if not row:
             print(f"⚠️ No NBA match found for {name}")
             continue
@@ -134,11 +162,16 @@ def main():
 
         time.sleep(REQUEST_DELAY_SEC)
 
+# ======================================================
+# CLOUD RUN SAFE ENTRYPOINT
+# ======================================================
+
 def run_headshot_ingest():
     """
-    Safe entrypoint for Cloud Run / background thread
+    Safe entrypoint for Cloud Run background threads
     """
     main()
+
 
 if __name__ == "__main__":
     main()

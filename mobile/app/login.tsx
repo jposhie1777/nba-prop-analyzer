@@ -1,18 +1,25 @@
-// /app/login.ts
 import { View, Pressable, Text } from "react-native";
 import { login } from "@/lib/auth/login";
+import { useAuth } from "@/lib/auth/useAuth";
 
 export default function LoginScreen() {
+  const setAuth = useAuth((s) => s.setAuth);
+
+  const handleLogin = async () => {
+    try {
+      const token = await login();
+
+      // TEMP: force dev role
+      setAuth(token, "dev");
+    } catch (err) {
+      console.error("Login failed:", err);
+    }
+  };
+
   return (
-    <View
-      style={{
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-      }}
-    >
+    <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
       <Pressable
-        onPress={login}
+        onPress={handleLogin}
         style={{
           paddingHorizontal: 24,
           paddingVertical: 14,

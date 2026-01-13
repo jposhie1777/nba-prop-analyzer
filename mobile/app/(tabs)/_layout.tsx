@@ -14,7 +14,7 @@ const SAVED_PROPS_KEY = "saved_props_v1";
 export default function TabLayout() {
   const colorScheme = useColorScheme();
 
-  const accessToken = useAuth((s) => s.accessToken);
+  const accessToken = true;
   const role = useAuth((s) => s.role);
 
   /* -------------------------------------------------

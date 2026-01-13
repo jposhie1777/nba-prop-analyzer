@@ -131,4 +131,4 @@ def preview_table(
         "column_count": len(columns),
         "columns": columns,
         "example_row": example_row,
-    }    }
+    }    

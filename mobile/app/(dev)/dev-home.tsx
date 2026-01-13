@@ -270,7 +270,23 @@ export default function DevHomeScreen() {
           ))
         )}
       </Section>
-
+      <Pressable
+        style={[styles.toolButton, { marginTop: 8 }]}
+        onPress={async () => {
+          await fetch(
+            `${apiUrl}/dev/bq/refresh-player-headshots`,
+            { method: "POST" }
+          );
+          alert("Player headshot refresh started");
+        }}
+      >
+        <Text style={styles.toolTitle}>
+          Refresh ESPN Player Headshots
+        </Text>
+        <Text style={styles.toolSubtitle}>
+          Updates player_lookup (manual)
+        </Text>
+      </Pressable>
       {/* DEVELOPER TOOLS */}
       <Section title="Developer Tools" styles={styles}>
         <ToolButton

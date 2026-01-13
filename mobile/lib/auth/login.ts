@@ -1,8 +1,8 @@
+import * as WebBrowser from "expo-web-browser";
 import * as AuthSession from "expo-auth-session";
-import { useAuth } from "./useAuth";
 
 // REQUIRED for Expo Go + Web
-AuthSession.maybeCompleteAuthSession();
+WebBrowser.maybeCompleteAuthSession();
 
 const domain = process.env.EXPO_PUBLIC_AUTH0_DOMAIN!;
 const clientId = process.env.EXPO_PUBLIC_AUTH0_CLIENT_ID!;

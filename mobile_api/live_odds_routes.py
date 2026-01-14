@@ -30,7 +30,7 @@ SELECT
   over_odds,
   under_odds,
   snapshot_ts
-FROM `graphite-flare-477419-h7.nba_live.live_player_prop_odds_flat`
+FROM `graphite-flare-477419-h7.nba_live.live_player_prop_odds_latest`
 WHERE game_id = @game_id
 ORDER BY market, player_id, book
 """

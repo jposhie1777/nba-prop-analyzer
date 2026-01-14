@@ -124,6 +124,30 @@ export function LiveGameCard({ game, players }: Props) {
     });
   }, [filteredGroupedProps, playerMetaById]);
 
+  // ------------------------------------
+  // 🔁 FLATTEN PLAYER → MARKET → ROWS
+  // ------------------------------------
+  const liveOddsRows = useMemo(() => {
+    const rows: any[] = [];
+  
+    for (const player of sortedGroupedProps as any[]) {
+      for (const [market, marketData] of Object.entries(player.markets)) {
+        if (!marketData?.main) continue;
+  
+        rows.push({
+          player_id: player.player_id,
+          market,
+          line: marketData.main.line,
+          over: marketData.main.over,
+          under: marketData.main.under,
+          milestones: marketData.milestones ?? [],
+        });
+      }
+    }
+  
+    return rows;
+  }, [sortedGroupedProps]);
+
   const {
     odds: gameOdds,
     loading: gameOddsLoading,
@@ -257,12 +281,12 @@ export function LiveGameCard({ game, players }: Props) {
         </Text>
       </Pressable>
       
-      {showPlayerProps && !oddsLoading && sortedGroupedProps.length > 0 && (
+      {showPlayerProps && !oddsLoading && liveOddsRows.length > 0 && (
         <LiveOdds
-          groupedProps={sortedGroupedProps}
+          groupedProps={liveOddsRows}
           loading={oddsLoading}
           playerNameById={playerNameById}
-          playerMetaById={playerMetaById}   // ✅ REQUIRED
+          playerMetaById={playerMetaById}
         />
       )}
     </View>

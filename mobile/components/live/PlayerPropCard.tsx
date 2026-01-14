@@ -1,3 +1,4 @@
+// components/live/playerpropcard
 import { View, Text, StyleSheet } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { MarketRow } from "./MarketRow";

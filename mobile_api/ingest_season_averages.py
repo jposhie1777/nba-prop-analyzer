@@ -89,9 +89,16 @@ def insert_rows(table: str, rows: List[Dict]):
     if not rows:
         return
 
+    print(f"📤 Attempting BigQuery insert: {table} ({len(rows)} rows)")
+
     errors = bq.insert_rows_json(table, rows)
+
     if errors:
+        print("❌ BigQuery insert errors:", errors)
         raise RuntimeError(errors)
+
+    print(f"✅ BigQuery insert successful: {table}")
+
 
 
 def log_ingestion(
@@ -167,7 +174,14 @@ def ingest_player():
                 insert_rows(f"{BQ_DATASET}.raw_season_averages_player", raw_rows)
                 insert_rows(f"{BQ_DATASET}.season_averages_player_stats", stat_rows)
 
+                print(
+                    f"✅ Player season averages inserted: "
+                    f"{category} | {type_ or 'default'} | "
+                    f"raw={len(raw_rows)} stats={len(stat_rows)}"
+                )
+
                 log_ingestion("player", category, type_, len(rows), True)
+
 
             except Exception as e:
                 log_ingestion("player", category, type_, 0, False, str(e))
@@ -222,7 +236,14 @@ def ingest_team():
                 insert_rows(f"{BQ_DATASET}.raw_season_averages_team", raw_rows)
                 insert_rows(f"{BQ_DATASET}.season_averages_team_stats", stat_rows)
 
+                print(
+                    f"✅ Team season averages inserted: "
+                    f"{category} | {type_ or 'default'} | "
+                    f"raw={len(raw_rows)} stats={len(stat_rows)}"
+                )
+
                 log_ingestion("team", category, type_, len(rows), True)
+
 
             except Exception as e:
                 log_ingestion("team", category, type_, 0, False, str(e))
@@ -237,8 +258,10 @@ def main(season: int, season_type: str):
     SEASON = season
     SEASON_TYPE = season_type
 
-    bq = get_bq_client()     # ✅ ADC + env fallback (matches rest of system)
-    HEADERS = get_headers()  # ✅ strict API key validation
+    print(f"🚀 Starting season averages ingest {SEASON} {SEASON_TYPE}")
+
+    bq = get_bq_client()     # ADC + env fallback
+    HEADERS = get_headers()  # strict API key validation
 
     ingest_player()
     ingest_team()

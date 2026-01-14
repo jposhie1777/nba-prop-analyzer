@@ -69,7 +69,10 @@ export default function DevHomeScreen() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Dev Console</Text>
-
+      
+      <Text selectable style={{ color: "white", fontSize: 12 }}>
+        API URL: {process.env.EXPO_PUBLIC_API_URL ?? "❌ UNDEFINED"}
+      </Text>
       {/* ENVIRONMENT */}
       <Section title="Environment & Build" styles={styles}>
         <KV label="ENV" value={runtimeEnv} styles={styles} />

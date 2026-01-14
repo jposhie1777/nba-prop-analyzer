@@ -58,7 +58,8 @@ SEASON = int(os.getenv("SEASON", "2024"))
 SEASON_TYPE = os.getenv("SEASON_TYPE", "regular")
 
 REQUEST_SLEEP = 0.25
-NOW_TS = datetime.now(timezone.utc)
+NOW_TS = datetime.now(timezone.utc).isoformat()
+
 
 # ======================================================
 # HELPERS

@@ -1,3 +1,4 @@
+// components/live/marketrow
 import { View, Text, ScrollView, StyleSheet } from "react-native";
 import { LineButton } from "./LineButton";
 

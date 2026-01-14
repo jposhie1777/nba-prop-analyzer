@@ -7,11 +7,11 @@ export function MarketRow({ market, lines }: any) {
   // Split main vs milestone
   // -----------------------------
   const mainLine = lines.find(
-    (l: any) => l.market_type === "over_under"
+    (l: any) => l.line_type === "over_under"
   );
 
   const milestones = lines
-    .filter((l: any) => l.market_type === "milestone")
+    .filter((l: any) => l.line_type === "milestone")
     .sort((a: any, b: any) => a.line - b.line)
     .slice(0, 3); // keep it clean
 

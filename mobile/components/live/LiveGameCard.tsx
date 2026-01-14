@@ -73,35 +73,35 @@ export function LiveGameCard({ game, players }: Props) {
   
       for (const [market, marketData] of Object.entries(player.markets)) {
         const normalizedMarket = market.toUpperCase();
+      
         let current = 0;
-
         switch (normalizedMarket) {
           case "PTS":
           case "POINTS":
             current = meta.pts;
             break;
-        
           case "REB":
           case "REBOUNDS":
             current = meta.reb;
             break;
-        
           case "AST":
           case "ASSISTS":
             current = meta.ast;
             break;
-        
-          case "3PM":
-            // ⚠️ you do NOT yet track this correctly
-            continue;
-        
           default:
             continue;
         }
-  
-        // ❌ REMOVE DEAD LINES
-        if (current >= marketData.line) continue;
-  
+      
+        // 🔑 find main over/under line
+        const mainLine = marketData.lines.find(
+          (l: any) => l.line_type === "over_under"
+        );
+      
+        if (!mainLine) continue;
+      
+        // ❌ remove dead lines
+        if (current >= mainLine.line) continue;
+      
         validMarkets[market] = marketData;
       }
   
@@ -123,30 +123,6 @@ export function LiveGameCard({ game, players }: Props) {
       return minB - minA;
     });
   }, [filteredGroupedProps, playerMetaById]);
-
-  // ------------------------------------
-  // 🔁 FLATTEN PLAYER → MARKET → ROWS
-  // ------------------------------------
-  const liveOddsRows = useMemo(() => {
-    const rows: any[] = [];
-  
-    for (const player of sortedGroupedProps as any[]) {
-      for (const [market, marketData] of Object.entries(player.markets)) {
-        if (!marketData?.main) continue;
-  
-        rows.push({
-          player_id: player.player_id,
-          market,
-          line: marketData.main.line,
-          over: marketData.main.over,
-          under: marketData.main.under,
-          milestones: marketData.milestones ?? [],
-        });
-      }
-    }
-  
-    return rows;
-  }, [sortedGroupedProps]);
 
   const {
     odds: gameOdds,
@@ -283,7 +259,7 @@ export function LiveGameCard({ game, players }: Props) {
       
       {showPlayerProps && (
         <LiveOdds
-          groupedProps={liveOddsRows}
+          groupedProps={sortedGroupedProps}
           loading={oddsLoading}
           playerNameById={playerNameById}
           playerMetaById={playerMetaById}

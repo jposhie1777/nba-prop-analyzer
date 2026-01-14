@@ -3,8 +3,7 @@ import os
 import asyncio
 from datetime import datetime
 from zoneinfo import ZoneInfo
-
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 
 from live_games import router as live_games_router
@@ -242,14 +241,19 @@ def get_props(
 
 @app.post("/admin/ingest/season-averages")
 def run_season_averages_ingestion(
+    background_tasks: BackgroundTasks,
     season: int = Query(2024),
-    season_type: str = Query("regular")
+    season_type: str = Query("regular"),
 ):
-    ingest_season_averages(season=season, season_type=season_type)
+    background_tasks.add_task(
+        ingest_season_averages,
+        season=season,
+        season_type=season_type,
+    )
 
     return {
-        "status": "started",
+        "status": "queued",
         "season": season,
         "season_type": season_type,
-        "started_at": datetime.utcnow().isoformat()
+        "queued_at": datetime.utcnow().isoformat(),
     }

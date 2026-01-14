@@ -2,13 +2,21 @@
 import { View, Text, ScrollView, StyleSheet } from "react-native";
 import { LineButton } from "./LineButton";
 
-export function MarketRow({ market, lines }: any) {
+export function MarketRow({ market, lines, current }: any) {
   // -----------------------------
   // Split main vs milestone
   // -----------------------------
   const mainLine = lines.find(
     (l: any) => l.line_type === "over_under"
   );
+  
+  const getState = (lineValue: number) => {
+    const remaining = lineValue - current;
+  
+    if (remaining <= 0) return "hit";     // ✅ already hit
+    if (remaining === 1) return "close";  // 🟡 one away
+    return "pending";                     // ⏳ still needs work
+  };
 
   const milestones = lines
     .filter((l: any) => l.line_type === "milestone")
@@ -33,6 +41,7 @@ export function MarketRow({ market, lines }: any) {
               key={`main-${mainLine.line}`}
               line={mainLine}
               market={market}
+              state={getState(mainLine.line)}
             />
           </View>
         </ScrollView>
@@ -53,7 +62,7 @@ export function MarketRow({ market, lines }: any) {
                 key={`ms-${m.line}`}
                 line={m}
                 market={market}
-                variant="milestone"   // 👈 optional, see below
+                state={getState(m.line)}
               />
             ))}
           </View>

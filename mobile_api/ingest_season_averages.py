@@ -10,22 +10,27 @@ from datetime import datetime, timezone
 # CONFIG
 # ======================================================
 
-PROJECT_ID = os.getenv("GCP_PROJECT") or os.getenv("GOOGLE_CLOUD_PROJECT")
-API_KEY = os.getenv("BALLDONTLIE_API_KEY")
-
-if not PROJECT_ID:
-    raise RuntimeError("❌ GCP_PROJECT not set")
-
-if not API_KEY:
-    raise RuntimeError("❌ BALLDONTLIE_API_KEY not set")
+def get_project_id() -> str:
+    project_id = (
+        os.getenv("GCP_PROJECT")
+        or os.getenv("GOOGLE_CLOUD_PROJECT")
+    )
+    if not project_id:
+        raise RuntimeError("❌ GCP_PROJECT / GOOGLE_CLOUD_PROJECT not set")
+    return project_id
 
 BQ_DATASET = "nba_goat_data"
-
-HEADERS = {
-    "Authorization": API_KEY
-}
-
 BASE_URL = "https://api.balldontlie.io/nba/v1"
+HEADERS = None
+bq = None
+
+def get_headers() -> dict:
+    api_key = os.getenv("BALLDONTLIE_API_KEY")
+    if not api_key:
+        raise RuntimeError("❌ BALLDONTLIE_API_KEY not set")
+    return {
+        "Authorization": api_key
+    }
 
 SEASON_AVERAGES_MATRIX = {
     "general": [
@@ -59,8 +64,6 @@ SEASON = int(os.getenv("SEASON", "2024"))
 SEASON_TYPE = os.getenv("SEASON_TYPE", "regular")
 
 REQUEST_SLEEP = 0.25  # rate-limit safety
-
-bq = bigquery.Client(project=PROJECT_ID)
 
 NOW_TS = datetime.now(timezone.utc)
 
@@ -235,13 +238,16 @@ def ingest_team():
 # ======================================================
 
 def main(season: int, season_type: str):
-    global SEASON, SEASON_TYPE
+    global SEASON, SEASON_TYPE, bq, HEADERS
+
     SEASON = season
     SEASON_TYPE = season_type
+
+    project_id = get_project_id()
+    bq = bigquery.Client(project=project_id)
+
+    HEADERS = get_headers()
 
     ingest_player()
     ingest_team()
     print("✅ Season averages ingestion complete")
-
-if __name__ == "__main__":
-    main()

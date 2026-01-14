@@ -20,6 +20,7 @@ from live_player_prop_odds_ingest import ingest_live_player_prop_odds
 from live_odds_routes import router as live_odds_router
 from live_odds_flatten import run_live_odds_flatten
 from dev_bq_routes import router as dev_bq_routes_router
+from routes.first_basket_routes import router as first_basket_router
 
 # ==================================================
 # 🔴 ADDITION: player box stream imports
@@ -88,6 +89,7 @@ app.include_router(live_games_router)
 app.include_router(historical_player_trends_router)
 app.include_router(live_odds_router)
 app.include_router(dev_bq_routes_router)
+app.include_router(first_basket_router
 
 # ==================================================
 # 🔴 ADDITION: player box + player stats routers

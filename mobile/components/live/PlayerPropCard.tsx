@@ -33,6 +33,15 @@ export function PlayerPropCard({
             key={market}
             market={market}
             lines={marketData.lines}
+            current={
+              market.toUpperCase() === "PTS" || market.toUpperCase() === "POINTS"
+                ? current.pts
+                : market.toUpperCase() === "AST" || market.toUpperCase() === "ASSISTS"
+                ? current.ast
+                : market.toUpperCase() === "REB" || market.toUpperCase() === "REBOUNDS"
+                ? current.reb
+                : 0
+            }
           />
         )
       )}

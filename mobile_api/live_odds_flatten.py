@@ -17,7 +17,6 @@ client = bigquery.Client(project=PROJECT_ID)
 # Odds are UPDATED in place when they change
 # ======================================================
 
-PLAYER_PROP_FLATTEN_SQL = """
 MERGE `graphite-flare-477419-h7.nba_live.live_player_prop_odds_flat` T
 USING (
   SELECT *
@@ -28,23 +27,25 @@ USING (
 
       CAST(JSON_VALUE(m, '$.player_id') AS INT64) AS player_id,
       JSON_VALUE(m, '$.market') AS market,
+      JSON_VALUE(m, '$.market_type') AS market_type,
 
-      -- keep FLOAT for output
       CAST(JSON_VALUE(m, '$.line') AS FLOAT64) AS line,
-
       JSON_VALUE(m, '$.book') AS book,
+
+      -- Over / Under
       CAST(JSON_VALUE(m, '$.odds.over') AS INT64)  AS over_odds,
       CAST(JSON_VALUE(m, '$.odds.under') AS INT64) AS under_odds,
+
+      -- Milestone
+      CAST(JSON_VALUE(m, '$.odds.yes') AS INT64) AS milestone_odds,
 
       ROW_NUMBER() OVER (
         PARTITION BY
           game_id,
           CAST(JSON_VALUE(m, '$.player_id') AS INT64),
           JSON_VALUE(m, '$.market'),
-
-          -- ✅ STRING version ONLY for partitioning
+          JSON_VALUE(m, '$.market_type'),
           JSON_VALUE(m, '$.line'),
-
           JSON_VALUE(m, '$.book')
         ORDER BY TIMESTAMP(snapshot_ts) DESC
       ) AS rn
@@ -54,17 +55,19 @@ USING (
   WHERE rn = 1
 ) S
 ON
-  T.game_id    = S.game_id
-  AND T.player_id = S.player_id
-  AND T.market = S.market
-  AND T.line   = S.line
-  AND T.book   = S.book
+  T.game_id     = S.game_id
+  AND T.player_id  = S.player_id
+  AND T.market  = S.market
+  AND T.market_type = S.market_type
+  AND T.line    = S.line
+  AND T.book    = S.book
 
 WHEN MATCHED THEN
   UPDATE SET
-    snapshot_ts = S.snapshot_ts,
-    over_odds   = S.over_odds,
-    under_odds  = S.under_odds
+    snapshot_ts    = S.snapshot_ts,
+    over_odds      = S.over_odds,
+    under_odds     = S.under_odds,
+    milestone_odds = S.milestone_odds
 
 WHEN NOT MATCHED THEN
   INSERT (
@@ -72,22 +75,25 @@ WHEN NOT MATCHED THEN
     game_id,
     player_id,
     market,
+    market_type,
     line,
     book,
     over_odds,
-    under_odds
+    under_odds,
+    milestone_odds
   )
   VALUES (
     S.snapshot_ts,
     S.game_id,
     S.player_id,
     S.market,
+    S.market_type,
     S.line,
     S.book,
     S.over_odds,
-    S.under_odds
+    S.under_odds,
+    S.milestone_odds
   );
-"""
 
 # ======================================================
 # 🔁 IDPOTENT FLATTEN: LIVE GAME ODDS

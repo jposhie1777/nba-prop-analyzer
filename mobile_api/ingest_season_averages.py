@@ -199,7 +199,7 @@ def ingest_player():
                             "ingested_at": NOW_TS,
                         })
 
-                insert_rows(f"{BQ_DATASET}.raw_season_averages_player", raw_rows)
+                insert_rows(f"{BQ_DATASET}.raw_season_averages_player_v2", raw_rows)
                 insert_rows(f"{BQ_DATASET}.season_averages_player_stats", stat_rows)
 
                 print(

@@ -21,7 +21,7 @@ from live_odds_flatten import run_live_odds_flatten
 from dev_bq_routes import router as dev_bq_routes_router
 from first_basket_routes import router as first_basket_router
 from ingest_season_averages import main as ingest_season_averages
-
+from season_averages_routes import router as season_averages_router
 # ==================================================
 # 🔴 ADDITION: player box stream imports
 # ==================================================
@@ -90,6 +90,7 @@ app.include_router(historical_player_trends_router)
 app.include_router(live_odds_router)
 app.include_router(dev_bq_routes_router)
 app.include_router(first_basket_router)
+app.include_router(season_averages_router)
 
 # ==================================================
 # 🔴 ADDITION: player box + player stats routers
@@ -239,21 +240,3 @@ def get_props(
         "props": props,
     }
 
-@app.post("/admin/ingest/season-averages")
-def run_season_averages_ingestion(
-    background_tasks: BackgroundTasks,
-    season: int = Query(2024),
-    season_type: str = Query("regular"),
-):
-    background_tasks.add_task(
-        ingest_season_averages,
-        season=season,
-        season_type=season_type,
-    )
-
-    return {
-        "status": "queued",
-        "season": season,
-        "season_type": season_type,
-        "queued_at": datetime.utcnow().isoformat(),
-    }

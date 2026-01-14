@@ -43,7 +43,7 @@ def get_live_player_props(
     Returns LIVE player prop odds (PTS / AST / REB / 3PM)
     for DraftKings + FanDuel only.
 
-    Source: live_player_prop_odds_flat
+    Source: live_player_prop_odds_latest
     """
 
     job = bq.query(

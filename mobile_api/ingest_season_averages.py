@@ -7,7 +7,9 @@ from typing import Dict, List, Optional
 from datetime import datetime, timezone
 
 from google.cloud import bigquery
-from bq import get_bq_client   # ✅ reuse shared helper
+from google.cloud.bigquery import json as bq_json   # ⭐ ADD THIS
+from bq import get_bq_client
+
 
 # ======================================================
 # CONFIG
@@ -178,7 +180,7 @@ def ingest_player():
                         "category": category,
                         "type": type_,
                         "player_id": player_id,
-                        "payload": r,
+                        "payload": bq_json.Json(r),
                         "ingested_at": NOW_TS,
                     })
 
@@ -243,7 +245,7 @@ def ingest_team():
                         "category": category,
                         "type": type_,
                         "team_id": team_id,
-                        "payload": r,
+                        "payload": bq_json.Json(r),
                         "ingested_at": NOW_TS,
                     })
 

@@ -7,6 +7,7 @@ import { LivePlayerProp } from "@/lib/liveOdds";
 export type BookOdds = {
   over: number | null;
   under: number | null;
+  milestone?: number | null;
 };
 
 export type LineEntry = {
@@ -39,10 +40,12 @@ export function groupLiveProps(
     const {
       player_id,
       market,
+      market_type,
       line,
       book,
       over,
       under,
+      milestone,
     } = p;
 
     // ---------------------------
@@ -86,10 +89,22 @@ export function groupLiveProps(
     // ---------------------------
     // Assign book odds
     // ---------------------------
-    lineEntry.books[book] = {
-      over: over ?? null,
-      under: under ?? null,
-    };
+    if (!lineEntry.books[book]) {
+      lineEntry.books[book] = {
+        over: null,
+        under: null,
+        milestone: null,
+      };
+    }
+    
+    if (market_type === "over_under") {
+      lineEntry.books[book].over = over ?? null;
+      lineEntry.books[book].under = under ?? null;
+    }
+    
+    if (market_type === "milestone") {
+      lineEntry.books[book].milestone = milestone ?? null;
+    }
   }
 
   // ---------------------------

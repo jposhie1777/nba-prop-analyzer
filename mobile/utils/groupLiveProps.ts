@@ -12,6 +12,7 @@ export type BookOdds = {
 
 export type LineEntry = {
   line: number;
+  line_type: "over_under" | "milestone";
   books: Record<string, BookOdds>;
 };
 
@@ -75,12 +76,15 @@ export function groupLiveProps(
     // Init or find line
     // ---------------------------
     let lineEntry = marketEntry.lines.find(
-      (l) => l.line === line
+      (l) =>
+        l.line === line &&
+        l.line_type === market_type
     );
 
     if (!lineEntry) {
       lineEntry = {
         line,
+        line_type: market_type,
         books: {},
       };
       marketEntry.lines.push(lineEntry);
@@ -112,7 +116,14 @@ export function groupLiveProps(
   // ---------------------------
   for (const player of Object.values(grouped)) {
     for (const market of Object.values(player.markets)) {
-      market.lines.sort((a, b) => a.line - b.line);
+      market.lines.sort((a, b) => {
+        // Main line first
+        if (a.line_type !== b.line_type) {
+          return a.line_type === "over_under" ? -1 : 1;
+        }
+        // Then by line value
+        return a.line - b.line;
+      });
     }
   }
 

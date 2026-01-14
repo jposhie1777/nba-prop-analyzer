@@ -16,7 +16,7 @@ client = bigquery.Client(project=PROJECT_ID)
 #
 # Odds are UPDATED in place when they change
 # ======================================================
-
+PLAYER_PROP_FLATTEN_SQL = """
 MERGE `graphite-flare-477419-h7.nba_live.live_player_prop_odds_flat` T
 USING (
   SELECT *
@@ -94,7 +94,7 @@ WHEN NOT MATCHED THEN
     S.under_odds,
     S.milestone_odds
   );
-
+"""
 # ======================================================
 # 🔁 IDPOTENT FLATTEN: LIVE GAME ODDS
 # ======================================================
@@ -202,3 +202,6 @@ def run_live_odds_flatten():
     client.query(GAME_ODDS_FLATTEN_SQL).result()
 
     print("✅ Live odds flatten complete")
+    
+if __name__ == "__main__":
+    run_live_odds_flatten()

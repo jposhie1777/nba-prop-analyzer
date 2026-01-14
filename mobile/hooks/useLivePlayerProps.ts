@@ -19,10 +19,21 @@ export function useLivePlayerProps(gameId?: number) {
       try {
         const data = await fetchLivePlayerProps(gameId);
     
+        // 🔍 DEBUG #1 — API response shape
+        console.log(
+          "[useLivePlayerProps] fetched",
+          gameId,
+          {
+            count: data?.props?.length,
+            sample: data?.props?.slice(0, 3),
+          }
+        );
+    
         const payloadStr = JSON.stringify(data.props);
     
-        // ⛔️ no-op update guard (MOST IMPORTANT)
+        // ⛔️ no-op update guard
         if (payloadStr === lastPayloadRef.current) {
+          console.log("[useLivePlayerProps] payload unchanged, skipping update");
           return;
         }
     

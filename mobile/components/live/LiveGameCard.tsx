@@ -147,6 +147,14 @@ export function LiveGameCard({ game, players }: Props) {
   
       return map;
     }, [players]);
+    console.log("🎯 LIVE PROPS PIPELINE DEBUG", {
+      gameId: game.gameId,
+      rawProps: liveProps.length,
+      groupedPlayers: Object.keys(groupedLiveProps).length,
+      filteredPlayers: Object.keys(filteredGroupedProps).length,
+      sortedPlayers: sortedGroupedProps.length,
+      sample: sortedGroupedProps[0],
+    });
 
   const hasLiveOdds = sortedGroupedProps.length > 0;
 

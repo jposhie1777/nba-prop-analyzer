@@ -114,7 +114,7 @@ def insert_rows(table: str, rows: List[Dict]):
 
     print(f"📤 Attempting BigQuery insert: {table} ({len(rows)} rows)")
 
-    errors = bq.insert_rows_json(table, rows)
+    errors = bq.insert_rows(table, rows)
 
     if errors:
         print("❌ BigQuery insert errors:", errors)

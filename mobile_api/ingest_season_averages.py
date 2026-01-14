@@ -2,6 +2,7 @@
 import os
 import time
 import requests
+import json
 from typing import Dict, List, Optional
 from datetime import datetime, timezone
 
@@ -54,7 +55,18 @@ SEASON_AVERAGES_MATRIX = {
     ]
 }
 
-SEASON = int(os.getenv("SEASON", "2024"))
+def get_current_nba_season() -> int:
+    """
+    Returns the NBA season start year.
+    Example:
+      Oct 2025 – Jun 2026 -> 2025
+      Oct 2024 – Jun 2025 -> 2024
+    """
+    today = datetime.now(timezone.utc)
+    return today.year if today.month >= 10 else today.year - 1
+
+
+SEASON = int(os.getenv("SEASON", get_current_nba_season()))
 SEASON_TYPE = os.getenv("SEASON_TYPE", "regular")
 
 REQUEST_SLEEP = 0.25
@@ -64,12 +76,22 @@ NOW_TS = datetime.now(timezone.utc).isoformat()
 # ======================================================
 # HELPERS
 # ======================================================
+def safe_float(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 def fetch_all_pages(url: str, params: Dict) -> List[Dict]:
     rows = []
 
     while True:
         r = requests.get(url, headers=HEADERS, params=params)
+
+        if r.status_code == 400:
+            print(f"⚠️ Unsupported season averages endpoint: {r.url}")
+            return []
+
         r.raise_for_status()
         payload = r.json()
 
@@ -83,6 +105,7 @@ def fetch_all_pages(url: str, params: Dict) -> List[Dict]:
         time.sleep(REQUEST_SLEEP)
 
     return rows
+
 
 
 def insert_rows(table: str, rows: List[Dict]):
@@ -155,11 +178,14 @@ def ingest_player():
                         "category": category,
                         "type": type_,
                         "player_id": player_id,
-                        "payload": r,
+                        "payload": json.dumps(r),
                         "ingested_at": NOW_TS,
                     })
 
                     for k, v in r.get("stats", {}).items():
+                        num = safe_float(v)
+                        if num is None:
+                            continue
                         stat_rows.append({
                             "season": SEASON,
                             "season_type": SEASON_TYPE,
@@ -167,7 +193,7 @@ def ingest_player():
                             "type": type_,
                             "player_id": player_id,
                             "stat_key": k,
-                            "stat_value": float(v) if v is not None else None,
+                            "stat_value": num,
                             "ingested_at": NOW_TS,
                         })
 
@@ -217,11 +243,14 @@ def ingest_team():
                         "category": category,
                         "type": type_,
                         "team_id": team_id,
-                        "payload": r,
+                        "payload": json.dumps(r),
                         "ingested_at": NOW_TS,
                     })
 
                     for k, v in r.get("stats", {}).items():
+                        num = safe_float(v)
+                        if num is None:
+                            continue
                         stat_rows.append({
                             "season": SEASON,
                             "season_type": SEASON_TYPE,
@@ -229,7 +258,7 @@ def ingest_team():
                             "type": type_,
                             "team_id": team_id,
                             "stat_key": k,
-                            "stat_value": float(v) if v is not None else None,
+                            "stat_value": num,
                             "ingested_at": NOW_TS,
                         })
 
@@ -252,13 +281,11 @@ def ingest_team():
 # MAIN
 # ======================================================
 
-def main(season: int, season_type: str):
-    global SEASON, SEASON_TYPE, bq, HEADERS
-
-    SEASON = season
-    SEASON_TYPE = season_type
+def main():
+    global bq, HEADERS
 
     print(f"🚀 Starting season averages ingest {SEASON} {SEASON_TYPE}")
+    print(f"🏀 Using NBA season start year: {SEASON}")
 
     bq = get_bq_client()     # ADC + env fallback
     HEADERS = get_headers()  # strict API key validation
@@ -267,3 +294,4 @@ def main(season: int, season_type: str):
     ingest_team()
 
     print("✅ Season averages ingestion complete")
+

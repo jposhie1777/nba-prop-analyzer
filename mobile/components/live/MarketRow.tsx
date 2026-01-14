@@ -19,9 +19,13 @@ export function MarketRow({ market, lines, current }: any) {
   };
 
   const milestones = lines
-    .filter((l: any) => l.line_type === "milestone")
+    .filter(
+      (l: any) =>
+        l.line_type === "milestone" &&
+        l.line > current               // 👈 ONLY FUTURE MILESTONES
+    )
     .sort((a: any, b: any) => a.line - b.line)
-    .slice(0, 3); // keep it clean
+    .slice(0, 3);
 
   if (!mainLine && milestones.length === 0) {
     return null;

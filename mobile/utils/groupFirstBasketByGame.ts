@@ -1,10 +1,8 @@
-import { FirstBasketRow } from "@/hooks/useFirstBasket";
-
 export function groupFirstBasketByGame(rows: FirstBasketRow[]) {
   const games = new Map<number, {
     game_id: number;
     game_date: string;
-    teams: Map<string, number>;
+    teams: Map<string, number | null>;
     players: FirstBasketRow[];
   }>();
 
@@ -20,7 +18,11 @@ export function groupFirstBasketByGame(rows: FirstBasketRow[]) {
 
     const g = games.get(r.game_id)!;
 
-    g.teams.set(r.team_abbr, r.team_tip_win_pct);
+    // Defensive: only set if defined
+    if (r.team_abbr) {
+      g.teams.set(r.team_abbr, r.team_tip_win_pct ?? null);
+    }
+
     g.players.push(r);
   }
 

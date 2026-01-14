@@ -21,6 +21,7 @@ from live_odds_routes import router as live_odds_router
 from live_odds_flatten import run_live_odds_flatten
 from dev_bq_routes import router as dev_bq_routes_router
 from first_basket_routes import router as first_basket_router
+from ingest_season_averages import main as ingest_season_averages
 
 # ==================================================
 # 🔴 ADDITION: player box stream imports
@@ -237,4 +238,22 @@ def get_props(
         "date": game_date,
         "count": len(props),
         "props": props,
+    }
+
+@app.post("/admin/ingest/season-averages")
+def run_season_averages_ingestion(
+    season: int = Query(2024),
+    season_type: str = Query("regular")
+):
+    """
+    Triggers full BallDontLie season averages ingestion.
+    WARNING: This is a heavy operation.
+    """
+    ingest_season_averages(season=season, season_type=season_type)
+
+    return {
+        "status": "started",
+        "season": season,
+        "season_type": season_type,
+        "started_at": datetime.utcnow().isoformat()
     }

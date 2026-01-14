@@ -234,7 +234,11 @@ def ingest_team():
 # MAIN
 # ======================================================
 
-def main():
+def main(season: int, season_type: str):
+    global SEASON, SEASON_TYPE
+    SEASON = season
+    SEASON_TYPE = season_type
+
     ingest_player()
     ingest_team()
     print("✅ Season averages ingestion complete")

@@ -89,7 +89,7 @@ app.include_router(live_games_router)
 app.include_router(historical_player_trends_router)
 app.include_router(live_odds_router)
 app.include_router(dev_bq_routes_router)
-app.include_router(first_basket_router
+app.include_router(first_basket_router)
 
 # ==================================================
 # 🔴 ADDITION: player box + player stats routers

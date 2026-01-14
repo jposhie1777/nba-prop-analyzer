@@ -1,27 +1,54 @@
+// components/live/LineButton.tsx
 import { Pressable, Text, StyleSheet } from "react-native";
 import { useTheme } from "@/store/useTheme";
 
-export function LineButton({ line, market }: any) {
+export function LineButton({ line, market, variant }: any) {
   const { colors } = useTheme();
+
+  const isMilestone = line.line_type === "milestone";
+
+  const dk = line.books?.draftkings;
 
   return (
     <Pressable
       style={[
         styles.btn,
-        { backgroundColor: colors.surface.card },
+        {
+          backgroundColor: colors.surface.card,
+          borderColor: isMilestone
+            ? colors.accent.primary
+            : colors.border.subtle,
+        },
       ]}
       onPress={() => {
-        // TODO: save bet
-        console.log("SAVE", market, line.line);
+        console.log(
+          "SAVE",
+          market,
+          line.line,
+          isMilestone ? "MILESTONE" : "OU"
+        );
       }}
     >
-      <Text style={styles.line}>{line.line}</Text>
-      <Text style={styles.odds}>
-        O {line.books.draftkings?.over}
+      {/* LINE LABEL */}
+      <Text style={styles.line}>
+        {isMilestone ? `${line.line}+` : line.line}
       </Text>
-      <Text style={styles.odds}>
-        U {line.books.draftkings?.under}
-      </Text>
+
+      {/* ODDS */}
+      {isMilestone ? (
+        <Text style={styles.odds}>
+          {dk?.milestone ?? "—"}
+        </Text>
+      ) : (
+        <>
+          <Text style={styles.odds}>
+            O {dk?.over ?? "—"}
+          </Text>
+          <Text style={styles.odds}>
+            U {dk?.under ?? "—"}
+          </Text>
+        </>
+      )}
     </Pressable>
   );
 }
@@ -32,6 +59,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     minWidth: 72,
     alignItems: "center",
+    borderWidth: 1,
   },
   line: {
     fontWeight: "800",

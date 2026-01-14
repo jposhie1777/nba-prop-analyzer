@@ -245,10 +245,6 @@ def run_season_averages_ingestion(
     season: int = Query(2024),
     season_type: str = Query("regular")
 ):
-    """
-    Triggers full BallDontLie season averages ingestion.
-    WARNING: This is a heavy operation.
-    """
     ingest_season_averages(season=season, season_type=season_type)
 
     return {

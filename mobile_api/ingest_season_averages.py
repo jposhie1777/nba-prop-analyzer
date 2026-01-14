@@ -3,26 +3,20 @@ import os
 import time
 import requests
 from typing import Dict, List, Optional
-from google.cloud import bigquery
 from datetime import datetime, timezone
+
+from google.cloud import bigquery
+from bq import get_bq_client   # ✅ reuse shared helper
 
 # ======================================================
 # CONFIG
 # ======================================================
 
-def get_project_id() -> str:
-    project_id = (
-        os.getenv("GCP_PROJECT")
-        or os.getenv("GOOGLE_CLOUD_PROJECT")
-    )
-    if not project_id:
-        raise RuntimeError("❌ GCP_PROJECT / GOOGLE_CLOUD_PROJECT not set")
-    return project_id
-
 BQ_DATASET = "nba_goat_data"
 BASE_URL = "https://api.balldontlie.io/nba/v1"
+
 HEADERS = None
-bq = None
+bq: bigquery.Client | None = None
 
 def get_headers() -> dict:
     api_key = os.getenv("BALLDONTLIE_API_KEY")
@@ -63,8 +57,7 @@ SEASON_AVERAGES_MATRIX = {
 SEASON = int(os.getenv("SEASON", "2024"))
 SEASON_TYPE = os.getenv("SEASON_TYPE", "regular")
 
-REQUEST_SLEEP = 0.25  # rate-limit safety
-
+REQUEST_SLEEP = 0.25
 NOW_TS = datetime.now(timezone.utc)
 
 # ======================================================
@@ -73,6 +66,7 @@ NOW_TS = datetime.now(timezone.utc)
 
 def fetch_all_pages(url: str, params: Dict) -> List[Dict]:
     rows = []
+
     while True:
         r = requests.get(url, headers=HEADERS, params=params)
         r.raise_for_status()
@@ -93,6 +87,7 @@ def fetch_all_pages(url: str, params: Dict) -> List[Dict]:
 def insert_rows(table: str, rows: List[Dict]):
     if not rows:
         return
+
     errors = bq.insert_rows_json(table, rows)
     if errors:
         raise RuntimeError(errors)
@@ -104,7 +99,7 @@ def log_ingestion(
     type_: Optional[str],
     rows_ingested: int,
     success: bool,
-    error_message: Optional[str] = None
+    error_message: Optional[str] = None,
 ):
     insert_rows(
         f"{BQ_DATASET}.season_averages_ingestion_log",
@@ -117,7 +112,7 @@ def log_ingestion(
             "rows_ingested": rows_ingested,
             "success": success,
             "error_message": error_message,
-            "ingested_at": NOW_TS
+            "ingested_at": NOW_TS,
         }]
     )
 
@@ -132,13 +127,12 @@ def ingest_player():
                 params = {
                     "season": SEASON,
                     "season_type": SEASON_TYPE,
-                    "per_page": 100
+                    "per_page": 100,
                 }
                 if type_:
                     params["type"] = type_
 
                 url = f"{BASE_URL}/season_averages/{category}"
-
                 rows = fetch_all_pages(url, params)
 
                 raw_rows = []
@@ -154,7 +148,7 @@ def ingest_player():
                         "type": type_,
                         "player_id": player_id,
                         "payload": r,
-                        "ingested_at": NOW_TS
+                        "ingested_at": NOW_TS,
                     })
 
                     for k, v in r.get("stats", {}).items():
@@ -166,7 +160,7 @@ def ingest_player():
                             "player_id": player_id,
                             "stat_key": k,
                             "stat_value": float(v) if v is not None else None,
-                            "ingested_at": NOW_TS
+                            "ingested_at": NOW_TS,
                         })
 
                 insert_rows(f"{BQ_DATASET}.raw_season_averages_player", raw_rows)
@@ -188,13 +182,12 @@ def ingest_team():
                 params = {
                     "season": SEASON,
                     "season_type": SEASON_TYPE,
-                    "per_page": 100
+                    "per_page": 100,
                 }
                 if type_:
                     params["type"] = type_
 
                 url = f"{BASE_URL}/team_season_averages/{category}"
-
                 rows = fetch_all_pages(url, params)
 
                 raw_rows = []
@@ -210,7 +203,7 @@ def ingest_team():
                         "type": type_,
                         "team_id": team_id,
                         "payload": r,
-                        "ingested_at": NOW_TS
+                        "ingested_at": NOW_TS,
                     })
 
                     for k, v in r.get("stats", {}).items():
@@ -222,7 +215,7 @@ def ingest_team():
                             "team_id": team_id,
                             "stat_key": k,
                             "stat_value": float(v) if v is not None else None,
-                            "ingested_at": NOW_TS
+                            "ingested_at": NOW_TS,
                         })
 
                 insert_rows(f"{BQ_DATASET}.raw_season_averages_team", raw_rows)
@@ -243,11 +236,10 @@ def main(season: int, season_type: str):
     SEASON = season
     SEASON_TYPE = season_type
 
-    project_id = get_project_id()
-    bq = bigquery.Client(project=project_id)
-
-    HEADERS = get_headers()
+    bq = get_bq_client()     # ✅ ADC + env fallback (matches rest of system)
+    HEADERS = get_headers()  # ✅ strict API key validation
 
     ingest_player()
     ingest_team()
+
     print("✅ Season averages ingestion complete")

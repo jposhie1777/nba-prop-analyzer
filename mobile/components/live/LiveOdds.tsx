@@ -35,15 +35,15 @@ export function LiveOdds({
 
   return (
     <View style={{ gap: 12, marginTop: 8 }}>
-      {groupedProps.map((player) => {
-        const meta = playerMetaById.get(player.player_id);
+      {groupedProps.map((p) => {
+        const meta = playerMetaById.get(p.player_id);
         if (!meta) return null;
-
+  
         return (
           <PlayerPropCard
-            key={player.player_id}
-            player={player}
-            name={playerNameById.get(player.player_id)}
+            key={`${p.player_id}-${p.market}`}
+            player={p}
+            name={playerNameById.get(p.player_id)}
             minutes={meta.minutes}
             current={meta}
           />

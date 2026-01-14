@@ -24,6 +24,7 @@ def ingest_live_player_prop_odds() -> dict:
     - LIVE games
     - DraftKings / FanDuel
     - PTS / AST / REB / 3PM
+    - Over/Under + Milestones
     """
 
     live_game_ids = fetch_live_game_ids()
@@ -50,45 +51,72 @@ def ingest_live_player_prop_odds() -> dict:
 
         payload = resp.json()
 
-        # ----------------------------------
-        # Filter markets + sportsbooks
-        # ----------------------------------
         filtered_markets = []
 
         for item in payload.get("data", []):
-            prop_type = item.get("prop_type")          # points / assists / rebounds
+            prop_type = item.get("prop_type")  # points / assists / rebounds / threes
             book = normalize_book(item.get("vendor"))
-        
+
+            # -----------------------------
             # Hard filters
+            # -----------------------------
             if prop_type not in LIVE_PLAYER_PROP_MARKETS:
                 continue
-        
+
             if book not in LIVE_ODDS_BOOKS:
                 continue
-        
+
             market_data = item.get("market") or {}
-            if market_data.get("type") != "over_under":
-                continue
-        
-            filtered_markets.append(
-                {
-                    "player_id": item.get("player_id"),
-                    "market": prop_type,
-                    "line": float(item.get("line_value"))
-                    if item.get("line_value") is not None
-                    else None,
-                    "book": book,
-                    "odds": {
-                        "over": market_data.get("over_odds"),
-                        "under": market_data.get("under_odds"),
-                    },
-                }
+            market_type = market_data.get("type")
+
+            line_value = (
+                float(item.get("line_value"))
+                if item.get("line_value") is not None
+                else None
             )
-        
-        # Nothing we care about for this game
+
+            # -----------------------------
+            # OVER / UNDER
+            # -----------------------------
+            if market_type == "over_under":
+                filtered_markets.append(
+                    {
+                        "player_id": item.get("player_id"),
+                        "market": prop_type,
+                        "market_type": "over_under",
+                        "line": line_value,
+                        "book": book,
+                        "odds": {
+                            "over": market_data.get("over_odds"),
+                            "under": market_data.get("under_odds"),
+                        },
+                    }
+                )
+                continue
+
+            # -----------------------------
+            # MILESTONE (X+)
+            # -----------------------------
+            if market_type == "milestone":
+                filtered_markets.append(
+                    {
+                        "player_id": item.get("player_id"),
+                        "market": prop_type,
+                        "market_type": "milestone",
+                        "line": line_value,  # milestone number (e.g. 20, 25)
+                        "book": book,
+                        "odds": {
+                            "yes": market_data.get("odds")
+                        },
+                    }
+                )
+                continue
+
+            # Ignore anything else (alternate lines, exotics, etc.)
+
         if not filtered_markets:
             continue
-        
+
         row = {
             "snapshot_ts": now.isoformat(),
             "game_id": game_id,
@@ -99,11 +127,11 @@ def ingest_live_player_prop_odds() -> dict:
                 }
             ),
         }
-        
+
         errors = client.insert_rows_json(BQ_TABLE, [row])
         if errors:
             raise RuntimeError(f"Player prop odds insert errors: {errors}")
-        
+
         games_written += 1
 
     return {

@@ -281,7 +281,7 @@ export function LiveGameCard({ game, players }: Props) {
         </Text>
       </Pressable>
       
-      {showPlayerProps && !oddsLoading && liveOddsRows.length > 0 && (
+      {showPlayerProps && (
         <LiveOdds
           groupedProps={liveOddsRows}
           loading={oddsLoading}

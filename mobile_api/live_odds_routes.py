@@ -20,6 +20,11 @@ bq = bigquery.Client(project=PROJECT_ID)
 # Live PLAYER PROPS query
 # ======================================================
 
+# ======================================================
+# Live PLAYER PROPS query
+# ======================================================
+
+PLAYER_PROPS_QUERY = """
 SELECT
   game_id,
   player_id,

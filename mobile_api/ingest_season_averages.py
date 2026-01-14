@@ -178,7 +178,7 @@ def ingest_player():
                         "category": category,
                         "type": type_,
                         "player_id": player_id,
-                        "payload": json.dumps(r),
+                        "payload": r,
                         "ingested_at": NOW_TS,
                     })
 
@@ -243,7 +243,7 @@ def ingest_team():
                         "category": category,
                         "type": type_,
                         "team_id": team_id,
-                        "payload": json.dumps(r),
+                        "payload": r,
                         "ingested_at": NOW_TS,
                     })
 

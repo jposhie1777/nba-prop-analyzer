@@ -12,10 +12,15 @@ const API = API_BASE;
 export type LivePlayerProp = {
   player_id: number;
   market: "PTS" | "AST" | "REB" | "3PM";
+
+  market_type: "over_under" | "milestone";
+
   line: number;
   book: "draftkings" | "fanduel";
-  over: number;
-  under: number;
+
+  over?: number | null;
+  under?: number | null;
+  milestone?: number | null;
 };
 
 export type LiveGameOdds = {

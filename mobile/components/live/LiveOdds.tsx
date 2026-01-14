@@ -1,4 +1,4 @@
-// components/liveOdds
+// components/live/liveOdds
 import { View, Text } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { PlayerPropCard } from "./PlayerPropCard";

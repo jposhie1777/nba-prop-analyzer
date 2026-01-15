@@ -1,4 +1,5 @@
-from mobile_api.ingest.season.player.general import run
+# ingest/season/player/shooting.py
+from mobile_api.ingest.season.common import ingest_category
 from mobile_api.ingest.common.bq import get_bq_client
 
 TABLE = "nba_goat_data.player_season_shooting"

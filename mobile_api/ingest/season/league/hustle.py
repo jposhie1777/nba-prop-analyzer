@@ -1,4 +1,4 @@
-# ingest/season/common/hustle
+# ingest/season/league/hustle
 import json
 from mobile_api.ingest.common.bq import get_bq_client
 from mobile_api.ingest.common.http import get

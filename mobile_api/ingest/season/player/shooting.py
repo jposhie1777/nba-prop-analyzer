@@ -10,11 +10,13 @@ TYPES = [
     "5ft_range",
 ]
 
-def run(season: int, season_type: str):
+def run(season, season_type, player_ids, run_ts):
     ingest_category(
         table=TABLE,
-        category="shooting",
+        category="general",
         types=TYPES,
         season=season,
         season_type=season_type,
+        player_ids=player_ids,
+        run_ts=run_ts,
     )

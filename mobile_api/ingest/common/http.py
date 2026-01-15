@@ -8,6 +8,6 @@ def get(url: str, params: dict):
         url,
         headers={"Authorization": API_KEY},
         params=params,
-        timeout=30,
+        timeout=10,   # ⬅️ lower
     )
     return resp

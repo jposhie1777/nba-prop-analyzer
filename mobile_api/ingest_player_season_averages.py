@@ -13,7 +13,7 @@ BASE_URL = "https://api.balldontlie.io/nba/v1/season_averages"
 API_KEY = os.getenv("BALLDONTLIE_API_KEY")
 
 DEFAULT_SEASON = 2025
-DEFAULT_SEASON_TYPE = "regular" is
+DEFAULT_SEASON_TYPE = "regular"
 
 def ingest_player_season_averages(
     season: int = DEFAULT_SEASON,

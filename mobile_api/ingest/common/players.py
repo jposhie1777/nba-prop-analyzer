@@ -2,6 +2,8 @@ from typing import List
 from google.cloud import bigquery
 from mobile_api.ingest.common.bq import get_bq_client
 
+
+
 def get_active_player_ids(season: int = 2025) -> list[int]:
     bq = get_bq_client()
 
@@ -13,17 +15,14 @@ def get_active_player_ids(season: int = 2025) -> list[int]:
       AND JSON_VALUE(payload, '$.player.id') IS NOT NULL
     """
 
-    job = bq.query(
-        query,
-        job_config={
-            "query_parameters": [
-                {
-                    "name": "season",
-                    "parameterType": {"type": "INT64"},
-                    "parameterValue": {"value": season},
-                }
-            ]
-        },
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter(
+                "season", "INT64", season
+            )
+        ]
     )
+
+    job = bq.query(query, job_config=job_config)
 
     return [row.player_id for row in job.result()]

@@ -1,8 +1,8 @@
 import json
-from ingest.common.bq import get_bq_client
-from ingest.common.http import get
-from ingest.common.players import get_active_player_ids
-from ingest.common.logging import now_ts
+from mobile_api.ingest.common.bq import get_bq_client
+from mobile_api.ingest.common.http import get
+from mobile_api.ingest.common.players import get_active_player_ids
+from mobile_api.ingest.common.logging import now_ts
 
 TABLE = "nba_goat_data.player_season_shooting"
 URL = "https://api.balldontlie.io/nba/v1/season_averages/shooting"

@@ -1,6 +1,6 @@
 from typing import List
 from google.cloud import bigquery
-from ingest.common.bq import get_bq_client
+from mobile_api.ingest.common.bq import get_bq_client
 
 def get_active_player_ids(limit: int = 500) -> List[int]:
     bq = get_bq_client()

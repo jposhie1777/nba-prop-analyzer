@@ -9,20 +9,9 @@ BALLDONTLIE_API_KEY=61082ce1-607a-4404-b059-2365d7649102,\
 ENABLE_LIVE_INGEST=true,\
 ENABLE_PLAYER_STATS_INGEST=true
 
-#!/bin/bash
-set -e
 
-gcloud builds submit \
-  --tag us-central1-docker.pkg.dev/graphite-flare-477419-h7/pulse/mobile-api
-
-gcloud run deploy pulse-mobile-api \
-  --image us-central1-docker.pkg.dev/graphite-flare-477419-h7/pulse/mobile-api \
-  --region us-central1 \
-  --set-env-vars \
-GCP_PROJECT=graphite-flare-477419-h7,\
-BALLDONTLIE_API_KEY=***,\
-ENABLE_LIVE_INGEST=true,\
-ENABLE_PLAYER_STATS_INGEST=true
+export GCP_PROJECT=graphite-flare-477419-h7
+export BALLDONTLIE_API_KEY=61082ce1-607a-4404-b059-2365d7649102
 
 
 cd ~/workspaces/nba-prop-analyzer

@@ -1,4 +1,5 @@
 import os
+import json
 import requests
 from datetime import datetime, timezone
 
@@ -18,6 +19,7 @@ API_KEY = os.getenv("BALLDONTLIE_API_KEY")
 DEFAULT_SEASON = 2025
 DEFAULT_SEASON_TYPE = "regular"
 
+
 def ingest_player_season_averages(
     season: int = DEFAULT_SEASON,
     season_type: str = DEFAULT_SEASON_TYPE,
@@ -35,24 +37,23 @@ def ingest_player_season_averages(
                 "season_type": season_type,
                 "type": stat_type,
             }
-    
+
             resp = requests.get(
                 url,
                 headers={"Authorization": API_KEY},
                 params=params,
                 timeout=30,
             )
-    
-            # ✅ ADD THIS BLOCK RIGHT HERE
+
+            # ✅ Skip permanently-invalid combos
             if resp.status_code == 400:
                 print(f"⚠️ Skipping invalid combo {category}:{stat_type}")
                 continue
-    
+
             resp.raise_for_status()
-            # ⬆️ keep this AFTER the guard
-    
+
             data = resp.json().get("data", [])
-    
+
             for record in data:
                 rows_to_insert.append({
                     "ingested_at": datetime.now(timezone.utc).isoformat(),
@@ -61,7 +62,8 @@ def ingest_player_season_averages(
                     "category": category,
                     "type": stat_type,
                     "player_id": record.get("player_id"),
-                    "payload": record,
+                    # ✅ store raw record as JSON string
+                    "payload": json.dumps(record),
                 })
 
     if rows_to_insert:

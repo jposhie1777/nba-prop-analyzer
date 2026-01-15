@@ -1,20 +1,59 @@
-# Explicit, Ball Dont Lie–valid season_averages combos ONLY
-
 PLAYER_SEASON_AVERAGE_COMBOS = {
-    "base": [
-        "per_game",
-        "totals",
-        "per_36",
-    ],
-    "advanced": [
+    "general": [
+        "base",
         "advanced",
-    ],
-    "shooting": [
-        "overall",
-        "catch_and_shoot",
-        "pullups",
-    ],
-    "defense": [
+        "usage",
+        "scoring",
         "defense",
+        "misc",
+    ],
+
+    "clutch": [
+        "base",
+        "advanced",
+        "usage",
+        "scoring",
+        "misc",
+    ],
+
+    "shooting": [
+        "by_zone",
+        "5ft_range",
+    ],
+
+    "playtype": [
+        "cut",
+        "handoff",
+        "isolation",
+        "offrebound",
+        "offscreen",
+        "postup",
+        "prballhandler",
+        "prrollman",
+        "spotup",
+        "transition",
+        "misc",
+    ],
+
+    "tracking": [
+        "efficiency",
+        "speeddistance",
+        "defense",
+        "elbowtouch",
+        "posttouch",
+        "passing",
+        "drives",
+        "rebounding",
+        "catchshoot",
+        "pullupshot",
+        "possessions",
+        "painttouch",
+    ],
+
+    "shotdashboard": [
+        "overall",
+        "pullups",
+        "catch_and_shoot",
+        "less_than_10_ft",
     ],
 }

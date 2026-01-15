@@ -20,23 +20,29 @@ def run(season: int, season_type: str):
     rows = []
 
     for t in TYPES:
-        resp = get(URL, {
-            "season": season,
-            "season_type": season_type,
-            "type": t,
-            "player_ids[]": players,
-        })
-        resp.raise_for_status()
-
-        for r in resp.json().get("data", []):
-            rows.append({
-                "ingested_at": now_ts(),
+        for batch in chunked(players, size=25):
+            resp = get(URL, {
                 "season": season,
                 "season_type": season_type,
                 "type": t,
-                "player_id": r["player"]["id"],
-                "payload": json.dumps(r),
+                "player_ids[]": batch,
             })
+    
+            if resp.status_code == 400:
+                print(f"⚠️ skipping batch size={len(batch)} for shooting:{t}")
+                continue
+    
+            resp.raise_for_status()
+    
+            for r in resp.json().get("data", []):
+                rows.append({
+                    "ingested_at": now_ts(),
+                    "season": season,
+                    "season_type": season_type,
+                    "type": t,
+                    "player_id": r["player"]["id"],
+                    "payload": json.dumps(r),
+                })
 
     if rows:
         bq.insert_rows_json(TABLE, rows)

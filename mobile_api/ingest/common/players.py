@@ -7,20 +7,17 @@ def get_active_player_ids(limit: int = 500) -> List[int]:
 
     job_config = bigquery.QueryJobConfig(
         query_parameters=[
-            bigquery.ScalarQueryParameter(
-                "limit", "INT64", limit
-            )
+            bigquery.ScalarQueryParameter("limit", "INT64", limit)
         ]
     )
 
-    rows = bq.query(
-        """
-        SELECT DISTINCT player_id
-        FROM `nba_goat_data.player_lookup`
-        WHERE player_id IS NOT NULL
-        LIMIT @limit
-        """,
-        job_config=job_config,
-    ).result()
+    query = """
+    SELECT DISTINCT
+      COALESCE(player_id, id) AS player_id
+    FROM `nba_goat_data.player_lookup`
+    WHERE COALESCE(player_id, id) IS NOT NULL
+    LIMIT @limit
+    """
 
+    rows = bq.query(query, job_config=job_config).result()
     return [r.player_id for r in rows]

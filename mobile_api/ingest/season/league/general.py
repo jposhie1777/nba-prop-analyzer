@@ -14,8 +14,6 @@ TYPES = [
     "scoring",
     "defense",
     "misc",
-    "violations",
-    "opponent",
 ]
 
 def run(season: int, season_type: str):

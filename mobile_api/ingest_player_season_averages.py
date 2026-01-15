@@ -5,7 +5,10 @@ from datetime import datetime, timezone
 from bq import get_bq_client
 from season_average_combos import PLAYER_SEASON_AVERAGE_COMBOS
 
-PROJECT_ID = os.getenv("GCP_PROJECT")
+PROJECT_ID = (
+    os.getenv("GCP_PROJECT")
+    or os.getenv("GOOGLE_CLOUD_PROJECT")
+)
 DATASET = "nba_goat_data"
 TABLE = "player_season_averages_raw"
 

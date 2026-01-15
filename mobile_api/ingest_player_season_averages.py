@@ -23,7 +23,7 @@ def ingest_player_season_averages(
     season_type: str = DEFAULT_SEASON_TYPE,
 ):
     bq = get_bq_client()
-    table_id = f"{PROJECT_ID}.{DATASET}.{TABLE}"
+    table_id = f"{bq.project}.{DATASET}.{TABLE}"
 
     rows_to_insert = []
 

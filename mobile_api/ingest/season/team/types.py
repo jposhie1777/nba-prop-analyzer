@@ -1,0 +1,58 @@
+# ingest/season/team/types.py
+TEAM_CATEGORIES = {
+    "general": [
+        "base",
+        "advanced",
+        "scoring",
+        "misc",
+        "opponent",
+        "defense",
+        "violations",
+    ],
+    "clutch": [
+        "base",
+        "advanced",
+        "misc",
+        "scoring",
+    ],
+    "shooting": [
+        "by_zone_base",
+        "by_zone_opponent",
+        "5ft_range_base",
+        "5ft_range_opponent",
+    ],
+    "playtype": [
+        "cut",
+        "handoff",
+        "isolation",
+        "offrebound",
+        "offscreen",
+        "postup",
+        "prballhandler",
+        "prrollman",
+        "spotup",
+        "transition",
+        "misc",
+    ],
+    "tracking": [
+        "painttouch",
+        "efficiency",
+        "speeddistance",
+        "defense",
+        "elbowtouch",
+        "posttouch",
+        "passing",
+        "drives",
+        "rebounding",
+        "catchshoot",
+        "pullupshot",
+        "possessions",
+    ],
+    "hustle": None,  # no type param
+    "shotdashboard": [
+        "overall",
+        "pullups",
+        "catch_and_shoot",
+        "less_than_10_ft",
+    ],
+}

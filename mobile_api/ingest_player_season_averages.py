@@ -1,8 +1,6 @@
 import os
-import json
 import requests
 from datetime import datetime, timezone
-from typing import Optional
 
 from bq import get_bq_client
 from season_average_combos import PLAYER_SEASON_AVERAGE_COMBOS
@@ -27,34 +25,38 @@ def ingest_player_season_averages(
 
     rows_to_insert = []
 
-    for category, stat_type in PLAYER_SEASON_AVERAGE_COMBOS:
-        url = f"{BASE_URL}/{category}"
-        params = {
-            "season": season,
-            "season_type": season_type,
-            "type": stat_type,
-        }
-
-        resp = requests.get(
-            url,
-            headers={"Authorization": API_KEY},
-            params=params,
-            timeout=30,
-        )
-        resp.raise_for_status()
-
-        data = resp.json().get("data", [])
-
-        for record in data:
-            rows_to_insert.append({
-                "ingested_at": datetime.now(timezone.utc).isoformat(),
+    # ✅ CORRECT iteration
+    for category, stat_types in PLAYER_SEASON_AVERAGE_COMBOS.items():
+        for stat_type in stat_types:
+            url = f"{BASE_URL}/{category}"
+            params = {
                 "season": season,
                 "season_type": season_type,
-                "category": category,
                 "type": stat_type,
-                "player_id": record.get("player_id"),
-                "payload": json.dumps(record),
-            })
+            }
+
+            resp = requests.get(
+                url,
+                headers={"Authorization": API_KEY},
+                params=params,
+                timeout=30,
+            )
+            resp.raise_for_status()
+
+            data = resp.json().get("data", [])
+
+            for record in data:
+                rows_to_insert.append({
+                    "ingested_at": datetime.now(timezone.utc).isoformat(),
+                    "season": season,
+                    "season_type": season_type,
+                    "category": category,
+                    "type": stat_type,
+                    "player_id": record.get("player_id"),
+
+                    # ✅ RECORD, not string
+                    "payload": record,
+                })
 
     if rows_to_insert:
         errors = bq.insert_rows_json(table_id, rows_to_insert)

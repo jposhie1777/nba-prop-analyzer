@@ -9,7 +9,10 @@ export function MarketRow({ market, lines, current }: any) {
   // Split main vs milestone
   // -----------------------------
   const { toggleSave } = useSavedBets();
-
+  
+  const getBetId = (side: "over" | "under") => {
+    return `${mainLine.game_id}:${mainLine.player_id}:${market}:${side}:${mainLine.line}`;
+  };
   const mainLine = lines.find(
     (l: any) => l.line_type === "over_under"
   );

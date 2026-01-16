@@ -12,7 +12,7 @@ export function GameLineupCard({ game }: { game: any }) {
         borderRadius: 12,
         padding: 12,
         gap: 12,
-      }
+      }}
     >
       {/* Header */}
       <View>

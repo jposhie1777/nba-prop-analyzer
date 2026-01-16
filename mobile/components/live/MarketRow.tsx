@@ -2,7 +2,7 @@
 import { View, Text, ScrollView, StyleSheet } from "react-native";
 import { LineButton } from "./LineButton";
 import { OverUnderButton } from "./OverUnderButton";
-import { useSavedBets } from "@/lib/store/useSavedBets";
+import { useSavedBets } from "@/store/useSavedBets";
 
 export function MarketRow({ market, lines, current }: any) {
   const { toggleSave } = useSavedBets();

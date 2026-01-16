@@ -46,7 +46,7 @@ export function MarketRow({ market, lines, current }: any) {
             <OverUnderButton
               side="over"
               line={mainLine.line}
-              odds={mainLine.over_price}
+              odds={mainLine.over_odds}
               disabled={mainLine.over_odds == null}
               onPress={() => {
                 if (mainLine.over_odds == null) return;
@@ -57,7 +57,7 @@ export function MarketRow({ market, lines, current }: any) {
             <OverUnderButton
               side="under"
               line={mainLine.line}
-              odds={mainLine.under_price}
+              odds={mainLine.under_odds}
               disabled={mainLine.under_odds == null}
               onPress={() => {
                 if (mainLine.under_odds == null) return;

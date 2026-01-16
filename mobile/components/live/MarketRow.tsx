@@ -1,4 +1,5 @@
 // components/live/marketrow
+import React, { useRef, useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet } from "react-native";
 import { LineButton } from "./LineButton";
 import { OverUnderButton } from "./OverUnderButton";
@@ -6,14 +7,11 @@ import { useSavedBets } from "@/store/useSavedBets";
 
 export function MarketRow({ market, lines, current }: any) {
   const { toggleSave } = useSavedBets();
-
+  const scrollRef = useRef<ScrollView>(null);
+  const buttonWidthRef = useRef<number>(0);
   const mainLine = lines.find(
     (l: any) => l.line_type === "over_under"
   );
-
-  const getBetId = (side: "over" | "under") => {
-    return `${mainLine.game_id}:${mainLine.player_id}:${market}:${side}:${mainLine.line}`;
-  };
 
   const getState = (lineValue: number) => {
     const remaining = lineValue - current;
@@ -28,12 +26,33 @@ export function MarketRow({ market, lines, current }: any) {
         l.line_type === "milestone" &&
         l.line > current
     )
-    .sort((a: any, b: any) => a.line - b.line)
-    .slice(0, 3);
+    .sort((a: any, b: any) => a.line - b.line);
 
   if (!mainLine && milestones.length === 0) {
     return null;
   }
+  
+  const getBetId = (side: "over" | "under") => {
+    if (!mainLine) return "";
+    return `${mainLine.game_id}:${mainLine.player_id}:${market}:${side}:${mainLine.line}`;
+  };
+
+  const closeIndex = milestones.findIndex(
+    (m: any) => getState(m.line) === "close"
+  );
+  
+  useEffect(() => {
+    if (
+      closeIndex >= 0 &&
+      scrollRef.current &&
+      buttonWidthRef.current > 0
+    ) {
+      scrollRef.current.scrollTo({
+        x: closeIndex * (buttonWidthRef.current + 8),
+        animated: true,
+      });
+    }
+  }, [closeIndex, milestones]);
 
   return (
     <View>
@@ -71,18 +90,31 @@ export function MarketRow({ market, lines, current }: any) {
       {/* MILESTONES */}
       {milestones.length > 0 && (
         <ScrollView
+          ref={scrollRef}
           horizontal
           showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingRight: 12 }}
           style={{ marginTop: 6 }}
         >
           <View style={styles.row}>
-            {milestones.map((m: any) => (
-              <LineButton
+            {milestones.map((m: any, idx: number) => (
+              <View
                 key={`ms-${m.line}`}
-                line={m}
-                market={market}
-                state={getState(m.line)}
-              />
+                onLayout={
+                  idx === 0
+                    ? (e) => {
+                        buttonWidthRef.current =
+                          e.nativeEvent.layout.width;
+                      }
+                    : undefined
+                }
+              >
+                <LineButton
+                  line={m}
+                  market={market}
+                  state={getState(m.line)}
+                />
+              </View>
             ))}
           </View>
         </ScrollView>
@@ -100,5 +132,6 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     gap: 8,
+    flexWrap: "nowrap", // IMPORTANT
   },
 });

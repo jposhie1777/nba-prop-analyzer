@@ -19,7 +19,24 @@ client = bigquery.Client(project=PROJECT_ID)
 PLAYER_PROP_FLATTEN_SQL = """
 MERGE `graphite-flare-477419-h7.nba_live.live_player_prop_odds_flat` T
 USING (
-  SELECT *
+  SELECT
+    game_id,
+    player_id,
+    market,
+    market_type,
+    line,
+    book,
+
+    ARRAY_AGG(
+      STRUCT(
+        snapshot_ts AS snapshot_ts,
+        over_odds AS over_odds,
+        under_odds AS under_odds,
+        milestone_odds AS milestone_odds
+      )
+      ORDER BY snapshot_ts DESC
+      LIMIT 1
+    )[OFFSET(0)].*
   FROM (
     SELECT
       TIMESTAMP(snapshot_ts) AS snapshot_ts,
@@ -27,32 +44,26 @@ USING (
 
       CAST(JSON_VALUE(m, '$.player_id') AS INT64) AS player_id,
       JSON_VALUE(m, '$.market') AS market,
-      JSON_VALUE(m, '$.market_type') AS market_type,
+
+      COALESCE(
+        JSON_VALUE(m, '$.market_type'),
+        CASE
+          WHEN JSON_VALUE(m, '$.odds.yes') IS NOT NULL THEN 'milestone'
+          WHEN JSON_VALUE(m, '$.odds.over') IS NOT NULL THEN 'over_under'
+          ELSE 'unknown'
+        END
+      ) AS market_type,
 
       CAST(JSON_VALUE(m, '$.line') AS FLOAT64) AS line,
       JSON_VALUE(m, '$.book') AS book,
 
-      -- Over / Under
-      CAST(JSON_VALUE(m, '$.odds.over') AS INT64)  AS over_odds,
+      CAST(JSON_VALUE(m, '$.odds.over') AS INT64) AS over_odds,
       CAST(JSON_VALUE(m, '$.odds.under') AS INT64) AS under_odds,
-
-      -- Milestone
-      CAST(JSON_VALUE(m, '$.odds.yes') AS INT64) AS milestone_odds,
-
-      ROW_NUMBER() OVER (
-        PARTITION BY
-          game_id,
-          CAST(JSON_VALUE(m, '$.player_id') AS INT64),
-          JSON_VALUE(m, '$.market'),
-          JSON_VALUE(m, '$.market_type'),
-          JSON_VALUE(m, '$.line'),
-          JSON_VALUE(m, '$.book')
-        ORDER BY TIMESTAMP(snapshot_ts) DESC
-      ) AS rn
+      CAST(JSON_VALUE(m, '$.odds.yes') AS INT64) AS milestone_odds
     FROM `graphite-flare-477419-h7.nba_live.live_player_prop_odds_raw`,
     UNNEST(JSON_QUERY_ARRAY(payload, '$.markets')) AS m
   )
-  WHERE rn = 1
+  GROUP BY 1,2,3,4,5,6
 ) S
 ON
   T.game_id     = S.game_id

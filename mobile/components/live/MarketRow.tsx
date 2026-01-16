@@ -6,7 +6,7 @@ import { OverUnderButton } from "./OverUnderButton";
 import { useSavedBets } from "@/store/useSavedBets";
 
 export function MarketRow({ market, lines, current }: any) {
-  const { toggleSave } = useSavedBets();
+  const isSaved = savedIds.has(id);
   const scrollRef = useRef<ScrollView>(null);
   const buttonWidthRef = useRef<number>(0);
   const mainLine = lines.find(
@@ -35,6 +35,11 @@ export function MarketRow({ market, lines, current }: any) {
   const getBetId = (side: "over" | "under") => {
     if (!mainLine) return "";
     return `${mainLine.game_id}:${mainLine.player_id}:${market}:${side}:${mainLine.line}`;
+  };
+
+  const getMilestoneBetId = (lineValue: number) => {
+    if (!mainLine) return "";
+    return `${mainLine.game_id}:${mainLine.player_id}:${market}:milestone:${lineValue}`;
   };
 
   const closeIndex = milestones.findIndex(
@@ -109,10 +114,15 @@ export function MarketRow({ market, lines, current }: any) {
                     : undefined
                 }
               >
+                
                 <LineButton
                   line={m}
                   market={market}
                   state={getState(m.line)}
+                  isSelected={isSaved}
+                  onPress={() => {
+                    toggleSave(betId);
+                  }}
                 />
               </View>
             ))}

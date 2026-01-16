@@ -6,7 +6,7 @@ export function useTonightLineups() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API_BASE}/lineups/tonight`);
+    fetch(`${API_BASE}/lineups/tonight`)
       .then(res => res.json())
       .then(setData)
       .finally(() => setLoading(false));

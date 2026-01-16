@@ -5,33 +5,50 @@ type Props = {
   side: "over" | "under";
   line: number;
   odds: number | null;
+  disabled?: boolean;
   onPress?: () => void;
 };
 
-export function OverUnderButton({ side, line, odds, onPress }: Props) {
+export function OverUnderButton({
+  side,
+  line,
+  odds,
+  disabled,
+  onPress,
+}: Props) {
   const { colors } = useTheme();
   const isOver = side === "over";
 
   return (
     <Pressable
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => ({
         flex: 1,
-        borderWidth: 1.5,
-        borderColor: isOver ? colors.success : colors.danger,
-        borderRadius: 10,
-        paddingVertical: 8,
+        borderWidth: 1,
+        borderRadius: 8,
+        paddingVertical: 6,     // 👈 smaller height
+        paddingHorizontal: 6,
         alignItems: "center",
-        opacity: pressed ? 0.7 : 1,
+        justifyContent: "center",
+        borderColor: disabled
+          ? colors.border.subtle
+          : isOver
+          ? colors.success
+          : colors.danger,
+        backgroundColor: pressed
+          ? colors.background.subtle
+          : "transparent",
+        opacity: disabled ? 0.4 : 1,
       })}
     >
-      {/* Label */}
+      {/* Over / Under label */}
       <Text
         style={{
-          fontSize: 12,
+          fontSize: 10,        // 👈 smaller
           fontWeight: "600",
+          marginBottom: 2,
           color: isOver ? colors.success : colors.danger,
-          marginBottom: 4,
         }}
       >
         {isOver ? "Over" : "Under"}
@@ -40,8 +57,9 @@ export function OverUnderButton({ side, line, odds, onPress }: Props) {
       {/* Line */}
       <Text
         style={{
-          fontSize: 16,
+          fontSize: 15,        // 👈 compact but readable
           fontWeight: "700",
+          lineHeight: 18,
           color: colors.text.primary,
         }}
       >
@@ -51,12 +69,12 @@ export function OverUnderButton({ side, line, odds, onPress }: Props) {
       {/* Odds */}
       <Text
         style={{
-          fontSize: 13,
-          marginTop: 2,
+          fontSize: 11,
+          marginTop: 1,
           color: colors.text.muted,
         }}
       >
-        {odds !== null ? (odds > 0 ? `+${odds}` : odds) : "—"}
+        {odds != null ? (odds > 0 ? `+${odds}` : odds) : "—"}
       </Text>
     </Pressable>
   );

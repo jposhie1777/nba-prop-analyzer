@@ -1,11 +1,15 @@
 // components/live/marketrow
 import { View, Text, ScrollView, StyleSheet } from "react-native";
 import { LineButton } from "./LineButton";
+import { OverUnderButton } from "./OverUnderButton";
+import { useBetsStore } from "@/store/useBetsStore";
 
 export function MarketRow({ market, lines, current }: any) {
   // -----------------------------
   // Split main vs milestone
   // -----------------------------
+  const { addBet } = useBetsStore();
+
   const mainLine = lines.find(
     (l: any) => l.line_type === "over_under"
   );
@@ -39,16 +43,51 @@ export function MarketRow({ market, lines, current }: any) {
           MAIN LINE (unchanged UI)
       ----------------------------- */}
       {mainLine && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.row}>
-            <LineButton
-              key={`main-${mainLine.line}`}
-              line={mainLine}
-              market={market}
-              state={getState(mainLine.line)}
+        <View style={{ marginBottom: 6 }}>
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <OverUnderButton
+              side="over"
+              line={mainLine.line}
+              odds={mainLine.over_odds}
+              disabled={mainLine.over_odds == null}
+              onPress={() => {
+                if (mainLine.over_odds == null) return;
+                addBet({
+                  game_id: mainLine.game_id,
+                  player_id: mainLine.player_id,
+                  player_name: mainLine.player_name,
+                  market,
+                  side: "over",
+                  line: mainLine.line,
+                  odds: mainLine.over_odds,
+                  book: mainLine.book,
+                  snapshot_ts: mainLine.snapshot_ts,
+                });
+              }}
+            />
+      
+            <OverUnderButton
+              side="under"
+              line={mainLine.line}
+              odds={mainLine.under_odds}
+              disabled={mainLine.under_odds == null}
+              onPress={() => {
+                if (mainLine.under_odds == null) return;
+                addBet({
+                  game_id: mainLine.game_id,
+                  player_id: mainLine.player_id,
+                  player_name: mainLine.player_name, // 👈 add this for parity
+                  market,
+                  side: "under",
+                  line: mainLine.line,
+                  odds: mainLine.under_odds,
+                  book: mainLine.book,
+                  snapshot_ts: mainLine.snapshot_ts,
+                });
+              }}
             />
           </View>
-        </ScrollView>
+        </View>
       )}
 
       {/* -----------------------------

@@ -1,3 +1,4 @@
+// components/live/linebutton
 import { Pressable, Text, StyleSheet } from "react-native";
 import { useTheme } from "@/store/useTheme";
 

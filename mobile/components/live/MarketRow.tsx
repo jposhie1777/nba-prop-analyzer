@@ -2,7 +2,7 @@
 import { View, Text, ScrollView, StyleSheet } from "react-native";
 import { LineButton } from "./LineButton";
 import { OverUnderButton } from "./OverUnderButton";
-import { useBetsStore } from "@/store/useSavedBets";
+import { useSavedBets } from "@/lib/store/useSavedBets";
 
 export function MarketRow({ market, lines, current }: any) {
   // -----------------------------
@@ -10,9 +10,7 @@ export function MarketRow({ market, lines, current }: any) {
   // -----------------------------
   const { toggleSave } = useSavedBets();
   
-  const getBetId = (side: "over" | "under") => {
-    return `${mainLine.game_id}:${mainLine.player_id}:${market}:${side}:${mainLine.line}`;
-  };
+  
   const mainLine = lines.find(
     (l: any) => l.line_type === "over_under"
   );
@@ -38,6 +36,10 @@ export function MarketRow({ market, lines, current }: any) {
     return null;
   }
 
+  const getBetId = (side: "over" | "under") => {
+    return `${mainLine.game_id}:${mainLine.player_id}:${market}:${side}:${mainLine.line}`;
+  };
+
   return (
     <View>
       <Text style={styles.label}>{market}</Text>
@@ -55,6 +57,7 @@ export function MarketRow({ market, lines, current }: any) {
               disabled={mainLine.over_odds == null}
               onPress={() => {
                 if (mainLine.over_odds == null) return;
+                toggleSave(getBetId("over"));
                 addBet({
                   game_id: mainLine.game_id,
                   player_id: mainLine.player_id,
@@ -76,6 +79,7 @@ export function MarketRow({ market, lines, current }: any) {
               disabled={mainLine.under_odds == null}
               onPress={() => {
                 if (mainLine.under_odds == null) return;
+                toggleSave(getBetId("under"));
                 addBet({
                   game_id: mainLine.game_id,
                   player_id: mainLine.player_id,

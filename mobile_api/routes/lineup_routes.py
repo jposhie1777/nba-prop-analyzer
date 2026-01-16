@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from mobile_api.bq import get_bq_client
+from bq import get_bq_client
 
 router = APIRouter(
     prefix="/lineups",

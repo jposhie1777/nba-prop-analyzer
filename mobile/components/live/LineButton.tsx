@@ -1,51 +1,70 @@
-// components/live/LineButton.tsx
 import { Pressable, Text, StyleSheet } from "react-native";
 import { useTheme } from "@/store/useTheme";
 
-export function LineButton({ line, market, variant }: any) {
+type Props = {
+  line: any;
+  market: string;
+  state?: "hit" | "close" | "pending";
+  isSelected?: boolean;
+  onPress?: () => void;
+};
+
+export function LineButton({
+  line,
+  market,
+  state = "pending",
+  isSelected = false,
+  onPress,
+}: Props) {
   const { colors } = useTheme();
-
   const isMilestone = line.line_type === "milestone";
-
-  const dk = line.books?.draftkings;
 
   return (
     <Pressable
-      style={[
+      onPress={onPress}
+      style={({ pressed }) => [
         styles.btn,
         {
-          backgroundColor: colors.surface.card,
-          borderColor: isMilestone
+          backgroundColor: isSelected
+            ? colors.accent.primary + "22"
+            : pressed
+            ? colors.surface.subtle
+            : colors.surface.card,
+
+          borderColor: isSelected
             ? colors.accent.primary
+            : state === "close"
+            ? colors.warning
+            : state === "hit"
+            ? colors.success
             : colors.border.subtle,
         },
       ]}
-      onPress={() => {
-        console.log(
-          "SAVE",
-          market,
-          line.line,
-          isMilestone ? "MILESTONE" : "OU"
-        );
-      }}
     >
-      {/* LINE LABEL */}
-      <Text style={styles.line}>
+      <Text
+        style={[
+          styles.line,
+          {
+            color: isSelected
+              ? colors.accent.primary
+              : colors.text.primary,
+          },
+        ]}
+      >
         {isMilestone ? `${line.line}+` : line.line}
       </Text>
 
-      {/* ODDS */}
       {isMilestone ? (
         <Text style={styles.odds}>
-          {dk?.milestone ?? "—"}
+          {line.over_odds ?? "—"}
         </Text>
       ) : (
         <>
           <Text style={styles.odds}>
-            O {dk?.over ?? "—"}
+            O {line.over_odds ?? "—"}
           </Text>
           <Text style={styles.odds}>
-            U {dk?.under ?? "—"}
+            U {line.under_odds ?? "—"}
           </Text>
         </>
       )}
@@ -55,7 +74,8 @@ export function LineButton({ line, market, variant }: any) {
 
 const styles = StyleSheet.create({
   btn: {
-    padding: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderRadius: 10,
     minWidth: 72,
     alignItems: "center",

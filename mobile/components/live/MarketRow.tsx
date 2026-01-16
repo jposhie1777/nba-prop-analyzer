@@ -6,7 +6,7 @@ import { OverUnderButton } from "./OverUnderButton";
 import { useSavedBets } from "@/store/useSavedBets";
 
 export function MarketRow({ market, lines, current }: any) {
-  const isSaved = savedIds.has(id);
+  const { toggleSave, savedIds } = useSavedBets();
   const scrollRef = useRef<ScrollView>(null);
   const buttonWidthRef = useRef<number>(0);
   const mainLine = lines.find(
@@ -115,15 +115,22 @@ export function MarketRow({ market, lines, current }: any) {
                 }
               >
                 
-                <LineButton
-                  line={m}
-                  market={market}
-                  state={getState(m.line)}
-                  isSelected={isSaved}
-                  onPress={() => {
-                    toggleSave(betId);
-                  }}
-                />
+                {(() => {
+                  const betId = getMilestoneBetId(m.line);
+                  const isSelected = savedIds.has(betId);
+                
+                  return (
+                    <LineButton
+                      line={m}
+                      market={market}
+                      state={getState(m.line)}
+                      isSelected={isSelected}
+                      onPress={() => {
+                        toggleSave(betId);
+                      }}
+                    />
+                  );
+                })()}
               </View>
             ))}
           </View>

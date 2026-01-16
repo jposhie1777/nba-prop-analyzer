@@ -85,6 +85,17 @@ export default function TabLayout() {
         }}
       />
 
+      {/* LINEUPS TAB */}
+      <Tabs.Screen
+        name="lineups"
+        options={{
+          title: "Lineups",
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="people" size={22} color={color} />
+          ),
+        }}
+      />
+
       {/* SAVED TAB */}
       <Tabs.Screen
         name="saved"

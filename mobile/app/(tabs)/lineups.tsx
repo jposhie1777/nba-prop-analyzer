@@ -24,7 +24,10 @@ export default function LineupsScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 12, gap: 12 }}>
+    <ScrollView
+      style={{ backgroundColor: colors.surface.screen }}
+      contentContainerStyle={{ padding: 12, gap: 12 }}
+    >
       {data.map(game => (
         <GameLineupCard key={game.game_id} game={game} />
       ))}

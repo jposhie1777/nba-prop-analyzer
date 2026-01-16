@@ -28,7 +28,10 @@ export function TeamLineups({
           Most Common Starters
         </Text>
         {mc.map(p => (
-          <LineupRow key={`mc-${p.player_id}`} player={p} />
+          <LineupRow
+            key={`mc-${teamAbbr}-${p.lineup_position}-${p.player_id}`}
+            player={p}
+          />
         ))}
       </View>
 
@@ -38,7 +41,10 @@ export function TeamLineups({
           Projected Starters
         </Text>
         {proj.map(p => (
-          <LineupRow key={`proj-${p.player_id}`} player={p} />
+          <LineupRow
+            key={`proj-${teamAbbr}-${p.lineup_position}-${p.player_id}`}
+            player={p}
+          />
         ))}
       </View>
     </View>

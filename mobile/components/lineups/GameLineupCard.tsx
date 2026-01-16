@@ -8,7 +8,7 @@ export function GameLineupCard({ game }: { game: any }) {
   return (
     <View
       style={{
-        backgroundColor: colors.surface,
+        backgroundColor: colors.surface.card
         borderRadius: 12,
         padding: 12,
         gap: 12,

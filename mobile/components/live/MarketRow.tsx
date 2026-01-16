@@ -2,13 +2,13 @@
 import { View, Text, ScrollView, StyleSheet } from "react-native";
 import { LineButton } from "./LineButton";
 import { OverUnderButton } from "./OverUnderButton";
-import { useBetsStore } from "@/store/useBetsStore";
+import { useBetsStore } from "@/store/useSavedBets";
 
 export function MarketRow({ market, lines, current }: any) {
   // -----------------------------
   // Split main vs milestone
   // -----------------------------
-  const { addBet } = useBetsStore();
+  const { toggleSave } = useSavedBets();
 
   const mainLine = lines.find(
     (l: any) => l.line_type === "over_under"

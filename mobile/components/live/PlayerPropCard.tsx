@@ -42,6 +42,7 @@ export function PlayerPropCard({
                 ? current.reb
                 : 0
             }
+            playerName={name} // 👈 ADD THIS LINE
           />
         )
       )}

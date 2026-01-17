@@ -9,18 +9,25 @@ export function MarketRow({ market, lines, current }: any) {
   const { toggleSave, savedIds } = useSavedBets();
   const scrollRef = useRef<ScrollView>(null);
   const buttonWidthRef = useRef<number>(0);
-  const overUnderLines = lines.filter(
-    (l: any) => l.line_type === "over_under"
-  );
-  const mainLine = overUnderLines
-    .filter(
-      (l: any) => l.over_odds != null || l.under_odds != null
-    )
-    .sort(
-      (a: any, b: any) =>
-        new Date(b.snapshot_ts).getTime() -
-        new Date(a.snapshot_ts).getTime()
-    )[0];
+  const overUnderByLine = new Map<number, any>();
+
+  for (const l of lines) {
+    if (l.line_type !== "over_under") continue;
+  
+    const existing = overUnderByLine.get(l.line);
+    if (
+      !existing ||
+      new Date(l.snapshot_ts).getTime() >
+        new Date(existing.snapshot_ts).getTime()
+    ) {
+      overUnderByLine.set(l.line, l);
+    }
+  }
+  
+  const mainLine = Array.from(overUnderByLine.values())
+    .find(
+      (l) => l.over_odds != null || l.under_odds != null
+    );
 
   const getState = (lineValue: number) => {
     const remaining = lineValue - current;

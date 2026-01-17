@@ -450,13 +450,21 @@ return (
             
                 {/* ODDS */}
                 <View style={styles.oddsInline}>
-                  {resolvedBooks.slice(0, 2).map((b) => {
-                    const key = `${normalizeBookKey(b.bookmaker)}-${b.odds}-${line}`;
+                  {uniqueBooks.slice(0, 2).map((b) => {
+                    const bookKey = normalizeBookKey(b.bookmaker);
+                    const reactKey = `${bookKey}-${b.odds}-${line}`;
+                  
                     return (
-                      <View key={key} style={styles.oddsPill}>
-                        {BOOKMAKER_LOGOS[key] && (
-                          <Image source={BOOKMAKER_LOGOS[key]} style={styles.bookLogo} />
+                      <View key={reactKey} style={styles.oddsPill}>
+                        {BOOKMAKER_LOGOS[bookKey] ? (
+                          <Image
+                            source={BOOKMAKER_LOGOS[bookKey]}
+                            style={styles.bookLogo}
+                          />
+                        ) : (
+                          <View style={styles.bookLogoPlaceholder} />
                         )}
+                  
                         <Text style={styles.oddsText}>{formatOdds(b.odds)}</Text>
                       </View>
                     );

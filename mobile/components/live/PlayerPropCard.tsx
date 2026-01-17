@@ -30,7 +30,7 @@ export function PlayerPropCard({
       {Object.entries(player.markets).map(
         ([market, marketData]: any) => (
           <MarketRow
-            key={market}
+            key={`${player.player_id}-${market}`}
             market={market}
             lines={marketData.lines}
             current={

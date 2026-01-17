@@ -2,32 +2,112 @@ import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const STORAGE_KEY = "saved_props_v1";
+const BETS_STORAGE_KEY = "saved_props_bets_v1"; // 🆕 ADD
+
+// 🆕 ADD: richer bet model
+export type SavedBet = {
+  id: string;
+  player: string;
+  market: string;
+  line: number;
+  odds?: number;
+};
 
 type SavedBetsStore = {
+  // =========================
+  // EXISTING (UNCHANGED)
+  // =========================
   savedIds: Set<string>;
-  toggleSave: (id: string) => void;
+  toggleSave: (id: string, bet?: SavedBet) => void;
   clearAll: () => void;
   hydrate: () => Promise<void>;
+
+  // =========================
+  // 🆕 ADDITIONS
+  // =========================
+  bets: Map<string, SavedBet>;
 };
 
 export const useSavedBets = create<SavedBetsStore>((set, get) => ({
+  // =========================
+  // EXISTING STATE
+  // =========================
   savedIds: new Set(),
 
-  toggleSave: (id) => {
-    const next = new Set(get().savedIds);
-    next.has(id) ? next.delete(id) : next.add(id);
-    set({ savedIds: next });
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(next)));
+  // =========================
+  // 🆕 ADDITION
+  // =========================
+  bets: new Map(),
+
+  // =========================
+  // EXTENDED (NOT REPLACED)
+  // =========================
+  toggleSave: (id, bet) => {
+    const nextIds = new Set(get().savedIds);
+    const nextBets = new Map(get().bets);
+
+    if (nextIds.has(id)) {
+      // REMOVE
+      nextIds.delete(id);
+      nextBets.delete(id);
+    } else {
+      // ADD
+      nextIds.add(id);
+
+      if (bet) {
+        nextBets.set(id, bet);
+      }
+    }
+
+    set({
+      savedIds: nextIds,
+      bets: nextBets,
+    });
+
+    // =========================
+    // PERSIST (BACKWARD SAFE)
+    // =========================
+    AsyncStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(Array.from(nextIds))
+    );
+
+    AsyncStorage.setItem(
+      BETS_STORAGE_KEY,
+      JSON.stringify(Array.from(nextBets.values()))
+    );
   },
 
+  // =========================
+  // EXISTING (UNCHANGED)
+  // =========================
   clearAll: () => {
-    set({ savedIds: new Set() });
+    set({
+      savedIds: new Set(),
+      bets: new Map(),
+    });
+
     AsyncStorage.removeItem(STORAGE_KEY);
+    AsyncStorage.removeItem(BETS_STORAGE_KEY); // 🆕 ADD
   },
 
+  // =========================
+  // EXTENDED HYDRATION
+  // =========================
   hydrate: async () => {
+    // ---- legacy IDs ----
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-    set({ savedIds: new Set(JSON.parse(raw)) });
+    if (raw) {
+      set({ savedIds: new Set(JSON.parse(raw)) });
+    }
+
+    // ---- 🆕 bet objects ----
+    const rawBets = await AsyncStorage.getItem(BETS_STORAGE_KEY);
+    if (rawBets) {
+      const parsed: SavedBet[] = JSON.parse(rawBets);
+      const map = new Map<string, SavedBet>();
+      parsed.forEach((b) => map.set(b.id, b));
+      set({ bets: map });
+    }
   },
 }));

@@ -19,6 +19,11 @@ export function LineButton({
 }: Props) {
   const { colors } = useTheme();
   const isMilestone = line.line_type === "milestone";
+  const milestoneOdds =
+  line.price ??
+  line.over_odds ??
+  line.books?.draftkings?.milestone ??
+  "—";
 
   return (
     <Pressable
@@ -57,7 +62,7 @@ export function LineButton({
 
       {isMilestone ? (
         <Text style={styles.odds}>
-          {line.over_odds ?? "—"}
+          {milestoneOdds}
         </Text>
       ) : (
         <>

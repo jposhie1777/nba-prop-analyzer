@@ -1,3 +1,4 @@
+// mobile/components/lineups/GameLineupCard.tsx
 import { View, Text } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { TeamLineups } from "./TeamLineups";

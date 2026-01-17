@@ -31,6 +31,7 @@ export function PlayerPropCard({
         ([market, marketData]: any) => (
           <MarketRow
             key={`${player.player_id}-${market}`}
+            playerId={player.player_id}
             market={market}
             lines={marketData.lines}
             current={

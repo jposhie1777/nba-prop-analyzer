@@ -5,12 +5,19 @@ import { useTheme } from "@/store/useTheme";
 import { LiveGameCard } from "@/components/live/LiveGameCard";
 import { useLiveGames } from "@/hooks/useLiveGames";
 import { useLivePlayerStats } from "@/hooks/useLivePlayerStats";
+import { Pressable } from "react-native";
+import { useSavedBets } from "@/store/useSavedBets";
+import { useState } from "react";
 
 export default function LiveGamesScreen() {
   const { colors } = useTheme();
 
   const { games, mode } = useLiveGames();
   const { playersByGame } = useLivePlayerStats();
+
+  // 🟢 BETSLIP STATE
+  const [betslipOpen, setBetslipOpen] = useState(false);
+  const savedIds = useSavedBets((s) => s.savedIds);
 
   const isConnecting = mode === "sse" && games.length === 0;
   
@@ -70,7 +77,7 @@ export default function LiveGamesScreen() {
       <FlatList
         data={games}
         keyExtractor={(g) => g.gameId}
-        contentContainerStyle={{ paddingBottom: 16 }}
+        contentContainerStyle={{ paddingBottom: 120 }}
         renderItem={({ item }) => (
           <LiveGameCard
             game={item}
@@ -78,6 +85,91 @@ export default function LiveGamesScreen() {
           />
         )}
       />
+  
+      {/* 🧾 BETSLIP BAR */}
+      {savedIds.size > 0 && (
+        <Pressable
+          onPress={() => setBetslipOpen(true)}
+          style={{
+            position: "absolute",
+            bottom: 16,
+            left: 16,
+            right: 16,
+            backgroundColor: colors.accent.primary,
+            borderRadius: 16,
+            paddingVertical: 14,
+            alignItems: "center",
+          }}
+        >
+          <Text
+            style={{
+              color: colors.text.primary,
+              fontWeight: "800",
+              fontSize: 14,
+            }}
+          >
+            View Betslip ({savedIds.size})
+          </Text>
+        </Pressable>
+      )}
+
+      {/* 🧾 BETSLIP DRAWER */}
+      {betslipOpen && (
+        <View
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: colors.surface.card,
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            padding: 16,
+            maxHeight: "70%",
+          }}
+        >
+          <Text
+            style={{
+              fontWeight: "800",
+              fontSize: 16,
+              marginBottom: 12,
+              color: colors.text.primary,
+            }}
+          >
+            Betslip
+          </Text>
+      
+          {Array.from(savedIds).map((id) => (
+            <Text
+              key={id}
+              style={{
+                color: colors.text.secondary,
+                fontSize: 12,
+                marginBottom: 6,
+              }}
+            >
+              {id}
+            </Text>
+          ))}
+      
+          <Pressable
+            onPress={() => setBetslipOpen(false)}
+            style={{
+              marginTop: 16,
+              alignItems: "center",
+            }}
+          >
+            <Text
+              style={{
+                color: colors.accent.primary,
+                fontWeight: "700",
+              }}
+            >
+              Close
+            </Text>
+          </Pressable>
+        </View>
+      )}
 
       {/* EMPTY STATE */}
       {games.length === 0 && !isConnecting && (

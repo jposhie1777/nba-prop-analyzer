@@ -68,25 +68,6 @@ export const useSavedBets = create<SavedBetsStore>((set, get) => ({
     );
   },
 
-    set({
-      savedIds: nextIds,
-      bets: nextBets,
-    });
-
-    // =========================
-    // PERSIST (BACKWARD SAFE)
-    // =========================
-    AsyncStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify(Array.from(nextIds))
-    );
-
-    AsyncStorage.setItem(
-      BETS_STORAGE_KEY,
-      JSON.stringify(Array.from(nextBets.values()))
-    );
-  },
-
   // =========================
   // EXISTING (UNCHANGED)
   // =========================

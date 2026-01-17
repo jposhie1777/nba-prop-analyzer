@@ -72,11 +72,11 @@ export function MarketRow({
     line: number
   ) => {
     if (!mainLine) return null;
-    return `ou:${mainLine.game_id}:${mainLine.player_id}:${marketKey}:${side}:${line}`;
+    return `ou:${mainLine.game_id}:${playerId}:${marketKey}:${side}:${line}`;
   };
   
   const getMilestoneBetId = (m: any) => {
-    return `ms:${m.game_id}:${m.player_id}:${marketKey}:${m.line}`;
+    return `ms:${m.game_id}:${playerId}:${marketKey}:${m.line}`;
   };
 
   const closeIndex = milestones.findIndex(
@@ -175,7 +175,7 @@ export function MarketRow({
           <View style={styles.row}>
             {milestones.map((m: any, idx: number) => (
               <View
-                key={`ms-${m.game_id}-${m.player_id}-${marketKey}-${m.line}`}
+                key={`ms-${playerId}-${marketKey}-${m.line}`}
                 onLayout={
                   idx === 0
                     ? (e) => {
@@ -194,13 +194,14 @@ export function MarketRow({
                     <LineButton
                       line={m}
                       market={market}
+                      playerId={playerId}
                       state={getState(m.line)}
                       isSelected={isSelected}
                       onPress={() => {
                         toggleSave({
                           id: betId,
                           player: playerName, // 👈 ADD
-                          playerId: m.player_id,
+                          playerId: playerId,
                           gameId: m.game_id,
                           market: marketKey,
                           line: m.line,

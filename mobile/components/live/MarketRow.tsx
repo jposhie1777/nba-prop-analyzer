@@ -5,7 +5,7 @@ import { LineButton } from "./LineButton";
 import { OverUnderButton } from "./OverUnderButton";
 import { useSavedBets } from "@/store/useSavedBets";
 
-export function MarketRow({ market, lines, current }: any) {
+export function MarketRow({ market, lines, current, playerName }: any) {
   const { toggleSave, savedIds } = useSavedBets();
   const scrollRef = useRef<ScrollView>(null);
   const buttonWidthRef = useRef<number>(0);
@@ -118,6 +118,7 @@ export function MarketRow({ market, lines, current }: any) {
                       if (mainLine.over_odds == null) return;
                       toggleSave({
                         id: overBetId,
+                        player: playerName, // 👈 ADD
                         playerId: mainLine.player_id,
                         gameId: mainLine.game_id,
                         market,
@@ -138,6 +139,7 @@ export function MarketRow({ market, lines, current }: any) {
                       if (mainLine.under_odds == null) return;
                       toggleSave({
                         id: underBetId,
+                        player: playerName,
                         playerId: mainLine.player_id,
                         gameId: mainLine.game_id,
                         market,
@@ -190,6 +192,7 @@ export function MarketRow({ market, lines, current }: any) {
                       onPress={() => {
                         toggleSave({
                           id: betId,
+                          player: playerName, // 👈 ADD
                           playerId: m.player_id,
                           gameId: m.game_id,
                           market,

@@ -18,6 +18,7 @@ export default function LiveGamesScreen() {
   // 🟢 BETSLIP STATE
   const [betslipOpen, setBetslipOpen] = useState(false);
   const savedIds = useSavedBets((s) => s.savedIds);
+  const bets = useSavedBets((s) => s.bets);
 
   const isConnecting = mode === "sse" && games.length === 0;
   
@@ -139,17 +140,22 @@ export default function LiveGamesScreen() {
             Betslip
           </Text>
       
-          {Array.from(savedIds).map((id) => (
-            <Text
-              key={id}
-              style={{
-                color: colors.text.secondary,
-                fontSize: 12,
-                marginBottom: 6,
-              }}
+          {Array.from(bets.values()).map((bet) => (
+            <View
+              key={bet.id}
+              style={{ marginBottom: 10 }}
             >
-              {id}
-            </Text>
+              <Text style={{ fontWeight: "700" }}>
+                {bet.player} · {bet.market}
+              </Text>
+          
+              <Text style={{ fontSize: 12, color: colors.text.muted }}>
+                {bet.side === "milestone"
+                  ? `${bet.line}+`
+                  : `${bet.side.toUpperCase()} ${bet.line}`}
+                {bet.odds != null ? ` (${bet.odds})` : ""}
+              </Text>
+            </View>
           ))}
       
           <Pressable

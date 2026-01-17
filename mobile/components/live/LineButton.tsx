@@ -5,6 +5,7 @@ import { useTheme } from "@/store/useTheme";
 type Props = {
   line: any;
   market: string;
+  playerId: number; // 👈 ADD
   state?: "hit" | "close" | "pending";
   isSelected?: boolean;
   onPress?: () => void;

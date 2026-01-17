@@ -67,27 +67,38 @@ export function MarketRow({ market, lines, current }: any) {
       {mainLine && (
         <View style={{ marginBottom: 6 }}>
           <View style={{ flexDirection: "row", gap: 10 }}>
-            <OverUnderButton
-              side="over"
-              line={mainLine.line}
-              odds={mainLine.over_odds}
-              disabled={mainLine.over_odds == null}
-              onPress={() => {
-                if (mainLine.over_odds == null) return;
-                toggleSave(getBetId("over"));
-              }}
-            />
-
-            <OverUnderButton
-              side="under"
-              line={mainLine.line}
-              odds={mainLine.under_odds}
-              disabled={mainLine.under_odds == null}
-              onPress={() => {
-                if (mainLine.under_odds == null) return;
-                toggleSave(getBetId("under"));
-              }}
-            />
+            {(() => {
+              const overBetId = getBetId("over");
+              const underBetId = getBetId("under");
+      
+              return (
+                <>
+                  <OverUnderButton
+                    side="over"
+                    line={mainLine.line}
+                    odds={mainLine.over_odds}
+                    disabled={mainLine.over_odds == null}
+                    isSelected={savedIds.has(overBetId)}
+                    onPress={() => {
+                      if (mainLine.over_odds == null) return;
+                      toggleSave(overBetId);
+                    }}
+                  />
+      
+                  <OverUnderButton
+                    side="under"
+                    line={mainLine.line}
+                    odds={mainLine.under_odds}
+                    disabled={mainLine.under_odds == null}
+                    isSelected={savedIds.has(underBetId)}
+                    onPress={() => {
+                      if (mainLine.under_odds == null) return;
+                      toggleSave(underBetId);
+                    }}
+                  />
+                </>
+              );
+            })()}
           </View>
         </View>
       )}

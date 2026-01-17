@@ -45,13 +45,13 @@ def get_player_lookup_table() -> str:
 
 
 # ======================================================
-# BIGQUERY READ (ACTIVE PLAYERS)
+# BIGQUERY READ (ACTIVE PLAYERS — DEDUPED)
 # ======================================================
 
 def fetch_active_players():
     """
     Canonical source of players.
-    This guarantees full coverage (no props dependency).
+    Ensures exactly ONE row per player_id.
     """
     bq = get_bq()
     project = get_project_id()
@@ -59,9 +59,10 @@ def fetch_active_players():
     query = f"""
     SELECT
       player_id,
-      name AS player_name
+      ANY_VALUE(name) AS player_name
     FROM `{project}.nba_goat_data.active_players`
     WHERE season = @season
+    GROUP BY player_id
     """
 
     job = bq.query(
@@ -135,8 +136,7 @@ def upsert_player(player_id: int, player_name: str, espn_row: dict):
     query = f"""
     MERGE `{table_id}` t
     USING (
-      SELECT
-        @player_id AS player_id
+      SELECT @player_id AS player_id
     ) s
     ON t.player_id = s.player_id
     WHEN MATCHED THEN
@@ -175,24 +175,12 @@ def upsert_player(player_id: int, player_name: str, espn_row: dict):
         query_parameters=[
             bigquery.ScalarQueryParameter("player_id", "INT64", player_id),
             bigquery.ScalarQueryParameter("player_name", "STRING", player_name),
-            bigquery.ScalarQueryParameter(
-                "espn_player_id", "INT64", espn_row["espn_player_id"]
-            ),
-            bigquery.ScalarQueryParameter(
-                "espn_display_name", "STRING", espn_row["espn_display_name"]
-            ),
-            bigquery.ScalarQueryParameter(
-                "player_image_url", "STRING", espn_row["player_image_url"]
-            ),
-            bigquery.ScalarQueryParameter(
-                "league", "STRING", espn_row["league"]
-            ),
-            bigquery.ScalarQueryParameter(
-                "last_verified", "TIMESTAMP", espn_row["last_verified"]
-            ),
-            bigquery.ScalarQueryParameter(
-                "source", "STRING", espn_row["source"]
-            ),
+            bigquery.ScalarQueryParameter("espn_player_id", "INT64", espn_row["espn_player_id"]),
+            bigquery.ScalarQueryParameter("espn_display_name", "STRING", espn_row["espn_display_name"]),
+            bigquery.ScalarQueryParameter("player_image_url", "STRING", espn_row["player_image_url"]),
+            bigquery.ScalarQueryParameter("league", "STRING", espn_row["league"]),
+            bigquery.ScalarQueryParameter("last_verified", "TIMESTAMP", espn_row["last_verified"]),
+            bigquery.ScalarQueryParameter("source", "STRING", espn_row["source"]),
         ]
     )
 
@@ -207,10 +195,17 @@ def main():
     players = fetch_active_players()
     print(f"📦 Loaded {len(players)} active players")
 
+    seen = set()
+
     for p in players:
         player_id = p["player_id"]
-        name = p["player_name"]
 
+        # Absolute safety guard
+        if player_id in seen:
+            continue
+        seen.add(player_id)
+
+        name = p["player_name"]
         print(f"🔍 ESPN lookup: {name} (player_id={player_id})")
 
         espn_row = fetch_espn_player(name)

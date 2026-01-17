@@ -6,7 +6,8 @@ import { OverUnderButton } from "./OverUnderButton";
 import { useSavedBets } from "@/store/useSavedBets";
 
 export function MarketRow({ market, lines, current, playerName }: any) {
-  const { toggleSave, savedIds } = useSavedBets();
+  const toggleSave = useSavedBets((s) => s.toggleSave);
+  const savedIds = useSavedBets((s) => s.savedIds);
   const scrollRef = useRef<ScrollView>(null);
   const buttonWidthRef = useRef<number>(0);
   const overUnderByLine = new Map<number, any>();

@@ -6,7 +6,7 @@ import requests
 from datetime import datetime, timezone
 
 from google.cloud import bigquery
-from bq import get_bq_client
+from mobile_api.bq import get_bq_client
 
 # ======================================================
 # CONFIG (CLOUD RUN SAFE)

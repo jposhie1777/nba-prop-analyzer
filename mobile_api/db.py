@@ -220,10 +220,11 @@ def ingest_live_games_snapshot() -> None:
         # ---------------------------
         if raw_time == "Final":
             state = "FINAL"
-        elif home_score is not None and away_score is not None:
+        elif isinstance(raw_period, int) and raw_period >= 1:
             state = "LIVE"
         else:
             state = "UPCOMING"
+
 
         # ---------------------------
         # Period + Clock

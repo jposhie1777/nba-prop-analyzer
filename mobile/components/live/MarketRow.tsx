@@ -13,6 +13,9 @@ export function MarketRow({ market, lines, current }: any) {
     (l: any) => l.line_type === "over_under"
   );
   const mainLine = overUnderLines
+    .filter(
+      (l: any) => l.over_odds != null || l.under_odds != null
+    )
     .sort(
       (a: any, b: any) =>
         new Date(b.snapshot_ts).getTime() -

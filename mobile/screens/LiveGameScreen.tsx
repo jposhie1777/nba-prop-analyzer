@@ -11,7 +11,7 @@ import { useState } from "react";
 
 export default function LiveGamesScreen() {
   const { colors } = useTheme();
-
+  const clearAll = useSavedBets((s) => s.clearAll);
   const { games, mode } = useLiveGames();
   const { playersByGame } = useLivePlayerStats();
 
@@ -141,14 +141,11 @@ export default function LiveGamesScreen() {
           </Text>
       
           {Array.from(bets.values()).map((bet) => (
-            <View
-              key={bet.id}
-              style={{ marginBottom: 10 }}
-            >
+            <View key={bet.id} style={{ marginBottom: 10 }}>
               <Text style={{ fontWeight: "700" }}>
                 {bet.player} · {bet.market}
               </Text>
-          
+      
               <Text style={{ fontSize: 12, color: colors.text.muted }}>
                 {bet.side === "milestone"
                   ? `${bet.line}+`
@@ -158,22 +155,48 @@ export default function LiveGamesScreen() {
             </View>
           ))}
       
-          <Pressable
-            onPress={() => setBetslipOpen(false)}
-            style={{
-              marginTop: 16,
-              alignItems: "center",
-            }}
-          >
-            <Text
+          {/* ACTION BUTTONS */}
+          <View style={{ flexDirection: "row", gap: 12, marginTop: 16 }}>
+            <Pressable
+              onPress={clearAll}
               style={{
-                color: colors.accent.primary,
-                fontWeight: "700",
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 10,
+                backgroundColor: colors.surface.subtle,
+                alignItems: "center",
               }}
             >
-              Close
-            </Text>
-          </Pressable>
+              <Text
+                style={{
+                  fontWeight: "700",
+                  color: colors.text.primary,
+                }}
+              >
+                Clear All
+              </Text>
+            </Pressable>
+      
+            <Pressable
+              onPress={() => setBetslipOpen(false)}
+              style={{
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 10,
+                backgroundColor: colors.accent.primary,
+                alignItems: "center",
+              }}
+            >
+              <Text
+                style={{
+                  fontWeight: "700",
+                  color: colors.text.primary,
+                }}
+              >
+                Close
+              </Text>
+            </Pressable>
+          </View>
         </View>
       )}
 

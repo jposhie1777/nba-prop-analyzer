@@ -217,6 +217,19 @@ export default function PropCard(props: PropCardProps) {
     return [];
   }, [books, bookmaker, odds]);
 
+  const uniqueBooks = useMemo(() => {
+    const seen = new Map<string, BookOdds>();
+  
+    resolvedBooks.forEach((b) => {
+      const k = `${normalizeBookKey(b.bookmaker)}-${b.odds}`;
+      if (!seen.has(k)) {
+        seen.set(k, b);
+      }
+    });
+  
+    return Array.from(seen.values());
+  }, [resolvedBooks]);
+
   /* =========================
      CONFIDENCE TIER
   ========================= */

@@ -1,3 +1,4 @@
+// mobile/app/%28tabs%29/lineups.tsx
 import { ScrollView, Text } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { useTonightLineups } from "@/lib/api/useTonightLineups";

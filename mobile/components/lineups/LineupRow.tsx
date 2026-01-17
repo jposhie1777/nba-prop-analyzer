@@ -1,3 +1,4 @@
+// mobile/components/lineups/LineupRow.tsx
 import { View, Text, Image } from "react-native";
 import { useTheme } from "@/store/useTheme";
 

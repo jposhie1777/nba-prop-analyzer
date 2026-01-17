@@ -1,3 +1,4 @@
+// mobile/components/lineups/TeamLineups.tsx
 import { View, Text } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { LineupRow } from "./LineupRow";
@@ -13,8 +14,22 @@ export function TeamLineups({
 }) {
   const { colors } = useTheme();
 
-  const mc = mostCommon.filter(l => l.team_abbr === teamAbbr);
-  const proj = projected.filter(l => l.team_abbr === teamAbbr);
+  const projectedTeam = projected
+    .filter(p => p.team_abbr === teamAbbr)
+    .sort((a, b) => a.lineup_position - b.lineup_position);
+
+  const mostCommonTeam = mostCommon
+    .filter(m => m.team_abbr === teamAbbr)
+    .sort((a, b) => a.lineup_position - b.lineup_position);
+
+  // Track projected players so we don’t duplicate
+  const usedPlayerIds = new Set(projectedTeam.map(p => p.player_id));
+
+  // Fill missing projected slots from most common
+  const filledProjected = [
+    ...projectedTeam,
+    ...mostCommonTeam.filter(m => !usedPlayerIds.has(m.player_id)),
+  ].slice(0, 5);
 
   return (
     <View style={{ gap: 8 }}>
@@ -27,7 +42,7 @@ export function TeamLineups({
         <Text style={{ color: colors.text.muted, fontSize: 12 }}>
           Most Common Starters
         </Text>
-        {mc.map(p => (
+        {mostCommonTeam.map(p => (
           <LineupRow
             key={`mc-${teamAbbr}-${p.lineup_position}-${p.player_id}`}
             player={p}
@@ -35,17 +50,24 @@ export function TeamLineups({
         ))}
       </View>
 
-      {/* Projected */}
+      {/* Projected (with fallback) */}
       <View style={{ gap: 4 }}>
         <Text style={{ color: colors.text.muted, fontSize: 12 }}>
           Projected Starters
         </Text>
-        {proj.map(p => (
-          <LineupRow
-            key={`proj-${teamAbbr}-${p.lineup_position}-${p.player_id}`}
-            player={p}
-          />
-        ))}
+        {filledProjected.map((p, idx) => {
+          const isFallback = !projectedTeam.some(
+            x => x.player_id === p.player_id
+          );
+
+          return (
+            <LineupRow
+              key={`proj-${teamAbbr}-${idx}-${p.player_id}`}
+              player={p}
+              isFallback={isFallback}
+            />
+          );
+        })}
       </View>
     </View>
   );

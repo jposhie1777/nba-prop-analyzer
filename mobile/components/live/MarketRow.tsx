@@ -9,9 +9,17 @@ export function MarketRow({ market, lines, current }: any) {
   const { toggleSave, savedIds } = useSavedBets();
   const scrollRef = useRef<ScrollView>(null);
   const buttonWidthRef = useRef<number>(0);
-  const mainLine = lines.find(
-    (l: any) => l.line_type === "over_under"
+  const overUnderLines = lines.filter(
+    (l: any) =>
+      l.line_type === "over_under" &&
+      (l.over_odds != null || l.under_odds != null)
   );
+  const mainLine = overUnderLines
+    .sort(
+      (a: any, b: any) =>
+        new Date(b.snapshot_ts).getTime() -
+        new Date(a.snapshot_ts).getTime()
+    )[0];
 
   const getState = (lineValue: number) => {
     const remaining = lineValue - current;

@@ -46,6 +46,8 @@ export function MarketRow({ market, lines, current }: any) {
     return Number(raw);
   };
 
+  const MAX_STEPS_AHEAD = 7;
+
   const milestones = lines
     .filter(
       (l: any) =>
@@ -54,17 +56,7 @@ export function MarketRow({ market, lines, current }: any) {
         getMilestoneOdds(l) !== null
     )
     .sort((a: any, b: any) => a.line - b.line)
-    .filter((line, idx, arr) => {
-      // Remove dominated lines
-      const odds = getMilestoneOdds(line)!;
-  
-      // If a higher line has better odds, drop this one
-      return !arr.some(
-        (other) =>
-          other.line > line.line &&
-          getMilestoneOdds(other)! > odds
-      );
-    });
+    .slice(0, MAX_STEPS_AHEAD);
   
   const getBetId = (side: "over" | "under") => {
     if (!mainLine) return "";

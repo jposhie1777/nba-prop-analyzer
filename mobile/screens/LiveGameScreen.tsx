@@ -8,6 +8,8 @@ import { useLivePlayerStats } from "@/hooks/useLivePlayerStats";
 import { Pressable } from "react-native";
 import { useSavedBets } from "@/store/useSavedBets";
 import { useState } from "react";
+import * as Linking from "expo-linking";
+import * as Clipboard from "expo-clipboard";
 
 export default function LiveGamesScreen() {
   const { colors } = useTheme();
@@ -22,6 +24,24 @@ export default function LiveGamesScreen() {
 
   const isConnecting = mode === "sse" && games.length === 0;
   
+  const copyAllBets = async () => {
+    if (bets.size === 0) return;
+  
+    const text = Array.from(bets.values())
+      .map((bet) => {
+        const line =
+          bet.side === "milestone"
+            ? `${bet.line}+`
+            : `${bet.side.toUpperCase()} ${bet.line}`;
+  
+        const odds = bet.odds != null ? ` (${bet.odds})` : "";
+  
+        return `${bet.player} ${bet.market} ${line}${odds}`;
+      })
+      .join("\n");
+  
+    await Clipboard.setStringAsync(text);
+  };
     /* ===========================
        DEV GUARD: players ↔ game
     =========================== */
@@ -156,46 +176,69 @@ export default function LiveGamesScreen() {
           ))}
       
           {/* ACTION BUTTONS */}
-          <View style={{ flexDirection: "row", gap: 12, marginTop: 16 }}>
+          <View style={{ gap: 12, marginTop: 16 }}>
+            {/* Gambly */}
             <Pressable
-              onPress={clearAll}
+              onPress={() => Linking.openURL("https://www.gambly.com/")}
               style={{
-                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 10,
+                backgroundColor: "#5865F2", // Discord-ish, Gambly-adjacent
+                alignItems: "center",
+              }}
+            >
+              <Text style={{ fontWeight: "800", color: "#fff" }}>
+                Open Gambly
+              </Text>
+            </Pressable>
+          
+            {/* Copy All */}
+            <Pressable
+              onPress={copyAllBets}
+              style={{
                 paddingVertical: 12,
                 borderRadius: 10,
                 backgroundColor: colors.surface.subtle,
                 alignItems: "center",
               }}
             >
-              <Text
-                style={{
-                  fontWeight: "700",
-                  color: colors.text.primary,
-                }}
-              >
-                Clear All
+              <Text style={{ fontWeight: "700", color: colors.text.primary }}>
+                Copy All Bets
               </Text>
             </Pressable>
-      
-            <Pressable
-              onPress={() => setBetslipOpen(false)}
-              style={{
-                flex: 1,
-                paddingVertical: 12,
-                borderRadius: 10,
-                backgroundColor: colors.accent.primary,
-                alignItems: "center",
-              }}
-            >
-              <Text
+          
+            {/* Clear / Close */}
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <Pressable
+                onPress={clearAll}
                 style={{
-                  fontWeight: "700",
-                  color: colors.text.primary,
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  backgroundColor: colors.surface.subtle,
+                  alignItems: "center",
                 }}
               >
-                Close
-              </Text>
-            </Pressable>
+                <Text style={{ fontWeight: "700", color: colors.text.primary }}>
+                  Clear All
+                </Text>
+              </Pressable>
+          
+              <Pressable
+                onPress={() => setBetslipOpen(false)}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  backgroundColor: colors.accent.primary,
+                  alignItems: "center",
+                }}
+              >
+                <Text style={{ fontWeight: "700", color: colors.text.primary }}>
+                  Close
+                </Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       )}

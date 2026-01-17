@@ -36,17 +36,35 @@ export function MarketRow({ market, lines, current }: any) {
     return "pending";
   };
 
+  const getMilestoneOdds = (line: any): number | null => {
+    const raw =
+      line.price ??
+      line.over_odds ??
+      line.books?.draftkings?.milestone;
+  
+    if (raw === null || raw === undefined) return null;
+    return Number(raw);
+  };
+
   const milestones = lines
     .filter(
       (l: any) =>
         l.line_type === "milestone" &&
-        l.line > current
+        l.line > current &&
+        getMilestoneOdds(l) !== null
     )
-    .sort((a: any, b: any) => a.line - b.line);
-
-  if (!mainLine && milestones.length === 0) {
-    return null;
-  }
+    .sort((a: any, b: any) => a.line - b.line)
+    .filter((line, idx, arr) => {
+      // Remove dominated lines
+      const odds = getMilestoneOdds(line)!;
+  
+      // If a higher line has better odds, drop this one
+      return !arr.some(
+        (other) =>
+          other.line > line.line &&
+          getMilestoneOdds(other)! > odds
+      );
+    });
   
   const getBetId = (side: "over" | "under") => {
     if (!mainLine) return "";

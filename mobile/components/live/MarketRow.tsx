@@ -1,5 +1,5 @@
 // components/live/marketrow
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import { View, Text, ScrollView, StyleSheet } from "react-native";
 import { LineButton } from "./LineButton";
 import { OverUnderButton } from "./OverUnderButton";
@@ -100,6 +100,19 @@ export function MarketRow({
   
     didAutoScroll.current = true;
   }, [closeIndex]);
+  
+  const [expandedLine, setExpandedLine] = useState<{ line: number } | null>(null);
+
+  const toggleExpand = (line: number) => {
+    setExpandedLine((prev) =>
+      prev?.line === line ? null : { line }
+    );
+  };
+  
+  // 🔒 collapse inspection when market changes
+  useEffect(() => {
+    setExpandedLine(null);
+  }, [market])
 
   return (
     <View>
@@ -165,42 +178,43 @@ export function MarketRow({
 
       {/* MILESTONES */}
       {milestones.length > 0 && (
-        <ScrollView
-          ref={scrollRef}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingRight: 12 }}
-          style={{ marginTop: 6 }}
-        >
-          <View style={styles.row}>
-            {milestones.map((m: any, idx: number) => (
-              <View
-                key={`ms-${playerId}-${marketKey}-${m.line}`}
-                onLayout={
-                  idx === 0
-                    ? (e) => {
-                        buttonWidthRef.current =
-                          e.nativeEvent.layout.width;
-                      }
-                    : undefined
-                }
-              >
-                
-                {(() => {
-                  const betId = getMilestoneBetId(m);
-                  const isSelected = savedIds.has(betId);
-                
-                  return (
+        <View style={{ marginTop: 6 }}>
+          <ScrollView
+            ref={scrollRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingRight: 12 }}
+            onScrollBeginDrag={() => setExpandedLine(null)} // 👈 ADD HERE
+          >
+            <View style={styles.row}>
+              {milestones.map((m: any, idx: number) => {
+                const betId = getMilestoneBetId(m);
+                const isSelected = savedIds.has(betId);
+                const isExpanded = expandedLine?.line === m.line;
+      
+                return (
+                  <View
+                    key={`ms-${playerId}-${marketKey}-${m.line}`}
+                    onLayout={
+                      idx === 0
+                        ? (e) => {
+                            buttonWidthRef.current =
+                              e.nativeEvent.layout.width;
+                          }
+                        : undefined
+                    }
+                  >
                     <LineButton
                       line={m}
                       market={market}
                       playerId={playerId}
                       state={getState(m.line)}
                       isSelected={isSelected}
-                      onPress={() => {
+                      isExpanded={isExpanded}
+                      onSave={() => {
                         toggleSave({
                           id: betId,
-                          player: playerName, // 👈 ADD
+                          player: playerName,
                           playerId: playerId,
                           gameId: m.game_id,
                           market: marketKey,
@@ -209,13 +223,32 @@ export function MarketRow({
                           odds: getMilestoneOdds(m),
                         });
                       }}
+                      onInspect={() => toggleExpand(m.line)}
                     />
-                  );
-                })()}
-              </View>
-            ))}
-          </View>
-        </ScrollView>
+                  </View>
+                );
+              })}
+            </View>
+          </ScrollView>
+      
+          {/* 🔍 EXPANDED ANALYTICS STRIP */}
+          {expandedLine?.line != null && (
+            <View style={styles.analytics}>
+              <Text style={styles.analyticsText}>
+                Fair odds: −180
+              </Text>
+              <Text style={styles.analyticsText}>
+                Edge: +105
+              </Text>
+              <Text style={styles.analyticsText}>
+                On pace: 11.8 {market}
+              </Text>
+              <Text style={styles.analyticsText}>
+                L5: 80% · L10: 70%
+              </Text>
+            </View>
+          )}
+        </View>
       )}
     </View>
   );
@@ -231,5 +264,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
     flexWrap: "nowrap", // IMPORTANT
+  },
+  analytics: {
+    marginTop: 6,
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: "#00000011",
+  },
+  analyticsText: {
+    fontSize: 11,
+    opacity: 0.85,
   },
 });

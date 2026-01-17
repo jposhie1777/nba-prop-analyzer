@@ -10,9 +10,7 @@ export function MarketRow({ market, lines, current }: any) {
   const scrollRef = useRef<ScrollView>(null);
   const buttonWidthRef = useRef<number>(0);
   const overUnderLines = lines.filter(
-    (l: any) =>
-      l.line_type === "over_under" &&
-      (l.over_odds != null || l.under_odds != null)
+    (l: any) => l.line_type === "over_under"
   );
   const mainLine = overUnderLines
     .sort(

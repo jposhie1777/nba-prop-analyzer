@@ -64,7 +64,7 @@ export function MarketRow({ market, lines, current, playerName }: any) {
     side: "over" | "under",
     line: number
   ) => {
-    if (!mainLine) return "";
+    if (!mainLine) return null;
     return `ou:${mainLine.game_id}:${mainLine.player_id}:${marketKey}:${side}:${line}`;
   };
   
@@ -168,7 +168,7 @@ export function MarketRow({ market, lines, current, playerName }: any) {
           <View style={styles.row}>
             {milestones.map((m: any, idx: number) => (
               <View
-                key={`ms-${m.game_id}-${m.player_id}-${marketKey}-${m.line}`}>
+                key={`ms-${m.game_id}-${m.player_id}-${marketKey}-${m.line}`}
                 onLayout={
                   idx === 0
                     ? (e) => {

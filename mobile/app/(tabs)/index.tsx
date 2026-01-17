@@ -79,7 +79,7 @@ export default function HomeScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
 
   
-
+  const listRef = useRef<FlatList>(null);
 
   // ---------------------------
   // FILTER + SORT STATE
@@ -305,6 +305,7 @@ export default function HomeScreen() {
           books={item.books}
           playerImageUrl={item.player_image_url}
           side={item.side}
+          scrollRef={listRef}
   
           hitRateL10={item.hitRateL10}
           edge={item.edge}
@@ -514,6 +515,7 @@ export default function HomeScreen() {
             PROP LIST
         ========================== */}
         <FlatList
+          ref={listRef}
           data={filteredProps}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}

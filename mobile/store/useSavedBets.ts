@@ -39,6 +39,12 @@ export const useSavedBets = create<SavedBetsStore>((set, get) => ({
   // EXTENDED (NOT REPLACED)
   // =========================
   toggleSave: (bet) => {
+    console.log("🟡 TOGGLE SAVE CALLED", {
+      id: bet.id,
+      market: bet.market,
+      player: bet.player,
+    });
+  
     const nextIds = new Set(get().savedIds);
     const nextBets = new Map(get().bets);
   
@@ -52,9 +58,19 @@ export const useSavedBets = create<SavedBetsStore>((set, get) => ({
       nextBets.set(bet.id, bet);
     }
   
+    console.log("🟢 BEFORE SET", {
+      hasId: nextIds.has(bet.id),
+      sizeBefore: get().savedIds.size,
+    });
+    
     set({
       savedIds: nextIds,
       bets: nextBets,
+    });
+    
+    console.log("🔵 AFTER SET", {
+      sizeAfter: nextIds.size,
+      ids: Array.from(nextIds),
     });
   
     AsyncStorage.setItem(

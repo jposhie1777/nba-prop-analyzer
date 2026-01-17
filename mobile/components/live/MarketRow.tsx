@@ -59,14 +59,17 @@ export function MarketRow({ market, lines, current }: any) {
     .sort((a: any, b: any) => a.line - b.line)
     .slice(0, MAX_STEPS_AHEAD);
   
-  const getBetId = (side: "over" | "under") => {
+  const getOverUnderBetId = (
+    side: "over" | "under",
+    line: number
+  ) => {
     if (!mainLine) return "";
-    return `${mainLine.game_id}:${mainLine.player_id}:${market}:${side}:${mainLine.line}`;
+    return `ou:${mainLine.game_id}:${mainLine.player_id}:${market}:${side}:${line}`;
   };
-
+  
   const getMilestoneBetId = (lineValue: number) => {
     if (!mainLine) return "";
-    return `${mainLine.game_id}:${mainLine.player_id}:${market}:milestone:${lineValue}`;
+    return `ms:${mainLine.game_id}:${mainLine.player_id}:${market}:${lineValue}`;
   };
 
   const closeIndex = milestones.findIndex(
@@ -100,8 +103,8 @@ export function MarketRow({ market, lines, current }: any) {
         <View style={{ marginBottom: 6 }}>
           <View style={{ flexDirection: "row", gap: 10 }}>
             {(() => {
-              const overBetId = getBetId("over");
-              const underBetId = getBetId("under");
+              const overBetId = getOverUnderBetId("over", mainLine.line);
+              const underBetId = getOverUnderBetId("under", mainLine.line);
       
               return (
                 <>
@@ -133,7 +136,15 @@ export function MarketRow({ market, lines, current }: any) {
                     isSelected={savedIds.has(underBetId)}
                     onPress={() => {
                       if (mainLine.under_odds == null) return;
-                      toggleSave(underBetId);
+                      toggleSave({
+                        id: underBetId,
+                        playerId: mainLine.player_id,
+                        gameId: mainLine.game_id,
+                        market,
+                        line: mainLine.line,
+                        side: "under",
+                        odds: mainLine.under_odds,
+                      });
                     }}
                   />
                 </>

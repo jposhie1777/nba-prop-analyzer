@@ -10,6 +10,7 @@ export function MarketRow({ market, lines, current }: any) {
   const scrollRef = useRef<ScrollView>(null);
   const buttonWidthRef = useRef<number>(0);
   const overUnderByLine = new Map<number, any>();
+  const didAutoScroll = useRef(false);
 
   for (const l of lines) {
     if (l.line_type !== "over_under") continue;
@@ -74,16 +75,21 @@ export function MarketRow({ market, lines, current }: any) {
   
   useEffect(() => {
     if (
-      closeIndex >= 0 &&
-      scrollRef.current &&
-      buttonWidthRef.current > 0
+      didAutoScroll.current ||
+      closeIndex < 0 ||
+      !scrollRef.current ||
+      buttonWidthRef.current === 0
     ) {
-      scrollRef.current.scrollTo({
-        x: closeIndex * (buttonWidthRef.current + 8),
-        animated: true,
-      });
+      return;
     }
-  }, [closeIndex, milestones]);
+  
+    scrollRef.current.scrollTo({
+      x: closeIndex * (buttonWidthRef.current + 8),
+      animated: true,
+    });
+  
+    didAutoScroll.current = true;
+  }, [closeIndex]);
 
   return (
     <View>
@@ -107,7 +113,15 @@ export function MarketRow({ market, lines, current }: any) {
                     isSelected={savedIds.has(overBetId)}
                     onPress={() => {
                       if (mainLine.over_odds == null) return;
-                      toggleSave(overBetId);
+                      toggleSave({
+                        id: overBetId,
+                        playerId: mainLine.player_id,
+                        gameId: mainLine.game_id,
+                        market,
+                        line: mainLine.line,
+                        side: "over",
+                        odds: mainLine.over_odds,
+                      });
                     }}
                   />
       
@@ -163,7 +177,15 @@ export function MarketRow({ market, lines, current }: any) {
                       state={getState(m.line)}
                       isSelected={isSelected}
                       onPress={() => {
-                        toggleSave(betId);
+                        toggleSave({
+                          id: betId,
+                          playerId: m.player_id,
+                          gameId: m.game_id,
+                          market,
+                          line: m.line,
+                          side: "milestone",
+                          odds: getMilestoneOdds(m),
+                        });
                       }}
                     />
                   );

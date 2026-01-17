@@ -1,3 +1,4 @@
+// components/live/BetslipDrawer.tsx
 import { View, Text, Pressable, StyleSheet, Animated } from "react-native";
 import { useEffect, useRef } from "react";
 import { useSavedBets } from "@/store/useSavedBets";
@@ -28,49 +29,80 @@ export function BetslipDrawer({
 
   if (savedIds.size === 0) return null;
 
-  const copyForGambly = () => {
-    const text = Array.from(savedIds)
-      .map((id) => `• ${id}`)
-      .join("\n");
-
-    navigator.clipboard?.writeText?.(text);
-  };
-
   return (
     <Animated.View
       style={[
         styles.drawer,
         {
           backgroundColor: colors.surface.card,
+          borderTopColor: colors.border.subtle,
           transform: [{ translateY }],
         },
       ]}
     >
+      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>
+        <Text
+          style={[
+            styles.title,
+            { color: colors.text.primary },
+          ]}
+        >
           Betslip ({savedIds.size})
         </Text>
 
         <Pressable onPress={onClose}>
-          <Text style={styles.close}>Close</Text>
+          <Text
+            style={{
+              color: colors.text.muted,
+              fontWeight: "600",
+            }}
+          >
+            Close
+          </Text>
         </Pressable>
       </View>
 
+      {/* Placeholder for bet rows (next step) */}
+      <View style={styles.body}>
+        <Text
+          style={{ color: colors.text.muted }}
+        >
+          Bets ready to copy
+        </Text>
+      </View>
+
+      {/* Actions */}
       <View style={styles.actions}>
         <Pressable
           style={[
             styles.primary,
-            { backgroundColor: colors.accent.primary },
+            {
+              backgroundColor: colors.accent.primary,
+              shadowColor: colors.accent.primary,
+            },
           ]}
-          onPress={copyForGambly}
         >
-          <Text style={styles.primaryText}>
+          <Text
+            style={{
+              color: colors.text.inverse,
+              fontWeight: "800",
+            }}
+          >
             Copy for Gambly
           </Text>
         </Pressable>
 
         <Pressable onPress={clearAll}>
-          <Text style={styles.clear}>Clear</Text>
+          <Text
+            style={{
+              color: colors.accent.danger,
+              fontWeight: "600",
+              textAlign: "center",
+            }}
+          >
+            Clear all
+          </Text>
         </Pressable>
       </View>
     </Animated.View>
@@ -87,35 +119,32 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 14,
+    borderTopWidth: 1,
     elevation: 12,
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 12,
+    alignItems: "center",
+    marginBottom: 8,
   },
   title: {
-    fontWeight: "800",
     fontSize: 16,
+    fontWeight: "800",
   },
-  close: {
-    fontWeight: "600",
+  body: {
+    flex: 1,
+    justifyContent: "center",
   },
   actions: {
-    marginTop: "auto",
-    gap: 12,
+    gap: 10,
   },
   primary: {
-    padding: 12,
+    paddingVertical: 12,
     borderRadius: 12,
     alignItems: "center",
-  },
-  primaryText: {
-    color: "white",
-    fontWeight: "800",
-  },
-  clear: {
-    textAlign: "center",
-    fontWeight: "600",
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
 });

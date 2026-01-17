@@ -19,11 +19,18 @@ export function LineButton({
 }: Props) {
   const { colors } = useTheme();
   const isMilestone = line.line_type === "milestone";
+  // 🔍 DEBUG: is this LineButton being reused across players?
+  console.log("🧩 LINE BUTTON RENDER", {
+    market,
+    line: line?.line,
+    playerId: line?.player_id,
+  });
+
   const milestoneOdds =
-  line.price ??
-  line.over_odds ??
-  line.books?.draftkings?.milestone ??
-  "—";
+    line.price ??
+    line.over_odds ??
+    line.books?.draftkings?.milestone ??
+    "—";
 
   return (
     <Pressable

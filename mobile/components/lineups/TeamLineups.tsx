@@ -5,13 +5,14 @@ import { LineupRow } from "./LineupRow";
 
 export function TeamLineups({
   teamAbbr,
-  mostCommon,
-  projected,
+  mostCommon = [],
+  projected = [],
 }: {
   teamAbbr: string;
-  mostCommon: any[];
-  projected: any[];
+  mostCommon?: any[];
+  projected?: any[];
 }) {
+
   const { colors } = useTheme();
 
   const projectedTeam = projected

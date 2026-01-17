@@ -10,6 +10,7 @@ export function MarketRow({ market, lines, current, playerName }: any) {
   const scrollRef = useRef<ScrollView>(null);
   const buttonWidthRef = useRef<number>(0);
   const overUnderByLine = new Map<number, any>();
+  const marketKey = market.toUpperCase();
   const didAutoScroll = useRef(false);
 
   for (const l of lines) {
@@ -64,12 +65,12 @@ export function MarketRow({ market, lines, current, playerName }: any) {
     line: number
   ) => {
     if (!mainLine) return "";
-    return `ou:${mainLine.game_id}:${mainLine.player_id}:${market}:${side}:${line}`;
+    return `ou:${mainLine.game_id}:${mainLine.player_id}:${marketKey}:${side}:${line}`;
   };
   
   const getMilestoneBetId = (lineValue: number) => {
     if (!mainLine) return "";
-    return `ms:${mainLine.game_id}:${mainLine.player_id}:${market}:${lineValue}`;
+    return `ms:${mainLine.game_id}:${mainLine.player_id}:${marketKey}:${lineValue}`;
   };
 
   const closeIndex = milestones.findIndex(
@@ -121,7 +122,7 @@ export function MarketRow({ market, lines, current, playerName }: any) {
                         player: playerName, // 👈 ADD
                         playerId: mainLine.player_id,
                         gameId: mainLine.game_id,
-                        market,
+                        market: marketKey,
                         line: mainLine.line,
                         side: "over",
                         odds: mainLine.over_odds,
@@ -142,7 +143,7 @@ export function MarketRow({ market, lines, current, playerName }: any) {
                         player: playerName,
                         playerId: mainLine.player_id,
                         gameId: mainLine.game_id,
-                        market,
+                        market: marketKey,
                         line: mainLine.line,
                         side: "under",
                         odds: mainLine.under_odds,
@@ -195,7 +196,7 @@ export function MarketRow({ market, lines, current, playerName }: any) {
                           player: playerName, // 👈 ADD
                           playerId: m.player_id,
                           gameId: m.game_id,
-                          market,
+                          market: marketKey,
                           line: m.line,
                           side: "milestone",
                           odds: getMilestoneOdds(m),

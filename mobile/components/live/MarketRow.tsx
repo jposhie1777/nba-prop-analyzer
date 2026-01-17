@@ -68,9 +68,8 @@ export function MarketRow({ market, lines, current, playerName }: any) {
     return `ou:${mainLine.game_id}:${mainLine.player_id}:${marketKey}:${side}:${line}`;
   };
   
-  const getMilestoneBetId = (lineValue: number) => {
-    if (!mainLine) return "";
-    return `ms:${mainLine.game_id}:${mainLine.player_id}:${marketKey}:${lineValue}`;
+  const getMilestoneBetId = (m: any) => {
+    return `ms:${m.game_id}:${m.player_id}:${marketKey}:${m.line}`;
   };
 
   const closeIndex = milestones.findIndex(
@@ -181,7 +180,7 @@ export function MarketRow({ market, lines, current, playerName }: any) {
               >
                 
                 {(() => {
-                  const betId = getMilestoneBetId(m.line);
+                  const betId = getMilestoneBetId(m);
                   const isSelected = savedIds.has(betId);
                 
                   return (

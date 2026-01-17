@@ -7,25 +7,21 @@ const BETS_STORAGE_KEY = "saved_props_bets_v1"; // 🆕 ADD
 // 🆕 ADD: richer bet model
 export type SavedBet = {
   id: string;
+  gameId: number;
+  playerId: number;
   player: string;
   market: string;
   line: number;
+  side: "over" | "under" | "milestone";
   odds?: number;
 };
 
 type SavedBetsStore = {
-  // =========================
-  // EXISTING (UNCHANGED)
-  // =========================
   savedIds: Set<string>;
-  toggleSave: (id: string, bet?: SavedBet) => void;
+  bets: Map<string, SavedBet>;
+  toggleSave: (bet: SavedBet) => void;
   clearAll: () => void;
   hydrate: () => Promise<void>;
-
-  // =========================
-  // 🆕 ADDITIONS
-  // =========================
-  bets: Map<string, SavedBet>;
 };
 
 export const useSavedBets = create<SavedBetsStore>((set, get) => ({
@@ -42,22 +38,35 @@ export const useSavedBets = create<SavedBetsStore>((set, get) => ({
   // =========================
   // EXTENDED (NOT REPLACED)
   // =========================
-  toggleSave: (id, bet) => {
+  toggleSave: (bet) => {
     const nextIds = new Set(get().savedIds);
     const nextBets = new Map(get().bets);
-
-    if (nextIds.has(id)) {
+  
+    if (nextIds.has(bet.id)) {
       // REMOVE
-      nextIds.delete(id);
-      nextBets.delete(id);
+      nextIds.delete(bet.id);
+      nextBets.delete(bet.id);
     } else {
       // ADD
-      nextIds.add(id);
-
-      if (bet) {
-        nextBets.set(id, bet);
-      }
+      nextIds.add(bet.id);
+      nextBets.set(bet.id, bet);
     }
+  
+    set({
+      savedIds: nextIds,
+      bets: nextBets,
+    });
+  
+    AsyncStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(Array.from(nextIds))
+    );
+  
+    AsyncStorage.setItem(
+      BETS_STORAGE_KEY,
+      JSON.stringify(Array.from(nextBets.values()))
+    );
+  },
 
     set({
       savedIds: nextIds,

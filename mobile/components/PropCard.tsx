@@ -1,5 +1,5 @@
 // components/PropCard.tsx
-import { View, Text, StyleSheet, Image, Pressable } from "react-native";
+import { View, Text, StyleSheet, Image, Pressable, FlatList } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as Haptics from "expo-haptics";
@@ -16,6 +16,7 @@ import { BOOKMAKER_LOGOS } from "../utils/bookmakerLogos";
 import { Sparkline } from "./Sparkline";
 import { BarSparkline } from "./BarSparkline";
 import { formatMarketLabel } from "@/utils/formatMarket";
+
 
 /* ======================================================
    TEAM LOGOS
@@ -127,6 +128,7 @@ type PropCardProps = {
   onToggleSave: () => void;
   expanded: boolean;
   onToggleExpand: () => void;
+  scrollRef?: React.RefObject<FlatList<any>>;
 };
 
 /* ======================================================
@@ -169,6 +171,7 @@ export default function PropCard(props: PropCardProps) {
     onToggleSave,
     expanded,
     onToggleExpand,
+    scrollRef,
   } = props;
 
   const hitPct = Math.round(((props.hit_rate_l10 ?? 0) as number) * 100);
@@ -401,6 +404,8 @@ return (
     friction={2}
     onSwipeableWillOpen={handleSwipeHaptic}
     onSwipeableOpen={handleSwipeOpen}
+    simultaneousHandlers={scrollRef}
+    shouldCancelWhenOutside={false}
   >
     <Animated.View style={[animatedStyle, styles.outer]}>
       <Animated.View style={[styles.card, flashStyle]}>

@@ -122,6 +122,8 @@ def ingest_live_games_snapshot() -> None:
     NY_TZ = ZoneInfo("America/New_York")
     UTC_TZ = ZoneInfo("UTC")
 
+    UTC_DAY_CUTOFF_HOUR = 6  # ✅ allow early-morning UTC games to count as NY "today"
+
     client = get_bq_client()
 
     headers = {
@@ -138,15 +140,15 @@ def ingest_live_games_snapshot() -> None:
         timeout=15,
     )
     box_resp.raise_for_status()
-    
+
     box_games = box_resp.json().get("data", [])
-    
-    # Index by game_id for fast lookup
+
     box_by_game_id = {
         bg.get("id"): bg
         for bg in box_games
         if bg.get("id") is not None
     }
+
     # --------------------------------------------------
     # Date window (NY authoritative)
     # --------------------------------------------------
@@ -183,17 +185,34 @@ def ingest_live_games_snapshot() -> None:
     rows = []
 
     for g in games:
+        # ---------------------------
+        # ✅ Determine authoritative NY game date
+        # ---------------------------
+        start_utc = datetime.fromisoformat(
+            g["start_time"].replace("Z", "+00:00")
+        )
+        start_ny = start_utc.astimezone(NY_TZ)
+
+        if start_utc.hour < UTC_DAY_CUTOFF_HOUR:
+            game_date_ny = start_ny.date()
+        else:
+            game_date_ny = start_ny.date()
+
+        # ❌ Skip tomorrow’s games
+        if game_date_ny != today_ny:
+            continue
+
         home_score = g.get("home_team_score")
         away_score = g.get("visitor_team_score")
-    
+
         # ---------------------------
         # Box score lookup (authoritative)
         # ---------------------------
         box = box_by_game_id.get(g["id"], {})
-    
+
         raw_period = box.get("period")
         raw_time = box.get("time")
-    
+
         # ---------------------------
         # Game state
         # ---------------------------
@@ -203,7 +222,7 @@ def ingest_live_games_snapshot() -> None:
             state = "LIVE"
         else:
             state = "UPCOMING"
-    
+
         # ---------------------------
         # Period + Clock
         # ---------------------------
@@ -212,35 +231,35 @@ def ingest_live_games_snapshot() -> None:
             if isinstance(raw_period, int)
             else None
         )
-    
+
         clock = raw_time if isinstance(raw_time, str) else None
-    
+
         rows.append(
             {
                 "game_id": g["id"],
-                "game_date": today_ny.isoformat(),
-    
+                "game_date": game_date_ny.isoformat(),  # ✅ FIXED
+
                 "state": state,
-    
+
                 "home_team_abbr": g["home_team"]["abbreviation"],
                 "away_team_abbr": g["visitor_team"]["abbreviation"],
-    
+
                 "home_score_q1": g.get("home_q1"),
                 "home_score_q2": g.get("home_q2"),
                 "home_score_q3": g.get("home_q3"),
                 "home_score_q4": g.get("home_q4"),
-    
+
                 "away_score_q1": g.get("visitor_q1"),
                 "away_score_q2": g.get("visitor_q2"),
                 "away_score_q3": g.get("visitor_q3"),
                 "away_score_q4": g.get("visitor_q4"),
-    
+
                 "home_score": home_score,
                 "away_score": away_score,
-    
+
                 "period": period,
                 "clock": clock,
-    
+
                 "poll_ts": poll_ts,
                 "ingested_at": poll_ts,
             }

@@ -5,7 +5,13 @@ import { LineButton } from "./LineButton";
 import { OverUnderButton } from "./OverUnderButton";
 import { useSavedBets } from "@/store/useSavedBets";
 
-export function MarketRow({ market, lines, current, playerName }: any) {
+export function MarketRow({
+  market,
+  lines,
+  current,
+  playerName,
+  playerId, // 👈 ADD
+}: any) {
   const toggleSave = useSavedBets((s) => s.toggleSave);
   const savedIds = useSavedBets((s) => s.savedIds);
   const scrollRef = useRef<ScrollView>(null);

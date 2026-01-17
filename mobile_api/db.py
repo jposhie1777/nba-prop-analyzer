@@ -188,9 +188,15 @@ def ingest_live_games_snapshot() -> None:
         # ---------------------------
         # ✅ Determine authoritative NY game date
         # ---------------------------
+        start_time_raw = g.get("start_time") or g.get("date")
+
+        if not start_time_raw:
+            continue  # cannot classify game day safely
+
         start_utc = datetime.fromisoformat(
-            g["start_time"].replace("Z", "+00:00")
+            start_time_raw.replace("Z", "+00:00")
         )
+
         start_ny = start_utc.astimezone(NY_TZ)
 
         if start_utc.hour < UTC_DAY_CUTOFF_HOUR:

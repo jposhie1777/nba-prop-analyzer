@@ -168,7 +168,7 @@ export function MarketRow({ market, lines, current, playerName }: any) {
           <View style={styles.row}>
             {milestones.map((m: any, idx: number) => (
               <View
-                key={`ms-${m.line}`}
+                key={`ms-${m.game_id}-${m.player_id}-${marketKey}-${m.line}`}>
                 onLayout={
                   idx === 0
                     ? (e) => {

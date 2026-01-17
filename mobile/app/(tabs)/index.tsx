@@ -544,7 +544,7 @@ export default function HomeScreen() {
           }
         
           /* 🔽 PERF (IMPORTANT) */
-          removeClippedSubviews
+          removeClippedSubviews={false}
           initialNumToRender={10}
           maxToRenderPerBatch={12}
           windowSize={7}

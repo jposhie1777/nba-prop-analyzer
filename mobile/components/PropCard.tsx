@@ -451,7 +451,7 @@ return (
                 {/* ODDS */}
                 <View style={styles.oddsInline}>
                   {resolvedBooks.slice(0, 2).map((b) => {
-                    const key = normalizeBookKey(b.bookmaker);
+                    const key = `${normalizeBookKey(b.bookmaker)}-${b.odds}-${line}`;
                     return (
                       <View key={key} style={styles.oddsPill}>
                         {BOOKMAKER_LOGOS[key] && (

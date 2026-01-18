@@ -3,6 +3,12 @@ from bq import get_bq_client
 
 router = APIRouter(prefix="/first-basket", tags=["First Basket"])
 
+def to_pct(x):
+    if x is None:
+        return 0
+    # If stored as 0.62, convert to 62
+    return round(x * 100) if x <= 1 else round(x)
+
 @router.get("/matchups")
 def get_first_basket_matchups():
     client = get_bq_client()
@@ -24,8 +30,8 @@ def get_first_basket_matchups():
                 "gameId": gid,
                 "homeTeam": r.home_team_abbr,
                 "awayTeam": r.away_team_abbr,
-                "homeTipWinPct": round(r.home_tip_win_pct),
-                "awayTipWinPct": round(r.away_tip_win_pct),
+                "homeTipWinPct": to_pct(r.home_tip_win_pct),
+                "awayTipWinPct": to_pct(r.away_tip_win_pct),
                 "rows": [],
             }
 

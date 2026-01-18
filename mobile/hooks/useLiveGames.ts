@@ -4,8 +4,6 @@ import { AppState } from "react-native";
 import { LiveGame } from "@/types/live";
 import { adaptLiveGames } from "@/services/adapters/liveAdapter";
 import Constants from "expo-constants";
-
-/* 🔴 ADD */
 import { useDevStore } from "@/lib/dev/devStore";
 
 /* ======================================================

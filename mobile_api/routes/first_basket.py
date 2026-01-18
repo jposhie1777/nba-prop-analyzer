@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 from collections import defaultdict
-from mobile_api.bq import get_bq_client
+from bq import get_bq_client
 
 router = APIRouter(prefix="/first-basket", tags=["First Basket"])
 

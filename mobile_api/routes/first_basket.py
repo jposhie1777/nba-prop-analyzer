@@ -47,7 +47,7 @@ def get_first_basket_matchups():
 
             # 🔹 counts
             "playerFirstBasketCount": r.player_first_basket_count,
-            "playerTeamFirstBasketCount": r.team_first_basket_count,
+            "playerTeamFirstBasketCount": r.player_team_first_basket_count,
         }
 
         rank = r.rank_within_team

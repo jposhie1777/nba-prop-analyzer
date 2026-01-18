@@ -10,7 +10,7 @@ from live_games import router as live_games_router
 from db import fetch_mobile_props, ingest_live_games_snapshot
 from live_stream import router as live_stream_router, refresher_loop
 from historical_player_trends import router as historical_player_trends_router
-from LiveGame.box_scores_snapshot import (
+from LiveGames.box_scores_snapshot import (
     router as box_scores_router,
     run_box_scores_snapshot,
 )

@@ -16,9 +16,6 @@ router = APIRouter(
 PROJECT_ID = os.getenv("GCP_PROJECT", "graphite-flare-477419-h7")
 bq = bigquery.Client(project=PROJECT_ID)
 
-# ======================================================
-# Live PLAYER PROPS query
-# ======================================================
 
 # ======================================================
 # Live PLAYER PROPS query

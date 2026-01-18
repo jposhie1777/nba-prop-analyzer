@@ -14,8 +14,8 @@ from LiveGames.box_scores_snapshot import (
     router as box_scores_router,
     run_box_scores_snapshot,
 )
-from live_game_odds_ingest import ingest_live_game_odds
-from live_player_prop_odds_ingest import ingest_live_player_prop_odds
+from LiveOdds.live_game_odds_ingest import ingest_live_game_odds
+from LiveOdds.live_player_prop_odds_ingest import ingest_live_player_prop_odds
 from live_odds_routes import router as live_odds_router
 from live_odds_flatten import run_live_odds_flatten
 from dev_bq_routes import router as dev_bq_routes_router

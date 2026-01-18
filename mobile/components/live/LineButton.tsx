@@ -5,27 +5,24 @@ import { useTheme } from "@/store/useTheme";
 type Props = {
   line: any;
   market: string;
-  playerId: number; // 👈 ADD
+  playerId: number;
   state?: "hit" | "close" | "pending";
   isSelected?: boolean;
-  onPress?: () => void;
+  onSave?: () => void;
+  onInspect?: () => void;
 };
+
 
 export function LineButton({
   line,
   market,
   state = "pending",
   isSelected = false,
-  onPress,
+  onSave,
+  onInspect,
 }: Props) {
   const { colors } = useTheme();
   const isMilestone = line.line_type === "milestone";
-  // 🔍 DEBUG: is this LineButton being reused across players?
-  console.log("🧩 LINE BUTTON RENDER", {
-    market,
-    line: line?.line,
-    playerId: line?.player_id,
-  });
 
   const milestoneOdds =
     line.price ??
@@ -35,7 +32,9 @@ export function LineButton({
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={onSave}
+      onLongPress={onInspect}
+      delayLongPress={250}
       style={({ pressed }) => [
         styles.btn,
         {
@@ -69,9 +68,7 @@ export function LineButton({
       </Text>
 
       {isMilestone ? (
-        <Text style={styles.odds}>
-          {milestoneOdds}
-        </Text>
+        <Text style={styles.odds}>{milestoneOdds}</Text>
       ) : (
         <>
           <Text style={styles.odds}>
@@ -85,6 +82,7 @@ export function LineButton({
     </Pressable>
   );
 }
+
 
 const styles = StyleSheet.create({
   btn: {

@@ -22,6 +22,7 @@ from dev_bq_routes import router as dev_bq_routes_router
 from first_basket_routes import router as first_basket_router
 from season_averages_routes import router as season_averages_router
 from routes.lineup_routes import router as lineups_router
+from routes.first_basket import router as first_basket_router
 
 # ==================================================
 # 🔴 ADDITION: player box stream imports
@@ -93,6 +94,7 @@ app.include_router(dev_bq_routes_router)
 app.include_router(first_basket_router)
 app.include_router(season_averages_router)
 app.include_router(lineups_router)
+app.include_router(first_basket_router)
 
 # ==================================================
 # 🔴 ADDITION: player box + player stats routers

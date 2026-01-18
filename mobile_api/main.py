@@ -10,7 +10,7 @@ from live_games import router as live_games_router
 from db import fetch_mobile_props, ingest_live_games_snapshot
 from live_stream import router as live_stream_router, refresher_loop
 from historical_player_trends import router as historical_player_trends_router
-from box_scores_snapshot import (
+from LiveGame.box_scores_snapshot import (
     router as box_scores_router,
     run_box_scores_snapshot,
 )
@@ -39,7 +39,7 @@ from player_stats_stream import (
     player_stats_refresher,
 )
 
-from debug_code import register as register_debug_code
+from debug.debug_code import register as register_debug_code
 
 # ==================================================
 # App (CREATE ONCE)
@@ -94,9 +94,6 @@ app.include_router(season_averages_router)
 app.include_router(lineups_router)
 app.include_router(first_basket_router)
 
-# ==================================================
-# 🔴 ADDITION: player box + player stats routers
-# ==================================================
 app.include_router(player_box_router)
 app.include_router(player_stats_router)
 

@@ -3,12 +3,6 @@ from bq import get_bq_client
 
 router = APIRouter(prefix="/first-basket", tags=["First Basket"])
 
-def to_pct(x):
-    if x is None:
-        return 0
-    # If stored as 0.62, convert to 62
-    return round(x * 100) if x <= 1 else round(x)
-
 @router.get("/matchups")
 def get_first_basket_matchups():
     client = get_bq_client()
@@ -22,6 +16,9 @@ def get_first_basket_matchups():
     rows = client.query(query).result()
     games = {}
 
+    # =========================
+    # 1️⃣ BUILD rowsByRank
+    # =========================
     for r in rows:
         gid = r.game_id
 
@@ -30,35 +27,49 @@ def get_first_basket_matchups():
                 "gameId": gid,
                 "homeTeam": r.home_team_abbr,
                 "awayTeam": r.away_team_abbr,
-                "homeTipWinPct": to_pct(r.home_tip_win_pct),
-                "awayTipWinPct": to_pct(r.away_tip_win_pct),
-                "rows": [],
+
+                # 🔹 RAW probabilities (0–1)
+                "homeTipWinPct": r.home_tip_win_pct,
+                "awayTipWinPct": r.away_tip_win_pct,
+
+                "rowsByRank": {},
             }
 
-        # hide rows where both sides are empty
         if r.player is None:
             continue
 
         side_obj = {
             "player": r.player,
+
+            # 🔹 RAW probabilities (0–1)
             "firstBasketPct": r.first_basket_probability,
             "firstShotShare": r.first_shot_share,
+
+            # 🔹 counts
             "playerFirstBasketCount": r.player_first_basket_count,
-            "playerTeamFirstBasketCount": r.player_team_first_basket_count,
+            "playerTeamFirstBasketCount": r.team_first_basket_count,
         }
 
-        # determine side by team_abbr
-        if r.team_abbr == games[gid]["homeTeam"]:
-            home = side_obj
-            away = None
-        else:
-            home = None
-            away = side_obj
+        rank = r.rank_within_team
 
-        games[gid]["rows"].append({
-            "rank": r.rank_within_team,
-            "home": home,
-            "away": away,
-        })
+        row = games[gid]["rowsByRank"].setdefault(
+            rank,
+            {"rank": rank, "home": None, "away": None}
+        )
+
+        if r.team_abbr == games[gid]["homeTeam"]:
+            row["home"] = side_obj
+        else:
+            row["away"] = side_obj
+
+    # =========================
+    # 2️⃣ FINALIZE rows
+    # =========================
+    for g in games.values():
+        g["rows"] = sorted(
+            g["rowsByRank"].values(),
+            key=lambda r: r["rank"]
+        )
+        del g["rowsByRank"]
 
     return list(games.values())

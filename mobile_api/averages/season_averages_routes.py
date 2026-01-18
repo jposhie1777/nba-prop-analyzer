@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from ingest_player_season_averages import ingest_player_season_averages
+from averages.ingest_player_season_averages import ingest_player_season_averages
 
 router = APIRouter(
     prefix="/admin/ingest/season-averages",

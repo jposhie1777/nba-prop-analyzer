@@ -1,27 +1,27 @@
-import { ScrollView, Text } from "react-native";
-import { useFirstBasket } from "@/hooks/useFirstBasket";
-import { groupFirstBasketByGame } from "@/utils/groupFirstBasketByGame";
-import { FirstBasketGameCard } from "@/components/first-basket/FirstBasketGameCard";
+// /app/(tabs)first-basket.tsx
+import React from "react";
+import { View, Text, FlatList, RefreshControl } from "react-native";
 import { useTheme } from "@/store/useTheme";
+import { useFirstBasketMatchups } from "@/hooks/useFirstBasketMatchups";
+import { FirstBasketMatchupCard } from "@/components/first-basket/FirstBasketMatchupCard";
 
 export default function FirstBasketScreen() {
   const { colors } = useTheme();
-  const { data, isLoading } = useFirstBasket();
-
-  if (isLoading) {
-    return <Text style={{ color: colors.text.muted }}>Loading…</Text>;
-  }
-
-  const games = groupFirstBasketByGame(data ?? []);
+  const { data, loading, error, refresh } = useFirstBasketMatchups();
 
   return (
-    <ScrollView>
-      {games.map(game => (
-        <FirstBasketGameCard
-          key={game.game_id}
-          game={game}
-        />
-      ))}
-    </ScrollView>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      {error ? (
+        <Text style={{ color: colors.danger, padding: 12 }}>Error: {error}</Text>
+      ) : null}
+
+      <FlatList
+        contentContainerStyle={{ padding: 12, paddingBottom: 40 }}
+        data={data}
+        keyExtractor={(m) => String(m.gameId)}
+        renderItem={({ item }) => <FirstBasketMatchupCard matchup={item} />}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} />}
+      />
+    </View>
   );
 }

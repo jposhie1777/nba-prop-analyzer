@@ -4,7 +4,7 @@ import requests
 from datetime import datetime, timezone
 
 from bq import get_bq_client
-from season_average_combos import PLAYER_SEASON_AVERAGE_COMBOS
+from averages.season_average_combos import PLAYER_SEASON_AVERAGE_COMBOS
 
 PROJECT_ID = (
     os.getenv("GCP_PROJECT")

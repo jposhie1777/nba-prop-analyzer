@@ -1,5 +1,3 @@
-# mobile_api/routes/first_basket.py
-
 from fastapi import APIRouter
 from collections import defaultdict
 from bq import get_bq_client
@@ -21,44 +19,74 @@ def get_first_basket_matchups():
     games = {}
 
     for r in rows:
-        game_id = r.game_id
+        gid = r.game_id
 
-        if game_id not in games:
-            games[game_id] = {
-                "gameId": game_id,
-                "homeTeam": None,
-                "awayTeam": None,
-                "rows": []
+        if gid not in games:
+            games[gid] = {
+                "gameId": gid,
+                # ✅ FLAT TEAM FIELDS (what frontend expects)
+                "homeTeam": r.home_team_abbr,
+                "awayTeam": r.away_team_abbr,
+                "homeTipWinPct": 0,
+                "awayTipWinPct": 0,
+                "rows": [],
+                # internal counters (not returned)
+                "_homeWins": 0,
+                "_awayWins": 0,
             }
 
-        game = games[game_id]
+        game = games[gid]
 
-        # infer teams once
-        if game["homeTeam"] is None:
-            game["homeTeam"] = r.home_player is not None and r.home_player or None
-        if game["awayTeam"] is None:
-            game["awayTeam"] = r.away_player is not None and r.away_player or None
-
-        # hide rows where both sides are empty
+        # Skip fully empty rows
         if r.home_player is None and r.away_player is None:
             continue
 
-        game["rows"].append({
-            "rank": r.rank_within_team,
-            "home": None if r.home_player is None else {
+        home_side = None
+        away_side = None
+
+        if r.home_player is not None:
+            home_side = {
                 "player": r.home_player,
                 "firstBasketPct": r.home_first_basket_pct,
                 "firstShotShare": r.home_first_shot_share,
                 "playerFirstBasketCount": r.home_player_first_basket_count,
                 "playerTeamFirstBasketCount": r.home_player_team_first_basket_count,
-            },
-            "away": None if r.away_player is None else {
+            }
+
+        if r.away_player is not None:
+            away_side = {
                 "player": r.away_player,
                 "firstBasketPct": r.away_first_basket_pct,
                 "firstShotShare": r.away_first_shot_share,
                 "playerFirstBasketCount": r.away_player_first_basket_count,
                 "playerTeamFirstBasketCount": r.away_player_team_first_basket_count,
             }
+
+        # ✅ Tip winner logic (simple, deterministic)
+        if home_side and away_side:
+            if r.home_first_basket_pct > r.away_first_basket_pct:
+                game["_homeWins"] += 1
+            elif r.away_first_basket_pct > r.home_first_basket_pct:
+                game["_awayWins"] += 1
+
+        game["rows"].append({
+            "rank": r.rank_within_team,
+            "home": home_side,
+            "away": away_side,
         })
 
-    return list(games.values())
+    # ✅ Finalize tip win %
+    results = []
+    for game in games.values():
+        total = game["_homeWins"] + game["_awayWins"] or 1
+
+        game["homeTipWinPct"] = round((game["_homeWins"] / total) * 100)
+        game["awayTipWinPct"] = round((game["_awayWins"] / total) * 100)
+
+        # remove internal fields
+        del game["_homeWins"]
+        del game["_awayWins"]
+
+        results.append(game)
+
+    return results

@@ -16,10 +16,10 @@ from LiveGames.box_scores_snapshot import (
 )
 from LiveOdds.live_game_odds_ingest import ingest_live_game_odds
 from LiveOdds.live_player_prop_odds_ingest import ingest_live_player_prop_odds
-from live_odds_routes import router as live_odds_router
-from live_odds_flatten import run_live_odds_flatten
+from LiveOdds.live_odds_routes import router as live_odds_router
+from LiveOdds.live_odds_flatten import run_live_odds_flatten
 from dev_bq_routes import router as dev_bq_routes_router
-from season_averages_routes import router as season_averages_router
+from averages.season_averages_routes import router as season_averages_router
 from routes.lineup_routes import router as lineups_router
 from routes.first_basket import router as first_basket_router
 

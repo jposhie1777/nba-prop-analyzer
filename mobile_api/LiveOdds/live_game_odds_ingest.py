@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import json
 import requests
 
-from live_odds_common import (
+from LiveOdds.live_odds_common import (
     BDL_V2,
     TIMEOUT_SEC,
     require_api_key,

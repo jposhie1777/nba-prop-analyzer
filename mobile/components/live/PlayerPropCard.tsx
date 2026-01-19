@@ -49,27 +49,25 @@ export function PlayerPropCard({
 
         {/* MARKETS */}
         {Object.entries(player.markets).map(
-          ([market, marketData]: any) => (
-            <MarketRow
-              key={`${player.player_id}-${market}`}
-              playerId={player.player_id}
-              market={market}
-              lines={marketData.lines}
-              current={
-                market.toUpperCase() === "PTS" ||
-                market.toUpperCase() === "POINTS"
-                  ? current.pts
-                  : market.toUpperCase() === "AST" ||
-                    market.toUpperCase() === "ASSISTS"
-                  ? current.ast
-                  : market.toUpperCase() === "REB" ||
-                    market.toUpperCase() === "REBOUNDS"
-                  ? current.reb
-                  : 0
-              }
-              playerName={name}
-            />
-          )
+          ([market, marketData]: any) => {
+            const currentByMarket: Record<string, number> = {
+              pts: current.pts,
+              ast: current.ast,
+              reb: current.reb,
+              "3pm": current.fg3m ?? 0,
+            };
+        
+            return (
+              <MarketRow
+                key={`${player.player_id}-${market}`}
+                playerId={player.player_id}
+                market={market}
+                lines={marketData.lines}
+                current={currentByMarket[market] ?? 0}
+                playerName={name}
+              />
+            );
+          }
         )}
       </View>
     </View>

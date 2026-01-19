@@ -23,7 +23,7 @@ from averages.season_averages_routes import router as season_averages_router
 from routes.lineup_routes import router as lineups_router
 from routes.first_basket import router as first_basket_router
 from routes.teams import router as teams_router
-from live.prop_analytics import router as prop_analytics_router
+from routes.prop_analytics import router as prop_analytics_router
 
 # ==================================================
 # 🔴 ADDITION: player box stream imports

@@ -11,6 +11,18 @@ import { useState } from "react";
 import * as Linking from "expo-linking";
 import * as Clipboard from "expo-clipboard";
 
+function formatBetLine(bet: any) {
+  if (bet.side === "milestone") {
+    return `${bet.line}+`;
+  }
+
+  if (!bet.side) {
+    return `${bet.line}`;
+  }
+
+  return `${bet.side.toUpperCase()} ${bet.line}`;
+}
+
 export default function LiveGamesScreen() {
   const { colors } = useTheme();
   const clearAll = useSavedBets((s) => s.clearAll);
@@ -29,10 +41,7 @@ export default function LiveGamesScreen() {
   
     const text = Array.from(bets.values())
       .map((bet) => {
-        const line =
-          bet.side === "milestone"
-            ? `${bet.line}+`
-            : `${bet.side.toUpperCase()} ${bet.line}`;
+        const line = formatBetLine(bet);
   
         const odds = bet.odds != null ? ` (${bet.odds})` : "";
   
@@ -167,9 +176,7 @@ export default function LiveGamesScreen() {
               </Text>
       
               <Text style={{ fontSize: 12, color: colors.text.muted }}>
-                {bet.side === "milestone"
-                  ? `${bet.line}+`
-                  : `${bet.side.toUpperCase()} ${bet.line}`}
+                {formatBetLine(bet)}
                 {bet.odds != null ? ` (${bet.odds})` : ""}
               </Text>
             </View>

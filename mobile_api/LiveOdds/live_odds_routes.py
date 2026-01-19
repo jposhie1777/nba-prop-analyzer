@@ -69,18 +69,20 @@ def get_live_player_props(
 
     for r in rows:
         last_updated = r.snapshot_ts
-        props.append(
-            {
-                "player_id": r.player_id,
-                "market": r.market,
-                "market_type": r.market_type,
-                "line": r.line,
-                "book": r.book,
-                "over_odds": r.over_odds,
-                "under_odds": r.under_odds,
-                "milestone_odds": r.milestone_odds,
-            }
-        )
+
+        props.append({
+            "player_id": r.player_id,
+            "market": r.market,
+            "market_type": r.market_type,
+            "line": r.line,
+            "book": r.book,
+            "odds": {
+                "over": r.over_odds,
+                "under": r.under_odds,
+                "yes": r.milestone_odds,
+            },
+        })
+
 
 
 

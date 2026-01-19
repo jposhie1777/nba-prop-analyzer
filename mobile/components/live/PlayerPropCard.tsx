@@ -56,14 +56,28 @@ export function PlayerPropCard({
               reb: current.reb,
               "3pm": current.fg3m ?? 0,
             };
-        
+
+            const currentValue = currentByMarket[market];
+
+            // 🚨 Safety guard — backend contract violation
+            if (currentValue == null) {
+              if (__DEV__) {
+                console.warn(
+                  "[PlayerPropCard] Unknown market key",
+                  market,
+                  Object.keys(currentByMarket)
+                );
+              }
+              return null;
+            }
+
             return (
               <MarketRow
                 key={`${player.player_id}-${market}`}
                 playerId={player.player_id}
                 market={market}
                 lines={marketData.lines}
-                current={currentByMarket[market] ?? 0}
+                current={currentValue}
                 playerName={name}
               />
             );

@@ -16,7 +16,7 @@ import { BOOKMAKER_LOGOS } from "../utils/bookmakerLogos";
 import { Sparkline } from "./Sparkline";
 import { BarSparkline } from "./BarSparkline";
 import { formatMarketLabel } from "@/utils/formatMarket";
-
+import { STAT_META } from "@/lib/stats";
 
 /* ======================================================
    TEAM LOGOS
@@ -174,6 +174,7 @@ export default function PropCard(props: PropCardProps) {
     scrollRef,
   } = props;
 
+  const meta = STAT_META[market as keyof typeof STAT_META];
   const hitPct = Math.round(((props.hit_rate_l10 ?? 0) as number) * 100);
   
   /* =========================
@@ -461,7 +462,8 @@ return (
                     </Text>
             
                     <Text numberOfLines={1} style={styles.marketLine}>
-                      {formatMarketLabel(market)} • {formatSideLabel(props.side)} {line}
+                      {(meta?.label ?? formatMarketLabel(market))} •{" "}
+                      {formatSideLabel(props.side)} {line}
                     </Text>
                   </View>
                 </View>

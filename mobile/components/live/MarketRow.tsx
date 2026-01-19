@@ -4,6 +4,7 @@ import { View, Text, ScrollView, StyleSheet } from "react-native";
 import { LineButton } from "./LineButton";
 import { OverUnderButton } from "./OverUnderButton";
 import { useSavedBets } from "@/store/useSavedBets";
+import { STAT_META } from "@/lib/stats";
 
 export function MarketRow({
   market,
@@ -17,7 +18,7 @@ export function MarketRow({
   const scrollRef = useRef<ScrollView>(null);
   const buttonWidthRef = useRef<number>(0);
   const overUnderByLine = new Map<number, any>();
-  const marketKey = market.toUpperCase();
+  const marketKey = market; // canonical key: pts | ast | reb | 3pm
   const didAutoScroll = useRef(false);
 
   for (const l of lines) {
@@ -114,9 +115,13 @@ export function MarketRow({
     setExpandedLine(null);
   }, [market])
 
+  const meta = STAT_META[market];
+
   return (
     <View>
-      <Text style={styles.label}>{market}</Text>
+      <Text style={styles.label}>
+        {meta?.label ?? market.toUpperCase()}
+      </Text>
 
       {/* MAIN OVER / UNDER */}
       {mainLine && (
@@ -241,7 +246,7 @@ export function MarketRow({
                 Edge: +105
               </Text>
               <Text style={styles.analyticsText}>
-                On pace: 11.8 {market}
+                On pace: 11.8 {meta?.unit ?? ""}
               </Text>
               <Text style={styles.analyticsText}>
                 L5: 80% · L10: 70%

@@ -107,15 +107,17 @@ export async function fetchLivePlayerProps(gameId: number) {
       const market = normalizeMarket(p.market ?? p.stat ?? p.prop_type);
       if (!market) return null;
   
+      const odds = p.odds ?? {};
+
       return {
         player_id: p.player_id,
         market,
         market_type: p.market_type,
         line: p.line,
         book: p.book,
-        over: p.over ?? null,
-        under: p.under ?? null,
-        milestone: p.milestone ?? null,
+        over: odds.over ?? null,
+        under: odds.under ?? null,
+        milestone: odds.yes ?? null,
       };
     })
     .filter(Boolean);

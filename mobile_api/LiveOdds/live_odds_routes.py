@@ -33,7 +33,7 @@ SELECT
   under_odds,
   milestone_odds,
   snapshot_ts
-FROM `graphite-flare-477419-h7.nba_live.live_player_prop_odds_latest`
+FROM `graphite-flare-477419-h7.nba_live.v_live_player_prop_odds_latest`
 WHERE game_id = @game_id
 ORDER BY market, market_type, player_id, line, book
 """
@@ -76,11 +76,14 @@ def get_live_player_props(
                 "market_type": r.market_type,
                 "line": r.line,
                 "book": r.book,
-                "over": r.over_odds,
-                "under": r.under_odds,
-                "milestone": r.milestone_odds,
+                "odds": {
+                    "over": r.over_odds,
+                    "under": r.under_odds,
+                    "yes": r.milestone_odds,
+                },
             }
         )
+
 
     return {
         "game_id": game_id,

@@ -4,7 +4,8 @@ import { View, Text, ScrollView, StyleSheet } from "react-native";
 import { LineButton } from "./LineButton";
 import { OverUnderButton } from "./OverUnderButton";
 import { useSavedBets } from "@/store/useSavedBets";
-import { STAT_META } from "@/lib/stats";
+import { fetchLivePropAnalytics } from "@/services/liveAnalytics";
+
 
 export function MarketRow({
   market,
@@ -18,7 +19,7 @@ export function MarketRow({
   const scrollRef = useRef<ScrollView>(null);
   const buttonWidthRef = useRef<number>(0);
   const overUnderByLine = new Map<number, any>();
-  const marketKey = market; // canonical key: pts | ast | reb | 3pm
+  const marketKey = market.toUpperCase();
   const didAutoScroll = useRef(false);
 
   for (const l of lines) {
@@ -103,25 +104,55 @@ export function MarketRow({
   }, [closeIndex]);
   
   const [expandedLine, setExpandedLine] = useState<{ line: number } | null>(null);
+  const [analytics, setAnalytics] = useState<any | null>(null);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
 
-  const toggleExpand = (line: number) => {
-    setExpandedLine((prev) =>
-      prev?.line === line ? null : { line }
-    );
+  const toggleExpand = async (line: number) => {
+    // collapse
+    if (expandedLine?.line === line) {
+      setExpandedLine(null);
+      setAnalytics(null);
+      return;
+    }
+
+    setExpandedLine({ line });
+    setAnalytics(null);
+    setLoadingAnalytics(true);
+
+    // determine side (safe defaults)
+    const side =
+      mainLine?.line === line
+        ? "over"        // main OU line → over analytics
+        : "milestone";  // milestone buttons
+
+    try {
+      const result = await fetchLivePropAnalytics({
+        gameId: mainLine?.game_id,
+        playerId,
+        market: marketKey,
+        line,
+        side,
+      });
+
+      setAnalytics(result);
+    } catch {
+      setAnalytics(null);
+    } finally {
+      setLoadingAnalytics(false);
+    }
   };
+
   
   // 🔒 collapse inspection when market changes
   useEffect(() => {
     setExpandedLine(null);
-  }, [market])
+    setAnalytics(null);
+  }, [market]);
 
-  const meta = STAT_META[market];
 
   return (
     <View>
-      <Text style={styles.label}>
-        {meta?.label ?? market.toUpperCase()}
-      </Text>
+      <Text style={styles.label}>{market}</Text>
 
       {/* MAIN OVER / UNDER */}
       {mainLine && (
@@ -225,7 +256,7 @@ export function MarketRow({
                           market: marketKey,
                           line: m.line,
                           side: "milestone",
-                          odds: getMilestoneOdds(m),
+                          odds: getMilestoneOdds(m) ?? undefined,
                         });
                       }}
                       onInspect={() => toggleExpand(m.line)}
@@ -239,18 +270,57 @@ export function MarketRow({
           {/* 🔍 EXPANDED ANALYTICS STRIP */}
           {expandedLine?.line != null && (
             <View style={styles.analytics}>
-              <Text style={styles.analyticsText}>
-                Fair odds: −180
-              </Text>
-              <Text style={styles.analyticsText}>
-                Edge: +105
-              </Text>
-              <Text style={styles.analyticsText}>
-                On pace: 11.8 {meta?.unit ?? ""}
-              </Text>
-              <Text style={styles.analyticsText}>
-                L5: 80% · L10: 70%
-              </Text>
+              {loadingAnalytics && (
+                <Text style={styles.analyticsText}>
+                  Loading analytics…
+                </Text>
+              )}
+
+              {!loadingAnalytics && analytics && (
+                <>
+                  <Text style={styles.analyticsText}>
+                    Fair odds: {analytics.fair_odds ?? "—"}
+                  </Text>
+
+                  <Text style={styles.analyticsText}>
+                    On pace for:{" "}
+                    {analytics.on_pace_value != null
+                      ? analytics.on_pace_value.toFixed(1)
+                      : "—"}{" "}
+                    {market}
+                  </Text>
+
+                  <Text style={styles.analyticsText}>
+                    Δ vs pace:{" "}
+                    {analytics.delta_vs_pace != null
+                      ? analytics.delta_vs_pace.toFixed(1)
+                      : "—"}
+                  </Text>
+
+                  <Text style={styles.analyticsText}>
+                    L5:{" "}
+                    {analytics.hit_rate_l5 != null
+                      ? `${Math.round(analytics.hit_rate_l5 * 100)}%`
+                      : "—"}{" "}
+                    · L10:{" "}
+                    {analytics.hit_rate_l10 != null
+                      ? `${Math.round(analytics.hit_rate_l10 * 100)}%`
+                      : "—"}
+                  </Text>
+
+                  {analytics.blowout_flag && (
+                    <Text style={styles.analyticsText}>
+                      ⚠ Blowout risk
+                    </Text>
+                  )}
+                </>
+              )}
+
+              {!loadingAnalytics && !analytics && (
+                <Text style={styles.analyticsText}>
+                  No analytics available
+                </Text>
+              )}
             </View>
           )}
         </View>

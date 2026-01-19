@@ -10,7 +10,7 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { useSavedBets } from "@/store/useSavedBets";
+import { useSavedProps } from "@/store/useSavedProps";
 import DebugMemory from "@/components/debug/DebugMemory";
 import { useDevStore } from "@/lib/dev/devStore";
 import { installFetchInterceptor } from "@/lib/dev/interceptFetch";
@@ -63,13 +63,14 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [queryClient] = useState(() => new QueryClient());
   // ---------------------------
-  // HYDRATE SAVED BETS ON BOOT
+  // HYDRATE SAVED PROPS ON BOOT
   // ---------------------------
-  const hydrateSavedBets = useSavedBets((s) => s.hydrate);
+  const hydrateSavedProps = useSavedProps((s) => s.hydrate);
 
   useEffect(() => {
-    hydrateSavedBets();
-  }, [hydrateSavedBets]);
+    hydrateSavedProps();
+  }, [hydrateSavedProps]);
+
 
   // ---------------------------
   // 🔴 NEW: HYDRATE DEV FLAGS ON BOOT (4A)
@@ -84,7 +85,7 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <>
         {/* DEV-ONLY MEMORY OVERLAY */}
-        {__DEV__ && <DebugMemory />}
+        {false && __DEV__ && <DebugMemory />}
   
         <ThemeProvider
           value={colorScheme === "dark" ? DarkTheme : DefaultTheme}

@@ -15,20 +15,6 @@ from LiveOdds.live_odds_common import (
     normalize_book,
 )
 
-# ======================================================
-# Market normalization (vendor → canonical)
-# ======================================================
-MARKET_NORMALIZATION = {
-    "points": "pts",
-    "assists": "ast",
-    "rebounds": "reb",
-
-    # --- 3PT markets ---
-    "three_pointers_made": "3pm",
-    "fg3m": "3pm",
-    "threes": "3pm",
-}
-
 BQ_TABLE = "graphite-flare-477419-h7.nba_live.live_player_prop_odds_raw"
 
 
@@ -68,12 +54,8 @@ def ingest_live_player_prop_odds() -> dict:
         filtered_markets = []
 
         for item in payload.get("data", []):
-            raw_prop_type = item.get("prop_type")
-            prop_type = MARKET_NORMALIZATION.get(raw_prop_type, raw_prop_type)
-
-            raw_book = item.get("book") or item.get("sportsbook")
-            book = normalize_book(raw_book)
-
+            prop_type = item.get("prop_type")  # points / assists / rebounds / threes
+            book = normalize_book(item.get("vendor"))
 
             # -----------------------------
             # Hard filters

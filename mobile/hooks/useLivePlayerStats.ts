@@ -16,6 +16,7 @@ export type LivePlayerStat = {
   pts: number;
   reb: number;
   ast: number;
+  fg3m: number;
   stl: number;
   blk: number;
   tov: number;
@@ -91,7 +92,12 @@ export function useLivePlayerStats() {
       es.addEventListener("snapshot", (e: MessageEvent) => {
         try {
           const json: Snapshot = JSON.parse(e.data);
-          setPlayers(json.players ?? []);
+          setPlayers(
+            (json.players ?? []).map((p) => ({
+              ...p,
+              fg3m: p.fg3?.[0] ?? 0, // 🔥 ADD THIS
+            }))
+          );
           setMode("sse");
         } catch (err) {
           console.error("❌ PlayerStats SSE parse error", err);

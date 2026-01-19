@@ -71,6 +71,9 @@ def ingest_live_player_prop_odds() -> dict:
             raw_prop_type = item.get("prop_type")
             prop_type = MARKET_NORMALIZATION.get(raw_prop_type, raw_prop_type)
 
+            raw_book = item.get("book") or item.get("sportsbook")
+            book = normalize_book(raw_book)
+
 
             # -----------------------------
             # Hard filters

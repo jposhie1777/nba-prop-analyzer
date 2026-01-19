@@ -20,6 +20,14 @@ export function MarketRow({
   const buttonWidthRef = useRef<number>(0);
   const overUnderByLine = new Map<number, any>();
   const marketKey = market.toUpperCase();
+
+  console.log("MarketRow", {
+    market,
+    marketKey,
+    lineCount: lines?.length,
+    sampleLine: lines?.[0],
+  });
+
   const didAutoScroll = useRef(false);
 
   for (const l of lines) {

@@ -1,124 +1,71 @@
 import { Tabs } from "expo-router";
-import React, { useEffect, useState } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-
+import { Ionicons } from "@expo/vector-icons";
 import { HapticTab } from "@/components/haptic-tab";
-import { IconSymbol } from "@/components/ui/icon-symbol";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { Ionicons } from "@expo/vector-icons";
-
-const SAVED_PROPS_KEY = "saved_props_v1";
+import { PulseHeader } from "@/components/layout/PulseHeader";
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
-
-  // ---------------------------
-  // GLOBAL SAVED BETS STATE
-  // ---------------------------
-  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
-
-  // ---------------------------
-  // LOAD SAVED BETS
-  // ---------------------------
-  useEffect(() => {
-    AsyncStorage.getItem(SAVED_PROPS_KEY).then((raw) => {
-      if (!raw) return;
-      setSavedIds(new Set(JSON.parse(raw)));
-    });
-  }, []);
-
-  // ---------------------------
-  // PERSIST SAVED BETS
-  // ---------------------------
-  useEffect(() => {
-    AsyncStorage.setItem(
-      SAVED_PROPS_KEY,
-      JSON.stringify(Array.from(savedIds))
-    );
-  }, [savedIds]);
-
-  // ---------------------------
-  // HELPERS
-  // ---------------------------
-  const toggleSave = (id: string) => {
-    setSavedIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
-
-  const clearAllSaved = () => {
-    setSavedIds(new Set());
-  };
 
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
-        headerShown: false,
         tabBarButton: HapticTab,
+        header: () => <PulseHeader />,
       }}
     >
-      {/* HOME TAB */}
       <Tabs.Screen
-        name="index"
+        name="home"
         options={{
           title: "Home",
           tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="house.fill" color={color} />
+            <Ionicons name="home" size={22} color={color} />
           ),
         }}
-        initialParams={{
-          savedIds,
-          toggleSave,
+      />
+
+      <Tabs.Screen
+        name="props"
+        options={{
+          title: "Props",
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="stats-chart" size={22} color={color} />
+          ),
         }}
       />
-      {/* LIVE TAB */}
+
       <Tabs.Screen
         name="live"
         options={{
           title: "Live",
           tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="dot.radiowaves.left.and.right" color={color} />
+            <Ionicons
+              name="radio-outline"
+              size={22}
+              color={color}
+            />
           ),
         }}
       />
 
-      {/* LINEUPS TAB */}
       <Tabs.Screen
-        name="lineups"
+        name="first-basket"
         options={{
-          title: "Lineups",
+          title: "First Basket",
           tabBarIcon: ({ color }) => (
-            <Ionicons name="people" size={22} color={color} />
+            <Ionicons name="basketball" size={22} color={color} />
           ),
         }}
       />
 
-      {/* SAVED TAB */}
       <Tabs.Screen
-        name="saved"
+        name="trends"
         options={{
-          title: "Saved",
+          title: "Trends",
           tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="bookmark.fill" color={color} />
-          ),
-        }}
-        initialParams={{
-          savedIds,
-          toggleSave,
-          clearAllSaved,
-        }}
-      />
-      {/* DEV TAB */}
-      <Tabs.Screen
-        name="dev"
-        options={{
-          title: "Dev",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="wrench.and.screwdriver.fill" color={color} />
+            <Ionicons name="trending-up" size={22} color={color} />
           ),
         }}
       />

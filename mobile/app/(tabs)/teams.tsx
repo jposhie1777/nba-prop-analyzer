@@ -1,5 +1,6 @@
 // app/(tabs)/teams.tsx
 import { View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useEffect, useState } from "react";
 import Constants from "expo-constants";
 
@@ -14,8 +15,13 @@ export default function TeamsScreen() {
   const [schema, setSchema] = useState<ColumnSchema[]>([]);
 
   useEffect(() => {
-    fetch(`${API}/teams/season-stats`).then(r => r.json()).then(setData);
-    fetch(`${API}/teams/season-stats/schema`).then(r => r.json()).then(setSchema);
+    fetch(`${API}/teams/season-stats`)
+      .then(r => r.json())
+      .then(setData);
+
+    fetch(`${API}/teams/season-stats/schema`)
+      .then(r => r.json())
+      .then(setSchema);
   }, []);
 
   if (!schema.length) return null;
@@ -23,12 +29,14 @@ export default function TeamsScreen() {
   const columns = schemaToColumns(schema);
 
   return (
-    <View style={{ flex: 1, padding: 12 }}>
-      <AutoSortableTable
-        data={data}
-        columns={columns}
-        defaultSort="pts"
-      />
-    </View>
+    <SafeAreaView style={{ flex: 1 }}>
+      <View style={{ flex: 1, padding: 12 }}>
+        <AutoSortableTable
+          data={data}
+          columns={columns}
+          defaultSort="pts"
+        />
+      </View>
+    </SafeAreaView>
   );
 }

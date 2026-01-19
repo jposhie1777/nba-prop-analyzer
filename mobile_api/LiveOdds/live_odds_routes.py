@@ -76,13 +76,12 @@ def get_live_player_props(
                 "market_type": r.market_type,
                 "line": r.line,
                 "book": r.book,
-                "odds": {
-                    "over": r.over_odds,
-                    "under": r.under_odds,
-                    "yes": r.milestone_odds,
-                },
+                "over_odds": r.over_odds,
+                "under_odds": r.under_odds,
+                "milestone_odds": r.milestone_odds,
             }
         )
+
 
 
     return {

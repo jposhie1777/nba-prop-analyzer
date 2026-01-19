@@ -10,8 +10,6 @@ from LiveOdds.live_odds_common import (
     require_api_key,
     get_bq_client,
     fetch_live_game_ids,
-    LIVE_PLAYER_PROP_MARKETS,
-    LIVE_ODDS_BOOKS,
     normalize_book,
 )
 
@@ -20,11 +18,16 @@ BQ_TABLE = "graphite-flare-477419-h7.nba_live.live_player_prop_odds_raw"
 
 def ingest_live_player_prop_odds() -> dict:
     """
-    Pull live player prop odds ONLY for:
-    - LIVE games
-    - DraftKings / FanDuel
-    - PTS / AST / REB / 3PM
-    - Over/Under + Milestones
+    Ingest ALL exposed live player prop odds from BDL.
+
+    Scope:
+    - LIVE games only
+    - ALL books
+    - ALL prop types (points, assists, PRA, turnovers, etc.)
+    - ALL market types (over_under, milestone, alternates, specials, etc.)
+
+    No filtering. No assumptions.
+    Downstream views decide what matters.
     """
 
     live_game_ids = fetch_live_game_ids()
@@ -38,6 +41,8 @@ def ingest_live_player_prop_odds() -> dict:
 
     now = datetime.now(timezone.utc)
     client = get_bq_client()
+
+    rows_to_insert = []
     games_written = 0
 
     for game_id in live_game_ids:
@@ -50,92 +55,45 @@ def ingest_live_player_prop_odds() -> dict:
         resp.raise_for_status()
 
         payload = resp.json()
+        items = payload.get("data", [])
 
-        filtered_markets = []
-
-        for item in payload.get("data", []):
-            prop_type = item.get("prop_type")  # points / assists / rebounds / threes
-            book = normalize_book(item.get("vendor"))
-
-            # -----------------------------
-            # Hard filters
-            # -----------------------------
-            if prop_type not in LIVE_PLAYER_PROP_MARKETS:
-                continue
-
-            if book not in LIVE_ODDS_BOOKS:
-                continue
-
-            market_data = item.get("market") or {}
-            market_type = market_data.get("type")
-
-            line_value = (
-                float(item.get("line_value"))
-                if item.get("line_value") is not None
-                else None
-            )
-
-            # -----------------------------
-            # OVER / UNDER
-            # -----------------------------
-            if market_type == "over_under":
-                filtered_markets.append(
-                    {
-                        "player_id": item.get("player_id"),
-                        "market": prop_type,
-                        "market_type": "over_under",
-                        "line": line_value,
-                        "book": book,
-                        "odds": {
-                            "over": market_data.get("over_odds"),
-                            "under": market_data.get("under_odds"),
-                        },
-                    }
-                )
-                continue
-
-            # -----------------------------
-            # MILESTONE (X+)
-            # -----------------------------
-            if market_type == "milestone":
-                filtered_markets.append(
-                    {
-                        "player_id": item.get("player_id"),
-                        "market": prop_type,
-                        "market_type": "milestone",
-                        "line": line_value,  # milestone number (e.g. 20, 25)
-                        "book": book,
-                        "odds": {
-                            "yes": market_data.get("odds")
-                        },
-                    }
-                )
-                continue
-
-            # Ignore anything else (alternate lines, exotics, etc.)
-
-        if not filtered_markets:
+        if not items:
             continue
 
+        # Store EXACTLY what BDL gives us, with light normalization helpers
         row = {
             "snapshot_ts": now.isoformat(),
             "game_id": game_id,
             "payload": json.dumps(
                 {
                     "game_id": game_id,
-                    "markets": filtered_markets,
+                    "count": len(items),
+                    "ingested_at": now.isoformat(),
+                    "items": [
+                        {
+                            **item,
+                            # helpers for downstream querying
+                            "normalized_book": normalize_book(item.get("vendor")),
+                            "prop_type": item.get("prop_type"),
+                            "market_type": (item.get("market") or {}).get("type"),
+                        }
+                        for item in items
+                    ],
                 }
             ),
         }
 
-        errors = client.insert_rows_json(BQ_TABLE, [row])
+        rows_to_insert.append(row)
+        games_written += 1
+
+    if rows_to_insert:
+        errors = client.insert_rows_json(BQ_TABLE, rows_to_insert)
         if errors:
             raise RuntimeError(f"Player prop odds insert errors: {errors}")
-
-        games_written += 1
 
     return {
         "status": "OK",
         "games_written": games_written,
+        "rows_inserted": len(rows_to_insert),
         "snapshot_ts": now.isoformat(),
     }

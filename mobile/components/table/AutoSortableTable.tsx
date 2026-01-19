@@ -23,41 +23,66 @@ export function AutoSortableTable<T>({
   } = useSortableData(data, defaultSort);
 
   return (
-    <>
-      {/* HEADER */}
-      <View style={{ flexDirection: "row", paddingBottom: 6 }}>
-        {columns.map(col => (
-          <Pressable
-            key={col.key}
-            onPress={() => toggleSort(col.key as keyof T)}
-            style={{ width: col.width }}
-          >
-            <Text
-              style={{
-                fontWeight: "600",
-                color:
-                  sortKey === col.key
+    <View style={{ flex: 1 }}>
+      {/* =========================
+          HEADER
+      ========================== */}
+      <View
+        style={{
+          flexDirection: "row",
+          paddingVertical: 8,
+          borderBottomWidth: 1,
+          borderColor: colors.border.subtle,
+        }}
+      >
+        {columns.map(col => {
+          const isActive = sortKey === col.key;
+
+          return (
+            <Pressable
+              key={col.key}
+              onPress={() => toggleSort(col.key as keyof T)}
+              style={{ width: col.width }}
+            >
+              <Text
+                style={{
+                  fontWeight: "600",
+                  fontSize: 12,
+                  color: isActive
                     ? colors.accent.primary
                     : colors.text.secondary,
-              }}
-            >
-              {col.label}
-              {sortKey === col.key
-                ? direction === "asc"
-                  ? " ▲"
-                  : " ▼"
-                : ""}
-            </Text>
-          </Pressable>
-        ))}
+                }}
+                numberOfLines={1}
+              >
+                {col.label}
+                {isActive
+                  ? direction === "asc"
+                    ? " ▲"
+                    : " ▼"
+                  : ""}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
 
-      {/* ROWS */}
+      {/* =========================
+          ROWS
+      ========================== */}
       <FlatList
         data={sortedData}
         keyExtractor={(_, i) => String(i)}
+        contentContainerStyle={{ paddingBottom: 24 }}
+        showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
-          <View style={{ flexDirection: "row", paddingVertical: 6 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              paddingVertical: 6,
+              borderBottomWidth: 0.5,
+              borderColor: colors.border.subtle,
+            }}
+          >
             {columns.map(col => {
               const raw = (item as any)[col.key];
               const value = col.formatter
@@ -67,7 +92,12 @@ export function AutoSortableTable<T>({
               return (
                 <Text
                   key={col.key}
-                  style={{ width: col.width }}
+                  style={{
+                    width: col.width,
+                    fontSize: 12,
+                    color: colors.text.primary,
+                  }}
+                  numberOfLines={1}
                 >
                   {value ?? "—"}
                 </Text>
@@ -76,6 +106,6 @@ export function AutoSortableTable<T>({
           </View>
         )}
       />
-    </>
+    </View>
   );
 }

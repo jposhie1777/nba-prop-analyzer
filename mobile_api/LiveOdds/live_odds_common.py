@@ -8,7 +8,7 @@ from google.cloud import bigquery
 # ==================================================
 
 BDL_V2 = "https://api.balldontlie.io/v2"
-TIMEOUT_SEC = 15
+TIMEOUT_SEC = 30
 
 # --------------------------------------------------
 # Allowed sportsbooks (LIVE ONLY)

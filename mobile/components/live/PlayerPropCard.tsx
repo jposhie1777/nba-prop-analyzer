@@ -12,57 +12,105 @@ export function PlayerPropCard({
   const { colors } = useTheme();
 
   return (
-    <View
-      style={[
-        styles.card,
-        { borderColor: colors.border.subtle },
-      ]}
-    >
-      {/* HEADER */}
-      <View style={styles.header}>
-        <Text style={styles.name}>{name}</Text>
-        <Text style={{ color: colors.text.muted }}>
-          {minutes} min · PTS {current.pts} · REB {current.reb} · AST {current.ast}
-        </Text>
-      </View>
+    <View style={styles.wrapper}>
+      {/* LEFT ACCENT RAIL */}
+      <View
+        style={[
+          styles.accent,
+          { backgroundColor: colors.accent.primary },
+        ]}
+      />
 
-      {/* MARKETS */}
-      {Object.entries(player.markets).map(
-        ([market, marketData]: any) => (
-          <MarketRow
-            key={`${player.player_id}-${market}`}
-            playerId={player.player_id}
-            market={market}
-            lines={marketData.lines}
-            current={
-              market.toUpperCase() === "PTS" || market.toUpperCase() === "POINTS"
-                ? current.pts
-                : market.toUpperCase() === "AST" || market.toUpperCase() === "ASSISTS"
-                ? current.ast
-                : market.toUpperCase() === "REB" || market.toUpperCase() === "REBOUNDS"
-                ? current.reb
-                : 0
-            }
-            playerName={name} // 👈 ADD THIS LINE
-          />
-        )
-      )}
+      {/* CARD */}
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.surface.card,
+            borderColor: colors.border.subtle,
+          },
+        ]}
+      >
+        {/* HEADER */}
+        <View style={styles.header}>
+          <Text
+            style={[
+              styles.name,
+              { color: colors.text.primary },
+            ]}
+          >
+            {name}
+          </Text>
+
+          <Text style={{ color: colors.text.muted, fontSize: 12 }}>
+            {minutes} min · PTS {current.pts} · REB {current.reb} · AST {current.ast}
+          </Text>
+        </View>
+
+        {/* MARKETS */}
+        {Object.entries(player.markets).map(
+          ([market, marketData]: any) => (
+            <MarketRow
+              key={`${player.player_id}-${market}`}
+              playerId={player.player_id}
+              market={market}
+              lines={marketData.lines}
+              current={
+                market.toUpperCase() === "PTS" ||
+                market.toUpperCase() === "POINTS"
+                  ? current.pts
+                  : market.toUpperCase() === "AST" ||
+                    market.toUpperCase() === "ASSISTS"
+                  ? current.ast
+                  : market.toUpperCase() === "REB" ||
+                    market.toUpperCase() === "REBOUNDS"
+                  ? current.reb
+                  : 0
+              }
+              playerName={name}
+            />
+          )
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 12,
-    gap: 10,
+  wrapper: {
+    flexDirection: "row",
+    marginBottom: 14,
   },
+
+  accent: {
+    width: 4,
+    borderRadius: 4,
+    marginRight: 10,
+  },
+
+  card: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    gap: 10,
+
+    // iOS elevation
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+
+    // Android elevation
+    elevation: 3,
+  },
+
   header: {
     gap: 2,
   },
+
   name: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "800",
   },
 });

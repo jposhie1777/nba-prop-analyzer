@@ -23,14 +23,25 @@ export function AutoSortableTable<T>({
   } = useSortableData(data, defaultSort);
 
   return (
-    <View style={{ flex: 1 }}>
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: colors.surface.card,
+        borderRadius: 12,
+        overflow: "hidden",
+        borderWidth: 1,
+        borderColor: colors.border.subtle,
+      }}
+    >
       {/* =========================
           HEADER
       ========================== */}
       <View
         style={{
           flexDirection: "row",
-          paddingVertical: 8,
+          paddingVertical: 10,
+          paddingHorizontal: 6,
+          backgroundColor: colors.surface.cardSoft,
           borderBottomWidth: 1,
           borderColor: colors.border.subtle,
         }}
@@ -46,8 +57,8 @@ export function AutoSortableTable<T>({
             >
               <Text
                 style={{
-                  fontWeight: "600",
                   fontSize: 12,
+                  fontWeight: "700",
                   color: isActive
                     ? colors.accent.primary
                     : colors.text.secondary,
@@ -72,39 +83,47 @@ export function AutoSortableTable<T>({
       <FlatList
         data={sortedData}
         keyExtractor={(_, i) => String(i)}
-        contentContainerStyle={{ paddingBottom: 24 }}
         showsVerticalScrollIndicator={false}
-        renderItem={({ item }) => (
-          <View
-            style={{
-              flexDirection: "row",
-              paddingVertical: 6,
-              borderBottomWidth: 0.5,
-              borderColor: colors.border.subtle,
-            }}
-          >
-            {columns.map(col => {
-              const raw = (item as any)[col.key];
-              const value = col.formatter
-                ? col.formatter(raw)
-                : raw;
+        contentContainerStyle={{ paddingBottom: 12 }}
+        renderItem={({ item, index }) => {
+          const isEven = index % 2 === 0;
 
-              return (
-                <Text
-                  key={col.key}
-                  style={{
-                    width: col.width,
-                    fontSize: 12,
-                    color: colors.text.primary,
-                  }}
-                  numberOfLines={1}
-                >
-                  {value ?? "—"}
-                </Text>
-              );
-            })}
-          </View>
-        )}
+          return (
+            <View
+              style={{
+                flexDirection: "row",
+                paddingVertical: 8,
+                paddingHorizontal: 6,
+                backgroundColor: isEven
+                  ? colors.surface.card
+                  : colors.surface.cardSoft,
+                borderBottomWidth: 1,
+                borderColor: colors.border.subtle,
+              }}
+            >
+              {columns.map(col => {
+                const raw = (item as any)[col.key];
+                const value = col.formatter
+                  ? col.formatter(raw)
+                  : raw;
+
+                return (
+                  <Text
+                    key={col.key}
+                    style={{
+                      width: col.width,
+                      fontSize: 12,
+                      color: colors.text.primary,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {value ?? "—"}
+                  </Text>
+                );
+              })}
+            </View>
+          );
+        }}
       />
     </View>
   );

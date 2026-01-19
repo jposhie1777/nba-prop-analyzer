@@ -7,14 +7,14 @@ const HIDDEN_COLUMNS = new Set([
   "season_type",
 ]);
 
-export function schemaToColumns(
-  schema: ColumnSchema[]
-): ColumnConfig[] {
+export function schemaToColumns(schema: ColumnSchema[]) {
   return schema
-    .filter(col => !HIDDEN_COLUMNS.has(col.name))
+    .filter(col => !["team_id", "season", "season_type"].includes(col.name))
     .map(col => {
-      const isPct = col.name.endsWith("_pct");
+      const isName =
+        col.name === "team_name" || col.name === "team_abbr";
       const isRank = col.name.endsWith("_rank");
+      const isPct = col.name.endsWith("_pct");
 
       return {
         key: col.name,
@@ -22,13 +22,18 @@ export function schemaToColumns(
           .replace("_pct", "%")
           .replace("_rank", " Rk")
           .toUpperCase(),
-        width: isRank ? 60 : 70,
-        isNumeric: col.type !== "STRING",
+
+        // 🔑 smarter widths
+        width: isName
+          ? 160
+          : isRank
+          ? 60
+          : 80,
+
         formatter: isPct
           ? (v: number) => (v * 100).toFixed(1)
-          : typeof v === "number"
-          ? (v: number) => v.toFixed(1)
           : undefined,
       };
     });
+}
 }

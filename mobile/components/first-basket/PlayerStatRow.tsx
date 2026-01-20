@@ -4,54 +4,72 @@ import { View, Text } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import type { FirstBasketSide } from "@/hooks/useFirstBasketMatchups";
 
-
-type Side = {
-  player: string;
-  firstBasketPct: number;
-  shotShare: number;
-  firstBasketCount: number;
-  teamFirstBasketCount: number;
-};
-
 export function PlayerStatRow({
   side,
+  highlight,
 }: {
-  side: FirstBasketSide | null;
+  side: FirstBasketSide;
+  highlight?: boolean;
 }) {
   const { colors } = useTheme();
 
-  if (!side) {
-    return (
-      <View style={{ flexDirection: "row", opacity: 0.4 }}>
-        <Text style={{ flex: 2 }}>—</Text>
-        <Text style={{ flex: 1, textAlign: "right" }}>—</Text>
-        <Text style={{ flex: 1, textAlign: "right" }}>—</Text>
-        <Text style={{ flex: 1, textAlign: "right" }}>—</Text>
-        <Text style={{ flex: 1, textAlign: "right" }}>—</Text>
-      </View>
-    );
-  }
-
   return (
-    <View style={{ flexDirection: "row" }}>
-      <Text style={{ flex: 2 }} numberOfLines={1}>
+    <View
+      style={{
+        paddingVertical: 8,
+        paddingHorizontal: 10,
+        borderRadius: 12,
+        backgroundColor: highlight
+          ? colors.accent.soft
+          : "transparent",
+        marginBottom: 6,
+      }}
+    >
+      {/* Player name */}
+      <Text
+        numberOfLines={1}
+        style={{
+          fontSize: 15,
+          fontWeight: highlight ? "700" : "500",
+          color: colors.text.primary,
+          marginBottom: 4,
+        }}
+      >
         {side.player}
       </Text>
 
-      <Text style={{ flex: 1, textAlign: "right" }}>
-        {(side.firstBasketPct * 100).toFixed(1)}%
-      </Text>
+      {/* Stats grid */}
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+        }}
+      >
+        <Stat value={`${(side.firstBasketPct * 100).toFixed(1)}%`} />
+        <Stat value={`${(side.firstShotShare * 100).toFixed(0)}%`} />
+        <Stat value={side.playerFirstBasketCount} />
+        <Stat value={side.playerTeamFirstBasketCount} />
+      </View>
+    </View>
+  );
+}
 
-      <Text style={{ flex: 1, textAlign: "right" }}>
-        {(side.firstShotShare * 100).toFixed(0)}%
-      </Text>
+/* ======================================================
+   Single Stat Cell
+====================================================== */
+function Stat({ value }: { value: string | number }) {
+  const { colors } = useTheme();
 
-      <Text style={{ flex: 1, textAlign: "right" }}>
-        {side.playerFirstBasketCount}
-      </Text>
-
-      <Text style={{ flex: 1, textAlign: "right" }}>
-        {side.playerTeamFirstBasketCount}
+  return (
+    <View style={{ alignItems: "center", minWidth: 52 }}>
+      <Text
+        style={{
+          fontSize: 13,
+          fontWeight: "600",
+          color: colors.text.primary,
+        }}
+      >
+        {value}
       </Text>
     </View>
   );

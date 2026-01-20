@@ -49,6 +49,11 @@ export function groupLiveProps(
       under,
       milestone,
     } = p;
+  
+    // 🔧 NORMALIZE MARKET TYPE
+    // Treat 3PM as over/under, not milestone
+    const normalizedMarketType =
+      market === "3pm" ? "over_under" : market_type;
 
     // ---------------------------
     // Init player
@@ -79,13 +84,13 @@ export function groupLiveProps(
     let lineEntry = marketEntry.lines.find(
       (l) =>
         l.line === line &&
-        l.line_type === market_type
+        l.line_type === normalizedMarketType
     );
 
     if (!lineEntry) {
       lineEntry = {
         line,
-        line_type: market_type,
+        line_type: normalizedMarketType,
         books: {},
       };
       marketEntry.lines.push(lineEntry);
@@ -102,12 +107,12 @@ export function groupLiveProps(
       };
     }
     
-    if (market_type === "over_under") {
+    if (normalizedMarketType === "over_under") {
       lineEntry.books[book].over = over ?? null;
       lineEntry.books[book].under = under ?? null;
     }
     
-    if (market_type === "milestone") {
+    if (normalizedMarketType === "milestone") {
       lineEntry.books[book].milestone = milestone ?? null;
     }
   }

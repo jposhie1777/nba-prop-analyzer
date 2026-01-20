@@ -1,7 +1,8 @@
 // components/live/playerpropcard
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, Image } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { MarketRow } from "./MarketRow";
+import { TEAM_LOGOS } from "@/constants/teamLogos";
 
 export function PlayerPropCard({
   player,
@@ -32,64 +33,40 @@ export function PlayerPropCard({
         ]}
       >
         <View style={styles.headerRow}>
-          {/* HEADSHOT */}
           <Image
             source={{ uri: player.player_image_url }}
             style={styles.headshot}
           />
-        
-          {/* CENTER TEXT */}
+
           <View style={styles.headerCenter}>
             <Text style={styles.name}>{name}</Text>
-            <Text style={styles.subline}>
+            <Text
+              style={[
+                styles.subline,
+                { color: colors.text.muted },
+              ]}
+            >
               {minutes} min · PTS {current.pts} · REB {current.reb} · AST {current.ast}
             </Text>
           </View>
-        
-          {/* TEAM LOGO */}
+
           <Image
             source={{ uri: TEAM_LOGOS[player.team_abbr] }}
             style={styles.teamLogo}
           />
         </View>
 
-        {/* MARKETS */}
         {Object.entries(player.markets).map(
           ([market, marketData]: any) => {
-        
-            // 🔍 DEBUG — market keys reaching PlayerPropCard
-            if (__DEV__) {
-              console.log(
-                "🧪 PlayerPropCard market loop",
-                {
-                  playerId: player.player_id,
-                  market,
-                  hasLines: !!marketData?.lines,
-                  lineCount: marketData?.lines?.length,
-                }
-              );
-            }
-        
             const currentByMarket: Record<string, number> = {
               pts: current.pts,
               ast: current.ast,
               reb: current.reb,
               "3pm": current.fg3m ?? 0,
             };
-        
-            const currentValue = currentByMarket[market];
 
-            // 🚨 Safety guard — backend contract violation
-            if (currentValue === undefined) {
-              if (__DEV__) {
-                console.warn(
-                  "[PlayerPropCard] Unknown market key",
-                  market,
-                  Object.keys(currentByMarket)
-                );
-              }
-              return null;
-            }
+            const currentValue = currentByMarket[market];
+            if (currentValue === undefined) return null;
 
             return (
               <MarketRow
@@ -119,34 +96,33 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  
+
   headerCenter: {
     flex: 1,
     alignItems: "center",
   },
-  
+
   headshot: {
     width: 36,
     height: 36,
     borderRadius: 18,
   },
-  
+
   teamLogo: {
     width: 28,
     height: 28,
     resizeMode: "contain",
   },
-  
+
   name: {
     fontSize: 16,
     fontWeight: "900",
     textAlign: "center",
   },
-  
+
   subline: {
     fontSize: 12,
     fontWeight: "600",
-    color: colors.text.muted,
     textAlign: "center",
   },
 
@@ -163,22 +139,11 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 10,
 
-    // iOS elevation
     shadowColor: "#000",
     shadowOpacity: 0.06,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
 
-    // Android elevation
     elevation: 3,
-  },
-
-  header: {
-    gap: 2,
-  },
-
-  name: {
-    fontSize: 15,
-    fontWeight: "800",
   },
 });

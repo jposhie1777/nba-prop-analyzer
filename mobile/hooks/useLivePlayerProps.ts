@@ -4,6 +4,7 @@ import {
   fetchLivePlayerProps,
   LivePlayerProp,
 } from "@/lib/liveOdds";
+import murmurhash from "murmurhash";
 
 export function useLivePlayerProps(gameId?: number) {
   const [props, setProps] = useState<LivePlayerProp[]>([]);
@@ -18,8 +19,6 @@ export function useLivePlayerProps(gameId?: number) {
     async function load() {
       try {
         const data = await fetchLivePlayerProps(gameId);
-    
-       import murmurhash from "murmurhash";
 
         /* 🔍 DEBUG — API response shape (SAFE) */
         if (__DEV__) {

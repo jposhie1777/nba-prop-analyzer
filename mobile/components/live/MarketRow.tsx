@@ -19,7 +19,8 @@ export function MarketRow({
   const scrollRef = useRef<ScrollView>(null);
   const buttonWidthRef = useRef<number>(0);
   const overUnderByLine = new Map<number, any>();
-  const marketKey = market.toUpperCase();
+  const marketKey = market; // canonical
+  const marketLabel = market.toUpperCase();
 
   console.log("MarketRow", {
     market,
@@ -160,7 +161,7 @@ export function MarketRow({
 
   return (
     <View>
-      <Text style={styles.label}>{market}</Text>
+      <Text style={styles.label}>{marketLabel}</Text>
 
       {/* MAIN OVER / UNDER */}
       {mainLine && (

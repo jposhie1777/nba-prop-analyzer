@@ -2,13 +2,136 @@
 import React from "react";
 import { View, Text } from "react-native";
 import { useTheme } from "@/store/useTheme";
-import type { FirstBasketMatchup, FirstBasketRow } from "@/hooks/useFirstBasketMatchups";
-import { PlayerStatRow } from "./PlayerStatRow";
-import { TextStyle } from "react-native";
+import type {
+  FirstBasketMatchup,
+  FirstBasketSide,
+} from "@/hooks/useFirstBasketMatchups";
 import { FirstBasketHeader } from "./FirstBasketHeader";
 
+/* ======================================================
+   Player Row (stacked, mobile-first)
+====================================================== */
+function FirstBasketPlayerRow({
+  side,
+  highlight,
+}: {
+  side: FirstBasketSide;
+  highlight?: boolean;
+}) {
+  const { colors } = useTheme();
 
+  const fbPct = (side.firstBasketPct * 100).toFixed(1);
+  const shotPct = (side.firstShotShare * 100).toFixed(0);
 
+  const teamShare =
+    side.playerTeamFirstBasketCount > 0
+      ? side.playerFirstBasketCount / side.playerTeamFirstBasketCount
+      : 0;
+
+  return (
+    <View
+      style={{
+        paddingVertical: 8,
+        paddingHorizontal: 10,
+        borderRadius: 12,
+        backgroundColor: highlight
+          ? colors.accent.soft
+          : "transparent",
+        marginBottom: 6,
+      }}
+    >
+      {/* Player name */}
+      <Text
+        numberOfLines={1}
+        style={{
+          fontSize: 15,
+          fontWeight: highlight ? "700" : "500",
+          color: colors.text.primary,
+        }}
+      >
+        {side.player}
+      </Text>
+
+      {/* Stats row */}
+      <View
+        style={{
+          flexDirection: "row",
+          gap: 14,
+          marginTop: 2,
+        }}
+      >
+        <Text style={{ fontSize: 12, color: colors.text.secondary }}>
+          {fbPct}% FB
+        </Text>
+
+        <Text style={{ fontSize: 12, color: colors.text.secondary }}>
+          {shotPct}% Shot
+        </Text>
+      </View>
+
+      {/* Team share bar */}
+      <View
+        style={{
+          height: 4,
+          backgroundColor: colors.border.subtle,
+          borderRadius: 2,
+          marginTop: 6,
+          overflow: "hidden",
+        }}
+      >
+        <View
+          style={{
+            height: "100%",
+            width: `${Math.min(teamShare * 100, 100)}%`,
+            backgroundColor: colors.accent.primary,
+            borderRadius: 2,
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+/* ======================================================
+   Team Section
+====================================================== */
+function TeamSection({
+  team,
+  players,
+}: {
+  team: string;
+  players: FirstBasketSide[];
+}) {
+  const { colors } = useTheme();
+
+  return (
+    <View style={{ marginTop: 12 }}>
+      {/* Team header */}
+      <Text
+        style={{
+          fontSize: 13,
+          fontWeight: "700",
+          color: colors.text.primary,
+          marginBottom: 6,
+        }}
+      >
+        {team}
+      </Text>
+
+      {players.map((p, i) => (
+        <FirstBasketPlayerRow
+          key={p.player}
+          side={p}
+          highlight={i === 0}
+        />
+      ))}
+    </View>
+  );
+}
+
+/* ======================================================
+   Matchup Card
+====================================================== */
 export function FirstBasketMatchupCard({
   matchup,
 }: {
@@ -27,13 +150,18 @@ export function FirstBasketMatchupCard({
     ? `https://a.espncdn.com/i/teamlogos/nba/500/${awayTeam.toLowerCase()}.png`
     : undefined;
 
-  const title =
-    matchup.homeTeam && matchup.awayTeam
-      ? `${matchup.homeTeam} vs ${matchup.awayTeam}`
-      : `Game ${matchup.gameId}`;
+  // Flatten + split rows into teams
+  const homePlayers: FirstBasketSide[] = matchup.rows
+    .map((r) => r.home)
+    .filter(Boolean)
+    .sort((a, b) => b.firstBasketPct - a.firstBasketPct)
+    .slice(0, 5);
 
-  // Hide rows where both sides are null
-  const rows = matchup.rows.filter((r) => r.home || r.away);
+  const awayPlayers: FirstBasketSide[] = matchup.rows
+    .map((r) => r.away)
+    .filter(Boolean)
+    .sort((a, b) => b.firstBasketPct - a.firstBasketPct)
+    .slice(0, 5);
 
   return (
     <View
@@ -46,126 +174,28 @@ export function FirstBasketMatchupCard({
         marginBottom: 12,
       }}
     >
+      {/* Header */}
       <FirstBasketHeader
-        homeTeam={matchup.homeTeam}
-        awayTeam={matchup.awayTeam}
+        homeTeam={homeTeam}
+        awayTeam={awayTeam}
         homeLogo={homeLogo}
         awayLogo={awayLogo}
         homeWinPct={matchup.homeTipWinPct}
         awayWinPct={matchup.awayTipWinPct}
       />
 
-
-      {/* =======================
-          HOME / AWAY LABELS
-      ======================== */}
+      {/* Divider */}
       <View
         style={{
-          flexDirection: "row",
-          marginTop: 6,
-          marginBottom: 4,
+          height: 1,
+          backgroundColor: colors.border.subtle,
+          marginVertical: 8,
         }}
-      >
-        <View style={{ flex: 1 }}>
-          <Text
-            style={{
-              color: colors.text.muted,
-              fontSize: 12,
-              fontWeight: "700",
-            }}
-          >
-            HOME
-          </Text>
-        </View>
+      />
 
-        <View style={{ flex: 1, alignItems: "flex-end" }}>
-          <Text
-            style={{
-              color: colors.text.muted,
-              fontSize: 12,
-              fontWeight: "700",
-            }}
-          >
-            AWAY
-          </Text>
-        </View>
-      </View>
-
-      {/* =======================
-          TABLE COLUMN HEADERS
-      ======================== */}
-      <View
-        style={{
-          flexDirection: "row",
-          paddingBottom: 6,
-          borderBottomWidth: 1,
-          borderBottomColor: colors.border.subtle,
-          marginBottom: 4,
-        }}
-      >
-        {/* Home headers */}
-        <View style={{ flex: 1, paddingRight: 6 }}>
-          <View style={{ flexDirection: "row" }}>
-            <Text style={colHeader(colors, 2)}>Player</Text>
-            <Text style={colHeader(colors, 1, true)}>FB%</Text>
-            <Text style={colHeader(colors, 1, true)}>Shot%</Text>
-            <Text style={colHeader(colors, 1, true)}>FB</Text>
-            <Text style={colHeader(colors, 1, true)}>Team</Text>
-          </View>
-        </View>
-
-        {/* Away headers */}
-        <View style={{ flex: 1, paddingLeft: 6 }}>
-          <View style={{ flexDirection: "row" }}>
-            <Text style={colHeader(colors, 2)}>Player</Text>
-            <Text style={colHeader(colors, 1, true)}>FB%</Text>
-            <Text style={colHeader(colors, 1, true)}>Shot%</Text>
-            <Text style={colHeader(colors, 1, true)}>FB</Text>
-            <Text style={colHeader(colors, 1, true)}>Team</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* =======================
-          DATA ROWS
-      ======================== */}
-      {rows.map((row: FirstBasketRow) => (
-        <View
-          key={row.rank}
-          style={{
-            flexDirection: "row",
-            paddingVertical: 6,
-            borderTopWidth: 1,
-            borderTopColor: colors.border.subtle,
-          }}
-        >
-          {/* HOME */}
-          <View style={{ flex: 1, paddingRight: 6 }}>
-            <PlayerStatRow side={row.home} />
-          </View>
-
-          {/* AWAY */}
-          <View style={{ flex: 1, paddingLeft: 6 }}>
-            <PlayerStatRow side={row.away} />
-          </View>
-        </View>
-      ))}
+      {/* Teams stacked */}
+      <TeamSection team={homeTeam} players={homePlayers} />
+      <TeamSection team={awayTeam} players={awayPlayers} />
     </View>
   );
-}
-
-/* =======================
-   COLUMN HEADER STYLE
-======================= */
-function colHeader(
-  colors: any,
-  flex: number,
-  rightAlign = false
-): TextStyle {
-  return {
-    flex,
-    fontSize: 11,
-    color: colors.text.muted,
-    textAlign: rightAlign ? "right" : "left",
-  };
 }

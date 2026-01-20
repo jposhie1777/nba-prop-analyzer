@@ -1,3 +1,4 @@
+// mobile/store/useTheme.ts
 import { create } from "zustand";
 import { themes, ThemeName } from "@/theme";
 

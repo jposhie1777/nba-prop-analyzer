@@ -26,60 +26,81 @@ USING (
     market_type,
     line,
     book,
-
-    ARRAY_AGG(
-      STRUCT(
-        snapshot_ts AS snapshot_ts,
-        over_odds AS over_odds,
-        under_odds AS under_odds,
-        milestone_odds AS milestone_odds
-      )
-      ORDER BY snapshot_ts DESC
-      LIMIT 1
-    )[OFFSET(0)].*
+    snapshot_ts,
+    over_odds,
+    under_odds,
+    milestone_odds
   FROM (
     SELECT
-      TIMESTAMP(snapshot_ts) AS snapshot_ts,
       game_id,
-    
-      CAST(JSON_VALUE(m, '$.player_id') AS INT64) AS player_id,
-    
-      CASE LOWER(JSON_VALUE(m, '$.market'))
-        WHEN 'points' THEN 'pts'
-        WHEN 'assists' THEN 'ast'
-        WHEN 'rebounds' THEN 'reb'
-        WHEN 'three_pointers_made' THEN '3pm'
-        ELSE JSON_VALUE(m, '$.market')
-      END AS market,
-    
-      CASE
-        WHEN JSON_VALUE(m, '$.market_type') IS NOT NULL
-          THEN JSON_VALUE(m, '$.market_type')
-        WHEN JSON_VALUE(m, '$.odds.yes') IS NOT NULL
-          THEN 'milestone'
-        WHEN JSON_VALUE(m, '$.odds.over') IS NOT NULL
-          OR JSON_VALUE(m, '$.odds.under') IS NOT NULL
-          THEN 'over_under'
-        ELSE 'unknown'
-      END AS market_type,
-    
-      CAST(JSON_VALUE(m, '$.line') AS FLOAT64) AS line,
-      JSON_VALUE(m, '$.book') AS book,
-    
-      SAFE_CAST(JSON_VALUE(m, '$.odds.over') AS INT64) AS over_odds,
-      SAFE_CAST(JSON_VALUE(m, '$.odds.under') AS INT64) AS under_odds,
-      SAFE_CAST(JSON_VALUE(m, '$.odds.yes') AS INT64) AS milestone_odds
-    
-    FROM `graphite-flare-477419-h7.nba_live.live_player_prop_odds_raw`,
-    UNNEST(JSON_QUERY_ARRAY(payload, '$.items')) AS m
-    
-    WHERE JSON_VALUE(m, '$.market') IN (
-      'points',
-      'assists',
-      'rebounds',
-      'three_pointers_made'
+      player_id,
+      market,
+      market_type,
+      line,
+      book,
+
+      ARRAY_AGG(
+        STRUCT(
+          snapshot_ts,
+          over_odds,
+          under_odds,
+          milestone_odds
+        )
+        ORDER BY snapshot_ts DESC
+        LIMIT 1
+      )[OFFSET(0)].*
+    FROM (
+      SELECT
+        TIMESTAMP(snapshot_ts) AS snapshot_ts,
+        game_id,
+
+        CAST(JSON_VALUE(i, '$.player_id') AS INT64) AS player_id,
+
+        CASE LOWER(JSON_VALUE(i, '$.prop_type'))
+          WHEN 'points' THEN 'pts'
+          WHEN 'assists' THEN 'ast'
+          WHEN 'rebounds' THEN 'reb'
+          WHEN 'three_pointers_made' THEN '3pm'
+          ELSE NULL
+        END AS market,
+
+        CASE
+          WHEN JSON_VALUE(i, '$.market_type') IS NOT NULL
+            THEN JSON_VALUE(i, '$.market_type')
+          WHEN JSON_VALUE(i, '$.market.odds') IS NOT NULL
+            THEN 'milestone'
+          WHEN JSON_VALUE(i, '$.market.over_odds') IS NOT NULL
+            OR JSON_VALUE(i, '$.market.under_odds') IS NOT NULL
+            THEN 'over_under'
+          ELSE 'unknown'
+        END AS market_type,
+
+        CAST(JSON_VALUE(i, '$.line_value') AS FLOAT64) AS line,
+        JSON_VALUE(i, '$.normalized_book') AS book,
+
+        SAFE_CAST(JSON_VALUE(i, '$.market.over_odds') AS INT64) AS over_odds,
+        SAFE_CAST(JSON_VALUE(i, '$.market.under_odds') AS INT64) AS under_odds,
+        SAFE_CAST(JSON_VALUE(i, '$.market.odds') AS INT64) AS milestone_odds
+
+      FROM `graphite-flare-477419-h7.nba_live.live_player_prop_odds_raw`,
+           UNNEST(JSON_QUERY_ARRAY(payload, '$.items')) AS i
+
+      WHERE JSON_VALUE(i, '$.prop_type') IN (
+        'points',
+        'assists',
+        'rebounds',
+        'three_pointers_made'
+      )
     )
-  GROUP BY 1,2,3,4,5,6
+    WHERE market IS NOT NULL
+    GROUP BY
+      game_id,
+      player_id,
+      market,
+      market_type,
+      line,
+      book
+  )
 ) S
 ON
   T.game_id     = S.game_id

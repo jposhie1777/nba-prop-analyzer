@@ -40,6 +40,7 @@ export function LiveGameCard({ game, players }: Props) {
       pts: number;
       reb: number;
       ast: number;
+      fg3m: number;
       stl: number;
       blk: number;
       tov: number;
@@ -51,6 +52,7 @@ export function LiveGameCard({ game, players }: Props) {
         pts: p.pts ?? 0,
         reb: p.reb ?? 0,
         ast: p.ast ?? 0,
+        fg3m: (p as any).fg3m ?? 0, // ✅ ADD THIS
         stl: p.stl ?? 0,
         blk: p.blk ?? 0,
         tov: p.tov ?? 0,

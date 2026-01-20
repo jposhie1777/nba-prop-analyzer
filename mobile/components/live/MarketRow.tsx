@@ -135,7 +135,7 @@ export function MarketRow({
 
     try {
       const result = await fetchLivePropAnalytics({
-        gameId: mainLine?.game_id ?? m.game_id,
+        gameId: mainLine?.game_id ?? line.game_id,
         playerId,
         market: marketKey,
         line,
@@ -157,6 +157,12 @@ export function MarketRow({
     setAnalytics(null);
   }, [market]);
 
+  const hasOU = !!mainLine;
+  const hasMilestones = milestones.length > 0;
+  
+  if (!hasOU && !hasMilestones) {
+    return null;
+  }
 
   return (
     <View>
@@ -165,13 +171,20 @@ export function MarketRow({
       {/* MAIN OVER / UNDER */}
       {mainLine && (
         <View style={{ marginBottom: 6 }}>
-          <View style={{ flexDirection: "row", gap: 10 }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{
+              gap: 8,
+              paddingVertical: 4,
+            }}
+          >
             {(() => {
               const { over, under } = getBookOdds(mainLine);
-            
+          
               const overBetId = getOverUnderBetId("over", mainLine.line);
               const underBetId = getOverUnderBetId("under", mainLine.line);
-            
+          
               return (
                 <>
                   <OverUnderButton
@@ -194,7 +207,7 @@ export function MarketRow({
                       });
                     }}
                   />
-            
+          
                   <OverUnderButton
                     side="under"
                     line={mainLine.line}
@@ -218,7 +231,7 @@ export function MarketRow({
                 </>
               );
             })()}
-          </View>
+          </ScrollView>
         </View>
       )}
 

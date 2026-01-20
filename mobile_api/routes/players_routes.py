@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from typing import Dict, Any
 from google.cloud import bigquery
 
-from lib.bq import get_bq_client  # 👈 USE YOUR EXISTING HELPER
+from bq import get_bq_client  # 👈 USE YOUR EXISTING HELPER
 
 router = APIRouter(prefix="/players", tags=["players"])
 

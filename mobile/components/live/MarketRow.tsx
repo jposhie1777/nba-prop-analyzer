@@ -34,9 +34,18 @@ export function MarketRow({
     book: "draftkings" | "fanduel" = "draftkings"
   ) => {
     const b = line.books?.[book];
+  
     return {
-      over: b?.over ?? null,
-      under: b?.under ?? null,
+      over:
+        b?.over ??
+        line.over_odds ??
+        (line.side === "over" ? line.price : null),
+  
+      under:
+        b?.under ??
+        line.under_odds ??
+        (line.side === "under" ? line.price : null),
+  
       milestone: b?.milestone ?? null,
     };
   };

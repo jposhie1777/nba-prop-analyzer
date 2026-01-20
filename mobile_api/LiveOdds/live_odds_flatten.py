@@ -61,8 +61,9 @@ USING (
           WHEN 'assists' THEN 'ast'
           WHEN 'rebounds' THEN 'reb'
           WHEN 'three_pointers_made' THEN '3pm'
+          WHEN 'threes' THEN '3pm'
           ELSE NULL
-        END AS market,
+        END AS market
 
         CASE
           WHEN JSON_VALUE(i, '$.market_type') IS NOT NULL
@@ -89,7 +90,8 @@ USING (
         'points',
         'assists',
         'rebounds',
-        'three_pointers_made'
+        'three_pointers_made',
+        'threes'
       )
     )
     WHERE market IS NOT NULL

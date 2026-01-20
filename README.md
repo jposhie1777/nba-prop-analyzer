@@ -1,1 +1,1 @@
-# nba-prop-analyzer
+# Pulse Sports Analytics

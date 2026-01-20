@@ -13,55 +13,55 @@ export function PlayerStatRow({
 }) {
   const { colors } = useTheme();
 
+  if (!side) return null;
+
   return (
     <View
       style={{
+        flexDirection: "row",
+        alignItems: "center",
         paddingVertical: 8,
         paddingHorizontal: 10,
-        borderRadius: 12,
+        borderRadius: 10,
         backgroundColor: highlight
-          ? colors.accent.primary + "22" // 13% opacity
+          ? `${colors.accent.primary}22`
           : "transparent",
-        marginBottom: 6,
+        marginBottom: 4,
       }}
     >
-      {/* Player name */}
+      {/* Player */}
       <Text
         numberOfLines={1}
         style={{
-          fontSize: 15,
+          flex: 2,
+          fontSize: 14,
           fontWeight: highlight ? "700" : "500",
           color: colors.text.primary,
-          marginBottom: 4,
         }}
       >
         {side.player}
       </Text>
 
-      {/* Stats grid */}
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-        }}
-      >
-        <Stat value={`${(side.firstBasketPct * 100).toFixed(1)}%`} />
-        <Stat value={`${(side.firstShotShare * 100).toFixed(0)}%`} />
-        <Stat value={side.playerFirstBasketCount} />
-        <Stat value={side.playerTeamFirstBasketCount} />
-      </View>
+      {/* FB% */}
+      <Stat value={`${(side.firstBasketPct * 100).toFixed(1)}%`} />
+
+      {/* Shot% */}
+      <Stat value={`${(side.firstShotShare * 100).toFixed(0)}%`} />
+
+      {/* FB */}
+      <Stat value={side.playerFirstBasketCount} />
+
+      {/* Team FB */}
+      <Stat value={side.playerTeamFirstBasketCount} />
     </View>
   );
 }
 
-/* ======================================================
-   Single Stat Cell
-====================================================== */
 function Stat({ value }: { value: string | number }) {
   const { colors } = useTheme();
 
   return (
-    <View style={{ alignItems: "center", minWidth: 52 }}>
+    <View style={{ flex: 1, alignItems: "center" }}>
       <Text
         style={{
           fontSize: 13,

@@ -24,7 +24,7 @@ from routes.lineup_routes import router as lineups_router
 from routes.first_basket import router as first_basket_router
 from routes.teams import router as teams_router
 from routes.prop_analytics import router as prop_analytics_router
-
+from routes.players_routes import router as players_router
 # ==================================================
 # 🔴 ADDITION: player box stream imports
 # ==================================================
@@ -99,6 +99,7 @@ app.include_router(teams_router)
 app.include_router(player_box_router)
 app.include_router(player_stats_router)
 app.include_router(prop_analytics_router)
+app.include_router(players_router)
 
 # ==================================================
 # Startup hook (CONTROLLED BACKGROUND TASKS)

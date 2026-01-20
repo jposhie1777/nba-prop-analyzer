@@ -74,24 +74,26 @@ export function OverUnderButton({
 }
 
 const styles = StyleSheet.create({
-  btn: {
-    paddingVertical: 4,     // ⬅ smaller
+  container: {
+    minWidth: 84,
+    paddingVertical: 6,
     paddingHorizontal: 10,
-    borderRadius: 8,
-    minWidth: 64,           // ⬅ smaller
-    alignItems: "center",
+    borderRadius: 10,
     borderWidth: 1,
   },
-  side: {
-    fontSize: 10,           // ⬅ smaller
-    fontWeight: "700",
-  },
+  
   line: {
-    fontSize: 12,           // ⬅ smaller
-    fontWeight: "800",
+    fontSize: 12,
+    fontWeight: "600",
   },
+  
   odds: {
+    fontSize: 11,
+    opacity: 0.75,
+  },
+  
+  side: {
     fontSize: 10,
-    opacity: 0.85,
+    opacity: 0.6,
   },
 });

@@ -10,39 +10,7 @@ import { FirstBasketHeader } from "./FirstBasketHeader";
 import { PlayerStatRow } from "./PlayerStatRow";
 
 /* ======================================================
-   Shared Stats Header (shown ONCE)
-====================================================== */
-function StatsHeader() {
-  const { colors } = useTheme();
-
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        justifyContent: "space-between",
-        paddingHorizontal: 10,
-        marginBottom: 4,
-      }}
-    >
-      {["FB%", "Shot%", "FB", "Team FB"].map((label) => (
-        <Text
-          key={label}
-          style={{
-            fontSize: 11,
-            color: colors.text.muted,
-            minWidth: 52,
-            textAlign: "center",
-          }}
-        >
-          {label}
-        </Text>
-      ))}
-    </View>
-  );
-}
-
-/* ======================================================
-   Team Section
+   Team Section (stacked, compact)
 ====================================================== */
 function TeamSection({
   team,
@@ -53,22 +21,47 @@ function TeamSection({
 }) {
   const { colors } = useTheme();
 
+  if (!players.length) return null;
+
   return (
     <View style={{ marginTop: 14 }}>
-      {/* Team name */}
+      {/* Team label */}
       <Text
         style={{
           fontSize: 13,
           fontWeight: "700",
           color: colors.text.primary,
-          marginBottom: 6,
+          marginBottom: 4,
         }}
       >
         {team}
       </Text>
 
-      {/* Shared header */}
-      <StatsHeader />
+      {/* Column header (aligned with rows) */}
+      <View
+        style={{
+          flexDirection: "row",
+          paddingHorizontal: 10,
+          marginBottom: 4,
+        }}
+      >
+        {/* Player column spacer */}
+        <Text style={{ flex: 2 }} />
+
+        {["FB%", "Shot%", "FB", "Team FB"].map((label) => (
+          <Text
+            key={label}
+            style={{
+              flex: 1,
+              textAlign: "center",
+              fontSize: 11,
+              color: colors.text.muted,
+            }}
+          >
+            {label}
+          </Text>
+        ))}
+      </View>
 
       {/* Player rows */}
       {players.map((p, i) => (
@@ -103,7 +96,7 @@ export function FirstBasketMatchupCard({
     ? `https://a.espncdn.com/i/teamlogos/nba/500/${awayTeam.toLowerCase()}.png`
     : undefined;
 
-  // Split + sort players
+  // Split + sort players by team
   const homePlayers: FirstBasketSide[] = matchup.rows
     .map((r) => r.home)
     .filter(Boolean)
@@ -146,7 +139,7 @@ export function FirstBasketMatchupCard({
         }}
       />
 
-      {/* Teams (stacked) */}
+      {/* Teams stacked */}
       <TeamSection team={homeTeam} players={homePlayers} />
       <TeamSection team={awayTeam} players={awayPlayers} />
     </View>

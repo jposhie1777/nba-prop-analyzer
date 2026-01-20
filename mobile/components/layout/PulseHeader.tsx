@@ -1,4 +1,5 @@
 import { View, Text, Image, StyleSheet, Pressable } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "@/store/useTheme";
 import { useRouter } from "expo-router";
 import { useRef } from "react";
@@ -34,41 +35,47 @@ export function PulseHeader() {
   }
 
   return (
-    <Pressable onPress={handleDevTap}>
-      <View
-        style={[
-          styles.container,
-          {
-            backgroundColor: colors.surface.screen,
-            borderBottomColor: colors.border.subtle,
-          },
-        ]}
-      >
+    <SafeAreaView
+      edges={["top"]}
+      style={{ backgroundColor: colors.surface.screen }}
+    >
+      <Pressable onPress={handleDevTap}>
         <View
           style={[
-            styles.logoWrap,
-            { backgroundColor: colors.surface.card },
+            styles.container,
+            {
+              backgroundColor: colors.surface.screen,
+              borderBottomColor: colors.border.subtle,
+            },
           ]}
         >
-          <Image
-            source={require("@/assets/logo.png")}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-        </View>
+          <View
+            style={[
+              styles.logoWrap,
+              { backgroundColor: colors.surface.card },
+            ]}
+          >
+            <Image
+              source={require("@/assets/logo.png")}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+          </View>
 
-        <Text
-          style={[
-            styles.title,
-            { color: colors.text.primary },
-          ]}
-        >
-          Pulse Sports Analytics
-        </Text>
-      </View>
-    </Pressable>
+          <Text
+            style={[
+              styles.title,
+              { color: colors.text.primary },
+            ]}
+          >
+            Pulse Sports Analytics
+          </Text>
+        </View>
+      </Pressable>
+    </SafeAreaView>
   );
 }
+
 const styles = StyleSheet.create({
   container: {
     height: 64,

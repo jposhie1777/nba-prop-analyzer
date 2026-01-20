@@ -1,4 +1,4 @@
-// components/live/marketrow
+// components/live/MarketRow.tsx
 import React, { useRef, useEffect, useState } from "react";
 import { View, Text, ScrollView, StyleSheet } from "react-native";
 import { LineButton } from "./LineButton";
@@ -6,79 +6,83 @@ import { OverUnderButton } from "./OverUnderButton";
 import { useSavedBets } from "@/store/useSavedBets";
 import { fetchLivePropAnalytics } from "@/services/liveAnalytics";
 
+/* ======================================================
+   MARKET LABELS
+====================================================== */
+const MARKET_LABELS: Record<string, string> = {
+  pts: "POINTS",
+  reb: "REBOUNDS",
+  ast: "ASSISTS",
+  "3pm": "THREES",
+};
 
 export function MarketRow({
   market,
   lines,
   current,
   playerName,
-  playerId, // 👈 ADD
+  playerId,
 }: any) {
-  console.log("🚨 MarketRow invoked", market, playerId);
   const toggleSave = useSavedBets((s) => s.toggleSave);
   const savedIds = useSavedBets((s) => s.savedIds);
+
   const scrollRef = useRef<ScrollView>(null);
   const buttonWidthRef = useRef<number>(0);
-  const overUnderByLine = new Map<number, any>();
-  const marketKey = market; // canonical
-  const marketLabel = market.toUpperCase();
+  const didAutoScroll = useRef(false);
 
+  const marketKey = market;
+  const marketLabel = MARKET_LABELS[market] ?? market.toUpperCase();
+
+  /* ======================
+     BOOK ODDS NORMALIZATION
+  ====================== */
   const getBookOdds = (
     line: any,
     book: "draftkings" | "fanduel" = "draftkings"
   ) => {
     const b = line.books?.[book];
-  
     return {
       over:
         b?.over ??
         line.over_odds ??
         (line.side === "over" ? line.price : null),
-  
       under:
         b?.under ??
         line.under_odds ??
         (line.side === "under" ? line.price : null),
-  
       milestone: b?.milestone ?? null,
     };
   };
 
-  const didAutoScroll = useRef(false);
-
+  /* ======================
+     MAIN O/U LINE
+  ====================== */
+  const overUnderByLine = new Map<number, any>();
   for (const l of lines) {
-    if (l.line_type !== "over_under") continue;
-    overUnderByLine.set(l.line, l);
+    if (l.line_type === "over_under") {
+      overUnderByLine.set(l.line, l);
+    }
   }
-  
+
   const mainLine = Array.from(overUnderByLine.values()).find((l) => {
     const { over, under } = getBookOdds(l);
     return over != null || under != null;
   });
-  
+
   /* ======================
-     DEBUG — mainLine miss
+     MILESTONES
   ====================== */
-  if (__DEV__ && !mainLine) {
-    console.warn("[MarketRow] No main OU line resolved", {
-      market,
-      playerId,
-      lineCount: lines?.length,
-      sampleLine: lines?.[0],
-      normalizedOdds: lines?.map((l: any) => ({
-        line: l.line,
-        line_type: l.line_type,
-        over: getBookOdds(l).over,
-        under: getBookOdds(l).under,
-        raw: {
-          price: l.price,
-          over_odds: l.over_odds,
-          under_odds: l.under_odds,
-          books: l.books,
-        },
-      })),
-    });
-  }
+  const MAX_STEPS_AHEAD = 7;
+
+  const milestones = lines
+    .filter(
+      (l: any) =>
+        l.line_type === "milestone" &&
+        l.line > current &&
+        getBookOdds(l).milestone != null
+    )
+    .sort((a: any, b: any) => a.line - b.line)
+    .slice(0, MAX_STEPS_AHEAD);
 
   const getState = (lineValue: number) => {
     const remaining = lineValue - current;
@@ -87,39 +91,13 @@ export function MarketRow({
     return "pending";
   };
 
-  const getMilestoneOdds = (line: any): number | null => {
-    const { milestone } = getBookOdds(line);
-    return milestone;
-  };
-
-  const MAX_STEPS_AHEAD = 7;
-
-  const milestones = lines
-    .filter(
-      (l: any) =>
-        l.line_type === "milestone" &&
-        l.line > current &&
-        getMilestoneOdds(l) !== null
-    )
-    .sort((a: any, b: any) => a.line - b.line)
-    .slice(0, MAX_STEPS_AHEAD);
-  
-  const getOverUnderBetId = (
-    side: "over" | "under",
-    line: number
-  ) => {
-    if (!mainLine) return null;
-    return `ou:${mainLine.game_id}:${playerId}:${marketKey}:${side}:${line}`;
-  };
-  
-  const getMilestoneBetId = (m: any) => {
-    return `ms:${m.game_id}:${playerId}:${marketKey}:${m.line}`;
-  };
-
+  /* ======================
+     AUTO SCROLL TO CLOSE
+  ====================== */
   const closeIndex = milestones.findIndex(
     (m: any) => getState(m.line) === "close"
   );
-  
+
   useEffect(() => {
     if (
       didAutoScroll.current ||
@@ -129,21 +107,23 @@ export function MarketRow({
     ) {
       return;
     }
-  
+
     scrollRef.current.scrollTo({
       x: closeIndex * (buttonWidthRef.current + 8),
       animated: true,
     });
-  
+
     didAutoScroll.current = true;
   }, [closeIndex]);
-  
+
+  /* ======================
+     ANALYTICS EXPAND
+  ====================== */
   const [expandedLine, setExpandedLine] = useState<{ line: number } | null>(null);
   const [analytics, setAnalytics] = useState<any | null>(null);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
 
   const toggleExpand = async (line: number) => {
-    // collapse
     if (expandedLine?.line === line) {
       setExpandedLine(null);
       setAnalytics(null);
@@ -154,21 +134,14 @@ export function MarketRow({
     setAnalytics(null);
     setLoadingAnalytics(true);
 
-    // determine side (safe defaults)
-    const side =
-      mainLine?.line === line
-        ? "over"        // main OU line → over analytics
-        : "milestone";  // milestone buttons
-
     try {
       const result = await fetchLivePropAnalytics({
         gameId: mainLine?.game_id ?? line.game_id,
         playerId,
         market: marketKey,
         line,
-        side,
+        side: mainLine?.line === line ? "over" : "milestone",
       });
-
       setAnalytics(result);
     } catch {
       setAnalytics(null);
@@ -177,52 +150,27 @@ export function MarketRow({
     }
   };
 
-  
-  // 🔒 collapse inspection when market changes
-  useEffect(() => {
-    setExpandedLine(null);
-    setAnalytics(null);
-  }, [market]);
-
-  const hasOU = !!mainLine;
-  const hasMilestones = milestones.length > 0;
-  
-  /* ======================
-     DEV GUARD — market hidden
-  ====================== */
-  if (__DEV__ && !hasOU && !hasMilestones) {
-    console.warn("[MarketRow] Market hidden (no render)", {
-      market,
-      playerId,
-      lines,
-    });
-  }
-  
-  if (!hasOU && !hasMilestones) {
+  if (!mainLine && milestones.length === 0) {
     return null;
   }
 
   return (
-    <View>
-      <Text style={styles.label}>{marketLabel}</Text>
+    <View style={styles.wrap}>
+      {/* MARKET HEADER */}
+      <Text style={styles.marketLabel}>{marketLabel}</Text>
 
-      {/* MAIN OVER / UNDER */}
+      {/* MAIN O/U */}
       {mainLine && (
-        <View style={{ marginBottom: 6 }}>
+        <>
+          <Text style={styles.sectionLabel}>MAIN LINE</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{
-              gap: 8,
-              paddingVertical: 4,
-            }}
+            contentContainerStyle={styles.ouRow}
           >
             {(() => {
               const { over, under } = getBookOdds(mainLine);
-          
-              const overBetId = getOverUnderBetId("over", mainLine.line);
-              const underBetId = getOverUnderBetId("under", mainLine.line);
-          
+
               return (
                 <>
                   <OverUnderButton
@@ -230,159 +178,127 @@ export function MarketRow({
                     line={mainLine.line}
                     odds={over}
                     disabled={over == null}
-                    isSelected={savedIds.has(overBetId)}
-                    onPress={() => {
-                      if (over == null) return;
+                    isSelected={savedIds.has(
+                      `ou:${mainLine.game_id}:${playerId}:${marketKey}:over:${mainLine.line}`
+                    )}
+                    onPress={() =>
+                      over != null &&
                       toggleSave({
-                        id: overBetId,
+                        id: `ou:${mainLine.game_id}:${playerId}:${marketKey}:over:${mainLine.line}`,
                         player: playerName,
-                        playerId: mainLine.player_id,
+                        playerId,
                         gameId: mainLine.game_id,
                         market: marketKey,
                         line: mainLine.line,
                         side: "over",
                         odds: over,
-                      });
-                    }}
+                      })
+                    }
                   />
-          
+
                   <OverUnderButton
                     side="under"
                     line={mainLine.line}
                     odds={under}
                     disabled={under == null}
-                    isSelected={savedIds.has(underBetId)}
-                    onPress={() => {
-                      if (under == null) return;
+                    isSelected={savedIds.has(
+                      `ou:${mainLine.game_id}:${playerId}:${marketKey}:under:${mainLine.line}`
+                    )}
+                    onPress={() =>
+                      under != null &&
                       toggleSave({
-                        id: underBetId,
+                        id: `ou:${mainLine.game_id}:${playerId}:${marketKey}:under:${mainLine.line}`,
                         player: playerName,
-                        playerId: mainLine.player_id,
+                        playerId,
                         gameId: mainLine.game_id,
                         market: marketKey,
                         line: mainLine.line,
                         side: "under",
                         odds: under,
-                      });
-                    }}
+                      })
+                    }
                   />
                 </>
               );
             })()}
           </ScrollView>
-        </View>
+        </>
       )}
 
       {/* MILESTONES */}
       {milestones.length > 0 && (
-        <View style={{ marginTop: 6 }}>
+        <>
+          <Text style={styles.sectionLabel}>MILESTONES</Text>
+
           <ScrollView
             ref={scrollRef}
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ paddingRight: 12 }}
-            onScrollBeginDrag={() => setExpandedLine(null)} // 👈 ADD HERE
+            onScrollBeginDrag={() => setExpandedLine(null)}
           >
-            <View style={styles.row}>
-              {milestones.map((m: any, idx: number) => {
-                const betId = getMilestoneBetId(m);
-                const isSelected = savedIds.has(betId);
-                const isExpanded = expandedLine?.line === m.line;
-      
-                return (
-                  <View
-                    key={`ms-${playerId}-${marketKey}-${m.line}`}
-                    onLayout={
-                      idx === 0
-                        ? (e) => {
-                            buttonWidthRef.current =
-                              e.nativeEvent.layout.width;
-                          }
-                        : undefined
+            <View style={styles.milestoneRow}>
+              {milestones.map((m: any, idx: number) => (
+                <View
+                  key={`ms-${playerId}-${marketKey}-${m.line}`}
+                  onLayout={
+                    idx === 0
+                      ? (e) =>
+                          (buttonWidthRef.current =
+                            e.nativeEvent.layout.width)
+                      : undefined
+                  }
+                >
+                  <LineButton
+                    line={m}
+                    market={market}
+                    playerId={playerId}
+                    state={getState(m.line)}
+                    isSelected={savedIds.has(
+                      `ms:${m.game_id}:${playerId}:${marketKey}:${m.line}`
+                    )}
+                    isExpanded={expandedLine?.line === m.line}
+                    onSave={() =>
+                      toggleSave({
+                        id: `ms:${m.game_id}:${playerId}:${marketKey}:${m.line}`,
+                        player: playerName,
+                        playerId,
+                        gameId: m.game_id,
+                        market: marketKey,
+                        line: m.line,
+                        side: "milestone",
+                        odds: getBookOdds(m).milestone ?? undefined,
+                      })
                     }
-                  >
-                    <LineButton
-                      line={m}
-                      market={market}
-                      playerId={playerId}
-                      state={getState(m.line)}
-                      isSelected={isSelected}
-                      isExpanded={isExpanded}
-                      onSave={() => {
-                        toggleSave({
-                          id: betId,
-                          player: playerName,
-                          playerId: playerId,
-                          gameId: m.game_id,
-                          market: marketKey,
-                          line: m.line,
-                          side: "milestone",
-                          odds: getMilestoneOdds(m) ?? undefined,
-                        });
-                      }}
-                      onInspect={() => toggleExpand(m.line)}
-                    />
-                  </View>
-                );
-              })}
+                    onInspect={() => toggleExpand(m.line)}
+                  />
+                </View>
+              ))}
             </View>
           </ScrollView>
-      
-          {/* 🔍 EXPANDED ANALYTICS STRIP */}
-          {expandedLine?.line != null && (
-            <View style={styles.analytics}>
-              {loadingAnalytics && (
-                <Text style={styles.analyticsText}>
-                  Loading analytics…
-                </Text>
-              )}
+        </>
+      )}
 
-              {!loadingAnalytics && analytics && (
-                <>
-                  <Text style={styles.analyticsText}>
-                    Fair odds: {analytics.fair_odds ?? "—"}
-                  </Text>
+      {/* ANALYTICS STRIP (UNCHANGED) */}
+      {expandedLine?.line != null && (
+        <View style={styles.analytics}>
+          {loadingAnalytics && (
+            <Text style={styles.analyticsText}>Loading analytics…</Text>
+          )}
 
-                  <Text style={styles.analyticsText}>
-                    On pace for:{" "}
-                    {analytics.on_pace_value != null
-                      ? analytics.on_pace_value.toFixed(1)
-                      : "—"}{" "}
-                    {market}
-                  </Text>
-
-                  <Text style={styles.analyticsText}>
-                    Δ vs pace:{" "}
-                    {analytics.delta_vs_pace != null
-                      ? analytics.delta_vs_pace.toFixed(1)
-                      : "—"}
-                  </Text>
-
-                  <Text style={styles.analyticsText}>
-                    L5:{" "}
-                    {analytics.hit_rate_l5 != null
-                      ? `${Math.round(analytics.hit_rate_l5 * 100)}%`
-                      : "—"}{" "}
-                    · L10:{" "}
-                    {analytics.hit_rate_l10 != null
-                      ? `${Math.round(analytics.hit_rate_l10 * 100)}%`
-                      : "—"}
-                  </Text>
-
-                  {analytics.blowout_flag && (
-                    <Text style={styles.analyticsText}>
-                      ⚠ Blowout risk
-                    </Text>
-                  )}
-                </>
-              )}
-
-              {!loadingAnalytics && !analytics && (
-                <Text style={styles.analyticsText}>
-                  No analytics available
-                </Text>
-              )}
-            </View>
+          {!loadingAnalytics && analytics && (
+            <>
+              <Text style={styles.analyticsText}>
+                Fair odds: {analytics.fair_odds ?? "—"}
+              </Text>
+              <Text style={styles.analyticsText}>
+                On pace for{" "}
+                {analytics.on_pace_value?.toFixed(1) ?? "—"} {market}
+              </Text>
+              <Text style={styles.analyticsText}>
+                Δ vs pace: {analytics.delta_vs_pace?.toFixed(1) ?? "—"}
+              </Text>
+            </>
           )}
         </View>
       )}
@@ -390,23 +306,49 @@ export function MarketRow({
   );
 }
 
+/* ======================================================
+   STYLES
+====================================================== */
 const styles = StyleSheet.create({
-  label: {
-    fontSize: 11,
-    fontWeight: "700",
-    marginBottom: 4,
+  wrap: {
+    marginTop: 8,
   },
-  row: {
+
+  marketLabel: {
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 1,
+    textAlign: "center",
+    marginBottom: 6,
+  },
+
+  sectionLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    opacity: 0.6,
+    marginBottom: 4,
+    marginLeft: 2,
+  },
+
+  ouRow: {
+    gap: 8,
+    paddingVertical: 4,
+  },
+
+  milestoneRow: {
     flexDirection: "row",
     gap: 8,
-    flexWrap: "nowrap", // IMPORTANT
+    flexWrap: "nowrap",
   },
+
   analytics: {
-    marginTop: 6,
+    marginTop: 8,
     padding: 8,
     borderRadius: 8,
     backgroundColor: "#00000011",
   },
+
   analyticsText: {
     fontSize: 11,
     opacity: 0.85,

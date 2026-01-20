@@ -61,6 +61,30 @@ export function MarketRow({
     const { over, under } = getBookOdds(l);
     return over != null || under != null;
   });
+  
+  /* ======================
+     DEBUG — mainLine miss
+  ====================== */
+  if (__DEV__ && !mainLine) {
+    console.warn("[MarketRow] No main OU line resolved", {
+      market,
+      playerId,
+      lineCount: lines?.length,
+      sampleLine: lines?.[0],
+      normalizedOdds: lines?.map((l: any) => ({
+        line: l.line,
+        line_type: l.line_type,
+        over: getBookOdds(l).over,
+        under: getBookOdds(l).under,
+        raw: {
+          price: l.price,
+          over_odds: l.over_odds,
+          under_odds: l.under_odds,
+          books: l.books,
+        },
+      })),
+    });
+  }
 
   const getState = (lineValue: number) => {
     const remaining = lineValue - current;
@@ -168,6 +192,17 @@ export function MarketRow({
 
   const hasOU = !!mainLine;
   const hasMilestones = milestones.length > 0;
+  
+  /* ======================
+     DEV GUARD — market hidden
+  ====================== */
+  if (__DEV__ && !hasOU && !hasMilestones) {
+    console.warn("[MarketRow] Market hidden (no render)", {
+      market,
+      playerId,
+      lines,
+    });
+  }
   
   if (!hasOU && !hasMilestones) {
     return null;

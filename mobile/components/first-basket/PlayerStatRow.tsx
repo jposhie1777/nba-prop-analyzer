@@ -21,7 +21,7 @@ export function PlayerStatRow({
         borderRadius: 12,
         backgroundColor: highlight
           ? colors.accent.primary + "22" // 13% opacity
-          : "transparent"
+          : "transparent",
         marginBottom: 6,
       }}
     >

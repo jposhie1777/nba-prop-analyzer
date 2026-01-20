@@ -71,7 +71,7 @@ USING (
       SAFE_CAST(JSON_VALUE(m, '$.odds.yes') AS INT64) AS milestone_odds
     
     FROM `graphite-flare-477419-h7.nba_live.live_player_prop_odds_raw`,
-    UNNEST(JSON_QUERY_ARRAY(payload, '$.markets')) AS m
+    UNNEST(JSON_QUERY_ARRAY(payload, '$.items')) AS m
     
     WHERE JSON_VALUE(m, '$.market') IN (
       'points',

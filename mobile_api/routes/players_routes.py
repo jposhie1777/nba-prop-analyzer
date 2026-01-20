@@ -1,17 +1,13 @@
 from fastapi import APIRouter
+from typing import Dict, Any
 from google.cloud import bigquery
-from typing import List, Dict, Any
-import os
+
+from lib.bq import get_bq_client  # 👈 USE YOUR EXISTING HELPER
 
 router = APIRouter(prefix="/players", tags=["players"])
 
-PROJECT_ID = os.getenv("GCP_PROJECT")
-BQ_DATASET = "nba_goat_data"
+DATASET = "nba_goat_data"
 TABLE = "v_player_season_mega"
-
-
-def get_bq_client():
-    return bigquery.Client(project=PROJECT_ID)
 
 
 @router.get("/season-mega")
@@ -25,7 +21,7 @@ def get_player_season_mega(limit: int = 500) -> Dict[str, Any]:
 
     query = f"""
     SELECT *
-    FROM `{PROJECT_ID}.{BQ_DATASET}.{TABLE}`
+    FROM `{DATASET}.{TABLE}`
     LIMIT @limit
     """
 
@@ -33,9 +29,7 @@ def get_player_season_mega(limit: int = 500) -> Dict[str, Any]:
         query,
         job_config=bigquery.QueryJobConfig(
             query_parameters=[
-                bigquery.ScalarQueryParameter(
-                    "limit", "INT64", limit
-                )
+                bigquery.ScalarQueryParameter("limit", "INT64", limit)
             ]
         ),
     )
@@ -45,5 +39,5 @@ def get_player_season_mega(limit: int = 500) -> Dict[str, Any]:
     return {
         "rows": rows,
         "count": len(rows),
-        "source": TABLE,
+        "source": f"{DATASET}.{TABLE}",
     }

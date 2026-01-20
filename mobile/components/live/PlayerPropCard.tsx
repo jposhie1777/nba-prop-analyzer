@@ -50,13 +50,27 @@ export function PlayerPropCard({
         {/* MARKETS */}
         {Object.entries(player.markets).map(
           ([market, marketData]: any) => {
+        
+            // 🔍 DEBUG — market keys reaching PlayerPropCard
+            if (__DEV__) {
+              console.log(
+                "🧪 PlayerPropCard market loop",
+                {
+                  playerId: player.player_id,
+                  market,
+                  hasLines: !!marketData?.lines,
+                  lineCount: marketData?.lines?.length,
+                }
+              );
+            }
+        
             const currentByMarket: Record<string, number> = {
               pts: current.pts,
               ast: current.ast,
               reb: current.reb,
               "3pm": current.fg3m ?? 0,
             };
-
+        
             const currentValue = currentByMarket[market];
 
             // 🚨 Safety guard — backend contract violation

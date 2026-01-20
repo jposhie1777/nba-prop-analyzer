@@ -98,16 +98,26 @@ export function LiveGameCard({ game, players }: Props) {
             continue;
         }
       
-        // 🔑 find main over/under line
         const mainLine = marketData.lines.find(
           (l: any) => l.line_type === "over_under"
         );
-      
-        if (!mainLine) continue;
-      
-        // ❌ remove dead lines
-        if (current >= mainLine.line) continue;
-      
+        
+        const milestones = marketData.lines.filter(
+          (l: any) =>
+            l.line_type === "milestone" &&
+            l.line > current
+        );
+        
+        // Drop market only if nothing actionable exists
+        if (!mainLine && milestones.length === 0) continue;
+        
+        // For non-ladder markets, keep original behavior
+        if (normalizedMarket !== "3PM") {
+          if (mainLine && current >= mainLine.line && milestones.length === 0) {
+            continue;
+          }
+        }
+        
         validMarkets[market] = marketData;
       }
   

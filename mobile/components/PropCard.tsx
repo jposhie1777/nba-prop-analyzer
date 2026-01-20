@@ -174,7 +174,10 @@ export default function PropCard(props: PropCardProps) {
     scrollRef,
   } = props;
 
-  const meta = STAT_META[market as keyof typeof STAT_META];
+  const normalizedMarket =
+    market.toLowerCase() as keyof typeof STAT_META;
+  
+  const meta = STAT_META[normalizedMarket];
   const hitPct = Math.round(((props.hit_rate_l10 ?? 0) as number) * 100);
   
   /* =========================

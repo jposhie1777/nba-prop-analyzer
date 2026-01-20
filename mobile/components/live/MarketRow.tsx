@@ -8,6 +8,7 @@ import { fetchLivePropAnalytics } from "@/services/liveAnalytics";
 
 
 export function MarketRow({
+  console.log("🚨 MarketRow invoked", market, playerId);
   market,
   lines,
   current,

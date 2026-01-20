@@ -29,25 +29,29 @@ export function MarketRow({
     sampleLine: lines?.[0],
   });
 
+  const getBookOdds = (
+    line: any,
+    book: "draftkings" | "fanduel" = "draftkings"
+  ) => {
+    const b = line.books?.[book];
+    return {
+      over: b?.over ?? null,
+      under: b?.under ?? null,
+      milestone: b?.milestone ?? null,
+    };
+  };
+
   const didAutoScroll = useRef(false);
 
   for (const l of lines) {
     if (l.line_type !== "over_under") continue;
-  
-    const existing = overUnderByLine.get(l.line);
-    if (
-      !existing ||
-      new Date(l.snapshot_ts).getTime() >
-        new Date(existing.snapshot_ts).getTime()
-    ) {
-      overUnderByLine.set(l.line, l);
-    }
+    overUnderByLine.set(l.line, l);
   }
   
-  const mainLine = Array.from(overUnderByLine.values())
-    .find(
-      (l) => l.over_odds != null || l.under_odds != null
-    );
+  const mainLine = Array.from(overUnderByLine.values()).find((l) => {
+    const { over, under } = getBookOdds(l);
+    return over != null || under != null;
+  });
 
   const getState = (lineValue: number) => {
     const remaining = lineValue - current;
@@ -57,13 +61,8 @@ export function MarketRow({
   };
 
   const getMilestoneOdds = (line: any): number | null => {
-    const raw =
-      line.price ??
-      line.over_odds ??
-      line.books?.draftkings?.milestone;
-  
-    if (raw === null || raw === undefined) return null;
-    return Number(raw);
+    const { milestone } = getBookOdds(line);
+    return milestone;
   };
 
   const MAX_STEPS_AHEAD = 7;
@@ -136,7 +135,7 @@ export function MarketRow({
 
     try {
       const result = await fetchLivePropAnalytics({
-        gameId: mainLine?.game_id,
+        gameId: mainLine?.game_id ?? m.game_id,
         playerId,
         market: marketKey,
         line,
@@ -168,40 +167,42 @@ export function MarketRow({
         <View style={{ marginBottom: 6 }}>
           <View style={{ flexDirection: "row", gap: 10 }}>
             {(() => {
+              const { over, under } = getBookOdds(mainLine);
+            
               const overBetId = getOverUnderBetId("over", mainLine.line);
               const underBetId = getOverUnderBetId("under", mainLine.line);
-      
+            
               return (
                 <>
                   <OverUnderButton
                     side="over"
                     line={mainLine.line}
-                    odds={mainLine.over_odds}
-                    disabled={mainLine.over_odds == null}
+                    odds={over}
+                    disabled={over == null}
                     isSelected={savedIds.has(overBetId)}
                     onPress={() => {
-                      if (mainLine.over_odds == null) return;
+                      if (over == null) return;
                       toggleSave({
                         id: overBetId,
-                        player: playerName, // 👈 ADD
+                        player: playerName,
                         playerId: mainLine.player_id,
                         gameId: mainLine.game_id,
                         market: marketKey,
                         line: mainLine.line,
                         side: "over",
-                        odds: mainLine.over_odds,
+                        odds: over,
                       });
                     }}
                   />
-      
+            
                   <OverUnderButton
                     side="under"
                     line={mainLine.line}
-                    odds={mainLine.under_odds}
-                    disabled={mainLine.under_odds == null}
+                    odds={under}
+                    disabled={under == null}
                     isSelected={savedIds.has(underBetId)}
                     onPress={() => {
-                      if (mainLine.under_odds == null) return;
+                      if (under == null) return;
                       toggleSave({
                         id: underBetId,
                         player: playerName,
@@ -210,7 +211,7 @@ export function MarketRow({
                         market: marketKey,
                         line: mainLine.line,
                         side: "under",
-                        odds: mainLine.under_odds,
+                        odds: under,
                       });
                     }}
                   />

@@ -173,10 +173,6 @@ export default function HomeScreen() {
         offset,
       });
   
-      if (__DEV__ && offset === 0) {
-        console.log("📦 FIRST PAGE SAMPLE", res.props[0]);
-      }
-  
       const normalized: UIProp[] = res.props.map((p) => ({
         ...p,
         id: `${p.player}-${p.market}-${p.line}`,
@@ -219,18 +215,6 @@ export default function HomeScreen() {
     setLoading(true);
     loadMoreProps();
   }, [loadMoreProps]);
-  
-  /* ---------------------------
-     DEBUG LOG (SAFE)
-  --------------------------- */
-  useEffect(() => {
-    if (!props.length) return;
-  
-    console.log(
-      "Bobby Portis rows:",
-      props.filter((p) => p.player === "Bobby Portis")
-    );
-  }, [props]);
 
   // ---------------------------
   // DERIVE MARKETS

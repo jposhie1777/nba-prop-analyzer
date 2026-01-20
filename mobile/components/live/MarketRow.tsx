@@ -22,13 +22,6 @@ export function MarketRow({
   const marketKey = market; // canonical
   const marketLabel = market.toUpperCase();
 
-  console.log("MarketRow", {
-    market,
-    marketKey,
-    lineCount: lines?.length,
-    sampleLine: lines?.[0],
-  });
-
   const getBookOdds = (
     line: any,
     book: "draftkings" | "fanduel" = "draftkings"

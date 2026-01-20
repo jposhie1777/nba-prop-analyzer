@@ -31,20 +31,26 @@ export function PlayerPropCard({
           },
         ]}
       >
-        {/* HEADER */}
-        <View style={styles.header}>
-          <Text
-            style={[
-              styles.name,
-              { color: colors.text.primary },
-            ]}
-          >
-            {name}
-          </Text>
-
-          <Text style={{ color: colors.text.muted, fontSize: 12 }}>
-            {minutes} min · PTS {current.pts} · REB {current.reb} · AST {current.ast}
-          </Text>
+        <View style={styles.headerRow}>
+          {/* HEADSHOT */}
+          <Image
+            source={{ uri: player.player_image_url }}
+            style={styles.headshot}
+          />
+        
+          {/* CENTER TEXT */}
+          <View style={styles.headerCenter}>
+            <Text style={styles.name}>{name}</Text>
+            <Text style={styles.subline}>
+              {minutes} min · PTS {current.pts} · REB {current.reb} · AST {current.ast}
+            </Text>
+          </View>
+        
+          {/* TEAM LOGO */}
+          <Image
+            source={{ uri: TEAM_LOGOS[player.team_abbr] }}
+            style={styles.teamLogo}
+          />
         </View>
 
         {/* MARKETS */}
@@ -106,6 +112,42 @@ const styles = StyleSheet.create({
   wrapper: {
     flexDirection: "row",
     marginBottom: 14,
+  },
+
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  
+  headerCenter: {
+    flex: 1,
+    alignItems: "center",
+  },
+  
+  headshot: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  
+  teamLogo: {
+    width: 28,
+    height: 28,
+    resizeMode: "contain",
+  },
+  
+  name: {
+    fontSize: 16,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  
+  subline: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.text.muted,
+    textAlign: "center",
   },
 
   accent: {

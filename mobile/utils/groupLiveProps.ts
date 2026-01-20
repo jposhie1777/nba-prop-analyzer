@@ -39,6 +39,12 @@ export function groupLiveProps(
   const grouped: GroupedLiveProps = {};
 
   for (const p of props) {
+  
+    // 🔎 DEBUG — raw markets entering grouper
+    if (__DEV__ && p.market === "3pm") {
+      console.log("🧨 groupLiveProps saw 3pm", p);
+    }
+  
     const {
       player_id,
       market,
@@ -49,7 +55,7 @@ export function groupLiveProps(
       under,
       milestone,
     } = p;
-  
+    
     // 🔧 NORMALIZE MARKET TYPE
     // Treat 3PM as over/under, not milestone
     const normalizedMarketType =

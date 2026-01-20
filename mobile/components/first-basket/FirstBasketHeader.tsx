@@ -11,6 +11,9 @@ type Props = {
   awayWinPct: number;
 };
 
+const fmtPct = (n?: number, digits = 1) =>
+  n == null ? "—" : (n * 100).toFixed(digits);
+
 export function FirstBasketHeader({
   homeTeam,
   awayTeam,
@@ -21,9 +24,14 @@ export function FirstBasketHeader({
 }: Props) {
   const { colors } = useTheme();
 
+  const homeEdge = homeWinPct > awayWinPct;
+  const awayEdge = awayWinPct > homeWinPct;
+
   return (
     <View style={{ marginBottom: 12 }}>
-      {/* Top Row */}
+      {/* ======================
+          Matchup Row
+      ====================== */}
       <View
         style={{
           flexDirection: "row",
@@ -55,7 +63,9 @@ export function FirstBasketHeader({
         />
       </View>
 
-      {/* Tip Win Row */}
+      {/* ======================
+          Tip Win Row
+      ====================== */}
       <Text
         style={{
           marginTop: 4,
@@ -65,12 +75,26 @@ export function FirstBasketHeader({
         }}
       >
         Tip Win:{" "}
-        <Text style={{ color: colors.accent.primary, fontWeight: "600" }}>
-          {homeTeam} {homeWinPct}%
+        <Text
+          style={{
+            color: homeEdge
+              ? colors.accent.primary
+              : colors.text.secondary,
+            fontWeight: homeEdge ? "600" : "400",
+          }}
+        >
+          {homeTeam} {fmtPct(homeWinPct)}%
         </Text>
         {" · "}
-        <Text style={{ color: colors.text.secondary }}>
-          {awayTeam} {awayWinPct}%
+        <Text
+          style={{
+            color: awayEdge
+              ? colors.accent.primary
+              : colors.text.secondary,
+            fontWeight: awayEdge ? "600" : "400",
+          }}
+        >
+          {awayTeam} {fmtPct(awayWinPct)}%
         </Text>
       </Text>
     </View>

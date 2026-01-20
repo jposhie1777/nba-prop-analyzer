@@ -19,25 +19,43 @@ export function useLivePlayerProps(gameId?: number) {
       try {
         const data = await fetchLivePlayerProps(gameId);
     
-        // 🔍 DEBUG #1 — API response shape
-        console.log(
-          "[useLivePlayerProps] fetched",
-          gameId,
-          {
-            count: data?.props?.length,
-            sample: data?.props?.slice(0, 3),
-          }
+       import murmurhash from "murmurhash";
+
+        /* 🔍 DEBUG — API response shape (SAFE) */
+        if (__DEV__) {
+          console.log("[useLivePlayerProps] fetched", gameId, {
+            count: data?.props?.length ?? 0,
+            sample: data?.props
+              ?.slice(0, 3)
+              .map(p => `${p.player_id}:${p.market}:${p.line}`),
+          });
+        }
+        
+        /* ======================================================
+           CHANGE DETECTION (NO MASSIVE STRINGIFY)
+        ====================================================== */
+        
+        const payloadHash = murmurhash.v3(
+          JSON.stringify(
+            data.props.map(p => [
+              p.player_id,
+              p.market,
+              p.line,
+              p.book,
+              p.snapshot_ts ?? p.ingested_at,
+              p.odds?.yes,
+              p.odds?.over,
+              p.odds?.under,
+            ])
+          )
         );
-    
-        const payloadStr = JSON.stringify(data.props);
-    
+        
         // ⛔️ no-op update guard
-        if (payloadStr === lastPayloadRef.current) {
-          console.log("[useLivePlayerProps] payload unchanged, skipping update");
+        if (payloadHash === lastPayloadRef.current) {
           return;
         }
-    
-        lastPayloadRef.current = payloadStr;
+        
+        lastPayloadRef.current = payloadHash;
     
         if (mounted) {
           setLoading(true);

@@ -8,13 +8,13 @@ import { fetchLivePropAnalytics } from "@/services/liveAnalytics";
 
 
 export function MarketRow({
-  console.log("🚨 MarketRow invoked", market, playerId);
   market,
   lines,
   current,
   playerName,
   playerId, // 👈 ADD
 }: any) {
+  console.log("🚨 MarketRow invoked", market, playerId);
   const toggleSave = useSavedBets((s) => s.toggleSave);
   const savedIds = useSavedBets((s) => s.savedIds);
   const scrollRef = useRef<ScrollView>(null);

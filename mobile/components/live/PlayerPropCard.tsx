@@ -60,7 +60,7 @@ export function PlayerPropCard({
             const currentValue = currentByMarket[market];
 
             // 🚨 Safety guard — backend contract violation
-            if (currentValue == null) {
+            if (currentValue === undefined) {
               if (__DEV__) {
                 console.warn(
                   "[PlayerPropCard] Unknown market key",

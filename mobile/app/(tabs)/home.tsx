@@ -2,16 +2,39 @@ import { ScrollView, View, Text, StyleSheet, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "@/store/useTheme";
 
+/* ======================================================
+   Tile
+====================================================== */
 function Tile({ title, subtitle, onPress }: any) {
   const { colors } = useTheme();
+
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.tile, { borderColor: colors.border }]}
+      style={[
+        styles.tile,
+        {
+          backgroundColor: colors.surface.card,
+          borderColor: colors.border.subtle,
+        },
+      ]}
     >
-      <Text style={[styles.tileTitle, { color: colors.text }]}>{title}</Text>
+      <Text
+        style={[
+          styles.tileTitle,
+          { color: colors.text.primary },
+        ]}
+      >
+        {title}
+      </Text>
+
       {!!subtitle && (
-        <Text style={[styles.tileSub, { color: colors.mutedText }]}>
+        <Text
+          style={[
+            styles.tileSub,
+            { color: colors.text.muted },
+          ]}
+        >
           {subtitle}
         </Text>
       )}
@@ -19,23 +42,62 @@ function Tile({ title, subtitle, onPress }: any) {
   );
 }
 
+/* ======================================================
+   Home
+====================================================== */
 export default function Home() {
   const router = useRouter();
   const { colors } = useTheme();
 
   return (
     <ScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+      style={{
+        flex: 1,
+        backgroundColor: colors.surface.screen,
+      }}
+      contentContainerStyle={{
+        padding: 16,
+        paddingBottom: 40,
+      }}
     >
-      <Text style={[styles.h1, { color: colors.text }]}>Today</Text>
-      <View style={[styles.card, { borderColor: colors.border }]}>
-        <Text style={{ color: colors.mutedText }}>
+      {/* ===========================
+          Today
+      ============================ */}
+      <Text
+        style={[
+          styles.h1,
+          { color: colors.text.primary },
+        ]}
+      >
+        Today
+      </Text>
+
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.surface.card,
+            borderColor: colors.border.subtle,
+          },
+        ]}
+      >
+        <Text style={{ color: colors.text.muted }}>
           (Coming next) Brief overview of today’s NBA games.
         </Text>
       </View>
 
-      <Text style={[styles.h1, { color: colors.text, marginTop: 18 }]}>
+      {/* ===========================
+          Directory
+      ============================ */}
+      <Text
+        style={[
+          styles.h1,
+          {
+            color: colors.text.primary,
+            marginTop: 18,
+          },
+        ]}
+      >
         Directory
       </Text>
 
@@ -44,24 +106,40 @@ export default function Home() {
         subtitle="Lines, odds, confidence"
         onPress={() => router.push("/(tabs)/props")}
       />
+
       <Tile
         title="Live"
         subtitle="Live scores, odds, box"
         onPress={() => router.push("/(tabs)/live")}
       />
+
       <Tile
         title="First Basket"
         subtitle="Matchups + projections"
         onPress={() => router.push("/(tabs)/first-basket")}
       />
+
       <Tile
         title="Trend Chart"
         subtitle="Player / market trends"
         onPress={() => router.push("/(tabs)/trends")}
       />
-      <Text style={[styles.h1, { color: colors.text, marginTop: 24 }]}>
+
+      {/* ===========================
+          More
+      ============================ */}
+      <Text
+        style={[
+          styles.h1,
+          {
+            color: colors.text.primary,
+            marginTop: 24,
+          },
+        ]}
+      >
         More
       </Text>
+
       <Tile
         title="Lineups"
         subtitle="Projected & most common"
@@ -89,19 +167,36 @@ export default function Home() {
   );
 }
 
+/* ======================================================
+   Styles
+====================================================== */
 const styles = StyleSheet.create({
-  h1: { fontSize: 18, fontWeight: "800", marginBottom: 10 },
+  h1: {
+    fontSize: 18,
+    fontWeight: "800",
+    marginBottom: 10,
+  },
+
   card: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 12,
     padding: 14,
   },
+
   tile: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 12,
     padding: 14,
     marginTop: 10,
   },
-  tileTitle: { fontSize: 16, fontWeight: "800" },
-  tileSub: { marginTop: 4, fontSize: 12 },
+
+  tileTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+  },
+
+  tileSub: {
+    marginTop: 4,
+    fontSize: 12,
+  },
 });

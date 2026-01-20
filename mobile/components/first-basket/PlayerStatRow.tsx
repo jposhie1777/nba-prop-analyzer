@@ -20,8 +20,8 @@ export function PlayerStatRow({
         paddingHorizontal: 10,
         borderRadius: 12,
         backgroundColor: highlight
-          ? colors.accent.soft
-          : "transparent",
+          ? colors.accent.primary + "22" // 13% opacity
+          : "transparent"
         marginBottom: 6,
       }}
     >

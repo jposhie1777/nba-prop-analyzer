@@ -38,7 +38,6 @@ USING (
       market_type,
       line,
       book,
-
       ARRAY_AGG(
         STRUCT(
           snapshot_ts,
@@ -48,7 +47,7 @@ USING (
         )
         ORDER BY snapshot_ts DESC
         LIMIT 1
-      )[OFFSET(0)].*
+      )[OFFSET(0)] AS latest
     FROM (
       SELECT
         TIMESTAMP(snapshot_ts) AS snapshot_ts,
@@ -63,11 +62,11 @@ USING (
           WHEN 'three_pointers_made' THEN '3pm'
           WHEN 'threes' THEN '3pm'
           ELSE NULL
-        END AS market
+        END AS market,
 
         CASE
-          WHEN JSON_VALUE(i, '$.market_type') IS NOT NULL
-            THEN JSON_VALUE(i, '$.market_type')
+          WHEN JSON_VALUE(i, '$.market.type') IS NOT NULL
+            THEN JSON_VALUE(i, '$.market.type')
           WHEN JSON_VALUE(i, '$.market.odds') IS NOT NULL
             THEN 'milestone'
           WHEN JSON_VALUE(i, '$.market.over_odds') IS NOT NULL
@@ -102,7 +101,8 @@ USING (
       market_type,
       line,
       book
-  )
+  ),
+  UNNEST([latest]) AS latest
 ) S
 ON
   T.game_id     = S.game_id

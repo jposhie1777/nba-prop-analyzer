@@ -88,6 +88,12 @@ export function LiveGameCard({ game, players }: Props) {
           case "ASSISTS":
             current = meta.ast;
             break;
+          case "3PM":
+          case "3PTS":
+          case "THREES":
+            // fg3m is the correct live stat
+            current = (meta as any).fg3m ?? 0;
+            break;
           default:
             continue;
         }

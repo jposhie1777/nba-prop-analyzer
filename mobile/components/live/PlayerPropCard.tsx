@@ -2,7 +2,7 @@
 import { View, Text, StyleSheet, Image } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { MarketRow } from "./MarketRow";
-import { TEAM_LOGOS } from "@/constants/teamLogos";
+import { TEAM_LOGOS } from "@/utils/teamLogos";
 
 export function PlayerPropCard({
   player,

@@ -7,87 +7,36 @@ import type {
   FirstBasketSide,
 } from "@/hooks/useFirstBasketMatchups";
 import { FirstBasketHeader } from "./FirstBasketHeader";
+import { PlayerStatRow } from "./PlayerStatRow";
 
 /* ======================================================
-   Player Row (stacked, mobile-first)
+   Shared Stats Header (shown ONCE)
 ====================================================== */
-function FirstBasketPlayerRow({
-  side,
-  highlight,
-}: {
-  side: FirstBasketSide;
-  highlight?: boolean;
-}) {
+function StatsHeader() {
   const { colors } = useTheme();
-
-  const fbPct = (side.firstBasketPct * 100).toFixed(1);
-  const shotPct = (side.firstShotShare * 100).toFixed(0);
-
-  const teamShare =
-    side.playerTeamFirstBasketCount > 0
-      ? side.playerFirstBasketCount / side.playerTeamFirstBasketCount
-      : 0;
 
   return (
     <View
       style={{
-        paddingVertical: 8,
+        flexDirection: "row",
+        justifyContent: "space-between",
         paddingHorizontal: 10,
-        borderRadius: 12,
-        backgroundColor: highlight
-          ? colors.accent.soft
-          : "transparent",
-        marginBottom: 6,
+        marginBottom: 4,
       }}
     >
-      {/* Player name */}
-      <Text
-        numberOfLines={1}
-        style={{
-          fontSize: 15,
-          fontWeight: highlight ? "700" : "500",
-          color: colors.text.primary,
-        }}
-      >
-        {side.player}
-      </Text>
-
-      {/* Stats row */}
-      <View
-        style={{
-          flexDirection: "row",
-          gap: 14,
-          marginTop: 2,
-        }}
-      >
-        <Text style={{ fontSize: 12, color: colors.text.secondary }}>
-          {fbPct}% FB
-        </Text>
-
-        <Text style={{ fontSize: 12, color: colors.text.secondary }}>
-          {shotPct}% Shot
-        </Text>
-      </View>
-
-      {/* Team share bar */}
-      <View
-        style={{
-          height: 4,
-          backgroundColor: colors.border.subtle,
-          borderRadius: 2,
-          marginTop: 6,
-          overflow: "hidden",
-        }}
-      >
-        <View
+      {["FB%", "Shot%", "FB", "Team FB"].map((label) => (
+        <Text
+          key={label}
           style={{
-            height: "100%",
-            width: `${Math.min(teamShare * 100, 100)}%`,
-            backgroundColor: colors.accent.primary,
-            borderRadius: 2,
+            fontSize: 11,
+            color: colors.text.muted,
+            minWidth: 52,
+            textAlign: "center",
           }}
-        />
-      </View>
+        >
+          {label}
+        </Text>
+      ))}
     </View>
   );
 }
@@ -105,8 +54,8 @@ function TeamSection({
   const { colors } = useTheme();
 
   return (
-    <View style={{ marginTop: 12 }}>
-      {/* Team header */}
+    <View style={{ marginTop: 14 }}>
+      {/* Team name */}
       <Text
         style={{
           fontSize: 13,
@@ -118,8 +67,12 @@ function TeamSection({
         {team}
       </Text>
 
+      {/* Shared header */}
+      <StatsHeader />
+
+      {/* Player rows */}
       {players.map((p, i) => (
-        <FirstBasketPlayerRow
+        <PlayerStatRow
           key={p.player}
           side={p}
           highlight={i === 0}
@@ -150,7 +103,7 @@ export function FirstBasketMatchupCard({
     ? `https://a.espncdn.com/i/teamlogos/nba/500/${awayTeam.toLowerCase()}.png`
     : undefined;
 
-  // Flatten + split rows into teams
+  // Split + sort players
   const homePlayers: FirstBasketSide[] = matchup.rows
     .map((r) => r.home)
     .filter(Boolean)
@@ -174,7 +127,7 @@ export function FirstBasketMatchupCard({
         marginBottom: 12,
       }}
     >
-      {/* Header */}
+      {/* Matchup header */}
       <FirstBasketHeader
         homeTeam={homeTeam}
         awayTeam={awayTeam}
@@ -193,7 +146,7 @@ export function FirstBasketMatchupCard({
         }}
       />
 
-      {/* Teams stacked */}
+      {/* Teams (stacked) */}
       <TeamSection team={homeTeam} players={homePlayers} />
       <TeamSection team={awayTeam} players={awayPlayers} />
     </View>

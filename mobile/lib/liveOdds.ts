@@ -57,8 +57,6 @@ export async function fetchLivePlayerProps(gameId: number) {
   const res = await fetch(url);
   const text = await res.text();
 
-  console.log("🧨 RAW LIVE PROPS RESPONSE", text);
-
   if (!res.ok) {
     throw new Error(`Failed to fetch live player props: ${res.status}`);
   }

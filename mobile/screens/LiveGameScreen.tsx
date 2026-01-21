@@ -118,29 +118,39 @@ export default function LiveGamesScreen() {
   
       {/* 🧾 BETSLIP BAR */}
       {savedIds.size > 0 && (
-        <Pressable
-          onPress={() => setBetslipOpen(true)}
+        <View
+          pointerEvents="box-none"
           style={{
             position: "absolute",
-            bottom: 16,
-            left: 16,
-            right: 16,
-            backgroundColor: colors.accent.primary,
-            borderRadius: 16,
-            paddingVertical: 14,
+            bottom: 0,
+            left: 0,
+            right: 0,
             alignItems: "center",
           }}
         >
-          <Text
+          <Pressable
+            pointerEvents="auto"
+            onPress={() => setBetslipOpen(true)}
             style={{
-              color: colors.text.primary,
-              fontWeight: "800",
-              fontSize: 14,
+              marginBottom: 16,
+              width: "90%",
+              backgroundColor: colors.accent.primary,
+              borderRadius: 16,
+              paddingVertical: 14,
+              alignItems: "center",
             }}
           >
-            View Betslip ({savedIds.size})
-          </Text>
-        </Pressable>
+            <Text
+              style={{
+                color: colors.text.primary,
+                fontWeight: "800",
+                fontSize: 14,
+              }}
+            >
+              View Betslip ({savedIds.size})
+            </Text>
+          </Pressable>
+        </View>
       )}
 
       {/* 🧾 BETSLIP DRAWER */}

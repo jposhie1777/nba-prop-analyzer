@@ -4,6 +4,30 @@ import { useTheme } from "@/store/useTheme";
 import { useSavedBets } from "@/store/useSavedBets";
 import { SavedBet } from "@/store/useSavedBets";
 
+/* ============================
+   LABEL FORMATTER (ADJUSTMENT)
+============================ */
+
+function formatBetLabel(bet: SavedBet) {
+  // Game bets
+  if (bet.betType === "game") {
+    if (bet.side === "over") return `OVER ${bet.line}`;
+    if (bet.side === "under") return `UNDER ${bet.line}`;
+    return `${bet.side.toUpperCase()} ${bet.line}`;
+  }
+
+  // Player props
+  if (bet.side === "milestone") {
+    return `${bet.line}+`;
+  }
+
+  return `${bet.side.toUpperCase()} ${bet.line}`;
+}
+
+/* ============================
+   COMPONENT
+============================ */
+
 export function OddsButton({ bet }: { bet: SavedBet }) {
   const { colors } = useTheme();
   const toggleSave = useSavedBets((s) => s.toggleSave);
@@ -41,9 +65,7 @@ export function OddsButton({ bet }: { bet: SavedBet }) {
           },
         ]}
       >
-        {bet.betType === "game"
-          ? `${bet.side.toUpperCase()} ${bet.line}`
-          : `${bet.market} ${bet.line}`}
+        {formatBetLabel(bet)}
       </Text>
 
       <Text style={[styles.odds, { color: colors.text.muted }]}>
@@ -52,6 +74,10 @@ export function OddsButton({ bet }: { bet: SavedBet }) {
     </Pressable>
   );
 }
+
+/* ============================
+   STYLES (UNCHANGED)
+============================ */
 
 const styles = StyleSheet.create({
   btn: {

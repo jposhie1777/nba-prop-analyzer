@@ -1,6 +1,10 @@
 // services/adapters/gameOddsToBet.ts
 import { Bet } from "@/types/bet";
 
+/* ======================================================
+   GAME SPREAD
+====================================================== */
+
 export function adaptGameSpreadToBet({
   gameId,
   teamAbbr,
@@ -8,15 +12,27 @@ export function adaptGameSpreadToBet({
   line,
   odds,
   bookmaker,
-}: any): Bet {
+  side, // "home" | "away"
+}: {
+  gameId: string;
+  teamAbbr: string;
+  opponentAbbr: string;
+  line: number;
+  odds: number | null;
+  bookmaker: string;
+  side: "home" | "away";
+}): Bet {
   return {
-    id: `spread:${gameId}:${teamAbbr}:${line}:${bookmaker}`,
+    // 🔐 UNIQUE + COLLISION-SAFE
+    id: `game:${gameId}:spread:${side}:${teamAbbr}:${line}:${bookmaker}`,
 
+    betType: "game",
     type: "game_spread",
+
     gameId,
     bookmaker,
 
-    side: "home", // or away
+    side,
     line,
     odds,
 
@@ -30,18 +46,32 @@ export function adaptGameSpreadToBet({
   };
 }
 
+/* ======================================================
+   GAME TOTAL
+====================================================== */
+
 export function adaptGameTotalToBet({
   gameId,
   line,
   odds,
-  side,
+  side, // "over" | "under"
   bookmaker,
   teams,
-}: any): Bet {
+}: {
+  gameId: string;
+  line: number;
+  odds: number | null;
+  side: "over" | "under";
+  bookmaker: string;
+  teams: string;
+}): Bet {
   return {
-    id: `total:${gameId}:${side}:${line}:${bookmaker}`,
+    // 🔐 UNIQUE + COLLISION-SAFE
+    id: `game:${gameId}:total:${side}:${line}:${bookmaker}`,
 
+    betType: "game",
     type: "game_total",
+
     gameId,
     bookmaker,
 

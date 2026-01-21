@@ -1,8 +1,9 @@
 // components/live/PlayerPropCard.tsx
-import { View, Text, StyleSheet, Image } from "react-native";
+import { View, Text, StyleSheet, Image, Pressable } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { MarketRow } from "./MarketRow";
 import { TEAM_LOGOS } from "@/utils/teamLogos";
+import { openTrendChart } from "@/navigation/trendLinking";
 
 export function PlayerPropCard({
   player,
@@ -44,9 +45,20 @@ export function PlayerPropCard({
 
           {/* Name + Stats (CENTER) */}
           <View style={styles.headerCenter}>
-            <Text style={[styles.name, { color: colors.text.primary }]}>
-              {name}
-            </Text>
+            {/* PLAYER NAME (TREND LINK) */}
+            <Pressable
+              onPress={() => openTrendChart(name, "pts")}
+              hitSlop={8}
+            >
+              <Text
+                style={[
+                  styles.name,
+                  { color: colors.text.primary },
+                ]}
+              >
+                {name}
+              </Text>
+            </Pressable>
 
             <Text
               style={[
@@ -54,11 +66,11 @@ export function PlayerPropCard({
                 { color: colors.text.muted },
               ]}
             >
-              {minutes} min ·
-              {" "}PTS {current.pts} ·
-              {" "}REB {current.reb} ·
-              {" "}AST {current.ast} ·
-              {" "}3PM {current.fg3m ?? 0}
+              {minutes} min ·{" "}
+              PTS {current.pts} ·{" "}
+              REB {current.reb} ·{" "}
+              AST {current.ast} ·{" "}
+              3PM {current.fg3m ?? 0}
             </Text>
           </View>
 

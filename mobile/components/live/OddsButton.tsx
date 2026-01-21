@@ -1,34 +1,60 @@
 // components/live/OddsButton.tsx
-import { TouchableOpacity, Text, StyleSheet } from "react-native";
+import { Pressable, Text, StyleSheet } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { useBetslip } from "@/store/useBetslip";
 import { Bet } from "@/types/bet";
 
 export function OddsButton({ bet }: { bet: Bet }) {
   const { colors } = useTheme();
-  const addBet = useBetslip((s) => s.addBet);
+  const { bets, addBet, removeBet } = useBetslip();
 
   if (bet.odds == null) return null;
 
+  const isSelected = bets.some((b) => b.id === bet.id);
+
+  const handlePress = () => {
+    if (isSelected) {
+      removeBet(bet.id);
+    } else {
+      addBet(bet);
+    }
+  };
+
   return (
-    <TouchableOpacity
-      activeOpacity={0.7}
-      onPress={() => addBet(bet)}
-      style={[
+    <Pressable
+      onPress={handlePress}
+      style={({ pressed }) => [
         styles.btn,
         {
-          backgroundColor: colors.surface.card,
-          borderColor: colors.border.subtle,
+          backgroundColor: isSelected
+            ? colors.accent.primary + "22"
+            : pressed
+            ? colors.surface.subtle
+            : colors.surface.card,
+
+          borderColor: isSelected
+            ? colors.accent.primary
+            : colors.border.subtle,
         },
       ]}
     >
-      <Text style={[styles.label, { color: colors.text.primary }]}>
-        {bet.display.title}
+      <Text
+        style={[
+          styles.label,
+          {
+            color: isSelected
+              ? colors.accent.primary
+              : colors.text.primary,
+          },
+        ]}
+      >
+        {bet.display?.title ?? bet.label}
       </Text>
+
       <Text style={[styles.odds, { color: colors.text.muted }]}>
         {bet.odds > 0 ? `+${bet.odds}` : bet.odds}
       </Text>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
@@ -44,8 +70,10 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 11,
     fontWeight: "700",
+    textAlign: "center",
   },
   odds: {
     fontSize: 10,
+    marginTop: 2,
   },
 });

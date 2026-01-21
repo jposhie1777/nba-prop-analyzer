@@ -44,6 +44,8 @@ export function LiveGameCard({ game, players }: Props) {
       stl: number;
       blk: number;
       tov: number;
+      team_abbr?: string;
+      player_image_url?: string;
     }>();
   
     for (const p of players) {
@@ -53,18 +55,16 @@ export function LiveGameCard({ game, players }: Props) {
         reb: p.reb ?? 0,
         ast: p.ast ?? 0,
         fg3m: (p as any).fg3m ?? 0,
-      
-        // 🔑 ADD THESE TWO
-        team_abbr: p.team_abbr,
-        player_image_url: p.player_image_url,
-      
         stl: p.stl ?? 0,
         blk: p.blk ?? 0,
         tov: p.tov ?? 0,
+        team_abbr: p.team_abbr,
+        player_image_url: p.player_image_url,
       });
+    }
   
     return map;
-  }, [players]);
+  }, [players]); // ✅ THIS now matches the opening useMemo(
   
   const filteredGroupedProps = useMemo(() => {
     const out: Record<number, any> = {};

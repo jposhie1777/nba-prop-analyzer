@@ -438,6 +438,18 @@ def normalize_prop(p: dict, *, snapshot_ts: str) -> Optional[NormalizedProp]:
     market_type = market.get("type") or ""
     market_name = market.get("name") or market.get("title")  # not always present
     market_desc = market.get("description") or market.get("desc")
+    
+    # 🔎 TEMP DEBUG — window discovery
+    if vendor in ("fanduel", "draftkings"):
+        m = p.get("market") or {}
+        if m.get("name") or m.get("description"):
+            print({
+                "vendor": vendor,
+                "prop_type": raw_prop_type,
+                "market_type": m.get("type"),
+                "market_name": m.get("name"),
+                "market_desc": m.get("description"),
+            })
 
     # Window inference
     window = infer_market_window(raw_prop_type, market_type, market_name, market_desc)

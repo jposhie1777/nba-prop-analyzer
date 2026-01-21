@@ -1,5 +1,5 @@
 // components/live/OddsButton.tsx
-import { Pressable, Text, StyleSheet } from "react-native";
+import { TouchableOpacity, Text, StyleSheet } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { useBetslip } from "@/store/useBetslip";
 import { Bet } from "@/types/bet";
@@ -11,7 +11,8 @@ export function OddsButton({ bet }: { bet: Bet }) {
   if (bet.odds == null) return null;
 
   return (
-    <Pressable
+    <TouchableOpacity
+      activeOpacity={0.7}
       onPress={() => addBet(bet)}
       style={[
         styles.btn,
@@ -27,7 +28,7 @@ export function OddsButton({ bet }: { bet: Bet }) {
       <Text style={[styles.odds, { color: colors.text.muted }]}>
         {bet.odds > 0 ? `+${bet.odds}` : bet.odds}
       </Text>
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 

@@ -8,6 +8,8 @@ const config: ExpoConfig = {
   web: {
     bundler: "metro",
     output: "static",
+    name: "Pulse",
+    shortName: "Pulse",
   },
 
   extra: {

@@ -1,30 +1,26 @@
-// types/bet.ts
-export type BetType =
-  | "player_prop"
-  | "game_spread"
-  | "game_total"
-  | "game_moneyline";
-
-export type BetSource = "draftkings" | "fanduel";
+export type BetType = "player" | "game";
 
 export type Bet = {
-  id: string;                 // stable unique id
-  type: BetType;
+  id: string;
+  betType: BetType;
 
-  gameId: number;
-  bookmaker: BetSource;
+  // shared
+  odds: number | null;
+  bookmaker: string;
 
-  odds: number;               // -110, +120, etc
-  line?: number | null;       // spread / total
-  side: "over" | "under" | "home" | "away";
+  // display
+  label: string;
 
-  teamAbbr?: string;
-  opponentAbbr?: string;
+  // routing metadata
+  gameId?: string;
 
-  display: {
-    title: string;            // "CHI -8.5"
-    subtitle: string;         // "vs LAC • Spread"
-  };
+  // player-only
+  playerId?: number;
+  player?: string;
+  market?: string;
+  line?: number;
+  side?: string;
 
-  meta?: Record<string, any>; // future-proof (quarter, alt, etc)
+  // game-only
+  teams?: string;
 };

@@ -5,7 +5,7 @@ export function openTrendChart(
   market: string
 ) {
   router.push({
-    pathname: "/trend",
+    pathname: "/trend-chart",
     params: {
       player,
       market,

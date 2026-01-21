@@ -92,16 +92,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.05)", // or colors.border.subtle
   },
 
   logo: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
   },
 
   title: {
-    fontSize: 18,
-    fontWeight: "700",
-    letterSpacing: 0.3,
+    fontSize: 17,        // ⬇️ from 18
+    fontWeight: "600",  // ⬇️ from 700
+    letterSpacing: 0.2, // slightly tighter
   },
 });

@@ -49,7 +49,7 @@ export function PulseHeader() {
             },
           ]}
         >
-          {/* LOGO — PRIMARY ANCHOR */}
+          {/* LOGO — PRIMARY BRAND ANCHOR */}
           <View
             style={[
               styles.logoWrap,
@@ -66,25 +66,15 @@ export function PulseHeader() {
             />
           </View>
 
-          {/* TEXT — SECONDARY */}
-          <View style={styles.textWrap}>
-            <Text
-              style={[
-                styles.title,
-                { color: colors.text.primary },
-              ]}
-            >
-              Pulse
-            </Text>
-            <Text
-              style={[
-                styles.subtitle,
-                { color: colors.text.muted },
-              ]}
-            >
-              Sports Analytics
-            </Text>
-          </View>
+          {/* BRAND TEXT — SUPPORTING */}
+          <Text
+            style={[
+              styles.title,
+              { color: colors.text.primary },
+            ]}
+          >
+            Pulse Sports Analytics
+          </Text>
         </View>
       </Pressable>
     </SafeAreaView>
@@ -93,42 +83,30 @@ export function PulseHeader() {
 
 const styles = StyleSheet.create({
   container: {
-    height: 72, // ⬆️ more breathing room
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 12,
+    alignItems: "center", // 🔑 forces logo-first hierarchy
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
 
   logoWrap: {
-    width: 52,   // ⬆️ logo is now unmistakable
-    height: 52,
-    borderRadius: 14,
+    width: 64,          // 👈 unmistakable
+    height: 64,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
+    marginBottom: 6,
   },
 
   logo: {
-    width: 40,
-    height: 40,
-  },
-
-  textWrap: {
-    marginLeft: 12,
-    justifyContent: "center",
+    width: 48,
+    height: 48,
   },
 
   title: {
-    fontSize: 18,
-    fontWeight: "700",
+    fontSize: 14,       // 👈 supporting, not competing
+    fontWeight: "600",
     letterSpacing: 0.4,
-    lineHeight: 20,
-  },
-
-  subtitle: {
-    fontSize: 12,
-    marginTop: -2,
-    letterSpacing: 0.3,
   },
 });

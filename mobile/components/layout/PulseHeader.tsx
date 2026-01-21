@@ -49,14 +49,10 @@ export function PulseHeader() {
             },
           ]}
         >
-          {/* LOGO — PRIMARY BRAND ANCHOR */}
           <View
             style={[
               styles.logoWrap,
-              {
-                backgroundColor: colors.surface.card,
-                borderColor: colors.border.subtle,
-              },
+              { backgroundColor: colors.surface.card },
             ]}
           >
             <Image
@@ -66,7 +62,6 @@ export function PulseHeader() {
             />
           </View>
 
-          {/* BRAND TEXT — SUPPORTING */}
           <Text
             style={[
               styles.title,
@@ -83,30 +78,30 @@ export function PulseHeader() {
 
 const styles = StyleSheet.create({
   container: {
-    paddingTop: 10,
-    paddingBottom: 12,
-    alignItems: "center", // 🔑 forces logo-first hierarchy
+    height: 64,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
 
   logoWrap: {
-    width: 64,          // 👈 unmistakable
-    height: 64,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    marginBottom: 6,
+    marginRight: 12,
   },
 
   logo: {
-    width: 48,
-    height: 48,
+    width: 32,
+    height: 32,
   },
 
   title: {
-    fontSize: 14,       // 👈 supporting, not competing
-    fontWeight: "600",
-    letterSpacing: 0.4,
+    fontSize: 18,
+    fontWeight: "700",
+    letterSpacing: 0.3,
   },
 });

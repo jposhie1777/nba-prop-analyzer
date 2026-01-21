@@ -301,20 +301,22 @@ export function LiveGameCard({ game, players }: Props) {
       {/* -----------------------------
          🔽 PLAYER PROPS (COLLAPSIBLE)
       ----------------------------- */}
-      <Pressable
-        onPress={() => setShowPlayerProps((v) => !v)}
-        style={{ marginTop: 6 }}
-      >
-        <Text
-          style={{
-            color: colors.text.secondary,
-            fontSize: 12,
-            fontWeight: "600",
-          }}
+      <View style={{ marginTop: 6, alignSelf: "flex-start" }}>
+        <Pressable
+          onPress={() => setShowPlayerProps((v) => !v)}
+          hitSlop={8}
         >
-          Player Props {showPlayerProps ? "▾" : "▸"}
-        </Text>
-      </Pressable>
+          <Text
+            style={{
+              color: colors.text.secondary,
+              fontSize: 12,
+              fontWeight: "600",
+            }}
+          >
+            Player Props {showPlayerProps ? "▾" : "▸"}
+          </Text>
+        </Pressable>
+      </View>
       
       {showPlayerProps && (
         <LiveOdds

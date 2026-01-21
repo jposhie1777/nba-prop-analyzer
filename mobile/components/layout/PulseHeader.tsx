@@ -49,10 +49,14 @@ export function PulseHeader() {
             },
           ]}
         >
+          {/* LOGO — PRIMARY ANCHOR */}
           <View
             style={[
               styles.logoWrap,
-              { backgroundColor: colors.surface.card },
+              {
+                backgroundColor: colors.surface.card,
+                borderColor: colors.border.subtle,
+              },
             ]}
           >
             <Image
@@ -62,14 +66,25 @@ export function PulseHeader() {
             />
           </View>
 
-          <Text
-            style={[
-              styles.title,
-              { color: colors.text.primary },
-            ]}
-          >
-            Pulse Sports Analytics
-          </Text>
+          {/* TEXT — SECONDARY */}
+          <View style={styles.textWrap}>
+            <Text
+              style={[
+                styles.title,
+                { color: colors.text.primary },
+              ]}
+            >
+              Pulse
+            </Text>
+            <Text
+              style={[
+                styles.subtitle,
+                { color: colors.text.muted },
+              ]}
+            >
+              Sports Analytics
+            </Text>
+          </View>
         </View>
       </Pressable>
     </SafeAreaView>
@@ -78,7 +93,7 @@ export function PulseHeader() {
 
 const styles = StyleSheet.create({
   container: {
-    height: 64,
+    height: 72, // ⬆️ more breathing room
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
@@ -86,24 +101,34 @@ const styles = StyleSheet.create({
   },
 
   logoWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
+    width: 52,   // ⬆️ logo is now unmistakable
+    height: 52,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.05)", // or colors.border.subtle
   },
 
   logo: {
-    width: 36,
-    height: 36,
+    width: 40,
+    height: 40,
+  },
+
+  textWrap: {
+    marginLeft: 12,
+    justifyContent: "center",
   },
 
   title: {
-    fontSize: 17,        // ⬇️ from 18
-    fontWeight: "600",  // ⬇️ from 700
-    letterSpacing: 0.2, // slightly tighter
+    fontSize: 18,
+    fontWeight: "700",
+    letterSpacing: 0.4,
+    lineHeight: 20,
+  },
+
+  subtitle: {
+    fontSize: 12,
+    marginTop: -2,
+    letterSpacing: 0.3,
   },
 });

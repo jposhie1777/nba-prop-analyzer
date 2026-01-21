@@ -1,7 +1,7 @@
 // components/live/OddsButton.tsx
 import { Pressable, Text, StyleSheet } from "react-native";
 import { useTheme } from "@/store/useTheme";
-import { useBetslip } from "@/store/useBetslip";
+import { useSavedBets } from "@/store/useSavedBets";
 import { Bet } from "@/types/bet";
 
 export function OddsButton({ bet }: { bet: Bet }) {

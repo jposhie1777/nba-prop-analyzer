@@ -1,6 +1,6 @@
 import { View, Pressable, Text, StyleSheet } from "react-native";
 import { PlayerDropdown } from "@/components/PlayerDropdown";
-import { TREND_MARKETS } from "./trendMarkets";
+import { TREND_MARKETS } from "./TrendMarkets";
 import type { TrendWindow } from "./resolveTrendSeries";
 import { useTheme } from "@/store/useTheme";
 

@@ -1,6 +1,6 @@
 import { View, ActivityIndicator, Text, StyleSheet } from "react-native";
 import { useTheme } from "@/store/useTheme";
-import { PlayerSeasonMegaTable } from "@/components/tables/PlayerSeasonMegaTable";
+import { PlayerSeasonMegaTable } from "@/components/table/PlayerSeasonMegaTable";
 import { usePlayerSeasonMega } from "@/hooks/usePlayerSeasonMega";
 
 export default function PlayersMegaScreen() {

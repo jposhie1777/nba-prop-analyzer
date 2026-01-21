@@ -40,15 +40,16 @@ _TTL_SECONDS = 60
 # --------------------------------------------------
 # Core fetch function
 # --------------------------------------------------
+SUPPORTED_BOOKS = ("fanduel", "draftkings")
+
 def fetch_mobile_props(
     *,
     game_date: str,
-    min_hit_rate: float = 0.60,
     limit: int = 200,
     offset: int = 0,
 ) -> List[Dict]:
 
-    cache_key = f"{game_date}:{min_hit_rate}:{limit}:{offset}"
+    cache_key = f"{game_date}:{limit}:{offset}"
     now = time()
 
     if cache_key in _CACHE:
@@ -64,8 +65,11 @@ def fetch_mobile_props(
     LEFT JOIN `nba_goat_data.player_lookup` l
       ON l.player_name = p.player
     WHERE p.gameDate = @game_date
-      AND p.hit_rate_l10 >= @min_hit_rate
-    ORDER BY p.hit_rate_l10 DESC, p.edge_pct DESC
+      AND LOWER(p.book) IN UNNEST(@books)
+    ORDER BY
+      p.player,
+      p.market,
+      p.line
     LIMIT @limit
     OFFSET @offset
     """
@@ -76,7 +80,9 @@ def fetch_mobile_props(
         job_config=bigquery.QueryJobConfig(
             query_parameters=[
                 bigquery.ScalarQueryParameter("game_date", "DATE", game_date),
-                bigquery.ScalarQueryParameter("min_hit_rate", "FLOAT64", min_hit_rate),
+                bigquery.ArrayQueryParameter(
+                    "books", "STRING", list(SUPPORTED_BOOKS)
+                ),
                 bigquery.ScalarQueryParameter("limit", "INT64", limit),
                 bigquery.ScalarQueryParameter("offset", "INT64", offset),
             ]

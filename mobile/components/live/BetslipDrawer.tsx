@@ -1,11 +1,41 @@
 // components/live/BetslipDrawer.tsx
 import { View, Text, Pressable, StyleSheet, Animated } from "react-native";
-import { useEffect, useRef, useMemo } from "react";
+import { useEffect, useRef } from "react";
 import { useTheme } from "@/store/useTheme";
-import { useBetslip } from "@/store/useBetslip";
+import { useSavedBets, SavedBet } from "@/store/useSavedBets";
 import * as Clipboard from "expo-clipboard";
 
 const DRAWER_HEIGHT = 320;
+
+/* ============================
+   LABEL FORMATTERS (ADJUSTMENT)
+============================ */
+
+function formatBetTitle(bet: SavedBet) {
+  if (bet.betType === "player") {
+    return `${bet.player} · ${bet.market}`;
+  }
+  return bet.teams;
+}
+
+function formatBetSubline(bet: SavedBet) {
+  const odds =
+    bet.odds != null ? ` (${bet.odds > 0 ? "+" : ""}${bet.odds})` : "";
+
+  if (bet.betType === "game") {
+    return `${bet.side.toUpperCase()} ${bet.line}${odds} · ${bet.bookmaker}`;
+  }
+
+  if (bet.side === "milestone") {
+    return `${bet.line}+${odds} · ${bet.bookmaker}`;
+  }
+
+  return `${bet.side.toUpperCase()} ${bet.line}${odds} · ${bet.bookmaker}`;
+}
+
+/* ============================
+   COMPONENT
+============================ */
 
 export function BetslipDrawer({
   open,
@@ -15,7 +45,12 @@ export function BetslipDrawer({
   onClose: () => void;
 }) {
   const { colors } = useTheme();
-  const { bets, removeBet, clear } = useBetslip();
+  const betsMap = useSavedBets((s) => s.bets);
+  const removeBet = useSavedBets((s) => s.toggleSave);
+  const clearAll = useSavedBets((s) => s.clearAll);
+
+  const bets = Array.from(betsMap.values());
+  const betCount = bets.length;
 
   const translateY = useRef(
     new Animated.Value(DRAWER_HEIGHT)
@@ -29,22 +64,12 @@ export function BetslipDrawer({
     }).start();
   }, [open]);
 
-  const betCount = bets.length;
   if (betCount === 0) return null;
 
   const copyAll = async () => {
     const text = bets
-      .map((b) => {
-        const odds =
-          b.odds != null ? ` (${b.odds > 0 ? "+" : ""}${b.odds})` : "";
-
-        if (b.betType === "player") {
-          return `${b.player} · ${b.market} ${b.side?.toUpperCase()} ${b.line}${odds}`;
-        }
-
-        return `${b.teams} · ${b.label}${odds}`;
-      })
-      .join("\n");
+      .map((b) => `${formatBetTitle(b)}\n${formatBetSubline(b)}`)
+      .join("\n\n");
 
     await Clipboard.setStringAsync(text);
   };
@@ -88,9 +113,7 @@ export function BetslipDrawer({
                   { color: colors.text.primary },
                 ]}
               >
-                {bet.betType === "player"
-                  ? `${bet.player} · ${bet.market}`
-                  : bet.teams}
+                {formatBetTitle(bet)}
               </Text>
 
               <Text
@@ -99,17 +122,12 @@ export function BetslipDrawer({
                   { color: colors.text.muted },
                 ]}
               >
-                {bet.label}
-                {bet.odds != null
-                  ? ` (${bet.odds > 0 ? "+" : ""}${bet.odds})`
-                  : ""}
-                {" · "}
-                {bet.bookmaker}
+                {formatBetSubline(bet)}
               </Text>
             </View>
 
             <Pressable
-              onPress={() => removeBet(bet.id)}
+              onPress={() => removeBet(bet)}
               hitSlop={8}
             >
               <Text
@@ -149,7 +167,7 @@ export function BetslipDrawer({
           </Text>
         </Pressable>
 
-        <Pressable onPress={clear}>
+        <Pressable onPress={clearAll}>
           <Text
             style={{
               color: colors.accent.danger,
@@ -164,6 +182,10 @@ export function BetslipDrawer({
     </Animated.View>
   );
 }
+
+/* ============================
+   STYLES (UNCHANGED)
+============================ */
 
 const styles = StyleSheet.create({
   drawer: {

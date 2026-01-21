@@ -1,22 +1,18 @@
+// components/live/OddsButton.tsx
 import { Pressable, Text, StyleSheet } from "react-native";
 import { useTheme } from "@/store/useTheme";
+import { useBetslip } from "@/store/useBetslip";
+import { Bet } from "@/types/bet";
 
-export function OddsButton({
-  label,
-  odds,
-  onPress,
-}: {
-  label: string;
-  odds: number | null;
-  onPress?: () => void;
-}) {
+export function OddsButton({ bet }: { bet: Bet }) {
   const { colors } = useTheme();
+  const addBet = useBetslip((s) => s.addBet);
 
-  if (odds === null) return null;
+  if (bet.odds === null) return null;
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => addBet(bet)}
       style={[
         styles.btn,
         {
@@ -26,10 +22,10 @@ export function OddsButton({
       ]}
     >
       <Text style={[styles.label, { color: colors.text.primary }]}>
-        {label}
+        {bet.display.title}
       </Text>
       <Text style={[styles.odds, { color: colors.text.muted }]}>
-        {odds > 0 ? `+${odds}` : odds}
+        {bet.odds > 0 ? `+${bet.odds}` : bet.odds}
       </Text>
     </Pressable>
   );

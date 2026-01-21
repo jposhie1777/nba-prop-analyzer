@@ -1,5 +1,5 @@
 // services/adapters/gameOddsToBet.ts
-import { Bet } from "@/types/bet";
+import { SavedBet } from "@/store/useSavedBets";
 
 /* ======================================================
    GAME SPREAD
@@ -21,28 +21,22 @@ export function adaptGameSpreadToBet({
   odds: number | null;
   bookmaker: string;
   side: "home" | "away";
-}): Bet {
+}): SavedBet {
   return {
     // 🔐 UNIQUE + COLLISION-SAFE
     id: `game:${gameId}:spread:${side}:${teamAbbr}:${line}:${bookmaker}`,
 
     betType: "game",
-    type: "game_spread",
 
-    gameId,
+    gameId: Number(gameId),
     bookmaker,
+    odds: odds ?? undefined,
 
     side,
     line,
-    odds,
 
-    teamAbbr,
-    opponentAbbr,
-
-    display: {
-      title: `${teamAbbr} ${line}`,
-      subtitle: `${teamAbbr} vs ${opponentAbbr} • Spread`,
-    },
+    // 🆕 game-only display fields
+    teams: `${teamAbbr} vs ${opponentAbbr}`,
   };
 }
 
@@ -64,24 +58,20 @@ export function adaptGameTotalToBet({
   side: "over" | "under";
   bookmaker: string;
   teams: string;
-}): Bet {
+}): SavedBet {
   return {
     // 🔐 UNIQUE + COLLISION-SAFE
     id: `game:${gameId}:total:${side}:${line}:${bookmaker}`,
 
     betType: "game",
-    type: "game_total",
 
-    gameId,
+    gameId: Number(gameId),
     bookmaker,
+    odds: odds ?? undefined,
 
     side,
     line,
-    odds,
 
-    display: {
-      title: `${side === "over" ? "O" : "U"} ${line}`,
-      subtitle: `${teams} • Total`,
-    },
+    teams,
   };
 }

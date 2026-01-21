@@ -42,9 +42,13 @@ export function LiveOdds({
   
         return (
           <PlayerPropCard
-            key={player.player_id}
-            player={player}
-            name={playerNameById.get(player.player_id)}
+            key={player.player_id} // ✅ ADD THIS
+            player={{
+              ...player,
+              team_abbr: meta.team_abbr,
+              player_image_url: meta.player_image_url,
+            }}
+            name={playerNameById.get(player.player_id) ?? "Unknown"} // ✅ SAFE FALLBACK
             minutes={meta.minutes}
             current={meta}
           />

@@ -5,6 +5,8 @@ import { LineButton } from "./LineButton";
 import { OverUnderButton } from "./OverUnderButton";
 import { useSavedBets } from "@/store/useSavedBets";
 import { fetchLivePropAnalytics } from "@/services/liveAnalytics";
+import { openTrendChart } from "@/navigation/trendLinking";
+import { Pressable } from "react-native";
 
 /* ======================================================
    MARKET LABELS
@@ -14,6 +16,13 @@ const MARKET_LABELS: Record<string, string> = {
   reb: "REBOUNDS",
   ast: "ASSISTS",
   "3pm": "THREES",
+};
+
+const TREND_MARKET_MAP: Record<string, string> = {
+  pts: "pts",
+  reb: "reb",
+  ast: "ast",
+  "3pm": "fg3m",
 };
 
 export function MarketRow({
@@ -30,7 +39,8 @@ export function MarketRow({
   const buttonWidthRef = useRef<number>(0);
   const didAutoScroll = useRef(false);
 
-  const marketKey = market;
+  const marketKey =
+    TREND_MARKET_MAP[market] ?? market;
   const marketLabel = MARKET_LABELS[market] ?? market.toUpperCase();
 
   /* ======================
@@ -157,7 +167,16 @@ export function MarketRow({
   return (
     <View style={styles.wrap}>
       {/* MARKET HEADER */}
-      <Text style={styles.marketLabel}>{marketLabel}</Text>
+      <View style={styles.marketHeader}>
+        <Text style={styles.marketLabel}>{marketLabel}</Text>
+      
+        <Pressable
+          onPress={() => openTrendChart(playerName, marketKey)}
+          hitSlop={8}
+        >
+          <Text style={styles.trendLink}>TREND</Text>
+        </Pressable>
+      </View>
 
       {/* MAIN O/U */}
       {mainLine && (
@@ -352,5 +371,18 @@ const styles = StyleSheet.create({
   analyticsText: {
     fontSize: 11,
     opacity: 0.85,
+  },
+  marketHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
+  
+  trendLink: {
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.6,
+    opacity: 0.7,
   },
 });

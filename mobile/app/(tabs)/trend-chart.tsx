@@ -1,3 +1,4 @@
+// app/(tabs)/trend-chart.tsx
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { useMemo, useState } from "react";
 import { useTheme } from "@/store/useTheme";

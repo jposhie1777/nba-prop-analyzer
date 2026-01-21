@@ -45,11 +45,9 @@ SUPPORTED_BOOKS = ("fanduel", "draftkings")
 def fetch_mobile_props(
     *,
     game_date: str,
-    limit: int = 200,
-    offset: int = 0,
 ) -> List[Dict]:
 
-    cache_key = f"{game_date}:{limit}:{offset}"
+    cache_key = f"{game_date}"
     now = time()
 
     if cache_key in _CACHE:
@@ -65,13 +63,11 @@ def fetch_mobile_props(
     LEFT JOIN `nba_goat_data.player_lookup` l
       ON l.player_name = p.player
     WHERE p.gameDate = @game_date
-      AND LOWER(p.book) IN UNNEST(@books)
+      AND LOWER(p.book) IN ('fanduel', 'draftkings')
     ORDER BY
       p.player,
       p.market,
       p.line
-    LIMIT @limit
-    OFFSET @offset
     """
 
     client = get_bq_client()
@@ -80,11 +76,6 @@ def fetch_mobile_props(
         job_config=bigquery.QueryJobConfig(
             query_parameters=[
                 bigquery.ScalarQueryParameter("game_date", "DATE", game_date),
-                bigquery.ArrayQueryParameter(
-                    "books", "STRING", list(SUPPORTED_BOOKS)
-                ),
-                bigquery.ScalarQueryParameter("limit", "INT64", limit),
-                bigquery.ScalarQueryParameter("offset", "INT64", offset),
             ]
         ),
     )
@@ -92,6 +83,7 @@ def fetch_mobile_props(
     rows = [dict(row) for row in job.result()]
     _CACHE[cache_key] = (now, rows)
     return rows
+
 
 
 # ======================================================

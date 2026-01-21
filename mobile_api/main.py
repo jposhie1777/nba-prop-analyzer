@@ -221,21 +221,11 @@ def health():
 # Props endpoint (mobile default)
 # ==================================================
 @app.get("/props")
-def get_props(
-    game_date: str | None = None,
-    min_hit_rate: float = Query(0.60, ge=0.0, le=1.0),
-    limit: int = Query(200, ge=50, le=500),
-    offset: int = Query(0, ge=0),
-):
+def get_props(game_date: str | None = None):
     if game_date is None:
         game_date = datetime.now(NY_TZ).date().isoformat()
 
-    props = fetch_mobile_props(
-        game_date=game_date,
-        min_hit_rate=min_hit_rate,
-        limit=limit,
-        offset=offset,
-    )
+    props = fetch_mobile_props(game_date=game_date)
 
     return {
         "date": game_date,

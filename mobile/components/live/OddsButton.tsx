@@ -2,27 +2,20 @@
 import { Pressable, Text, StyleSheet } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { useSavedBets } from "@/store/useSavedBets";
-import { Bet } from "@/types/bet";
+import { SavedBet } from "@/store/useSavedBets";
 
-export function OddsButton({ bet }: { bet: Bet }) {
+export function OddsButton({ bet }: { bet: SavedBet }) {
   const { colors } = useTheme();
-  const { bets, addBet, removeBet } = useBetslip();
+  const toggleSave = useSavedBets((s) => s.toggleSave);
+  const savedIds = useSavedBets((s) => s.savedIds);
 
   if (bet.odds == null) return null;
 
-  const isSelected = bets.some((b) => b.id === bet.id);
-
-  const handlePress = () => {
-    if (isSelected) {
-      removeBet(bet.id);
-    } else {
-      addBet(bet);
-    }
-  };
+  const isSelected = savedIds.has(bet.id);
 
   return (
     <Pressable
-      onPress={handlePress}
+      onPress={() => toggleSave(bet)}
       style={({ pressed }) => [
         styles.btn,
         {
@@ -48,7 +41,9 @@ export function OddsButton({ bet }: { bet: Bet }) {
           },
         ]}
       >
-        {bet.display?.title ?? bet.label}
+        {bet.betType === "game"
+          ? `${bet.side.toUpperCase()} ${bet.line}`
+          : `${bet.market} ${bet.line}`}
       </Text>
 
       <Text style={[styles.odds, { color: colors.text.muted }]}>

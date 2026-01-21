@@ -1,4 +1,4 @@
-// utils/groupliveprops
+// utils/groupLiveProps
 import { LivePlayerProp } from "@/lib/liveOdds";
 
 /* ============================
@@ -39,12 +39,6 @@ export function groupLiveProps(
   const grouped: GroupedLiveProps = {};
 
   for (const p of props) {
-  
-    // 🔎 DEBUG — raw markets entering grouper
-    if (__DEV__ && p.market === "3pm") {
-      console.log("🧨 groupLiveProps saw 3pm", p);
-    }
-  
     const {
       player_id,
       market,
@@ -55,15 +49,15 @@ export function groupLiveProps(
       under,
       milestone,
     } = p;
-    
-    // 🔧 NORMALIZE MARKET TYPE
-    // Treat 3PM as over/under, not milestone
-    const normalizedMarketType =
-      market === "3pm" ? "over_under" : market_type;
 
-    // ---------------------------
-    // Init player
-    // ---------------------------
+    // 🔎 DEBUG — verify 3PM milestones arrive correctly
+    if (__DEV__ && market === "3pm") {
+      console.log("🧨 groupLiveProps saw 3pm", p);
+    }
+
+    /* ---------------------------
+       Init player
+    --------------------------- */
     if (!grouped[player_id]) {
       grouped[player_id] = {
         player_id,
@@ -73,9 +67,9 @@ export function groupLiveProps(
 
     const player = grouped[player_id];
 
-    // ---------------------------
-    // Init market
-    // ---------------------------
+    /* ---------------------------
+       Init market
+    --------------------------- */
     if (!player.markets[market]) {
       player.markets[market] = {
         lines: [],
@@ -84,27 +78,28 @@ export function groupLiveProps(
 
     const marketEntry = player.markets[market];
 
-    // ---------------------------
-    // Init or find line
-    // ---------------------------
+    /* ---------------------------
+       Init or find line
+       (DO NOT normalize market_type)
+    --------------------------- */
     let lineEntry = marketEntry.lines.find(
       (l) =>
         l.line === line &&
-        l.line_type === normalizedMarketType
+        l.line_type === market_type
     );
 
     if (!lineEntry) {
       lineEntry = {
         line,
-        line_type: normalizedMarketType,
+        line_type: market_type,
         books: {},
       };
       marketEntry.lines.push(lineEntry);
     }
 
-    // ---------------------------
-    // Assign book odds
-    // ---------------------------
+    /* ---------------------------
+       Assign book odds
+    --------------------------- */
     if (!lineEntry.books[book]) {
       lineEntry.books[book] = {
         over: null,
@@ -112,20 +107,20 @@ export function groupLiveProps(
         milestone: null,
       };
     }
-    
-    if (normalizedMarketType === "over_under") {
+
+    if (market_type === "over_under") {
       lineEntry.books[book].over = over ?? null;
       lineEntry.books[book].under = under ?? null;
     }
-    
-    if (normalizedMarketType === "milestone") {
+
+    if (market_type === "milestone") {
       lineEntry.books[book].milestone = milestone ?? null;
     }
   }
 
-  // ---------------------------
-  // Sort lines ascending (UX)
-  // ---------------------------
+  /* ---------------------------
+     Sort lines (UX)
+  --------------------------- */
   for (const player of Object.values(grouped)) {
     for (const market of Object.values(player.markets)) {
       market.lines.sort((a, b) => {
@@ -133,7 +128,7 @@ export function groupLiveProps(
         if (a.line_type !== b.line_type) {
           return a.line_type === "over_under" ? -1 : 1;
         }
-        // Then by line value
+        // Then ascending by line
         return a.line - b.line;
       });
     }

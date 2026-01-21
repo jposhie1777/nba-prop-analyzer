@@ -14,6 +14,10 @@ import { groupLiveProps } from "@/utils/groupLiveProps";
 import { useMemo, useState } from "react";
 import { useLiveGameOdds } from "@/hooks/useLiveGameOdds";
 import { OddsButton } from "./OddsButton";
+import {
+  adaptGameSpreadToBet,
+  adaptGameTotalToBet,
+} from "@/services/adapters/gameOddsToBet";
 
 type Props = {
   game: LiveGame;
@@ -213,10 +217,7 @@ export function LiveGameCard({ game, players }: Props) {
       {gameOdds?.length > 0 && (
         <View style={{ marginBottom: 10, gap: 6 }}>
           {gameOdds.map((o) => (
-            <View
-              key={o.book}
-              style={{ gap: 6 }}
-            >
+            <View key={o.book} style={{ gap: 6 }}>
               <Text
                 style={{
                   fontSize: 11,
@@ -228,24 +229,60 @@ export function LiveGameCard({ game, players }: Props) {
               </Text>
       
               <View style={{ flexDirection: "row", gap: 8 }}>
+                {/* Away Spread */}
                 {o.spread_away !== null && (
                   <OddsButton
-                    label={`${game.away.abbrev} ${o.spread_away}`}
-                    odds={o.spread_away_odds}
+                    bet={adaptGameSpreadToBet({
+                      gameId: game.gameId,
+                      teamAbbr: game.away.abbrev,
+                      opponentAbbr: game.home.abbrev,
+                      line: o.spread_away,
+                      odds: o.spread_away_odds,
+                      bookmaker: o.book,
+                      side: "away",
+                    })}
                   />
                 )}
       
+                {/* Home Spread */}
                 {o.spread_home !== null && (
                   <OddsButton
-                    label={`${game.home.abbrev} ${o.spread_home}`}
-                    odds={o.spread_home_odds}
+                    bet={adaptGameSpreadToBet({
+                      gameId: game.gameId,
+                      teamAbbr: game.home.abbrev,
+                      opponentAbbr: game.away.abbrev,
+                      line: o.spread_home,
+                      odds: o.spread_home_odds,
+                      bookmaker: o.book,
+                      side: "home",
+                    })}
                   />
                 )}
       
+                {/* Totals */}
                 {o.total !== null && (
                   <>
-                    <OddsButton label={`O ${o.total}`} odds={o.over} />
-                    <OddsButton label={`U ${o.total}`} odds={o.under} />
+                    <OddsButton
+                      bet={adaptGameTotalToBet({
+                        gameId: game.gameId,
+                        line: o.total,
+                        odds: o.over,
+                        side: "over",
+                        bookmaker: o.book,
+                        teams: `${game.away.abbrev} vs ${game.home.abbrev}`,
+                      })}
+                    />
+      
+                    <OddsButton
+                      bet={adaptGameTotalToBet({
+                        gameId: game.gameId,
+                        line: o.total,
+                        odds: o.under,
+                        side: "under",
+                        bookmaker: o.book,
+                        teams: `${game.away.abbrev} vs ${game.home.abbrev}`,
+                      })}
+                    />
                   </>
                 )}
               </View>

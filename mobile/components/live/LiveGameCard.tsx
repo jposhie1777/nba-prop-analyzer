@@ -52,12 +52,16 @@ export function LiveGameCard({ game, players }: Props) {
         pts: p.pts ?? 0,
         reb: p.reb ?? 0,
         ast: p.ast ?? 0,
-        fg3m: (p as any).fg3m ?? 0, // ✅ ADD THIS
+        fg3m: (p as any).fg3m ?? 0,
+      
+        // 🔑 ADD THESE TWO
+        team_abbr: p.team_abbr,
+        player_image_url: p.player_image_url,
+      
         stl: p.stl ?? 0,
         blk: p.blk ?? 0,
         tov: p.tov ?? 0,
       });
-    }
   
     return map;
   }, [players]);

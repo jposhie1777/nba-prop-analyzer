@@ -7,13 +7,24 @@ const BETS_STORAGE_KEY = "saved_props_bets_v1"; // 🆕 ADD
 // 🆕 ADD: richer bet model
 export type SavedBet = {
   id: string;
+  betType: "player" | "game";
+
+  // shared
   gameId: number;
-  playerId: number;
-  player: string;
-  market: string;
+  odds?: number;
+  bookmaker?: string;
+
+  // player-only
+  playerId?: number;
+  player?: string;
+  market?: string;
+
+  // game-only
+  teams?: string;
+
+  // shared display
   line: number;
   side: "over" | "under" | "milestone";
-  odds?: number;
 };
 
 type SavedBetsStore = {

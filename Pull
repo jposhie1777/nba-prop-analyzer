@@ -15,6 +15,16 @@ export BALLDONTLIE_API_KEY=61082ce1-607a-4404-b059-2365d7649102
 
 
 cd mobile_api
+
+export GCP_PROJECT=graphite-flare-477419-h7
+export BALDONTLIE_KEY=61082ce1-607a-4404-b059-2365d7649102
+export WRITE_MODE=DRY_RUN
+
+python ingest_player_props_master.py
+
+
+
+cd mobile_api
 source ..venv/bin/activate
 export GCP_PROJECT=graphite-flare-477419-h7
 export BALLDONTLIE_API_KEY=61082ce1-607a-4404-b059-2365d7649102

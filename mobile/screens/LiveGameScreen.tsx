@@ -107,7 +107,11 @@ export default function LiveGamesScreen() {
       <FlatList
         data={games}
         keyExtractor={(g) => g.gameId}
-        contentContainerStyle={{ paddingBottom: 120 }}
+        contentContainerStyle={{ paddingBottom: 140 }}
+      
+        // 🔑 THIS IS THE FIX
+        keyboardShouldPersistTaps="handled"
+      
         renderItem={({ item }) => (
           <LiveGameCard
             game={item}

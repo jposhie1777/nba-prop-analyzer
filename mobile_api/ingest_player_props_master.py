@@ -148,7 +148,7 @@ def http_get(base: str, path: str, params: Optional[dict] = None, *, max_retries
     url = f"{base}{path}"
     headers = {}
     if "api.balldontlie.io" in base:
-        headers["Authorization"] = API_KEY
+        headers["Authorization"] = f"Bearer {API_KEY}"
 
     last_err = None
     for attempt in range(max_retries):

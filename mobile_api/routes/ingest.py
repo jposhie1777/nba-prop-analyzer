@@ -22,6 +22,9 @@ def run_master_ingest(
     final_table: str | None = None,
     write_mode: str | None = None,
 ):
+    # 🚨 THIS is the correct place for the log
+    print("🚨🚨🚨 SCHEDULER HIT /ingest/player-props-master 🚨🚨🚨")
+
     try:
         # Inject overrides ONLY for this request
         if dataset:

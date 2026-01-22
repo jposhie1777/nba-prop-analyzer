@@ -27,7 +27,7 @@ from routes.prop_analytics import router as prop_analytics_router
 from routes.players_routes import router as players_router
 from routes.player_props_master import router as master_props_router
 from routes.ingest_player_props_master import router as ingest_master_router
-
+from routes.ingest import router as ingest_router
 
 
 # ==================================================
@@ -107,6 +107,8 @@ app.include_router(prop_analytics_router)
 app.include_router(players_router)
 app.include_router(master_props_router)
 app.include_router(ingest_master_router)
+app.include_router(router)
+
 
 # ==================================================
 # Startup hook (CONTROLLED BACKGROUND TASKS)

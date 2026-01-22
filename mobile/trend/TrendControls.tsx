@@ -1,4 +1,4 @@
-import { View, Pressable, Text, StyleSheet } from "react-native";
+import { View, Pressable, Text, StyleSheet, ScrollView } from "react-native";
 import { PlayerDropdown } from "@/components/PlayerDropdown";
 import { TREND_MARKETS } from "./TrendMarkets";
 import type { TrendWindow } from "./resolveTrendSeries";
@@ -33,6 +33,7 @@ export function TrendControls({
         onSelect={onPlayer}
       />
 
+      {/* MARKET SELECTOR */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -40,19 +41,20 @@ export function TrendControls({
       >
         {TREND_MARKETS.map((m) => {
           const active = m.key === market;
+      
           return (
             <Pressable
               key={m.key}
               onPress={() => onMarket(m.key)}
               style={[
                 styles.marketPill,
-                active && { backgroundColor: colors.surface.card },
+                active && { backgroundColor: colors.state.selected },
               ]}
             >
               <Text
                 style={[
                   styles.marketLabel,
-                  active && { color: colors.text.primary },
+                  active && { color: colors.state.active },
                 ]}
               >
                 {m.label}
@@ -60,7 +62,7 @@ export function TrendControls({
             </Pressable>
           );
         })}
-      </View>
+      </ScrollView>
 
       <View style={styles.windowRow}>
         {[5, 10, 20].map((n) => {

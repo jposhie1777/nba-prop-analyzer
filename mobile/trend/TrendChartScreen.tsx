@@ -53,11 +53,43 @@ export function TrendChartScreen({
         onWindow={setWindow}
       />
 
-      <View style={styles.chartCard}>
+      <View
+        style={[
+          styles.chartCard,
+          {
+            backgroundColor: colors.surface.cardSoft,
+            borderColor: colors.border.subtle,
+          },
+        ]}
+      >
+        {/* CHART TITLE / CONTEXT */}
+        <Text
+          style={{
+            fontSize: 13,
+            fontWeight: "800",
+            letterSpacing: 0.4,
+            color: colors.text.muted,
+            textAlign: "center",
+            marginBottom: 8,
+          }}
+        >
+          {market.toUpperCase()} · LAST {window}
+        </Text>
+      
+        {/* SPACING ANCHOR */}
+        <View style={{ height: 8 }} />
+      
+        {/* CHART */}
         {values.length ? (
           <TrendBarChart values={values} dates={dates} />
         ) : (
-          <Text style={{ color: colors.text.muted }}>
+          <Text
+            style={{
+              color: colors.text.muted,
+              textAlign: "center",
+              paddingVertical: 24,
+            }}
+          >
             Select a player to view trends
           </Text>
         )}
@@ -80,5 +112,8 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+  },
+  chartHeaderSpacer: {
+    height: 12,
   },
 });

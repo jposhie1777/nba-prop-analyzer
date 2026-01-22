@@ -107,7 +107,8 @@ app.include_router(prop_analytics_router)
 app.include_router(players_router)
 app.include_router(master_props_router)
 app.include_router(ingest_master_router)
-app.include_router(router)
+app.include_router(ingest_router)
+
 
 
 # ==================================================

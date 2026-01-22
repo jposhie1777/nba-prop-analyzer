@@ -1,5 +1,5 @@
 import { ScrollView } from "react-native";
-import { BarSparkline } from "@/components/BarSparkline";
+import { TrendBarSparkline } from "@/components/sparkline/TrendBarSparkline";
 
 type Props = {
   values: number[];
@@ -16,10 +16,9 @@ export function TrendBarChart({ values, dates }: Props) {
         paddingVertical: 8,
       }}
     >
-      <BarSparkline
+      <TrendBarSparkline
         data={values}
         dates={dates}
-        height={160}
       />
     </ScrollView>
   );

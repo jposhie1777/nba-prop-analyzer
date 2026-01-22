@@ -14,7 +14,7 @@ import { useTheme } from "@/store/useTheme";
 import textStyles from "../theme/text";
 import { BOOKMAKER_LOGOS } from "../utils/bookmakerLogos";
 import { Sparkline } from "./Sparkline";
-import { BarSparkline } from "./BarSparkline";
+import { MiniBarSparkline } from "@/components/sparkline/MiniBarSparkline";
 import { formatMarketLabel } from "@/utils/formatMarket";
 import { STAT_META } from "@/lib/stats";
 
@@ -574,10 +574,9 @@ return (
                       </>
                     )}
                   
-                    <BarSparkline
+                    <MiniBarSparkline
                       data={sparkline}
                       dates={dates}
-                      height={64}
                     />
                   </View>
             

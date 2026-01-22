@@ -67,11 +67,6 @@ DATASET = os.getenv("PROP_DATASET", "nba_live")
 TABLE_FINAL = os.getenv("PROP_TABLE_FINAL", "player_prop_odds_master")
 TABLE_STAGING = os.getenv("PROP_TABLE_STAGING", "player_prop_odds_master_staging")
 
-WRITE_MODE = os.getenv("WRITE_MODE", "DRY_RUN").upper().strip()
-# WRITE_MODE:
-# - DRY_RUN      -> no BQ writes, prints summary + samples
-# - STAGING_ONLY -> overwrite staging only
-# - SWAP         -> overwrite staging then CREATE OR REPLACE final from staging
 
 VENDORS = [v.strip().lower() for v in os.getenv("VENDORS", "fanduel,draftkings").split(",") if v.strip()]
 RATE_DELAY_SEC = float(os.getenv("RATE_DELAY_SEC", "0.25"))
@@ -513,6 +508,13 @@ def ingest_player_props_master(game_date: str) -> dict:
       - applies FanDuel correction
       - optionally writes to BQ (safe modes)
     """
+
+    # --------------------------------------------------
+    # Resolve WRITE_MODE AT RUNTIME (CRITICAL FIX)
+    # --------------------------------------------------
+    WRITE_MODE = os.getenv("WRITE_MODE", "DRY_RUN").upper().strip()
+    print("🧪 MASTER INGEST WRITE_MODE =", WRITE_MODE, flush=True)
+
     client = get_bq_client()
     snapshot_ts = now_iso()
 
@@ -532,7 +534,7 @@ def ingest_player_props_master(game_date: str) -> dict:
         try:
             props = fetch_player_props_for_game(int(gid))
         except Exception as e:
-            print(f"❌ props pull failed for game_id={gid}: {e}")
+            print(f"❌ props pull failed for game_id={gid}: {e}", flush=True)
             time.sleep(RATE_DELAY_SEC)
             continue
 
@@ -548,9 +550,9 @@ def ingest_player_props_master(game_date: str) -> dict:
 
         time.sleep(RATE_DELAY_SEC)
 
-    # -----------------------------
-    # DRY RUN summary
-    # -----------------------------
+    # --------------------------------------------------
+    # SUMMARY (ALWAYS LOGGED)
+    # --------------------------------------------------
     by_vendor: Dict[str, int] = {}
     by_window: Dict[str, int] = {}
     by_market: Dict[str, int] = {}
@@ -563,23 +565,22 @@ def ingest_player_props_master(game_date: str) -> dict:
     def topk(d: Dict[str, int], k: int = 12) -> List[Tuple[str, int]]:
         return sorted(d.items(), key=lambda x: x[1], reverse=True)[:k]
 
-    print("\n==================== MASTER PROP INGEST ====================")
-    print(f"date: {game_date}")
-    print(f"vendors: {VENDORS}")
-    print(f"games: {len(games)} | games_with_props: {games_with_props}")
-    print(f"raw_props_seen: {seen_props} | normalized_rows: {len(all_rows)}")
-    print(f"by_vendor: {by_vendor}")
-    print(f"by_window: {by_window}")
-    print(f"top_market_keys: {topk(by_market)}")
+    print("\n==================== MASTER PROP INGEST ====================", flush=True)
+    print(f"date: {game_date}", flush=True)
+    print(f"vendors: {VENDORS}", flush=True)
+    print(f"games: {len(games)} | games_with_props: {games_with_props}", flush=True)
+    print(f"raw_props_seen: {seen_props} | normalized_rows: {len(all_rows)}", flush=True)
+    print(f"by_vendor: {by_vendor}", flush=True)
+    print(f"by_window: {by_window}", flush=True)
+    print(f"top_market_keys: {topk(by_market)}", flush=True)
 
-    # Sample a few rows for sanity (esp window labeling)
     sample = all_rows[:8]
-    print("\nSAMPLE ROWS (first 8):")
-    print(json.dumps(sample, indent=2)[:2500])
+    print("\nSAMPLE ROWS (first 8):", flush=True)
+    print(json.dumps(sample, indent=2)[:2500], flush=True)
 
-    # -----------------------------
+    # --------------------------------------------------
     # WRITE MODES
-    # -----------------------------
+    # --------------------------------------------------
     if WRITE_MODE == "DRY_RUN":
         return {
             "status": "dry_run",
@@ -593,6 +594,7 @@ def ingest_player_props_master(game_date: str) -> dict:
         }
 
     if WRITE_MODE == "STAGING_ONLY":
+        print("✍️ WRITING TO STAGING TABLE", fqtn(TABLE_STAGING), flush=True)
         bq_overwrite_json(client, TABLE_STAGING, all_rows)
         return {
             "status": "staging_written",
@@ -602,6 +604,7 @@ def ingest_player_props_master(game_date: str) -> dict:
         }
 
     if WRITE_MODE == "SWAP":
+        print("🔁 SWAPPING STAGING → FINAL", flush=True)
         bq_overwrite_json(client, TABLE_STAGING, all_rows)
         bq_swap_from_staging(client, TABLE_FINAL, TABLE_STAGING)
         return {
@@ -611,8 +614,9 @@ def ingest_player_props_master(game_date: str) -> dict:
             "final_table": fqtn(TABLE_FINAL),
         }
 
-    raise ValueError(f"Invalid WRITE_MODE={WRITE_MODE}. Use DRY_RUN | STAGING_ONLY | SWAP.")
-
+    raise ValueError(
+        f"Invalid WRITE_MODE={WRITE_MODE}. Use DRY_RUN | STAGING_ONLY | SWAP."
+    )
 
 # -----------------------------
 # CLI ENTRYPOINT

@@ -392,8 +392,19 @@ class NormalizedProp:
 # BALLDONTLIE FETCHERS
 # -----------------------------
 def fetch_games_for_date(game_date: str) -> List[dict]:
-    payload = http_get(BALDONTLIE_V1, "/games", {"dates[]": game_date})
-    return payload.get("data", []) or []
+    try:
+        payload = http_get(
+            BALDONTLIE_V1,
+            "/games",
+            {"dates[]": game_date},
+        )
+        return payload.get("data", []) or []
+    except RuntimeError as e:
+        msg = str(e)
+        if "HTTP 500" in msg:
+            print(f"⚠️ BallDontLie v1 /games unstable for {game_date} — skipping ingest")
+            return []
+        raise
 
 def fetch_player_props_for_game(game_id: int) -> List[dict]:
     """

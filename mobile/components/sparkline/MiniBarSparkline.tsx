@@ -1,16 +1,22 @@
 // components/sparkline/MiniBarSparkline.tsx
 import { BaseBarSparkline } from "./BaseBarSparkline";
 
-export function MiniBarSparkline(props: any) {
+type Props = {
+  data?: number[];
+  dates?: string[];
+};
+
+export function MiniBarSparkline({ data, dates }: Props) {
   return (
     <BaseBarSparkline
-      {...props}
+      data={data}
+      dates={dates}
       height={48}
       barWidth={8}
       barGap={6}
       baselineHeight={32}
       showValues={false}
-      dateStep={0}
+      showDates={false}
     />
   );
 }

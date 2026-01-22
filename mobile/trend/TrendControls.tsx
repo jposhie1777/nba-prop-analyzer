@@ -33,7 +33,11 @@ export function TrendControls({
         onSelect={onPlayer}
       />
 
-      <View style={styles.marketRow}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.marketRow}
+      >
         {TREND_MARKETS.map((m) => {
           const active = m.key === market;
           return (

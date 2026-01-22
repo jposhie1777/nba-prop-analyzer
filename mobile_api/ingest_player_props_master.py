@@ -3,12 +3,31 @@
 PULSE / GOAT — MASTER PLAYER PROP INGEST (WINDOW-AWARE)
 ======================================================
 
+Goal:
+- Pull ALL available player props for ONLY FanDuel + DraftKings
+- Correctly classify market windows (FULL / H1 / Q1 / FIRST3MIN etc.)
+- Apply FanDuel-specific “market correction” so props don’t get mislabeled
+- SAFE rollout: default is DRY_RUN (no BigQuery writes)
+
+How to use:
+- Set env:
+  - BALDONTLIE_KEY=...
+  - GCP_PROJECT or GOOGLE_CLOUD_PROJECT (or PROJECT_ID)
+- Optional:
+  - PROP_DATASET=nba_live (or nba_goat_data)
+  - PROP_TABLE_FINAL=player_prop_odds_master
+  - PROP_TABLE_STAGING=player_prop_odds_master_staging
+  - WRITE_MODE=DRY_RUN | STAGING_ONLY | SWAP
+  - VENDORS=fanduel,draftkings
+  - GAME_DATE=YYYY-MM-DD  (otherwise today NY)
+
+Run:
+  python ingest_player_props_master.py
+
 Notes:
 - BallDontLie endpoints:
-  - props: v2 /odds/player_props  (single global pull)
-- This ingest intentionally DOES NOT call v1 /games
-- Only currently available props are ingested (props appear near game time)
-- Frontend filters by game_id
+  - games:    v1 /games
+  - props:    v2 /odds/player_props
 - If the API ever *requires* prop_types[] again, this script auto-falls back to a
   broad list (and you can extend it in FALLBACK_PROP_TYPES).
 """
@@ -30,6 +49,7 @@ from google.cloud import bigquery
 # -----------------------------
 # CONFIG
 # -----------------------------
+BALDONTLIE_V1 = "https://api.balldontlie.io/v1"
 BALDONTLIE_V2 = "https://api.balldontlie.io/v2"
 
 API_KEY = os.getenv("BALDONTLIE_KEY", "")
@@ -128,7 +148,7 @@ def http_get(base: str, path: str, params: Optional[dict] = None, *, max_retries
     url = f"{base}{path}"
     headers = {}
     if "api.balldontlie.io" in base:
-        headers["Authorization"] = f"Bearer {API_KEY}"
+        headers["Authorization"] = API_KEY
 
     last_err = None
     for attempt in range(max_retries):
@@ -371,35 +391,47 @@ class NormalizedProp:
 # -----------------------------
 # BALLDONTLIE FETCHERS
 # -----------------------------
-def fetch_all_player_props() -> List[dict]:
+def fetch_games_for_date(game_date: str) -> List[dict]:
+    payload = http_get(BALDONTLIE_V1, "/games", {"dates[]": game_date})
+    return payload.get("data", []) or []
+
+def fetch_player_props_for_game(game_id: int) -> List[dict]:
     """
-    Pull ALL currently available player props across all games
-    and all vendors.
+    Pull all props for one game for the selected vendors.
+
+    This tries the “no prop_types” call first (true ALL available).
+    If BDL returns an error that implies prop_types are required, we retry
+    with a broad fallback list.
     """
+    params: Dict[str, Any] = {"game_id": game_id}
+    for v in VENDORS:
+        params.setdefault("vendors[]", []).append(v)
+
+    # Attempt 1: all props
     try:
-        payload = http_get(
-            BALDONTLIE_V2,
-            "/odds/player_props",
-            params={},  # 👈 NO FILTERS
-        )
+        payload = http_get(BALDONTLIE_V2, "/odds/player_props", params)
         return payload.get("data", []) or []
-
     except RuntimeError as e:
-        msg = str(e)
-        if "HTTP 500" in msg:
-            print("⚠️ BallDontLie global props endpoint unstable (500)")
-            return []
+        msg = str(e).lower()
 
-        raise
+        # Attempt 2: fallback prop_types
+        needs_types = ("prop_types" in msg) or ("prop type" in msg and "required" in msg) or ("missing" in msg and "prop" in msg)
+        if not needs_types:
+            raise
+
+        params2 = dict(params)
+        params2["prop_types[]"] = FALLBACK_PROP_TYPES
+        payload2 = http_get(BALDONTLIE_V2, "/odds/player_props", params2)
+        return payload2.get("data", []) or []
+
 
 # -----------------------------
 # NORMALIZER
 # -----------------------------
 def normalize_prop(p: dict, *, snapshot_ts: str) -> Optional[NormalizedProp]:
     vendor = (p.get("vendor") or "").lower().strip()
-    if not vendor:
+    if vendor not in VENDORS:
         return None
-
 
     market = p.get("market") or {}
     raw_prop_type = p.get("prop_type") or ""
@@ -473,32 +505,48 @@ def normalize_prop(p: dict, *, snapshot_ts: str) -> Optional[NormalizedProp]:
 # -----------------------------
 def ingest_player_props_master(game_date: str) -> dict:
     """
-    Snapshot ingest:
-    - pulls ALL currently available player props (v2 only)
-    - filters vendors to fanduel + draftkings
-    - classifies windows (FULL / Q1 / FIRST3MIN / H1 ...)
-    - applies FanDuel correction
-    - optionally writes to BQ (safe modes)
+    Snapshot ingest for a date:
+      - pulls games (v1)
+      - pulls props per game (v2)
+      - filters vendors to fanduel + draftkings
+      - classifies windows (FULL / Q1 / FIRST3MIN / H1 ...)
+      - applies FanDuel correction
+      - optionally writes to BQ (safe modes)
     """
     client = get_bq_client()
     snapshot_ts = now_iso()
 
-    props = fetch_all_player_props()
-    if not props:
-        return {
-            "status": "no_props",
-            "date": game_date,
-            "rows": 0,
-        }
+    games = fetch_games_for_date(game_date)
+    if not games:
+        return {"status": "no_games", "date": game_date, "rows": 0}
 
     all_rows: List[dict] = []
-    seen_props = len(props)
+    games_with_props = 0
+    seen_props = 0
 
-    for p in props:
-        np = normalize_prop(p, snapshot_ts=snapshot_ts)
-        if not np:
+    for g in games:
+        gid = g.get("id")
+        if not gid:
             continue
-        all_rows.append(np.to_row())
+
+        try:
+            props = fetch_player_props_for_game(int(gid))
+        except Exception as e:
+            print(f"❌ props pull failed for game_id={gid}: {e}")
+            time.sleep(RATE_DELAY_SEC)
+            continue
+
+        seen_props += len(props)
+        if props:
+            games_with_props += 1
+
+        for p in props:
+            np = normalize_prop(p, snapshot_ts=snapshot_ts)
+            if not np:
+                continue
+            all_rows.append(np.to_row())
+
+        time.sleep(RATE_DELAY_SEC)
 
     # -----------------------------
     # DRY RUN summary
@@ -512,20 +560,22 @@ def ingest_player_props_master(game_date: str) -> dict:
         by_window[r["market_window"]] = by_window.get(r["market_window"], 0) + 1
         by_market[r["market_key"]] = by_market.get(r["market_key"], 0) + 1
 
-    def topk(d: Dict[str, int], k: int = 12):
+    def topk(d: Dict[str, int], k: int = 12) -> List[Tuple[str, int]]:
         return sorted(d.items(), key=lambda x: x[1], reverse=True)[:k]
 
     print("\n==================== MASTER PROP INGEST ====================")
     print(f"date: {game_date}")
     print(f"vendors: {VENDORS}")
-    print(f"raw_props_seen: {seen_props}")
-    print(f"normalized_rows: {len(all_rows)}")
+    print(f"games: {len(games)} | games_with_props: {games_with_props}")
+    print(f"raw_props_seen: {seen_props} | normalized_rows: {len(all_rows)}")
     print(f"by_vendor: {by_vendor}")
     print(f"by_window: {by_window}")
     print(f"top_market_keys: {topk(by_market)}")
 
+    # Sample a few rows for sanity (esp window labeling)
+    sample = all_rows[:8]
     print("\nSAMPLE ROWS (first 8):")
-    print(json.dumps(all_rows[:8], indent=2)[:2500])
+    print(json.dumps(sample, indent=2)[:2500])
 
     # -----------------------------
     # WRITE MODES
@@ -534,6 +584,8 @@ def ingest_player_props_master(game_date: str) -> dict:
         return {
             "status": "dry_run",
             "date": game_date,
+            "games": len(games),
+            "games_with_props": games_with_props,
             "raw_props_seen": seen_props,
             "rows": len(all_rows),
             "by_vendor": by_vendor,
@@ -559,7 +611,7 @@ def ingest_player_props_master(game_date: str) -> dict:
             "final_table": fqtn(TABLE_FINAL),
         }
 
-    raise ValueError(f"Invalid WRITE_MODE={WRITE_MODE}")
+    raise ValueError(f"Invalid WRITE_MODE={WRITE_MODE}. Use DRY_RUN | STAGING_ONLY | SWAP.")
 
 
 # -----------------------------

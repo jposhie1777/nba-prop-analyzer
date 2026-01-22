@@ -4,12 +4,12 @@ cd mobile_api
 
 gcloud run deploy pulse-mobile-api \
   --source . \
-  --region us-central1 \
-  --set-env-vars \
-BALLDONTLIE_API_KEY=61082ce1-607a-4404-b059-2365d7649102,\
-ENABLE_LIVE_INGEST=true,\
-ENABLE_PLAYER_STATS_INGEST=true,\
-WRITE_MODE=SWAP
+    --region us-central1 \
+      --set-env-vars \
+      BALLDONTLIE_API_KEY=61082ce1-607a-4404-b059-2365d7649102,\
+      ENABLE_LIVE_INGEST=true,\
+      ENABLE_PLAYER_STATS_INGEST=true
+
 
 
 

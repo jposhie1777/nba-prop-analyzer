@@ -1,13 +1,16 @@
 from fastapi import APIRouter, Query
 from google.cloud import bigquery
 from typing import List, Optional
+from bq import get_bq_client
+
+
 
 router = APIRouter(
     prefix="/props/player-props",
     tags=["player-props-master"],
 )
 
-bq = bigquery.Client()
+bq = get_bq_client()
 
 # --------------------------------------
 # CONSTANTS / DEFAULTS

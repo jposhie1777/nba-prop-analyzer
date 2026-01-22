@@ -9,10 +9,8 @@ gcloud run deploy pulse-mobile-api \
 BALLDONTLIE_API_KEY=61082ce1-607a-4404-b059-2365d7649102,\
 ENABLE_LIVE_INGEST=true,\
 ENABLE_PLAYER_STATS_INGEST=true,\
-WRITE_MODE=SWAP,\
-PROP_DATASET=nba_live,\
-PROP_TABLE_FINAL=player_prop_odds_master,\
-PROP_TABLE_STAGING=player_prop_odds_master_staging
+WRITE_MODE=SWAP
+
 
 
 

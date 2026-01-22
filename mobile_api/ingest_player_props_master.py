@@ -3,31 +3,12 @@
 PULSE / GOAT — MASTER PLAYER PROP INGEST (WINDOW-AWARE)
 ======================================================
 
-Goal:
-- Pull ALL available player props for ONLY FanDuel + DraftKings
-- Correctly classify market windows (FULL / H1 / Q1 / FIRST3MIN etc.)
-- Apply FanDuel-specific “market correction” so props don’t get mislabeled
-- SAFE rollout: default is DRY_RUN (no BigQuery writes)
-
-How to use:
-- Set env:
-  - BALDONTLIE_KEY=...
-  - GCP_PROJECT or GOOGLE_CLOUD_PROJECT (or PROJECT_ID)
-- Optional:
-  - PROP_DATASET=nba_live (or nba_goat_data)
-  - PROP_TABLE_FINAL=player_prop_odds_master
-  - PROP_TABLE_STAGING=player_prop_odds_master_staging
-  - WRITE_MODE=DRY_RUN | STAGING_ONLY | SWAP
-  - VENDORS=fanduel,draftkings
-  - GAME_DATE=YYYY-MM-DD  (otherwise today NY)
-
-Run:
-  python ingest_player_props_master.py
-
 Notes:
 - BallDontLie endpoints:
-  - games:    v1 /games
-  - props:    v2 /odds/player_props
+  - props: v2 /odds/player_props  (single global pull)
+- This ingest intentionally DOES NOT call v1 /games
+- Only currently available props are ingested (props appear near game time)
+- Frontend filters by game_id
 - If the API ever *requires* prop_types[] again, this script auto-falls back to a
   broad list (and you can extend it in FALLBACK_PROP_TYPES).
 """
@@ -391,48 +372,45 @@ class NormalizedProp:
 # -----------------------------
 # BALLDONTLIE FETCHERS
 # -----------------------------
-def fetch_games_for_date(game_date: str) -> List[dict]:
-    try:
-        payload = http_get(
-            BALDONTLIE_V1,
-            "/games",
-            {"dates[]": game_date},
-        )
-        return payload.get("data", []) or []
-    except RuntimeError as e:
-        msg = str(e)
-        if "HTTP 500" in msg:
-            print(f"⚠️ BallDontLie v1 /games unstable for {game_date} — skipping ingest")
-            return []
-        raise
-
-def fetch_player_props_for_game(game_id: int) -> List[dict]:
+def fetch_all_player_props() -> List[dict]:
     """
-    Pull all props for one game for the selected vendors.
+    Pull ALL currently available player props across all games
+    for the selected vendors.
 
-    This tries the “no prop_types” call first (true ALL available).
-    If BDL returns an error that implies prop_types are required, we retry
-    with a broad fallback list.
+    This is the canonical master ingest source.
     """
-    params: Dict[str, Any] = {"game_id": game_id}
+    params: Dict[str, Any] = {}
     for v in VENDORS:
         params.setdefault("vendors[]", []).append(v)
 
-    # Attempt 1: all props
+    # Attempt 1: no prop_types (true ALL)
     try:
-        payload = http_get(BALDONTLIE_V2, "/odds/player_props", params)
+        payload = http_get(
+            BALDONTLIE_V2,
+            "/odds/player_props",
+            params,
+        )
         return payload.get("data", []) or []
+
     except RuntimeError as e:
         msg = str(e).lower()
 
-        # Attempt 2: fallback prop_types
-        needs_types = ("prop_types" in msg) or ("prop type" in msg and "required" in msg) or ("missing" in msg and "prop" in msg)
+        # Fallback if prop_types suddenly required
+        needs_types = (
+            "prop_types" in msg
+            or ("prop type" in msg and "required" in msg)
+        )
         if not needs_types:
             raise
 
         params2 = dict(params)
         params2["prop_types[]"] = FALLBACK_PROP_TYPES
-        payload2 = http_get(BALDONTLIE_V2, "/odds/player_props", params2)
+
+        payload2 = http_get(
+            BALDONTLIE_V2,
+            "/odds/player_props",
+            params2,
+        )
         return payload2.get("data", []) or []
 
 

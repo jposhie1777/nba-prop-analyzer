@@ -374,52 +374,32 @@ class NormalizedProp:
 def fetch_all_player_props() -> List[dict]:
     """
     Pull ALL currently available player props across all games
-    for the selected vendors.
-
-    This is the canonical master ingest source.
+    and all vendors.
     """
-    params: Dict[str, Any] = {}
-    for v in VENDORS:
-        params.setdefault("vendors[]", []).append(v)
-
-    # Attempt 1: no prop_types (true ALL)
     try:
         payload = http_get(
             BALDONTLIE_V2,
             "/odds/player_props",
-            params,
+            params={},  # 👈 NO FILTERS
         )
         return payload.get("data", []) or []
 
     except RuntimeError as e:
-        msg = str(e).lower()
+        msg = str(e)
+        if "HTTP 500" in msg:
+            print("⚠️ BallDontLie global props endpoint unstable (500)")
+            return []
 
-        # Fallback if prop_types suddenly required
-        needs_types = (
-            "prop_types" in msg
-            or ("prop type" in msg and "required" in msg)
-        )
-        if not needs_types:
-            raise
-
-        params2 = dict(params)
-        params2["prop_types[]"] = FALLBACK_PROP_TYPES
-
-        payload2 = http_get(
-            BALDONTLIE_V2,
-            "/odds/player_props",
-            params2,
-        )
-        return payload2.get("data", []) or []
-
+        raise
 
 # -----------------------------
 # NORMALIZER
 # -----------------------------
 def normalize_prop(p: dict, *, snapshot_ts: str) -> Optional[NormalizedProp]:
     vendor = (p.get("vendor") or "").lower().strip()
-    if vendor not in VENDORS:
+    if not vendor:
         return None
+
 
     market = p.get("market") or {}
     raw_prop_type = p.get("prop_type") or ""

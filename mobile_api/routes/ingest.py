@@ -27,7 +27,7 @@ def today_ny() -> str:
 
 
 # ======================================================
-# Request Model (THIS FIXES THE BUG)
+# Request Model
 # ======================================================
 class MasterIngestRequest(BaseModel):
     date: Optional[str] = None
@@ -42,12 +42,14 @@ class MasterIngestRequest(BaseModel):
 # ======================================================
 @router.post("/player-props-master")
 def run_master_ingest(req: MasterIngestRequest):
-    # 🚨 PROOF THIS ROUTE WAS HIT
-    print("🚨🚨🚨 SCHEDULER HIT /ingest/player-props-master 🚨🚨🚨")
-    print("DEBUG REQUEST BODY:", req.dict())
+    # 🚨 ENTRY CONFIRMATION
+    print("🚨🚨🚨 ENTERED /ingest/player-props-master 🚨🚨🚨", flush=True)
+    print("📦 REQUEST BODY:", req.dict(), flush=True)
 
     try:
-        # Inject overrides ONLY for this request
+        # --------------------------------------------------
+        # Apply request-scoped overrides
+        # --------------------------------------------------
         if req.dataset:
             os.environ["PROP_DATASET"] = req.dataset
         if req.staging_table:
@@ -57,10 +59,29 @@ def run_master_ingest(req: MasterIngestRequest):
         if req.write_mode:
             os.environ["WRITE_MODE"] = req.write_mode
 
+        # --------------------------------------------------
+        # Resolve game date
+        # --------------------------------------------------
         game_date = req.date or today_ny()
-        return ingest_player_props_master(game_date)
+
+        print("🧠 ABOUT TO RUN MASTER INGEST", {
+            "game_date": game_date,
+            "WRITE_MODE": os.getenv("WRITE_MODE"),
+            "DATASET": os.getenv("PROP_DATASET"),
+            "STAGING_TABLE": os.getenv("PROP_TABLE_STAGING"),
+            "FINAL_TABLE": os.getenv("PROP_TABLE_FINAL"),
+        }, flush=True)
+
+        # --------------------------------------------------
+        # RUN INGEST (LONG-RUNNING)
+        # --------------------------------------------------
+        result = ingest_player_props_master(game_date)
+
+        print("✅ MASTER INGEST COMPLETED", result, flush=True)
+        return result
 
     except Exception as e:
+        print("❌ MASTER INGEST FAILED", str(e), flush=True)
         raise HTTPException(
             status_code=500,
             detail=f"Master ingest failed: {str(e)}",

@@ -1,4 +1,5 @@
 # mobile_api/routes/ingest.py
+import os
 from fastapi import APIRouter, HTTPException
 from datetime import datetime
 from zoneinfo import ZoneInfo

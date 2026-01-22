@@ -30,7 +30,6 @@ from google.cloud import bigquery
 # -----------------------------
 # CONFIG
 # -----------------------------
-BALDONTLIE_V1 = "https://api.balldontlie.io/v1"
 BALDONTLIE_V2 = "https://api.balldontlie.io/v2"
 
 API_KEY = os.getenv("BALDONTLIE_KEY", "")
@@ -494,48 +493,32 @@ def normalize_prop(p: dict, *, snapshot_ts: str) -> Optional[NormalizedProp]:
 # -----------------------------
 def ingest_player_props_master(game_date: str) -> dict:
     """
-    Snapshot ingest for a date:
-      - pulls games (v1)
-      - pulls props per game (v2)
-      - filters vendors to fanduel + draftkings
-      - classifies windows (FULL / Q1 / FIRST3MIN / H1 ...)
-      - applies FanDuel correction
-      - optionally writes to BQ (safe modes)
+    Snapshot ingest:
+    - pulls ALL currently available player props (v2 only)
+    - filters vendors to fanduel + draftkings
+    - classifies windows (FULL / Q1 / FIRST3MIN / H1 ...)
+    - applies FanDuel correction
+    - optionally writes to BQ (safe modes)
     """
     client = get_bq_client()
     snapshot_ts = now_iso()
 
-    games = fetch_games_for_date(game_date)
-    if not games:
-        return {"status": "no_games", "date": game_date, "rows": 0}
+    props = fetch_all_player_props()
+    if not props:
+        return {
+            "status": "no_props",
+            "date": game_date,
+            "rows": 0,
+        }
 
     all_rows: List[dict] = []
-    games_with_props = 0
-    seen_props = 0
+    seen_props = len(props)
 
-    for g in games:
-        gid = g.get("id")
-        if not gid:
+    for p in props:
+        np = normalize_prop(p, snapshot_ts=snapshot_ts)
+        if not np:
             continue
-
-        try:
-            props = fetch_player_props_for_game(int(gid))
-        except Exception as e:
-            print(f"❌ props pull failed for game_id={gid}: {e}")
-            time.sleep(RATE_DELAY_SEC)
-            continue
-
-        seen_props += len(props)
-        if props:
-            games_with_props += 1
-
-        for p in props:
-            np = normalize_prop(p, snapshot_ts=snapshot_ts)
-            if not np:
-                continue
-            all_rows.append(np.to_row())
-
-        time.sleep(RATE_DELAY_SEC)
+        all_rows.append(np.to_row())
 
     # -----------------------------
     # DRY RUN summary
@@ -549,22 +532,20 @@ def ingest_player_props_master(game_date: str) -> dict:
         by_window[r["market_window"]] = by_window.get(r["market_window"], 0) + 1
         by_market[r["market_key"]] = by_market.get(r["market_key"], 0) + 1
 
-    def topk(d: Dict[str, int], k: int = 12) -> List[Tuple[str, int]]:
+    def topk(d: Dict[str, int], k: int = 12):
         return sorted(d.items(), key=lambda x: x[1], reverse=True)[:k]
 
     print("\n==================== MASTER PROP INGEST ====================")
     print(f"date: {game_date}")
     print(f"vendors: {VENDORS}")
-    print(f"games: {len(games)} | games_with_props: {games_with_props}")
-    print(f"raw_props_seen: {seen_props} | normalized_rows: {len(all_rows)}")
+    print(f"raw_props_seen: {seen_props}")
+    print(f"normalized_rows: {len(all_rows)}")
     print(f"by_vendor: {by_vendor}")
     print(f"by_window: {by_window}")
     print(f"top_market_keys: {topk(by_market)}")
 
-    # Sample a few rows for sanity (esp window labeling)
-    sample = all_rows[:8]
     print("\nSAMPLE ROWS (first 8):")
-    print(json.dumps(sample, indent=2)[:2500])
+    print(json.dumps(all_rows[:8], indent=2)[:2500])
 
     # -----------------------------
     # WRITE MODES
@@ -573,8 +554,6 @@ def ingest_player_props_master(game_date: str) -> dict:
         return {
             "status": "dry_run",
             "date": game_date,
-            "games": len(games),
-            "games_with_props": games_with_props,
             "raw_props_seen": seen_props,
             "rows": len(all_rows),
             "by_vendor": by_vendor,
@@ -600,7 +579,7 @@ def ingest_player_props_master(game_date: str) -> dict:
             "final_table": fqtn(TABLE_FINAL),
         }
 
-    raise ValueError(f"Invalid WRITE_MODE={WRITE_MODE}. Use DRY_RUN | STAGING_ONLY | SWAP.")
+    raise ValueError(f"Invalid WRITE_MODE={WRITE_MODE}")
 
 
 # -----------------------------

@@ -15,20 +15,15 @@ export function BoxScore({
 }) {
   const { colors } = useTheme();
 
-  // 🔴 DEBUG: no players attached to this game
+  // 🔴 DEV GUARD: no players attached to this game (terminal only)
   if (!players.length) {
-    return (
-      <Text
-        style={{
-          fontSize: 10,
-          color: "red",
-          textAlign: "center",
-          marginVertical: 4,
-        }}
-      >
-        DEBUG BoxScore hidden — no players
-      </Text>
-    );
+    if (__DEV__) {
+      console.warn("BOX GUARD: no players for game", {
+        homeTeam,
+        awayTeam,
+      });
+    }
+    return null;
   }
 
   const period = players[0]?.period;
@@ -37,7 +32,7 @@ export function BoxScore({
   const home = players.filter((p) => p.team === homeTeam);
   const away = players.filter((p) => p.team === awayTeam);
 
-  // 🔴 DEBUG: console output (Expo / GitHub terminal)
+  // 🔴 DEBUG: console output (Expo / terminal)
   console.log("BOX DEBUG", {
     game: players[0]?.game_id,
     homeTeam,
@@ -49,19 +44,6 @@ export function BoxScore({
 
   return (
     <View>
-      {/* 🔴 DEBUG: visible in mobile UI */}
-      <Text
-        style={{
-          fontSize: 10,
-          textAlign: "center",
-          color: colors.text.muted,
-          marginBottom: 4,
-        }}
-      >
-        DEBUG BoxScore — total:{players.length} home:{home.length} away:
-        {away.length}
-      </Text>
-
       {(period || clock) && (
         <Text style={[styles.clock, { color: colors.text.muted }]}>
           Q{period} · {clock}

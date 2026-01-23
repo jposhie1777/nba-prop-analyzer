@@ -1,15 +1,19 @@
 // /screens/liveGamesScreen.tsx
 import { FlatList, View, Text } from "react-native";
+import { Pressable } from "react-native";
+import { useState } from "react";
+import * as Linking from "expo-linking";
+import * as Clipboard from "expo-clipboard";
 
 import { useTheme } from "@/store/useTheme";
 import { LiveGameCard } from "@/components/live/LiveGameCard";
 import { useLiveGames } from "@/hooks/useLiveGames";
 import { useLivePlayerStats } from "@/hooks/useLivePlayerStats";
-import { Pressable } from "react-native";
 import { useSavedBets } from "@/store/useSavedBets";
-import { useState } from "react";
-import * as Linking from "expo-linking";
-import * as Clipboard from "expo-clipboard";
+
+/* ============================
+   HELPERS
+============================ */
 
 function formatBetLine(bet: any) {
   if (bet.side === "milestone") {
@@ -23,95 +27,70 @@ function formatBetLine(bet: any) {
   return `${bet.side.toUpperCase()} ${bet.line}`;
 }
 
+/* ============================
+   SCREEN
+============================ */
+
 export default function LiveGamesScreen() {
   const { colors } = useTheme();
   const clearAll = useSavedBets((s) => s.clearAll);
   const { games, mode } = useLiveGames();
   const { playersByGame } = useLivePlayerStats();
 
-  // 🟢 BETSLIP STATE
   const [betslipOpen, setBetslipOpen] = useState(false);
   const savedIds = useSavedBets((s) => s.savedIds);
   const bets = useSavedBets((s) => s.bets);
 
   const isConnecting = mode === "sse" && games.length === 0;
-  
+
   const copyAllBets = async () => {
     if (bets.size === 0) return;
-  
+
     const text = Array.from(bets.values())
       .map((bet) => {
         const line = formatBetLine(bet);
-  
         const odds = bet.odds != null ? ` (${bet.odds})` : "";
-  
         return `${bet.player} ${bet.market} ${line}${odds}`;
       })
       .join("\n");
-  
+
     await Clipboard.setStringAsync(text);
   };
-    /* ===========================
-       DEV GUARD: players ↔ game
-    =========================== */
-    const guardedPlayersByGame = (gameId: string) => {
-      const players = playersByGame(gameId);
-  
-      if (__DEV__) {
-        if (players.length === 0) {
-          console.warn("🟠 GUARD: no players for game", gameId);
-        } else {
-          const teams = new Set(players.map((p) => p.team));
-          if (teams.size < 2) {
-            console.warn("🔴 GUARD: players not split by team", {
-              gameId,
-              teams: Array.from(teams),
-              samplePlayer: players[0],
-            });
-          }
+
+  /* ===========================
+     DEV GUARD (TERMINAL ONLY)
+  =========================== */
+  const guardedPlayersByGame = (gameId: string) => {
+    const players = playersByGame(gameId);
+
+    if (__DEV__) {
+      if (players.length === 0) {
+        console.warn("🟠 GUARD: no players for game", gameId);
+      } else {
+        const teams = new Set(players.map((p) => p.team));
+        if (teams.size < 2) {
+          console.warn("🔴 GUARD: players not split by team", {
+            gameId,
+            teams: Array.from(teams),
+            samplePlayer: players[0],
+          });
         }
       }
-  
-      return players;
-    };
+    }
+
+    return players;
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface.screen }}>
-
-      {/* Status row */}
-      <Text
-        style={{
-          color: colors.text.muted,
-          fontSize: 12,
-          paddingHorizontal: 12,
-          paddingVertical: 6,
-        }}
-      >
-        {mode === "sse"
-          ? games.length > 0
-            ? "LIVE"
-            : "Waiting for games to go live…"
-          : "Refreshing"}
-      </Text>
-      <Text
-        style={{
-          color: colors.text.muted,
-          fontSize: 10,
-          paddingHorizontal: 12,
-          paddingBottom: 6,
-        }}
-      >
-        DEBUG player-stats mode: {mode}
-      </Text>
-      {/* LIVE GAMES */}
+      {/* =====================
+          LIVE GAMES
+      ===================== */}
       <FlatList
         data={games}
         keyExtractor={(g) => g.gameId}
         contentContainerStyle={{ paddingBottom: 140 }}
-      
-        // 🔑 THIS IS THE FIX
         keyboardShouldPersistTaps="handled"
-      
         renderItem={({ item }) => (
           <LiveGameCard
             game={item}
@@ -119,8 +98,10 @@ export default function LiveGamesScreen() {
           />
         )}
       />
-  
-      {/* 🧾 BETSLIP BAR */}
+
+      {/* =====================
+          BETSLIP BAR
+      ===================== */}
       {savedIds.size > 0 && (
         <View
           pointerEvents="box-none"
@@ -157,7 +138,9 @@ export default function LiveGamesScreen() {
         </View>
       )}
 
-      {/* 🧾 BETSLIP DRAWER */}
+      {/* =====================
+          BETSLIP DRAWER
+      ===================== */}
       {betslipOpen && (
         <View
           style={{
@@ -182,29 +165,27 @@ export default function LiveGamesScreen() {
           >
             Betslip
           </Text>
-      
+
           {Array.from(bets.values()).map((bet) => (
             <View key={bet.id} style={{ marginBottom: 10 }}>
               <Text style={{ fontWeight: "700" }}>
                 {bet.player} · {bet.market}
               </Text>
-      
+
               <Text style={{ fontSize: 12, color: colors.text.muted }}>
                 {formatBetLine(bet)}
                 {bet.odds != null ? ` (${bet.odds})` : ""}
               </Text>
             </View>
           ))}
-      
-          {/* ACTION BUTTONS */}
+
           <View style={{ gap: 12, marginTop: 16 }}>
-            {/* Gambly */}
             <Pressable
               onPress={() => Linking.openURL("https://www.gambly.com/")}
               style={{
                 paddingVertical: 12,
                 borderRadius: 10,
-                backgroundColor: "#5865F2", // Discord-ish, Gambly-adjacent
+                backgroundColor: "#5865F2",
                 alignItems: "center",
               }}
             >
@@ -212,8 +193,7 @@ export default function LiveGamesScreen() {
                 Open Gambly
               </Text>
             </Pressable>
-          
-            {/* Copy All */}
+
             <Pressable
               onPress={copyAllBets}
               style={{
@@ -227,8 +207,7 @@ export default function LiveGamesScreen() {
                 Copy All Bets
               </Text>
             </Pressable>
-          
-            {/* Clear / Close */}
+
             <View style={{ flexDirection: "row", gap: 12 }}>
               <Pressable
                 onPress={clearAll}
@@ -244,7 +223,7 @@ export default function LiveGamesScreen() {
                   Clear All
                 </Text>
               </Pressable>
-          
+
               <Pressable
                 onPress={() => setBetslipOpen(false)}
                 style={{
@@ -264,14 +243,11 @@ export default function LiveGamesScreen() {
         </View>
       )}
 
-      {/* EMPTY STATE */}
+      {/* =====================
+          EMPTY STATE
+      ===================== */}
       {games.length === 0 && !isConnecting && (
-        <View
-          style={{
-            padding: 24,
-            alignItems: "center",
-          }}
-        >
+        <View style={{ padding: 24, alignItems: "center" }}>
           <Text style={{ color: colors.text.muted }}>
             No live games right now
           </Text>

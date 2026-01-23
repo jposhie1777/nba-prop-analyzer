@@ -1,3 +1,4 @@
+# ingest_player_props_master.py
 """
 ======================================================
 PULSE / GOAT — MASTER PLAYER PROP INGEST (WINDOW-AWARE)

@@ -26,6 +26,7 @@ from routes.teams import router as teams_router
 from routes.prop_analytics import router as prop_analytics_router
 from routes.players_routes import router as players_router
 from routes.ingest import router as ingest_router
+from routes.props import router as props_router
 
 
 # ==================================================
@@ -104,7 +105,7 @@ app.include_router(player_stats_router)
 app.include_router(prop_analytics_router)
 app.include_router(players_router)
 app.include_router(ingest_router)
-
+app.include_router(props_router)
 
 
 # ==================================================

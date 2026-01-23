@@ -1,5 +1,4 @@
 // components/live/boxscore/TeamSection.tsx
-
 import { useState } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { LivePlayerStat } from "@/hooks/useLivePlayerStats";
@@ -16,23 +15,15 @@ export function TeamSection({
   const { colors } = useTheme();
   const [expanded, setExpanded] = useState(false);
 
-  // 🔴 DEBUG: confirm section receives players
+  // 🔴 DEV GUARD: no players for team (terminal only)
   if (!players.length) {
-    return (
-      <Text
-        style={{
-          fontSize: 10,
-          textAlign: "center",
-          color: colors.text.muted,
-          marginBottom: 4,
-        }}
-      >
-        DEBUG TeamSection ({label}): no players
-      </Text>
-    );
+    if (__DEV__) {
+      console.warn("TEAMSECTION GUARD: no players", { label });
+    }
+    return null;
   }
 
-  // 🔧 FIX: safe numeric sorting (minutes is number | null now)
+  // 🔧 Safe numeric sorting (minutes is number | null)
   const sorted = [...players].sort(
     (a, b) => (b.minutes ?? 0) - (a.minutes ?? 0)
   );
@@ -47,34 +38,36 @@ export function TeamSection({
           {label} {expanded ? "▾" : "▸"}
         </Text>
       </Pressable>
-  
-      {/* 🔴 DEBUG 8 (optional, can remove later) */}
-      <Text
-        style={{
-          fontSize: 10,
-          color: colors.text.muted,
-          marginBottom: 2,
-        }}
-      >
-        DEBUG first player: {players[0]?.name} ({players[0]?.team})
-      </Text>
-  
+
       {/* STAT HEADERS */}
       <View style={styles.statHeaderRow}>
-      <Text style={styles.nameSpacer}> </Text>
-      <Text style={[styles.statHeader, { color: colors.text.muted }]}>PTS</Text>
-      <Text style={[styles.statHeader, { color: colors.text.muted }]}>REB</Text>
-      <Text style={[styles.statHeader, { color: colors.text.muted }]}>AST</Text>
-      <Text style={[styles.statHeader, { color: colors.text.muted }]}>MIN</Text>
-      <Text style={[styles.statHeader, { color: colors.text.muted }]}>3PT</Text>
-      <Text style={[styles.pmHeader, { color: colors.text.muted }]}>+/-</Text>
-    </View>
-  
-      {/* PLAYERS */}
+        <Text style={styles.nameSpacer}> </Text>
+        <Text style={[styles.statHeader, { color: colors.text.muted }]}>
+          PTS
+        </Text>
+        <Text style={[styles.statHeader, { color: colors.text.muted }]}>
+          REB
+        </Text>
+        <Text style={[styles.statHeader, { color: colors.text.muted }]}>
+          AST
+        </Text>
+        <Text style={[styles.statHeader, { color: colors.text.muted }]}>
+          MIN
+        </Text>
+        <Text style={[styles.statHeader, { color: colors.text.muted }]}>
+          3PT
+        </Text>
+        <Text style={[styles.pmHeader, { color: colors.text.muted }]}>
+          +/-
+        </Text>
+      </View>
+
+      {/* STARTERS */}
       {starters.map((p) => (
         <PlayerRow key={p.player_id} player={p} active />
       ))}
-  
+
+      {/* BENCH */}
       {expanded &&
         bench.map((p) => (
           <PlayerRow key={p.player_id} player={p} />
@@ -82,6 +75,7 @@ export function TeamSection({
     </View>
   );
 }
+
 const styles = StyleSheet.create({
   section: {
     marginBottom: 8,
@@ -96,11 +90,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     marginBottom: 4,
   },
-  
   nameSpacer: {
-    flex: 1, // aligns with player name column
+    flex: 1,
   },
-  
   statHeader: {
     width: 36,
     textAlign: "center",
@@ -114,4 +106,3 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 });
-  

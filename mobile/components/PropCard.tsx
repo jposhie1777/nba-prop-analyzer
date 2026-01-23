@@ -17,6 +17,7 @@ import { Sparkline } from "./Sparkline";
 import { MiniBarSparkline } from "@/components/sparkline/MiniBarSparkline";
 import { formatMarketLabel } from "@/utils/formatMarket";
 import { STAT_META } from "@/lib/stats";
+import { usePropBetslip } from "@/store/usePropBetslip";
 
 /* ======================================================
    TEAM LOGOS
@@ -295,15 +296,23 @@ export default function PropCard(props: PropCardProps) {
   /* =========================
      SWIPE SAVE
   ========================= */
+  const slipItems = usePropBetslip((s) => s.items);
+  const addToSlip = usePropBetslip((s) => s.add);
+  const removeFromSlip = usePropBetslip((s) => s.remove);
+  const slipId = `${player}-${market}-${props.side ?? "over"}-${line}-${away}@${home}`;
+  const inSlip = slipItems.some((i) => i.id === slipId);
+  const slipAccent =
+    inSlip ? colors.accent.primary : accentColor;
+
   const swipeableRef = useRef<Swipeable>(null);
 
-  const renderSaveAction = () => (
+  const renderSlipAction = () => (
     <View
       style={{
         flex: 1,
         justifyContent: "center",
         paddingLeft: 24,
-        backgroundColor: saved
+        backgroundColor: inSlip
           ? colors.surface.cardSoft
           : colors.glow.success,
 
@@ -313,27 +322,42 @@ export default function PropCard(props: PropCardProps) {
         style={{
           fontSize: 16,
           fontWeight: "900",
-          color: saved
+          color: inSlip
             ? colors.text.secondary
             : colors.accent.success,
 
         }}
       >
-        {saved ? "Unsave" : "Save"}
+        {inSlip ? "Remove" : "Add to Slip"}
       </Text>
     </View>
   );
 
   const handleSwipeHaptic = () => {
     Haptics.impactAsync(
-      saved
+      inSlip
         ? Haptics.ImpactFeedbackStyle.Light
         : Haptics.ImpactFeedbackStyle.Medium
     );
   };
 
   const handleSwipeOpen = () => {
-    onToggleSave();
+    if (inSlip) {
+      removeFromSlip(slipId);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } else {
+      addToSlip({
+        id: slipId,
+        player,
+        market,
+        side: props.side ?? "over",
+        line,
+        odds,
+        matchup,
+      });
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+  
     setTimeout(() => swipeableRef.current?.close(), 120);
   };
 
@@ -403,7 +427,7 @@ return (
   <Swipeable
     ref={swipeableRef}
     overshootRight={false}
-    renderLeftActions={renderSaveAction}
+    renderLeftActions={renderSlipAction}
     leftThreshold={60}
     friction={2}
     onSwipeableWillOpen={handleSwipeHaptic}
@@ -415,8 +439,8 @@ return (
       <Animated.View style={[styles.card, flashStyle]}>
         {/* ACCENT STRIP */}
         <View
-          style={[styles.accentStrip, { backgroundColor: accentColor }]}
-        />
+          style={[styles.accentStrip, { backgroundColor: slipAccent }]}
+         />
 
         {/* SAVE BUTTON */}
         <Pressable

@@ -7,7 +7,7 @@ import {
   Linking,
   ScrollView,
 } from "react-native";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 
@@ -15,13 +15,45 @@ import { usePropBetslip } from "@/store/usePropBetslip";
 import { useTheme } from "@/store/useTheme";
 
 const GAMBLY_URL = "https://www.gambly.com/gambly-bot";
+const STAKE = 10;
 
+/* ======================================================
+   ODDS HELPERS
+====================================================== */
+function americanToDecimal(odds: number) {
+  return odds > 0
+    ? 1 + odds / 100
+    : 1 + 100 / Math.abs(odds);
+}
+
+function decimalToAmerican(decimal: number) {
+  if (decimal >= 2) {
+    return Math.round((decimal - 1) * 100);
+  }
+  return Math.round(-100 / (decimal - 1));
+}
+
+/* ======================================================
+   COMPONENT
+====================================================== */
 export function PropBetslipDrawer() {
   const { colors } = useTheme();
   const { items, remove, clear } = usePropBetslip();
 
   const [expanded, setExpanded] = useState(false);
 
+  /* =========================
+     AUTO COLLAPSE > 3 ITEMS
+  ========================= */
+  useEffect(() => {
+    if (items.length > 3) {
+      setExpanded(false);
+    }
+  }, [items.length]);
+
+  /* =========================
+     COPY TEXT
+  ========================= */
   const text = useMemo(
     () =>
       items
@@ -35,6 +67,31 @@ export function PropBetslipDrawer() {
     [items]
   );
 
+  /* =========================
+     PARLAY ODDS
+  ========================= */
+  const parlayOdds = useMemo(() => {
+    if (items.length < 2) return null;
+
+    const decimal = items.reduce(
+      (acc, b) => acc * americanToDecimal(b.odds),
+      1
+    );
+
+    return decimalToAmerican(decimal);
+  }, [items]);
+
+  /* =========================
+     $10 PAYOUT
+  ========================= */
+  const payout = useMemo(() => {
+    if (parlayOdds == null) return null;
+
+    return parlayOdds > 0
+      ? STAKE + (STAKE * parlayOdds) / 100
+      : STAKE + (STAKE * 100) / Math.abs(parlayOdds);
+  }, [parlayOdds]);
+
   if (!items.length) return null;
 
   return (
@@ -47,19 +104,49 @@ export function PropBetslipDrawer() {
         },
       ]}
     >
-      {/* HEADER */}
+      {/* =========================
+          HEADER
+      ========================== */}
       <Pressable
         onPress={() => setExpanded((v) => !v)}
         style={styles.header}
       >
-        <Text
-          style={[
-            styles.title,
-            { color: colors.text.primary },
-          ]}
-        >
-          Betslip ({items.length})
-        </Text>
+        <View>
+          <Text
+            style={[
+              styles.title,
+              { color: colors.text.primary },
+            ]}
+          >
+            Betslip ({items.length})
+          </Text>
+
+          {parlayOdds != null && (
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "700",
+                color: colors.text.muted,
+                marginTop: 2,
+              }}
+            >
+              Parlay Odds:{" "}
+              {parlayOdds > 0
+                ? `+${parlayOdds}`
+                : parlayOdds}
+              {payout && (
+                <Text
+                  style={{
+                    color: colors.text.secondary,
+                  }}
+                >
+                  {"  "}• ${STAKE} → $
+                  {payout.toFixed(2)}
+                </Text>
+              )}
+            </Text>
+          )}
+        </View>
 
         <Text
           style={[
@@ -71,12 +158,12 @@ export function PropBetslipDrawer() {
         </Text>
       </Pressable>
 
-      {/* BET LIST */}
+      {/* =========================
+          BET LIST
+      ========================== */}
       {expanded && (
         <View style={{ maxHeight: 220 }}>
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-          >
+          <ScrollView showsVerticalScrollIndicator={false}>
             {items.map((b) => (
               <View
                 key={b.id}
@@ -108,9 +195,7 @@ export function PropBetslipDrawer() {
                   {b.odds}
                 </Text>
 
-                <Pressable
-                  onPress={() => remove(b.id)}
-                >
+                <Pressable onPress={() => remove(b.id)}>
                   <Text
                     style={[
                       styles.remove,
@@ -126,20 +211,18 @@ export function PropBetslipDrawer() {
         </View>
       )}
 
-      {/* ACTIONS */}
+      {/* =========================
+          ACTIONS
+      ========================== */}
       <View style={styles.actions}>
         <Pressable
           onPress={clear}
           style={[
             styles.clearBtn,
-            {
-              borderColor: colors.border.subtle,
-            },
+            { borderColor: colors.border.subtle },
           ]}
         >
-          <Text
-            style={{ color: colors.text.muted }}
-          >
+          <Text style={{ color: colors.text.muted }}>
             Clear All
           </Text>
         </Pressable>
@@ -153,10 +236,7 @@ export function PropBetslipDrawer() {
           }}
           style={[
             styles.btn,
-            {
-              backgroundColor:
-                colors.surface.elevated,
-            },
+            { backgroundColor: colors.surface.elevated },
           ]}
         >
           <Text
@@ -170,15 +250,10 @@ export function PropBetslipDrawer() {
         </Pressable>
 
         <Pressable
-          onPress={() =>
-            Linking.openURL(GAMBLY_URL)
-          }
+          onPress={() => Linking.openURL(GAMBLY_URL)}
           style={[
             styles.btn,
-            {
-              backgroundColor:
-                colors.accent.primary,
-            },
+            { backgroundColor: colors.accent.primary },
           ]}
         >
           <Text
@@ -195,6 +270,9 @@ export function PropBetslipDrawer() {
   );
 }
 
+/* ======================================================
+   STYLES
+====================================================== */
 const styles = StyleSheet.create({
   wrap: {
     position: "absolute",

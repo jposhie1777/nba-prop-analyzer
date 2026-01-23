@@ -1,14 +1,38 @@
 // components/live/BetslipDrawer.tsx
-import { View, Text, Pressable, StyleSheet, Animated } from "react-native";
-import { useEffect, useRef } from "react";
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  Animated,
+} from "react-native";
+import { useEffect, useRef, useMemo } from "react";
 import { useTheme } from "@/store/useTheme";
 import { useSavedBets, SavedBet } from "@/store/useSavedBets";
 import * as Clipboard from "expo-clipboard";
 
 const DRAWER_HEIGHT = 320;
+const STAKE = 10;
 
 /* ============================
-   LABEL FORMATTERS (ADJUSTMENT)
+   ODDS HELPERS
+============================ */
+
+function americanToDecimal(odds: number) {
+  return odds > 0
+    ? 1 + odds / 100
+    : 1 + 100 / Math.abs(odds);
+}
+
+function decimalToAmerican(decimal: number) {
+  if (decimal >= 2) {
+    return Math.round((decimal - 1) * 100);
+  }
+  return Math.round(-100 / (decimal - 1));
+}
+
+/* ============================
+   LABEL FORMATTERS
 ============================ */
 
 function formatBetTitle(bet: SavedBet) {
@@ -20,7 +44,9 @@ function formatBetTitle(bet: SavedBet) {
 
 function formatBetSubline(bet: SavedBet) {
   const odds =
-    bet.odds != null ? ` (${bet.odds > 0 ? "+" : ""}${bet.odds})` : "";
+    bet.odds != null
+      ? ` (${bet.odds > 0 ? "+" : ""}${bet.odds})`
+      : "";
 
   if (bet.betType === "game") {
     return `${bet.side.toUpperCase()} ${bet.line}${odds} · ${bet.bookmaker}`;
@@ -52,6 +78,33 @@ export function BetslipDrawer({
   const bets = Array.from(betsMap.values());
   const betCount = bets.length;
 
+  /* ============================
+     PARLAY ODDS
+  ============================ */
+
+  const parlayOdds = useMemo(() => {
+    if (betCount < 2) return null;
+
+    const decimal = bets.reduce((acc, b) => {
+      if (b.odds == null) return acc;
+      return acc * americanToDecimal(b.odds);
+    }, 1);
+
+    return decimalToAmerican(decimal);
+  }, [bets, betCount]);
+
+  const payout = useMemo(() => {
+    if (parlayOdds == null) return null;
+
+    return parlayOdds > 0
+      ? STAKE + (STAKE * parlayOdds) / 100
+      : STAKE + (STAKE * 100) / Math.abs(parlayOdds);
+  }, [parlayOdds]);
+
+  /* ============================
+     ANIMATION
+  ============================ */
+
   const translateY = useRef(
     new Animated.Value(DRAWER_HEIGHT)
   ).current;
@@ -68,7 +121,10 @@ export function BetslipDrawer({
 
   const copyAll = async () => {
     const text = bets
-      .map((b) => `${formatBetTitle(b)}\n${formatBetSubline(b)}`)
+      .map(
+        (b) =>
+          `${formatBetTitle(b)}\n${formatBetSubline(b)}`
+      )
       .join("\n\n");
 
     await Clipboard.setStringAsync(text);
@@ -89,12 +145,50 @@ export function BetslipDrawer({
           HEADER
       ===================== */}
       <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text.primary }]}>
-          Betslip ({betCount})
-        </Text>
+        <View>
+          <Text
+            style={[
+              styles.title,
+              { color: colors.text.primary },
+            ]}
+          >
+            Betslip ({betCount})
+          </Text>
+
+          {parlayOdds != null && (
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "700",
+                color: colors.text.muted,
+                marginTop: 2,
+              }}
+            >
+              Parlay Odds:{" "}
+              {parlayOdds > 0
+                ? `+${parlayOdds}`
+                : parlayOdds}
+              {payout && (
+                <Text
+                  style={{
+                    color: colors.text.secondary,
+                  }}
+                >
+                  {"  "}• ${STAKE} → $
+                  {payout.toFixed(2)}
+                </Text>
+              )}
+            </Text>
+          )}
+        </View>
 
         <Pressable onPress={onClose} hitSlop={8}>
-          <Text style={{ color: colors.text.muted, fontWeight: "600" }}>
+          <Text
+            style={{
+              color: colors.text.muted,
+              fontWeight: "600",
+            }}
+          >
             Close
           </Text>
         </Pressable>

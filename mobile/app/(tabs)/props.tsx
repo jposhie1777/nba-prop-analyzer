@@ -19,7 +19,7 @@ import { usePropsStore } from "@/store/usePropsStore";
 import { themeMeta } from "@/theme/meta";
 import { useHistoricalPlayerTrends } from "@/hooks/useHistoricalPlayerTrends";
 import { resolveSparklineByMarket } from "@/utils/resolveSparkline";
-
+import { PropBetslipDrawer } from "@/components/prop/PropBetslipDrawer";
 
 // ---------------------------
 // STORAGE KEYS
@@ -533,6 +533,8 @@ export default function HomeScreen() {
           maxToRenderPerBatch={12}
           windowSize={7}
 />
+        <PropBetslipDrawer />
+
         {themeOpen && (
           <View style={styles.themeOverlay}>
             <View style={styles.themeModal}>

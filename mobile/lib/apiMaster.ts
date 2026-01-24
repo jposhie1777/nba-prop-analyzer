@@ -2,16 +2,15 @@
 import { API_BASE } from "./config";
 
 export async function fetchPlayerPropsMaster() {
-  const url = `${API_BASE}/props/master`;
+  const url = `${API_BASE}/props`;
   console.log("📡 FETCH MASTER:", url);
 
-  const res = await fetch(url, {
-    credentials: "omit",
-  });
+  const res = await fetch(url, { credentials: "omit" });
 
   if (!res.ok) {
     throw new Error(`Master props error ${res.status}`);
   }
 
-  return res.json();
+  const json = await res.json();
+  return json.props; // ✅ IMPORTANT
 }

@@ -1,3 +1,4 @@
+// lib/apiMaster.ts
 import { API_BASE } from "./config";
 
 export async function fetchPlayerPropsMaster() {

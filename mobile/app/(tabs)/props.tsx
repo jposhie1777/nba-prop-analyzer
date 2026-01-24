@@ -1,4 +1,4 @@
-// app/(tabs)/index
+// app/(tabs)/props
 import {
   View,
   Text,

@@ -1,57 +1,12 @@
 // components/PropCard.tsx
 import { View, Text, StyleSheet, Image, Pressable, FlatList } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
-import { useEffect, useMemo, useRef, useState } from "react";
-import * as Haptics from "expo-haptics";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-} from "react-native-reanimated";
+import { useMemo, useState } from "react";
 
 import { useTheme } from "@/store/useTheme";
 import { BOOKMAKER_LOGOS } from "@/utils/bookmakerLogos";
 import { MiniBarSparkline } from "@/components/sparkline/MiniBarSparkline";
 import { formatMarketLabel } from "@/utils/formatMarket";
-import { STAT_META } from "@/lib/stats";
-import { usePropBetslip } from "@/store/usePropBetslip";
-
-/* ======================================================
-   TEAM LOGOS
-====================================================== */
-const TEAM_LOGOS: Record<string, string> = {
-  ATL: "https://a.espncdn.com/i/teamlogos/nba/500/atl.png",
-  BOS: "https://a.espncdn.com/i/teamlogos/nba/500/bos.png",
-  BKN: "https://a.espncdn.com/i/teamlogos/nba/500/bkn.png",
-  CHA: "https://a.espncdn.com/i/teamlogos/nba/500/cha.png",
-  CHI: "https://a.espncdn.com/i/teamlogos/nba/500/chi.png",
-  CLE: "https://a.espncdn.com/i/teamlogos/nba/500/cle.png",
-  DAL: "https://a.espncdn.com/i/teamlogos/nba/500/dal.png",
-  DEN: "https://a.espncdn.com/i/teamlogos/nba/500/den.png",
-  DET: "https://a.espncdn.com/i/teamlogos/nba/500/det.png",
-  GSW: "https://a.espncdn.com/i/teamlogos/nba/500/gsw.png",
-  HOU: "https://a.espncdn.com/i/teamlogos/nba/500/hou.png",
-  IND: "https://a.espncdn.com/i/teamlogos/nba/500/ind.png",
-  LAC: "https://a.espncdn.com/i/teamlogos/nba/500/lac.png",
-  LAL: "https://a.espncdn.com/i/teamlogos/nba/500/lal.png",
-  MEM: "https://a.espncdn.com/i/teamlogos/nba/500/mem.png",
-  MIA: "https://a.espncdn.com/i/teamlogos/nba/500/mia.png",
-  MIL: "https://a.espncdn.com/i/teamlogos/nba/500/mil.png",
-  MIN: "https://a.espncdn.com/i/teamlogos/nba/500/min.png",
-  NOP: "https://a.espncdn.com/i/teamlogos/nba/500/nop.png",
-  NYK: "https://a.espncdn.com/i/teamlogos/nba/500/nyk.png",
-  OKC: "https://a.espncdn.com/i/teamlogos/nba/500/okc.png",
-  ORL: "https://a.espncdn.com/i/teamlogos/nba/500/orl.png",
-  PHI: "https://a.espncdn.com/i/teamlogos/nba/500/phi.png",
-  PHX: "https://a.espncdn.com/i/teamlogos/nba/500/phx.png",
-  POR: "https://a.espncdn.com/i/teamlogos/nba/500/por.png",
-  SAC: "https://a.espncdn.com/i/teamlogos/nba/500/sac.png",
-  SAS: "https://a.espncdn.com/i/teamlogos/nba/500/sas.png",
-  TOR: "https://a.espncdn.com/i/teamlogos/nba/500/tor.png",
-  UTA: "https://a.espncdn.com/i/teamlogos/nba/500/uta.png",
-  WAS: "https://a.espncdn.com/i/teamlogos/nba/500/was.png",
-};
 
 /* ======================================================
    TYPES
@@ -63,28 +18,22 @@ type BookOdds = {
 
 export type PropCardProps = {
   player: string;
+  playerId?: number;
+  playerImageUrl?: string;
+
   market: string;
-  side?: "over" | "under";
+  side?: "over" | "under" | "yes";
   line: number;
   odds: number;
 
-  confidence: number;
+  bookmaker?: string;
+  books?: BookOdds[];
+
+  confidence?: number;
 
   avg_l5?: number;
   avg_l10?: number;
   avg_l20?: number;
-
-  clear_1p_pct_l5?: number;
-  clear_1p_pct_l10?: number;
-  clear_1p_pct_l20?: number;
-
-  clear_2p_pct_l5?: number;
-  clear_2p_pct_l10?: number;
-  clear_2p_pct_l20?: number;
-
-  avg_margin_l5?: number;
-  avg_margin_l10?: number;
-  avg_margin_l20?: number;
 
   bad_miss_pct_l5?: number;
   bad_miss_pct_l10?: number;
@@ -94,22 +43,6 @@ export type PropCardProps = {
   pace_l10?: number;
   pace_l20?: number;
 
-  usage_l5?: number;
-  usage_l10?: number;
-  usage_l20?: number;
-
-  ts_l10?: number;
-  pace_delta?: number;
-  delta_vs_line?: number;
-
-  matchup?: string;
-  home?: string;
-  away?: string;
-
-  bookmaker?: string;
-  books?: BookOdds[];
-  playerImageUrl?: string;
-
   sparkline_l5?: number[];
   sparkline_l10?: number[];
   sparkline_l20?: number[];
@@ -118,9 +51,8 @@ export type PropCardProps = {
   last10_dates?: string[];
   last20_dates?: string[];
 
-  /** 🔑 FINAL HIT RATE — already side + window aware */
-  hitRate: number;     // 0–1
-  hitRatePct: number; // 0–100
+  hitRate: number;
+  hitRatePct: number;
   window?: "L5" | "L10" | "L20";
 
   saved: boolean;
@@ -137,12 +69,15 @@ function normalizeBookKey(name: string) {
   return name.toLowerCase().replace(/[\s_]/g, "");
 }
 
-function formatOdds(o: number) {
+function formatOdds(o?: number) {
+  if (o == null) return "";
   return o > 0 ? `+${o}` : `${o}`;
 }
 
-function formatSideLabel(side?: "over" | "under") {
-  return side === "under" ? "Under" : "Over";
+function formatSideLabel(side?: "over" | "under" | "yes") {
+  if (side === "under") return "Under";
+  if (side === "yes") return "Yes";
+  return "Over";
 }
 
 /* ======================================================
@@ -154,128 +89,70 @@ export default function PropCard(props: PropCardProps) {
 
   const {
     player,
+    playerId,
+    playerImageUrl,
     market,
     side,
     line,
     odds,
-    confidence,
-    matchup,
-    home,
-    away,
     bookmaker,
     books,
-    pace_delta,
-    delta_vs_line,
-    ts_l10,
     saved,
     onToggleSave,
     expanded,
     onToggleExpand,
     scrollRef,
-    hitRate,
     hitRatePct,
   } = props;
 
   /* =========================
-     VISUAL WINDOW (DISPLAY ONLY)
+     DISPLAY WINDOW
   ========================= */
-  const [displayWindow, setDisplayWindow] =
-    useState<"L5" | "L10" | "L20">(props.window ?? "L10");
-  
-  const w =
-    displayWindow === "L5"
-      ? "l5"
-      : displayWindow === "L20"
-      ? "l20"
-      : "l10";
-
-  const avg =
-    w === "l5" ? props.avg_l5 :
-    w === "l20" ? props.avg_l20 :
-    props.avg_l10;
-
-  const clear1 =
-    w === "l5" ? props.clear_1p_pct_l5 :
-    w === "l20" ? props.clear_1p_pct_l20 :
-    props.clear_1p_pct_l10;
-
-  const clear2 =
-    w === "l5" ? props.clear_2p_pct_l5 :
-    w === "l20" ? props.clear_2p_pct_l20 :
-    props.clear_2p_pct_l10;
-
-  const margin =
-    w === "l5" ? props.avg_margin_l5 :
-    w === "l20" ? props.avg_margin_l20 :
-    props.avg_margin_l10;
-
-  const badMiss =
-    w === "l5" ? props.bad_miss_pct_l5 :
-    w === "l20" ? props.bad_miss_pct_l20 :
-    props.bad_miss_pct_l10;
-
-  const pace =
-    w === "l5" ? props.pace_l5 :
-    w === "l20" ? props.pace_l20 :
-    props.pace_l10;
-
-  const usage =
-    w === "l5" ? props.usage_l5 :
-    w === "l20" ? props.usage_l20 :
-    props.usage_l10;
+  const [displayWindow, setDisplayWindow] = useState<"L5" | "L10" | "L20">(
+    props.window ?? "L10"
+  );
 
   const sparkline =
-    w === "l5" ? props.sparkline_l5 :
-    w === "l20" ? props.sparkline_l20 :
-    props.sparkline_l10;
+    displayWindow === "L5"
+      ? props.sparkline_l5
+      : displayWindow === "L20"
+      ? props.sparkline_l20
+      : props.sparkline_l10;
 
   const dates =
-    w === "l5" ? props.last5_dates :
-    w === "l20" ? props.last20_dates :
-    props.last10_dates;
+    displayWindow === "L5"
+      ? props.last5_dates
+      : displayWindow === "L20"
+      ? props.last20_dates
+      : props.last10_dates;
 
   /* =========================
-     BOOKS
+     IMAGE RESOLUTION
   ========================= */
-  const resolvedBooks = useMemo<BookOdds[]>(() => {
-    if (books?.length) return books;
-    if (bookmaker) return [{ bookmaker, odds }];
-    return [];
+  const imageUrl =
+    playerImageUrl ||
+    (playerId
+      ? `https://a.espncdn.com/i/headshots/nba/players/full/${playerId}.png`
+      : null);
+
+  /* =========================
+     BOOK RESOLUTION
+  ========================= */
+  const resolvedBook = useMemo(() => {
+    if (books?.length) return books[0];
+    if (bookmaker) return { bookmaker, odds };
+    return null;
   }, [books, bookmaker, odds]);
 
-  const uniqueBooks = useMemo(() => {
-    const seen = new Map<string, BookOdds>();
-    resolvedBooks.forEach((b) => {
-      const k = `${normalizeBookKey(b.bookmaker)}-${b.odds}`;
-      if (!seen.has(k)) seen.set(k, b);
-    });
-    return Array.from(seen.values());
-  }, [resolvedBooks]);
-
-  /* =========================
-     CONFIDENCE COLOR
-  ========================= */
-  const tier =
-    confidence >= 80 ? "elite" :
-    confidence >= 65 ? "good" :
-    "mid";
-
-  const confidenceColor =
-    tier === "elite"
-      ? colors.accent.success
-      : tier === "good"
-      ? colors.accent.warning
-      : colors.text.muted;
+  const bookLogo =
+    resolvedBook &&
+    BOOKMAKER_LOGOS[normalizeBookKey(resolvedBook.bookmaker)];
 
   /* =========================
      RENDER
   ========================= */
   return (
-    <Swipeable
-      overshootRight={false}
-      renderLeftActions={() => null}
-      simultaneousHandlers={scrollRef}
-    >
+    <Swipeable overshootRight={false} simultaneousHandlers={scrollRef}>
       <View style={styles.outer}>
         <View style={styles.card}>
           {/* SAVE */}
@@ -286,14 +163,38 @@ export default function PropCard(props: PropCardProps) {
           </Pressable>
 
           {/* HEADER */}
-          <Pressable onPress={onToggleExpand}>
-            <Text style={styles.player}>{player}</Text>
-            <Text style={styles.marketLine}>
-              {formatMarketLabel(market)} • {formatSideLabel(side)} {line}
-            </Text>
+          <Pressable onPress={onToggleExpand} style={styles.headerRow}>
+            {imageUrl && (
+              <Image
+                source={{ uri: imageUrl }}
+                style={styles.headshot}
+                resizeMode="cover"
+              />
+            )}
 
-            <Text style={styles.hitText}>{hitRatePct}% HIT</Text>
-            <Text style={styles.metricSub}>Last {props.window ?? "L10"}</Text>
+            <View style={styles.headerText}>
+              <Text style={styles.player}>{player}</Text>
+
+              <Text style={styles.marketLine}>
+                {formatMarketLabel(market)} • {formatSideLabel(side)} {line}
+                {odds != null && (
+                  <Text style={styles.oddsText}>  {formatOdds(odds)}</Text>
+                )}
+              </Text>
+
+              {bookLogo && (
+                <Image
+                  source={{ uri: bookLogo }}
+                  style={styles.bookLogo}
+                  resizeMode="contain"
+                />
+              )}
+
+              <Text style={styles.hitText}>{hitRatePct}% HIT</Text>
+              <Text style={styles.metricSub}>
+                Last {displayWindow}
+              </Text>
+            </View>
           </Pressable>
 
           {/* EXPANDED */}
@@ -301,21 +202,14 @@ export default function PropCard(props: PropCardProps) {
             <View style={styles.expandWrap}>
               <MiniBarSparkline data={sparkline} dates={dates} />
 
-              <View style={styles.gridRow}>
-                <Text style={styles.statValue}>{avg?.toFixed(1) ?? "—"}</Text>
-                <Text style={styles.statValue}>{hitRatePct}%</Text>
-                <Text style={styles.statValue}>{Math.round((badMiss ?? 0) * 100)}%</Text>
-                <Text style={styles.statValue}>{pace?.toFixed(1) ?? "—"}</Text>
-              </View>
-
               <View style={styles.windowToggle}>
                 {(["L5", "L10", "L20"] as const).map((n) => (
                   <Pressable
                     key={n}
-                    onPress={() => setWindow(n)}
+                    onPress={() => setDisplayWindow(n)}
                     style={[
                       styles.windowPill,
-                      window === n && styles.windowPillActive,
+                      displayWindow === n && styles.windowPillActive,
                     ]}
                   >
                     <Text>{n}</Text>
@@ -336,6 +230,7 @@ export default function PropCard(props: PropCardProps) {
 function makeStyles(colors: any) {
   return StyleSheet.create({
     outer: { margin: 12 },
+
     card: {
       backgroundColor: colors.surface.card,
       borderRadius: 16,
@@ -343,18 +238,68 @@ function makeStyles(colors: any) {
       borderWidth: 1,
       borderColor: colors.border.subtle,
     },
-    saveButton: { position: "absolute", top: 8, right: 8 },
+
+    saveButton: {
+      position: "absolute",
+      top: 8,
+      right: 8,
+      zIndex: 2,
+    },
+
     saveStar: { fontSize: 18, color: colors.text.muted },
     saveStarOn: { color: colors.accent.primary },
 
-    player: { fontWeight: "800", color: colors.text.primary },
-    marketLine: { color: colors.text.secondary },
-    hitText: { fontWeight: "900", marginTop: 6 },
-    metricSub: { color: colors.text.muted },
+    headerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+
+    headshot: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.surface.cardSoft,
+    },
+
+    headerText: { flex: 1 },
+
+    player: {
+      fontWeight: "800",
+      fontSize: 15,
+      color: colors.text.primary,
+    },
+
+    marketLine: {
+      marginTop: 2,
+      color: colors.text.secondary,
+      fontSize: 13,
+    },
+
+    oddsText: {
+      fontWeight: "700",
+      color: colors.text.primary,
+    },
+
+    bookLogo: {
+      width: 42,
+      height: 16,
+      marginTop: 4,
+      opacity: 0.9,
+    },
+
+    hitText: {
+      marginTop: 6,
+      fontWeight: "900",
+      color: colors.text.primary,
+    },
+
+    metricSub: {
+      color: colors.text.muted,
+      fontSize: 12,
+    },
 
     expandWrap: { marginTop: 12 },
-    gridRow: { flexDirection: "row", justifyContent: "space-between" },
-    statValue: { flex: 1, textAlign: "center", fontWeight: "800" },
 
     windowToggle: {
       flexDirection: "row",
@@ -362,6 +307,7 @@ function makeStyles(colors: any) {
       marginTop: 10,
       gap: 8,
     },
+
     windowPill: {
       paddingHorizontal: 12,
       paddingVertical: 6,
@@ -369,6 +315,7 @@ function makeStyles(colors: any) {
       borderWidth: 1,
       borderColor: colors.border.subtle,
     },
+
     windowPillActive: {
       backgroundColor: colors.surface.cardSoft,
     },

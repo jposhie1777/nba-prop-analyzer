@@ -11,9 +11,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { useTheme } from "@/store/useTheme";
-import textStyles from "../theme/text";
-import { BOOKMAKER_LOGOS } from "../utils/bookmakerLogos";
-import { Sparkline } from "./Sparkline";
+import { BOOKMAKER_LOGOS } from "@/utils/bookmakerLogos";
 import { MiniBarSparkline } from "@/components/sparkline/MiniBarSparkline";
 import { formatMarketLabel } from "@/utils/formatMarket";
 import { STAT_META } from "@/lib/stats";
@@ -63,24 +61,18 @@ type BookOdds = {
   odds: number;
 };
 
-type PropCardProps = {
+export type PropCardProps = {
   player: string;
   market: string;
   side?: "over" | "under";
   line: number;
   odds: number;
 
-  hitRateL10: number;
-  edge: number;
   confidence: number;
 
   avg_l5?: number;
   avg_l10?: number;
   avg_l20?: number;
-
-  hit_rate_l5?: number;
-  hit_rate_l10?: number;
-  hit_rate_l20?: number;
 
   clear_1p_pct_l5?: number;
   clear_1p_pct_l10?: number;
@@ -113,6 +105,7 @@ type PropCardProps = {
   matchup?: string;
   home?: string;
   away?: string;
+
   bookmaker?: string;
   books?: BookOdds[];
   playerImageUrl?: string;
@@ -124,6 +117,11 @@ type PropCardProps = {
   last5_dates?: string[];
   last10_dates?: string[];
   last20_dates?: string[];
+
+  /** 🔑 FINAL HIT RATE — already side + window aware */
+  hitRate: number;     // 0–1
+  hitRatePct: number; // 0–100
+  window?: "L5" | "L10" | "L20";
 
   saved: boolean;
   onToggleSave: () => void;
@@ -146,113 +144,114 @@ function formatOdds(o: number) {
 function formatSideLabel(side?: "over" | "under") {
   return side === "under" ? "Under" : "Over";
 }
+
 /* ======================================================
    COMPONENT
 ====================================================== */
 export default function PropCard(props: PropCardProps) {
   const colors = useTheme((s) => s.colors);
-
   const styles = useMemo(() => makeStyles(colors), [colors]);
+
   const {
     player,
     market,
+    side,
     line,
     odds,
-    hitRateL10,
     confidence,
     matchup,
     home,
     away,
     bookmaker,
     books,
-    pace_delta,        // ✅ ADD THIS
-    delta_vs_line,     // (you already use this too)
+    pace_delta,
+    delta_vs_line,
     ts_l10,
     saved,
     onToggleSave,
     expanded,
     onToggleExpand,
     scrollRef,
+    hitRate,
+    hitRatePct,
   } = props;
 
-  const normalizedMarket =
-    market.toLowerCase() as keyof typeof STAT_META;
-  
-  const meta = STAT_META[normalizedMarket];
-  const hitPct = Math.round(((props.hit_rate_l10 ?? 0) as number) * 100);
-  
   /* =========================
-     WINDOW TOGGLE
+     VISUAL WINDOW (DISPLAY ONLY)
   ========================= */
-  const [window, setWindow] = useState<5 | 10 | 20>(10);
-  const w = window === 5 ? "l5" : window === 20 ? "l20" : "l10";
+  const [window, setWindow] = useState<"L5" | "L10" | "L20">(props.window ?? "L10");
+  const w = window === "L5" ? "l5" : window === "L20" ? "l20" : "l10";
 
-  const avg = w === "l5" ? props.avg_l5 : w === "l20" ? props.avg_l20 : props.avg_l10;
-  const hitRate = w === "l5" ? props.hit_rate_l5 : w === "l20" ? props.hit_rate_l20 : props.hit_rate_l10;
-  const clear1 = w === "l5" ? props.clear_1p_pct_l5 : w === "l20" ? props.clear_1p_pct_l20 : props.clear_1p_pct_l10;
-  const clear2 = w === "l5" ? props.clear_2p_pct_l5 : w === "l20" ? props.clear_2p_pct_l20 : props.clear_2p_pct_l10;
-  const margin = w === "l5" ? props.avg_margin_l5 : w === "l20" ? props.avg_margin_l20 : props.avg_margin_l10;
-  const badMiss = w === "l5" ? props.bad_miss_pct_l5 : w === "l20" ? props.bad_miss_pct_l20 : props.bad_miss_pct_l10;
-  const pace = w === "l5" ? props.pace_l5 : w === "l20" ? props.pace_l20 : props.pace_l10;
-  const usage = w === "l5" ? props.usage_l5 : w === "l20" ? props.usage_l20 : props.usage_l10;
-  
-  const dates =
-    (w === "l5" && props.last5_dates?.length)
-      ? props.last5_dates
-      : (w === "l20" && props.last20_dates?.length)
-      ? props.last20_dates
-      : props.last10_dates?.length
-      ? props.last10_dates
-      : props.last5_dates ?? props.last20_dates ?? [];
+  const avg =
+    w === "l5" ? props.avg_l5 :
+    w === "l20" ? props.avg_l20 :
+    props.avg_l10;
+
+  const clear1 =
+    w === "l5" ? props.clear_1p_pct_l5 :
+    w === "l20" ? props.clear_1p_pct_l20 :
+    props.clear_1p_pct_l10;
+
+  const clear2 =
+    w === "l5" ? props.clear_2p_pct_l5 :
+    w === "l20" ? props.clear_2p_pct_l20 :
+    props.clear_2p_pct_l10;
+
+  const margin =
+    w === "l5" ? props.avg_margin_l5 :
+    w === "l20" ? props.avg_margin_l20 :
+    props.avg_margin_l10;
+
+  const badMiss =
+    w === "l5" ? props.bad_miss_pct_l5 :
+    w === "l20" ? props.bad_miss_pct_l20 :
+    props.bad_miss_pct_l10;
+
+  const pace =
+    w === "l5" ? props.pace_l5 :
+    w === "l20" ? props.pace_l20 :
+    props.pace_l10;
+
+  const usage =
+    w === "l5" ? props.usage_l5 :
+    w === "l20" ? props.usage_l20 :
+    props.usage_l10;
 
   const sparkline =
-    (w === "l5" && props.sparkline_l5?.length)
-      ? props.sparkline_l5
-      : (w === "l20" && props.sparkline_l20?.length)
-      ? props.sparkline_l20
-      : props.sparkline_l10?.length
-      ? props.sparkline_l10
-      : props.sparkline_l5?.length
-      ? props.sparkline_l5
-      : props.sparkline_l20;
+    w === "l5" ? props.sparkline_l5 :
+    w === "l20" ? props.sparkline_l20 :
+    props.sparkline_l10;
+
+  const dates =
+    w === "l5" ? props.last5_dates :
+    w === "l20" ? props.last20_dates :
+    props.last10_dates;
 
   /* =========================
-     MULTI-BOOK NORMALIZATION
+     BOOKS
   ========================= */
-  const resolvedBooks: BookOdds[] = useMemo(() => {
-    if (books && books.length > 0) return books;
+  const resolvedBooks = useMemo<BookOdds[]>(() => {
+    if (books?.length) return books;
     if (bookmaker) return [{ bookmaker, odds }];
     return [];
   }, [books, bookmaker, odds]);
 
   const uniqueBooks = useMemo(() => {
     const seen = new Map<string, BookOdds>();
-  
     resolvedBooks.forEach((b) => {
       const k = `${normalizeBookKey(b.bookmaker)}-${b.odds}`;
-      if (!seen.has(k)) {
-        seen.set(k, b);
-      }
+      if (!seen.has(k)) seen.set(k, b);
     });
-  
     return Array.from(seen.values());
   }, [resolvedBooks]);
 
   /* =========================
-     CONFIDENCE TIER
+     CONFIDENCE COLOR
   ========================= */
-  const tier = useMemo(() => {
-    if (confidence >= 80) return "elite";
-    if (confidence >= 65) return "good";
-    return "mid";
-  }, [confidence]);
-
-  const accentColor =
-    tier === "elite"
-      ? colors.accent.success
-      : tier === "good"
-      ? colors.accent.warning
-      : colors.border.strong;
+  const tier =
+    confidence >= 80 ? "elite" :
+    confidence >= 65 ? "good" :
+    "mid";
 
   const confidenceColor =
     tier === "elite"
@@ -261,856 +260,110 @@ export default function PropCard(props: PropCardProps) {
       ? colors.accent.warning
       : colors.text.muted;
 
-
-  
   /* =========================
-     ODDS FLASH
+     RENDER
   ========================= */
-  const prevOddsRef = useRef<Record<string, number>>({});
-  const flash = useSharedValue(0);
-
-  useEffect(() => {
-    let changed = false;
-
-    resolvedBooks.forEach(({ bookmaker, odds }) => {
-      const key = normalizeBookKey(bookmaker);
-      const prev = prevOddsRef.current[key];
-      if (prev !== undefined && prev !== odds) changed = true;
-      prevOddsRef.current[key] = odds;
-    });
-
-    if (changed) {
-      flash.value = withTiming(1, { duration: 120 }, () => {
-        flash.value = withTiming(0, { duration: 520 });
-      });
-    }
-  }, [resolvedBooks]);
-
-  const flashStyle = useAnimatedStyle(() => {
-    if (flash.value > 0) {
-      return { backgroundColor: colors.glow.success };
-    }
-    return {};
-  });
-
-  /* =========================
-     SWIPE SAVE
-  ========================= */
-  const slipItems = usePropBetslip((s) => s.items);
-  const addToSlip = usePropBetslip((s) => s.add);
-  const removeFromSlip = usePropBetslip((s) => s.remove);
-  const slipId = `${player}-${market}-${props.side ?? "over"}-${line}-${away}@${home}`;
-  const inSlip = slipItems.some((i) => i.id === slipId);
-  const slipAccent =
-    inSlip ? colors.accent.primary : accentColor;
-
-  const swipeableRef = useRef<Swipeable>(null);
-
-  const renderSlipAction = () => (
-    <View
-      style={{
-        flex: 1,
-        justifyContent: "center",
-        paddingLeft: 24,
-        backgroundColor: inSlip
-          ? colors.surface.cardSoft
-          : colors.glow.success,
-
-      }}
+  return (
+    <Swipeable
+      overshootRight={false}
+      renderLeftActions={() => null}
+      simultaneousHandlers={scrollRef}
     >
-      <Text
-        style={{
-          fontSize: 16,
-          fontWeight: "900",
-          color: inSlip
-            ? colors.text.secondary
-            : colors.accent.success,
+      <View style={styles.outer}>
+        <View style={styles.card}>
+          {/* SAVE */}
+          <Pressable onPress={onToggleSave} style={styles.saveButton}>
+            <Text style={[styles.saveStar, saved && styles.saveStarOn]}>
+              {saved ? "★" : "☆"}
+            </Text>
+          </Pressable>
 
-        }}
-      >
-        {inSlip ? "Remove" : "Add to Slip"}
-      </Text>
-    </View>
-  );
+          {/* HEADER */}
+          <Pressable onPress={onToggleExpand}>
+            <Text style={styles.player}>{player}</Text>
+            <Text style={styles.marketLine}>
+              {formatMarketLabel(market)} • {formatSideLabel(side)} {line}
+            </Text>
 
-  const handleSwipeHaptic = () => {
-    Haptics.impactAsync(
-      inSlip
-        ? Haptics.ImpactFeedbackStyle.Light
-        : Haptics.ImpactFeedbackStyle.Medium
-    );
-  };
+            <Text style={styles.hitText}>{hitRatePct}% HIT</Text>
+            <Text style={styles.metricSub}>Last {window}</Text>
+          </Pressable>
 
-  const handleSwipeOpen = () => {
-    if (inSlip) {
-      removeFromSlip(slipId);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } else {
-      addToSlip({
-        id: slipId,
-        player,
-        market,
-        side: props.side ?? "over",
-        line,
-        odds,
-        matchup,
-      });
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    }
-  
-    setTimeout(() => swipeableRef.current?.close(), 120);
-  };
+          {/* EXPANDED */}
+          {expanded && (
+            <View style={styles.expandWrap}>
+              <MiniBarSparkline data={sparkline} dates={dates} />
 
-  /* =========================
-     SAVE SCALE
-  ========================= */
-  const scale = useSharedValue(1);
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  useEffect(() => {
-    if (saved) {
-      scale.value = withSpring(1.05, { damping: 12 });
-      scale.value = withSpring(1, { damping: 14 });
-    }
-  }, [saved]);
-
-  /* =========================
-     EXPAND ANIMATION
-  ========================= */
-  const expand = useSharedValue(0);
-  const EXPANDED_HEIGHT = 420;
-
-  useEffect(() => {
-    expand.value = withSpring(expanded ? EXPANDED_HEIGHT : 0, {
-      damping: 18,
-      stiffness: 180,
-    });
-  }, [expanded]);
-
-  const expandStyle = useAnimatedStyle(() => ({
-    height: expand.value,
-    opacity: expand.value === 0 ? 0 : 1,
-  }));
-
-  /* =========================
-     PRESS FEEDBACK
-  ========================= */
-  const pressScale = useSharedValue(1);
-  const pressAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pressScale.value }],
-  }));
-
-  const onPressIn = () => {
-    pressScale.value = withSpring(0.985, { damping: 18 });
-  };
-
-  const onPressOut = () => {
-    pressScale.value = withSpring(1, { damping: 18 });
-  };
-
-  /* =========================
-     ROW COMPONENT
-  ========================= */
-  const ExpandRow = ({ label, value }: { label: string; value?: string }) => (
-    <View style={styles.expandRow}>
-      <Text style={styles.expandLabel}>{label}</Text>
-      <Text style={styles.expandValue}>{value ?? "—"}</Text>
-    </View>
-  );
-
-/* ======================================================
-   RENDER
-====================================================== */
-return (
-  <Swipeable
-    ref={swipeableRef}
-    overshootRight={false}
-    renderLeftActions={renderSlipAction}
-    leftThreshold={60}
-    friction={2}
-    onSwipeableWillOpen={handleSwipeHaptic}
-    onSwipeableOpen={handleSwipeOpen}
-    simultaneousHandlers={scrollRef}
-    shouldCancelWhenOutside={false}
-  >
-    <Animated.View style={[animatedStyle, styles.outer]}>
-      <Animated.View style={[styles.card, flashStyle]}>
-        {/* ACCENT STRIP */}
-        <View
-          style={[styles.accentStrip, { backgroundColor: slipAccent }]}
-         />
-
-        {/* SAVE BUTTON */}
-        <Pressable
-          onPress={onToggleSave}
-          hitSlop={10}
-          style={styles.saveButton}
-        >
-          <Text
-            style={[
-              styles.saveStar,
-              saved ? styles.saveStarOn : styles.saveStarOff,
-            ]}
-          >
-            {saved ? "★" : "☆"}
-          </Text>
-        </Pressable>
-
-        {/* MAIN CARD PRESS */}
-        <Pressable
-          onPress={onToggleExpand}
-          onPressIn={onPressIn}
-          onPressOut={onPressOut}
-          hitSlop={4}
-        >
-          <Animated.View style={pressAnimStyle}>
-            {/* HEADER */}
-            <View style={styles.headerWrap}>
-            
-              {/* TOP: PLAYER + BET */}
-              <View style={styles.topRow}>
-                <View style={styles.playerRow}>
-                  {props.playerImageUrl ? (
-                    <View style={styles.headshotWrap}>
-                      <Image
-                        source={{ uri: props.playerImageUrl }}
-                        style={styles.playerHeadshot}
-                      />
-                    </View>
-                  ) : (
-                    <View style={styles.playerHeadshotPlaceholder} />
-                  )}
-            
-                  <View style={styles.playerText}>
-                    <Text numberOfLines={1} style={styles.player}>
-                      {player}
-                    </Text>
-            
-                    <Text numberOfLines={1} style={styles.marketLine}>
-                      {(meta?.label ?? formatMarketLabel(market))} •{" "}
-                      {formatSideLabel(props.side)} {line}
-                    </Text>
-                  </View>
-                </View>
-            
-                {/* ODDS */}
-                <View style={styles.oddsInline}>
-                  {uniqueBooks.slice(0, 2).map((b) => {
-                    const bookKey = normalizeBookKey(b.bookmaker);
-                    const reactKey = `${bookKey}-${b.odds}-${line}`;
-                  
-                    return (
-                      <View key={reactKey} style={styles.oddsPill}>
-                        {BOOKMAKER_LOGOS[bookKey] ? (
-                          <Image
-                            source={BOOKMAKER_LOGOS[bookKey]}
-                            style={styles.bookLogo}
-                          />
-                        ) : (
-                          <View style={styles.bookLogoPlaceholder} />
-                        )}
-                  
-                        <Text style={styles.oddsText}>{formatOdds(b.odds)}</Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-            
-              {/* MATCHUP (BOTTOM CENTER) */}
-              <View style={styles.matchupRow}>
-                <View style={styles.logoRow}>
-                  {away && TEAM_LOGOS[away] && (
-                    <Image source={{ uri: TEAM_LOGOS[away] }} style={styles.teamLogoSm} />
-                  )}
-                  <Text style={styles.vs}>vs</Text>
-                  {home && TEAM_LOGOS[home] && (
-                    <Image source={{ uri: TEAM_LOGOS[home] }} style={styles.teamLogoSm} />
-                  )}
-                </View>
-            
-                <Text style={styles.matchupText}>
-                  {away} @ {home}
-                </Text>
-              </View>
-            
-            </View>
-
-            {/* DIVIDER */}
-            <View style={styles.divider} />
-
-            {/* METRICS */}
-            <View style={styles.metricsRow}>
-              <View>
-                <Text style={styles.hitText}>{hitPct}% HIT</Text>
-                <Text style={styles.metricSub}>Last 10</Text>
+              <View style={styles.gridRow}>
+                <Text style={styles.statValue}>{avg?.toFixed(1) ?? "—"}</Text>
+                <Text style={styles.statValue}>{hitRatePct}%</Text>
+                <Text style={styles.statValue}>{Math.round((badMiss ?? 0) * 100)}%</Text>
+                <Text style={styles.statValue}>{pace?.toFixed(1) ?? "—"}</Text>
               </View>
 
-              <View style={styles.badge}>
-                <Text style={styles.badgeLabel}>CONF</Text>
-                <Text
-                  style={[
-                    styles.badgeValue,
-                    { color: confidenceColor },
-                  ]}
-                >
-                  {confidence}
-                </Text>
-              </View>
-            </View>
-
-            {/* CONFIDENCE BAR */}
-            <View style={styles.confidenceRow}>
-              <View style={styles.confidenceSpacer} />
-              <View style={styles.confidenceBarWrap}>
-                <View style={styles.confidenceBarTrack}>
-                  <View
+              <View style={styles.windowToggle}>
+                {(["L5", "L10", "L20"] as const).map((n) => (
+                  <Pressable
+                    key={n}
+                    onPress={() => setWindow(n)}
                     style={[
-                      styles.confidenceBarFill,
-                      {
-                        width: `${confidence}%`,
-                        backgroundColor: confidenceColor,
-                      },
+                      styles.windowPill,
+                      window === n && styles.windowPillActive,
                     ]}
-                  />
-                </View>
+                  >
+                    <Text>{n}</Text>
+                  </Pressable>
+                ))}
               </View>
             </View>
-
-            {/* EXPANDED SECTION (AUTO HEIGHT) */}
-            {expanded && (
-              <View style={styles.expandWrap}>
-                <View style={styles.expandInner}>
-                  {/* PERFORMANCE */}
-                  <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionIcon}>📊</Text>
-                    <Text style={styles.sectionText}>Performance</Text>
-                  </View>
-            
-                  {/* 👇 BAR CHART ROW */}
-                  <View style={{ alignItems: "center" }}>
-                    {__DEV__ && (
-                      <>
-                        {console.log("BAR → sparkline", sparkline)}
-                        {console.log("BAR → dates", dates)}
-                      </>
-                    )}
-                  
-                    <MiniBarSparkline
-                      data={sparkline}
-                      dates={dates}
-                    />
-                  </View>
-            
-                  <View style={styles.gridRow}>
-                    <Text style={styles.statLabel}>AVG</Text>
-                    <Text style={styles.statLabel}>HIT%</Text>
-                    <Text style={styles.statLabel}>BAD MISS</Text>
-                    <Text style={styles.statLabel}>PACE</Text>
-                  </View>
-
-                  <View style={styles.gridRow}>
-                    <Text style={styles.statValue}>
-                      {avg != null ? avg.toFixed(1) : "—"}
-                    </Text>
-                    <Text style={styles.statValue}>
-                      {Math.round((hitRate ?? 0) * 100)}%
-                    </Text>
-                    <Text style={styles.statValue}>
-                      {Math.round((badMiss ?? 0) * 100)}%
-                    </Text>
-                    <Text style={styles.statValue}>
-                      {pace?.toFixed(1) ?? "—"}
-                    </Text>
-                  </View>
-
-                  {/* EDGE */}
-                  <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionIcon}>🎯</Text>
-                    <Text style={styles.sectionText}>Edge</Text>
-                  </View>
-
-                  <View style={styles.gridRow}>
-                    <Text style={styles.statLabel}>+1</Text>
-                    <Text style={styles.statLabel}>+2</Text>
-                    <Text style={styles.statLabel}>MARGIN</Text>
-                    <Text style={styles.statLabel}>Δ LINE</Text>
-                  </View>
-
-                  <View style={styles.gridRow}>
-                    <Text style={styles.statValue}>
-                      {Math.round((clear1 ?? 0) * 100)}%
-                    </Text>
-                    <Text style={styles.statValue}>
-                      {Math.round((clear2 ?? 0) * 100)}%
-                    </Text>
-                    <Text style={styles.statValue}>
-                      {margin?.toFixed(1) ?? "—"}
-                    </Text>
-                    <Text style={styles.statValue}>
-                      {props.delta_vs_line?.toFixed(1) ?? "—"}
-                    </Text>
-                  </View>
-
-                  {/* CONTEXT */}
-                  <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionIcon}>⚡</Text>
-                    <Text style={styles.sectionText}>Context</Text>
-                  </View>
-
-                  <View style={styles.gridRow}>
-                    <Text style={styles.statLabel}>TS%</Text>
-                    <Text style={styles.statLabel}>USG%</Text>
-                    <Text style={styles.statLabel}>PACE Δ</Text>
-                  </View>
-
-                  <View style={styles.gridRow}>
-                    <Text style={styles.statValue}>
-                      {props.ts_l10?.toFixed(3) ?? "—"}
-                    </Text>
-                    <Text style={styles.statValue}>
-                      {Math.round((usage ?? 0) * 100)}%
-                    </Text>
-                    <Text style={styles.statValue}>
-                      {pace_delta != null
-                        ? pace_delta.toFixed(1)
-                        : "—"}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* WINDOW TOGGLE */}
-                <View style={styles.windowToggle}>
-                  <View style={styles.windowPillGroup}>
-                    {[5, 10, 20].map((n) => {
-                      const active = window === n;
-                      return (
-                        <Pressable
-                          key={n}
-                          onPress={() =>
-                            setWindow(n as 5 | 10 | 20)
-                          }
-                          style={[
-                            styles.windowPill,
-                            active && styles.windowPillActive,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.windowPillLabel,
-                              active &&
-                                styles.windowPillLabelActive,
-                            ]}
-                          >
-                            L{n}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </View>
-              </View>
-            )}
-          </Animated.View>
-        </Pressable>
-      </Animated.View>
-    </Animated.View>
-  </Swipeable>
-);
+          )}
+        </View>
+      </View>
+    </Swipeable>
+  );
 }
+
 /* ======================================================
    STYLES
 ====================================================== */
 function makeStyles(colors: any) {
   return StyleSheet.create({
-    outer: {
-      marginHorizontal: 14,
-      marginVertical: 10,
-    },
-
+    outer: { margin: 12 },
     card: {
       backgroundColor: colors.surface.card,
-      borderRadius: 18,
-      paddingVertical: 16,
-      paddingHorizontal: 14,
+      borderRadius: 16,
+      padding: 14,
       borderWidth: 1,
       borderColor: colors.border.subtle,
-      shadowColor: "#000",
-      shadowOpacity: 0.25,
-      shadowRadius: 10,
-      shadowOffset: { width: 0, height: 6 },
-      elevation: 4,
-      overflow: "hidden",
     },
-
-    accentStrip: {
-      position: "absolute",
-      left: 0,
-      top: 0,
-      bottom: 0,
-      width: 4,
-    },
-
-    saveButton: {
-      position: "absolute",
-      top: 10,
-      right: 12,
-      width: 34,
-      height: 34,
-      borderRadius: 12,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: colors.surface.elevated,
-    },
-
-    saveStar: {
-      fontSize: 18,
-      fontWeight: "900",
-    },
-
+    saveButton: { position: "absolute", top: 8, right: 8 },
+    saveStar: { fontSize: 18, color: colors.text.muted },
     saveStarOn: { color: colors.accent.primary },
-    saveStarOff: { color: colors.text.muted },
 
-    headerRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 10,
-    },
+    player: { fontWeight: "800", color: colors.text.primary },
+    marketLine: { color: colors.text.secondary },
+    hitText: { fontWeight: "900", marginTop: 6 },
+    metricSub: { color: colors.text.muted },
 
-    teamLogo: {
-      width: 18,
-      height: 18,
-      resizeMode: "contain",
-    },
+    expandWrap: { marginTop: 12 },
+    gridRow: { flexDirection: "row", justifyContent: "space-between" },
+    statValue: { flex: 1, textAlign: "center", fontWeight: "800" },
 
-    teamLogoPlaceholder: {
-      width: 18,
-      height: 18,
-      borderRadius: 4,
-      backgroundColor: colors.surface.cardSoft,
-    },
-
-
-    player: {
-      fontWeight: "800",
-      color: colors.text.primary,
-      textAlign: "left",
-    },
-    
-    marketLine: {
-      fontWeight: "700",
-      color: colors.text.secondary,
-      textAlign: "left",
-    },
-
-    matchup: {
-      color: colors.text.muted,
-    },
-
-    oddsPill: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 999,
-      backgroundColor: colors.surface.cardSoft,
-    },
-
-
-    oddsText: {
-      fontWeight: "800",
-      color: colors.text.primary,
-    },
-
-    divider: {
-      height: 1,
-      backgroundColor: colors.border.subtle,
-      marginVertical: 8,
-    },
-
-    hitText: {
-      fontWeight: "900",
-      color: colors.text.primary,
-      letterSpacing: 0.3,
-    },
-
-
-    metricSub: {
-      color: colors.text.muted,
-    },
-
-    badge: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: 999,
-      borderWidth: 1,
-      borderColor: colors.border.subtle,
-},
-
-
-    badgeLabel: {
-      fontSize: 9,
-      fontWeight: "900",
-      color: colors.text.muted,
-    },
-
-    badgeValue: {
-      fontSize: 15,
-      fontWeight: "900",
-    },
-
-    expandWrap: { overflow: "hidden" },
-
-    expandInner: {
-      marginTop: 12,
-      paddingTop: 12,
-      borderTopWidth: 1,
-      borderTopColor: colors.border.subtle,
-    },
-
-    sectionHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-      marginTop: 14,
-      marginBottom: 6,
-    },
-
-    sectionText: {
-      fontWeight: "900",
-      letterSpacing: 0.6,
-      textTransform: "uppercase",
-      color: colors.text.secondary,
-    },
-    sectionIcon: {
-      fontSize: 13,
-      lineHeight: 13,
-      opacity: 0.85,
-    },
-    expandedContainer: {
-      gap: 12,
-    },
-    
-    gridRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-    },
-    
-    statLabel: {
-      flex: 1,
-      textAlign: "center",
-      fontSize: 11,
-      fontWeight: "700",
-      letterSpacing: 0.4,
-      color: colors.text.muted,
-    },
-    
-    statValue: {
-      flex: 1,
-      textAlign: "center",
-      fontSize: 14,
-      fontWeight: "900",
-      color: colors.text.primary,
-    },
-    confidenceRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      marginTop: 6,
-    },
-    
-    confidenceSpacer: {
-      flex: 3, // 👈 left 75% empty
-    },
-    
-    confidenceBarWrap: {
-      flex: 1, // 👈 right 25%
-      alignItems: "flex-end",
-    },
-    
-    confidenceBarTrack: {
-      width: "100%",
-      height: 4,
-      borderRadius: 999,
-      backgroundColor: colors.surface.cardSoft,
-      opacity: 0.6, // quieter
-    },
-    
-    confidenceBarFill: {
-      height: "100%",
-      borderRadius: 999,
-    },
     windowToggle: {
-      marginTop: 14,
-      alignItems: "center",
-    },
-    
-    windowPillGroup: {
       flexDirection: "row",
-      backgroundColor: colors.surface.cardSoft,
-      borderRadius: 999,
-      padding: 4,
-      gap: 6,
+      justifyContent: "center",
+      marginTop: 10,
+      gap: 8,
     },
-    
     windowPill: {
-      paddingHorizontal: 14,
+      paddingHorizontal: 12,
       paddingVertical: 6,
       borderRadius: 999,
-      backgroundColor: "transparent",
+      borderWidth: 1,
+      borderColor: colors.border.subtle,
     },
-    
     windowPillActive: {
-      backgroundColor: colors.surface.card,
-      shadowColor: "#000",
-      shadowOpacity: 0.18,
-      shadowRadius: 6,
-      shadowOffset: { width: 0, height: 3 },
-      elevation: 3,
-    },
-    
-    windowPillLabel: {
-      fontSize: 12,
-      fontWeight: "800",
-      color: colors.text.muted,
-      letterSpacing: 0.4,
-    },
-    
-    windowPillLabelActive: {
-      color: colors.text.primary,
-    },
-    bookLogo: {
-      width: 14,
-      height: 14,
-      resizeMode: "contain",
-    },
-
-    bookLogoPlaceholder: {
-      width: 14,
-      height: 14,
-      borderRadius: 3,
       backgroundColor: colors.surface.cardSoft,
-    },
-    metricsRow: {
-      flexDirection: "row",
-      alignItems: "flex-end",
-      justifyContent: "space-between",
-      marginTop: 6,
-    },
-    oddsTopRight: {
-      position: "absolute",
-      top: 12,
-      right: 46, // 👈 pushes left so it doesn't collide with save star
-      flexDirection: "row",
-      gap: 6,
-    },
-    leftBlock: {
-      width: 72,            // 👈 prevents logo collapse
-      gap: 4,
-    },
-    
-    logoRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 6,
-    },
-    
-    teamLogoLg: {
-      width: 22,
-      height: 22,
-      resizeMode: "contain",
-    },
-    
-    vs: {
-      fontSize: 9,
-      fontWeight: "800",
-      color: colors.text.muted,
-      opacity: 0.7,
-    },
-    
-    matchupTop: {
-      fontSize: 11,
-      fontWeight: "700",
-      color: colors.text.muted,
-      textAlign: "center",
-    },
-    
-    centerBlock: {
-      flex: 1,
-      justifyContent: "center",
-      paddingLeft: 8,      // 👈 subtle bias back toward center
-    },
-    playerRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    
-    headshotWrap: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: colors.surface.card,
-      overflow: "hidden",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    
-    playerHeadshot: {
-      width: 34,
-      height: 34,
-      borderRadius: 17,
-      resizeMode: "cover",
-    },
-    
-    playerHeadshotPlaceholder: {
-      width: 34,
-      height: 34,
-      borderRadius: 17,
-      backgroundColor: colors.surface.cardSoft,
-      opacity: 0.5,
-    },
-    headerWrap: {
-      gap: 6,
-    },
-    
-    topRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-    },
-    
-    playerText: {
-      flexShrink: 1,
-    },
-    
-    oddsInline: {
-      flexDirection: "row",
-      gap: 6,
-    },
-    
-    matchupRow: {
-      alignItems: "center",
-      marginTop: 2,
-    },
-    
-    teamLogoSm: {
-      width: 16,
-      height: 16,
-      resizeMode: "contain",
-    },
-    
-    matchupText: {
-      fontSize: 12,
-      fontWeight: "600",
-      color: colors.text.muted,
-      marginTop: 2,
     },
   });
 }

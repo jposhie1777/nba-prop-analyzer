@@ -94,6 +94,7 @@ export default function PropsTestScreen() {
       return (
         <PropCard
           {...item}
+          playerId={item.player_id}
           scrollRef={listRef}
           saved={savedIds.has(item.id)}
           onToggleSave={() => toggleSave(item.id)}

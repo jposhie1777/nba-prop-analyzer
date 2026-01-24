@@ -23,7 +23,7 @@ export function usePlayerPropsMaster() {
     fetchPlayerPropsMaster()
       .then((rows) => {
         console.log("📦 [MASTER] raw rows:", rows.length);
-        console.log("📦 [MASTER] sample row:", rows[0]);
+        console.log("📦 [MASTER] sample raw:", rows[0]);
         setRaw(rows);
       })
       .catch((e) => {
@@ -39,7 +39,6 @@ export function usePlayerPropsMaster() {
     const set = new Set<string>();
     raw.forEach((r) => r.prop_type_base && set.add(r.prop_type_base));
     const result = ["ALL", ...Array.from(set)];
-
     console.log("📊 [MASTER] markets:", result);
     return result;
   }, [raw]);
@@ -53,25 +52,18 @@ export function usePlayerPropsMaster() {
     let failHit = 0;
     let pass = 0;
 
-    const out = raw.filter((p) => {
-      /* MARKET */
+    const filtered = raw.filter((p) => {
       if (filters.market !== "ALL" && p.prop_type_base !== filters.market) {
         failMarket++;
         return false;
       }
 
-      /* ODDS */
-      if (p.odds == null) {
-        failOdds++;
-        return false;
-      }
-      if (p.odds < filters.minOdds || p.odds > filters.maxOdds) {
+      if (p.odds == null || p.odds < filters.minOdds || p.odds > filters.maxOdds) {
         failOdds++;
         return false;
       }
 
-      /* HIT RATE (side-aware) */
-      const hit =
+      const hitRate =
         p.odds_side === "UNDER"
           ? filters.hitRateWindow === "L5"
             ? p.hit_rate_under_l5
@@ -84,12 +76,7 @@ export function usePlayerPropsMaster() {
           ? p.hit_rate_over_l20
           : p.hit_rate_over_l10;
 
-      if (hit == null) {
-        failHit++;
-        return false;
-      }
-
-      if (hit * 100 < filters.minHitRate) {
+      if (hitRate == null || hitRate * 100 < filters.minHitRate) {
         failHit++;
         return false;
       }
@@ -105,19 +92,8 @@ export function usePlayerPropsMaster() {
       pass,
     });
 
-    const normalized = out.map((p) => ({
-      id: `${p.prop_id}-${p.odds_side}`,
-      propId: p.prop_id,
-
-      player: p.player_name,
-      market: p.prop_type_base,
-      window: p.market_window,
-      line: p.line_value,
-
-      odds: p.odds,
-      oddsSide: p.odds_side,
-
-      hitRate:
+    const normalized = filtered.map((p) => {
+      const hitRate =
         p.odds_side === "UNDER"
           ? filters.hitRateWindow === "L5"
             ? p.hit_rate_under_l5
@@ -128,20 +104,34 @@ export function usePlayerPropsMaster() {
           ? p.hit_rate_over_l5
           : filters.hitRateWindow === "L20"
           ? p.hit_rate_over_l20
-          : p.hit_rate_over_l10,
-    }));
+          : p.hit_rate_over_l10;
 
-    console.log("🧪 [MASTER] sample final prop:", normalized[0]);
+      return {
+        id: `${p.prop_id}-${p.odds_side}`,
+        propId: p.prop_id,
+
+        player: p.player_name,
+        market: p.prop_type_base,
+        window: p.market_window,
+        line: p.line_value,
+
+        odds: p.odds,
+        oddsSide: p.odds_side,
+
+        // 🔑 SINGLE SOURCE OF TRUTH
+        hitRate,                           // 0–1
+        hitRatePct: Math.round(hitRate * 100), // 0–100
+      };
+    });
+
+    console.log("🧪 [MASTER] sample final:", normalized[0]);
     return normalized;
   }, [raw, filters]);
 
   return {
     loading,
     props,
-    filters: {
-      ...filters,
-      markets,
-    },
+    filters: { ...filters, markets },
     setFilters,
   };
 }

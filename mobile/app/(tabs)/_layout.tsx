@@ -1,3 +1,4 @@
+// app/(tabs)/_layout.tsx
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { HapticTab } from "@/components/haptic-tab";
@@ -32,6 +33,18 @@ export default function TabLayout() {
           title: "Props",
           tabBarIcon: ({ color }) => (
             <Ionicons name="stats-chart" size={22} color={color} />
+          ),
+        }}
+      />
+
+      {/* 👇 NEW TEST TAB */}
+      <Tabs.Screen
+        name="props-test"
+        options={{
+          title: "Props Test",
+          tabBarLabel: "Test",
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="flask-outline" size={22} color={color} />
           ),
         }}
       />

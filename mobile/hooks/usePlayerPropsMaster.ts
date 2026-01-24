@@ -1,12 +1,13 @@
-// /hooks/usePlayerPropsMaster.ts
+// hooks/usePlayerPropsMaster.ts
 import { useEffect, useMemo, useState } from "react";
 import { fetchPlayerPropsMaster } from "@/lib/apiMaster";
 
+type HitRateWindow = "L5" | "L10" | "L20";
+
 const DEFAULT_FILTERS = {
   market: "ALL",
-  hitRateWindow: "L10" as "L5" | "L10" | "L20",
+  hitRateWindow: "L10" as HitRateWindow,
   minHitRate: 80,
-  minConfidence: 0,
   minOdds: -700,
   maxOdds: 200,
 };
@@ -17,10 +18,9 @@ export function usePlayerPropsMaster() {
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
 
   useEffect(() => {
-    fetchPlayerPropsMaster().then((rows) => {
-      setRaw(rows);
-      setLoading(false);
-    });
+    fetchPlayerPropsMaster()
+      .then((rows) => setRaw(rows))
+      .finally(() => setLoading(false));
   }, []);
 
   const markets = useMemo(() => {
@@ -30,27 +30,35 @@ export function usePlayerPropsMaster() {
   const props = useMemo(() => {
     return raw
       .filter((p) => {
-        if (filters.market !== "ALL" && p.prop_type_base !== filters.market)
+        // MARKET
+        if (filters.market !== "ALL" && p.prop_type_base !== filters.market) {
           return false;
+        }
 
+        // HIT RATE
         const hit =
           filters.hitRateWindow === "L5"
-            ? p.hit_rate_l5
+            ? p.hit_rate_over_l5
             : filters.hitRateWindow === "L20"
-            ? p.hit_rate_l20
-            : p.hit_rate_l10;
+            ? p.hit_rate_over_l20
+            : p.hit_rate_over_l10;
 
         if ((hit ?? 0) * 100 < filters.minHitRate) return false;
-        if (p.confidence < filters.minConfidence) return false;
-        if (p.odds < filters.minOdds || p.odds > filters.maxOdds) return false;
+
+        // ODDS (prefer over)
+        const odds = p.odds_over ?? p.odds_under;
+        if (odds == null) return false;
+        if (odds < filters.minOdds || odds > filters.maxOdds) return false;
 
         return true;
       })
       .map((p) => ({
         ...p,
-        id: `${p.player}-${p.prop_type_base}-${p.line_value}`,
+        id: `${p.player_id}-${p.prop_type_base}-${p.line_value}-${p.market_window}`,
+        player: p.player_name,
         market: p.prop_type_base,
         line: p.line_value,
+        odds: p.odds_over ?? p.odds_under,
       }));
   }, [raw, filters]);
 

@@ -172,11 +172,11 @@ export function usePlayerPropsMaster({
   /* ======================================================
      RETURN
   ====================================================== */
-  return {
+    return {
     loading,
     props,
     filters: { ...filters, markets },
     setFilters,
-    fetchNext, // ✅ REQUIRED BY SCREEN
+    fetchNext,
   };
-}}
+}

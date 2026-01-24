@@ -42,7 +42,7 @@ def read_props(
     game_date: Optional[str] = None,
     market: Optional[str] = None,
     window: Optional[str] = None,
-    limit: int = Query(200, le=500),
+    limit: int = Query(500, ge=100, le=2000),
     offset: int = 0,
 ):
     client = get_bq_client()
@@ -53,12 +53,11 @@ def read_props(
         window,
     )
 
-    # 🔑 IMPORTANT: use canonical hit_rate_l10
     sql = f"""
     SELECT *
     FROM `{DATASET}.{VIEW}`
     {where_sql}
-    ORDER BY hit_rate_l10 DESC
+    ORDER BY hit_rate_l10 DESC, prop_id
     LIMIT @limit
     OFFSET @offset
     """

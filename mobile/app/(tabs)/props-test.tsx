@@ -1,3 +1,4 @@
+// app/(tabs)/props-test
 import {
   View,
   Text,

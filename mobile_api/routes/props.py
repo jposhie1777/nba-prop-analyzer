@@ -19,7 +19,6 @@ def build_where(
     game_date: Optional[str],
     market: Optional[str],
     window: Optional[str],
-    min_confidence: Optional[float],
 ):
     clauses = []
 
@@ -32,9 +31,6 @@ def build_where(
     if window:
         clauses.append("market_window = @window")
 
-    if min_confidence is not None:
-        clauses.append("confidence >= @min_confidence")
-
     if not clauses:
         return ""
 
@@ -46,7 +42,6 @@ def read_props(
     game_date: Optional[str] = None,
     market: Optional[str] = None,
     window: Optional[str] = None,
-    min_confidence: Optional[float] = None,
     limit: int = Query(200, le=500),
     offset: int = 0,
 ):
@@ -56,14 +51,14 @@ def read_props(
         game_date,
         market,
         window,
-        min_confidence,
     )
 
+    # 🔑 IMPORTANT: use canonical hit_rate_l10
     sql = f"""
     SELECT *
     FROM `{DATASET}.{VIEW}`
     {where_sql}
-    ORDER BY hit_rate_over_l10 DESC
+    ORDER BY hit_rate_l10 DESC
     LIMIT @limit
     OFFSET @offset
     """
@@ -74,13 +69,17 @@ def read_props(
     ]
 
     if game_date:
-        params.append(bigquery.ScalarQueryParameter("game_date", "STRING", game_date))
+        params.append(
+            bigquery.ScalarQueryParameter("game_date", "STRING", game_date)
+        )
     if market:
-        params.append(bigquery.ScalarQueryParameter("market", "STRING", market))
+        params.append(
+            bigquery.ScalarQueryParameter("market", "STRING", market)
+        )
     if window:
-        params.append(bigquery.ScalarQueryParameter("window", "STRING", window))
-    if min_confidence is not None:
-        params.append(bigquery.ScalarQueryParameter("min_confidence", "FLOAT64", min_confidence))
+        params.append(
+            bigquery.ScalarQueryParameter("window", "STRING", window)
+        )
 
     job = client.query(
         sql,

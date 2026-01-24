@@ -6,7 +6,7 @@ import {
   FlatList,
   Pressable,
 } from "react-native";
-import { useMemo, useState, useCallback, useRef } from "react";
+import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import Slider from "@react-native-community/slider";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
@@ -21,21 +21,20 @@ import { usePlayerPropsMaster } from "@/hooks/usePlayerPropsMaster";
    Screen
 ====================================================== */
 export default function PropsTestScreen() {
-  const colors = useTheme((s) => s.colors);
+  const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const savedIds = useSavedBets((s) => s.savedIds);
   const toggleSave = useSavedBets((s) => s.toggleSave);
 
   const {
-    props,
+    props: rawProps,
     loading,
     filters,
     setFilters,
   } = usePlayerPropsMaster();
 
   const { getByPlayer } = useHistoricalPlayerTrends();
-
   const listRef = useRef<FlatList>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -44,7 +43,39 @@ export default function PropsTestScreen() {
   }, []);
 
   /* ======================================================
-     Render Item
+     SANITIZE + NORMALIZE DATA
+  ====================================================== */
+  const props = useMemo(() => {
+    return rawProps
+      .filter((p) => {
+        // hard guardrails
+        if (!p.player) return false;
+        if (!p.prop_type_base) return false;
+        if (p.line_value == null) return false;
+        return true;
+      })
+      .map((p, idx) => {
+        const market = String(p.prop_type_base || "unknown");
+
+        return {
+          ...p,
+          market,
+          line: p.line_value,
+
+          // 🔑 bulletproof ID (no collisions)
+          id: [
+            p.player_id ?? "p",
+            market,
+            p.line_value,
+            p.market_window ?? "FULL",
+            idx,
+          ].join("::"),
+        };
+      });
+  }, [rawProps]);
+
+  /* ======================================================
+     RENDER ITEM
   ====================================================== */
   const renderItem = useCallback(
     ({ item }: any) => {
@@ -53,56 +84,24 @@ export default function PropsTestScreen() {
 
       return (
         <PropCard
-          /* CORE */
-          player={item.player}
-          market={item.market}
-          line={item.line}
-          odds={item.odds}
-          side={item.odds === item.odds_under ? "under" : "over"}
-          playerImageUrl={item.player_image_url}
-
-          /* HIT RATES (DEFAULT = L10) */
-          hitRateL10={item.hit_rate_over_l10}
-          edge={0}
-          confidence={0}
-
-          /* WINDOWS */
-          avg_l5={item.avg_l5}
-          avg_l10={item.avg_l10}
-          avg_l20={item.avg_l20}
-
-          hit_rate_l5={item.hit_rate_over_l5}
-          hit_rate_l10={item.hit_rate_over_l10}
-          hit_rate_l20={item.hit_rate_over_l20}
-
-          /* CONTEXT */
-          matchup={item.matchup}
-          home={item.home_team}
-          away={item.away_team}
-
-          /* SPARKLINES */
-          sparkline_l5={spark.sparkline_l5}
-          sparkline_l10={spark.sparkline_l10}
-          sparkline_l20={spark.sparkline_l20}
-          last5_dates={trend?.last5_dates}
-          last10_dates={trend?.last10_dates}
-          last20_dates={trend?.last20_dates}
-
-          /* STATE */
+          {...item}
           scrollRef={listRef}
           saved={savedIds.has(item.id)}
           onToggleSave={() => toggleSave(item.id)}
           expanded={expandedId === item.id}
           onToggleExpand={() => toggleExpand(item.id)}
+          sparkline_l5={spark?.sparkline_l5}
+          sparkline_l10={spark?.sparkline_l10}
+          sparkline_l20={spark?.sparkline_l20}
+          last5_dates={trend?.last5_dates}
+          last10_dates={trend?.last10_dates}
+          last20_dates={trend?.last20_dates}
         />
       );
     },
     [savedIds, expandedId, toggleSave, toggleExpand, getByPlayer]
   );
 
-  /* ======================================================
-     Loading State
-  ====================================================== */
   if (loading) {
     return (
       <GestureHandlerRootView style={styles.root}>
@@ -114,24 +113,22 @@ export default function PropsTestScreen() {
   }
 
   /* ======================================================
-     Render
+     UI
   ====================================================== */
   return (
     <GestureHandlerRootView style={styles.root}>
       <View style={styles.screen}>
-        {/* ===========================
-            FILTERS
-        ============================ */}
+        {/* ================= FILTERS ================= */}
         <View style={styles.filters}>
           <Text style={styles.filtersTitle}>Filters</Text>
 
-          {/* MARKET */}
+          {/* MARKETS */}
           <View style={styles.pills}>
-            {filters.markets.map((mkt) => {
+            {filters.markets.map((mkt, i) => {
               const active = filters.market === mkt;
               return (
                 <Pressable
-                  key={mkt}
+                  key={`mkt-${mkt}-${i}`}
                   onPress={() =>
                     setFilters((f) => ({
                       ...f,
@@ -158,7 +155,7 @@ export default function PropsTestScreen() {
               const active = filters.hitRateWindow === w;
               return (
                 <Pressable
-                  key={w}
+                  key={`hr-${w}`}
                   onPress={() =>
                     setFilters((f) => ({
                       ...f,
@@ -179,7 +176,6 @@ export default function PropsTestScreen() {
             })}
           </View>
 
-          {/* HIT RATE SLIDER */}
           <Text style={styles.sliderLabel}>
             Hit Rate ≥ {filters.minHitRate}%
           </Text>
@@ -195,11 +191,9 @@ export default function PropsTestScreen() {
             thumbTintColor={colors.accent.primary}
           />
 
-          {/* ODDS RANGE */}
           <Text style={styles.sliderLabel}>
             Odds {filters.minOdds} → {filters.maxOdds}
           </Text>
-
           <Slider
             minimumValue={-1000}
             maximumValue={1000}
@@ -208,10 +202,7 @@ export default function PropsTestScreen() {
             onValueChange={(v) =>
               setFilters((f) => ({ ...f, minOdds: v }))
             }
-            minimumTrackTintColor={colors.accent.primary}
-            thumbTintColor={colors.accent.primary}
           />
-
           <Slider
             minimumValue={-1000}
             maximumValue={1000}
@@ -220,21 +211,16 @@ export default function PropsTestScreen() {
             onValueChange={(v) =>
               setFilters((f) => ({ ...f, maxOdds: v }))
             }
-            minimumTrackTintColor={colors.accent.primary}
-            thumbTintColor={colors.accent.primary}
           />
         </View>
 
-        {/* ===========================
-            PROP LIST
-        ============================ */}
+        {/* ================= LIST ================= */}
         <FlatList
           ref={listRef}
           data={props}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 40 }}
         />
       </View>
     </GestureHandlerRootView>
@@ -247,63 +233,45 @@ export default function PropsTestScreen() {
 function makeStyles(colors: any) {
   return StyleSheet.create({
     root: { flex: 1 },
-
-    screen: {
-      flex: 1,
-      backgroundColor: colors.surface.screen,
-    },
-
-    center: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-
-    loading: {
-      color: colors.text.muted,
-      fontWeight: "600",
-    },
+    screen: { flex: 1, backgroundColor: colors.surface.screen },
+    center: { flex: 1, alignItems: "center", justifyContent: "center" },
+    loading: { color: colors.text.muted },
 
     filters: {
-      padding: 14,
-      backgroundColor: colors.surface.card,
-      borderBottomWidth: 1,
+      padding: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border.subtle,
     },
-
     filtersTitle: {
-      fontSize: 16,
+      fontSize: 14,
       fontWeight: "800",
       color: colors.text.primary,
-      marginBottom: 10,
+      marginBottom: 8,
     },
-
     pills: {
       flexDirection: "row",
       flexWrap: "wrap",
-      gap: 8,
-      marginBottom: 10,
+      marginBottom: 8,
+      gap: 6,
     },
-
     pill: {
-      paddingHorizontal: 12,
+      paddingHorizontal: 10,
       paddingVertical: 6,
-      borderRadius: 14,
-      backgroundColor: colors.surface.elevated,
-      color: colors.text.secondary,
-      fontWeight: "700",
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border.subtle,
+      color: colors.text.muted,
+      fontSize: 12,
     },
-
     pillActive: {
       backgroundColor: colors.accent.primary,
-      color: colors.text.primary,
+      color: colors.text.inverse,
+      borderColor: colors.accent.primary,
     },
-
     sliderLabel: {
-      marginTop: 10,
-      marginBottom: 4,
-      fontWeight: "700",
-      color: colors.text.secondary,
+      fontSize: 12,
+      color: colors.text.muted,
+      marginTop: 6,
     },
   });
 }

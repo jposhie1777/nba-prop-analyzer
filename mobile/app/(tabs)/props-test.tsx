@@ -1,4 +1,5 @@
 // app/(tabs)/props-test
+// app/(tabs)/props-test
 import {
   View,
   Text,
@@ -8,11 +9,9 @@ import {
 } from "react-native";
 import { useMemo, useState, useCallback, useRef, useEffect } from "react";
 import Slider from "@react-native-community/slider";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import PropCard from "@/components/PropCard";
-import { PropBetslipDrawer } from "@/components/prop/PropBetslipDrawer";
 import { useTheme } from "@/store/useTheme";
 import { useSavedBets } from "@/store/useSavedBets";
 import { useHistoricalPlayerTrends } from "@/hooks/useHistoricalPlayerTrends";
@@ -20,25 +19,10 @@ import { resolveSparklineByMarket } from "@/utils/resolveSparkline";
 import { usePlayerPropsMaster } from "@/hooks/usePlayerPropsMaster";
 
 /* ======================================================
-   Constants
-====================================================== */
-const FILTERS_KEY = "props_test_filters_v1";
-const PAGE_SIZE = 200;
-
-/* ======================================================
-   Types
-====================================================== */
-type GroupedProp = any & {
-  books?: {
-    bookmaker: string;
-    odds: number;
-  }[];
-};
-
-/* ======================================================
    Screen
 ====================================================== */
 export default function PropsTestScreen() {
+  // ✅ CORRECT theme usage (Zustand selector)
   const colors = useTheme((s) => s.colors);
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
@@ -50,101 +34,69 @@ export default function PropsTestScreen() {
     loading,
     filters,
     setFilters,
-    fetchNext, // ⬅️ REQUIRED from hook
-  } = usePlayerPropsMaster({
-    limit: PAGE_SIZE,
-  });
+  } = usePlayerPropsMaster();
 
   const { getByPlayer } = useHistoricalPlayerTrends();
 
   const listRef = useRef<FlatList>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const [offset, setOffset] = useState(0);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-
   const toggleExpand = useCallback((id: string) => {
     setExpandedId((prev) => (prev === id ? null : id));
   }, []);
 
   /* ======================================================
-     FILTER PERSISTENCE
+     DEBUG — RAW INPUT
   ====================================================== */
   useEffect(() => {
-    (async () => {
-      const raw = await AsyncStorage.getItem(FILTERS_KEY);
-      if (!raw) return;
-      setFilters((f) => ({ ...f, ...JSON.parse(raw) }));
-    })();
-  }, [setFilters]);
-
-  useEffect(() => {
-    AsyncStorage.setItem(FILTERS_KEY, JSON.stringify(filters));
-  }, [filters]);
+    console.log("🧪 [SCREEN] rawProps length:", rawProps.length);
+    if (rawProps.length) {
+      console.log("🧪 [SCREEN] sample raw prop:", rawProps[0]);
+    }
+  }, [rawProps]);
 
   /* ======================================================
-     PAGINATION
-  ====================================================== */
-  const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore) return;
-
-    setLoadingMore(true);
-    const count = await fetchNext({ offset });
-
-    setOffset((o) => o + PAGE_SIZE);
-    if (count < PAGE_SIZE) setHasMore(false);
-
-    setLoadingMore(false);
-  }, [fetchNext, offset, loadingMore, hasMore]);
-
-  /* ======================================================
-     MULTI-BOOK GROUPING
+     SANITIZE + NORMALIZE
   ====================================================== */
   const props = useMemo(() => {
-    const base = rawProps.filter((p) => {
-      if (!p.player) return false;
-      if (!p.market) return false;
-      if (p.line == null) return false;
-      return true;
-    });
+    const cleaned = rawProps
+      .filter((p) => {
+        if (!p.player) return false;
+        if (!p.market) return false;
+        if (p.line == null) return false;
+        if (!p.id) return false;
+        return true;
+      })
+      .map((p, idx) => ({
+        ...p,
+        // 🔒 absolutely unique key
+        id: `${p.id}::${idx}`,
+      }));
 
-    const map = new Map<string, GroupedProp>();
+    console.log("🧪 [SCREEN] props after sanitize:", cleaned.length);
 
-    base.forEach((p) => {
-      const key = `${p.player}-${p.market}-${p.line}`;
-
-      if (!map.has(key)) {
-        map.set(key, {
-          ...p,
-          id: key,
-          books: [],
-        });
-      }
-
-      if (p.bookmaker) {
-        map.get(key)!.books!.push({
-          bookmaker: p.bookmaker,
-          odds: p.odds,
-        });
-      }
-    });
-
-    return Array.from(map.values());
+    return cleaned;
   }, [rawProps]);
 
   /* ======================================================
      RENDER ITEM
   ====================================================== */
   const renderItem = useCallback(
-    ({ item }: { item: GroupedProp }) => {
+    ({ item }: any) => {
       const trend = getByPlayer(item.player);
       const spark = resolveSparklineByMarket(item.market, trend);
+
+      if (!spark) {
+        console.warn(
+          "⚠️ Unhandled sparkline market:",
+          item.market
+        );
+      }
 
       return (
         <PropCard
           {...item}
-          books={item.books}
+          playerId={item.player_id}
           scrollRef={listRef}
           saved={savedIds.has(item.id)}
           onToggleSave={() => toggleSave(item.id)}
@@ -182,12 +134,13 @@ export default function PropsTestScreen() {
         <View style={styles.filters}>
           <Text style={styles.filtersTitle}>Filters</Text>
 
+          {/* MARKETS */}
           <View style={styles.pills}>
             {filters.markets.map((mkt) => {
               const active = filters.market === mkt;
               return (
                 <Pressable
-                  key={mkt}
+                  key={`mkt-${mkt}`}
                   onPress={() =>
                     setFilters((f) => ({
                       ...f,
@@ -208,6 +161,33 @@ export default function PropsTestScreen() {
             })}
           </View>
 
+          {/* HIT RATE WINDOW */}
+          <View style={styles.pills}>
+            {(["L5", "L10", "L20"] as const).map((w) => {
+              const active = filters.hitRateWindow === w;
+              return (
+                <Pressable
+                  key={`hr-${w}`}
+                  onPress={() =>
+                    setFilters((f) => ({
+                      ...f,
+                      hitRateWindow: w,
+                    }))
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.pill,
+                      active && styles.pillActive,
+                    ]}
+                  >
+                    {w}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
           <Text style={styles.sliderLabel}>
             Hit Rate ≥ {filters.minHitRate}%
           </Text>
@@ -222,27 +202,42 @@ export default function PropsTestScreen() {
             minimumTrackTintColor={colors.accent.primary}
             thumbTintColor={colors.accent.primary}
           />
+
+          <Text style={styles.sliderLabel}>
+            Odds {filters.minOdds} → {filters.maxOdds}
+          </Text>
+          <Slider
+            minimumValue={-1000}
+            maximumValue={1000}
+            step={25}
+            value={filters.minOdds}
+            onValueChange={(v) =>
+              setFilters((f) => ({ ...f, minOdds: v }))
+            }
+          />
+          <Slider
+            minimumValue={-1000}
+            maximumValue={1000}
+            step={25}
+            value={filters.maxOdds}
+            onValueChange={(v) =>
+              setFilters((f) => ({ ...f, maxOdds: v }))
+            }
+          />
         </View>
 
         {/* ================= LIST ================= */}
+        <Text style={{ padding: 8, color: "red" }}>
+          PROPS COUNT: {props.length}
+        </Text>
+
         <FlatList
           ref={listRef}
           data={props}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           showsVerticalScrollIndicator={false}
-          onEndReached={loadMore}
-          onEndReachedThreshold={0.6}
-          ListFooterComponent={
-            loadingMore ? (
-              <Text style={{ textAlign: "center", padding: 16 }}>
-                Loading more…
-              </Text>
-            ) : null
-          }
         />
-
-        <PropBetslipDrawer />
       </View>
     </GestureHandlerRootView>
   );
@@ -266,6 +261,7 @@ function makeStyles(colors: any) {
     loading: {
       color: colors.text.muted,
     },
+
     filters: {
       padding: 12,
       borderBottomWidth: StyleSheet.hairlineWidth,
@@ -303,4 +299,4 @@ function makeStyles(colors: any) {
       marginTop: 6,
     },
   });
-}
+}}

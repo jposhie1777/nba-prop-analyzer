@@ -1,8 +1,23 @@
-// lib/apiMaster.ts
 import { API_BASE } from "./config";
 
-export async function fetchPlayerPropsMaster() {
-  const url = `${API_BASE}/props`;
+type FetchArgs = {
+  limit?: number;
+  offset?: number;
+};
+
+export async function fetchPlayerPropsMaster(
+  { limit, offset }: FetchArgs = {}
+) {
+  const params = new URLSearchParams();
+
+  if (limit != null) params.set("limit", String(limit));
+  if (offset != null) params.set("offset", String(offset));
+
+  const url =
+    params.toString().length > 0
+      ? `${API_BASE}/props?${params.toString()}`
+      : `${API_BASE}/props`;
+
   console.log("📡 [MASTER FETCH]", url);
 
   const res = await fetch(url, { credentials: "omit" });

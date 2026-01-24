@@ -2,152 +2,108 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchPlayerPropsMaster } from "@/lib/apiMaster";
 
-/* ======================================================
-   Types
-====================================================== */
 export type HitRateWindow = "L5" | "L10" | "L20";
-export type BetSide = "OVER" | "UNDER";
 
-type Filters = {
-  market: string;
-  hitRateWindow: HitRateWindow;
-  minHitRate: number;
-  minOdds: number;
-  maxOdds: number;
-  side: BetSide;
-};
-
-/* ======================================================
-   Defaults
-====================================================== */
-const DEFAULT_FILTERS: Filters = {
+const DEFAULT_FILTERS = {
   market: "ALL",
-  hitRateWindow: "L10",
-  minHitRate: 80,
+  hitRateWindow: "L10" as HitRateWindow,
+  minHitRate: 60,      // 🔑 lowered default
   minOdds: -700,
   maxOdds: 200,
-  side: "OVER",
 };
 
-/* ======================================================
-   Hook
-====================================================== */
 export function usePlayerPropsMaster() {
   const [raw, setRaw] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+  const [filters, setFilters] = useState(DEFAULT_FILTERS);
 
-  /* ===============================
+  /* ============================
      Fetch
-  ================================ */
+  ============================ */
   useEffect(() => {
     fetchPlayerPropsMaster()
-      .then((rows) => setRaw(rows ?? []))
+      .then(setRaw)
       .finally(() => setLoading(false));
   }, []);
 
-  /* ===============================
+  /* ============================
      Markets
-  ================================ */
+  ============================ */
   const markets = useMemo(() => {
-    const uniq = new Set<string>();
-    raw.forEach((r) => {
-      if (r?.prop_type_base) uniq.add(r.prop_type_base);
-    });
-    return ["ALL", ...Array.from(uniq)];
+    const set = new Set<string>();
+    raw.forEach((r) => r.prop_type_base && set.add(r.prop_type_base));
+    return ["ALL", ...Array.from(set)];
   }, [raw]);
 
-  /* ===============================
-     Filter + Normalize
-  ================================ */
+  /* ============================
+     Filtered + normalized props
+  ============================ */
   const props = useMemo(() => {
     return raw
       .filter((p) => {
-        // ---------- Hard guards ----------
-        if (!p) return false;
-        if (!p.player_id) return false;
-        if (!p.prop_type_base) return false;
-        if (p.line_value == null) return false;
-
-        // ---------- Market ----------
-        if (filters.market !== "ALL" && p.prop_type_base !== filters.market) {
+        /* MARKET */
+        if (
+          filters.market !== "ALL" &&
+          p.prop_type_base !== filters.market
+        ) {
           return false;
         }
 
-        // ---------- Hit rate ----------
+        /* ODDS */
+        if (p.odds == null) return false;
+        if (p.odds < filters.minOdds || p.odds > filters.maxOdds) {
+          return false;
+        }
+
+        /* HIT RATE — side aware */
         const hit =
-          filters.side === "OVER"
+          p.odds_side === "UNDER"
             ? filters.hitRateWindow === "L5"
-              ? p.hit_rate_over_l5
+              ? p.hit_rate_under_l5
               : filters.hitRateWindow === "L20"
-              ? p.hit_rate_over_l20
-              : p.hit_rate_over_l10
+              ? p.hit_rate_under_l20
+              : p.hit_rate_under_l10
             : filters.hitRateWindow === "L5"
-            ? p.hit_rate_under_l5
+            ? p.hit_rate_over_l5
             : filters.hitRateWindow === "L20"
-            ? p.hit_rate_under_l20
-            : p.hit_rate_under_l10;
+            ? p.hit_rate_over_l20
+            : p.hit_rate_over_l10;
 
-        if ((hit ?? 0) * 100 < filters.minHitRate) return false;
-
-        // ---------- Odds ----------
-        const odds =
-          filters.side === "OVER" ? p.odds_over : p.odds_under;
-
-        if (odds == null) return false;
-        if (odds < filters.minOdds || odds > filters.maxOdds) return false;
+        if (hit == null) return false;
+        if (hit * 100 < filters.minHitRate) return false;
 
         return true;
       })
-      .map((p, idx) => {
-        // ---------- Lists ----------
-        const list =
-          filters.hitRateWindow === "L5"
-            ? p.list_l5
-            : filters.hitRateWindow === "L20"
-            ? p.list_l20
-            : p.list_l10;
+      .map((p) => ({
+        /* ========= identity ========= */
+        id: `${p.prop_id}-${p.odds_side}`, // 🔒 guaranteed unique
+        propId: p.prop_id,
 
-        const odds =
-          filters.side === "OVER" ? p.odds_over : p.odds_under;
+        /* ========= display ========= */
+        player: p.player_name,
+        market: p.prop_type_base,
+        window: p.market_window,
+        line: p.line_value,
 
-        return {
-          ...p,
+        odds: p.odds,
+        oddsSide: p.odds_side,
 
-          // stable, collision-proof ID
-          id: [
-            p.player_id,
-            p.prop_type_base,
-            p.line_value,
-            p.market_window ?? "FULL",
-            filters.side,
-            idx,
-          ].join("::"),
-
-          // normalized fields used by UI
-          player: p.player_name,
-          market: p.prop_type_base,
-          line: p.line_value,
-          odds,
-          list,
-          hit_rate: filters.side === "OVER"
+        /* ========= analytics ========= */
+        hitRate:
+          p.odds_side === "UNDER"
             ? filters.hitRateWindow === "L5"
-              ? p.hit_rate_over_l5
+              ? p.hit_rate_under_l5
               : filters.hitRateWindow === "L20"
-              ? p.hit_rate_over_l20
-              : p.hit_rate_over_l10
+              ? p.hit_rate_under_l20
+              : p.hit_rate_under_l10
             : filters.hitRateWindow === "L5"
-            ? p.hit_rate_under_l5
+            ? p.hit_rate_over_l5
             : filters.hitRateWindow === "L20"
-            ? p.hit_rate_under_l20
-            : p.hit_rate_under_l10,
-        };
-      });
+            ? p.hit_rate_over_l20
+            : p.hit_rate_over_l10,
+      }));
   }, [raw, filters]);
 
-  /* ===============================
-     Public API
-  ================================ */
   return {
     loading,
     props,

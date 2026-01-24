@@ -7,7 +7,7 @@ export type HitRateWindow = "L5" | "L10" | "L20";
 const DEFAULT_FILTERS = {
   market: "ALL",
   hitRateWindow: "L10" as HitRateWindow,
-  minHitRate: 60,      // 🔑 lowered default
+  minHitRate: 60,
   minOdds: -700,
   maxOdds: 200,
 };
@@ -22,7 +22,13 @@ export function usePlayerPropsMaster() {
   ============================ */
   useEffect(() => {
     fetchPlayerPropsMaster()
-      .then(setRaw)
+      .then((rows) => {
+        if (__DEV__) {
+          console.log("📦 [MASTER] raw rows:", rows.length);
+          console.log("📦 [MASTER] sample row:", rows[0]);
+        }
+        setRaw(rows);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -32,30 +38,54 @@ export function usePlayerPropsMaster() {
   const markets = useMemo(() => {
     const set = new Set<string>();
     raw.forEach((r) => r.prop_type_base && set.add(r.prop_type_base));
-    return ["ALL", ...Array.from(set)];
+
+    const result = ["ALL", ...Array.from(set)];
+
+    if (__DEV__) {
+      console.log("🏷️ [MASTER] markets:", result);
+    }
+
+    return result;
   }, [raw]);
 
   /* ============================
      Filtered + normalized props
   ============================ */
   const props = useMemo(() => {
-    return raw
+    let pass = 0;
+    let failMarket = 0;
+    let failOdds = 0;
+    let failHit = 0;
+
+    if (__DEV__) {
+      console.log("🔍 [MASTER] filter input:", {
+        raw: raw.length,
+        filters,
+      });
+    }
+
+    const result = raw
       .filter((p) => {
         /* MARKET */
         if (
           filters.market !== "ALL" &&
           p.prop_type_base !== filters.market
         ) {
+          failMarket++;
           return false;
         }
 
         /* ODDS */
-        if (p.odds == null) return false;
+        if (p.odds == null) {
+          failOdds++;
+          return false;
+        }
         if (p.odds < filters.minOdds || p.odds > filters.maxOdds) {
+          failOdds++;
           return false;
         }
 
-        /* HIT RATE — side aware */
+        /* HIT RATE */
         const hit =
           p.odds_side === "UNDER"
             ? filters.hitRateWindow === "L5"
@@ -69,17 +99,18 @@ export function usePlayerPropsMaster() {
             ? p.hit_rate_over_l20
             : p.hit_rate_over_l10;
 
-        if (hit == null) return false;
-        if (hit * 100 < filters.minHitRate) return false;
+        if (hit == null || hit * 100 < filters.minHitRate) {
+          failHit++;
+          return false;
+        }
 
+        pass++;
         return true;
       })
       .map((p) => ({
-        /* ========= identity ========= */
-        id: `${p.prop_id}-${p.odds_side}`, // 🔒 guaranteed unique
+        id: `${p.prop_id}-${p.odds_side}`,
         propId: p.prop_id,
 
-        /* ========= display ========= */
         player: p.player_name,
         market: p.prop_type_base,
         window: p.market_window,
@@ -88,7 +119,6 @@ export function usePlayerPropsMaster() {
         odds: p.odds,
         oddsSide: p.odds_side,
 
-        /* ========= analytics ========= */
         hitRate:
           p.odds_side === "UNDER"
             ? filters.hitRateWindow === "L5"
@@ -102,6 +132,21 @@ export function usePlayerPropsMaster() {
             ? p.hit_rate_over_l20
             : p.hit_rate_over_l10,
       }));
+
+    if (__DEV__) {
+      console.log("✅ [MASTER] filter results:", {
+        pass,
+        failMarket,
+        failOdds,
+        failHit,
+      });
+
+      if (result.length > 0) {
+        console.log("🧪 [MASTER] sample final prop:", result[0]);
+      }
+    }
+
+    return result;
   }, [raw, filters]);
 
   return {

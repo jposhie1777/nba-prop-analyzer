@@ -299,4 +299,4 @@ function makeStyles(colors: any) {
       marginTop: 6,
     },
   });
-}}
+}

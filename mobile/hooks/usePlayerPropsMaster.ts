@@ -93,34 +93,47 @@ export function usePlayerPropsMaster() {
     });
 
     const normalized = filtered.map((p) => {
+      const over = {
+        l5: p.hit_rate_over_l5,
+        l10: p.hit_rate_over_l10,
+        l20: p.hit_rate_over_l20,
+      };
+    
+      const under = {
+        l5: p.hit_rate_under_l5,
+        l10: p.hit_rate_under_l10,
+        l20: p.hit_rate_under_l20,
+      };
+    
+      const sideRates = p.odds_side === "UNDER" ? under : over;
+    
       const hitRate =
-        p.odds_side === "UNDER"
-          ? filters.hitRateWindow === "L5"
-            ? p.hit_rate_under_l5
-            : filters.hitRateWindow === "L20"
-            ? p.hit_rate_under_l20
-            : p.hit_rate_under_l10
-          : filters.hitRateWindow === "L5"
-          ? p.hit_rate_over_l5
+        filters.hitRateWindow === "L5"
+          ? sideRates.l5
           : filters.hitRateWindow === "L20"
-          ? p.hit_rate_over_l20
-          : p.hit_rate_over_l10;
-
+          ? sideRates.l20
+          : sideRates.l10;
+    
       return {
         id: `${p.prop_id}-${p.odds_side}`,
         propId: p.prop_id,
-
+    
         player: p.player_name,
         market: p.prop_type_base,
         window: p.market_window,
         line: p.line_value,
-
+    
         odds: p.odds,
         oddsSide: p.odds_side,
-
-        // 🔑 SINGLE SOURCE OF TRUTH
-        hitRate,                           // 0–1
-        hitRatePct: Math.round(hitRate * 100), // 0–100
+    
+        // ✅ ALWAYS AVAILABLE (for cards + expansion)
+        hit_rate_l5: sideRates.l5,
+        hit_rate_l10: sideRates.l10,
+        hit_rate_l20: sideRates.l20,
+    
+        // ✅ ACTIVE WINDOW (for filters / sort)
+        hitRate, // 0–1
+        hitRatePct: Math.round((hitRate ?? 0) * 100),
       };
     });
 

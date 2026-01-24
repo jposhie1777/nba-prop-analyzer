@@ -1,3 +1,4 @@
+// app/(tabs)/props-test/tsx
 import {
   View,
   Text,

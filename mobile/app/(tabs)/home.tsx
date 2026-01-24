@@ -1,3 +1,4 @@
+// app/(tabs)/home.tsx
 import { ScrollView, View, Text, StyleSheet, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "@/store/useTheme";

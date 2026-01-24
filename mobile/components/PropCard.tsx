@@ -179,8 +179,15 @@ export default function PropCard(props: PropCardProps) {
   /* =========================
      VISUAL WINDOW (DISPLAY ONLY)
   ========================= */
-  const [window, setWindow] = useState<"L5" | "L10" | "L20">(props.window ?? "L10");
-  const w = window === "L5" ? "l5" : window === "L20" ? "l20" : "l10";
+  const [displayWindow, setDisplayWindow] =
+    useState<"L5" | "L10" | "L20">(props.window ?? "L10");
+  
+  const w =
+    displayWindow === "L5"
+      ? "l5"
+      : displayWindow === "L20"
+      ? "l20"
+      : "l10";
 
   const avg =
     w === "l5" ? props.avg_l5 :
@@ -286,7 +293,7 @@ export default function PropCard(props: PropCardProps) {
             </Text>
 
             <Text style={styles.hitText}>{hitRatePct}% HIT</Text>
-            <Text style={styles.metricSub}>Last {window}</Text>
+            <Text style={styles.metricSub}>Last {props.window ?? "L10"}</Text>
           </Pressable>
 
           {/* EXPANDED */}

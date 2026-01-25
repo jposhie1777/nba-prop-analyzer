@@ -184,22 +184,9 @@ export default function PropsTestScreen() {
   if (loading) {
     return (
       <GestureHandlerRootView style={styles.root}>
-        <View style={styles.screen}>
-          <View style={styles.filters}>
-            {/* filters */}
-          </View>
-    
-          <FlatList
-            ref={listRef}
-            data={props}
-            keyExtractor={(item) => item.id}
-            renderItem={renderItem}
-            showsVerticalScrollIndicator={false}
-          />
+        <View style={styles.center}>
+          <Text style={styles.loading}>Loading test props…</Text>
         </View>
-    
-        {/* ✅ THIS IS THE RENDER YOU WERE ASKING ABOUT */}
-        <PropBetslipDrawer />
       </GestureHandlerRootView>
     );
   }
@@ -337,6 +324,8 @@ export default function PropsTestScreen() {
           showsVerticalScrollIndicator={false}
         />
       </View>
+      {/* ✅ ADD THIS LINE */}
+      <PropBetslipDrawer />
     </GestureHandlerRootView>
   );
 }

@@ -14,7 +14,6 @@ import * as Haptics from "expo-haptics";
 import PropCard from "@/components/PropCard";
 import { useTheme } from "@/store/useTheme";
 import { useSavedBets } from "@/store/useSavedBets";
-import { usePropBetslip } from "@/store/usePropBetslip";
 import { useHistoricalPlayerTrends } from "@/hooks/useHistoricalPlayerTrends";
 import { resolveSparklineByMarket } from "@/utils/resolveSparkline";
 import { usePlayerPropsMaster } from "@/hooks/usePlayerPropsMaster";

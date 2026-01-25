@@ -11,7 +11,7 @@ import { useMemo, useState, useEffect } from "react";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 
-import { usePropBetslip } from "@/store/usePropBetslip";
+import { useBetslipDrawer } from "@/store/useBetslipDrawer";
 import { useTheme } from "@/store/useTheme";
 
 const GAMBLY_URL = "https://www.gambly.com/gambly-bot";
@@ -41,7 +41,7 @@ export function PropBetslipDrawer() {
   const { items, remove, clear } = usePropBetslip();
 
   const [expanded, setExpanded] = useState(false);
-
+  const { isOpen, close, toggle } = useBetslipDrawer();
   /* =========================
      AUTO COLLAPSE > 3 ITEMS
   ========================= */
@@ -92,7 +92,7 @@ export function PropBetslipDrawer() {
       : STAKE + (STAKE * 100) / Math.abs(parlayOdds);
   }, [parlayOdds]);
 
-  if (!items.length) return null;
+  if (!items.length && !isOpen) return null;
 
   return (
     <View
@@ -101,6 +101,7 @@ export function PropBetslipDrawer() {
         {
           backgroundColor: colors.surface.card,
           borderTopColor: colors.border.subtle,
+          transform: [{ translateY: isOpen ? 0 : 260 }],
         },
       ]}
     >

@@ -43,26 +43,33 @@ export function usePlayerPropsMaster({
   /* ======================================================
      INITIAL FETCH (PAGE 0)
   ====================================================== */
-  useEffect(() => {
-    let mounted = true;
+ useEffect(() => {
+  let mounted = true;
 
-    setLoading(true);
+  setLoading(true);
 
-    fetchPlayerPropsMaster({ limit, offset: 0 })
-      .then((rows) => {
-        if (!mounted) return;
-        console.log("📦 [MASTER] initial rows:", rows.length);
-        setRaw(rows);
-      })
-      .catch((e) => {
-        console.error("❌ [MASTER] fetch failed", e);
-      })
-      .finally(() => mounted && setLoading(false));
+  fetchPlayerPropsMaster({ limit, offset: 0 })
+    .then((rows) => {
+      if (!mounted) return;
 
-    return () => {
-      mounted = false;
-    };
-  }, [limit]);
+      console.log("📦 [MASTER] initial rows:", rows.length);
+
+      // 🔴 ADD THIS LINE
+      console.log("🧪 [MASTER] sample row keys:", Object.keys(rows[0] ?? {}));
+      console.log("🧪 [MASTER] sample row:", rows[0]);
+
+      setRaw(rows);
+    })
+    .catch((e) => {
+      console.error("❌ [MASTER] fetch failed", e);
+    })
+    .finally(() => mounted && setLoading(false));
+
+  return () => {
+    mounted = false;
+  };
+}, [limit]);
+
 
   /* ======================================================
      FETCH NEXT PAGE
@@ -145,7 +152,13 @@ export function usePlayerPropsMaster({
       /* ---------- ODDS ---------- */
       odds: p.odds,
       oddsSide: p.odds_side,
-      bookmaker: p.bookmaker_key,
+      bookmaker: p.vendor,
+
+      /* ---------- MEDIA / MATCHUP ---------- */
+      playerImageUrl: p.player_image_url,
+      homeTeam: p.home_team_abbr,
+      awayTeam: p.away_team_abbr,
+
 
       /* ---------- HIT RATES ---------- */
       hit_rate_l5: p.hit_rate_l5,

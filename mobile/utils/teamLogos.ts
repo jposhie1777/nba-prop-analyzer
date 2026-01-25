@@ -17,7 +17,7 @@ export const TEAM_LOGOS: Record<string, string> = {
   MIA: "https://a.espncdn.com/i/teamlogos/nba/500/mia.png",
   MIL: "https://a.espncdn.com/i/teamlogos/nba/500/mil.png",
   MIN: "https://a.espncdn.com/i/teamlogos/nba/500/min.png",
-  NOP: "https://a.espncdn.com/i/teamlogos/nba/500/nop.png",
+  NOP: "https://a.espncdn.com/i/teamlogos/nba/500/no.png",
   NYK: "https://a.espncdn.com/i/teamlogos/nba/500/nyk.png",
   OKC: "https://a.espncdn.com/i/teamlogos/nba/500/okc.png",
   ORL: "https://a.espncdn.com/i/teamlogos/nba/500/orl.png",

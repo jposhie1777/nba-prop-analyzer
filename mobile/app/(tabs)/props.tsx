@@ -4,708 +4,441 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  Pressable, // ✅ ADD THIS
+  Pressable,
 } from "react-native";
-import { useMemo, useState, useEffect, useCallback, useRef } from "react";
+import { useMemo, useState, useCallback, useRef, useEffect } from "react";
 import Slider from "@react-native-community/slider";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import * as Haptics from "expo-haptics";
 
-import PropCard from "../../components/PropCard";
+import PropCard from "@/components/PropCard";
 import { useTheme } from "@/store/useTheme";
-import { fetchProps, MobileProp } from "../../lib/api";
 import { useSavedBets } from "@/store/useSavedBets";
-import { usePropsStore } from "@/store/usePropsStore";
-import { themeMeta } from "@/theme/meta";
 import { useHistoricalPlayerTrends } from "@/hooks/useHistoricalPlayerTrends";
 import { resolveSparklineByMarket } from "@/utils/resolveSparkline";
+import { usePlayerPropsMaster } from "@/hooks/usePlayerPropsMaster";
+import { useBetslipDrawer } from "@/store/useBetslipDrawer";
 import { PropBetslipDrawer } from "@/components/prop/PropBetslipDrawer";
-
-// ---------------------------
-// STORAGE KEYS
-// ---------------------------
-const FILTERS_KEY = "home_filters_v1";
-const SAVED_PROPS_KEY = "saved_props_v1";
-
-// ---------------------------
-// UI-SAFE PROP MODEL
-// ---------------------------
-type UIProp = {
-  id: string;
-  edge: number;
-  confidence: number;
-
-  home?: string;
-  away?: string;
-} & MobileProp;
+import { usePropBetslip } from "@/store/usePropBetslip";
 
 
+/* ======================================================
+   Screen
+====================================================== */
+export default function PropsTestScreen() {
+  const colors = useTheme((s) => s.colors);
+  const styles = useMemo(() => makeStyles(colors), [colors]);
 
-// ---------------------------
-// MULTI-BOOK GROUPING
-// ---------------------------
-type GroupedProp = UIProp & {
-  books?: {
-    bookmaker: string;
-    odds: number;
-  }[];
-};
-
-export default function HomeScreen() {
-  // ---------------------------
-  // TAB STATE
-  // ---------------------------
-  const [activeTab, setActiveTab] = useState<"all" | "saved">("all");
-
-  // ---------------------------
-  // SAVED BETS (GLOBAL STORE)
-  // ---------------------------
   const savedIds = useSavedBets((s) => s.savedIds);
   const toggleSave = useSavedBets((s) => s.toggleSave);
-  
-  const setPropsStore = usePropsStore((s) => s.setProps);
+  const openBetslip = useBetslipDrawer((s) => s.open);
+  const addToBetslip = usePropBetslip((s) => s.add);
+  const removeFromBetslip = usePropBetslip((s) => s.remove);
+  const [windowOpen, setWindowOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
-  // ---------------------------
-  // REAL PROPS DATA
-  // ---------------------------
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const { ready: trendsReady, getByPlayer } = useHistoricalPlayerTrends();
-  const PAGE_SIZE = 200;
 
-  const [props, setProps] = useState<UIProp[]>([]);
-  const [offset, setOffset] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const {
+    props: rawProps,
+    loading,
+    filters,
+    setFilters,
+  } = usePlayerPropsMaster();
 
-  
+  const { getByPlayer } = useHistoricalPlayerTrends();
+
   const listRef = useRef<FlatList>(null);
-
-  // ---------------------------
-  // FILTER + SORT STATE
-  // ---------------------------
-  const [marketFilter, setMarketFilter] = useState<string | null>(null);
-  const [evOnly, setEvOnly] = useState(false);
-  const [sortBy, setSortBy] = useState<"edge" | "confidence">("edge");
-
-  const [minConfidence, setMinConfidence] = useState(0);
-  const [minOdds, setMinOdds] = useState(-300);
-  const [maxOdds, setMaxOdds] = useState(300);
-
-  const [filtersOpen, setFiltersOpen] = useState(true);
-  const colors = useTheme((s) => s.colors);
-  const setTheme = useTheme((s) => s.setTheme);
-  
-  const styles = useMemo(() => makeStyles(colors), [colors]);
-  
-  const [themeOpen, setThemeOpen] = useState(false);
-  // ---------------------------
-  // EXPANDED CARD STATE (ONLY ONE OPEN)
-  // ---------------------------
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  
+
   const toggleExpand = useCallback((id: string) => {
     setExpandedId((prev) => (prev === id ? null : id));
   }, []);
 
-  // ---------------------------
-  // LOAD SAVED FILTERS
-  // ---------------------------
-  useEffect(() => {
-    (async () => {
-      try {
-        const raw = await AsyncStorage.getItem(FILTERS_KEY);
-        if (!raw) return;
-
-        const saved = JSON.parse(raw);
-        setMarketFilter(saved.marketFilter ?? null);
-        setEvOnly(saved.evOnly ?? false);
-        setSortBy(saved.sortBy ?? "edge");
-        setMinConfidence(saved.minConfidence ?? 0);
-        setMinOdds(saved.minOdds ?? -300);
-        setMaxOdds(saved.maxOdds ?? 300);
-        setFiltersOpen(saved.filtersOpen ?? true);
-      } catch (e) {
-        console.warn("Failed to load filters", e);
-      }
-    })();
-  }, []);
-
-  // ---------------------------
-  // SAVE FILTERS
-  // ---------------------------
-  useEffect(() => {
-    AsyncStorage.setItem(
-      FILTERS_KEY,
-      JSON.stringify({
-        marketFilter,
-        evOnly,
-        sortBy,
-        minConfidence,
-        minOdds,
-        maxOdds,
-        filtersOpen,
-      })
-    );
-  }, [
-    marketFilter,
-    evOnly,
-    sortBy,
-    minConfidence,
-    minOdds,
-    maxOdds,
-    filtersOpen,
-  ]);
-
-  // ---------------------------
-  // LOAD PROPS FROM API
-  // ---------------------------
-  const loadMoreProps = useCallback(async () => {
-    if (loadingMore || !hasMore) return;
+  /* ======================================================
+     SAVE / UNSAVE (single source of truth)
+  ====================================================== */
+  const saveProp = useCallback(
+    (item: any) => {
+      if (savedIds.has(item.id)) return;
   
-    setLoadingMore(true);
-    setError(null);
+      toggleSave(item.id);
   
-    try {
-      const res = await fetchProps({
-        minHitRate: 0,
-        limit: PAGE_SIZE,
-        offset,
+      addToBetslip({
+        id: item.id,
+        player: item.player,
+        market: item.market,
+        side: item.side ?? "over",
+        line: item.line,
+        odds: item.odds,
+        matchup: item.matchup,
       });
   
-      const normalized: UIProp[] = res.props.map((p) => ({
-        ...p,
-        id: `${p.player}-${p.market}-${p.line}`,
-        edge: p.hitRateL10 ?? 0,
-        confidence: p.confidence_score,
-        matchup: p.matchup,
-        bookmaker: p.bookmaker,
-        home: p.home_team,
-        away: p.away_team,
-      }));
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   
-      setProps((prev) => {
-        const next = [...prev, ...normalized];
-        setPropsStore(next);
-        return next;
-      });
-  
-      setOffset((prev) => prev + PAGE_SIZE);
-  
-      if (res.props.length < PAGE_SIZE) {
-        setHasMore(false); // ✅ no more pages
-      }
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setLoading(false);        // initial screen only
-      setLoadingMore(false);   // pagination spinner
-    }
-  }, [offset, loadingMore, hasMore, setPropsStore]);
+      // ✅ OPEN THE DRAWER
+      openBetslip();
+    },
+    [savedIds, toggleSave, addToBetslip, openBetslip]
+  );
 
-  const didInit = useRef(false);
+  const unsaveProp = useCallback(
+    (id: string) => {
+      toggleSave(id);
+      removeFromBetslip(id);
+    },
+    [toggleSave, removeFromBetslip]
+  );
 
-  /* ---------------------------
-     INITIAL LOAD (STRICT-MODE SAFE)
-  --------------------------- */
-  useEffect(() => {
-    if (didInit.current) return;
-    didInit.current = true;
-  
-    setLoading(true);
-    loadMoreProps();
-  }, [loadMoreProps]);
-
-  // ---------------------------
-  // DERIVE MARKETS
-  // ---------------------------
-  const markets = useMemo(() => {
-    return Array.from(new Set(props.map((p) => p.market)));
-  }, [props]);
-
-  // ---------------------------
-  // FILTER + SORT + GROUP
-  // ---------------------------
-  const filteredProps = useMemo(() => {
-    const base = props
+  /* ======================================================
+     SANITIZE + FILTER + SORT
+  ====================================================== */
+  const props = useMemo(() => {
+    const cleaned = rawProps
       .filter((p) => {
-        if (activeTab === "saved" && !savedIds.has(p.id)) return false;
-        if (marketFilter && p.market !== marketFilter) return false;
-        if (evOnly && p.edge < 0.1) return false;
-        if (p.confidence < minConfidence) return false;
-        if (p.odds < minOdds || p.odds > maxOdds) return false;
+        if (!p.player) return false;
+        if (!p.market) return false;
+        if (p.line == null) return false;
+        if (!p.id) return false;
+
+        if (
+          filters.marketWindow &&
+          p.market_window !== filters.marketWindow
+        ) {
+          return false;
+        }
+
+        const hitRate =
+          filters.hitRateWindow === "L5"
+            ? p.hit_rate_l5
+            : filters.hitRateWindow === "L10"
+            ? p.hit_rate_l10
+            : p.hit_rate_l20;
+
+        if (hitRate != null && hitRate < filters.minHitRate) {
+          return false;
+        }
+
+        if (p.odds < filters.minOdds) return false;
+        if (p.odds > filters.maxOdds) return false;
+
         return true;
       })
-      .sort((a, b) => {
-        if (sortBy === "edge") return b.edge - a.edge;
-        return b.confidence - a.confidence;
-      });
+      .map((p, idx) => ({
+        ...p,
+        id: `${p.id}::${idx}`,
+      }));
 
-    const map = new Map<string, GroupedProp>();
-    base.forEach((p) => {
-      const key = `${p.player}-${p.market}-${p.line}`;
-      if (!map.has(key)) map.set(key, { ...p, books: [] });
-      if (p.bookmaker) {
-        map.get(key)!.books!.push({
-          bookmaker: p.bookmaker,
-          odds: p.odds,
-        });
-      }
+    cleaned.sort((a, b) => {
+      const getHR = (p: any) =>
+        filters.hitRateWindow === "L5"
+          ? p.hit_rate_l5 ?? 0
+          : filters.hitRateWindow === "L10"
+          ? p.hit_rate_l10 ?? 0
+          : p.hit_rate_l20 ?? 0;
+
+      const hrDiff = getHR(b) - getHR(a);
+      if (hrDiff !== 0) return hrDiff;
+
+      return (a.odds ?? 0) - (b.odds ?? 0);
     });
 
-    return Array.from(map.values());
-  }, [
-    props,
-    activeTab,
-    savedIds,
-    marketFilter,
-    evOnly,
-    minConfidence,
-    minOdds,
-    maxOdds,
-    sortBy,
-  ]);
+    return cleaned;
+  }, [rawProps, filters]);
 
-  // helper: normalize null → undefined for PropCard props
-  const n = (v: number | null | undefined) => v ?? undefined;
-
-  // ---------------------------
-  // FLATLIST RENDER ITEM
-  // ---------------------------
+  /* ======================================================
+     RENDER ITEM
+  ====================================================== */
   const renderItem = useCallback(
-    ({ item }: { item: GroupedProp }) => {
+    ({ item }: any) => {
+      console.log("🧪 RENDER ITEM KEYS", {
+        keys: Object.keys(item),
+        bookmaker: item.bookmaker,
+        bookmaker_key: item.bookmaker_key,
+      });
+  
       const trend = getByPlayer(item.player);
       const spark = resolveSparklineByMarket(item.market, trend);
-      const last5_dates = trend?.last5_dates;
-      const last10_dates = trend?.last10_dates;
-      const last20_dates = trend?.last20_dates;
+      const isSaved = savedIds.has(item.id);
+
       return (
         <PropCard
-          /* CORE */
-          player={item.player}
-          market={item.market}
-          line={item.line}
-          odds={item.odds}
-          books={item.books}
-          playerImageUrl={item.player_image_url}
-          side={item.side}
+          {...item}
+          bookmaker={item.bookmaker} 
+          playerId={item.player_id}
           scrollRef={listRef}
-  
-          hitRateL10={item.hitRateL10}
-          edge={item.edge}
-          confidence={item.confidence}
-  
-          /* WINDOW METRICS */
-          avg_l5={n(item.avg_l5)}
-          avg_l10={n(item.avg_l10)}
-          avg_l20={n(item.avg_l20)}
-  
-          hit_rate_l5={n(item.hit_rate_l5)}
-          hit_rate_l10={n(item.hit_rate_l10)}
-          hit_rate_l20={n(item.hit_rate_l20)}
-  
-          clear_1p_pct_l5={n(item.clear_1p_pct_l5)}
-          clear_1p_pct_l10={n(item.clear_1p_pct_l10)}
-          clear_1p_pct_l20={n(item.clear_1p_pct_l20)}
-  
-          clear_2p_pct_l5={n(item.clear_2p_pct_l5)}
-          clear_2p_pct_l10={n(item.clear_2p_pct_l10)}
-          clear_2p_pct_l20={n(item.clear_2p_pct_l20)}
-  
-          avg_margin_l5={n(item.avg_margin_l5)}
-          avg_margin_l10={n(item.avg_margin_l10)}
-          avg_margin_l20={n(item.avg_margin_l20)}
-  
-          bad_miss_pct_l5={n(item.bad_miss_pct_l5)}
-          bad_miss_pct_l10={n(item.bad_miss_pct_l10)}
-          bad_miss_pct_l20={n(item.bad_miss_pct_l20)}
-  
-          pace_l5={n(item.pace_l5)}
-          pace_l10={n(item.pace_l10)}
-          pace_l20={n(item.pace_l20)}
-  
-          usage_l5={n(item.usage_l5)}
-          usage_l10={n(item.usage_l10)}
-          usage_l20={n(item.usage_l20)}
-  
-          /* CONTEXT */
-          ts_l10={n(item.ts_l10)}
-          pace_delta={n(item.pace_delta)}
-          delta_vs_line={n(item.delta_vs_line)}
-  
-          sparkline_l5={spark.sparkline_l5}
-          sparkline_l10={spark.sparkline_l10}
-          sparkline_l20={spark.sparkline_l20}
-        
-          last5_dates={last5_dates}
-          last10_dates={last10_dates}
-          last20_dates={last20_dates}
-        
-          matchup={item.matchup}
-          home={item.home}
-          away={item.away}
-  
-          /* STATE */
-          saved={savedIds.has(item.id)}
-          onToggleSave={() => toggleSave(item.id)}
-  
+          saved={isSaved}
+          onSwipeSave={() => saveProp(item)}
+          onToggleSave={() =>
+            isSaved ? unsaveProp(item.id) : saveProp(item)
+          }
           expanded={expandedId === item.id}
           onToggleExpand={() => toggleExpand(item.id)}
+          sparkline_l5={spark?.sparkline_l5}
+          sparkline_l10={spark?.sparkline_l10}
+          sparkline_l20={spark?.sparkline_l20}
+          last5_dates={trend?.last5_dates}
+          last10_dates={trend?.last10_dates}
+          last20_dates={trend?.last20_dates}
         />
       );
     },
-    [savedIds, toggleSave, expandedId, toggleExpand, getByPlayer]
+    [
+      savedIds,
+      expandedId,
+      toggleExpand,
+      getByPlayer,
+      saveProp,
+      unsaveProp,
+    ]
   );
-
-
-  // ---------------------------
-  // STATES
-  // ---------------------------
-  if (error) {
-    return (
-      <GestureHandlerRootView style={styles.root}>
-        <View style={styles.center}>
-          <Text style={styles.error}>{error}</Text>
-        </View>
-      </GestureHandlerRootView>
-    );
-  }
 
   if (loading) {
     return (
       <GestureHandlerRootView style={styles.root}>
         <View style={styles.center}>
-          <Text style={styles.loading}>Loading today’s props…</Text>
+          <Text style={styles.loading}>Loading test props…</Text>
         </View>
       </GestureHandlerRootView>
     );
   }
 
-  // ---------------------------
-  // RENDER
-  // ---------------------------
+  /* ======================================================
+     UI
+  ====================================================== */
   return (
     <GestureHandlerRootView style={styles.root}>
       <View style={styles.screen}>
-        {/* =========================
-            TOP TABS
-        ========================== */}
-        <View style={styles.tabs}>
-          <Text
-            onPress={() => setActiveTab("all")}
-            style={[styles.tab, activeTab === "all" && styles.tabActive]}
-          >
-            All
-          </Text>
-          <Text
-            onPress={() => setActiveTab("saved")}
-            style={[styles.tab, activeTab === "saved" && styles.tabActive]}
-          >
-            Saved
-          </Text>
-        </View>
-
-        {/* =========================
-            FILTERS
-        ========================== */}
         <View style={styles.filters}>
-          {/* HEADER ROW */}
-          <View style={styles.filterHeaderRow}>
-            <Text
-              onPress={() => setFiltersOpen((v) => !v)}
-              style={styles.filtersTitle}
-            >
-              Filters {filtersOpen ? "▲" : "▼"}
+          {/* FILTER HEADER */}
+          <Pressable
+            style={styles.filterHeader}
+            onPress={() => setFiltersOpen((v) => !v)}
+          >
+            <Text style={styles.filtersTitle}>Filters</Text>
+            <Text style={styles.chevron}>
+              {filtersOpen ? "▲" : "▼"}
             </Text>
-        
-            <Pressable
-              onPress={() => setThemeOpen(true)}
-              style={styles.themeBtn}
-            >
-              <Text style={styles.themeBtnText}>🎨 Theme</Text>
-            </Pressable>
-          </View>
+          </Pressable>
 
+          {/* FILTER BODY */}
           {filtersOpen && (
-            <View style={styles.filtersCard}>
-              {/* MARKET PILLS */}
+            <View style={styles.filterBody}>
+              {/* MARKET FILTERS */}
               <View style={styles.pills}>
-                {markets.map((mkt) => {
-                  const active = marketFilter === mkt;
+                {filters.markets.map((mkt) => {
+                  const active = filters.market === mkt;
                   return (
-                    <Text
+                    <Pressable
                       key={mkt}
                       onPress={() =>
-                        setMarketFilter(active ? null : mkt)
+                        setFilters((f) => ({
+                          ...f,
+                          market: active ? "ALL" : mkt,
+                        }))
                       }
-                      style={[
-                        styles.pill,
-                        active && styles.pillActive,
-                      ]}
                     >
-                      {mkt}
-                    </Text>
+                      <Text
+                        style={[
+                          styles.pill,
+                          active && styles.pillActive,
+                        ]}
+                      >
+                        {mkt}
+                      </Text>
+                    </Pressable>
                   );
                 })}
               </View>
 
-              {/* CONFIDENCE */}
+              {/* WINDOW FILTER */}
+              <Text style={styles.sectionLabel}>Window</Text>
+              <View style={styles.pills}>
+                {(["FULL", "Q1", "FIRST3MIN"] as const).map((w) => {
+                  const active = filters.marketWindow === w;
+                  return (
+                    <Pressable
+                      key={w}
+                      onPress={() =>
+                        setFilters((f) => ({
+                          ...f,
+                          marketWindow: active ? null : w,
+                        }))
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.pill,
+                          active && styles.pillActive,
+                        ]}
+                      >
+                        {w}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {/* HIT RATE WINDOW */}
+              <Text style={styles.sectionLabel}>Hit Rate</Text>
+              <View style={styles.pills}>
+                {(["L5", "L10", "L20"] as const).map((w) => {
+                  const active = filters.hitRateWindow === w;
+                  return (
+                    <Pressable
+                      key={w}
+                      onPress={() =>
+                        setFilters((f) => ({
+                          ...f,
+                          hitRateWindow: w,
+                        }))
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.pill,
+                          active && styles.pillActive,
+                        ]}
+                      >
+                        {w}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {/* HIT RATE SLIDER */}
               <Text style={styles.sliderLabel}>
-                Confidence ≥ {minConfidence}
+                Hit Rate ≥ {filters.minHitRate}%
               </Text>
               <Slider
                 minimumValue={0}
                 maximumValue={100}
                 step={5}
-                value={minConfidence}
-                onValueChange={setMinConfidence}
+                value={filters.minHitRate}
+                onValueChange={(v) =>
+                  setFilters((f) => ({ ...f, minHitRate: v }))
+                }
                 minimumTrackTintColor={colors.accent.primary}
-                maximumTrackTintColor={colors.surface.cardSoft}
                 thumbTintColor={colors.accent.primary}
-
               />
 
-              {/* ODDS */}
-              <Text style={styles.sliderLabel}>Min Odds: {minOdds}</Text>
+              {/* ODDS SLIDER */}
+              <Text style={styles.sliderLabel}>
+                Odds {filters.minOdds} → {filters.maxOdds}
+              </Text>
               <Slider
                 minimumValue={-1000}
                 maximumValue={1000}
                 step={25}
-                value={minOdds}
-                onValueChange={setMinOdds}
-                minimumTrackTintColor={colors.accent.primary}
-                maximumTrackTintColor={colors.surface.cardSoft}
-                thumbTintColor={colors.accent.primary}
+                value={filters.minOdds}
+                onValueChange={(v) =>
+                  setFilters((f) => ({ ...f, minOdds: v }))
+                }
               />
-
-
-              <Text style={styles.sliderLabel}>Max Odds: {maxOdds}</Text>
               <Slider
                 minimumValue={-1000}
                 maximumValue={1000}
                 step={25}
-                value={maxOdds}
-                onValueChange={setMaxOdds}
-                minimumTrackTintColor={colors.accent.primary}
-                maximumTrackTintColor={colors.surface.cardSoft}
-                thumbTintColor={colors.accent.primary}
+                value={filters.maxOdds}
+                onValueChange={(v) =>
+                  setFilters((f) => ({ ...f, maxOdds: v }))
+                }
               />
-
             </View>
           )}
         </View>
 
-        {/* =========================
-            PROP LIST
-        ========================== */}
+
         <FlatList
           ref={listRef}
-          data={filteredProps}
+          data={props}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.list}
-        
-          /* 🔽 PAGINATION */
-          onEndReached={() => {
-            if (!loadingMore && hasMore) {
-              loadMoreProps();
-            }
-          }}
-          onEndReachedThreshold={0.6}
-        
-          /* 🔽 FOOTER */
-          ListFooterComponent={
-            loadingMore ? (
-              <View style={{ paddingVertical: 24 }}>
-                <Text style={{ textAlign: "center", color: colors.text.muted }}>
-                  Loading more props…
-                </Text>
-              </View>
-            ) : (
-              <View style={{ height: 40 }} />
-            )
-          }
-        
-          /* 🔽 PERF (IMPORTANT) */
-          removeClippedSubviews={false}
-          initialNumToRender={10}
-          maxToRenderPerBatch={12}
-          windowSize={7}
-/>
-        <PropBetslipDrawer />
-
-        {themeOpen && (
-          <View style={styles.themeOverlay}>
-            <View style={styles.themeModal}>
-              {Object.entries(themeMeta).map(([key, meta]) => (
-                <Pressable
-                  key={key}
-                  onPress={() => {
-                    setTheme(key as any);
-                    setThemeOpen(false);
-                  }}
-                  style={[
-                    styles.themeOption,
-                    { backgroundColor: meta.preview },
-                  ]}
-                >
-                  <Text style={styles.themeLabel}>{meta.label}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        )}
+        />
       </View>
+      {/* ✅ ADD THIS LINE */}
+      <PropBetslipDrawer />
     </GestureHandlerRootView>
   );
 }
 
-// ---------------------------
-// STYLES — HOME SCREEN
-// ---------------------------
-
-const makeStyles = (colors: any) =>
-  StyleSheet.create({
+/* ======================================================
+   Styles
+====================================================== */
+function makeStyles(colors: any) {
+  return StyleSheet.create({
     root: { flex: 1 },
-
-    screen: {
-      flex: 1,
-      backgroundColor: colors.surface.screen,
-    },
-
-    center: {
-      flex: 1,
-      justifyContent: "center",
-      alignItems: "center",
-    },
-
-    error: {
-      color: colors.accent.danger,
-      fontWeight: "600",
-    },
-
-    loading: {
-      color: colors.text.muted,
-    },
-
-    tabs: {
-      flexDirection: "row",
-      justifyContent: "space-around",
-      paddingVertical: 12,
-      backgroundColor: colors.surface.card,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border.subtle,
-    },
-
-    tab: {
-      fontWeight: "700",
-      color: colors.text.muted,
-    },
-
-    tabActive: {
-      color: colors.accent.primary,
-    },
+    screen: { flex: 1, backgroundColor: colors.surface.screen },
+    center: { flex: 1, alignItems: "center", justifyContent: "center" },
+    loading: { color: colors.text.muted },
 
     filters: {
-      padding: 14,
-      backgroundColor: colors.surface.card,
-      borderBottomWidth: 1,
+      padding: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border.subtle,
-    },
-
-    filterHeaderRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
     },
 
     filtersTitle: {
-      fontSize: 16,
-      fontWeight: "700",
+      fontSize: 14,
+      fontWeight: "800",
       color: colors.text.primary,
-    },
-
-    filtersCard: {
-      backgroundColor: colors.surface.cardSoft,
-      borderRadius: 14,
-      padding: 12,
-      marginTop: 10,
-      borderWidth: 1,
-      borderColor: colors.border.subtle,
+      marginBottom: 8,
     },
 
     pills: {
       flexDirection: "row",
       flexWrap: "wrap",
-      marginBottom: 12,
+      marginBottom: 8,
+      gap: 6,
     },
 
     pill: {
-      paddingHorizontal: 12,
+      paddingHorizontal: 10,
       paddingVertical: 6,
-      borderRadius: 14,
-      marginRight: 8,
-      marginBottom: 8,
-      fontWeight: "600",
-      color: colors.text.secondary,
-      backgroundColor: colors.surface.elevated,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border.subtle,
+      color: colors.text.muted,
+      fontSize: 12,
     },
 
     pillActive: {
       backgroundColor: colors.accent.primary,
-      color: colors.text.primary,
+      color: colors.text.inverse,
+      borderColor: colors.accent.primary,
     },
 
     sliderLabel: {
+      fontSize: 12,
+      color: colors.text.muted,
+      marginTop: 6,
+    },
+    filterHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: 6,
+      marginBottom: 4,
+    },
+
+    filterHeaderText: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.text.primary,
+    },
+
+    chevron: {
+      fontSize: 12,
+      color: colors.text.muted,
+    },
+    sectionLabel: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.text.muted,
       marginTop: 10,
       marginBottom: 4,
-      color: colors.text.secondary,
-      fontWeight: "600",
     },
 
-    list: {
-      paddingTop: 8,
-    },
-
-    themeBtn: {
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      borderRadius: 10,
-      backgroundColor: colors.surface.elevated,
-      borderWidth: 1,
-      borderColor: colors.border.subtle,
-    },
-
-    themeBtnText: {
-      fontSize: 12,
-      fontWeight: "800",
-      color: colors.text.primary,
-    },
-
-    themeOverlay: {
-      position: "absolute",
-      inset: 0,
-      backgroundColor: "rgba(0,0,0,0.4)",
-      justifyContent: "center",
-      alignItems: "center",
-    },
-
-    themeModal: {
-      backgroundColor: colors.surface.card,
-      padding: 16,
-      borderRadius: 16,
-      width: "80%",
-      gap: 10,
-    },
-
-    themeOption: {
-      padding: 12,
-      borderRadius: 12,
-    },
-
-    themeLabel: {
-      fontWeight: "800",
-      color: colors.text.primary,
-    },
   });
+}

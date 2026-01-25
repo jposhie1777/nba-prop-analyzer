@@ -37,18 +37,6 @@ export default function TabLayout() {
         }}
       />
 
-      {/* 👇 NEW TEST TAB */}
-      <Tabs.Screen
-        name="props-test"
-        options={{
-          title: "Props Test",
-          tabBarLabel: "Test",
-          tabBarIcon: ({ color }) => (
-            <Ionicons name="flask-outline" size={22} color={color} />
-          ),
-        }}
-      />
-
       <Tabs.Screen
         name="live"
         options={{

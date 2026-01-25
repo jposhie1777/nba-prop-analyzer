@@ -14,6 +14,7 @@ import { useTheme } from "@/store/useTheme";
 import { BOOKMAKER_LOGOS } from "@/utils/bookmakerLogos";
 import { MiniBarSparkline } from "@/components/sparkline/MiniBarSparkline";
 import { formatMarketLabel } from "@/utils/formatMarket";
+import { TEAM_LOGOS } from "@/utils/teamLogos";
 
 
 /* ======================================================
@@ -34,22 +35,11 @@ export type PropCardProps = {
   line: number;
   odds: number;
 
-  bookmaker?: string;
-  books?: BookOdds[];
+  bookmaker?: string;   // ✅ single source of truth
+  books?: string;
 
-  confidence?: number;
-
-  avg_l5?: number;
-  avg_l10?: number;
-  avg_l20?: number;
-
-  bad_miss_pct_l5?: number;
-  bad_miss_pct_l10?: number;
-  bad_miss_pct_l20?: number;
-
-  pace_l5?: number;
-  pace_l10?: number;
-  pace_l20?: number;
+  homeTeam?: string;
+  awayTeam?: string;
 
   sparkline_l5?: number[];
   sparkline_l10?: number[];
@@ -63,10 +53,12 @@ export type PropCardProps = {
   hitRatePct: number;
   window?: "L5" | "L10" | "L20";
 
+  avg_l5?: number;
+  avg_l10?: number;
+  avg_l20?: number;
+
   saved: boolean;
   onToggleSave: () => void;
-
-  // ✅ swipe-right save
   onSwipeSave?: () => void;
 
   expanded: boolean;
@@ -74,12 +66,24 @@ export type PropCardProps = {
   scrollRef?: React.RefObject<FlatList<any>>;
 };
 
+
 /* ======================================================
    HELPERS
 ====================================================== */
-function normalizeBookKey(name: string) {
-  return name.toLowerCase().replace(/[\s_]/g, "");
+function resolveBookmakerKey(raw?: string) {
+  if (!raw) return null;
+
+  const key = raw.toLowerCase().replace(/[\s_]/g, "");
+
+  if (key.startsWith("draft")) return "draftkings";
+  if (key.startsWith("fan")) return "fanduel";
+  if (key === "dk") return "draftkings";
+  if (key === "fd") return "fanduel";
+
+  return key;
 }
+
+
 
 function formatOdds(o?: number) {
   if (o == null) return "";
@@ -125,6 +129,20 @@ export default function PropCard(props: PropCardProps) {
     props.window ?? "L10"
   );
 
+  const hitRate =
+    displayWindow === "L5"
+      ? props.hitRatePct
+      : displayWindow === "L20"
+      ? props.hitRatePct
+      : props.hitRatePct;
+
+  const windowAvg =
+    displayWindow === "L5"
+      ? props.avg_l5
+      : displayWindow === "L20"
+      ? props.avg_l20
+      : props.avg_l10;
+
   const sparkline =
     displayWindow === "L5"
       ? props.sparkline_l5
@@ -148,19 +166,29 @@ export default function PropCard(props: PropCardProps) {
       ? `https://a.espncdn.com/i/headshots/nba/players/full/${playerId}.png`
       : null);
 
+  const homeLogo = props.homeTeam
+  ? TEAM_LOGOS[props.homeTeam]
+  : null;
+
+  const awayLogo = props.awayTeam
+    ? TEAM_LOGOS[props.awayTeam]
+    : null;
+    
   /* =========================
      BOOK
   ========================= */
   const resolvedBook = useMemo(() => {
-    if (books?.length) return books[0];
-    if (bookmaker) return { bookmaker, odds };
-    return null;
-  }, [books, bookmaker, odds]);
+  if (bookmaker) {
+    return { bookmaker, odds };
+  }
+  return null;
+}, [bookmaker, odds]);
 
-  const bookLogo =
-    resolvedBook &&
-    BOOKMAKER_LOGOS[normalizeBookKey(resolvedBook.bookmaker)];
+  const bookKey = resolveBookmakerKey(resolvedBook?.bookmaker);
 
+  const bookLogo = bookKey ? BOOKMAKER_LOGOS[bookKey] : null;
+
+    
   /* =========================
      SWIPE UI
   ========================= */
@@ -199,38 +227,65 @@ export default function PropCard(props: PropCardProps) {
             </Text>
           </Pressable>
 
-          {/* HEADER */}
-          <Pressable onPress={onToggleExpand} style={styles.headerRow}>
-            {imageUrl && (
-              <Image
-                source={{ uri: imageUrl }}
-                style={styles.headshot}
-                resizeMode="cover"
-              />
-            )}
+          {/* TOP HEADER SECTION */}
+          <Pressable onPress={onToggleExpand} style={styles.header}>
+            {/* LEFT – MATCHUP */}
+            <View style={styles.headerLeft}>
+              {awayLogo && <Image source={{ uri: awayLogo }} style={styles.teamLogo} />}
+              <Text style={styles.atSymbol}>@</Text>
+              {homeLogo && <Image source={{ uri: homeLogo }} style={styles.teamLogo} />}
+            </View>
 
-            <View style={styles.headerText}>
-              <Text style={styles.player}>{player}</Text>
+            {/* CENTER – PLAYER + MARKET */}
+            <View style={styles.headerCenter}>
+              {imageUrl && (
+                <Image source={{ uri: imageUrl }} style={styles.headshot} />
+              )}
 
-              <Text style={styles.marketLine}>
-                {formatMarketLabel(market)} • {formatSideLabel(side)} {line}
-                {odds != null && (
-                  <Text style={styles.oddsText}>  {formatOdds(odds)}</Text>
-                )}
-              </Text>
+              <View style={styles.headerTextBlock}>
+                <Text style={styles.player}>{player}</Text>
+                <Text style={styles.marketLine}>
+                  {formatMarketLabel(market)} · {formatSideLabel(side)} {line}
+                </Text>
+              </View>
+            </View>
 
-              {bookLogo && (
+
+            {/* RIGHT – BOOK + ODDS */}
+            <View style={styles.headerRight}>
+              <View style={styles.bookOddsRow}>
+
+                {/* 🔵 REAL LOGO */}
                 <Image
-                  source={{ uri: bookLogo }}
+                  source={bookLogo}
                   style={styles.bookLogo}
                   resizeMode="contain"
                 />
-              )}
 
-              <Text style={styles.hitText}>{hitRatePct}% HIT</Text>
-              <Text style={styles.metricSub}>Last {displayWindow}</Text>
+
+                <Text style={styles.oddsText}>
+                  {formatOdds(resolvedBook?.odds ?? odds)}
+                </Text>
+              </View>
             </View>
+
           </Pressable>
+          <View style={styles.bottomRow}>
+            <View style={styles.metricBox}>
+              <Text style={styles.metricLabel}>{displayWindow} HIT</Text>
+              <Text style={styles.metricValue}>
+                {hitRate != null ? `${hitRate}%` : "—"}
+              </Text>
+            </View>
+
+            <View style={styles.metricBox}>
+              <Text style={styles.metricLabel}>{displayWindow} AVG</Text>
+              <Text style={styles.metricValue}>
+                {windowAvg != null ? windowAvg.toFixed(1) : "—"}
+              </Text>
+            </View>
+          </View>
+
 
           {/* EXPANDED */}
           {expanded && (
@@ -264,7 +319,13 @@ export default function PropCard(props: PropCardProps) {
 ====================================================== */
 function makeStyles(colors: any) {
   return StyleSheet.create({
-    outer: { margin: 12 },
+    /* =========================
+       WRAPPER
+    ========================= */
+    outer: {
+      marginHorizontal: 12,
+      marginVertical: 8,
+    },
 
     card: {
       backgroundColor: colors.surface.card,
@@ -274,6 +335,9 @@ function makeStyles(colors: any) {
       borderColor: colors.border.subtle,
     },
 
+    /* =========================
+       SAVE STAR
+    ========================= */
     saveButton: {
       position: "absolute",
       top: 8,
@@ -281,60 +345,148 @@ function makeStyles(colors: any) {
       zIndex: 2,
     },
 
-    saveStar: { fontSize: 18, color: colors.text.muted },
-    saveStarOn: { color: colors.accent.primary },
+    saveStar: {
+      fontSize: 18,
+      color: colors.text.muted,
+    },
 
-    headerRow: {
+    saveStarOn: {
+      color: colors.accent.primary,
+    },
+
+    /* =========================
+       TOP HEADER SECTION
+    ========================= */
+    header: {
+      position: "relative",
+      paddingBottom: 10,
+      marginBottom: 8,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border.subtle,
+    },
+
+    headerLeft: {
+      position: "absolute",
+      left: 0,
+      top: 0,
       flexDirection: "row",
       alignItems: "center",
-      gap: 12,
+      gap: 6,
     },
 
+    headerRight: {
+      position: "absolute",
+      right: 0,
+      top: 0,
+      alignItems: "flex-end",
+    },
+
+
+    headerCenter: {
+      flexDirection: "row",
+      alignItems: "center",
+      alignSelf: "center",
+      gap: 10,
+    },
+
+    headerTextBlock: {
+      alignItems: "flex-start",
+    },
+
+
+    /* =========================
+       IMAGES
+    ========================= */
     headshot: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
+      width: 38,
+      height: 38,
+      borderRadius: 19,
       backgroundColor: colors.surface.cardSoft,
+      marginBottom: 2,
     },
 
-    headerText: { flex: 1 },
 
-    player: {
-      fontWeight: "800",
-      fontSize: 15,
-      color: colors.text.primary,
-    },
-
-    marketLine: {
-      marginTop: 2,
-      color: colors.text.secondary,
-      fontSize: 13,
-    },
-
-    oddsText: {
-      fontWeight: "700",
-      color: colors.text.primary,
+    teamLogo: {
+      width: 22,
+      height: 22,
+      resizeMode: "contain",
     },
 
     bookLogo: {
-      width: 42,
-      height: 16,
-      marginTop: 4,
-      opacity: 0.9,
+      width: 28,
+      height: 14,
+      resizeMode: "contain",
+      opacity: 0.95,
     },
 
-    hitText: {
-      marginTop: 6,
-      fontWeight: "900",
+    oddsText: {
+      fontSize: 13,
+      fontWeight: "800",
       color: colors.text.primary,
     },
 
-    metricSub: {
-      color: colors.text.muted,
-      fontSize: 12,
+
+    /* =========================
+       TEXT
+    ========================= */
+    player: {
+      fontSize: 15,
+      fontWeight: "800",
+      color: colors.text.primary,
+      textAlign: "left",
     },
 
-    expandWrap: { marginTop: 12 },
+    marketLine: {
+      fontSize: 12,
+      color: colors.text.muted,
+      marginTop: 2,
+      textAlign: "left",
+    },
+
+    bookOddsRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+
+    atSymbol: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.text.muted,
+    },
+
+    /* =========================
+       BOTTOM METRICS ROW
+    ========================= */
+    bottomRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      marginTop: 6,
+    },
+
+    metricBox: {
+      alignItems: "flex-start",
+    },
+
+    metricLabel: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.text.muted,
+      marginBottom: 2,
+    },
+
+    metricValue: {
+      fontSize: 16,
+      fontWeight: "900",
+      color: colors.accent.primary,
+    },
+
+    /* =========================
+       EXPANDED AREA
+    ========================= */
+    expandWrap: {
+      marginTop: 12,
+    },
 
     windowToggle: {
       flexDirection: "row",
@@ -353,9 +505,12 @@ function makeStyles(colors: any) {
 
     windowPillActive: {
       backgroundColor: colors.surface.cardSoft,
+      borderColor: colors.surface.cardSoft,
     },
 
-    /* SWIPE */
+    /* =========================
+       SWIPE SAVE
+    ========================= */
     swipeSave: {
       flex: 1,
       justifyContent: "center",
@@ -368,6 +523,7 @@ function makeStyles(colors: any) {
       color: colors.text.inverse,
       fontWeight: "900",
       fontSize: 14,
+      letterSpacing: 0.5,
     },
   });
 }

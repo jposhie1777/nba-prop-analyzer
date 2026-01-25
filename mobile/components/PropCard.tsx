@@ -8,12 +8,13 @@ import {
   FlatList,
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
 
 import { useTheme } from "@/store/useTheme";
 import { BOOKMAKER_LOGOS } from "@/utils/bookmakerLogos";
 import { MiniBarSparkline } from "@/components/sparkline/MiniBarSparkline";
 import { formatMarketLabel } from "@/utils/formatMarket";
+
 
 /* ======================================================
    TYPES
@@ -97,7 +98,7 @@ function formatSideLabel(side?: "over" | "under" | "yes") {
 export default function PropCard(props: PropCardProps) {
   const colors = useTheme((s) => s.colors);
   const styles = useMemo(() => makeStyles(colors), [colors]);
-
+  const swipeRef = useRef<Swipeable>(null);
   const {
     player,
     playerId,
@@ -174,6 +175,7 @@ export default function PropCard(props: PropCardProps) {
   ========================= */
   return (
     <Swipeable
+      ref={swipeRef}
       overshootRight={false}
       simultaneousHandlers={scrollRef}
       renderLeftActions={renderSwipeSave}
@@ -181,6 +183,11 @@ export default function PropCard(props: PropCardProps) {
         if (!saved) {
           onSwipeSave?.();
         }
+    
+        // ✅ THIS IS THE CRITICAL LINE
+        requestAnimationFrame(() => {
+          swipeRef.current?.close();
+        });
       }}
     >
       <View style={styles.outer}>

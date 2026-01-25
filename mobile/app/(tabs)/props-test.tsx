@@ -1,5 +1,4 @@
 // app/(tabs)/props-test
-// app/(tabs)/props-test
 import {
   View,
   Text,
@@ -22,7 +21,6 @@ import { usePlayerPropsMaster } from "@/hooks/usePlayerPropsMaster";
    Screen
 ====================================================== */
 export default function PropsTestScreen() {
-  // ✅ CORRECT theme usage (Zustand selector)
   const colors = useTheme((s) => s.colors);
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
@@ -56,7 +54,7 @@ export default function PropsTestScreen() {
   }, [rawProps]);
 
   /* ======================================================
-     SANITIZE + NORMALIZE
+     SANITIZE + FILTER + SORT
   ====================================================== */
   const props = useMemo(() => {
     const cleaned = rawProps
@@ -65,18 +63,58 @@ export default function PropsTestScreen() {
         if (!p.market) return false;
         if (p.line == null) return false;
         if (!p.id) return false;
+
+        // ➕ ADD: market window filter (unchecked = ALL)
+        if (
+          filters.marketWindow &&
+          p.market_window !== filters.marketWindow
+        ) {
+          return false;
+        }
+
+        // ➕ ADD: hit rate filter by selected window
+        const hitRate =
+          filters.hitRateWindow === "L5"
+            ? p.hit_rate_l5
+            : filters.hitRateWindow === "L10"
+            ? p.hit_rate_l10
+            : p.hit_rate_l20;
+
+        if (hitRate != null && hitRate < filters.minHitRate) {
+          return false;
+        }
+
+        // ➕ ADD: odds filter
+        if (p.odds < filters.minOdds) return false;
+        if (p.odds > filters.maxOdds) return false;
+
         return true;
       })
       .map((p, idx) => ({
         ...p,
-        // 🔒 absolutely unique key
         id: `${p.id}::${idx}`,
       }));
 
-    console.log("🧪 [SCREEN] props after sanitize:", cleaned.length);
+    // ➕ ADD: default sorting
+    cleaned.sort((a, b) => {
+      const getHR = (p: any) =>
+        filters.hitRateWindow === "L5"
+          ? p.hit_rate_l5 ?? 0
+          : filters.hitRateWindow === "L10"
+          ? p.hit_rate_l10 ?? 0
+          : p.hit_rate_l20 ?? 0;
+
+      const hrDiff = getHR(b) - getHR(a);
+      if (hrDiff !== 0) return hrDiff;
+
+      // Secondary: odds ASC
+      return (a.odds ?? 0) - (b.odds ?? 0);
+    });
+
+    console.log("🧪 [SCREEN] props after sanitize/filter/sort:", cleaned.length);
 
     return cleaned;
-  }, [rawProps]);
+  }, [rawProps, filters]);
 
   /* ======================================================
      RENDER ITEM
@@ -130,7 +168,6 @@ export default function PropsTestScreen() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <View style={styles.screen}>
-        {/* ================= FILTERS ================= */}
         <View style={styles.filters}>
           <Text style={styles.filtersTitle}>Filters</Text>
 
@@ -155,6 +192,33 @@ export default function PropsTestScreen() {
                     ]}
                   >
                     {mkt}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {/* ➕ ADD: MARKET WINDOW */}
+          <View style={styles.pills}>
+            {(["FULL", "Q1", "FIRST3MIN"] as const).map((w) => {
+              const active = filters.marketWindow === w;
+              return (
+                <Pressable
+                  key={`mw-${w}`}
+                  onPress={() =>
+                    setFilters((f) => ({
+                      ...f,
+                      marketWindow: active ? null : w,
+                    }))
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.pill,
+                      active && styles.pillActive,
+                    ]}
+                  >
+                    {w}
                   </Text>
                 </Pressable>
               );
@@ -226,7 +290,6 @@ export default function PropsTestScreen() {
           />
         </View>
 
-        {/* ================= LIST ================= */}
         <Text style={{ padding: 8, color: "red" }}>
           PROPS COUNT: {props.length}
         </Text>
@@ -261,7 +324,6 @@ function makeStyles(colors: any) {
     loading: {
       color: colors.text.muted,
     },
-
     filters: {
       padding: 12,
       borderBottomWidth: StyleSheet.hairlineWidth,

@@ -13,6 +13,7 @@ import * as Haptics from "expo-haptics";
 
 import { useBetslipDrawer } from "@/store/useBetslipDrawer";
 import { useTheme } from "@/store/useTheme";
+import { usePropBetslip } from "@/store/usePropBetslip";
 
 const GAMBLY_URL = "https://www.gambly.com/gambly-bot";
 const STAKE = 10;

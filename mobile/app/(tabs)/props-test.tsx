@@ -9,10 +9,12 @@ import {
 import { useMemo, useState, useCallback, useRef, useEffect } from "react";
 import Slider from "@react-native-community/slider";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import * as Haptics from "expo-haptics";
 
 import PropCard from "@/components/PropCard";
 import { useTheme } from "@/store/useTheme";
 import { useSavedBets } from "@/store/useSavedBets";
+import { usePropBetslip } from "@/store/usePropBetslip";
 import { useHistoricalPlayerTrends } from "@/hooks/useHistoricalPlayerTrends";
 import { resolveSparklineByMarket } from "@/utils/resolveSparkline";
 import { usePlayerPropsMaster } from "@/hooks/usePlayerPropsMaster";
@@ -26,6 +28,9 @@ export default function PropsTestScreen() {
 
   const savedIds = useSavedBets((s) => s.savedIds);
   const toggleSave = useSavedBets((s) => s.toggleSave);
+
+  const addToBetslip = usePropBetslip((s) => s.add);
+  const removeFromBetslip = usePropBetslip((s) => s.remove);
 
   const {
     props: rawProps,
@@ -44,14 +49,36 @@ export default function PropsTestScreen() {
   }, []);
 
   /* ======================================================
-     DEBUG — RAW INPUT
+     SAVE / UNSAVE (single source of truth)
   ====================================================== */
-  useEffect(() => {
-    console.log("🧪 [SCREEN] rawProps length:", rawProps.length);
-    if (rawProps.length) {
-      console.log("🧪 [SCREEN] sample raw prop:", rawProps[0]);
-    }
-  }, [rawProps]);
+  const saveProp = useCallback(
+    (item: any) => {
+      if (savedIds.has(item.id)) return;
+
+      toggleSave(item.id);
+
+      addToBetslip({
+        id: item.id,
+        player: item.player,
+        market: item.market,
+        side: item.side ?? "over",
+        line: item.line,
+        odds: item.odds,
+        matchup: item.matchup,
+      });
+
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    },
+    [savedIds, toggleSave, addToBetslip]
+  );
+
+  const unsaveProp = useCallback(
+    (id: string) => {
+      toggleSave(id);
+      removeFromBetslip(id);
+    },
+    [toggleSave, removeFromBetslip]
+  );
 
   /* ======================================================
      SANITIZE + FILTER + SORT
@@ -64,7 +91,6 @@ export default function PropsTestScreen() {
         if (p.line == null) return false;
         if (!p.id) return false;
 
-        // ➕ ADD: market window filter (unchecked = ALL)
         if (
           filters.marketWindow &&
           p.market_window !== filters.marketWindow
@@ -72,7 +98,6 @@ export default function PropsTestScreen() {
           return false;
         }
 
-        // ➕ ADD: hit rate filter by selected window
         const hitRate =
           filters.hitRateWindow === "L5"
             ? p.hit_rate_l5
@@ -84,7 +109,6 @@ export default function PropsTestScreen() {
           return false;
         }
 
-        // ➕ ADD: odds filter
         if (p.odds < filters.minOdds) return false;
         if (p.odds > filters.maxOdds) return false;
 
@@ -95,7 +119,6 @@ export default function PropsTestScreen() {
         id: `${p.id}::${idx}`,
       }));
 
-    // ➕ ADD: default sorting
     cleaned.sort((a, b) => {
       const getHR = (p: any) =>
         filters.hitRateWindow === "L5"
@@ -107,11 +130,8 @@ export default function PropsTestScreen() {
       const hrDiff = getHR(b) - getHR(a);
       if (hrDiff !== 0) return hrDiff;
 
-      // Secondary: odds ASC
       return (a.odds ?? 0) - (b.odds ?? 0);
     });
-
-    console.log("🧪 [SCREEN] props after sanitize/filter/sort:", cleaned.length);
 
     return cleaned;
   }, [rawProps, filters]);
@@ -123,21 +143,18 @@ export default function PropsTestScreen() {
     ({ item }: any) => {
       const trend = getByPlayer(item.player);
       const spark = resolveSparklineByMarket(item.market, trend);
-
-      if (!spark) {
-        console.warn(
-          "⚠️ Unhandled sparkline market:",
-          item.market
-        );
-      }
+      const isSaved = savedIds.has(item.id);
 
       return (
         <PropCard
           {...item}
           playerId={item.player_id}
           scrollRef={listRef}
-          saved={savedIds.has(item.id)}
-          onToggleSave={() => toggleSave(item.id)}
+          saved={isSaved}
+          onSwipeSave={() => saveProp(item)}
+          onToggleSave={() =>
+            isSaved ? unsaveProp(item.id) : saveProp(item)
+          }
           expanded={expandedId === item.id}
           onToggleExpand={() => toggleExpand(item.id)}
           sparkline_l5={spark?.sparkline_l5}
@@ -149,7 +166,14 @@ export default function PropsTestScreen() {
         />
       );
     },
-    [savedIds, expandedId, toggleSave, toggleExpand, getByPlayer]
+    [
+      savedIds,
+      expandedId,
+      toggleExpand,
+      getByPlayer,
+      saveProp,
+      unsaveProp,
+    ]
   );
 
   if (loading) {
@@ -171,13 +195,12 @@ export default function PropsTestScreen() {
         <View style={styles.filters}>
           <Text style={styles.filtersTitle}>Filters</Text>
 
-          {/* MARKETS */}
           <View style={styles.pills}>
             {filters.markets.map((mkt) => {
               const active = filters.market === mkt;
               return (
                 <Pressable
-                  key={`mkt-${mkt}`}
+                  key={mkt}
                   onPress={() =>
                     setFilters((f) => ({
                       ...f,
@@ -198,13 +221,12 @@ export default function PropsTestScreen() {
             })}
           </View>
 
-          {/* ➕ ADD: MARKET WINDOW */}
           <View style={styles.pills}>
             {(["FULL", "Q1", "FIRST3MIN"] as const).map((w) => {
               const active = filters.marketWindow === w;
               return (
                 <Pressable
-                  key={`mw-${w}`}
+                  key={w}
                   onPress={() =>
                     setFilters((f) => ({
                       ...f,
@@ -225,13 +247,12 @@ export default function PropsTestScreen() {
             })}
           </View>
 
-          {/* HIT RATE WINDOW */}
           <View style={styles.pills}>
             {(["L5", "L10", "L20"] as const).map((w) => {
               const active = filters.hitRateWindow === w;
               return (
                 <Pressable
-                  key={`hr-${w}`}
+                  key={w}
                   onPress={() =>
                     setFilters((f) => ({
                       ...f,
@@ -290,10 +311,6 @@ export default function PropsTestScreen() {
           />
         </View>
 
-        <Text style={{ padding: 8, color: "red" }}>
-          PROPS COUNT: {props.length}
-        </Text>
-
         <FlatList
           ref={listRef}
           data={props}
@@ -312,35 +329,30 @@ export default function PropsTestScreen() {
 function makeStyles(colors: any) {
   return StyleSheet.create({
     root: { flex: 1 },
-    screen: {
-      flex: 1,
-      backgroundColor: colors.surface.screen,
-    },
-    center: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    loading: {
-      color: colors.text.muted,
-    },
+    screen: { flex: 1, backgroundColor: colors.surface.screen },
+    center: { flex: 1, alignItems: "center", justifyContent: "center" },
+    loading: { color: colors.text.muted },
+
     filters: {
       padding: 12,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border.subtle,
     },
+
     filtersTitle: {
       fontSize: 14,
       fontWeight: "800",
       color: colors.text.primary,
       marginBottom: 8,
     },
+
     pills: {
       flexDirection: "row",
       flexWrap: "wrap",
       marginBottom: 8,
       gap: 6,
     },
+
     pill: {
       paddingHorizontal: 10,
       paddingVertical: 6,
@@ -350,11 +362,13 @@ function makeStyles(colors: any) {
       color: colors.text.muted,
       fontSize: 12,
     },
+
     pillActive: {
       backgroundColor: colors.accent.primary,
       color: colors.text.inverse,
       borderColor: colors.accent.primary,
     },
+
     sliderLabel: {
       fontSize: 12,
       color: colors.text.muted,

@@ -18,6 +18,7 @@ import { usePropBetslip } from "@/store/usePropBetslip";
 import { useHistoricalPlayerTrends } from "@/hooks/useHistoricalPlayerTrends";
 import { resolveSparklineByMarket } from "@/utils/resolveSparkline";
 import { usePlayerPropsMaster } from "@/hooks/usePlayerPropsMaster";
+import { useBetslipDrawer } from "@/store/useBetslipDrawer";
 
 /* ======================================================
    Screen
@@ -28,7 +29,7 @@ export default function PropsTestScreen() {
 
   const savedIds = useSavedBets((s) => s.savedIds);
   const toggleSave = useSavedBets((s) => s.toggleSave);
-
+  const openBetslip = useBetslipDrawer((s) => s.open);
   const addToBetslip = usePropBetslip((s) => s.add);
   const removeFromBetslip = usePropBetslip((s) => s.remove);
 
@@ -54,9 +55,9 @@ export default function PropsTestScreen() {
   const saveProp = useCallback(
     (item: any) => {
       if (savedIds.has(item.id)) return;
-
+  
       toggleSave(item.id);
-
+  
       addToBetslip({
         id: item.id,
         player: item.player,
@@ -66,10 +67,13 @@ export default function PropsTestScreen() {
         odds: item.odds,
         matchup: item.matchup,
       });
-
+  
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  
+      // ✅ OPEN THE DRAWER
+      openBetslip();
     },
-    [savedIds, toggleSave, addToBetslip]
+    [savedIds, toggleSave, addToBetslip, openBetslip]
   );
 
   const unsaveProp = useCallback(

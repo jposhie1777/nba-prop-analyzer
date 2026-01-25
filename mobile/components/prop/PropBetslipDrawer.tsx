@@ -109,7 +109,10 @@ export function PropBetslipDrawer() {
           HEADER
       ========================== */}
       <Pressable
-        onPress={() => setExpanded((v) => !v)}
+        onPress={() => {
+          toggle();
+          setExpanded((v) => !v);
+        }}
         style={styles.header}
       >
         <View>
@@ -196,7 +199,14 @@ export function PropBetslipDrawer() {
                   {b.odds}
                 </Text>
 
-                <Pressable onPress={() => remove(b.id)}>
+                <Pressable
+                  onPress={() => {
+                    remove(b.id);
+                    if (items.length === 1) {
+                      close();
+                    }
+                  }}
+                >
                   <Text
                     style={[
                       styles.remove,
@@ -217,7 +227,10 @@ export function PropBetslipDrawer() {
       ========================== */}
       <View style={styles.actions}>
         <Pressable
-          onPress={clear}
+          onPress={() => {
+            clear();
+            close();
+          }}
           style={[
             styles.clearBtn,
             { borderColor: colors.border.subtle },

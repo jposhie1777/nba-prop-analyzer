@@ -19,6 +19,7 @@ import { useHistoricalPlayerTrends } from "@/hooks/useHistoricalPlayerTrends";
 import { resolveSparklineByMarket } from "@/utils/resolveSparkline";
 import { usePlayerPropsMaster } from "@/hooks/usePlayerPropsMaster";
 import { useBetslipDrawer } from "@/store/useBetslipDrawer";
+import { PropBetslipDrawer } from "@/components/prop/PropBetslipDrawer";
 
 /* ======================================================
    Screen

@@ -110,10 +110,7 @@ export function PropBetslipDrawer() {
           HEADER
       ========================== */}
       <Pressable
-        onPress={() => {
-          toggle();
-          setExpanded((v) => !v);
-        }}
+        onPress={() => setExpanded((v) => !v)}
         style={styles.header}
       >
         <View>

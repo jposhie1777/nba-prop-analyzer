@@ -1,5 +1,12 @@
 // components/PropCard.tsx
-import { View, Text, StyleSheet, Image, Pressable, FlatList } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Image,
+  Pressable,
+  FlatList,
+} from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import { useMemo, useState } from "react";
 
@@ -57,6 +64,10 @@ export type PropCardProps = {
 
   saved: boolean;
   onToggleSave: () => void;
+
+  // ✅ swipe-right save
+  onSwipeSave?: () => void;
+
   expanded: boolean;
   onToggleExpand: () => void;
   scrollRef?: React.RefObject<FlatList<any>>;
@@ -99,6 +110,7 @@ export default function PropCard(props: PropCardProps) {
     books,
     saved,
     onToggleSave,
+    onSwipeSave,
     expanded,
     onToggleExpand,
     scrollRef,
@@ -127,7 +139,7 @@ export default function PropCard(props: PropCardProps) {
       : props.last10_dates;
 
   /* =========================
-     IMAGE RESOLUTION
+     IMAGE
   ========================= */
   const imageUrl =
     playerImageUrl ||
@@ -136,7 +148,7 @@ export default function PropCard(props: PropCardProps) {
       : null);
 
   /* =========================
-     BOOK RESOLUTION
+     BOOK
   ========================= */
   const resolvedBook = useMemo(() => {
     if (books?.length) return books[0];
@@ -149,13 +161,31 @@ export default function PropCard(props: PropCardProps) {
     BOOKMAKER_LOGOS[normalizeBookKey(resolvedBook.bookmaker)];
 
   /* =========================
+     SWIPE UI
+  ========================= */
+  const renderSwipeSave = () => (
+    <View style={styles.swipeSave}>
+      <Text style={styles.swipeSaveText}>SAVE</Text>
+    </View>
+  );
+
+  /* =========================
      RENDER
   ========================= */
   return (
-    <Swipeable overshootRight={false} simultaneousHandlers={scrollRef}>
+    <Swipeable
+      overshootRight={false}
+      simultaneousHandlers={scrollRef}
+      renderLeftActions={renderSwipeSave}
+      onSwipeableLeftOpen={() => {
+        if (!saved) {
+          onSwipeSave?.();
+        }
+      }}
+    >
       <View style={styles.outer}>
         <View style={styles.card}>
-          {/* SAVE */}
+          {/* SAVE STAR */}
           <Pressable onPress={onToggleSave} style={styles.saveButton}>
             <Text style={[styles.saveStar, saved && styles.saveStarOn]}>
               {saved ? "★" : "☆"}
@@ -191,9 +221,7 @@ export default function PropCard(props: PropCardProps) {
               )}
 
               <Text style={styles.hitText}>{hitRatePct}% HIT</Text>
-              <Text style={styles.metricSub}>
-                Last {displayWindow}
-              </Text>
+              <Text style={styles.metricSub}>Last {displayWindow}</Text>
             </View>
           </Pressable>
 
@@ -318,6 +346,21 @@ function makeStyles(colors: any) {
 
     windowPillActive: {
       backgroundColor: colors.surface.cardSoft,
+    },
+
+    /* SWIPE */
+    swipeSave: {
+      flex: 1,
+      justifyContent: "center",
+      paddingLeft: 24,
+      backgroundColor: colors.accent.primary,
+      borderRadius: 16,
+    },
+
+    swipeSaveText: {
+      color: colors.text.inverse,
+      fontWeight: "900",
+      fontSize: 14,
     },
   });
 }

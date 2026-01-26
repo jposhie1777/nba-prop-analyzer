@@ -1,6 +1,6 @@
 // mobile/utils/parlayProgress.ts
 
-export type ParlaySide = "over" | "under";
+export type ParlaySide = "over" | "under" | "yes";
 
 /**
  * Calculate progress (0 → 1) toward a leg resolving.
@@ -16,11 +16,13 @@ export function calcLegProgress(
 
   const raw = current / line;
 
-  if (side === "over") {
+  // ✅ "yes" behaves like "over"
+  const isOver = side === "over" || side === "yes";
+
+  if (isOver) {
     return clamp(raw, 0, 1);
   }
 
-  // under bets invert
   return clamp(1 - raw, 0, 1);
 }
 

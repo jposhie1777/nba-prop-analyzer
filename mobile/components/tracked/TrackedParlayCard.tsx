@@ -79,22 +79,32 @@ export default function TrackedParlayCard({ parlay }: Props) {
               <View style={styles.legRow}>
                 <Text style={styles.legText} numberOfLines={1}>
                   {leg.player_name}{" "}
-                  {leg.side.toUpperCase()} {leg.line} {leg.market}
+                  {leg.side.toUpperCase()} {leg.line} {leg.market.toUpperCase()}
                 </Text>
-
-                <Text
-                  style={[
-                    styles.legValue,
-                    leg.status === "winning" && {
-                      color: colors.accent.success,
-                    },
-                    leg.status === "losing" && {
-                      color: colors.accent.danger,
-                    },
-                  ]}
-                >
-                  {leg.current ?? "—"}
-                </Text>
+              
+                {/* RIGHT SIDE: VALUE + CLOCK */}
+                <View style={styles.legRight}>
+                  <Text
+                    style={[
+                      styles.legValue,
+                      leg.status === "winning" && {
+                        color: colors.accent.success,
+                      },
+                      leg.status === "losing" && {
+                        color: colors.accent.danger,
+                      },
+                    ]}
+                  >
+                    {leg.current ?? "—"}
+                  </Text>
+              
+                  {/* LIVE CLOCK */}
+                  {leg.period && leg.clock && leg.game_status === "live" && (
+                    <Text style={styles.clock}>
+                      Q{leg.period} {leg.clock}
+                    </Text>
+                  )}
+                </View>
               </View>
 
               {/* ---------- Live Context (STEP 6) ---------- */}
@@ -207,6 +217,16 @@ function makeStyles(colors: any) {
     footerText: {
       fontSize: 12,
       color: colors.text.muted,
+    },
+    legRight: {
+      alignItems: "flex-end",
+    },
+    
+    clock: {
+      fontSize: 10,
+      marginTop: 2,
+      color: colors.text.muted,
+      fontWeight: "600",
     },
   });
 }

@@ -1,4 +1,3 @@
-// hooks/useHistoricalPlayerTrends
 import { useEffect, useRef, useState } from "react";
 import Constants from "expo-constants";
 
@@ -8,27 +7,71 @@ import Constants from "expo-constants";
 const API = Constants.expoConfig?.extra?.API_URL!;
 
 /* ======================================================
-   TYPES (matches BigQuery schema)
+   TYPES (Option A — canonical market_key support)
 ====================================================== */
 export type HistoricalPlayerTrend = {
   player: string;
 
+  /* ======================
+     CORE STATS
+  ====================== */
   pts_last5_list?: number[];
   pts_last10_list?: number[];
   pts_last20_list?: number[];
-
-  ast_last5_list?: number[];
-  ast_last10_list?: number[];
-  ast_last20_list?: number[];
 
   reb_last5_list?: number[];
   reb_last10_list?: number[];
   reb_last20_list?: number[];
 
+  ast_last5_list?: number[];
+  ast_last10_list?: number[];
+  ast_last20_list?: number[];
+
+  stl_last5_list?: number[];
+  stl_last10_list?: number[];
+  stl_last20_list?: number[];
+
+  blk_last5_list?: number[];
+  blk_last10_list?: number[];
+  blk_last20_list?: number[];
+
+  fg3m_last5_list?: number[];
+  fg3m_last10_list?: number[];
+  fg3m_last20_list?: number[];
+
+  /* ======================
+     COMBO MARKETS
+  ====================== */
+  pr_last5_list?: number[];
+  pr_last10_list?: number[];
+  pr_last20_list?: number[];
+
+  pa_last5_list?: number[];
+  pa_last10_list?: number[];
+  pa_last20_list?: number[];
+
+  ra_last5_list?: number[];
+  ra_last10_list?: number[];
+  ra_last20_list?: number[];
+
   pra_last5_list?: number[];
   pra_last10_list?: number[];
   pra_last20_list?: number[];
 
+  /* ======================
+     MILESTONES
+  ====================== */
+  dd_last5_list?: number[];
+  dd_last10_list?: number[];
+  dd_last20_list?: number[];
+
+  td_last5_list?: number[];
+  td_last10_list?: number[];
+  td_last20_list?: number[];
+
+  /* ======================
+     DATES
+  ====================== */
   last5_dates?: string[];
   last10_dates?: string[];
   last20_dates?: string[];
@@ -83,7 +126,6 @@ export function useHistoricalPlayerTrends() {
   const getByPlayer = (player: string) =>
     cacheRef.current[player];
 
-  // 👇 ADD THIS
   const players = Object.keys(cacheRef.current).sort();
 
   return {

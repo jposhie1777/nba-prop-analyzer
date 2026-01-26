@@ -20,6 +20,7 @@ import { usePlayerPropsMaster } from "@/hooks/usePlayerPropsMaster";
 import { useBetslipDrawer } from "@/store/useBetslipDrawer";
 import { PropBetslipDrawer } from "@/components/prop/PropBetslipDrawer";
 import { usePropBetslip } from "@/store/usePropBetslip";
+import { normalizeMarket } from "@/utils/normalizeMarket";
 
 
 /* ======================================================
@@ -65,13 +66,18 @@ export default function PropsTestScreen() {
   
       addToBetslip({
         id: item.id,
+
+        player_id: item.player_id,          // 🔥 REQUIRED
         player: item.player,
-        market: item.market,
+
+        market: normalizeMarket(item.market), // 🔥 REQUIRED
         side: item.side ?? "over",
         line: item.line,
         odds: item.odds,
+
         matchup: item.matchup,
       });
+
   
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   
@@ -99,13 +105,6 @@ export default function PropsTestScreen() {
         if (!p.market) return false;
         if (p.line == null) return false;
         if (!p.id) return false;
-
-        if (
-          filters.marketWindow &&
-          p.market_window !== filters.marketWindow
-        ) {
-          return false;
-        }
 
         const hitRate =
           filters.hitRateWindow === "L5"
@@ -150,12 +149,6 @@ export default function PropsTestScreen() {
   ====================================================== */
   const renderItem = useCallback(
     ({ item }: any) => {
-      console.log("🧪 RENDER ITEM KEYS", {
-        keys: Object.keys(item),
-        bookmaker: item.bookmaker,
-        bookmaker_key: item.bookmaker_key,
-      });
-  
       const trend = getByPlayer(item.player);
       const spark = resolveSparklineByMarket(item.market, trend);
       const isSaved = savedIds.has(item.id);

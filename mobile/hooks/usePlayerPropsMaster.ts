@@ -6,11 +6,13 @@ export type HitRateWindow = "L5" | "L10" | "L20";
 
 type Filters = {
   market: string;
+  marketWindow: "FULL" | "Q1" | "FIRST3MIN" | null;
   hitRateWindow: HitRateWindow;
   minHitRate: number;
   minOdds: number;
   maxOdds: number;
 };
+
 
 type FetchArgs = {
   limit?: number;
@@ -22,17 +24,19 @@ type FetchArgs = {
 ====================================================== */
 const DEFAULT_FILTERS: Filters = {
   market: "ALL",
+  marketWindow: null,   // ✅
   hitRateWindow: "L5",
   minHitRate: 0,
-  minOdds: -1000,
-  maxOdds: 1000,
+  minOdds: -750,
+  maxOdds: 500,
 };
+
 
 /* ======================================================
    HOOK
 ====================================================== */
 export function usePlayerPropsMaster({
-  limit = 200,
+  limit = 800,
 }: {
   limit?: number;
 } = {}) {
@@ -70,6 +74,18 @@ export function usePlayerPropsMaster({
   };
 }, [limit]);
 
+  /* ======================================================
+    DEBUG — MARKET KEYS (PART 5)
+  ====================================================== */
+  useEffect(() => {
+    if (!raw.length) return;
+
+    console.log(
+      "🧪 MARKET KEYS:",
+      Array.from(new Set(raw.map(r => r.market_key)))
+    );
+  }, [raw]);
+
 
   /* ======================================================
      FETCH NEXT PAGE
@@ -95,21 +111,55 @@ export function usePlayerPropsMaster({
   /* ======================================================
      MARKET LIST (FROM LOADED DATA)
   ====================================================== */
+  const MARKET_ORDER = [
+    "pts",
+    "reb",
+    "ast",
+    "3pm",
+    "stl",
+    "blk",
+    "tov",
+    "pr",
+    "pa",
+    "ra",
+    "pra",
+    "dd",
+    "td",
+  ];
+
   const markets = useMemo(() => {
     const set = new Set<string>();
-    raw.forEach((r) => r.prop_type_base && set.add(r.prop_type_base));
-    return ["ALL", ...Array.from(set)];
+    raw.forEach((r) => {
+      if (r.market_key) set.add(r.market_key);
+    });
+
+    return [
+      "ALL",
+      ...MARKET_ORDER.filter((m) => set.has(m)),
+      ...Array.from(set).filter((m) => !MARKET_ORDER.includes(m)),
+    ];
   }, [raw]);
+
 
   /* ======================================================
      FILTER + NORMALIZE
   ====================================================== */
   const props = useMemo(() => {
     const filtered = raw.filter((p) => {
+
       /* ---------- MARKET ---------- */
       if (
         filters.market !== "ALL" &&
-        p.prop_type_base !== filters.market
+        p.market_key !== filters.market
+      ) {
+        return false;
+      }
+
+
+      /* ---------- MARKET WINDOW ---------- */
+      if (
+        filters.marketWindow &&
+        p.market_window !== filters.marketWindow
       ) {
         return false;
       }
@@ -138,49 +188,48 @@ export function usePlayerPropsMaster({
       return true;
     });
 
-    return filtered.map((p, idx) => ({
-      /* ---------- KEYS ---------- */
-      id: `${p.prop_id}-${p.odds_side}-${idx}`,
-      propId: p.prop_id,
-
-      /* ---------- DISPLAY ---------- */
-      player: p.player_name,
-      market: p.prop_type_base,
-      window: p.market_window,
-      line: p.line_value,
-
-      /* ---------- ODDS ---------- */
-      odds: p.odds,
-      oddsSide: p.odds_side,
-      bookmaker: p.vendor,
-
-      /* ---------- MEDIA / MATCHUP ---------- */
-      playerImageUrl: p.player_image_url,
-      homeTeam: p.home_team_abbr,
-      awayTeam: p.away_team_abbr,
-
-
-      /* ---------- HIT RATES ---------- */
-      hit_rate_l5: p.hit_rate_l5,
-      hit_rate_l10: p.hit_rate_l10,
-      hit_rate_l20: p.hit_rate_l20,
-
-      hitRate:
+    return filtered.map((p, idx) => {
+      const hitRate =
         filters.hitRateWindow === "L5"
           ? p.hit_rate_l5
           : filters.hitRateWindow === "L20"
           ? p.hit_rate_l20
-          : p.hit_rate_l10,
+          : p.hit_rate_l10;
 
-      hitRatePct: Math.round(
-        ((filters.hitRateWindow === "L5"
-          ? p.hit_rate_l5
-          : filters.hitRateWindow === "L20"
-          ? p.hit_rate_l20
-          : p.hit_rate_l10) ?? 0) * 100
-      ),
-    }));
+      return {
+        /* ---------- KEYS ---------- */
+        id: `${p.prop_id}-${p.odds_side}-${idx}`,
+        propId: p.prop_id,
+
+        /* ---------- DISPLAY ---------- */
+        player_id: p.player_id,
+        player: p.player_name,
+        market: p.market_key,
+        window: p.market_window,
+        line: p.line_value,
+
+        /* ---------- ODDS ---------- */
+        odds: p.odds,
+        side: p.odds_side,
+        bookmaker: p.vendor,
+
+        /* ---------- MEDIA ---------- */
+        playerImageUrl: p.player_image_url,
+        homeTeam: p.home_team_abbr,
+        awayTeam: p.away_team_abbr,
+
+        /* ---------- HIT RATES ---------- */
+        hit_rate_l5: p.hit_rate_l5,
+        hit_rate_l10: p.hit_rate_l10,
+        hit_rate_l20: p.hit_rate_l20,
+
+        hitRate,
+        hitRatePct: Math.round((hitRate ?? 0) * 100),
+      };
+    });
   }, [raw, filters]);
+
+
 
   /* ======================================================
      RETURN

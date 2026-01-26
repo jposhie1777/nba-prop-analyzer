@@ -14,6 +14,8 @@ import * as Haptics from "expo-haptics";
 import { useBetslipDrawer } from "@/store/useBetslipDrawer";
 import { useTheme } from "@/store/useTheme";
 import { usePropBetslip } from "@/store/usePropBetslip";
+import { useParlayTracker } from "@/store/useParlayTracker";
+import { normalizeMarket } from "@/utils/normalizeMarket";
 
 const GAMBLY_URL = "https://www.gambly.com/gambly-bot";
 const STAKE = 10;
@@ -43,6 +45,8 @@ export function PropBetslipDrawer() {
 
   const [expanded, setExpanded] = useState(false);
   const { isOpen, close, toggle } = useBetslipDrawer();
+  const [shouldTrack, setShouldTrack] = useState(false);
+
   /* =========================
      AUTO COLLAPSE > 3 ITEMS
   ========================= */
@@ -51,6 +55,11 @@ export function PropBetslipDrawer() {
       setExpanded(false);
     }
   }, [items.length]);
+
+  useEffect(() => {
+    if (!items.length) setShouldTrack(false);
+  }, [items.length]);
+
 
   /* =========================
      COPY TEXT
@@ -82,8 +91,10 @@ export function PropBetslipDrawer() {
     return decimalToAmerican(decimal);
   }, [items]);
 
-  /* =========================
-     $10 PAYOUT
+  const { track } = useParlayTracker();
+
+ /* =========================
+    $10 PAYOUT
   ========================= */
   const payout = useMemo(() => {
     if (parlayOdds == null) return null;
@@ -93,7 +104,41 @@ export function PropBetslipDrawer() {
       : STAKE + (STAKE * 100) / Math.abs(parlayOdds);
   }, [parlayOdds]);
 
+  /* =========================
+    SNAPSHOT BUILDER
+  ========================= */
+  function buildSnapshot(
+    source: "toggle" | "copy" | "gambly"
+  ) {
+    const legIds = items.map((b) => b.id).join("-");
+
+    return {
+      parlay_id: `${Date.now()}-${legIds}`,
+      created_at: new Date().toISOString(),
+      source,
+
+      stake: STAKE,
+      parlay_odds: parlayOdds,
+      payout,
+
+      legs: items.map((b) => ({
+        leg_id: b.id,
+        player_id: b.player_id,
+        player_name: b.player,
+
+        market: normalizeMarket(b.market), // 🔥 THIS LINE
+        side: b.side,
+        line: b.line,
+        odds: b.odds,
+      })),
+    };
+  }
+
+  /* =========================
+    EARLY EXIT
+  ========================= */
   if (!items.length && !isOpen) return null;
+
 
   return (
     <View
@@ -220,15 +265,34 @@ export function PropBetslipDrawer() {
         </View>
       )}
 
+      <View style={{ marginTop: 6 }}>
+        <Pressable
+          onPress={() => setShouldTrack((v) => !v)}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <Text style={{ color: colors.text.primary, fontWeight: "800" }}>
+            {shouldTrack ? "☑" : "☐"} Track this bet
+          </Text>
+        </Pressable>
+      </View>
+
       {/* =========================
           ACTIONS
       ========================== */}
       <View style={styles.actions}>
         <Pressable
           onPress={() => {
+            if (shouldTrack && items.length) {
+              track(buildSnapshot("toggle"));
+            }
             clear();
             close();
           }}
+
           style={[
             styles.clearBtn,
             { borderColor: colors.border.subtle },
@@ -241,11 +305,15 @@ export function PropBetslipDrawer() {
 
         <Pressable
           onPress={async () => {
+            const snapshot = buildSnapshot("copy");
+            track(snapshot);
+
             await Clipboard.setStringAsync(text);
             Haptics.notificationAsync(
               Haptics.NotificationFeedbackType.Success
             );
           }}
+
           style={[
             styles.btn,
             { backgroundColor: colors.surface.elevated },
@@ -262,7 +330,11 @@ export function PropBetslipDrawer() {
         </Pressable>
 
         <Pressable
-          onPress={() => Linking.openURL(GAMBLY_URL)}
+          onPress={() => {
+            const snapshot = buildSnapshot("gambly");
+            track(snapshot);
+            Linking.openURL(GAMBLY_URL);
+          }}
           style={[
             styles.btn,
             { backgroundColor: colors.accent.primary },

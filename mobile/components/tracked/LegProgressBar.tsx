@@ -14,7 +14,7 @@ export type LegStatus =
 
 type Props = {
   progress: number; // 0 → 1
-  status?: LegStatus;
+  status?: LegStatus; // kept for future use
 };
 
 /* ======================================================
@@ -23,19 +23,17 @@ type Props = {
 
 export default function LegProgressBar({
   progress,
-  status = "pending",
 }: Props) {
   const colors = useTheme((s) => s.colors);
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  const fillColor =
-    status === "winning"
-      ? colors.accent.success
-      : status === "losing"
-      ? colors.accent.danger
-      : status === "pushed"
-      ? colors.accent.info
-      : colors.accent.primary;
+  const clamped = Math.min(Math.max(progress, 0), 1);
+  const isComplete = clamped >= 1;
+
+  // 🟡 while filling → 🟢 when complete
+  const fillColor = isComplete
+    ? colors.accent.success   // green
+    : colors.accent.warning;  // yellow
 
   return (
     <View style={styles.track}>
@@ -43,7 +41,7 @@ export default function LegProgressBar({
         style={[
           styles.fill,
           {
-            width: `${Math.round(progress * 100)}%`,
+            width: `${Math.round(clamped * 100)}%`,
             backgroundColor: fillColor,
           },
         ]}

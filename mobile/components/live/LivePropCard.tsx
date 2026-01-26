@@ -1,3 +1,4 @@
+// /components/live/LivePropCard.tsx
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { useState, useCallback } from "react";

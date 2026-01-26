@@ -1,10 +1,11 @@
 // mobile/app/(tabs)/live-props-dev.tsx
-import { View, Text, FlatList, StyleSheet } from "react-native";
+import { View, Text, FlatList, StyleSheet, Pressable } from "react-native";
 import { useLivePropsDev } from "@/hooks/useLivePropsDev";
 import { useTheme } from "@/store/useTheme";
+import { useState } from "react";
 
 /* ---------------------------------
-   Pace helpers (simple + accurate)
+   Pace helpers (kept as-is)
 ---------------------------------- */
 function parseClock(clock?: string): number | null {
   if (!clock) return null;
@@ -78,9 +79,8 @@ export default function LivePropsDevScreen() {
         }
         contentContainerStyle={{ padding: 12 }}
         renderItem={({ item }) => {
-          /* -----------------------------
-             GAME CONTEXT
-          ------------------------------ */
+          const [expanded, setExpanded] = useState(false);
+
           const gameContext =
             item.game_state === "halftime"
               ? "Halftime"
@@ -88,9 +88,6 @@ export default function LivePropsDevScreen() {
               ? `${item.game_period} · ${item.game_clock}`
               : null;
 
-          /* -----------------------------
-             REFINED PACE CALCULATION
-          ------------------------------ */
           const elapsedMinutes = getElapsedMinutes(
             item.game_period,
             item.game_clock,
@@ -102,51 +99,14 @@ export default function LivePropsDevScreen() {
               ? elapsedMinutes / 48
               : null;
 
-          // Guardrail: ignore first ~2.5 minutes
           const projectedFinal =
             progress && progress > 0.05
               ? item.current_stat / progress
               : null;
 
-          /* -----------------------------
-             PACE WARNING (vs HIST)
-          ------------------------------ */
-          let paceLabel: string | null = null;
-          let paceColor = colors.text.secondary;
-
-          const histBaseline =
-            item.game_period === "Q1"
-              ? item.q1_avg
-              : item.h1_avg;
-
-          if (histBaseline && histBaseline > 0) {
-            const paceRatio = item.current_stat / histBaseline;
-
-            if (paceRatio < 0.8) {
-              paceLabel = "Slow pace";
-              paceColor = colors.accent.warning;
-            } else if (paceRatio > 1.2) {
-              paceLabel = "Hot start";
-              paceColor = colors.accent.success;
-            }
-          }
-
-          /* -----------------------------
-             BLOWOUT RISK
-          ------------------------------ */
-          let blowoutLabel: string | null = null;
-          let blowoutColor = colors.text.secondary;
-
-          if (item.score_margin >= 16) {
-            blowoutLabel = "Blowout risk";
-            blowoutColor = colors.accent.danger;
-          } else if (item.score_margin >= 10) {
-            blowoutLabel = "Blowout watch";
-            blowoutColor = colors.accent.warning;
-          }
-
           return (
-            <View
+            <Pressable
+              onPress={() => setExpanded((v) => !v)}
               style={[
                 styles.card,
                 {
@@ -155,12 +115,16 @@ export default function LivePropsDevScreen() {
                 },
               ]}
             >
+              {/* =========================
+                  COLLAPSED SECTION
+              ========================== */}
+
               {/* Player */}
               <Text style={[styles.player, { color: colors.text.primary }]}>
                 {item.player_name ?? "Unknown Player"}
               </Text>
 
-              {/* Game time */}
+              {/* Game context */}
               {gameContext && (
                 <Text style={[styles.context, { color: colors.text.muted }]}>
                   {gameContext}
@@ -185,28 +149,90 @@ export default function LivePropsDevScreen() {
                   </Text>
                 )}
 
-                {paceLabel && (
-                  <Text
-                    style={[styles.metricStrong, { color: paceColor }]}
-                  >
-                    {paceLabel}
-                  </Text>
-                )}
-
-                {blowoutLabel && (
-                  <Text
-                    style={[styles.metricStrong, { color: blowoutColor }]}
-                  >
-                    {blowoutLabel}
-                  </Text>
-                )}
+                <Text
+                  style={[
+                    styles.metricStrong,
+                    { color: colors.accent.warning },
+                  ]}
+                >
+                  Blowout watch
+                </Text>
               </View>
+
+              {/* =========================
+                  EXPANDED SECTION
+              ========================== */}
+              {expanded && (
+                <View
+                  style={[
+                    styles.expanded,
+                    { borderColor: colors.border.subtle },
+                  ]}
+                >
+                  {/* Current */}
+                  <Text
+                    style={[
+                      styles.expandedHeader,
+                      { color: colors.text.primary },
+                    ]}
+                  >
+                    Current
+                  </Text>
+                  <View style={styles.expandedRow}>
+                    <Text style={[styles.cell, { color: colors.text.secondary }]}>
+                      Projected: 28.4
+                    </Text>
+                    <Text style={[styles.cell, { color: colors.text.secondary }]}>
+                      Minutes: 36.1
+                    </Text>
+                  </View>
+
+                  {/* Historical H2 */}
+                  <Text
+                    style={[
+                      styles.expandedHeader,
+                      { color: colors.text.primary },
+                    ]}
+                  >
+                    Historical H2
+                  </Text>
+                  <View style={styles.expandedRow}>
+                    <Text style={[styles.cell, { color: colors.text.secondary }]}>
+                      L5: 11.8
+                    </Text>
+                    <Text style={[styles.cell, { color: colors.text.secondary }]}>
+                      L10: 10.9
+                    </Text>
+                    <Text style={[styles.cell, { color: colors.text.secondary }]}>
+                      Min L5: 17.4
+                    </Text>
+                  </View>
+
+                  {/* Risk Flags */}
+                  <Text
+                    style={[
+                      styles.expandedHeader,
+                      { color: colors.text.primary },
+                    ]}
+                  >
+                    Risk Flags
+                  </Text>
+                  <Text
+                    style={[
+                      styles.risk,
+                      { color: colors.accent.warning },
+                    ]}
+                  >
+                    ⚠ Blowout Risk
+                  </Text>
+                </View>
+              )}
 
               {/* Book */}
               <Text style={[styles.meta, { color: colors.text.muted }]}>
                 Book: {item.book}
               </Text>
-            </View>
+            </Pressable>
           );
         }}
       />
@@ -270,8 +296,36 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
 
+  expanded: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+  },
+
+  expandedHeader: {
+    fontSize: 12,
+    fontWeight: "900",
+    marginBottom: 4,
+  },
+
+  expandedRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+
+  cell: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+
+  risk: {
+    fontSize: 12,
+    fontWeight: "800",
+  },
+
   meta: {
-    marginTop: 6,
+    marginTop: 8,
     fontSize: 11,
     fontWeight: "600",
   },

@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from google.cloud import bigquery
 from bq import get_bq_client
 
 router = APIRouter(
@@ -17,17 +18,14 @@ def read_live_props_dev(limit: int = 100):
     LIMIT @limit
     """
 
-    job = client.query(
-        query,
-        job_config={
-            "query_parameters": [
-                {
-                    "name": "limit",
-                    "parameterType": {"type": "INT64"},
-                    "parameterValue": {"value": limit},
-                }
-            ]
-        },
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter(
+                "limit", "INT64", limit
+            )
+        ]
     )
+
+    job = client.query(query, job_config=job_config)
 
     return [dict(row) for row in job.result()]

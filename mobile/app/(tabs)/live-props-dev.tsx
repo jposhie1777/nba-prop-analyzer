@@ -75,6 +75,17 @@ export default function LivePropsDevScreen() {
               },
             ]}
           >
+            {/* Player name */}
+            <Text
+              style={[
+                styles.player,
+                { color: colors.text.primary },
+              ]}
+            >
+              {item.player_name ?? "Unknown Player"}
+            </Text>
+
+            {/* Market */}
             <Text
               style={[
                 styles.title,
@@ -84,6 +95,7 @@ export default function LivePropsDevScreen() {
               {item.market.toUpperCase()} · {item.line}
             </Text>
 
+            {/* Progress */}
             <Text
               style={[
                 styles.body,
@@ -94,6 +106,7 @@ export default function LivePropsDevScreen() {
               {item.remaining_needed}
             </Text>
 
+            {/* Book */}
             <Text
               style={[
                 styles.meta,
@@ -125,6 +138,12 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     marginBottom: 12,
+  },
+
+  player: {
+    fontSize: 15,
+    fontWeight: "900",
+    marginBottom: 4,
   },
 
   title: {

@@ -80,7 +80,7 @@ export default function TrackedParlayCard({ parlay }: Props) {
                   {leg.side.toUpperCase()} {leg.line}{" "}
                   {leg.market.toUpperCase()}
                 </Text>
-
+            
                 {/* RIGHT SIDE: STAT + CLOCK */}
                 <View style={styles.legRight}>
                   <Text
@@ -96,14 +96,17 @@ export default function TrackedParlayCard({ parlay }: Props) {
                   >
                     {leg.current ?? "—"}
                   </Text>
-
-                  {(leg.period != null || leg.clock) && (
-                    <Text style={styles.clock}>
-                      Q{leg.period ?? "—"} {leg.clock ?? ""}
-                    </Text>
-                  )}
+            
+                  {/* ⏱ LIVE CLOCK ONLY */}
+                  {leg.game_status === "live" &&
+                    (leg.period != null || leg.clock) && (
+                      <Text style={styles.clock}>
+                        Q{leg.period ?? "—"} {leg.clock ?? ""}
+                      </Text>
+                    )}
                 </View>
               </View>
+            </View>
 
               {/* ---------- PROGRESS ---------- */}
               <LegProgressBar

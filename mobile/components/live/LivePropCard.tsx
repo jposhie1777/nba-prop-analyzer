@@ -1,10 +1,10 @@
 // /components/live/LivePropCard.tsx
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable, Image } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { useState, useCallback } from "react";
 import { Swipeable } from "react-native-gesture-handler";
 import * as Haptics from "expo-haptics";
-
+import { TEAM_LOGOS } from "@/utils/teamLogos";
 import { usePropBetslip } from "@/store/usePropBetslip";
 import { useBetslipDrawer } from "@/store/useBetslipDrawer";
 
@@ -165,22 +165,50 @@ export default function LivePropCard({ item }: { item: any }) {
         ========================== */}
         <View style={styles.headerRow}>
           {/* Left */}
-          <View style={styles.headerLeft}>
-            <View
-              style={[
-                styles.headshot,
-                { backgroundColor: colors.surface.cardSoft },
-              ]}
-            />
+          <View
+            style={[
+              styles.headshot,
+              { backgroundColor: colors.surface.cardSoft },
+            ]}
+          >
+            {item.player_image_url ? (
+              <Image
+                source={{ uri: item.player_image_url }}
+                style={styles.headshotImage}
+                resizeMode="cover"
+              />
+            ) : null}
+          </View>
 
             <View>
               <Text style={[styles.player, { color: colors.text.primary }]}>
                 {item.player_name ?? "Unknown Player"}
               </Text>
 
-              <Text style={[styles.subtle, { color: colors.text.muted }]}>
-                {contextText}
-              </Text>
+              <View style={styles.matchupRow}>
+                {item.away_team_abbr && TEAM_LOGOS[item.away_team_abbr] && (
+                  <Image
+                    source={{ uri: TEAM_LOGOS[item.away_team_abbr] }}
+                    style={styles.teamLogo}
+                  />
+                )}
+              
+                <Text style={[styles.subtle, { color: colors.text.muted }]}>
+                  @
+                </Text>
+              
+                {item.home_team_abbr && TEAM_LOGOS[item.home_team_abbr] && (
+                  <Image
+                    source={{ uri: TEAM_LOGOS[item.home_team_abbr] }}
+                    style={styles.teamLogo}
+                  />
+                )}
+              
+                <Text style={[styles.subtle, { color: colors.text.muted }]}>
+                  {item.game_period ?? ""}
+                  {item.game_clock ? ` · ${item.game_clock}` : ""}
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -441,5 +469,21 @@ const styles = StyleSheet.create({
   odds: {
     fontSize: 14,
     fontWeight: "900",
+  },
+  headshotImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 22,
+  },
+  matchupRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 2,
+  },
+  
+  teamLogo: {
+    width: 16,
+    height: 16,
   },
 });

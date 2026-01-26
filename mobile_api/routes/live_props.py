@@ -14,15 +14,28 @@ VIEW = "nba_live.v_live_player_props_enriched"
 
 @router.get("")
 def read_live_props(
-    limit: int = Query(100, ge=10, le=500),
+    limit: int = Query(100, ge=10, le=200),
+    cursor: Optional[str] = None,          # 👈 NEW
     market: Optional[str] = None,
     book: Optional[str] = None,
 ):
     client = get_bq_client()
 
     where = []
-    params = []
+    params = [
+        bigquery.ScalarQueryParameter("limit", "INT64", limit),
+    ]
 
+    # ---- Cursor pagination ----
+    if cursor:
+        where.append("snapshot_ts < @cursor")
+        params.append(
+            bigquery.ScalarQueryParameter(
+                "cursor", "TIMESTAMP", cursor
+            )
+        )
+
+    # ---- Optional filters ----
     if market:
         where.append("market = @market")
         params.append(
@@ -45,15 +58,18 @@ def read_live_props(
         LIMIT @limit
     """
 
-    job_config = bigquery.QueryJobConfig(
-        query_parameters=[
-            bigquery.ScalarQueryParameter("limit", "INT64", limit),
-            *params,
-        ]
+    rows = list(
+        client.query(
+            query,
+            job_config=bigquery.QueryJobConfig(
+                query_parameters=params
+            ),
+        ).result()
     )
 
-    rows = client.query(query, job_config=job_config).result()
+    next_cursor = rows[-1]["snapshot_ts"] if rows else None
 
     return {
-        "props": [dict(row) for row in rows]
+        "items": [dict(row) for row in rows],
+        "next_cursor": next_cursor,
     }

@@ -62,10 +62,13 @@ export default function TrackedParlayCard({ parlay }: Props) {
       {/* ================= LEGS ================= */}
       <View style={styles.legs}>
         {parlay.legs.map((leg) => {
+          const sideNorm =
+            leg.side === "under" ? "under" : "over";
+          
           const progress = calcLegProgress(
             leg.current,
             leg.line,
-            leg.side
+            sideNorm
           );
 
           return (

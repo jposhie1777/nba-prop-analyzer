@@ -1,12 +1,54 @@
+// /app/(tabs)/live-props-dev.tsx
 import { View, Text, FlatList, StyleSheet } from "react-native";
-import { useLivePropsDev } from "@/hooks/useLivePropsDev";
+import { useMemo } from "react";
+
 import { useTheme } from "@/store/useTheme";
 import LivePropCard from "@/components/live/LivePropCard";
 
+// 🔁 NEW HOOK (cursor-based pagination)
+import { useLivePropsInfinite } from "@/hooks/useLivePropsInfinite";
+
+/* ======================================================
+   CONFIG
+====================================================== */
+
+// Safety cap so mobile never explodes
+const MAX_ROWS = 600;
+
+/* ======================================================
+   SCREEN
+====================================================== */
+
 export default function LivePropsDevScreen() {
   const { colors } = useTheme();
-  const { data, isLoading, error } = useLivePropsDev(50);
 
+  const {
+    data,
+    error,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useLivePropsInfinite();
+
+  /* ---------------------------------
+     FLATTEN PAGES
+  ---------------------------------- */
+  const allRows = useMemo(() => {
+    return data?.pages.flatMap((p) => p.items) ?? [];
+  }, [data]);
+
+  /* ---------------------------------
+     GUARDRAIL (OPTIONAL BUT RECOMMENDED)
+  ---------------------------------- */
+  const trimmedRows = useMemo(() => {
+    if (allRows.length <= MAX_ROWS) return allRows;
+    return allRows.slice(0, MAX_ROWS);
+  }, [allRows]);
+
+  /* ---------------------------------
+     STATES
+  ---------------------------------- */
   if (isLoading) {
     return (
       <View
@@ -37,7 +79,7 @@ export default function LivePropsDevScreen() {
     );
   }
 
-  if (!data || data.length === 0) {
+  if (!trimmedRows || trimmedRows.length === 0) {
     return (
       <View
         style={[
@@ -52,6 +94,9 @@ export default function LivePropsDevScreen() {
     );
   }
 
+  /* ---------------------------------
+     RENDER
+  ---------------------------------- */
   return (
     <View
       style={[
@@ -60,18 +105,39 @@ export default function LivePropsDevScreen() {
       ]}
     >
       <FlatList
-        data={data}
-        keyExtractor={(item) =>
-          `${item.game_id}-${item.player_id}-${item.market}-${item.line}-${item.book}`
-        }
+        data={trimmedRows}
+        keyExtractor={(item) => item.prop_key}
         contentContainerStyle={{ padding: 12 }}
         renderItem={({ item }) => (
           <LivePropCard item={item} />
         )}
+        onEndReached={() => {
+          if (hasNextPage && !isFetchingNextPage) {
+            fetchNextPage();
+          }
+        }}
+        onEndReachedThreshold={0.6}
+        ListFooterComponent={
+          isFetchingNextPage ? (
+            <Text
+              style={{
+                textAlign: "center",
+                paddingVertical: 12,
+                color: colors.text.muted,
+              }}
+            >
+              Loading more…
+            </Text>
+          ) : null
+        }
       />
     </View>
   );
 }
+
+/* ======================================================
+   STYLES
+====================================================== */
 
 const styles = StyleSheet.create({
   container: {

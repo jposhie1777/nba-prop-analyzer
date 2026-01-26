@@ -65,58 +65,79 @@ export default function LivePropsDevScreen() {
           `${item.game_id}-${item.player_id}-${item.market}-${item.line}-${item.book}`
         }
         contentContainerStyle={{ padding: 12 }}
-        renderItem={({ item }) => (
-          <View
-            style={[
-              styles.card,
-              {
-                backgroundColor: colors.surface.card,
-                borderColor: colors.border.subtle,
-              },
-            ]}
-          >
-            {/* Player name */}
-            <Text
-              style={[
-                styles.player,
-                { color: colors.text.primary },
-              ]}
-            >
-              {item.player_name ?? "Unknown Player"}
-            </Text>
+        renderItem={({ item }) => {
+          const gameContext =
+            item.game_state === "halftime"
+              ? "Halftime"
+              : item.game_period && item.game_clock
+              ? `${item.game_period} · ${item.game_clock}`
+              : null;
 
-            {/* Market */}
-            <Text
+          return (
+            <View
               style={[
-                styles.title,
-                { color: colors.text.primary },
+                styles.card,
+                {
+                  backgroundColor: colors.surface.card,
+                  borderColor: colors.border.subtle,
+                },
               ]}
             >
-              {item.market.toUpperCase()} · {item.line}
-            </Text>
+              {/* Player name */}
+              <Text
+                style={[
+                  styles.player,
+                  { color: colors.text.primary },
+                ]}
+              >
+                {item.player_name ?? "Unknown Player"}
+              </Text>
 
-            {/* Progress */}
-            <Text
-              style={[
-                styles.body,
-                { color: colors.text.secondary },
-              ]}
-            >
-              Current: {item.current_stat} → Need{" "}
-              {item.remaining_needed}
-            </Text>
+              {/* Game context (Q + clock OR Halftime) */}
+              {gameContext && (
+                <Text
+                  style={[
+                    styles.context,
+                    { color: colors.text.muted },
+                  ]}
+                >
+                  {gameContext}
+                </Text>
+              )}
 
-            {/* Book */}
-            <Text
-              style={[
-                styles.meta,
-                { color: colors.text.muted },
-              ]}
-            >
-              Book: {item.book}
-            </Text>
-          </View>
-        )}
+              {/* Market */}
+              <Text
+                style={[
+                  styles.title,
+                  { color: colors.text.primary },
+                ]}
+              >
+                {item.market.toUpperCase()} · {item.line}
+              </Text>
+
+              {/* Progress */}
+              <Text
+                style={[
+                  styles.body,
+                  { color: colors.text.secondary },
+                ]}
+              >
+                Current: {item.current_stat} → Need{" "}
+                {item.remaining_needed}
+              </Text>
+
+              {/* Book */}
+              <Text
+                style={[
+                  styles.meta,
+                  { color: colors.text.muted },
+                ]}
+              >
+                Book: {item.book}
+              </Text>
+            </View>
+          );
+        }}
       />
     </View>
   );
@@ -143,7 +164,13 @@ const styles = StyleSheet.create({
   player: {
     fontSize: 15,
     fontWeight: "900",
-    marginBottom: 4,
+    marginBottom: 2,
+  },
+
+  context: {
+    fontSize: 12,
+    fontWeight: "700",
+    marginBottom: 6,
   },
 
   title: {

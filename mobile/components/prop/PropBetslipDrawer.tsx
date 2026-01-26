@@ -121,16 +121,22 @@ export function PropBetslipDrawer() {
       parlay_odds: parlayOdds,
       payout,
 
-      legs: items.map((b) => ({
-        leg_id: b.id,
-        player_id: b.player_id,
-        player_name: b.player,
-
-        market: normalizeMarket(b.market), // 🔥 THIS LINE
-        side: b.side,
-        line: b.line,
-        odds: b.odds,
-      })),
+      legs: items.map((b) => {
+        // ✅ normalize YES → OVER
+        const sideNorm: "over" | "under" =
+          b.side === "under" ? "under" : "over";
+      
+        return {
+          leg_id: b.id,
+          player_id: b.player_id,
+          player_name: b.player,
+      
+          market: normalizeMarket(b.market),
+          side: sideNorm, // 🔥 THIS IS THE FIX
+          line: b.line,
+          odds: b.odds,
+        };
+      }),
     };
   }
 

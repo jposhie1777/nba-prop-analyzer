@@ -6,13 +6,18 @@ const KEY = "prop_betslip_v1";
 
 export type PropSlipItem = {
   id: string;
+
+  player_id: number;        // ✅ ADD THIS
   player: string;
+
   market: string;
   side: "over" | "under";
   line: number;
   odds: number;
+
   matchup?: string;
 };
+
 
 type State = {
   items: PropSlipItem[];

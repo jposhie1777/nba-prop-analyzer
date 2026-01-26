@@ -1,6 +1,6 @@
-// tabs/layout
+// app/_layout.tsx
 import "react-native-reanimated";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   DarkTheme,
   DefaultTheme,
@@ -8,14 +8,12 @@ import {
 } from "@react-navigation/native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useSavedProps } from "@/store/useSavedProps";
-import DebugMemory from "@/components/debug/DebugMemory";
 import { useDevStore } from "@/lib/dev/devStore";
 import { installFetchInterceptor } from "@/lib/dev/interceptFetch";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState } from "react";
 
 /* -------------------------------------------------
    Expo Router settings
@@ -26,14 +24,8 @@ export const unstable_settings = {
 
 /* -------------------------------------------------
    GLOBAL DEV INSTRUMENTATION (DEV ONLY)
-   - Registered once
-   - Memory safe
-   - Preserves RedBox
 -------------------------------------------------- */
 if (__DEV__) {
-  // -----------------------------
-  // Global error capture
-  // -----------------------------
   // @ts-ignore
   const defaultHandler = global.ErrorUtils?.getGlobalHandler?.();
 
@@ -50,9 +42,6 @@ if (__DEV__) {
     }
   );
 
-  // -----------------------------
-  // Fetch interceptor
-  // -----------------------------
   installFetchInterceptor();
 }
 
@@ -62,19 +51,15 @@ if (__DEV__) {
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [queryClient] = useState(() => new QueryClient());
-  // ---------------------------
-  // HYDRATE SAVED PROPS ON BOOT
-  // ---------------------------
+
+  // Hydrate saved props on boot
   const hydrateSavedProps = useSavedProps((s) => s.hydrate);
 
   useEffect(() => {
     hydrateSavedProps();
   }, [hydrateSavedProps]);
 
-
-  // ---------------------------
-  // 🔴 NEW: HYDRATE DEV FLAGS ON BOOT (4A)
-  // ---------------------------
+  // Hydrate dev flags
   useEffect(() => {
     if (__DEV__) {
       useDevStore.getState().actions.hydrateFlags();
@@ -83,27 +68,16 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <>
-        {/* DEV-ONLY MEMORY OVERLAY */}
-        {false && __DEV__ && <DebugMemory />}
-  
-        <ThemeProvider
-          value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
-        >
-          <Stack>
-            {/* MAIN TAB STACK */}
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-  
-            {/* MODALS */}
-            <Stack.Screen
-              name="modal"
-              options={{ presentation: "modal", title: "Modal" }}
-            />
-          </Stack>
-  
-          <StatusBar style="auto" />
-        </ThemeProvider>
-      </>
+      <ThemeProvider
+        value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
+      >
+        <Stack screenOptions={{ headerShown: false }}>
+          {/* 🔑 ONLY ROOT CHILD */}
+          <Stack.Screen name="(tabs)" />
+        </Stack>
+
+        <StatusBar style="auto" />
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

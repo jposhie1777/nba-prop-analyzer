@@ -2,6 +2,7 @@
 import { ScrollView, View, Text, StyleSheet, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "@/store/useTheme";
+import { useParlayTracker } from "@/store/useParlayTracker";
 
 /* ======================================================
    Tile
@@ -49,6 +50,8 @@ function Tile({ title, subtitle, onPress }: any) {
 export default function Home() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { tracked } = useParlayTracker();
+  const trackedCount = Object.keys(tracked).length;
 
   return (
     <ScrollView
@@ -129,6 +132,7 @@ export default function Home() {
       {/* ===========================
           More
       ============================ */}
+      
       <Text
         style={[
           styles.h1,
@@ -140,7 +144,12 @@ export default function Home() {
       >
         More
       </Text>
-
+      <Tile
+        title={`Tracked Parlays${trackedCount > 0 ? ` (${trackedCount})` : ""}`}
+        subtitle="Active bet tracking"
+        onPress={() => router.push("/(tabs)/more/tracked-parlays")}
+      />
+  
       <Tile
         title="Lineups"
         subtitle="Projected & most common"

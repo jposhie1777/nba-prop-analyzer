@@ -1,48 +1,52 @@
-export function formatMarketLabel(market: string): string {
+// mobile/utils/formatMarket.ts
+export function formatMarketLabel(market?: string): string {
+  if (!market) return "";
+
   switch (market) {
-    case "points":
+    /* ---------- CORE ---------- */
     case "pts":
       return "Points";
 
-    case "rebounds":
     case "reb":
       return "Rebounds";
 
-    case "assists":
     case "ast":
       return "Assists";
 
-    case "steals":
+    case "stl":
       return "Steals";
 
-    case "blocks":
+    case "blk":
       return "Blocks";
 
-    // 🔥 3PM — THIS IS THE IMPORTANT PART
-    case "three_pointers_made":
-    case "fg3m":
-    case "threes":
+    case "tov":
+      return "Turnovers";
+
+    /* ---------- THREES ---------- */
     case "3pm":
       return "3-Pointers Made";
 
-    case "points_rebounds":
+    /* ---------- COMBOS ---------- */
+    case "pr":
       return "Points + Rebounds";
 
-    case "points_assists":
+    case "pa":
       return "Points + Assists";
 
-    case "rebounds_assists":
+    case "ra":
       return "Rebounds + Assists";
 
-    case "points_rebounds_assists":
-      return "Pts + Reb + Ast";
+    case "pra":
+      return "Points + Rebounds + Assists";
 
-    case "double_double":
+    /* ---------- SPECIALS ---------- */
+    case "dd":
       return "Double Double";
 
-    case "triple_double":
+    case "td":
       return "Triple Double";
 
+    /* ---------- FALLBACK (DEV SAFETY) ---------- */
     default:
       return market
         .replace(/_/g, " ")

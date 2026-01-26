@@ -50,23 +50,25 @@ export function buildLiveSnapshot({
   ====================================================== */
   const snapshot: LiveSnapshotByPlayerId = {};
 
-  for (const p of players ?? []) {
+    for (const p of players ?? []) {
     const playerId = Number(p.player_id ?? p.id);
     if (!playerId) continue;
-
+  
     const gameId = Number(p.game_id);
     const ctx = gameContext.get(gameId);
-
+  
     snapshot[playerId] = {
       /* ---------- Stats ---------- */
       pts: p.pts ?? 0,
       reb: p.reb ?? 0,
       ast: p.ast ?? 0,
       fg3m: p.fg3m ?? 0,
-
-      /* ---------- Game Context ---------- */
+  
+      /* ---------- FORCE GAME CONTEXT ---------- */
       game_id: gameId,
       game_status: ctx?.game_status ?? "live",
+  
+      // 👇 CRITICAL: NEVER trust player period/clock
       period: ctx?.period ?? null,
       clock: ctx?.clock ?? null,
     };

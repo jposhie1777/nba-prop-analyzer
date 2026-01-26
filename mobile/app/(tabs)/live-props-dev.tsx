@@ -3,12 +3,37 @@ import { View, Text, FlatList, StyleSheet } from "react-native";
 import { useLivePropsDev } from "@/hooks/useLivePropsDev";
 import { useTheme } from "@/store/useTheme";
 
-const QUARTER_PROGRESS: Record<string, number> = {
-  Q1: 0.25,
-  Q2: 0.5,
-  Q3: 0.75,
-  Q4: 1,
-};
+/* ---------------------------------
+   Pace helpers (simple + accurate)
+---------------------------------- */
+function parseClock(clock?: string): number | null {
+  if (!clock) return null;
+  const [m, s] = clock.split(":").map(Number);
+  if (Number.isNaN(m) || Number.isNaN(s)) return null;
+  return m + s / 60;
+}
+
+function getElapsedMinutes(
+  period?: string,
+  clock?: string,
+  gameState?: string
+): number | null {
+  if (gameState === "halftime") return 24;
+
+  const quarterIndex: Record<string, number> = {
+    Q1: 0,
+    Q2: 1,
+    Q3: 2,
+    Q4: 3,
+  };
+
+  if (!period || !(period in quarterIndex)) return null;
+
+  const remaining = parseClock(clock);
+  if (remaining == null) return null;
+
+  return quarterIndex[period] * 12 + (12 - remaining);
+}
 
 export default function LivePropsDevScreen() {
   const { colors } = useTheme();
@@ -16,12 +41,7 @@ export default function LivePropsDevScreen() {
 
   if (isLoading) {
     return (
-      <View
-        style={[
-          styles.center,
-          { backgroundColor: colors.surface.screen },
-        ]}
-      >
+      <View style={[styles.center, { backgroundColor: colors.surface.screen }]}>
         <Text style={{ color: colors.text.muted }}>
           Loading live props…
         </Text>
@@ -31,12 +51,7 @@ export default function LivePropsDevScreen() {
 
   if (error) {
     return (
-      <View
-        style={[
-          styles.center,
-          { backgroundColor: colors.surface.screen },
-        ]}
-      >
+      <View style={[styles.center, { backgroundColor: colors.surface.screen }]}>
         <Text style={{ color: colors.accent.danger }}>
           Error loading live props
         </Text>
@@ -46,12 +61,7 @@ export default function LivePropsDevScreen() {
 
   if (!data || data.length === 0) {
     return (
-      <View
-        style={[
-          styles.center,
-          { backgroundColor: colors.surface.screen },
-        ]}
-      >
+      <View style={[styles.center, { backgroundColor: colors.surface.screen }]}>
         <Text style={{ color: colors.text.muted }}>
           No live props available
         </Text>
@@ -60,12 +70,7 @@ export default function LivePropsDevScreen() {
   }
 
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: colors.surface.screen },
-      ]}
-    >
+    <View style={[styles.container, { backgroundColor: colors.surface.screen }]}>
       <FlatList
         data={data}
         keyExtractor={(item) =>
@@ -84,15 +89,22 @@ export default function LivePropsDevScreen() {
               : null;
 
           /* -----------------------------
-             PACE CALCULATION
+             REFINED PACE CALCULATION
           ------------------------------ */
-          const progress =
-            item.game_state === "halftime"
-              ? 0.5
-              : QUARTER_PROGRESS[item.game_period] ?? 0.25;
+          const elapsedMinutes = getElapsedMinutes(
+            item.game_period,
+            item.game_clock,
+            item.game_state
+          );
 
+          const progress =
+            elapsedMinutes && elapsedMinutes > 0
+              ? elapsedMinutes / 48
+              : null;
+
+          // Guardrail: ignore first ~2.5 minutes
           const projectedFinal =
-            progress > 0
+            progress && progress > 0.05
               ? item.current_stat / progress
               : null;
 
@@ -108,8 +120,7 @@ export default function LivePropsDevScreen() {
               : item.h1_avg;
 
           if (histBaseline && histBaseline > 0) {
-            const paceRatio =
-              item.current_stat / histBaseline;
+            const paceRatio = item.current_stat / histBaseline;
 
             if (paceRatio < 0.8) {
               paceLabel = "Slow pace";
@@ -145,67 +156,38 @@ export default function LivePropsDevScreen() {
               ]}
             >
               {/* Player */}
-              <Text
-                style={[
-                  styles.player,
-                  { color: colors.text.primary },
-                ]}
-              >
+              <Text style={[styles.player, { color: colors.text.primary }]}>
                 {item.player_name ?? "Unknown Player"}
               </Text>
 
               {/* Game time */}
               {gameContext && (
-                <Text
-                  style={[
-                    styles.context,
-                    { color: colors.text.muted },
-                  ]}
-                >
+                <Text style={[styles.context, { color: colors.text.muted }]}>
                   {gameContext}
                 </Text>
               )}
 
               {/* Market */}
-              <Text
-                style={[
-                  styles.title,
-                  { color: colors.text.primary },
-                ]}
-              >
+              <Text style={[styles.title, { color: colors.text.primary }]}>
                 {item.market.toUpperCase()} · {item.line}
               </Text>
 
               {/* Progress */}
-              <Text
-                style={[
-                  styles.body,
-                  { color: colors.text.secondary },
-                ]}
-              >
-                Current: {item.current_stat} → Need{" "}
-                {item.remaining_needed}
+              <Text style={[styles.body, { color: colors.text.secondary }]}>
+                Current: {item.current_stat} → Need {item.remaining_needed}
               </Text>
 
               {/* Indicators */}
               <View style={styles.metricsRow}>
                 {projectedFinal && (
-                  <Text
-                    style={[
-                      styles.metric,
-                      { color: colors.text.secondary },
-                    ]}
-                  >
+                  <Text style={[styles.metric, { color: colors.text.secondary }]}>
                     Pace: {projectedFinal.toFixed(1)}
                   </Text>
                 )}
 
                 {paceLabel && (
                   <Text
-                    style={[
-                      styles.metricStrong,
-                      { color: paceColor },
-                    ]}
+                    style={[styles.metricStrong, { color: paceColor }]}
                   >
                     {paceLabel}
                   </Text>
@@ -213,10 +195,7 @@ export default function LivePropsDevScreen() {
 
                 {blowoutLabel && (
                   <Text
-                    style={[
-                      styles.metricStrong,
-                      { color: blowoutColor },
-                    ]}
+                    style={[styles.metricStrong, { color: blowoutColor }]}
                   >
                     {blowoutLabel}
                   </Text>
@@ -224,12 +203,7 @@ export default function LivePropsDevScreen() {
               </View>
 
               {/* Book */}
-              <Text
-                style={[
-                  styles.meta,
-                  { color: colors.text.muted },
-                ]}
-              >
+              <Text style={[styles.meta, { color: colors.text.muted }]}>
                 Book: {item.book}
               </Text>
             </View>
@@ -241,9 +215,7 @@ export default function LivePropsDevScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
 
   center: {
     flex: 1,

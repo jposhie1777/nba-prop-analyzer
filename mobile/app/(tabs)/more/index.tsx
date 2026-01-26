@@ -1,4 +1,4 @@
-// app/more/index.tsx
+// app/(tabs)/more/index.tsx
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 
@@ -21,7 +21,9 @@ export default function MoreIndexScreen() {
     >
       {/* Tracked Parlays */}
       <Pressable
-        onPress={() => router.push("/(tabs)/more/tracked-parlays")}
+        onPress={() =>
+          router.push("/(tabs)/more/tracked-parlays")
+        }
         style={[
           styles.card,
           {
@@ -50,7 +52,35 @@ export default function MoreIndexScreen() {
         </Text>
       </Pressable>
 
-      {/* Add more tiles here as needed */}
+      {/* Live Props (DEV) */}
+      <Pressable
+        onPress={() => router.push("/live-props-dev")}
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.surface.card,
+            borderColor: colors.border.subtle,
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.title,
+            { color: colors.text.primary },
+          ]}
+        >
+          🧪 Live Props (DEV)
+        </Text>
+
+        <Text
+          style={[
+            styles.subtitle,
+            { color: colors.text.muted },
+          ]}
+        >
+          Simulated live prop feed for testing
+        </Text>
+      </Pressable>
     </View>
   );
 }

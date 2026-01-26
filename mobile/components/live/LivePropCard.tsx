@@ -34,6 +34,14 @@ function getElapsedMinutes(
   return quarterIndex[period] * 12 + (12 - remaining);
 }
 
+function formatOdds(odds?: number) {
+  if (odds == null) return "";
+  return odds > 0 ? `+${odds}` : `${odds}`;
+}
+
+/* =====================================================
+   CARD
+===================================================== */
 export default function LivePropCard({ item }: { item: any }) {
   const { colors } = useTheme();
   const [expanded, setExpanded] = useState(false);
@@ -93,7 +101,7 @@ export default function LivePropCard({ item }: { item: any }) {
       ]}
     >
       {/* =========================
-          HEADER ROW
+          HEADER
       ========================== */}
       <View style={styles.headerRow}>
         {/* Headshot placeholder */}
@@ -105,7 +113,6 @@ export default function LivePropCard({ item }: { item: any }) {
         />
 
         <View style={{ flex: 1 }}>
-          {/* Player */}
           <Text style={[styles.player, { color: colors.text.primary }]}>
             {item.player_name ?? "Unknown Player"}
           </Text>
@@ -118,12 +125,7 @@ export default function LivePropCard({ item }: { item: any }) {
                 { backgroundColor: colors.surface.elevated },
               ]}
             />
-            <Text
-              style={[
-                styles.matchupText,
-                { color: colors.text.muted },
-              ]}
-            >
+            <Text style={[styles.matchupText, { color: colors.text.muted }]}>
               {item.away_team_abbr ?? "AWY"} vs{" "}
               {item.home_team_abbr ?? "HOM"}
             </Text>
@@ -135,14 +137,8 @@ export default function LivePropCard({ item }: { item: any }) {
             />
           </View>
 
-          {/* Game context */}
           {gameContext && (
-            <Text
-              style={[
-                styles.context,
-                { color: colors.text.muted },
-              ]}
-            >
+            <Text style={[styles.context, { color: colors.text.muted }]}>
               {gameContext}
             </Text>
           )}
@@ -165,30 +161,20 @@ export default function LivePropCard({ item }: { item: any }) {
       ========================== */}
       <View style={styles.metricsRow}>
         {projectedFinal && (
-          <Text
-            style={[
-              styles.metric,
-              { color: colors.text.secondary },
-            ]}
-          >
+          <Text style={[styles.metric, { color: colors.text.secondary }]}>
             Pace: {projectedFinal.toFixed(1)}
           </Text>
         )}
 
         {blowoutLabel && (
-          <Text
-            style={[
-              styles.metricStrong,
-              { color: blowoutColor },
-            ]}
-          >
+          <Text style={[styles.metricStrong, { color: blowoutColor }]}>
             {blowoutLabel}
           </Text>
         )}
       </View>
 
       {/* =========================
-          EXPANDED (layout only)
+          EXPANDED
       ========================== */}
       {expanded && (
         <View
@@ -197,12 +183,7 @@ export default function LivePropCard({ item }: { item: any }) {
             { borderColor: colors.border.subtle },
           ]}
         >
-          <Text
-            style={[
-              styles.expandedHeader,
-              { color: colors.text.primary },
-            ]}
-          >
+          <Text style={[styles.expandedHeader, { color: colors.text.primary }]}>
             Current
           </Text>
           <View style={styles.expandedRow}>
@@ -214,12 +195,7 @@ export default function LivePropCard({ item }: { item: any }) {
             </Text>
           </View>
 
-          <Text
-            style={[
-              styles.expandedHeader,
-              { color: colors.text.primary },
-            ]}
-          >
+          <Text style={[styles.expandedHeader, { color: colors.text.primary }]}>
             Historical H2
           </Text>
           <View style={styles.expandedRow}>
@@ -236,14 +212,38 @@ export default function LivePropCard({ item }: { item: any }) {
         </View>
       )}
 
-      {/* Book */}
-      <Text style={[styles.meta, { color: colors.text.muted }]}>
-        Book: {item.book}
-      </Text>
+      {/* =========================
+          BOOK + PRICE
+      ========================== */}
+      <View style={styles.bookRow}>
+        <View
+          style={[
+            styles.bookLogo,
+            { backgroundColor: colors.surface.elevated },
+          ]}
+        >
+          <Text style={[styles.bookLogoText, { color: colors.text.primary }]}>
+            {item.book === "fanduel"
+              ? "FD"
+              : item.book === "draftkings"
+              ? "DK"
+              : "BK"}
+          </Text>
+        </View>
+
+        {item.over_odds != null && (
+          <Text style={[styles.odds, { color: colors.text.primary }]}>
+            {formatOdds(item.over_odds)}
+          </Text>
+        )}
+      </View>
     </Pressable>
   );
 }
 
+/* =====================================================
+   STYLES
+===================================================== */
 const styles = StyleSheet.create({
   card: {
     padding: 14,
@@ -252,7 +252,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  /* Header */
   headerRow: {
     flexDirection: "row",
     gap: 12,
@@ -294,7 +293,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  /* Body */
   title: {
     fontSize: 14,
     fontWeight: "900",
@@ -323,7 +321,6 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
 
-  /* Expanded */
   expanded: {
     marginTop: 12,
     paddingTop: 12,
@@ -347,9 +344,29 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  meta: {
-    marginTop: 8,
+  bookRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 10,
+  },
+
+  bookLogo: {
+    minWidth: 32,
+    height: 20,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+
+  bookLogoText: {
     fontSize: 11,
-    fontWeight: "600",
+    fontWeight: "900",
+  },
+
+  odds: {
+    fontSize: 13,
+    fontWeight: "900",
   },
 });

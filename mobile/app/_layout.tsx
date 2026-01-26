@@ -1,6 +1,7 @@
 // app/_layout.tsx
 import "react-native-reanimated";
 import { useEffect, useState } from "react";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import {
   DarkTheme,
   DefaultTheme,
@@ -67,17 +68,19 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider
-        value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
-      >
-        <Stack screenOptions={{ headerShown: false }}>
-          {/* 🔑 ONLY ROOT CHILD */}
-          <Stack.Screen name="(tabs)" />
-        </Stack>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider
+          value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
+        >
+          <Stack screenOptions={{ headerShown: false }}>
+            {/* 🔑 ONLY ROOT CHILD */}
+            <Stack.Screen name="(tabs)" />
+          </Stack>
 
-        <StatusBar style="auto" />
-      </ThemeProvider>
-    </QueryClientProvider>
+          <StatusBar style="auto" />
+        </ThemeProvider>
+      </QueryClientProvider>
+    </GestureHandlerRootView>
   );
 }

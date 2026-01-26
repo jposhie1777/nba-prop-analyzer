@@ -97,7 +97,6 @@ export default function TrackedParlayCard({ parlay }: Props) {
                     {leg.current ?? "—"}
                   </Text>
             
-                  {/* ⏱ LIVE CLOCK ONLY */}
                   {leg.game_status === "live" &&
                     (leg.period != null || leg.clock) && (
                       <Text style={styles.clock}>
@@ -106,13 +105,11 @@ export default function TrackedParlayCard({ parlay }: Props) {
                     )}
                 </View>
               </View>
-            </View>
-
+            
               {/* ---------- PROGRESS ---------- */}
               <LegProgressBar
                 progress={progress}
                 status={leg.status}
-                isFinal={leg.isFinal}
               />
             </View>
           );

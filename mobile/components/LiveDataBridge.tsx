@@ -11,6 +11,16 @@ export function LiveDataBridge() {
   const { players } = useLivePlayerStats();
   const { games } = useLiveGames();
 
+  console.log(
+    "📊 LIVE PLAYER IDS",
+    players.map(p => ({
+      id: p.player_id,
+      name: p.player_name,
+      pts: p.pts,
+      reb: p.reb,
+      ast: p.ast,
+    }))
+  );
   const applyLiveSnapshot = useParlayTracker(
     (s) => s.applyLiveSnapshot
   );

@@ -1,7 +1,14 @@
-import { View, Text, StyleSheet } from "react-native";
+// components/live/TrackedParlayCard
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+} from "react-native";
 import { useMemo } from "react";
 
 import { useTheme } from "@/store/useTheme";
+import { useParlayTracker } from "@/store/useParlayTracker";
 import { TrackedParlaySnapshot } from "@/store/useParlayTracker";
 import { calcLegProgress } from "@/utils/parlayProgress";
 import LegProgressBar from "@/components/tracked/LegProgressBar";
@@ -22,14 +29,21 @@ export default function TrackedParlayCard({ parlay }: Props) {
   const colors = useTheme((s) => s.colors);
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  /* ======================================================
-     PARLAY SUMMARY
-  ====================================================== */
+  const untrack = useParlayTracker((s) => s.untrack);
+
+  /* ================= SUMMARY ================= */
+
   const summary = useMemo(() => {
     const total = parlay.legs.length;
-    const winning = parlay.legs.filter((l) => l.status === "winning").length;
-    const losing = parlay.legs.filter((l) => l.status === "losing").length;
-    const finals = parlay.legs.filter((l) => l.isFinal).length;
+    const winning = parlay.legs.filter(
+      (l) => l.status === "winning"
+    ).length;
+    const losing = parlay.legs.filter(
+      (l) => l.status === "losing"
+    ).length;
+    const finals = parlay.legs.filter(
+      (l) => l.isFinal
+    ).length;
 
     if (losing > 0) {
       return { label: "Danger", color: colors.accent.danger };
@@ -54,34 +68,42 @@ export default function TrackedParlayCard({ parlay }: Props) {
           {String(parlay.source).toUpperCase()}
         </Text>
 
-        <Text style={[styles.state, { color: summary.color }]}>
-          {summary.label}
-        </Text>
+        <View style={styles.headerRight}>
+          <Text style={[styles.state, { color: summary.color }]}>
+            {summary.label}
+          </Text>
+
+          <Pressable
+            hitSlop={10}
+            onPress={() => untrack(parlay.parlay_id)}
+          >
+            <Text style={styles.clear}>Clear</Text>
+          </Pressable>
+        </View>
       </View>
 
       {/* ================= LEGS ================= */}
       <View style={styles.legs}>
         {parlay.legs.map((leg) => {
-          const sideNorm =
-            leg.side === "under" ? "under" : "over";
-          
           const progress = calcLegProgress(
             leg.current,
             leg.line,
-            sideNorm
+            leg.side
           );
 
           return (
             <View key={leg.leg_id} style={styles.leg}>
-              {/* ---------- LINE ---------- */}
+              {/* ---------- ROW ---------- */}
               <View style={styles.legRow}>
-                <Text style={styles.legText} numberOfLines={1}>
+                <Text
+                  style={styles.legText}
+                  numberOfLines={1}
+                >
                   {leg.player_name}{" "}
                   {leg.side.toUpperCase()} {leg.line}{" "}
                   {leg.market.toUpperCase()}
                 </Text>
-            
-                {/* RIGHT SIDE: STAT + CLOCK */}
+
                 <View style={styles.legRight}>
                   <Text
                     style={[
@@ -96,16 +118,17 @@ export default function TrackedParlayCard({ parlay }: Props) {
                   >
                     {leg.current ?? "—"}
                   </Text>
-            
+
                   {leg.game_status === "live" &&
                     (leg.period != null || leg.clock) && (
                       <Text style={styles.clock}>
-                        Q{leg.period ?? "—"} {leg.clock ?? ""}
+                        Q{leg.period ?? "—"}{" "}
+                        {leg.clock ?? ""}
                       </Text>
                     )}
                 </View>
               </View>
-            
+
               {/* ---------- PROGRESS ---------- */}
               <LegProgressBar
                 progress={progress}
@@ -152,6 +175,12 @@ function makeStyles(colors: any) {
       marginBottom: 12,
     },
 
+    headerRight: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+
     source: {
       fontSize: 12,
       fontWeight: "700",
@@ -162,6 +191,12 @@ function makeStyles(colors: any) {
     state: {
       fontSize: 12,
       fontWeight: "600",
+    },
+
+    clear: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.accent.danger,
     },
 
     legs: {
@@ -216,4 +251,4 @@ function makeStyles(colors: any) {
       color: colors.text.muted,
     },
   });
-} 
+}

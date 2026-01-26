@@ -36,7 +36,7 @@ const DEFAULT_FILTERS: Filters = {
    HOOK
 ====================================================== */
 export function usePlayerPropsMaster({
-  limit = 800,
+  limit = 600,
 }: {
   limit?: number;
 } = {}) {

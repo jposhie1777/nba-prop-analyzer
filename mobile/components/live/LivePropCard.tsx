@@ -107,31 +107,49 @@ export default function LivePropCard({ item }: { item: any }) {
           HEADER
       ========================== */}
       <View style={styles.headerRow}>
-        {/* Headshot */}
-        <View
-          style={[
-            styles.headshot,
-            { backgroundColor: colors.surface.cardSoft },
-          ]}
-        />
+        {/* Left: headshot + name */}
+        <View style={styles.headerLeft}>
+          <View
+            style={[
+              styles.headshot,
+              { backgroundColor: colors.surface.cardSoft },
+            ]}
+          />
 
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.player, { color: colors.text.primary }]}>
-            {item.player_name ?? "Unknown Player"}
-          </Text>
+          <View>
+            <Text style={[styles.player, { color: colors.text.primary }]}>
+              {item.player_name ?? "Unknown Player"}
+            </Text>
 
-          <Text style={[styles.subtle, { color: colors.text.muted }]}>
-            {contextText}
-          </Text>
-        </View>
-
-        {projectedFinal && (
-          <View style={[styles.pill, styles.pillNeutral]}>
-            <Text style={styles.pillText}>
-              Pace {projectedFinal.toFixed(1)}
+            <Text style={[styles.subtle, { color: colors.text.muted }]}>
+              {contextText}
             </Text>
           </View>
-        )}
+        </View>
+
+        {/* Right: Book + Odds */}
+        <View style={styles.headerRight}>
+          <View
+            style={[
+              styles.bookPill,
+              { backgroundColor: colors.surface.elevated },
+            ]}
+          >
+            <Text style={styles.bookText}>
+              {item.book === "fanduel"
+                ? "FD"
+                : item.book === "draftkings"
+                ? "DK"
+                : "BK"}
+            </Text>
+          </View>
+
+          {item.over_odds != null && (
+            <Text style={[styles.odds, { color: colors.text.primary }]}>
+              {formatOdds(item.over_odds)}
+            </Text>
+          )}
+        </View>
       </View>
 
       {/* =========================
@@ -152,6 +170,19 @@ export default function LivePropCard({ item }: { item: any }) {
       <Text style={[styles.body, { color: colors.text.secondary }]}>
         Current {item.current_stat} → Need {item.remaining_needed}
       </Text>
+
+      {/* =========================
+          BOTTOM METRICS
+      ========================== */}
+      {projectedFinal && (
+        <View style={styles.bottomRow}>
+          <View style={[styles.pill, styles.pillNeutral]}>
+            <Text style={styles.pillText}>
+              Pace {projectedFinal.toFixed(1)}
+            </Text>
+          </View>
+        </View>
+      )}
 
       {/* =========================
           EXPANDED (layout only)
@@ -181,32 +212,6 @@ export default function LivePropCard({ item }: { item: any }) {
           </View>
         </View>
       )}
-
-      {/* =========================
-          FOOTER
-      ========================== */}
-      <View style={styles.footerRow}>
-        <View
-          style={[
-            styles.bookPill,
-            { backgroundColor: colors.surface.elevated },
-          ]}
-        >
-          <Text style={styles.bookText}>
-            {item.book === "fanduel"
-              ? "FD"
-              : item.book === "draftkings"
-              ? "DK"
-              : "BK"}
-          </Text>
-        </View>
-
-        {item.over_odds != null && (
-          <Text style={[styles.odds, { color: colors.text.primary }]}>
-            {formatOdds(item.over_odds)}
-          </Text>
-        )}
-      </View>
     </Pressable>
   );
 }
@@ -227,7 +232,20 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     gap: 12,
+  },
+
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+
+  headerRight: {
+    alignItems: "flex-end",
+    gap: 4,
   },
 
   headshot: {
@@ -266,8 +284,14 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
 
+  bottomRow: {
+    marginTop: 10,
+    flexDirection: "row",
+    justifyContent: "flex-start",
+  },
+
   pill: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 999,
   },
@@ -311,13 +335,6 @@ const styles = StyleSheet.create({
   cell: {
     fontSize: 12,
     fontWeight: "700",
-  },
-
-  footerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 12,
   },
 
   bookPill: {

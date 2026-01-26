@@ -68,6 +68,16 @@ export default function LivePropCard({ item }: { item: any }) {
       : `${item.away_team_abbr ?? "AWY"} vs ${
           item.home_team_abbr ?? "HOM"
         }`;
+  
+  /* -----------------------------
+     ODDS COLOR
+  ------------------------------ */
+  const oddsColor =
+    item.display_odds_side === "OVER"
+      ? "#16A34A"
+      : item.display_odds_side === "UNDER"
+      ? "#DC2626"
+      : colors.text.muted;
 
   /* -----------------------------
      PACE
@@ -191,10 +201,18 @@ export default function LivePropCard({ item }: { item: any }) {
               </Text>
             </View>
 
-            {item.over_odds != null && (
-              <Text style={[styles.odds, { color: colors.text.primary }]}>
-                {formatOdds(item.over_odds)}
-              </Text>
+            {item.display_odds != null && (
+              <View style={{ alignItems: "flex-end" }}>
+                <Text style={[styles.odds, { color: oddsColor }]}>
+                  {formatOdds(item.display_odds)}
+                </Text>
+            
+                {item.display_odds_side && (
+                  <Text style={[styles.subtle, { fontSize: 10 }]}>
+                    {item.display_odds_side}
+                  </Text>
+                )}
+              </View>
             )}
           </View>
         </View>

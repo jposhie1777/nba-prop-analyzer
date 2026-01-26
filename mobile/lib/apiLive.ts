@@ -1,16 +1,28 @@
 import { API_BASE } from "./config";
 
-export async function fetchLiveProps(limit = 100) {
-  const url = `${API_BASE}/live-props?limit=${limit}`;
-  console.log("📡 [LIVE PROPS]", url);
+export async function fetchLiveProps({
+  limit,
+  cursor,
+}: {
+  limit: number;
+  cursor?: string;
+}) {
+  const params = new URLSearchParams({
+    limit: String(limit),
+  });
 
-  const res = await fetch(url, { credentials: "omit" });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Live props failed ${res.status}: ${text}`);
+  if (cursor) {
+    params.append("cursor", cursor);
   }
 
-  const json = await res.json();
-  return json.props ?? [];
+  const res = await fetch(
+    `${API_BASE}/live-props?${params.toString()}`,
+    { credentials: "omit" }
+  );
+
+  if (!res.ok) {
+    throw new Error("Failed to fetch live props");
+  }
+
+  return res.json();
 }

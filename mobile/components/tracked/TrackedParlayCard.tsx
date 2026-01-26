@@ -23,7 +23,7 @@ export default function TrackedParlayCard({ parlay }: Props) {
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   /* ======================================================
-     PARLAY SUMMARY (STEP 7)
+     PARLAY SUMMARY
   ====================================================== */
   const summary = useMemo(() => {
     const total = parlay.legs.length;
@@ -68,21 +68,17 @@ export default function TrackedParlayCard({ parlay }: Props) {
             leg.side
           );
 
-          const showLive =
-            leg.game_status === "live" &&
-            leg.period != null &&
-            leg.clock;
-
           return (
             <View key={leg.leg_id} style={styles.leg}>
-              {/* ---------- Line ---------- */}
+              {/* ---------- LINE ---------- */}
               <View style={styles.legRow}>
                 <Text style={styles.legText} numberOfLines={1}>
                   {leg.player_name}{" "}
-                  {leg.side.toUpperCase()} {leg.line} {leg.market.toUpperCase()}
+                  {leg.side.toUpperCase()} {leg.line}{" "}
+                  {leg.market.toUpperCase()}
                 </Text>
-              
-                {/* RIGHT SIDE: VALUE + CLOCK */}
+
+                {/* RIGHT SIDE: STAT + CLOCK */}
                 <View style={styles.legRight}>
                   <Text
                     style={[
@@ -97,24 +93,16 @@ export default function TrackedParlayCard({ parlay }: Props) {
                   >
                     {leg.current ?? "—"}
                   </Text>
-              
-                  {/* LIVE CLOCK */}
-                  {leg.period && leg.clock && leg.game_status === "live" && (
+
+                  {(leg.period != null || leg.clock) && (
                     <Text style={styles.clock}>
-                      Q{leg.period} {leg.clock}
+                      Q{leg.period ?? "—"} {leg.clock ?? ""}
                     </Text>
                   )}
                 </View>
               </View>
 
-              {/* ---------- Live Context (STEP 6) ---------- */}
-              {showLive && (
-                <Text style={styles.liveMeta}>
-                  Q{leg.period} · {leg.clock}
-                </Text>
-              )}
-
-              {/* ---------- Progress (STEP 5) ---------- */}
+              {/* ---------- PROGRESS ---------- */}
               <LegProgressBar
                 progress={progress}
                 status={leg.status}
@@ -194,15 +182,21 @@ function makeStyles(colors: any) {
       paddingRight: 8,
     },
 
+    legRight: {
+      alignItems: "flex-end",
+    },
+
     legValue: {
       fontSize: 13,
       fontWeight: "700",
       color: colors.text.primary,
     },
 
-    liveMeta: {
-      fontSize: 11,
+    clock: {
+      fontSize: 10,
+      marginTop: 2,
       color: colors.text.muted,
+      fontWeight: "600",
     },
 
     footer: {
@@ -217,16 +211,6 @@ function makeStyles(colors: any) {
     footerText: {
       fontSize: 12,
       color: colors.text.muted,
-    },
-    legRight: {
-      alignItems: "flex-end",
-    },
-    
-    clock: {
-      fontSize: 10,
-      marginTop: 2,
-      color: colors.text.muted,
-      fontWeight: "600",
     },
   });
 }

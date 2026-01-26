@@ -2,9 +2,9 @@ import { View, Text, StyleSheet, Pressable } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { useState } from "react";
 
-/* =====================================================
-   PACE HELPERS (pure utilities)
-===================================================== */
+/* ---------------------------------
+   Pace helpers
+---------------------------------- */
 function parseClock(clock?: string): number | null {
   if (!clock) return null;
   const [m, s] = clock.split(":").map(Number);
@@ -34,14 +34,7 @@ function getElapsedMinutes(
   return quarterIndex[period] * 12 + (12 - remaining);
 }
 
-/* =====================================================
-   LIVE PROP CARD
-===================================================== */
-type LivePropCardProps = {
-  item: any;
-};
-
-export default function LivePropCard({ item }: LivePropCardProps) {
+export default function LivePropCard({ item }: { item: any }) {
   const { colors } = useTheme();
   const [expanded, setExpanded] = useState(false);
 
@@ -56,7 +49,7 @@ export default function LivePropCard({ item }: LivePropCardProps) {
       : null;
 
   /* -----------------------------
-     PACE CALCULATION
+     PACE
   ------------------------------ */
   const elapsedMinutes = getElapsedMinutes(
     item.game_period,
@@ -69,14 +62,13 @@ export default function LivePropCard({ item }: LivePropCardProps) {
       ? elapsedMinutes / 48
       : null;
 
-  // Guardrail: ignore very early game noise
   const projectedFinal =
     progress && progress > 0.05
       ? item.current_stat / progress
       : null;
 
   /* -----------------------------
-     BLOWOUT RISK
+     BLOWOUT
   ------------------------------ */
   let blowoutLabel: string | null = null;
   let blowoutColor = colors.text.secondary;
@@ -101,35 +93,84 @@ export default function LivePropCard({ item }: LivePropCardProps) {
       ]}
     >
       {/* =========================
-          COLLAPSED SECTION
+          HEADER ROW
       ========================== */}
+      <View style={styles.headerRow}>
+        {/* Headshot placeholder */}
+        <View
+          style={[
+            styles.headshot,
+            { backgroundColor: colors.surface.cardSoft },
+          ]}
+        />
 
-      {/* Player */}
-      <Text style={[styles.player, { color: colors.text.primary }]}>
-        {item.player_name ?? "Unknown Player"}
-      </Text>
+        <View style={{ flex: 1 }}>
+          {/* Player */}
+          <Text style={[styles.player, { color: colors.text.primary }]}>
+            {item.player_name ?? "Unknown Player"}
+          </Text>
 
-      {/* Game context */}
-      {gameContext && (
-        <Text style={[styles.context, { color: colors.text.muted }]}>
-          {gameContext}
-        </Text>
-      )}
+          {/* Matchup */}
+          <View style={styles.matchupRow}>
+            <View
+              style={[
+                styles.logo,
+                { backgroundColor: colors.surface.elevated },
+              ]}
+            />
+            <Text
+              style={[
+                styles.matchupText,
+                { color: colors.text.muted },
+              ]}
+            >
+              {item.away_team_abbr ?? "AWY"} vs{" "}
+              {item.home_team_abbr ?? "HOM"}
+            </Text>
+            <View
+              style={[
+                styles.logo,
+                { backgroundColor: colors.surface.elevated },
+              ]}
+            />
+          </View>
 
-      {/* Market */}
+          {/* Game context */}
+          {gameContext && (
+            <Text
+              style={[
+                styles.context,
+                { color: colors.text.muted },
+              ]}
+            >
+              {gameContext}
+            </Text>
+          )}
+        </View>
+      </View>
+
+      {/* =========================
+          MARKET
+      ========================== */}
       <Text style={[styles.title, { color: colors.text.primary }]}>
         {item.market.toUpperCase()} · {item.line}
       </Text>
 
-      {/* Progress */}
       <Text style={[styles.body, { color: colors.text.secondary }]}>
         Current: {item.current_stat} → Need {item.remaining_needed}
       </Text>
 
-      {/* Indicators */}
+      {/* =========================
+          METRICS
+      ========================== */}
       <View style={styles.metricsRow}>
         {projectedFinal && (
-          <Text style={[styles.metric, { color: colors.text.secondary }]}>
+          <Text
+            style={[
+              styles.metric,
+              { color: colors.text.secondary },
+            ]}
+          >
             Pace: {projectedFinal.toFixed(1)}
           </Text>
         )}
@@ -147,7 +188,7 @@ export default function LivePropCard({ item }: LivePropCardProps) {
       </View>
 
       {/* =========================
-          EXPANDED SECTION
+          EXPANDED (layout only)
       ========================== */}
       {expanded && (
         <View
@@ -156,7 +197,6 @@ export default function LivePropCard({ item }: LivePropCardProps) {
             { borderColor: colors.border.subtle },
           ]}
         >
-          {/* Current */}
           <Text
             style={[
               styles.expandedHeader,
@@ -167,14 +207,13 @@ export default function LivePropCard({ item }: LivePropCardProps) {
           </Text>
           <View style={styles.expandedRow}>
             <Text style={[styles.cell, { color: colors.text.secondary }]}>
-              Projected: {projectedFinal?.toFixed(1) ?? "—"}
+              Projected: 28.4
             </Text>
             <Text style={[styles.cell, { color: colors.text.secondary }]}>
               Minutes: 36.1
             </Text>
           </View>
 
-          {/* Historical H2 */}
           <Text
             style={[
               styles.expandedHeader,
@@ -194,28 +233,6 @@ export default function LivePropCard({ item }: LivePropCardProps) {
               Min L5: 17.4
             </Text>
           </View>
-
-          {/* Risk Flags */}
-          {blowoutLabel && (
-            <>
-              <Text
-                style={[
-                  styles.expandedHeader,
-                  { color: colors.text.primary },
-                ]}
-              >
-                Risk Flags
-              </Text>
-              <Text
-                style={[
-                  styles.risk,
-                  { color: blowoutColor },
-                ]}
-              >
-                ⚠ {blowoutLabel}
-              </Text>
-            </>
-          )}
         </View>
       )}
 
@@ -227,32 +244,61 @@ export default function LivePropCard({ item }: LivePropCardProps) {
   );
 }
 
-/* =====================================================
-   STYLES
-===================================================== */
 const styles = StyleSheet.create({
   card: {
     padding: 14,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     marginBottom: 12,
+  },
+
+  /* Header */
+  headerRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 8,
+  },
+
+  headshot: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
 
   player: {
     fontSize: 15,
     fontWeight: "900",
-    marginBottom: 2,
+  },
+
+  matchupRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 2,
+  },
+
+  logo: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+  },
+
+  matchupText: {
+    fontSize: 11,
+    fontWeight: "700",
   },
 
   context: {
     fontSize: 12,
     fontWeight: "700",
-    marginBottom: 6,
+    marginTop: 2,
   },
 
+  /* Body */
   title: {
     fontSize: 14,
     fontWeight: "900",
+    marginTop: 6,
   },
 
   body: {
@@ -263,8 +309,7 @@ const styles = StyleSheet.create({
 
   metricsRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
+    gap: 12,
     marginTop: 6,
   },
 
@@ -278,6 +323,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
 
+  /* Expanded */
   expanded: {
     marginTop: 12,
     paddingTop: 12,
@@ -299,11 +345,6 @@ const styles = StyleSheet.create({
   cell: {
     fontSize: 12,
     fontWeight: "700",
-  },
-
-  risk: {
-    fontSize: 12,
-    fontWeight: "800",
   },
 
   meta: {

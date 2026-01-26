@@ -47,14 +47,18 @@ export default function LivePropCard({ item }: { item: any }) {
   const [expanded, setExpanded] = useState(false);
 
   /* -----------------------------
-     GAME CONTEXT
+     CONTEXT
   ------------------------------ */
-  const gameContext =
+  const contextText =
     item.game_state === "halftime"
       ? "Halftime"
       : item.game_period && item.game_clock
-      ? `${item.game_period} · ${item.game_clock}`
-      : null;
+      ? `${item.away_team_abbr ?? "AWY"} vs ${
+          item.home_team_abbr ?? "HOM"
+        } · ${item.game_period} ${item.game_clock}`
+      : `${item.away_team_abbr ?? "AWY"} vs ${
+          item.home_team_abbr ?? "HOM"
+        }`;
 
   /* -----------------------------
      PACE
@@ -79,14 +83,13 @@ export default function LivePropCard({ item }: { item: any }) {
      BLOWOUT
   ------------------------------ */
   let blowoutLabel: string | null = null;
-  let blowoutColor = colors.text.secondary;
+  let blowoutStyle = styles.pillWarning;
 
   if (item.score_margin >= 16) {
     blowoutLabel = "Blowout Risk";
-    blowoutColor = colors.accent.danger;
+    blowoutStyle = styles.pillDanger;
   } else if (item.score_margin >= 10) {
     blowoutLabel = "Blowout Watch";
-    blowoutColor = colors.accent.warning;
   }
 
   return (
@@ -96,7 +99,7 @@ export default function LivePropCard({ item }: { item: any }) {
         styles.card,
         {
           backgroundColor: colors.surface.card,
-          borderColor: colors.border.subtle,
+          shadowColor: "#000",
         },
       ]}
     >
@@ -104,7 +107,7 @@ export default function LivePropCard({ item }: { item: any }) {
           HEADER
       ========================== */}
       <View style={styles.headerRow}>
-        {/* Headshot placeholder */}
+        {/* Headshot */}
         <View
           style={[
             styles.headshot,
@@ -117,64 +120,41 @@ export default function LivePropCard({ item }: { item: any }) {
             {item.player_name ?? "Unknown Player"}
           </Text>
 
-          {/* Matchup */}
-          <View style={styles.matchupRow}>
-            <View
-              style={[
-                styles.logo,
-                { backgroundColor: colors.surface.elevated },
-              ]}
-            />
-            <Text style={[styles.matchupText, { color: colors.text.muted }]}>
-              {item.away_team_abbr ?? "AWY"} vs{" "}
-              {item.home_team_abbr ?? "HOM"}
-            </Text>
-            <View
-              style={[
-                styles.logo,
-                { backgroundColor: colors.surface.elevated },
-              ]}
-            />
-          </View>
-
-          {gameContext && (
-            <Text style={[styles.context, { color: colors.text.muted }]}>
-              {gameContext}
-            </Text>
-          )}
+          <Text style={[styles.subtle, { color: colors.text.muted }]}>
+            {contextText}
+          </Text>
         </View>
+
+        {projectedFinal && (
+          <View style={[styles.pill, styles.pillNeutral]}>
+            <Text style={styles.pillText}>
+              Pace {projectedFinal.toFixed(1)}
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* =========================
           MARKET
       ========================== */}
-      <Text style={[styles.title, { color: colors.text.primary }]}>
-        {item.market.toUpperCase()} · {item.line}
-      </Text>
-
-      <Text style={[styles.body, { color: colors.text.secondary }]}>
-        Current: {item.current_stat} → Need {item.remaining_needed}
-      </Text>
-
-      {/* =========================
-          METRICS
-      ========================== */}
-      <View style={styles.metricsRow}>
-        {projectedFinal && (
-          <Text style={[styles.metric, { color: colors.text.secondary }]}>
-            Pace: {projectedFinal.toFixed(1)}
-          </Text>
-        )}
+      <View style={styles.marketRow}>
+        <Text style={[styles.title, { color: colors.text.primary }]}>
+          {item.market.toUpperCase()} · {item.line}
+        </Text>
 
         {blowoutLabel && (
-          <Text style={[styles.metricStrong, { color: blowoutColor }]}>
-            {blowoutLabel}
-          </Text>
+          <View style={[styles.pill, blowoutStyle]}>
+            <Text style={styles.pillText}>{blowoutLabel}</Text>
+          </View>
         )}
       </View>
 
+      <Text style={[styles.body, { color: colors.text.secondary }]}>
+        Current {item.current_stat} → Need {item.remaining_needed}
+      </Text>
+
       {/* =========================
-          EXPANDED
+          EXPANDED (layout only)
       ========================== */}
       {expanded && (
         <View
@@ -187,42 +167,32 @@ export default function LivePropCard({ item }: { item: any }) {
             Current
           </Text>
           <View style={styles.expandedRow}>
-            <Text style={[styles.cell, { color: colors.text.secondary }]}>
-              Projected: 28.4
-            </Text>
-            <Text style={[styles.cell, { color: colors.text.secondary }]}>
-              Minutes: 36.1
-            </Text>
+            <Text style={styles.cell}>Projected: 28.4</Text>
+            <Text style={styles.cell}>Minutes: 36.1</Text>
           </View>
 
           <Text style={[styles.expandedHeader, { color: colors.text.primary }]}>
             Historical H2
           </Text>
           <View style={styles.expandedRow}>
-            <Text style={[styles.cell, { color: colors.text.secondary }]}>
-              L5: 11.8
-            </Text>
-            <Text style={[styles.cell, { color: colors.text.secondary }]}>
-              L10: 10.9
-            </Text>
-            <Text style={[styles.cell, { color: colors.text.secondary }]}>
-              Min L5: 17.4
-            </Text>
+            <Text style={styles.cell}>L5: 11.8</Text>
+            <Text style={styles.cell}>L10: 10.9</Text>
+            <Text style={styles.cell}>Min L5: 17.4</Text>
           </View>
         </View>
       )}
 
       {/* =========================
-          BOOK + PRICE
+          FOOTER
       ========================== */}
-      <View style={styles.bookRow}>
+      <View style={styles.footerRow}>
         <View
           style={[
-            styles.bookLogo,
+            styles.bookPill,
             { backgroundColor: colors.surface.elevated },
           ]}
         >
-          <Text style={[styles.bookLogoText, { color: colors.text.primary }]}>
+          <Text style={styles.bookText}>
             {item.book === "fanduel"
               ? "FD"
               : item.book === "draftkings"
@@ -246,83 +216,82 @@ export default function LivePropCard({ item }: { item: any }) {
 ===================================================== */
 const styles = StyleSheet.create({
   card: {
-    padding: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-    marginBottom: 12,
+    padding: 16,
+    borderRadius: 18,
+    marginBottom: 14,
+    shadowOpacity: 0.04,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
   },
 
   headerRow: {
     flexDirection: "row",
+    alignItems: "center",
     gap: 12,
-    marginBottom: 8,
   },
 
   headshot: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
 
   player: {
+    fontSize: 16,
+    fontWeight: "900",
+  },
+
+  subtle: {
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+
+  marketRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 12,
+  },
+
+  title: {
     fontSize: 15,
     fontWeight: "900",
   },
 
-  matchupRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginTop: 2,
-  },
-
-  logo: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-  },
-
-  matchupText: {
-    fontSize: 11,
-    fontWeight: "700",
-  },
-
-  context: {
-    fontSize: 12,
-    fontWeight: "700",
-    marginTop: 2,
-  },
-
-  title: {
-    fontSize: 14,
-    fontWeight: "900",
-    marginTop: 6,
-  },
-
   body: {
     marginTop: 6,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
+    opacity: 0.85,
   },
 
-  metricsRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 6,
+  pill: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
   },
 
-  metric: {
+  pillText: {
     fontSize: 11,
-    fontWeight: "700",
+    fontWeight: "800",
+    color: "#111",
   },
 
-  metricStrong: {
-    fontSize: 11,
-    fontWeight: "900",
+  pillNeutral: {
+    backgroundColor: "#EEF2FF",
+  },
+
+  pillWarning: {
+    backgroundColor: "#FEF3C7",
+  },
+
+  pillDanger: {
+    backgroundColor: "#FEE2E2",
   },
 
   expanded: {
-    marginTop: 12,
+    marginTop: 14,
     paddingTop: 12,
     borderTopWidth: 1,
   },
@@ -330,7 +299,7 @@ const styles = StyleSheet.create({
   expandedHeader: {
     fontSize: 12,
     fontWeight: "900",
-    marginBottom: 4,
+    marginBottom: 6,
   },
 
   expandedRow: {
@@ -344,29 +313,29 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  bookRow: {
+  footerRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginTop: 10,
+    marginTop: 12,
   },
 
-  bookLogo: {
-    minWidth: 32,
-    height: 20,
-    borderRadius: 6,
+  bookPill: {
+    minWidth: 34,
+    height: 22,
+    borderRadius: 7,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 6,
   },
 
-  bookLogoText: {
+  bookText: {
     fontSize: 11,
     fontWeight: "900",
   },
 
   odds: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "900",
   },
 });

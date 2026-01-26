@@ -1,12 +1,26 @@
 // /app/(tabs)/live-props-dev.tsx
 import { View, Text, FlatList, StyleSheet } from "react-native";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { useTheme } from "@/store/useTheme";
 import LivePropCard from "@/components/live/LivePropCard";
+import { LivePropFilterBar } from "@/components/live/LivePropFilterBar";
 
-// 🔁 NEW HOOK (cursor-based pagination)
+// 🔁 Cursor-based pagination hook
 import { useLivePropsInfinite } from "@/hooks/useLivePropsInfinite";
+
+/* ======================================================
+   TYPES
+====================================================== */
+
+type MarketType = "OVER" | "UNDER" | "MILESTONE";
+
+type Filters = {
+  stats: string[];           // [] = ALL
+  marketTypes: MarketType[]; // [] = ALL
+  minOdds: number;
+  maxOdds: number;
+};
 
 /* ======================================================
    CONFIG
@@ -15,12 +29,59 @@ import { useLivePropsInfinite } from "@/hooks/useLivePropsInfinite";
 // Safety cap so mobile never explodes
 const MAX_ROWS = 600;
 
+const DEFAULT_FILTERS: Filters = {
+  stats: [],
+  marketTypes: [],
+  minOdds: -800,
+  maxOdds: 400,
+};
+
+/* ======================================================
+   FILTER + SORT
+====================================================== */
+
+function applyFiltersAndSort(data: any[], filters: Filters) {
+  return data
+    .filter((item) => {
+      // ---- STAT FILTER ----
+      if (
+        filters.stats.length > 0 &&
+        !filters.stats.includes(item.market)
+      ) {
+        return false;
+      }
+
+      // ---- MARKET TYPE FILTER ----
+      if (
+        filters.marketTypes.length > 0 &&
+        !filters.marketTypes.includes(item.display_odds_side)
+      ) {
+        return false;
+      }
+
+      // ---- ODDS FILTER ----
+      if (item.display_odds == null) return false;
+
+      if (
+        item.display_odds < filters.minOdds ||
+        item.display_odds > filters.maxOdds
+      ) {
+        return false;
+      }
+
+      return true;
+    })
+    // ---- DEFAULT SORT: LOW → HIGH ODDS ----
+    .sort((a, b) => a.display_odds - b.display_odds);
+}
+
 /* ======================================================
    SCREEN
 ====================================================== */
 
 export default function LivePropsDevScreen() {
   const { colors } = useTheme();
+  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
 
   const {
     data,
@@ -39,12 +100,16 @@ export default function LivePropsDevScreen() {
   }, [data]);
 
   /* ---------------------------------
-     GUARDRAIL (OPTIONAL BUT RECOMMENDED)
+     GUARDRAIL + FILTER + SORT
   ---------------------------------- */
-  const trimmedRows = useMemo(() => {
-    if (allRows.length <= MAX_ROWS) return allRows;
-    return allRows.slice(0, MAX_ROWS);
-  }, [allRows]);
+  const visibleRows = useMemo(() => {
+    const capped =
+      allRows.length <= MAX_ROWS
+        ? allRows
+        : allRows.slice(0, MAX_ROWS);
+
+    return applyFiltersAndSort(capped, filters);
+  }, [allRows, filters]);
 
   /* ---------------------------------
      STATES
@@ -79,7 +144,7 @@ export default function LivePropsDevScreen() {
     );
   }
 
-  if (!trimmedRows || trimmedRows.length === 0) {
+  if (!visibleRows || visibleRows.length === 0) {
     return (
       <View
         style={[
@@ -104,8 +169,15 @@ export default function LivePropsDevScreen() {
         { backgroundColor: colors.surface.screen },
       ]}
     >
+      {/* FILTER BAR */}
+      <LivePropFilterBar
+        filters={filters}
+        setFilters={setFilters}
+      />
+
+      {/* LIST */}
       <FlatList
-        data={trimmedRows}
+        data={visibleRows}
         keyExtractor={(item) => item.prop_key}
         contentContainerStyle={{ padding: 12 }}
         renderItem={({ item }) => (

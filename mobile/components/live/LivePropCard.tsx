@@ -1,6 +1,11 @@
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { useTheme } from "@/store/useTheme";
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import { Swipeable } from "react-native-gesture-handler";
+import * as Haptics from "expo-haptics";
+
+import { usePropBetslip } from "@/store/usePropBetslip";
+import { useBetslipDrawer } from "@/store/useBetslipDrawer";
 
 /* ---------------------------------
    Pace helpers
@@ -45,6 +50,9 @@ function formatOdds(odds?: number) {
 export default function LivePropCard({ item }: { item: any }) {
   const { colors } = useTheme();
   const [expanded, setExpanded] = useState(false);
+
+  const add = usePropBetslip((s) => s.add);
+  const openDrawer = useBetslipDrawer((s) => s.open);
 
   /* -----------------------------
      CONTEXT
@@ -92,127 +100,176 @@ export default function LivePropCard({ item }: { item: any }) {
     blowoutLabel = "Blowout Watch";
   }
 
+  /* -----------------------------
+     SAVE HANDLER
+  ------------------------------ */
+  const handleSave = useCallback(() => {
+    add({
+      id: `live-${item.game_id}-${item.player_id}-${item.market}-${item.line}`,
+      player_id: item.player_id,
+      player: item.player_name,
+      market: item.market,
+      side: "over",
+      line: item.line,
+      odds: item.over_odds,
+      matchup: `${item.away_team_abbr} @ ${item.home_team_abbr}`,
+    });
+
+    openDrawer();
+
+    Haptics.notificationAsync(
+      Haptics.NotificationFeedbackType.Success
+    );
+  }, [add, openDrawer, item]);
+
+  /* -----------------------------
+     SWIPE ACTION
+  ------------------------------ */
+  const renderSaveAction = () => (
+    <View style={styles.swipeSave}>
+      <Text style={styles.swipeSaveText}>Save</Text>
+    </View>
+  );
+
   return (
-    <Pressable
-      onPress={() => setExpanded((v) => !v)}
-      style={[
-        styles.card,
-        {
-          backgroundColor: colors.surface.card,
-          shadowColor: "#000",
-        },
-      ]}
+    <Swipeable
+      renderRightActions={renderSaveAction}
+      onSwipeableOpen={(direction) => {
+        if (direction === "right") handleSave();
+      }}
+      overshootRight={false}
     >
-      {/* =========================
-          HEADER
-      ========================== */}
-      <View style={styles.headerRow}>
-        {/* Left: headshot + name */}
-        <View style={styles.headerLeft}>
-          <View
-            style={[
-              styles.headshot,
-              { backgroundColor: colors.surface.cardSoft },
-            ]}
-          />
+      <Pressable
+        onPress={() => setExpanded((v) => !v)}
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.surface.card,
+            shadowColor: "#000",
+          },
+        ]}
+      >
+        {/* =========================
+            HEADER
+        ========================== */}
+        <View style={styles.headerRow}>
+          {/* Left */}
+          <View style={styles.headerLeft}>
+            <View
+              style={[
+                styles.headshot,
+                { backgroundColor: colors.surface.cardSoft },
+              ]}
+            />
 
-          <View>
-            <Text style={[styles.player, { color: colors.text.primary }]}>
-              {item.player_name ?? "Unknown Player"}
-            </Text>
+            <View>
+              <Text style={[styles.player, { color: colors.text.primary }]}>
+                {item.player_name ?? "Unknown Player"}
+              </Text>
 
-            <Text style={[styles.subtle, { color: colors.text.muted }]}>
-              {contextText}
-            </Text>
+              <Text style={[styles.subtle, { color: colors.text.muted }]}>
+                {contextText}
+              </Text>
+            </View>
+          </View>
+
+          {/* Right: Book + Odds */}
+          <View style={styles.headerRight}>
+            <View
+              style={[
+                styles.bookPill,
+                { backgroundColor: colors.surface.elevated },
+              ]}
+            >
+              <Text style={styles.bookText}>
+                {item.book === "fanduel"
+                  ? "FD"
+                  : item.book === "draftkings"
+                  ? "DK"
+                  : "BK"}
+              </Text>
+            </View>
+
+            {item.over_odds != null && (
+              <Text style={[styles.odds, { color: colors.text.primary }]}>
+                {formatOdds(item.over_odds)}
+              </Text>
+            )}
           </View>
         </View>
 
-        {/* Right: Book + Odds */}
-        <View style={styles.headerRight}>
-          <View
-            style={[
-              styles.bookPill,
-              { backgroundColor: colors.surface.elevated },
-            ]}
-          >
-            <Text style={styles.bookText}>
-              {item.book === "fanduel"
-                ? "FD"
-                : item.book === "draftkings"
-                ? "DK"
-                : "BK"}
-            </Text>
-          </View>
+        {/* =========================
+            MARKET
+        ========================== */}
+        <View style={styles.marketRow}>
+          <Text style={[styles.title, { color: colors.text.primary }]}>
+            {item.market.toUpperCase()} · {item.line}
+          </Text>
 
-          {item.over_odds != null && (
-            <Text style={[styles.odds, { color: colors.text.primary }]}>
-              {formatOdds(item.over_odds)}
-            </Text>
+          {blowoutLabel && (
+            <View style={[styles.pill, blowoutStyle]}>
+              <Text style={styles.pillText}>{blowoutLabel}</Text>
+            </View>
           )}
         </View>
-      </View>
 
-      {/* =========================
-          MARKET
-      ========================== */}
-      <View style={styles.marketRow}>
-        <Text style={[styles.title, { color: colors.text.primary }]}>
-          {item.market.toUpperCase()} · {item.line}
+        <Text style={[styles.body, { color: colors.text.secondary }]}>
+          Current {item.current_stat} → Need {item.remaining_needed}
         </Text>
 
-        {blowoutLabel && (
-          <View style={[styles.pill, blowoutStyle]}>
-            <Text style={styles.pillText}>{blowoutLabel}</Text>
+        {/* =========================
+            BOTTOM METRICS
+        ========================== */}
+        {projectedFinal && (
+          <View style={styles.bottomRow}>
+            <View style={[styles.pill, styles.pillNeutral]}>
+              <Text style={styles.pillText}>
+                Pace {projectedFinal.toFixed(1)}
+              </Text>
+            </View>
           </View>
         )}
-      </View>
 
-      <Text style={[styles.body, { color: colors.text.secondary }]}>
-        Current {item.current_stat} → Need {item.remaining_needed}
-      </Text>
-
-      {/* =========================
-          BOTTOM METRICS
-      ========================== */}
-      {projectedFinal && (
-        <View style={styles.bottomRow}>
-          <View style={[styles.pill, styles.pillNeutral]}>
-            <Text style={styles.pillText}>
-              Pace {projectedFinal.toFixed(1)}
+        {/* =========================
+            EXPANDED
+        ========================== */}
+        {expanded && (
+          <View
+            style={[
+              styles.expanded,
+              { borderColor: colors.border.subtle },
+            ]}
+          >
+            <Text
+              style={[
+                styles.expandedHeader,
+                { color: colors.text.primary },
+              ]}
+            >
+              Current
             </Text>
-          </View>
-        </View>
-      )}
+            <View style={styles.expandedRow}>
+              <Text style={styles.cell}>Projected: 28.4</Text>
+              <Text style={styles.cell}>Minutes: 36.1</Text>
+            </View>
 
-      {/* =========================
-          EXPANDED (layout only)
-      ========================== */}
-      {expanded && (
-        <View
-          style={[
-            styles.expanded,
-            { borderColor: colors.border.subtle },
-          ]}
-        >
-          <Text style={[styles.expandedHeader, { color: colors.text.primary }]}>
-            Current
-          </Text>
-          <View style={styles.expandedRow}>
-            <Text style={styles.cell}>Projected: 28.4</Text>
-            <Text style={styles.cell}>Minutes: 36.1</Text>
+            <Text
+              style={[
+                styles.expandedHeader,
+                { color: colors.text.primary },
+              ]}
+            >
+              Historical H2
+            </Text>
+            <View style={styles.expandedRow}>
+              <Text style={styles.cell}>L5: 11.8</Text>
+              <Text style={styles.cell}>L10: 10.9</Text>
+              <Text style={styles.cell}>Min L5: 17.4</Text>
+            </View>
           </View>
-
-          <Text style={[styles.expandedHeader, { color: colors.text.primary }]}>
-            Historical H2
-          </Text>
-          <View style={styles.expandedRow}>
-            <Text style={styles.cell}>L5: 11.8</Text>
-            <Text style={styles.cell}>L10: 10.9</Text>
-            <Text style={styles.cell}>Min L5: 17.4</Text>
-          </View>
-        </View>
-      )}
-    </Pressable>
+        )}
+      </Pressable>
+    </Swipeable>
   );
 }
 
@@ -229,9 +286,22 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
   },
 
+  swipeSave: {
+    flex: 1,
+    backgroundColor: "#16A34A",
+    justifyContent: "center",
+    paddingLeft: 24,
+    borderRadius: 18,
+  },
+
+  swipeSaveText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+
   headerRow: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
   },
@@ -267,7 +337,6 @@ const styles = StyleSheet.create({
 
   marketRow: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
     marginTop: 12,
   },
@@ -287,7 +356,6 @@ const styles = StyleSheet.create({
   bottomRow: {
     marginTop: 10,
     flexDirection: "row",
-    justifyContent: "flex-start",
   },
 
   pill: {

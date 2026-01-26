@@ -1,5 +1,10 @@
+// /hooks/useLivePropsDev
 import { useQuery } from "@tanstack/react-query";
 import { fetchLiveProps } from "@/lib/apiLive";
+
+/* ======================================================
+   HELPERS
+====================================================== */
 
 function periodNumToLabel(period?: number) {
   if (!period) return null;
@@ -37,6 +42,29 @@ function resolveCurrentStat(item: any) {
   }
 }
 
+/* ---------------------------------
+   Odds resolver (NEW)
+---------------------------------- */
+function resolveDisplayOdds(item: any) {
+  if (item.over_odds != null) {
+    return { odds: item.over_odds, side: "OVER" };
+  }
+
+  if (item.under_odds != null) {
+    return { odds: item.under_odds, side: "UNDER" };
+  }
+
+  if (item.milestone_odds != null) {
+    return { odds: item.milestone_odds, side: "MILESTONE" };
+  }
+
+  return { odds: null, side: null };
+}
+
+/* ======================================================
+   HOOK
+====================================================== */
+
 export function useLivePropsDev(limit = 100) {
   return useQuery({
     queryKey: ["live-props", limit],
@@ -45,6 +73,7 @@ export function useLivePropsDev(limit = 100) {
 
       return rows.map((r: any) => {
         const current = resolveCurrentStat(r);
+        const { odds, side } = resolveDisplayOdds(r);
 
         return {
           ...r,
@@ -59,6 +88,10 @@ export function useLivePropsDev(limit = 100) {
           score_margin: Math.abs(
             (r.home_score ?? 0) - (r.away_score ?? 0)
           ),
+
+          /* ---------- Display Odds ---------- */
+          display_odds: odds,
+          display_odds_side: side,
         };
       });
     },

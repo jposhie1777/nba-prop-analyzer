@@ -3,6 +3,13 @@ import { View, Text, FlatList, StyleSheet } from "react-native";
 import { useLivePropsDev } from "@/hooks/useLivePropsDev";
 import { useTheme } from "@/store/useTheme";
 
+const QUARTER_PROGRESS: Record<string, number> = {
+  Q1: 0.25,
+  Q2: 0.5,
+  Q3: 0.75,
+  Q4: 1,
+};
+
 export default function LivePropsDevScreen() {
   const { colors } = useTheme();
   const { data, isLoading, error } = useLivePropsDev(50);
@@ -30,7 +37,7 @@ export default function LivePropsDevScreen() {
           { backgroundColor: colors.surface.screen },
         ]}
       >
-        <Text style={{ color: colors.text.danger }}>
+        <Text style={{ color: colors.accent.danger }}>
           Error loading live props
         </Text>
       </View>
@@ -66,12 +73,66 @@ export default function LivePropsDevScreen() {
         }
         contentContainerStyle={{ padding: 12 }}
         renderItem={({ item }) => {
+          /* -----------------------------
+             GAME CONTEXT
+          ------------------------------ */
           const gameContext =
             item.game_state === "halftime"
               ? "Halftime"
               : item.game_period && item.game_clock
               ? `${item.game_period} · ${item.game_clock}`
               : null;
+
+          /* -----------------------------
+             PACE CALCULATION
+          ------------------------------ */
+          const progress =
+            item.game_state === "halftime"
+              ? 0.5
+              : QUARTER_PROGRESS[item.game_period] ?? 0.25;
+
+          const projectedFinal =
+            progress > 0
+              ? item.current_stat / progress
+              : null;
+
+          /* -----------------------------
+             PACE WARNING (vs HIST)
+          ------------------------------ */
+          let paceLabel: string | null = null;
+          let paceColor = colors.text.secondary;
+
+          const histBaseline =
+            item.game_period === "Q1"
+              ? item.q1_avg
+              : item.h1_avg;
+
+          if (histBaseline && histBaseline > 0) {
+            const paceRatio =
+              item.current_stat / histBaseline;
+
+            if (paceRatio < 0.8) {
+              paceLabel = "Slow pace";
+              paceColor = colors.accent.warning;
+            } else if (paceRatio > 1.2) {
+              paceLabel = "Hot start";
+              paceColor = colors.accent.success;
+            }
+          }
+
+          /* -----------------------------
+             BLOWOUT RISK
+          ------------------------------ */
+          let blowoutLabel: string | null = null;
+          let blowoutColor = colors.text.secondary;
+
+          if (item.score_margin >= 16) {
+            blowoutLabel = "Blowout risk";
+            blowoutColor = colors.accent.danger;
+          } else if (item.score_margin >= 10) {
+            blowoutLabel = "Blowout watch";
+            blowoutColor = colors.accent.warning;
+          }
 
           return (
             <View
@@ -83,7 +144,7 @@ export default function LivePropsDevScreen() {
                 },
               ]}
             >
-              {/* Player name */}
+              {/* Player */}
               <Text
                 style={[
                   styles.player,
@@ -93,7 +154,7 @@ export default function LivePropsDevScreen() {
                 {item.player_name ?? "Unknown Player"}
               </Text>
 
-              {/* Game context (Q + clock OR Halftime) */}
+              {/* Game time */}
               {gameContext && (
                 <Text
                   style={[
@@ -125,6 +186,42 @@ export default function LivePropsDevScreen() {
                 Current: {item.current_stat} → Need{" "}
                 {item.remaining_needed}
               </Text>
+
+              {/* Indicators */}
+              <View style={styles.metricsRow}>
+                {projectedFinal && (
+                  <Text
+                    style={[
+                      styles.metric,
+                      { color: colors.text.secondary },
+                    ]}
+                  >
+                    Pace: {projectedFinal.toFixed(1)}
+                  </Text>
+                )}
+
+                {paceLabel && (
+                  <Text
+                    style={[
+                      styles.metricStrong,
+                      { color: paceColor },
+                    ]}
+                  >
+                    {paceLabel}
+                  </Text>
+                )}
+
+                {blowoutLabel && (
+                  <Text
+                    style={[
+                      styles.metricStrong,
+                      { color: blowoutColor },
+                    ]}
+                  >
+                    {blowoutLabel}
+                  </Text>
+                )}
+              </View>
 
               {/* Book */}
               <Text
@@ -184,8 +281,25 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
+  metricsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 6,
+  },
+
+  metric: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+
+  metricStrong: {
+    fontSize: 11,
+    fontWeight: "900",
+  },
+
   meta: {
-    marginTop: 4,
+    marginTop: 6,
     fontSize: 11,
     fontWeight: "600",
   },

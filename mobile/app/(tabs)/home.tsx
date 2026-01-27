@@ -126,7 +126,7 @@ export default function Home() {
       <Tile
         title="Trend Chart"
         subtitle="Player / market trends"
-        onPress={() => router.push("/(tabs)/trends")}
+        onPress={() => router.push("/(tabs)/trend-chart")}
       />
 
       {/* ===========================
@@ -153,26 +153,27 @@ export default function Home() {
       <Tile
         title="Lineups"
         subtitle="Projected & most common"
-        onPress={() => router.push("/(more)/lineups")}
+        onPress={() => router.push("/more/lineups")}
       />
 
       <Tile
         title="Teams"
         subtitle="Team profiles & stats"
-        onPress={() => router.push("/(more)/teams")}
+        onPress={() => router.push("/more/teams")}
       />
 
       <Tile
         title="Saved"
         subtitle="Saved bets & picks"
-        onPress={() => router.push("/(more)/SavedScreen")}
+        onPress={() => router.push("/more/SavedScreen")}
       />
 
       <Tile
         title="Explore"
         subtitle="All features"
-        onPress={() => router.push("/(more)/explore")}
+        onPress={() => router.push("/more/explore")}
       />
+
     </ScrollView>
   );
 }

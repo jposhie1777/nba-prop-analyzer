@@ -86,7 +86,7 @@ export default function RootLayout() {
           {/* -------------------------------
               GLOBAL OVERLAYS
           -------------------------------- */}
-          <BetslipDrawer />
+          <PropBetslipDrawer />
 
           <StatusBar style="auto" />
         </ThemeProvider>

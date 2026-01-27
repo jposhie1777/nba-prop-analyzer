@@ -165,26 +165,27 @@ export default function LivePropCard({ item }: { item: any }) {
         ========================== */}
         <View style={styles.headerRow}>
           {/* Left */}
-          <View
-            style={[
-              styles.headshot,
-              { backgroundColor: colors.surface.cardSoft },
-            ]}
-          >
-            {item.player_image_url ? (
-              <Image
-                source={{ uri: item.player_image_url }}
-                style={styles.headshotImage}
-                resizeMode="cover"
-              />
-            ) : null}
-          </View>
-
+          <View style={styles.headerLeft}>
+            <View
+              style={[
+                styles.headshot,
+                { backgroundColor: colors.surface.cardSoft },
+              ]}
+            >
+              {item.player_image_url ? (
+                <Image
+                  source={{ uri: item.player_image_url }}
+                  style={styles.headshotImage}
+                  resizeMode="cover"
+                />
+              ) : null}
+            </View>
+        
             <View>
               <Text style={[styles.player, { color: colors.text.primary }]}>
                 {item.player_name ?? "Unknown Player"}
               </Text>
-
+        
               <View style={styles.matchupRow}>
                 {item.away_team_abbr && TEAM_LOGOS[item.away_team_abbr] && (
                   <Image
@@ -192,18 +193,18 @@ export default function LivePropCard({ item }: { item: any }) {
                     style={styles.teamLogo}
                   />
                 )}
-              
+        
                 <Text style={[styles.subtle, { color: colors.text.muted }]}>
                   @
                 </Text>
-              
+        
                 {item.home_team_abbr && TEAM_LOGOS[item.home_team_abbr] && (
                   <Image
                     source={{ uri: TEAM_LOGOS[item.home_team_abbr] }}
                     style={styles.teamLogo}
                   />
                 )}
-              
+        
                 <Text style={[styles.subtle, { color: colors.text.muted }]}>
                   {item.game_period ?? ""}
                   {item.game_clock ? ` · ${item.game_clock}` : ""}
@@ -211,8 +212,8 @@ export default function LivePropCard({ item }: { item: any }) {
               </View>
             </View>
           </View>
-
-          {/* Right: Book + Odds */}
+        
+          {/* Right */}
           <View style={styles.headerRight}>
             <View
               style={[
@@ -228,13 +229,13 @@ export default function LivePropCard({ item }: { item: any }) {
                   : "BK"}
               </Text>
             </View>
-
+        
             {item.display_odds != null && (
               <View style={{ alignItems: "flex-end" }}>
                 <Text style={[styles.odds, { color: oddsColor }]}>
                   {formatOdds(item.display_odds)}
                 </Text>
-            
+        
                 {item.display_odds_side && (
                   <Text style={[styles.subtle, { fontSize: 10 }]}>
                     {item.display_odds_side}

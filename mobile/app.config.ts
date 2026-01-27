@@ -8,18 +8,23 @@ const config: ExpoConfig = {
   web: {
     bundler: "metro",
     output: "static",
+
+    // 🔥 THIS IS THE FIX
+    experimental: {
+      type: "module"
+    }
   },
 
   plugins: ["expo-router"],
 
   experiments: {
-    typedRoutes: true,
+    typedRoutes: true
   },
 
   extra: {
     API_URL:
-      "https://pulse-mobile-api-763243624328.us-central1.run.app",
-  },
+      "https://pulse-mobile-api-763243624328.us-central1.run.app"
+  }
 };
 
 export default config;

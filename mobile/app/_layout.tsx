@@ -16,6 +16,9 @@ import { useSavedProps } from "@/store/useSavedProps";
 import { useDevStore } from "@/lib/dev/devStore";
 import { installFetchInterceptor } from "@/lib/dev/interceptFetch";
 
+// ✅ ADD THIS
+import BetslipDrawer from "@/components/betslip/BetslipDrawer";
+
 /* -------------------------------------------------
    Expo Router settings
 -------------------------------------------------- */
@@ -73,10 +76,17 @@ export default function RootLayout() {
         <ThemeProvider
           value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
         >
+          {/* -------------------------------
+              APP NAVIGATION
+          -------------------------------- */}
           <Stack screenOptions={{ headerShown: false }}>
-            {/* 🔑 ONLY ROOT CHILD */}
             <Stack.Screen name="(tabs)" />
           </Stack>
+
+          {/* -------------------------------
+              GLOBAL OVERLAYS
+          -------------------------------- */}
+          <BetslipDrawer />
 
           <StatusBar style="auto" />
         </ThemeProvider>

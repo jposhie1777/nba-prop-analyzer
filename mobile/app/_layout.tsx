@@ -17,7 +17,7 @@ import { useDevStore } from "@/lib/dev/devStore";
 import { installFetchInterceptor } from "@/lib/dev/interceptFetch";
 
 // ✅ ADD THIS
-import BetslipDrawer from "@/components/prop/BetslipDrawer";
+import PropBetslipDrawer from "@/components/prop/PropBetslipDrawer";
 
 /* -------------------------------------------------
    Expo Router settings

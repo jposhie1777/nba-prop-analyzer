@@ -1,16 +1,24 @@
 // /components/live/LivePropCard.tsx
-import { View, Text, StyleSheet, Pressable, Image } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  Image,
+} from "react-native";
 import { useTheme } from "@/store/useTheme";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { Swipeable } from "react-native-gesture-handler";
 import * as Haptics from "expo-haptics";
+
 import { TEAM_LOGOS } from "@/utils/teamLogos";
 import { usePropBetslip } from "@/store/usePropBetslip";
 import { useBetslipDrawer } from "@/store/useBetslipDrawer";
 
-/* ---------------------------------
-   Pace helpers
----------------------------------- */
+/* =====================================================
+   HELPERS
+===================================================== */
+
 function parseClock(clock?: string): number | null {
   if (!clock) return null;
   const [m, s] = clock.split(":").map(Number);
@@ -48,27 +56,15 @@ function formatOdds(odds?: number) {
 /* =====================================================
    CARD
 ===================================================== */
+
 export default function LivePropCard({ item }: { item: any }) {
   const { colors } = useTheme();
   const [expanded, setExpanded] = useState(false);
+  const swipeRef = useRef<Swipeable>(null);
 
   const add = usePropBetslip((s) => s.add);
   const openDrawer = useBetslipDrawer((s) => s.open);
 
-  /* -----------------------------
-     CONTEXT
-  ------------------------------ */
-  const contextText =
-    item.game_state === "halftime"
-      ? "Halftime"
-      : item.game_period && item.game_clock
-      ? `${item.away_team_abbr ?? "AWY"} vs ${
-          item.home_team_abbr ?? "HOM"
-        } · ${item.game_period} ${item.game_clock}`
-      : `${item.away_team_abbr ?? "AWY"} vs ${
-          item.home_team_abbr ?? "HOM"
-        }`;
-  
   /* -----------------------------
      ODDS COLOR
   ------------------------------ */
@@ -122,11 +118,14 @@ export default function LivePropCard({ item }: { item: any }) {
       market: item.market,
       side: "over",
       line: item.line,
-      odds: item.over_odds,
+      odds: item.display_odds,
       matchup: `${item.away_team_abbr} @ ${item.home_team_abbr}`,
     });
 
-    openDrawer();
+    // Let swipe animation finish before opening drawer
+    setTimeout(() => {
+      openDrawer();
+    }, 50);
 
     Haptics.notificationAsync(
       Haptics.NotificationFeedbackType.Success
@@ -134,7 +133,7 @@ export default function LivePropCard({ item }: { item: any }) {
   }, [add, openDrawer, item]);
 
   /* -----------------------------
-     SWIPE ACTION
+     SWIPE ACTION (LEFT SIDE)
   ------------------------------ */
   const renderSaveAction = () => (
     <View style={styles.swipeSave}>
@@ -144,11 +143,15 @@ export default function LivePropCard({ item }: { item: any }) {
 
   return (
     <Swipeable
-      renderRightActions={renderSaveAction}
+      ref={swipeRef}
+      renderLeftActions={renderSaveAction}
       onSwipeableOpen={(direction) => {
-        if (direction === "right") handleSave();
+        if (direction === "left") {
+          handleSave();
+          swipeRef.current?.close();
+        }
       }}
-      overshootRight={false}
+      overshootLeft={false}
     >
       <Pressable
         onPress={() => setExpanded((v) => !v)}
@@ -180,45 +183,71 @@ export default function LivePropCard({ item }: { item: any }) {
                 />
               ) : null}
             </View>
-        
+
             <View>
-              <Text style={[styles.player, { color: colors.text.primary }]}>
+              <Text
+                style={[
+                  styles.player,
+                  { color: colors.text.primary },
+                ]}
+              >
                 {item.player_name ?? "Unknown Player"}
               </Text>
-        
+
               <View style={styles.matchupRow}>
-                {item.away_team_abbr && TEAM_LOGOS[item.away_team_abbr] && (
-                  <Image
-                    source={{ uri: TEAM_LOGOS[item.away_team_abbr] }}
-                    style={styles.teamLogo}
-                  />
-                )}
-        
-                <Text style={[styles.subtle, { color: colors.text.muted }]}>
+                {item.away_team_abbr &&
+                  TEAM_LOGOS[item.away_team_abbr] && (
+                    <Image
+                      source={{
+                        uri: TEAM_LOGOS[item.away_team_abbr],
+                      }}
+                      style={styles.teamLogo}
+                    />
+                  )}
+
+                <Text
+                  style={[
+                    styles.subtle,
+                    { color: colors.text.muted },
+                  ]}
+                >
                   @
                 </Text>
-        
-                {item.home_team_abbr && TEAM_LOGOS[item.home_team_abbr] && (
-                  <Image
-                    source={{ uri: TEAM_LOGOS[item.home_team_abbr] }}
-                    style={styles.teamLogo}
-                  />
-                )}
-        
-                <Text style={[styles.subtle, { color: colors.text.muted }]}>
+
+                {item.home_team_abbr &&
+                  TEAM_LOGOS[item.home_team_abbr] && (
+                    <Image
+                      source={{
+                        uri: TEAM_LOGOS[item.home_team_abbr],
+                      }}
+                      style={styles.teamLogo}
+                    />
+                  )}
+
+                <Text
+                  style={[
+                    styles.subtle,
+                    { color: colors.text.muted },
+                  ]}
+                >
                   {item.game_period ?? ""}
-                  {item.game_clock ? ` · ${item.game_clock}` : ""}
+                  {item.game_clock
+                    ? ` · ${item.game_clock}`
+                    : ""}
                 </Text>
               </View>
             </View>
           </View>
-        
+
           {/* Right */}
           <View style={styles.headerRight}>
             <View
               style={[
                 styles.bookPill,
-                { backgroundColor: colors.surface.elevated },
+                {
+                  backgroundColor:
+                    colors.surface.elevated,
+                },
               ]}
             >
               <Text style={styles.bookText}>
@@ -229,15 +258,25 @@ export default function LivePropCard({ item }: { item: any }) {
                   : "BK"}
               </Text>
             </View>
-        
+
             {item.display_odds != null && (
               <View style={{ alignItems: "flex-end" }}>
-                <Text style={[styles.odds, { color: oddsColor }]}>
+                <Text
+                  style={[
+                    styles.odds,
+                    { color: oddsColor },
+                  ]}
+                >
                   {formatOdds(item.display_odds)}
                 </Text>
-        
+
                 {item.display_odds_side && (
-                  <Text style={[styles.subtle, { fontSize: 10 }]}>
+                  <Text
+                    style={[
+                      styles.subtle,
+                      { fontSize: 10 },
+                    ]}
+                  >
                     {item.display_odds_side}
                   </Text>
                 )}
@@ -250,19 +289,32 @@ export default function LivePropCard({ item }: { item: any }) {
             MARKET
         ========================== */}
         <View style={styles.marketRow}>
-          <Text style={[styles.title, { color: colors.text.primary }]}>
+          <Text
+            style={[
+              styles.title,
+              { color: colors.text.primary },
+            ]}
+          >
             {item.market.toUpperCase()} · {item.line}
           </Text>
 
           {blowoutLabel && (
             <View style={[styles.pill, blowoutStyle]}>
-              <Text style={styles.pillText}>{blowoutLabel}</Text>
+              <Text style={styles.pillText}>
+                {blowoutLabel}
+              </Text>
             </View>
           )}
         </View>
 
-        <Text style={[styles.body, { color: colors.text.secondary }]}>
-          Current {item.current_stat} → Need {item.remaining_needed}
+        <Text
+          style={[
+            styles.body,
+            { color: colors.text.secondary },
+          ]}
+        >
+          Current {item.current_stat} → Need{" "}
+          {item.remaining_needed}
         </Text>
 
         {/* =========================
@@ -296,9 +348,14 @@ export default function LivePropCard({ item }: { item: any }) {
             >
               Current
             </Text>
+
             <View style={styles.expandedRow}>
-              <Text style={styles.cell}>Projected: 28.4</Text>
-              <Text style={styles.cell}>Minutes: 36.1</Text>
+              <Text style={styles.cell}>
+                Projected: 28.4
+              </Text>
+              <Text style={styles.cell}>
+                Minutes: 36.1
+              </Text>
             </View>
 
             <Text
@@ -309,10 +366,13 @@ export default function LivePropCard({ item }: { item: any }) {
             >
               Historical H2
             </Text>
+
             <View style={styles.expandedRow}>
               <Text style={styles.cell}>L5: 11.8</Text>
               <Text style={styles.cell}>L10: 10.9</Text>
-              <Text style={styles.cell}>Min L5: 17.4</Text>
+              <Text style={styles.cell}>
+                Min L5: 17.4
+              </Text>
             </View>
           </View>
         )}
@@ -324,6 +384,7 @@ export default function LivePropCard({ item }: { item: any }) {
 /* =====================================================
    STYLES
 ===================================================== */
+
 const styles = StyleSheet.create({
   card: {
     padding: 16,
@@ -370,6 +431,24 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
+  },
+
+  headshotImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 22,
+  },
+
+  matchupRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 2,
+  },
+
+  teamLogo: {
+    width: 16,
+    height: 16,
   },
 
   player: {
@@ -470,21 +549,5 @@ const styles = StyleSheet.create({
   odds: {
     fontSize: 14,
     fontWeight: "900",
-  },
-  headshotImage: {
-    width: "100%",
-    height: "100%",
-    borderRadius: 22,
-  },
-  matchupRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginTop: 2,
-  },
-  
-  teamLogo: {
-    width: 16,
-    height: 16,
   },
 });

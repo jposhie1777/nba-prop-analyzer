@@ -14,6 +14,7 @@ import * as Haptics from "expo-haptics";
 import { TEAM_LOGOS } from "@/utils/teamLogos";
 import { usePropBetslip } from "@/store/usePropBetslip";
 import { useBetslipDrawer } from "@/store/useBetslipDrawer";
+import { InteractionManager } from "react-native";
 
 /* =====================================================
    HELPERS
@@ -121,12 +122,12 @@ export default function LivePropCard({ item }: { item: any }) {
       odds: item.display_odds,
       matchup: `${item.away_team_abbr} @ ${item.home_team_abbr}`,
     });
-
-    // Let swipe animation finish before opening drawer
-    setTimeout(() => {
+  
+    // ✅ GUARANTEED to fire after swipe animation finishes
+    InteractionManager.runAfterInteractions(() => {
       openDrawer();
-    }, 50);
-
+    });
+  
     Haptics.notificationAsync(
       Haptics.NotificationFeedbackType.Success
     );

@@ -104,6 +104,7 @@ export default function PropCard(props: PropCardProps) {
   const colors = useTheme((s) => s.colors);
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const swipeRef = useRef<Swipeable>(null);
+  const [showBadLineInfo, setShowBadLineInfo] = useState(false);
   const {
     player,
     playerId,
@@ -252,13 +253,38 @@ export default function PropCard(props: PropCardProps) {
                 </Text>
             
                 {/* 🚨 BAD LINE BADGE */}
-                {badLineScore != null && badLineScore >= 1.0 && (
-                  <Pressable style={styles.badLineBadge}>
-                    <Text style={styles.badLineText}>⚠️ BAD LINE</Text>
-                  </Pressable>
+                {typeof badLineScore === "number" && badLineScore >= 1.0 && (
+                  <View>
+                    <Pressable
+                      style={styles.badLineBadge}
+                      onPress={() => setShowBadLineInfo((v) => !v)}
+                    >
+                      <Text style={styles.badLineText}>⚠️ BAD LINE</Text>
+                    </Pressable>
+                
+                    {showBadLineInfo && (
+                      <View style={styles.badLineTooltip}>
+                        <Text style={styles.tooltipTitle}>Bad Line Detected</Text>
+                
+                        <Text style={styles.tooltipText}>
+                          This line is mispriced relative to recent performance and opponent
+                          context.
+                        </Text>
+                
+                        <Text style={styles.tooltipMeta}>
+                          Score: {badLineScore.toFixed(2)}
+                        </Text>
+                
+                        <Pressable
+                          onPress={() => setShowBadLineInfo(false)}
+                          style={styles.tooltipClose}
+                        >
+                          <Text style={styles.tooltipCloseText}>Dismiss</Text>
+                        </Pressable>
+                      </View>
+                    )}
+                  </View>
                 )}
-              </View>
-            </View>
 
 
             {/* RIGHT – BOOK + ODDS */}
@@ -549,6 +575,42 @@ function makeStyles(colors: any) {
       color: "#ff4d4f",
       fontSize: 11,
       fontWeight: "600",
+    },
+    badLineTooltip: {
+      backgroundColor: "#111",
+      borderColor: "#ff4d4f",
+      borderWidth: 1,
+      borderRadius: 8,
+      padding: 10,
+      marginTop: 6,
+    },
+    
+    tooltipTitle: {
+      color: "#ff4d4f",
+      fontWeight: "700",
+      fontSize: 13,
+      marginBottom: 4,
+    },
+    
+    tooltipText: {
+      color: "#ddd",
+      fontSize: 12,
+      marginBottom: 6,
+    },
+    
+    tooltipMeta: {
+      color: "#aaa",
+      fontSize: 11,
+      marginBottom: 6,
+    },
+    
+    tooltipClose: {
+      alignSelf: "flex-end",
+    },
+    
+    tooltipCloseText: {
+      color: "#aaa",
+      fontSize: 11,
     },
   });
 }

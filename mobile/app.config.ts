@@ -7,7 +7,7 @@ const config: ExpoConfig = {
   scheme: "pulse",
 
   /* ---------------------------------
-     ✅ REQUIRED FOR PUSH TOKENS / EAS
+     ANDROID
   ---------------------------------- */
   android: {
     package: "com.anonymous.pulse",
@@ -20,7 +20,7 @@ const config: ExpoConfig = {
     bundler: "metro",
     output: "static",
 
-    // 🔥 REQUIRED FOR expo-router + web
+    // Required for expo-router + web
     experimental: {
       type: "module",
     },
@@ -40,15 +40,11 @@ const config: ExpoConfig = {
 
   /* ---------------------------------
      EXTRA / ENV
+     (NO eas.projectId here on purpose)
   ---------------------------------- */
   extra: {
     API_URL:
       "https://pulse-mobile-api-763243624328.us-central1.run.app",
-
-    // ✅ REQUIRED FOR Expo push tokens
-    eas: {
-      projectId: "REPLACE_WITH_YOUR_PROJECT_ID",
-    },
   },
 };
 

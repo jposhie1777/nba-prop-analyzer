@@ -1,4 +1,5 @@
-from fastapi import APIRouter
+# push.py
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 import requests
 from google.cloud import bigquery
@@ -12,7 +13,7 @@ EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
 
 
 # ============================
-#.   PUSH TOKEN REGISTRATION
+#   PUSH TOKEN REGISTRATION
 # ============================
 
 class PushRegisterBody(BaseModel):
@@ -21,7 +22,14 @@ class PushRegisterBody(BaseModel):
 
 
 @router.post("/register")
-def register_push_token(body: PushRegisterBody):
+async def register_push_token(request: Request, body: PushRegisterBody):
+    # 🔍 DEBUG: confirm request actually reaches FastAPI
+    raw_body = await request.body()
+    print("📥 [PUSH] Raw body:", raw_body)
+    print("📥 [PUSH] Headers:", dict(request.headers))
+
+    print("📥 [PUSH] Parsed body:", body.dict())
+
     bq = get_bq_client()
 
     query = """
@@ -46,7 +54,14 @@ def register_push_token(body: PushRegisterBody):
 
     bq.query(query, job_config=job_config).result()
 
+    print("✅ [PUSH] Token registered in BigQuery")
+
     return {"ok": True}
+
+
+# ============================
+#   SEND PUSH
+# ============================
 
 def send_push(
     token: str,
@@ -80,7 +95,6 @@ def send_push(
 
     print("📡 [PUSH] Expo HTTP status:", resp.status_code)
 
-    # Hard failure (non-200)
     if not resp.ok:
         print("❌ [PUSH] Expo HTTP error response:")
         print(resp.text)
@@ -93,10 +107,8 @@ def send_push(
         print("Raw body:", resp.text)
         raise
 
-    # 🔍 Full Expo response
     print("📬 [PUSH] Expo response JSON:", json.dumps(result, indent=2))
 
-    # Expo contract: {"data": [{...}, {...}]}
     data_items = result.get("data")
 
     if not isinstance(data_items, list):

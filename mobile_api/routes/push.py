@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from db.bigquery import bq
+from bq import get_bq_client
 
 router = APIRouter(prefix="/push", tags=["push"])
 

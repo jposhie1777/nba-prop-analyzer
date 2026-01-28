@@ -82,7 +82,8 @@ export async function ensurePushRegistered(userId: string) {
     if (!API_BASE) {
       console.log("❌ API_BASE is undefined — aborting push register");
       return;
-    }
+ w
+   }
 
     /* ---------------------------------
        REGISTER WITH BACKEND

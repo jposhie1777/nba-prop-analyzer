@@ -17,8 +17,8 @@ import { useDevStore } from "@/lib/dev/devStore";
 import { installFetchInterceptor } from "@/lib/dev/interceptFetch";
 import { PropBetslipDrawer } from "@/components/prop/PropBetslipDrawer";
 
-import { registerForPushNotifications } from "@/lib/notifications/registerForPush";
-import { API_BASE } from "@/lib/apiMaster";
+// ✅ NEW (token-change gated)
+import { ensurePushRegistered } from "@/lib/notifications/ensurePushRegistered";
 
 /* -------------------------------------------------
    Expo Router settings
@@ -58,7 +58,7 @@ export default function RootLayout() {
   const [queryClient] = useState(() => new QueryClient());
 
   /* -------------------------------
-     HYDRATE STORES ON BOOT
+     HYDRATE STORES
   -------------------------------- */
   const hydrateSavedProps = useSavedProps((s) => s.hydrate);
 
@@ -73,29 +73,14 @@ export default function RootLayout() {
   }, []);
 
   /* -------------------------------
-     REGISTER PUSH NOTIFICATIONS
-     (RUNS ONCE PER APP LAUNCH)
+     PUSH REGISTRATION (SAFE)
+     - Runs once
+     - Only POSTs if token changed
   -------------------------------- */
   useEffect(() => {
-    (async () => {
-      try {
-        const token = await registerForPushNotifications();
-        if (!token) return;
-
-        await fetch(`${API_BASE}/push/register`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            expo_push_token: token,
-            user_id: "anon", // replace when auth exists
-          }),
-        });
-      } catch (err) {
-        console.warn("Push registration failed", err);
-      }
-    })();
+    ensurePushRegistered("anon").catch((err) => {
+      console.warn("📵 Push registration skipped:", err);
+    });
   }, []);
 
   /* -------------------------------

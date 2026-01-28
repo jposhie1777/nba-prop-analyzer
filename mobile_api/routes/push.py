@@ -10,9 +10,9 @@ router = APIRouter(prefix="/push", tags=["push"])
 EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
 
 
-/* ============================
-   PUSH TOKEN REGISTRATION
-============================ */
+# ============================
+#.   PUSH TOKEN REGISTRATION
+# ============================
 
 class PushRegisterBody(BaseModel):
     user_id: str
@@ -48,9 +48,8 @@ def register_push_token(body: PushRegisterBody):
     return {"ok": True}
 
 
-/* ============================
-   EXPO PUSH SENDER (HELPER)
-============================ */
+
+
 
 def send_push(
     token: str,

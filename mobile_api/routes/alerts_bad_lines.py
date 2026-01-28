@@ -1,7 +1,6 @@
 # alerts_bad_lines.py
 from fastapi import APIRouter
 from google.cloud import bigquery
-from datetime import timedelta
 
 from bq import get_bq_client
 from routes.push import send_push
@@ -17,44 +16,54 @@ def check_bad_line_alerts(
 ):
     """
     Sends push alerts for newly detected bad lines.
-    Dedupes by (player_id, market, line_value)
+
+    Logical dedupe key:
+      (player_id, market, ROUND(line_value, 1))
+
     Enforces cooldown window to prevent spam.
     """
 
     bq = get_bq_client()
 
     # ----------------------------------
-    # 1. Fetch NEW bad lines (LOGICALLY DEDUPED)
+    # 1. Fetch NEW bad lines (DEDUPED + NORMALIZED)
     # ----------------------------------
     bad_lines = list(
         bq.query(
             """
-            WITH ranked AS (
+            WITH normalized AS (
               SELECT
                 bl.*,
-                ROW_NUMBER() OVER (
-                  PARTITION BY
-                    bl.player_id,
-                    bl.market,
-                    bl.line_value
-                  ORDER BY bl.bad_line_score DESC
-                ) AS rn
+                ROUND(bl.line_value, 1) AS norm_line_value
               FROM nba_live.v_bad_line_alerts_scored bl
               WHERE bl.is_bad_line = TRUE
                 AND bl.bad_line_score >= @min_score
-                AND NOT EXISTS (
-                  SELECT 1
-                  FROM nba_live.bad_line_alert_log l
-                  WHERE
-                    l.player_id = bl.player_id
-                    AND l.market = bl.market
-                    AND l.line_value = bl.line_value
-                    AND l.alerted_at >
-                      TIMESTAMP_SUB(
-                        CURRENT_TIMESTAMP(),
-                        INTERVAL @cooldown_minutes MINUTE
-                      )
-                )
+            ),
+
+            ranked AS (
+              SELECT
+                n.*,
+                ROW_NUMBER() OVER (
+                  PARTITION BY
+                    n.player_id,
+                    n.market,
+                    n.norm_line_value
+                  ORDER BY n.bad_line_score DESC
+                ) AS rn
+              FROM normalized n
+              WHERE NOT EXISTS (
+                SELECT 1
+                FROM nba_live.bad_line_alert_log l
+                WHERE
+                  l.player_id = n.player_id
+                  AND l.market = n.market
+                  AND l.line_value = n.norm_line_value
+                  AND l.alerted_at >
+                    TIMESTAMP_SUB(
+                      CURRENT_TIMESTAMP(),
+                      INTERVAL @cooldown_minutes MINUTE
+                    )
+              )
             )
 
             SELECT *
@@ -66,7 +75,7 @@ def check_bad_line_alerts(
             job_config=bigquery.QueryJobConfig(
                 query_parameters=[
                     bigquery.ScalarQueryParameter(
-                        "min_score", "FLOAT", min_score
+                        "min_score", "FLOAT64", min_score
                     ),
                     bigquery.ScalarQueryParameter(
                         "max_lines", "INT64", max_lines
@@ -120,21 +129,21 @@ def check_bad_line_alerts(
                     title="⚠️ Bad Line Detected",
                     body=(
                         f"{row['player_name']} "
-                        f"{row['market']} {row['line_value']} "
+                        f"{row['market']} {row['norm_line_value']} "
                         f"({row['odds']:+})"
                     ),
                     data={
                         "type": "bad_line",
                         "player_id": row["player_id"],
                         "market": row["market"],
-                        "line_value": row["line_value"],
+                        "line_value": row["norm_line_value"],
                     },
                 )
 
                 sent += 1
 
                 # ----------------------------------
-                # Log alert (LOGICAL DEDUPE KEY)
+                # Log alert (NORMALIZED DEDUPE KEY)
                 # ----------------------------------
                 bq.query(
                     """
@@ -165,7 +174,7 @@ def check_bad_line_alerts(
                                 "market", "STRING", row["market"]
                             ),
                             bigquery.ScalarQueryParameter(
-                                "line_value", "FLOAT64", row["line_value"]
+                                "line_value", "FLOAT64", row["norm_line_value"]
                             ),
                             bigquery.ScalarQueryParameter(
                                 "token", "STRING", t["expo_push_token"]

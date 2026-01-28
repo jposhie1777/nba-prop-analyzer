@@ -239,7 +239,7 @@ export default function PropCard(props: PropCardProps) {
               {homeLogo && <Image source={{ uri: homeLogo }} style={styles.teamLogo} />}
             </View>
 
-            {/* CENTER – PLAYER + MARKET */}
+            {/* CENTER – PLAYER */}
             <View style={styles.headerCenter}>
               {imageUrl && (
                 <Image source={{ uri: imageUrl }} style={styles.headshot} />

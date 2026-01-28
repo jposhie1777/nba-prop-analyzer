@@ -21,7 +21,7 @@ import { useBetslipDrawer } from "@/store/useBetslipDrawer";
 import { PropBetslipDrawer } from "@/components/prop/PropBetslipDrawer";
 import { usePropBetslip } from "@/store/usePropBetslip";
 import { normalizeMarket } from "@/utils/normalizeMarket";
-
+import { useBadLineAlerts } from "@/hooks/useBadLineAlerts";
 
 /* ======================================================
    Screen
@@ -144,6 +144,18 @@ export default function PropsTestScreen() {
     return cleaned;
   }, [rawProps, filters]);
 
+  const { data: badLines } = useBadLineAlerts(1.0);
+
+  const badLineMap = useMemo(() => {
+    const map = new Map<number, number>();
+  
+    badLines?.forEach((b) => {
+      map.set(b.prop_id, b.bad_line_score);
+    });
+  
+    return map;
+  }, [badLines]);
+
   /* ======================================================
      RENDER ITEM
   ====================================================== */
@@ -160,6 +172,7 @@ export default function PropsTestScreen() {
           playerId={item.player_id}
           scrollRef={listRef}
           saved={isSaved}
+          badLineScore={badLineMap.get(item.propId)}
           onSwipeSave={() => saveProp(item)}
           onToggleSave={() =>
             isSaved ? unsaveProp(item.id) : saveProp(item)

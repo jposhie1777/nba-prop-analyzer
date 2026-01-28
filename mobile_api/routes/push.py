@@ -1,188 +1,195 @@
-# alerts_bad_lines.py
-from fastapi import APIRouter
+# push.py
+from fastapi import APIRouter, Request, HTTPException
+from pydantic import BaseModel
+import requests
 from google.cloud import bigquery
-from datetime import timedelta
-
+import json
+from typing import Optional
 from bq import get_bq_client
-from routes.push import send_push
 
-router = APIRouter(prefix="/alerts", tags=["alerts"])
+router = APIRouter(prefix="/push", tags=["push"])
+
+EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
 
 
-@router.post("/bad-lines/check")
-def check_bad_line_alerts(
-    min_score: float = 1.25,
-    max_lines: int = 5,
-    cooldown_minutes: int = 30,
-):
-    """
-    Sends push alerts for newly detected bad lines.
-    Dedupes by (player_id, market, line_value)
-    Enforces cooldown window to prevent spam.
-    """
+# ============================
+#   PUSH TOKEN REGISTRATION
+# ============================
+
+class PushRegisterBody(BaseModel):
+    user_id: str
+    expo_push_token: str
+
+
+@router.post("/register")
+async def register_push_token(request: Request, body: PushRegisterBody):
+    # 🔍 DEBUG: confirm request actually reaches FastAPI
+    raw_body = await request.body()
+    print("📥 [PUSH] Raw body:", raw_body)
+    print("📥 [PUSH] Headers:", dict(request.headers))
+
+    print("📥 [PUSH] Parsed body:", body.dict())
 
     bq = get_bq_client()
 
-    # ----------------------------------
-    # 1. Fetch NEW bad lines (LOGICALLY DEDUPED)
-    # ----------------------------------
-    bad_lines = list(
-        bq.query(
-            """
-            WITH ranked AS (
-              SELECT
-                bl.*,
-                ROW_NUMBER() OVER (
-                  PARTITION BY
-                    bl.player_id,
-                    bl.market,
-                    bl.line_value
-                  ORDER BY bl.bad_line_score DESC
-                ) AS rn
-              FROM nba_live.v_bad_line_alerts_scored bl
-              WHERE bl.is_bad_line = TRUE
-                AND bl.bad_line_score >= @min_score
-                AND NOT EXISTS (
-                  SELECT 1
-                  FROM nba_live.bad_line_alert_log l
-                  WHERE
-                    l.player_id = bl.player_id
-                    AND l.market = bl.market
-                    AND l.line_value = bl.line_value
-                    AND l.alerted_at >
-                      TIMESTAMP_SUB(
-                        CURRENT_TIMESTAMP(),
-                        INTERVAL @cooldown_minutes MINUTE
-                      )
-                )
-            )
+    query = """
+    MERGE nba_live.push_tokens t
+    USING (SELECT @user_id AS user_id, @token AS token) s
+    ON t.user_id = s.user_id AND t.expo_push_token = s.token
+    WHEN NOT MATCHED THEN
+      INSERT (user_id, expo_push_token)
+      VALUES (s.user_id, s.token)
+    """
 
-            SELECT *
-            FROM ranked
-            WHERE rn = 1
-            ORDER BY bad_line_score DESC
-            LIMIT @max_lines
-            """,
-            job_config=bigquery.QueryJobConfig(
-                query_parameters=[
-                    bigquery.ScalarQueryParameter(
-                        "min_score", "FLOAT", min_score
-                    ),
-                    bigquery.ScalarQueryParameter(
-                        "max_lines", "INT64", max_lines
-                    ),
-                    bigquery.ScalarQueryParameter(
-                        "cooldown_minutes", "INT64", cooldown_minutes
-                    ),
-                ]
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter(
+                "user_id", "STRING", body.user_id
             ),
-        )
+            bigquery.ScalarQueryParameter(
+                "token", "STRING", body.expo_push_token
+            ),
+        ]
     )
 
-    if not bad_lines:
-        return {
-            "ok": True,
-            "sent": 0,
-            "reason": "no new bad lines (deduped + cooldown)",
-        }
+    bq.query(query, job_config=job_config).result()
 
-    # ----------------------------------
-    # 2. Fetch push tokens
-    # ----------------------------------
-    tokens = list(
-        bq.query(
-            """
-            SELECT DISTINCT expo_push_token
-            FROM nba_live.push_tokens
-            WHERE expo_push_token IS NOT NULL
-            """
+    print("✅ [PUSH] Token registered in BigQuery")
+
+    return {"ok": True}
+
+
+# ============================
+#   SEND PUSH
+# ============================
+
+def send_push(
+    token: str,
+    title: str,
+    body: str,
+    data: Optional[dict] = None,
+):
+    payload = {
+        "to": token,
+        "sound": "default",
+        "title": title,
+        "body": body,
+        "data": data or {},
+    }
+
+    print("🚀 [PUSH] Sending Expo push")
+    print("➡️  Token:", token)
+    print("➡️  Title:", title)
+    print("➡️  Body:", body)
+    print("➡️  Data:", json.dumps(payload["data"], default=str))
+
+    try:
+        resp = requests.post(
+            EXPO_PUSH_URL,
+            json=payload,
+            timeout=10,
         )
+    except Exception as e:
+        print("❌ [PUSH] Network error sending to Expo:", e)
+        raise
+
+    print("📡 [PUSH] Expo HTTP status:", resp.status_code)
+
+    if not resp.ok:
+        print("❌ [PUSH] Expo HTTP error response:")
+        print(resp.text)
+        resp.raise_for_status()
+
+    try:
+        result = resp.json()
+    except Exception as e:
+        print("❌ [PUSH] Failed to parse Expo JSON response:", e)
+        print("Raw body:", resp.text)
+        raise
+
+    print("📬 [PUSH] Expo response JSON:", json.dumps(result, indent=2))
+
+    data_items = result.get("data")
+
+    # --------------------------------------------------
+    # Normalize Expo response:
+    # - Single push → dict
+    # - Batch push  → list
+    # --------------------------------------------------
+    if isinstance(data_items, dict):
+        data_items = [data_items]
+    elif not isinstance(data_items, list):
+        raise RuntimeError(
+            f"Unexpected Expo response shape: {result}"
+        )
+
+    errors = []
+
+    for idx, item in enumerate(data_items):
+        print(f"🔎 [PUSH] Result[{idx}]:", item)
+
+        status = item.get("status")
+
+        if status != "ok":
+            print("❌ [PUSH] Expo rejected message:", item)
+            errors.append(item)
+        else:
+            print("✅ [PUSH] Expo accepted message:", item)
+
+    if errors:
+        raise RuntimeError(
+            f"Expo push rejected one or more messages: {errors}"
+        )
+
+    print("🎉 [PUSH] Push completed successfully")
+    return result
+
+@router.post("/test")
+def send_test_push(
+    user_id: str = "anon",
+):
+    bq = get_bq_client()
+
+    # Pull the most recent token for this user
+    query = """
+    SELECT expo_push_token
+    FROM nba_live.push_tokens
+    WHERE user_id = @user_id
+    ORDER BY created_at DESC
+    LIMIT 1
+    """
+
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter(
+                "user_id", "STRING", user_id
+            )
+        ]
     )
 
-    if not tokens:
-        return {
-            "ok": True,
-            "sent": 0,
-            "reason": "no push tokens",
-        }
+    rows = list(bq.query(query, job_config=job_config).result())
 
-    sent = 0
-    failures = 0
+    if not rows:
+        raise HTTPException(
+            status_code=404,
+            detail="No push token found for user",
+        )
 
-    # ----------------------------------
-    # 3. Send pushes + log alerts
-    # ----------------------------------
-    for row in bad_lines:
-        for t in tokens:
-            try:
-                send_push(
-                    token=t["expo_push_token"],
-                    title="⚠️ Bad Line Detected",
-                    body=(
-                        f"{row['player_name']} "
-                        f"{row['market']} {row['line_value']} "
-                        f"({row['odds']:+})"
-                    ),
-                    data={
-                        "type": "bad_line",
-                        "player_id": row["player_id"],
-                        "market": row["market"],
-                        "line_value": row["line_value"],
-                    },
-                )
+    token = rows[0]["expo_push_token"]
 
-                sent += 1
-
-                # ----------------------------------
-                # Log alert (LOGICAL DEDUPE KEY)
-                # ----------------------------------
-                bq.query(
-                    """
-                    INSERT INTO nba_live.bad_line_alert_log (
-                      player_id,
-                      player_name,
-                      market,
-                      line_value,
-                      expo_push_token
-                    )
-                    VALUES (
-                      @player_id,
-                      @player_name,
-                      @market,
-                      @line_value,
-                      @token
-                    )
-                    """,
-                    job_config=bigquery.QueryJobConfig(
-                        query_parameters=[
-                            bigquery.ScalarQueryParameter(
-                                "player_id", "INT64", row["player_id"]
-                            ),
-                            bigquery.ScalarQueryParameter(
-                                "player_name", "STRING", row["player_name"]
-                            ),
-                            bigquery.ScalarQueryParameter(
-                                "market", "STRING", row["market"]
-                            ),
-                            bigquery.ScalarQueryParameter(
-                                "line_value", "FLOAT64", row["line_value"]
-                            ),
-                            bigquery.ScalarQueryParameter(
-                                "token", "STRING", t["expo_push_token"]
-                            ),
-                        ]
-                    ),
-                )
-
-            except Exception as e:
-                print("❌ Bad line push failed:", e)
-                failures += 1
+    # 🔔 SEND TEST PUSH
+    result = send_push(
+        token=token,
+        title="🔥 Pulse Test Push",
+        body="If you can read this, push notifications are LIVE.",
+        data={
+            "type": "test",
+            "source": "pulse-backend",
+        },
+    )
 
     return {
         "ok": True,
-        "bad_lines": len(bad_lines),
-        "tokens": len(tokens),
-        "sent": sent,
-        "failures": failures,
-        "cooldown_minutes": cooldown_minutes,
+        "token": token,
+        "expo_response": result,
     }

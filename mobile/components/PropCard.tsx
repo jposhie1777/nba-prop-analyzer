@@ -285,7 +285,8 @@ export default function PropCard(props: PropCardProps) {
                     )}
                   </View>
                 )}
-
+              </View>   {/* ✅ CLOSE headerTextBlock */}
+            </View> 
 
             {/* RIGHT – BOOK + ODDS */}
             <View style={styles.headerRight}>

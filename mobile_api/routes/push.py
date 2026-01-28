@@ -2,7 +2,8 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 import requests
 from google.cloud import bigquery
-
+import json
+from typing import Optional
 from bq import get_bq_client
 
 router = APIRouter(prefix="/push", tags=["push"])
@@ -47,15 +48,11 @@ def register_push_token(body: PushRegisterBody):
 
     return {"ok": True}
 
-
-
-
-
 def send_push(
     token: str,
     title: str,
     body: str,
-    data: dict | None = None,
+    data: Optional[dict] = None,
 ):
     payload = {
         "to": token,
@@ -65,21 +62,63 @@ def send_push(
         "data": data or {},
     }
 
-    resp = requests.post(EXPO_PUSH_URL, json=payload, timeout=10)
-    resp.raise_for_status()
+    print("🚀 [PUSH] Sending Expo push")
+    print("➡️  Token:", token)
+    print("➡️  Title:", title)
+    print("➡️  Body:", body)
+    print("➡️  Data:", json.dumps(payload["data"], default=str))
 
-    result = resp.json()
+    try:
+        resp = requests.post(
+            EXPO_PUSH_URL,
+            json=payload,
+            timeout=10,
+        )
+    except Exception as e:
+        print("❌ [PUSH] Network error sending to Expo:", e)
+        raise
 
-    # 🔍 CRITICAL: log Expo response
-    print("📬 Expo push response:", result)
+    print("📡 [PUSH] Expo HTTP status:", resp.status_code)
 
-    # 🚨 Validate per-message status
+    # Hard failure (non-200)
+    if not resp.ok:
+        print("❌ [PUSH] Expo HTTP error response:")
+        print(resp.text)
+        resp.raise_for_status()
+
+    try:
+        result = resp.json()
+    except Exception as e:
+        print("❌ [PUSH] Failed to parse Expo JSON response:", e)
+        print("Raw body:", resp.text)
+        raise
+
+    # 🔍 Full Expo response
+    print("📬 [PUSH] Expo response JSON:", json.dumps(result, indent=2))
+
+    # Expo contract: {"data": [{...}, {...}]}
+    data_items = result.get("data")
+
+    if not isinstance(data_items, list):
+        raise RuntimeError(
+            f"Unexpected Expo response shape (data is not list): {result}"
+        )
+
     errors = []
-    for item in result.get("data", []):
-        if item.get("status") != "ok":
+
+    for idx, item in enumerate(data_items):
+        print(f"🔎 [PUSH] Result[{idx}]:", item)
+
+        status = item.get("status")
+
+        if status != "ok":
+            print("❌ [PUSH] Expo rejected message:", item)
             errors.append(item)
+        else:
+            print("✅ [PUSH] Expo accepted message:", item)
 
     if errors:
-        raise RuntimeError(f"Expo push rejected: {errors}")
+        raise RuntimeError(f"Expo push rejected one or more messages: {errors}")
 
+    print("🎉 [PUSH] Push completed successfully")
     return result

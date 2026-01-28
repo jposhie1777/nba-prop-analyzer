@@ -17,7 +17,7 @@ import { useDevStore } from "@/lib/dev/devStore";
 import { installFetchInterceptor } from "@/lib/dev/interceptFetch";
 import { PropBetslipDrawer } from "@/components/prop/PropBetslipDrawer";
 
-// ✅ NEW (token-change gated)
+// 🔔 Push (token-change gated)
 import { ensurePushRegistered } from "@/lib/notifications/registerForPush";
 
 /* -------------------------------------------------
@@ -58,7 +58,7 @@ export default function RootLayout() {
   const [queryClient] = useState(() => new QueryClient());
 
   /* -------------------------------
-     HYDRATE STORES
+     HYDRATE STORES ON BOOT
   -------------------------------- */
   const hydrateSavedProps = useSavedProps((s) => s.hydrate);
 
@@ -73,9 +73,10 @@ export default function RootLayout() {
   }, []);
 
   /* -------------------------------
-     PUSH REGISTRATION (SAFE)
-     - Runs once
-     - Only POSTs if token changed
+     PUSH REGISTRATION
+     - Runs once per app launch
+     - No prompt if already granted
+     - POSTs only if token changed
   -------------------------------- */
   useEffect(() => {
     ensurePushRegistered("anon").catch((err) => {

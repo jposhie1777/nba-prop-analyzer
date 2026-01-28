@@ -29,6 +29,7 @@ export type PropCardProps = {
   player: string;
   playerId?: number;
   playerImageUrl?: string;
+  badLineScore?: number;
 
   market: string;
   side?: "over" | "under" | "yes";
@@ -241,12 +242,20 @@ export default function PropCard(props: PropCardProps) {
               {imageUrl && (
                 <Image source={{ uri: imageUrl }} style={styles.headshot} />
               )}
-
+            
               <View style={styles.headerTextBlock}>
                 <Text style={styles.player}>{player}</Text>
+            
                 <Text style={styles.marketLine}>
                   {formatMarketLabel(market)} · {formatSideLabel(side)} {line}
                 </Text>
+            
+                {/* 🚨 BAD LINE BADGE */}
+                {badLineScore != null && badLineScore >= 1.0 && (
+                  <Pressable style={styles.badLineBadge}>
+                    <Text style={styles.badLineText}>⚠️ BAD LINE</Text>
+                  </Pressable>
+                )}
               </View>
             </View>
 
@@ -524,6 +533,21 @@ function makeStyles(colors: any) {
       fontWeight: "900",
       fontSize: 14,
       letterSpacing: 0.5,
+    },
+    badLineBadge: {
+      backgroundColor: "#2a1414",
+      borderColor: "#ff4d4f",
+      borderWidth: 1,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 6,
+      alignSelf: "flex-start",
+      marginTop: 4,
+    },
+    badLineText: {
+      color: "#ff4d4f",
+      fontSize: 11,
+      fontWeight: "600",
     },
   });
 }

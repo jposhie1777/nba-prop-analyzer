@@ -24,7 +24,6 @@ def get_bad_lines(
 
               home_team_abbr,
               away_team_abbr,
-              team_abbr,
               opponent_team_abbr,
 
               market,

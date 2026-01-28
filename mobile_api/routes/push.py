@@ -111,9 +111,16 @@ def send_push(
 
     data_items = result.get("data")
 
-    if not isinstance(data_items, list):
+    # --------------------------------------------------
+    # Normalize Expo response:
+    # - Single push → dict
+    # - Batch push  → list
+    # --------------------------------------------------
+    if isinstance(data_items, dict):
+        data_items = [data_items]
+    elif not isinstance(data_items, list):
         raise RuntimeError(
-            f"Unexpected Expo response shape (data is not list): {result}"
+            f"Unexpected Expo response shape: {result}"
         )
 
     errors = []
@@ -130,7 +137,9 @@ def send_push(
             print("✅ [PUSH] Expo accepted message:", item)
 
     if errors:
-        raise RuntimeError(f"Expo push rejected one or more messages: {errors}")
+        raise RuntimeError(
+            f"Expo push rejected one or more messages: {errors}"
+        )
 
     print("🎉 [PUSH] Push completed successfully")
     return result

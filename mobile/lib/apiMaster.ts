@@ -36,3 +36,39 @@ export async function fetchPlayerPropsMaster(
 
   return json.props ?? [];
 }
+
+/* ======================================================
+   BAD LINES
+====================================================== */
+export async function fetchBadLines({
+  min_score = 1.25,
+  limit = 50,
+}: {
+  min_score?: number;
+  limit?: number;
+} = {}) {
+  const params = new URLSearchParams();
+  params.set("min_score", String(min_score));
+  params.set("limit", String(limit));
+
+  const url = `${API_BASE}/bad-lines?${params.toString()}`;
+
+  console.log("📡 [BAD LINES FETCH]", url);
+
+  const res = await fetch(url, { credentials: "omit" });
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("❌ [BAD LINES FETCH FAILED]", res.status, text);
+    throw new Error(`Bad lines fetch failed ${res.status}`);
+  }
+
+  const json = await res.json();
+
+  console.log(
+    "📦 [BAD LINES FETCH] count:",
+    json?.bad_lines?.length
+  );
+
+  return json;
+}

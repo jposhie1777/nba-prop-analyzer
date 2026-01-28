@@ -32,6 +32,7 @@ from routes.live_props import router as live_props_router
 from routes.bad_line_alerts import router as bad_line_alerts_router
 from routes.push import router as push_router
 from routes.alerts_bad_lines import router as alerts_router
+from routes.bad_lines import router as bad_lines_router
 
 # ==================================================
 # 🔴 ADDITION: player box stream imports
@@ -101,6 +102,7 @@ app.include_router(live_props_router)
 app.include_router(bad_line_alerts_router)
 app.include_router(push_router)
 app.include_router(alerts_router)
+app.include_router(bad_lines_router)
 
 
 # ==================================================

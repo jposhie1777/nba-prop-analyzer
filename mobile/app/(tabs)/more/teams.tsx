@@ -1,4 +1,4 @@
-// app/(tabs)/teams.tsx
+// app/(tabs)/more/teams.tsx
 import { View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useEffect, useState } from "react";

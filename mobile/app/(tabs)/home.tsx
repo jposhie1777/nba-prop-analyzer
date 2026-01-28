@@ -173,7 +173,11 @@ export default function Home() {
         subtitle="All features"
         onPress={() => router.push("/more/explore")}
       />
-
+      <Tile
+        title="Player Season"
+        subtitle="Player Season Mega Table"
+        onPress={() => router.push("/(tabs)/more/player-season-mega")}
+      />
     </ScrollView>
   );
 }

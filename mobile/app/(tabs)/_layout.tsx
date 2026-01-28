@@ -81,7 +81,7 @@ export default function TabLayout() {
         />
 
         <Tabs.Screen
-          name="trends"
+          name="trend-chart"
           options={{
             title: "Trends",
             tabBarIcon: ({ color }) => (

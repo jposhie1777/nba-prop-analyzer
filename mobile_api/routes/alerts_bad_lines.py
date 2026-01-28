@@ -11,26 +11,28 @@ router = APIRouter(prefix="/alerts", tags=["alerts"])
 @router.post("/bad-lines/check")
 def check_bad_line_alerts(
     min_score: float = 1.25,
-    max_lines: int = 5,
-    cooldown_minutes: int = 30,
 ):
     """
-    Sends push alerts for newly detected bad lines.
+    Sends ONE batched push alert per run for newly detected bad lines.
 
-    Logical dedupe key:
+    Dedupe key:
       (player_id, market, line_key)
 
-    where:
-      line_key = CAST(line_value * 2 AS INT64)
+    Cooldown:
+      120 minutes (2 hours)
 
-    Enforces cooldown window to prevent spam.
+    Max lines per push:
+      7 (hard-coded for now)
     """
+
+    MAX_LINES = 7
+    COOLDOWN_MINUTES = 120
 
     bq = get_bq_client()
 
-    # ----------------------------------
-    # 1. Fetch NEW bad lines (DEDUPED + SAFE)
-    # ----------------------------------
+    # -------------------------------------------------
+    # 1. Fetch NEW bad lines (DEDUPED + COOLDOWN SAFE)
+    # -------------------------------------------------
     bad_lines = list(
         bq.query(
             """
@@ -82,10 +84,10 @@ def check_bad_line_alerts(
                         "min_score", "FLOAT64", min_score
                     ),
                     bigquery.ScalarQueryParameter(
-                        "max_lines", "INT64", max_lines
+                        "cooldown_minutes", "INT64", COOLDOWN_MINUTES
                     ),
                     bigquery.ScalarQueryParameter(
-                        "cooldown_minutes", "INT64", cooldown_minutes
+                        "max_lines", "INT64", MAX_LINES
                     ),
                 ]
             ),
@@ -99,9 +101,9 @@ def check_bad_line_alerts(
             "reason": "no new bad lines (deduped + cooldown)",
         }
 
-    # ----------------------------------
+    # -------------------------------------------------
     # 2. Fetch push tokens
-    # ----------------------------------
+    # -------------------------------------------------
     tokens = list(
         bq.query(
             """
@@ -119,36 +121,49 @@ def check_bad_line_alerts(
             "reason": "no push tokens",
         }
 
+    # -------------------------------------------------
+    # 3. Build batched push body (NO LENGTH CAP)
+    # -------------------------------------------------
+    lines_text = [
+        f"{row['player_name']} "
+        f"{row['market']} {row['display_line']} "
+        f"({row['odds']:+})"
+        for row in bad_lines
+    ]
+
+    body = "\n".join(lines_text)
+
+    title = f"⚠️ {len(bad_lines)} Bad Lines Detected"
+
     sent = 0
     failures = 0
 
-    # ----------------------------------
-    # 3. Send pushes + log alerts
-    # ----------------------------------
+    # -------------------------------------------------
+    # 4. Send ONE push per token
+    # -------------------------------------------------
+    for t in tokens:
+        try:
+            send_push(
+                token=t["expo_push_token"],
+                title=title,
+                body=body,
+                data={
+                    "type": "bad_line_batch",
+                    "count": len(bad_lines),
+                },
+            )
+            sent += 1
+
+        except Exception as e:
+            print("❌ Batch bad line push failed:", e)
+            failures += 1
+
+    # -------------------------------------------------
+    # 5. Log EACH line (for cooldown + dedupe)
+    # -------------------------------------------------
     for row in bad_lines:
         for t in tokens:
             try:
-                send_push(
-                    token=t["expo_push_token"],
-                    title="⚠️ Bad Line Detected",
-                    body=(
-                        f"{row['player_name']} "
-                        f"{row['market']} {row['display_line']} "
-                        f"({row['odds']:+})"
-                    ),
-                    data={
-                        "type": "bad_line",
-                        "player_id": row["player_id"],
-                        "market": row["market"],
-                        "line": row["display_line"],
-                    },
-                )
-
-                sent += 1
-
-                # ----------------------------------
-                # Log alert (INTEGER DEDUPE KEY)
-                # ----------------------------------
                 bq.query(
                     """
                     INSERT INTO nba_live.bad_line_alert_log (
@@ -191,10 +206,8 @@ def check_bad_line_alerts(
                         ]
                     ),
                 )
-
             except Exception as e:
-                print("❌ Bad line push failed:", e)
-                failures += 1
+                print("❌ Bad line log failed:", e)
 
     return {
         "ok": True,
@@ -202,5 +215,5 @@ def check_bad_line_alerts(
         "tokens": len(tokens),
         "sent": sent,
         "failures": failures,
-        "cooldown_minutes": cooldown_minutes,
+        "cooldown_minutes": COOLDOWN_MINUTES,
     }

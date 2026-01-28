@@ -17,24 +17,35 @@ def get_bad_lines(
         bq.query(
             """
             SELECT
+              prop_id,
+              game_id,
               player_id,
               player_name,
-              player_image_url,
-              game_id,
+
               home_team_abbr,
               away_team_abbr,
+              team_abbr,
+              opponent_team_abbr,
 
               market,
+              market_window,
+              odds_side,
+
               line_value,
               odds,
 
-              bad_line_score,
-              implied_edge_pct,
-              model_projection,
-              books_count,
-              sharp_book_disagreement,
+              hit_rate_l5,
+              hit_rate_l10,
+              hit_rate_l20,
 
-              updated_at
+              baseline_l10,
+              expected_stat,
+              expected_edge,
+
+              opp_allowed_rank,
+              defense_multiplier,
+
+              bad_line_score
             FROM nba_live.v_bad_line_alerts_scored
             WHERE is_bad_line = TRUE
               AND bad_line_score >= @min_score
@@ -43,8 +54,12 @@ def get_bad_lines(
             """,
             job_config=bigquery.QueryJobConfig(
                 query_parameters=[
-                    bigquery.ScalarQueryParameter("min_score", "FLOAT64", min_score),
-                    bigquery.ScalarQueryParameter("limit", "INT64", limit),
+                    bigquery.ScalarQueryParameter(
+                        "min_score", "FLOAT64", min_score
+                    ),
+                    bigquery.ScalarQueryParameter(
+                        "limit", "INT64", limit
+                    ),
                 ]
             ),
         )

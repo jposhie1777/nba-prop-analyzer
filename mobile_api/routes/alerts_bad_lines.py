@@ -18,7 +18,10 @@ def check_bad_line_alerts(
     Sends push alerts for newly detected bad lines.
 
     Logical dedupe key:
-      (player_id, market, ROUND(line_value, 1))
+      (player_id, market, line_key)
+
+    where:
+      line_key = CAST(line_value * 2 AS INT64)
 
     Enforces cooldown window to prevent spam.
     """
@@ -26,7 +29,7 @@ def check_bad_line_alerts(
     bq = get_bq_client()
 
     # ----------------------------------
-    # 1. Fetch NEW bad lines (DEDUPED + NORMALIZED)
+    # 1. Fetch NEW bad lines (DEDUPED + SAFE)
     # ----------------------------------
     bad_lines = list(
         bq.query(
@@ -34,7 +37,8 @@ def check_bad_line_alerts(
             WITH normalized AS (
               SELECT
                 bl.*,
-                ROUND(bl.line_value, 1) AS norm_line_value
+                CAST(ROUND(bl.line_value * 2) AS INT64) AS line_key,
+                ROUND(bl.line_value, 1) AS display_line
               FROM nba_live.v_bad_line_alerts_scored bl
               WHERE bl.is_bad_line = TRUE
                 AND bl.bad_line_score >= @min_score
@@ -47,7 +51,7 @@ def check_bad_line_alerts(
                   PARTITION BY
                     n.player_id,
                     n.market,
-                    n.norm_line_value
+                    n.line_key
                   ORDER BY n.bad_line_score DESC
                 ) AS rn
               FROM normalized n
@@ -57,7 +61,7 @@ def check_bad_line_alerts(
                 WHERE
                   l.player_id = n.player_id
                   AND l.market = n.market
-                  AND l.line_value = n.norm_line_value
+                  AND l.line_key = n.line_key
                   AND l.alerted_at >
                     TIMESTAMP_SUB(
                       CURRENT_TIMESTAMP(),
@@ -129,21 +133,21 @@ def check_bad_line_alerts(
                     title="⚠️ Bad Line Detected",
                     body=(
                         f"{row['player_name']} "
-                        f"{row['market']} {row['norm_line_value']} "
+                        f"{row['market']} {row['display_line']} "
                         f"({row['odds']:+})"
                     ),
                     data={
                         "type": "bad_line",
                         "player_id": row["player_id"],
                         "market": row["market"],
-                        "line_value": row["norm_line_value"],
+                        "line": row["display_line"],
                     },
                 )
 
                 sent += 1
 
                 # ----------------------------------
-                # Log alert (NORMALIZED DEDUPE KEY)
+                # Log alert (INTEGER DEDUPE KEY)
                 # ----------------------------------
                 bq.query(
                     """
@@ -152,6 +156,7 @@ def check_bad_line_alerts(
                       player_name,
                       market,
                       line_value,
+                      line_key,
                       expo_push_token
                     )
                     VALUES (
@@ -159,6 +164,7 @@ def check_bad_line_alerts(
                       @player_name,
                       @market,
                       @line_value,
+                      @line_key,
                       @token
                     )
                     """,
@@ -174,7 +180,10 @@ def check_bad_line_alerts(
                                 "market", "STRING", row["market"]
                             ),
                             bigquery.ScalarQueryParameter(
-                                "line_value", "FLOAT64", row["norm_line_value"]
+                                "line_value", "FLOAT64", row["display_line"]
+                            ),
+                            bigquery.ScalarQueryParameter(
+                                "line_key", "INT64", row["line_key"]
                             ),
                             bigquery.ScalarQueryParameter(
                                 "token", "STRING", t["expo_push_token"]

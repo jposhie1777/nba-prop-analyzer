@@ -1,21 +1,25 @@
 {
+  "framework": null,
   "buildCommand": "npx expo export --platform web",
   "outputDirectory": "dist",
-  "rewrites": [
+  "routes": [
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
-  ],
-  "headers": [
+      "src": "/_expo/(.*)",
+      "dest": "/_expo/$1",
+      "headers": {
+        "Content-Type": "application/javascript"
+      }
+    },
     {
-      "source": "/(.*)\\.js",
-      "headers": [
-        {
-          "key": "Content-Type",
-          "value": "text/javascript"
-        }
-      ]
+      "src": "/(.*)\\.(js|css|map|json|png|jpg|svg|ico|woff2?)",
+      "dest": "/$1"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 }

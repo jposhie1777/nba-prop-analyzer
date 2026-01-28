@@ -33,9 +33,6 @@ export function LiveDataBridge() {
 
     const snap = buildLiveSnapshot({ players, games });
 
-    console.log("🧪 LIVE SNAPSHOT BUILT", snap);
-    console.log("🧪 SNAPSHOT KEYS", Object.keys(snap ?? {}));
-
     return snap;
   }, [players, games]);
 

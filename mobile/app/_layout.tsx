@@ -18,7 +18,7 @@ import { installFetchInterceptor } from "@/lib/dev/interceptFetch";
 import { PropBetslipDrawer } from "@/components/prop/PropBetslipDrawer";
 
 // ✅ NEW (token-change gated)
-import { ensurePushRegistered } from "@/lib/notifications/ensurePushRegistered";
+import { ensurePushRegistered } from "@/lib/notifications/registerForPush";
 
 /* -------------------------------------------------
    Expo Router settings

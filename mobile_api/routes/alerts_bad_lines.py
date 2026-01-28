@@ -24,14 +24,15 @@ def check_bad_line_alerts(
             SELECT *
             FROM nba_live.v_bad_line_alerts_scored bl
             WHERE bl.is_bad_line = TRUE
-              AND bl.bad_line_score >= @min_score
-              AND NOT EXISTS (
+            AND bl.bad_line_score >= @min_score
+            AND NOT EXISTS (
                 SELECT 1
                 FROM nba_live.bad_line_alert_log l
-                WHERE l.prop_id = bl.prop_id
-              )
+                WHERE CAST(l.prop_id AS STRING) = CAST(bl.prop_id AS STRING)
+            )
             ORDER BY bl.bad_line_score DESC
             LIMIT @max_lines
+
             """,
             job_config=bigquery.QueryJobConfig(
                 query_parameters=[

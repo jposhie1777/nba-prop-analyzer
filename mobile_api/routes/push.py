@@ -65,11 +65,21 @@ def send_push(
         "data": data or {},
     }
 
-    resp = requests.post(EXPO_PUSH_URL, json=payload, timeout=5)
+    resp = requests.post(EXPO_PUSH_URL, json=payload, timeout=10)
+    resp.raise_for_status()
 
-    if resp.status_code != 200:
-        raise RuntimeError(
-            f"Expo push failed: {resp.status_code} {resp.text}"
-        )
+    result = resp.json()
 
-    return resp.json()
+    # 🔍 CRITICAL: log Expo response
+    print("📬 Expo push response:", result)
+
+    # 🚨 Validate per-message status
+    errors = []
+    for item in result.get("data", []):
+        if item.get("status") != "ok":
+            errors.append(item)
+
+    if errors:
+        raise RuntimeError(f"Expo push rejected: {errors}")
+
+    return result

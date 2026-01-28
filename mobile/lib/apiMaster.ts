@@ -31,8 +31,5 @@ export async function fetchPlayerPropsMaster(
 
   const json = await res.json();
 
-  console.log("📦 [MASTER FETCH] count:", json?.props?.length);
-  console.log("🧪 [MASTER FETCH] sample:", json?.props?.[0]);
-
   return json.props ?? [];
 }

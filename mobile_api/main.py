@@ -244,4 +244,3 @@ def get_props(
         "count": len(props),
         "props": props,
     }
-

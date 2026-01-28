@@ -24,15 +24,6 @@ const config: ExpoConfig = {
     },
   },
 
-  /* ============================
-     EXPO EXPERIMENTS
-     (CRITICAL FIX)
-  ============================ */
-  expo: {
-    experiments: {
-      webStaticRendering: false,
-    },
-  },
 
   /* ============================
      ROUTER

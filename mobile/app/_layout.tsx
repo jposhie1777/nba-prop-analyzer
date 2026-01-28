@@ -15,9 +15,10 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useSavedProps } from "@/store/useSavedProps";
 import { useDevStore } from "@/lib/dev/devStore";
 import { installFetchInterceptor } from "@/lib/dev/interceptFetch";
-
-// ✅ ADD THIS
 import { PropBetslipDrawer } from "@/components/prop/PropBetslipDrawer";
+
+import { registerForPushNotifications } from "@/lib/notifications/registerForPush";
+import { API_BASE } from "@/lib/apiMaster";
 
 /* -------------------------------------------------
    Expo Router settings
@@ -56,36 +57,62 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [queryClient] = useState(() => new QueryClient());
 
-  // Hydrate saved props on boot
+  /* -------------------------------
+     HYDRATE STORES ON BOOT
+  -------------------------------- */
   const hydrateSavedProps = useSavedProps((s) => s.hydrate);
 
   useEffect(() => {
     hydrateSavedProps();
   }, [hydrateSavedProps]);
 
-  // Hydrate dev flags
   useEffect(() => {
     if (__DEV__) {
       useDevStore.getState().actions.hydrateFlags();
     }
   }, []);
 
+  /* -------------------------------
+     REGISTER PUSH NOTIFICATIONS
+     (RUNS ONCE PER APP LAUNCH)
+  -------------------------------- */
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await registerForPushNotifications();
+        if (!token) return;
+
+        await fetch(`${API_BASE}/push/register`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            expo_push_token: token,
+            user_id: "anon", // replace when auth exists
+          }),
+        });
+      } catch (err) {
+        console.warn("Push registration failed", err);
+      }
+    })();
+  }, []);
+
+  /* -------------------------------
+     RENDER
+  -------------------------------- */
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider
           value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
         >
-          {/* -------------------------------
-              APP NAVIGATION
-          -------------------------------- */}
+          {/* APP NAVIGATION */}
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(tabs)" />
           </Stack>
 
-          {/* -------------------------------
-              GLOBAL OVERLAYS
-          -------------------------------- */}
+          {/* GLOBAL OVERLAYS */}
           <PropBetslipDrawer />
 
           <StatusBar style="auto" />

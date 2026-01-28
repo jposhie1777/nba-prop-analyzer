@@ -63,4 +63,4 @@ export async function ensurePushRegistered(userId: string) {
     // ❗ Never crash app boot because of push
     console.warn("📵 Push registration failed:", err);
   }
-}}
+}

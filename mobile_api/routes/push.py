@@ -1,5 +1,5 @@
 # push.py
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 import requests
 from google.cloud import bigquery
@@ -134,3 +134,53 @@ def send_push(
 
     print("🎉 [PUSH] Push completed successfully")
     return result
+
+@router.post("/test")
+def send_test_push(
+    user_id: str = "anon",
+):
+    bq = get_bq_client()
+
+    # Pull the most recent token for this user
+    query = """
+    SELECT expo_push_token
+    FROM nba_live.push_tokens
+    WHERE user_id = @user_id
+    ORDER BY created_at DESC
+    LIMIT 1
+    """
+
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter(
+                "user_id", "STRING", user_id
+            )
+        ]
+    )
+
+    rows = list(bq.query(query, job_config=job_config).result())
+
+    if not rows:
+        raise HTTPException(
+            status_code=404,
+            detail="No push token found for user",
+        )
+
+    token = rows[0]["expo_push_token"]
+
+    # 🔔 SEND TEST PUSH
+    result = send_push(
+        token=token,
+        title="🔥 Pulse Test Push",
+        body="If you can read this, push notifications are LIVE.",
+        data={
+            "type": "test",
+            "source": "pulse-backend",
+        },
+    )
+
+    return {
+        "ok": True,
+        "token": token,
+        "expo_response": result,
+    }

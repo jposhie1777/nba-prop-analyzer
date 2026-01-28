@@ -1,6 +1,9 @@
 // mobile/lib/apiMaster.ts
 import { API_BASE } from "./config";
 
+/* 🔑 RE-EXPORT so other modules can import it */
+export { API_BASE };
+
 type FetchArgs = {
   limit?: number;
   offset?: number;

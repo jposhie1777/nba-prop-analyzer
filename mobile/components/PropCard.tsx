@@ -252,9 +252,9 @@ export default function PropCard(props: PropCardProps) {
                   {formatMarketLabel(market)} · {formatSideLabel(side)} {line}
                 </Text>
             
-                {/* 🚨 BAD LINE BADGE */}
+                {/* 🚨 BAD LINE BADGE + TOOLTIP */}
                 {typeof badLineScore === "number" && badLineScore >= 1.0 && (
-                  <View>
+                  <View style={styles.badLineContainer}>
                     <Pressable
                       style={styles.badLineBadge}
                       onPress={() => setShowBadLineInfo((v) => !v)}
@@ -276,8 +276,8 @@ export default function PropCard(props: PropCardProps) {
                         </Text>
                 
                         <Pressable
-                          onPress={() => setShowBadLineInfo(false)}
                           style={styles.tooltipClose}
+                          onPress={() => setShowBadLineInfo(false)}
                         >
                           <Text style={styles.tooltipCloseText}>Dismiss</Text>
                         </Pressable>

@@ -115,6 +115,7 @@ export default function PropCard(props: PropCardProps) {
     bookmaker,
     books,
     saved,
+    badLineScore,
     onToggleSave,
     onSwipeSave,
     expanded,

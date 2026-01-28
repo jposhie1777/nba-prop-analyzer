@@ -16,7 +16,7 @@ def check_bad_line_alerts(
     bq = get_bq_client()
 
     # -------------------------------------------------
-    # 1. Fetch NEW bad lines (deduped + filtered)
+    # 1. Fetch NEW bad lines (deduped correctly)
     # -------------------------------------------------
     bad_lines = list(
         bq.query(
@@ -32,7 +32,6 @@ def check_bad_line_alerts(
               WHERE bl.is_bad_line = TRUE
                 AND bl.bad_line_score >= @min_score
                 AND bl.odds BETWEEN -150 AND 300
-                AND LOWER(bl.book) IN ('draftkings', 'fanduel')
                 AND NOT EXISTS (
                   SELECT 1
                   FROM nba_live.bad_line_alert_log l
@@ -93,7 +92,6 @@ def check_bad_line_alerts(
                         "player_id": row["player_id"],
                         "market": row["market"],
                         "line_value": row["line_value"],
-                        "book": row["book"],
                         "odds": row["odds"],
                         "score": row["bad_line_score"],
                     },
@@ -111,7 +109,6 @@ def check_bad_line_alerts(
                         market,
                         line_value,
                         prop_id,
-                        book,
                         expo_push_token
                     )
                     VALUES (
@@ -119,7 +116,6 @@ def check_bad_line_alerts(
                         @market,
                         @line_value,
                         @prop_id,
-                        @book,
                         @token
                     )
                     """,
@@ -136,9 +132,6 @@ def check_bad_line_alerts(
                             ),
                             bigquery.ScalarQueryParameter(
                                 "prop_id", "STRING", row["prop_id"]
-                            ),
-                            bigquery.ScalarQueryParameter(
-                                "book", "STRING", row["book"]
                             ),
                             bigquery.ScalarQueryParameter(
                                 "token", "STRING", t["expo_push_token"]

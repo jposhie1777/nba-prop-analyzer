@@ -1,9 +1,9 @@
+// components/bad-lines/BadLineCard.tsx
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
-  Image,
 } from "react-native";
 import { useMemo } from "react";
 
@@ -13,21 +13,36 @@ import { useTheme } from "@/store/useTheme";
    TYPES
 ====================================================== */
 export type BadLine = {
+  prop_id: number;
+  game_id: number;
+
   player_id: number;
   player_name: string;
-  player_image_url?: string;
 
   home_team_abbr: string;
   away_team_abbr: string;
 
   market: string;
+  market_window: string;
+  odds_side: string;
+
   line_value: number;
   odds: number;
 
+  hit_rate_l5?: number;
+  hit_rate_l10?: number;
+  hit_rate_l20?: number;
+
+  baseline_l10?: number;
+  expected_stat?: number;     // ← model projection
+  expected_edge?: number;     // ← edge vs line (fraction)
+
+  opp_allowed_rank?: number;
+  defense_multiplier?: number;
+
   bad_line_score: number;
-  implied_edge_pct?: number;
-  model_projection?: number;
 };
+
 
 type Props = {
   line: BadLine;
@@ -52,13 +67,6 @@ export default function BadLineCard({ line }: Props) {
     <View style={[styles.card, styles[severity]]}>
       {/* HEADER */}
       <View style={styles.header}>
-        {line.player_image_url && (
-          <Image
-            source={{ uri: line.player_image_url }}
-            style={styles.avatar}
-          />
-        )}
-
         <View style={styles.headerText}>
           <Text style={styles.player} numberOfLines={1}>
             {line.player_name}
@@ -84,16 +92,25 @@ export default function BadLineCard({ line }: Props) {
 
       {/* EXPLANATION */}
       <View style={styles.explain}>
-        {line.model_projection != null && (
+        {line.expected_stat != null && (
           <Text style={styles.explainText}>
-            Model: {line.model_projection.toFixed(1)}
+            Model: {line.expected_stat.toFixed(1)}
           </Text>
         )}
-        {line.implied_edge_pct != null && (
+
+        {line.expected_edge != null && (
           <Text style={styles.explainText}>
-            Edge: +{line.implied_edge_pct.toFixed(1)}%
+            Edge: +{(line.expected_edge * 100).toFixed(1)}%
           </Text>
         )}
+
+        {line.hit_rate_l10 != null && (
+          <Text style={styles.explainText}>
+            L10 hit: {(line.hit_rate_l10 * 100).toFixed(0)}%
+          </Text>
+        )}
+
+
         <Text style={styles.score}>
           Score: {line.bad_line_score.toFixed(2)}
         </Text>

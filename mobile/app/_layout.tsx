@@ -1,22 +1,62 @@
 // app/_layout.tsx
-// app/_layout.tsx
-import { View, Text } from "react-native";
+import { useEffect, useState } from "react";
+import { Platform } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import {
+  DarkTheme,
+  DefaultTheme,
+  ThemeProvider,
+} from "@react-navigation/native";
+import { Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useSavedProps } from "@/store/useSavedProps";
+import { useDevStore } from "@/lib/dev/devStore";
+import { PropBetslipDrawer } from "@/components/prop/PropBetslipDrawer";
+import { ensurePushRegistered } from "@/lib/notifications/registerForPush";
+
+export const unstable_settings = {
+  anchor: "(tabs)",
+};
 
 export default function RootLayout() {
-  console.log("🚨 ROOT LAYOUT OVERRIDE RENDER");
+  const colorScheme = useColorScheme();
+  const [queryClient] = useState(() => new QueryClient());
+
+  const hydrateSavedProps = useSavedProps((s) => s.hydrate);
+
+  useEffect(() => {
+    hydrateSavedProps();
+  }, [hydrateSavedProps]);
+
+  useEffect(() => {
+    if (__DEV__) {
+      useDevStore.getState().actions.hydrateFlags();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") {
+      ensurePushRegistered("anon").catch(() => {});
+    }
+  }, []);
 
   return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: "red",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <Text style={{ color: "white", fontSize: 24 }}>
-        ROOT LAYOUT OK
-      </Text>
-    </View>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider
+          value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
+        >
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(tabs)" />
+          </Stack>
+
+          <PropBetslipDrawer />
+          <StatusBar style="auto" />
+        </ThemeProvider>
+      </QueryClientProvider>
+    </GestureHandlerRootView>
   );
 }

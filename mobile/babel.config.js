@@ -1,10 +1,11 @@
 module.exports = function (api) {
-  api.cache(true);
+  api.cache.forever(); // Changed from api.cache(true)
+  
   return {
     presets: ["babel-preset-expo"],
     plugins: [
-      "expo-router/babel",          // 👈 REQUIRED
-      "react-native-reanimated/plugin", // 👈 MUST BE LAST
+      "expo-router/babel",
+      "react-native-reanimated/plugin",
     ],
   };
 };

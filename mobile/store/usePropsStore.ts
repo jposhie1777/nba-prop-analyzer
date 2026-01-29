@@ -1,3 +1,4 @@
+// mobile/store/usePropsStore.ts
 import { create } from "zustand";
 import { MobileProp } from "@/lib/api";
 

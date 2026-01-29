@@ -1,16 +1,10 @@
-import { TrendChartScreen } from "@/trend/TrendChartScreen";
-import { useLocalSearchParams } from "expo-router";
+// app/(tabs)/more/trend-chart.tsx
+import { View, Text } from "react-native";
 
-export default function TrendTab() {
-  const params = useLocalSearchParams<{
-    player?: string;
-    market?: string;
-  }>();
-
+export default function TrendChart() {
   return (
-    <TrendChartScreen
-      initialPlayer={params.player}
-      initialMarket={params.market}
-    />
+    <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+      <Text>Trend Chart OK</Text>
+    </View>
   );
 }

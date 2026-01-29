@@ -1,5 +1,3 @@
-Pasting for reference 
-
 // app/_layout.tsx
 import "react-native-reanimated";
 import { useEffect, useState } from "react";

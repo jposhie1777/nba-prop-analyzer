@@ -51,9 +51,11 @@
     "zustand": "^5.0.9"
   },
   "devDependencies": {
-    "typescript": "~5.9.2",
+    "@expo/cli": "^54.0.22",
     "@types/react": "~19.1.0",
     "eslint": "^9.25.0",
-    "eslint-config-expo": "~10.0.0"
+    "eslint-config-expo": "~10.0.0",
+    "react-native-svg-transformer": "^1.5.3",
+    "typescript": "~5.9.2"
   }
 }

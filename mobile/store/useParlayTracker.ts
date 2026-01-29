@@ -1,34 +1,26 @@
 // store/useParlayTracker.ts
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { createSafeStorage } from "@/lib/zustandStorage";
 
 /* ======================================================
    TYPES
 ====================================================== */
 
-/**
- * Canonical market keys only
- * MUST match live stat fields
- */
 export type StatMarket = "pts" | "reb" | "ast" | "fg3m";
 
 export type TrackedParlayLeg = {
   leg_id: string;
 
-  /* ---------- Identity ---------- */
   player_id: number;
   player_name: string;
 
-  /* ---------- Bet Definition ---------- */
   market: StatMarket;
   side: "over" | "under";
   line: number;
   odds: number;
 
-  /* ---------- Live Runtime ---------- */
   current?: number;
-
   period?: number | null;
   clock?: string | null;
   game_status?: "pregame" | "live" | "final";
@@ -49,10 +41,6 @@ export type TrackedParlaySnapshot = {
   payout: number | null;
 };
 
-/* ======================================================
-   LIVE SNAPSHOT (RUNTIME ONLY)
-====================================================== */
-
 export type LiveSnapshotByPlayerId = Record<
   number,
   {
@@ -67,10 +55,6 @@ export type LiveSnapshotByPlayerId = Record<
     game_status?: "pregame" | "live" | "final";
   }
 >;
-
-/* ======================================================
-   STORE STATE
-====================================================== */
 
 type State = {
   tracked: Record<string, TrackedParlaySnapshot>;
@@ -89,7 +73,7 @@ type State = {
 };
 
 /* ======================================================
-   STORE (PERSISTED)
+   STORE (WEB + NATIVE SAFE)
 ====================================================== */
 
 export const useParlayTracker = create<State>()(
@@ -97,7 +81,6 @@ export const useParlayTracker = create<State>()(
     (set, get) => ({
       tracked: {},
 
-      /* ---------- Add / Replace Parlay ---------- */
       track: (snapshot) =>
         set((state) => ({
           tracked: {
@@ -112,7 +95,6 @@ export const useParlayTracker = create<State>()(
           },
         })),
 
-      /* ---------- Remove Single Parlay ---------- */
       untrack: (parlay_id) =>
         set((state) => {
           const next = { ...state.tracked };
@@ -120,10 +102,8 @@ export const useParlayTracker = create<State>()(
           return { tracked: next };
         }),
 
-      /* ---------- Remove All Parlays ---------- */
       clearAll: () => set({ tracked: {} }),
 
-      /* ---------- Lookup ---------- */
       isTracked: (parlay_id) =>
         Boolean(get().tracked[parlay_id]),
 
@@ -131,12 +111,6 @@ export const useParlayTracker = create<State>()(
          LIVE ENRICHMENT
       ====================================================== */
       applyLiveSnapshot: (snapshotByPlayerId) => {
-        console.log(
-          "🟢 APPLY LIVE SNAPSHOT",
-          Object.keys(snapshotByPlayerId).length,
-          "players"
-        );
-
         set((state) => ({
           tracked: Object.fromEntries(
             Object.entries(state.tracked).map(([parlayId, parlay]) => [
@@ -148,7 +122,6 @@ export const useParlayTracker = create<State>()(
                     snapshotByPlayerId[Number(leg.player_id)];
                   if (!live) return leg;
 
-                  /* ---------- Current stat ---------- */
                   const current =
                     leg.market === "pts" ? live.pts :
                     leg.market === "reb" ? live.reb :
@@ -156,13 +129,11 @@ export const useParlayTracker = create<State>()(
                     leg.market === "fg3m" ? live.fg3m :
                     undefined;
 
-                  /* ---------- Game status ---------- */
                   const gameStatus =
                     live.game_status ??
                     leg.game_status ??
                     "live";
 
-                  /* ---------- Resolve status ---------- */
                   let status = leg.status ?? "pending";
 
                   if (current != null && gameStatus !== "final") {
@@ -193,7 +164,7 @@ export const useParlayTracker = create<State>()(
 
                   return {
                     ...leg,
-                    current: current ?? leg.current,
+                    current,
                     period: live.period ?? leg.period,
                     clock: live.clock ?? leg.clock,
                     game_status: gameStatus,
@@ -207,26 +178,20 @@ export const useParlayTracker = create<State>()(
         }));
       },
 
-      /* ======================================================
-         CLEANUP FINALIZED PARLAYS
-      ====================================================== */
       cleanupExpired: () =>
-        set((state) => {
-          const next = Object.fromEntries(
+        set((state) => ({
+          tracked: Object.fromEntries(
             Object.entries(state.tracked).filter(
               ([_, parlay]) =>
-                // keep parlays with at least one non-final leg
                 parlay.legs.some((leg) => !leg.isFinal)
             )
-          );
-
-          return { tracked: next };
-        }),
+          ),
+        })),
     }),
     {
       name: "pulse-tracked-parlays",
       version: 2,
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(createSafeStorage),
     }
   )
 );

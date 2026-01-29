@@ -1,8 +1,14 @@
 // app/_layout.tsx
-import "react-native-reanimated";
+// Conditionally import reanimated - only on native platforms
+import { Platform } from "react-native";
+if (Platform.OS !== 'web') {
+  require("react-native-reanimated");
+}
+
 import { useEffect, useState } from "react";
-import { Platform, View, Text } from "react-native";
+import { View, Text } from "react-native"; // ← Remove Platform from here!
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+
 import {
   DarkTheme,
   DefaultTheme,

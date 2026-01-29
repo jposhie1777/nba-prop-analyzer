@@ -6,43 +6,23 @@ const config: ExpoConfig = {
   slug: "pulse",
   scheme: "pulse",
 
-  /* ============================
-     ANDROID
-  ============================ */
   android: {
     package: "com.anonymous.pulse",
   },
 
-  /* ============================
-     WEB (IMPORTANT)
-  ============================ */
   web: {
-    bundler: "metro",
+    bundler: "metro",  // Keep metro for SDK 54
     output: "static",
-    experimental: {
-      type: "module",
-    },
   },
 
-
-  /* ============================
-     ROUTER
-  ============================ */
   plugins: ["expo-router"],
 
-  /* ============================
-     TYPE SAFETY
-  ============================ */
   experiments: {
     typedRoutes: true,
   },
 
-  /* ============================
-     ENV / EAS
-  ============================ */
   extra: {
-    API_URL:
-      "https://pulse-mobile-api-763243624328.us-central1.run.app",
+    API_URL: "https://pulse-mobile-api-763243624328.us-central1.run.app",
     eas: {
       projectId: "f7f03566-58a4-46dd-acfb-93291bc04752",
     },

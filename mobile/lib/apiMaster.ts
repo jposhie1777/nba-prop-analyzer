@@ -19,8 +19,8 @@ export async function fetchPlayerPropsMaster(
 
   const url =
     params.toString().length > 0
-      ? `${API_BASE}/props?${params.toString()}`
-      : `${API_BASE}/props`;
+      ? `${API_BASE}/props/player/master?${params.toString()}`
+      : `${API_BASE}/props/player/master`;
 
   console.log("📡 [MASTER FETCH]", url);
 

@@ -129,10 +129,9 @@ function makeStyles(colors: any) {
   return StyleSheet.create({
     root: {
       flex: 1,
-      backgroundColor: colors.background,
+      backgroundColor: colors.surface.screen,
     },
 
-    /* ---------- HEADER ---------- */
     header: {
       paddingHorizontal: 16,
       paddingTop: 12,
@@ -142,16 +141,15 @@ function makeStyles(colors: any) {
     title: {
       fontSize: 22,
       fontWeight: "700",
-      color: colors.text,
+      color: colors.text.primary,
     },
 
     subtitle: {
       marginTop: 4,
       fontSize: 13,
-      color: colors.subtleText,
+      color: colors.text.muted,
     },
 
-    /* ---------- FILTERS ---------- */
     filters: {
       flexDirection: "row",
       paddingHorizontal: 12,
@@ -163,7 +161,7 @@ function makeStyles(colors: any) {
       paddingVertical: 6,
       paddingHorizontal: 12,
       borderRadius: 16,
-      backgroundColor: colors.surface,
+      backgroundColor: colors.surface.cardSoft,
     },
 
     filterPillActive: {
@@ -173,19 +171,17 @@ function makeStyles(colors: any) {
     filterText: {
       fontSize: 12,
       fontWeight: "600",
-      color: colors.text,
+      color: colors.text.primary,
     },
 
     filterTextActive: {
-      color: colors.onAccent ?? "#fff",
+      color: colors.text.inverse,
     },
 
-    /* ---------- LIST ---------- */
     listContent: {
       paddingBottom: 24,
     },
 
-    /* ---------- EMPTY ---------- */
     empty: {
       flex: 1,
       alignItems: "center",
@@ -196,13 +192,13 @@ function makeStyles(colors: any) {
     emptyTitle: {
       fontSize: 16,
       fontWeight: "600",
-      color: colors.text,
+      color: colors.text.primary,
       marginBottom: 6,
     },
 
     emptySubtitle: {
       fontSize: 13,
-      color: colors.subtleText,
+      color: colors.text.muted,
       textAlign: "center",
     },
   });

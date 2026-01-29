@@ -78,6 +78,14 @@ export default function TabLayout() {
         />
 
         <Tabs.Screen
+          name="ladders"
+          options={{
+            title: "Ladders",
+            headerTitle: "Ladders",
+          }}
+        />
+
+        <Tabs.Screen
           name="trend-chart"
           options={{
             title: "Trends",

@@ -1,8 +1,16 @@
-// hooks/usePlayerSeasonMega
+// hooks/usePlayerSeasonMega.ts
 import { useEffect, useState, useCallback } from "react";
-import Constants from "expo-constants";
 
-const API = Constants.expoConfig?.extra?.API_URL!;
+/* ======================================================
+   CONFIG (WEB + NATIVE SAFE)
+====================================================== */
+
+// 🔑 Build-time injected by Expo
+const API = process.env.EXPO_PUBLIC_API_URL!;
+
+/* ======================================================
+   TYPES
+====================================================== */
 
 export type PlayerSeasonMegaRow = {
   player_id: number;
@@ -22,6 +30,10 @@ type Result = {
   error: string | null;
   refetch: () => void;
 };
+
+/* ======================================================
+   HOOK
+====================================================== */
 
 export function usePlayerSeasonMega(
   opts?: {
@@ -45,11 +57,13 @@ export function usePlayerSeasonMega(
 
     try {
       const res = await fetch(
-        `${API}/players/season-mega?limit=${limit}`
+        `${API}/players/season-mega?limit=${limit}`,
+        { credentials: "omit" }
       );
 
       if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        throw new Error(text || `HTTP ${res.status}`);
       }
 
       const json = await res.json();
@@ -58,7 +72,7 @@ export function usePlayerSeasonMega(
       setCount(json.count ?? 0);
     } catch (err: any) {
       console.error("[usePlayerSeasonMega] failed", err);
-      setError(err.message ?? "Unknown error");
+      setError(err?.message ?? "Unknown error");
     } finally {
       setLoading(false);
     }

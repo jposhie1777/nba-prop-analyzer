@@ -135,12 +135,13 @@ export default function BadLineCard({ line }: Props) {
 function makeStyles(colors: any) {
   return StyleSheet.create({
     card: {
-      backgroundColor: colors.card,
+      backgroundColor: colors.surface.card,
       borderRadius: 14,
       padding: 12,
       marginHorizontal: 12,
       marginVertical: 6,
       borderWidth: 1,
+      borderColor: colors.border.subtle,
     },
 
     high: {
@@ -150,21 +151,13 @@ function makeStyles(colors: any) {
       borderColor: colors.accent.warning,
     },
     low: {
-      borderColor: colors.border,
+      borderColor: colors.border.subtle,
     },
 
     header: {
       flexDirection: "row",
       alignItems: "center",
       marginBottom: 8,
-    },
-
-    avatar: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      marginRight: 10,
-      backgroundColor: colors.muted,
     },
 
     headerText: {
@@ -174,12 +167,12 @@ function makeStyles(colors: any) {
     player: {
       fontSize: 15,
       fontWeight: "600",
-      color: colors.text,
+      color: colors.text.primary,
     },
 
     matchup: {
       fontSize: 12,
-      color: colors.subtleText,
+      color: colors.text.muted,
       marginTop: 2,
     },
 
@@ -192,16 +185,16 @@ function makeStyles(colors: any) {
     market: {
       fontSize: 13,
       fontWeight: "600",
-      color: colors.text,
+      color: colors.text.primary,
     },
 
     line: {
       fontSize: 13,
-      color: colors.text,
+      color: colors.text.primary,
     },
 
     odds: {
-      color: colors.subtleText,
+      color: colors.text.muted,
     },
 
     explain: {
@@ -210,7 +203,7 @@ function makeStyles(colors: any) {
 
     explainText: {
       fontSize: 12,
-      color: colors.subtleText,
+      color: colors.text.muted,
     },
 
     score: {
@@ -230,13 +223,13 @@ function makeStyles(colors: any) {
       paddingVertical: 6,
       paddingHorizontal: 12,
       borderRadius: 10,
-      backgroundColor: colors.surface,
+      backgroundColor: colors.surface.cardSoft,
     },
 
     actionText: {
       fontSize: 12,
       fontWeight: "600",
-      color: colors.text,
+      color: colors.text.primary,
     },
   });
 }

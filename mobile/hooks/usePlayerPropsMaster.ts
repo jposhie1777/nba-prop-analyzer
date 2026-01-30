@@ -1,6 +1,7 @@
 // hooks/usePlayerPropsMaster.ts
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { fetchPlayerPropsMaster } from "@/lib/apiMaster";
+import { TEAM_LOGOS } from "@/utils/teamLogos";
 
 export type HitRateWindow = "L5" | "L10" | "L20";
 
@@ -13,11 +14,91 @@ type Filters = {
   maxOdds: number;
 };
 
-
 type FetchArgs = {
   limit?: number;
   offset?: number;
 };
+
+const TEAM_ABBRS = new Set(Object.keys(TEAM_LOGOS));
+
+const TEAM_NAME_TO_ABBR: Record<string, string> = {
+  "atlanta hawks": "ATL",
+  "boston celtics": "BOS",
+  "brooklyn nets": "BKN",
+  "charlotte hornets": "CHA",
+  "chicago bulls": "CHI",
+  "cleveland cavaliers": "CLE",
+  "dallas mavericks": "DAL",
+  "denver nuggets": "DEN",
+  "detroit pistons": "DET",
+  "golden state warriors": "GSW",
+  "houston rockets": "HOU",
+  "indiana pacers": "IND",
+  "la clippers": "LAC",
+  "los angeles clippers": "LAC",
+  "la lakers": "LAL",
+  "los angeles lakers": "LAL",
+  "memphis grizzlies": "MEM",
+  "miami heat": "MIA",
+  "milwaukee bucks": "MIL",
+  "minnesota timberwolves": "MIN",
+  "new orleans pelicans": "NOP",
+  "new york knicks": "NYK",
+  "oklahoma city thunder": "OKC",
+  "orlando magic": "ORL",
+  "philadelphia 76ers": "PHI",
+  "philadelphia sixers": "PHI",
+  "phoenix suns": "PHX",
+  "portland trail blazers": "POR",
+  "sacramento kings": "SAC",
+  "san antonio spurs": "SAS",
+  "toronto raptors": "TOR",
+  "utah jazz": "UTA",
+  "washington wizards": "WAS",
+};
+
+function normalizeTeamAbbr(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  const upper = trimmed.toUpperCase();
+  if (TEAM_ABBRS.has(upper)) return upper;
+
+  const normalizedName = trimmed
+    .toLowerCase()
+    .replace(/\./g, "")
+    .replace(/\s+/g, " ");
+
+  return TEAM_NAME_TO_ABBR[normalizedName];
+}
+
+function parseMatchup(matchup: unknown): {
+  home?: string;
+  away?: string;
+} {
+  if (typeof matchup !== "string") return {};
+  const normalized = matchup.trim();
+  if (!normalized) return {};
+
+  if (normalized.includes("@")) {
+    const [awayRaw, homeRaw] = normalized.split("@");
+    return {
+      away: normalizeTeamAbbr(awayRaw),
+      home: normalizeTeamAbbr(homeRaw),
+    };
+  }
+
+  const vsParts = normalized.split(/\s+vs\.?\s+/i);
+  if (vsParts.length === 2) {
+    return {
+      home: normalizeTeamAbbr(vsParts[0]),
+      away: normalizeTeamAbbr(vsParts[1]),
+    };
+  }
+
+  return {};
+}
 
 /* ======================================================
    DEFAULT FILTERS
@@ -30,7 +111,6 @@ const DEFAULT_FILTERS: Filters = {
   minOdds: -750,
   maxOdds: 500,
 };
-
 
 /* ======================================================
    HOOK
@@ -86,7 +166,6 @@ export function usePlayerPropsMaster({
     );
   }, [raw]);
 
-
   /* ======================================================
      FETCH NEXT PAGE
   ====================================================== */
@@ -140,7 +219,6 @@ export function usePlayerPropsMaster({
     ];
   }, [raw]);
 
-
   /* ======================================================
      FILTER + NORMALIZE
   ====================================================== */
@@ -154,7 +232,6 @@ export function usePlayerPropsMaster({
       ) {
         return false;
       }
-
 
       /* ---------- MARKET WINDOW ---------- */
       if (
@@ -196,6 +273,22 @@ export function usePlayerPropsMaster({
           ? p.hit_rate_l20
           : p.hit_rate_l10;
 
+      const matchupTeams = parseMatchup(
+        p.matchup ?? p.game_matchup ?? p.matchup_display
+      );
+
+      // 🔍 DEBUG — confirm whether teams exist at the DATA level
+      if (__DEV__ && (!p.home_team_abbr || !p.away_team_abbr)) {
+        console.warn("🚨 PROP HAS NO TEAMS", {
+          prop_id: p.prop_id,
+          game_id: p.game_id,
+          player: p.player_name,
+          home_team_abbr: p.home_team_abbr,
+          away_team_abbr: p.away_team_abbr,
+          matchup: p.matchup ?? p.game_matchup ?? p.matchup_display,
+        });
+      }
+
       return {
         /* ---------- KEYS ---------- */
         id: `${p.prop_id}-${p.odds_side}-${idx}`,
@@ -215,8 +308,27 @@ export function usePlayerPropsMaster({
 
         /* ---------- MEDIA ---------- */
         playerImageUrl: p.player_image_url,
-        homeTeam: p.home_team_abbr,
-        awayTeam: p.away_team_abbr,
+        homeTeam:
+          normalizeTeamAbbr(
+            p.home_team_abbr ??
+              p.home_team_abbrev ??
+              p.homeTeam ??
+              p.home_team ??
+              p.home_team?.abbreviation ??
+              p.home_abbr ??
+              p.home
+          ) ?? matchupTeams.home,
+        awayTeam:
+          normalizeTeamAbbr(
+            p.away_team_abbr ??
+              p.away_team_abbrev ??
+              p.visitor_team_abbr ??
+              p.awayTeam ??
+              p.away_team ??
+              p.away_team?.abbreviation ??
+              p.away_abbr ??
+              p.away
+          ) ?? matchupTeams.away,
 
         /* ---------- HIT RATES ---------- */
         hit_rate_l5: p.hit_rate_l5,
@@ -228,8 +340,6 @@ export function usePlayerPropsMaster({
       };
     });
   }, [raw, filters]);
-
-
 
   /* ======================================================
      RETURN

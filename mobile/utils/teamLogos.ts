@@ -1,3 +1,4 @@
+// utils/teamLogos.ts
 export const TEAM_LOGOS: Record<string, string> = {
   ATL: "https://a.espncdn.com/i/teamlogos/nba/500/atl.png",
   BOS: "https://a.espncdn.com/i/teamlogos/nba/500/bos.png",

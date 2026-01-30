@@ -85,6 +85,10 @@ function resolveBookmakerKey(raw?: string) {
   return key;
 }
 
+function normalizeTeamKey(team?: string) {
+  if (!team) return undefined;
+  return team.trim().toUpperCase();
+}
 
 
 function formatOdds(o?: number) {
@@ -171,7 +175,7 @@ export default function PropCard(props: PropCardProps) {
       : props.last10_dates;
 
   /* =========================
-     IMAGE
+    IMAGE
   ========================= */
   const imageUrl =
     playerImageUrl ||
@@ -179,8 +183,30 @@ export default function PropCard(props: PropCardProps) {
       ? `https://a.espncdn.com/i/headshots/nba/players/full/${playerId}.png`
       : null);
 
-  const homeLogo = homeTeam ? TEAM_LOGOS[homeTeam] : null;
-  const awayLogo = awayTeam ? TEAM_LOGOS[awayTeam] : null;
+  // 🔧 normalize BEFORE logo lookup
+  function normalizeTeamKey(team?: string) {
+    if (!team) return undefined;
+    const key = team.trim().toUpperCase();
+    if (key === "NO") return "NOP";
+    if (key === "PHO") return "PHX";
+    return key;
+  }
+
+  const homeKey = normalizeTeamKey(homeTeam);
+  const awayKey = normalizeTeamKey(awayTeam);
+
+  const homeLogo = homeKey ? TEAM_LOGOS[homeKey] : null;
+  const awayLogo = awayKey ? TEAM_LOGOS[awayKey] : null;
+
+  if (__DEV__ && (homeKey && !homeLogo || awayKey && !awayLogo)) {
+    console.warn("🚨 TEAM LOGO MISS", {
+      homeTeam,
+      awayTeam,
+      homeKey,
+      awayKey,
+    });
+  }
+
     
   /* =========================
      BOOK

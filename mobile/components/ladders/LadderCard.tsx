@@ -3,6 +3,34 @@ import { useTheme } from "@/store/useTheme";
 import { VendorLadder } from "./VendorLadder";
 import { Ladder } from "@/hooks/useLadders";
 
+function formatGameClock(period: string | null | undefined, clock: string | null | undefined): string | null {
+  if (!period) return null;
+
+  const periodUpper = period.toUpperCase();
+
+  // Handle special periods
+  if (periodUpper === "HALFTIME" || periodUpper === "HALF") {
+    return "Halftime";
+  }
+  if (periodUpper === "OT" || periodUpper === "OVERTIME") {
+    return clock ? `OT ${clock}` : "OT";
+  }
+  if (periodUpper.startsWith("OT")) {
+    // OT2, OT3, etc.
+    return clock ? `${period} ${clock}` : period;
+  }
+
+  // Standard quarters (Q1, Q2, Q3, Q4 or 1, 2, 3, 4)
+  const quarterMatch = periodUpper.match(/^Q?(\d)$/);
+  if (quarterMatch) {
+    const q = `Q${quarterMatch[1]}`;
+    return clock ? `${q} ${clock}` : q;
+  }
+
+  // Fallback
+  return clock ? `${period} ${clock}` : period;
+}
+
 export function LadderCard({ ladder }: { ladder: Ladder }) {
   const { colors } = useTheme();
 
@@ -13,6 +41,9 @@ export function LadderCard({ ladder }: { ladder: Ladder }) {
 
   const isLive = ladder.game_state === "LIVE";
   const hasCurrentStat = isLive && ladder.current_stat != null;
+  const gameClockText = isLive && ladder.game_clock
+    ? formatGameClock(ladder.game_clock.period, ladder.game_clock.clock)
+    : null;
 
   return (
     <View style={[styles.card, { backgroundColor: colors.surface.card }]}>
@@ -33,11 +64,20 @@ export function LadderCard({ ladder }: { ladder: Ladder }) {
           {ladder.player_team_abbr} vs {ladder.opponent_team_abbr} •{" "}
           {ladder.market.toUpperCase()}
         </Text>
-        {/* Game Score for Live */}
-        {isLive && ladder.game_score && (
-          <Text style={[styles.gameScore, { color: colors.text.secondary }]}>
-            Score: {ladder.game_score.home ?? 0} - {ladder.game_score.away ?? 0}
-          </Text>
+        {/* Game Score and Clock for Live */}
+        {isLive && (ladder.game_score || gameClockText) && (
+          <View style={styles.gameInfoRow}>
+            {ladder.game_score && (
+              <Text style={[styles.gameScore, { color: colors.text.secondary }]}>
+                {ladder.game_score.home ?? 0} - {ladder.game_score.away ?? 0}
+              </Text>
+            )}
+            {gameClockText && (
+              <Text style={[styles.gameClock, { color: "#f59e0b" }]}>
+                {gameClockText}
+              </Text>
+            )}
+          </View>
         )}
       </View>
 
@@ -126,10 +166,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 2,
   },
+  gameInfoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+    gap: 12,
+  },
   gameScore: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  gameClock: {
     fontSize: 12,
     fontWeight: "600",
-    marginTop: 4,
   },
   summary: {
     flexDirection: "row",

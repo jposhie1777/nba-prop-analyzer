@@ -20,6 +20,11 @@ export type GameScore = {
   away: number | null;
 };
 
+export type GameClock = {
+  period: string | null;
+  clock: string | null;
+};
+
 export type Ladder = {
   game_id: number;
   player_id: number;
@@ -35,6 +40,7 @@ export type Ladder = {
   // Live-only fields
   current_stat?: number | null;
   game_score?: GameScore;
+  game_clock?: GameClock;
 };
 
 export type LadderMode = "pre-live" | "live";

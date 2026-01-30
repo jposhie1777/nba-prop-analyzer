@@ -7,6 +7,9 @@ from bq import get_bq_client
 
 router = APIRouter(prefix="/ladders", tags=["ladders"])
 
+# Minimum odds threshold (filter out extreme favorites like -5000)
+MIN_ODDS_THRESHOLD = -800
+
 # Pre-live: Uses player_prop_odds_master (pre-game props)
 PRE_LIVE_QUERY = """
 WITH props AS (
@@ -30,7 +33,9 @@ games AS (
     game_id,
     home_team_abbr,
     away_team_abbr,
-    state
+    state,
+    home_score,
+    away_score
   FROM `nba_live.live_games`
   WHERE state = 'UPCOMING'
 ),
@@ -46,6 +51,8 @@ SELECT
   pl.player_name,
   g.home_team_abbr,
   g.away_team_abbr,
+  g.home_score,
+  g.away_score,
   'UPCOMING' AS game_state,
   p.market,
   p.market_type,
@@ -54,14 +61,15 @@ SELECT
   p.over_odds,
   p.under_odds,
   p.milestone_odds,
-  p.snapshot_ts
+  p.snapshot_ts,
+  NULL AS current_stat
 FROM props p
 JOIN games g ON p.game_id = g.game_id
 LEFT JOIN players pl ON p.player_id = pl.player_id
 ORDER BY p.player_id, p.market, p.line, p.book
 """
 
-# Live: Uses v_live_player_prop_odds_latest (live odds)
+# Live: Uses v_live_player_prop_odds_latest with player stats and game scores
 LIVE_QUERY = """
 WITH props AS (
   SELECT
@@ -83,7 +91,9 @@ games AS (
     game_id,
     home_team_abbr,
     away_team_abbr,
-    state
+    state,
+    home_score,
+    away_score
   FROM `nba_live.live_games`
   WHERE state = 'LIVE'
 ),
@@ -92,6 +102,17 @@ players AS (
     player_id,
     player_name
   FROM `nba_goat_data.player_lookup`
+),
+player_stats AS (
+  SELECT
+    game_id,
+    player_id,
+    pts,
+    reb,
+    ast,
+    fg3_made,
+    ROW_NUMBER() OVER (PARTITION BY game_id, player_id ORDER BY ingested_at DESC) AS rn
+  FROM `nba_live.live_player_stats`
 )
 SELECT
   p.game_id,
@@ -99,6 +120,8 @@ SELECT
   pl.player_name,
   g.home_team_abbr,
   g.away_team_abbr,
+  g.home_score,
+  g.away_score,
   'LIVE' AS game_state,
   p.market,
   p.market_type,
@@ -107,10 +130,18 @@ SELECT
   p.over_odds,
   p.under_odds,
   p.milestone_odds,
-  p.snapshot_ts
+  p.snapshot_ts,
+  CASE
+    WHEN UPPER(p.market) IN ('PTS', 'POINTS') THEN ps.pts
+    WHEN UPPER(p.market) IN ('REB', 'REBOUNDS') THEN ps.reb
+    WHEN UPPER(p.market) IN ('AST', 'ASSISTS') THEN ps.ast
+    WHEN UPPER(p.market) IN ('3PM', '3PTS', 'THREES', 'FG3M') THEN ps.fg3_made
+    ELSE NULL
+  END AS current_stat
 FROM props p
 JOIN games g ON p.game_id = g.game_id
 LEFT JOIN players pl ON p.player_id = pl.player_id
+LEFT JOIN player_stats ps ON p.game_id = ps.game_id AND p.player_id = ps.player_id AND ps.rn = 1
 ORDER BY p.player_id, p.market, p.line, p.book
 """
 
@@ -146,6 +177,7 @@ def process_rows_to_ladders(
     min_vendors: int,
     market_filter: str | None,
     limit: int,
+    min_odds: int = MIN_ODDS_THRESHOLD,
 ) -> List[Dict[str, Any]]:
     """Process query rows into ladder format."""
 
@@ -156,8 +188,11 @@ def process_rows_to_ladders(
         "player_name": None,
         "player_team_abbr": None,
         "opponent_team_abbr": None,
+        "home_score": None,
+        "away_score": None,
         "game_state": None,
         "market": None,
+        "current_stat": None,
         "vendors": defaultdict(list),
         "all_lines": [],
         "snapshot_ts": None,
@@ -174,13 +209,20 @@ def process_rows_to_ladders(
             group["player_name"] = row.player_name or f"Player {row.player_id}"
             group["player_team_abbr"] = row.home_team_abbr or "UNK"
             group["opponent_team_abbr"] = row.away_team_abbr or "UNK"
+            group["home_score"] = row.home_score
+            group["away_score"] = row.away_score
             group["game_state"] = row.game_state or "UPCOMING"
             group["market"] = row.market
+            group["current_stat"] = row.current_stat
             group["snapshot_ts"] = row.snapshot_ts
 
         # Determine which odds to use (over_odds for over/under, milestone_odds for yes/no)
         odds = row.over_odds or row.milestone_odds
         if odds is None:
+            continue
+
+        # Filter out extreme odds (e.g., -5000)
+        if odds < min_odds:
             continue
 
         score = calculate_ladder_score(odds)
@@ -233,15 +275,30 @@ def process_rows_to_ladders(
         for vendor, rungs in group["vendors"].items():
             # Sort rungs by line
             sorted_rungs = sorted(rungs, key=lambda x: x["line"])
+
+            # Dedupe: prefer whole numbers over half-lines (e.g., keep 4, drop 3.5 and 4.5)
+            whole_lines = {r["line"] for r in sorted_rungs if r["line"] == int(r["line"])}
+            deduped_rungs = []
+            for r in sorted_rungs:
+                line = r["line"]
+                is_half = line != int(line)
+                if is_half:
+                    # Check if nearby whole number exists
+                    floor_line = float(int(line))
+                    ceil_line = float(int(line) + 1)
+                    if floor_line in whole_lines or ceil_line in whole_lines:
+                        continue  # Skip this half-line
+                deduped_rungs.append(r)
+
             ladder_by_vendor.append({
                 "vendor": vendor,
-                "rungs": sorted_rungs,
+                "rungs": deduped_rungs,
             })
 
         # Sort vendors alphabetically
         ladder_by_vendor.sort(key=lambda x: x["vendor"])
 
-        ladders.append({
+        ladder_data = {
             "game_id": group["game_id"],
             "player_id": group["player_id"],
             "player_name": group["player_name"],
@@ -253,7 +310,17 @@ def process_rows_to_ladders(
             "anchor_line": float(anchor_line) if anchor_line else 0,
             "ladder_score": max_score,
             "ladder_by_vendor": ladder_by_vendor,
-        })
+        }
+
+        # Add live-specific fields
+        if group["game_state"] == "LIVE":
+            ladder_data["current_stat"] = group["current_stat"]
+            ladder_data["game_score"] = {
+                "home": group["home_score"],
+                "away": group["away_score"],
+            }
+
+        ladders.append(ladder_data)
 
     # Sort by ladder_score descending
     ladders.sort(key=lambda x: x["ladder_score"], reverse=True)
@@ -268,12 +335,15 @@ def get_ladders(
     limit: int = Query(50, ge=10, le=200),
     min_vendors: int = Query(1, ge=1, le=5),
     market: str | None = Query(None, description="Filter by market (pts, ast, reb, etc.)"),
+    min_odds: int = Query(MIN_ODDS_THRESHOLD, description="Minimum odds threshold (e.g., -800 filters out -5000)"),
 ) -> Dict[str, Any]:
     """
     Returns prop ladders - comparison of lines across vendors for each player+market.
 
     - pre-live: Shows props for upcoming games (from player_prop_odds_master)
     - live: Shows props for in-progress games (from v_live_player_prop_odds_latest)
+      - Includes current_stat (player's current stat for the market)
+      - Includes game_score (current home/away scores)
     """
     client = get_bq_client()
 
@@ -283,7 +353,7 @@ def get_ladders(
     job = client.query(query)
     rows = list(job.result())
 
-    ladders = process_rows_to_ladders(rows, min_vendors, market, limit)
+    ladders = process_rows_to_ladders(rows, min_vendors, market, limit, min_odds)
 
     return {
         "mode": mode,

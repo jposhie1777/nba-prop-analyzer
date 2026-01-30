@@ -15,6 +15,11 @@ export type VendorBlock = {
 
 export type GameState = "UPCOMING" | "LIVE" | "FINAL";
 
+export type GameScore = {
+  home: number | null;
+  away: number | null;
+};
+
 export type Ladder = {
   game_id: number;
   player_id: number;
@@ -27,6 +32,9 @@ export type Ladder = {
   anchor_line: number;
   ladder_score: number;
   ladder_by_vendor: VendorBlock[];
+  // Live-only fields
+  current_stat?: number | null;
+  game_score?: GameScore;
 };
 
 export type LadderMode = "pre-live" | "live";

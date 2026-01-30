@@ -42,6 +42,9 @@ export type PropCardProps = {
 
   homeTeam?: string;
   awayTeam?: string;
+  playerPosition?: string;
+  opponentTeamAbbr?: string;
+  opponentPositionRank?: number;
 
   sparkline_l5?: number[];
   sparkline_l10?: number[];
@@ -137,6 +140,9 @@ export default function PropCard(props: PropCardProps) {
     hitRatePct,
     homeTeam,
     awayTeam,
+    playerPosition,
+    opponentTeamAbbr,
+    opponentPositionRank,
   } = props;
 
   /* =========================
@@ -367,6 +373,30 @@ export default function PropCard(props: PropCardProps) {
             {/* EXPANDED */}
             {expanded && (
               <View style={styles.expandWrap}>
+                {(playerPosition || opponentTeamAbbr || opponentPositionRank != null) && (
+                  <View style={styles.opponentWrap}>
+                    <View>
+                      <Text style={styles.opponentTitle}>
+                        Opponent Position Rank
+                      </Text>
+                      {opponentTeamAbbr && playerPosition && (
+                        <Text style={styles.opponentSubtitle}>
+                          {opponentTeamAbbr} vs {playerPosition}
+                        </Text>
+                      )}
+                    </View>
+                    <View style={styles.opponentRankChip}>
+                      <Text style={styles.opponentRankLabel}>
+                        {formatMarketLabel(market)} Rk
+                      </Text>
+                      <Text style={styles.opponentRankValue}>
+                        {opponentPositionRank != null
+                          ? `#${opponentPositionRank}`
+                          : "—"}
+                      </Text>
+                    </View>
+                  </View>
+                )}
                 <MiniBarSparkline data={sparkline} dates={dates} />
 
                 <View style={styles.windowToggle}>
@@ -580,6 +610,46 @@ function makeStyles(colors: any) {
       paddingBottom: 16,
       borderTopWidth: 1,
       borderTopColor: colors.border.subtle,
+    },
+
+    opponentWrap: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 12,
+      gap: 12,
+    },
+
+    opponentTitle: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.text.primary,
+    },
+
+    opponentSubtitle: {
+      fontSize: 11,
+      color: colors.text.muted,
+      marginTop: 2,
+    },
+
+    opponentRankChip: {
+      alignItems: "flex-end",
+      backgroundColor: colors.surface.cardSoft,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 10,
+    },
+
+    opponentRankLabel: {
+      fontSize: 10,
+      color: colors.text.muted,
+      fontWeight: "700",
+    },
+
+    opponentRankValue: {
+      fontSize: 14,
+      fontWeight: "800",
+      color: colors.accent.primary,
     },
 
     windowToggle: {

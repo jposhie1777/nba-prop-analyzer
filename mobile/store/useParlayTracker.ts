@@ -2,6 +2,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { createSafeStorage } from "@/lib/zustandStorage";
+import { shouldExpireParlay } from "@/utils/parlayExpiry";
 
 /* ======================================================
    TYPES
@@ -182,8 +183,7 @@ export const useParlayTracker = create<State>()(
         set((state) => ({
           tracked: Object.fromEntries(
             Object.entries(state.tracked).filter(
-              ([_, parlay]) =>
-                parlay.legs.some((leg) => !leg.isFinal)
+              ([_, parlay]) => !shouldExpireParlay(parlay)
             )
           ),
         })),

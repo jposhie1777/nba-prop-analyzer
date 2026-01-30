@@ -93,7 +93,9 @@ games AS (
     away_team_abbr,
     state,
     home_score,
-    away_score
+    away_score,
+    period,
+    clock
   FROM `nba_live.live_games`
   WHERE state = 'LIVE'
 ),
@@ -122,6 +124,8 @@ SELECT
   g.away_team_abbr,
   g.home_score,
   g.away_score,
+  g.period,
+  g.clock,
   'LIVE' AS game_state,
   p.market,
   p.market_type,
@@ -190,6 +194,8 @@ def process_rows_to_ladders(
         "opponent_team_abbr": None,
         "home_score": None,
         "away_score": None,
+        "period": None,
+        "clock": None,
         "game_state": None,
         "market": None,
         "current_stat": None,
@@ -211,9 +217,11 @@ def process_rows_to_ladders(
             group["opponent_team_abbr"] = row.away_team_abbr or "UNK"
             group["home_score"] = row.home_score
             group["away_score"] = row.away_score
+            group["period"] = getattr(row, "period", None)
+            group["clock"] = getattr(row, "clock", None)
             group["game_state"] = row.game_state or "UPCOMING"
             group["market"] = row.market
-            group["current_stat"] = row.current_stat
+            group["current_stat"] = getattr(row, "current_stat", None)
             group["snapshot_ts"] = row.snapshot_ts
 
         # Determine which odds to use (over_odds for over/under, milestone_odds for yes/no)
@@ -318,6 +326,10 @@ def process_rows_to_ladders(
             ladder_data["game_score"] = {
                 "home": group["home_score"],
                 "away": group["away_score"],
+            }
+            ladder_data["game_clock"] = {
+                "period": group["period"],
+                "clock": group["clock"],
             }
 
         ladders.append(ladder_data)

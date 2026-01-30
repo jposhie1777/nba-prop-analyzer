@@ -1,11 +1,16 @@
 // hooks/useLadders.ts
-import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { API_BASE } from "@/lib/config";
+
+export type Rung = {
+  line: number;
+  odds: number;
+  ladder_score: number;
+};
 
 export type VendorBlock = {
   vendor: string;
-  line: number;
-  over_odds: number | null;
-  under_odds: number | null;
+  rungs: Rung[];
 };
 
 export type Ladder = {
@@ -21,20 +26,44 @@ export type Ladder = {
   ladder_by_vendor: VendorBlock[];
 };
 
-export function useLadders() {
-  const [data, setData] = useState<Ladder[]>([]);
-  const [loading, setLoading] = useState(true);
+type UseLaddersOptions = {
+  limit?: number;
+  minVendors?: number;
+  market?: string;
+};
 
-  useEffect(() => {
-    // TODO: Replace with actual API call when /ladders endpoint is available
-    // For now, return empty data after a brief delay to simulate loading
-    const timer = setTimeout(() => {
-      setData([]);
-      setLoading(false);
-    }, 500);
+export function useLadders(options: UseLaddersOptions = {}) {
+  const { limit = 50, minVendors = 1, market } = options;
 
-    return () => clearTimeout(timer);
-  }, []);
+  const query = useQuery<Ladder[]>({
+    queryKey: ["ladders", limit, minVendors, market],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("limit", limit.toString());
+      params.set("min_vendors", minVendors.toString());
+      if (market) {
+        params.set("market", market);
+      }
 
-  return { data, loading };
+      const res = await fetch(`${API_BASE}/ladders?${params.toString()}`);
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text);
+      }
+
+      const json = await res.json();
+      return json.ladders ?? [];
+    },
+
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  });
+
+  return {
+    data: query.data ?? [],
+    loading: query.isLoading,
+    error: query.error,
+    refetch: query.refetch,
+  };
 }

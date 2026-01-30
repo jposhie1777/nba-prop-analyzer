@@ -9,6 +9,26 @@ from fastapi.middleware.cors import CORSMiddleware
 from live_games import router as live_games_router
 from db import fetch_mobile_props, ingest_live_games_snapshot
 from live_stream import router as live_stream_router, refresher_loop
+
+# ==================================================
+# SMART SCHEDULING IMPORTS
+# ==================================================
+from smart_game_orchestrator import (
+    orchestrator_loop,
+    register_ingestion_callbacks,
+    get_session_info,
+    fetch_and_write_daily_schedule,
+    start_ingestion,
+    stop_ingestion,
+    is_ingestion_active,
+)
+from managed_live_ingest import (
+    managed_ingest_loop,
+    start_managed_ingest,
+    stop_managed_ingest,
+    get_ingest_status,
+    nba_today,
+)
 from historical_player_trends import router as historical_player_trends_router
 from LiveGames.box_scores_snapshot import (
     router as box_scores_router,
@@ -106,17 +126,58 @@ app.include_router(bad_lines_router)
 
 
 # ==================================================
-# Startup hook (CONTROLLED BACKGROUND TASKS)
+# Startup hook (SMART SCHEDULED BACKGROUND TASKS)
 # ==================================================
 @app.on_event("startup")
 async def startup():
+    use_scheduler = os.environ.get("USE_SMART_SCHEDULER") == "true"
     enable_ingest = os.environ.get("ENABLE_LIVE_INGEST") == "true"
 
-    if not enable_ingest:
-        print("🛑 Live ingest DISABLED — no background loops started")
+    print("\n" + "="*60)
+    print("[STARTUP] PULSE MOBILE API")
+    print(f"[STARTUP] Time: {datetime.now(NY_TZ).strftime('%Y-%m-%d %I:%M:%S %p ET')}")
+    print(f"[STARTUP] USE_SMART_SCHEDULER: {use_scheduler}")
+    print(f"[STARTUP] ENABLE_LIVE_INGEST: {enable_ingest}")
+    print("="*60 + "\n")
+
+    # =====================================================
+    # SMART SCHEDULER MODE (new)
+    # =====================================================
+    if use_scheduler:
+        print("[STARTUP] Using SMART SCHEDULER mode")
+        print("[STARTUP] Ingestion will start 15 min before games")
+        print("[STARTUP] Ingestion will stop when all games FINAL\n")
+
+        # Register callbacks so orchestrator can control ingest
+        register_ingestion_callbacks(
+            start_callback=start_managed_ingest,
+            stop_callback=stop_managed_ingest,
+        )
+
+        # Start orchestrator (manages schedule + triggers ingest)
+        asyncio.create_task(orchestrator_loop())
+        print("[STARTUP] -> Orchestrator loop started")
+
+        # Start managed ingest loop (waits for orchestrator signal)
+        asyncio.create_task(managed_ingest_loop())
+        print("[STARTUP] -> Managed ingest loop started")
+
+        # READ-SIDE refreshers still run (but check is_ingestion_active)
+        asyncio.create_task(refresher_loop())
+        asyncio.create_task(player_box_refresher())
+        asyncio.create_task(player_stats_refresher())
+        print("[STARTUP] -> Cache refreshers started")
+
         return
 
-    print("🟢 Live ingest ENABLED — starting background loops")
+    # =====================================================
+    # LEGACY MODE (original 24/7 loops)
+    # =====================================================
+    if not enable_ingest:
+        print("[STARTUP] Live ingest DISABLED - no background loops started")
+        return
+
+    print("[STARTUP] Using LEGACY 24/7 ingest mode")
 
     # -----------------------------
     # READ-SIDE (BQ → memory)
@@ -133,14 +194,14 @@ async def startup():
             try:
                 await asyncio.to_thread(ingest_live_games_snapshot)
             except Exception as e:
-                print("❌ Live games ingest failed:", e)
+                print("[INGEST] Live games ingest failed:", e)
 
             await asyncio.sleep(15)
 
     asyncio.create_task(live_ingest_loop())
 
     # -----------------------------
-    # 🔴 WRITE-SIDE: box scores snapshot
+    # WRITE-SIDE: box scores snapshot
     # -----------------------------
     async def live_boxscore_snapshot_loop():
         await asyncio.sleep(5)
@@ -151,67 +212,67 @@ async def startup():
                     run_box_scores_snapshot,
                     dry_run=False,
                 )
-                print("📸 Live boxscore snapshot written")
+                print("[INGEST] Live boxscore snapshot written")
 
             except Exception as e:
-                print("❌ Live boxscore snapshot failed:", e)
+                print("[INGEST] Live boxscore snapshot failed:", e)
 
             await asyncio.sleep(30)
 
 
     asyncio.create_task(live_boxscore_snapshot_loop())
-    
+
     # -----------------------------
-    # 🔴 WRITE-SIDE: live game odds
+    # WRITE-SIDE: live game odds
     # -----------------------------
     async def live_game_odds_loop():
         await asyncio.sleep(10)
-    
+
         while True:
             try:
                 await asyncio.to_thread(ingest_live_game_odds)
-                print("📈 Live game odds snapshot written")
+                print("[INGEST] Live game odds snapshot written")
             except Exception as e:
-                print("❌ Live game odds ingest failed:", e)
-    
+                print("[INGEST] Live game odds ingest failed:", e)
+
             await asyncio.sleep(30)
-    
+
     asyncio.create_task(live_game_odds_loop())
-    
-    
+
+
     # -----------------------------
-    # 🔴 WRITE-SIDE: live player props
+    # WRITE-SIDE: live player props
     # -----------------------------
     async def live_player_prop_odds_loop():
         await asyncio.sleep(12)
-    
+
         while True:
             try:
                 await asyncio.to_thread(ingest_live_player_prop_odds)
-                print("🎯 Live player prop odds snapshot written")
+                print("[INGEST] Live player prop odds snapshot written")
             except Exception as e:
-                print("❌ Live player prop odds ingest failed:", e)
-    
+                print("[INGEST] Live player prop odds ingest failed:", e)
+
             await asyncio.sleep(30)
-    
+
     asyncio.create_task(live_player_prop_odds_loop())
 
     # -----------------------------
-    # 🔴 WRITE-SIDE: live odds FLATTEN (IDEMPOTENT)
+    # WRITE-SIDE: live odds FLATTEN (IDEMPOTENT)
     # -----------------------------
     async def live_odds_flatten_loop():
         # Let first RAW snapshots land
         await asyncio.sleep(20)
-    
+
         while True:
             try:
                 await asyncio.to_thread(run_live_odds_flatten)
-                print("🧮 Live odds flatten complete")
+                print("[INGEST] Live odds flatten complete")
             except Exception as e:
-                print("❌ Live odds flatten failed:", e)
-    
+                print("[INGEST] Live odds flatten failed:", e)
+
             await asyncio.sleep(30)
-    
+
     asyncio.create_task(live_odds_flatten_loop())
 
 # ==================================================
@@ -245,4 +306,62 @@ def get_props(
         "date": game_date,
         "count": len(props),
         "props": props,
+    }
+
+
+# ==================================================
+# Debug endpoints (SMART SCHEDULER)
+# ==================================================
+@app.get("/debug/orchestrator")
+def debug_orchestrator():
+    """Get orchestrator/scheduler state"""
+    return get_session_info()
+
+
+@app.get("/debug/ingest")
+def debug_ingest():
+    """Get ingest loop state"""
+    return get_ingest_status()
+
+
+@app.post("/debug/force-start")
+def force_start_ingest():
+    """Force start ingestion (for testing)"""
+    start_ingestion()
+    start_managed_ingest()
+    return {"status": "started", "message": "FIRING UP INGESTION - FORCED"}
+
+
+@app.post("/debug/force-stop")
+def force_stop_ingest():
+    """Force stop ingestion (for testing)"""
+    stop_ingestion()
+    stop_managed_ingest()
+    return {"status": "stopped", "message": "STOPPING INGESTION - FORCED"}
+
+
+@app.post("/debug/force-fetch")
+async def force_fetch_schedule():
+    """Force fetch today's schedule (for testing)"""
+    today = nba_today().isoformat()
+    try:
+        session = await asyncio.to_thread(fetch_and_write_daily_schedule, today)
+        return {
+            "status": "ok",
+            "date": today,
+            "games": len(session.games),
+            "games_list": [str(g) for g in session.games.values()],
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/debug/full")
+def debug_full():
+    """Get complete debug state"""
+    return {
+        "time": datetime.now(NY_TZ).isoformat(),
+        "nba_today": nba_today().isoformat(),
+        "orchestrator": get_session_info(),
+        "ingest": get_ingest_status(),
     }

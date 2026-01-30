@@ -81,6 +81,38 @@ export default function MoreIndexScreen() {
           Simulated live prop feed for testing
         </Text>
       </Pressable>
+
+      {/* Opponent Position Defense */}
+      <Pressable
+        onPress={() =>
+          router.push("/(tabs)/more/opponent-position-defense")
+        }
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.surface.card,
+            borderColor: colors.border.subtle,
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.title,
+            { color: colors.text.primary },
+          ]}
+        >
+          🛡️ Opponent Position Defense
+        </Text>
+
+        <Text
+          style={[
+            styles.subtitle,
+            { color: colors.text.muted },
+          ]}
+        >
+          See opponent averages allowed by position
+        </Text>
+      </Pressable>
     </View>
   );
 }

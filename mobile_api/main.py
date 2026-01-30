@@ -71,6 +71,12 @@ from player_stats_stream import (
     player_stats_refresher,
 )
 
+# ==================================================
+# Game Advanced Stats V2 imports
+# ==================================================
+from ingest.game_advanced_stats.routes import router as game_advanced_stats_router
+from ingest.game_advanced_stats.ingest import ingest_yesterday as ingest_game_advanced_stats_yesterday
+
 from debug.debug_code import register as register_debug_code
 
 # ==================================================
@@ -125,6 +131,7 @@ app.include_router(push_router)
 app.include_router(alerts_router)
 app.include_router(bad_lines_router)
 app.include_router(ladders_router)
+app.include_router(game_advanced_stats_router)
 
 
 # ==================================================
@@ -169,6 +176,61 @@ async def startup():
         asyncio.create_task(player_box_refresher())
         asyncio.create_task(player_stats_refresher())
         print("[STARTUP] -> Cache refreshers started")
+
+        # -----------------------------
+        # DAILY: Game Advanced Stats V2 ingest (runs at 6:00 AM ET)
+        # -----------------------------
+        async def game_advanced_stats_daily_loop():
+            """
+            Daily loop that ingests game advanced stats for yesterday's games.
+            Runs at 6:00 AM ET, after all games are final and data is available.
+            """
+            from datetime import time as dt_time, timedelta
+
+            INGEST_HOUR = 6
+            INGEST_MINUTE = 0
+
+            print("[GAME_ADV_STATS] Daily ingest loop started")
+            print(f"[GAME_ADV_STATS] Scheduled to run at {INGEST_HOUR}:{INGEST_MINUTE:02d} AM ET")
+
+            while True:
+                try:
+                    now = datetime.now(NY_TZ)
+
+                    # Calculate next run time
+                    next_run = now.replace(
+                        hour=INGEST_HOUR,
+                        minute=INGEST_MINUTE,
+                        second=0,
+                        microsecond=0,
+                    )
+
+                    # If we've passed today's run time, schedule for tomorrow
+                    if now >= next_run:
+                        next_run = next_run + timedelta(days=1)
+
+                    wait_seconds = (next_run - now).total_seconds()
+
+                    print(f"[GAME_ADV_STATS] Next run: {next_run.strftime('%Y-%m-%d %I:%M %p ET')} ({wait_seconds/3600:.1f} hours)")
+
+                    # Wait until next run time
+                    await asyncio.sleep(wait_seconds)
+
+                    # Run the ingest
+                    print(f"\n[GAME_ADV_STATS] ========== DAILY INGEST @ {datetime.now(NY_TZ).strftime('%I:%M %p ET')} ==========")
+
+                    result = await asyncio.to_thread(ingest_game_advanced_stats_yesterday)
+
+                    print(f"[GAME_ADV_STATS] Result: {result}")
+                    print(f"[GAME_ADV_STATS] Daily ingest complete\n")
+
+                except Exception as e:
+                    print(f"[GAME_ADV_STATS] ERROR in daily loop: {e}")
+                    # Wait 1 hour before retrying on error
+                    await asyncio.sleep(3600)
+
+        asyncio.create_task(game_advanced_stats_daily_loop())
+        print("[STARTUP] -> Game Advanced Stats daily ingest loop started")
 
         return
 

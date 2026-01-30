@@ -37,6 +37,28 @@ export async function fetchPlayerPropsMaster(
   return json.props ?? [];
 }
 
+export async function fetchPlayerPositions() {
+  const url = `${API_BASE}/players/positions`;
+
+  console.log("📡 [PLAYER POSITIONS FETCH]", url);
+
+  const res = await fetch(url, { credentials: "omit" });
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error(
+      "❌ [PLAYER POSITIONS FETCH FAILED]",
+      res.status,
+      text
+    );
+    throw new Error(`Player positions error ${res.status}`);
+  }
+
+  const json = await res.json();
+
+  return json.rows ?? [];
+}
+
 /* ======================================================
    BAD LINES
 ====================================================== */

@@ -329,6 +329,22 @@ export function usePlayerPropsMaster({
               p.away_abbr ??
               p.away
           ) ?? matchupTeams.away,
+        playerTeamAbbr:
+          normalizeTeamAbbr(
+            p.player_team_abbr ??
+              p.team_abbr ??
+              p.player_team ??
+              p.team ??
+              p.team_abbreviation ??
+              p.team_abbrev
+          ) ?? undefined,
+        opponentTeamAbbr:
+          normalizeTeamAbbr(
+            p.opponent_team_abbr ??
+              p.opponent_abbr ??
+              p.opponent_team ??
+              p.opponent
+          ) ?? undefined,
 
         /* ---------- HIT RATES ---------- */
         hit_rate_l5: p.hit_rate_l5,

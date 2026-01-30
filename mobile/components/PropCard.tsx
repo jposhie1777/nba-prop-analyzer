@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import { useMemo, useState, useRef } from "react";
+import { LinearGradient } from "expo-linear-gradient";
 
 import { useTheme } from "@/store/useTheme";
 import { BOOKMAKER_LOGOS } from "@/utils/bookmakerLogos";
@@ -95,6 +96,13 @@ function formatSideLabel(side?: "over" | "under" | "yes") {
   if (side === "under") return "Under";
   if (side === "yes") return "Yes";
   return "Over";
+}
+
+function getHitRateColor(pct: number): string {
+  if (pct >= 80) return "#22c55e"; // green
+  if (pct >= 60) return "#3b82f6"; // blue
+  if (pct >= 40) return "#f59e0b"; // amber
+  return "#ef4444"; // red
 }
 
 /* ======================================================
@@ -202,6 +210,11 @@ export default function PropCard(props: PropCardProps) {
   );
 
   /* =========================
+     HIT RATE COLOR
+  ========================= */
+  const hitRateColor = getHitRateColor(hitRate ?? 0);
+
+  /* =========================
      RENDER
   ========================= */
   return (
@@ -214,8 +227,7 @@ export default function PropCard(props: PropCardProps) {
         if (!saved) {
           onSwipeSave?.();
         }
-    
-        // ✅ THIS IS THE CRITICAL LINE
+
         requestAnimationFrame(() => {
           swipeRef.current?.close();
         });
@@ -223,106 +235,123 @@ export default function PropCard(props: PropCardProps) {
     >
       <View style={styles.outer}>
         <View style={styles.card}>
-          {/* SAVE STAR */}
-          <Pressable onPress={onToggleSave} style={styles.saveButton}>
-            <Text style={[styles.saveStar, saved && styles.saveStarOn]}>
-              {saved ? "★" : "☆"}
-            </Text>
-          </Pressable>
+          {/* TOP ACCENT LINE */}
+          <View style={[styles.accentLine, { backgroundColor: hitRateColor }]} />
 
-          {/* TOP HEADER SECTION */}
-          <Pressable onPress={onToggleExpand} style={styles.header}>
-            {/* LEFT – MATCHUP */}
-            <View style={styles.headerLeft}>
-              {awayLogo && <Image source={{ uri: awayLogo }} style={styles.teamLogo} />}
-              <Text style={styles.atSymbol}>@</Text>
-              {homeLogo && <Image source={{ uri: homeLogo }} style={styles.teamLogo} />}
-            </View>
-
-            {/* CENTER – PLAYER */}
-            <View style={styles.headerCenter}>
-              {imageUrl && (
-                <Image source={{ uri: imageUrl }} style={styles.headshot} />
-              )}
-            
-              <View style={styles.headerTextBlock}>
-                <Text style={styles.player}>{player}</Text>
-            
-                <Text style={styles.marketLine}>
-                  {formatMarketLabel(market)} · {formatSideLabel(side)} {line}
-                </Text>
-            
-                {/* 🚨 BAD LINE BADGE + TOOLTIP */}
-                {typeof badLineScore === "number" && badLineScore >= 1.0 && (
-                  <View style={styles.badLineContainer}>
-                    <Pressable
-                      style={styles.badLineBadge}
-                      onPress={() => setShowBadLineInfo((v) => !v)}
-                    >
-                      <Text style={styles.badLineText}>⚠️ BAD LINE</Text>
-                    </Pressable>
-                
-                    {showBadLineInfo && (
-                      <View style={styles.badLineTooltip}>
-                        <Text style={styles.tooltipTitle}>Bad Line Detected</Text>
-                
-                        <Text style={styles.tooltipText}>
-                          This line is mispriced relative to recent performance and opponent
-                          context.
-                        </Text>
-                
-                        <Text style={styles.tooltipMeta}>
-                          Score: {badLineScore.toFixed(2)}
-                        </Text>
-                
-                        <Pressable
-                          style={styles.tooltipClose}
-                          onPress={() => setShowBadLineInfo(false)}
-                        >
-                          <Text style={styles.tooltipCloseText}>Dismiss</Text>
-                        </Pressable>
-                      </View>
-                    )}
-                  </View>
+          {/* MAIN CONTENT */}
+          <Pressable onPress={onToggleExpand} style={styles.contentWrap}>
+            {/* PLAYER ROW */}
+            <View style={styles.playerRow}>
+              {/* HEADSHOT WITH RING */}
+              <View style={styles.headshotWrap}>
+                {imageUrl ? (
+                  <Image source={{ uri: imageUrl }} style={styles.headshot} />
+                ) : (
+                  <View style={styles.headshotPlaceholder} />
                 )}
-              </View>   {/* ✅ CLOSE headerTextBlock */}
-            </View> 
+                <View style={[styles.headshotRing, { borderColor: hitRateColor }]} />
+              </View>
 
-            {/* RIGHT – BOOK + ODDS */}
-            <View style={styles.headerRight}>
-              <View style={styles.bookOddsRow}>
+              {/* PLAYER INFO */}
+              <View style={styles.playerInfo}>
+                <Text style={styles.player} numberOfLines={1}>{player}</Text>
+                <View style={styles.matchupRow}>
+                  {awayLogo && <Image source={{ uri: awayLogo }} style={styles.teamLogoSmall} />}
+                  <Text style={styles.atSymbol}>@</Text>
+                  {homeLogo && <Image source={{ uri: homeLogo }} style={styles.teamLogoSmall} />}
+                </View>
+              </View>
 
-                {/* 🔵 REAL LOGO */}
-                <Image
-                  source={bookLogo}
-                  style={styles.bookLogo}
-                  resizeMode="contain"
-                />
-
-
+              {/* ODDS CHIP */}
+              <View style={styles.oddsChip}>
+                {bookLogo && (
+                  <Image
+                    source={bookLogo}
+                    style={styles.bookLogoSmall}
+                    resizeMode="contain"
+                  />
+                )}
                 <Text style={styles.oddsText}>
                   {formatOdds(resolvedBook?.odds ?? odds)}
                 </Text>
               </View>
             </View>
 
+            {/* PROP LINE */}
+            <View style={styles.propLineRow}>
+              <View style={styles.propLineBadge}>
+                <Text style={styles.propLineText}>
+                  {formatMarketLabel(market)}
+                </Text>
+              </View>
+              <View style={styles.propValueBadge}>
+                <Text style={styles.propValueText}>
+                  {formatSideLabel(side)} {line}
+                </Text>
+              </View>
+
+              {/* BAD LINE BADGE */}
+              {typeof badLineScore === "number" && badLineScore >= 1.0 && (
+                <Pressable
+                  style={styles.badLineBadge}
+                  onPress={() => setShowBadLineInfo((v) => !v)}
+                >
+                  <Text style={styles.badLineText}>⚠️ BAD LINE</Text>
+                </Pressable>
+              )}
+            </View>
+
+            {/* BAD LINE TOOLTIP */}
+            {showBadLineInfo && typeof badLineScore === "number" && (
+              <View style={styles.badLineTooltip}>
+                <Text style={styles.tooltipTitle}>Bad Line Detected</Text>
+                <Text style={styles.tooltipText}>
+                  This line is mispriced relative to recent performance and opponent context.
+                </Text>
+                <Text style={styles.tooltipMeta}>
+                  Score: {badLineScore.toFixed(2)}
+                </Text>
+                <Pressable
+                  style={styles.tooltipClose}
+                  onPress={() => setShowBadLineInfo(false)}
+                >
+                  <Text style={styles.tooltipCloseText}>Dismiss</Text>
+                </Pressable>
+              </View>
+            )}
+
+            {/* STATS ROW */}
+            <View style={styles.statsRow}>
+              {/* HIT RATE WITH PROGRESS */}
+              <View style={styles.statBlock}>
+                <Text style={styles.statLabel}>{displayWindow} HIT RATE</Text>
+                <View style={styles.progressWrap}>
+                  <View style={styles.progressTrack}>
+                    <View
+                      style={[
+                        styles.progressFill,
+                        {
+                          width: `${Math.min(hitRate ?? 0, 100)}%`,
+                          backgroundColor: hitRateColor
+                        }
+                      ]}
+                    />
+                  </View>
+                  <Text style={[styles.statValue, { color: hitRateColor }]}>
+                    {hitRate != null ? `${hitRate}%` : "—"}
+                  </Text>
+                </View>
+              </View>
+
+              {/* AVG */}
+              <View style={styles.statBlockRight}>
+                <Text style={styles.statLabel}>{displayWindow} AVG</Text>
+                <Text style={styles.avgValue}>
+                  {windowAvg != null ? windowAvg.toFixed(1) : "—"}
+                </Text>
+              </View>
+            </View>
           </Pressable>
-          <View style={styles.bottomRow}>
-            <View style={styles.metricBox}>
-              <Text style={styles.metricLabel}>{displayWindow} HIT</Text>
-              <Text style={styles.metricValue}>
-                {hitRate != null ? `${hitRate}%` : "—"}
-              </Text>
-            </View>
-
-            <View style={styles.metricBox}>
-              <Text style={styles.metricLabel}>{displayWindow} AVG</Text>
-              <Text style={styles.metricValue}>
-                {windowAvg != null ? windowAvg.toFixed(1) : "—"}
-              </Text>
-            </View>
-          </View>
-
 
           {/* EXPANDED */}
           {expanded && (
@@ -339,7 +368,10 @@ export default function PropCard(props: PropCardProps) {
                       displayWindow === n && styles.windowPillActive,
                     ]}
                   >
-                    <Text>{n}</Text>
+                    <Text style={[
+                      styles.windowPillText,
+                      displayWindow === n && styles.windowPillTextActive,
+                    ]}>{n}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -361,188 +393,254 @@ function makeStyles(colors: any) {
     ========================= */
     outer: {
       marginHorizontal: 12,
-      marginVertical: 8,
+      marginVertical: 6,
     },
 
     card: {
       backgroundColor: colors.surface.card,
-      borderRadius: 16,
-      padding: 14,
-      borderWidth: 1,
-      borderColor: colors.border.subtle,
+      borderRadius: 20,
+      overflow: "hidden",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 12,
+      elevation: 6,
+    },
+
+    accentLine: {
+      height: 3,
+      width: "100%",
+    },
+
+    contentWrap: {
+      padding: 16,
     },
 
     /* =========================
-       SAVE STAR
+       PLAYER ROW
     ========================= */
-    saveButton: {
-      position: "absolute",
-      top: 8,
-      right: 8,
-      zIndex: 2,
+    playerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 14,
     },
 
-    saveStar: {
-      fontSize: 18,
-      color: colors.text.muted,
-    },
-
-    saveStarOn: {
-      color: colors.accent.primary,
-    },
-
-    /* =========================
-       TOP HEADER SECTION
-    ========================= */
-    header: {
+    headshotWrap: {
       position: "relative",
-      paddingBottom: 10,
-      marginBottom: 8,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border.subtle,
+      width: 52,
+      height: 52,
+      marginRight: 12,
     },
 
-    headerLeft: {
-      position: "absolute",
-      left: 0,
-      top: 0,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-    },
-
-    headerRight: {
-      position: "absolute",
-      right: 0,
-      top: 0,
-      alignItems: "flex-end",
-    },
-
-
-    headerCenter: {
-      flexDirection: "row",
-      alignItems: "center",
-      alignSelf: "center",
-      gap: 10,
-    },
-
-    headerTextBlock: {
-      alignItems: "flex-start",
-    },
-
-
-    /* =========================
-       IMAGES
-    ========================= */
     headshot: {
-      width: 38,
-      height: 38,
-      borderRadius: 19,
+      width: 48,
+      height: 48,
+      borderRadius: 24,
       backgroundColor: colors.surface.cardSoft,
-      marginBottom: 2,
     },
 
-
-    teamLogo: {
-      width: 22,
-      height: 22,
-      resizeMode: "contain",
+    headshotPlaceholder: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: colors.surface.cardSoft,
     },
 
-    bookLogo: {
-      width: 28,
-      height: 14,
-      resizeMode: "contain",
-      opacity: 0.95,
+    headshotRing: {
+      position: "absolute",
+      top: -2,
+      left: -2,
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      borderWidth: 2,
     },
 
-    oddsText: {
-      fontSize: 13,
-      fontWeight: "800",
-      color: colors.text.primary,
+    playerInfo: {
+      flex: 1,
     },
 
-
-    /* =========================
-       TEXT
-    ========================= */
     player: {
-      fontSize: 15,
-      fontWeight: "800",
+      fontSize: 17,
+      fontWeight: "700",
       color: colors.text.primary,
-      textAlign: "left",
+      letterSpacing: -0.3,
+      marginBottom: 4,
     },
 
-    marketLine: {
-      fontSize: 12,
-      color: colors.text.muted,
-      marginTop: 2,
-      textAlign: "left",
-    },
-
-    bookOddsRow: {
+    matchupRow: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 6,
+      gap: 4,
+    },
+
+    teamLogoSmall: {
+      width: 18,
+      height: 18,
+      resizeMode: "contain",
     },
 
     atSymbol: {
-      fontSize: 11,
-      fontWeight: "700",
+      fontSize: 10,
+      fontWeight: "600",
       color: colors.text.muted,
+      marginHorizontal: 2,
+    },
+
+    oddsChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.surface.cardSoft,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 10,
+      gap: 6,
+    },
+
+    bookLogoSmall: {
+      width: 20,
+      height: 12,
+    },
+
+    oddsText: {
+      fontSize: 14,
+      fontWeight: "800",
+      color: colors.text.primary,
     },
 
     /* =========================
-       BOTTOM METRICS ROW
+       PROP LINE ROW
     ========================= */
-    bottomRow: {
+    propLineRow: {
       flexDirection: "row",
-      justifyContent: "space-between",
-      marginTop: 6,
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 16,
     },
 
-    metricBox: {
-      alignItems: "flex-start",
+    propLineBadge: {
+      backgroundColor: `${colors.accent.primary}15`,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 8,
     },
 
-    metricLabel: {
-      fontSize: 11,
-      fontWeight: "700",
-      color: colors.text.muted,
-      marginBottom: 2,
-    },
-
-    metricValue: {
-      fontSize: 16,
-      fontWeight: "900",
+    propLineText: {
+      fontSize: 12,
+      fontWeight: "600",
       color: colors.accent.primary,
+    },
+
+    propValueBadge: {
+      backgroundColor: colors.surface.cardSoft,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 8,
+    },
+
+    propValueText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.text.primary,
+    },
+
+    /* =========================
+       STATS ROW
+    ========================= */
+    statsRow: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      justifyContent: "space-between",
+    },
+
+    statBlock: {
+      flex: 1,
+      marginRight: 16,
+    },
+
+    statBlockRight: {
+      alignItems: "flex-end",
+    },
+
+    statLabel: {
+      fontSize: 10,
+      fontWeight: "600",
+      color: colors.text.muted,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 6,
+    },
+
+    progressWrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+
+    progressTrack: {
+      flex: 1,
+      height: 6,
+      backgroundColor: colors.surface.cardSoft,
+      borderRadius: 3,
+      overflow: "hidden",
+    },
+
+    progressFill: {
+      height: "100%",
+      borderRadius: 3,
+    },
+
+    statValue: {
+      fontSize: 16,
+      fontWeight: "800",
+      minWidth: 48,
+      textAlign: "right",
+    },
+
+    avgValue: {
+      fontSize: 22,
+      fontWeight: "800",
+      color: colors.text.primary,
     },
 
     /* =========================
        EXPANDED AREA
     ========================= */
     expandWrap: {
-      marginTop: 12,
+      marginTop: 4,
+      paddingTop: 16,
+      paddingHorizontal: 16,
+      paddingBottom: 16,
+      borderTopWidth: 1,
+      borderTopColor: colors.border.subtle,
     },
 
     windowToggle: {
       flexDirection: "row",
       justifyContent: "center",
-      marginTop: 10,
+      marginTop: 14,
       gap: 8,
     },
 
     windowPill: {
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 999,
-      borderWidth: 1,
-      borderColor: colors.border.subtle,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 12,
+      backgroundColor: colors.surface.cardSoft,
     },
 
     windowPillActive: {
-      backgroundColor: colors.surface.cardSoft,
-      borderColor: colors.surface.cardSoft,
+      backgroundColor: colors.accent.primary,
+    },
+
+    windowPillText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.text.muted,
+    },
+
+    windowPillTextActive: {
+      color: colors.text.inverse,
     },
 
     /* =========================
@@ -553,65 +651,75 @@ function makeStyles(colors: any) {
       justifyContent: "center",
       paddingLeft: 24,
       backgroundColor: colors.accent.primary,
-      borderRadius: 16,
+      borderRadius: 20,
+      marginVertical: 6,
     },
 
     swipeSaveText: {
       color: colors.text.inverse,
-      fontWeight: "900",
+      fontWeight: "800",
       fontSize: 14,
       letterSpacing: 0.5,
     },
+
+    /* =========================
+       BAD LINE
+    ========================= */
     badLineBadge: {
       backgroundColor: "#2a1414",
       borderColor: "#ff4d4f",
       borderWidth: 1,
       paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: 6,
-      alignSelf: "flex-start",
-      marginTop: 4,
+      paddingVertical: 4,
+      borderRadius: 8,
     },
+
     badLineText: {
       color: "#ff4d4f",
-      fontSize: 11,
-      fontWeight: "600",
+      fontSize: 10,
+      fontWeight: "700",
     },
+
     badLineTooltip: {
-      backgroundColor: "#111",
+      backgroundColor: "#1a1a1a",
       borderColor: "#ff4d4f",
       borderWidth: 1,
-      borderRadius: 8,
-      padding: 10,
-      marginTop: 6,
+      borderRadius: 12,
+      padding: 14,
+      marginTop: 8,
+      marginBottom: 8,
     },
-    
+
     tooltipTitle: {
       color: "#ff4d4f",
       fontWeight: "700",
-      fontSize: 13,
-      marginBottom: 4,
+      fontSize: 14,
+      marginBottom: 6,
     },
-    
+
     tooltipText: {
       color: "#ddd",
-      fontSize: 12,
-      marginBottom: 6,
+      fontSize: 13,
+      lineHeight: 18,
+      marginBottom: 8,
     },
-    
+
     tooltipMeta: {
-      color: "#aaa",
-      fontSize: 11,
-      marginBottom: 6,
+      color: "#888",
+      fontSize: 12,
+      marginBottom: 8,
     },
-    
+
     tooltipClose: {
       alignSelf: "flex-end",
+      paddingVertical: 4,
+      paddingHorizontal: 8,
     },
-    
+
     tooltipCloseText: {
-      color: "#aaa",
-      fontSize: 11,
+      color: "#888",
+      fontSize: 12,
+      fontWeight: "600",
     },
   });
 }

@@ -10,7 +10,7 @@ router = APIRouter(prefix="/ladders", tags=["ladders"])
 # Minimum odds threshold (filter out extreme favorites like -5000)
 MIN_ODDS_THRESHOLD = -800
 
-# Pre-live: Uses player_prop_odds_master (pre-game props)
+# Pre-live: Uses player_prop_odds_master_staging (pre-game props)
 PRE_LIVE_QUERY = """
 WITH props AS (
   SELECT
@@ -24,7 +24,7 @@ WITH props AS (
     p.odds_under AS under_odds,
     p.milestone_odds,
     p.snapshot_ts
-  FROM `nba_live.player_prop_odds_master` p
+  FROM `nba_live.player_prop_odds_master_staging` p
   WHERE LOWER(p.vendor) IN ('draftkings', 'fanduel')
     AND p.market_window = 'FULL'
 ),
@@ -32,12 +32,8 @@ games AS (
   SELECT
     game_id,
     home_team_abbr,
-    away_team_abbr,
-    state,
-    home_score,
-    away_score
+    away_team_abbr
   FROM `nba_live.live_games`
-  WHERE state = 'UPCOMING'
 ),
 players AS (
   SELECT
@@ -49,10 +45,10 @@ SELECT
   p.game_id,
   p.player_id,
   pl.player_name,
-  g.home_team_abbr,
-  g.away_team_abbr,
-  g.home_score,
-  g.away_score,
+  COALESCE(g.home_team_abbr, 'TBD') AS home_team_abbr,
+  COALESCE(g.away_team_abbr, 'TBD') AS away_team_abbr,
+  NULL AS home_score,
+  NULL AS away_score,
   'UPCOMING' AS game_state,
   p.market,
   p.market_type,
@@ -64,7 +60,7 @@ SELECT
   p.snapshot_ts,
   NULL AS current_stat
 FROM props p
-JOIN games g ON p.game_id = g.game_id
+LEFT JOIN games g ON p.game_id = g.game_id
 LEFT JOIN players pl ON p.player_id = pl.player_id
 ORDER BY p.player_id, p.market, p.line, p.book
 """

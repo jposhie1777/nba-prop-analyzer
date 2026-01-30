@@ -26,7 +26,10 @@ import {
   OpponentPositionDefenseRow,
   useOpponentPositionDefense,
 } from "@/hooks/useOpponentPositionDefense";
-import { usePlayerPositions } from "@/hooks/usePlayerPositions";
+import {
+  PlayerPositionRow,
+  usePlayerPositions,
+} from "@/hooks/usePlayerPositions";
 
 function getOpponentRank(
   row: OpponentPositionDefenseRow | undefined,
@@ -59,6 +62,25 @@ function getOpponentRank(
     default:
       return undefined;
   }
+}
+
+function normalizePosition(value?: string) {
+  return value?.trim().toUpperCase();
+}
+
+function resolveOpponentTeamAbbr({
+  playerTeamAbbr,
+  homeTeam,
+  awayTeam,
+}: {
+  playerTeamAbbr?: string;
+  homeTeam?: string;
+  awayTeam?: string;
+}) {
+  if (!playerTeamAbbr || !homeTeam || !awayTeam) return undefined;
+  if (playerTeamAbbr === homeTeam) return awayTeam;
+  if (playerTeamAbbr === awayTeam) return homeTeam;
+  return undefined;
 }
 
 /* ======================================================
@@ -199,16 +221,18 @@ export default function PropsTestScreen() {
   const opponentPositionMap = useMemo(() => {
     const map = new Map<string, OpponentPositionDefenseRow>();
     opponentPositionRows.forEach((row) => {
-      map.set(`${row.opponent_team_abbr}-${row.player_position}`, row);
+      const position = normalizePosition(row.player_position);
+      if (!position) return;
+      map.set(`${row.opponent_team_abbr}-${position}`, row);
     });
     return map;
   }, [opponentPositionRows]);
 
   const playerPositionMap = useMemo(() => {
-    const map = new Map<number, string>();
+    const map = new Map<number, PlayerPositionRow>();
     playerPositions.forEach((row) => {
-      if (row.player_id != null && row.position) {
-        map.set(row.player_id, row.position);
+      if (row.player_id != null && row.position && row.team_abbr) {
+        map.set(row.player_id, row);
       }
     });
     return map;
@@ -222,17 +246,21 @@ export default function PropsTestScreen() {
       const trend = getByPlayer(item.player);
       const spark = resolveSparklineByMarket(item.market, trend);
       const isSaved = savedIds.has(item.id);
-      const playerPosition =
-        playerPositionMap.get(item.player_id) ?? item.player_position;
+      const playerLookup = playerPositionMap.get(item.player_id);
+      const playerPosition = normalizePosition(
+        playerLookup?.position ?? item.player_position,
+      );
+      const playerTeamAbbr =
+        item.playerTeamAbbr ??
+        playerLookup?.team_abbr ??
+        item.team_abbr;
       const opponentTeamAbbr =
         item.opponentTeamAbbr ??
-        (item.playerTeamAbbr && item.homeTeam && item.awayTeam
-          ? item.playerTeamAbbr === item.homeTeam
-            ? item.awayTeam
-            : item.playerTeamAbbr === item.awayTeam
-            ? item.homeTeam
-            : undefined
-          : undefined);
+        resolveOpponentTeamAbbr({
+          playerTeamAbbr,
+          homeTeam: item.homeTeam,
+          awayTeam: item.awayTeam,
+        });
       const opponentRow =
         opponentTeamAbbr && playerPosition
           ? opponentPositionMap.get(

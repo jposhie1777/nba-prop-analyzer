@@ -1,5 +1,5 @@
 // app/(tabs)/more/index.tsx
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 
 import { useTheme } from "@/store/useTheme";
@@ -13,11 +13,9 @@ export default function MoreIndexScreen() {
   const trackedCount = Object.keys(tracked).length;
 
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: colors.surface.base },
-      ]}
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.surface.base }}
+      contentContainerStyle={styles.container}
     >
       {/* Tracked Parlays */}
       <Pressable
@@ -52,6 +50,70 @@ export default function MoreIndexScreen() {
         </Text>
       </Pressable>
 
+      {/* Player Season Averages */}
+      <Pressable
+        onPress={() =>
+          router.push("/(tabs)/more/player-season-averages")
+        }
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.surface.card,
+            borderColor: colors.border.subtle,
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.title,
+            { color: colors.text.primary },
+          ]}
+        >
+          🏀 Player Season Averages
+        </Text>
+
+        <Text
+          style={[
+            styles.subtitle,
+            { color: colors.text.muted },
+          ]}
+        >
+          Search and view player stats for 2024-25
+        </Text>
+      </Pressable>
+
+      {/* Team Season Averages */}
+      <Pressable
+        onPress={() =>
+          router.push("/(tabs)/more/team-season-averages")
+        }
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.surface.card,
+            borderColor: colors.border.subtle,
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.title,
+            { color: colors.text.primary },
+          ]}
+        >
+          🏟️ Team Season Averages
+        </Text>
+
+        <Text
+          style={[
+            styles.subtitle,
+            { color: colors.text.muted },
+          ]}
+        >
+          View team standings and stats for 2024-25
+        </Text>
+      </Pressable>
+
       {/* Live Props (DEV) */}
       <Pressable
         onPress={() => router.push("/live-props-dev")}
@@ -81,47 +143,15 @@ export default function MoreIndexScreen() {
           Simulated live prop feed for testing
         </Text>
       </Pressable>
-
-      {/* Opponent Position Defense */}
-      <Pressable
-        onPress={() =>
-          router.push("/(tabs)/more/opponent-position-defense")
-        }
-        style={[
-          styles.card,
-          {
-            backgroundColor: colors.surface.card,
-            borderColor: colors.border.subtle,
-          },
-        ]}
-      >
-        <Text
-          style={[
-            styles.title,
-            { color: colors.text.primary },
-          ]}
-        >
-          🛡️ Opponent Position Defense
-        </Text>
-
-        <Text
-          style={[
-            styles.subtitle,
-            { color: colors.text.muted },
-          ]}
-        >
-          See opponent averages allowed by position
-        </Text>
-      </Pressable>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     padding: 12,
     gap: 12,
+    paddingBottom: 24,
   },
 
   card: {

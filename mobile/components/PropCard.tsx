@@ -235,31 +235,15 @@ export default function PropCard(props: PropCardProps) {
     >
       <View style={styles.outer}>
         <View style={styles.card}>
-          {/* TOP ACCENT LINE */}
-          <View style={[styles.accentLine, { backgroundColor: hitRateColor }]} />
-
           {/* MAIN CONTENT */}
           <Pressable onPress={onToggleExpand} style={styles.contentWrap}>
-            {/* PLAYER ROW */}
-            <View style={styles.playerRow}>
-              {/* HEADSHOT WITH RING */}
-              <View style={styles.headshotWrap}>
-                {imageUrl ? (
-                  <Image source={{ uri: imageUrl }} style={styles.headshot} />
-                ) : (
-                  <View style={styles.headshotPlaceholder} />
-                )}
-                <View style={[styles.headshotRing, { borderColor: hitRateColor }]} />
-              </View>
-
-              {/* PLAYER INFO */}
-              <View style={styles.playerInfo}>
-                <Text style={styles.player} numberOfLines={1}>{player}</Text>
-                <View style={styles.matchupRow}>
-                  {awayLogo && <Image source={{ uri: awayLogo }} style={styles.teamLogoSmall} />}
-                  <Text style={styles.atSymbol}>@</Text>
-                  {homeLogo && <Image source={{ uri: homeLogo }} style={styles.teamLogoSmall} />}
-                </View>
+            {/* TOP ROW: MATCHUP + ODDS */}
+            <View style={styles.topRow}>
+              {/* MATCHUP LOGOS */}
+              <View style={styles.matchupRow}>
+                {awayLogo && <Image source={{ uri: awayLogo }} style={styles.teamLogo} />}
+                <Text style={styles.atSymbol}>@</Text>
+                {homeLogo && <Image source={{ uri: homeLogo }} style={styles.teamLogo} />}
               </View>
 
               {/* ODDS CHIP */}
@@ -277,29 +261,35 @@ export default function PropCard(props: PropCardProps) {
               </View>
             </View>
 
-            {/* PROP LINE */}
-            <View style={styles.propLineRow}>
-              <View style={styles.propLineBadge}>
-                <Text style={styles.propLineText}>
-                  {formatMarketLabel(market)}
-                </Text>
-              </View>
-              <View style={styles.propValueBadge}>
-                <Text style={styles.propValueText}>
-                  {formatSideLabel(side)} {line}
-                </Text>
+            {/* PLAYER ROW */}
+            <View style={styles.playerRow}>
+              {/* HEADSHOT */}
+              <View style={styles.headshotWrap}>
+                {imageUrl ? (
+                  <Image source={{ uri: imageUrl }} style={styles.headshot} />
+                ) : (
+                  <View style={styles.headshotPlaceholder} />
+                )}
               </View>
 
-              {/* BAD LINE BADGE */}
-              {typeof badLineScore === "number" && badLineScore >= 1.0 && (
-                <Pressable
-                  style={styles.badLineBadge}
-                  onPress={() => setShowBadLineInfo((v) => !v)}
-                >
-                  <Text style={styles.badLineText}>⚠️ BAD LINE</Text>
-                </Pressable>
-              )}
+              {/* PLAYER INFO */}
+              <View style={styles.playerInfo}>
+                <Text style={styles.player} numberOfLines={1}>{player}</Text>
+                <Text style={styles.marketLine}>
+                  {formatMarketLabel(market)} · {formatSideLabel(side)} {line}
+                </Text>
+              </View>
             </View>
+
+            {/* BAD LINE BADGE */}
+            {typeof badLineScore === "number" && badLineScore >= 1.0 && (
+              <Pressable
+                style={styles.badLineBadge}
+                onPress={() => setShowBadLineInfo((v) => !v)}
+              >
+                <Text style={styles.badLineText}>⚠️ BAD LINE</Text>
+              </Pressable>
+            )}
 
             {/* BAD LINE TOOLTIP */}
             {showBadLineInfo && typeof badLineScore === "number" && (
@@ -322,28 +312,13 @@ export default function PropCard(props: PropCardProps) {
 
             {/* STATS ROW */}
             <View style={styles.statsRow}>
-              {/* HIT RATE WITH PROGRESS */}
               <View style={styles.statBlock}>
-                <Text style={styles.statLabel}>{displayWindow} HIT RATE</Text>
-                <View style={styles.progressWrap}>
-                  <View style={styles.progressTrack}>
-                    <View
-                      style={[
-                        styles.progressFill,
-                        {
-                          width: `${Math.min(hitRate ?? 0, 100)}%`,
-                          backgroundColor: hitRateColor
-                        }
-                      ]}
-                    />
-                  </View>
-                  <Text style={[styles.statValue, { color: hitRateColor }]}>
-                    {hitRate != null ? `${hitRate}%` : "—"}
-                  </Text>
-                </View>
+                <Text style={styles.statLabel}>{displayWindow} HIT</Text>
+                <Text style={styles.statValue}>
+                  {hitRate != null ? `${hitRate}%` : "—"}
+                </Text>
               </View>
 
-              {/* AVG */}
               <View style={styles.statBlockRight}>
                 <Text style={styles.statLabel}>{displayWindow} AVG</Text>
                 <Text style={styles.avgValue}>
@@ -398,93 +373,46 @@ function makeStyles(colors: any) {
 
     card: {
       backgroundColor: colors.surface.card,
-      borderRadius: 20,
-      overflow: "hidden",
+      borderRadius: 16,
+      borderWidth: 1.5,
+      borderColor: colors.border.subtle,
       shadowColor: "#000",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.15,
-      shadowRadius: 12,
-      elevation: 6,
-    },
-
-    accentLine: {
-      height: 3,
-      width: "100%",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      elevation: 3,
     },
 
     contentWrap: {
-      padding: 16,
+      padding: 14,
     },
 
     /* =========================
-       PLAYER ROW
+       TOP ROW (MATCHUP + ODDS)
     ========================= */
-    playerRow: {
+    topRow: {
       flexDirection: "row",
+      justifyContent: "space-between",
       alignItems: "center",
-      marginBottom: 14,
-    },
-
-    headshotWrap: {
-      position: "relative",
-      width: 52,
-      height: 52,
-      marginRight: 12,
-    },
-
-    headshot: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      backgroundColor: colors.surface.cardSoft,
-    },
-
-    headshotPlaceholder: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      backgroundColor: colors.surface.cardSoft,
-    },
-
-    headshotRing: {
-      position: "absolute",
-      top: -2,
-      left: -2,
-      width: 52,
-      height: 52,
-      borderRadius: 26,
-      borderWidth: 2,
-    },
-
-    playerInfo: {
-      flex: 1,
-    },
-
-    player: {
-      fontSize: 17,
-      fontWeight: "700",
-      color: colors.text.primary,
-      letterSpacing: -0.3,
-      marginBottom: 4,
+      marginBottom: 12,
     },
 
     matchupRow: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 4,
+      gap: 6,
     },
 
-    teamLogoSmall: {
-      width: 18,
-      height: 18,
+    teamLogo: {
+      width: 24,
+      height: 24,
       resizeMode: "contain",
     },
 
     atSymbol: {
-      fontSize: 10,
-      fontWeight: "600",
+      fontSize: 11,
+      fontWeight: "700",
       color: colors.text.muted,
-      marginHorizontal: 2,
     },
 
     oddsChip: {
@@ -509,39 +437,48 @@ function makeStyles(colors: any) {
     },
 
     /* =========================
-       PROP LINE ROW
+       PLAYER ROW
     ========================= */
-    propLineRow: {
+    playerRow: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 8,
-      marginBottom: 16,
+      marginBottom: 12,
     },
 
-    propLineBadge: {
-      backgroundColor: `${colors.accent.primary}15`,
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: 8,
+    headshotWrap: {
+      width: 44,
+      height: 44,
+      marginRight: 12,
     },
 
-    propLineText: {
-      fontSize: 12,
-      fontWeight: "600",
-      color: colors.accent.primary,
-    },
-
-    propValueBadge: {
+    headshot: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
       backgroundColor: colors.surface.cardSoft,
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: 8,
     },
 
-    propValueText: {
-      fontSize: 12,
+    headshotPlaceholder: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.surface.cardSoft,
+    },
+
+    playerInfo: {
+      flex: 1,
+    },
+
+    player: {
+      fontSize: 16,
       fontWeight: "700",
       color: colors.text.primary,
+      marginBottom: 2,
+    },
+
+    marketLine: {
+      fontSize: 13,
+      color: colors.text.muted,
     },
 
     /* =========================
@@ -549,13 +486,12 @@ function makeStyles(colors: any) {
     ========================= */
     statsRow: {
       flexDirection: "row",
-      alignItems: "flex-end",
       justifyContent: "space-between",
+      marginTop: 4,
     },
 
     statBlock: {
-      flex: 1,
-      marginRight: 16,
+      alignItems: "flex-start",
     },
 
     statBlockRight: {
@@ -563,44 +499,22 @@ function makeStyles(colors: any) {
     },
 
     statLabel: {
-      fontSize: 10,
-      fontWeight: "600",
+      fontSize: 11,
+      fontWeight: "700",
       color: colors.text.muted,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
-      marginBottom: 6,
-    },
-
-    progressWrap: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 10,
-    },
-
-    progressTrack: {
-      flex: 1,
-      height: 6,
-      backgroundColor: colors.surface.cardSoft,
-      borderRadius: 3,
-      overflow: "hidden",
-    },
-
-    progressFill: {
-      height: "100%",
-      borderRadius: 3,
+      marginBottom: 2,
     },
 
     statValue: {
       fontSize: 16,
-      fontWeight: "800",
-      minWidth: 48,
-      textAlign: "right",
+      fontWeight: "900",
+      color: colors.accent.primary,
     },
 
     avgValue: {
-      fontSize: 22,
-      fontWeight: "800",
-      color: colors.text.primary,
+      fontSize: 16,
+      fontWeight: "900",
+      color: colors.accent.primary,
     },
 
     /* =========================
@@ -651,7 +565,7 @@ function makeStyles(colors: any) {
       justifyContent: "center",
       paddingLeft: 24,
       backgroundColor: colors.accent.primary,
-      borderRadius: 20,
+      borderRadius: 16,
       marginVertical: 6,
     },
 
@@ -671,7 +585,9 @@ function makeStyles(colors: any) {
       borderWidth: 1,
       paddingHorizontal: 8,
       paddingVertical: 4,
-      borderRadius: 8,
+      borderRadius: 6,
+      alignSelf: "flex-start",
+      marginBottom: 8,
     },
 
     badLineText: {

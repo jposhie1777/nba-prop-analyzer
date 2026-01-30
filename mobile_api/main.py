@@ -54,6 +54,7 @@ from routes.push import router as push_router
 from routes.alerts_bad_lines import router as alerts_router
 from routes.bad_lines import router as bad_lines_router
 from routes.ladders import router as ladders_router
+from routes.season_averages import router as season_averages_data_router
 
 # ==================================================
 # 🔴 ADDITION: player box stream imports
@@ -139,6 +140,7 @@ app.include_router(bad_lines_router)
 app.include_router(ladders_router)
 app.include_router(game_advanced_stats_router)
 app.include_router(season_averages_ingest_router)
+app.include_router(season_averages_data_router)
 
 
 # ==================================================

@@ -29,19 +29,23 @@ export type Ladder = {
   ladder_by_vendor: VendorBlock[];
 };
 
+export type LadderMode = "pre-live" | "live";
+
 type UseLaddersOptions = {
+  mode?: LadderMode;
   limit?: number;
   minVendors?: number;
   market?: string;
 };
 
 export function useLadders(options: UseLaddersOptions = {}) {
-  const { limit = 50, minVendors = 1, market } = options;
+  const { mode = "pre-live", limit = 50, minVendors = 1, market } = options;
 
   const query = useQuery<Ladder[]>({
-    queryKey: ["ladders", limit, minVendors, market],
+    queryKey: ["ladders", mode, limit, minVendors, market],
     queryFn: async () => {
       const params = new URLSearchParams();
+      params.set("mode", mode);
       params.set("limit", limit.toString());
       params.set("min_vendors", minVendors.toString());
       if (market) {
@@ -59,8 +63,8 @@ export function useLadders(options: UseLaddersOptions = {}) {
       return json.ladders ?? [];
     },
 
-    refetchInterval: 30_000,
-    staleTime: 15_000,
+    refetchInterval: mode === "live" ? 15_000 : 60_000, // Faster refresh for live
+    staleTime: mode === "live" ? 10_000 : 30_000,
   });
 
   return {

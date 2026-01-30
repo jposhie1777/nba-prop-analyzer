@@ -77,6 +77,12 @@ from player_stats_stream import (
 from ingest.game_advanced_stats.routes import router as game_advanced_stats_router
 from ingest.game_advanced_stats.ingest import ingest_yesterday as ingest_game_advanced_stats_yesterday
 
+# ==================================================
+# Season Averages imports
+# ==================================================
+from ingest.season_averages.routes import router as season_averages_ingest_router
+from ingest.season_averages.ingest import ingest_current_season as ingest_season_averages_current
+
 from debug.debug_code import register as register_debug_code
 
 # ==================================================
@@ -132,6 +138,7 @@ app.include_router(alerts_router)
 app.include_router(bad_lines_router)
 app.include_router(ladders_router)
 app.include_router(game_advanced_stats_router)
+app.include_router(season_averages_ingest_router)
 
 
 # ==================================================
@@ -231,6 +238,61 @@ async def startup():
 
         asyncio.create_task(game_advanced_stats_daily_loop())
         print("[STARTUP] -> Game Advanced Stats daily ingest loop started")
+
+        # -----------------------------
+        # DAILY: Season Averages ingest (runs at 6:15 AM ET)
+        # -----------------------------
+        async def season_averages_daily_loop():
+            """
+            Daily loop that ingests season averages for the current season.
+            Runs at 6:15 AM ET, after game advanced stats complete.
+            """
+            from datetime import time as dt_time, timedelta
+
+            INGEST_HOUR = 6
+            INGEST_MINUTE = 15
+
+            print("[SEASON_AVG] Daily ingest loop started")
+            print(f"[SEASON_AVG] Scheduled to run at {INGEST_HOUR}:{INGEST_MINUTE:02d} AM ET")
+
+            while True:
+                try:
+                    now = datetime.now(NY_TZ)
+
+                    # Calculate next run time
+                    next_run = now.replace(
+                        hour=INGEST_HOUR,
+                        minute=INGEST_MINUTE,
+                        second=0,
+                        microsecond=0,
+                    )
+
+                    # If we've passed today's run time, schedule for tomorrow
+                    if now >= next_run:
+                        next_run = next_run + timedelta(days=1)
+
+                    wait_seconds = (next_run - now).total_seconds()
+
+                    print(f"[SEASON_AVG] Next run: {next_run.strftime('%Y-%m-%d %I:%M %p ET')} ({wait_seconds/3600:.1f} hours)")
+
+                    # Wait until next run time
+                    await asyncio.sleep(wait_seconds)
+
+                    # Run the ingest
+                    print(f"\n[SEASON_AVG] ========== DAILY INGEST @ {datetime.now(NY_TZ).strftime('%I:%M %p ET')} ==========")
+
+                    result = await asyncio.to_thread(ingest_season_averages_current)
+
+                    print(f"[SEASON_AVG] Result: {result}")
+                    print(f"[SEASON_AVG] Daily ingest complete\n")
+
+                except Exception as e:
+                    print(f"[SEASON_AVG] ERROR in daily loop: {e}")
+                    # Wait 1 hour before retrying on error
+                    await asyncio.sleep(3600)
+
+        asyncio.create_task(season_averages_daily_loop())
+        print("[STARTUP] -> Season Averages daily ingest loop started")
 
         return
 

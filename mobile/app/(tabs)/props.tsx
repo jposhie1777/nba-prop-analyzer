@@ -22,6 +22,44 @@ import { PropBetslipDrawer } from "@/components/prop/PropBetslipDrawer";
 import { usePropBetslip } from "@/store/usePropBetslip";
 import { normalizeMarket } from "@/utils/normalizeMarket";
 import { useBadLineAlerts } from "@/hooks/useBadLineAlerts";
+import {
+  OpponentPositionDefenseRow,
+  useOpponentPositionDefense,
+} from "@/hooks/useOpponentPositionDefense";
+import { usePlayerPositions } from "@/hooks/usePlayerPositions";
+
+function getOpponentRank(
+  row: OpponentPositionDefenseRow | undefined,
+  market?: string,
+) {
+  if (!row || !market) return undefined;
+  switch (market.toLowerCase()) {
+    case "pts":
+      return row.pts_allowed_rank;
+    case "reb":
+      return row.reb_allowed_rank;
+    case "ast":
+      return row.ast_allowed_rank;
+    case "stl":
+      return row.stl_allowed_rank;
+    case "blk":
+      return row.blk_allowed_rank;
+    case "3pm":
+      return row.fg3m_allowed_rank;
+    case "pa":
+      return row.pa_allowed_rank;
+    case "pr":
+      return row.pr_allowed_rank;
+    case "pra":
+      return row.pra_allowed_rank;
+    case "dd":
+      return row.dd_rate_allowed_rank;
+    case "td":
+      return row.td_rate_allowed_rank;
+    default:
+      return undefined;
+  }
+}
 
 /* ======================================================
    Screen
@@ -45,6 +83,8 @@ export default function PropsTestScreen() {
     filters,
     setFilters,
   } = usePlayerPropsMaster();
+  const { data: opponentPositionRows } = useOpponentPositionDefense();
+  const { data: playerPositions } = usePlayerPositions();
 
   const { getByPlayer } = useHistoricalPlayerTrends();
 
@@ -156,6 +196,24 @@ export default function PropsTestScreen() {
     return map;
   }, [badLines]);
 
+  const opponentPositionMap = useMemo(() => {
+    const map = new Map<string, OpponentPositionDefenseRow>();
+    opponentPositionRows.forEach((row) => {
+      map.set(`${row.opponent_team_abbr}-${row.player_position}`, row);
+    });
+    return map;
+  }, [opponentPositionRows]);
+
+  const playerPositionMap = useMemo(() => {
+    const map = new Map<number, string>();
+    playerPositions.forEach((row) => {
+      if (row.player_id != null && row.position) {
+        map.set(row.player_id, row.position);
+      }
+    });
+    return map;
+  }, [playerPositions]);
+
   /* ======================================================
      RENDER ITEM
   ====================================================== */
@@ -164,6 +222,27 @@ export default function PropsTestScreen() {
       const trend = getByPlayer(item.player);
       const spark = resolveSparklineByMarket(item.market, trend);
       const isSaved = savedIds.has(item.id);
+      const playerPosition =
+        playerPositionMap.get(item.player_id) ?? item.player_position;
+      const opponentTeamAbbr =
+        item.opponentTeamAbbr ??
+        (item.playerTeamAbbr && item.homeTeam && item.awayTeam
+          ? item.playerTeamAbbr === item.homeTeam
+            ? item.awayTeam
+            : item.playerTeamAbbr === item.awayTeam
+            ? item.homeTeam
+            : undefined
+          : undefined);
+      const opponentRow =
+        opponentTeamAbbr && playerPosition
+          ? opponentPositionMap.get(
+              `${opponentTeamAbbr}-${playerPosition}`,
+            )
+          : undefined;
+      const opponentPositionRank = getOpponentRank(
+        opponentRow,
+        item.market,
+      );
 
       return (
         <PropCard
@@ -173,6 +252,9 @@ export default function PropsTestScreen() {
           scrollRef={listRef}
           saved={isSaved}
           badLineScore={badLineMap.get(item.propId)}
+          playerPosition={playerPosition}
+          opponentTeamAbbr={opponentTeamAbbr}
+          opponentPositionRank={opponentPositionRank}
           onSwipeSave={() => saveProp(item)}
           onToggleSave={() =>
             isSaved ? unsaveProp(item.id) : saveProp(item)
@@ -195,6 +277,8 @@ export default function PropsTestScreen() {
       getByPlayer,
       saveProp,
       unsaveProp,
+      opponentPositionMap,
+      playerPositionMap,
     ]
   );
 
@@ -284,167 +368,153 @@ export default function PropsTestScreen() {
                 })}
               </View>
 
-              {/* HIT RATE WINDOW */}
-              <Text style={styles.sectionLabel}>Hit Rate</Text>
-              <View style={styles.pills}>
-                {(["L5", "L10", "L20"] as const).map((w) => {
-                  const active = filters.hitRateWindow === w;
-                  return (
-                    <Pressable
-                      key={w}
-                      onPress={() =>
-                        setFilters((f) => ({
-                          ...f,
-                          hitRateWindow: w,
-                        }))
-                      }
-                    >
-                      <Text
-                        style={[
-                          styles.pill,
-                          active && styles.pillActive,
-                        ]}
-                      >
-                        {w}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              {/* HIT RATE SLIDER */}
-              <Text style={styles.sliderLabel}>
-                Hit Rate ≥ {filters.minHitRate}%
-              </Text>
+              {/* HIT RATE FILTER */}
+              <Text style={styles.sectionLabel}>Min Hit Rate</Text>
               <Slider
                 minimumValue={0}
                 maximumValue={100}
                 step={5}
                 value={filters.minHitRate}
-                onValueChange={(v) =>
-                  setFilters((f) => ({ ...f, minHitRate: v }))
+                onValueChange={(val) =>
+                  setFilters((f) => ({
+                    ...f,
+                    minHitRate: val,
+                  }))
                 }
-                minimumTrackTintColor={colors.accent.primary}
-                thumbTintColor={colors.accent.primary}
               />
-
-              {/* ODDS SLIDER */}
-              <Text style={styles.sliderLabel}>
-                Odds {filters.minOdds} → {filters.maxOdds}
+              <Text style={styles.sliderValue}>
+                {filters.minHitRate}%
               </Text>
+
+              {/* ODDS FILTER */}
+              <Text style={styles.sectionLabel}>Odds Range</Text>
               <Slider
                 minimumValue={-1000}
                 maximumValue={1000}
                 step={25}
                 value={filters.minOdds}
-                onValueChange={(v) =>
-                  setFilters((f) => ({ ...f, minOdds: v }))
+                onValueChange={(val) =>
+                  setFilters((f) => ({
+                    ...f,
+                    minOdds: val,
+                  }))
                 }
               />
+              <Text style={styles.sliderValue}>
+                Min: {filters.minOdds}
+              </Text>
+
               <Slider
                 minimumValue={-1000}
                 maximumValue={1000}
                 step={25}
                 value={filters.maxOdds}
-                onValueChange={(v) =>
-                  setFilters((f) => ({ ...f, maxOdds: v }))
+                onValueChange={(val) =>
+                  setFilters((f) => ({
+                    ...f,
+                    maxOdds: val,
+                  }))
                 }
               />
+              <Text style={styles.sliderValue}>
+                Max: {filters.maxOdds}
+              </Text>
             </View>
           )}
         </View>
-
 
         <FlatList
           ref={listRef}
           data={props}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.list}
         />
+
+        {/* BETSLIP DRAWER */}
+        <PropBetslipDrawer />
       </View>
-      {/* ✅ ADD THIS LINE */}
-      <PropBetslipDrawer />
     </GestureHandlerRootView>
   );
 }
 
 /* ======================================================
-   Styles
+   STYLES
 ====================================================== */
-function makeStyles(colors: any) {
-  return StyleSheet.create({
-    root: { flex: 1 },
-    screen: { flex: 1, backgroundColor: colors.surface.screen },
-    center: { flex: 1, alignItems: "center", justifyContent: "center" },
-    loading: { color: colors.text.muted },
-
+const makeStyles = (colors: any) =>
+  StyleSheet.create({
+    root: {
+      flex: 1,
+    },
+    screen: {
+      flex: 1,
+      backgroundColor: colors.surface.screen,
+    },
+    list: {
+      paddingBottom: 40,
+    },
     filters: {
-      padding: 12,
-      borderBottomWidth: StyleSheet.hairlineWidth,
+      padding: 14,
+      borderBottomWidth: 1,
       borderBottomColor: colors.border.subtle,
-    },
-
-    filtersTitle: {
-      fontSize: 14,
-      fontWeight: "800",
-      color: colors.text.primary,
-      marginBottom: 8,
-    },
-
-    pills: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      marginBottom: 8,
-      gap: 6,
-    },
-
-    pill: {
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      borderRadius: 999,
-      borderWidth: 1,
-      borderColor: colors.border.subtle,
-      color: colors.text.muted,
-      fontSize: 12,
-    },
-
-    pillActive: {
-      backgroundColor: colors.accent.primary,
-      color: colors.text.inverse,
-      borderColor: colors.accent.primary,
-    },
-
-    sliderLabel: {
-      fontSize: 12,
-      color: colors.text.muted,
-      marginTop: 6,
     },
     filterHeader: {
       flexDirection: "row",
-      alignItems: "center",
       justifyContent: "space-between",
-      paddingVertical: 6,
-      marginBottom: 4,
+      alignItems: "center",
     },
-
-    filterHeaderText: {
-      fontSize: 13,
+    filtersTitle: {
+      fontSize: 16,
       fontWeight: "700",
       color: colors.text.primary,
     },
-
     chevron: {
       fontSize: 12,
+      fontWeight: "700",
       color: colors.text.muted,
+    },
+    filterBody: {
+      marginTop: 12,
     },
     sectionLabel: {
       fontSize: 12,
       fontWeight: "700",
       color: colors.text.muted,
-      marginTop: 10,
+      marginTop: 12,
       marginBottom: 4,
     },
-
+    pills: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    pill: {
+      backgroundColor: colors.surface.cardSoft,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 12,
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.text.muted,
+    },
+    pillActive: {
+      backgroundColor: colors.accent.primary,
+      color: colors.text.inverse,
+    },
+    sliderValue: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.text.muted,
+      marginTop: 4,
+    },
+    center: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    loading: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.text.muted,
+    },
   });
-}

@@ -33,19 +33,15 @@ games AS (
 players AS (
   SELECT
     player_id,
-    player_name,
-    team_abbr
+    player_name
   FROM `nba_goat_data.player_lookup`
 )
 SELECT
   p.game_id,
   p.player_id,
   pl.player_name,
-  pl.team_abbr AS player_team_abbr,
-  CASE
-    WHEN pl.team_abbr = g.home_team_abbr THEN g.away_team_abbr
-    ELSE g.home_team_abbr
-  END AS opponent_team_abbr,
+  g.home_team_abbr,
+  g.away_team_abbr,
   p.market,
   p.market_type,
   p.line,
@@ -126,8 +122,8 @@ def get_ladders(
             group["game_id"] = row.game_id
             group["player_id"] = row.player_id
             group["player_name"] = row.player_name or f"Player {row.player_id}"
-            group["player_team_abbr"] = row.player_team_abbr or "UNK"
-            group["opponent_team_abbr"] = row.opponent_team_abbr or "UNK"
+            group["player_team_abbr"] = row.home_team_abbr or "UNK"
+            group["opponent_team_abbr"] = row.away_team_abbr or "UNK"
             group["market"] = row.market
             group["snapshot_ts"] = row.snapshot_ts
 

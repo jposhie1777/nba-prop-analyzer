@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import {
   View,
   Text,
@@ -9,41 +9,35 @@ import {
   Pressable,
 } from "react-native";
 import { useTheme } from "@/store/useTheme";
-import { useLadders, Ladder } from "@/hooks/useLadders";
+import { useLadders, LadderMode } from "@/hooks/useLadders";
 import { LadderCard } from "@/components/ladders/LadderCard";
-
-type Tab = "pre-live" | "live";
 
 export function LaddersScreen() {
   const { colors } = useTheme();
-  const { data, loading, error, refetch } = useLadders();
-  const [activeTab, setActiveTab] = useState<Tab>("pre-live");
+  const [activeTab, setActiveTab] = useState<LadderMode>("pre-live");
 
-  const { preLiveLadders, liveLadders } = useMemo(() => {
-    const preLive: Ladder[] = [];
-    const live: Ladder[] = [];
+  // Separate API calls for each mode
+  const preLive = useLadders({ mode: "pre-live" });
+  const live = useLadders({ mode: "live" });
 
-    for (const ladder of data) {
-      if (ladder.game_state === "LIVE") {
-        live.push(ladder);
-      } else if (ladder.game_state === "UPCOMING") {
-        preLive.push(ladder);
-      }
-      // Skip FINAL games
-    }
+  const currentData = activeTab === "pre-live" ? preLive : live;
+  const { data, loading, error, refetch } = currentData;
 
-    return { preLiveLadders: preLive, liveLadders: live };
-  }, [data]);
-
-  const displayData = activeTab === "pre-live" ? preLiveLadders : liveLadders;
-
+  // Show loading only on initial load
   if (loading && data.length === 0) {
     return (
       <View style={[styles.container, { backgroundColor: colors.surface.background }]}>
+        <TabBar
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          preLiveCount={preLive.data.length}
+          liveCount={live.data.length}
+          colors={colors}
+        />
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.text.secondary} />
           <Text style={[styles.loadingText, { color: colors.text.muted }]}>
-            Loading ladders…
+            Loading {activeTab === "live" ? "live" : "pre-game"} props…
           </Text>
         </View>
       </View>
@@ -53,6 +47,13 @@ export function LaddersScreen() {
   if (error) {
     return (
       <View style={[styles.container, { backgroundColor: colors.surface.background }]}>
+        <TabBar
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          preLiveCount={preLive.data.length}
+          liveCount={live.data.length}
+          colors={colors}
+        />
         <View style={styles.center}>
           <Text style={[styles.errorText, { color: colors.text.primary }]}>
             Failed to load ladders
@@ -67,64 +68,15 @@ export function LaddersScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.surface.background }]}>
-      {/* Sub-tabs */}
-      <View style={[styles.tabBar, { borderBottomColor: colors.border.subtle }]}>
-        <Pressable
-          style={[
-            styles.tab,
-            activeTab === "pre-live" && [
-              styles.activeTab,
-              { borderBottomColor: colors.text.primary },
-            ],
-          ]}
-          onPress={() => setActiveTab("pre-live")}
-        >
-          <Text
-            style={[
-              styles.tabText,
-              { color: activeTab === "pre-live" ? colors.text.primary : colors.text.muted },
-            ]}
-          >
-            Pre-Live
-          </Text>
-          <View style={[styles.badge, { backgroundColor: colors.surface.card }]}>
-            <Text style={[styles.badgeText, { color: colors.text.muted }]}>
-              {preLiveLadders.length}
-            </Text>
-          </View>
-        </Pressable>
+      <TabBar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        preLiveCount={preLive.data.length}
+        liveCount={live.data.length}
+        colors={colors}
+      />
 
-        <Pressable
-          style={[
-            styles.tab,
-            activeTab === "live" && [
-              styles.activeTab,
-              { borderBottomColor: "#22c55e" },
-            ],
-          ]}
-          onPress={() => setActiveTab("live")}
-        >
-          <View style={styles.liveIndicator}>
-            {liveLadders.length > 0 && <View style={styles.liveDot} />}
-            <Text
-              style={[
-                styles.tabText,
-                { color: activeTab === "live" ? "#22c55e" : colors.text.muted },
-              ]}
-            >
-              Live
-            </Text>
-          </View>
-          <View style={[styles.badge, { backgroundColor: colors.surface.card }]}>
-            <Text style={[styles.badgeText, { color: colors.text.muted }]}>
-              {liveLadders.length}
-            </Text>
-          </View>
-        </Pressable>
-      </View>
-
-      {/* Content */}
-      {displayData.length === 0 ? (
+      {data.length === 0 ? (
         <View style={styles.center}>
           <Text style={[styles.emptyText, { color: colors.text.primary }]}>
             No {activeTab === "live" ? "live" : "pre-live"} ladders
@@ -137,7 +89,7 @@ export function LaddersScreen() {
         </View>
       ) : (
         <FlatList
-          data={displayData}
+          data={data}
           keyExtractor={(item) =>
             `${item.game_id}-${item.player_id}-${item.market}`
           }
@@ -152,6 +104,78 @@ export function LaddersScreen() {
           }
         />
       )}
+    </View>
+  );
+}
+
+// Extracted TabBar component for reuse
+function TabBar({
+  activeTab,
+  setActiveTab,
+  preLiveCount,
+  liveCount,
+  colors,
+}: {
+  activeTab: LadderMode;
+  setActiveTab: (tab: LadderMode) => void;
+  preLiveCount: number;
+  liveCount: number;
+  colors: any;
+}) {
+  return (
+    <View style={[styles.tabBar, { borderBottomColor: colors.border.subtle }]}>
+      <Pressable
+        style={[
+          styles.tab,
+          activeTab === "pre-live" && [
+            styles.activeTab,
+            { borderBottomColor: colors.text.primary },
+          ],
+        ]}
+        onPress={() => setActiveTab("pre-live")}
+      >
+        <Text
+          style={[
+            styles.tabText,
+            { color: activeTab === "pre-live" ? colors.text.primary : colors.text.muted },
+          ]}
+        >
+          Pre-Live
+        </Text>
+        <View style={[styles.badge, { backgroundColor: colors.surface.card }]}>
+          <Text style={[styles.badgeText, { color: colors.text.muted }]}>
+            {preLiveCount}
+          </Text>
+        </View>
+      </Pressable>
+
+      <Pressable
+        style={[
+          styles.tab,
+          activeTab === "live" && [
+            styles.activeTab,
+            { borderBottomColor: "#22c55e" },
+          ],
+        ]}
+        onPress={() => setActiveTab("live")}
+      >
+        <View style={styles.liveIndicator}>
+          {liveCount > 0 && <View style={styles.liveDot} />}
+          <Text
+            style={[
+              styles.tabText,
+              { color: activeTab === "live" ? "#22c55e" : colors.text.muted },
+            ]}
+          >
+            Live
+          </Text>
+        </View>
+        <View style={[styles.badge, { backgroundColor: colors.surface.card }]}>
+          <Text style={[styles.badgeText, { color: colors.text.muted }]}>
+            {liveCount}
+          </Text>
+        </View>
+      </Pressable>
     </View>
   );
 }

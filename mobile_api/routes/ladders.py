@@ -1,14 +1,68 @@
 # routes/ladders.py
 from fastapi import APIRouter, Query
-from google.cloud import bigquery
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Literal
 from collections import defaultdict
 
 from bq import get_bq_client
 
 router = APIRouter(prefix="/ladders", tags=["ladders"])
 
-LADDERS_QUERY = """
+# Pre-live: Uses player_prop_odds_master (pre-game props)
+PRE_LIVE_QUERY = """
+WITH props AS (
+  SELECT
+    p.game_id,
+    p.player_id,
+    p.market_key AS market,
+    p.market_type,
+    p.line_value AS line,
+    p.vendor AS book,
+    p.odds_over AS over_odds,
+    p.odds_under AS under_odds,
+    p.milestone_odds,
+    p.snapshot_ts
+  FROM `nba_live.player_prop_odds_master` p
+  WHERE LOWER(p.vendor) IN ('draftkings', 'fanduel')
+    AND p.market_window = 'FULL'
+),
+games AS (
+  SELECT
+    game_id,
+    home_team_abbr,
+    away_team_abbr,
+    state
+  FROM `nba_live.live_games`
+  WHERE state = 'UPCOMING'
+),
+players AS (
+  SELECT
+    player_id,
+    player_name
+  FROM `nba_goat_data.player_lookup`
+)
+SELECT
+  p.game_id,
+  p.player_id,
+  pl.player_name,
+  g.home_team_abbr,
+  g.away_team_abbr,
+  'UPCOMING' AS game_state,
+  p.market,
+  p.market_type,
+  p.line,
+  p.book,
+  p.over_odds,
+  p.under_odds,
+  p.milestone_odds,
+  p.snapshot_ts
+FROM props p
+JOIN games g ON p.game_id = g.game_id
+LEFT JOIN players pl ON p.player_id = pl.player_id
+ORDER BY p.player_id, p.market, p.line, p.book
+"""
+
+# Live: Uses v_live_player_prop_odds_latest (live odds)
+LIVE_QUERY = """
 WITH props AS (
   SELECT
     p.game_id,
@@ -31,6 +85,7 @@ games AS (
     away_team_abbr,
     state
   FROM `nba_live.live_games`
+  WHERE state = 'LIVE'
 ),
 players AS (
   SELECT
@@ -44,7 +99,7 @@ SELECT
   pl.player_name,
   g.home_team_abbr,
   g.away_team_abbr,
-  g.state AS game_state,
+  'LIVE' AS game_state,
   p.market,
   p.market_type,
   p.line,
@@ -78,30 +133,21 @@ def calculate_ladder_score(odds: int) -> float:
 
 def determine_tier(vendor_count: int, score_spread: float) -> str:
     """Determine ladder tier based on vendor coverage and score spread."""
-    if vendor_count >= 3 and score_spread >= 2.0:
+    if vendor_count >= 2 and score_spread >= 1.0:
         return "A"
-    elif vendor_count >= 2 and score_spread >= 1.0:
+    elif vendor_count >= 1 and score_spread >= 0.5:
         return "B"
     else:
         return "C"
 
 
-@router.get("")
-def get_ladders(
-    limit: int = Query(50, ge=10, le=200),
-    min_vendors: int = Query(1, ge=1, le=5),
-    market: str | None = Query(None, description="Filter by market (pts, ast, reb, etc.)"),
-) -> Dict[str, Any]:
-    """
-    Returns prop ladders - comparison of lines across vendors for each player+market.
-
-    A ladder shows all available lines from different sportsbooks for the same prop,
-    allowing users to find the best value.
-    """
-    client = get_bq_client()
-
-    job = client.query(LADDERS_QUERY)
-    rows = list(job.result())
+def process_rows_to_ladders(
+    rows: List,
+    min_vendors: int,
+    market_filter: str | None,
+    limit: int,
+) -> List[Dict[str, Any]]:
+    """Process query rows into ladder format."""
 
     # Group by player_id + market to build ladders
     ladder_groups: Dict[str, Dict[str, Any]] = defaultdict(lambda: {
@@ -159,7 +205,7 @@ def get_ladders(
             continue
 
         # Apply market filter
-        if market and group["market"] != market:
+        if market_filter and group["market"] != market_filter:
             continue
 
         # Calculate aggregate stats
@@ -213,9 +259,34 @@ def get_ladders(
     ladders.sort(key=lambda x: x["ladder_score"], reverse=True)
 
     # Apply limit
-    ladders = ladders[:limit]
+    return ladders[:limit]
+
+
+@router.get("")
+def get_ladders(
+    mode: Literal["pre-live", "live"] = Query("pre-live", description="pre-live for upcoming games, live for in-progress"),
+    limit: int = Query(50, ge=10, le=200),
+    min_vendors: int = Query(1, ge=1, le=5),
+    market: str | None = Query(None, description="Filter by market (pts, ast, reb, etc.)"),
+) -> Dict[str, Any]:
+    """
+    Returns prop ladders - comparison of lines across vendors for each player+market.
+
+    - pre-live: Shows props for upcoming games (from player_prop_odds_master)
+    - live: Shows props for in-progress games (from v_live_player_prop_odds_latest)
+    """
+    client = get_bq_client()
+
+    # Select query based on mode
+    query = PRE_LIVE_QUERY if mode == "pre-live" else LIVE_QUERY
+
+    job = client.query(query)
+    rows = list(job.result())
+
+    ladders = process_rows_to_ladders(rows, min_vendors, market, limit)
 
     return {
+        "mode": mode,
         "count": len(ladders),
         "ladders": ladders,
     }

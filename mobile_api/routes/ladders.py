@@ -136,10 +136,10 @@ SELECT
   p.milestone_odds,
   p.snapshot_ts,
   CASE
-    WHEN UPPER(p.market) IN ('PTS', 'POINTS') THEN ps.pts
-    WHEN UPPER(p.market) IN ('REB', 'REBOUNDS') THEN ps.reb
-    WHEN UPPER(p.market) IN ('AST', 'ASSISTS') THEN ps.ast
-    WHEN UPPER(p.market) IN ('3PM', '3PTS', 'THREES', 'FG3M') THEN ps.fg3_made
+    WHEN UPPER(p.market) IN ('PTS', 'POINTS', 'PLAYER_POINTS') THEN ps.pts
+    WHEN UPPER(p.market) IN ('REB', 'REBOUNDS', 'PLAYER_REBOUNDS', 'TRB') THEN ps.reb
+    WHEN UPPER(p.market) IN ('AST', 'ASSISTS', 'PLAYER_ASSISTS') THEN ps.ast
+    WHEN UPPER(p.market) IN ('3PM', '3PTS', 'THREES', 'FG3M', 'THREE_POINTERS', 'PLAYER_THREES', 'MADE_THREES') THEN ps.fg3_made
     ELSE NULL
   END AS current_stat
 FROM props p
@@ -229,7 +229,11 @@ def process_rows_to_ladders(
         if odds is None:
             continue
 
+        # Convert to int for comparison
+        odds = int(odds)
+
         # Filter out extreme odds (e.g., -5000)
+        # Skip if odds are worse than min_odds threshold
         if odds < min_odds:
             continue
 
@@ -285,16 +289,22 @@ def process_rows_to_ladders(
             sorted_rungs = sorted(rungs, key=lambda x: x["line"])
 
             # Dedupe: prefer whole numbers over half-lines (e.g., keep 4, drop 3.5 and 4.5)
-            whole_lines = {r["line"] for r in sorted_rungs if r["line"] == int(r["line"])}
+            # Build set of whole number lines (e.g., 2.0, 3.0, 4.0)
+            whole_lines = set()
+            for r in sorted_rungs:
+                line = round(r["line"], 1)
+                if line == int(line):
+                    whole_lines.add(int(line))
+
             deduped_rungs = []
             for r in sorted_rungs:
-                line = r["line"]
-                is_half = line != int(line)
-                if is_half:
-                    # Check if nearby whole number exists
-                    floor_line = float(int(line))
-                    ceil_line = float(int(line) + 1)
-                    if floor_line in whole_lines or ceil_line in whole_lines:
+                line = round(r["line"], 1)
+                # Check if this is a half-line (x.5)
+                if line != int(line):
+                    # It's a half-line - check if adjacent whole numbers exist
+                    floor_val = int(line)  # e.g., 3.5 -> 3
+                    ceil_val = floor_val + 1  # e.g., 3.5 -> 4
+                    if floor_val in whole_lines or ceil_val in whole_lines:
                         continue  # Skip this half-line
                 deduped_rungs.append(r)
 

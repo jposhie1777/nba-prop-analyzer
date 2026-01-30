@@ -22,12 +22,14 @@ WITH props AS (
     p.milestone_odds,
     p.snapshot_ts
   FROM `nba_live.v_live_player_prop_odds_latest` p
+  WHERE LOWER(p.book) IN ('draftkings', 'fanduel')
 ),
 games AS (
   SELECT
     game_id,
     home_team_abbr,
-    away_team_abbr
+    away_team_abbr,
+    state
   FROM `nba_live.live_games`
 ),
 players AS (
@@ -42,6 +44,7 @@ SELECT
   pl.player_name,
   g.home_team_abbr,
   g.away_team_abbr,
+  g.state AS game_state,
   p.market,
   p.market_type,
   p.line,
@@ -107,6 +110,7 @@ def get_ladders(
         "player_name": None,
         "player_team_abbr": None,
         "opponent_team_abbr": None,
+        "game_state": None,
         "market": None,
         "vendors": defaultdict(list),
         "all_lines": [],
@@ -124,6 +128,7 @@ def get_ladders(
             group["player_name"] = row.player_name or f"Player {row.player_id}"
             group["player_team_abbr"] = row.home_team_abbr or "UNK"
             group["opponent_team_abbr"] = row.away_team_abbr or "UNK"
+            group["game_state"] = row.game_state or "UPCOMING"
             group["market"] = row.market
             group["snapshot_ts"] = row.snapshot_ts
 
@@ -196,6 +201,7 @@ def get_ladders(
             "player_name": group["player_name"],
             "player_team_abbr": group["player_team_abbr"],
             "opponent_team_abbr": group["opponent_team_abbr"],
+            "game_state": group["game_state"],
             "market": group["market"],
             "ladder_tier": tier,
             "anchor_line": float(anchor_line) if anchor_line else 0,

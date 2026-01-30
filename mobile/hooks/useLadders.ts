@@ -13,12 +13,15 @@ export type VendorBlock = {
   rungs: Rung[];
 };
 
+export type GameState = "UPCOMING" | "LIVE" | "FINAL";
+
 export type Ladder = {
   game_id: number;
   player_id: number;
   player_name: string;
   player_team_abbr: string;
   opponent_team_abbr: string;
+  game_state: GameState;
   market: string;
   ladder_tier: string;
   anchor_line: number;

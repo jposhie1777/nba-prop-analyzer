@@ -4,6 +4,7 @@ import { fetchPlayerPositions } from "@/lib/apiMaster";
 export type PlayerPositionRow = {
   player_id: number;
   position: string;
+  team_abbr: string;
 };
 
 export function usePlayerPositions() {

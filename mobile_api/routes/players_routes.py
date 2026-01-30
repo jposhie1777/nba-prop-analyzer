@@ -55,10 +55,12 @@ def get_player_positions() -> Dict[str, Any]:
     query = f"""
     SELECT
       player_id,
-      position
+      position,
+      team_abbr
     FROM `{DATASET}.{ROSTERS_VIEW}`
     WHERE player_id IS NOT NULL
       AND position IS NOT NULL
+      AND team_abbr IS NOT NULL
     QUALIFY ROW_NUMBER() OVER (
       PARTITION BY player_id
       ORDER BY depth ASC, role ASC

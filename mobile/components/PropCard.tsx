@@ -131,6 +131,8 @@ export default function PropCard(props: PropCardProps) {
     onToggleExpand,
     scrollRef,
     hitRatePct,
+    homeTeam,
+    awayTeam,
   } = props;
 
   /* =========================
@@ -177,13 +179,8 @@ export default function PropCard(props: PropCardProps) {
       ? `https://a.espncdn.com/i/headshots/nba/players/full/${playerId}.png`
       : null);
 
-  const homeLogo = props.homeTeam
-  ? TEAM_LOGOS[props.homeTeam]
-  : null;
-
-  const awayLogo = props.awayTeam
-    ? TEAM_LOGOS[props.awayTeam]
-    : null;
+  const homeLogo = homeTeam ? TEAM_LOGOS[homeTeam] : null;
+  const awayLogo = awayTeam ? TEAM_LOGOS[awayTeam] : null;
     
   /* =========================
      BOOK
@@ -248,10 +245,14 @@ export default function PropCard(props: PropCardProps) {
               <View style={styles.matchupRow}>
                 {awayLogo ? (
                   <Image source={{ uri: awayLogo }} style={styles.teamLogo} />
+                ) : awayTeam ? (
+                  <Text style={styles.teamAbbr}>{awayTeam}</Text>
                 ) : null}
                 <Text style={styles.atSymbol}>@</Text>
                 {homeLogo ? (
                   <Image source={{ uri: homeLogo }} style={styles.teamLogo} />
+                ) : homeTeam ? (
+                  <Text style={styles.teamAbbr}>{homeTeam}</Text>
                 ) : null}
               </View>
 
@@ -427,6 +428,12 @@ function makeStyles(colors: any) {
       width: 24,
       height: 24,
       resizeMode: "contain",
+    },
+
+    teamAbbr: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.text.muted,
     },
 
     atSymbol: {

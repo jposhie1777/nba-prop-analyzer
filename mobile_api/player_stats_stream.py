@@ -6,7 +6,7 @@ import random
 import time
 import traceback
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
@@ -60,7 +60,7 @@ WITH ranked AS (
       ORDER BY ingested_at DESC
     ) AS rn
   FROM `graphite-flare-477419-h7.nba_live.live_player_stats`
-  WHERE game_date >= DATE_SUB(@game_date, INTERVAL 1 DAY)  -- 🔧 FIX (midnight safety)
+  WHERE game_date = @game_date
 )
 SELECT *
 FROM ranked
@@ -108,8 +108,20 @@ def _compute_backoff(failures: int) -> float:
 # BigQuery fetch (TODAY – NBA TIME)
 # ======================================================
 
+def get_betting_day():
+    """
+    Returns the 'betting day' date.
+    NBA games can run past midnight, so if it's before 3 AM ET,
+    we use yesterday's date to catch late-finishing games.
+    """
+    now_et = datetime.now(ZoneInfo("America/New_York"))
+    if now_et.hour < 3:
+        return (now_et - timedelta(days=1)).date()
+    return now_et.date()
+
+
 async def fetch_player_stats_snapshot() -> Dict[str, Any]:
-    nba_today = datetime.now(ZoneInfo("America/New_York")).date()
+    nba_today = get_betting_day()
 
     def _run():
         client = get_bq_client()

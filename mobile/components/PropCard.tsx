@@ -235,15 +235,24 @@ export default function PropCard(props: PropCardProps) {
     >
       <View style={styles.outer}>
         <View style={styles.card}>
-          {/* MAIN CONTENT */}
-          <Pressable onPress={onToggleExpand} style={styles.contentWrap}>
+          {/* LEFT ACCENT BAR */}
+          <View style={[styles.accentBar, { backgroundColor: hitRateColor }]} />
+
+          {/* CARD BODY */}
+          <View style={styles.cardBody}>
+            {/* MAIN CONTENT */}
+            <Pressable onPress={onToggleExpand} style={styles.contentWrap}>
             {/* TOP ROW: MATCHUP + ODDS */}
             <View style={styles.topRow}>
               {/* MATCHUP LOGOS */}
               <View style={styles.matchupRow}>
-                {awayLogo && <Image source={{ uri: awayLogo }} style={styles.teamLogo} />}
+                {awayLogo ? (
+                  <Image source={{ uri: awayLogo }} style={styles.teamLogo} />
+                ) : null}
                 <Text style={styles.atSymbol}>@</Text>
-                {homeLogo && <Image source={{ uri: homeLogo }} style={styles.teamLogo} />}
+                {homeLogo ? (
+                  <Image source={{ uri: homeLogo }} style={styles.teamLogo} />
+                ) : null}
               </View>
 
               {/* ODDS CHIP */}
@@ -328,30 +337,31 @@ export default function PropCard(props: PropCardProps) {
             </View>
           </Pressable>
 
-          {/* EXPANDED */}
-          {expanded && (
-            <View style={styles.expandWrap}>
-              <MiniBarSparkline data={sparkline} dates={dates} />
+            {/* EXPANDED */}
+            {expanded && (
+              <View style={styles.expandWrap}>
+                <MiniBarSparkline data={sparkline} dates={dates} />
 
-              <View style={styles.windowToggle}>
-                {(["L5", "L10", "L20"] as const).map((n) => (
-                  <Pressable
-                    key={n}
-                    onPress={() => setDisplayWindow(n)}
-                    style={[
-                      styles.windowPill,
-                      displayWindow === n && styles.windowPillActive,
-                    ]}
-                  >
-                    <Text style={[
-                      styles.windowPillText,
-                      displayWindow === n && styles.windowPillTextActive,
-                    ]}>{n}</Text>
-                  </Pressable>
-                ))}
+                <View style={styles.windowToggle}>
+                  {(["L5", "L10", "L20"] as const).map((n) => (
+                    <Pressable
+                      key={n}
+                      onPress={() => setDisplayWindow(n)}
+                      style={[
+                        styles.windowPill,
+                        displayWindow === n && styles.windowPillActive,
+                      ]}
+                    >
+                      <Text style={[
+                        styles.windowPillText,
+                        displayWindow === n && styles.windowPillTextActive,
+                      ]}>{n}</Text>
+                    </Pressable>
+                  ))}
+                </View>
               </View>
-            </View>
-          )}
+            )}
+          </View>
         </View>
       </View>
     </Swipeable>
@@ -372,6 +382,7 @@ function makeStyles(colors: any) {
     },
 
     card: {
+      flexDirection: "row",
       backgroundColor: colors.surface.card,
       borderRadius: 16,
       borderWidth: 1.5,
@@ -381,6 +392,15 @@ function makeStyles(colors: any) {
       shadowOpacity: 0.08,
       shadowRadius: 8,
       elevation: 3,
+      overflow: "hidden",
+    },
+
+    accentBar: {
+      width: 4,
+    },
+
+    cardBody: {
+      flex: 1,
     },
 
     contentWrap: {

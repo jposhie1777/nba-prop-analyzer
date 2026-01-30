@@ -1,4 +1,4 @@
-// theme/colors.ts
+// mobile/theme/color.ts
 
 const colors = {
   /* ======================

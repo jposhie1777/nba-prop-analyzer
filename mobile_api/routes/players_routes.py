@@ -8,6 +8,7 @@ router = APIRouter(prefix="/players", tags=["players"])
 
 DATASET = "nba_goat_data"
 TABLE = "v_player_season_mega"
+ROSTERS_VIEW = "v_team_rosters_with_player_id"
 
 
 @router.get("/season-mega")
@@ -40,4 +41,36 @@ def get_player_season_mega(limit: int = 500) -> Dict[str, Any]:
         "rows": rows,
         "count": len(rows),
         "source": f"{DATASET}.{TABLE}",
+    }
+
+
+@router.get("/positions")
+def get_player_positions() -> Dict[str, Any]:
+    """
+    Player position lookup keyed by player_id.
+    """
+
+    client = get_bq_client()
+
+    query = f"""
+    SELECT
+      player_id,
+      position
+    FROM `{DATASET}.{ROSTERS_VIEW}`
+    WHERE player_id IS NOT NULL
+      AND position IS NOT NULL
+    QUALIFY ROW_NUMBER() OVER (
+      PARTITION BY player_id
+      ORDER BY depth ASC, role ASC
+    ) = 1
+    """
+
+    job = client.query(query)
+
+    rows = [dict(r) for r in job]
+
+    return {
+        "rows": rows,
+        "count": len(rows),
+        "source": f"{DATASET}.{ROSTERS_VIEW}",
     }

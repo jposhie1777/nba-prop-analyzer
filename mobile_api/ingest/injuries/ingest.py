@@ -15,8 +15,8 @@ from bq import get_bq_client
 # ==================================================
 # Constants
 # ==================================================
-# NBA-specific endpoints use /nba/v1 path
-BDL_NBA_V1 = "https://api.balldontlie.io/nba/v1"
+# Player injuries endpoint is at /v1/player_injuries
+BDL_BASE_V1 = "https://api.balldontlie.io/v1"
 INJURIES_TABLE = "nba_live.player_injuries"
 REQUEST_DELAY_SEC = 0.3
 BATCH_SIZE = 100
@@ -72,7 +72,7 @@ def fetch_all_injuries(
 
         try:
             resp = requests.get(
-                f"{BDL_NBA_V1}/injuries",
+                f"{BDL_BASE_V1}/player_injuries",
                 params=params,
                 headers=headers,
                 timeout=30,
@@ -113,37 +113,22 @@ def transform_injury_to_row(injury: dict[str, Any], run_ts: str) -> dict[str, An
     """
     Transform a single injury API record to BigQuery row.
 
-    Expected API response shape:
+    Expected API response shape (from /v1/player_injuries):
     {
-        "id": 123,
         "player": {
             "id": 456,
             "first_name": "Anthony",
             "last_name": "Davis",
-            ...
-        },
-        "team": {
-            "id": 14,
-            "abbreviation": "LAL",
-            "full_name": "Los Angeles Lakers",
-            ...
+            "team_id": 14,
+            "position": "F-C",
+            "jersey_number": "3"
         },
         "status": "Out",
-        "comment": "Ankle",
-        "date": "2025-01-15",
-        "return_date": null
+        "description": "Ankle",
+        "return_date": "2025-01-20"
     }
     """
     player = injury.get("player") or {}
-    team = injury.get("team") or {}
-
-    # Parse report date
-    report_date = None
-    if injury.get("date"):
-        try:
-            report_date = injury["date"]
-        except (ValueError, AttributeError):
-            pass
 
     # Parse return date
     return_date = None
@@ -155,7 +140,7 @@ def transform_injury_to_row(injury: dict[str, Any], run_ts: str) -> dict[str, An
 
     return {
         # Metadata
-        "injury_id": injury.get("id"),
+        "injury_id": None,  # API doesn't provide injury ID
         "run_ts": run_ts,
         "ingested_at": datetime.now(UTC_TZ).isoformat(),
 
@@ -165,15 +150,15 @@ def transform_injury_to_row(injury: dict[str, Any], run_ts: str) -> dict[str, An
         "player_last_name": player.get("last_name"),
         "player_name": f"{player.get('first_name', '')} {player.get('last_name', '')}".strip(),
 
-        # Team info
-        "team_id": team.get("id"),
-        "team_abbreviation": team.get("abbreviation"),
-        "team_name": team.get("full_name"),
+        # Team info (team_id is on player object)
+        "team_id": player.get("team_id"),
+        "team_abbreviation": None,  # Not provided in API response
+        "team_name": None,  # Not provided in API response
 
         # Injury details
         "status": injury.get("status"),  # "Out", "Questionable", "Doubtful", "Day-To-Day", "Probable"
-        "injury_type": injury.get("comment"),  # "Ankle", "Knee", "Rest", etc.
-        "report_date": report_date,
+        "injury_type": injury.get("description"),  # "Ankle", "Knee", "Rest", etc.
+        "report_date": None,  # Not provided in API response
         "return_date": return_date,
     }
 

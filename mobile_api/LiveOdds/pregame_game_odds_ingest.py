@@ -170,10 +170,16 @@ def ingest_pregame_game_odds() -> dict:
         "Accept": "application/json",
     }
 
+    # Explicitly request DraftKings and FanDuel vendors
+    params = {
+        "game_ids[]": upcoming_game_ids,
+        "vendors[]": ["draftkings", "fanduel"],
+    }
+
     resp = requests.get(
         f"{BDL_V2}/odds",
         headers=headers,
-        params={"game_ids[]": upcoming_game_ids},
+        params=params,
         timeout=TIMEOUT_SEC,
     )
     resp.raise_for_status()
@@ -522,7 +528,7 @@ def debug_pregame_odds() -> dict:
 
     debug_info["upcoming_game_ids"] = upcoming_ids
 
-    # 4. Fetch odds for upcoming games
+    # 4. Fetch odds for upcoming games (with explicit vendors[] param)
     if upcoming_ids:
         try:
             headers = {
@@ -530,10 +536,16 @@ def debug_pregame_odds() -> dict:
                 "Accept": "application/json",
             }
 
+            # Explicitly request DraftKings and FanDuel
+            params = {
+                "game_ids[]": upcoming_ids,
+                "vendors[]": ["draftkings", "fanduel"],
+            }
+
             resp = requests.get(
                 f"{BDL_V2}/odds",
                 headers=headers,
-                params={"game_ids[]": upcoming_ids},
+                params=params,
                 timeout=TIMEOUT_SEC,
             )
             resp.raise_for_status()
@@ -541,6 +553,7 @@ def debug_pregame_odds() -> dict:
             odds_data = resp.json().get("data", [])
             debug_info["odds_api_response"] = {
                 "total_records": len(odds_data),
+                "vendors_requested": ["draftkings", "fanduel"],
                 "records": odds_data[:20],  # Limit to first 20 for readability
             }
 

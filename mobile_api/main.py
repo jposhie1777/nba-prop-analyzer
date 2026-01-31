@@ -93,6 +93,12 @@ from ingest.game_advanced_stats.ingest import ingest_yesterday as ingest_game_ad
 from ingest.season_averages.routes import router as season_averages_ingest_router
 from ingest.season_averages.ingest import ingest_current_season as ingest_season_averages_current
 
+# ==================================================
+# Injuries and WOWY imports
+# ==================================================
+from ingest.injuries.routes import router as injuries_router
+from ingest.injuries.ingest import ingest_injuries
+
 from debug.debug_code import register as register_debug_code
 
 # ==================================================
@@ -152,6 +158,7 @@ app.include_router(game_advanced_stats_router)
 app.include_router(season_averages_ingest_router)
 app.include_router(season_averages_data_router)
 app.include_router(opponent_position_defense_router)
+app.include_router(injuries_router)
 
 
 # ==================================================

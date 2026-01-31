@@ -165,15 +165,28 @@ def ingest_pregame_game_odds() -> dict:
     if not upcoming_game_ids:
         return {"status": "SKIPPED", "reason": "no upcoming games"}
 
+    # Convert to set for fast lookup
+    upcoming_set = set(upcoming_game_ids)
+
     headers = {
         "Authorization": f"Bearer {require_api_key()}",
         "Accept": "application/json",
     }
 
+    # Query by date to get all odds, then filter to upcoming games
+    # This may return more complete data than querying by game_ids
+    game_date = today_ny()
+    params = {
+        "dates[]": [game_date],
+        "per_page": 100,  # Get more results
+    }
+
+    print(f"[PREGAME_ODDS] Fetching odds for date {game_date}")
+
     resp = requests.get(
         f"{BDL_V2}/odds",
         headers=headers,
-        params={"game_ids[]": upcoming_game_ids},
+        params=params,
         timeout=TIMEOUT_SEC,
     )
     resp.raise_for_status()
@@ -181,12 +194,18 @@ def ingest_pregame_game_odds() -> dict:
     payload = resp.json()
     now = datetime.now(timezone.utc)
 
+    print(f"[PREGAME_ODDS] API returned {len(payload.get('data', []))} total odds records")
+
     rows = []
     games_processed = set()
 
     for game in payload.get("data", []):
         game_id = game.get("game_id")
         if not game_id:
+            continue
+
+        # Only include odds for upcoming games (skip LIVE/FINAL)
+        if game_id not in upcoming_set:
             continue
 
         book = normalize_book(game.get("vendor"))
@@ -522,7 +541,7 @@ def debug_pregame_odds() -> dict:
 
     debug_info["upcoming_game_ids"] = upcoming_ids
 
-    # 4. Fetch odds for upcoming games
+    # 4. Fetch odds using dates[] param (more complete than game_ids[])
     if upcoming_ids:
         try:
             headers = {
@@ -530,23 +549,38 @@ def debug_pregame_odds() -> dict:
                 "Accept": "application/json",
             }
 
+            # Query by date to get all odds for today
+            game_date = today_ny()
+            params = {
+                "dates[]": [game_date],
+                "per_page": 100,
+            }
+
             resp = requests.get(
                 f"{BDL_V2}/odds",
                 headers=headers,
-                params={"game_ids[]": upcoming_ids},
+                params=params,
                 timeout=TIMEOUT_SEC,
             )
             resp.raise_for_status()
 
             odds_data = resp.json().get("data", [])
+
+            # Filter to upcoming games only for display
+            upcoming_set = set(upcoming_ids)
+            upcoming_odds = [r for r in odds_data if r.get("game_id") in upcoming_set]
+
             debug_info["odds_api_response"] = {
-                "total_records": len(odds_data),
-                "records": odds_data[:20],  # Limit to first 20 for readability
+                "query_method": "dates[]",
+                "date": game_date,
+                "total_records_all_games": len(odds_data),
+                "total_records_upcoming_only": len(upcoming_odds),
+                "records": upcoming_odds[:30],  # Show more records
             }
 
-            # Count which games have odds
+            # Count which upcoming games have DK/FD odds
             games_with_odds = set()
-            for record in odds_data:
+            for record in upcoming_odds:
                 gid = record.get("game_id")
                 vendor = record.get("vendor", "").lower()
                 if gid and vendor in ["draftkings", "fanduel"]:
@@ -556,6 +590,16 @@ def debug_pregame_odds() -> dict:
             debug_info["games_without_odds"] = [
                 gid for gid in upcoming_ids if gid not in games_with_odds
             ]
+
+            # Also show which vendors are available per game
+            vendors_per_game = {}
+            for record in upcoming_odds:
+                gid = record.get("game_id")
+                vendor = record.get("vendor", "").lower()
+                if gid not in vendors_per_game:
+                    vendors_per_game[gid] = []
+                vendors_per_game[gid].append(vendor)
+            debug_info["vendors_per_game"] = vendors_per_game
 
         except Exception as e:
             debug_info["error_fetching_odds"] = str(e)

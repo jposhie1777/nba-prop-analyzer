@@ -35,8 +35,9 @@ function getOpponentRank(
   row: OpponentPositionDefenseRow | undefined,
   market?: string,
 ) {
-  if (!row || !market) return undefined;
-  switch (market.toLowerCase()) {
+  const normalizedMarket = normalizeMarketKey(market);
+  if (!row || !normalizedMarket) return undefined;
+  switch (normalizedMarket) {
     case "pts":
       return row.pts_allowed_rank;
     case "reb":
@@ -47,7 +48,7 @@ function getOpponentRank(
       return row.stl_allowed_rank;
     case "blk":
       return row.blk_allowed_rank;
-    case "3pm":
+    case "fg3m":
       return row.fg3m_allowed_rank;
     case "pa":
       return row.pa_allowed_rank;
@@ -62,6 +63,38 @@ function getOpponentRank(
     default:
       return undefined;
   }
+}
+
+function normalizeMarketKey(value?: string) {
+  if (!value) return undefined;
+  const key = value
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/_/g, "");
+  if (["pts", "point", "points"].includes(key)) return "pts";
+  if (["reb", "rebound", "rebounds"].includes(key)) return "reb";
+  if (["ast", "assist", "assists"].includes(key)) return "ast";
+  if (["stl", "steal", "steals"].includes(key)) return "stl";
+  if (["blk", "block", "blocks"].includes(key)) return "blk";
+  if (
+    [
+      "3pm",
+      "3pt",
+      "3pts",
+      "3pointersmade",
+      "threepointersmade",
+      "fg3m",
+    ].includes(key)
+  ) {
+    return "fg3m";
+  }
+  if (["pa", "pointsassists"].includes(key)) return "pa";
+  if (["pr", "pointsrebounds"].includes(key)) return "pr";
+  if (["ra", "reboundsassists"].includes(key)) return "ra";
+  if (["pra", "pointsreboundsassists"].includes(key)) return "pra";
+  if (["dd", "doubledouble"].includes(key)) return "dd";
+  if (["td", "tripledouble"].includes(key)) return "td";
+  return key;
 }
 
 function normalizePosition(value?: string) {

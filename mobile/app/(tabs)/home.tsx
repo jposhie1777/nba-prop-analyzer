@@ -110,6 +110,12 @@ export default function Home() {
         subtitle="Lines, odds, confidence"
         onPress={() => router.push("/(tabs)/props")}
       />
+      
+      <Tile
+        title="Game Betting"
+        subtitle="Moneyline, spread, totals"
+        onPress={() => router.push("/(tabs)/game-betting")}
+      />
 
       <Tile
         title="Live"

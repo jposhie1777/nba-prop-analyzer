@@ -50,6 +50,20 @@ export default function TabLayout() {
         />
 
         <Tabs.Screen
+          name="game-betting"
+          options={{
+            title: "Game Bets",
+            tabBarIcon: ({ color }) => (
+              <Ionicons
+                name="analytics"
+                size={22}
+                color={color}
+              />
+            ),
+          }}
+        />
+
+        <Tabs.Screen
           name="live"
           options={{
             title: "Live",

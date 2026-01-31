@@ -94,3 +94,39 @@ export async function fetchBadLines({
 
   return json;
 }
+
+/* ======================================================
+   LIVE BAD LINES (during active games)
+====================================================== */
+export async function fetchLiveBadLines({
+  min_edge = 0.15,
+  limit = 50,
+}: {
+  min_edge?: number;
+  limit?: number;
+} = {}) {
+  const params = new URLSearchParams();
+  params.set("min_edge", String(min_edge));
+  params.set("limit", String(limit));
+
+  const url = `${API_BASE}/bad-lines/live?${params.toString()}`;
+
+  console.log("📡 [LIVE BAD LINES FETCH]", url);
+
+  const res = await fetch(url, { credentials: "omit" });
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("❌ [LIVE BAD LINES FETCH FAILED]", res.status, text);
+    throw new Error(`Live bad lines fetch failed ${res.status}`);
+  }
+
+  const json = await res.json();
+
+  console.log(
+    "📦 [LIVE BAD LINES FETCH] count:",
+    json?.bad_lines?.length
+  );
+
+  return json;
+}

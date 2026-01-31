@@ -26,6 +26,13 @@ from zoneinfo import ZoneInfo
 
 from google.cloud import bigquery
 
+# ==================================================
+# ODDS INGESTION IMPORTS
+# ==================================================
+from LiveOdds.live_game_odds_ingest import ingest_live_game_odds
+from LiveOdds.live_player_prop_odds_ingest import ingest_live_player_prop_odds
+from LiveOdds.live_odds_flatten import run_live_odds_flatten
+
 
 # ======================================================
 # Configuration
@@ -359,6 +366,9 @@ def run_full_ingest_cycle() -> Dict[str, int]:
         "live_games": 0,
         "box_scores": 0,
         "player_stats": 0,
+        "game_odds": 0,
+        "player_prop_odds": 0,
+        "odds_flatten": 0,
     }
 
     # 1. Live games
@@ -387,6 +397,30 @@ def run_full_ingest_cycle() -> Dict[str, int]:
         print(f"[INGEST] Player stats: {results['player_stats']} rows written")
     except Exception as e:
         print(f"[INGEST] ERROR in player_stats: {e}")
+
+    # 4. Live game odds
+    try:
+        ingest_live_game_odds()
+        results["game_odds"] = 1
+        print("[INGEST] Live game odds: snapshot written")
+    except Exception as e:
+        print(f"[INGEST] ERROR in game_odds: {e}")
+
+    # 5. Live player prop odds
+    try:
+        ingest_live_player_prop_odds()
+        results["player_prop_odds"] = 1
+        print("[INGEST] Live player prop odds: snapshot written")
+    except Exception as e:
+        print(f"[INGEST] ERROR in player_prop_odds: {e}")
+
+    # 6. Flatten odds (idempotent)
+    try:
+        run_live_odds_flatten()
+        results["odds_flatten"] = 1
+        print("[INGEST] Live odds flatten: complete")
+    except Exception as e:
+        print(f"[INGEST] ERROR in odds_flatten: {e}")
 
     return results
 

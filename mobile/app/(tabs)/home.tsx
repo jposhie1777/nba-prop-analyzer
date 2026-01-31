@@ -65,7 +65,7 @@ export default function Home() {
       }}
     >
       {/* ===========================
-          Today
+          Live
       ============================ */}
       <Text
         style={[
@@ -73,72 +73,75 @@ export default function Home() {
           { color: colors.text.primary },
         ]}
       >
-        Today
+        Live
       </Text>
 
-      <View
-        style={[
-          styles.card,
-          {
-            backgroundColor: colors.surface.card,
-            borderColor: colors.border.subtle,
-          },
-        ]}
-      >
-        <Text style={{ color: colors.text.muted }}>
-          (Coming next) Brief overview of today’s NBA games.
-        </Text>
-      </View>
+      <Tile
+        title={`Tracked Parlays${trackedCount > 0 ? ` (${trackedCount})` : ""}`}
+        subtitle="Active bet tracking"
+        onPress={() => router.push("/(tabs)/more/tracked-parlays")}
+      />
+
+      <Tile
+        title="Live Props"
+        subtitle="Real-time prop updates"
+        onPress={() => router.push("/(tabs)/live-props-dev")}
+      />
+
+      <Tile
+        title="Live Ladder"
+        subtitle="Live prop ladders by game"
+        onPress={() => router.push("/(tabs)/ladders")}
+      />
+
+      <Tile
+        title="Live Bad Lines"
+        subtitle="Real-time bad line detection"
+        onPress={() => router.push("/(tabs)/bad-lines")}
+      />
 
       {/* ===========================
-          Directory
+          Analytics
       ============================ */}
       <Text
         style={[
           styles.h1,
           {
             color: colors.text.primary,
-            marginTop: 18,
+            marginTop: 24,
           },
         ]}
       >
-        Directory
+        Analytics
       </Text>
 
       <Tile
-        title="Player Props"
-        subtitle="Lines, odds, confidence"
-        onPress={() => router.push("/(tabs)/props")}
-      />
-      
-      <Tile
-        title="Game Betting"
-        subtitle="Moneyline, spread, totals"
-        onPress={() => router.push("/(tabs)/game-betting")}
+        title="Player Season Averages"
+        subtitle="Points, rebounds, assists & more"
+        onPress={() => router.push("/(tabs)/more/player-season-averages")}
       />
 
       <Tile
-        title="Live"
-        subtitle="Live scores, odds, box"
-        onPress={() => router.push("/(tabs)/live")}
+        title="Team Season Averages"
+        subtitle="Team stats & standings"
+        onPress={() => router.push("/(tabs)/more/team-season-averages")}
       />
 
       <Tile
-        title="First Basket"
-        subtitle="Matchups + projections"
-        onPress={() => router.push("/(tabs)/first-basket")}
+        title="Opponent Position Defense"
+        subtitle="Defense rankings by position"
+        onPress={() => router.push("/(tabs)/more/opponent-position-defense")}
       />
 
       <Tile
-        title="Trend Chart"
-        subtitle="Player / market trends"
-        onPress={() => router.push("/(tabs)/trend-chart")}
+        title="Lineups"
+        subtitle="Projected & most common"
+        onPress={() => router.push("/more/lineups")}
       />
 
       {/* ===========================
           More
       ============================ */}
-      
       <Text
         style={[
           styles.h1,
@@ -150,17 +153,6 @@ export default function Home() {
       >
         More
       </Text>
-      <Tile
-        title={`Tracked Parlays${trackedCount > 0 ? ` (${trackedCount})` : ""}`}
-        subtitle="Active bet tracking"
-        onPress={() => router.push("/(tabs)/more/tracked-parlays")}
-      />
-  
-      <Tile
-        title="Lineups"
-        subtitle="Projected & most common"
-        onPress={() => router.push("/more/lineups")}
-      />
 
       <Tile
         title="Teams"
@@ -178,11 +170,6 @@ export default function Home() {
         title="Explore"
         subtitle="All features"
         onPress={() => router.push("/more/explore")}
-      />
-      <Tile
-        title="Player Season"
-        subtitle="Player Season Mega Table"
-        onPress={() => router.push("/(tabs)/more/player-season-mega")}
       />
     </ScrollView>
   );

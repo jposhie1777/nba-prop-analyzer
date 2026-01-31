@@ -14,6 +14,7 @@ Differs from live_game_odds_ingest.py which only runs during live games.
 """
 
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 import json
 import requests
 import os
@@ -36,30 +37,119 @@ BQ_TABLE_CLOSING = "graphite-flare-477419-h7.nba_live.closing_lines"
 
 PROJECT_ID = os.getenv("GCP_PROJECT", "graphite-flare-477419-h7")
 
+# BallDontLie API
+BDL_V1 = "https://api.balldontlie.io/v1"
+NY_TZ = ZoneInfo("America/New_York")
+
+
+def today_ny() -> str:
+    """Get today's date in NY timezone as YYYY-MM-DD."""
+    return datetime.now(NY_TZ).date().isoformat()
+
+
+def fetch_todays_games() -> list[dict]:
+    """
+    Fetch today's games directly from BallDontLie API.
+
+    Returns:
+        List of game dictionaries from the API
+    """
+    headers = {
+        "Authorization": f"Bearer {require_api_key()}",
+        "Accept": "application/json",
+    }
+
+    game_date = today_ny()
+    print(f"[PREGAME_ODDS] Fetching games for {game_date}")
+
+    resp = requests.get(
+        f"{BDL_V1}/games",
+        headers=headers,
+        params={"dates[]": game_date},
+        timeout=TIMEOUT_SEC,
+    )
+    resp.raise_for_status()
+
+    games = resp.json().get("data", []) or []
+    print(f"[PREGAME_ODDS] Found {len(games)} total games for {game_date}")
+
+    return games
+
+
+def fetch_live_box_scores() -> dict[int, dict]:
+    """
+    Fetch current live box scores to determine game states.
+
+    Returns:
+        Dict mapping game_id to box score data
+    """
+    headers = {
+        "Authorization": f"Bearer {require_api_key()}",
+        "Accept": "application/json",
+    }
+
+    resp = requests.get(
+        f"{BDL_V1}/box_scores/live",
+        headers=headers,
+        timeout=TIMEOUT_SEC,
+    )
+    resp.raise_for_status()
+
+    games = resp.json().get("data", []) or []
+    return {g["id"]: g for g in games if g.get("id")}
+
 
 def fetch_upcoming_game_ids() -> list[int]:
     """
-    Fetch game IDs for upcoming games from BigQuery.
+    Fetch game IDs for upcoming games by:
+    1. Getting today's games from BDL API
+    2. Checking live box scores to filter out LIVE/FINAL games
 
     Returns:
-        List of game IDs that are in UPCOMING state
+        List of game IDs that haven't started yet
     """
-    client = get_bq_client()
+    # Get all games for today
+    todays_games = fetch_todays_games()
+    if not todays_games:
+        print("[PREGAME_ODDS] No games scheduled for today")
+        return []
 
-    rows = list(
-        client.query(
-            """
-            SELECT DISTINCT game_id
-            FROM `graphite-flare-477419-h7.nba_live.live_games`
-            WHERE state = 'UPCOMING'
-            """
-        ).result()
-    )
+    all_game_ids = [g["id"] for g in todays_games]
+    print(f"[PREGAME_ODDS] Today's game IDs: {all_game_ids}")
 
-    game_ids = [r.game_id for r in rows]
-    print(f"[PREGAME_ODDS] Found {len(game_ids)} upcoming games: {game_ids}")
+    # Check live box scores to see which games have started
+    try:
+        live_scores = fetch_live_box_scores()
+    except Exception as e:
+        print(f"[PREGAME_ODDS] Warning: Could not fetch live scores: {e}")
+        # If we can't get live scores, assume all games are upcoming
+        return all_game_ids
 
-    return game_ids
+    # Filter to only games that haven't started
+    upcoming_ids = []
+    for game in todays_games:
+        game_id = game["id"]
+        live_data = live_scores.get(game_id, {})
+
+        raw_time = live_data.get("time")
+        raw_period = live_data.get("period")
+
+        # Check if game is FINAL
+        if raw_time == "Final":
+            print(f"[PREGAME_ODDS] Game {game_id} is FINAL - skipping")
+            continue
+
+        # Check if game is LIVE (has started)
+        if isinstance(raw_period, int) and raw_period >= 1:
+            print(f"[PREGAME_ODDS] Game {game_id} is LIVE (Q{raw_period}) - skipping")
+            continue
+
+        # Game is still upcoming
+        upcoming_ids.append(game_id)
+
+    print(f"[PREGAME_ODDS] Found {len(upcoming_ids)} upcoming games: {upcoming_ids}")
+
+    return upcoming_ids
 
 
 def ingest_pregame_game_odds() -> dict:

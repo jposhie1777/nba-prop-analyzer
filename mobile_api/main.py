@@ -38,6 +38,10 @@ from LiveOdds.live_game_odds_ingest import ingest_live_game_odds
 from LiveOdds.live_player_prop_odds_ingest import ingest_live_player_prop_odds
 from LiveOdds.live_odds_routes import router as live_odds_router
 from LiveOdds.live_odds_flatten import run_live_odds_flatten
+from LiveOdds.pregame_game_odds_ingest import (
+    run_full_pregame_cycle,
+    capture_closing_lines,
+)
 from dev_bq_routes import router as dev_bq_routes_router
 from averages.season_averages_routes import router as season_averages_router
 from routes.lineup_routes import router as lineups_router
@@ -302,6 +306,93 @@ async def startup():
 
         asyncio.create_task(season_averages_daily_loop())
         print("[STARTUP] -> Season Averages daily ingest loop started")
+
+        # -----------------------------
+        # HOURLY: Pre-game Game Odds ingest (runs every hour until games start)
+        # -----------------------------
+        async def pregame_odds_hourly_loop():
+            """
+            Hourly loop that ingests pre-game odds for upcoming games.
+            Runs every hour from 8 AM ET until games start.
+            Also captures closing lines when games transition to LIVE.
+            """
+            from datetime import time as dt_time, timedelta
+
+            # Start ingesting at 8 AM ET, stop at 11 PM ET
+            START_HOUR = 8
+            END_HOUR = 23
+            INTERVAL_MINUTES = 60  # Run every hour
+
+            print("[PREGAME_ODDS] Hourly ingest loop started")
+            print(f"[PREGAME_ODDS] Active hours: {START_HOUR}:00 AM - {END_HOUR}:00 PM ET")
+            print(f"[PREGAME_ODDS] Interval: {INTERVAL_MINUTES} minutes")
+
+            while True:
+                try:
+                    now = datetime.now(NY_TZ)
+                    current_hour = now.hour
+
+                    # Only run during active hours
+                    if START_HOUR <= current_hour < END_HOUR:
+                        print(f"\n[PREGAME_ODDS] ========== HOURLY INGEST @ {now.strftime('%I:%M %p ET')} ==========")
+
+                        result = await asyncio.to_thread(run_full_pregame_cycle)
+
+                        print(f"[PREGAME_ODDS] Result: {result}")
+                        print(f"[PREGAME_ODDS] Hourly ingest complete\n")
+
+                        # Sleep for the interval
+                        await asyncio.sleep(INTERVAL_MINUTES * 60)
+
+                    else:
+                        # Outside active hours - calculate wait until next active period
+                        if current_hour < START_HOUR:
+                            # Wait until START_HOUR today
+                            next_run = now.replace(hour=START_HOUR, minute=0, second=0, microsecond=0)
+                        else:
+                            # Wait until START_HOUR tomorrow
+                            next_run = (now + timedelta(days=1)).replace(
+                                hour=START_HOUR, minute=0, second=0, microsecond=0
+                            )
+
+                        wait_seconds = (next_run - now).total_seconds()
+                        print(f"[PREGAME_ODDS] Outside active hours. Next run: {next_run.strftime('%Y-%m-%d %I:%M %p ET')}")
+                        await asyncio.sleep(min(wait_seconds, 3600))  # Check at least every hour
+
+                except Exception as e:
+                    print(f"[PREGAME_ODDS] ERROR in hourly loop: {e}")
+                    # Wait 15 minutes before retrying on error
+                    await asyncio.sleep(900)
+
+        asyncio.create_task(pregame_odds_hourly_loop())
+        print("[STARTUP] -> Pre-game Odds hourly ingest loop started")
+
+        # -----------------------------
+        # Closing Line Capture (runs with managed ingest to catch game transitions)
+        # -----------------------------
+        async def closing_line_capture_loop():
+            """
+            Runs every 2 minutes during active ingestion to capture closing lines
+            when games transition from UPCOMING to LIVE.
+            """
+            print("[CLOSING_LINES] Capture loop started")
+
+            while True:
+                try:
+                    # Only run when ingestion is active (games are happening)
+                    if is_ingestion_active():
+                        result = await asyncio.to_thread(capture_closing_lines)
+                        if result.get("closing_lines_captured", 0) > 0:
+                            print(f"[CLOSING_LINES] Captured {result['closing_lines_captured']} closing lines")
+
+                    await asyncio.sleep(120)  # Check every 2 minutes
+
+                except Exception as e:
+                    print(f"[CLOSING_LINES] ERROR: {e}")
+                    await asyncio.sleep(120)
+
+        asyncio.create_task(closing_line_capture_loop())
+        print("[STARTUP] -> Closing Line capture loop started")
 
         return
 

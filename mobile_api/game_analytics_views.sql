@@ -1,7 +1,7 @@
 -- Game betting analytics views for moneyline, spread, and totals
 -- NOTE: If your odds/lines columns have different names, update them below.
 
-CREATE OR REPLACE VIEW `nba_goa_data.v_game_betting_base` AS
+CREATE OR REPLACE VIEW `nba_goat_data.v_game_betting_base` AS
 SELECT
   game_id,
   season,
@@ -55,7 +55,7 @@ SELECT
   END AS total_result
 FROM `nba_goa_data.games`;
 
-CREATE OR REPLACE VIEW `nba_goa_data.v_game_betting_team_form` AS
+CREATE OR REPLACE VIEW `nba_goat_data.v_game_betting_team_form` AS
 WITH base AS (
   SELECT *
   FROM `nba_goa_data.v_game_betting_base`
@@ -150,7 +150,7 @@ SELECT
   ) AS avg_margin_l10
 FROM team_rows;
 
-CREATE OR REPLACE VIEW `nba_goa_data.v_game_betting_board` AS
+CREATE OR REPLACE VIEW `nba_goat_data.v_game_betting_board` AS
 SELECT
   base.*,
   home_form.games_l10 AS home_games_l10,

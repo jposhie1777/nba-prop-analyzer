@@ -91,6 +91,34 @@ export default function TabLayout() {
           }}
         />
 
+        <Tabs.Screen
+          name="injuries"
+          options={{
+            title: "Injuries",
+            tabBarIcon: ({ color }) => (
+              <Ionicons
+                name="medkit"
+                size={22}
+                color={color}
+              />
+            ),
+          }}
+        />
+
+        <Tabs.Screen
+          name="wowy"
+          options={{
+            title: "WOWY",
+            tabBarIcon: ({ color }) => (
+              <Ionicons
+                name="people"
+                size={22}
+                color={color}
+              />
+            ),
+          }}
+        />
+
         {/* Ladders moved to home screen as a link */}
         <Tabs.Screen
           name="ladders"

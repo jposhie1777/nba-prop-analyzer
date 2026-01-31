@@ -1,7 +1,9 @@
-import { View, Text, StyleSheet } from "react-native";
+import { useState } from "react";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { useTheme } from "@/store/useTheme";
-import { VendorLadder } from "./VendorLadder";
+import { CombinedOddsTable } from "./CombinedOddsTable";
 import { Ladder } from "@/hooks/useLadders";
+import { Ionicons } from "@expo/vector-icons";
 
 function formatGameClock(period: string | null | undefined, clock: string | null | undefined): string | null {
   if (!period) return null;
@@ -33,6 +35,7 @@ function formatGameClock(period: string | null | undefined, clock: string | null
 
 export function LadderCard({ ladder }: { ladder: Ladder }) {
   const { colors } = useTheme();
+  const [analyticsExpanded, setAnalyticsExpanded] = useState(false);
 
   const tierColor =
     ladder.ladder_tier === "A" ? "#22c55e" :
@@ -114,10 +117,32 @@ export function LadderCard({ ladder }: { ladder: Ladder }) {
       {/* Divider */}
       <View style={[styles.divider, { backgroundColor: colors.border.subtle }]} />
 
-      {/* Vendors */}
-      {ladder.ladder_by_vendor.map((v) => (
-        <VendorLadder key={v.vendor} vendorBlock={v} />
-      ))}
+      {/* Combined Odds Table */}
+      <CombinedOddsTable vendors={ladder.ladder_by_vendor} />
+
+      {/* Expandable Analytics Section */}
+      <TouchableOpacity
+        style={[styles.analyticsToggle, { borderTopColor: colors.border.subtle }]}
+        onPress={() => setAnalyticsExpanded(!analyticsExpanded)}
+        activeOpacity={0.7}
+      >
+        <Text style={[styles.analyticsToggleText, { color: colors.text.secondary }]}>
+          Analytics
+        </Text>
+        <Ionicons
+          name={analyticsExpanded ? "chevron-up" : "chevron-down"}
+          size={16}
+          color={colors.text.secondary}
+        />
+      </TouchableOpacity>
+
+      {analyticsExpanded && (
+        <View style={[styles.analyticsContent, { backgroundColor: colors.surface.elevated }]}>
+          <Text style={[styles.analyticsPlaceholder, { color: colors.text.muted }]}>
+            Analytics data coming soon
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -201,5 +226,27 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     marginVertical: 10,
+  },
+  analyticsToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: 12,
+    marginTop: 8,
+    borderTopWidth: 1,
+  },
+  analyticsToggleText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  analyticsContent: {
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 8,
+  },
+  analyticsPlaceholder: {
+    fontSize: 13,
+    textAlign: "center",
+    fontStyle: "italic",
   },
 });

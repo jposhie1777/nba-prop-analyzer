@@ -11,7 +11,8 @@ import { useMemo } from "react";
 
 import { useTheme } from "@/store/useTheme";
 import { useParlayTracker } from "@/store/useParlayTracker";
-import TrackedParlayCard from "@/components/tracked/TrackedParlayCard";
+import TrackedParlayCard, { LegHedge } from "@/components/tracked/TrackedParlayCard";
+import { useHedgeAlerts } from "@/hooks/useHedgeAlerts";
 
 export default function TrackedParlaysScreen() {
   const colors = useTheme((s) => s.colors);
@@ -20,6 +21,13 @@ export default function TrackedParlaysScreen() {
   // 🔑 Zustand selectors (separate for perf)
   const tracked = useParlayTracker((s) => s.tracked);
   const clearAll = useParlayTracker((s) => s.clearAll);
+
+  // 🔄 Hedge alerts - checks for at-risk legs
+  const { suggestions: hedgeSuggestions } = useHedgeAlerts({
+    pollInterval: 30_000,
+    sendPush: true,
+    minRiskLevel: "at_risk",
+  });
 
   // Normalize → newest first
   const parlays = useMemo(() => {
@@ -73,9 +81,25 @@ export default function TrackedParlaysScreen() {
         data={parlays}
         keyExtractor={(item) => item.parlay_id}
         contentContainerStyle={styles.list}
-        renderItem={({ item }) => (
-          <TrackedParlayCard parlay={item} />
-        )}
+        renderItem={({ item }) => {
+          // Get hedge suggestions for this parlay
+          const parlayHedges = hedgeSuggestions[item.parlay_id] ?? [];
+          const hedgesForCard: LegHedge[] = parlayHedges.map((h) => ({
+            leg_id: h.leg_id,
+            hedge_side: h.hedge_side,
+            hedge_line: h.hedge_line,
+            hedge_odds: h.hedge_odds,
+            hedge_book: h.hedge_book,
+            risk_level: h.risk_level,
+          }));
+
+          return (
+            <TrackedParlayCard
+              parlay={item}
+              hedges={hedgesForCard}
+            />
+          );
+        }}
       />
     </View>
   );

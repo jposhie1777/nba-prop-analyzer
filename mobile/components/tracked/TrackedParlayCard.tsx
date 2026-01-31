@@ -12,24 +12,39 @@ import { useParlayTracker } from "@/store/useParlayTracker";
 import { TrackedParlaySnapshot } from "@/store/useParlayTracker";
 import { calcLegProgress } from "@/utils/parlayProgress";
 import LegProgressBar from "@/components/tracked/LegProgressBar";
+import HedgeSuggestion, { HedgeData } from "@/components/tracked/HedgeSuggestion";
 
 /* ======================================================
    TYPES
 ====================================================== */
 
+export type LegHedge = HedgeData & {
+  leg_id: string;
+};
+
 type Props = {
   parlay: TrackedParlaySnapshot;
+  hedges?: LegHedge[];
 };
 
 /* ======================================================
    COMPONENT
 ====================================================== */
 
-export default function TrackedParlayCard({ parlay }: Props) {
+export default function TrackedParlayCard({ parlay, hedges = [] }: Props) {
   const colors = useTheme((s) => s.colors);
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const untrack = useParlayTracker((s) => s.untrack);
+
+  /* ================= HEDGES BY LEG ================= */
+  const hedgesByLegId = useMemo(() => {
+    const map: Record<string, LegHedge> = {};
+    for (const h of hedges) {
+      map[h.leg_id] = h;
+    }
+    return map;
+  }, [hedges]);
 
   /* ================= SUMMARY ================= */
 
@@ -134,6 +149,13 @@ export default function TrackedParlayCard({ parlay }: Props) {
                 progress={progress}
                 status={leg.status}
               />
+
+              {/* ---------- HEDGE SUGGESTION ---------- */}
+              {hedgesByLegId[leg.leg_id] && (
+                <HedgeSuggestion
+                  hedge={hedgesByLegId[leg.leg_id]}
+                />
+              )}
             </View>
           );
         })}

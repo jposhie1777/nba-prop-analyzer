@@ -15,7 +15,8 @@ from bq import get_bq_client
 # ==================================================
 # Constants
 # ==================================================
-BDL_BASE_V1 = "https://api.balldontlie.io/v1"
+# NBA-specific endpoints use /nba/v1 path
+BDL_NBA_V1 = "https://api.balldontlie.io/nba/v1"
 INJURIES_TABLE = "nba_live.player_injuries"
 REQUEST_DELAY_SEC = 0.3
 BATCH_SIZE = 100
@@ -71,7 +72,7 @@ def fetch_all_injuries(
 
         try:
             resp = requests.get(
-                f"{BDL_BASE_V1}/injuries",
+                f"{BDL_NBA_V1}/injuries",
                 params=params,
                 headers=headers,
                 timeout=30,

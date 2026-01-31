@@ -91,11 +91,27 @@ export default function TabLayout() {
           }}
         />
 
+        {/* Ladders moved to home screen as a link */}
         <Tabs.Screen
           name="ladders"
           options={{
-            title: "Ladders",
-            headerTitle: "Ladders",
+            href: null, // Hide from tab bar
+          }}
+        />
+
+        {/* Bad Lines moved to home screen as a link */}
+        <Tabs.Screen
+          name="bad-lines"
+          options={{
+            href: null, // Hide from tab bar
+          }}
+        />
+
+        {/* Live Props Dev - accessible from home */}
+        <Tabs.Screen
+          name="live-props-dev"
+          options={{
+            href: null, // Hide from tab bar
           }}
         />
 

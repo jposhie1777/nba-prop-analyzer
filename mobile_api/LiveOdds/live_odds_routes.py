@@ -365,6 +365,7 @@ from LiveOdds.pregame_game_odds_ingest import (
     ingest_pregame_game_odds,
     run_pregame_odds_flatten,
     capture_closing_lines,
+    debug_pregame_odds,
 )
 
 @router.post("/pregame/ingest")
@@ -390,3 +391,17 @@ def trigger_closing_line_capture() -> Dict[str, Any]:
     """
     result = capture_closing_lines()
     return result
+
+
+@router.get("/pregame/debug")
+def get_pregame_debug() -> Dict[str, Any]:
+    """
+    Debug endpoint to diagnose pre-game odds issues.
+
+    Shows:
+    - All games for today
+    - Which are UPCOMING vs LIVE/FINAL
+    - What odds the BDL API returns
+    - Which games have odds vs don't
+    """
+    return debug_pregame_odds()

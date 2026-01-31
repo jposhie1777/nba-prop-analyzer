@@ -456,6 +456,113 @@ def run_full_pregame_cycle() -> dict:
     return results
 
 
+def debug_pregame_odds() -> dict:
+    """
+    Debug endpoint to diagnose pre-game odds issues.
+
+    Returns detailed info about:
+    1. All games for today from BDL API
+    2. Which games are UPCOMING vs LIVE/FINAL
+    3. What odds are available for each game
+    """
+    debug_info = {
+        "date": today_ny(),
+        "total_games_today": 0,
+        "games": [],
+        "upcoming_game_ids": [],
+        "odds_api_response": None,
+        "games_with_odds": [],
+        "games_without_odds": [],
+    }
+
+    # 1. Fetch all games for today
+    try:
+        todays_games = fetch_todays_games()
+        debug_info["total_games_today"] = len(todays_games)
+    except Exception as e:
+        debug_info["error_fetching_games"] = str(e)
+        return debug_info
+
+    # 2. Fetch live box scores to check states
+    try:
+        live_scores = fetch_live_box_scores()
+    except Exception as e:
+        debug_info["error_fetching_live_scores"] = str(e)
+        live_scores = {}
+
+    # 3. Categorize each game
+    upcoming_ids = []
+    for game in todays_games:
+        game_id = game["id"]
+        home_team = game.get("home_team", {}).get("abbreviation", "???")
+        away_team = game.get("visitor_team", {}).get("abbreviation", "???")
+
+        live_data = live_scores.get(game_id, {})
+        raw_time = live_data.get("time")
+        raw_period = live_data.get("period")
+
+        # Determine state
+        if raw_time == "Final":
+            state = "FINAL"
+        elif isinstance(raw_period, int) and raw_period >= 1:
+            state = f"LIVE (Q{raw_period})"
+        else:
+            state = "UPCOMING"
+            upcoming_ids.append(game_id)
+
+        debug_info["games"].append({
+            "game_id": game_id,
+            "matchup": f"{away_team} @ {home_team}",
+            "state": state,
+            "live_data": {
+                "time": raw_time,
+                "period": raw_period,
+            }
+        })
+
+    debug_info["upcoming_game_ids"] = upcoming_ids
+
+    # 4. Fetch odds for upcoming games
+    if upcoming_ids:
+        try:
+            headers = {
+                "Authorization": f"Bearer {require_api_key()}",
+                "Accept": "application/json",
+            }
+
+            resp = requests.get(
+                f"{BDL_V2}/odds",
+                headers=headers,
+                params={"game_ids[]": upcoming_ids},
+                timeout=TIMEOUT_SEC,
+            )
+            resp.raise_for_status()
+
+            odds_data = resp.json().get("data", [])
+            debug_info["odds_api_response"] = {
+                "total_records": len(odds_data),
+                "records": odds_data[:20],  # Limit to first 20 for readability
+            }
+
+            # Count which games have odds
+            games_with_odds = set()
+            for record in odds_data:
+                gid = record.get("game_id")
+                vendor = record.get("vendor", "").lower()
+                if gid and vendor in ["draftkings", "fanduel"]:
+                    games_with_odds.add(gid)
+
+            debug_info["games_with_odds"] = list(games_with_odds)
+            debug_info["games_without_odds"] = [
+                gid for gid in upcoming_ids if gid not in games_with_odds
+            ]
+
+        except Exception as e:
+            debug_info["error_fetching_odds"] = str(e)
+
+    return debug_info
+
+
 if __name__ == "__main__":
     result = run_full_pregame_cycle()
     print(f"Result: {result}")

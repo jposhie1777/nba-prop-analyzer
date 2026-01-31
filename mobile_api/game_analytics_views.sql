@@ -163,10 +163,10 @@ SELECT
   away_form.ats_pct_l10 AS away_ats_pct_l10,
   away_form.over_pct_l10 AS away_over_pct_l10,
   away_form.avg_margin_l10 AS away_avg_margin_l10
-FROM `nba_goa_data.v_game_betting_base` AS base
-LEFT JOIN `nba_goa_data.v_game_betting_team_form` AS home_form
+FROM `nba_goat_data.v_game_betting_base` AS base
+LEFT JOIN `nba_goat_data.v_game_betting_team_form` AS home_form
   ON base.game_id = home_form.game_id
   AND base.home_team_abbr = home_form.team_abbr
-LEFT JOIN `nba_goa_data.v_game_betting_team_form` AS away_form
+LEFT JOIN `nba_goat_data.v_game_betting_team_form` AS away_form
   ON base.game_id = away_form.game_id
   AND base.away_team_abbr = away_form.team_abbr;

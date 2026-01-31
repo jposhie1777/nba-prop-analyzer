@@ -52,6 +52,7 @@ from routes.live_props import router as live_props_router
 from routes.bad_line_alerts import router as bad_line_alerts_router
 from routes.push import router as push_router
 from routes.alerts_bad_lines import router as alerts_router
+from routes.alerts_hedge import router as hedge_alerts_router
 from routes.bad_lines import router as bad_lines_router
 from routes.ladders import router as ladders_router
 from routes.season_averages import router as season_averages_data_router
@@ -136,6 +137,7 @@ app.include_router(live_props_router)
 app.include_router(bad_line_alerts_router)
 app.include_router(push_router)
 app.include_router(alerts_router)
+app.include_router(hedge_alerts_router)
 app.include_router(bad_lines_router)
 app.include_router(ladders_router)
 app.include_router(game_advanced_stats_router)

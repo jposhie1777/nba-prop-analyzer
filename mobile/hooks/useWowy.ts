@@ -23,16 +23,19 @@ export function useWowy(options: UseWowyOptions = {}) {
   const [data, setData] = useState<WowyResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedStat, setSelectedStat] = useState<
+    "pts" | "reb" | "ast" | "fg3m"
+  >("pts");
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetchWowyForInjured({
-        team: options.team,
-        status: options.status,
-        season: options.season,
+      const response = await fetchCachedWowy({
+        season: options.season ?? 2025,
+        stat: selectedStat, // pts | reb | ast | fg3m
       });
+
       setData(response);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");

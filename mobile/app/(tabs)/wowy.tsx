@@ -42,11 +42,12 @@ export default function WowyScreen() {
           ip.injured_player.player_name
             .toLowerCase()
             .includes(searchQuery.toLowerCase()) ||
-          ip.injured_player.team
+          (ip.injured_player.team ?? "")
             .toLowerCase()
             .includes(searchQuery.toLowerCase())
       )
     : filteredByStatus;
+
 
   // Sort by team PPG impact (most negative impact first = most important players)
   const sortedPlayers = [...filteredPlayers].sort((a, b) => {

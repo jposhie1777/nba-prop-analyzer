@@ -43,10 +43,11 @@ export type TeamImpact = {
 export type InjuredPlayerInfo = {
   player_id: number;
   player_name: string;
-  team: string;
+  team: string | null;   // ✅ fix
   status: string;
   injury_type: string | null;
 };
+
 
 export type InjuredPlayerWowy = {
   injured_player: InjuredPlayerInfo;
@@ -101,7 +102,10 @@ export async function fetchWowyForInjured(params?: {
     qs.append("season", params.season.toString());
   }
 
-  const url = `${API_BASE}/injuries/wowy/injured${qs.toString() ? `?${qs.toString()}` : ""}`;
+  // 🔴 REQUIRED FIX — disable backend default filter
+  qs.append("today_only", "false");
+
+  const url = `${API_BASE}/injuries/wowy/injured?${qs.toString()}`;
 
   const res = await fetch(url, {
     method: "GET",
@@ -118,6 +122,7 @@ export async function fetchWowyForInjured(params?: {
 
   return res.json();
 }
+
 
 export async function fetchWowyForPlayer(
   playerId: number,

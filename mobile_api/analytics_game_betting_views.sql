@@ -1,7 +1,7 @@
 -- Game betting analytics views for moneyline, spread, and totals
 -- NOTE: If your odds/lines columns have different names, update them below.
 
-CREATE OR REPLACE VIEW `nba_goa_data.v_game_betting_base` AS
+CREATE OR REPLACE VIEW `nba_goat_data.v_game_betting_base` AS
 SELECT
   game_id,
   season,
@@ -53,12 +53,12 @@ SELECT
     WHEN home_score_final + away_score_final < total_line THEN 'UNDER'
     ELSE 'PUSH'
   END AS total_result
-FROM `nba_goa_data.games`;
+FROM `nba_goat_data.games`;
 
-CREATE OR REPLACE VIEW `nba_goa_data.v_game_betting_team_form` AS
+CREATE OR REPLACE VIEW `nba_goat_data.v_game_betting_team_form` AS
 WITH base AS (
   SELECT *
-  FROM `nba_goa_data.v_game_betting_base`
+  FROM `nba_goat_data.v_game_betting_base`
   WHERE is_final = TRUE
 ),
 team_games AS (
@@ -150,7 +150,7 @@ SELECT
   ) AS avg_margin_l10
 FROM team_rows;
 
-CREATE OR REPLACE VIEW `nba_goa_data.v_game_betting_board` AS
+CREATE OR REPLACE VIEW `nba_goat_data.v_game_betting_board` AS
 SELECT
   base.*,
   home_form.games_l10 AS home_games_l10,
@@ -163,10 +163,10 @@ SELECT
   away_form.ats_pct_l10 AS away_ats_pct_l10,
   away_form.over_pct_l10 AS away_over_pct_l10,
   away_form.avg_margin_l10 AS away_avg_margin_l10
-FROM `nba_goa_data.v_game_betting_base` AS base
-LEFT JOIN `nba_goa_data.v_game_betting_team_form` AS home_form
+FROM `nba_goat_data.v_game_betting_base` AS base
+LEFT JOIN `nba_goat_data.v_game_betting_team_form` AS home_form
   ON base.game_id = home_form.game_id
   AND base.home_team_abbr = home_form.team_abbr
-LEFT JOIN `nba_goa_data.v_game_betting_team_form` AS away_form
+LEFT JOIN `nba_goat_data.v_game_betting_team_form` AS away_form
   ON base.game_id = away_form.game_id
   AND base.away_team_abbr = away_form.team_abbr;

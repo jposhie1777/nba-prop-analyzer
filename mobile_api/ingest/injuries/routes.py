@@ -11,6 +11,7 @@ import asyncio
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
+from google.cloud import bigquery
 
 from .ingest import ingest_injuries, get_current_injuries
 from .wowy import (
@@ -301,14 +302,19 @@ async def trigger_injury_ingest():
     """
     Trigger a refresh of injury data from BallDontLie API.
 
-    This fetches the latest injuries and updates the database.
-    Should be called periodically (e.g., every few hours) to keep data fresh.
+    This fetches the latest injuries and updates the database,
+    THEN refreshes the WOWY cache.
     """
     try:
         result = await asyncio.to_thread(ingest_injuries)
 
-        if result.get("status") == "error":
+        if result.get("status") != "ok":
             raise HTTPException(status_code=500, detail=result.get("error"))
+
+        # 🔁 Trigger WOWY cache refresh AFTER injuries ingest
+        from services.http import post_internal
+        season = get_current_season()
+        post_internal(f"/injuries/wowy/cache/refresh?season={season}")
 
         return IngestResponse(
             status="ok",
@@ -378,3 +384,56 @@ async def get_wowy_schema():
         {"name": "ast_without", "type": "FLOAT"},
         {"name": "ast_diff", "type": "FLOAT"},
     ]
+
+@router.get("/wowy/injured/cached")
+async def get_cached_wowy(
+    season: int = Query(...),
+    stat: str = Query("pts"),
+):
+    from bq import get_bq_client
+
+    client = get_bq_client()
+
+    query = """
+    SELECT *
+    FROM `nba_live.wowy_injured_cache`
+    WHERE season = @season
+      AND stat = @stat
+    ORDER BY team_ppg_diff ASC, stat_diff DESC
+    """
+
+    job = client.query(
+        query,
+        job_config=bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("season", "INT64", season),
+                bigquery.ScalarQueryParameter("stat", "STRING", stat),
+            ]
+        ),
+    )
+
+    rows = [dict(r) for r in job.result()]
+
+    return {
+        "count": len(rows),
+        "season": season,
+        "stat": stat,
+        "injured_players": rows,
+    }
+
+@router.post("/wowy/cache/refresh")
+async def refresh_wowy_cache(
+    season: int = Query(...),
+):
+    from services.wowy_cache import refresh_wowy_cache_for_season
+
+    result = await asyncio.to_thread(
+        refresh_wowy_cache_for_season,
+        season,
+    )
+
+    return {
+        "status": "ok",
+        "season": season,
+        "rows_written": result,
+    }

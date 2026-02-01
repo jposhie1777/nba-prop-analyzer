@@ -199,3 +199,23 @@ export async function fetchBeneficiaries(
 
   return res.json();
 }
+
+export async function fetchCachedWowy(params: {
+  season: number;
+  stat: "pts" | "reb" | "ast" | "fg3m";
+}) {
+  const qs = new URLSearchParams({
+    season: params.season.toString(),
+    stat: params.stat,
+  });
+
+  const res = await fetch(
+    `${API_BASE}/injuries/wowy/injured/cached?${qs.toString()}`
+  );
+
+  if (!res.ok) {
+    throw new Error(await res.text());
+  }
+
+  return res.json();
+}

@@ -124,6 +124,7 @@ export default function RootLayout() {
           {/* 🧭 APP NAVIGATION */}
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="(dev)" />
           </Stack>
 
           {/* 🧪 GLOBAL OVERLAYS */}

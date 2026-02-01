@@ -9,6 +9,7 @@ import { createDevStyles } from "./devStyles";
 import { useDevStore } from "@/lib/dev/devStore";
 import { BqTableCard } from "./components/BqTableCard";
 import { useBqDatasetTables } from "@/lib/dev/useBqDatasetTables";
+import { useBqRoutines } from "@/lib/dev/useBqRoutines";
 
 export default function DevHomeScreen() {
   const { colors } = useTheme();
@@ -16,7 +17,10 @@ export default function DevHomeScreen() {
   const router = useRouter();
   const goatTables = useBqDatasetTables("nba_goat_data");
   const liveTables = useBqDatasetTables("nba_live");
-  const { health, flags, sse, freshness, actions } = useDevStore();
+  const goatRoutines = useBqRoutines("nba_goat_data");
+  const liveRoutines = useBqRoutines("nba_live");
+  const { devUnlocked, health, flags, sse, freshness, actions } =
+    useDevStore();
 
   const appVersion =
     Constants.expoConfig?.version ??
@@ -40,8 +44,6 @@ export default function DevHomeScreen() {
      🔴 4D: AUTO-REFRESH ON APP RESUME (DEV ONLY)
 -------------------------------------------------- */
   React.useEffect(() => {
-    if (!__DEV__) return;
-
     const sub = AppState.addEventListener("change", (state) => {
       if (state === "active") {
         actions.runAllHealthChecks();
@@ -58,13 +60,57 @@ export default function DevHomeScreen() {
 
   /* 🔴 ALSO: run once on initial mount */
   React.useEffect(() => {
-    if (!__DEV__) return;
-
     actions.runAllHealthChecks();
     freshness.datasets.forEach((d) =>
       actions.fetchFreshness(d.key)
     );
   }, []);
+
+  if (!devUnlocked) {
+    return (
+      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+        <Text style={styles.title}>Dev Console</Text>
+        <Text style={styles.mutedText}>
+          Tap the logo 5 times to unlock this page.
+        </Text>
+        <Pressable
+          style={styles.toolButton}
+          onPress={() => router.back()}
+        >
+          <Text style={styles.toolTitle}>Back</Text>
+        </Pressable>
+      </ScrollView>
+    );
+  }
+
+  const goatTableItems = goatTables.items;
+  const liveTableItems = liveTables.items;
+
+  const goatBaseTables = goatTableItems.filter(
+    (item) => item.type !== "VIEW"
+  );
+  const goatViews = goatTableItems.filter(
+    (item) => item.type === "VIEW"
+  );
+  const liveBaseTables = liveTableItems.filter(
+    (item) => item.type !== "VIEW"
+  );
+  const liveViews = liveTableItems.filter(
+    (item) => item.type === "VIEW"
+  );
+
+  const goatTablesWithData = goatBaseTables.filter(
+    (item) => item.rowCount == null || item.rowCount > 0
+  );
+  const goatViewsWithData = goatViews.filter(
+    (item) => item.rowCount == null || item.rowCount > 0
+  );
+  const liveTablesWithData = liveBaseTables.filter(
+    (item) => item.rowCount == null || item.rowCount > 0
+  );
+  const liveViewsWithData = liveViews.filter(
+    (item) => item.rowCount == null || item.rowCount > 0
+  );
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -196,14 +242,14 @@ export default function DevHomeScreen() {
         </Text>
       </Section>
       
-      {/* BIGQUERY TABLE INSPECTOR */}
+      {/* BIGQUERY TABLES + VIEWS */}
       <Section
-        title="BigQuery Tables"
+        title="BigQuery Tables & Views"
         styles={styles}
         defaultOpen={false}
       >
         <Text style={styles.mutedText}>
-          Schema + latest row (dev only, safe preview)
+          Schema + latest row preview for tables and views with data.
         </Text>
         {goatTables.lastRefreshed && (
           <Text style={styles.mutedText}>
@@ -229,13 +275,30 @@ export default function DevHomeScreen() {
         ) : goatTables.error ? (
           <Text style={styles.dangerText}>{goatTables.error}</Text>
         ) : (
-          goatTables.tables.map((table) => (
-            <BqTableCard
-              key={table}
-              dataset="nba_goat_data"
-              table={table}
-            />
-          ))
+          <>
+            <Text style={styles.sectionSubtitle}>Tables</Text>
+            {goatTablesWithData.map((table) => (
+              <BqTableCard
+                key={table.name}
+                dataset="nba_goat_data"
+                table={table.name}
+                tableType={table.type}
+                rowCount={table.rowCount}
+              />
+            ))}
+            <Text style={[styles.sectionSubtitle, { marginTop: 12 }]}>
+              Views
+            </Text>
+            {goatViewsWithData.map((view) => (
+              <BqTableCard
+                key={view.name}
+                dataset="nba_goat_data"
+                table={view.name}
+                tableType={view.type}
+                rowCount={view.rowCount}
+              />
+            ))}
+          </>
         )}
         <Text style={[styles.sectionSubtitle, { marginTop: 12 }]}>
           nba_live
@@ -264,13 +327,30 @@ export default function DevHomeScreen() {
         ) : liveTables.error ? (
           <Text style={styles.dangerText}>{liveTables.error}</Text>
         ) : (
-          liveTables.tables.map((table) => (
-            <BqTableCard
-              key={table}
-              dataset="nba_live"
-              table={table}
-            />
-          ))
+          <>
+            <Text style={styles.sectionSubtitle}>Tables</Text>
+            {liveTablesWithData.map((table) => (
+              <BqTableCard
+                key={table.name}
+                dataset="nba_live"
+                table={table.name}
+                tableType={table.type}
+                rowCount={table.rowCount}
+              />
+            ))}
+            <Text style={[styles.sectionSubtitle, { marginTop: 12 }]}>
+              Views
+            </Text>
+            {liveViewsWithData.map((view) => (
+              <BqTableCard
+                key={view.name}
+                dataset="nba_live"
+                table={view.name}
+                tableType={view.type}
+                rowCount={view.rowCount}
+              />
+            ))}
+          </>
         )}
       </Section>
       <Pressable
@@ -290,6 +370,73 @@ export default function DevHomeScreen() {
           Updates player_lookup (manual)
         </Text>
       </Pressable>
+
+      {/* BIGQUERY ROUTINES */}
+      <Section title="BigQuery Stored Procedures" styles={styles} defaultOpen={false}>
+        <Text style={styles.mutedText}>
+          Stored procedures + SQL definitions (read-only).
+        </Text>
+
+        <Pressable
+          style={[styles.toolButton, { marginTop: 6 }]}
+          onPress={() => {
+            goatRoutines.reload();
+            liveRoutines.reload();
+          }}
+        >
+          <Text style={styles.toolTitle}>Refresh routines</Text>
+        </Pressable>
+
+        <Text style={[styles.sectionSubtitle, { marginTop: 12 }]}>
+          nba_goat_data
+        </Text>
+        {goatRoutines.loading ? (
+          <Text style={styles.mutedText}>Loading routines…</Text>
+        ) : goatRoutines.error ? (
+          <Text style={styles.dangerText}>{goatRoutines.error}</Text>
+        ) : goatRoutines.items.length === 0 ? (
+          <Text style={styles.mutedText}>No routines found.</Text>
+        ) : (
+          goatRoutines.items.map((routine) => (
+            <View key={routine.name} style={styles.card}>
+              <Text style={styles.cardTitle}>{routine.name}</Text>
+              {routine.type && (
+                <Text style={styles.mutedText}>{routine.type}</Text>
+              )}
+              {routine.definition && (
+                <Text style={styles.codeBlock} numberOfLines={12}>
+                  {routine.definition}
+                </Text>
+              )}
+            </View>
+          ))
+        )}
+
+        <Text style={[styles.sectionSubtitle, { marginTop: 12 }]}>
+          nba_live
+        </Text>
+        {liveRoutines.loading ? (
+          <Text style={styles.mutedText}>Loading routines…</Text>
+        ) : liveRoutines.error ? (
+          <Text style={styles.dangerText}>{liveRoutines.error}</Text>
+        ) : liveRoutines.items.length === 0 ? (
+          <Text style={styles.mutedText}>No routines found.</Text>
+        ) : (
+          liveRoutines.items.map((routine) => (
+            <View key={routine.name} style={styles.card}>
+              <Text style={styles.cardTitle}>{routine.name}</Text>
+              {routine.type && (
+                <Text style={styles.mutedText}>{routine.type}</Text>
+              )}
+              {routine.definition && (
+                <Text style={styles.codeBlock} numberOfLines={12}>
+                  {routine.definition}
+                </Text>
+              )}
+            </View>
+          ))
+        )}
+      </Section>
       {/* DEVELOPER TOOLS */}
       <Section title="Developer Tools" styles={styles}>
         <ToolButton

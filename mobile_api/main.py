@@ -37,7 +37,7 @@ from LiveGames.box_scores_snapshot import (
 from LiveOdds.live_game_odds_ingest import ingest_live_game_odds
 from LiveOdds.live_player_prop_odds_ingest import ingest_live_player_prop_odds
 from LiveOdds.live_odds_routes import router as live_odds_router
-from LiveOdds.live_odds_flatten import run_live_odds_flatten
+from LiveOdds.live_odds_flatten import run_live_odds_orchestrator
 from LiveOdds.pregame_game_odds_ingest import (
     run_full_pregame_cycle,
     capture_closing_lines,
@@ -501,7 +501,7 @@ async def startup():
 
         while True:
             try:
-                await asyncio.to_thread(run_live_odds_flatten)
+                await asyncio.to_thread(run_live_odds_orchestrator)
                 print("[INGEST] Live odds flatten complete")
             except Exception as e:
                 print("[INGEST] Live odds flatten failed:", e)

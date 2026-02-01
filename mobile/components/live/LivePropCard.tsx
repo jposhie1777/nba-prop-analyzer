@@ -54,6 +54,16 @@ function formatOdds(odds?: number) {
   return odds > 0 ? `+${odds}` : `${odds}`;
 }
 
+function formatAverage(value?: number | null) {
+  if (value == null || Number.isNaN(value)) return "—";
+  return value.toFixed(1);
+}
+
+function formatLine(value?: number | null) {
+  if (value == null || Number.isNaN(value)) return "—";
+  return Number.isInteger(value) ? `${value}` : value.toFixed(1);
+}
+
 /* =====================================================
    CARD
 ===================================================== */
@@ -347,15 +357,15 @@ export default function LivePropCard({ item }: { item: any }) {
                 { color: colors.text.primary },
               ]}
             >
-              Current
+              Line Check
             </Text>
 
             <View style={styles.expandedRow}>
               <Text style={styles.cell}>
-                Projected: 28.4
+                Line: {formatLine(item.line)}
               </Text>
               <Text style={styles.cell}>
-                Minutes: 36.1
+                Current: {formatLine(item.current_stat)}
               </Text>
             </View>
 
@@ -365,14 +375,18 @@ export default function LivePropCard({ item }: { item: any }) {
                 { color: colors.text.primary },
               ]}
             >
-              Historical H2
+              Historical Averages
             </Text>
 
             <View style={styles.expandedRow}>
-              <Text style={styles.cell}>L5: 11.8</Text>
-              <Text style={styles.cell}>L10: 10.9</Text>
               <Text style={styles.cell}>
-                Min L5: 17.4
+                Q3: {formatAverage(item.avg_q3)}
+              </Text>
+              <Text style={styles.cell}>
+                Q4: {formatAverage(item.avg_q4)}
+              </Text>
+              <Text style={styles.cell}>
+                H2: {formatAverage(item.avg_h2)}
               </Text>
             </View>
           </View>

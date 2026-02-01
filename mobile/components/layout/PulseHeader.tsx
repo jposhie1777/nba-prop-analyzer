@@ -2,34 +2,16 @@ import { View, Text, Image, StyleSheet, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "@/store/useTheme";
 import { useRouter } from "expo-router";
-import { useRef } from "react";
+import { useDevStore } from "@/lib/dev/devStore";
 
 export function PulseHeader() {
   const { colors } = useTheme();
   const router = useRouter();
-
-  // DEV-only 5-tap unlock
-  const tapCountRef = useRef(0);
-  const tapTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const registerDevTap = useDevStore((s) => s.actions.registerDevTap);
 
   function handleDevTap() {
-    if (!__DEV__) return;
-
-    tapCountRef.current += 1;
-
-    if (tapCountRef.current === 1) {
-      tapTimerRef.current = setTimeout(() => {
-        tapCountRef.current = 0;
-        tapTimerRef.current = null;
-      }, 2000);
-    }
-
-    if (tapCountRef.current >= 5) {
-      tapCountRef.current = 0;
-      if (tapTimerRef.current) {
-        clearTimeout(tapTimerRef.current);
-        tapTimerRef.current = null;
-      }
+    registerDevTap();
+    if (useDevStore.getState().devUnlocked) {
       router.push("/(dev)/dev-home");
     }
   }

@@ -13,7 +13,7 @@ const MAX_ERROR_ITEMS = 30;
 const DEV_FLAGS_STORAGE_KEY = "__DEV_FLAGS__";
 
 /* 🔴 NEW: DEV UNLOCK CONFIG */
-const DEV_UNLOCK_TAPS_REQUIRED = 7;
+const DEV_UNLOCK_TAPS_REQUIRED = 5;
 const DEV_UNLOCK_TAP_WINDOW_MS = 2000;
 const API_URL =
   Constants.expoConfig?.extra?.API_URL ??
@@ -178,9 +178,21 @@ export const useDevStore = create<DevStore>((set, get) => ({
 
   health: {
     checks: [
-      { key: "health", label: "API Health", url: "/health" },
-      { key: "live", label: "Live Scores Debug", url: "/live/scores/debug" },
-      { key: "props", label: "Props", url: "/props" },
+      {
+        key: "health",
+        label: "API Health",
+        url: API_URL ? `${API_URL}/health` : "/health",
+      },
+      {
+        key: "live",
+        label: "Live Scores Debug",
+        url: API_URL ? `${API_URL}/live/scores/debug` : "/live/scores/debug",
+      },
+      {
+        key: "props",
+        label: "Props",
+        url: API_URL ? `${API_URL}/props` : "/props",
+      },
     ],
   },
 

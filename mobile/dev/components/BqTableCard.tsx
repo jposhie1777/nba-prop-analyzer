@@ -8,9 +8,16 @@ import { useBqTablePreview } from "@/lib/dev/useBqTablePreview";
 type Props = {
   dataset: string;
   table: string;
+  tableType?: string;
+  rowCount?: number | null;
 };
 
-export function BqTableCard({ dataset, table }: Props) {
+export function BqTableCard({
+  dataset,
+  table,
+  tableType,
+  rowCount,
+}: Props) {
   const { colors } = useTheme();
   const styles = React.useMemo(() => createDevStyles(colors), [colors]);
 
@@ -29,6 +36,8 @@ export function BqTableCard({ dataset, table }: Props) {
       <Pressable onPress={toggle}>
         <Text style={styles.cardTitle}>{table}</Text>
         <Text style={styles.mutedText}>
+          {tableType ? `${tableType} • ` : ""}
+          {typeof rowCount === "number" ? `${rowCount} rows • ` : ""}
           {open ? "Tap to collapse" : "Tap to inspect"}
         </Text>
       </Pressable>

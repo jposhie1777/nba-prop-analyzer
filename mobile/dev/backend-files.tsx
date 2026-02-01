@@ -41,7 +41,7 @@ export default function BackendFilesScreen() {
           key={file}
           onPress={() =>
             router.push({
-              pathname: "/code-viewer",
+              pathname: "/(dev)/code-viewer",
               params: { file },
             })
           }

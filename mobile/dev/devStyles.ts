@@ -52,6 +52,10 @@ export function createDevStyles(colors: ThemeColors) {
       gap: 10,
       backgroundColor: colors.surface.cardSoft,
     },
+    sectionSubtitle: {
+      fontWeight: "700",
+      color: colors.text.secondary,
+    },
 
     kvRow: {
       flexDirection: "row",

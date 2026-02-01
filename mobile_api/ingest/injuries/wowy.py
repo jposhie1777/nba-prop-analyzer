@@ -4,7 +4,7 @@ With Or Without You (WOWY) Analysis Module.
 Analyzes how teammates' stats change when a specific player is out.
 Uses historical game data from nba_goat_data.player_game_stats_full.
 """
-
+# mobile/api/ingest/injuries/wowy.py
 from typing import Any, Optional
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -24,13 +24,18 @@ _WOWY_PLAYER_CACHE: dict[tuple[int, int, int, int], dict[str, Any]] = {}
 
 
 def get_current_season() -> int:
-    """Get current NBA season year (e.g., 2025 for 2024-25 season)."""
+    """
+    Return season START year as stored in BigQuery.
+    Example: 2025–26 season → 2025
+    """
     from datetime import datetime
+
     now = datetime.now()
-    # NBA season starts in October, so if we're in Oct-Dec, it's the next year's season
+    # NBA season starts in October
     if now.month >= 10:
-        return now.year + 1
-    return now.year
+        return now.year
+    return now.year - 1
+
 
 
 def _get_today_date_est() -> str:

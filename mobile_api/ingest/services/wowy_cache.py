@@ -37,7 +37,7 @@ def refresh_wowy_cache_for_season(season: int) -> int:
                 "injured_player": w["injured_player"],
                 "team_impact": w["team_impact"],
                 "teammates": w["teammates"],
-                "updated_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow().isoformat(),
             })
 
         if rows:

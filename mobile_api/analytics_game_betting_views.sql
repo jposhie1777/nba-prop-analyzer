@@ -2,58 +2,80 @@
 -- NOTE: If your odds/lines columns have different names, update them below.
 
 CREATE OR REPLACE VIEW `nba_goat_data.v_game_betting_base` AS
+WITH odds_latest AS (
+  SELECT
+    game_id,
+    snapshot_ts,
+    book,
+    spread_home,
+    spread_away,
+    spread_home_odds,
+    spread_away_odds,
+    total,
+    over_odds,
+    under_odds,
+    moneyline_home_odds,
+    moneyline_away_odds
+  FROM `nba_live.pregame_game_odds_flat`
+  QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY game_id
+    ORDER BY snapshot_ts DESC
+  ) = 1
+)
 SELECT
-  game_id,
-  season,
-  game_date,
-  start_time_est,
-  status,
-  is_final,
-  home_team_abbr,
-  away_team_abbr,
-  home_score_final,
-  away_score_final,
-  -- Odds/lines (update column names if needed)
-  home_moneyline,
-  away_moneyline,
-  spread_home,
-  spread_away,
-  total_line,
+  games.game_id,
+  games.season,
+  games.game_date,
+  games.start_time_est,
+  games.status,
+  games.is_final,
+  games.home_team_abbr,
+  games.away_team_abbr,
+  games.home_score_final,
+  games.away_score_final,
+  -- Odds/lines (sourced from latest pregame snapshot)
+  odds_latest.moneyline_home_odds AS home_moneyline,
+  odds_latest.moneyline_away_odds AS away_moneyline,
+  odds_latest.spread_home,
+  odds_latest.spread_away,
+  odds_latest.total AS total_line,
   -- Derived scoring
   CASE
-    WHEN home_score_final IS NULL OR away_score_final IS NULL THEN NULL
-    ELSE home_score_final - away_score_final
+    WHEN games.home_score_final IS NULL OR games.away_score_final IS NULL THEN NULL
+    ELSE games.home_score_final - games.away_score_final
   END AS home_margin,
   CASE
-    WHEN home_score_final IS NULL OR away_score_final IS NULL THEN NULL
-    ELSE home_score_final + away_score_final
+    WHEN games.home_score_final IS NULL OR games.away_score_final IS NULL THEN NULL
+    ELSE games.home_score_final + games.away_score_final
   END AS total_points,
   -- Moneyline result
   CASE
-    WHEN home_score_final IS NULL OR away_score_final IS NULL THEN NULL
-    WHEN home_score_final > away_score_final THEN 'HOME'
-    WHEN home_score_final < away_score_final THEN 'AWAY'
+    WHEN games.home_score_final IS NULL OR games.away_score_final IS NULL THEN NULL
+    WHEN games.home_score_final > games.away_score_final THEN 'HOME'
+    WHEN games.home_score_final < games.away_score_final THEN 'AWAY'
     ELSE 'PUSH'
   END AS moneyline_result,
   -- Spread result (home spread applied to home score)
   CASE
-    WHEN spread_home IS NULL
-      OR home_score_final IS NULL
-      OR away_score_final IS NULL THEN NULL
-    WHEN home_score_final + spread_home > away_score_final THEN 'HOME'
-    WHEN home_score_final + spread_home < away_score_final THEN 'AWAY'
+    WHEN odds_latest.spread_home IS NULL
+      OR games.home_score_final IS NULL
+      OR games.away_score_final IS NULL THEN NULL
+    WHEN games.home_score_final + odds_latest.spread_home > games.away_score_final THEN 'HOME'
+    WHEN games.home_score_final + odds_latest.spread_home < games.away_score_final THEN 'AWAY'
     ELSE 'PUSH'
   END AS spread_result,
   -- Total result
   CASE
-    WHEN total_line IS NULL
-      OR home_score_final IS NULL
-      OR away_score_final IS NULL THEN NULL
-    WHEN home_score_final + away_score_final > total_line THEN 'OVER'
-    WHEN home_score_final + away_score_final < total_line THEN 'UNDER'
+    WHEN odds_latest.total IS NULL
+      OR games.home_score_final IS NULL
+      OR games.away_score_final IS NULL THEN NULL
+    WHEN games.home_score_final + games.away_score_final > odds_latest.total THEN 'OVER'
+    WHEN games.home_score_final + games.away_score_final < odds_latest.total THEN 'UNDER'
     ELSE 'PUSH'
   END AS total_result
-FROM `nba_goat_data.games`;
+FROM `nba_goat_data.games` AS games
+LEFT JOIN odds_latest
+  ON games.game_id = odds_latest.game_id;
 
 CREATE OR REPLACE VIEW `nba_goat_data.v_game_betting_team_form` AS
 WITH base AS (

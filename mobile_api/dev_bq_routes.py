@@ -30,19 +30,26 @@ def is_stale(dataset: str) -> bool:
     return datetime.utcnow() - entry["refreshed_at"] > CACHE_TTL
 
 
-def refresh_dataset_tables(dataset: str) -> List[str]:
+def refresh_dataset_tables(dataset: str) -> List[Dict]:
     bq = get_bq_client()
     project_id = bq.project
 
     query = f"""
-    SELECT table_name
+    SELECT table_name, table_type, row_count
     FROM `{project_id}.{dataset}.INFORMATION_SCHEMA.TABLES`
-    WHERE table_type = 'BASE TABLE'
+    WHERE table_type IN ('BASE TABLE', 'VIEW')
     ORDER BY table_name
     """
 
     rows = bq.query(query).result()
-    tables = [r.table_name for r in rows]
+    tables = [
+        {
+            "name": r.table_name,
+            "type": r.table_type,
+            "row_count": r.row_count,
+        }
+        for r in rows
+    ]
 
     _metadata_cache[dataset] = {
         "tables": tables,
@@ -135,6 +142,32 @@ def preview_table(
         "columns": columns,
         "example_row": example_row,
     }    
+
+# ======================================================
+# Routines (stored procedures / functions)
+# ======================================================
+@router.get("/datasets/{dataset}/routines")
+def list_routines(dataset: str):
+    bq = get_bq_client()
+    project_id = bq.project
+
+    query = f"""
+    SELECT routine_name, routine_type, routine_definition
+    FROM `{project_id}.{dataset}.INFORMATION_SCHEMA.ROUTINES`
+    ORDER BY routine_name
+    """
+
+    rows = bq.query(query).result()
+    routines = [
+        {
+            "name": r.routine_name,
+            "type": r.routine_type,
+            "definition": r.routine_definition,
+        }
+        for r in rows
+    ]
+
+    return {"dataset": dataset, "routines": routines}
 # ======================================================
 # 🔴 Manual ESPN player headshot refresh (DEV ONLY)
 # ======================================================

@@ -63,7 +63,9 @@ from routes.season_averages import router as season_averages_data_router
 from routes.opponent_position_defense import (
     router as opponent_position_defense_router,
 )
-
+from routes.game_betting_analytics import (
+    router as game_betting_analytics_router,
+)
 
 # ==================================================
 # 🔴 ADDITION: player box stream imports
@@ -159,7 +161,7 @@ app.include_router(season_averages_ingest_router)
 app.include_router(season_averages_data_router)
 app.include_router(opponent_position_defense_router)
 app.include_router(injuries_router)
-
+app.include_router(game_betting_analytics_router)
 
 # ==================================================
 # Startup hook (SMART SCHEDULED BACKGROUND TASKS)

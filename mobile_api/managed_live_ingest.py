@@ -31,7 +31,7 @@ from google.cloud import bigquery
 # ==================================================
 from LiveOdds.live_game_odds_ingest import ingest_live_game_odds
 from LiveOdds.live_player_prop_odds_ingest import ingest_live_player_prop_odds
-from LiveOdds.live_odds_flatten import run_live_odds_flatten
+from LiveOdds.live_odds_flatten import run_live_odds_orchestrator
 
 
 # ======================================================
@@ -416,7 +416,7 @@ def run_full_ingest_cycle() -> Dict[str, int]:
 
     # 6. Flatten odds (idempotent)
     try:
-        run_live_odds_flatten()
+        run_live_odds_orchestrator()
         results["odds_flatten"] = 1
         print("[INGEST] Live odds flatten: complete")
     except Exception as e:

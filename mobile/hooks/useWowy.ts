@@ -4,11 +4,13 @@ import {
   fetchWowyForInjured,
   fetchWowyForPlayer,
   fetchBeneficiaries,
+  fetchCachedWowy, // ✅ ADD THIS
   WowyResponse,
   SinglePlayerWowyResponse,
   BeneficiariesResponse,
   InjuredPlayerWowy,
 } from "@/lib/wowy";
+
 
 type UseWowyOptions = {
   team?: string;
@@ -42,7 +44,8 @@ export function useWowy(options: UseWowyOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [options.team, options.status, options.season]);
+  }, [options.team, options.status, options.season, selectedStat]);
+
 
   useEffect(() => {
     load();

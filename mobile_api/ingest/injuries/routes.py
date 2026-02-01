@@ -395,11 +395,14 @@ async def get_cached_wowy(
     client = get_bq_client()
 
     query = """
-    SELECT *
+    SELECT
+      injured_player,
+      team_impact,
+      teammates
     FROM `nba_live.wowy_injured_cache`
     WHERE season = @season
       AND stat = @stat
-    ORDER BY team_ppg_diff ASC, stat_diff DESC
+    ORDER BY team_impact.team_ppg_diff ASC
     """
 
     job = client.query(
@@ -417,9 +420,9 @@ async def get_cached_wowy(
     return {
         "count": len(rows),
         "season": season,
-        "stat": stat,
         "injured_players": rows,
     }
+
 
 @router.post("/wowy/cache/refresh")
 async def refresh_wowy_cache(

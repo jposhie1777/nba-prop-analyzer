@@ -209,6 +209,7 @@ async def get_injured_players_wowy(
     team: Optional[str] = Query(None, description="Filter by team abbreviation"),
     status: Optional[str] = Query(None, description="Filter by injury status"),
     season: Optional[int] = Query(None, description="Season year (default: current)"),
+    today_only: bool = Query(True, description="Only include players in today's games"),
 ):
     """
     Get WOWY analysis for all currently injured players.
@@ -245,6 +246,7 @@ async def get_injured_players_wowy(
             team_id=resolved_team_id,
             status_filter=status_filter,
             season=season,
+            only_today_games=today_only,
         )
 
         return {

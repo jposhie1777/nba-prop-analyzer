@@ -171,7 +171,7 @@ def get_game_betting_analytics(
       away_over_pct_l10,
       home_avg_margin_l10,
       away_avg_margin_l10
-    FROM `nba_goa_data.v_game_betting_board`
+    FROM `nba_goat_data.v_game_betting_board`
     WHERE (@game_date IS NULL OR game_date = @game_date)
       AND (@include_final OR is_final IS NULL OR is_final = FALSE)
     ORDER BY game_date, start_time_est

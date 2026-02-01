@@ -428,7 +428,8 @@ async def get_cached_wowy(
 async def refresh_wowy_cache(
     season: int = Query(...),
 ):
-    from services.wowy_cache import refresh_wowy_cache_for_season
+    from ingest.services.wowy_cache import refresh_wowy_cache_for_season
+
 
     result = await asyncio.to_thread(
         refresh_wowy_cache_for_season,

@@ -368,6 +368,24 @@ export default function PropCard(props: PropCardProps) {
                 </Text>
               </View>
             </View>
+
+            <View style={styles.windowToggle}>
+              {(["L5", "L10", "L20"] as const).map((n) => (
+                <Pressable
+                  key={n}
+                  onPress={() => setDisplayWindow(n)}
+                  style={[
+                    styles.windowPill,
+                    displayWindow === n && styles.windowPillActive,
+                  ]}
+                >
+                  <Text style={[
+                    styles.windowPillText,
+                    displayWindow === n && styles.windowPillTextActive,
+                  ]}>{n}</Text>
+                </Pressable>
+              ))}
+            </View>
           </Pressable>
 
             {/* EXPANDED */}
@@ -399,23 +417,6 @@ export default function PropCard(props: PropCardProps) {
                 )}
                 <MiniBarSparkline data={sparkline} dates={dates} />
 
-                <View style={styles.windowToggle}>
-                  {(["L5", "L10", "L20"] as const).map((n) => (
-                    <Pressable
-                      key={n}
-                      onPress={() => setDisplayWindow(n)}
-                      style={[
-                        styles.windowPill,
-                        displayWindow === n && styles.windowPillActive,
-                      ]}
-                    >
-                      <Text style={[
-                        styles.windowPillText,
-                        displayWindow === n && styles.windowPillTextActive,
-                      ]}>{n}</Text>
-                    </Pressable>
-                  ))}
-                </View>
               </View>
             )}
           </View>

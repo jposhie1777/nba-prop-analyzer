@@ -6,6 +6,9 @@ Uses historical game data from nba_goat_data.player_game_stats_full.
 """
 
 from typing import Any, Optional
+from datetime import datetime
+from zoneinfo import ZoneInfo
+import time
 from bq import get_bq_client
 
 # ==================================================
@@ -13,6 +16,11 @@ from bq import get_bq_client
 # ==================================================
 PLAYER_GAME_STATS_TABLE = "nba_goat_data.player_game_stats_full"
 INJURIES_TABLE = "nba_live.player_injuries"
+GAMES_TABLE = "nba_goat_data.games"
+
+CACHE_TTL_SECONDS = 300
+_TODAYS_TEAMS_CACHE: dict[str, Any] = {"fetched_at": 0.0, "teams": set()}
+_WOWY_PLAYER_CACHE: dict[tuple[int, int, int, int], dict[str, Any]] = {}
 
 
 def get_current_season() -> int:
@@ -23,6 +31,65 @@ def get_current_season() -> int:
     if now.month >= 10:
         return now.year + 1
     return now.year
+
+
+def _get_today_date_est() -> str:
+    """Return today's date in America/New_York (YYYY-MM-DD)."""
+    now_et = datetime.now(ZoneInfo("America/New_York"))
+    return now_et.date().isoformat()
+
+
+def _get_today_team_abbreviations(client) -> set[str]:
+    """Get team abbreviations for games happening today (cached)."""
+    now = time.time()
+    cached_at = _TODAYS_TEAMS_CACHE.get("fetched_at", 0.0)
+    if now - cached_at < CACHE_TTL_SECONDS:
+        return _TODAYS_TEAMS_CACHE.get("teams", set())
+
+    today_date = _get_today_date_est()
+    query = f"""
+    SELECT DISTINCT home_team_abbr AS team_abbreviation
+    FROM `{GAMES_TABLE}`
+    WHERE game_date = DATE("{today_date}")
+    UNION DISTINCT
+    SELECT DISTINCT away_team_abbr AS team_abbreviation
+    FROM `{GAMES_TABLE}`
+    WHERE game_date = DATE("{today_date}")
+    """
+    rows = [dict(r) for r in client.query(query).result()]
+    teams = {r["team_abbreviation"] for r in rows if r.get("team_abbreviation")}
+    _TODAYS_TEAMS_CACHE["fetched_at"] = now
+    _TODAYS_TEAMS_CACHE["teams"] = teams
+    return teams
+
+
+def _get_cached_wowy(
+    *,
+    player_id: int,
+    season: int,
+    min_games_with: int,
+    min_games_without: int,
+) -> Optional[dict[str, Any]]:
+    key = (player_id, season, min_games_with, min_games_without)
+    cached = _WOWY_PLAYER_CACHE.get(key)
+    if not cached:
+        return None
+    if time.time() - cached.get("fetched_at", 0.0) > CACHE_TTL_SECONDS:
+        _WOWY_PLAYER_CACHE.pop(key, None)
+        return None
+    return cached.get("data")
+
+
+def _set_cached_wowy(
+    *,
+    player_id: int,
+    season: int,
+    min_games_with: int,
+    min_games_without: int,
+    data: dict[str, Any],
+) -> None:
+    key = (player_id, season, min_games_with, min_games_without)
+    _WOWY_PLAYER_CACHE[key] = {"fetched_at": time.time(), "data": data}
 
 
 # ==================================================
@@ -286,6 +353,7 @@ def get_wowy_for_injured_players(
     team_id: Optional[int] = None,
     status_filter: Optional[list[str]] = None,
     season: Optional[int] = None,
+    only_today_games: bool = True,
 ) -> list[dict[str, Any]]:
     """
     Get WOWY analysis for all currently injured players.
@@ -313,6 +381,14 @@ def get_wowy_for_injured_players(
         status_list = ", ".join(f"'{s}'" for s in status_filter)
         where_clauses.append(f"status IN ({status_list})")
 
+    if only_today_games:
+        todays_teams = _get_today_team_abbreviations(client)
+        if not todays_teams:
+            print("[WOWY] No games today; skipping WOWY analysis")
+            return []
+        teams_list = ", ".join(f"'{t}'" for t in sorted(todays_teams))
+        where_clauses.append(f"team_abbreviation IN ({teams_list})")
+
     where_sql = " AND ".join(where_clauses)
 
     injuries_query = f"""
@@ -336,12 +412,29 @@ def get_wowy_for_injured_players(
     for player in injured_players:
         print(f"[WOWY] Analyzing: {player['player_name']} ({player['team_abbreviation']})")
 
-        wowy = analyze_wowy_for_player(
-            player["player_id"],
+        cached = _get_cached_wowy(
+            player_id=player["player_id"],
             season=season,
-            min_games_with=3,  # Lower threshold for injured player analysis
+            min_games_with=3,
             min_games_without=1,
         )
+        if cached:
+            wowy = cached
+        else:
+            wowy = analyze_wowy_for_player(
+                player["player_id"],
+                season=season,
+                min_games_with=3,  # Lower threshold for injured player analysis
+                min_games_without=1,
+            )
+            if wowy.get("status") == "ok":
+                _set_cached_wowy(
+                    player_id=player["player_id"],
+                    season=season,
+                    min_games_with=3,
+                    min_games_without=1,
+                    data=wowy,
+                )
 
         if wowy.get("status") == "ok":
             results.append({

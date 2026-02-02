@@ -2,7 +2,7 @@
 Test Main Scheduled - FastAPI app with intelligent game scheduling
 
 This is a TEST version of main.py that uses:
-- smart_game_orchestrator.py for game scheduling
+- stater_game_orchestrator.py for game scheduling
 - managed_live_ingest.py for controllable ingestion
 
 Run with:
@@ -22,17 +22,19 @@ Debug endpoints:
 Console output includes clear debug lines for Cloud Run monitoring.
 """
 
-import os
 import asyncio
-from datetime import datetime
+import json
+import time
+from datetime import datetime, date
 from zoneinfo import ZoneInfo
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.responses import StreamingResponse
 
 # ==================================================
 # Orchestrator & Managed Ingest
 # ==================================================
-from smart_game_orchestrator import (
+from stater_game_orchestrator import (
     orchestrator_loop,
     register_ingestion_callbacks,
     get_session_info,
@@ -46,9 +48,13 @@ from managed_live_ingest import (
     start_managed_ingest,
     stop_managed_ingest,
     get_ingest_status,
-    live_stream_refresher,
-    player_stats_refresher,
+    get_live_scores_payload,
+    get_live_games_payload,
+    get_player_box_payload,
+    snapshot_player_box,
+    get_player_stats_payload,
     LIVE_STREAM_STATE,
+    PLAYER_BOX_STATE,
     PLAYER_STATS_STATE,
     nba_today,
 )
@@ -56,7 +62,6 @@ from managed_live_ingest import (
 # ==================================================
 # Existing routers (import same as main.py)
 # ==================================================
-from live_games import router as live_games_router
 from db import fetch_mobile_props
 from historical_player_trends import router as historical_player_trends_router
 from LiveOdds.live_odds_routes import router as live_odds_router
@@ -105,7 +110,6 @@ app.add_middleware(
 # ==================================================
 # Include existing routers
 # ==================================================
-app.include_router(live_games_router)
 app.include_router(historical_player_trends_router)
 app.include_router(live_odds_router)
 app.include_router(dev_bq_routes_router)
@@ -154,13 +158,6 @@ async def startup():
     asyncio.create_task(managed_ingest_loop())
     print("[STARTUP] -> Managed ingest loop started")
 
-    # 3. Cache refreshers (read from BQ -> memory for SSE)
-    asyncio.create_task(live_stream_refresher())
-    print("[STARTUP] -> Live stream refresher started")
-
-    asyncio.create_task(player_stats_refresher())
-    print("[STARTUP] -> Player stats refresher started")
-
     print("\n[STARTUP] All background tasks running")
     print("[STARTUP] Waiting for orchestrator to fetch schedule...\n")
 
@@ -205,18 +202,135 @@ def get_props(
 
 
 # ==================================================
-# Live Scores Endpoints (from cache)
+# Live Endpoints (on-demand snapshots)
 # ==================================================
 @app.get("/live/scores")
-def get_live_scores():
-    """Get cached live scores"""
-    return LIVE_STREAM_STATE.payload
+def get_live_scores(force_refresh: bool = False):
+    """Get live scores (cached with TTL)"""
+    return get_live_scores_payload(force_refresh=force_refresh)
+
+
+@app.get("/live/scores/stream")
+async def live_scores_stream():
+    async def gen():
+        last_sent: str | None = None
+        last_keepalive = 0.0
+
+        while True:
+            now = time.time()
+            if now - last_keepalive >= 15:
+                yield ":keepalive\n\n"
+                last_keepalive = now
+
+            payload = await asyncio.to_thread(get_live_scores_payload)
+            data_str = json.dumps(payload, separators=(",", ":"))
+            if data_str != last_sent:
+                yield f"event: snapshot\ndata: {data_str}\n\n"
+                last_sent = data_str
+
+            await asyncio.sleep(1)
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.get("/live/scores/debug")
+def live_scores_debug():
+    now = datetime.now(NBA_TZ)
+    last_updated = LIVE_STREAM_STATE.last_updated
+    last_attempt = LIVE_STREAM_STATE.last_attempt
+
+    return {
+        "last_good_seconds_ago": (
+            int((now - last_updated).total_seconds()) if last_updated else None
+        ),
+        "last_attempt_seconds_ago": (
+            int((now - last_attempt).total_seconds()) if last_attempt else None
+        ),
+        "consecutive_failures": LIVE_STREAM_STATE.consecutive_errors,
+        "meta": LIVE_STREAM_STATE.payload.get("meta"),
+        "game_count": len(LIVE_STREAM_STATE.payload.get("games", [])),
+    }
+
+
+@app.get("/live/games")
+def get_live_games():
+    """Get live/upcoming games list"""
+    return get_live_games_payload()
+
+
+@app.get("/live/player-box")
+def get_live_player_box(
+    game_date: date | None = None,
+    force_refresh: bool = False,
+):
+    """Get player box scores"""
+    return get_player_box_payload(
+        game_date=game_date,
+        force_refresh=force_refresh,
+    )
+
+
+@app.get("/live/player-box/snapshot")
+def snapshot_live_player_box(
+    game_date: date | None = None,
+    dry_run: bool = False,
+):
+    """Persist a player box snapshot (optional dry run)"""
+    return snapshot_player_box(game_date=game_date, dry_run=dry_run)
 
 
 @app.get("/live/player-stats")
-def get_live_player_stats():
-    """Get cached player stats"""
-    return PLAYER_STATS_STATE.payload
+def get_live_player_stats(
+    game_date: date | None = None,
+    force_refresh: bool = False,
+):
+    """Get player stats snapshot"""
+    return get_player_stats_payload(
+        game_date=game_date,
+        force_refresh=force_refresh,
+    )
+
+
+@app.get("/live/player-stats/stream")
+async def live_player_stats_stream(game_date: date | None = None):
+    async def gen():
+        last_sent: str | None = None
+        last_keepalive = 0.0
+
+        while True:
+            now = time.time()
+            if now - last_keepalive >= 15:
+                yield ":keepalive\n\n"
+                last_keepalive = now
+
+            payload = await asyncio.to_thread(
+                get_player_stats_payload,
+                game_date=game_date,
+            )
+            data_str = json.dumps(payload, separators=(",", ":"))
+            if data_str != last_sent:
+                yield f"event: snapshot\ndata: {data_str}\n\n"
+                last_sent = data_str
+
+            await asyncio.sleep(1)
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # ==================================================
@@ -243,10 +357,17 @@ def debug_cache():
             "last_updated": LIVE_STREAM_STATE.last_updated.isoformat() if LIVE_STREAM_STATE.last_updated else None,
             "status": LIVE_STREAM_STATE.payload.get("meta", {}).get("status"),
         },
+        "player_box": {
+            "game_count": len(PLAYER_BOX_STATE.payload.get("games", [])),
+            "last_updated": PLAYER_BOX_STATE.last_updated.isoformat() if PLAYER_BOX_STATE.last_updated else None,
+            "status": PLAYER_BOX_STATE.payload.get("meta", {}).get("status"),
+            "game_date": PLAYER_BOX_STATE.payload.get("meta", {}).get("game_date"),
+        },
         "player_stats": {
             "player_count": len(PLAYER_STATS_STATE.payload.get("players", [])),
             "last_updated": PLAYER_STATS_STATE.last_updated.isoformat() if PLAYER_STATS_STATE.last_updated else None,
             "status": PLAYER_STATS_STATE.payload.get("meta", {}).get("status"),
+            "game_date": PLAYER_STATS_STATE.payload.get("meta", {}).get("game_date"),
         },
     }
 
@@ -298,6 +419,10 @@ def debug_full():
             "live_stream": {
                 "game_count": len(LIVE_STREAM_STATE.payload.get("games", [])),
                 "last_updated": LIVE_STREAM_STATE.last_updated.isoformat() if LIVE_STREAM_STATE.last_updated else None,
+            },
+            "player_box": {
+                "game_count": len(PLAYER_BOX_STATE.payload.get("games", [])),
+                "last_updated": PLAYER_BOX_STATE.last_updated.isoformat() if PLAYER_BOX_STATE.last_updated else None,
             },
             "player_stats": {
                 "player_count": len(PLAYER_STATS_STATE.payload.get("players", [])),

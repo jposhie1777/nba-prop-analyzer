@@ -208,6 +208,7 @@ export const useParlayTracker = create<State>()(
       name: "pulse-tracked-parlays",
       version: 2,
       storage: createJSONStorage(createSafeStorage),
+      partialize: (state) => ({ tracked: state.tracked }),
 
       // 🔑 REQUIRED for web rehydration
       onRehydrateStorage: () => (state) => {

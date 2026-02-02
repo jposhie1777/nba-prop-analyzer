@@ -745,6 +745,12 @@ def _run_player_prop_pipeline(lock_owner: str) -> None:
         last_ts = _get_last_processed_ts(state_key)
         raw_max = _get_raw_max_snapshot_ts(RAW_PLAYER_PROP)
 
+        print("⏱️ PLAYER_PROP WATERMARK", {
+            "state_key": state_key,
+            "last_processed_ts": str(last_ts),
+            "raw_max_ts": str(raw_max),
+        })
+        
         if raw_max is None or raw_max <= last_ts:
             print(f"✅ No new RAW rows. last_processed={last_ts} raw_max={raw_max}")
             _release_lock(state_key, lock_owner, None)
@@ -774,6 +780,7 @@ def _run_player_prop_pipeline(lock_owner: str) -> None:
         )
 
         print("✅ Player props complete; advancing watermark")
+        print("🔓 ADVANCING PLAYER_PROP WATERMARK TO", str(window_end))
         _release_lock(state_key, lock_owner, window_end)
 
     except Exception as e:

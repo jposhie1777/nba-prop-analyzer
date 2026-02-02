@@ -57,13 +57,20 @@ def fetch_live_game_ids() -> list[int]:
     rows = list(
         client.query(
             """
-            SELECT DISTINCT game_id
-            FROM `graphite-flare-477419-h7.nba_live.live_games`
-            WHERE state = 'LIVE'
+            SELECT DISTINCT
+              CAST(JSON_VALUE(g, '$.id') AS INT64) AS game_id
+            FROM `graphite-flare-477419-h7.nba_live.box_scores_raw`,
+                 UNNEST(JSON_QUERY_ARRAY(payload, '$.data')) AS g
+            WHERE
+              JSON_VALUE(g, '$.time') IS NOT NULL
+              AND JSON_VALUE(g, '$.time') != 'Final'
+              AND JSON_VALUE(g, '$.period') IS NOT NULL
             """
         ).result()
     )
 
-    print("🟡 LIVE GAME IDS:", [r.game_id for r in rows])
+    game_ids = [r.game_id for r in rows if r.game_id is not None]
 
-    return [r.game_id for r in rows]
+    print("🟢 LIVE GAME IDS (box_scores_raw):", game_ids)
+
+    return game_ids

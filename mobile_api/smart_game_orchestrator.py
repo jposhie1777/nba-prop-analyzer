@@ -585,8 +585,8 @@ async def orchestrator_loop():
                         stop_ingestion()
                         continue
 
-                # Sleep between checks (30 seconds during active games)
-                await asyncio.sleep(30)
+                # Sleep between checks (60 seconds during active games)
+                await asyncio.sleep(60)
                 continue
 
             # Fallback sleep

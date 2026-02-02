@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 
 const API = "https://pulse-mobile-api-763243624328.us-central1.run.app";
-const POLL_INTERVAL_MS = 20_000;
+const POLL_INTERVAL_MS = 60_000;
 
 type LiveSnapshot = {
   games: any[];

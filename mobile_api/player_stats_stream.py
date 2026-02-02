@@ -28,7 +28,7 @@ router = APIRouter(
 # Config
 # ======================================================
 
-REFRESH_INTERVAL_SEC = 20
+REFRESH_INTERVAL_SEC = 60
 BQ_TIMEOUT_SEC = 8
 KEEPALIVE_SEC = 15
 MAX_BACKOFF_SEC = 120

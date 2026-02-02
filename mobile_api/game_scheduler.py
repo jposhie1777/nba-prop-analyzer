@@ -366,7 +366,7 @@ while True:
         
         # If games are active, check frequently
         if SCHEDULE.has_active_games():
-            await asyncio.sleep(30)  # Check every 30 seconds during active games
+            await asyncio.sleep(60)  # Check every 60 seconds during active games
         
         # If waiting for games to start, check less frequently
         elif SCHEDULE.games:

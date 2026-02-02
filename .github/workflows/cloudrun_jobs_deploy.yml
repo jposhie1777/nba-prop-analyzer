@@ -1,0 +1,45 @@
+name: Deploy Cloud Run Jobs
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "mobile_api/**"
+      - ".github/workflows/cloudrun_jobs_deploy.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    env:
+      PROJECT_ID: graphite-flare-477419-h7
+      REGION: us-central1
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Deploy Cloud Run Jobs + Scheduler
+        env:
+          BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
+        run: |
+          chmod +x mobile_api/deploy_cloudrun_jobs.sh
+          mobile_api/deploy_cloudrun_jobs.sh \
+            --project "$PROJECT_ID" \
+            --region "$REGION" \
+            --bdl-key "$BALLDONTLIE_API_KEY"

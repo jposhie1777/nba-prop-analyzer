@@ -129,6 +129,29 @@ To customize, pass:
 
 The ingest job runs on a 60s interval while active.
 
+### GitHub Actions deploy (recommended)
+
+This lets you deploy **strictly from GitHub**. After setup, you only push
+changes to GitHub and the workflow updates Cloud Run.
+
+Workflow file:
+- `.github/workflows/cloudrun_jobs_deploy.yml`
+
+Required GitHub Secrets:
+- `GOOGLE_APPLICATION_CREDENTIALS_JSON`
+- `BALLDONTLIE_API_KEY`
+
+Required GCP roles for the service account in the JSON:
+- `roles/run.developer`
+- `roles/cloudscheduler.admin`
+- `roles/iam.serviceAccountUser`
+- `roles/cloudbuild.builds.editor`
+
+Notes:
+- The workflow deploys on pushes to `main` (adjust if your default branch differs).
+- Project and region are set in the workflow env block:
+  `PROJECT_ID=graphite-flare-477419-h7`, `REGION=us-central1`.
+
 ### YAML-based deploy (jobs + scheduler)
 
 Cloud Run Jobs and Cloud Scheduler also support YAML-based deploys.

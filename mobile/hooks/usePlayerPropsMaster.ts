@@ -100,6 +100,49 @@ function parseMatchup(matchup: unknown): {
   return {};
 }
 
+function parseStartTime(value: unknown): number | null {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value.getTime();
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return null;
+    return value < 1e12 ? value * 1000 : value;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const numeric = Number(trimmed);
+    if (!Number.isNaN(numeric)) {
+      return numeric < 1e12 ? numeric * 1000 : numeric;
+    }
+    const parsed = Date.parse(trimmed);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
+}
+
+function resolveGameStartTime(row: Record<string, any>): number | null {
+  const candidates = [
+    row.game_start_time,
+    row.game_start_time_et,
+    row.game_start_time_est,
+    row.start_time_et,
+    row.start_time_est,
+    row.start_time_utc,
+    row.game_start_time_utc,
+    row.start_time,
+    row.game_time,
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = parseStartTime(candidate);
+    if (parsed != null) return parsed;
+  }
+
+  return null;
+}
+
 /* ======================================================
    DEFAULT FILTERS
 ====================================================== */
@@ -276,6 +319,7 @@ export function usePlayerPropsMaster({
       const matchupTeams = parseMatchup(
         p.matchup ?? p.game_matchup ?? p.matchup_display
       );
+      const startTimeMs = resolveGameStartTime(p);
 
       // 🔍 DEBUG — confirm whether teams exist at the DATA level
       if (__DEV__ && (!p.home_team_abbr || !p.away_team_abbr)) {
@@ -353,6 +397,7 @@ export function usePlayerPropsMaster({
 
         hitRate,
         hitRatePct: Math.round((hitRate ?? 0) * 100),
+        startTimeMs,
       };
     });
   }, [raw, filters]);

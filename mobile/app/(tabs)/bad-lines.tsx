@@ -10,7 +10,8 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { useTheme } from "@/store/useTheme";
-import BadLineCard from "@/components/bad-lines/BadLineCard";
+import type { BadLine } from "@/components/bad-lines/BadLineCard";
+import { GameBadLinesSection } from "@/components/bad-lines/GameBadLinesSection";
 import { fetchBadLines } from "@/lib/apiMaster";
 
 
@@ -18,6 +19,14 @@ import { fetchBadLines } from "@/lib/apiMaster";
    CONSTANTS
 ====================================================== */
 const SCORE_FILTERS = [1.25, 1.5, 2.0];
+
+type GameGroup = {
+  key: string;
+  gameId?: number;
+  awayTeamAbbr: string;
+  homeTeamAbbr: string;
+  lines: BadLine[];
+};
 
 /* ======================================================
    SCREEN
@@ -39,15 +48,48 @@ export default function BadLinesScreen() {
     refetchInterval: 60_000,
   });
 
+  const badLines = data?.bad_lines ?? [];
+  const badLinesByGame = useMemo<GameGroup[]>(() => {
+    const groups = new Map<string, GameGroup>();
+
+    badLines.forEach((line) => {
+      const awayTeamAbbr = line.away_team_abbr ?? "TBD";
+      const homeTeamAbbr = line.home_team_abbr ?? "TBD";
+      const key =
+        line.game_id != null
+          ? String(line.game_id)
+          : `${awayTeamAbbr}-${homeTeamAbbr}`;
+
+      const existing = groups.get(key);
+      if (existing) {
+        existing.lines.push(line);
+        return;
+      }
+
+      groups.set(key, {
+        key,
+        gameId: line.game_id,
+        awayTeamAbbr,
+        homeTeamAbbr,
+        lines: [line],
+      });
+    });
+
+    const grouped = Array.from(groups.values());
+    grouped.forEach((group) => {
+      group.lines.sort((a, b) => b.bad_line_score - a.bad_line_score);
+    });
+
+    return grouped;
+  }, [badLines]);
+
   if (isLoading) {
     return (
-        <View style={{ flex: 1, justifyContent: "center" }}>
+      <View style={{ flex: 1, justifyContent: "center" }}>
         <ActivityIndicator size="large" />
-        </View>
+      </View>
     );
-    }
-
-  const badLines = data?.bad_lines ?? [];
+  }
 
   return (
     <View style={styles.root}>
@@ -106,12 +148,16 @@ export default function BadLinesScreen() {
            LIST
         ================================================== */
         <FlatList
-          data={badLines}
-          keyExtractor={(x) =>
-            `${x.player_id}-${x.market}-${x.line_value}`
-          }
+          data={badLinesByGame}
+          keyExtractor={(item) => item.key}
           renderItem={({ item }) => (
-            <BadLineCard line={item} />
+            <GameBadLinesSection
+              gameId={item.gameId}
+              awayTeamAbbr={item.awayTeamAbbr}
+              homeTeamAbbr={item.homeTeamAbbr}
+              lines={item.lines}
+              defaultExpanded={false}
+            />
           )}
           refreshing={isFetching}
           onRefresh={refetch}
@@ -179,6 +225,8 @@ function makeStyles(colors: any) {
     },
 
     listContent: {
+      paddingHorizontal: 12,
+      paddingTop: 8,
       paddingBottom: 24,
     },
 

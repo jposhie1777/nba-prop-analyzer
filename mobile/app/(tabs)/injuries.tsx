@@ -7,7 +7,6 @@ import {
   RefreshControl,
   StyleSheet,
   Pressable,
-  ScrollView,
 } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { useInjuries } from "@/hooks/useInjuries";
@@ -188,25 +187,24 @@ export default function InjuriesScreen() {
 
       {/* Content */}
       {viewMode === "byTeam" ? (
-        <ScrollView
+        <FlatList
           contentContainerStyle={styles.listContent}
+          data={filteredByTeam}
+          keyExtractor={(item) => item.team}
+          renderItem={({ item }) => (
+            <TeamInjuriesSection teamData={item} defaultExpanded={false} />
+          )}
           refreshControl={
             <RefreshControl refreshing={loading} onRefresh={refresh} />
           }
-        >
-          {filteredByTeam.map((team) => (
-            <TeamInjuriesSection
-              key={team.team}
-              teamData={team}
-              defaultExpanded={filteredByTeam.length <= 5}
-            />
-          ))}
-          {filteredByTeam.length === 0 && !loading && (
-            <Text style={[styles.emptyText, { color: colors.text?.muted ?? "#888" }]}>
-              No injuries found
-            </Text>
-          )}
-        </ScrollView>
+          ListEmptyComponent={
+            !loading ? (
+              <Text style={[styles.emptyText, { color: colors.text?.muted ?? "#888" }]}>
+                No injuries found
+              </Text>
+            ) : null
+          }
+        />
       ) : (
         <FlatList
           contentContainerStyle={styles.listContent}

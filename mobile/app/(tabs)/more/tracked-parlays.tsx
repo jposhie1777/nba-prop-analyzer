@@ -21,6 +21,7 @@ export default function TrackedParlaysScreen() {
   // 🔑 Zustand selectors (separate for perf)
   const tracked = useParlayTracker((s) => s.tracked);
   const clearAll = useParlayTracker((s) => s.clearAll);
+  const hasHydrated = useParlayTracker((s) => s.hasHydrated); // ✅ ADD
 
   // 🔄 Hedge alerts - checks for at-risk legs
   const { suggestions: hedgeSuggestions } = useHedgeAlerts({
@@ -37,6 +38,11 @@ export default function TrackedParlaysScreen() {
         new Date(a.created_at).getTime()
     );
   }, [tracked]);
+
+  // ⏳ WAIT FOR HYDRATION (WEB FIX)
+  if (!hasHydrated) {
+    return null; // or <ActivityIndicator />
+  }
 
   // ---------- EMPTY ----------
   if (parlays.length === 0) {
@@ -82,7 +88,6 @@ export default function TrackedParlaysScreen() {
         keyExtractor={(item) => item.parlay_id}
         contentContainerStyle={styles.list}
         renderItem={({ item }) => {
-          // Get hedge suggestions for this parlay
           const parlayHedges = hedgeSuggestions[item.parlay_id] ?? [];
           const hedgesForCard: LegHedge[] = parlayHedges.map((h) => ({
             leg_id: h.leg_id,

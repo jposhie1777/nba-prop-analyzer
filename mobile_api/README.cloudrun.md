@@ -148,9 +148,13 @@ Required GCP roles for the service account in the JSON:
 - `roles/cloudbuild.builds.editor`
 
 Notes:
-- The workflow deploys on pushes to `main` (adjust if your default branch differs).
+- The workflow is **manual-only** (no auto deploys on push).
 - Project and region are set in the workflow env block:
   `PROJECT_ID=graphite-flare-477419-h7`, `REGION=us-central1`.
+  
+To deploy on demand:
+- GitHub UI: Actions → **Deploy Cloud Run Jobs** → Run workflow
+- CLI: `gh workflow run "Deploy Cloud Run Jobs"`
 
 ### YAML-based deploy (jobs + scheduler)
 

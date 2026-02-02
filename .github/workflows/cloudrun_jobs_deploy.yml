@@ -2,12 +2,6 @@ name: Deploy Cloud Run Jobs
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - "mobile_api/**"
-      - ".github/workflows/cloudrun_jobs_deploy.yml"
 
 jobs:
   deploy:

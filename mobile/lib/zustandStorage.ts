@@ -1,6 +1,7 @@
 // lib/zustandStorage.ts
 import { Platform } from "react-native";
 import type { StateStorage } from "zustand/middleware";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 /**
  * No-op storage used during SSR to prevent crashes.
@@ -12,30 +13,34 @@ const noopStorage: StateStorage = {
 };
 
 export const createSafeStorage = (): StateStorage => {
-  // 🚫 Web SSR (no window, no storage)
+  // 🚫 Web SSR (no window)
   if (Platform.OS === "web" && typeof window === "undefined") {
     return noopStorage;
   }
 
-  // ✅ Native + Web client
-  return {
-    getItem: async (name) => {
-      const AsyncStorage = await import(
-        "@react-native-async-storage/async-storage"
-      );
-      return AsyncStorage.default.getItem(name);
-    },
-    setItem: async (name, value) => {
-      const AsyncStorage = await import(
-        "@react-native-async-storage/async-storage"
-      );
-      return AsyncStorage.default.setItem(name, value);
-    },
-    removeItem: async (name) => {
-      const AsyncStorage = await import(
-        "@react-native-async-storage/async-storage"
-      );
-      return AsyncStorage.default.removeItem(name);
-    },
-  };
+  // ✅ Web client → localStorage
+  if (Platform.OS === "web") {
+    return {
+      getItem: async (name) => {
+        try {
+          return window.localStorage.getItem(name);
+        } catch {
+          return null;
+        }
+      },
+      setItem: async (name, value) => {
+        try {
+          window.localStorage.setItem(name, value);
+        } catch {}
+      },
+      removeItem: async (name) => {
+        try {
+          window.localStorage.removeItem(name);
+        } catch {}
+      },
+    };
+  }
+
+  // ✅ Native (iOS / Android)
+  return AsyncStorage;
 };

@@ -194,21 +194,6 @@ export default function PropsTestScreen() {
     [filters.hitRateWindow]
   );
 
-  const sortByHitRateOdds = useCallback(
-    (a: any, b: any) => {
-      const aHit = resolveHitRatePct(a) ?? -1;
-      const bHit = resolveHitRatePct(b) ?? -1;
-
-      if (aHit !== bHit) return bHit - aHit;
-
-      const oddsDiff = (a.odds ?? 0) - (b.odds ?? 0);
-      if (oddsDiff !== 0) return oddsDiff;
-
-      return (a.player ?? "").localeCompare(b.player ?? "");
-    },
-    [resolveHitRatePct]
-  );
-
   /* ======================================================
      SAVE / UNSAVE (single source of truth)
   ====================================================== */
@@ -252,18 +237,6 @@ export default function PropsTestScreen() {
   /* ======================================================
      SANITIZE + FILTER + SORT
   ====================================================== */
-  const resolveHitRatePct = (p: any) => {
-    const raw =
-      filters.hitRateWindow === "L5"
-        ? p.hit_rate_l5
-        : filters.hitRateWindow === "L10"
-        ? p.hit_rate_l10
-        : p.hit_rate_l20;
-
-    if (raw == null) return null;
-    return raw <= 1 ? raw * 100 : raw;
-  };
-
   const props = useMemo(() => {
     const cleaned = rawProps
       .filter((p) => {

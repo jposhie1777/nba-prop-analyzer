@@ -7,38 +7,48 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
  * No-op storage used during SSR to prevent crashes.
  */
 const noopStorage: StateStorage = {
-  getItem: async () => null,
-  setItem: async () => {},
-  removeItem: async () => {},
+  getItem: () => null,
+  setItem: () => {},
+  removeItem: () => {},
 };
 
+const canUseWebStorage = () => {
+  try {
+    return typeof window !== "undefined" && !!window.localStorage;
+  } catch {
+    return false;
+  }
+};
+
+const createWebStorage = (): StateStorage => ({
+  getItem: (name) => {
+    try {
+      return window.localStorage.getItem(name);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (name, value) => {
+    try {
+      window.localStorage.setItem(name, value);
+    } catch {}
+  },
+  removeItem: (name) => {
+    try {
+      window.localStorage.removeItem(name);
+    } catch {}
+  },
+});
+
 export const createSafeStorage = (): StateStorage => {
-  // 🚫 Web SSR (no window)
-  if (Platform.OS === "web" && typeof window === "undefined") {
-    return noopStorage;
+  // ✅ Web client → localStorage (even if Platform is mis-detected)
+  if (canUseWebStorage()) {
+    return createWebStorage();
   }
 
-  // ✅ Web client → localStorage
+  // 🚫 Web SSR (no window)
   if (Platform.OS === "web") {
-    return {
-      getItem: async (name) => {
-        try {
-          return window.localStorage.getItem(name);
-        } catch {
-          return null;
-        }
-      },
-      setItem: async (name, value) => {
-        try {
-          window.localStorage.setItem(name, value);
-        } catch {}
-      },
-      removeItem: async (name) => {
-        try {
-          window.localStorage.removeItem(name);
-        } catch {}
-      },
-    };
+    return noopStorage;
   }
 
   // ✅ Native (iOS / Android)

@@ -22,6 +22,10 @@ export function LiveDataBridge() {
     return buildLiveSnapshot({ players, games });
   }, [players, games]);
 
+  useEffect(() => {
+    console.log("🟢 [LiveDataBridge:web] mounted");
+  }, []);
+
   /* ======================================================
      Apply live stats + cleanup when data updates
   ====================================================== */

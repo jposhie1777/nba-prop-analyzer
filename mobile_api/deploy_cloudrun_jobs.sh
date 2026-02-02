@@ -8,10 +8,18 @@ BDL_KEY=""
 IMAGE=""
 INGEST_JOB="mobile-api-ingest"
 GATEKEEPER_JOB="mobile-api-gatekeeper"
-SCHEDULER_NAME="mobile-api-gatekeeper"
+SCHEDULE_REFRESH_JOB="mobile-api-schedule-refresh"
+SCHEDULER_REFRESH_NAME="mobile-api-schedule-refresh"
+SCHEDULER_EARLY_NAME="mobile-api-gatekeeper-early"
+SCHEDULER_PRE_NAME="mobile-api-gatekeeper-pre"
+SCHEDULER_LIVE_NAME="mobile-api-gatekeeper-live"
 SCHEDULER_SA_NAME="mobile-api-jobs-sa"
 
-SCHEDULE="*/2 * * * *"
+TIME_ZONE="America/New_York"
+SCHEDULE_REFRESH="30 5 * * *"
+SCHEDULE_EARLY="*/10 6-11 * * *"
+SCHEDULE_PRE="*/5 12-14 * * *"
+SCHEDULE_LIVE="*/2 15-23,0-3 * * *"
 PRE_GAME_MINUTES="0"
 INTERVAL_SEC="60"
 JOB_MAX_MINUTES="10"
@@ -24,8 +32,16 @@ Options:
   --image <IMAGE>                 Container image (default: gcr.io/<PROJECT>/mobile-api-jobs:latest)
   --ingest-job <NAME>             Ingest job name (default: ${INGEST_JOB})
   --gatekeeper-job <NAME>         Gatekeeper job name (default: ${GATEKEEPER_JOB})
-  --scheduler-name <NAME>         Scheduler job name (default: ${SCHEDULER_NAME})
-  --schedule "<CRON>"             Scheduler cron (default: "${SCHEDULE}")
+  --refresh-job <NAME>            Schedule refresh job (default: ${SCHEDULE_REFRESH_JOB})
+  --scheduler-refresh <NAME>      Scheduler refresh name (default: ${SCHEDULER_REFRESH_NAME})
+  --scheduler-early <NAME>        Scheduler early name (default: ${SCHEDULER_EARLY_NAME})
+  --scheduler-pre <NAME>          Scheduler pre-game name (default: ${SCHEDULER_PRE_NAME})
+  --scheduler-live <NAME>         Scheduler live name (default: ${SCHEDULER_LIVE_NAME})
+  --time-zone <TZ>                Scheduler timezone (default: ${TIME_ZONE})
+  --schedule-refresh "<CRON>"     Daily refresh cron (default: "${SCHEDULE_REFRESH}")
+  --schedule-early "<CRON>"       Early cron (default: "${SCHEDULE_EARLY}")
+  --schedule-pre "<CRON>"         Pre-game cron (default: "${SCHEDULE_PRE}")
+  --schedule-live "<CRON>"        Live cron (default: "${SCHEDULE_LIVE}")
   --pre-game-minutes <N>          Lead time before games (default: ${PRE_GAME_MINUTES})
   --interval-sec <N>              Ingest interval seconds (default: ${INTERVAL_SEC})
   --job-max-minutes <N>           Ingest job max minutes (default: ${JOB_MAX_MINUTES})
@@ -41,8 +57,16 @@ while [[ $# -gt 0 ]]; do
     --image) IMAGE="$2"; shift 2;;
     --ingest-job) INGEST_JOB="$2"; shift 2;;
     --gatekeeper-job) GATEKEEPER_JOB="$2"; shift 2;;
-    --scheduler-name) SCHEDULER_NAME="$2"; shift 2;;
-    --schedule) SCHEDULE="$2"; shift 2;;
+    --refresh-job) SCHEDULE_REFRESH_JOB="$2"; shift 2;;
+    --scheduler-refresh) SCHEDULER_REFRESH_NAME="$2"; shift 2;;
+    --scheduler-early) SCHEDULER_EARLY_NAME="$2"; shift 2;;
+    --scheduler-pre) SCHEDULER_PRE_NAME="$2"; shift 2;;
+    --scheduler-live) SCHEDULER_LIVE_NAME="$2"; shift 2;;
+    --time-zone) TIME_ZONE="$2"; shift 2;;
+    --schedule-refresh) SCHEDULE_REFRESH="$2"; shift 2;;
+    --schedule-early) SCHEDULE_EARLY="$2"; shift 2;;
+    --schedule-pre) SCHEDULE_PRE="$2"; shift 2;;
+    --schedule-live) SCHEDULE_LIVE="$2"; shift 2;;
     --pre-game-minutes) PRE_GAME_MINUTES="$2"; shift 2;;
     --interval-sec) INTERVAL_SEC="$2"; shift 2;;
     --job-max-minutes) JOB_MAX_MINUTES="$2"; shift 2;;
@@ -98,25 +122,50 @@ gcloud run jobs deploy "${GATEKEEPER_JOB}" \
   --set-env-vars "LIVE_INGEST_PRE_GAME_MINUTES=${PRE_GAME_MINUTES}" \
   --set-env-vars "CLOUD_RUN_REGION=${REGION},CLOUD_RUN_INGEST_JOB=${INGEST_JOB}"
 
-echo "==> Creating/updating Cloud Scheduler job ${SCHEDULER_NAME}"
-SCHEDULER_URI="https://run.googleapis.com/v2/projects/${PROJECT}/locations/${REGION}/jobs/${GATEKEEPER_JOB}:run"
+echo "==> Deploying schedule refresh job ${SCHEDULE_REFRESH_JOB}"
+gcloud run jobs deploy "${SCHEDULE_REFRESH_JOB}" \
+  --project "${PROJECT}" \
+  --region "${REGION}" \
+  --image "${IMAGE}" \
+  --command "python" \
+  --args "-m","jobs.schedule_refresh" \
+  --set-env-vars "BALLDONTLIE_API_KEY=${BDL_KEY},GCP_PROJECT=${PROJECT}"
 
-if gcloud scheduler jobs describe "${SCHEDULER_NAME}" --project "${PROJECT}" >/dev/null 2>&1; then
-  gcloud scheduler jobs update http "${SCHEDULER_NAME}" \
-    --project "${PROJECT}" \
-    --schedule "${SCHEDULE}" \
-    --uri "${SCHEDULER_URI}" \
-    --http-method POST \
-    --oauth-service-account-email "${SCHEDULER_SA_EMAIL}" \
-    --oauth-token-scope "https://www.googleapis.com/auth/cloud-platform"
-else
-  gcloud scheduler jobs create http "${SCHEDULER_NAME}" \
-    --project "${PROJECT}" \
-    --schedule "${SCHEDULE}" \
-    --uri "${SCHEDULER_URI}" \
-    --http-method POST \
-    --oauth-service-account-email "${SCHEDULER_SA_EMAIL}" \
-    --oauth-token-scope "https://www.googleapis.com/auth/cloud-platform"
-fi
+upsert_scheduler_job() {
+  local name="$1"
+  local schedule="$2"
+  local uri="$3"
+
+  if gcloud scheduler jobs describe "${name}" --project "${PROJECT}" --location "${REGION}" >/dev/null 2>&1; then
+    gcloud scheduler jobs update http "${name}" \
+      --project "${PROJECT}" \
+      --location "${REGION}" \
+      --schedule "${schedule}" \
+      --time-zone "${TIME_ZONE}" \
+      --uri "${uri}" \
+      --http-method POST \
+      --oauth-service-account-email "${SCHEDULER_SA_EMAIL}" \
+      --oauth-token-scope "https://www.googleapis.com/auth/cloud-platform"
+  else
+    gcloud scheduler jobs create http "${name}" \
+      --project "${PROJECT}" \
+      --location "${REGION}" \
+      --schedule "${schedule}" \
+      --time-zone "${TIME_ZONE}" \
+      --uri "${uri}" \
+      --http-method POST \
+      --oauth-service-account-email "${SCHEDULER_SA_EMAIL}" \
+      --oauth-token-scope "https://www.googleapis.com/auth/cloud-platform"
+  fi
+}
+
+SCHEDULER_GATEKEEPER_URI="https://run.googleapis.com/v2/projects/${PROJECT}/locations/${REGION}/jobs/${GATEKEEPER_JOB}:run"
+SCHEDULER_REFRESH_URI="https://run.googleapis.com/v2/projects/${PROJECT}/locations/${REGION}/jobs/${SCHEDULE_REFRESH_JOB}:run"
+
+echo "==> Creating/updating Cloud Scheduler jobs (timezone: ${TIME_ZONE})"
+upsert_scheduler_job "${SCHEDULER_REFRESH_NAME}" "${SCHEDULE_REFRESH}" "${SCHEDULER_REFRESH_URI}"
+upsert_scheduler_job "${SCHEDULER_EARLY_NAME}" "${SCHEDULE_EARLY}" "${SCHEDULER_GATEKEEPER_URI}"
+upsert_scheduler_job "${SCHEDULER_PRE_NAME}" "${SCHEDULE_PRE}" "${SCHEDULER_GATEKEEPER_URI}"
+upsert_scheduler_job "${SCHEDULER_LIVE_NAME}" "${SCHEDULE_LIVE}" "${SCHEDULER_GATEKEEPER_URI}"
 
 echo "==> Done"

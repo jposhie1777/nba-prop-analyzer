@@ -65,6 +65,7 @@ This option avoids paying for a 24/7 instance. Instead:
   the **ingest runner job**.
 - The ingest runner does cycles every 60 seconds and exits after a short
   duration (default 10 minutes).
+- A **schedule refresh job** runs once daily to write today's games to BigQuery.
 
 ### Job environment variables
 
@@ -82,6 +83,10 @@ This option avoids paying for a 24/7 instance. Instead:
 - `CLOUD_RUN_INGEST_JOB` (required, name of ingest runner job)
 - `GCP_PROJECT` or `GOOGLE_CLOUD_PROJECT` (required)
 
+**Schedule refresh job:**
+- `BALLDONTLIE_API_KEY` (required)
+- `GCP_PROJECT` or `GOOGLE_CLOUD_PROJECT` (required)
+
 ### IAM requirements
 
 The gatekeeper job must be able to run the ingest job:
@@ -91,8 +96,8 @@ The gatekeeper job must be able to run the ingest job:
 
 ### One-click deploy (jobs + scheduler)
 
-Use the script below to build the image, deploy both jobs, and create
-the scheduler trigger.
+Use the script below to build the image, deploy all jobs, and create
+the scheduler triggers.
 
 ```bash
 cd mobile_api
@@ -108,7 +113,73 @@ BALLDONTLIE_API_KEY="YOUR_KEY"
   --bdl-key "$BALLDONTLIE_API_KEY"
 ```
 
-Notes:
-- Default scheduler cadence is every 2 minutes. To change it:
-  `--schedule "*/1 * * * *"` (every minute) or `--schedule "*/5 * * * *"`.
-- The ingest job runs on a 60s interval while active.
+Defaults (America/New_York):
+- Daily schedule refresh at **5:30 AM ET**
+- Gatekeeper cadence:
+  - 6:00–11:59 AM: every 10 minutes
+  - 12:00–2:59 PM: every 5 minutes
+- 3:00 PM–3:59 AM: every 2 minutes
+
+To customize, pass:
+- `--schedule-refresh "30 6 * * *"` (daily refresh at 6:30 AM)
+- `--schedule-early "*/15 6-11 * * *"` (slower mornings)
+- `--schedule-pre "*/5 12-14 * * *"` (noon to 2:59 PM)
+- `--schedule-live "*/2 15-23,0-3 * * *"` (3 PM to 3:59 AM)
+- `--time-zone "America/New_York"`
+
+The ingest job runs on a 60s interval while active.
+
+### YAML-based deploy (jobs + scheduler)
+
+Cloud Run Jobs and Cloud Scheduler also support YAML-based deploys.
+You can use:
+
+```bash
+gcloud run jobs replace job.yaml
+gcloud scheduler jobs import scheduler-job.yaml
+```
+
+Minimal Job YAML (template):
+
+```yaml
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: mobile-api-ingest
+  namespace: YOUR_PROJECT
+  labels:
+    cloud.googleapis.com/location: YOUR_REGION
+spec:
+  template:
+    template:
+      containers:
+        - image: gcr.io/YOUR_PROJECT/mobile-api-jobs:latest
+          command: ["python", "-m", "jobs.ingest_runner"]
+          env:
+            - name: BALLDONTLIE_API_KEY
+              value: "YOUR_KEY"
+            - name: LIVE_INGEST_INTERVAL_SEC
+              value: "60"
+            - name: LIVE_INGEST_PRE_GAME_MINUTES
+              value: "0"
+            - name: LIVE_INGEST_JOB_MAX_MINUTES
+              value: "10"
+            - name: GCP_PROJECT
+              value: "YOUR_PROJECT"
+```
+
+Minimal Scheduler YAML (template):
+
+```yaml
+name: projects/YOUR_PROJECT/locations/YOUR_REGION/jobs/mobile-api-gatekeeper-live
+schedule: "*/2 15-23,0-3 * * *"
+timeZone: "America/New_York"
+httpTarget:
+  uri: https://run.googleapis.com/v2/projects/YOUR_PROJECT/locations/YOUR_REGION/jobs/mobile-api-gatekeeper:run
+  httpMethod: POST
+  oauthToken:
+    serviceAccountEmail: mobile-api-jobs-sa@YOUR_PROJECT.iam.gserviceaccount.com
+    scope: https://www.googleapis.com/auth/cloud-platform
+```
+
+Replace the placeholders before running the commands.

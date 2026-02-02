@@ -1,19 +1,20 @@
 # main.py
 import os
 import asyncio
-from datetime import datetime
+import json
+import time
+from datetime import datetime, date
 from zoneinfo import ZoneInfo
-from fastapi import FastAPI, Query, BackgroundTasks
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.responses import StreamingResponse
 
-from live_games import router as live_games_router
 from db import fetch_mobile_props, ingest_live_games_snapshot
-from live_stream import router as live_stream_router, refresher_loop
 
 # ==================================================
 # SMART SCHEDULING IMPORTS
 # ==================================================
-from smart_game_orchestrator import (
+from stater_game_orchestrator import (
     orchestrator_loop,
     register_ingestion_callbacks,
     get_session_info,
@@ -28,6 +29,12 @@ from managed_live_ingest import (
     stop_managed_ingest,
     get_ingest_status,
     nba_today,
+    get_live_scores_payload,
+    get_live_games_payload,
+    get_player_box_payload,
+    snapshot_player_box,
+    get_player_stats_payload,
+    LIVE_STREAM_STATE,
 )
 from historical_player_trends import router as historical_player_trends_router
 from LiveGames.box_scores_snapshot import (
@@ -65,22 +72,6 @@ from routes.opponent_position_defense import (
 )
 from routes.game_betting_analytics import (
     router as game_betting_analytics_router,
-)
-
-# ==================================================
-# 🔴 ADDITION: player box stream imports
-# ==================================================
-from player_box_stream import (
-    router as player_box_router,
-    player_box_refresher,
-)
-
-# ==================================================
-# 🔴 ADDITION: player stats stream imports
-# ==================================================
-from player_stats_stream import (
-    router as player_stats_router,
-    player_stats_refresher,
 )
 
 # ==================================================
@@ -132,9 +123,7 @@ app.add_middleware(
 # ==================================================
 # Routers
 # ==================================================
-app.include_router(live_stream_router)
 app.include_router(box_scores_router)
-app.include_router(live_games_router)
 app.include_router(historical_player_trends_router)
 app.include_router(live_odds_router)
 app.include_router(dev_bq_routes_router)
@@ -142,8 +131,6 @@ app.include_router(season_averages_router)
 app.include_router(lineups_router)
 app.include_router(first_basket_router)
 app.include_router(teams_router)
-app.include_router(player_box_router)
-app.include_router(player_stats_router)
 app.include_router(prop_analytics_router)
 app.include_router(players_router)
 app.include_router(ingest_router)
@@ -200,11 +187,7 @@ async def startup():
         asyncio.create_task(managed_ingest_loop())
         print("[STARTUP] -> Managed ingest loop started")
 
-        # READ-SIDE refreshers still run (but check is_ingestion_active)
-        asyncio.create_task(refresher_loop())
-        asyncio.create_task(player_box_refresher())
-        asyncio.create_task(player_stats_refresher())
-        print("[STARTUP] -> Cache refreshers started")
+        # Read-side snapshots are fetched on demand via endpoints.
 
         # -----------------------------
         # DAILY: Game Advanced Stats V2 ingest (runs at 6:00 AM ET)
@@ -414,12 +397,7 @@ async def startup():
 
     print("[STARTUP] Using LEGACY 24/7 ingest mode")
 
-    # -----------------------------
-    # READ-SIDE (BQ → memory)
-    # -----------------------------
-    asyncio.create_task(refresher_loop())
-    asyncio.create_task(player_box_refresher())
-    asyncio.create_task(player_stats_refresher())
+    # Read-side snapshots are fetched on demand via endpoints.
 
     # -----------------------------
     # WRITE-SIDE: games snapshot
@@ -542,6 +520,137 @@ def get_props(
         "count": len(props),
         "props": props,
     }
+
+
+# ==================================================
+# Live Endpoints (on-demand snapshots)
+# ==================================================
+@app.get("/live/scores")
+def get_live_scores(force_refresh: bool = False):
+    """Get live scores (cached with TTL)"""
+    return get_live_scores_payload(force_refresh=force_refresh)
+
+
+@app.get("/live/scores/stream")
+async def live_scores_stream():
+    async def gen():
+        last_sent: str | None = None
+        last_keepalive = 0.0
+
+        while True:
+            now = time.time()
+            if now - last_keepalive >= 15:
+                yield ":keepalive\n\n"
+                last_keepalive = now
+
+            payload = await asyncio.to_thread(get_live_scores_payload)
+            data_str = json.dumps(payload, separators=(",", ":"))
+            if data_str != last_sent:
+                yield f"event: snapshot\ndata: {data_str}\n\n"
+                last_sent = data_str
+
+            await asyncio.sleep(1)
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.get("/live/scores/debug")
+def live_scores_debug():
+    now = datetime.now(NY_TZ)
+    last_updated = LIVE_STREAM_STATE.last_updated
+    last_attempt = LIVE_STREAM_STATE.last_attempt
+    return {
+        "last_good_seconds_ago": (
+            int((now - last_updated).total_seconds()) if last_updated else None
+        ),
+        "last_attempt_seconds_ago": (
+            int((now - last_attempt).total_seconds()) if last_attempt else None
+        ),
+        "consecutive_failures": LIVE_STREAM_STATE.consecutive_errors,
+        "meta": LIVE_STREAM_STATE.payload.get("meta"),
+        "game_count": len(LIVE_STREAM_STATE.payload.get("games", [])),
+    }
+
+
+@app.get("/live/games")
+def get_live_games():
+    """Get live/upcoming games list"""
+    return get_live_games_payload()
+
+
+@app.get("/live/player-box")
+def get_live_player_box(
+    game_date: date | None = None,
+    force_refresh: bool = False,
+):
+    """Get player box scores"""
+    return get_player_box_payload(
+        game_date=game_date,
+        force_refresh=force_refresh,
+    )
+
+
+@app.get("/live/player-box/snapshot")
+def snapshot_live_player_box(
+    game_date: date | None = None,
+    dry_run: bool = False,
+):
+    """Persist a player box snapshot (optional dry run)"""
+    return snapshot_player_box(game_date=game_date, dry_run=dry_run)
+
+
+@app.get("/live/player-stats")
+def get_live_player_stats(
+    game_date: date | None = None,
+    force_refresh: bool = False,
+):
+    """Get player stats snapshot"""
+    return get_player_stats_payload(
+        game_date=game_date,
+        force_refresh=force_refresh,
+    )
+
+
+@app.get("/live/player-stats/stream")
+async def live_player_stats_stream(game_date: date | None = None):
+    async def gen():
+        last_sent: str | None = None
+        last_keepalive = 0.0
+
+        while True:
+            now = time.time()
+            if now - last_keepalive >= 15:
+                yield ":keepalive\n\n"
+                last_keepalive = now
+
+            payload = await asyncio.to_thread(
+                get_player_stats_payload,
+                game_date=game_date,
+            )
+            data_str = json.dumps(payload, separators=(",", ":"))
+            if data_str != last_sent:
+                yield f"event: snapshot\ndata: {data_str}\n\n"
+                last_sent = data_str
+
+            await asyncio.sleep(1)
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # ==================================================

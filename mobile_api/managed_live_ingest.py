@@ -2,16 +2,18 @@
 Managed Live Ingest - Controllable ingestion loops for NBA live data
 
 This module provides ingestion loops that can be started/stopped by the orchestrator.
-Each loop runs every 60 seconds when active and stops when signaled.
+Each ingest loop runs every 60 seconds when active and stops when signaled.
 
 Loops included:
 1. Live Games Snapshot (BallDontLie -> nba_live.live_games)
 2. Box Scores Snapshot (BallDontLie -> nba_live.box_scores_raw)
-3. Live Stream Refresher (BigQuery read -> memory cache)
-4. Player Box Refresher (BigQuery read -> memory cache)
-5. Player Stats Refresher (BigQuery read -> memory cache)
+3. Player Stats Flatten (box scores -> nba_live.live_player_stats)
+4. Live odds ingestion/flattening
 
-Console debug lines included for Cloud Run monitoring.
+Read-side helpers (no background loops):
+- Live scores snapshot (BigQuery -> payload)
+- Player box snapshot (BigQuery -> payload)
+- Player stats snapshot (BigQuery -> payload)
 """
 
 import asyncio
@@ -52,6 +54,17 @@ BDL_BASE = "https://api.balldontlie.io/v1"
 LIVE_GAMES_TABLE = "graphite-flare-477419-h7.nba_live.live_games"
 BOX_SCORES_RAW_TABLE = "graphite-flare-477419-h7.nba_live.box_scores_raw"
 LIVE_PLAYER_STATS_TABLE = "graphite-flare-477419-h7.nba_live.live_player_stats"
+PLAYER_BOX_RAW_TABLE = "graphite-flare-477419-h7.nba_live.player_box_raw"
+
+# Read-side cache TTLs (seconds)
+LIVE_SCORES_CACHE_TTL_SEC = int(os.getenv("LIVE_SCORES_CACHE_TTL_SEC", "5"))
+PLAYER_BOX_CACHE_TTL_SEC = int(os.getenv("PLAYER_BOX_CACHE_TTL_SEC", "5"))
+PLAYER_STATS_CACHE_TTL_SEC = int(os.getenv("PLAYER_STATS_CACHE_TTL_SEC", "5"))
+
+# Optional kill switch for player-stats writes from snapshots
+ENABLE_PLAYER_STATS_INGEST = (
+    os.getenv("ENABLE_PLAYER_STATS_INGEST", "false").lower() == "true"
+)
 
 
 # ======================================================
@@ -276,30 +289,46 @@ def ingest_box_scores_snapshot() -> int:
 # LOOP 3: Flatten Player Stats (Write to live_player_stats)
 # ======================================================
 
-def flatten_player_stats_from_box_scores(box_data: List[Dict]) -> int:
+def flatten_player_stats_from_box_scores(
+    box_data: List[Dict],
+    game_date: Optional[date] = None,
+    skip_if_disabled: bool = False,
+) -> int:
     """
     Flatten player stats from box score data and write to BigQuery.
 
     Args:
         box_data: List of box score game dicts
+        game_date: Optional override for game date
+        skip_if_disabled: Respect ENABLE_PLAYER_STATS_INGEST flag
 
     Returns:
         Number of player rows written
     """
+    if skip_if_disabled and not ENABLE_PLAYER_STATS_INGEST:
+        return 0
+
     client = get_bq_client()
-    today = nba_today()
+    if game_date is None:
+        game_date = nba_today()
     now_iso = datetime.now(UTC_TZ).isoformat()
 
     rows = []
 
     for game in box_data:
         game_id = game.get("id")
-        status = game.get("status")
+        status = (game.get("status") or "").lower()
         period = game.get("period")
-        clock = game.get("time")
+        clock = game.get("clock") or game.get("time")
 
         # Determine game state
-        if clock == "Final":
+        if status in ("scheduled", "pre"):
+            game_state = "PRE"
+        elif status in ("in_progress", "live"):
+            game_state = "LIVE"
+        elif status in ("final", "finished"):
+            game_state = "FINAL"
+        elif clock == "Final":
             game_state = "FINAL"
         elif isinstance(period, int) and period >= 1:
             game_state = "LIVE"
@@ -318,7 +347,7 @@ def flatten_player_stats_from_box_scores(box_data: List[Dict]) -> int:
 
                 rows.append({
                     "game_id": game_id,
-                    "game_date": today.isoformat(),
+                    "game_date": game_date.isoformat(),
                     "game_state": game_state,
                     "player_id": player_meta.get("id"),
                     "player_name": f"{player_meta.get('first_name', '')} {player_meta.get('last_name', '')}".strip(),
@@ -536,14 +565,17 @@ def get_ingest_status() -> Dict[str, Any]:
 
 
 # ======================================================
-# Memory Cache States (for SSE endpoints)
+# Read-Side Cache States (on-demand)
 # ======================================================
 
 @dataclass
 class LiveStreamState:
-    """Cached state for live scores stream"""
+    """Cached state for live scores snapshots"""
     payload: Dict[str, Any] = None
     last_updated: Optional[datetime] = None
+    last_attempt: Optional[datetime] = None
+    consecutive_errors: int = 0
+    last_error: Optional[str] = None
 
     def __post_init__(self):
         if self.payload is None:
@@ -552,9 +584,13 @@ class LiveStreamState:
 
 @dataclass
 class PlayerBoxState:
-    """Cached state for player box stream"""
+    """Cached state for player box snapshots"""
     payload: Dict[str, Any] = None
     last_updated: Optional[datetime] = None
+    last_attempt: Optional[datetime] = None
+    consecutive_errors: int = 0
+    last_error: Optional[str] = None
+    game_date: Optional[date] = None
 
     def __post_init__(self):
         if self.payload is None:
@@ -563,9 +599,13 @@ class PlayerBoxState:
 
 @dataclass
 class PlayerStatsState:
-    """Cached state for player stats stream"""
+    """Cached state for player stats snapshots"""
     payload: Dict[str, Any] = None
     last_updated: Optional[datetime] = None
+    last_attempt: Optional[datetime] = None
+    consecutive_errors: int = 0
+    last_error: Optional[str] = None
+    game_date: Optional[date] = None
 
     def __post_init__(self):
         if self.payload is None:
@@ -579,10 +619,10 @@ PLAYER_STATS_STATE = PlayerStatsState()
 
 
 # ======================================================
-# Cache Refresh Loops (READ side)
+# Read-Side Queries
 # ======================================================
 
-LIVE_GAMES_QUERY = """
+LIVE_SCORES_QUERY = """
 WITH ranked AS (
   SELECT
     game_id,
@@ -610,130 +650,411 @@ SELECT * FROM ranked WHERE rn = 1
 ORDER BY ingested_at DESC
 """
 
+LIVE_GAMES_LIST_QUERY = """
+WITH ranked AS (
+  SELECT
+    game_id,
+    home_team_abbr,
+    away_team_abbr,
+    home_score,
+    away_score,
+    period,
+    clock,
+    state,
+    ingested_at,
+    ROW_NUMBER() OVER (PARTITION BY game_id ORDER BY ingested_at DESC) AS rn
+  FROM `graphite-flare-477419-h7.nba_live.live_games`
+)
+SELECT
+  r.game_id,
+  r.home_team_abbr,
+  r.away_team_abbr,
+  r.home_score,
+  r.away_score,
+  r.period,
+  r.clock,
+  r.state,
+  g.start_time_utc,
+  DATETIME(g.start_time_utc, "America/New_York") AS start_time_et
+FROM ranked r
+LEFT JOIN `graphite-flare-477419-h7.nba_goat_data.games` g
+  ON g.game_id = r.game_id
+WHERE r.rn = 1
+ORDER BY start_time_utc
+"""
 
-async def live_stream_refresher():
-    """Refresh live scores cache from BigQuery"""
-    global LIVE_STREAM_STATE
-
-    print("[CACHE] Live stream refresher initialized")
-
-    while True:
-        try:
-            if not CONTROL.is_running:
-                await asyncio.sleep(5)
-                continue
-
-            def _query():
-                client = get_bq_client()
-                return list(client.query(LIVE_GAMES_QUERY).result())
-
-            rows = await asyncio.to_thread(_query)
-
-            games = []
-            for r in rows:
-                games.append({
-                    "game_id": r.game_id,
-                    "home_team": r.home_team_abbr,
-                    "away_team": r.away_team_abbr,
-                    "home_score": r.home_score,
-                    "away_score": r.away_score,
-                    "home_q": [r.home_score_q1, r.home_score_q2, r.home_score_q3, r.home_score_q4],
-                    "away_q": [r.away_score_q1, r.away_score_q2, r.away_score_q3, r.away_score_q4],
-                    "period": r.period,
-                    "clock": r.clock,
-                })
-
-            LIVE_STREAM_STATE.payload = {
-                "games": games,
-                "meta": {
-                    "status": "OK",
-                    "server_updated_at": datetime.now(UTC_TZ).isoformat(),
-                    "game_count": len(games),
-                },
-            }
-            LIVE_STREAM_STATE.last_updated = datetime.now(NBA_TZ)
-
-            await asyncio.sleep(INGEST_INTERVAL_SEC)
-
-        except Exception as e:
-            print(f"[CACHE] Live stream error: {e}")
-            await asyncio.sleep(10)
-
+BOX_SCORES_QUERY = """
+SELECT
+  snapshot_ts,
+  payload
+FROM `graphite-flare-477419-h7.nba_live.box_scores_raw`
+WHERE game_date = @game_date
+ORDER BY snapshot_ts DESC
+LIMIT 1
+"""
 
 PLAYER_STATS_QUERY = """
 WITH ranked AS (
   SELECT
     *,
-    ROW_NUMBER() OVER (PARTITION BY game_id, player_id ORDER BY ingested_at DESC) AS rn
+    ROW_NUMBER() OVER (
+      PARTITION BY game_id, player_id
+      ORDER BY ingested_at DESC
+    ) AS rn
   FROM `graphite-flare-477419-h7.nba_live.live_player_stats`
-  WHERE game_date >= DATE_SUB(@game_date, INTERVAL 1 DAY)
+  WHERE game_date = @game_date
 )
-SELECT * FROM ranked WHERE rn = 1
+SELECT *
+FROM ranked
+WHERE rn = 1
 ORDER BY ingested_at DESC
 """
 
 
-async def player_stats_refresher():
-    """Refresh player stats cache from BigQuery"""
-    global PLAYER_STATS_STATE
+# ======================================================
+# Read-Side Helpers (no background loops)
+# ======================================================
 
-    print("[CACHE] Player stats refresher initialized")
+def _is_cache_fresh(last_updated: Optional[datetime], ttl_sec: int) -> bool:
+    if not last_updated:
+        return False
+    return (datetime.now(UTC_TZ) - last_updated).total_seconds() < ttl_sec
 
-    while True:
-        try:
-            if not CONTROL.is_running:
-                await asyncio.sleep(5)
-                continue
 
-            def _query():
-                client = get_bq_client()
-                job = client.query(
-                    PLAYER_STATS_QUERY,
-                    job_config=bigquery.QueryJobConfig(
-                        query_parameters=[
-                            bigquery.ScalarQueryParameter("game_date", "DATE", nba_today())
-                        ]
-                    ),
-                )
-                return list(job.result())
+def _build_degraded_payload(state: Any, now: datetime) -> Dict[str, Any]:
+    payload = dict(state.payload or {})
+    meta = dict(payload.get("meta", {}))
+    meta.update(
+        {
+            "status": "DEGRADED",
+            "server_updated_at": now.isoformat(),
+            "consecutive_failures": state.consecutive_errors,
+            "seconds_since_last_good": (
+                int((now - state.last_updated).total_seconds())
+                if state.last_updated
+                else None
+            ),
+            "last_error": state.last_error,
+        }
+    )
+    payload["meta"] = meta
+    return payload
 
-            rows = await asyncio.to_thread(_query)
 
-            players = []
-            for r in rows:
-                players.append({
-                    "game_id": r.game_id,
-                    "player_id": r.player_id,
-                    "name": r.player_name or "-",
-                    "team": r.team_abbr,
-                    "opponent": r.opponent_abbr,
-                    "minutes": float(r.minutes) if r.minutes else None,
-                    "pts": r.pts or 0,
-                    "reb": r.reb or 0,
-                    "ast": r.ast or 0,
-                    "stl": r.stl or 0,
-                    "blk": r.blk or 0,
-                    "tov": r.tov or 0,
-                    "fg": [r.fg_made or 0, r.fg_att or 0],
-                    "fg3": [r.fg3_made or 0, r.fg3_att or 0],
-                    "ft": [r.ft_made or 0, r.ft_att or 0],
-                    "plus_minus": r.plus_minus or 0,
-                    "period": int(r.period) if r.period and str(r.period).isdigit() else None,
-                    "clock": r.clock,
-                })
+def get_betting_day() -> date:
+    """
+    Returns the 'betting day' date.
+    NBA games can run past midnight, so if it's before 3 AM ET,
+    we use yesterday's date to catch late-finishing games.
+    """
+    now_et = datetime.now(NBA_TZ)
+    if now_et.hour < 3:
+        return (now_et - timedelta(days=1)).date()
+    return now_et.date()
 
-            PLAYER_STATS_STATE.payload = {
-                "players": players,
-                "meta": {
-                    "status": "OK",
-                    "server_updated_at": datetime.now(UTC_TZ).isoformat(),
-                    "player_count": len(players),
-                },
+
+def fetch_live_scores_snapshot() -> Dict[str, Any]:
+    client = get_bq_client()
+    rows = list(client.query(LIVE_SCORES_QUERY).result())
+
+    games: List[Dict[str, Any]] = []
+    max_updated_at: Optional[datetime] = None
+
+    for r in rows:
+        updated_at = r.ingested_at
+        if updated_at and updated_at.tzinfo is None:
+            updated_at = updated_at.replace(tzinfo=timezone.utc)
+
+        if updated_at and (max_updated_at is None or updated_at > max_updated_at):
+            max_updated_at = updated_at
+
+        games.append(
+            {
+                "game_id": r.game_id,
+                "home_team": r.home_team_abbr,
+                "away_team": r.away_team_abbr,
+                "home_score": r.home_score,
+                "away_score": r.away_score,
+                "home_q": [r.home_score_q1, r.home_score_q2, r.home_score_q3, r.home_score_q4],
+                "away_q": [r.away_score_q1, r.away_score_q2, r.away_score_q3, r.away_score_q4],
+                "period": r.period,
+                "clock": r.clock,
             }
-            PLAYER_STATS_STATE.last_updated = datetime.now(NBA_TZ)
+        )
 
-            await asyncio.sleep(INGEST_INTERVAL_SEC)
+    return {
+        "games": games,
+        "source_updated_at": max_updated_at.isoformat() if max_updated_at else None,
+    }
 
-        except Exception as e:
-            print(f"[CACHE] Player stats error: {e}")
-            await asyncio.sleep(10)
+
+def get_live_scores_payload(force_refresh: bool = False) -> Dict[str, Any]:
+    if (
+        not force_refresh
+        and _is_cache_fresh(LIVE_STREAM_STATE.last_updated, LIVE_SCORES_CACHE_TTL_SEC)
+    ):
+        return LIVE_STREAM_STATE.payload
+
+    now = datetime.now(UTC_TZ)
+    LIVE_STREAM_STATE.last_attempt = now
+
+    try:
+        snapshot = fetch_live_scores_snapshot()
+        LIVE_STREAM_STATE.payload = {
+            "games": snapshot.get("games", []),
+            "meta": {
+                "status": "OK",
+                "server_updated_at": now.isoformat(),
+                "source_updated_at": snapshot.get("source_updated_at"),
+                "game_count": len(snapshot.get("games", [])),
+            },
+        }
+        LIVE_STREAM_STATE.last_updated = now
+        LIVE_STREAM_STATE.consecutive_errors = 0
+        LIVE_STREAM_STATE.last_error = None
+    except Exception as exc:
+        LIVE_STREAM_STATE.consecutive_errors += 1
+        LIVE_STREAM_STATE.last_error = str(exc)
+        LIVE_STREAM_STATE.payload = _build_degraded_payload(LIVE_STREAM_STATE, now)
+
+    return LIVE_STREAM_STATE.payload
+
+
+def fetch_live_games_list() -> List[Dict[str, Any]]:
+    client = get_bq_client()
+    rows = list(client.query(LIVE_GAMES_LIST_QUERY).result())
+
+    games: List[Dict[str, Any]] = []
+    for r in rows:
+        games.append(
+            {
+                "game_id": r.game_id,
+                "home": r.home_team_abbr,
+                "away": r.away_team_abbr,
+                "home_score": r.home_score,
+                "away_score": r.away_score,
+                "period": r.period,
+                "clock": r.clock,
+                "start_time_et": r.start_time_et.isoformat() if r.start_time_et else None,
+                "state": r.state,
+            }
+        )
+
+    return games
+
+
+def get_live_games_payload() -> Dict[str, Any]:
+    games = fetch_live_games_list()
+    return {"count": len(games), "games": games}
+
+
+def fetch_player_box_snapshot(game_date: Optional[date] = None) -> Dict[str, Any]:
+    if game_date is None:
+        game_date = nba_today()
+
+    client = get_bq_client()
+    job = client.query(
+        BOX_SCORES_QUERY,
+        job_config=bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("game_date", "DATE", game_date)
+            ]
+        ),
+    )
+    rows = list(job.result())
+
+    if not rows:
+        return {
+            "games": [],
+            "source_updated_at": None,
+            "game_date": game_date.isoformat(),
+        }
+
+    row = rows[0]
+    raw = row.payload
+    payload = json.loads(raw) if isinstance(raw, str) else raw
+
+    return {
+        "games": payload.get("data", []),
+        "source_updated_at": row.snapshot_ts.isoformat() if row.snapshot_ts else None,
+        "game_date": game_date.isoformat(),
+    }
+
+
+def get_player_box_payload(
+    game_date: Optional[date] = None,
+    force_refresh: bool = False,
+) -> Dict[str, Any]:
+    if game_date is None:
+        game_date = nba_today()
+
+    if (
+        not force_refresh
+        and PLAYER_BOX_STATE.game_date == game_date
+        and _is_cache_fresh(PLAYER_BOX_STATE.last_updated, PLAYER_BOX_CACHE_TTL_SEC)
+    ):
+        return PLAYER_BOX_STATE.payload
+
+    now = datetime.now(UTC_TZ)
+    PLAYER_BOX_STATE.last_attempt = now
+
+    try:
+        snapshot = fetch_player_box_snapshot(game_date)
+        PLAYER_BOX_STATE.payload = {
+            "games": snapshot.get("games", []),
+            "meta": {
+                "status": "OK",
+                "server_updated_at": now.isoformat(),
+                "source_updated_at": snapshot.get("source_updated_at"),
+                "game_date": game_date.isoformat(),
+                "game_count": len(snapshot.get("games", [])),
+            },
+        }
+        PLAYER_BOX_STATE.last_updated = now
+        PLAYER_BOX_STATE.game_date = game_date
+        PLAYER_BOX_STATE.consecutive_errors = 0
+        PLAYER_BOX_STATE.last_error = None
+    except Exception as exc:
+        PLAYER_BOX_STATE.consecutive_errors += 1
+        PLAYER_BOX_STATE.last_error = str(exc)
+        PLAYER_BOX_STATE.payload = _build_degraded_payload(PLAYER_BOX_STATE, now)
+
+    return PLAYER_BOX_STATE.payload
+
+
+def snapshot_player_box(
+    game_date: Optional[date] = None,
+    dry_run: bool = False,
+) -> Dict[str, Any]:
+    if game_date is None:
+        game_date = nba_today()
+
+    snapshot = fetch_player_box_snapshot(game_date)
+
+    if not dry_run:
+        client = get_bq_client()
+        table_id = PLAYER_BOX_RAW_TABLE
+
+        row = {
+            "snapshot_ts": datetime.now(timezone.utc).isoformat(),
+            "game_date": game_date.isoformat(),
+            "payload": json.dumps(snapshot),
+        }
+
+        errors = client.insert_rows_json(table_id, [row])
+        if errors:
+            raise RuntimeError(f"BigQuery insert errors: {errors}")
+
+        flatten_player_stats_from_box_scores(
+            snapshot.get("games", []),
+            game_date=game_date,
+            skip_if_disabled=True,
+        )
+
+    return {
+        "status": "OK",
+        "game_date": str(game_date),
+        "games": len(snapshot.get("games", [])),
+        "dry_run": dry_run,
+    }
+
+
+def fetch_player_stats_snapshot(game_date: Optional[date] = None) -> Dict[str, Any]:
+    if game_date is None:
+        game_date = get_betting_day()
+
+    client = get_bq_client()
+    job = client.query(
+        PLAYER_STATS_QUERY,
+        job_config=bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("game_date", "DATE", game_date)
+            ]
+        ),
+    )
+    rows = list(job.result())
+
+    players: List[Dict[str, Any]] = []
+    max_ingested_at: Optional[datetime] = None
+
+    for r in rows:
+        updated_at = r.ingested_at
+        if updated_at and updated_at.tzinfo is None:
+            updated_at = updated_at.replace(tzinfo=timezone.utc)
+
+        if updated_at and (max_ingested_at is None or updated_at > max_ingested_at):
+            max_ingested_at = updated_at
+
+        players.append(
+            {
+                "game_id": r.game_id,
+                "player_id": r.player_id,
+                "name": r.player_name or "-",
+                "team": r.team_abbr,
+                "opponent": r.opponent_abbr,
+                "minutes": float(r.minutes) if r.minutes is not None else None,
+                "pts": r.pts or 0,
+                "reb": r.reb or 0,
+                "ast": r.ast or 0,
+                "stl": r.stl or 0,
+                "blk": r.blk or 0,
+                "tov": r.tov or 0,
+                "fg": [r.fg_made or 0, r.fg_att or 0],
+                "fg3": [r.fg3_made or 0, r.fg3_att or 0],
+                "ft": [r.ft_made or 0, r.ft_att or 0],
+                "plus_minus": r.plus_minus or 0,
+                "period": (
+                    int(r.period)
+                    if r.period and str(r.period).isdigit()
+                    else None
+                ),
+                "clock": r.clock,
+            }
+        )
+
+    return {
+        "players": players,
+        "source_updated_at": max_ingested_at.isoformat() if max_ingested_at else None,
+        "game_date": game_date.isoformat(),
+    }
+
+
+def get_player_stats_payload(
+    game_date: Optional[date] = None,
+    force_refresh: bool = False,
+) -> Dict[str, Any]:
+    if game_date is None:
+        game_date = get_betting_day()
+
+    if (
+        not force_refresh
+        and PLAYER_STATS_STATE.game_date == game_date
+        and _is_cache_fresh(PLAYER_STATS_STATE.last_updated, PLAYER_STATS_CACHE_TTL_SEC)
+    ):
+        return PLAYER_STATS_STATE.payload
+
+    now = datetime.now(UTC_TZ)
+    PLAYER_STATS_STATE.last_attempt = now
+
+    try:
+        snapshot = fetch_player_stats_snapshot(game_date)
+        PLAYER_STATS_STATE.payload = {
+            "players": snapshot.get("players", []),
+            "meta": {
+                "status": "OK",
+                "server_updated_at": now.isoformat(),
+                "source_updated_at": snapshot.get("source_updated_at"),
+                "game_date": game_date.isoformat(),
+                "player_count": len(snapshot.get("players", [])),
+            },
+        }
+        PLAYER_STATS_STATE.last_updated = now
+        PLAYER_STATS_STATE.game_date = game_date
+        PLAYER_STATS_STATE.consecutive_errors = 0
+        PLAYER_STATS_STATE.last_error = None
+    except Exception as exc:
+        PLAYER_STATS_STATE.consecutive_errors += 1
+        PLAYER_STATS_STATE.last_error = str(exc)
+        PLAYER_STATS_STATE.payload = _build_degraded_payload(PLAYER_STATS_STATE, now)
+
+    return PLAYER_STATS_STATE.payload

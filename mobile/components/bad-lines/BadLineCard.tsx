@@ -46,12 +46,18 @@ export type BadLine = {
 
 type Props = {
   line: BadLine;
+  compact?: boolean;
+  showMatchup?: boolean;
 };
 
 /* ======================================================
-   COMPONENT
+  COMPONENT
 ====================================================== */
-export default function BadLineCard({ line }: Props) {
+export default function BadLineCard({
+  line,
+  compact = false,
+  showMatchup = true,
+}: Props) {
   // 🔑 Zustand theme (same pattern as PropCard, TrackedParlayCard, etc.)
   const colors = useTheme((s) => s.colors);
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -64,59 +70,54 @@ export default function BadLineCard({ line }: Props) {
       : "low";
 
   return (
-    <View style={[styles.card, styles[severity]]}>
-      {/* HEADER */}
-      <View style={styles.header}>
-        <View style={styles.headerText}>
+    <View style={[styles.card, compact && styles.cardCompact, styles[severity]]}>
+      <View style={styles.headerRow}>
+        <View style={styles.playerBlock}>
           <Text style={styles.player} numberOfLines={1}>
             {line.player_name}
           </Text>
-          <Text style={styles.matchup}>
-            {line.away_team_abbr} @ {line.home_team_abbr}
+          {showMatchup && (
+            <Text style={styles.matchup}>
+              {line.away_team_abbr} @ {line.home_team_abbr}
+            </Text>
+          )}
+        </View>
+
+        <View style={styles.lineBlock}>
+          <Text style={styles.market}>{line.market.toUpperCase()}</Text>
+          <Text style={styles.line}>
+            {line.line_value}{" "}
+            <Text style={styles.odds}>
+              ({line.odds > 0 ? `+${line.odds}` : line.odds})
+            </Text>
           </Text>
         </View>
       </View>
 
-      {/* LINE */}
-      <View style={styles.lineRow}>
-        <Text style={styles.market}>
-          {line.market.toUpperCase()}
-        </Text>
-        <Text style={styles.line}>
-          {line.line_value}{" "}
-          <Text style={styles.odds}>
-            ({line.odds > 0 ? `+${line.odds}` : line.odds})
-          </Text>
-        </Text>
-      </View>
-
-      {/* EXPLANATION */}
-      <View style={styles.explain}>
+      <View style={styles.metaRow}>
         {line.expected_stat != null && (
-          <Text style={styles.explainText}>
-            Model: {line.expected_stat.toFixed(1)}
+          <Text style={styles.metaText}>
+            Model {line.expected_stat.toFixed(1)}
           </Text>
         )}
 
         {line.expected_edge != null && (
-          <Text style={styles.explainText}>
-            Edge: +{(line.expected_edge * 100).toFixed(1)}%
+          <Text style={styles.metaText}>
+            Edge +{(line.expected_edge * 100).toFixed(1)}%
           </Text>
         )}
 
         {line.hit_rate_l10 != null && (
-          <Text style={styles.explainText}>
-            L10 hit: {(line.hit_rate_l10 * 100).toFixed(0)}%
+          <Text style={styles.metaText}>
+            L10 {(line.hit_rate_l10 * 100).toFixed(0)}%
           </Text>
         )}
 
-
         <Text style={styles.score}>
-          Score: {line.bad_line_score.toFixed(2)}
+          Score {line.bad_line_score.toFixed(2)}
         </Text>
       </View>
 
-      {/* ACTIONS */}
       <View style={styles.actions}>
         <Pressable style={styles.actionBtn}>
           <Text style={styles.actionText}>Add</Text>
@@ -136,12 +137,18 @@ function makeStyles(colors: any) {
   return StyleSheet.create({
     card: {
       backgroundColor: colors.surface.card,
-      borderRadius: 14,
-      padding: 12,
+      borderRadius: 12,
+      padding: 10,
       marginHorizontal: 12,
       marginVertical: 6,
       borderWidth: 1,
       borderColor: colors.border.subtle,
+    },
+    cardCompact: {
+      paddingVertical: 8,
+      paddingHorizontal: 10,
+      marginHorizontal: 0,
+      marginVertical: 0,
     },
 
     high: {
@@ -154,80 +161,87 @@ function makeStyles(colors: any) {
       borderColor: colors.border.subtle,
     },
 
-    header: {
+    headerRow: {
       flexDirection: "row",
-      alignItems: "center",
-      marginBottom: 8,
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+      gap: 10,
+      marginBottom: 6,
     },
 
-    headerText: {
+    playerBlock: {
       flex: 1,
+      minWidth: 0,
     },
 
     player: {
-      fontSize: 15,
-      fontWeight: "600",
+      fontSize: 14,
+      fontWeight: "700",
       color: colors.text.primary,
     },
 
     matchup: {
-      fontSize: 12,
+      fontSize: 11,
       color: colors.text.muted,
       marginTop: 2,
     },
 
-    lineRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      marginBottom: 8,
+    lineBlock: {
+      alignItems: "flex-end",
     },
 
     market: {
-      fontSize: 13,
-      fontWeight: "600",
-      color: colors.text.primary,
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.text.muted,
+      textTransform: "uppercase",
     },
 
     line: {
       fontSize: 13,
+      fontWeight: "600",
       color: colors.text.primary,
+      marginTop: 2,
     },
 
     odds: {
       color: colors.text.muted,
     },
 
-    explain: {
-      marginBottom: 10,
+    metaRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 8,
     },
 
-    explainText: {
-      fontSize: 12,
+    metaText: {
+      fontSize: 11,
       color: colors.text.muted,
     },
 
     score: {
-      marginTop: 4,
-      fontSize: 12,
-      fontWeight: "600",
+      fontSize: 11,
+      fontWeight: "700",
       color: colors.accent.warning,
     },
 
     actions: {
       flexDirection: "row",
       justifyContent: "flex-end",
-      gap: 12,
+      gap: 8,
     },
 
     actionBtn: {
-      paddingVertical: 6,
-      paddingHorizontal: 12,
-      borderRadius: 10,
+      paddingVertical: 4,
+      paddingHorizontal: 10,
+      borderRadius: 8,
       backgroundColor: colors.surface.cardSoft,
     },
 
     actionText: {
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: "600",
       color: colors.text.primary,
     },

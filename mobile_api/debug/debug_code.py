@@ -10,7 +10,9 @@ router = APIRouter(
 
 ALLOWED_FILES = {
     "main.py",
-    "live_stream.py",
+    "managed_live_ingest.py",
+    "stater_game_orchestrator.py",
+    "test_main_scheduled.py",
     "box_scores_snapshot.py",
     "box_test.py",
     "db.py",

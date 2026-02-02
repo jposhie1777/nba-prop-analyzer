@@ -1,8 +1,6 @@
 // app/(tabs)/_layout.tsx
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Platform } from "react-native";
-
 import { HapticTab } from "@/components/haptic-tab";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -14,8 +12,8 @@ export default function TabLayout() {
 
   return (
     <>
-      {/* 🔥 Live data sync — NATIVE ONLY (prevents web blank screen) */}
-      {Platform.OS !== "web" && <LiveDataBridge />}
+      {/* 🔥 Live data sync — all platforms */}
+      <LiveDataBridge />
 
       <Tabs
         screenOptions={{

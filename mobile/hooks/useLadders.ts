@@ -77,7 +77,7 @@ export function useLadders(options: UseLaddersOptions = {}) {
       return json.ladders ?? [];
     },
 
-    refetchInterval: mode === "live" ? 15_000 : 60_000, // Faster refresh for live
+    refetchInterval: 60_000,
     staleTime: mode === "live" ? 10_000 : 30_000,
   });
 

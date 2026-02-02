@@ -11,7 +11,7 @@ import { useDevStore } from "@/lib/dev/devStore";
 ====================================================== */
 
 const API = Constants.expoConfig?.extra?.API_URL!;
-const POLL_INTERVAL_MS = 20_000;
+const POLL_INTERVAL_MS = 60_000;
 
 type Mode = "sse" | "poll";
 

@@ -88,7 +88,7 @@ export function useLivePlayerProps(gameId?: number) {
 
     // Initial load + polling
     load();
-    intervalId = setInterval(load, 30_000);
+    intervalId = setInterval(load, 60_000);
 
     return () => {
       mounted = false;

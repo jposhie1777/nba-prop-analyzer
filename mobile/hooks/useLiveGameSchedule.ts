@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import Constants from "expo-constants";
 
 const API = Constants.expoConfig?.extra?.API_URL!;
-const POLL_MS = 30_000;
+const POLL_MS = 60_000;
 
 export type LiveGameSchedule = {
   game_id: number;

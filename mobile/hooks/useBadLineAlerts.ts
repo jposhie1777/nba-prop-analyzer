@@ -43,7 +43,7 @@ export function useBadLineAlerts(minScore = 1.0) {
       return json.bad_lines ?? [];
     },
 
-    refetchInterval: 30_000, // live-ish
+    refetchInterval: 60_000, // live-ish
     staleTime: 15_000,
   });
 }

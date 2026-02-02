@@ -5,7 +5,7 @@ import Constants from "expo-constants";
 import { useParlayTracker } from "@/store/useParlayTracker";
 
 const API = Constants.expoConfig?.extra?.API_URL!;
-const POLL_INTERVAL_MS = 20_000;
+const POLL_INTERVAL_MS = 60_000;
 
 export type LivePlayerStat = {
   game_id: number;

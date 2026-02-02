@@ -95,7 +95,7 @@ export function useLivePropsDev(limit = 100) {
         };
       });
     },
-    refetchInterval: 15_000, // live but not insane
+    refetchInterval: 60_000, // live but not insane
     staleTime: 5_000,
   });
 }

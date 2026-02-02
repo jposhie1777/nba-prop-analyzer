@@ -22,7 +22,7 @@ router = APIRouter(prefix="/live", tags=["live"])
 # ======================================================
 # Configuration
 # ======================================================
-REFRESH_INTERVAL_SEC = 20
+REFRESH_INTERVAL_SEC = 60
 BQ_TIMEOUT_SEC = 8                  # must be < REFRESH_INTERVAL_SEC
 KEEPALIVE_SEC = 15                  # keep SSE alive through proxies
 MAX_BACKOFF_SEC = 120

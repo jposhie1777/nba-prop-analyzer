@@ -431,7 +431,7 @@ async def startup():
             except Exception as e:
                 print("[INGEST] Live games ingest failed:", e)
 
-            await asyncio.sleep(15)
+            await asyncio.sleep(60)
 
     asyncio.create_task(live_ingest_loop())
 
@@ -452,7 +452,7 @@ async def startup():
             except Exception as e:
                 print("[INGEST] Live boxscore snapshot failed:", e)
 
-            await asyncio.sleep(30)
+            await asyncio.sleep(60)
 
 
     asyncio.create_task(live_boxscore_snapshot_loop())
@@ -470,7 +470,7 @@ async def startup():
             except Exception as e:
                 print("[INGEST] Live game odds ingest failed:", e)
 
-            await asyncio.sleep(30)
+            await asyncio.sleep(60)
 
     asyncio.create_task(live_game_odds_loop())
 
@@ -488,7 +488,7 @@ async def startup():
             except Exception as e:
                 print("[INGEST] Live player prop odds ingest failed:", e)
 
-            await asyncio.sleep(30)
+            await asyncio.sleep(60)
 
     asyncio.create_task(live_player_prop_odds_loop())
 
@@ -506,7 +506,7 @@ async def startup():
             except Exception as e:
                 print("[INGEST] Live odds flatten failed:", e)
 
-            await asyncio.sleep(30)
+            await asyncio.sleep(60)
 
     asyncio.create_task(live_odds_flatten_loop())
 

@@ -101,7 +101,7 @@ export function useLivePropsInfinite() {
     getNextPageParam: (lastPage) =>
       lastPage.next_cursor ?? undefined,
 
-    refetchInterval: 15_000,
+    refetchInterval: 60_000,
     staleTime: 5_000,
   });
 }

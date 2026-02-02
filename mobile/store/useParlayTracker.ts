@@ -57,8 +57,16 @@ export type LiveSnapshotByPlayerId = Record<
   }
 >;
 
+/* ======================================================
+   STATE
+====================================================== */
+
 type State = {
   tracked: Record<string, TrackedParlaySnapshot>;
+
+  // 🔑 Hydration guard (required for web)
+  hasHydrated: boolean;
+  setHasHydrated: (v: boolean) => void;
 
   track: (snapshot: TrackedParlaySnapshot) => void;
   untrack: (parlay_id: string) => void;
@@ -81,6 +89,11 @@ export const useParlayTracker = create<State>()(
   persist(
     (set, get) => ({
       tracked: {},
+
+      hasHydrated: false,
+      setHasHydrated: (v) => set({ hasHydrated: v }),
+
+      /* ================= TRACKING ================= */
 
       track: (snapshot) =>
         set((state) => ({
@@ -111,6 +124,7 @@ export const useParlayTracker = create<State>()(
       /* ======================================================
          LIVE ENRICHMENT
       ====================================================== */
+
       applyLiveSnapshot: (snapshotByPlayerId) => {
         set((state) => ({
           tracked: Object.fromEntries(
@@ -179,6 +193,8 @@ export const useParlayTracker = create<State>()(
         }));
       },
 
+      /* ================= CLEANUP ================= */
+
       cleanupExpired: () =>
         set((state) => ({
           tracked: Object.fromEntries(
@@ -192,6 +208,11 @@ export const useParlayTracker = create<State>()(
       name: "pulse-tracked-parlays",
       version: 2,
       storage: createJSONStorage(createSafeStorage),
+
+      // 🔑 REQUIRED for web rehydration
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     }
   )
 );

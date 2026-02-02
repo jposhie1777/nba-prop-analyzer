@@ -14,14 +14,23 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/store/useTheme";
 import { useWowy } from "@/hooks/useWowy";
 import { WowyCard } from "@/components/wowy/WowyCard";
+import { TeamWowySection } from "@/components/wowy/TeamWowySection";
+import { InjuredPlayerWowy, WowyStat } from "@/lib/wowy";
 
 type StatusFilter = "all" | "out" | "questionable";
-export type WowyStat = "pts" | "reb" | "ast" | "fg3m";
+type ViewMode = "byTeam" | "impact";
+
+function getImpactValue(player: InjuredPlayerWowy) {
+  const diff = player.team_impact.team_ppg_diff;
+  if (diff === null || diff === undefined) return Number.NEGATIVE_INFINITY;
+  return Math.abs(diff);
+}
 
 export default function WowyScreen() {
   const { colors } = useTheme();
   const { injuredPlayers, season, loading, error, refresh } = useWowy();
 
+  const [viewMode, setViewMode] = useState<ViewMode>("impact");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("out");
   const [searchQuery, setSearchQuery] = useState("");
   const [stat, setStat] = useState<WowyStat>("pts");
@@ -53,11 +62,39 @@ export default function WowyScreen() {
       )
     : filteredByStatus;
 
-  const sortedPlayers = [...filteredPlayers].sort((a, b) => {
-    const aImpact = a.team_impact.team_ppg_diff ?? 0;
-    const bImpact = b.team_impact.team_ppg_diff ?? 0;
-    return aImpact - bImpact;
+  const impactSortedPlayers = [...filteredPlayers].sort((a, b) => {
+    const aImpact = getImpactValue(a);
+    const bImpact = getImpactValue(b);
+    if (bImpact !== aImpact) return bImpact - aImpact;
+    return a.injured_player.player_name.localeCompare(b.injured_player.player_name);
   });
+
+  const groupedByTeam = filteredPlayers.reduce<Record<string, InjuredPlayerWowy[]>>(
+    (acc, player) => {
+      const teamKey = player.injured_player.team?.trim() || "Unknown";
+      if (!acc[teamKey]) {
+        acc[teamKey] = [];
+      }
+      acc[teamKey].push(player);
+      return acc;
+    },
+    {}
+  );
+
+  const teamSections = Object.entries(groupedByTeam)
+    .map(([team, players]) => ({
+      team,
+      players: [...players].sort((a, b) => {
+        const aImpact = getImpactValue(a);
+        const bImpact = getImpactValue(b);
+        if (bImpact !== aImpact) return bImpact - aImpact;
+        return a.injured_player.player_name.localeCompare(b.injured_player.player_name);
+      }),
+    }))
+    .sort((a, b) => a.team.localeCompare(b.team));
+
+  const teamCount = teamSections.length;
+  const playerCount = filteredPlayers.length;
 
   /* =========================
      RENDER
@@ -187,9 +224,66 @@ export default function WowyScreen() {
         ))}
       </View>
 
+      {/* VIEW TOGGLE */}
+      <View style={styles.viewToggleRow}>
+        <Pressable
+          onPress={() => setViewMode("byTeam")}
+          style={[
+            styles.viewToggleButton,
+            {
+              backgroundColor:
+                viewMode === "byTeam"
+                  ? colors.accent?.primary ?? "#3b82f6"
+                  : colors.surface?.cardSoft ?? "#222",
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.viewToggleText,
+              {
+                color:
+                  viewMode === "byTeam" ? "#fff" : colors.text?.muted ?? "#888",
+              },
+            ]}
+          >
+            By Team
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setViewMode("impact")}
+          style={[
+            styles.viewToggleButton,
+            {
+              backgroundColor:
+                viewMode === "impact"
+                  ? colors.accent?.primary ?? "#3b82f6"
+                  : colors.surface?.cardSoft ?? "#222",
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.viewToggleText,
+              {
+                color:
+                  viewMode === "impact" ? "#fff" : colors.text?.muted ?? "#888",
+              },
+            ]}
+          >
+            Largest Impact
+          </Text>
+        </Pressable>
+      </View>
+
       <Text style={[styles.countText, { color: colors.text?.muted ?? "#888" }]}>
-        {sortedPlayers.length} injured player
-        {sortedPlayers.length !== 1 ? "s" : ""} with WOWY data
+        {viewMode === "byTeam"
+          ? `${teamCount} team${teamCount !== 1 ? "s" : ""} with ${playerCount} injured player${
+              playerCount !== 1 ? "s" : ""
+            }`
+          : `${impactSortedPlayers.length} injured player${
+              impactSortedPlayers.length !== 1 ? "s" : ""
+            } with WOWY data`}
       </Text>
 
       {error && (
@@ -198,17 +292,52 @@ export default function WowyScreen() {
         </Text>
       )}
 
-      <FlatList
-        contentContainerStyle={styles.listContent}
-        data={sortedPlayers}
-        keyExtractor={(item) => String(item.injured_player.player_id)}
-        renderItem={({ item }) => (
-          <WowyCard data={item} stat={stat} defaultExpanded={false} />
-        )}
-        refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={refresh} />
-        }
-      />
+      {viewMode === "byTeam" ? (
+        <FlatList
+          key="byTeam"
+          contentContainerStyle={styles.listContent}
+          data={teamSections}
+          keyExtractor={(item) => item.team}
+          renderItem={({ item }) => (
+            <TeamWowySection
+              team={item.team}
+              players={item.players}
+              stat={stat}
+              defaultExpanded={false}
+            />
+          )}
+          refreshControl={
+            <RefreshControl refreshing={loading} onRefresh={refresh} />
+          }
+          ListEmptyComponent={
+            !loading ? (
+              <Text style={[styles.emptyText, { color: colors.text?.muted ?? "#888" }]}>
+                No WOWY data found
+              </Text>
+            ) : null
+          }
+        />
+      ) : (
+        <FlatList
+          key="impact"
+          contentContainerStyle={styles.listContent}
+          data={impactSortedPlayers}
+          keyExtractor={(item) => String(item.injured_player.player_id)}
+          renderItem={({ item }) => (
+            <WowyCard data={item} stat={stat} defaultExpanded={false} />
+          )}
+          refreshControl={
+            <RefreshControl refreshing={loading} onRefresh={refresh} />
+          }
+          ListEmptyComponent={
+            !loading ? (
+              <Text style={[styles.emptyText, { color: colors.text?.muted ?? "#888" }]}>
+                No WOWY data found
+              </Text>
+            ) : null
+          }
+        />
+      )}
     </View>
   );
 }
@@ -261,7 +390,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
+  viewToggleRow: {
+    flexDirection: "row",
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+    gap: 8,
+  },
+  viewToggleButton: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  viewToggleText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+
   countText: { paddingHorizontal: 12, paddingBottom: 8, fontSize: 12 },
   listContent: { padding: 12, paddingBottom: 40 },
   errorText: { padding: 12, textAlign: "center" },
+  emptyText: { textAlign: "center", marginTop: 20, fontSize: 13 },
 });

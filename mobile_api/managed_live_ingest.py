@@ -44,7 +44,18 @@ NBA_TZ = ZoneInfo("America/New_York")
 UTC_TZ = ZoneInfo("UTC")
 
 # Loop intervals (in seconds)
-INGEST_INTERVAL_SEC = 60     # How often to run each ingest loop
+def _read_int_env(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+        return value if value > 0 else default
+    except ValueError:
+        return default
+
+
+INGEST_INTERVAL_SEC = _read_int_env("LIVE_INGEST_INTERVAL_SEC", 60)
 BQ_TIMEOUT_SEC = 10          # BigQuery query timeout
 
 # BallDontLie API

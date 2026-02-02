@@ -170,7 +170,7 @@ async def startup():
     # =====================================================
     if use_scheduler:
         print("[STARTUP] Using SMART SCHEDULER mode")
-        print("[STARTUP] Ingestion will start 15 min before games")
+        print("[STARTUP] Ingestion will start when games go LIVE (or pre-game lead)")
         print("[STARTUP] Ingestion will stop when all games FINAL\n")
 
         # Register callbacks so orchestrator can control ingest

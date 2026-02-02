@@ -4,8 +4,8 @@ Stater Game Orchestrator - Intelligent NBA game session manager
 This module:
 1. Fetches today's games at 5-6 AM EST from BallDontLie API
 2. Writes schedule to nba_live.live_games
-3. Triggers ingestion 15 minutes before first game
-4. Runs ingestion every 20 seconds during active games
+3. Triggers ingestion when games go LIVE (or pre-game lead time)
+4. Runs ingestion on the managed ingest interval during live games
 5. Stops when ALL games are FINAL
 6. Handles midnight crossover (games don't cut off at day change)
 
@@ -36,7 +36,18 @@ SCHEDULE_FETCH_HOUR = 5
 SCHEDULE_FETCH_MINUTE = 30
 
 # How many minutes before first game to start ingestion
-PRE_GAME_LEAD_MINUTES = 15
+def _read_int_env(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+        return value if value >= 0 else default
+    except ValueError:
+        return default
+
+
+PRE_GAME_LEAD_MINUTES = _read_int_env("LIVE_INGEST_PRE_GAME_MINUTES", 0)
 
 # How many minutes after last game goes FINAL to keep polling
 POST_FINAL_GRACE_MINUTES = 10
@@ -468,7 +479,10 @@ async def orchestrator_loop():
     print("\n" + "="*60)
     print("[ORCHESTRATOR] SMART GAME ORCHESTRATOR STARTING")
     print(f"[ORCHESTRATOR] Schedule fetch time: {SCHEDULE_FETCH_HOUR}:{SCHEDULE_FETCH_MINUTE:02d} AM EST")
-    print(f"[ORCHESTRATOR] Pre-game lead time: {PRE_GAME_LEAD_MINUTES} minutes")
+    if PRE_GAME_LEAD_MINUTES > 0:
+        print(f"[ORCHESTRATOR] Pre-game lead time: {PRE_GAME_LEAD_MINUTES} minutes")
+    else:
+        print("[ORCHESTRATOR] Start mode: LIVE-only (no pre-game lead)")
     print("="*60 + "\n")
 
     while True:
@@ -546,20 +560,39 @@ async def orchestrator_loop():
             # ==========================================
             if not session.ingestion_started:
                 first_game = session.first_game_time()
+                start_ingestion_at = (
+                    first_game - timedelta(minutes=PRE_GAME_LEAD_MINUTES)
+                    if first_game
+                    else None
+                )
 
-                if first_game:
-                    start_ingestion_at = first_game - timedelta(minutes=PRE_GAME_LEAD_MINUTES)
+                # Refresh game states so we can start when games actually go LIVE
+                await asyncio.to_thread(update_game_states, session)
 
-                    if now >= start_ingestion_at:
-                        session.ingestion_started = True
-                        session.ingestion_started_at = now
-                        start_ingestion()
+                if session.any_games_live():
+                    session.ingestion_started = True
+                    session.ingestion_started_at = now
+                    start_ingestion()
+                elif PRE_GAME_LEAD_MINUTES > 0 and start_ingestion_at and now >= start_ingestion_at:
+                    session.ingestion_started = True
+                    session.ingestion_started_at = now
+                    start_ingestion()
+                else:
+                    if first_game:
+                        if PRE_GAME_LEAD_MINUTES > 0 and start_ingestion_at:
+                            wait_seconds = (start_ingestion_at - now).total_seconds()
+                            print(f"[ORCHESTRATOR] First game at {first_game.strftime('%I:%M %p ET')}")
+                            print(f"[ORCHESTRATOR] Starting ingestion at {start_ingestion_at.strftime('%I:%M %p ET')} ({wait_seconds/60:.1f} min)")
+                        else:
+                            wait_seconds = 60
+                            print(f"[ORCHESTRATOR] First game at {first_game.strftime('%I:%M %p ET')}")
+                            print("[ORCHESTRATOR] Waiting for games to go LIVE...")
                     else:
-                        wait_seconds = (start_ingestion_at - now).total_seconds()
-                        print(f"[ORCHESTRATOR] First game at {first_game.strftime('%I:%M %p ET')}")
-                        print(f"[ORCHESTRATOR] Starting ingestion at {start_ingestion_at.strftime('%I:%M %p ET')} ({wait_seconds/60:.1f} min)")
-                        await asyncio.sleep(min(wait_seconds, 60))
-                        continue
+                        wait_seconds = 60
+                        print("[ORCHESTRATOR] Waiting for games to go LIVE...")
+
+                    await asyncio.sleep(min(wait_seconds, 60))
+                    continue
 
             # ==========================================
             # STATE 2b: Ingestion active - monitor games

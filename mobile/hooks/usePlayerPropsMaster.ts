@@ -107,9 +107,9 @@ const DEFAULT_FILTERS: Filters = {
   market: "ALL",
   marketWindow: null,   // ✅
   hitRateWindow: "L5",
-  minHitRate: 0,
+  minHitRate: 80,
   minOdds: -750,
-  maxOdds: 500,
+  maxOdds: 300,
 };
 
 /* ======================================================

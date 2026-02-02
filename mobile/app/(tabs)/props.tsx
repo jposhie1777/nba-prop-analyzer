@@ -179,6 +179,36 @@ export default function PropsTestScreen() {
     }));
   }, []);
 
+  const resolveHitRatePct = useCallback(
+    (prop: any) => {
+      const raw =
+        filters.hitRateWindow === "L5"
+          ? prop.hit_rate_l5
+          : filters.hitRateWindow === "L10"
+          ? prop.hit_rate_l10
+          : prop.hit_rate_l20;
+
+      if (raw == null) return null;
+      return raw <= 1 ? raw * 100 : raw;
+    },
+    [filters.hitRateWindow]
+  );
+
+  const sortByHitRateOdds = useCallback(
+    (a: any, b: any) => {
+      const aHit = resolveHitRatePct(a) ?? -1;
+      const bHit = resolveHitRatePct(b) ?? -1;
+
+      if (aHit !== bHit) return bHit - aHit;
+
+      const oddsDiff = (a.odds ?? 0) - (b.odds ?? 0);
+      if (oddsDiff !== 0) return oddsDiff;
+
+      return (a.player ?? "").localeCompare(b.player ?? "");
+    },
+    [resolveHitRatePct]
+  );
+
   /* ======================================================
      SAVE / UNSAVE (single source of truth)
   ====================================================== */
@@ -222,6 +252,18 @@ export default function PropsTestScreen() {
   /* ======================================================
      SANITIZE + FILTER + SORT
   ====================================================== */
+  const resolveHitRatePct = (p: any) => {
+    const raw =
+      filters.hitRateWindow === "L5"
+        ? p.hit_rate_l5
+        : filters.hitRateWindow === "L10"
+        ? p.hit_rate_l10
+        : p.hit_rate_l20;
+
+    if (raw == null) return null;
+    return raw <= 1 ? raw * 100 : raw;
+  };
+
   const props = useMemo(() => {
     const cleaned = rawProps
       .filter((p) => {
@@ -230,14 +272,9 @@ export default function PropsTestScreen() {
         if (p.line == null) return false;
         if (!p.id) return false;
 
-        const hitRate =
-          filters.hitRateWindow === "L5"
-            ? p.hit_rate_l5
-            : filters.hitRateWindow === "L10"
-            ? p.hit_rate_l10
-            : p.hit_rate_l20;
+        const hitRatePct = resolveHitRatePct(p);
 
-        if (hitRate != null && hitRate < filters.minHitRate) {
+        if (hitRatePct != null && hitRatePct < filters.minHitRate) {
           return false;
         }
 
@@ -252,13 +289,19 @@ export default function PropsTestScreen() {
       }));
 
     cleaned.sort((a, b) => {
-      const oddsDiff = (b.odds ?? 0) - (a.odds ?? 0);
+      const aHit = resolveHitRatePct(a) ?? -1;
+      const bHit = resolveHitRatePct(b) ?? -1;
+      const hitDiff = bHit - aHit;
+      if (hitDiff !== 0) return hitDiff;
+
+      const oddsDiff = (a.odds ?? 0) - (b.odds ?? 0);
       if (oddsDiff !== 0) return oddsDiff;
+
       return (a.player ?? "").localeCompare(b.player ?? "");
     });
 
     return cleaned;
-  }, [rawProps, filters]);
+  }, [rawProps, filters, resolveHitRatePct]);
 
   const gameGroups = useMemo(() => {
     const map = new Map<string, any[]>();
@@ -272,19 +315,34 @@ export default function PropsTestScreen() {
     const groups = Array.from(map.entries()).map(([label, items]) => ({
       key: label,
       label,
-      items: [...items].sort(
-        (a, b) => (b.odds ?? 0) - (a.odds ?? 0),
-      ),
+      items: [...items].sort((a, b) => {
+        const aHit = resolveHitRatePct(a) ?? -1;
+        const bHit = resolveHitRatePct(b) ?? -1;
+        const hitDiff = bHit - aHit;
+        if (hitDiff !== 0) return hitDiff;
+        return (a.odds ?? 0) - (b.odds ?? 0);
+      }),
     }));
 
     groups.sort((a, b) => {
       if (a.key === "Other") return 1;
       if (b.key === "Other") return -1;
+
+      const aTop = a.items[0];
+      const bTop = b.items[0];
+      const aHit = aTop ? resolveHitRatePct(aTop) ?? -1 : -1;
+      const bHit = bTop ? resolveHitRatePct(bTop) ?? -1 : -1;
+      const hitDiff = bHit - aHit;
+      if (hitDiff !== 0) return hitDiff;
+
+      const oddsDiff = (aTop?.odds ?? 0) - (bTop?.odds ?? 0);
+      if (oddsDiff !== 0) return oddsDiff;
+
       return a.key.localeCompare(b.key);
     });
 
     return groups;
-  }, [props]);
+  }, [props, resolveHitRatePct]);
 
   const { data: badLines } = useBadLineAlerts(1.0);
 

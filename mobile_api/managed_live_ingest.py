@@ -2,7 +2,7 @@
 Managed Live Ingest - Controllable ingestion loops for NBA live data
 
 This module provides ingestion loops that can be started/stopped by the orchestrator.
-Each loop runs every 20 seconds when active and stops when signaled.
+Each loop runs every 60 seconds when active and stops when signaled.
 
 Loops included:
 1. Live Games Snapshot (BallDontLie -> nba_live.live_games)
@@ -42,7 +42,7 @@ NBA_TZ = ZoneInfo("America/New_York")
 UTC_TZ = ZoneInfo("UTC")
 
 # Loop intervals (in seconds)
-INGEST_INTERVAL_SEC = 20     # How often to run each ingest loop
+INGEST_INTERVAL_SEC = 60     # How often to run each ingest loop
 BQ_TIMEOUT_SEC = 10          # BigQuery query timeout
 
 # BallDontLie API
@@ -431,7 +431,7 @@ def run_full_ingest_cycle() -> Dict[str, int]:
 
 async def managed_ingest_loop():
     """
-    Main ingest loop that runs every 20 seconds when enabled.
+    Main ingest loop that runs every 60 seconds when enabled.
     Checks CONTROL.is_running to determine if it should run.
     """
     global CONTROL
@@ -496,7 +496,7 @@ def start_managed_ingest() -> None:
     print("\n" + "="*60)
     print("[INGEST] !! INGESTION STARTED !!")
     print(f"[INGEST] Start time: {CONTROL.started_at.strftime('%I:%M:%S %p ET')}")
-    print("[INGEST] Running every 20 seconds")
+    print("[INGEST] Running every 60 seconds")
     print("="*60 + "\n")
 
 

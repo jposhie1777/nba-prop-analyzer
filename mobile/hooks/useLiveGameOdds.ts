@@ -42,7 +42,7 @@ export function useLiveGameOdds(gameId?: number) {
     }
 
     load();
-    const id = setInterval(load, 30_000);
+    const id = setInterval(load, 60_000);
 
     return () => {
       mounted = false;

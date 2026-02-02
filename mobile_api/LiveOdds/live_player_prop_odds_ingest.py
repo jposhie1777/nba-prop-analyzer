@@ -32,7 +32,13 @@ def ingest_live_player_prop_odds() -> dict:
 
     live_game_ids = fetch_live_game_ids()
     if not live_game_ids:
-        return {"status": "SKIPPED", "reason": "no live games"}
+        print("⚠️ No live games detected — continuing ingest safely")
+        return {
+            "status": "OK",
+            "games_written": 0,
+            "rows_inserted": 0,
+            "snapshot_ts": now.isoformat(),
+        }
 
     headers = {
         "Authorization": f"Bearer {require_api_key()}",

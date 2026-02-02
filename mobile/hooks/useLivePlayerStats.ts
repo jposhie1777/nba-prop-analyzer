@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
 import Constants from "expo-constants";
+import { useParlayTracker } from "@/store/useParlayTracker";
 
 const API = Constants.expoConfig?.extra?.API_URL!;
 const POLL_INTERVAL_MS = 20_000;
@@ -47,6 +48,9 @@ export function useLivePlayerStats() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const appStateRef = useRef(AppState.currentState);
 
+  const applyLiveSnapshot = useParlayTracker(
+    (s) => s.applyLiveSnapshot
+  );
   /* ===========================
      Polling
   =========================== */
@@ -169,6 +173,31 @@ export function useLivePlayerStats() {
 
     return filtered;
   };
+
+    /* ===========================
+       Sync live stats → tracked parlays
+    =========================== */
+    useEffect(() => {
+      if (!players.length) return;
+  
+      const snapshotByPlayerId = Object.fromEntries(
+        players.map((p) => [
+          String(p.player_id), // 🔑 STRING KEY (web-safe)
+          {
+            pts: p.pts,
+            reb: p.reb,
+            ast: p.ast,
+            fg3m: p.fg3m,
+            game_id: p.game_id,
+            period: p.period,
+            clock: p.clock,
+            game_status: p.period == null ? "final" : "live",
+          },
+        ])
+      );
+  
+      applyLiveSnapshot(snapshotByPlayerId);
+    }, [players, applyLiveSnapshot]);
 
   return {
     players,

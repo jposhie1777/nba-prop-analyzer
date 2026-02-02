@@ -8,7 +8,7 @@ import {
   FlatList,
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
-import { useMemo, useState, useRef } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { LinearGradient } from "expo-linear-gradient";
 
 import { useTheme } from "@/store/useTheme";
@@ -151,6 +151,12 @@ export default function PropCard(props: PropCardProps) {
   const [displayWindow, setDisplayWindow] = useState<"L5" | "L10" | "L20">(
     props.window ?? "L10"
   );
+
+  useEffect(() => {
+    if (props.window) {
+      setDisplayWindow(props.window);
+    }
+  }, [props.window]);
 
   const hitRate =
     displayWindow === "L5"

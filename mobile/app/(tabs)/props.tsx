@@ -5,6 +5,7 @@ import {
   StyleSheet,
   FlatList,
   Pressable,
+  Image,
 } from "react-native";
 import { useMemo, useState, useCallback, useRef, useEffect } from "react";
 import Slider from "@react-native-community/slider";
@@ -30,6 +31,7 @@ import {
   PlayerPositionRow,
   usePlayerPositions,
 } from "@/hooks/usePlayerPositions";
+import { TEAM_LOGOS } from "@/utils/teamLogos";
 
 function getOpponentRank(
   row: OpponentPositionDefenseRow | undefined,
@@ -132,6 +134,26 @@ function resolveGameLabel(item: {
   const trimmed = typeof fallback === "string" ? fallback.trim() : "";
 
   return trimmed || "Other";
+}
+
+function normalizeTeamKey(team?: string) {
+  if (!team) return undefined;
+  const key = team.trim().toUpperCase();
+  if (key === "NO") return "NOP";
+  if (key === "PHO") return "PHX";
+  return key;
+}
+
+function resolveTeamLogo(team?: string) {
+  const key = normalizeTeamKey(team);
+  return key ? TEAM_LOGOS[key] : undefined;
+}
+
+function formatGameStartTime(startTimeMs?: number | null) {
+  if (!startTimeMs) return "TBD";
+  const date = new Date(startTimeMs);
+  if (Number.isNaN(date.getTime())) return "TBD";
+  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
 /* ======================================================
@@ -261,18 +283,51 @@ export default function PropsTestScreen() {
   }, [rawProps, filters]);
 
   const gameGroups = useMemo(() => {
-    const map = new Map<string, any[]>();
+    const map = new Map<
+      string,
+      {
+        key: string;
+        label: string;
+        items: any[];
+        homeTeam?: string;
+        awayTeam?: string;
+        startTimeMs?: number | null;
+      }
+    >();
 
     props.forEach((prop) => {
       const label = resolveGameLabel(prop);
-      if (!map.has(label)) map.set(label, []);
-      map.get(label)!.push(prop);
+      const existing = map.get(label);
+      const startTimeMs = prop.startTimeMs ?? null;
+
+      if (!existing) {
+        map.set(label, {
+          key: label,
+          label,
+          items: [prop],
+          homeTeam: prop.homeTeam,
+          awayTeam: prop.awayTeam,
+          startTimeMs,
+        });
+        return;
+      }
+
+      existing.items.push(prop);
+
+      if (!existing.homeTeam && prop.homeTeam) {
+        existing.homeTeam = prop.homeTeam;
+      }
+      if (!existing.awayTeam && prop.awayTeam) {
+        existing.awayTeam = prop.awayTeam;
+      }
+      if (existing.startTimeMs == null && startTimeMs != null) {
+        existing.startTimeMs = startTimeMs;
+      }
     });
 
-    const groups = Array.from(map.entries()).map(([label, items]) => ({
-      key: label,
-      label,
-      items: [...items].sort(
+    const groups = Array.from(map.values()).map((group) => ({
+      ...group,
+      items: [...group.items].sort(
         (a, b) => (b.odds ?? 0) - (a.odds ?? 0),
       ),
     }));
@@ -402,8 +457,23 @@ export default function PropsTestScreen() {
   );
 
   const renderGameGroup = useCallback(
-    ({ item }: { item: { key: string; label: string; items: any[] } }) => {
+    ({
+      item,
+    }: {
+      item: {
+        key: string;
+        label: string;
+        items: any[];
+        homeTeam?: string;
+        awayTeam?: string;
+        startTimeMs?: number | null;
+      };
+    }) => {
       const isExpanded = !!expandedGames[item.key];
+      const awayLogo = resolveTeamLogo(item.awayTeam);
+      const homeLogo = resolveTeamLogo(item.homeTeam);
+      const startTimeLabel = formatGameStartTime(item.startTimeMs);
+      const gameMetaText = `${startTimeLabel} | ${item.items.length} props`;
 
       return (
         <View style={styles.gameGroup}>
@@ -411,11 +481,30 @@ export default function PropsTestScreen() {
             style={styles.gameHeader}
             onPress={() => toggleGame(item.key)}
           >
-            <View>
-              <Text style={styles.gameTitle}>{item.label}</Text>
-              <Text style={styles.gameMeta}>
-                {item.items.length} props
-              </Text>
+            <View style={styles.gameHeaderLeft}>
+              <View style={styles.gameMatchupRow}>
+                {(awayLogo || homeLogo) && (
+                  <View style={styles.matchupLogoRow}>
+                    {awayLogo ? (
+                      <Image
+                        source={{ uri: awayLogo }}
+                        style={styles.gameTeamLogo}
+                      />
+                    ) : null}
+                    {awayLogo && homeLogo ? (
+                      <Text style={styles.gameAtSymbol}>@</Text>
+                    ) : null}
+                    {homeLogo ? (
+                      <Image
+                        source={{ uri: homeLogo }}
+                        style={styles.gameTeamLogo}
+                      />
+                    ) : null}
+                  </View>
+                )}
+                <Text style={styles.gameTitle}>{item.label}</Text>
+              </View>
+              <Text style={styles.gameMeta}>{gameMetaText}</Text>
             </View>
             <Text style={styles.gameChevron}>
               {isExpanded ? "▲" : "▼"}
@@ -439,6 +528,11 @@ export default function PropsTestScreen() {
       gameListRef,
       styles.gameGroup,
       styles.gameHeader,
+      styles.gameHeaderLeft,
+      styles.gameMatchupRow,
+      styles.matchupLogoRow,
+      styles.gameTeamLogo,
+      styles.gameAtSymbol,
       styles.gameTitle,
       styles.gameMeta,
       styles.gameChevron,
@@ -784,10 +878,34 @@ const makeStyles = (colors: any) =>
       justifyContent: "space-between",
       alignItems: "center",
     },
+    gameHeaderLeft: {
+      flex: 1,
+    },
+    gameMatchupRow: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    matchupLogoRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginRight: 8,
+    },
+    gameTeamLogo: {
+      width: 20,
+      height: 20,
+      resizeMode: "contain",
+    },
+    gameAtSymbol: {
+      marginHorizontal: 4,
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.text.muted,
+    },
     gameTitle: {
       fontSize: 14,
       fontWeight: "700",
       color: colors.text.primary,
+      flexShrink: 1,
     },
     gameMeta: {
       marginTop: 2,

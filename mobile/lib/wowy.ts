@@ -48,6 +48,8 @@ export type InjuredPlayerInfo = {
   injury_type: string | null;
 };
 
+export type WowyStat = "pts" | "reb" | "ast" | "fg3m";
+
 
 export type InjuredPlayerWowy = {
   injured_player: InjuredPlayerInfo;

@@ -4,8 +4,7 @@ import { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 
 import { useTheme } from "@/store/useTheme";
-import { InjuredPlayerWowy, TeammateWowy } from "@/lib/wowy";
-import { WowyStat } from "@/app/(tabs)/wowy";
+import { InjuredPlayerWowy, TeammateWowy, WowyStat } from "@/lib/wowy";
 
 type Props = {
   data: InjuredPlayerWowy;

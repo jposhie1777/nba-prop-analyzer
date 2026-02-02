@@ -2,14 +2,41 @@
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { useState } from "react";
 import { useTheme } from "@/store/useTheme";
-import { TeamInjuries } from "@/lib/injuries";
-import { InjuryCard } from "./InjuryCard";
+import { InjuryRecord, TeamInjuries } from "@/lib/injuries";
 import { Ionicons } from "@expo/vector-icons";
 
 type Props = {
   teamData: TeamInjuries;
   defaultExpanded?: boolean;
 };
+
+function getStatusColor(status: string, colors: any): string {
+  switch (status.toLowerCase()) {
+    case "out":
+      return colors.accent?.danger ?? "#ef4444";
+    case "doubtful":
+      return "#f97316";
+    case "questionable":
+      return "#eab308";
+    case "day-to-day":
+      return "#3b82f6";
+    case "probable":
+      return "#22c55e";
+    default:
+      return colors.text?.muted ?? "#888";
+  }
+}
+
+function getInjuryMeta(injury: InjuryRecord): string | null {
+  const parts: string[] = [];
+  if (injury.injury_type) {
+    parts.push(injury.injury_type);
+  }
+  if (injury.report_date) {
+    parts.push(`Reported ${injury.report_date}`);
+  }
+  return parts.length > 0 ? parts.join(" | ") : null;
+}
 
 export function TeamInjuriesSection({ teamData, defaultExpanded = true }: Props) {
   const { colors } = useTheme();
@@ -19,6 +46,7 @@ export function TeamInjuriesSection({ teamData, defaultExpanded = true }: Props)
   const questionableCount = teamData.injuries.filter(
     (i) => i.status === "Questionable" || i.status === "Doubtful"
   ).length;
+  const totalCount = teamData.injuries.length;
 
   return (
     <View style={styles.container}>
@@ -45,6 +73,9 @@ export function TeamInjuriesSection({ teamData, defaultExpanded = true }: Props)
               {teamData.team_name}
             </Text>
           )}
+          <Text style={[styles.teamMeta, { color: colors.text?.muted ?? "#888" }]}>
+            {totalCount} {totalCount === 1 ? "injury" : "injuries"}
+          </Text>
         </View>
 
         <View style={styles.badges}>
@@ -67,10 +98,67 @@ export function TeamInjuriesSection({ teamData, defaultExpanded = true }: Props)
       </Pressable>
 
       {expanded && (
-        <View style={styles.injuries}>
-          {teamData.injuries.map((injury) => (
-            <InjuryCard key={injury.injury_id ?? injury.player_id} injury={injury} />
-          ))}
+        <View
+          style={[
+            styles.injuries,
+            {
+              backgroundColor: colors.surface?.card ?? "#1a1a1a",
+              borderColor: colors.border?.subtle ?? "#333",
+            },
+          ]}
+        >
+          {teamData.injuries.map((injury, index) => {
+            const statusColor = getStatusColor(injury.status, colors);
+            const metaText = getInjuryMeta(injury);
+            return (
+              <View
+                key={injury.injury_id ?? injury.player_id}
+                style={[
+                  styles.injuryRow,
+                  index > 0 && {
+                    borderTopWidth: StyleSheet.hairlineWidth,
+                    borderColor: colors.border?.subtle ?? "#333",
+                  },
+                ]}
+              >
+                <View style={styles.injuryInfo}>
+                  <Text
+                    style={[
+                      styles.playerName,
+                      { color: colors.text?.primary ?? "#fff" },
+                    ]}
+                  >
+                    {injury.player_name}
+                  </Text>
+                  {metaText && (
+                    <Text
+                      style={[
+                        styles.injuryMeta,
+                        { color: colors.text?.muted ?? "#888" },
+                      ]}
+                    >
+                      {metaText}
+                    </Text>
+                  )}
+                </View>
+                <View style={styles.injuryRight}>
+                  <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+                    <Text style={styles.statusText}>{injury.status}</Text>
+                  </View>
+                  {injury.return_date && (
+                    <Text
+                      style={[
+                        styles.returnText,
+                        { color: colors.text?.muted ?? "#888" },
+                      ]}
+                    >
+                      ETA {injury.return_date}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            );
+          })}
         </View>
       )}
     </View>
@@ -79,7 +167,7 @@ export function TeamInjuriesSection({ teamData, defaultExpanded = true }: Props)
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 12,
+    marginBottom: 10,
   },
   header: {
     flexDirection: "row",
@@ -100,6 +188,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
+  teamMeta: {
+    fontSize: 11,
+    marginTop: 2,
+  },
   badges: {
     flexDirection: "row",
     alignItems: "center",
@@ -117,6 +209,44 @@ const styles = StyleSheet.create({
   },
   injuries: {
     marginTop: 8,
-    paddingLeft: 8,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
+  },
+  injuryRow: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  injuryInfo: {
+    flex: 1,
+  },
+  playerName: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  injuryMeta: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  injuryRight: {
+    alignItems: "flex-end",
+    gap: 4,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#fff",
+  },
+  returnText: {
+    fontSize: 10,
   },
 });

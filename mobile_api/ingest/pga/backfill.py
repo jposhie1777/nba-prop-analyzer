@@ -1,13 +1,19 @@
 from __future__ import annotations
 
 import os
+import sys
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 from google.cloud import bigquery
 
-from pga.client import PgaApiError, fetch_paginated
+# Allow running as a script: python mobile_api/ingest/pga/backfill.py
+REPO_ROOT = Path(__file__).resolve().parents[4]
+sys.path.insert(0, str(REPO_ROOT))
+
+from mobile_api.pga.client import PgaApiError, fetch_paginated
 
 
 DATASET = os.getenv("PGA_DATASET", "pga_data")

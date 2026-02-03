@@ -87,6 +87,13 @@ export default function Home() {
         onPress={() => router.push("/(tabs)/pga")}
       />
 
+      <SportTile
+        title="ATP"
+        subtitle="Surface splits, form, and matchup trends"
+        badge="ATP"
+        onPress={() => router.push("/(tabs)/atp")}
+      />
+
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
           More Sports

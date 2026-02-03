@@ -145,3 +145,49 @@ export type PgaSimulatedFinishes = {
   top10_prob: number;
   top20_prob: number;
 };
+
+export type PgaComparePlayer = {
+  player_id: number;
+  player: PgaPlayer;
+  rank: number;
+  score: number;
+  metrics: {
+    form_score?: number | null;
+    course_fit_score?: number | null;
+    head_to_head_win_rate?: number | null;
+    head_to_head_starts?: number | null;
+    top5_prob?: number | null;
+    top10_prob?: number | null;
+    top20_prob?: number | null;
+    tournament_bonus?: number | null;
+    tournament_avg_finish?: number | null;
+    tournament_starts?: number | null;
+  };
+};
+
+export type PgaCompareHeadToHead = {
+  player_id: number;
+  opponent_id: number;
+  starts: number;
+  wins: number;
+  losses: number;
+  ties: number;
+  win_rate?: number | null;
+};
+
+export type PgaCompareRecommendation = {
+  player_id: number;
+  label: string;
+  edge: number;
+  reasons: string[];
+};
+
+export type PgaCompareResponse = {
+  player_ids: number[];
+  course_id?: number | null;
+  tournament_id?: number | null;
+  weights: Record<string, number>;
+  players: PgaComparePlayer[];
+  head_to_head: PgaCompareHeadToHead[];
+  recommendation?: PgaCompareRecommendation | null;
+};

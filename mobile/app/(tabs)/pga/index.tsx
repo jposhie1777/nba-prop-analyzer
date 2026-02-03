@@ -71,6 +71,11 @@ export default function PgaHome() {
         route="/(tabs)/pga/matchups"
       />
       <Tile
+        title="Pairings Compare"
+        subtitle="2-3 player comparison with best-bet pick"
+        route="/(tabs)/pga/compare"
+      />
+      <Tile
         title="5) Placement Probabilities"
         subtitle="Win/top-5/top-10/top-20 rates"
         route="/(tabs)/pga/placement-probabilities"

@@ -10,6 +10,6 @@ export function usePgaTournaments(params?: { season?: number; status?: string })
   return usePgaQuery<Response>("/pga/tournaments", {
     season: params?.season,
     status: params?.status,
-    per_page: 50,
+    per_page: 100,
   });
 }

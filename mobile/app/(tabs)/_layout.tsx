@@ -141,6 +141,14 @@ export default function TabLayout() {
           }}
         />
 
+        {/* ATP Home (sport selector landing) */}
+        <Tabs.Screen
+          name="atp"
+          options={{
+            href: null, // Hide from tab bar
+          }}
+        />
+
         {/* Bad Lines moved to home screen as a link */}
         <Tabs.Screen
           name="bad-lines"

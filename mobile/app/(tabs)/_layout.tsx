@@ -125,6 +125,22 @@ export default function TabLayout() {
           }}
         />
 
+        {/* NBA Home (sport selector landing) */}
+        <Tabs.Screen
+          name="nba"
+          options={{
+            href: null, // Hide from tab bar
+          }}
+        />
+
+        {/* PGA Home (sport selector landing) */}
+        <Tabs.Screen
+          name="pga"
+          options={{
+            href: null, // Hide from tab bar
+          }}
+        />
+
         {/* Bad Lines moved to home screen as a link */}
         <Tabs.Screen
           name="bad-lines"

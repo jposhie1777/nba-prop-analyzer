@@ -1,0 +1,59 @@
+name: PGA Backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      years:
+        description: "How many seasons to backfill (default 5)"
+        required: false
+        default: "5"
+      start_season:
+        description: "Optional start season (YYYY)"
+        required: false
+        default: ""
+      end_season:
+        description: "Optional end season (YYYY)"
+        required: false
+        default: ""
+      truncate:
+        description: "Truncate tables before backfill (true/false)"
+        required: false
+        default: "true"
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+
+    env:
+      PGA_DATASET: "pga_data"
+      PGA_DATASET_LOCATION: "US"
+      PGA_BACKFILL_YEARS: ${{ inputs.years }}
+      PGA_START_SEASON: ${{ inputs.start_season }}
+      PGA_END_SEASON: ${{ inputs.end_season }}
+      PGA_TRUNCATE: ${{ inputs.truncate }}
+      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+      BDL_PGA_API_KEY: ${{ secrets.BDL_PGA_API_KEY }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r mobile_api/requirements.txt
+
+      - name: Configure GCP credentials
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
+
+      - name: Run PGA backfill
+        run: |
+          python mobile_api/ingest/pga/backfill.py

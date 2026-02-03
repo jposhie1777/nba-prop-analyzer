@@ -77,6 +77,14 @@ ENABLE_PLAYER_STATS_INGEST = (
     os.getenv("ENABLE_PLAYER_STATS_INGEST", "false").lower() == "true"
 )
 
+# Optional kill switches for live odds ingestion + flattening
+ENABLE_LIVE_ODDS_INGEST = (
+    os.getenv("ENABLE_LIVE_ODDS_INGEST", "true").lower() == "true"
+)
+ENABLE_LIVE_ODDS_FLATTEN = (
+    os.getenv("ENABLE_LIVE_ODDS_FLATTEN", "true").lower() == "true"
+)
+
 
 # ======================================================
 # Global Control State
@@ -439,28 +447,50 @@ def run_full_ingest_cycle() -> Dict[str, int]:
         print(f"[INGEST] ERROR in player_stats: {e}")
 
     # 4. Live game odds
-    try:
-        ingest_live_game_odds()
-        results["game_odds"] = 1
-        print("[INGEST] Live game odds: snapshot written")
-    except Exception as e:
-        print(f"[INGEST] ERROR in game_odds: {e}")
+    if ENABLE_LIVE_ODDS_INGEST:
+        try:
+            game_odds_result = ingest_live_game_odds()
+            if isinstance(game_odds_result, dict):
+                results["game_odds"] = int(game_odds_result.get("games", 0) or 0)
+            else:
+                results["game_odds"] = 0
+            print("[INGEST] Live game odds: snapshot written")
+        except Exception as e:
+            print(f"[INGEST] ERROR in game_odds: {e}")
+    else:
+        print("[INGEST] Live game odds ingest disabled (ENABLE_LIVE_ODDS_INGEST=false)")
 
     # 5. Live player prop odds
-    try:
-        ingest_live_player_prop_odds()
-        results["player_prop_odds"] = 1
-        print("[INGEST] Live player prop odds: snapshot written")
-    except Exception as e:
-        print(f"[INGEST] ERROR in player_prop_odds: {e}")
+    if ENABLE_LIVE_ODDS_INGEST:
+        try:
+            prop_odds_result = ingest_live_player_prop_odds()
+            if isinstance(prop_odds_result, dict):
+                results["player_prop_odds"] = int(
+                    prop_odds_result.get("rows_inserted", 0)
+                    or prop_odds_result.get("games_written", 0)
+                    or 0
+                )
+            else:
+                results["player_prop_odds"] = 0
+            print("[INGEST] Live player prop odds: snapshot written")
+        except Exception as e:
+            print(f"[INGEST] ERROR in player_prop_odds: {e}")
+    else:
+        print("[INGEST] Live player prop odds ingest disabled (ENABLE_LIVE_ODDS_INGEST=false)")
 
     # 6. Flatten odds (idempotent)
-    try:
-        run_live_odds_orchestrator()
-        results["odds_flatten"] = 1
-        print("[INGEST] Live odds flatten: complete")
-    except Exception as e:
-        print(f"[INGEST] ERROR in odds_flatten: {e}")
+    if ENABLE_LIVE_ODDS_FLATTEN:
+        if results["game_odds"] or results["player_prop_odds"]:
+            try:
+                run_live_odds_orchestrator()
+                results["odds_flatten"] = 1
+                print("[INGEST] Live odds flatten: complete")
+            except Exception as e:
+                print(f"[INGEST] ERROR in odds_flatten: {e}")
+        else:
+            print("[INGEST] Live odds flatten skipped (no new odds)")
+    else:
+        print("[INGEST] Live odds flatten disabled (ENABLE_LIVE_ODDS_FLATTEN=false)")
 
     return results
 

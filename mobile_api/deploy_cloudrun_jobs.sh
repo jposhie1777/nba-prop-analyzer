@@ -14,6 +14,7 @@ SCHEDULER_EARLY_NAME="mobile-api-gatekeeper-early"
 SCHEDULER_PRE_NAME="mobile-api-gatekeeper-pre"
 SCHEDULER_LIVE_NAME="mobile-api-gatekeeper-live"
 SCHEDULER_SA_NAME="mobile-api-jobs-sa"
+SCHEDULER_SA_EMAIL_OVERRIDE=""
 
 TIME_ZONE="America/New_York"
 SCHEDULE_REFRESH="30 5 * * *"
@@ -46,6 +47,7 @@ Options:
   --interval-sec <N>              Ingest interval seconds (default: ${INTERVAL_SEC})
   --job-max-minutes <N>           Ingest job max minutes (default: ${JOB_MAX_MINUTES})
   --service-account <NAME>        Service account name (default: ${SCHEDULER_SA_NAME})
+  --service-account-email <EMAIL> Use existing service account email (skip create)
 EOF
 }
 
@@ -71,6 +73,7 @@ while [[ $# -gt 0 ]]; do
     --interval-sec) INTERVAL_SEC="$2"; shift 2;;
     --job-max-minutes) JOB_MAX_MINUTES="$2"; shift 2;;
     --service-account) SCHEDULER_SA_NAME="$2"; shift 2;;
+    --service-account-email) SCHEDULER_SA_EMAIL_OVERRIDE="$2"; shift 2;;
     -h|--help) usage; exit 0;;
     *) echo "Unknown arg: $1"; usage; exit 1;;
   esac
@@ -85,7 +88,8 @@ if [[ -z "${IMAGE}" ]]; then
   IMAGE="gcr.io/${PROJECT}/mobile-api-jobs:latest"
 fi
 
-SCHEDULER_SA_EMAIL="${SCHEDULER_SA_NAME}@${PROJECT}.iam.gserviceaccount.com"
+ACTIVE_ACCOUNT=$(gcloud auth list --filter=status:ACTIVE --format="value(account)" | head -n 1)
+SCHEDULER_SA_EMAIL="${SCHEDULER_SA_EMAIL_OVERRIDE}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -125,15 +129,35 @@ while true; do
   esac
 done
 
-echo "==> Ensuring service account ${SCHEDULER_SA_EMAIL}"
-if ! gcloud iam service-accounts describe "${SCHEDULER_SA_EMAIL}" --project "${PROJECT}" >/dev/null 2>&1; then
-  gcloud iam service-accounts create "${SCHEDULER_SA_NAME}" --project "${PROJECT}"
+if [[ -z "${SCHEDULER_SA_EMAIL}" ]]; then
+  SCHEDULER_SA_EMAIL="${SCHEDULER_SA_NAME}@${PROJECT}.iam.gserviceaccount.com"
+  echo "==> Ensuring service account ${SCHEDULER_SA_EMAIL}"
+  if ! gcloud iam service-accounts describe "${SCHEDULER_SA_EMAIL}" --project "${PROJECT}" >/dev/null 2>&1; then
+    if ! gcloud iam service-accounts create "${SCHEDULER_SA_NAME}" --project "${PROJECT}"; then
+      if [[ -n "${ACTIVE_ACCOUNT}" ]]; then
+        echo "==> WARNING: could not create service account. Using active account: ${ACTIVE_ACCOUNT}"
+        SCHEDULER_SA_EMAIL="${ACTIVE_ACCOUNT}"
+      else
+        echo "No service account available. Provide --service-account-email."
+        exit 1
+      fi
+    fi
+  fi
+else
+  echo "==> Using provided service account email: ${SCHEDULER_SA_EMAIL}"
 fi
 
-echo "==> Granting IAM roles to service account"
-gcloud projects add-iam-policy-binding "${PROJECT}" \
-  --member "serviceAccount:${SCHEDULER_SA_EMAIL}" \
-  --role "roles/run.developer" >/dev/null
+bind_role() {
+  local role="$1"
+  if ! gcloud projects add-iam-policy-binding "${PROJECT}" \
+    --member "serviceAccount:${SCHEDULER_SA_EMAIL}" \
+    --role "${role}" >/dev/null 2>&1; then
+    echo "==> WARNING: could not grant ${role} to ${SCHEDULER_SA_EMAIL}."
+  fi
+}
+
+echo "==> Granting IAM roles to service account (best-effort)"
+bind_role "roles/run.developer"
 
 echo "==> Deploying ingest job ${INGEST_JOB}"
 gcloud run jobs deploy "${INGEST_JOB}" \

@@ -70,12 +70,12 @@ CREATE TABLE IF NOT EXISTS `pga_data.tournaments` (
   champion_id INT64,
   champion_display_name STRING,
   champion_country STRING,
-  courses JSON
+  courses STRING
 )
 PARTITION BY RANGE_BUCKET(season, GENERATE_ARRAY(2015, 2035, 1))
 CLUSTER BY tournament_id, season
 OPTIONS (
-  description = 'PGA tournaments (BallDontLie PGA API)'
+  description = 'PGA tournaments (BallDontLie PGA API); courses stored as JSON string'
 );
 
 CREATE TABLE IF NOT EXISTS `pga_data.tournament_results` (

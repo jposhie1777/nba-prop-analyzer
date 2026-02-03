@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-const API = process.env.EXPO_PUBLIC_API_URL!;
+import { API_BASE } from "@/lib/config";
+
+const API = API_BASE;
 
 type QueryResult<T> = {
   data: T | null;
@@ -37,7 +39,7 @@ export function usePgaQuery<T>(
 
   const url = useMemo(() => {
     const qs = toQueryString(params);
-    return `${API}${path}${qs}`;
+    return API ? `${API}${path}${qs}` : "";
   }, [path, params]);
 
   const fetchData = useCallback(async () => {
@@ -45,6 +47,9 @@ export function usePgaQuery<T>(
     setLoading(true);
     setError(null);
     try {
+      if (!API) {
+        throw new Error("API URL not configured");
+      }
       const res = await fetch(url, { credentials: "omit" });
       if (!res.ok) {
         const text = await res.text();
@@ -53,7 +58,12 @@ export function usePgaQuery<T>(
       const json = await res.json();
       setData(json);
     } catch (err: any) {
-      setError(err?.message ?? "Unknown error");
+      const message = err?.message ?? "Unknown error";
+      if (message === "Failed to fetch") {
+        setError("Network error. Check API URL or CORS settings.");
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }

@@ -77,6 +77,17 @@ ENABLE_PLAYER_STATS_INGEST = (
     os.getenv("ENABLE_PLAYER_STATS_INGEST", "false").lower() == "true"
 )
 
+# Optional kill switches for live data snapshots
+ENABLE_LIVE_GAMES_INGEST = (
+    os.getenv("ENABLE_LIVE_GAMES_INGEST", "true").lower() == "true"
+)
+ENABLE_BOX_SCORES_INGEST = (
+    os.getenv("ENABLE_BOX_SCORES_INGEST", "true").lower() == "true"
+)
+ENABLE_LIVE_PLAYER_STATS_INGEST = (
+    os.getenv("ENABLE_LIVE_PLAYER_STATS_INGEST", "true").lower() == "true"
+)
+
 # Optional kill switches for live odds ingestion + flattening
 ENABLE_LIVE_ODDS_INGEST = (
     os.getenv("ENABLE_LIVE_ODDS_INGEST", "true").lower() == "true"
@@ -420,31 +431,40 @@ def run_full_ingest_cycle() -> Dict[str, int]:
     }
 
     # 1. Live games
-    try:
-        results["live_games"] = ingest_live_games_snapshot()
-        print(f"[INGEST] Live games: {results['live_games']} games written")
-    except Exception as e:
-        print(f"[INGEST] ERROR in live_games: {e}")
+    if ENABLE_LIVE_GAMES_INGEST:
+        try:
+            results["live_games"] = ingest_live_games_snapshot()
+            print(f"[INGEST] Live games: {results['live_games']} games written")
+        except Exception as e:
+            print(f"[INGEST] ERROR in live_games: {e}")
+    else:
+        print("[INGEST] Live games ingest disabled (ENABLE_LIVE_GAMES_INGEST=false)")
 
     # 2. Box scores
-    try:
-        results["box_scores"] = ingest_box_scores_snapshot()
-        print(f"[INGEST] Box scores: {results['box_scores']} games written")
-    except Exception as e:
-        print(f"[INGEST] ERROR in box_scores: {e}")
+    if ENABLE_BOX_SCORES_INGEST:
+        try:
+            results["box_scores"] = ingest_box_scores_snapshot()
+            print(f"[INGEST] Box scores: {results['box_scores']} games written")
+        except Exception as e:
+            print(f"[INGEST] ERROR in box_scores: {e}")
+    else:
+        print("[INGEST] Box scores ingest disabled (ENABLE_BOX_SCORES_INGEST=false)")
 
     # 3. Player stats (from box scores)
-    try:
-        # Fetch fresh box scores for flattening
-        headers = get_bdl_headers()
-        resp = requests.get(f"{BDL_BASE}/box_scores/live", headers=headers, timeout=15)
-        resp.raise_for_status()
-        box_data = resp.json().get("data", [])
+    if ENABLE_LIVE_PLAYER_STATS_INGEST:
+        try:
+            # Fetch fresh box scores for flattening
+            headers = get_bdl_headers()
+            resp = requests.get(f"{BDL_BASE}/box_scores/live", headers=headers, timeout=15)
+            resp.raise_for_status()
+            box_data = resp.json().get("data", [])
 
-        results["player_stats"] = flatten_player_stats_from_box_scores(box_data)
-        print(f"[INGEST] Player stats: {results['player_stats']} rows written")
-    except Exception as e:
-        print(f"[INGEST] ERROR in player_stats: {e}")
+            results["player_stats"] = flatten_player_stats_from_box_scores(box_data)
+            print(f"[INGEST] Player stats: {results['player_stats']} rows written")
+        except Exception as e:
+            print(f"[INGEST] ERROR in player_stats: {e}")
+    else:
+        print("[INGEST] Player stats ingest disabled (ENABLE_LIVE_PLAYER_STATS_INGEST=false)")
 
     # 4. Live game odds
     if ENABLE_LIVE_ODDS_INGEST:

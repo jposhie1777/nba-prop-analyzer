@@ -33,7 +33,7 @@ jobs:
       PGA_END_SEASON: ${{ inputs.end_season }}
       PGA_TRUNCATE: ${{ inputs.truncate }}
       GCP_PROJECT: ${{ secrets.PROJECT_ID }}
-      BDL_PGA_API_KEY: ${{ secrets.BDL_PGA_API_KEY }}
+      BDL_PGA_API_KEY: ${{ secrets.BDL_PGA_API_KEY || secrets.BALDONTLIE_KEY || secrets.BALLDONTLIE_API_KEY }}
 
     steps:
       - name: Checkout repo

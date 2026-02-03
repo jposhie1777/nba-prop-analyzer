@@ -73,6 +73,7 @@ from routes.opponent_position_defense import (
 from routes.game_betting_analytics import (
     router as game_betting_analytics_router,
 )
+from routes.pga_analytics import router as pga_analytics_router
 
 # ==================================================
 # Game Advanced Stats V2 imports
@@ -149,6 +150,7 @@ app.include_router(season_averages_data_router)
 app.include_router(opponent_position_defense_router)
 app.include_router(injuries_router)
 app.include_router(game_betting_analytics_router)
+app.include_router(pga_analytics_router)
 
 # ==================================================
 # Startup hook (SMART SCHEDULED BACKGROUND TASKS)

@@ -2,6 +2,11 @@ name: Deploy Cloud Run Jobs
 
 on:
   workflow_dispatch:
+    inputs:
+      reason:
+        description: "Optional note for this deploy"
+        required: false
+        default: "manual"
 
 jobs:
   deploy:
@@ -30,7 +35,7 @@ jobs:
 
       - name: Deploy Cloud Run Jobs + Scheduler
         env:
-          BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
+          BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY || secrets.BALDONTLIE_KEY }}
         run: |
           chmod +x mobile_api/deploy_cloudrun_jobs.sh
           mobile_api/deploy_cloudrun_jobs.sh \

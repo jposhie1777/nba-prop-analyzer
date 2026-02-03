@@ -139,7 +139,7 @@ Workflow file:
 
 Required GitHub Secrets:
 - `GOOGLE_APPLICATION_CREDENTIALS_JSON`
-- `BALLDONTLIE_API_KEY`
+- `BALLDONTLIE_API_KEY` **or** `BALDONTLIE_KEY`
 
 Required GCP roles for the service account in the JSON:
 - `roles/run.developer`

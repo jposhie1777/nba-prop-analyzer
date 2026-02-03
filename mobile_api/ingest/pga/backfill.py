@@ -10,7 +10,7 @@ from typing import Any, Dict, Iterable, List, Optional
 from google.cloud import bigquery
 
 # Allow running as a script: python mobile_api/ingest/pga/backfill.py
-REPO_ROOT = Path(__file__).resolve().parents[4]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT))
 
 from mobile_api.pga.client import PgaApiError, fetch_paginated

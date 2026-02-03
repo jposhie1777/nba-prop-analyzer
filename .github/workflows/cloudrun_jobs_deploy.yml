@@ -2,6 +2,11 @@ name: Deploy Cloud Run Jobs
 
 on:
   workflow_dispatch:
+    inputs:
+      reason:
+        description: "Optional note for this deploy"
+        required: false
+        default: "manual"
 
 jobs:
   deploy:

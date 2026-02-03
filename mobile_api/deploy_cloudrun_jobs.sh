@@ -165,7 +165,7 @@ gcloud run jobs deploy "${INGEST_JOB}" \
   --region "${REGION}" \
   --image "${IMAGE}" \
   --command "python" \
-  --args "-m,jobs.ingest_runner" \
+  --args=-m,jobs.ingest_runner \
   --set-env-vars "BALLDONTLIE_API_KEY=${BDL_KEY},GCP_PROJECT=${PROJECT}" \
   --set-env-vars "LIVE_INGEST_INTERVAL_SEC=${INTERVAL_SEC},LIVE_INGEST_PRE_GAME_MINUTES=${PRE_GAME_MINUTES},LIVE_INGEST_JOB_MAX_MINUTES=${JOB_MAX_MINUTES}"
 
@@ -175,7 +175,7 @@ gcloud run jobs deploy "${GATEKEEPER_JOB}" \
   --region "${REGION}" \
   --image "${IMAGE}" \
   --command "python" \
-  --args "-m,jobs.gatekeeper" \
+  --args=-m,jobs.gatekeeper \
   --service-account "${SCHEDULER_SA_EMAIL}" \
   --set-env-vars "BALLDONTLIE_API_KEY=${BDL_KEY},GCP_PROJECT=${PROJECT}" \
   --set-env-vars "LIVE_INGEST_PRE_GAME_MINUTES=${PRE_GAME_MINUTES}" \
@@ -187,7 +187,7 @@ gcloud run jobs deploy "${SCHEDULE_REFRESH_JOB}" \
   --region "${REGION}" \
   --image "${IMAGE}" \
   --command "python" \
-  --args "-m,jobs.schedule_refresh" \
+  --args=-m,jobs.schedule_refresh \
   --set-env-vars "BALLDONTLIE_API_KEY=${BDL_KEY},GCP_PROJECT=${PROJECT}"
 
 upsert_scheduler_job() {

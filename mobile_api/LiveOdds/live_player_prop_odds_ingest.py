@@ -31,6 +31,7 @@ def ingest_live_player_prop_odds() -> dict:
     """
 
     live_game_ids = fetch_live_game_ids()
+    now = datetime.now(timezone.utc)
     if not live_game_ids:
         print("⚠️ No live games detected — continuing ingest safely")
         return {
@@ -45,7 +46,6 @@ def ingest_live_player_prop_odds() -> dict:
         "Accept": "application/json",
     }
 
-    now = datetime.now(timezone.utc)
     client = get_bq_client()
 
     rows_to_insert = []

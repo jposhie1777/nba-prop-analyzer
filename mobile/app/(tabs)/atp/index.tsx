@@ -1,41 +1,36 @@
 // app/(tabs)/atp/index.tsx
-import { ScrollView, Text, StyleSheet, View } from "react-native";
+import { ScrollView, Text, StyleSheet, Pressable } from "react-native";
+import { useRouter } from "expo-router";
 import { useTheme } from "@/store/useTheme";
 
-type CapabilityProps = {
+type TileProps = {
   title: string;
   subtitle: string;
+  route: string;
 };
 
-function Capability({ title, subtitle }: CapabilityProps) {
+function Tile({ title, subtitle, route }: TileProps) {
+  const router = useRouter();
   const { colors } = useTheme();
 
   return (
-    <View
+    <Pressable
+      onPress={() => router.push(route)}
       style={[
-        styles.card,
+        styles.tile,
         {
           backgroundColor: colors.surface.card,
           borderColor: colors.border.subtle,
         },
       ]}
     >
-      <Text style={[styles.cardTitle, { color: colors.text.primary }]}>
+      <Text style={[styles.tileTitle, { color: colors.text.primary }]}>
         {title}
       </Text>
-      <Text style={[styles.cardSub, { color: colors.text.muted }]}>
+      <Text style={[styles.tileSub, { color: colors.text.muted }]}>
         {subtitle}
       </Text>
-    </View>
-  );
-}
-
-function Bullet({ text }: { text: string }) {
-  const { colors } = useTheme();
-  return (
-    <Text style={[styles.bullet, { color: colors.text.muted }]}>
-      - {text}
-    </Text>
+    </Pressable>
   );
 }
 
@@ -48,59 +43,48 @@ export default function AtpHome() {
       contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
     >
       <Text style={[styles.h1, { color: colors.text.primary }]}>
-        ATP All-Star Analytics
+        ATP Historical + Betting Analytics
       </Text>
       <Text style={[styles.sub, { color: colors.text.muted }]}>
-        With All-Star tier access, we can turn ATP matches, rankings,
-        tournaments, and race standings into betting analytics. This tier does
-        not include match statistics or betting odds feeds.
+        Historical match results power surface splits, form tracking, head-to-head
+        trends, and matchup previews built for tennis betting workflows.
       </Text>
 
-      <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
-        Available data (All-Star)
-      </Text>
-      <View style={styles.section}>
-        <Bullet text="Players, tournaments, and rankings." />
-        <Bullet text="Match results with score, round, surface, and duration." />
-        <Bullet text="ATP Race standings for the current season." />
-      </View>
-
-      <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
-        Betting analytics we can build
-      </Text>
-      <Capability
-        title="Court type analytics"
-        subtitle="Win rates, straight-sets rates, and average sets by surface."
+      <Tile
+        title="1) Player Form + Consistency"
+        subtitle="Recent win rate, straight-sets, tiebreak trends"
+        route="/(tabs)/atp/player-form"
       />
-      <Capability
-        title="Head-to-head history"
-        subtitle="Series record, last meeting, and surface splits from match results."
+      <Tile
+        title="2) Surface Splits"
+        subtitle="Win rate, straight-sets, and average sets by surface"
+        route="/(tabs)/atp/surface-splits"
       />
-      <Capability
-        title="Recent form and momentum"
-        subtitle="Last N matches, streaks, and trend splits by surface or round."
+      <Tile
+        title="3) Tournament Performance"
+        subtitle="Titles, finals, semis, and win rates"
+        route="/(tabs)/atp/tournament-performance"
       />
-      <Capability
-        title="Tournament performance"
-        subtitle="Round reach and results by category (Grand Slam, Masters, 500/250)."
+      <Tile
+        title="4) Head-to-Head"
+        subtitle="Series record with surface breakdowns"
+        route="/(tabs)/atp/head-to-head"
       />
-      <Capability
-        title="Ranking and race context"
-        subtitle="Ranking movement, points pace, and race position snapshots."
+      <Tile
+        title="5) Matchup Compare"
+        subtitle="Composite betting edge from form, surface, H2H, ranking"
+        route="/(tabs)/atp/compare"
       />
-      <Capability
-        title="Matchup previews"
-        subtitle="Model-based projections using surface, form, and ranking gaps."
+      <Tile
+        title="6) Region / Time Splits"
+        subtitle="Win rates by month and location"
+        route="/(tabs)/atp/region-splits"
       />
-
-      <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
-        What is not in All-Star
-      </Text>
-      <View style={styles.section}>
-        <Bullet text="Match statistics (serve, return, break points, aces)." />
-        <Bullet text="Player career stat endpoints or official H2H endpoint." />
-        <Bullet text="Betting odds feeds." />
-      </View>
+      <Tile
+        title="7) Set Distribution"
+        subtitle="Set score outcomes for wins and losses"
+        route="/(tabs)/atp/set-distribution"
+      />
     </ScrollView>
   );
 }
@@ -115,31 +99,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginBottom: 14,
   },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    marginTop: 12,
-    marginBottom: 6,
-  },
-  section: {
-    marginBottom: 6,
-  },
-  card: {
+  tile: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 12,
     padding: 14,
     marginTop: 10,
   },
-  cardTitle: {
+  tileTitle: {
     fontSize: 15,
     fontWeight: "800",
   },
-  cardSub: {
+  tileSub: {
     marginTop: 4,
     fontSize: 12,
-  },
-  bullet: {
-    fontSize: 12,
-    marginTop: 4,
   },
 });

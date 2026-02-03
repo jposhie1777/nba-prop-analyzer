@@ -17,9 +17,17 @@ class PgaApiError(RuntimeError):
 
 
 def _get_api_key() -> str:
-    key = os.getenv("BDL_PGA_API_KEY") or os.getenv("BDL_API_KEY")
+    key = (
+        os.getenv("BDL_PGA_API_KEY")
+        or os.getenv("BDL_API_KEY")
+        or os.getenv("BALDONTLIE_KEY")
+        or os.getenv("BALLDONTLIE_API_KEY")
+    )
     if not key:
-        raise PgaApiError("Missing BDL_PGA_API_KEY (or BDL_API_KEY) environment variable.")
+        raise PgaApiError(
+            "Missing PGA API key. Set BDL_PGA_API_KEY (preferred) or "
+            "BDL_API_KEY/BALDONTLIE_KEY/BALLDONTLIE_API_KEY."
+        )
     return key
 
 

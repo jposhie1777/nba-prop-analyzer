@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query
 
 from pga.analytics import (
+    build_compare,
     build_course_comps,
     build_course_fit,
     build_course_profile,
@@ -304,6 +305,64 @@ def pga_simulated_finishes(
         results = _fetch_results_for_seasons([season])
         return build_simulated_finishes(
             results, player_id=player_id, last_n=last_n, simulations=simulations
+        )
+    except Exception as err:
+        _handle_error(err)
+
+
+@router.get("/analytics/compare")
+def pga_compare(
+    player_ids: List[int] = Query(...),
+    season: Optional[int] = None,
+    seasons_back: int = Query(2, ge=0, le=5),
+    course_id: Optional[int] = None,
+    tournament_id: Optional[int] = None,
+    last_n_form: int = Query(10, ge=3, le=50),
+    last_n_placement: int = Query(20, ge=5, le=60),
+):
+    try:
+        if len(player_ids) < 2 or len(player_ids) > 3:
+            raise HTTPException(status_code=400, detail="player_ids must include 2 or 3 IDs")
+
+        season = season or _current_season()
+        seasons = [season - offset for offset in range(seasons_back + 1)]
+
+        results: List[Dict[str, Any]] = []
+        for year in seasons:
+            results.extend(
+                fetch_paginated(
+                    "/tournament_results",
+                    params={"season": year, "player_ids": player_ids},
+                    cache_ttl=900,
+                )
+            )
+
+        players = fetch_paginated(
+            "/players",
+            params={"player_ids": player_ids, "per_page": 100},
+            cache_ttl=900,
+        )
+
+        tournaments: List[Dict[str, Any]] = []
+        courses: List[Dict[str, Any]] = []
+        if course_id:
+            tournaments = _fetch_tournaments_for_seasons(seasons)
+            courses = fetch_paginated(
+                "/courses",
+                params={"per_page": 100},
+                cache_ttl=900,
+            )
+
+        return build_compare(
+            results,
+            player_ids=player_ids,
+            players=players,
+            tournaments=tournaments,
+            courses=courses,
+            course_id=course_id,
+            tournament_id=tournament_id,
+            last_n_form=last_n_form,
+            last_n_placement=last_n_placement,
         )
     except Exception as err:
         _handle_error(err)

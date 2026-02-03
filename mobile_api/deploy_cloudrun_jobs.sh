@@ -90,7 +90,40 @@ SCHEDULER_SA_EMAIL="${SCHEDULER_SA_NAME}@${PROJECT}.iam.gserviceaccount.com"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "==> Building image ${IMAGE}"
-gcloud builds submit --project "${PROJECT}" --tag "${IMAGE}" "${SCRIPT_DIR}"
+BUILD_ID=$(gcloud builds submit \
+  --project "${PROJECT}" \
+  --tag "${IMAGE}" \
+  --async \
+  --format="value(id)" \
+  "${SCRIPT_DIR}")
+
+if [[ -z "${BUILD_ID}" ]]; then
+  echo "Build did not start (no build id returned)."
+  exit 1
+fi
+
+echo "==> Build started: ${BUILD_ID}"
+
+while true; do
+  STATUS=$(gcloud builds describe "${BUILD_ID}" \
+    --project "${PROJECT}" \
+    --format="value(status)")
+
+  case "${STATUS}" in
+    SUCCESS)
+      echo "==> Build completed successfully"
+      break
+      ;;
+    FAILURE|CANCELLED|TIMEOUT)
+      echo "==> Build failed with status: ${STATUS}"
+      exit 1
+      ;;
+    *)
+      echo "==> Build status: ${STATUS} (waiting...)"
+      sleep 5
+      ;;
+  esac
+done
 
 echo "==> Ensuring service account ${SCHEDULER_SA_EMAIL}"
 if ! gcloud iam service-accounts describe "${SCHEDULER_SA_EMAIL}" --project "${PROJECT}" >/dev/null 2>&1; then

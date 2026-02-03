@@ -210,3 +210,36 @@ httpTarget:
 ```
 
 Replace the placeholders before running the commands.
+
+## Cloud Run Service (API for mobile/web)
+
+Your mobile hooks need a **service URL** (jobs do not have URLs).
+
+To deploy the API service manually:
+
+```bash
+cd mobile_api
+chmod +x deploy_cloudrun_service.sh
+
+PROJECT_ID="graphite-flare-477419-h7"
+REGION="us-central1"
+BALLDONTLIE_API_KEY="YOUR_KEY"
+
+./deploy_cloudrun_service.sh \
+  --project "$PROJECT_ID" \
+  --region "$REGION" \
+  --bdl-key "$BALLDONTLIE_API_KEY"
+```
+
+The script prints the service URL at the end:
+```
+==> Service URL: https://<service-id>-uc.a.run.app
+```
+
+### GitHub Actions deploy (service)
+
+Workflow file:
+- `.github/workflows/cloudrun_service_deploy.yml`
+
+To run:
+Actions → **Deploy Cloud Run Service** → Run workflow

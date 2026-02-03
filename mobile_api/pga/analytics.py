@@ -638,7 +638,7 @@ def get_course_holes(
     return fetch_paginated("/course_holes", params=params, cache_ttl=3600)
 
 
-def _group_results_by_player(results: List[Dict[str, Any]]) -> Dict[int, Dict[str, Any]]:
+def _group_results_by_player_v2(results: List[Dict[str, Any]]) -> Dict[int, Dict[str, Any]]:
     grouped: Dict[int, Dict[str, Any]] = {}
     for row in results:
         player = row.get("player") or {}
@@ -685,7 +685,7 @@ def player_form_summary(
     min_events: int,
     cut_penalty: int = 80,
 ) -> List[Dict[str, Any]]:
-    grouped = _group_results_by_player(results)
+    grouped = _group_results_by_player_v2(results)
     summaries: List[Dict[str, Any]] = []
     for player_id, payload in grouped.items():
         recent = _recent_results(payload["results"], last_n)
@@ -735,7 +735,7 @@ def placement_probabilities(
     last_n: int,
     min_events: int,
 ) -> List[Dict[str, Any]]:
-    grouped = _group_results_by_player(results)
+    grouped = _group_results_by_player_v2(results)
     summaries: List[Dict[str, Any]] = []
     for payload in grouped.values():
         recent = _recent_results(payload["results"], last_n)
@@ -764,7 +764,7 @@ def cut_rates(
     last_n: int,
     min_events: int,
 ) -> List[Dict[str, Any]]:
-    grouped = _group_results_by_player(results)
+    grouped = _group_results_by_player_v2(results)
     summaries: List[Dict[str, Any]] = []
     for payload in grouped.values():
         recent = _recent_results(payload["results"], last_n)
@@ -1135,7 +1135,7 @@ def simulate_finishes(
     cut_penalty: int = 80,
 ) -> Dict[str, Any]:
     player_rows = [r for r in results if (r.get("player") or {}).get("id") == player_id]
-    grouped = _group_results_by_player(player_rows)
+    grouped = _group_results_by_player_v2(player_rows)
     if player_id not in grouped:
         return {"player_id": player_id, "simulations": 0, "distribution": []}
     recent = _recent_results(grouped[player_id]["results"], last_n)
@@ -1168,4 +1168,275 @@ def simulate_finishes(
         "top10_prob": round(safe_div(sum(1 for o in outcomes if o <= 10), simulations), 3),
         "top20_prob": round(safe_div(sum(1 for o in outcomes if o <= 20), simulations), 3),
         "distribution": distribution,
+    }
+
+
+def _normalize_metric(
+    values: Dict[int, Optional[float]],
+    *,
+    invert: bool = False,
+    default: float = 0.5,
+) -> Dict[int, float]:
+    valid = [value for value in values.values() if value is not None]
+    if not valid:
+        return {key: default for key in values}
+    min_val = min(valid)
+    max_val = max(valid)
+    if min_val == max_val:
+        return {key: default for key in values}
+
+    normalized: Dict[int, float] = {}
+    for key, value in values.items():
+        if value is None:
+            normalized[key] = default
+            continue
+        score = (value - min_val) / (max_val - min_val)
+        normalized[key] = 1 - score if invert else score
+    return normalized
+
+
+def _tournament_bonus(
+    results: List[Dict[str, Any]],
+    *,
+    player_id: int,
+    tournament_id: int,
+    cut_penalty: int,
+) -> Dict[str, Any]:
+    finishes: List[int] = []
+    for row in results:
+        tournament = row.get("tournament") or {}
+        if tournament.get("id") != tournament_id:
+            continue
+        player = row.get("player") or {}
+        if player.get("id") != player_id:
+            continue
+        finishes.append(
+            finish_value(row.get("position_numeric"), row.get("position"), cut_penalty)
+        )
+    if not finishes:
+        return {"bonus": 0.0, "avg_finish": None, "starts": 0}
+
+    avg_finish = sum(finishes) / len(finishes)
+    raw_bonus = (40 - avg_finish) / 40
+    bonus = max(0.0, min(1.0, raw_bonus))
+    return {
+        "bonus": round(bonus, 3),
+        "avg_finish": round(avg_finish, 2),
+        "starts": len(finishes),
+    }
+
+
+def _edge_label(edge: float) -> str:
+    if edge >= 0.08:
+        return "Best Edge"
+    if edge >= 0.04:
+        return "Lean"
+    return "No Clear Edge"
+
+
+def build_compare(
+    results: List[Dict[str, Any]],
+    *,
+    player_ids: List[int],
+    players: Optional[List[Dict[str, Any]]] = None,
+    tournaments: Optional[List[Dict[str, Any]]] = None,
+    courses: Optional[List[Dict[str, Any]]] = None,
+    course_id: Optional[int] = None,
+    tournament_id: Optional[int] = None,
+    last_n_form: int = 10,
+    last_n_placement: int = 20,
+    cut_penalty: int = 80,
+) -> Dict[str, Any]:
+    player_ids = list(dict.fromkeys(player_ids))
+    players_map: Dict[int, Dict[str, Any]] = {
+        (player.get("id")): player for player in (players or []) if player.get("id")
+    }
+    for row in results:
+        player = row.get("player") or {}
+        player_id = player.get("id")
+        if player_id and player_id not in players_map:
+            players_map[player_id] = player
+
+    form_rows = build_player_form(results, last_n=last_n_form, min_events=1)
+    placement_rows = build_placement_probabilities(
+        results, last_n=last_n_placement, min_events=1
+    )
+    form_map = {row["player_id"]: row for row in form_rows}
+    placement_map = {row["player_id"]: row for row in placement_rows}
+
+    course_fit_map: Dict[int, Dict[str, Any]] = {}
+    if course_id and tournaments and courses:
+        course_payload = build_course_fit(
+            results,
+            tournaments,
+            courses,
+            target_course_id=course_id,
+            last_n=last_n_placement,
+            min_events=1,
+        )
+        for row in course_payload.get("players", []):
+            course_fit_map[row["player_id"]] = row
+
+    head_to_head: List[Dict[str, Any]] = []
+    h2h_rates: Dict[int, List[float]] = {pid: [] for pid in player_ids}
+    h2h_starts: Dict[int, int] = {pid: 0 for pid in player_ids}
+
+    for idx, player_id in enumerate(player_ids):
+        for opponent_id in player_ids[idx + 1 :]:
+            matchup = build_matchup(
+                results,
+                player_id=player_id,
+                opponent_id=opponent_id,
+                cut_penalty=cut_penalty,
+            )
+            starts = matchup.get("starts") or 0
+            wins = matchup.get("wins") or 0
+            losses = matchup.get("losses") or 0
+            ties = matchup.get("ties") or 0
+
+            head_to_head.append(
+                {
+                    "player_id": player_id,
+                    "opponent_id": opponent_id,
+                    "starts": starts,
+                    "wins": wins,
+                    "losses": losses,
+                    "ties": ties,
+                    "win_rate": matchup.get("win_rate"),
+                }
+            )
+
+            if starts > 0:
+                h2h_rates[player_id].append(matchup.get("win_rate") or 0.0)
+                h2h_rates[opponent_id].append(safe_div(losses, starts))
+                h2h_starts[player_id] += starts
+                h2h_starts[opponent_id] += starts
+
+    metrics: Dict[int, Dict[str, Any]] = {}
+    for player_id in player_ids:
+        form = form_map.get(player_id, {})
+        placement = placement_map.get(player_id, {})
+        course_fit = course_fit_map.get(player_id, {})
+        h2h_rate = (
+            sum(h2h_rates[player_id]) / len(h2h_rates[player_id])
+            if h2h_rates[player_id]
+            else None
+        )
+        tournament_history = (
+            _tournament_bonus(
+                results,
+                player_id=player_id,
+                tournament_id=tournament_id,
+                cut_penalty=cut_penalty,
+            )
+            if tournament_id
+            else {"bonus": 0.0, "avg_finish": None, "starts": 0}
+        )
+
+        metrics[player_id] = {
+            "form_score": form.get("form_score"),
+            "course_fit_score": course_fit.get("course_fit_score"),
+            "head_to_head_win_rate": round(h2h_rate, 3) if h2h_rate is not None else None,
+            "head_to_head_starts": h2h_starts[player_id],
+            "top5_prob": placement.get("top5_prob"),
+            "top10_prob": placement.get("top10_prob"),
+            "top20_prob": placement.get("top20_prob"),
+            "tournament_bonus": tournament_history["bonus"],
+            "tournament_avg_finish": tournament_history["avg_finish"],
+            "tournament_starts": tournament_history["starts"],
+        }
+
+    form_norm = _normalize_metric(
+        {pid: metrics[pid]["form_score"] for pid in player_ids}
+    )
+    course_norm = _normalize_metric(
+        {pid: metrics[pid]["course_fit_score"] for pid in player_ids},
+        invert=True,
+    )
+    h2h_norm = _normalize_metric(
+        {pid: metrics[pid]["head_to_head_win_rate"] for pid in player_ids}
+    )
+    top10_norm = _normalize_metric(
+        {pid: metrics[pid]["top10_prob"] for pid in player_ids}
+    )
+
+    base_weights = {
+        "form": 0.4,
+        "course_fit": 0.25,
+        "head_to_head": 0.2,
+        "top10": 0.15,
+    }
+    if course_id is None:
+        base_weights.pop("course_fit")
+    total_weight = sum(base_weights.values())
+    weights = {key: value / total_weight for key, value in base_weights.items()}
+
+    player_rows: List[Dict[str, Any]] = []
+    for player_id in player_ids:
+        score = (
+            weights.get("form", 0) * form_norm[player_id]
+            + weights.get("course_fit", 0) * course_norm[player_id]
+            + weights.get("head_to_head", 0) * h2h_norm[player_id]
+            + weights.get("top10", 0) * top10_norm[player_id]
+        )
+        if tournament_id:
+            score += 0.05 * (metrics[player_id]["tournament_bonus"] or 0)
+
+        player_rows.append(
+            {
+                "player_id": player_id,
+                "player": players_map.get(player_id, {"id": player_id}),
+                "score": round(score, 4),
+                "metrics": metrics[player_id],
+            }
+        )
+
+    player_rows.sort(key=lambda row: row["score"], reverse=True)
+    for index, row in enumerate(player_rows, start=1):
+        row["rank"] = index
+
+    recommendation = None
+    if player_rows:
+        best = player_rows[0]
+        second_score = player_rows[1]["score"] if len(player_rows) > 1 else 0.0
+        edge = round(best["score"] - second_score, 4)
+        label = _edge_label(edge)
+
+        reasons: List[str] = []
+        metric_candidates = [
+            ("Best recent form", form_norm),
+            ("Strongest course fit", course_norm),
+            ("Head-to-head edge", h2h_norm),
+            ("Top-10 probability leader", top10_norm),
+        ]
+        for text, metric in metric_candidates:
+            best_pid = max(metric, key=metric.get)
+            if best_pid != best["player_id"]:
+                continue
+            values = sorted(metric.values(), reverse=True)
+            margin = values[0] - values[1] if len(values) > 1 else values[0]
+            if margin >= 0.02:
+                reasons.append(text)
+
+        if tournament_id and (best["metrics"].get("tournament_bonus") or 0) >= 0.4:
+            reasons.append("Strong tournament history")
+
+        if not reasons:
+            reasons = ["Composite score leader"]
+
+        recommendation = {
+            "player_id": best["player_id"],
+            "label": label,
+            "edge": edge,
+            "reasons": reasons[:2],
+        }
+
+    return {
+        "player_ids": player_ids,
+        "course_id": course_id,
+        "tournament_id": tournament_id,
+        "weights": weights,
+        "players": player_rows,
+        "head_to_head": head_to_head,
+        "recommendation": recommendation,
     }

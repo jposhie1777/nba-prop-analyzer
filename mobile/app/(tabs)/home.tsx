@@ -1,13 +1,16 @@
 // app/(tabs)/home.tsx
-import { ScrollView, View, Text, StyleSheet, Pressable } from "react-native";
+import { ScrollView, Text, StyleSheet, Pressable, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "@/store/useTheme";
-import { useParlayTracker } from "@/store/useParlayTracker";
 
-/* ======================================================
-   Tile
-====================================================== */
-function Tile({ title, subtitle, onPress }: any) {
+type SportTileProps = {
+  title: string;
+  subtitle: string;
+  onPress: () => void;
+  badge?: string;
+};
+
+function SportTile({ title, subtitle, onPress, badge }: SportTileProps) {
   const { colors } = useTheme();
 
   return (
@@ -21,37 +24,31 @@ function Tile({ title, subtitle, onPress }: any) {
         },
       ]}
     >
-      <Text
-        style={[
-          styles.tileTitle,
-          { color: colors.text.primary },
-        ]}
-      >
-        {title}
-      </Text>
-
-      {!!subtitle && (
-        <Text
-          style={[
-            styles.tileSub,
-            { color: colors.text.muted },
-          ]}
-        >
-          {subtitle}
+      <View style={styles.tileHeader}>
+        <Text style={[styles.tileTitle, { color: colors.text.primary }]}>
+          {title}
         </Text>
-      )}
+        {badge ? (
+          <View
+            style={[
+              styles.badge,
+              { backgroundColor: colors.accent.primary },
+            ]}
+          >
+            <Text style={styles.badgeText}>{badge}</Text>
+          </View>
+        ) : null}
+      </View>
+      <Text style={[styles.tileSub, { color: colors.text.muted }]}>
+        {subtitle}
+      </Text>
     </Pressable>
   );
 }
 
-/* ======================================================
-   Home
-====================================================== */
 export default function Home() {
   const router = useRouter();
   const { colors } = useTheme();
-  const { tracked } = useParlayTracker();
-  const trackedCount = Object.keys(tracked).length;
 
   return (
     <ScrollView
@@ -64,147 +61,94 @@ export default function Home() {
         paddingBottom: 40,
       }}
     >
-      {/* ===========================
-          Live
-      ============================ */}
       <Text
         style={[
           styles.h1,
           { color: colors.text.primary },
         ]}
       >
-        Live
+        Research Hub
+      </Text>
+      <Text style={[styles.subtitle, { color: colors.text.muted }]}>
+        Choose a sport to open analytics, models, and betting tools.
       </Text>
 
-      <Tile
-        title={`Tracked Parlays${trackedCount > 0 ? ` (${trackedCount})` : ""}`}
-        subtitle="Active bet tracking"
-        onPress={() => router.push("/(tabs)/more/tracked-parlays")}
+      <SportTile
+        title="NBA"
+        subtitle="Props, live edges, team & player analytics"
+        badge="LIVE"
+        onPress={() => router.push("/(tabs)/nba")}
       />
 
-      <Tile
-        title="Live Props"
-        subtitle="Real-time prop updates"
-        onPress={() => router.push("/(tabs)/live-props-dev")}
+      <SportTile
+        title="PGA"
+        subtitle="Course fit, form, placements, and simulations"
+        badge="NEW"
+        onPress={() => router.push("/(tabs)/pga")}
       />
 
-      <Tile
-        title="Live Ladder"
-        subtitle="Live prop ladders by game"
-        onPress={() => router.push("/(tabs)/ladders")}
-      />
-
-      <Tile
-        title="Live Bad Lines"
-        subtitle="Real-time bad line detection"
-        onPress={() => router.push("/(tabs)/bad-lines")}
-      />
-
-      {/* ===========================
-          Analytics
-      ============================ */}
-      <Text
-        style={[
-          styles.h1,
-          {
-            color: colors.text.primary,
-            marginTop: 24,
-          },
-        ]}
-      >
-        Analytics
-      </Text>
-
-      <Tile
-        title="Player Season Averages"
-        subtitle="Points, rebounds, assists & more"
-        onPress={() => router.push("/(tabs)/more/player-season-averages")}
-      />
-
-      <Tile
-        title="Team Season Averages"
-        subtitle="Team stats & standings"
-        onPress={() => router.push("/(tabs)/more/team-season-averages")}
-      />
-
-      <Tile
-        title="Opponent Position Defense"
-        subtitle="Defense rankings by position"
-        onPress={() => router.push("/(tabs)/more/opponent-position-defense")}
-      />
-
-      <Tile
-        title="Lineups"
-        subtitle="Projected & most common"
-        onPress={() => router.push("/more/lineups")}
-      />
-
-      {/* ===========================
-          More
-      ============================ */}
-      <Text
-        style={[
-          styles.h1,
-          {
-            color: colors.text.primary,
-            marginTop: 24,
-          },
-        ]}
-      >
-        More
-      </Text>
-
-      <Tile
-        title="Teams"
-        subtitle="Team profiles & stats"
-        onPress={() => router.push("/more/teams")}
-      />
-
-      <Tile
-        title="Saved"
-        subtitle="Saved bets & picks"
-        onPress={() => router.push("/more/SavedScreen")}
-      />
-
-      <Tile
-        title="Explore"
-        subtitle="All features"
-        onPress={() => router.push("/more/explore")}
-      />
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+          More Sports
+        </Text>
+        <Text style={[styles.sectionSub, { color: colors.text.muted }]}>
+          This hub supports adding new sports quickly. Ask me to wire up any
+          league and I will add it here.
+        </Text>
+      </View>
     </ScrollView>
   );
 }
 
-/* ======================================================
-   Styles
-====================================================== */
 const styles = StyleSheet.create({
   h1: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: "800",
-    marginBottom: 10,
+    marginBottom: 6,
   },
-
-  card: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    padding: 14,
+  subtitle: {
+    fontSize: 13,
+    marginBottom: 14,
   },
-
   tile: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    padding: 14,
-    marginTop: 10,
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 12,
   },
-
+  tileHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   tileTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "800",
   },
-
   tileSub: {
-    marginTop: 4,
+    marginTop: 6,
+    fontSize: 13,
+  },
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  badgeText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+  },
+  section: {
+    marginTop: 28,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  sectionSub: {
     fontSize: 12,
+    marginTop: 6,
   },
 });

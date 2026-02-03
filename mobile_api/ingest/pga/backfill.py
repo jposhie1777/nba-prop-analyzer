@@ -7,7 +7,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 from google.cloud import bigquery
 
-from pga.client import PgaApiError, fetch_paginated
+from mobile_api.pga.client import PgaApiError, fetch_paginated
 
 
 DATASET = os.getenv("PGA_DATASET", "pga_data")

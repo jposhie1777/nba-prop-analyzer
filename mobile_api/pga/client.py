@@ -5,6 +5,17 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+from .bq import (
+    fetch_course_holes as bq_fetch_course_holes,
+    fetch_courses as bq_fetch_courses,
+    fetch_courses_page as bq_fetch_courses_page,
+    fetch_players as bq_fetch_players,
+    fetch_players_page as bq_fetch_players_page,
+    fetch_tournament_course_stats as bq_fetch_tournament_course_stats,
+    fetch_tournament_results as bq_fetch_tournament_results,
+    fetch_tournaments as bq_fetch_tournaments,
+    fetch_tournaments_page as bq_fetch_tournaments_page,
+)
 from .cache import get_cached, set_cached
 
 
@@ -14,6 +25,13 @@ DEFAULT_TIMEOUT = 20
 
 class PgaApiError(RuntimeError):
     pass
+
+
+def _use_bq() -> bool:
+    source = os.getenv("PGA_DATA_SOURCE")
+    if source:
+        return source.strip().lower() == "bq"
+    return os.getenv("PGA_USE_BQ", "true").strip().lower() == "true"
 
 
 def _get_api_key() -> str:
@@ -35,6 +53,32 @@ def _headers() -> Dict[str, str]:
     return {"Authorization": _get_api_key()}
 
 
+def _fetch_paginated_bq(path: str, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    if path == "/players":
+        return bq_fetch_players(params)
+    if path == "/tournaments":
+        return bq_fetch_tournaments(params)
+    if path == "/courses":
+        return bq_fetch_courses(params)
+    if path == "/tournament_results":
+        return bq_fetch_tournament_results(params)
+    if path == "/tournament_course_stats":
+        return bq_fetch_tournament_course_stats(params)
+    if path == "/course_holes":
+        return bq_fetch_course_holes(params)
+    raise PgaApiError(f"Unsupported PGA BigQuery path: {path}")
+
+
+def _fetch_one_page_bq(path: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    if path == "/players":
+        return bq_fetch_players_page(params)
+    if path == "/tournaments":
+        return bq_fetch_tournaments_page(params)
+    if path == "/courses":
+        return bq_fetch_courses_page(params)
+    raise PgaApiError(f"Unsupported PGA BigQuery path: {path}")
+
+
 def fetch_paginated(
     path: str,
     params: Optional[Dict[str, Any]] = None,
@@ -48,6 +92,14 @@ def fetch_paginated(
     cached = get_cached(cache_key, cache_ttl)
     if cached is not None:
         return cached
+
+    if _use_bq():
+        try:
+            results = _fetch_paginated_bq(path, params)
+        except Exception as exc:
+            raise PgaApiError(f"PGA BigQuery error for {path}: {exc}") from exc
+        set_cached(cache_key, results)
+        return results
 
     results: List[Dict[str, Any]] = []
     cursor: Optional[int] = params.get("cursor")
@@ -89,6 +141,14 @@ def fetch_one_page(
     cached = get_cached(cache_key, cache_ttl)
     if cached is not None:
         return cached
+
+    if _use_bq():
+        try:
+            payload = _fetch_one_page_bq(path, params)
+        except Exception as exc:
+            raise PgaApiError(f"PGA BigQuery error for {path}: {exc}") from exc
+        set_cached(cache_key, payload)
+        return payload
 
     resp = requests.get(
         f"{BASE_URL}{path}",

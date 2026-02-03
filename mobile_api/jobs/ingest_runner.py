@@ -34,6 +34,7 @@ def _read_int_env(name: str, default: int) -> int:
 
 
 JOB_MAX_MINUTES = _read_int_env("LIVE_INGEST_JOB_MAX_MINUTES", 10)
+LIVE_INGEST_ENABLED = os.getenv("ENABLE_LIVE_INGEST", "true").lower() == "true"
 
 
 def _parse_start_time_est(game: Dict, game_date: str) -> datetime:
@@ -81,6 +82,10 @@ def _ingest_window_active(now: datetime) -> bool:
 
 
 def main() -> None:
+    if not LIVE_INGEST_ENABLED:
+        print("[INGEST_JOB] Disabled (ENABLE_LIVE_INGEST=false). Exiting.")
+        return
+
     start = datetime.now(NBA_TZ)
     end = start + timedelta(minutes=JOB_MAX_MINUTES)
 

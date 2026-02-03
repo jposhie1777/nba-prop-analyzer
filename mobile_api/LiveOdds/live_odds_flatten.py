@@ -40,6 +40,7 @@ FLAT_GAME_ODDS = f"{PROJECT_ID}.{DATASET}.live_game_odds_flat"
 LEASE_SECONDS = int(os.getenv("INGEST_LEASE_SECONDS", "180"))  # 3 min lock
 MAX_BYTES_PER_QUERY = int(os.getenv("MAX_BYTES_PER_QUERY", str(2_000_000_000)))  # 2GB
 DRY_RUN = os.getenv("DRY_RUN", "false").lower() == "true"
+ENABLE_LIVE_ODDS_FLATTEN = os.getenv("ENABLE_LIVE_ODDS_FLATTEN", "true").lower() == "true"
 
 client = bigquery.Client(project=PROJECT_ID)
 
@@ -133,12 +134,12 @@ INSERT INTO `{STAGE_PLAYER_PROP}` (
 )
 WITH new_raw AS (
   SELECT
-    TIMESTAMP(snapshot_ts) AS snapshot_ts,
+    snapshot_ts,
     game_id,
     payload
   FROM `{RAW_PLAYER_PROP}`
-  WHERE TIMESTAMP(snapshot_ts) > window_start
-    AND TIMESTAMP(snapshot_ts) <= window_end
+  WHERE snapshot_ts > window_start
+    AND snapshot_ts <= window_end
 ),
 parsed AS (
   SELECT
@@ -399,12 +400,12 @@ INSERT INTO `{STAGE_GAME_ODDS}` (
 )
 WITH new_raw AS (
   SELECT
-    TIMESTAMP(snapshot_ts) AS snapshot_ts,
+    snapshot_ts,
     game_id,
     payload
   FROM `{RAW_GAME_ODDS}`
-  WHERE TIMESTAMP(snapshot_ts) > window_start
-    AND TIMESTAMP(snapshot_ts) <= window_end
+  WHERE snapshot_ts > window_start
+    AND snapshot_ts <= window_end
 ),
 parsed AS (
   SELECT
@@ -641,6 +642,8 @@ def _run_query(sql: str, params: Optional[Dict[str, Any]] = None) -> bigquery.jo
     # Dry run / safety
     job_config.dry_run = DRY_RUN
     job_config.use_query_cache = False
+    if MAX_BYTES_PER_QUERY > 0:
+        job_config.maximum_bytes_billed = MAX_BYTES_PER_QUERY
 
     job = client.query(sql, job_config=job_config)
 
@@ -703,7 +706,7 @@ def _get_last_processed_ts(state_key: str) -> datetime:
 
 
 def _get_raw_max_snapshot_ts(raw_table: str) -> Optional[datetime]:
-    sql = f"SELECT MAX(TIMESTAMP(snapshot_ts)) AS max_ts FROM `{raw_table}`"
+    sql = f"SELECT MAX(snapshot_ts) AS max_ts FROM `{raw_table}`"
     rows = list(_run_query(sql).result() if not DRY_RUN else [])
     if DRY_RUN:
         return datetime.now(timezone.utc)
@@ -859,6 +862,10 @@ def run_live_odds_orchestrator() -> None:
 
     Set DRY_RUN=true to estimate bytes.
     """
+    if not ENABLE_LIVE_ODDS_FLATTEN:
+        print("🚫 Live Odds Orchestrator disabled (ENABLE_LIVE_ODDS_FLATTEN=false)")
+        return
+
     print("🚦 Live Odds Orchestrator starting")
     print(f"Project={PROJECT_ID} Dataset={DATASET} DryRun={DRY_RUN}")
 

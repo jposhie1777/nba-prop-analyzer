@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import sys
 import time
@@ -126,7 +127,7 @@ def ensure_tables(client: bigquery.Client) -> None:
             bigquery.SchemaField("champion_id", "INT64"),
             bigquery.SchemaField("champion_display_name", "STRING"),
             bigquery.SchemaField("champion_country", "STRING"),
-            bigquery.SchemaField("courses", "JSON"),
+            bigquery.SchemaField("courses", "STRING"),
         ],
         partition_field="season",
         cluster_fields=["tournament_id", "season"],
@@ -339,7 +340,7 @@ def normalize_tournaments(
                 "champion_id": champion.get("id"),
                 "champion_display_name": champion.get("display_name"),
                 "champion_country": champion.get("country"),
-                "courses": tournament.get("courses"),
+                "courses": json.dumps(tournament.get("courses") or []),
             }
         )
     return rows

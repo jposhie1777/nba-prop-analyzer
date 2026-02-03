@@ -87,8 +87,10 @@ fi
 
 SCHEDULER_SA_EMAIL="${SCHEDULER_SA_NAME}@${PROJECT}.iam.gserviceaccount.com"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 echo "==> Building image ${IMAGE}"
-gcloud builds submit --project "${PROJECT}" --tag "${IMAGE}"
+gcloud builds submit --project "${PROJECT}" --tag "${IMAGE}" "${SCRIPT_DIR}"
 
 echo "==> Ensuring service account ${SCHEDULER_SA_EMAIL}"
 if ! gcloud iam service-accounts describe "${SCHEDULER_SA_EMAIL}" --project "${PROJECT}" >/dev/null 2>&1; then

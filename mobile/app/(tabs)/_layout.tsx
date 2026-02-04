@@ -41,6 +41,7 @@ const PGA_TABS: TabConfig[] = [
     title: "Simulated Finishes",
     icon: "bar-chart",
   },
+  { name: "pga", title: "Home", icon: "home" },
 ];
 
 const ATP_TABS: TabConfig[] = [
@@ -52,6 +53,7 @@ const ATP_TABS: TabConfig[] = [
     icon: "trophy",
   },
   { name: "atp-surface-splits", title: "Surface Splits", icon: "grid" },
+  { name: "atp", title: "Home", icon: "home" },
 ];
 
 const SPORT_TABS: Record<SportKey, TabConfig[]> = {

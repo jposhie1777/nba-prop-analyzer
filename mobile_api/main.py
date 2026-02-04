@@ -112,6 +112,16 @@ register_debug_code(app)
 # ==================================================
 NY_TZ = ZoneInfo("America/New_York")
 
+def _read_int_env(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+        return value if value > 0 else default
+    except ValueError:
+        return default
+
 # ==================================================
 # CORS (REQUIRED for Expo Web)
 # ==================================================
@@ -163,12 +173,25 @@ app.include_router(atp_ingest_router)
 async def startup():
     use_scheduler = os.environ.get("USE_SMART_SCHEDULER") == "true"
     enable_ingest = os.environ.get("ENABLE_LIVE_INGEST") == "true"
+    enable_live_games_snapshot = (
+        os.environ.get("ENABLE_LIVE_GAMES_SNAPSHOT") == "true"
+    )
+    live_games_interval_sec = _read_int_env(
+        "LIVE_GAMES_SNAPSHOT_INTERVAL_SEC",
+        300,
+    )
 
     print("\n" + "="*60)
     print("[STARTUP] PULSE MOBILE API")
     print(f"[STARTUP] Time: {datetime.now(NY_TZ).strftime('%Y-%m-%d %I:%M:%S %p ET')}")
     print(f"[STARTUP] USE_SMART_SCHEDULER: {use_scheduler}")
     print(f"[STARTUP] ENABLE_LIVE_INGEST: {enable_ingest}")
+    print(f"[STARTUP] ENABLE_LIVE_GAMES_SNAPSHOT: {enable_live_games_snapshot}")
+    if enable_live_games_snapshot:
+        print(
+            "[STARTUP] LIVE_GAMES_SNAPSHOT_INTERVAL_SEC:"
+            f" {live_games_interval_sec}"
+        )
     print("="*60 + "\n")
 
     # =====================================================
@@ -398,7 +421,22 @@ async def startup():
     # LEGACY MODE (original 24/7 loops)
     # =====================================================
     if not enable_ingest:
-        print("[STARTUP] Live ingest DISABLED - no background loops started")
+        if enable_live_games_snapshot:
+            print("[STARTUP] Live ingest DISABLED - live games snapshot only")
+
+            async def live_games_snapshot_loop():
+                while True:
+                    try:
+                        await asyncio.to_thread(ingest_live_games_snapshot)
+                    except Exception as e:
+                        print("[INGEST] Live games snapshot failed:", e)
+
+                    await asyncio.sleep(live_games_interval_sec)
+
+            asyncio.create_task(live_games_snapshot_loop())
+            print("[STARTUP] -> Live games snapshot loop started")
+        else:
+            print("[STARTUP] Live ingest DISABLED - no background loops started")
         return
 
     print("[STARTUP] Using LEGACY 24/7 ingest mode")

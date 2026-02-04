@@ -101,7 +101,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --min-instances "${MIN_INSTANCES}" \
   --max-instances "${MAX_INSTANCES}" \
   --set-env-vars "BALLDONTLIE_API_KEY=${BDL_KEY},GCP_PROJECT=${PROJECT}" \
-  --set-env-vars "USE_SMART_SCHEDULER=false,ENABLE_LIVE_INGEST=false"
+  --set-env-vars "USE_SMART_SCHEDULER=false,ENABLE_LIVE_INGEST=false,ENABLE_LIVE_GAMES_SNAPSHOT=true,LIVE_GAMES_SNAPSHOT_INTERVAL_SEC=300"
 
 SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" \
   --project "${PROJECT}" \

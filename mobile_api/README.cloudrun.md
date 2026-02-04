@@ -12,9 +12,15 @@ This service can run on Cloud Run in two modes:
 - `BALLDONTLIE_API_KEY` (required)
 - `USE_SMART_SCHEDULER=true` (required for smart live ingest)
 - `ENABLE_LIVE_INGEST=true` (required for legacy mode; harmless with smart mode)
+  - If you only want `nba_live.live_games` updates, keep this `false` and set
+    `ENABLE_LIVE_GAMES_SNAPSHOT=true`.
 
 ## Optional environment variables (both options)
 
+- `ENABLE_LIVE_GAMES_SNAPSHOT=true` (optional)
+  - Runs only the live games snapshot loop (writes `nba_live.live_games`)
+  - Useful when `ENABLE_LIVE_INGEST=false` but you still need matchups/logos
+- `LIVE_GAMES_SNAPSHOT_INTERVAL_SEC` (default `300`)
 - `LIVE_INGEST_INTERVAL_SEC` (default `60`)
 - `LIVE_INGEST_PRE_GAME_MINUTES` (default `0`)
   - Set to `0` to start only when games go LIVE

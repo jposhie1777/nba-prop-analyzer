@@ -114,6 +114,38 @@ export default function MoreIndexScreen() {
         </Text>
       </Pressable>
 
+      {/* 100 in 3Q */}
+      <Pressable
+        onPress={() =>
+          router.push("/(tabs)/more/three-quarter-100")
+        }
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.surface.card,
+            borderColor: colors.border.subtle,
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.title,
+            { color: colors.text.primary },
+          ]}
+        >
+          🔥 100 in 3Q
+        </Text>
+
+        <Text
+          style={[
+            styles.subtitle,
+            { color: colors.text.muted },
+          ]}
+        >
+          Teams most likely to hit 100 by the 3rd
+        </Text>
+      </Pressable>
+
       {/* Live Props (DEV) */}
       <Pressable
         onPress={() => router.push("/live-props-dev")}

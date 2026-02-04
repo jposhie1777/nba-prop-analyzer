@@ -73,6 +73,7 @@ from routes.opponent_position_defense import (
 from routes.game_betting_analytics import (
     router as game_betting_analytics_router,
 )
+from routes.three_q_100 import router as three_q_100_router
 from routes.pga_analytics import router as pga_analytics_router
 from routes.atp_analytics import router as atp_analytics_router
 
@@ -162,6 +163,7 @@ app.include_router(season_averages_data_router)
 app.include_router(opponent_position_defense_router)
 app.include_router(injuries_router)
 app.include_router(game_betting_analytics_router)
+app.include_router(three_q_100_router)
 app.include_router(pga_analytics_router)
 app.include_router(atp_analytics_router)
 app.include_router(atp_ingest_router)

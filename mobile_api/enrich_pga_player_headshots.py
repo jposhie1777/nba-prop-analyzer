@@ -2,7 +2,6 @@ import os
 import time
 
 import requests
-from google.api_core.exceptions import NotFound
 from google.cloud import bigquery
 
 # ==============================
@@ -10,7 +9,7 @@ from google.cloud import bigquery
 # ==============================
 PROJECT_ID = os.getenv("PGA_PROJECT_ID", "graphite-flare-477419-h7")
 DATASET = os.getenv("PGA_DATASET", "pga_data")
-TABLE = os.getenv("PGA_TABLE", "players_active")
+TABLE = os.getenv("PGA_TABLE", "active_players")
 
 ESPN_SEARCH_URL = "https://site.web.api.espn.com/apis/common/v3/search"
 
@@ -27,13 +26,7 @@ def fetch_players_missing_headshots():
     WHERE espn_headshot_url IS NULL
        OR espn_headshot_url = ""
     """
-    try:
-        return client.query(query).result()
-    except NotFound as exc:
-        raise NotFound(
-            f"BigQuery table not found: {PROJECT_ID}.{DATASET}.{TABLE}. "
-            "Set PGA_PROJECT_ID/PGA_DATASET/PGA_TABLE to the correct values."
-        ) from exc
+    return client.query(query).result()
 
 # ==============================
 # ESPN SEARCH

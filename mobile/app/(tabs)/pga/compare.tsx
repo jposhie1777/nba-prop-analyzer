@@ -36,9 +36,9 @@ export default function CompareScreen() {
   const [courseSearch, setCourseSearch] = useState("");
   const [selectedCourse, setSelectedCourse] = useState<SearchItem | null>(null);
 
-  const { data: playersA } = usePgaPlayers({ search: searchA });
-  const { data: playersB } = usePgaPlayers({ search: searchB });
-  const { data: playersC } = usePgaPlayers({ search: searchC });
+  const { data: playersA } = usePgaPlayers({ search: searchA, active: true });
+  const { data: playersB } = usePgaPlayers({ search: searchB, active: true });
+  const { data: playersC } = usePgaPlayers({ search: searchC, active: true });
   const { data: tournaments } = usePgaTournaments({
     season: new Date().getFullYear(),
   });
@@ -72,9 +72,25 @@ export default function CompareScreen() {
     [playersC]
   );
 
+  const upcomingTournaments = useMemo(() => {
+    const now = Date.now();
+    return (tournaments?.data || [])
+      .filter((tournament) => {
+        if (!tournament.start_date) return false;
+        return new Date(tournament.start_date).getTime() >= now;
+      })
+      .sort((a, b) => {
+        const aTime = a.start_date ? new Date(a.start_date).getTime() : 0;
+        const bTime = b.start_date ? new Date(b.start_date).getTime() : 0;
+        return aTime - bTime;
+      })
+      .slice(0, 3);
+  }, [tournaments]);
+
   const tournamentItems = useMemo(() => {
     const search = tournamentSearch.trim().toLowerCase();
-    return (tournaments?.data || [])
+    const pool = search ? tournaments?.data || [] : upcomingTournaments;
+    return pool
       .filter((tournament) =>
         search ? tournament.name.toLowerCase().includes(search) : true
       )
@@ -83,17 +99,57 @@ export default function CompareScreen() {
         label: tournament.name,
         subLabel: tournament.course_name ?? "",
       }));
-  }, [tournaments, tournamentSearch]);
+  }, [tournaments, tournamentSearch, upcomingTournaments]);
 
-  const courseItems = useMemo(
-    () =>
-      (courses?.data || []).map((course) => ({
-        id: course.id,
-        label: course.name,
-        subLabel: [course.city, course.state].filter(Boolean).join(", "),
-      })),
-    [courses]
-  );
+  const upcomingCourseItems = useMemo(() => {
+    const courseLookup = new Map(
+      (courses?.data || []).map((course) => [course.name.toLowerCase(), course])
+    );
+    const items: SearchItem[] = [];
+    const seen = new Set<number>();
+
+    upcomingTournaments.forEach((tournament) => {
+      const coursesInTournament = tournament.courses?.length
+        ? tournament.courses.map((entry) => entry.course)
+        : [];
+
+      if (coursesInTournament.length > 0) {
+        coursesInTournament.forEach((course) => {
+          if (!course?.id || seen.has(course.id)) return;
+          seen.add(course.id);
+          items.push({
+            id: course.id,
+            label: course.name,
+            subLabel: [course.city, course.state].filter(Boolean).join(", "),
+          });
+        });
+      } else if (tournament.course_name) {
+        const match = courseLookup.get(tournament.course_name.toLowerCase());
+        if (match && !seen.has(match.id)) {
+          seen.add(match.id);
+          items.push({
+            id: match.id,
+            label: match.name,
+            subLabel: [match.city, match.state].filter(Boolean).join(", "),
+          });
+        }
+      }
+    });
+
+    return items.slice(0, 3);
+  }, [courses, upcomingTournaments]);
+
+  const courseItems = useMemo(() => {
+    const search = courseSearch.trim();
+    if (!search) {
+      return upcomingCourseItems;
+    }
+    return (courses?.data || []).map((course) => ({
+      id: course.id,
+      label: course.name,
+      subLabel: [course.city, course.state].filter(Boolean).join(", "),
+    }));
+  }, [courseSearch, courses, upcomingCourseItems]);
 
   useEffect(() => {
     if (!playerA && itemsA.length > 0) {

@@ -6,9 +6,10 @@ type Response = {
   count: number;
 };
 
-export function usePgaPlayers(params?: { search?: string }) {
+export function usePgaPlayers(params?: { search?: string; active?: boolean }) {
   return usePgaQuery<Response>("/pga/players", {
     search: params?.search,
+    active: params?.active,
     per_page: 50,
   });
 }

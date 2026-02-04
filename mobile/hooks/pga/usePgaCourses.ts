@@ -9,6 +9,6 @@ type Response = {
 export function usePgaCourses(params?: { search?: string }) {
   return usePgaQuery<Response>("/pga/courses", {
     search: params?.search,
-    per_page: 50,
+    per_page: 100,
   });
 }

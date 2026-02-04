@@ -10,6 +10,11 @@ SERVICE_NAME="mobile-api"
 MIN_INSTANCES="0"
 MAX_INSTANCES="1"
 ALLOW_UNAUTHENTICATED="true"
+MODE="snapshot"
+CPU_ALWAYS="false"
+LIVE_GAMES_SNAPSHOT_INTERVAL_SEC="300"
+LIVE_INGEST_INTERVAL_SEC="60"
+LIVE_INGEST_PRE_GAME_MINUTES="0"
 
 usage() {
   cat <<EOF
@@ -21,6 +26,11 @@ Options:
   --min-instances <N>             Min instances (default: ${MIN_INSTANCES})
   --max-instances <N>             Max instances (default: ${MAX_INSTANCES})
   --allow-unauthenticated <BOOL>  Allow unauthenticated (default: ${ALLOW_UNAUTHENTICATED})
+  --mode <snapshot|live>          Deploy mode (default: ${MODE})
+  --cpu-always <BOOL>             Disable CPU throttling (default: ${CPU_ALWAYS})
+  --live-games-snapshot-interval-sec <N>  Live games snapshot interval (default: ${LIVE_GAMES_SNAPSHOT_INTERVAL_SEC})
+  --live-ingest-interval-sec <N>          Live ingest interval (default: ${LIVE_INGEST_INTERVAL_SEC})
+  --live-ingest-pre-game-minutes <N>      Live ingest pre-game lead (default: ${LIVE_INGEST_PRE_GAME_MINUTES})
 EOF
 }
 
@@ -34,6 +44,11 @@ while [[ $# -gt 0 ]]; do
     --min-instances) MIN_INSTANCES="$2"; shift 2;;
     --max-instances) MAX_INSTANCES="$2"; shift 2;;
     --allow-unauthenticated) ALLOW_UNAUTHENTICATED="$2"; shift 2;;
+    --mode) MODE="$2"; shift 2;;
+    --cpu-always) CPU_ALWAYS="$2"; shift 2;;
+    --live-games-snapshot-interval-sec) LIVE_GAMES_SNAPSHOT_INTERVAL_SEC="$2"; shift 2;;
+    --live-ingest-interval-sec) LIVE_INGEST_INTERVAL_SEC="$2"; shift 2;;
+    --live-ingest-pre-game-minutes) LIVE_INGEST_PRE_GAME_MINUTES="$2"; shift 2;;
     -h|--help) usage; exit 0;;
     *) echo "Unknown arg: $1"; usage; exit 1;;
   esac
@@ -91,6 +106,48 @@ if [[ "${ALLOW_UNAUTHENTICATED}" == "true" ]]; then
   ALLOW_FLAG="--allow-unauthenticated"
 fi
 
+CPU_FLAG=""
+if [[ "${CPU_ALWAYS}" == "true" ]]; then
+  CPU_FLAG="--no-cpu-throttling"
+fi
+
+case "${MODE}" in
+  snapshot)
+    ENV_VARS=(
+      "BALLDONTLIE_API_KEY=${BDL_KEY}"
+      "GCP_PROJECT=${PROJECT}"
+      "USE_SMART_SCHEDULER=false"
+      "ENABLE_LIVE_INGEST=false"
+      "ENABLE_LIVE_GAMES_SNAPSHOT=true"
+      "LIVE_GAMES_SNAPSHOT_INTERVAL_SEC=${LIVE_GAMES_SNAPSHOT_INTERVAL_SEC}"
+    )
+    ;;
+  live)
+    ENV_VARS=(
+      "BALLDONTLIE_API_KEY=${BDL_KEY}"
+      "GCP_PROJECT=${PROJECT}"
+      "USE_SMART_SCHEDULER=true"
+      "ENABLE_LIVE_INGEST=true"
+      "ENABLE_LIVE_GAMES_SNAPSHOT=true"
+      "LIVE_GAMES_SNAPSHOT_INTERVAL_SEC=${LIVE_GAMES_SNAPSHOT_INTERVAL_SEC}"
+      "LIVE_INGEST_INTERVAL_SEC=${LIVE_INGEST_INTERVAL_SEC}"
+      "LIVE_INGEST_PRE_GAME_MINUTES=${LIVE_INGEST_PRE_GAME_MINUTES}"
+      "ENABLE_LIVE_GAMES_INGEST=true"
+      "ENABLE_BOX_SCORES_INGEST=true"
+      "ENABLE_LIVE_PLAYER_STATS_INGEST=true"
+      "ENABLE_LIVE_ODDS_INGEST=true"
+      "ENABLE_LIVE_ODDS_FLATTEN=true"
+      "ENABLE_PLAYER_STATS_INGEST=true"
+    )
+    ;;
+  *)
+    echo "Unknown mode: ${MODE}"
+    exit 1
+    ;;
+esac
+
+ENV_VARS_CSV=$(IFS=, ; echo "${ENV_VARS[*]}")
+
 echo "==> Deploying service ${SERVICE_NAME}"
 gcloud run deploy "${SERVICE_NAME}" \
   --project "${PROJECT}" \
@@ -98,10 +155,10 @@ gcloud run deploy "${SERVICE_NAME}" \
   --platform managed \
   --image "${IMAGE}" \
   ${ALLOW_FLAG} \
+  ${CPU_FLAG} \
   --min-instances "${MIN_INSTANCES}" \
   --max-instances "${MAX_INSTANCES}" \
-  --set-env-vars "BALLDONTLIE_API_KEY=${BDL_KEY},GCP_PROJECT=${PROJECT}" \
-  --set-env-vars "USE_SMART_SCHEDULER=false,ENABLE_LIVE_INGEST=false,ENABLE_LIVE_GAMES_SNAPSHOT=true,LIVE_GAMES_SNAPSHOT_INTERVAL_SEC=300"
+  --set-env-vars "${ENV_VARS_CSV}"
 
 SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" \
   --project "${PROJECT}" \

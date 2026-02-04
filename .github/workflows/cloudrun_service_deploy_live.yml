@@ -1,0 +1,59 @@
+name: Deploy Cloud Run Service (Live Ingest)
+
+on:
+  workflow_dispatch:
+    inputs:
+      min_instances:
+        description: "Min instances (live ingest requires >=1)"
+        required: false
+        default: "1"
+      max_instances:
+        description: "Max instances"
+        required: false
+        default: "1"
+      cpu_always:
+        description: "Disable CPU throttling (true/false)"
+        required: false
+        default: "true"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    env:
+      PROJECT_ID: graphite-flare-477419-h7
+      REGION: us-central1
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Deploy Cloud Run Service (Live)
+        env:
+          BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY || secrets.BALDONTLIE_KEY }}
+        run: |
+          chmod +x mobile_api/deploy_cloudrun_service.sh
+          mobile_api/deploy_cloudrun_service.sh \
+            --project "$PROJECT_ID" \
+            --region "$REGION" \
+            --bdl-key "$BALLDONTLIE_API_KEY" \
+            --min-instances "${{ inputs.min_instances }}" \
+            --max-instances "${{ inputs.max_instances }}" \
+            --cpu-always "${{ inputs.cpu_always }}" \
+            --mode live \
+            --live-games-snapshot-interval-sec 60 \
+            --live-ingest-interval-sec 60 \
+            --live-ingest-pre-game-minutes 0

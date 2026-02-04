@@ -10,6 +10,7 @@ from google.cloud import bigquery
 from bq import get_bq_client
 
 DATASET = os.getenv("PGA_DATASET", "pga_data")
+PLAYERS_TABLE = os.getenv("PGA_PLAYERS_TABLE", "players_active")
 
 
 def _table(client: bigquery.Client, table: str) -> str:
@@ -127,7 +128,7 @@ def _query_players(
     limit: Optional[int] = None,
     offset: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
-    table = _table(client, "players")
+    table = _table(client, PLAYERS_TABLE)
     conditions: List[str] = []
     params: List[bigquery.QueryParameter] = []
 
@@ -421,7 +422,7 @@ def fetch_tournament_results(params: Optional[Dict[str, Any]] = None) -> List[Di
     player_ids = _normalize_int_list(params.get("player_ids"))
 
     results_table = f"`{project}.{DATASET}.tournament_results`"
-    players_table = f"`{project}.{DATASET}.players`"
+    players_table = f"`{project}.{DATASET}.{PLAYERS_TABLE}`"
     tournaments_table = f"`{project}.{DATASET}.tournaments`"
 
     conditions: List[str] = []

@@ -1,32 +1,32 @@
-import requests
+import os
 import time
+
+import requests
 from google.cloud import bigquery
 
 # ==============================
 # CONFIG
 # ==============================
-PROJECT_ID = "graphite-flare-477419-h7"
-DATASET = "pga_data"
-TABLE = "players_active"
+PROJECT_ID = os.getenv("PGA_PROJECT_ID", "graphite-flare-477419-h7")
+DATASET = os.getenv("PGA_DATASET", "pga_data")
+TABLE = os.getenv("PGA_TABLE", "active_players")
 
 ESPN_SEARCH_URL = "https://site.web.api.espn.com/apis/common/v3/search"
 
 client = bigquery.Client(project=PROJECT_ID)
 
-# ==============================
-# FETCH PLAYERS MISSING HEADSHOTS
-# ==============================
-QUERY = f"""
-SELECT
-  player_id,
-  first_name,
-  last_name,
-  display_name
-FROM `{PROJECT_ID}.{DATASET}.{TABLE}`
-WHERE espn_headshot_url IS NULL
-"""
-
-players = client.query(QUERY).result()
+def fetch_players_missing_headshots():
+    query = f"""
+    SELECT
+      player_id,
+      first_name,
+      last_name,
+      display_name
+    FROM `{PROJECT_ID}.{DATASET}.{TABLE}`
+    WHERE espn_headshot_url IS NULL
+       OR espn_headshot_url = ""
+    """
+    return client.query(query).result()
 
 # ==============================
 # ESPN SEARCH
@@ -52,38 +52,41 @@ def find_espn_athlete(full_name: str):
     return None, None
 
 
-# ==============================
-# MAIN LOOP
-# ==============================
-updates = []
+def main():
+    updates = []
+    players = fetch_players_missing_headshots()
 
-for row in players:
-    name = row.display_name or f"{row.first_name} {row.last_name}"
+    for row in players:
+        name = row.display_name or f"{row.first_name} {row.last_name}"
 
-    try:
-        espn_id, espn_name = find_espn_athlete(name)
-        if not espn_id:
-            print(f"❌ No ESPN match for {name}")
-            continue
+        try:
+            espn_id, espn_name = find_espn_athlete(name)
+            if not espn_id:
+                print(f"❌ No ESPN match for {name}")
+                continue
 
-        headshot_url = f"https://a.espncdn.com/i/headshots/golf/players/full/{espn_id}.png"
+            headshot_url = (
+                f"https://a.espncdn.com/i/headshots/golf/players/full/{espn_id}.png"
+            )
 
-        updates.append({
-            "player_id": row.player_id,
-            "espn_player_id": int(espn_id),
-            "espn_headshot_url": headshot_url,
-        })
+            updates.append(
+                {
+                    "player_id": row.player_id,
+                    "espn_player_id": int(espn_id),
+                    "espn_headshot_url": headshot_url,
+                }
+            )
 
-        print(f"✅ {name} → {headshot_url}")
-        time.sleep(0.2)  # be polite
+            print(f"✅ {name} → {headshot_url}")
+            time.sleep(0.2)  # be polite
 
-    except Exception as e:
-        print(f"⚠️ Error for {name}: {e}")
+        except Exception as e:
+            print(f"⚠️ Error for {name}: {e}")
 
-# ==============================
-# WRITE BACK TO BIGQUERY
-# ==============================
-if updates:
+    if not updates:
+        print("ℹ️ No missing headshots found.")
+        return
+
     temp_table = f"{PROJECT_ID}.{DATASET}.tmp_player_headshots"
 
     job = client.load_table_from_json(
@@ -100,7 +103,7 @@ if updates:
     )
     job.result()
 
-    MERGE_SQL = f"""
+    merge_sql = f"""
     MERGE `{PROJECT_ID}.{DATASET}.{TABLE}` t
     USING `{temp_table}` s
     ON t.player_id = s.player_id
@@ -110,5 +113,9 @@ if updates:
         espn_headshot_url = s.espn_headshot_url
     """
 
-    client.query(MERGE_SQL).result()
+    client.query(merge_sql).result()
     print("🎯 BigQuery updated successfully")
+
+
+if __name__ == "__main__":
+    main()

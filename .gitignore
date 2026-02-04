@@ -10,5 +10,5 @@ graphite-flare-477419-h7-e3b8cac922d3.json
 __pycache__/
 *.pyc
 *.pyo
-
+*.json
 secrets/

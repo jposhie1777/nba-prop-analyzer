@@ -170,6 +170,9 @@ export default function PropsTestScreen() {
   const removeFromBetslip = usePropBetslip((s) => s.remove);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<"ALL" | "BY_GAME">("ALL");
+  const [sortOption, setSortOption] = useState<
+    "HIT_RATE" | "ODDS" | "BAD_LINES"
+  >("HIT_RATE");
   const [expandedGames, setExpandedGames] = useState<Record<string, boolean>>(
     {}
   );
@@ -200,6 +203,18 @@ export default function PropsTestScreen() {
       [key]: !prev[key],
     }));
   }, []);
+
+  const { data: badLines } = useBadLineAlerts(1.0);
+
+  const badLineMap = useMemo(() => {
+    const map = new Map<number, number>();
+
+    badLines?.forEach((b) => {
+      map.set(b.prop_id, b.bad_line_score);
+    });
+
+    return map;
+  }, [badLines]);
 
   /* ======================================================
      SAVE / UNSAVE (single source of truth)
@@ -273,14 +288,41 @@ export default function PropsTestScreen() {
         id: `${p.id}::${idx}`,
       }));
 
+    const getHitRateValue = (prop: any) =>
+      filters.hitRateWindow === "L5"
+        ? prop.hit_rate_l5
+        : filters.hitRateWindow === "L10"
+        ? prop.hit_rate_l10
+        : prop.hit_rate_l20;
+
     cleaned.sort((a, b) => {
-      const oddsDiff = (b.odds ?? 0) - (a.odds ?? 0);
-      if (oddsDiff !== 0) return oddsDiff;
+      if (sortOption === "ODDS") {
+        const oddsDiff = (a.odds ?? 0) - (b.odds ?? 0);
+        if (oddsDiff !== 0) return oddsDiff;
+        return (a.player ?? "").localeCompare(b.player ?? "");
+      }
+
+      if (sortOption === "BAD_LINES") {
+        const aScore = badLineMap.get(a.propId) ?? 0;
+        const bScore = badLineMap.get(b.propId) ?? 0;
+
+        const aIsBadLine = aScore > 0;
+        const bIsBadLine = bScore > 0;
+
+        if (aIsBadLine && !bIsBadLine) return -1;
+        if (!aIsBadLine && bIsBadLine) return 1;
+        if (aScore !== bScore) return bScore - aScore;
+      }
+
+      const aHitRate = getHitRateValue(a) ?? 0;
+      const bHitRate = getHitRateValue(b) ?? 0;
+      const hitRateDiff = bHitRate - aHitRate;
+      if (hitRateDiff !== 0) return hitRateDiff;
       return (a.player ?? "").localeCompare(b.player ?? "");
     });
 
     return cleaned;
-  }, [rawProps, filters]);
+  }, [rawProps, filters, sortOption, badLineMap]);
 
   const gameGroups = useMemo(() => {
     const map = new Map<
@@ -327,9 +369,41 @@ export default function PropsTestScreen() {
 
     const groups = Array.from(map.values()).map((group) => ({
       ...group,
-      items: [...group.items].sort(
-        (a, b) => (b.odds ?? 0) - (a.odds ?? 0),
-      ),
+      items: [...group.items].sort((a, b) => {
+        if (sortOption === "ODDS") {
+          const oddsDiff = (a.odds ?? 0) - (b.odds ?? 0);
+          if (oddsDiff !== 0) return oddsDiff;
+          return (a.player ?? "").localeCompare(b.player ?? "");
+        }
+
+        if (sortOption === "BAD_LINES") {
+          const aScore = badLineMap.get(a.propId) ?? 0;
+          const bScore = badLineMap.get(b.propId) ?? 0;
+
+          const aIsBadLine = aScore > 0;
+          const bIsBadLine = bScore > 0;
+
+          if (aIsBadLine && !bIsBadLine) return -1;
+          if (!aIsBadLine && bIsBadLine) return 1;
+          if (aScore !== bScore) return bScore - aScore;
+        }
+
+        const aHitRate =
+          filters.hitRateWindow === "L5"
+            ? a.hit_rate_l5
+            : filters.hitRateWindow === "L10"
+            ? a.hit_rate_l10
+            : a.hit_rate_l20;
+        const bHitRate =
+          filters.hitRateWindow === "L5"
+            ? b.hit_rate_l5
+            : filters.hitRateWindow === "L10"
+            ? b.hit_rate_l10
+            : b.hit_rate_l20;
+        const hitRateDiff = (bHitRate ?? 0) - (aHitRate ?? 0);
+        if (hitRateDiff !== 0) return hitRateDiff;
+        return (a.player ?? "").localeCompare(b.player ?? "");
+      }),
     }));
 
     groups.sort((a, b) => {
@@ -339,19 +413,7 @@ export default function PropsTestScreen() {
     });
 
     return groups;
-  }, [props]);
-
-  const { data: badLines } = useBadLineAlerts(1.0);
-
-  const badLineMap = useMemo(() => {
-    const map = new Map<number, number>();
-  
-    badLines?.forEach((b) => {
-      map.set(b.prop_id, b.bad_line_score);
-    });
-  
-    return map;
-  }, [badLines]);
+  }, [props, sortOption, badLineMap, filters.hitRateWindow]);
 
   const opponentPositionMap = useMemo(() => {
     const map = new Map<string, OpponentPositionDefenseRow>();
@@ -621,6 +683,40 @@ export default function PropsTestScreen() {
                         ]}
                       >
                         {w}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {/* SORT */}
+              <Text style={styles.sectionLabel}>Sort</Text>
+              <View style={styles.pills}>
+                {[
+                  { value: "HIT_RATE", label: "Hit Rate" },
+                  { value: "ODDS", label: "Odds" },
+                  { value: "BAD_LINES", label: "Bad Lines" },
+                ].map((option) => {
+                  const active = sortOption === option.value;
+                  return (
+                    <Pressable
+                      key={option.value}
+                      onPress={() =>
+                        setSortOption(
+                          option.value as
+                            | "HIT_RATE"
+                            | "ODDS"
+                            | "BAD_LINES"
+                        )
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.pill,
+                          active && styles.pillActive,
+                        ]}
+                      >
+                        {option.label}
                       </Text>
                     </Pressable>
                   );

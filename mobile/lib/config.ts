@@ -9,7 +9,7 @@ const EXTRA_API_URL =
 export const API_BASE =
   process.env.EXPO_PUBLIC_API_URL ??
   EXTRA_API_URL ??
-  "https://pulse-mobile-api-763243624328.us-central1.run.app";
+  "https://mobile-api-763243624328.us-central1.run.app/";
 
 export const USE_MOCK_LIVE_DATA =
   process.env.EXPO_PUBLIC_USE_MOCK_LIVE_DATA === "true";  

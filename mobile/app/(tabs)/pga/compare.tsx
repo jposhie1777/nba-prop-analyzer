@@ -9,7 +9,7 @@ import { usePgaTournaments } from "@/hooks/pga/usePgaTournaments";
 import { usePgaQuery } from "@/hooks/pga/usePgaQuery";
 import { SearchPicker, SearchItem } from "@/components/pga/SearchPicker";
 import { MetricCard } from "@/components/pga/MetricCard";
-import { PgaCompareResponse } from "@/types/pga";
+import { PgaCompareResponse, PgaRoundScore } from "@/types/pga";
 
 type CompareCount = 2 | 3;
 
@@ -18,6 +18,36 @@ const formatPct = (value?: number | null) =>
 
 const formatNum = (value?: number | null) =>
   value == null ? "—" : value.toFixed(2);
+
+const formatPar = (value?: number | null) => {
+  if (value == null) return "—";
+  if (value === 0) return "E";
+  return value > 0 ? `+${value}` : `${value}`;
+};
+
+const formatRoundScoreValue = (round: PgaRoundScore) => {
+  if (round.par_relative_score != null) {
+    return formatPar(round.par_relative_score);
+  }
+  if (round.round_score != null) {
+    return `${round.round_score}`;
+  }
+  if (round.total_score != null) {
+    return `${round.total_score}`;
+  }
+  return "—";
+};
+
+const formatRoundScores = (rounds?: PgaRoundScore[] | null) => {
+  if (!rounds || rounds.length === 0) return "—";
+  const ordered = rounds
+    .filter((round) => round.round_number != null)
+    .sort((a, b) => a.round_number - b.round_number);
+  if (ordered.length === 0) return "—";
+  return ordered
+    .map((round) => `R${round.round_number}: ${formatRoundScoreValue(round)}`)
+    .join(" • ");
+};
 
 export default function CompareScreen() {
   const { colors } = useTheme();
@@ -369,6 +399,10 @@ export default function CompareScreen() {
               {
                 label: "Tournament Bonus",
                 value: formatPct(row.metrics.tournament_bonus),
+              },
+              {
+                label: "Round Scores",
+                value: formatRoundScores(row.metrics.round_scores),
               },
             ]}
           />

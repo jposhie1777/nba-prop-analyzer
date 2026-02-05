@@ -11,6 +11,7 @@ from bq import get_bq_client
 
 DATASET = os.getenv("PGA_DATASET", "pga_data")
 PLAYERS_TABLE = os.getenv("PGA_PLAYERS_TABLE", "players_active")
+ROUND_SCORES_TABLE = os.getenv("PGA_ROUND_SCORES_TABLE", "tournament_round_scores")
 
 
 def _table(client: bigquery.Client, table: str) -> str:
@@ -514,6 +515,96 @@ def fetch_tournament_results(params: Optional[Dict[str, Any]] = None) -> List[Di
                 "position_numeric": row.get("position_numeric"),
                 "total_score": row.get("total_score"),
                 "par_relative_score": row.get("par_relative_score"),
+            }
+        )
+    return payload
+
+
+def fetch_tournament_round_scores(params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    params = params or {}
+    client = get_bq_client()
+    project = client.project
+
+    season = params.get("season")
+    tournament_ids = _normalize_int_list(params.get("tournament_ids"))
+    player_ids = _normalize_int_list(params.get("player_ids"))
+    round_numbers = _normalize_int_list(params.get("round_numbers"))
+
+    table = f"`{project}.{DATASET}.{ROUND_SCORES_TABLE}`"
+
+    conditions: List[str] = []
+    query_params: List[bigquery.QueryParameter] = []
+
+    if season is not None:
+        conditions.append("season = @season")
+        query_params.append(bigquery.ScalarQueryParameter("season", "INT64", int(season)))
+
+    if tournament_ids:
+        conditions.append("tournament_id IN UNNEST(@tournament_ids)")
+        query_params.append(
+            bigquery.ArrayQueryParameter("tournament_ids", "INT64", tournament_ids)
+        )
+
+    if player_ids:
+        conditions.append("player_id IN UNNEST(@player_ids)")
+        query_params.append(
+            bigquery.ArrayQueryParameter("player_ids", "INT64", player_ids)
+        )
+
+    if round_numbers:
+        conditions.append("round_number IN UNNEST(@round_numbers)")
+        query_params.append(
+            bigquery.ArrayQueryParameter("round_numbers", "INT64", round_numbers)
+        )
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    query = f"""
+    WITH latest AS (
+      SELECT * EXCEPT(row_num)
+      FROM (
+        SELECT *,
+          ROW_NUMBER() OVER (
+            PARTITION BY tournament_id, player_id, round_number
+            ORDER BY run_ts DESC
+          ) AS row_num
+        FROM {table}
+      )
+      WHERE row_num = 1
+    )
+    SELECT
+      season,
+      tournament_id,
+      tournament_name,
+      tournament_start_date,
+      round_number,
+      round_date,
+      player_id,
+      player_display_name,
+      round_score,
+      par_relative_score,
+      total_score
+    FROM latest
+    {where_clause}
+    ORDER BY round_number
+    """
+
+    rows = _run_query(client, query, query_params)
+    payload: List[Dict[str, Any]] = []
+    for row in rows:
+        payload.append(
+            {
+                "season": row.get("season"),
+                "tournament_id": row.get("tournament_id"),
+                "tournament_name": row.get("tournament_name"),
+                "tournament_start_date": _iso(row.get("tournament_start_date")),
+                "round_number": row.get("round_number"),
+                "round_date": _iso(row.get("round_date")),
+                "player_id": row.get("player_id"),
+                "player_display_name": row.get("player_display_name"),
+                "round_score": row.get("round_score"),
+                "par_relative_score": row.get("par_relative_score"),
+                "total_score": row.get("total_score"),
             }
         )
     return payload

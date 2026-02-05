@@ -98,6 +98,27 @@ OPTIONS (
   description = 'PGA tournament results (BallDontLie PGA API)'
 );
 
+CREATE TABLE IF NOT EXISTS `pga_data.tournament_round_scores` (
+  run_ts TIMESTAMP NOT NULL,
+  ingested_at TIMESTAMP NOT NULL,
+  season INT64,
+  tournament_id INT64 NOT NULL,
+  tournament_name STRING,
+  tournament_start_date TIMESTAMP,
+  round_number INT64,
+  round_date DATE,
+  player_id INT64 NOT NULL,
+  player_display_name STRING,
+  round_score INT64,
+  par_relative_score INT64,
+  total_score INT64
+)
+PARTITION BY RANGE_BUCKET(season, GENERATE_ARRAY(2015, 2035, 1))
+CLUSTER BY tournament_id, player_id, round_number
+OPTIONS (
+  description = 'PGA tournament round scores (BallDontLie PGA API)'
+);
+
 CREATE TABLE IF NOT EXISTS `pga_data.tournament_course_stats` (
   run_ts TIMESTAMP NOT NULL,
   ingested_at TIMESTAMP NOT NULL,

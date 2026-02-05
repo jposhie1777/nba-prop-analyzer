@@ -41,6 +41,11 @@ const PGA_TABS: TabConfig[] = [
     title: "Simulated Finishes",
     icon: "bar-chart",
   },
+  {
+    name: "pga-simulated-leaderboard",
+    title: "Sim Leaderboard",
+    icon: "trophy",
+  },
   { name: "pga", title: "Home", icon: "home" },
 ];
 

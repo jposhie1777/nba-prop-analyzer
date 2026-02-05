@@ -478,6 +478,7 @@ def build_simulated_finishes(
     *,
     player_id: int,
     last_n: int = 20,
+    min_events: int = 5,
     simulations: int = 2000,
     cut_penalty: int = 80,
     seed: Optional[int] = None,
@@ -492,8 +493,16 @@ def build_simulated_finishes(
         if (r.get("player") or {}).get("id") == player_id
     ]
     recent = _sort_recent(player_results, last_n)
-    if not recent:
-        return {"player_id": player_id, "simulations": 0, "distribution": []}
+    if len(recent) < min_events:
+        return {
+            "player_id": player_id,
+            "simulations": 0,
+            "starts": len(recent),
+            "distribution": {},
+            "top5_prob": 0.0,
+            "top10_prob": 0.0,
+            "top20_prob": 0.0,
+        }
 
     finish_values = [
         finish_value(r.get("position_numeric"), r.get("position"), cut_penalty)
@@ -534,10 +543,98 @@ def build_simulated_finishes(
     return {
         "player_id": player_id,
         "simulations": simulations,
+        "starts": len(recent),
         "distribution": {key: rate(value) for key, value in bins.items()},
         "top5_prob": rate(bins["1-5"]),
         "top10_prob": rate(bins["1-5"] + bins["6-10"]),
         "top20_prob": rate(bins["1-5"] + bins["6-10"] + bins["11-20"]),
+    }
+
+
+def build_simulated_leaderboard(
+    results: List[Dict[str, Any]],
+    *,
+    last_n: int = 20,
+    min_events: int = 5,
+    simulations: int = 2000,
+    cut_penalty: int = 80,
+    seed: Optional[int] = None,
+) -> Dict[str, Any]:
+    grouped = _group_results_by_player(results)
+    rng = Random(seed or (last_n + simulations))
+
+    player_samples: Dict[int, Dict[str, Any]] = {}
+    for player_id, player_results in grouped.items():
+        recent = _sort_recent(player_results, last_n)
+        if len(recent) < min_events:
+            continue
+
+        finish_values = [
+            finish_value(r.get("position_numeric"), r.get("position"), cut_penalty)
+            for r in recent
+        ]
+        if not finish_values:
+            continue
+
+        player_samples[player_id] = {
+            "player": recent[-1]["player"],
+            "starts": len(recent),
+            "samples": finish_values,
+            "sum_finish": 0.0,
+            "sum_rank": 0.0,
+            "first": 0,
+            "top5": 0,
+            "top10": 0,
+            "top20": 0,
+        }
+
+    if not player_samples:
+        return {"simulations": 0, "field_size": 0, "leaderboard": []}
+
+    for _ in range(simulations):
+        draw = []
+        for player_id, payload in player_samples.items():
+            finish = rng.choice(payload["samples"])
+            payload["sum_finish"] += finish
+            draw.append((player_id, finish))
+
+        draw.sort(key=lambda item: item[1])
+        for rank_idx, (player_id, _) in enumerate(draw, start=1):
+            payload = player_samples[player_id]
+            payload["sum_rank"] += rank_idx
+            if rank_idx == 1:
+                payload["first"] += 1
+            if rank_idx <= 5:
+                payload["top5"] += 1
+            if rank_idx <= 10:
+                payload["top10"] += 1
+            if rank_idx <= 20:
+                payload["top20"] += 1
+
+    def rate(value: int) -> float:
+        return round(safe_div(value, simulations), 3)
+
+    leaderboard: List[Dict[str, Any]] = []
+    for player_id, payload in player_samples.items():
+        leaderboard.append(
+            {
+                "player_id": player_id,
+                "player": payload["player"],
+                "starts": payload["starts"],
+                "projected_finish": round(payload["sum_rank"] / simulations, 2),
+                "projected_score": round(payload["sum_finish"] / simulations, 2),
+                "win_prob": rate(payload["first"]),
+                "top5_prob": rate(payload["top5"]),
+                "top10_prob": rate(payload["top10"]),
+                "top20_prob": rate(payload["top20"]),
+            }
+        )
+
+    leaderboard.sort(key=lambda row: (row["projected_finish"], row["projected_score"]))
+    return {
+        "simulations": simulations,
+        "field_size": len(leaderboard),
+        "leaderboard": leaderboard,
     }
 
 

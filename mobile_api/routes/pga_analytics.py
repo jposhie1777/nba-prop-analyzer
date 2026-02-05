@@ -16,6 +16,7 @@ from pga.analytics import (
     build_player_form,
     build_region_splits,
     build_simulated_finishes,
+    build_simulated_leaderboard,
     build_tournament_difficulty,
 )
 from pga.client import PgaApiError, fetch_one_page, fetch_paginated
@@ -149,11 +150,28 @@ def pga_placement_probabilities(
 ):
     try:
         season = season or _current_season()
-        results = _fetch_results_for_seasons([season])
+        seasons_to_try = [season, season - 1, season - 2]
+        selected_season = season
+        selected_results: List[Dict[str, Any]] = []
+        selected_rows: List[Dict[str, Any]] = []
+
+        for year in seasons_to_try:
+            results = _fetch_results_for_seasons([year])
+            rows = build_placement_probabilities(results, last_n=last_n, min_events=min_events)
+            if rows:
+                selected_season = year
+                selected_results = results
+                selected_rows = rows
+                break
+            if not selected_results:
+                selected_season = year
+                selected_results = results
+
         return {
-            "season": season,
-            "count": len(results),
-            "rows": build_placement_probabilities(results, last_n=last_n, min_events=min_events),
+            "season": selected_season,
+            "requested_season": season,
+            "count": len(selected_results),
+            "rows": selected_rows,
         }
     except Exception as err:
         _handle_error(err)
@@ -298,17 +316,43 @@ def pga_simulated_finishes(
     player_id: int,
     season: Optional[int] = None,
     last_n: int = Query(20, ge=5, le=60),
+    min_events: int = Query(5, ge=1, le=20),
     simulations: int = Query(2000, ge=500, le=10000),
 ):
     try:
         season = season or _current_season()
         results = _fetch_results_for_seasons([season])
         return build_simulated_finishes(
-            results, player_id=player_id, last_n=last_n, simulations=simulations
+            results,
+            player_id=player_id,
+            last_n=last_n,
+            min_events=min_events,
+            simulations=simulations,
         )
     except Exception as err:
         _handle_error(err)
 
+
+
+
+@router.get("/analytics/simulated-leaderboard")
+def pga_simulated_leaderboard(
+    season: Optional[int] = None,
+    last_n: int = Query(20, ge=5, le=60),
+    min_events: int = Query(5, ge=1, le=20),
+    simulations: int = Query(2000, ge=500, le=10000),
+):
+    try:
+        season = season or _current_season()
+        results = _fetch_results_for_seasons([season])
+        return build_simulated_leaderboard(
+            results,
+            last_n=last_n,
+            min_events=min_events,
+            simulations=simulations,
+        )
+    except Exception as err:
+        _handle_error(err)
 
 @router.get("/analytics/compare")
 def pga_compare(

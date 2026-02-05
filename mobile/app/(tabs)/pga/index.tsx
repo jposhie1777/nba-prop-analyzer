@@ -105,6 +105,11 @@ export default function PgaHome() {
         subtitle="Monte Carlo finish distribution"
         route="/(tabs)/pga/simulated-finishes"
       />
+      <Tile
+        title="11) Simulated Leaderboard"
+        subtitle="Tournament-wide projected finish rankings"
+        route="/(tabs)/pga/simulated-leaderboard"
+      />
     </ScrollView>
   );
 }

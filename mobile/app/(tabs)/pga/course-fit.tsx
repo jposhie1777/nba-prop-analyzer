@@ -71,7 +71,7 @@ export default function CourseFitScreen() {
           items={courseItems}
           selectedId={selected?.id}
           onSelect={setSelected}
-          helperText="Select a course to evaluate player fit."
+          helperText="Select a course to evaluate player fit. Lower fit score = stronger fit (better expected finish)."
         />
 
         {loading ? (
@@ -96,6 +96,8 @@ export default function CourseFitScreen() {
             Comp courses: {data.comps.map((comp) => comp.course.name).join(", ")}
           </Text>
         ) : null}
+
+        <Text style={{ color: colors.text.muted, marginTop: 8 }}>Fit model = 70% target-course average finish + 30% comp-course average finish. Lower is better.</Text>
 
         <View style={{ marginTop: 12 }}>
           {(data?.players || []).slice(0, 25).map((row) => (

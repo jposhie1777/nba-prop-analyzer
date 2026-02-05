@@ -1,33 +1,27 @@
-import { ScrollView, View, Text, TextInput, ActivityIndicator } from "react-native";
+import { ScrollView, Text, TextInput, View, ActivityIndicator } from "react-native";
 import { Stack } from "expo-router";
 import { useMemo, useState } from "react";
 
 import { useTheme } from "@/store/useTheme";
 import { usePgaQuery } from "@/hooks/pga/usePgaQuery";
 import { MetricCard } from "@/components/pga/MetricCard";
-import { PgaPlacementRow } from "@/types/pga";
+import { PgaSimulatedLeaderboard } from "@/types/pga";
 
-type Response = {
-  season: number;
-  requested_season?: number;
-  rows: PgaPlacementRow[];
-};
-
-export default function PlacementProbabilitiesScreen() {
+export default function SimulatedLeaderboardScreen() {
   const { colors } = useTheme();
-  const [season, setSeason] = useState(String(new Date().getFullYear()));
+  const [season, setSeason] = useState(String(new Date().getFullYear() - 1));
   const seasonNum = useMemo(() => Number(season) || undefined, [season]);
 
-  const { data, loading, error } = usePgaQuery<Response>(
-    "/pga/analytics/placement-probabilities",
-    { season: seasonNum, last_n: 20, min_events: 2 }
+  const { data, loading, error } = usePgaQuery<PgaSimulatedLeaderboard>(
+    "/pga/analytics/simulated-leaderboard",
+    { season: seasonNum, last_n: 20, min_events: 5, simulations: 2000 }
   );
 
   return (
     <>
       <Stack.Screen
         options={{
-          title: "Placement Probabilities",
+          title: "Simulated Leaderboard",
           headerStyle: { backgroundColor: colors.surface.screen },
           headerTintColor: colors.text.primary,
         }}
@@ -54,6 +48,10 @@ export default function PlacementProbabilitiesScreen() {
           placeholderTextColor={colors.text.muted}
         />
 
+        <Text style={{ color: colors.text.muted, marginTop: 8 }}>
+          Tournament-wide simulation to quickly scan projected finishes and top-x hit rates.
+        </Text>
+
         {loading ? (
           <View style={{ padding: 20, alignItems: "center" }}>
             <ActivityIndicator color={colors.accent.primary} />
@@ -62,18 +60,21 @@ export default function PlacementProbabilitiesScreen() {
 
         {error ? <Text style={{ color: colors.text.danger, marginTop: 12 }}>{error}</Text> : null}
 
-        {data?.requested_season && data.season !== data.requested_season ? (
-          <Text style={{ color: colors.text.muted, marginTop: 10 }}>
-            No rows for {data.requested_season} yet, showing {data.season} instead.
-          </Text>
+        {data ? (
+          <MetricCard
+            title="Field Summary"
+            subtitle={`Players: ${data.field_size}`}
+            metrics={[{ label: "Simulations", value: data.simulations }]}
+          />
         ) : null}
 
-        {(data?.rows || []).slice(0, 40).map((row) => (
+        {(data?.leaderboard || []).slice(0, 40).map((row, idx) => (
           <MetricCard
             key={row.player_id}
-            title={row.player.display_name}
-            subtitle={`Starts: ${row.starts}`}
+            title={`${idx + 1}. ${row.player.display_name}`}
+            subtitle={`Starts used: ${row.starts}`}
             metrics={[
+              { label: "Projected Finish", value: row.projected_finish },
               { label: "Win", value: row.win_prob },
               { label: "Top 5", value: row.top5_prob },
               { label: "Top 10", value: row.top10_prob },

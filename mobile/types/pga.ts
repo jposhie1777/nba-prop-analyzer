@@ -140,10 +140,29 @@ export type PgaCourseProfile = {
 export type PgaSimulatedFinishes = {
   player_id: number;
   simulations: number;
+  starts?: number;
   distribution: Record<string, number>;
   top5_prob: number;
   top10_prob: number;
   top20_prob: number;
+};
+
+export type PgaSimulatedLeaderboardRow = {
+  player_id: number;
+  player: PgaPlayer;
+  starts: number;
+  projected_finish: number;
+  projected_score: number;
+  win_prob: number;
+  top5_prob: number;
+  top10_prob: number;
+  top20_prob: number;
+};
+
+export type PgaSimulatedLeaderboard = {
+  simulations: number;
+  field_size: number;
+  leaderboard: PgaSimulatedLeaderboardRow[];
 };
 
 export type PgaComparePlayer = {

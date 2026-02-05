@@ -11,6 +11,7 @@ import { useMemo, useState, useCallback, useRef, useEffect } from "react";
 import Slider from "@react-native-community/slider";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import * as Haptics from "expo-haptics";
+import { useRouter } from "expo-router";
 
 import PropCard from "@/components/PropCard";
 import { useTheme } from "@/store/useTheme";
@@ -162,6 +163,7 @@ function formatGameStartTime(startTimeMs?: number | null) {
 export default function PropsTestScreen() {
   const colors = useTheme((s) => s.colors);
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const router = useRouter();
 
   const savedIds = useSavedBets((s) => s.savedIds);
   const toggleSave = useSavedBets((s) => s.toggleSave);
@@ -837,6 +839,16 @@ export default function PropsTestScreen() {
               ]}
             >
               By Game
+            </Text>
+          </Pressable>
+          <Pressable
+            style={styles.subTab}
+            onPress={() =>
+              router.push("/(tabs)/live-props-dev")
+            }
+          >
+            <Text style={styles.subTabText}>
+              Live Props
             </Text>
           </Pressable>
         </View>

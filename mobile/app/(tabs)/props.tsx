@@ -7,7 +7,7 @@ import {
   Pressable,
   Image,
 } from "react-native";
-import { useMemo, useState, useCallback, useRef, useEffect } from "react";
+import { useMemo, useState, useCallback, useRef } from "react";
 import Slider from "@react-native-community/slider";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import * as Haptics from "expo-haptics";
@@ -20,7 +20,6 @@ import { useHistoricalPlayerTrends } from "@/hooks/useHistoricalPlayerTrends";
 import { resolveSparklineByMarket } from "@/utils/resolveSparkline";
 import { usePlayerPropsMaster } from "@/hooks/usePlayerPropsMaster";
 import { useBetslipDrawer } from "@/store/useBetslipDrawer";
-import { PropBetslipDrawer } from "@/components/prop/PropBetslipDrawer";
 import { usePropBetslip } from "@/store/usePropBetslip";
 import { normalizeMarket } from "@/utils/normalizeMarket";
 import { useBadLineAlerts } from "@/hooks/useBadLineAlerts";
@@ -168,6 +167,7 @@ export default function PropsTestScreen() {
   const savedIds = useSavedBets((s) => s.savedIds);
   const toggleSave = useSavedBets((s) => s.toggleSave);
   const openBetslip = useBetslipDrawer((s) => s.open);
+  const isBetslipOpen = useBetslipDrawer((s) => s.isOpen);
   const addToBetslip = usePropBetslip((s) => s.add);
   const removeFromBetslip = usePropBetslip((s) => s.remove);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -175,9 +175,7 @@ export default function PropsTestScreen() {
   const [sortOption, setSortOption] = useState<
     "HIT_RATE" | "ODDS" | "BAD_LINES"
   >("HIT_RATE");
-  const [expandedGames, setExpandedGames] = useState<Record<string, boolean>>(
-    {}
-  );
+  const [expandedGameKey, setExpandedGameKey] = useState<string | null>(null);
 
 
   const {
@@ -200,10 +198,20 @@ export default function PropsTestScreen() {
   }, []);
 
   const toggleGame = useCallback((key: string) => {
-    setExpandedGames((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
+    setExpandedGameKey((prev) => {
+      const next = prev === key ? null : key;
+
+      if (next) {
+        requestAnimationFrame(() => {
+          gameListRef.current?.scrollToOffset({
+            offset: 0,
+            animated: true,
+          });
+        });
+      }
+
+      return next;
+    });
   }, []);
 
   const { data: badLines } = useBadLineAlerts(1.0);
@@ -414,8 +422,31 @@ export default function PropsTestScreen() {
       return a.key.localeCompare(b.key);
     });
 
-    return groups;
-  }, [props, sortOption, badLineMap, filters.hitRateWindow]);
+    if (!expandedGameKey) {
+      return groups;
+    }
+
+    const expandedGroup = groups.find(
+      (group) => group.key === expandedGameKey,
+    );
+
+    if (!expandedGroup) {
+      return groups;
+    }
+
+    return [
+      expandedGroup,
+      ...groups.filter((group) => group.key !== expandedGameKey),
+    ];
+  }, [props, sortOption, badLineMap, filters.hitRateWindow, expandedGameKey]);
+
+  const listContentContainerStyle = useMemo(
+    () => [
+      styles.list,
+      { paddingBottom: isBetslipOpen ? 320 : 120 },
+    ],
+    [styles.list, isBetslipOpen],
+  );
 
   const opponentPositionMap = useMemo(() => {
     const map = new Map<string, OpponentPositionDefenseRow>();
@@ -533,7 +564,7 @@ export default function PropsTestScreen() {
         startTimeMs?: number | null;
       };
     }) => {
-      const isExpanded = !!expandedGames[item.key];
+      const isExpanded = expandedGameKey === item.key;
       const awayLogo = resolveTeamLogo(item.awayTeam);
       const homeLogo = resolveTeamLogo(item.homeTeam);
       const startTimeLabel = formatGameStartTime(item.startTimeMs);
@@ -587,7 +618,7 @@ export default function PropsTestScreen() {
       );
     },
     [
-      expandedGames,
+      expandedGameKey,
       renderPropCard,
       gameListRef,
       styles.gameGroup,
@@ -859,7 +890,7 @@ export default function PropsTestScreen() {
             data={props}
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
-            contentContainerStyle={styles.list}
+            contentContainerStyle={listContentContainerStyle}
           />
         ) : (
           <FlatList
@@ -867,12 +898,9 @@ export default function PropsTestScreen() {
             data={gameGroups}
             keyExtractor={(item) => item.key}
             renderItem={renderGameGroup}
-            contentContainerStyle={styles.list}
+            contentContainerStyle={listContentContainerStyle}
           />
         )}
-
-        {/* BETSLIP DRAWER */}
-        <PropBetslipDrawer />
       </View>
     </GestureHandlerRootView>
   );

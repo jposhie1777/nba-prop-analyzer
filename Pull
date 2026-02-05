@@ -24,10 +24,10 @@ git push origin main
 
 
 
-
+export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account.json"
 export GCP_PROJECT=graphite-flare-477419-h7
 export BALLDONTLIE_API_KEY=61082ce1-607a-4404-b059-2365d7649102
-
+python -m jobs.schedule_refresh
 
 cd mobile_api
 

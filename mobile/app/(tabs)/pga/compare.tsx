@@ -1,4 +1,5 @@
-import { ScrollView, View, Text, Pressable, ActivityIndicator } from "react-native";
+import { ScrollView, View, Text, Pressable, ActivityIndicator, StyleSheet } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { Stack } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 
@@ -254,30 +255,43 @@ export default function CompareScreen() {
         style={{ flex: 1, backgroundColor: colors.surface.screen }}
         contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
       >
-        <Text style={{ color: colors.text.primary, fontWeight: "700" }}>
-          Compare Mode
+        <Text style={cmpStyles.sectionLabel}>
+          <Text style={{ color: colors.text.muted, fontSize: 11, fontWeight: "600", letterSpacing: 1 }}>
+            COMPARE MODE
+          </Text>
         </Text>
-        <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+        <View style={cmpStyles.toggleRow}>
           {[2, 3].map((count) => {
             const isActive = compareCount === count;
             return (
               <Pressable
                 key={count}
                 onPress={() => setCompareCount(count as CompareCount)}
-                style={{
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  borderColor: isActive
-                    ? colors.accent.primary
-                    : colors.border.subtle,
-                  backgroundColor: isActive
-                    ? colors.surface.cardSoft
-                    : colors.surface.card,
-                }}
+                style={[
+                  cmpStyles.toggleBtn,
+                  {
+                    borderColor: isActive
+                      ? colors.accent.primary
+                      : colors.border.subtle,
+                    backgroundColor: isActive
+                      ? colors.state.selected
+                      : colors.surface.card,
+                  },
+                ]}
               >
-                <Text style={{ color: colors.text.primary, fontWeight: "700" }}>
+                <Ionicons
+                  name={count === 2 ? "people-outline" : "people"}
+                  size={16}
+                  color={isActive ? colors.accent.primary : colors.text.muted}
+                  style={{ marginRight: 6 }}
+                />
+                <Text
+                  style={{
+                    color: isActive ? colors.accent.primary : colors.text.primary,
+                    fontWeight: "600",
+                    fontSize: 14,
+                  }}
+                >
                   {count} Players
                 </Text>
               </Pressable>
@@ -326,8 +340,12 @@ export default function CompareScreen() {
           helperText="Boosts players with strong history at the event."
         />
         {selectedTournament ? (
-          <Pressable onPress={() => setSelectedTournament(null)}>
-            <Text style={{ color: colors.accent.primary, marginBottom: 12 }}>
+          <Pressable
+            onPress={() => setSelectedTournament(null)}
+            style={cmpStyles.clearBtn}
+          >
+            <Ionicons name="close-circle" size={14} color={colors.accent.primary} />
+            <Text style={{ color: colors.accent.primary, marginLeft: 4, fontSize: 13, fontWeight: "600" }}>
               Clear tournament
             </Text>
           </Pressable>
@@ -344,8 +362,12 @@ export default function CompareScreen() {
           helperText="Uses course fit + comp courses."
         />
         {selectedCourse ? (
-          <Pressable onPress={() => setSelectedCourse(null)}>
-            <Text style={{ color: colors.accent.primary, marginBottom: 12 }}>
+          <Pressable
+            onPress={() => setSelectedCourse(null)}
+            style={cmpStyles.clearBtn}
+          >
+            <Ionicons name="close-circle" size={14} color={colors.accent.primary} />
+            <Text style={{ color: colors.accent.primary, marginLeft: 4, fontSize: 13, fontWeight: "600" }}>
               Clear course
             </Text>
           </Pressable>
@@ -388,7 +410,7 @@ export default function CompareScreen() {
               { label: "Form Score", value: formatNum(row.metrics.form_score) },
               {
                 label: "Course Fit",
-                value: row.metrics.course_fit_score ?? "—",
+                value: row.metrics.course_fit_score ?? "\u2014",
               },
               {
                 label: "H2H Win %",
@@ -411,3 +433,28 @@ export default function CompareScreen() {
     </>
   );
 }
+
+const cmpStyles = StyleSheet.create({
+  sectionLabel: {
+    marginBottom: 4,
+  },
+  toggleRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  toggleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  clearBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+});

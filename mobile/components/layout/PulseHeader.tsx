@@ -1,4 +1,4 @@
-import { View, Text, Image, StyleSheet, Pressable } from "react-native";
+import { View, Text, Image, StyleSheet, Pressable, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "@/store/useTheme";
 import { useRouter } from "expo-router";
@@ -34,7 +34,19 @@ export function PulseHeader() {
           <View
             style={[
               styles.logoWrap,
-              { backgroundColor: colors.surface.card },
+              {
+                backgroundColor: colors.accent.primary,
+                ...Platform.select({
+                  ios: {
+                    shadowColor: colors.accent.primary,
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 6,
+                  },
+                  android: { elevation: 3 },
+                  default: {},
+                }),
+              },
             ]}
           >
             <Image
@@ -68,8 +80,8 @@ const styles = StyleSheet.create({
   },
 
   logoWrap: {
-    width: 44,
-    height: 44,
+    width: 38,
+    height: 38,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
@@ -77,13 +89,14 @@ const styles = StyleSheet.create({
   },
 
   logo: {
-    width: 32,
-    height: 32,
+    width: 24,
+    height: 24,
+    tintColor: "#FFFFFF",
   },
 
   title: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "700",
-    letterSpacing: 0.3,
+    letterSpacing: -0.2,
   },
 });

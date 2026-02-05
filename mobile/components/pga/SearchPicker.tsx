@@ -1,4 +1,5 @@
-import { View, Text, TextInput, Pressable, StyleSheet } from "react-native";
+import { View, Text, TextInput, Pressable, StyleSheet, Platform } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/store/useTheme";
 
 export type SearchItem = {
@@ -33,20 +34,39 @@ export function SearchPicker({
   return (
     <View style={styles.wrapper}>
       <Text style={[styles.title, { color: colors.text.primary }]}>{title}</Text>
-      <TextInput
-        value={query}
-        onChangeText={onQueryChange}
-        placeholder={placeholder}
-        placeholderTextColor={colors.text.muted}
+      <View
         style={[
-          styles.input,
+          styles.inputWrap,
           {
             backgroundColor: colors.surface.card,
-            borderColor: colors.border.subtle,
-            color: colors.text.primary,
+            borderColor: colors.border.strong,
+            ...Platform.select({
+              ios: {
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.04,
+                shadowRadius: 4,
+              },
+              android: { elevation: 1 },
+              default: {},
+            }),
           },
         ]}
-      />
+      >
+        <Ionicons
+          name="search"
+          size={16}
+          color={colors.text.muted}
+          style={styles.searchIcon}
+        />
+        <TextInput
+          value={query}
+          onChangeText={onQueryChange}
+          placeholder={placeholder}
+          placeholderTextColor={colors.text.disabled ?? colors.text.muted}
+          style={[styles.input, { color: colors.text.primary }]}
+        />
+      </View>
       {helperText ? (
         <Text style={[styles.helper, { color: colors.text.muted }]}>
           {helperText}
@@ -59,25 +79,40 @@ export function SearchPicker({
             <Pressable
               key={item.id}
               onPress={() => onSelect(item)}
-              style={[
+              style={({ pressed }) => [
                 styles.item,
                 {
                   backgroundColor: isSelected
-                    ? colors.surface.cardSoft
+                    ? colors.state.selected
                     : colors.surface.card,
                   borderColor: isSelected
                     ? colors.accent.primary
                     : colors.border.subtle,
+                  opacity: pressed ? 0.85 : 1,
                 },
               ]}
             >
-              <Text style={[styles.itemTitle, { color: colors.text.primary }]}>
-                {item.label}
-              </Text>
-              {item.subLabel ? (
-                <Text style={[styles.itemSub, { color: colors.text.muted }]}>
-                  {item.subLabel}
+              <View style={styles.itemContent}>
+                <Text
+                  style={[
+                    styles.itemTitle,
+                    { color: isSelected ? colors.accent.primary : colors.text.primary },
+                  ]}
+                >
+                  {item.label}
                 </Text>
+                {item.subLabel ? (
+                  <Text style={[styles.itemSub, { color: colors.text.muted }]}>
+                    {item.subLabel}
+                  </Text>
+                ) : null}
+              </View>
+              {isSelected ? (
+                <Ionicons
+                  name="checkmark-circle"
+                  size={20}
+                  color={colors.accent.primary}
+                />
               ) : null}
             </Pressable>
           );
@@ -96,29 +131,44 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginBottom: 6,
   },
-  input: {
+  inputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  input: {
+    flex: 1,
+    paddingVertical: 11,
     fontSize: 14,
   },
   helper: {
     marginTop: 6,
     fontSize: 12,
+    fontStyle: "italic",
   },
   list: {
     marginTop: 10,
-    gap: 8,
+    gap: 6,
   },
   item: {
     borderWidth: 1,
-    borderRadius: 10,
-    padding: 10,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  itemContent: {
+    flex: 1,
   },
   itemTitle: {
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: "600",
   },
   itemSub: {
     marginTop: 2,

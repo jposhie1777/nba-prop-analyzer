@@ -49,6 +49,16 @@ function getElapsedMinutes(
   return quarterIndex[period] * 12 + (12 - remaining);
 }
 
+function getProjectionBasis(
+  period?: string,
+  gameState?: string
+): "2H" | "Q4" | null {
+  if (gameState === "halftime") return "2H";
+  if (period === "Q3") return "2H";
+  if (period === "Q4") return "Q4";
+  return null;
+}
+
 function formatOdds(odds?: number) {
   if (odds == null) return "";
   return odds > 0 ? `+${odds}` : `${odds}`;
@@ -123,16 +133,29 @@ export default function LivePropCard({ item }: { item: any }) {
     q3Average != null && q4Average != null
       ? q3Average + q4Average
       : null;
+  const projectionBasis = getProjectionBasis(
+    item.game_period,
+    item.game_state
+  );
+  const remainingAverage =
+    projectionBasis === "2H"
+      ? h2Average
+      : projectionBasis === "Q4"
+      ? q4Average
+      : null;
   const lineValue =
     typeof item.line === "number" ? item.line : null;
   const projectedTotal =
-    currentStat != null && h2Average != null
-      ? currentStat + h2Average
+    currentStat != null && remainingAverage != null
+      ? currentStat + remainingAverage
       : null;
   const projectedDelta =
     projectedTotal != null && lineValue != null
       ? projectedTotal - lineValue
       : null;
+  const projectionLabel = projectionBasis
+    ? `Projected (${projectionBasis})`
+    : "Projected";
 
   const projectedDeltaColor =
     projectedDelta == null
@@ -366,7 +389,7 @@ export default function LivePropCard({ item }: { item: any }) {
 
         <View style={styles.summaryRow}>
           <Text style={styles.summaryCell}>
-            Projected: {formatAverage(projectedTotal)}
+            {projectionLabel}: {formatAverage(projectedTotal)}
           </Text>
           <Text
             style={[
@@ -437,6 +460,15 @@ export default function LivePropCard({ item }: { item: any }) {
               </Text>
               <Text style={styles.cell}>
                 H2: {formatAverage(h2Average)}
+              </Text>
+            </View>
+
+            <View style={styles.expandedRow}>
+              <Text style={styles.cell}>
+                Basis: {projectionBasis ?? "—"}
+              </Text>
+              <Text style={styles.cell}>
+                Remaining Avg: {formatAverage(remainingAverage)}
               </Text>
             </View>
           </View>

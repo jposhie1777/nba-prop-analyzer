@@ -299,6 +299,8 @@ def build_course_fit(
 
     course_tournament_ids: set[int] = set()
     comp_tournament_ids: set[int] = set()
+    course_tournament_names: set[str] = set()
+    comp_tournament_names: set[str] = set()
 
     for tournament in tournaments:
         for entry in tournament.get("courses") or []:
@@ -306,15 +308,33 @@ def build_course_fit(
             course_id = course.get("id")
             if course_id == target_course_id:
                 course_tournament_ids.add(tournament["id"])
+                course_tournament_names.add((tournament.get("name") or "").strip().lower())
             if course_id in comp_course_ids:
                 comp_tournament_ids.add(tournament["id"])
+                comp_tournament_names.add((tournament.get("name") or "").strip().lower())
 
     grouped = _group_results_by_player(results)
     players: List[Dict[str, Any]] = []
     for player_id, player_results in grouped.items():
         player_recent = _sort_recent(player_results, last_n)
-        course_results = [r for r in player_recent if r["tournament"].get("id") in course_tournament_ids]
-        comp_results = [r for r in player_recent if r["tournament"].get("id") in comp_tournament_ids]
+        course_results = [
+            r
+            for r in player_recent
+            if (
+                r["tournament"].get("id") in course_tournament_ids
+                or (r["tournament"].get("name") or "").strip().lower()
+                in course_tournament_names
+            )
+        ]
+        comp_results = [
+            r
+            for r in player_recent
+            if (
+                r["tournament"].get("id") in comp_tournament_ids
+                or (r["tournament"].get("name") or "").strip().lower()
+                in comp_tournament_names
+            )
+        ]
 
         if len(course_results) < min_events and len(comp_results) < min_events:
             continue
@@ -696,11 +716,17 @@ def build_compare(
     tournament_avg: Dict[int, Optional[float]] = {pid: None for pid in player_ids}
     tournament_starts: Dict[int, int] = {pid: 0 for pid in player_ids}
     if tournament_id:
+        tournament_name_lookup = {
+            (t.get("name") or "").strip().lower()
+            for t in tournaments
+            if t.get("id") == tournament_id
+        }
         for pid in player_ids:
             finishes: List[int] = []
             for result in results:
                 tournament = result.get("tournament") or {}
-                if tournament.get("id") != tournament_id:
+                result_tournament_name = (tournament.get("name") or "").strip().lower()
+                if tournament.get("id") != tournament_id and result_tournament_name not in tournament_name_lookup:
                     continue
                 player = result.get("player") or {}
                 if player.get("id") != pid:

@@ -76,8 +76,21 @@ export default function CompareScreen() {
     const now = Date.now();
     return (tournaments?.data || [])
       .filter((tournament) => {
-        if (!tournament.start_date) return false;
-        return new Date(tournament.start_date).getTime() >= now;
+        const startTime = tournament.start_date
+          ? new Date(tournament.start_date).getTime()
+          : Number.NaN;
+        const endTime = tournament.end_date
+          ? new Date(tournament.end_date).getTime()
+          : Number.NaN;
+
+        const hasUpcomingStart = !Number.isNaN(startTime) && startTime >= now;
+        const isInProgress =
+          !Number.isNaN(startTime) &&
+          !Number.isNaN(endTime) &&
+          startTime <= now &&
+          endTime >= now;
+
+        return hasUpcomingStart || isInProgress;
       })
       .sort((a, b) => {
         const aTime = a.start_date ? new Date(a.start_date).getTime() : 0;

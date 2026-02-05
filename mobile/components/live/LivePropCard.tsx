@@ -115,8 +115,14 @@ export default function LivePropCard({ item }: { item: any }) {
     typeof item.current_stat === "number"
       ? item.current_stat
       : null;
+  const q3Average =
+    typeof item.avg_q3 === "number" ? item.avg_q3 : null;
+  const q4Average =
+    typeof item.avg_q4 === "number" ? item.avg_q4 : null;
   const h2Average =
-    typeof item.avg_h2 === "number" ? item.avg_h2 : null;
+    q3Average != null && q4Average != null
+      ? q3Average + q4Average
+      : null;
   const lineValue =
     typeof item.line === "number" ? item.line : null;
   const projectedTotal =
@@ -358,6 +364,20 @@ export default function LivePropCard({ item }: { item: any }) {
           {item.remaining_needed}
         </Text>
 
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryCell}>
+            Projected: {formatAverage(projectedTotal)}
+          </Text>
+          <Text
+            style={[
+              styles.summaryCell,
+              { color: projectedDeltaColor },
+            ]}
+          >
+            vs Line: {formatDelta(projectedDelta)}
+          </Text>
+        </View>
+
         {/* =========================
             BOTTOM METRICS
         ========================== */}
@@ -399,20 +419,6 @@ export default function LivePropCard({ item }: { item: any }) {
               </Text>
             </View>
 
-            <View style={styles.expandedRow}>
-              <Text style={styles.cell}>
-                Projected: {formatAverage(projectedTotal)}
-              </Text>
-              <Text
-                style={[
-                  styles.cell,
-                  { color: projectedDeltaColor },
-                ]}
-              >
-                vs Line: {formatDelta(projectedDelta)}
-              </Text>
-            </View>
-
             <Text
               style={[
                 styles.expandedHeader,
@@ -424,13 +430,13 @@ export default function LivePropCard({ item }: { item: any }) {
 
             <View style={styles.expandedRow}>
               <Text style={styles.cell}>
-                Q3: {formatAverage(item.avg_q3)}
+                Q3: {formatAverage(q3Average)}
               </Text>
               <Text style={styles.cell}>
-                Q4: {formatAverage(item.avg_q4)}
+                Q4: {formatAverage(q4Average)}
               </Text>
               <Text style={styles.cell}>
-                H2: {formatAverage(item.avg_h2)}
+                H2: {formatAverage(h2Average)}
               </Text>
             </View>
           </View>
@@ -542,6 +548,17 @@ const styles = StyleSheet.create({
   bottomRow: {
     marginTop: 10,
     flexDirection: "row",
+  },
+
+  summaryRow: {
+    marginTop: 8,
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+
+  summaryCell: {
+    fontSize: 12,
+    fontWeight: "700",
   },
 
   pill: {

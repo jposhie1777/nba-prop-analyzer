@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   FlatList,
+  SectionList,
   Pressable,
   Image,
 } from "react-native";
@@ -190,7 +191,7 @@ export default function PropsTestScreen() {
   const { getByPlayer } = useHistoricalPlayerTrends();
 
   const listRef = useRef<FlatList>(null);
-  const gameListRef = useRef<FlatList>(null);
+  const gameListRef = useRef<SectionList>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const toggleExpand = useCallback((id: string) => {
@@ -551,24 +552,26 @@ export default function PropsTestScreen() {
     [renderPropCard, listRef]
   );
 
-  const renderGameGroup = useCallback(
+  const renderGameHeader = useCallback(
     ({
-      item,
+      section,
     }: {
-      item: {
+      section: {
         key: string;
         label: string;
-        items: any[];
+        data: any[];
+        itemCount: number;
         homeTeam?: string;
         awayTeam?: string;
         startTimeMs?: number | null;
       };
     }) => {
+      const item = section;
       const isExpanded = expandedGameKey === item.key;
       const awayLogo = resolveTeamLogo(item.awayTeam);
       const homeLogo = resolveTeamLogo(item.homeTeam);
       const startTimeLabel = formatGameStartTime(item.startTimeMs);
-      const gameMetaText = `${startTimeLabel} | ${item.items.length} props`;
+      const gameMetaText = `${startTimeLabel} | ${item.itemCount} props`;
 
       return (
         <View style={styles.gameGroup}>
@@ -605,22 +608,11 @@ export default function PropsTestScreen() {
               {isExpanded ? "▲" : "▼"}
             </Text>
           </Pressable>
-          {isExpanded && (
-            <View style={styles.gameProps}>
-              {item.items.map((prop) => (
-                <View key={prop.id}>
-                  {renderPropCard(prop, gameListRef)}
-                </View>
-              ))}
-            </View>
-          )}
         </View>
       );
     },
     [
       expandedGameKey,
-      renderPropCard,
-      gameListRef,
       styles.gameGroup,
       styles.gameHeader,
       styles.gameHeaderLeft,
@@ -631,9 +623,22 @@ export default function PropsTestScreen() {
       styles.gameTitle,
       styles.gameMeta,
       styles.gameChevron,
-      styles.gameProps,
       toggleGame,
     ]
+  );
+
+  const gameSections = useMemo(
+    () =>
+      gameGroups.map((group) => ({
+        key: group.key,
+        label: group.label,
+        homeTeam: group.homeTeam,
+        awayTeam: group.awayTeam,
+        startTimeMs: group.startTimeMs,
+        itemCount: group.items.length,
+        data: expandedGameKey === group.key ? group.items : [],
+      })),
+    [gameGroups, expandedGameKey],
   );
 
   if (loading) {
@@ -893,11 +898,13 @@ export default function PropsTestScreen() {
             contentContainerStyle={listContentContainerStyle}
           />
         ) : (
-          <FlatList
+          <SectionList
             ref={gameListRef}
-            data={gameGroups}
-            keyExtractor={(item) => item.key}
-            renderItem={renderGameGroup}
+            sections={gameSections}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => renderPropCard(item, gameListRef)}
+            renderSectionHeader={renderGameHeader}
+            stickySectionHeadersEnabled
             contentContainerStyle={listContentContainerStyle}
           />
         )}
@@ -1053,9 +1060,6 @@ const makeStyles = (colors: any) =>
       fontSize: 12,
       fontWeight: "700",
       color: colors.text.muted,
-    },
-    gameProps: {
-      marginTop: 4,
     },
     center: {
       flex: 1,

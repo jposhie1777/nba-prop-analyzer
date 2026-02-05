@@ -63,7 +63,14 @@ def read_live_props(
                 market,
                 AVG(CASE WHEN period = 'Q3' THEN stat_value END) AS avg_q3,
                 AVG(CASE WHEN period = 'Q4' THEN stat_value END) AS avg_q4,
-                AVG(CASE WHEN period IN ('Q3', 'Q4') THEN stat_value END) AS avg_h2
+                COALESCE(
+                    AVG(CASE WHEN period = 'Q3' THEN stat_value END),
+                    0
+                )
+                + COALESCE(
+                    AVG(CASE WHEN period = 'Q4' THEN stat_value END),
+                    0
+                ) AS avg_h2
             FROM (
                 SELECT player_id, 'pts' AS market, pts AS stat_value, period
                 FROM `{PERIOD_STATS_TABLE}`

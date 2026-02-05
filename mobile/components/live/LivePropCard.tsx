@@ -64,6 +64,12 @@ function formatLine(value?: number | null) {
   return Number.isInteger(value) ? `${value}` : value.toFixed(1);
 }
 
+function formatDelta(value?: number | null) {
+  if (value == null || Number.isNaN(value)) return "—";
+  const formatted = value.toFixed(1);
+  return value > 0 ? `+${formatted}` : formatted;
+}
+
 /* =====================================================
    CARD
 ===================================================== */
@@ -104,6 +110,30 @@ export default function LivePropCard({ item }: { item: any }) {
     progress && progress > 0.05
       ? item.current_stat / progress
       : null;
+
+  const currentStat =
+    typeof item.current_stat === "number"
+      ? item.current_stat
+      : null;
+  const h2Average =
+    typeof item.avg_h2 === "number" ? item.avg_h2 : null;
+  const lineValue =
+    typeof item.line === "number" ? item.line : null;
+  const projectedTotal =
+    currentStat != null && h2Average != null
+      ? currentStat + h2Average
+      : null;
+  const projectedDelta =
+    projectedTotal != null && lineValue != null
+      ? projectedTotal - lineValue
+      : null;
+
+  const projectedDeltaColor =
+    projectedDelta == null
+      ? colors.text.muted
+      : projectedDelta >= 0
+      ? "#16A34A"
+      : "#DC2626";
 
   /* -----------------------------
      BLOWOUT
@@ -366,6 +396,20 @@ export default function LivePropCard({ item }: { item: any }) {
               </Text>
               <Text style={styles.cell}>
                 Current: {formatLine(item.current_stat)}
+              </Text>
+            </View>
+
+            <View style={styles.expandedRow}>
+              <Text style={styles.cell}>
+                Projected: {formatAverage(projectedTotal)}
+              </Text>
+              <Text
+                style={[
+                  styles.cell,
+                  { color: projectedDeltaColor },
+                ]}
+              >
+                vs Line: {formatDelta(projectedDelta)}
               </Text>
             </View>
 

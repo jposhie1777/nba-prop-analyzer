@@ -39,6 +39,14 @@ export type PgaTournament = {
   }>;
 };
 
+export type PgaRoundScore = {
+  round_number?: number | null;
+  round_date?: string | null;
+  round_score?: number | null;
+  par_relative_score?: number | null;
+  total_score?: number | null;
+};
+
 export type PgaPlayerFormRow = {
   player_id: number;
   player: PgaPlayer;
@@ -162,6 +170,7 @@ export type PgaComparePlayer = {
     tournament_bonus?: number | null;
     tournament_avg_finish?: number | null;
     tournament_starts?: number | null;
+    round_scores?: PgaRoundScore[];
   };
 };
 
@@ -190,4 +199,5 @@ export type PgaCompareResponse = {
   players: PgaComparePlayer[];
   head_to_head: PgaCompareHeadToHead[];
   recommendation?: PgaCompareRecommendation | null;
+  round_scores_tournament?: PgaTournament | null;
 };

@@ -48,6 +48,30 @@ def _sort_recent(results: List[Dict[str, Any]], last_n: int) -> List[Dict[str, A
     return ordered[-last_n:]
 
 
+def _group_round_scores(
+    rows: Iterable[Dict[str, Any]],
+    *,
+    player_ids: List[int],
+) -> Dict[int, List[Dict[str, Any]]]:
+    grouped: Dict[int, List[Dict[str, Any]]] = {pid: [] for pid in player_ids}
+    for row in rows:
+        player_id = row.get("player_id")
+        if player_id not in grouped:
+            continue
+        grouped[player_id].append(
+            {
+                "round_number": row.get("round_number"),
+                "round_date": row.get("round_date"),
+                "round_score": row.get("round_score"),
+                "par_relative_score": row.get("par_relative_score"),
+                "total_score": row.get("total_score"),
+            }
+        )
+    for pid, items in grouped.items():
+        grouped[pid] = sorted(items, key=lambda item: item.get("round_number") or 0)
+    return grouped
+
+
 def build_player_form(
     results: List[Dict[str, Any]],
     *,
@@ -570,6 +594,7 @@ def build_compare(
     players: List[Dict[str, Any]],
     tournaments: List[Dict[str, Any]],
     courses: List[Dict[str, Any]],
+    round_scores: Optional[List[Dict[str, Any]]] = None,
     course_id: Optional[int] = None,
     tournament_id: Optional[int] = None,
     last_n_form: int = 10,
@@ -582,6 +607,8 @@ def build_compare(
 
     placement_rows = build_placement_probabilities(results, last_n=last_n_placement, min_events=3)
     placement_map = {row["player_id"]: row for row in placement_rows}
+
+    round_scores_map = _group_round_scores(round_scores or [], player_ids=player_ids)
 
     course_fit_map: Dict[int, float] = {}
     if course_id and courses and tournaments:
@@ -708,6 +735,7 @@ def build_compare(
                     "tournament_bonus": None,
                     "tournament_avg_finish": tournament_avg.get(pid),
                     "tournament_starts": tournament_starts.get(pid),
+                "round_scores": round_scores_map.get(pid) or [],
                 },
             }
         )

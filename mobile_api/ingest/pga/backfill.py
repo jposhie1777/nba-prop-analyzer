@@ -156,6 +156,28 @@ def ensure_tables(client: bigquery.Client) -> None:
 
     create_table(
         client,
+        "tournament_round_scores",
+        [
+            bigquery.SchemaField("run_ts", "TIMESTAMP", mode="REQUIRED"),
+            bigquery.SchemaField("ingested_at", "TIMESTAMP", mode="REQUIRED"),
+            bigquery.SchemaField("season", "INT64"),
+            bigquery.SchemaField("tournament_id", "INT64", mode="REQUIRED"),
+            bigquery.SchemaField("tournament_name", "STRING"),
+            bigquery.SchemaField("tournament_start_date", "TIMESTAMP"),
+            bigquery.SchemaField("round_number", "INT64"),
+            bigquery.SchemaField("round_date", "DATE"),
+            bigquery.SchemaField("player_id", "INT64", mode="REQUIRED"),
+            bigquery.SchemaField("player_display_name", "STRING"),
+            bigquery.SchemaField("round_score", "INT64"),
+            bigquery.SchemaField("par_relative_score", "INT64"),
+            bigquery.SchemaField("total_score", "INT64"),
+        ],
+        partition_field="season",
+        cluster_fields=["tournament_id", "player_id", "round_number"],
+    )
+
+    create_table(
+        client,
         "tournament_course_stats",
         [
             bigquery.SchemaField("run_ts", "TIMESTAMP", mode="REQUIRED"),
@@ -453,6 +475,7 @@ def main() -> None:
             "courses",
             "tournaments",
             "tournament_results",
+            "tournament_round_scores",
             "tournament_course_stats",
             "course_holes",
         ]:

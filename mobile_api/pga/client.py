@@ -53,6 +53,12 @@ def _headers() -> Dict[str, str]:
     return {"Authorization": _get_api_key()}
 
 
+def _resolve_source(source: Optional[str]) -> str:
+    if source:
+        return source.strip().lower()
+    return "bq" if _use_bq() else "api"
+
+
 def _fetch_paginated_bq(path: str, params: Dict[str, Any]) -> List[Dict[str, Any]]:
     if path == "/players":
         return bq_fetch_players(params)
@@ -86,14 +92,16 @@ def fetch_paginated(
     per_page: int = 100,
     max_pages: int = 50,
     cache_ttl: int = 900,
+    source: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     params = params or {}
-    cache_key = f"{path}:{sorted(params.items())}:{per_page}:{max_pages}"
+    resolved_source = _resolve_source(source)
+    cache_key = f"{path}:{sorted(params.items())}:{per_page}:{max_pages}:{resolved_source}"
     cached = get_cached(cache_key, cache_ttl)
     if cached is not None:
         return cached
 
-    if _use_bq():
+    if resolved_source == "bq":
         try:
             results = _fetch_paginated_bq(path, params)
         except Exception as exc:
@@ -135,14 +143,16 @@ def fetch_one_page(
     params: Optional[Dict[str, Any]] = None,
     *,
     cache_ttl: int = 300,
+    source: Optional[str] = None,
 ) -> Dict[str, Any]:
     params = params or {}
-    cache_key = f"one:{path}:{sorted(params.items())}"
+    resolved_source = _resolve_source(source)
+    cache_key = f"one:{path}:{sorted(params.items())}:{resolved_source}"
     cached = get_cached(cache_key, cache_ttl)
     if cached is not None:
         return cached
 
-    if _use_bq():
+    if resolved_source == "bq":
         try:
             payload = _fetch_one_page_bq(path, params)
         except Exception as exc:

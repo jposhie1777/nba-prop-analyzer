@@ -89,6 +89,7 @@ from ingest.game_advanced_stats.ingest import ingest_yesterday as ingest_game_ad
 from ingest.season_averages.routes import router as season_averages_ingest_router
 from ingest.season_averages.ingest import ingest_current_season as ingest_season_averages_current
 from ingest.atp.routes import router as atp_ingest_router
+from ingest.pga.routes import router as pga_ingest_router
 
 # ==================================================
 # Injuries and WOWY imports
@@ -167,6 +168,7 @@ app.include_router(three_q_100_router)
 app.include_router(pga_analytics_router)
 app.include_router(atp_analytics_router)
 app.include_router(atp_ingest_router)
+app.include_router(pga_ingest_router)
 
 # ==================================================
 # Startup hook (SMART SCHEDULED BACKGROUND TASKS)

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from zoneinfo import ZoneInfo
 
 from pga.analytics import (
     build_compare,
@@ -18,10 +19,14 @@ from pga.analytics import (
     build_simulated_finishes,
     build_tournament_difficulty,
 )
+from pga.bq import fetch_tournament_round_scores
 from pga.client import PgaApiError, fetch_one_page, fetch_paginated
+from pga.utils import parse_iso_datetime
 
 
 router = APIRouter(prefix="/pga", tags=["PGA"])
+NY_TZ = ZoneInfo("America/New_York")
+ACTIVE_TOURNAMENT_STATUSES = {"in_progress", "active", "ongoing", "live"}
 
 
 def _current_season() -> int:
@@ -58,6 +63,69 @@ def _fetch_tournaments_for_seasons(seasons: List[int]) -> List[Dict[str, Any]]:
             )
         )
     return tournaments
+
+
+def _tournament_date_bounds(tournament: Dict[str, Any]) -> tuple[Optional[date], Optional[date]]:
+    start = parse_iso_datetime(tournament.get("start_date"))
+    end = parse_iso_datetime(tournament.get("end_date"))
+    return (start.date() if start else None, end.date() if end else None)
+
+
+def _select_round_scores_tournament(
+    tournaments: List[Dict[str, Any]],
+    *,
+    reference_date: date,
+) -> Optional[Dict[str, Any]]:
+    def sort_key(item: Dict[str, Any]) -> datetime:
+        return parse_iso_datetime(item.get("start_date")) or datetime.min
+
+    active = [
+        t
+        for t in tournaments
+        if (t.get("status") or "").strip().lower() in ACTIVE_TOURNAMENT_STATUSES
+    ]
+    if active:
+        return sorted(active, key=sort_key, reverse=True)[0]
+
+    in_window: List[Dict[str, Any]] = []
+    recent: List[Dict[str, Any]] = []
+    cutoff = reference_date - timedelta(days=1)
+
+    for tournament in tournaments:
+        start, end = _tournament_date_bounds(tournament)
+        if start and end and start <= reference_date <= end:
+            in_window.append(tournament)
+        if end and end >= cutoff:
+            recent.append(tournament)
+
+    if in_window:
+        return sorted(in_window, key=sort_key, reverse=True)[0]
+    if recent:
+        return sorted(recent, key=sort_key, reverse=True)[0]
+    return None
+
+
+def _resolve_round_scores_tournament(
+    *,
+    tournament_id: Optional[int],
+    season: int,
+) -> Optional[Dict[str, Any]]:
+    if tournament_id:
+        payload = fetch_one_page(
+            "/tournaments",
+            params={"tournament_ids": [tournament_id]},
+            cache_ttl=300,
+        )
+        tournaments = payload.get("data", [])
+        return tournaments[0] if tournaments else None
+
+    tournaments = fetch_paginated(
+        "/tournaments",
+        params={"season": season},
+        cache_ttl=300,
+    )
+    reference_date = datetime.now(NY_TZ).date()
+    return _select_round_scores_tournament(tournaments, reference_date=reference_date)
 
 
 @router.get("/players")
@@ -353,16 +421,33 @@ def pga_compare(
                 cache_ttl=900,
             )
 
-        return build_compare(
+        round_scores: List[Dict[str, Any]] = []
+        round_scores_tournament = _resolve_round_scores_tournament(
+            tournament_id=tournament_id,
+            season=season,
+        )
+        if round_scores_tournament and round_scores_tournament.get("id"):
+            round_scores = fetch_tournament_round_scores(
+                {
+                    "season": round_scores_tournament.get("season") or season,
+                    "tournament_ids": [round_scores_tournament.get("id")],
+                    "player_ids": player_ids,
+                }
+            )
+
+        response = build_compare(
             results,
             player_ids=player_ids,
             players=players,
             tournaments=tournaments,
             courses=courses,
+            round_scores=round_scores,
             course_id=course_id,
             tournament_id=tournament_id,
             last_n_form=last_n_form,
             last_n_placement=last_n_placement,
         )
+        response["round_scores_tournament"] = round_scores_tournament
+        return response
     except Exception as err:
         _handle_error(err)

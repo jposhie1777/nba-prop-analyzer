@@ -200,7 +200,7 @@ def _fetch_rounds_for_tournament(
     target_date: Optional[date],
     round_number: Optional[int],
     source: str,
-) -> List[Dict[str, Any]]:
+) -> tuple[List[Dict[str, Any]], bool]:
     base = {"tournament_ids": [tournament_id]}
     attempts: List[Dict[str, Any]] = []
     if round_number is not None and target_date is not None:
@@ -212,16 +212,24 @@ def _fetch_rounds_for_tournament(
     attempts.append(base)
 
     for params in attempts:
-        records = _fetch_paginated_retry("/tournament_rounds", params, source=source)
+        try:
+            records = _fetch_paginated_retry("/tournament_rounds", params, source=source)
+        except PgaApiError as exc:
+            message = str(exc)
+            if "404" in message and "Route not found" in message:
+                results = _fetch_paginated_retry("/tournament_results", base, source=source)
+                return results, True
+            raise
         if records:
-            return records
+            return records, False
 
     if round_number is not None:
         alt_params = {**base, "round": round_number}
         if target_date is not None:
             alt_params["date"] = target_date.isoformat()
-        return _fetch_paginated_retry("/tournament_rounds", alt_params, source=source)
-    return []
+        records = _fetch_paginated_retry("/tournament_rounds", alt_params, source=source)
+        return records, False
+    return [], False
 
 
 def normalize_round_scores(
@@ -231,6 +239,7 @@ def normalize_round_scores(
     fallback_date: date,
     tournament_lookup: Dict[int, Dict[str, Any]],
     round_number_filter: Optional[int] = None,
+    skip_round_filter_when_missing: bool = False,
 ) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     for record in records:
@@ -246,7 +255,8 @@ def normalize_round_scores(
             record.get("round_number") or record.get("round") or record.get("round_num")
         )
         if round_number_filter is not None and round_number != round_number_filter:
-            continue
+            if not (skip_round_filter_when_missing and round_number is None):
+                continue
 
         round_date = _parse_date(
             record.get("round_date")
@@ -343,7 +353,7 @@ def ingest_round_scores(
         inferred_round = _infer_round_number(start_date, target_day)
         round_to_fetch = round_number or inferred_round
 
-        records = _fetch_rounds_for_tournament(
+        records, used_results_fallback = _fetch_rounds_for_tournament(
             tid,
             target_date=target_day,
             round_number=round_to_fetch,
@@ -355,11 +365,13 @@ def ingest_round_scores(
             fallback_date=target_day,
             tournament_lookup=tournament_lookup,
             round_number_filter=round_to_fetch,
+            skip_round_filter_when_missing=used_results_fallback,
         )
         summary.setdefault("tournaments", {})[str(tid)] = {
             "round_number": round_to_fetch,
             "records": len(records),
             "rows": len(rows),
+            "used_results_fallback": used_results_fallback,
         }
         all_rows.extend(rows)
 

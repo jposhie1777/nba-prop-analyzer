@@ -1,0 +1,60 @@
+name: ATP Backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      years:
+        description: "How many seasons to backfill (default 5)"
+        required: false
+        default: "5"
+      start_season:
+        description: "Optional start season (YYYY)"
+        required: false
+        default: ""
+      end_season:
+        description: "Optional end season (YYYY)"
+        required: false
+        default: ""
+      truncate:
+        description: "Truncate tables before backfill (true/false)"
+        required: false
+        default: "true"
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+
+    env:
+      ATP_DATASET: "atp_live"
+      ATP_BQ_LOCATION: "US"
+      ATP_BACKFILL_YEARS: ${{ inputs.years }}
+      ATP_START_SEASON: ${{ inputs.start_season }}
+      ATP_END_SEASON: ${{ inputs.end_season }}
+      ATP_TRUNCATE: ${{ inputs.truncate }}
+      BDL_ATP_TIER: "ALL_STAR"
+      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+      BDL_ATP_API_KEY: ${{ secrets.BDL_ATP_API_KEY || secrets.BALDONTLIE_KEY || secrets.BALLDONTLIE_API_KEY }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r mobile_api/requirements.txt
+
+      - name: Configure GCP credentials
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
+
+      - name: Run ATP backfill
+        run: |
+          python mobile_api/ingest/atp/backfill.py

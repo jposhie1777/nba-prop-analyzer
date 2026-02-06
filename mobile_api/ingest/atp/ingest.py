@@ -16,7 +16,7 @@ from .client import AtpApiError, fetch_paginated, get_rate_limits
 # Config
 # ======================================================
 
-DEFAULT_DATASET = os.getenv("ATP_DATASET", "atp_live")
+DEFAULT_DATASET = os.getenv("ATP_DATASET", "atp_data")
 DEFAULT_LOCATION = os.getenv("ATP_BQ_LOCATION", "US")
 
 ATP_PLAYERS_TABLE = os.getenv("ATP_PLAYERS_TABLE", f"{DEFAULT_DATASET}.players")

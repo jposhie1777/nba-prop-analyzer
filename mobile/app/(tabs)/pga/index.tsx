@@ -85,7 +85,7 @@ const TILE_COLORS = {
   teal: { bg: "rgba(13,148,136,0.10)", fg: "#0D9488" },
   rose: { bg: "rgba(225,29,72,0.10)", fg: "#E11D48" },
   amber: { bg: "rgba(217,119,6,0.10)", fg: "#D97706" },
-  indigo: { bg: "rgba(79,70,229,0.10)", fg: "#4F46E5" },
+  indigo: { bg: "rgba(37,99,235,0.10)", fg: "#2563EB" },
   cyan: { bg: "rgba(6,182,212,0.10)", fg: "#06B6D4" },
   slate: { bg: "rgba(71,85,105,0.10)", fg: "#475569" },
   emerald: { bg: "rgba(5,150,105,0.10)", fg: "#059669" },
@@ -102,9 +102,6 @@ export default function PgaHome() {
     >
       {/* Hero Section */}
       <View style={[styles.hero, { backgroundColor: colors.accent.primary }]}>
-        <View style={styles.heroIconRow}>
-          <Ionicons name="golf-outline" size={28} color="#FFFFFF" />
-        </View>
         <Text style={styles.heroTitle}>PGA Analytics</Text>
         <Text style={styles.heroSub}>
           Tournament results, course stats, and player profiles
@@ -231,9 +228,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     marginBottom: 20,
-  },
-  heroIconRow: {
-    marginBottom: 10,
   },
   heroTitle: {
     fontSize: 24,

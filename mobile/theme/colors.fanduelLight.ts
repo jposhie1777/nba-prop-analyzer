@@ -23,7 +23,7 @@ export const fanduelLight: ThemeColors = {
   },
 
   accent: {
-    primary: "#4F46E5",
+    primary: "#2563EB",
     success: "#059669",
     warning: "#D97706",
     danger: "#DC2626",
@@ -31,15 +31,15 @@ export const fanduelLight: ThemeColors = {
   },
 
   state: {
-    active: "#4F46E5",
-    hover: "#EEF2FF",
-    selected: "#E0E7FF",
+    active: "#2563EB",
+    hover: "#EFF6FF",
+    selected: "#DBEAFE",
     disabled: "#CBD5E1",
   },
 
   glow: {
     success: "rgba(5,150,105,0.14)",
-    primary: "rgba(79,70,229,0.14)",
+    primary: "rgba(37,99,235,0.14)",
   },
 };
 

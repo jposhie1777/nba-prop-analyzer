@@ -53,14 +53,21 @@ export default function AtpCompareScreen() {
 
   useEffect(() => {
     if (!playerB && itemsB.length > 0) {
-      setPlayerB(itemsB[0]);
+      // Avoid auto-selecting the same player as Player A
+      const candidate = playerA
+        ? itemsB.find((item) => item.id !== playerA.id) ?? null
+        : itemsB[0];
+      if (candidate) setPlayerB(candidate);
     }
-  }, [itemsB, playerB]);
+  }, [itemsB, playerB, playerA]);
 
   const playerIds = useMemo(
     () => [playerA?.id, playerB?.id].filter((id): id is number => !!id),
     [playerA, playerB]
   );
+
+  const hasTwoDistinctPlayers =
+    playerIds.length === 2 && playerIds[0] !== playerIds[1];
 
   const { data, loading, error } = useAtpQuery<AtpCompareResponse>(
     "/atp/analytics/compare",
@@ -68,7 +75,7 @@ export default function AtpCompareScreen() {
       player_ids: playerIds,
       surface: surface.trim() || undefined,
     },
-    playerIds.length === 2
+    hasTwoDistinctPlayers
   );
 
   const playerNameMap = useMemo(() => {

@@ -137,28 +137,31 @@ function formatGameStatus(
   period?: string | null,
   clock?: string | null,
   state?: string | null,
-  awayScore?: number | null,
-  homeScore?: number | null
 ) {
   const normalizedState =
     typeof state === "string" ? state.toLowerCase() : null;
-  const hasScore =
-    typeof awayScore === "number" && typeof homeScore === "number";
-  const scoreText = hasScore ? `${awayScore}-${homeScore}` : null;
 
   if (normalizedState === "halftime") {
-    return scoreText ? `Halftime • ${scoreText}` : "Halftime";
+    return "Halftime";
   }
   if (normalizedState === "final") {
-    return scoreText ? `Final • ${scoreText}` : "Final";
+    return "Final";
   }
 
-  const timeText =
-    period && clock
-      ? `${period} ${clock}`
-      : period ?? clock ?? "Live";
+  // Detect halftime: Q2 with no clock or clock at 0:00
+  const normalizedPeriod =
+    typeof period === "string" ? period.toLowerCase().replace(/\s/g, "") : null;
+  const isQ2 = normalizedPeriod === "q2" || normalizedPeriod === "2";
+  const clockEmpty =
+    !clock || clock.trim() === "" || clock.trim() === "0:00";
 
-  return scoreText ? `${timeText} • ${scoreText}` : timeText;
+  if (isQ2 && clockEmpty) {
+    return "Halftime";
+  }
+
+  return period && clock
+    ? `${period} ${clock}`
+    : period ?? clock ?? "Live";
 }
 
 /* ======================================================
@@ -365,9 +368,10 @@ export default function LivePropsDevScreen() {
             item.game_period,
             item.game_clock,
             item.game_state,
-            item.away_score,
-            item.home_score
           );
+          const hasScore =
+            typeof item.away_score === "number" &&
+            typeof item.home_score === "number";
 
           return (
             <View
@@ -435,6 +439,17 @@ export default function LivePropsDevScreen() {
                   >
                     {awayAbbr} @ {homeAbbr}
                   </Text>
+
+                  {hasScore && (
+                    <Text
+                      style={[
+                        styles.scoreText,
+                        { color: colors.text.primary },
+                      ]}
+                    >
+                      {item.away_score} - {item.home_score}
+                    </Text>
+                  )}
 
                   <Text
                     style={[
@@ -572,6 +587,13 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontSize: 14,
     fontWeight: "900",
+  },
+
+  scoreText: {
+    marginTop: 4,
+    fontSize: 18,
+    fontWeight: "900",
+    letterSpacing: 1,
   },
 
   statusText: {

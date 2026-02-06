@@ -1,5 +1,7 @@
 import { View, Text, Pressable, StyleSheet } from "react-native";
+import { useState } from "react";
 import Slider from "@react-native-community/slider";
+import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/store/useTheme";
 
 /* ======================================================
@@ -26,6 +28,7 @@ export function LivePropFilterBar({
   setFilters: (f: any) => void;
 }) {
   const { colors } = useTheme();
+  const [isExpanded, setIsExpanded] = useState(false);
 
   /* ---------------------------------
      TOGGLE HELPERS
@@ -62,108 +65,125 @@ export function LivePropFilterBar({
       ]}
     >
       {/* HEADER */}
-      <View style={styles.headerRow}>
-        <Text style={[styles.title, { color: colors.text.primary }]}>
-          Filters
-        </Text>
-
-        <Pressable onPress={resetFilters}>
-          <Text style={[styles.reset, { color: colors.text.muted }]}>
-            Reset
+      <Pressable
+        onPress={() => setIsExpanded((prev) => !prev)}
+        style={styles.headerRow}
+      >
+        <View style={styles.headerLeft}>
+          <Text style={[styles.title, { color: colors.text.primary }]}>
+            Filters
           </Text>
-        </Pressable>
-      </View>
+          <Ionicons
+            name={isExpanded ? "chevron-up" : "chevron-down"}
+            size={16}
+            color={colors.text.muted}
+            style={{ marginLeft: 6 }}
+          />
+        </View>
 
-      {/* =========================
-          STAT FILTER
-      ========================== */}
-      <Text style={[styles.label, { color: colors.text.secondary }]}>
-        Stats
-      </Text>
-      <View style={styles.row}>
-        {STATS.map((s) => {
-          const active = filters.stats.includes(s);
-          return (
-            <Pressable
-              key={s}
-              onPress={() => toggle("stats", s)}
-            >
-              <Text
-                style={[
-                  styles.pill,
-                  active && {
-                    backgroundColor: colors.accent.primary,
-                    color: "#fff",
-                  },
-                ]}
-              >
-                {s.toUpperCase()}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+        {isExpanded && (
+          <Pressable onPress={resetFilters}>
+            <Text style={[styles.reset, { color: colors.text.muted }]}>
+              Reset
+            </Text>
+          </Pressable>
+        )}
+      </Pressable>
 
-      {/* =========================
-          MARKET TYPE FILTER
-      ========================== */}
-      <Text style={[styles.label, { color: colors.text.secondary }]}>
-        Market
-      </Text>
-      <View style={styles.row}>
-        {MARKET_TYPES.map((m) => {
-          const active = filters.marketTypes.includes(m);
-          return (
-            <Pressable
-              key={m}
-              onPress={() => toggle("marketTypes", m)}
-            >
-              <Text
-                style={[
-                  styles.pill,
-                  active && {
-                    backgroundColor: colors.accent.primary,
-                    color: "#fff",
-                  },
-                ]}
-              >
-                {m}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      {isExpanded && (
+        <>
+          {/* =========================
+              STAT FILTER
+          ========================== */}
+          <Text style={[styles.label, { color: colors.text.secondary }]}>
+            Stats
+          </Text>
+          <View style={styles.row}>
+            {STATS.map((s) => {
+              const active = filters.stats.includes(s);
+              return (
+                <Pressable
+                  key={s}
+                  onPress={() => toggle("stats", s)}
+                >
+                  <Text
+                    style={[
+                      styles.pill,
+                      active && {
+                        backgroundColor: colors.accent.primary,
+                        color: "#fff",
+                      },
+                    ]}
+                  >
+                    {s.toUpperCase()}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
 
-      {/* =========================
-          ODDS RANGE
-      ========================== */}
-      <Text style={[styles.label, { color: colors.text.secondary }]}>
-        Odds: {filters.minOdds} to {filters.maxOdds}
-      </Text>
+          {/* =========================
+              MARKET TYPE FILTER
+          ========================== */}
+          <Text style={[styles.label, { color: colors.text.secondary }]}>
+            Market
+          </Text>
+          <View style={styles.row}>
+            {MARKET_TYPES.map((m) => {
+              const active = filters.marketTypes.includes(m);
+              return (
+                <Pressable
+                  key={m}
+                  onPress={() => toggle("marketTypes", m)}
+                >
+                  <Text
+                    style={[
+                      styles.pill,
+                      active && {
+                        backgroundColor: colors.accent.primary,
+                        color: "#fff",
+                      },
+                    ]}
+                  >
+                    {m}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
 
-      {/* MIN */}
-      <Slider
-        minimumValue={-1000}
-        maximumValue={1000}
-        step={10}
-        value={filters.minOdds}
-        onValueChange={(v) =>
-          setFilters((f: any) => ({ ...f, minOdds: v }))
-        }
-        minimumTrackTintColor={colors.accent.primary}
-      />
+          {/* =========================
+              ODDS RANGE
+          ========================== */}
+          <Text style={[styles.label, { color: colors.text.secondary }]}>
+            Odds: {filters.minOdds} to {filters.maxOdds}
+          </Text>
 
-      {/* MAX */}
-      <Slider
-        minimumValue={-1000}
-        maximumValue={1000}
-        step={10}
-        value={filters.maxOdds}
-        onValueChange={(v) =>
-          setFilters((f: any) => ({ ...f, maxOdds: v }))
-        }
-        minimumTrackTintColor={colors.accent.primary}
-      />
+          {/* MIN */}
+          <Slider
+            minimumValue={-1000}
+            maximumValue={1000}
+            step={10}
+            value={filters.minOdds}
+            onValueChange={(v) =>
+              setFilters((f: any) => ({ ...f, minOdds: v }))
+            }
+            minimumTrackTintColor={colors.accent.primary}
+          />
+
+          {/* MAX */}
+          <Slider
+            minimumValue={-1000}
+            maximumValue={1000}
+            step={10}
+            value={filters.maxOdds}
+            onValueChange={(v) =>
+              setFilters((f: any) => ({ ...f, maxOdds: v }))
+            }
+            minimumTrackTintColor={colors.accent.primary}
+          />
+        </>
+      )}
     </View>
   );
 }
@@ -183,7 +203,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+  },
+
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
   },
 
   title: {

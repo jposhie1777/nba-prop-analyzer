@@ -4,7 +4,7 @@ Usage (GitHub Action or local):
     python mobile_api/ingest/atp/backfill.py
 
 Environment variables:
-    ATP_DATASET           BigQuery dataset (default: atp_live)
+    ATP_DATASET           BigQuery dataset (default: atp_data)
     ATP_BQ_LOCATION       BigQuery location (default: US)
     ATP_BACKFILL_YEARS    How many seasons back to fetch (default: 5)
     ATP_START_SEASON      Explicit start season (overrides BACKFILL_YEARS)

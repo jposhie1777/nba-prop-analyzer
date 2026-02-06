@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date as DateType
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
@@ -15,7 +16,7 @@ router = APIRouter(
 
 
 class PgaRoundScoresRequest(BaseModel):
-    date: Optional[str] = None
+    date: Optional[DateType] = None
     season: Optional[int] = None
     tournament_id: Optional[int] = None
     round_number: Optional[int] = None
@@ -27,7 +28,7 @@ class PgaRoundScoresRequest(BaseModel):
 def run_round_scores(req: PgaRoundScoresRequest):
     try:
         return ingest_round_scores(
-            target_date=req.date,
+            target_date=req.date.isoformat() if req.date else None,
             season=req.season,
             tournament_id=req.tournament_id,
             round_number=req.round_number,

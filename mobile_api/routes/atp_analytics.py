@@ -144,7 +144,7 @@ def atp_player_form(
     surface: Optional[str] = None,
     last_n: int = Query(12, ge=3, le=60),
     min_matches: int = Query(5, ge=1, le=30),
-    max_pages: Optional[int] = Query(None, ge=1, le=500),
+    max_pages: Optional[int] = Query(5, ge=1, le=500),
 ):
     try:
         seasons = _resolve_seasons(
@@ -173,7 +173,7 @@ def atp_surface_splits(
     start_season: Optional[int] = None,
     end_season: Optional[int] = None,
     min_matches: int = Query(5, ge=1, le=30),
-    max_pages: Optional[int] = Query(None, ge=1, le=500),
+    max_pages: Optional[int] = Query(5, ge=1, le=500),
 ):
     try:
         seasons = _resolve_seasons(
@@ -197,7 +197,7 @@ def atp_head_to_head(
     seasons_back: Optional[int] = Query(3, ge=0, le=15),
     start_season: Optional[int] = None,
     end_season: Optional[int] = None,
-    max_pages: Optional[int] = Query(None, ge=1, le=500),
+    max_pages: Optional[int] = Query(5, ge=1, le=500),
 ):
     try:
         seasons = _resolve_seasons(
@@ -226,7 +226,7 @@ def atp_tournament_performance(
     end_season: Optional[int] = None,
     surface: Optional[str] = None,
     min_matches: int = Query(5, ge=1, le=30),
-    max_pages: Optional[int] = Query(None, ge=1, le=500),
+    max_pages: Optional[int] = Query(5, ge=1, le=500),
 ):
     try:
         seasons = _resolve_seasons(
@@ -253,7 +253,7 @@ def atp_region_splits(
     seasons_back: Optional[int] = Query(2, ge=0, le=10),
     start_season: Optional[int] = None,
     end_season: Optional[int] = None,
-    max_pages: Optional[int] = Query(None, ge=1, le=500),
+    max_pages: Optional[int] = Query(5, ge=1, le=500),
 ):
     try:
         seasons = _resolve_seasons(
@@ -278,7 +278,7 @@ def atp_set_distribution(
     start_season: Optional[int] = None,
     end_season: Optional[int] = None,
     surface: Optional[str] = None,
-    max_pages: Optional[int] = Query(None, ge=1, le=500),
+    max_pages: Optional[int] = Query(5, ge=1, le=500),
 ):
     try:
         seasons = _resolve_seasons(
@@ -308,7 +308,7 @@ def atp_compare(
     end_season: Optional[int] = None,
     surface: Optional[str] = None,
     last_n: int = Query(12, ge=3, le=60),
-    max_pages: Optional[int] = Query(None, ge=1, le=500),
+    max_pages: Optional[int] = Query(5, ge=1, le=500),
 ):
     try:
         if len(player_ids) < 2 or len(player_ids) > 3:
@@ -321,7 +321,7 @@ def atp_compare(
         )
         matches = _fetch_matches_for_seasons(seasons, max_pages=max_pages)
 
-        rankings_payload = fetch_paginated("/rankings", params={"per_page": 100}, cache_ttl=900)
+        rankings_payload = fetch_paginated("/rankings", params={"per_page": 100}, cache_ttl=900, max_pages=3)
         rankings_map = {}
         for row in rankings_payload:
             player = row.get("player") or {}

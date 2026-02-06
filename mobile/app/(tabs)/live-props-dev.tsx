@@ -35,6 +35,8 @@ type GameGroup = {
   gameId?: string | number;
   home_team_abbr?: string;
   away_team_abbr?: string;
+  home_score?: number | null;
+  away_score?: number | null;
   game_period?: string | null;
   game_clock?: string | null;
   game_state?: string | null;
@@ -134,17 +136,29 @@ function resolveGameKey(item: any): string {
 function formatGameStatus(
   period?: string | null,
   clock?: string | null,
-  state?: string | null
+  state?: string | null,
+  awayScore?: number | null,
+  homeScore?: number | null
 ) {
   const normalizedState =
     typeof state === "string" ? state.toLowerCase() : null;
+  const hasScore =
+    typeof awayScore === "number" && typeof homeScore === "number";
+  const scoreText = hasScore ? `${awayScore}-${homeScore}` : null;
 
-  if (normalizedState === "halftime") return "Halftime";
-  if (normalizedState === "final") return "Final";
-  if (period && clock) return `${period} ${clock}`;
-  if (period) return period;
-  if (clock) return clock;
-  return "Live";
+  if (normalizedState === "halftime") {
+    return scoreText ? `Halftime • ${scoreText}` : "Halftime";
+  }
+  if (normalizedState === "final") {
+    return scoreText ? `Final • ${scoreText}` : "Final";
+  }
+
+  const timeText =
+    period && clock
+      ? `${period} ${clock}`
+      : period ?? clock ?? "Live";
+
+  return scoreText ? `${timeText} • ${scoreText}` : timeText;
 }
 
 /* ======================================================
@@ -203,6 +217,8 @@ export default function LivePropsDevScreen() {
           gameId: item.game_id,
           home_team_abbr: item.home_team_abbr,
           away_team_abbr: item.away_team_abbr,
+          home_score: item.home_score,
+          away_score: item.away_score,
           game_period: item.game_period,
           game_clock: item.game_clock,
           game_state: item.game_state,
@@ -217,6 +233,18 @@ export default function LivePropsDevScreen() {
         }
         if (!existing.away_team_abbr && item.away_team_abbr) {
           existing.away_team_abbr = item.away_team_abbr;
+        }
+        if (
+          existing.home_score == null &&
+          typeof item.home_score === "number"
+        ) {
+          existing.home_score = item.home_score;
+        }
+        if (
+          existing.away_score == null &&
+          typeof item.away_score === "number"
+        ) {
+          existing.away_score = item.away_score;
         }
         if (!existing.game_period && item.game_period) {
           existing.game_period = item.game_period;
@@ -336,7 +364,9 @@ export default function LivePropsDevScreen() {
           const statusText = formatGameStatus(
             item.game_period,
             item.game_clock,
-            item.game_state
+            item.game_state,
+            item.away_score,
+            item.home_score
           );
 
           return (

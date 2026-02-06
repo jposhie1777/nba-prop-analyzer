@@ -11,6 +11,7 @@ router = APIRouter(
 
 VIEW = "nba_live.v_live_player_props_enriched"
 PERIOD_STATS_TABLE = "nba_goat_data.player_game_stats_period"
+LIVE_GAMES_TABLE = "nba_live.live_games"
 
 
 @router.get("")
@@ -57,6 +58,16 @@ def read_live_props(
             FROM `{VIEW}`
             {where_sql}
         ),
+        games AS (
+            SELECT
+                game_id,
+                home_score,
+                away_score,
+                state AS game_state,
+                home_team_abbr,
+                away_team_abbr
+            FROM `{LIVE_GAMES_TABLE}`
+        ),
         period_avgs AS (
             SELECT
                 player_id,
@@ -101,10 +112,17 @@ def read_live_props(
         )
         SELECT
             live.*,
+            games.home_score,
+            games.away_score,
+            games.game_state,
+            games.home_team_abbr,
+            games.away_team_abbr,
             period_avgs.avg_q3,
             period_avgs.avg_q4,
             period_avgs.avg_h2
         FROM live
+        LEFT JOIN games
+            ON live.game_id = games.game_id
         LEFT JOIN period_avgs
             ON live.player_id = period_avgs.player_id
             AND live.market = period_avgs.market

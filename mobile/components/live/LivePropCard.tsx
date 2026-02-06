@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Pressable,
   Image,
+  InteractionManager,
 } from "react-native";
 import { useTheme } from "@/store/useTheme";
 import { useState, useCallback, useRef } from "react";
@@ -14,7 +15,6 @@ import * as Haptics from "expo-haptics";
 import { TEAM_LOGOS } from "@/utils/teamLogos";
 import { usePropBetslip } from "@/store/usePropBetslip";
 import { useBetslipDrawer } from "@/store/useBetslipDrawer";
-import { InteractionManager } from "react-native";
 
 /* =====================================================
    HELPERS
@@ -27,12 +27,41 @@ function parseClock(clock?: string): number | null {
   return m + s / 60;
 }
 
+function normalizeGameState(
+  gameState?: string
+): string | null {
+  if (typeof gameState !== "string") return null;
+  return gameState.trim().toLowerCase();
+}
+
+function normalizePeriod(period?: string): string | null {
+  if (typeof period !== "string") return null;
+  const cleaned = period.trim().toUpperCase();
+
+  if (cleaned === "1" || cleaned === "Q1" || cleaned === "1ST") {
+    return "Q1";
+  }
+  if (cleaned === "2" || cleaned === "Q2" || cleaned === "2ND") {
+    return "Q2";
+  }
+  if (cleaned === "3" || cleaned === "Q3" || cleaned === "3RD") {
+    return "Q3";
+  }
+  if (cleaned === "4" || cleaned === "Q4" || cleaned === "4TH") {
+    return "Q4";
+  }
+
+  return cleaned;
+}
+
 function getElapsedMinutes(
   period?: string,
   clock?: string,
   gameState?: string
 ): number | null {
-  if (gameState === "halftime") return 24;
+  if (normalizeGameState(gameState) === "halftime") return 24;
+
+  const normalizedPeriod = normalizePeriod(period);
 
   const quarterIndex: Record<string, number> = {
     Q1: 0,
@@ -41,21 +70,31 @@ function getElapsedMinutes(
     Q4: 3,
   };
 
-  if (!period || !(period in quarterIndex)) return null;
+  if (
+    !normalizedPeriod ||
+    !(normalizedPeriod in quarterIndex)
+  ) {
+    return null;
+  }
 
   const remaining = parseClock(clock);
   if (remaining == null) return null;
 
-  return quarterIndex[period] * 12 + (12 - remaining);
+  return (
+    quarterIndex[normalizedPeriod] * 12 + (12 - remaining)
+  );
 }
 
 function getProjectionBasis(
   period?: string,
   gameState?: string
 ): "2H" | "Q4" | null {
-  if (gameState === "halftime") return "2H";
-  if (period === "Q3") return "2H";
-  if (period === "Q4") return "Q4";
+  const normalizedPeriod = normalizePeriod(period);
+  const normalizedState = normalizeGameState(gameState);
+
+  if (normalizedState === "halftime") return "2H";
+  if (normalizedPeriod === "Q3") return "2H";
+  if (normalizedPeriod === "Q4") return "Q4";
   return null;
 }
 

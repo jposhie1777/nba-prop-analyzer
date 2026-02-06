@@ -9,8 +9,15 @@ from typing import Any, Dict, List, Optional
 from google.api_core.exceptions import Conflict, NotFound
 from google.cloud import bigquery
 
-from ingest.common.batch import chunked
-from .client import AtpApiError, fetch_paginated, get_rate_limits
+try:
+    from ingest.common.batch import chunked
+except ModuleNotFoundError:
+    from mobile_api.ingest.common.batch import chunked
+
+try:
+    from .client import AtpApiError, fetch_paginated, get_rate_limits
+except ImportError:
+    from mobile_api.ingest.atp.client import AtpApiError, fetch_paginated, get_rate_limits
 
 # ======================================================
 # Config

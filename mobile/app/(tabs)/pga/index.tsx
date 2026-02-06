@@ -3,6 +3,7 @@ import { ScrollView, View, Text, StyleSheet, Pressable, Platform } from "react-n
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/store/useTheme";
+import ThemeSelectorSection from "@/components/ThemeSelectorSection";
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
@@ -107,6 +108,7 @@ export default function PgaHome() {
           Tournament results, course stats, and player profiles
         </Text>
       </View>
+      <ThemeSelectorSection title="Theme selector" />
 
       {/* Player Analysis */}
       <SectionHeader title="PLAYER ANALYSIS" color={TILE_COLORS.green.fg} />

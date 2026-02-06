@@ -2,6 +2,7 @@
 import { ScrollView, Text, StyleSheet, Pressable, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "@/store/useTheme";
+import ThemeSelectorSection from "@/components/ThemeSelectorSection";
 
 type SportTileProps = {
   title: string;
@@ -72,6 +73,7 @@ export default function Home() {
       <Text style={[styles.subtitle, { color: colors.text.muted }]}>
         Choose a sport to open analytics, models, and betting tools.
       </Text>
+      <ThemeSelectorSection title="Theme selector" />
 
       <SportTile
         title="NBA"

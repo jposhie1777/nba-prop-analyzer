@@ -2,6 +2,7 @@
 import { ScrollView, Text, StyleSheet, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "@/store/useTheme";
+import ThemeSelectorSection from "@/components/ThemeSelectorSection";
 
 type TileProps = {
   title: string;
@@ -49,6 +50,7 @@ export default function AtpHome() {
         Historical match results power surface splits, form tracking, head-to-head
         trends, and matchup previews built for tennis betting workflows.
       </Text>
+      <ThemeSelectorSection title="Theme selector" />
 
       <Tile
         title="1) Player Form + Consistency"

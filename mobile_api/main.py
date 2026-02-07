@@ -78,6 +78,9 @@ from routes.pga_analytics import router as pga_analytics_router
 from routes.atp_analytics import router as atp_analytics_router
 from routes.correlations import router as correlations_router
 from routes.game_environment import router as game_environment_router
+from routes.sharp_moves import router as sharp_moves_router
+from routes.atp_match_predictor import router as atp_match_predictor_router
+from routes.pga_strokes_gained import router as pga_strokes_gained_router
 
 # ==================================================
 # Game Advanced Stats V2 imports
@@ -173,6 +176,9 @@ app.include_router(atp_ingest_router)
 app.include_router(pga_ingest_router)
 app.include_router(correlations_router)
 app.include_router(game_environment_router)
+app.include_router(sharp_moves_router)
+app.include_router(atp_match_predictor_router)
+app.include_router(pga_strokes_gained_router)
 
 # ==================================================
 # Startup hook (SMART SCHEDULED BACKGROUND TASKS)

@@ -31,6 +31,7 @@ const NBA_TABS: TabConfig[] = [
 const PGA_TABS: TabConfig[] = [
   { name: "pga-matchups", title: "Matchup Ratings", icon: "stats-chart" },
   { name: "pga-compare", title: "Pairings Compare", icon: "swap-horizontal" },
+  { name: "pga-strokes-gained", title: "Strokes Gained", icon: "speedometer" },
   {
     name: "pga-placement-probabilities",
     title: "Placement Probability",
@@ -52,6 +53,7 @@ const PGA_TABS: TabConfig[] = [
 const ATP_TABS: TabConfig[] = [
   { name: "atp-head-to-head", title: "Head to Head", icon: "people" },
   { name: "atp-compare", title: "Matchup Compare", icon: "analytics" },
+  { name: "atp-match-predictor", title: "Match Predictor", icon: "flash" },
   {
     name: "atp-tournament-performance",
     title: "Tournament Performance",

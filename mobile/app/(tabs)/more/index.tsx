@@ -114,6 +114,38 @@ export default function MoreIndexScreen() {
         </Text>
       </Pressable>
 
+      {/* Sharp Moves */}
+      <Pressable
+        onPress={() =>
+          router.push("/(tabs)/more/sharp-moves")
+        }
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.surface.card,
+            borderColor: colors.border.subtle,
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.title,
+            { color: colors.text.primary },
+          ]}
+        >
+          📈 Sharp Moves
+        </Text>
+
+        <Text
+          style={[
+            styles.subtitle,
+            { color: colors.text.muted },
+          ]}
+        >
+          Line movement tracker — steam moves & sharp money
+        </Text>
+      </Pressable>
+
       {/* Player Season Averages */}
       <Pressable
         onPress={() =>

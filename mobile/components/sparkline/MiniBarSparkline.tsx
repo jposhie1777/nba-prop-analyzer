@@ -11,11 +11,12 @@ export function MiniBarSparkline({ data, dates }: Props) {
     <BaseBarSparkline
       data={data}
       dates={dates}
-      height={48}
+      height={64}
       barWidth={8}
       barGap={6}
-      baselineHeight={32}
-      showValues={false}
+      baselineHeight={44}
+      showValues
+      valueOffset={-18}
       showDates={false}
     />
   );

@@ -45,6 +45,9 @@ export type PropCardProps = {
   playerPosition?: string;
   opponentTeamAbbr?: string;
   opponentPositionRank?: number;
+  teamPace?: number;
+  teamPaceRank?: number;
+  opponentPace?: number;
   opponentStatAllowed?: number;
   opponentStatAllowedIsRate?: boolean;
   teamPaceRank?: number;
@@ -187,6 +190,9 @@ export default function PropCard(props: PropCardProps) {
     playerPosition,
     opponentTeamAbbr,
     opponentPositionRank,
+    teamPace,
+    teamPaceRank,
+    opponentPace,
     opponentStatAllowed,
     opponentStatAllowedIsRate,
     teamPaceRank,
@@ -487,6 +493,29 @@ export default function PropCard(props: PropCardProps) {
                   </View>
                 )}
                 {(teamPaceRank != null ||
+                  teamPace != null ||
+                  opponentPaceRank != null ||
+                  opponentPace != null ||
+                  impliedTeamTotal != null ||
+                  spread != null) && (
+                  <View style={styles.chipRow}>
+                    {(teamPaceRank != null || teamPace != null) && (
+                      <View style={styles.metricChip}>
+                        <Text style={styles.metricChipLabel}>Pace</Text>
+                        <Text style={styles.metricChipValue}>
+                          {teamPaceRank != null
+                            ? `#${teamPaceRank}`
+                            : teamPace?.toFixed(1)}
+                        </Text>
+                      </View>
+                    )}
+                    {(opponentPaceRank != null || opponentPace != null) && (
+                      <View style={styles.metricChip}>
+                        <Text style={styles.metricChipLabel}>Opp Pace</Text>
+                        <Text style={styles.metricChipValue}>
+                          {opponentPaceRank != null
+                            ? `#${opponentPaceRank}`
+                            : opponentPace?.toFixed(1)}
                   opponentPaceRank != null ||
                   impliedTeamTotal != null ||
                   spread != null) && (

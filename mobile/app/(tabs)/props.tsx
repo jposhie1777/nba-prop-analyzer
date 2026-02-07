@@ -621,6 +621,18 @@ export default function PropsTestScreen() {
           : wowyStat
             ? []
             : undefined;
+      const paceValue =
+        filters.hitRateWindow === "L5"
+          ? item.pace_l5
+          : filters.hitRateWindow === "L20"
+          ? item.pace_l20
+          : item.pace_l10;
+      const usageValue =
+        filters.hitRateWindow === "L5"
+          ? item.usage_l5
+          : filters.hitRateWindow === "L20"
+          ? item.usage_l20
+          : item.usage_l10;
 
       return (
         <PropCard
@@ -633,6 +645,8 @@ export default function PropsTestScreen() {
           playerPosition={playerPosition}
           opponentTeamAbbr={opponentTeamAbbr}
           opponentPositionRank={opponentPositionRank}
+          teamPace={paceValue}
+          usagePct={usageValue}
           wowyStatLabel={wowyStat ? getWowyLabel(wowyStat) : undefined}
           wowyImpacts={wowyImpacts}
           onSwipeSave={() => saveProp(item)}

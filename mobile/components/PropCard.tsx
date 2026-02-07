@@ -45,6 +45,16 @@ export type PropCardProps = {
   playerPosition?: string;
   opponentTeamAbbr?: string;
   opponentPositionRank?: number;
+  teamPace?: number;
+  teamPaceRank?: number;
+  opponentPace?: number;
+  opponentPaceRank?: number;
+  impliedTeamTotal?: number;
+  spread?: number;
+  minutesAvg?: number;
+  usagePct?: number;
+  lineMovement?: string;
+  oddsMovement?: string;
   wowyStatLabel?: string;
   wowyImpacts?: WowyImpactDisplay[];
 
@@ -172,6 +182,16 @@ export default function PropCard(props: PropCardProps) {
     playerPosition,
     opponentTeamAbbr,
     opponentPositionRank,
+    teamPace,
+    teamPaceRank,
+    opponentPace,
+    opponentPaceRank,
+    impliedTeamTotal,
+    spread,
+    minutesAvg,
+    usagePct,
+    lineMovement,
+    oddsMovement,
     wowyStatLabel,
     wowyImpacts,
   } = props;
@@ -452,6 +472,89 @@ export default function PropCard(props: PropCardProps) {
                     </View>
                   </View>
                 )}
+                {(teamPaceRank != null ||
+                  teamPace != null ||
+                  opponentPaceRank != null ||
+                  opponentPace != null ||
+                  impliedTeamTotal != null ||
+                  spread != null) && (
+                  <View style={styles.chipRow}>
+                    {(teamPaceRank != null || teamPace != null) && (
+                      <View style={styles.metricChip}>
+                        <Text style={styles.metricChipLabel}>Pace</Text>
+                        <Text style={styles.metricChipValue}>
+                          {teamPaceRank != null
+                            ? `#${teamPaceRank}`
+                            : teamPace?.toFixed(1)}
+                        </Text>
+                      </View>
+                    )}
+                    {(opponentPaceRank != null || opponentPace != null) && (
+                      <View style={styles.metricChip}>
+                        <Text style={styles.metricChipLabel}>Opp Pace</Text>
+                        <Text style={styles.metricChipValue}>
+                          {opponentPaceRank != null
+                            ? `#${opponentPaceRank}`
+                            : opponentPace?.toFixed(1)}
+                        </Text>
+                      </View>
+                    )}
+                    {impliedTeamTotal != null && (
+                      <View style={styles.metricChip}>
+                        <Text style={styles.metricChipLabel}>Team TT</Text>
+                        <Text style={styles.metricChipValue}>
+                          {impliedTeamTotal.toFixed(1)}
+                        </Text>
+                      </View>
+                    )}
+                    {spread != null && (
+                      <View style={styles.metricChip}>
+                        <Text style={styles.metricChipLabel}>Spread</Text>
+                        <Text style={styles.metricChipValue}>
+                          {spread > 0 ? `+${spread}` : spread}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {(minutesAvg != null || usagePct != null) && (
+                  <View style={styles.chipRow}>
+                    {minutesAvg != null && (
+                      <View style={styles.metricChip}>
+                        <Text style={styles.metricChipLabel}>MPG</Text>
+                        <Text style={styles.metricChipValue}>
+                          {minutesAvg.toFixed(1)}
+                        </Text>
+                      </View>
+                    )}
+                    {usagePct != null && (
+                      <View style={styles.metricChip}>
+                        <Text style={styles.metricChipLabel}>USG</Text>
+                        <Text style={styles.metricChipValue}>
+                          {usagePct.toFixed(0)}%
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {(lineMovement || oddsMovement) && (
+                  <View style={styles.marketRow}>
+                    {lineMovement && (
+                      <View style={styles.marketItem}>
+                        <Text style={styles.marketLabel}>Line</Text>
+                        <Text style={styles.marketValue}>{lineMovement}</Text>
+                      </View>
+                    )}
+                    {oddsMovement && (
+                      <View style={styles.marketItem}>
+                        <Text style={styles.marketLabel}>Odds</Text>
+                        <Text style={styles.marketValue}>{oddsMovement}</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
                 <MiniBarSparkline data={sparkline} dates={dates} />
                 {wowyImpacts && (
                   <View style={styles.wowySection}>
@@ -705,6 +808,58 @@ function makeStyles(colors: any) {
       paddingBottom: 16,
       borderTopWidth: 1,
       borderTopColor: colors.border.subtle,
+    },
+
+    chipRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 10,
+    },
+
+    metricChip: {
+      backgroundColor: colors.surface.cardSoft,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 10,
+    },
+
+    metricChipLabel: {
+      fontSize: 10,
+      color: colors.text.muted,
+      fontWeight: "700",
+    },
+
+    metricChipValue: {
+      fontSize: 13,
+      fontWeight: "800",
+      color: colors.text.primary,
+      marginTop: 2,
+    },
+
+    marketRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 12,
+      marginBottom: 12,
+    },
+
+    marketItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+
+    marketLabel: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.text.muted,
+    },
+
+    marketValue: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.text.primary,
     },
 
     opponentWrap: {

@@ -446,6 +446,12 @@ export function usePlayerPropsMaster({
 
         hitRate,
         hitRatePct: Math.round((hitRate ?? 0) * 100),
+        pace_l5: p.pace_l5 ?? null,
+        pace_l10: p.pace_l10 ?? null,
+        pace_l20: p.pace_l20 ?? null,
+        usage_l5: p.usage_l5 ?? null,
+        usage_l10: p.usage_l10 ?? null,
+        usage_l20: p.usage_l20 ?? null,
         startTimeMs,
       };
     });

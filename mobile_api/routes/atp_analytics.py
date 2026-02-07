@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -72,6 +72,26 @@ def _fetch_matches_for_seasons(
     return matches
 
 
+def _parse_date(value: Optional[str], fallback: date) -> date:
+    if not value:
+        return fallback
+    return datetime.strptime(value, "%Y-%m-%d").date()
+
+
+def _chunked(items: List[int], size: int = 25) -> List[List[int]]:
+    return [items[i : i + size] for i in range(0, len(items), size)]
+
+
+def _date_overlaps(
+    *,
+    start: date,
+    end: date,
+    target_start: date,
+    target_end: date,
+) -> bool:
+    return start <= target_end and end >= target_start
+
+
 @router.get("/players")
 def get_atp_players(
     search: Optional[str] = None,
@@ -131,6 +151,77 @@ def get_atp_rankings(
         payload = fetch_one_page("/rankings", params=params, cache_ttl=300)
         data = payload.get("data", [])
         return {"data": data, "count": len(data), "meta": payload.get("meta", {})}
+    except Exception as err:
+        _handle_error(err)
+
+
+@router.get("/matches/upcoming")
+def get_atp_upcoming_matches(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    include_completed: bool = Query(False),
+    max_pages: Optional[int] = Query(5, ge=1, le=500),
+):
+    try:
+        today = date.today()
+        default_end = today + timedelta(days=1)
+        window_start = _parse_date(start_date, today)
+        window_end = _parse_date(end_date, default_end)
+        if window_start > window_end:
+            window_start, window_end = window_end, window_start
+
+        seasons = sorted({window_start.year, window_end.year})
+        tournaments: List[Dict[str, Any]] = []
+        for season in seasons:
+            payload = fetch_one_page(
+                "/tournaments",
+                params={"season": season, "per_page": 100},
+                cache_ttl=300,
+            )
+            tournaments.extend(payload.get("data", []) or [])
+
+        eligible_tournaments: List[Dict[str, Any]] = []
+        for tournament in tournaments:
+            start_raw = tournament.get("start_date")
+            end_raw = tournament.get("end_date")
+            if not start_raw or not end_raw:
+                continue
+            try:
+                start = datetime.strptime(start_raw, "%Y-%m-%d").date()
+                end = datetime.strptime(end_raw, "%Y-%m-%d").date()
+            except ValueError:
+                continue
+            if _date_overlaps(
+                start=start,
+                end=end,
+                target_start=window_start,
+                target_end=window_end,
+            ):
+                eligible_tournaments.append(tournament)
+
+        tournament_ids = [tournament.get("id") for tournament in eligible_tournaments if tournament.get("id")]
+        matches: List[Dict[str, Any]] = []
+        for batch in _chunked(tournament_ids, size=25):
+            batch_matches = fetch_paginated(
+                "/matches",
+                params={"tournament_ids[]": batch},
+                cache_ttl=300,
+                max_pages=max_pages,
+            )
+            matches.extend(batch_matches)
+
+        if not include_completed:
+            matches = [match for match in matches if match.get("match_status") != "F"]
+
+        return {
+            "window": {"start_date": window_start.isoformat(), "end_date": window_end.isoformat()},
+            "tournaments": {
+                "count": len(eligible_tournaments),
+                "ids": tournament_ids,
+            },
+            "matches": matches,
+            "count": len(matches),
+        }
     except Exception as err:
         _handle_error(err)
 

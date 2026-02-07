@@ -57,6 +57,51 @@ const TEAM_NAME_TO_ABBR: Record<string, string> = {
   "washington wizards": "WAS",
 };
 
+function normalizeMarketKey(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const key = value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/_/g, "");
+  if (!key) return undefined;
+  if (["pts", "point", "points"].includes(key)) return "pts";
+  if (["reb", "rebound", "rebounds"].includes(key)) return "reb";
+  if (["ast", "assist", "assists"].includes(key)) return "ast";
+  if (["stl", "steal", "steals"].includes(key)) return "stl";
+  if (["blk", "block", "blocks"].includes(key)) return "blk";
+  if (
+    [
+      "3pm",
+      "3pt",
+      "3pts",
+      "3pointersmade",
+      "threepointersmade",
+      "fg3m",
+    ].includes(key)
+  ) {
+    return "3pm";
+  }
+  if (["tov", "turnover", "turnovers"].includes(key)) return "tov";
+  if (["pa", "pointsassists"].includes(key)) return "pa";
+  if (["pr", "pointsrebounds"].includes(key)) return "pr";
+  if (["ra", "reboundsassists"].includes(key)) return "ra";
+  if (["pra", "pointsreboundsassists"].includes(key)) return "pra";
+  if (["dd", "doubledouble"].includes(key)) return "dd";
+  if (["td", "tripledouble"].includes(key)) return "td";
+  return key;
+}
+
+function resolveMarketKey(row: Record<string, any>): string | undefined {
+  return normalizeMarketKey(
+    row.market_key ??
+      row.market ??
+      row.market_name ??
+      row.market_type ??
+      row.stat_type
+  );
+}
+
 function normalizeTeamAbbr(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
@@ -252,7 +297,8 @@ export function usePlayerPropsMaster({
   const markets = useMemo(() => {
     const set = new Set<string>();
     raw.forEach((r) => {
-      if (r.market_key) set.add(r.market_key);
+      const key = resolveMarketKey(r);
+      if (key) set.add(key);
     });
 
     return [
@@ -267,11 +313,13 @@ export function usePlayerPropsMaster({
   ====================================================== */
   const props = useMemo(() => {
     const filtered = raw.filter((p) => {
+      const marketKey = resolveMarketKey(p);
+      if (!marketKey) return false;
 
       /* ---------- MARKET ---------- */
       if (
         filters.market !== "ALL" &&
-        p.market_key !== filters.market
+        marketKey !== filters.market
       ) {
         return false;
       }
@@ -309,6 +357,7 @@ export function usePlayerPropsMaster({
     });
 
     return filtered.map((p, idx) => {
+      const marketKey = resolveMarketKey(p) ?? "unknown";
       const hitRate =
         filters.hitRateWindow === "L5"
           ? p.hit_rate_l5
@@ -341,7 +390,7 @@ export function usePlayerPropsMaster({
         /* ---------- DISPLAY ---------- */
         player_id: p.player_id,
         player: p.player_name,
-        market: p.market_key,
+        market: marketKey,
         window: p.market_window,
         line: p.line_value,
 

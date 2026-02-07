@@ -174,26 +174,58 @@ def get_prop_correlations(
     client = get_bq_client()
 
     # ── Step 1: Get tonight's games ──────────────────────────
-    games_query = """
-    SELECT DISTINCT
-        game_id,
-        home_team_abbr,
-        away_team_abbr
-    FROM `nba_goat_data.v_game_betting_base`
-    WHERE game_date = @game_date
-      AND (is_final IS NULL OR is_final = FALSE)
-    """
+    # Try the betting view first, fall back to the games table
+    games_rows = []
+    game_source = "betting"
 
-    games_rows = list(
-        client.query(
-            games_query,
-            job_config=bigquery.QueryJobConfig(
-                query_parameters=[
-                    bigquery.ScalarQueryParameter("game_date", "DATE", query_date),
-                ]
-            ),
-        ).result()
-    )
+    try:
+        games_query = """
+        SELECT DISTINCT
+            game_id,
+            home_team_abbr,
+            away_team_abbr
+        FROM `nba_goat_data.v_game_betting_base`
+        WHERE game_date = @game_date
+          AND (is_final IS NULL OR is_final = FALSE)
+        """
+        games_rows = list(
+            client.query(
+                games_query,
+                job_config=bigquery.QueryJobConfig(
+                    query_parameters=[
+                        bigquery.ScalarQueryParameter("game_date", "DATE", query_date),
+                    ]
+                ),
+            ).result()
+        )
+    except Exception as e:
+        print(f"[CORRELATIONS] Betting view query failed: {e}")
+
+    # Fallback: try the games table directly
+    if not games_rows:
+        try:
+            fallback_query = """
+            SELECT DISTINCT
+                game_id,
+                home_team_abbr,
+                away_team_abbr
+            FROM `nba_goat_data.games`
+            WHERE game_date = @game_date
+              AND (is_final IS NULL OR is_final = FALSE)
+            """
+            games_rows = list(
+                client.query(
+                    fallback_query,
+                    job_config=bigquery.QueryJobConfig(
+                        query_parameters=[
+                            bigquery.ScalarQueryParameter("game_date", "DATE", query_date),
+                        ]
+                    ),
+                ).result()
+            )
+            game_source = "games_table"
+        except Exception as e:
+            print(f"[CORRELATIONS] Games table fallback also failed: {e}")
 
     if not games_rows:
         return {
@@ -212,54 +244,68 @@ def get_prop_correlations(
         team_abbrs.add(gd["away_team_abbr"])
 
     # ── Step 2: Get recent game stats for players on tonight's teams ──
-    # Use game_advanced_stats (period=0 = full game) for the last N games
     team_list = ", ".join(f"'{t}'" for t in sorted(team_abbrs))
 
-    stats_query = f"""
-    WITH recent AS (
-        SELECT
-            player_id,
-            player_first_name,
-            player_last_name,
-            team_abbreviation,
-            game_id,
-            game_date,
-            usage_percentage,
-            offensive_rating,
-            assist_ratio,
-            rebound_percentage,
-            pace,
-            pie,
-            ROW_NUMBER() OVER (
-                PARTITION BY player_id
-                ORDER BY game_date DESC
-            ) AS game_num
-        FROM `nba_live.game_advanced_stats`
-        WHERE period = 0
-          AND team_abbreviation IN ({team_list})
-          AND usage_percentage IS NOT NULL
-          AND game_date < @game_date
-    )
-    SELECT *
-    FROM recent
-    WHERE game_num <= @lookback
-    ORDER BY team_abbreviation, player_id, game_date DESC
-    """
+    try:
+        stats_query = f"""
+        WITH recent AS (
+            SELECT
+                player_id,
+                player_first_name,
+                player_last_name,
+                team_abbreviation,
+                game_id,
+                game_date,
+                usage_percentage,
+                offensive_rating,
+                assist_ratio,
+                rebound_percentage,
+                pace,
+                pie,
+                ROW_NUMBER() OVER (
+                    PARTITION BY player_id
+                    ORDER BY game_date DESC
+                ) AS game_num
+            FROM `nba_live.game_advanced_stats`
+            WHERE period = 0
+              AND team_abbreviation IN ({team_list})
+              AND usage_percentage IS NOT NULL
+              AND game_date < @game_date
+        )
+        SELECT *
+        FROM recent
+        WHERE game_num <= @lookback
+        ORDER BY team_abbreviation, player_id, game_date DESC
+        """
 
-    stats_rows = list(
-        client.query(
-            stats_query,
-            job_config=bigquery.QueryJobConfig(
-                query_parameters=[
-                    bigquery.ScalarQueryParameter("game_date", "DATE", query_date),
-                    bigquery.ScalarQueryParameter("lookback", "INT64", lookback),
-                ]
-            ),
-        ).result()
-    )
+        stats_rows = list(
+            client.query(
+                stats_query,
+                job_config=bigquery.QueryJobConfig(
+                    query_parameters=[
+                        bigquery.ScalarQueryParameter("game_date", "DATE", query_date),
+                        bigquery.ScalarQueryParameter("lookback", "INT64", lookback),
+                    ]
+                ),
+            ).result()
+        )
+    except Exception as e:
+        print(f"[CORRELATIONS] Game advanced stats query failed: {e}")
+        return {
+            "game_date": query_date.isoformat(),
+            "count": 0,
+            "games": [],
+            "error": "Could not load game advanced stats",
+        }
 
-    # ── Step 3: Organize stats by team → player → game list ──
-    # Structure: { team_abbr: { player_id: { "name": ..., "games": { game_id: {...} } } } }
+    if not stats_rows:
+        return {
+            "game_date": query_date.isoformat(),
+            "count": 0,
+            "games": [],
+        }
+
+    # ── Step 3: Organize stats by team -> player -> game list ──
     team_players: Dict[str, Dict[int, Dict]] = {}
     for row in stats_rows:
         r = dict(row)
@@ -286,42 +332,36 @@ def get_prop_correlations(
             "pie": r.get("pie"),
         }
 
-    # ── Step 4: Get tonight's props for market context ──
-    props_query = """
-    SELECT DISTINCT
-        p.player_id,
-        p.market_key,
-        p.line_value
-    FROM `nba_goat_data.props_mobile_v1` p
-    WHERE p.gameDate = @game_date
-    """
-
-    props_rows = list(
-        client.query(
-            props_query,
-            job_config=bigquery.QueryJobConfig(
-                query_parameters=[
-                    bigquery.ScalarQueryParameter("game_date", "DATE", query_date),
-                ]
-            ),
-        ).result()
-    )
-
-    # Map player_id → list of active markets
+    # ── Step 4: Get tonight's props for market context (optional) ──
     player_markets: Dict[int, List[Dict]] = {}
-    for pr in props_rows:
-        prd = dict(pr)
-        pid = prd["player_id"]
-        if pid not in player_markets:
-            player_markets[pid] = []
-        player_markets[pid].append({
-            "market": prd.get("market_key"),
-            "line": prd.get("line_value"),
-        })
+    try:
+        props_query = """
+        SELECT DISTINCT
+            player_id,
+            market_key,
+            line_value
+        FROM `nba_live.player_prop_odds_master_staging`
+        WHERE market_window = 'FULL'
+        """
+        props_rows = list(client.query(props_query).result())
+
+        for pr in props_rows:
+            prd = dict(pr)
+            pid = prd["player_id"]
+            if pid not in player_markets:
+                player_markets[pid] = []
+            player_markets[pid].append({
+                "market": prd.get("market_key"),
+                "line": prd.get("line_value"),
+            })
+    except Exception as e:
+        print(f"[CORRELATIONS] Props query failed (non-fatal): {e}")
+        # Continue without prop market data — correlations still work
 
     # ── Step 5: Compute correlations for teammate pairs ──
     metrics = ["usage_percentage", "offensive_rating", "assist_ratio", "pie"]
     all_correlations: List[Dict] = []
+    has_props = len(player_markets) > 0
 
     for team_abbr, players in team_players.items():
         player_ids = sorted(players.keys())
@@ -334,9 +374,11 @@ def get_prop_correlations(
                 pa = players[pid_a]
                 pb = players[pid_b]
 
-                # Only include players with active props tonight
-                if pid_a not in player_markets and pid_b not in player_markets:
-                    continue
+                # If we have props data, require at least one player to have props.
+                # If props failed to load, include all pairs.
+                if has_props:
+                    if pid_a not in player_markets and pid_b not in player_markets:
+                        continue
 
                 # Find shared games
                 shared_games = sorted(

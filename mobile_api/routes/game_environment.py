@@ -150,37 +150,76 @@ def get_game_environment(
     client = get_bq_client()
 
     # ── Step 1: Get tonight's games with betting lines ──
-    games_query = """
-    SELECT
-        game_id,
-        game_date,
-        start_time_est,
-        status,
-        home_team_abbr,
-        away_team_abbr,
-        home_moneyline,
-        away_moneyline,
-        spread_home,
-        spread_away,
-        total_line
-    FROM `nba_goat_data.v_game_betting_base`
-    WHERE game_date = @game_date
-      AND (is_final IS NULL OR is_final = FALSE)
-    ORDER BY start_time_est
-    LIMIT @limit
-    """
+    games_rows = []
+    try:
+        games_query = """
+        SELECT
+            game_id,
+            game_date,
+            start_time_est,
+            status,
+            home_team_abbr,
+            away_team_abbr,
+            home_moneyline,
+            away_moneyline,
+            spread_home,
+            spread_away,
+            total_line
+        FROM `nba_goat_data.v_game_betting_base`
+        WHERE game_date = @game_date
+          AND (is_final IS NULL OR is_final = FALSE)
+        ORDER BY start_time_est
+        LIMIT @limit
+        """
+        games_rows = list(
+            client.query(
+                games_query,
+                job_config=bigquery.QueryJobConfig(
+                    query_parameters=[
+                        bigquery.ScalarQueryParameter("game_date", "DATE", query_date),
+                        bigquery.ScalarQueryParameter("limit", "INT64", limit),
+                    ]
+                ),
+            ).result()
+        )
+    except Exception as e:
+        print(f"[GAME_ENV] Betting view query failed: {e}")
 
-    games_rows = list(
-        client.query(
-            games_query,
-            job_config=bigquery.QueryJobConfig(
-                query_parameters=[
-                    bigquery.ScalarQueryParameter("game_date", "DATE", query_date),
-                    bigquery.ScalarQueryParameter("limit", "INT64", limit),
-                ]
-            ),
-        ).result()
-    )
+    # Fallback: try the games table directly (without betting lines)
+    if not games_rows:
+        try:
+            fallback_query = """
+            SELECT
+                game_id,
+                game_date,
+                start_time_est,
+                status,
+                home_team_abbr,
+                away_team_abbr,
+                CAST(NULL AS INT64) AS home_moneyline,
+                CAST(NULL AS INT64) AS away_moneyline,
+                CAST(NULL AS FLOAT64) AS spread_home,
+                CAST(NULL AS FLOAT64) AS spread_away,
+                CAST(NULL AS FLOAT64) AS total_line
+            FROM `nba_goat_data.games`
+            WHERE game_date = @game_date
+              AND (is_final IS NULL OR is_final = FALSE)
+            ORDER BY start_time_est
+            LIMIT @limit
+            """
+            games_rows = list(
+                client.query(
+                    fallback_query,
+                    job_config=bigquery.QueryJobConfig(
+                        query_parameters=[
+                            bigquery.ScalarQueryParameter("game_date", "DATE", query_date),
+                            bigquery.ScalarQueryParameter("limit", "INT64", limit),
+                        ]
+                    ),
+                ).result()
+            )
+        except Exception as e:
+            print(f"[GAME_ENV] Games table fallback also failed: {e}")
 
     if not games_rows:
         return {
@@ -199,149 +238,158 @@ def get_game_environment(
 
     team_list = ", ".join(f"'{t}'" for t in sorted(team_abbrs))
 
-    # ── Step 2: Get team pace + scoring from season averages ──
-    pace_query = f"""
-    WITH latest AS (
-        SELECT
-            team_abbreviation,
-            CAST(JSON_VALUE(stats, '$.gp') AS INT64) AS gp,
-            CAST(JSON_VALUE(stats, '$.pts') AS FLOAT64) AS pts_avg,
-            CAST(JSON_VALUE(stats, '$.reb') AS FLOAT64) AS reb_avg,
-            CAST(JSON_VALUE(stats, '$.ast') AS FLOAT64) AS ast_avg,
-            CAST(JSON_VALUE(stats, '$.tov') AS FLOAT64) AS tov_avg,
-            CAST(JSON_VALUE(stats, '$.fg_pct') AS FLOAT64) AS fg_pct,
-            CAST(JSON_VALUE(stats, '$.fg3_pct') AS FLOAT64) AS fg3_pct,
-            RANK() OVER (ORDER BY CAST(JSON_VALUE(stats, '$.pts') AS FLOAT64) DESC) AS scoring_rank
-        FROM `nba_live.team_season_averages`
-        WHERE category = 'general'
-          AND stat_type = 'base'
-          AND season_type = 'regular'
-          AND team_abbreviation IN ({team_list})
-          AND run_ts = (
-              SELECT MAX(run_ts)
-              FROM `nba_live.team_season_averages`
-              WHERE category = 'general'
-                AND stat_type = 'base'
-                AND season_type = 'regular'
-          )
-    )
-    SELECT * FROM latest
-    """
-
-    pace_rows = list(client.query(pace_query).result())
+    # ── Step 2: Get team pace + scoring from season averages (optional) ──
     team_stats: Dict[str, Dict] = {}
-    for row in pace_rows:
-        rd = dict(row)
-        team_stats[rd["team_abbreviation"]] = rd
+    try:
+        pace_query = f"""
+        WITH latest AS (
+            SELECT
+                team_abbreviation,
+                CAST(JSON_VALUE(stats, '$.gp') AS INT64) AS gp,
+                CAST(JSON_VALUE(stats, '$.pts') AS FLOAT64) AS pts_avg,
+                CAST(JSON_VALUE(stats, '$.reb') AS FLOAT64) AS reb_avg,
+                CAST(JSON_VALUE(stats, '$.ast') AS FLOAT64) AS ast_avg,
+                CAST(JSON_VALUE(stats, '$.tov') AS FLOAT64) AS tov_avg,
+                CAST(JSON_VALUE(stats, '$.fg_pct') AS FLOAT64) AS fg_pct,
+                CAST(JSON_VALUE(stats, '$.fg3_pct') AS FLOAT64) AS fg3_pct,
+                RANK() OVER (ORDER BY CAST(JSON_VALUE(stats, '$.pts') AS FLOAT64) DESC) AS scoring_rank
+            FROM `nba_live.team_season_averages`
+            WHERE category = 'general'
+              AND stat_type = 'base'
+              AND season_type = 'regular'
+              AND team_abbreviation IN ({team_list})
+              AND run_ts = (
+                  SELECT MAX(run_ts)
+                  FROM `nba_live.team_season_averages`
+                  WHERE category = 'general'
+                    AND stat_type = 'base'
+                    AND season_type = 'regular'
+              )
+        )
+        SELECT * FROM latest
+        """
+        pace_rows = list(client.query(pace_query).result())
+        for row in pace_rows:
+            rd = dict(row)
+            team_stats[rd["team_abbreviation"]] = rd
+    except Exception as e:
+        print(f"[GAME_ENV] Team season averages query failed (non-fatal): {e}")
 
-    # ── Step 3: Get team pace from advanced stats (actual pace metric) ──
-    adv_pace_query = f"""
-    WITH team_pace AS (
-        SELECT
-            team_abbreviation,
-            AVG(pace) AS avg_pace,
-            STDDEV(pace) AS pace_std,
-            COUNT(*) AS games_sampled
-        FROM `nba_live.game_advanced_stats`
-        WHERE period = 0
-          AND team_abbreviation IN ({team_list})
-          AND pace IS NOT NULL
-          AND game_date >= DATE_SUB(@game_date, INTERVAL 30 DAY)
-        GROUP BY team_abbreviation
-    ),
-    ranked AS (
-        SELECT
-            *,
-            RANK() OVER (ORDER BY avg_pace DESC) AS pace_rank
-        FROM team_pace
-    )
-    SELECT * FROM ranked
-    """
-
-    adv_pace_rows = list(
-        client.query(
-            adv_pace_query,
-            job_config=bigquery.QueryJobConfig(
-                query_parameters=[
-                    bigquery.ScalarQueryParameter("game_date", "DATE", query_date),
-                ]
-            ),
-        ).result()
-    )
+    # ── Step 3: Get team pace from advanced stats (optional) ──
     team_pace: Dict[str, Dict] = {}
-    for row in adv_pace_rows:
-        rd = dict(row)
-        team_pace[rd["team_abbreviation"]] = rd
+    try:
+        adv_pace_query = f"""
+        WITH team_pace AS (
+            SELECT
+                team_abbreviation,
+                AVG(pace) AS avg_pace,
+                STDDEV(pace) AS pace_std,
+                COUNT(*) AS games_sampled
+            FROM `nba_live.game_advanced_stats`
+            WHERE period = 0
+              AND team_abbreviation IN ({team_list})
+              AND pace IS NOT NULL
+              AND game_date >= DATE_SUB(@game_date, INTERVAL 30 DAY)
+            GROUP BY team_abbreviation
+        ),
+        ranked AS (
+            SELECT
+                *,
+                RANK() OVER (ORDER BY avg_pace DESC) AS pace_rank
+            FROM team_pace
+        )
+        SELECT * FROM ranked
+        """
+        adv_pace_rows = list(
+            client.query(
+                adv_pace_query,
+                job_config=bigquery.QueryJobConfig(
+                    query_parameters=[
+                        bigquery.ScalarQueryParameter("game_date", "DATE", query_date),
+                    ]
+                ),
+            ).result()
+        )
+        for row in adv_pace_rows:
+            rd = dict(row)
+            team_pace[rd["team_abbreviation"]] = rd
+    except Exception as e:
+        print(f"[GAME_ENV] Advanced pace query failed (non-fatal): {e}")
 
-    # ── Step 4: Detect back-to-backs ──
+    # ── Step 4: Detect back-to-backs (optional) ──
     yesterday = query_date - timedelta(days=1)
-    b2b_query = f"""
-    SELECT DISTINCT
-        home_team_abbr AS team_abbr
-    FROM `nba_goat_data.games`
-    WHERE game_date = @yesterday
-      AND is_final = TRUE
-      AND home_team_abbr IN ({team_list})
-    UNION DISTINCT
-    SELECT DISTINCT
-        away_team_abbr AS team_abbr
-    FROM `nba_goat_data.games`
-    WHERE game_date = @yesterday
-      AND is_final = TRUE
-      AND away_team_abbr IN ({team_list})
-    """
+    b2b_teams: set = set()
+    try:
+        b2b_query = f"""
+        SELECT DISTINCT
+            home_team_abbr AS team_abbr
+        FROM `nba_goat_data.games`
+        WHERE game_date = @yesterday
+          AND is_final = TRUE
+          AND home_team_abbr IN ({team_list})
+        UNION DISTINCT
+        SELECT DISTINCT
+            away_team_abbr AS team_abbr
+        FROM `nba_goat_data.games`
+        WHERE game_date = @yesterday
+          AND is_final = TRUE
+          AND away_team_abbr IN ({team_list})
+        """
+        b2b_rows = list(
+            client.query(
+                b2b_query,
+                job_config=bigquery.QueryJobConfig(
+                    query_parameters=[
+                        bigquery.ScalarQueryParameter("yesterday", "DATE", yesterday),
+                    ]
+                ),
+            ).result()
+        )
+        b2b_teams = {dict(r)["team_abbr"] for r in b2b_rows}
+    except Exception as e:
+        print(f"[GAME_ENV] B2B query failed (non-fatal): {e}")
 
-    b2b_rows = list(
-        client.query(
-            b2b_query,
-            job_config=bigquery.QueryJobConfig(
-                query_parameters=[
-                    bigquery.ScalarQueryParameter("yesterday", "DATE", yesterday),
-                ]
-            ),
-        ).result()
-    )
-    b2b_teams = {dict(r)["team_abbr"] for r in b2b_rows}
-
-    # ── Step 5: Get days since last game for each team ──
-    rest_query = f"""
-    WITH last_games AS (
+    # ── Step 5: Get days since last game for each team (optional) ──
+    team_rest: Dict[str, int] = {}
+    try:
+        rest_query = f"""
+        WITH last_games AS (
+            SELECT
+                team_abbr,
+                MAX(game_date) AS last_game_date
+            FROM (
+                SELECT home_team_abbr AS team_abbr, game_date
+                FROM `nba_goat_data.games`
+                WHERE is_final = TRUE AND game_date < @game_date
+                UNION ALL
+                SELECT away_team_abbr AS team_abbr, game_date
+                FROM `nba_goat_data.games`
+                WHERE is_final = TRUE AND game_date < @game_date
+            )
+            WHERE team_abbr IN ({team_list})
+            GROUP BY team_abbr
+        )
         SELECT
             team_abbr,
-            MAX(game_date) AS last_game_date
-        FROM (
-            SELECT home_team_abbr AS team_abbr, game_date
-            FROM `nba_goat_data.games`
-            WHERE is_final = TRUE AND game_date < @game_date
-            UNION ALL
-            SELECT away_team_abbr AS team_abbr, game_date
-            FROM `nba_goat_data.games`
-            WHERE is_final = TRUE AND game_date < @game_date
+            last_game_date,
+            DATE_DIFF(@game_date, last_game_date, DAY) AS rest_days
+        FROM last_games
+        """
+        rest_rows = list(
+            client.query(
+                rest_query,
+                job_config=bigquery.QueryJobConfig(
+                    query_parameters=[
+                        bigquery.ScalarQueryParameter("game_date", "DATE", query_date),
+                    ]
+                ),
+            ).result()
         )
-        WHERE team_abbr IN ({team_list})
-        GROUP BY team_abbr
-    )
-    SELECT
-        team_abbr,
-        last_game_date,
-        DATE_DIFF(@game_date, last_game_date, DAY) AS rest_days
-    FROM last_games
-    """
-
-    rest_rows = list(
-        client.query(
-            rest_query,
-            job_config=bigquery.QueryJobConfig(
-                query_parameters=[
-                    bigquery.ScalarQueryParameter("game_date", "DATE", query_date),
-                ]
-            ),
-        ).result()
-    )
-    team_rest: Dict[str, int] = {}
-    for row in rest_rows:
-        rd = dict(row)
-        team_rest[rd["team_abbr"]] = rd.get("rest_days", 1)
+        for row in rest_rows:
+            rd = dict(row)
+            team_rest[rd["team_abbr"]] = rd.get("rest_days", 1)
+    except Exception as e:
+        print(f"[GAME_ENV] Rest days query failed (non-fatal): {e}")
 
     # ── Step 6: Assemble environment profiles ──
     result_games = []

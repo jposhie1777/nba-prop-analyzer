@@ -45,6 +45,8 @@ export type PropCardProps = {
   playerPosition?: string;
   opponentTeamAbbr?: string;
   opponentPositionRank?: number;
+  wowyStatLabel?: string;
+  wowyImpacts?: WowyImpactDisplay[];
 
   sparkline_l5?: number[];
   sparkline_l10?: number[];
@@ -69,6 +71,18 @@ export type PropCardProps = {
   expanded: boolean;
   onToggleExpand: () => void;
   scrollRef?: React.RefObject<FlatList<any>>;
+};
+
+type WowyImpactDisplay = {
+  injuredPlayerId: number;
+  injuredPlayerName: string;
+  injuredStatus?: string;
+  injuryType?: string | null;
+  diff: number | null;
+  statWith: number | null;
+  statWithout: number | null;
+  gamesWith: number | null;
+  gamesWithout: number | null;
 };
 
 
@@ -112,6 +126,21 @@ function getHitRateColor(pct: number): string {
   return "#ef4444"; // red
 }
 
+function formatDiff(value: number | null): string {
+  if (value === null || value === undefined) return "—";
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${value.toFixed(1)}`;
+}
+
+function getDiffColor(value: number | null, colors: any): string {
+  if (value === null || value === undefined) return colors.text.muted;
+  if (value > 2) return "#22c55e";
+  if (value > 0) return "#4ade80";
+  if (value < -2) return "#ef4444";
+  if (value < 0) return "#f87171";
+  return colors.text.muted;
+}
+
 /* ======================================================
    COMPONENT
 ====================================================== */
@@ -143,6 +172,8 @@ export default function PropCard(props: PropCardProps) {
     playerPosition,
     opponentTeamAbbr,
     opponentPositionRank,
+    wowyStatLabel,
+    wowyImpacts,
   } = props;
 
   /* =========================
@@ -422,6 +453,63 @@ export default function PropCard(props: PropCardProps) {
                   </View>
                 )}
                 <MiniBarSparkline data={sparkline} dates={dates} />
+                {wowyImpacts && (
+                  <View style={styles.wowySection}>
+                    <Text style={styles.wowyTitle}>
+                      WOWY Impact{wowyStatLabel ? ` · ${wowyStatLabel}` : ""}
+                    </Text>
+                    {wowyImpacts.length > 0 ? (
+                      wowyImpacts.map((impact) => {
+                        const diffColor = getDiffColor(impact.diff, colors);
+                        const statusParts = [
+                          impact.injuredStatus,
+                          impact.injuryType,
+                        ].filter(Boolean);
+                        return (
+                          <View
+                            key={`${impact.injuredPlayerId}-${impact.injuredPlayerName}`}
+                            style={styles.wowyRow}
+                          >
+                            <View style={styles.wowyLeft}>
+                              <Text style={styles.wowyName}>
+                                {impact.injuredPlayerName}
+                              </Text>
+                              {statusParts.length > 0 && (
+                                <Text style={styles.wowyMeta}>
+                                  {statusParts.join(" • ")}
+                                </Text>
+                              )}
+                            </View>
+                            <View style={styles.wowyRight}>
+                              <Text style={[styles.wowyDiff, { color: diffColor }]}>
+                                {formatDiff(impact.diff)}
+                              </Text>
+                              <Text style={styles.wowyValue}>
+                                {impact.statWithout != null
+                                  ? impact.statWithout.toFixed(1)
+                                  : "—"}
+                                {" vs "}
+                                {impact.statWith != null
+                                  ? impact.statWith.toFixed(1)
+                                  : "—"}
+                              </Text>
+                              {impact.gamesWith != null &&
+                                impact.gamesWithout != null && (
+                                  <Text style={styles.wowyGames}>
+                                    {impact.gamesWithout} w/o • {impact.gamesWith} w/
+                                  </Text>
+                                )}
+                            </View>
+                          </View>
+                        );
+                      })
+                    ) : (
+                      <Text style={styles.wowyEmpty}>
+                        No WOWY impact data for this market.
+                      </Text>
+                    )}
+                  </View>
+                )}
 
               </View>
             )}
@@ -657,6 +745,70 @@ function makeStyles(colors: any) {
       fontSize: 14,
       fontWeight: "800",
       color: colors.accent.primary,
+    },
+
+    wowySection: {
+      marginTop: 14,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.border.subtle,
+      gap: 10,
+    },
+
+    wowyTitle: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.text.primary,
+      textTransform: "uppercase",
+      letterSpacing: 0.6,
+    },
+
+    wowyRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      gap: 12,
+    },
+
+    wowyLeft: {
+      flex: 1,
+    },
+
+    wowyName: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.text.primary,
+    },
+
+    wowyMeta: {
+      marginTop: 2,
+      fontSize: 11,
+      color: colors.text.muted,
+    },
+
+    wowyRight: {
+      alignItems: "flex-end",
+    },
+
+    wowyDiff: {
+      fontSize: 14,
+      fontWeight: "800",
+    },
+
+    wowyValue: {
+      marginTop: 2,
+      fontSize: 11,
+      color: colors.text.muted,
+    },
+
+    wowyGames: {
+      marginTop: 2,
+      fontSize: 10,
+      color: colors.text.muted,
+    },
+
+    wowyEmpty: {
+      fontSize: 12,
+      color: colors.text.muted,
     },
 
     windowToggle: {

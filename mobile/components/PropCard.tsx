@@ -45,6 +45,8 @@ export type PropCardProps = {
   playerPosition?: string;
   opponentTeamAbbr?: string;
   opponentPositionRank?: number;
+  opponentStatAllowed?: number;
+  opponentStatAllowedIsRate?: boolean;
   teamPaceRank?: number;
   opponentPaceRank?: number;
   impliedTeamTotal?: number;
@@ -139,6 +141,12 @@ function formatDiff(value: number | null): string {
   return `${sign}${value.toFixed(1)}`;
 }
 
+function formatAllowedStat(value?: number, isRate?: boolean): string {
+  if (value === null || value === undefined) return "—";
+  if (isRate) return `${(value * 100).toFixed(0)}%`;
+  return value.toFixed(1);
+}
+
 function getDiffColor(value: number | null, colors: any): string {
   if (value === null || value === undefined) return colors.text.muted;
   if (value > 2) return "#22c55e";
@@ -179,6 +187,8 @@ export default function PropCard(props: PropCardProps) {
     playerPosition,
     opponentTeamAbbr,
     opponentPositionRank,
+    opponentStatAllowed,
+    opponentStatAllowedIsRate,
     teamPaceRank,
     opponentPaceRank,
     impliedTeamTotal,
@@ -445,7 +455,7 @@ export default function PropCard(props: PropCardProps) {
               <View style={styles.expandWrap}>
                 {(playerPosition || opponentTeamAbbr || opponentPositionRank != null) && (
                   <View style={styles.opponentWrap}>
-                    <View>
+                    <View style={styles.opponentLeft}>
                       <Text style={styles.opponentTitle}>
                         Opponent Position Rank
                       </Text>
@@ -455,6 +465,21 @@ export default function PropCard(props: PropCardProps) {
                         </Text>
                       )}
                     </View>
+                    {opponentStatAllowed != null && (
+                      <View style={styles.opponentAllowedWrap}>
+                        <View style={styles.opponentAllowedChip}>
+                          <Text style={styles.opponentRankLabel}>
+                            Allowed {formatMarketLabel(market)}
+                          </Text>
+                          <Text style={styles.opponentRankValue}>
+                            {formatAllowedStat(
+                              opponentStatAllowed,
+                              opponentStatAllowedIsRate,
+                            )}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
                     <View style={styles.opponentRankChip}>
                       <Text style={styles.opponentRankLabel}>
                         {formatMarketLabel(market)} Rk
@@ -854,6 +879,10 @@ function makeStyles(colors: any) {
       gap: 12,
     },
 
+    opponentLeft: {
+      flex: 1,
+    },
+
     opponentTitle: {
       fontSize: 12,
       fontWeight: "700",
@@ -864,6 +893,19 @@ function makeStyles(colors: any) {
       fontSize: 11,
       color: colors.text.muted,
       marginTop: 2,
+    },
+
+    opponentAllowedWrap: {
+      flex: 1,
+      alignItems: "center",
+    },
+
+    opponentAllowedChip: {
+      alignItems: "center",
+      backgroundColor: colors.surface.cardSoft,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 10,
     },
 
     opponentRankChip: {

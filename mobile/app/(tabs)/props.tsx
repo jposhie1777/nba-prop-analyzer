@@ -70,6 +70,40 @@ function getOpponentRank(
   }
 }
 
+function getOpponentAllowedStat(
+  row: OpponentPositionDefenseRow | undefined,
+  market?: string,
+) {
+  const normalizedMarket = normalizeMarketKey(market);
+  if (!row || !normalizedMarket) return undefined;
+  switch (normalizedMarket) {
+    case "pts":
+      return { value: row.pts_allowed_avg, isRate: false };
+    case "reb":
+      return { value: row.reb_allowed_avg, isRate: false };
+    case "ast":
+      return { value: row.ast_allowed_avg, isRate: false };
+    case "stl":
+      return { value: row.stl_allowed_avg, isRate: false };
+    case "blk":
+      return { value: row.blk_allowed_avg, isRate: false };
+    case "fg3m":
+      return { value: row.fg3m_allowed_avg, isRate: false };
+    case "pa":
+      return { value: row.pa_allowed_avg, isRate: false };
+    case "pr":
+      return { value: row.pr_allowed_avg, isRate: false };
+    case "pra":
+      return { value: row.pra_allowed_avg, isRate: false };
+    case "dd":
+      return { value: row.dd_rate_allowed, isRate: true };
+    case "td":
+      return { value: row.td_rate_allowed, isRate: true };
+    default:
+      return undefined;
+  }
+}
+
 function normalizeMarketKey(value?: string) {
   if (!value) return undefined;
   const key = value
@@ -588,6 +622,10 @@ export default function PropsTestScreen() {
         opponentRow,
         item.market,
       );
+      const opponentStatAllowed = getOpponentAllowedStat(
+        opponentRow,
+        item.market,
+      );
       const wowyStat = resolveWowyStat(item.market);
       const wowyEntries =
         wowyStat && item.player_id != null
@@ -632,6 +670,8 @@ export default function PropsTestScreen() {
           playerPosition={playerPosition}
           opponentTeamAbbr={opponentTeamAbbr}
           opponentPositionRank={opponentPositionRank}
+          opponentStatAllowed={opponentStatAllowed?.value}
+          opponentStatAllowedIsRate={opponentStatAllowed?.isRate}
           wowyStatLabel={wowyStat ? getWowyLabel(wowyStat) : undefined}
           wowyImpacts={wowyImpacts}
           onSwipeSave={() => saveProp(item)}

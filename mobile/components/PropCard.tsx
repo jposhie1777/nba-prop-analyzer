@@ -45,6 +45,8 @@ export type PropCardProps = {
   playerPosition?: string;
   opponentTeamAbbr?: string;
   opponentPositionRank?: number;
+  opponentStatAllowed?: number;
+  opponentStatAllowedIsRate?: boolean;
   teamPaceRank?: number;
   opponentPaceRank?: number;
   impliedTeamTotal?: number;
@@ -139,6 +141,12 @@ function formatDiff(value: number | null): string {
   return `${sign}${value.toFixed(1)}`;
 }
 
+function formatAllowedStat(value?: number, isRate?: boolean): string {
+  if (value === null || value === undefined) return "—";
+  if (isRate) return `${(value * 100).toFixed(0)}%`;
+  return value.toFixed(1);
+}
+
 function getDiffColor(value: number | null, colors: any): string {
   if (value === null || value === undefined) return colors.text.muted;
   if (value > 2) return "#22c55e";
@@ -179,6 +187,8 @@ export default function PropCard(props: PropCardProps) {
     playerPosition,
     opponentTeamAbbr,
     opponentPositionRank,
+    opponentStatAllowed,
+    opponentStatAllowedIsRate,
     teamPaceRank,
     opponentPaceRank,
     impliedTeamTotal,
@@ -452,6 +462,15 @@ export default function PropCard(props: PropCardProps) {
                       {opponentTeamAbbr && playerPosition && (
                         <Text style={styles.opponentSubtitle}>
                           {opponentTeamAbbr} vs {playerPosition}
+                        </Text>
+                      )}
+                      {opponentStatAllowed != null && (
+                        <Text style={styles.opponentAllowed}>
+                          Allowed {formatMarketLabel(market)}:{" "}
+                          {formatAllowedStat(
+                            opponentStatAllowed,
+                            opponentStatAllowedIsRate,
+                          )}
                         </Text>
                       )}
                     </View>
@@ -864,6 +883,12 @@ function makeStyles(colors: any) {
       fontSize: 11,
       color: colors.text.muted,
       marginTop: 2,
+    },
+
+    opponentAllowed: {
+      fontSize: 11,
+      color: colors.text.muted,
+      marginTop: 4,
     },
 
     opponentRankChip: {

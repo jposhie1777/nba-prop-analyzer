@@ -24,6 +24,7 @@ import { useBetslipDrawer } from "@/store/useBetslipDrawer";
 import { usePropBetslip } from "@/store/usePropBetslip";
 import { normalizeMarket } from "@/utils/normalizeMarket";
 import { useBadLineAlerts } from "@/hooks/useBadLineAlerts";
+import { useWowy } from "@/hooks/useWowy";
 import {
   OpponentPositionDefenseRow,
   useOpponentPositionDefense,
@@ -32,6 +33,7 @@ import {
   PlayerPositionRow,
   usePlayerPositions,
 } from "@/hooks/usePlayerPositions";
+import { InjuredPlayerWowy, TeammateWowy, WowyStat } from "@/lib/wowy";
 import { TEAM_LOGOS } from "@/utils/teamLogos";
 
 function getOpponentRank(
@@ -99,6 +101,68 @@ function normalizeMarketKey(value?: string) {
   if (["td", "tripledouble"].includes(key)) return "td";
   return key;
 }
+
+function resolveWowyStat(market?: string): WowyStat | null {
+  const key = normalizeMarketKey(market);
+  if (key === "pts") return "pts";
+  if (key === "reb") return "reb";
+  if (key === "ast") return "ast";
+  if (key === "fg3m") return "fg3m";
+  return null;
+}
+
+function getWowyStatValues(tm: TeammateWowy, stat: WowyStat) {
+  switch (stat) {
+    case "pts":
+      return {
+        diff: tm.pts_diff,
+        withStat: tm.pts_with,
+        withoutStat: tm.pts_without,
+        label: "PTS",
+      };
+    case "reb":
+      return {
+        diff: tm.reb_diff,
+        withStat: tm.reb_with,
+        withoutStat: tm.reb_without,
+        label: "REB",
+      };
+    case "ast":
+      return {
+        diff: tm.ast_diff,
+        withStat: tm.ast_with,
+        withoutStat: tm.ast_without,
+        label: "AST",
+      };
+    case "fg3m":
+      return {
+        diff: tm.fg3m_diff,
+        withStat: tm.fg3m_with,
+        withoutStat: tm.fg3m_without,
+        label: "3PM",
+      };
+  }
+}
+
+function getWowyLabel(stat: WowyStat) {
+  switch (stat) {
+    case "pts":
+      return "PTS";
+    case "reb":
+      return "REB";
+    case "ast":
+      return "AST";
+    case "fg3m":
+      return "3PM";
+  }
+}
+
+type WowyImpactEntry = {
+  injuredPlayer: InjuredPlayerWowy["injured_player"];
+  teammate: TeammateWowy;
+  gamesWith: number;
+  gamesWithout: number;
+};
 
 function normalizePosition(value?: string) {
   return value?.trim().toUpperCase();
@@ -187,6 +251,7 @@ export default function PropsTestScreen() {
   } = usePlayerPropsMaster();
   const { data: opponentPositionRows } = useOpponentPositionDefense();
   const { data: playerPositions } = usePlayerPositions();
+  const { injuredPlayers: wowyPlayers } = useWowy();
 
   const { getByPlayer } = useHistoricalPlayerTrends();
 
@@ -469,6 +534,27 @@ export default function PropsTestScreen() {
     return map;
   }, [playerPositions]);
 
+  const wowyImpactMap = useMemo(() => {
+    const map = new Map<number, WowyImpactEntry[]>();
+
+    wowyPlayers.forEach((injured) => {
+      const injuredInfo = injured.injured_player;
+      injured.teammates.forEach((teammate) => {
+        const entry: WowyImpactEntry = {
+          injuredPlayer: injuredInfo,
+          teammate,
+          gamesWith: teammate.games_with,
+          gamesWithout: teammate.games_without,
+        };
+        const existing = map.get(teammate.player_id) ?? [];
+        existing.push(entry);
+        map.set(teammate.player_id, existing);
+      });
+    });
+
+    return map;
+  }, [wowyPlayers]);
+
   /* ======================================================
      RENDER ITEM
   ====================================================== */
@@ -502,6 +588,39 @@ export default function PropsTestScreen() {
         opponentRow,
         item.market,
       );
+      const wowyStat = resolveWowyStat(item.market);
+      const wowyEntries =
+        wowyStat && item.player_id != null
+          ? wowyImpactMap.get(item.player_id) ?? []
+          : [];
+      const wowyImpacts =
+        wowyStat && wowyEntries.length > 0
+          ? [...wowyEntries]
+              .map((entry) => {
+                const values = getWowyStatValues(
+                  entry.teammate,
+                  wowyStat,
+                );
+                return {
+                  injuredPlayerId: entry.injuredPlayer.player_id,
+                  injuredPlayerName: entry.injuredPlayer.player_name,
+                  injuredStatus: entry.injuredPlayer.status,
+                  injuryType: entry.injuredPlayer.injury_type,
+                  diff: values.diff,
+                  statWith: values.withStat,
+                  statWithout: values.withoutStat,
+                  gamesWith: entry.gamesWith,
+                  gamesWithout: entry.gamesWithout,
+                };
+              })
+              .sort((a, b) => {
+                const aDiff = a.diff ?? 0;
+                const bDiff = b.diff ?? 0;
+                return Math.abs(bDiff) - Math.abs(aDiff);
+              })
+          : wowyStat
+            ? []
+            : undefined;
 
       return (
         <PropCard
@@ -514,6 +633,8 @@ export default function PropsTestScreen() {
           playerPosition={playerPosition}
           opponentTeamAbbr={opponentTeamAbbr}
           opponentPositionRank={opponentPositionRank}
+          wowyStatLabel={wowyStat ? getWowyLabel(wowyStat) : undefined}
+          wowyImpacts={wowyImpacts}
           onSwipeSave={() => saveProp(item)}
           onToggleSave={() =>
             isSaved ? unsaveProp(item.id) : saveProp(item)
@@ -544,6 +665,7 @@ export default function PropsTestScreen() {
       playerPositionMap,
       filters.hitRateWindow,
       badLineMap,
+      wowyImpactMap,
     ]
   );
 

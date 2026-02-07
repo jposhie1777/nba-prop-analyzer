@@ -50,6 +50,70 @@ export default function MoreIndexScreen() {
         </Text>
       </Pressable>
 
+      {/* Prop Correlations */}
+      <Pressable
+        onPress={() =>
+          router.push("/(tabs)/more/correlations")
+        }
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.surface.card,
+            borderColor: colors.border.subtle,
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.title,
+            { color: colors.text.primary },
+          ]}
+        >
+          🔗 Prop Correlations
+        </Text>
+
+        <Text
+          style={[
+            styles.subtitle,
+            { color: colors.text.muted },
+          ]}
+        >
+          Teammate prop pairs that tend to hit together
+        </Text>
+      </Pressable>
+
+      {/* Game Environment */}
+      <Pressable
+        onPress={() =>
+          router.push("/(tabs)/more/game-environment")
+        }
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.surface.card,
+            borderColor: colors.border.subtle,
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.title,
+            { color: colors.text.primary },
+          ]}
+        >
+          🌡️ Game Environment
+        </Text>
+
+        <Text
+          style={[
+            styles.subtitle,
+            { color: colors.text.muted },
+          ]}
+        >
+          Pace, totals, rest & scoring context for tonight
+        </Text>
+      </Pressable>
+
       {/* Player Season Averages */}
       <Pressable
         onPress={() =>

@@ -16,6 +16,7 @@ type Props = {
   /* Display toggles */
   showValues?: boolean;
   showDates?: boolean;
+  valueOffset?: number;
 
   /* Date density control */
   dateStep?: number | "auto";
@@ -32,6 +33,7 @@ export function BaseBarSparkline({
 
   showValues = true,
   showDates = true,
+  valueOffset,
   dateStep = "auto",
 }: Props) {
   const colors = useTheme((s) => s.colors);
@@ -113,6 +115,7 @@ export function BaseBarSparkline({
               <Text
                 style={[
                   styles.value,
+                  valueOffset != null && { top: valueOffset },
                   { color: colors.text.primary },
                 ]}
               >

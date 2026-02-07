@@ -76,6 +76,8 @@ from routes.game_betting_analytics import (
 from routes.three_q_100 import router as three_q_100_router
 from routes.pga_analytics import router as pga_analytics_router
 from routes.atp_analytics import router as atp_analytics_router
+from routes.correlations import router as correlations_router
+from routes.game_environment import router as game_environment_router
 
 # ==================================================
 # Game Advanced Stats V2 imports
@@ -169,6 +171,8 @@ app.include_router(pga_analytics_router)
 app.include_router(atp_analytics_router)
 app.include_router(atp_ingest_router)
 app.include_router(pga_ingest_router)
+app.include_router(correlations_router)
+app.include_router(game_environment_router)
 
 # ==================================================
 # Startup hook (SMART SCHEDULED BACKGROUND TASKS)

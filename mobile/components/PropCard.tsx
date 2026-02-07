@@ -48,6 +48,9 @@ export type PropCardProps = {
   teamPace?: number;
   teamPaceRank?: number;
   opponentPace?: number;
+  opponentStatAllowed?: number;
+  opponentStatAllowedIsRate?: boolean;
+  teamPaceRank?: number;
   opponentPaceRank?: number;
   impliedTeamTotal?: number;
   spread?: number;
@@ -87,7 +90,6 @@ type WowyImpactDisplay = {
   injuredPlayerId: number;
   injuredPlayerName: string;
   injuredStatus?: string;
-  injuryType?: string | null;
   diff: number | null;
   statWith: number | null;
   statWithout: number | null;
@@ -142,6 +144,12 @@ function formatDiff(value: number | null): string {
   return `${sign}${value.toFixed(1)}`;
 }
 
+function formatAllowedStat(value?: number, isRate?: boolean): string {
+  if (value === null || value === undefined) return "—";
+  if (isRate) return `${(value * 100).toFixed(0)}%`;
+  return value.toFixed(1);
+}
+
 function getDiffColor(value: number | null, colors: any): string {
   if (value === null || value === undefined) return colors.text.muted;
   if (value > 2) return "#22c55e";
@@ -185,6 +193,9 @@ export default function PropCard(props: PropCardProps) {
     teamPace,
     teamPaceRank,
     opponentPace,
+    opponentStatAllowed,
+    opponentStatAllowedIsRate,
+    teamPaceRank,
     opponentPaceRank,
     impliedTeamTotal,
     spread,
@@ -459,6 +470,15 @@ export default function PropCard(props: PropCardProps) {
                           {opponentTeamAbbr} vs {playerPosition}
                         </Text>
                       )}
+                      {opponentStatAllowed != null && (
+                        <Text style={styles.opponentAllowed}>
+                          Allowed {formatMarketLabel(market)}:{" "}
+                          {formatAllowedStat(
+                            opponentStatAllowed,
+                            opponentStatAllowedIsRate,
+                          )}
+                        </Text>
+                      )}
                     </View>
                     <View style={styles.opponentRankChip}>
                       <Text style={styles.opponentRankLabel}>
@@ -496,6 +516,21 @@ export default function PropCard(props: PropCardProps) {
                           {opponentPaceRank != null
                             ? `#${opponentPaceRank}`
                             : opponentPace?.toFixed(1)}
+                  opponentPaceRank != null ||
+                  impliedTeamTotal != null ||
+                  spread != null) && (
+                  <View style={styles.chipRow}>
+                    {teamPaceRank != null && (
+                      <View style={styles.metricChip}>
+                        <Text style={styles.metricChipLabel}>Pace</Text>
+                        <Text style={styles.metricChipValue}>#{teamPaceRank}</Text>
+                      </View>
+                    )}
+                    {opponentPaceRank != null && (
+                      <View style={styles.metricChip}>
+                        <Text style={styles.metricChipLabel}>Opp Pace</Text>
+                        <Text style={styles.metricChipValue}>
+                          #{opponentPaceRank}
                         </Text>
                       </View>
                     )}
@@ -564,10 +599,7 @@ export default function PropCard(props: PropCardProps) {
                     {wowyImpacts.length > 0 ? (
                       wowyImpacts.map((impact) => {
                         const diffColor = getDiffColor(impact.diff, colors);
-                        const statusParts = [
-                          impact.injuredStatus,
-                          impact.injuryType,
-                        ].filter(Boolean);
+                        const statusParts = [impact.injuredStatus].filter(Boolean);
                         return (
                           <View
                             key={`${impact.injuredPlayerId}-${impact.injuredPlayerName}`}
@@ -880,6 +912,12 @@ function makeStyles(colors: any) {
       fontSize: 11,
       color: colors.text.muted,
       marginTop: 2,
+    },
+
+    opponentAllowed: {
+      fontSize: 11,
+      color: colors.text.muted,
+      marginTop: 4,
     },
 
     opponentRankChip: {

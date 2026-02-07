@@ -85,7 +85,6 @@ type WowyImpactDisplay = {
   injuredPlayerId: number;
   injuredPlayerName: string;
   injuredStatus?: string;
-  injuryType?: string | null;
   diff: number | null;
   statWith: number | null;
   statWithout: number | null;
@@ -552,10 +551,7 @@ export default function PropCard(props: PropCardProps) {
                     {wowyImpacts.length > 0 ? (
                       wowyImpacts.map((impact) => {
                         const diffColor = getDiffColor(impact.diff, colors);
-                        const statusParts = [
-                          impact.injuredStatus,
-                          impact.injuryType,
-                        ].filter(Boolean);
+                        const statusParts = [impact.injuredStatus].filter(Boolean);
                         return (
                           <View
                             key={`${impact.injuredPlayerId}-${impact.injuredPlayerName}`}

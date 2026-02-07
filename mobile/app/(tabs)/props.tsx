@@ -605,7 +605,6 @@ export default function PropsTestScreen() {
                   injuredPlayerId: entry.injuredPlayer.player_id,
                   injuredPlayerName: entry.injuredPlayer.player_name,
                   injuredStatus: entry.injuredPlayer.status,
-                  injuryType: entry.injuredPlayer.injury_type,
                   diff: values.diff,
                   statWith: values.withStat,
                   statWithout: values.withoutStat,

@@ -37,7 +37,11 @@ BALDONTLIE_STATS_BASE = "https://api.balldontlie.io/v1"
 BALDONTLIE_NBA_BASE = "https://api.balldontlie.io/v1"
 BALDONTLIE_ODDS_BASE = "https://api.balldontlie.io/v2"
 
-API_KEY = os.getenv("BALDONTLIE_KEY", "")
+API_KEY = (
+    os.getenv("BALDONTLIE_KEY")
+    or os.getenv("BALLDONTLIE_API_KEY")
+    or ""
+)
 HEADERS = {"Authorization": API_KEY}
 
 RATE_PROFILE = os.getenv("BALLDONTLIE_TIER", "GOAT").upper()

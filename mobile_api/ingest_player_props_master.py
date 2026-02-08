@@ -53,9 +53,13 @@ from google.cloud import bigquery
 BALDONTLIE_V1 = "https://api.balldontlie.io/v1"
 BALDONTLIE_V2 = "https://api.balldontlie.io/v2"
 
-API_KEY = os.getenv("BALDONTLIE_KEY", "")
+API_KEY = (
+    os.getenv("BALDONTLIE_KEY")
+    or os.getenv("BALLDONTLIE_API_KEY")
+    or ""
+)
 if not API_KEY:
-    print("⚠️ BALDONTLIE_KEY missing")
+    print("⚠️ BallDontLie API key missing (set BALDONTLIE_KEY or BALLDONTLIE_API_KEY)")
 
 PROJECT_ID = (
     os.getenv("GCP_PROJECT")

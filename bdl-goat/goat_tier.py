@@ -42,9 +42,13 @@ BALDONTLIE_STATS_BASE = "https://api.balldontlie.io/v1"
 BALDONTLIE_NBA_BASE = "https://api.balldontlie.io/v1"
 BALDONTLIE_ODDS_BASE = "https://api.balldontlie.io/v2"
 
-API_KEY = os.getenv("BALDONTLIE_KEY", "")
+API_KEY = (
+    os.getenv("BALDONTLIE_KEY")
+    or os.getenv("BALLDONTLIE_API_KEY")
+    or ""
+)
 if not API_KEY:
-    print("⚠️ BALDONTLIE_KEY missing")
+    print("⚠️ BallDontLie API key missing (set BALDONTLIE_KEY or BALLDONTLIE_API_KEY)")
 
 HEADERS = {"Authorization": API_KEY}
 
@@ -1280,7 +1284,7 @@ def fetch_all_player_injuries() -> list[dict]:
     cursor = None
 
     headers = {
-        "Authorization": os.getenv("BALDONTLIE_KEY"),
+        "Authorization": API_KEY,
     }
 
     while True:

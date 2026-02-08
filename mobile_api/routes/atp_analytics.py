@@ -92,6 +92,114 @@ def _date_overlaps(
     return start <= target_end and end >= target_start
 
 
+def _parse_match_time(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _player_label(player: Any) -> str:
+    if not player:
+        return "TBD"
+    if isinstance(player, str):
+        return player
+    if isinstance(player, dict):
+        name = player.get("name") or player.get("full_name")
+        if name:
+            return name
+        first = player.get("first_name")
+        last = player.get("last_name")
+        if first or last:
+            return " ".join(part for part in [first, last] if part)
+    return "TBD"
+
+
+def _format_match(match: Dict[str, Any]) -> Dict[str, Any]:
+    round_name = match.get("round") or match.get("round_name") or "Round"
+    scheduled_raw = (
+        match.get("start_time")
+        or match.get("start_time_utc")
+        or match.get("scheduled_at")
+        or match.get("date")
+        or match.get("start_date")
+    )
+    scheduled_at = _parse_match_time(scheduled_raw)
+    return {
+        "id": match.get("id"),
+        "round": round_name,
+        "round_order": match.get("round_order") or match.get("round"),
+        "status": match.get("match_status"),
+        "scheduled_at": scheduled_at.isoformat() if scheduled_at else None,
+        "player1": _player_label(match.get("player1") or match.get("player_1")),
+        "player2": _player_label(match.get("player2") or match.get("player_2")),
+        "winner": _player_label(match.get("winner")),
+        "score": match.get("score"),
+    }
+
+
+def _select_tournament(
+    tournaments: List[Dict[str, Any]],
+    *,
+    tournament_id: Optional[int],
+    tournament_name: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    if tournament_id is not None:
+        for tournament in tournaments:
+            if tournament.get("id") == tournament_id:
+                return tournament
+        return None
+
+    filtered = tournaments
+    if tournament_name:
+        name_lower = tournament_name.lower()
+        filtered = [
+            tournament
+            for tournament in tournaments
+            if name_lower in (tournament.get("name") or "").lower()
+        ]
+        if not filtered:
+            filtered = tournaments
+
+    def parse_date(value: Optional[str]) -> Optional[date]:
+        if not value:
+            return None
+        try:
+            return datetime.strptime(value, "%Y-%m-%d").date()
+        except ValueError:
+            return None
+
+    today = date.today()
+    active = []
+    upcoming = []
+    past = []
+
+    for tournament in filtered:
+        start = parse_date(tournament.get("start_date"))
+        end = parse_date(tournament.get("end_date"))
+        if not start or not end:
+            continue
+        if start <= today <= end:
+            active.append((start, end, tournament))
+        elif start >= today:
+            upcoming.append((start, end, tournament))
+        else:
+            past.append((start, end, tournament))
+
+    if active:
+        active.sort(key=lambda item: (item[0], item[1]))
+        return active[0][2]
+    if upcoming:
+        upcoming.sort(key=lambda item: (item[0], item[1]))
+        return upcoming[0][2]
+    if past:
+        past.sort(key=lambda item: (item[1], item[0]), reverse=True)
+        return past[0][2]
+    return None
+
+
 @router.get("/players")
 def get_atp_players(
     search: Optional[str] = None,
@@ -224,6 +332,113 @@ def get_atp_upcoming_matches(
         }
     except Exception as err:
         _handle_error(err)
+
+
+@router.get("/tournament-bracket")
+def get_atp_tournament_bracket(
+    tournament_id: Optional[int] = None,
+    tournament_name: Optional[str] = None,
+    season: Optional[int] = None,
+    upcoming_limit: int = Query(6, ge=1, le=50),
+    max_pages: Optional[int] = Query(5, ge=1, le=500),
+):
+    try:
+        return build_tournament_bracket_payload(
+            tournament_id=tournament_id,
+            tournament_name=tournament_name,
+            season=season,
+            upcoming_limit=upcoming_limit,
+            max_pages=max_pages,
+        )
+    except HTTPException:
+        raise
+    except Exception as err:
+        _handle_error(err)
+
+
+def build_tournament_bracket_payload(
+    *,
+    tournament_id: Optional[int] = None,
+    tournament_name: Optional[str] = None,
+    season: Optional[int] = None,
+    upcoming_limit: int = 6,
+    max_pages: Optional[int] = 5,
+) -> Dict[str, Any]:
+    selected_season = season or _current_season()
+    tournaments_payload = fetch_one_page(
+        "/tournaments",
+        params={"season": selected_season, "per_page": 100},
+        cache_ttl=300,
+    )
+    tournaments = tournaments_payload.get("data", []) or []
+    tournament = _select_tournament(
+        tournaments,
+        tournament_id=tournament_id,
+        tournament_name=tournament_name,
+    )
+    if not tournament:
+        raise HTTPException(status_code=404, detail="Tournament not found.")
+
+    matches = fetch_paginated(
+        "/matches",
+        params={"tournament_id": tournament.get("id")},
+        cache_ttl=300,
+        max_pages=max_pages,
+    )
+
+    formatted_matches = [_format_match(match) for match in matches]
+    rounds: Dict[str, Dict[str, Any]] = {}
+    for match in formatted_matches:
+        round_name = str(match.get("round") or "Round")
+        if round_name not in rounds:
+            rounds[round_name] = {
+                "name": round_name,
+                "order": match.get("round_order"),
+                "matches": [],
+            }
+        rounds[round_name]["matches"].append(match)
+
+    round_list = list(rounds.values())
+    round_list.sort(
+        key=lambda item: (
+            item.get("order") is None,
+            item.get("order") if item.get("order") is not None else 999,
+            item.get("name"),
+        )
+    )
+
+    def match_sort_key(match: Dict[str, Any]) -> tuple:
+        scheduled = _parse_match_time(match.get("scheduled_at"))
+        return (
+            scheduled is None,
+            scheduled or datetime.max,
+        )
+
+    upcoming_matches = [
+        match
+        for match in formatted_matches
+        if match.get("status") != "F"
+    ]
+    upcoming_matches.sort(key=match_sort_key)
+    upcoming_matches = upcoming_matches[:upcoming_limit]
+
+    return {
+        "tournament": {
+            "id": tournament.get("id"),
+            "name": tournament.get("name"),
+            "surface": tournament.get("surface"),
+            "start_date": tournament.get("start_date"),
+            "end_date": tournament.get("end_date"),
+            "category": tournament.get("category"),
+            "city": tournament.get("city"),
+            "country": tournament.get("country"),
+        },
+        "bracket": {
+            "rounds": round_list,
+        },
+        "upcoming_matches": upcoming_matches,
+        "match_count": len(formatted_matches),
+    }
 
 
 @router.get("/analytics/player-form")

@@ -52,9 +52,8 @@ def _ny_date_window(date_str: str | None) -> tuple[str, str, str]:
     start_ny = datetime.combine(target_date, time(0, 0, 0), tzinfo=NY_TZ)
     end_ny = datetime.combine(target_date, time(23, 59, 59), tzinfo=NY_TZ)
 
-    # The Odds API expects Zulu format without offset, e.g. 2020-11-24T16:05:00Z
-    start_utc = start_ny.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    end_utc = end_ny.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    start_utc = start_ny.astimezone(timezone.utc).isoformat()
+    end_utc = end_ny.astimezone(timezone.utc).isoformat()
     return target_date.isoformat(), start_utc, end_utc
 
 

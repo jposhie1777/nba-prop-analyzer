@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query
 
 from atp.analytics import (
+    _round_rank,
     build_compare,
     build_head_to_head,
     build_player_form,
@@ -130,7 +131,7 @@ def _format_match(match: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "id": match.get("id"),
         "round": round_name,
-        "round_order": match.get("round_order") or match.get("round"),
+        "round_order": match.get("round_order") if match.get("round_order") is not None else _round_rank(round_name),
         "status": match.get("match_status"),
         "scheduled_at": scheduled_at.isoformat() if scheduled_at else None,
         "player1": _player_label(match.get("player1") or match.get("player_1")),
@@ -159,6 +160,8 @@ def _select_tournament(
             tournament
             for tournament in tournaments
             if name_lower in (tournament.get("name") or "").lower()
+            or name_lower in (tournament.get("city") or "").lower()
+            or name_lower in (tournament.get("location") or "").lower()
         ]
         if not filtered:
             filtered = tournaments

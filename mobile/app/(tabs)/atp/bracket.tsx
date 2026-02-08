@@ -48,8 +48,12 @@ export default function AtpBracketScreen() {
         dates: "Dates TBD",
       };
     }
+    const city = data.tournament.city;
+    const displayName = city
+      ? `${data.tournament.name} (${city})`
+      : data.tournament.name;
     return {
-      name: data.tournament.name,
+      name: displayName,
       surface: data.tournament.surface
         ? `${data.tournament.surface} Court`
         : "Surface TBD",

@@ -8,6 +8,8 @@ export type AtpBracketMatch = {
   scheduled_at?: string | null;
   player1: string;
   player2: string;
+  player1_id?: number | null;
+  player2_id?: number | null;
   winner?: string;
   score?: string | null;
 };

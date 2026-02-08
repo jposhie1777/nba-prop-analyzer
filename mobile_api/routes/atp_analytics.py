@@ -118,6 +118,13 @@ def _player_label(player: Any) -> str:
     return "TBD"
 
 
+def _player_id(player: Any) -> Optional[int]:
+    if isinstance(player, dict):
+        pid = player.get("id")
+        return int(pid) if pid is not None else None
+    return None
+
+
 def _format_match(match: Dict[str, Any]) -> Dict[str, Any]:
     round_name = match.get("round") or match.get("round_name") or "Round"
     scheduled_raw = (
@@ -128,14 +135,18 @@ def _format_match(match: Dict[str, Any]) -> Dict[str, Any]:
         or match.get("start_date")
     )
     scheduled_at = _parse_match_time(scheduled_raw)
+    p1_raw = match.get("player1") or match.get("player_1")
+    p2_raw = match.get("player2") or match.get("player_2")
     return {
         "id": match.get("id"),
         "round": round_name,
         "round_order": match.get("round_order") if match.get("round_order") is not None else _round_rank(round_name),
         "status": match.get("match_status"),
         "scheduled_at": scheduled_at.isoformat() if scheduled_at else None,
-        "player1": _player_label(match.get("player1") or match.get("player_1")),
-        "player2": _player_label(match.get("player2") or match.get("player_2")),
+        "player1": _player_label(p1_raw),
+        "player2": _player_label(p2_raw),
+        "player1_id": _player_id(p1_raw),
+        "player2_id": _player_id(p2_raw),
         "winner": _player_label(match.get("winner")),
         "score": match.get("score"),
     }

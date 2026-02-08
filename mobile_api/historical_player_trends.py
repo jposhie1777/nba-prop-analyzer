@@ -1,14 +1,13 @@
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-from google.cloud import bigquery
 from datetime import date, datetime
+
+from bq import get_bq_client
 
 router = APIRouter(
     prefix="/historical",
     tags=["historical"]
 )
-
-bq = bigquery.Client()
 
 QUERY = """
 SELECT *
@@ -17,6 +16,7 @@ FROM `graphite-flare-477419-h7.nba_goat_data.historical_player_trends`
 
 @router.get("/player-trends")
 def get_player_trends():
+    bq = get_bq_client()
     rows = bq.query(QUERY).result()
 
     out = []

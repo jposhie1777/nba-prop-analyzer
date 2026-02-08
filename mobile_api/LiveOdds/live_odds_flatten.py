@@ -42,7 +42,14 @@ MAX_BYTES_PER_QUERY = int(os.getenv("MAX_BYTES_PER_QUERY", str(2_000_000_000))) 
 DRY_RUN = os.getenv("DRY_RUN", "false").lower() == "true"
 ENABLE_LIVE_ODDS_FLATTEN = os.getenv("ENABLE_LIVE_ODDS_FLATTEN", "true").lower() == "true"
 
-client = bigquery.Client(project=PROJECT_ID)
+_client: bigquery.Client | None = None
+
+
+def _get_client() -> bigquery.Client:
+    global _client
+    if _client is None:
+        _client = bigquery.Client(project=PROJECT_ID)
+    return _client
 
 
 # =============================================================================
@@ -624,6 +631,7 @@ WHEN NOT MATCHED THEN
 # =============================================================================
 
 def _run_query(sql: str, params: Optional[Dict[str, Any]] = None) -> bigquery.job.QueryJob:
+    client = _get_client()
     job_config = bigquery.QueryJobConfig()
 
     qparams = []

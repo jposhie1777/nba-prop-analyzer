@@ -146,6 +146,117 @@ def _build_rows(
     return rows
 
 
+def run_alt_player_points_ingest(
+    api_key: str | None = None,
+    date: str | None = None,
+    markets: str = DEFAULT_MARKETS,
+    regions: str = DEFAULT_REGIONS,
+    bookmakers: str | None = None,
+    event_id: str | None = None,
+    max_events: int | None = None,
+    dataset: str = "odds_raw",
+    table: str = "nba_alt_player_points",
+    table_id: str | None = None,
+    dry_run: bool = False,
+    include_sample: bool = False,
+) -> dict:
+    resolved_key = _resolve_api_key(api_key)
+    request_date, commence_from, commence_to = _ny_date_window(date)
+
+    print(
+        "[THEODDSAPI] Fetching NBA alternate player points",
+        {
+            "date": request_date,
+            "markets": markets,
+            "regions": regions,
+            "commence_from": commence_from,
+            "commence_to": commence_to,
+        },
+    )
+
+    event_payloads: list[dict] = []
+    events_found: int | None = None
+    if event_id:
+        event_payloads.append(
+            _fetch_event_player_points(
+                api_key=resolved_key,
+                event_id=event_id,
+                markets=markets,
+                regions=regions,
+                bookmakers=bookmakers,
+            )
+        )
+        events_found = 1
+    else:
+        events = _fetch_events(
+            api_key=resolved_key,
+            commence_from=commence_from,
+            commence_to=commence_to,
+        )
+        if max_events is not None:
+            events = events[: max(max_events, 0)]
+
+        events_found = len(events)
+        print(f"[THEODDSAPI] Events found: {events_found}")
+        for idx, event in enumerate(events, start=1):
+            eid = event.get("id")
+            if not eid:
+                continue
+            print(f"[THEODDSAPI] Fetching event {idx}/{len(events)}: {eid}")
+            event_payloads.append(
+                _fetch_event_player_points(
+                    api_key=resolved_key,
+                    event_id=eid,
+                    markets=markets,
+                    regions=regions,
+                    bookmakers=bookmakers,
+                )
+            )
+
+    snapshot_ts = datetime.now(timezone.utc).isoformat()
+    rows = _build_rows(
+        event_payloads=event_payloads,
+        snapshot_ts=snapshot_ts,
+        request_date=request_date,
+        markets=markets,
+        regions=regions,
+    )
+
+    print(f"[THEODDSAPI] Event payloads: {len(event_payloads)} rows prepared: {len(rows)}")
+
+    result = {
+        "status": "OK",
+        "request_date": request_date,
+        "markets": markets,
+        "regions": regions,
+        "events_found": events_found,
+        "event_payloads": len(event_payloads),
+        "rows_prepared": len(rows),
+        "dry_run": dry_run,
+    }
+
+    sample = rows[0] if rows else None
+    if dry_run:
+        if include_sample:
+            result["sample_row"] = sample
+        return result
+
+    project = os.getenv("GCP_PROJECT") or os.getenv("GOOGLE_CLOUD_PROJECT")
+    resolved_table_id = _resolve_table_id(project, dataset, table, table_id)
+    print(f"[THEODDSAPI] Inserting into {resolved_table_id}")
+
+    if rows:
+        client = get_bq_client()
+        errors = client.insert_rows_json(resolved_table_id, rows)
+        if errors:
+            raise RuntimeError(f"BigQuery insert errors: {errors}")
+
+    result["table_id"] = resolved_table_id
+    result["rows_inserted"] = len(rows)
+    print("[THEODDSAPI] Insert complete.")
+    return result
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Fetch NBA alternate player points from The Odds API into BigQuery."
@@ -170,83 +281,23 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
-    api_key = _resolve_api_key(args.api_key)
-    request_date, commence_from, commence_to = _ny_date_window(args.date)
-
-    print(
-        "[THEODDSAPI] Fetching NBA alternate player points",
-        {
-            "date": request_date,
-            "markets": args.markets,
-            "regions": args.regions,
-            "commence_from": commence_from,
-            "commence_to": commence_to,
-        },
-    )
-
-    event_payloads: list[dict] = []
-    if args.event_id:
-        event_payloads.append(
-            _fetch_event_player_points(
-                api_key=api_key,
-                event_id=args.event_id,
-                markets=args.markets,
-                regions=args.regions,
-                bookmakers=args.bookmakers,
-            )
-        )
-    else:
-        events = _fetch_events(
-            api_key=api_key,
-            commence_from=commence_from,
-            commence_to=commence_to,
-        )
-        if args.max_events is not None:
-            events = events[: max(args.max_events, 0)]
-
-        print(f"[THEODDSAPI] Events found: {len(events)}")
-        for idx, event in enumerate(events, start=1):
-            event_id = event.get("id")
-            if not event_id:
-                continue
-            print(f"[THEODDSAPI] Fetching event {idx}/{len(events)}: {event_id}")
-            event_payloads.append(
-                _fetch_event_player_points(
-                    api_key=api_key,
-                    event_id=event_id,
-                    markets=args.markets,
-                    regions=args.regions,
-                    bookmakers=args.bookmakers,
-                )
-            )
-
-    snapshot_ts = datetime.now(timezone.utc).isoformat()
-    rows = _build_rows(
-        event_payloads=event_payloads,
-        snapshot_ts=snapshot_ts,
-        request_date=request_date,
+    result = run_alt_player_points_ingest(
+        api_key=args.api_key,
+        date=args.date,
         markets=args.markets,
         regions=args.regions,
+        bookmakers=args.bookmakers,
+        event_id=args.event_id,
+        max_events=args.max_events,
+        dataset=args.dataset,
+        table=args.table,
+        table_id=args.table_id,
+        dry_run=args.dry_run,
+        include_sample=args.dry_run,
     )
 
-    print(f"[THEODDSAPI] Event payloads: {len(event_payloads)} rows prepared: {len(rows)}")
-
-    if args.dry_run:
-        sample = rows[0] if rows else None
-        print("[THEODDSAPI] DRY RUN; sample row:", sample)
-        return
-
-    project = os.getenv("GCP_PROJECT") or os.getenv("GOOGLE_CLOUD_PROJECT")
-    table_id = _resolve_table_id(project, args.dataset, args.table, args.table_id)
-    print(f"[THEODDSAPI] Inserting into {table_id}")
-
-    if rows:
-        client = get_bq_client()
-        errors = client.insert_rows_json(table_id, rows)
-        if errors:
-            raise RuntimeError(f"BigQuery insert errors: {errors}")
-
-    print("[THEODDSAPI] Insert complete.")
+    if args.dry_run and result.get("sample_row") is not None:
+        print("[THEODDSAPI] DRY RUN; sample row:", result["sample_row"])
 
 
 if __name__ == "__main__":

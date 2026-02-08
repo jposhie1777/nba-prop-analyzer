@@ -16,7 +16,6 @@ Intended to run on a schedule (6:00 AM and 3:45 PM ET).
 from __future__ import annotations
 
 import argparse
-import itertools
 import json
 import os
 import re
@@ -77,16 +76,65 @@ def _resolve_api_keys(api_key: str | None, api_keys: str | None) -> list[str]:
     keys: list[str] = []
     if api_keys:
         keys = _parse_key_list(api_keys)
+    if not keys and api_key:
+        return [api_key]
     if not keys:
         env_keys = os.getenv("THE_ODDS_API_KEYS") or os.getenv("ODDS_API_KEYS")
         keys = _parse_key_list(env_keys)
     if not keys:
-        key = api_key or os.getenv("THE_ODDS_API_KEY") or os.getenv("ODDS_API_KEY")
+        key = os.getenv("THE_ODDS_API_KEY") or os.getenv("ODDS_API_KEY")
         if key:
             return [key]
     if not keys:
         raise RuntimeError("Missing THE_ODDS_API_KEYS/THE_ODDS_API_KEY (or pass --api-key).")
     return keys
+
+
+def _mask_key(key: str) -> str:
+    if len(key) <= 8:
+        return "****"
+    return f"{key[:4]}...{key[-4:]}"
+
+
+def _is_invalid_key(resp: requests.Response) -> bool:
+    if resp.status_code != 401:
+        return False
+    try:
+        payload = resp.json()
+    except ValueError:
+        return False
+    return payload.get("error_code") == "INVALID_KEY"
+
+
+def _request_json_with_keys(
+    api_keys: list[str],
+    url: str,
+    params: dict,
+) -> tuple[dict | list, requests.structures.CaseInsensitiveDict, str]:
+    if not api_keys:
+        raise RuntimeError("No The Odds API keys available.")
+
+    last_error = None
+    attempts = len(api_keys)
+    for _ in range(attempts):
+        if not api_keys:
+            break
+        key = api_keys.pop(0)
+        attempt_params = dict(params)
+        attempt_params["apiKey"] = key
+        resp = requests.get(url, params=attempt_params, timeout=TIMEOUT_SEC)
+        if resp.status_code >= 400:
+            if _is_invalid_key(resp):
+                print(f"[THEODDSAPI] Invalid API key skipped: {_mask_key(key)}")
+                last_error = f"{resp.status_code}: {resp.text}"
+                continue
+            api_keys.append(key)
+            raise RuntimeError(f"The Odds API error {resp.status_code}: {resp.text}")
+
+        api_keys.append(key)
+        return resp.json(), resp.headers, key
+
+    raise RuntimeError(f"All The Odds API keys failed. Last error: {last_error}")
 
 
 def _resolve_table_id(project: str | None, dataset: str, table: str, table_id: str | None) -> str:
@@ -125,37 +173,30 @@ def _normalize_markets(markets: str | None) -> str:
 
 
 def _fetch_events(
-    api_key: str,
+    api_keys: list[str],
     commence_from: str,
     commence_to: str,
 ) -> list[dict]:
     params = {
-        "apiKey": api_key,
         "dateFormat": DEFAULT_DATE_FORMAT,
         "commenceTimeFrom": commence_from,
         "commenceTimeTo": commence_to,
     }
     url = f"{THEODDSAPI_BASE}/sports/{SPORT_KEY}/events"
-    resp = requests.get(url, params=params, timeout=TIMEOUT_SEC)
-    if resp.status_code >= 400:
-        raise RuntimeError(f"The Odds API error {resp.status_code}: {resp.text}")
-    resp.raise_for_status()
-
-    payload = resp.json()
+    payload, _, _ = _request_json_with_keys(api_keys, url, params)
     if not isinstance(payload, list):
         raise RuntimeError("Unexpected The Odds API events response shape.")
     return payload
 
 
 def _fetch_event_player_props(
-    api_key: str,
+    api_keys: list[str],
     event_id: str,
     markets: str,
     regions: str,
     bookmakers: str | None,
 ) -> dict:
     params = {
-        "apiKey": api_key,
         "regions": regions,
         "markets": markets,
         "oddsFormat": DEFAULT_ODDS_FORMAT,
@@ -165,17 +206,13 @@ def _fetch_event_player_props(
         params["bookmakers"] = bookmakers
 
     url = f"{THEODDSAPI_BASE}/sports/{SPORT_KEY}/events/{event_id}/odds"
-    resp = requests.get(url, params=params, timeout=TIMEOUT_SEC)
-    if resp.status_code >= 400:
-        raise RuntimeError(f"The Odds API error {resp.status_code}: {resp.text}")
-    resp.raise_for_status()
+    payload, headers, _ = _request_json_with_keys(api_keys, url, params)
 
-    remaining = resp.headers.get("x-requests-remaining")
-    used = resp.headers.get("x-requests-used")
+    remaining = headers.get("x-requests-remaining")
+    used = headers.get("x-requests-used")
     if remaining or used:
         print(f"[THEODDSAPI] Requests used={used} remaining={remaining}")
 
-    payload = resp.json()
     if not isinstance(payload, dict):
         raise RuntimeError("Unexpected The Odds API event odds response shape.")
     return payload
@@ -228,7 +265,6 @@ def run_alt_player_props_ingest(
     include_sample: bool = False,
 ) -> dict:
     resolved_keys = _resolve_api_keys(api_key, api_keys)
-    key_iter = itertools.cycle(resolved_keys)
     markets = _normalize_markets(markets)
     bookmakers = _normalize_csv(bookmakers)
     request_date, commence_from, commence_to = _ny_date_window(date)
@@ -250,7 +286,7 @@ def run_alt_player_props_ingest(
     if event_id:
         event_payloads.append(
             _fetch_event_player_props(
-                api_key=next(key_iter),
+                api_keys=resolved_keys,
                 event_id=event_id,
                 markets=markets,
                 regions=regions,
@@ -260,7 +296,7 @@ def run_alt_player_props_ingest(
         events_found = 1
     else:
         events = _fetch_events(
-            api_key=next(key_iter),
+            api_keys=resolved_keys,
             commence_from=commence_from,
             commence_to=commence_to,
         )
@@ -276,7 +312,7 @@ def run_alt_player_props_ingest(
             print(f"[THEODDSAPI] Fetching event {idx}/{len(events)}: {eid}")
             event_payloads.append(
                 _fetch_event_player_props(
-                    api_key=next(key_iter),
+                    api_keys=resolved_keys,
                     event_id=eid,
                     markets=markets,
                     regions=regions,

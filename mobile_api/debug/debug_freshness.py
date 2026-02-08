@@ -2,12 +2,12 @@
 from fastapi import APIRouter, HTTPException
 from google.cloud import bigquery
 
+from bq import get_bq_client
+
 router = APIRouter(
     prefix="/debug/freshness",
     tags=["debug"],
 )
-
-bq = bigquery.Client()
 
 DATASETS = {
     "live_games": {
@@ -30,6 +30,7 @@ def get_freshness(key: str):
     if not cfg:
         raise HTTPException(status_code=404, detail="Unknown dataset")
 
+    bq = get_bq_client()
     query = f"""
     SELECT
       COUNT(*) AS row_count,

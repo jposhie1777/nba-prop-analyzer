@@ -14,7 +14,14 @@ router = APIRouter(
 )
 
 PROJECT_ID = os.getenv("GCP_PROJECT", "graphite-flare-477419-h7")
-bq = bigquery.Client(project=PROJECT_ID)
+_bq: bigquery.Client | None = None
+
+
+def _get_bq_client() -> bigquery.Client:
+    global _bq
+    if _bq is None:
+        _bq = bigquery.Client(project=PROJECT_ID)
+    return _bq
 
 
 # ======================================================
@@ -49,6 +56,7 @@ def get_live_player_props(
     Source: live_player_prop_odds_latest
     """
 
+    bq = _get_bq_client()
     job = bq.query(
         PLAYER_PROPS_QUERY,
         job_config=bigquery.QueryJobConfig(
@@ -134,6 +142,7 @@ def get_live_game_odds(
     Source: live_game_odds_flat
     """
 
+    bq = _get_bq_client()
     job = bq.query(
         GAME_ODDS_QUERY,
         job_config=bigquery.QueryJobConfig(
@@ -221,6 +230,7 @@ def get_pregame_odds(
     Source: pregame_game_odds_flat
     """
 
+    bq = _get_bq_client()
     job = bq.query(
         PREGAME_ODDS_QUERY,
         job_config=bigquery.QueryJobConfig(
@@ -309,6 +319,7 @@ def get_closing_lines(
     Source: closing_lines
     """
 
+    bq = _get_bq_client()
     job = bq.query(
         CLOSING_LINES_QUERY,
         job_config=bigquery.QueryJobConfig(

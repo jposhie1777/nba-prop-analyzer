@@ -3,17 +3,18 @@
 from fastapi import APIRouter
 from google.cloud import bigquery
 
+from bq import get_bq_client
+
 router = APIRouter(
     prefix="/alerts",
     tags=["alerts"],
 )
 
-client = bigquery.Client()
-
 @router.get("/bad-lines")
 def get_bad_lines(
     min_score: float = 0.75,
 ):
+    client = get_bq_client()
     query = """
     SELECT *
     FROM `nba_live.v_bad_line_alerts_scored`

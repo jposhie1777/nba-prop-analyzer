@@ -55,7 +55,7 @@ export default function AtpHome() {
         style={[
           styles.primaryButton,
           {
-            backgroundColor: colors.brand.primary,
+            backgroundColor: colors.accent.primary,
             borderColor: colors.border.subtle,
           },
         ]}

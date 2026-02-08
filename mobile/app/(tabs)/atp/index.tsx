@@ -36,6 +36,7 @@ function Tile({ title, subtitle, route }: TileProps) {
 }
 
 export default function AtpHome() {
+  const router = useRouter();
   const { colors } = useTheme();
 
   return (

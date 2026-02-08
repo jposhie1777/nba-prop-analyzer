@@ -89,6 +89,8 @@ function MatchCard({
   const winner = match.winner;
   const p1Won = finished && winner === match.player1;
   const p2Won = finished && winner === match.player2;
+  const hasScore = Boolean(match.score);
+  const showOutcome = finished && Boolean(winner);
 
   return (
     <View
@@ -117,7 +119,7 @@ function MatchCard({
         >
           {match.player1}
         </Text>
-        {finished && match.score && (
+        {showOutcome && (
           <Text
             style={[
               s.setScores,
@@ -149,7 +151,7 @@ function MatchCard({
         >
           {match.player2}
         </Text>
-        {finished && match.score && (
+        {showOutcome && (
           <Text
             style={[
               s.setScores,
@@ -163,9 +165,14 @@ function MatchCard({
           </Text>
         )}
       </View>
-      {finished && match.score ? (
-        <Text style={[s.scoreText, { color: colors.text.secondary }]}>
-          {match.score}
+      {finished ? (
+        <Text
+          style={[
+            hasScore ? s.scoreText : s.matchMeta,
+            { color: hasScore ? colors.text.secondary : colors.text.muted },
+          ]}
+        >
+          {hasScore ? match.score : "Final"}
         </Text>
       ) : (
         <Text style={[s.matchMeta, { color: colors.text.muted }]}>

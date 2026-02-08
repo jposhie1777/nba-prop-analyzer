@@ -118,8 +118,32 @@ def _player_label(player: Any) -> str:
     return "TBD"
 
 
+def _canonical_round_name(round_name: Optional[str]) -> str:
+    if not round_name:
+        return "Round"
+    rank = _round_rank(round_name)
+    if rank >= _round_rank("Finals"):
+        return "Final"
+    if rank >= _round_rank("Semifinals"):
+        return "Semi-Finals"
+    if rank >= _round_rank("Quarterfinals"):
+        return "Quarterfinals"
+    if rank >= _round_rank("Round of 16"):
+        return "Round of 16"
+    if rank >= _round_rank("Round of 32"):
+        return "Round of 32"
+    if rank >= _round_rank("Round of 64"):
+        return "Round of 64"
+    if rank >= _round_rank("Round of 128"):
+        return "Round of 128"
+    if rank == 0:
+        return "Qualifying"
+    return round_name
+
+
 def _format_match(match: Dict[str, Any]) -> Dict[str, Any]:
     round_name = match.get("round") or match.get("round_name") or "Round"
+    canonical_round = _canonical_round_name(str(round_name))
     scheduled_raw = (
         match.get("start_time")
         or match.get("start_time_utc")
@@ -130,8 +154,8 @@ def _format_match(match: Dict[str, Any]) -> Dict[str, Any]:
     scheduled_at = _parse_match_time(scheduled_raw)
     return {
         "id": match.get("id"),
-        "round": round_name,
-        "round_order": match.get("round_order") or _round_rank(round_name),
+        "round": canonical_round,
+        "round_order": match.get("round_order") or _round_rank(canonical_round),
         "status": match.get("match_status"),
         "scheduled_at": scheduled_at.isoformat() if scheduled_at else None,
         "player1": _player_label(match.get("player1") or match.get("player_1")),
@@ -382,9 +406,12 @@ def build_tournament_bracket_payload(
     if not tournament:
         raise HTTPException(status_code=404, detail="Tournament not found.")
 
+    match_params: Dict[str, Any] = {"tournament_ids[]": [tournament.get("id")]}
+    if tournament.get("season"):
+        match_params["season"] = tournament.get("season")
     matches = fetch_paginated(
         "/matches",
-        params={"tournament_id": tournament.get("id")},
+        params=match_params,
         cache_ttl=300,
         max_pages=max_pages,
     )

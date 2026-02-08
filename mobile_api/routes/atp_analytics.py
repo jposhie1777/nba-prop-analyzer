@@ -131,7 +131,7 @@ def _format_match(match: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "id": match.get("id"),
         "round": round_name,
-        "round_order": match.get("round_order") or _round_rank(round_name),
+        "round_order": match.get("round_order") if match.get("round_order") is not None else _round_rank(round_name),
         "status": match.get("match_status"),
         "scheduled_at": scheduled_at.isoformat() if scheduled_at else None,
         "player1": _player_label(match.get("player1") or match.get("player_1")),
@@ -343,7 +343,7 @@ def get_atp_tournament_bracket(
     tournament_name: Optional[str] = None,
     season: Optional[int] = None,
     upcoming_limit: int = Query(6, ge=1, le=50),
-    max_pages: Optional[int] = Query(5, ge=1, le=500),
+    max_pages: Optional[int] = Query(20, ge=1, le=500),
 ):
     try:
         return build_tournament_bracket_payload(
@@ -365,7 +365,7 @@ def build_tournament_bracket_payload(
     tournament_name: Optional[str] = None,
     season: Optional[int] = None,
     upcoming_limit: int = 6,
-    max_pages: Optional[int] = 5,
+    max_pages: Optional[int] = 20,
 ) -> Dict[str, Any]:
     selected_season = season or _current_season()
     tournaments_payload = fetch_one_page(

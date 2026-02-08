@@ -38,6 +38,10 @@ DEFAULT_MARKET_LIST = [
     "player_points_assists_alternate",
     "player_rebounds_assists_alternate",
 ]
+DEFAULT_POINTS_MARKET_LIST = [
+    "player_points_alternate",
+]
+DEFAULT_POINTS_MARKETS = ",".join(DEFAULT_POINTS_MARKET_LIST)
 DEFAULT_MARKETS = ",".join(DEFAULT_MARKET_LIST)
 DEFAULT_REGIONS = "us"
 DEFAULT_ODDS_FORMAT = "american"
@@ -97,13 +101,53 @@ def _mask_key(key: str) -> str:
 
 
 def _is_invalid_key(resp: requests.Response) -> bool:
-    if resp.status_code != 401:
+    if resp.status_code not in (401, 403):
         return False
+    payload = _parse_error_payload(resp)
+    error_code = str(payload.get("error_code") or "").upper()
+    if error_code in {"INVALID_KEY", "KEY_DISABLED"}:
+        return True
+    return True
+
+
+def _parse_error_payload(resp: requests.Response) -> dict:
     try:
         payload = resp.json()
     except ValueError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _is_exhausted_key(resp: requests.Response) -> bool:
+    if resp.status_code not in (402, 429):
         return False
-    return payload.get("error_code") == "INVALID_KEY"
+    payload = _parse_error_payload(resp)
+    error_code = str(payload.get("error_code") or "").upper()
+    exhausted_codes = {
+        "OUT_OF_REQUESTS",
+        "OVER_RATE_LIMIT",
+        "RATE_LIMIT_EXCEEDED",
+        "PLAN_LIMIT_EXCEEDED",
+        "DAILY_LIMIT_REACHED",
+        "MONTHLY_LIMIT_REACHED",
+    }
+    if error_code in exhausted_codes:
+        return True
+    message = str(payload.get("message") or payload.get("error") or "").lower()
+    return any(
+        phrase in message
+        for phrase in ("out of requests", "rate limit", "quota", "limit reached")
+    )
+
+
+def _read_remaining(headers: requests.structures.CaseInsensitiveDict) -> int | None:
+    remaining = headers.get("x-requests-remaining")
+    if remaining is None:
+        return None
+    try:
+        return int(remaining)
+    except (TypeError, ValueError):
+        return None
 
 
 def _request_json_with_keys(
@@ -119,7 +163,7 @@ def _request_json_with_keys(
     for _ in range(attempts):
         if not api_keys:
             break
-        key = api_keys.pop(0)
+        key = api_keys[0]
         attempt_params = dict(params)
         attempt_params["apiKey"] = key
         resp = requests.get(url, params=attempt_params, timeout=TIMEOUT_SEC)
@@ -127,12 +171,21 @@ def _request_json_with_keys(
             if _is_invalid_key(resp):
                 print(f"[THEODDSAPI] Invalid API key skipped: {_mask_key(key)}")
                 last_error = f"{resp.status_code}: {resp.text}"
+                api_keys.pop(0)
                 continue
-            api_keys.append(key)
+            if _is_exhausted_key(resp):
+                print(f"[THEODDSAPI] API key exhausted, moving on: {_mask_key(key)}")
+                last_error = f"{resp.status_code}: {resp.text}"
+                api_keys.pop(0)
+                continue
             raise RuntimeError(f"The Odds API error {resp.status_code}: {resp.text}")
 
-        api_keys.append(key)
-        return resp.json(), resp.headers, key
+        payload = resp.json()
+        remaining = _read_remaining(resp.headers)
+        if remaining == 0:
+            print(f"[THEODDSAPI] API key exhausted after request: {_mask_key(key)}")
+            api_keys.pop(0)
+        return payload, resp.headers, key
 
     raise RuntimeError(f"All The Odds API keys failed. Last error: {last_error}")
 
@@ -362,6 +415,38 @@ def run_alt_player_props_ingest(
     result["rows_inserted"] = len(rows)
     print("[THEODDSAPI] Insert complete.")
     return result
+
+
+def run_alt_player_points_ingest(
+    api_key: str | None = None,
+    api_keys: str | None = None,
+    date: str | None = None,
+    markets: str = DEFAULT_POINTS_MARKETS,
+    regions: str = DEFAULT_REGIONS,
+    bookmakers: str | None = None,
+    event_id: str | None = None,
+    max_events: int | None = None,
+    dataset: str = "odds_raw",
+    table: str = "nba_alt_player_points",
+    table_id: str | None = None,
+    dry_run: bool = False,
+    include_sample: bool = False,
+) -> dict:
+    return run_alt_player_props_ingest(
+        api_key=api_key,
+        api_keys=api_keys,
+        date=date,
+        markets=markets,
+        regions=regions,
+        bookmakers=bookmakers,
+        event_id=event_id,
+        max_events=max_events,
+        dataset=dataset,
+        table=table,
+        table_id=table_id,
+        dry_run=dry_run,
+        include_sample=include_sample,
+    )
 
 
 def main() -> None:

@@ -8,13 +8,10 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from ingest_player_props_master import ingest_player_props_master
-from LiveOdds.theoddsapi_alt_points_test import (
-    run_alt_player_points_ingest,
-    DEFAULT_MARKETS as THEODDS_DEFAULT_MARKETS,
-    DEFAULT_REGIONS as THEODDS_DEFAULT_REGIONS,
-)
 from LiveOdds.theoddsapi_alt_player_props import (
+    run_alt_player_points_ingest,
     run_alt_player_props_ingest,
+    DEFAULT_POINTS_MARKETS as THEODDS_ALT_PLAYER_POINTS_MARKETS,
     DEFAULT_MARKETS as THEODDS_ALT_PLAYER_PROPS_MARKETS,
     DEFAULT_REGIONS as THEODDS_ALT_PLAYER_PROPS_REGIONS,
 )
@@ -119,9 +116,10 @@ def run_theoddsapi_alt_player_points(req: TheOddsAltPlayerPointsRequest):
     try:
         result = run_alt_player_points_ingest(
             api_key=req.api_key,
+            api_keys=req.api_keys,
             date=req.date,
-            markets=req.markets or THEODDS_DEFAULT_MARKETS,
-            regions=req.regions or THEODDS_DEFAULT_REGIONS,
+            markets=req.markets or THEODDS_ALT_PLAYER_POINTS_MARKETS,
+            regions=req.regions or THEODDS_ALT_PLAYER_PROPS_REGIONS,
             bookmakers=req.bookmakers,
             event_id=req.event_id,
             max_events=req.max_events,

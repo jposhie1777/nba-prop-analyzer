@@ -4,6 +4,7 @@ set -euo pipefail
 PROJECT=""
 REGION=""
 BDL_KEY=""
+THE_ODDS_API_KEYS="${THE_ODDS_API_KEYS:-}"
 
 IMAGE=""
 SERVICE_NAME="mobile-api"
@@ -61,6 +62,10 @@ fi
 
 if [[ -z "${IMAGE}" ]]; then
   IMAGE="gcr.io/${PROJECT}/mobile-api:latest"
+fi
+
+if [[ -z "${THE_ODDS_API_KEYS}" ]]; then
+  THE_ODDS_API_KEYS="${ODDS_API_KEYS:-}"
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -145,6 +150,10 @@ case "${MODE}" in
     exit 1
     ;;
 esac
+
+if [[ -n "${THE_ODDS_API_KEYS}" ]]; then
+  ENV_VARS+=("THE_ODDS_API_KEYS=${THE_ODDS_API_KEYS}")
+fi
 
 ENV_VARS_CSV=$(IFS=, ; echo "${ENV_VARS[*]}")
 

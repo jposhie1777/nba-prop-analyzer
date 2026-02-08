@@ -13,6 +13,11 @@ from LiveOdds.theoddsapi_alt_points_test import (
     DEFAULT_MARKETS as THEODDS_DEFAULT_MARKETS,
     DEFAULT_REGIONS as THEODDS_DEFAULT_REGIONS,
 )
+from LiveOdds.theoddsapi_alt_player_props import (
+    run_alt_player_props_ingest,
+    DEFAULT_MARKETS as THEODDS_ALT_PLAYER_PROPS_MARKETS,
+    DEFAULT_REGIONS as THEODDS_ALT_PLAYER_PROPS_REGIONS,
+)
 
 
 # ======================================================
@@ -44,6 +49,7 @@ class MasterIngestRequest(BaseModel):
 
 class TheOddsAltPlayerPointsRequest(BaseModel):
     api_key: Optional[str] = None
+    api_keys: Optional[str] = None
     date: Optional[str] = None
     markets: Optional[str] = None
     regions: Optional[str] = None
@@ -131,4 +137,32 @@ def run_theoddsapi_alt_player_points(req: TheOddsAltPlayerPointsRequest):
         raise HTTPException(
             status_code=500,
             detail=f"The Odds API ingest failed: {str(e)}",
+        )
+
+
+@router.post("/theoddsapi/alt-player-props")
+def run_theoddsapi_alt_player_props(req: TheOddsAltPlayerPointsRequest):
+    print("🚨 ENTERED /ingest/theoddsapi/alt-player-props", flush=True)
+    try:
+        result = run_alt_player_props_ingest(
+            api_key=req.api_key,
+            api_keys=req.api_keys,
+            date=req.date,
+            markets=req.markets or THEODDS_ALT_PLAYER_PROPS_MARKETS,
+            regions=req.regions or THEODDS_ALT_PLAYER_PROPS_REGIONS,
+            bookmakers=req.bookmakers,
+            event_id=req.event_id,
+            max_events=req.max_events,
+            dataset=req.dataset or "odds_raw",
+            table=req.table or "nba_alt_player_props",
+            table_id=req.table_id,
+            dry_run=bool(req.dry_run),
+            include_sample=False,
+        )
+        return result
+    except Exception as e:
+        print("❌ The Odds API alt props ingest failed", str(e), flush=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"The Odds API alt props ingest failed: {str(e)}",
         )

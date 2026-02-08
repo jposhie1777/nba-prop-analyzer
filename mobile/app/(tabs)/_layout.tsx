@@ -50,6 +50,7 @@ const PGA_TABS: TabConfig[] = [
 ];
 
 const ATP_TABS: TabConfig[] = [
+  { name: "atp-bracket", title: "Bracket", icon: "tennisball-outline" },
   { name: "atp-head-to-head", title: "Head to Head", icon: "people" },
   { name: "atp-compare", title: "Matchup Compare", icon: "analytics" },
   {

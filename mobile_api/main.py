@@ -3,7 +3,7 @@ import os
 import asyncio
 import json
 import time
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -75,7 +75,10 @@ from routes.game_betting_analytics import (
 )
 from routes.three_q_100 import router as three_q_100_router
 from routes.pga_analytics import router as pga_analytics_router
-from routes.atp_analytics import router as atp_analytics_router
+from routes.atp_analytics import (
+    router as atp_analytics_router,
+    build_tournament_bracket_payload,
+)
 from routes.correlations import router as correlations_router
 from routes.game_environment import router as game_environment_router
 
@@ -335,6 +338,64 @@ async def startup():
 
         asyncio.create_task(season_averages_daily_loop())
         print("[STARTUP] -> Season Averages daily ingest loop started")
+
+        # -----------------------------
+        # DAILY: ATP tournament bracket warm-up (runs at 6:00 AM ET)
+        # -----------------------------
+        async def atp_bracket_daily_refresh_loop():
+            """
+            Daily loop that refreshes the ATP tournament bracket cache.
+            Runs at 6:00 AM ET to keep the standard endpoint warm.
+            """
+            REFRESH_HOUR = 6
+            REFRESH_MINUTE = 0
+
+            print("[ATP_BRACKET] Daily refresh loop started")
+            print(
+                "[ATP_BRACKET] Scheduled to run at"
+                f" {REFRESH_HOUR}:{REFRESH_MINUTE:02d} AM ET"
+            )
+
+            while True:
+                try:
+                    now = datetime.now(NY_TZ)
+                    next_run = now.replace(
+                        hour=REFRESH_HOUR,
+                        minute=REFRESH_MINUTE,
+                        second=0,
+                        microsecond=0,
+                    )
+                    if now >= next_run:
+                        next_run = next_run + timedelta(days=1)
+
+                    wait_seconds = (next_run - now).total_seconds()
+                    print(
+                        "[ATP_BRACKET] Next run:"
+                        f" {next_run.strftime('%Y-%m-%d %I:%M %p ET')}"
+                        f" ({wait_seconds/3600:.1f} hours)"
+                    )
+                    await asyncio.sleep(wait_seconds)
+
+                    print(
+                        "\n[ATP_BRACKET] ======== DAILY REFRESH @"
+                        f" {datetime.now(NY_TZ).strftime('%I:%M %p ET')} ========"
+                    )
+
+                    payload = await asyncio.to_thread(build_tournament_bracket_payload)
+                    tournament_name = (payload.get("tournament") or {}).get("name")
+                    match_count = payload.get("match_count")
+                    print(
+                        "[ATP_BRACKET] Refreshed bracket cache"
+                        f" for {tournament_name} ({match_count} matches)"
+                    )
+                    print("[ATP_BRACKET] Daily refresh complete\n")
+
+                except Exception as e:
+                    print(f"[ATP_BRACKET] ERROR in daily loop: {e}")
+                    await asyncio.sleep(3600)
+
+        asyncio.create_task(atp_bracket_daily_refresh_loop())
+        print("[STARTUP] -> ATP bracket daily refresh loop started")
 
         # -----------------------------
         # HOURLY: Pre-game Game Odds ingest (runs every hour until games start)

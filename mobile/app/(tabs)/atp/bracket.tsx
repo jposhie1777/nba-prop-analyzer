@@ -33,16 +33,30 @@ function formatDateRange(start?: string | null, end?: string | null) {
   return `${fmt(startDate)} - ${fmt(endDate)}`;
 }
 
-function formatMatchTime(value?: string | null) {
-  if (!value) return "Time TBD";
+function formatMatchDay(value?: string | null) {
+  if (!value) return "TBD";
   const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "Time TBD";
+  if (Number.isNaN(d.getTime())) return "TBD";
+  return d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function formatMatchTime(value?: string | null) {
+  if (!value) return "TBD";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "TBD";
   return d.toLocaleString(undefined, {
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function formatMatchMeta(match: AtpBracketMatch) {
+  return isCompleted(match) ? formatMatchDay(match.scheduled_at) : formatMatchTime(match.scheduled_at);
 }
 
 function isCompleted(m: AtpBracketMatch) {
@@ -173,17 +187,22 @@ function MatchCard({
         )}
       </View>
       {finished ? (
-        <Text
-          style={[
-            hasScore ? s.scoreText : s.matchMeta,
-            { color: hasScore ? colors.text.secondary : colors.text.muted },
-          ]}
-        >
-          {hasScore ? match.score : "Final"}
-        </Text>
+        <>
+          <Text
+            style={[
+              hasScore ? s.scoreText : s.matchMeta,
+              { color: hasScore ? colors.text.secondary : colors.text.muted },
+            ]}
+          >
+            {hasScore ? match.score : "Final"}
+          </Text>
+          <Text style={[s.matchMeta, { color: colors.text.muted }]}>
+            {formatMatchMeta(match)}
+          </Text>
+        </>
       ) : (
         <Text style={[s.matchMeta, { color: colors.text.muted }]}>
-          {formatMatchTime(match.scheduled_at)}
+          {formatMatchMeta(match)}
         </Text>
       )}
     </View>
@@ -270,7 +289,7 @@ function MatchAnalysisCard({
       {/* Match header */}
       <View style={s.analysisHeader}>
         <Text style={[s.analysisRound, { color: colors.text.muted }]}>
-          {match.round} {"\u2022"} {formatMatchTime(match.scheduled_at)}
+          {match.round} {"\u2022"} {formatMatchMeta(match)}
         </Text>
       </View>
 

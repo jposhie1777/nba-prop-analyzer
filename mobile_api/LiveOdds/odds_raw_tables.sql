@@ -1,8 +1,8 @@
--- BigQuery table schema for The Odds API NBA alternate totals (over/under)
+-- BigQuery table schema for The Odds API NBA alternate player points (over/under)
 -- Dataset: odds_raw
--- Table: nba_alt_points
+-- Table: nba_alt_player_points
 
-CREATE TABLE IF NOT EXISTS `graphite-flare-477419-h7.odds_raw.nba_alt_points` (
+CREATE TABLE IF NOT EXISTS `graphite-flare-477419-h7.odds_raw.nba_alt_player_points` (
   snapshot_ts TIMESTAMP NOT NULL,
   request_date DATE NOT NULL,
   event_id STRING NOT NULL,
@@ -19,5 +19,5 @@ CREATE TABLE IF NOT EXISTS `graphite-flare-477419-h7.odds_raw.nba_alt_points` (
 PARTITION BY DATE(snapshot_ts)
 CLUSTER BY event_id
 OPTIONS (
-  description = 'Raw The Odds API alternate totals (over/under) odds for NBA games'
+  description = 'Raw The Odds API alternate player points (over/under) for NBA games'
 );

@@ -1,6 +1,6 @@
 """
-Small test script to pull NBA alternate totals (over/under) from The Odds API
-and store raw payloads in BigQuery.
+Small test script to pull NBA alternate player points (over/under) from
+The Odds API and store raw payloads in BigQuery.
 
 Usage:
   THE_ODDS_API_KEY=... python -m LiveOdds.theoddsapi_alt_points_test
@@ -20,7 +20,7 @@ from LiveOdds.live_odds_common import get_bq_client
 
 THEODDSAPI_BASE = "https://api.the-odds-api.com/v4"
 SPORT_KEY = "basketball_nba"
-DEFAULT_MARKETS = "alternate_totals"
+DEFAULT_MARKETS = "alternate_player_points"
 DEFAULT_REGIONS = "us"
 DEFAULT_ODDS_FORMAT = "american"
 DEFAULT_DATE_FORMAT = "iso"
@@ -57,7 +57,7 @@ def _ny_date_window(date_str: str | None) -> tuple[str, str, str]:
     return target_date.isoformat(), start_utc, end_utc
 
 
-def _fetch_alt_totals(
+def _fetch_alt_player_points(
     api_key: str,
     markets: str,
     regions: str,
@@ -127,7 +127,7 @@ def _build_rows(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Fetch NBA alternate totals from The Odds API into BigQuery."
+        description="Fetch NBA alternate player points from The Odds API into BigQuery."
     )
     parser.add_argument("--api-key", help="The Odds API key (or set THE_ODDS_API_KEY).")
     parser.add_argument(
@@ -138,7 +138,7 @@ def main() -> None:
     parser.add_argument("--regions", default=DEFAULT_REGIONS)
     parser.add_argument("--bookmakers", help="Comma-separated bookmakers (optional).")
     parser.add_argument("--dataset", default="odds_raw")
-    parser.add_argument("--table", default="nba_alt_points")
+    parser.add_argument("--table", default="nba_alt_player_points")
     parser.add_argument("--table-id", help="Full BigQuery table id override.")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
@@ -147,7 +147,7 @@ def main() -> None:
     request_date, commence_from, commence_to = _ny_date_window(args.date)
 
     print(
-        "[THEODDSAPI] Fetching NBA alternate totals",
+        "[THEODDSAPI] Fetching NBA alternate player points",
         {
             "date": request_date,
             "markets": args.markets,
@@ -157,7 +157,7 @@ def main() -> None:
         },
     )
 
-    events = _fetch_alt_totals(
+    events = _fetch_alt_player_points(
         api_key=api_key,
         markets=args.markets,
         regions=args.regions,

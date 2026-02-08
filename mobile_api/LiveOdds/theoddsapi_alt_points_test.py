@@ -20,7 +20,7 @@ from LiveOdds.live_odds_common import get_bq_client
 
 THEODDSAPI_BASE = "https://api.the-odds-api.com/v4"
 SPORT_KEY = "basketball_nba"
-DEFAULT_MARKETS = "alternate_player_points"
+DEFAULT_MARKETS = "player_points_alternate"
 DEFAULT_REGIONS = "us"
 DEFAULT_ODDS_FORMAT = "american"
 DEFAULT_DATE_FORMAT = "iso"

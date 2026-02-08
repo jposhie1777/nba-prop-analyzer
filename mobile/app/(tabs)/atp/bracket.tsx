@@ -46,7 +46,14 @@ function formatMatchTime(value?: string | null) {
 }
 
 function isCompleted(m: AtpBracketMatch) {
-  return m.status === "F" || m.status === "Finished";
+  const status = (m.status || "").toString().toLowerCase();
+  return (
+    status === "f" ||
+    status === "finished" ||
+    status === "final" ||
+    status === "complete" ||
+    status === "completed"
+  );
 }
 
 function isQualifyingRound(r: AtpBracketRound) {
@@ -85,11 +92,11 @@ function MatchCard({
   match: AtpBracketMatch;
   colors: any;
 }) {
-  const finished = isCompleted(match);
+  const hasScore = Boolean(match.score);
+  const finished = isCompleted(match) || hasScore;
   const winner = match.winner;
   const p1Won = finished && winner === match.player1;
   const p2Won = finished && winner === match.player2;
-  const hasScore = Boolean(match.score);
   const showOutcome = finished && Boolean(winner);
 
   return (

@@ -384,7 +384,7 @@ def build_tournament_bracket_payload(
 
     matches = fetch_paginated(
         "/matches",
-        params={"tournament_id": tournament.get("id")},
+        params={"tournament_ids[]": [tournament.get("id")]},
         cache_ttl=300,
         max_pages=max_pages,
     )

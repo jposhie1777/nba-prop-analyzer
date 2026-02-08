@@ -2,6 +2,7 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useMemo } from "react";
 import { useTheme } from "@/store/useTheme";
 import { useAtpTournamentBracket } from "@/hooks/atp/useAtpTournamentBracket";
+import type { AtpBracketMatch, AtpBracketRound } from "@/hooks/atp/useAtpTournamentBracket";
 
 function formatDateRange(start?: string | null, end?: string | null) {
   if (!start && !end) return "Dates TBD";
@@ -15,9 +16,6 @@ function formatDateRange(start?: string | null, end?: string | null) {
           year: "numeric",
         })
       : "TBD";
-  if (startDate && endDate) {
-    return `${format(startDate)} - ${format(endDate)}`;
-  }
   return `${format(startDate)} - ${format(endDate)}`;
 }
 
@@ -33,11 +31,168 @@ function formatMatchTime(value?: string | null) {
   });
 }
 
+function isCompleted(match: AtpBracketMatch) {
+  return match.status === "F" || match.status === "Finished";
+}
+
+function isQualifyingRound(round: AtpBracketRound) {
+  const name = round.name.toLowerCase();
+  return (
+    name.includes("qualifying") ||
+    name.includes("qualification") ||
+    (name.startsWith("q") && /^q\d$/.test(name))
+  );
+}
+
+function MatchCard({
+  match,
+  colors,
+}: {
+  match: AtpBracketMatch;
+  colors: any;
+}) {
+  const finished = isCompleted(match);
+  const winner = match.winner;
+  const p1Won = finished && winner === match.player1;
+  const p2Won = finished && winner === match.player2;
+
+  return (
+    <View
+      style={[
+        styles.matchCard,
+        {
+          backgroundColor: colors.surface.elevated,
+          borderColor: finished ? "rgba(34,197,94,0.25)" : colors.border.subtle,
+        },
+      ]}
+    >
+      {/* Player 1 row */}
+      <View style={styles.playerRow}>
+        <Text
+          style={[
+            styles.playerText,
+            {
+              color: p1Won
+                ? colors.accent.success
+                : finished && !p1Won && winner
+                  ? colors.text.muted
+                  : colors.text.primary,
+              fontWeight: p1Won ? "800" : "600",
+            },
+          ]}
+          numberOfLines={1}
+        >
+          {match.player1}
+        </Text>
+        {finished && match.score && (
+          <Text
+            style={[
+              styles.setScores,
+              {
+                color: p1Won ? colors.accent.success : colors.text.muted,
+                fontWeight: p1Won ? "700" : "400",
+              },
+            ]}
+          >
+            {p1Won ? "W" : "L"}
+          </Text>
+        )}
+      </View>
+
+      {/* Divider */}
+      <View style={[styles.matchDivider, { backgroundColor: colors.border.subtle }]} />
+
+      {/* Player 2 row */}
+      <View style={styles.playerRow}>
+        <Text
+          style={[
+            styles.playerText,
+            {
+              color: p2Won
+                ? colors.accent.success
+                : finished && !p2Won && winner
+                  ? colors.text.muted
+                  : colors.text.primary,
+              fontWeight: p2Won ? "800" : "600",
+            },
+          ]}
+          numberOfLines={1}
+        >
+          {match.player2}
+        </Text>
+        {finished && match.score && (
+          <Text
+            style={[
+              styles.setScores,
+              {
+                color: p2Won ? colors.accent.success : colors.text.muted,
+                fontWeight: p2Won ? "700" : "400",
+              },
+            ]}
+          >
+            {p2Won ? "W" : "L"}
+          </Text>
+        )}
+      </View>
+
+      {/* Score / Time */}
+      {finished && match.score ? (
+        <Text style={[styles.scoreText, { color: colors.text.secondary }]}>
+          {match.score}
+        </Text>
+      ) : (
+        <Text style={[styles.matchMeta, { color: colors.text.muted }]}>
+          {formatMatchTime(match.scheduled_at)}
+        </Text>
+      )}
+    </View>
+  );
+}
+
+function RoundColumn({
+  round,
+  colors,
+}: {
+  round: AtpBracketRound;
+  colors: any;
+}) {
+  return (
+    <View style={styles.roundColumn}>
+      <View
+        style={[
+          styles.roundHeader,
+          { backgroundColor: colors.surface.cardSoft },
+        ]}
+      >
+        <Text style={[styles.roundTitle, { color: colors.text.primary }]}>
+          {round.name}
+        </Text>
+        <Text style={[styles.roundCount, { color: colors.text.muted }]}>
+          {round.matches.length} {round.matches.length === 1 ? "match" : "matches"}
+        </Text>
+      </View>
+      {round.matches.length === 0 ? (
+        <Text style={[styles.emptyText, { color: colors.text.muted }]}>
+          Matches TBD
+        </Text>
+      ) : (
+        round.matches.map((match) => (
+          <MatchCard
+            key={`${round.name}-${match.id ?? match.player1}-${match.player2}`}
+            match={match}
+            colors={colors}
+          />
+        ))
+      )}
+    </View>
+  );
+}
+
 export default function AtpBracketScreen() {
   const { colors } = useTheme();
   const { data, loading, error } = useAtpTournamentBracket({
     tournamentName: "Montpellier",
-    upcomingLimit: 6,
+    upcomingLimit: 20,
   });
 
   const header = useMemo(() => {
@@ -60,14 +215,44 @@ export default function AtpBracketScreen() {
     };
   }, [data]);
 
+  const { qualifyingRounds, mainDrawRounds, stats } = useMemo(() => {
+    const rounds = data?.bracket.rounds ?? [];
+    const qualifying: AtpBracketRound[] = [];
+    const mainDraw: AtpBracketRound[] = [];
+
+    for (const round of rounds) {
+      if (isQualifyingRound(round)) {
+        qualifying.push(round);
+      } else {
+        mainDraw.push(round);
+      }
+    }
+
+    let totalMatches = 0;
+    let completedMatches = 0;
+    for (const round of rounds) {
+      for (const match of round.matches) {
+        totalMatches++;
+        if (isCompleted(match)) completedMatches++;
+      }
+    }
+
+    return {
+      qualifyingRounds: qualifying,
+      mainDrawRounds: mainDraw,
+      stats: { total: totalMatches, completed: completedMatches },
+    };
+  }, [data]);
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.surface.screen }}
       contentContainerStyle={styles.container}
     >
+      {/* Tournament Header */}
       <View
         style={[
-          styles.bracketCard,
+          styles.headerCard,
           { backgroundColor: colors.surface.card, borderColor: colors.border.subtle },
         ]}
       >
@@ -75,117 +260,80 @@ export default function AtpBracketScreen() {
           {header.name}
         </Text>
         <Text style={[styles.bracketMeta, { color: colors.text.muted }]}>
-          {header.surface} • {header.dates}
+          {header.surface} {"\u2022"} {header.dates}
         </Text>
-
-        {loading ? (
-          <Text style={[styles.statusText, { color: colors.text.muted }]}>
-            Loading bracket...
-          </Text>
-        ) : error ? (
-          <Text style={[styles.statusText, { color: colors.text.error }]}>
-            {error}
-          </Text>
-        ) : (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.roundsRow}
-          >
-            {(data?.bracket.rounds ?? []).map((round) => (
-              <View key={round.name} style={styles.roundColumn}>
-                <Text
-                  style={[styles.roundTitle, { color: colors.text.primary }]}
-                >
-                  {round.name}
-                </Text>
-                {round.matches.length === 0 ? (
-                  <Text style={[styles.emptyText, { color: colors.text.muted }]}>
-                    Matches TBD
-                  </Text>
-                ) : (
-                  round.matches.map((match) => (
-                    <View
-                      key={`${round.name}-${match.id ?? match.player1}`}
-                      style={[
-                        styles.matchCard,
-                        {
-                          backgroundColor: colors.surface.elevated,
-                          borderColor: colors.border.subtle,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.playerText,
-                          { color: colors.text.primary },
-                        ]}
-                      >
-                        {match.player1}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.playerText,
-                          { color: colors.text.primary },
-                        ]}
-                      >
-                        {match.player2}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.matchMeta,
-                          { color: colors.text.muted },
-                        ]}
-                      >
-                        {formatMatchTime(match.scheduled_at)}
-                      </Text>
-                    </View>
-                  ))
-                )}
-              </View>
-            ))}
-          </ScrollView>
-        )}
-      </View>
-
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
-          Upcoming Matches
-        </Text>
-        {loading ? (
-          <Text style={[styles.statusText, { color: colors.text.muted }]}>
-            Loading upcoming matches...
-          </Text>
-        ) : error ? (
-          <Text style={[styles.statusText, { color: colors.text.error }]}>
-            {error}
-          </Text>
-        ) : (data?.upcoming_matches ?? []).length === 0 ? (
-          <Text style={[styles.statusText, { color: colors.text.muted }]}>
-            No upcoming matches found.
-          </Text>
-        ) : (
-          (data?.upcoming_matches ?? []).map((match) => (
+        {!loading && !error && stats.total > 0 && (
+          <View style={styles.progressRow}>
             <View
-              key={`upcoming-${match.id ?? match.player1}`}
               style={[
-                styles.upcomingCard,
-                {
-                  backgroundColor: colors.surface.card,
-                  borderColor: colors.border.subtle,
-                },
+                styles.progressBar,
+                { backgroundColor: colors.surface.elevated },
               ]}
             >
-              <Text style={[styles.playerText, { color: colors.text.primary }]}>
-                {match.player1} vs {match.player2}
-              </Text>
-              <Text style={[styles.matchMeta, { color: colors.text.muted }]}>
-                {match.round} • {formatMatchTime(match.scheduled_at)}
-              </Text>
+              <View
+                style={[
+                  styles.progressFill,
+                  {
+                    backgroundColor: colors.accent.success,
+                    width: `${Math.round((stats.completed / stats.total) * 100)}%` as any,
+                  },
+                ]}
+              />
             </View>
-          ))
+            <Text style={[styles.progressText, { color: colors.text.muted }]}>
+              {stats.completed}/{stats.total} completed
+            </Text>
+          </View>
         )}
       </View>
+
+      {loading ? (
+        <Text style={[styles.statusText, { color: colors.text.muted }]}>
+          Loading bracket...
+        </Text>
+      ) : error ? (
+        <Text style={[styles.statusText, { color: colors.text.primary }]}>
+          {error}
+        </Text>
+      ) : (
+        <>
+          {/* Main Draw */}
+          {mainDrawRounds.length > 0 && (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+                Main Draw
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.roundsRow}
+              >
+                {mainDrawRounds.map((round) => (
+                  <RoundColumn key={round.name} round={round} colors={colors} />
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Qualifying */}
+          {qualifyingRounds.length > 0 && (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.text.muted }]}>
+                Qualifying
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.roundsRow}
+              >
+                {qualifyingRounds.map((round) => (
+                  <RoundColumn key={round.name} round={round} colors={colors} />
+                ))}
+              </ScrollView>
+            </View>
+          )}
+        </>
+      )}
     </ScrollView>
   );
 }
@@ -194,66 +342,113 @@ const styles = StyleSheet.create({
   container: {
     padding: 16,
     paddingBottom: 32,
-    gap: 16,
+    gap: 20,
   },
-  bracketCard: {
+  headerCard: {
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
     padding: 16,
     gap: 8,
+    alignItems: "center",
   },
   bracketTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "800",
     textAlign: "center",
   },
   bracketMeta: {
-    fontSize: 12,
+    fontSize: 13,
     textAlign: "center",
   },
-  roundsRow: {
-    paddingVertical: 8,
-    gap: 12,
-  },
-  roundColumn: {
-    width: 180,
+  progressRow: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
+    marginTop: 4,
+    width: "100%",
   },
-  roundTitle: {
-    fontSize: 14,
-    fontWeight: "700",
+  progressBar: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+    overflow: "hidden",
   },
-  matchCard: {
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 10,
-    gap: 6,
+  progressFill: {
+    height: "100%",
+    borderRadius: 2,
   },
-  playerText: {
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  matchMeta: {
+  progressText: {
     fontSize: 11,
-  },
-  statusText: {
-    fontSize: 12,
-  },
-  emptyText: {
-    fontSize: 12,
-    fontStyle: "italic",
   },
   section: {
     gap: 10,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  roundsRow: {
+    paddingVertical: 4,
+    gap: 12,
+  },
+  roundColumn: {
+    width: 190,
+    gap: 8,
+  },
+  roundHeader: {
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    gap: 2,
+  },
+  roundTitle: {
+    fontSize: 13,
     fontWeight: "700",
   },
-  upcomingCard: {
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 12,
+  roundCount: {
+    fontSize: 10,
+  },
+  matchCard: {
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 8,
     gap: 4,
+  },
+  playerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 4,
+  },
+  playerText: {
+    fontSize: 12,
+    flex: 1,
+  },
+  setScores: {
+    fontSize: 11,
+  },
+  matchDivider: {
+    height: StyleSheet.hairlineWidth,
+  },
+  scoreText: {
+    fontSize: 11,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  matchMeta: {
+    fontSize: 10,
+    marginTop: 2,
+  },
+  statusText: {
+    fontSize: 13,
+    textAlign: "center",
+    padding: 20,
+  },
+  emptyText: {
+    fontSize: 12,
+    fontStyle: "italic",
+    padding: 8,
   },
 });

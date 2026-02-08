@@ -20,7 +20,7 @@ from LiveOdds.live_odds_common import get_bq_client
 
 THEODDSAPI_BASE = "https://api.the-odds-api.com/v4"
 SPORT_KEY = "basketball_nba"
-DEFAULT_MARKETS = "alternate_player_points"
+DEFAULT_MARKETS = "player_points_alternate"
 DEFAULT_REGIONS = "us"
 DEFAULT_ODDS_FORMAT = "american"
 DEFAULT_DATE_FORMAT = "iso"
@@ -52,32 +52,53 @@ def _ny_date_window(date_str: str | None) -> tuple[str, str, str]:
     start_ny = datetime.combine(target_date, time(0, 0, 0), tzinfo=NY_TZ)
     end_ny = datetime.combine(target_date, time(23, 59, 59), tzinfo=NY_TZ)
 
-    start_utc = start_ny.astimezone(timezone.utc).isoformat()
-    end_utc = end_ny.astimezone(timezone.utc).isoformat()
+    # The Odds API expects Zulu format without offset, e.g. 2020-11-24T16:05:00Z
+    start_utc = start_ny.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    end_utc = end_ny.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     return target_date.isoformat(), start_utc, end_utc
 
 
-def _fetch_alt_player_points(
+def _fetch_events(
     api_key: str,
-    markets: str,
-    regions: str,
     commence_from: str,
     commence_to: str,
-    bookmakers: str | None,
 ) -> list[dict]:
+    params = {
+        "apiKey": api_key,
+        "dateFormat": DEFAULT_DATE_FORMAT,
+        "commenceTimeFrom": commence_from,
+        "commenceTimeTo": commence_to,
+    }
+    url = f"{THEODDSAPI_BASE}/sports/{SPORT_KEY}/events"
+    resp = requests.get(url, params=params, timeout=TIMEOUT_SEC)
+    if resp.status_code >= 400:
+        raise RuntimeError(f"The Odds API error {resp.status_code}: {resp.text}")
+    resp.raise_for_status()
+
+    payload = resp.json()
+    if not isinstance(payload, list):
+        raise RuntimeError("Unexpected The Odds API events response shape.")
+    return payload
+
+
+def _fetch_event_player_points(
+    api_key: str,
+    event_id: str,
+    markets: str,
+    regions: str,
+    bookmakers: str | None,
+) -> dict:
     params = {
         "apiKey": api_key,
         "regions": regions,
         "markets": markets,
         "oddsFormat": DEFAULT_ODDS_FORMAT,
         "dateFormat": DEFAULT_DATE_FORMAT,
-        "commenceTimeFrom": commence_from,
-        "commenceTimeTo": commence_to,
     }
     if bookmakers:
         params["bookmakers"] = bookmakers
 
-    url = f"{THEODDSAPI_BASE}/sports/{SPORT_KEY}/odds/"
+    url = f"{THEODDSAPI_BASE}/sports/{SPORT_KEY}/events/{event_id}/odds"
     resp = requests.get(url, params=params, timeout=TIMEOUT_SEC)
     if resp.status_code >= 400:
         raise RuntimeError(f"The Odds API error {resp.status_code}: {resp.text}")
@@ -89,20 +110,20 @@ def _fetch_alt_player_points(
         print(f"[THEODDSAPI] Requests used={used} remaining={remaining}")
 
     payload = resp.json()
-    if not isinstance(payload, list):
-        raise RuntimeError("Unexpected The Odds API response shape.")
+    if not isinstance(payload, dict):
+        raise RuntimeError("Unexpected The Odds API event odds response shape.")
     return payload
 
 
 def _build_rows(
-    events: list[dict],
+    event_payloads: list[dict],
     snapshot_ts: str,
     request_date: str,
     markets: str,
     regions: str,
 ) -> list[dict]:
     rows = []
-    for event in events:
+    for event in event_payloads:
         event_id = event.get("id")
         if not event_id:
             continue
@@ -137,6 +158,12 @@ def main() -> None:
     parser.add_argument("--markets", default=DEFAULT_MARKETS)
     parser.add_argument("--regions", default=DEFAULT_REGIONS)
     parser.add_argument("--bookmakers", help="Comma-separated bookmakers (optional).")
+    parser.add_argument("--event-id", help="Fetch odds for a single event id only.")
+    parser.add_argument(
+        "--max-events",
+        type=int,
+        help="Limit number of events fetched (helps conserve requests).",
+    )
     parser.add_argument("--dataset", default="odds_raw")
     parser.add_argument("--table", default="nba_alt_player_points")
     parser.add_argument("--table-id", help="Full BigQuery table id override.")
@@ -157,25 +184,52 @@ def main() -> None:
         },
     )
 
-    events = _fetch_alt_player_points(
-        api_key=api_key,
-        markets=args.markets,
-        regions=args.regions,
-        commence_from=commence_from,
-        commence_to=commence_to,
-        bookmakers=args.bookmakers,
-    )
+    event_payloads: list[dict] = []
+    if args.event_id:
+        event_payloads.append(
+            _fetch_event_player_points(
+                api_key=api_key,
+                event_id=args.event_id,
+                markets=args.markets,
+                regions=args.regions,
+                bookmakers=args.bookmakers,
+            )
+        )
+    else:
+        events = _fetch_events(
+            api_key=api_key,
+            commence_from=commence_from,
+            commence_to=commence_to,
+        )
+        if args.max_events is not None:
+            events = events[: max(args.max_events, 0)]
+
+        print(f"[THEODDSAPI] Events found: {len(events)}")
+        for idx, event in enumerate(events, start=1):
+            event_id = event.get("id")
+            if not event_id:
+                continue
+            print(f"[THEODDSAPI] Fetching event {idx}/{len(events)}: {event_id}")
+            event_payloads.append(
+                _fetch_event_player_points(
+                    api_key=api_key,
+                    event_id=event_id,
+                    markets=args.markets,
+                    regions=args.regions,
+                    bookmakers=args.bookmakers,
+                )
+            )
 
     snapshot_ts = datetime.now(timezone.utc).isoformat()
     rows = _build_rows(
-        events=events,
+        event_payloads=event_payloads,
         snapshot_ts=snapshot_ts,
         request_date=request_date,
         markets=args.markets,
         regions=args.regions,
     )
 
-    print(f"[THEODDSAPI] Events fetched: {len(events)} rows prepared: {len(rows)}")
+    print(f"[THEODDSAPI] Event payloads: {len(event_payloads)} rows prepared: {len(rows)}")
 
     if args.dry_run:
         sample = rows[0] if rows else None

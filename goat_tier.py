@@ -14,7 +14,13 @@ GOAT_DATASET = "nba_goat_data"
 TABLE_PLAYER_STATS = "player_game_stats"
 
 BALDONTLIE_BASE = "https://api.balldontlie.io/v1"
-API_KEY = os.getenv("BALDONTLIE_KEY")
+API_KEY = (
+    os.getenv("BALDONTLIE_KEY")
+    or os.getenv("BALLDONTLIE_API_KEY")
+    or ""
+)
+if not API_KEY:
+    print("⚠️ BallDontLie API key missing (set BALDONTLIE_KEY or BALLDONTLIE_API_KEY)")
 
 RATE_PROFILE = os.getenv("BALLDONTLIE_TIER", "ALL_STAR")
 

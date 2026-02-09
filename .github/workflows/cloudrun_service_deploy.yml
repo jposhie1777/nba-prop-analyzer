@@ -39,8 +39,8 @@ jobs:
 
       - name: Deploy Cloud Run Service
         env:
-          BDL_PGA_API_KEY: ${{ secrets.BDL_PGA_API_KEY }}
-          BDL_ATP_API_KEY: ${{ secrets.BDL_ATP_API_KEY }}
+          BDL_PGA_API_KEY: ${{ secrets.BDL_PGA_API_KEY || secrets.BALLDONTLIE_API_KEY }}
+          BDL_ATP_API_KEY: ${{ secrets.BDL_ATP_API_KEY || secrets.BALLDONTLIE_API_KEY }}
           THE_ODDS_API_KEYS: ${{ secrets.THE_ODDS_API_KEYS }}
         run: |
           chmod +x mobile_api/deploy_cloudrun_service.sh

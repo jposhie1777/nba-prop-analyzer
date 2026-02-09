@@ -9,7 +9,7 @@ from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import StreamingResponse
 
-from db import fetch_mobile_props, ingest_live_games_snapshot
+from db import ingest_live_games_snapshot
 
 # ==================================================
 # SMART SCHEDULING IMPORTS
@@ -607,32 +607,6 @@ async def startup():
 @app.get("/health")
 def health():
     return {"status": "ok"}
-
-# ==================================================
-# Props endpoint (mobile default)
-# ==================================================
-@app.get("/props")
-def get_props(
-    game_date: str | None = None,
-    min_hit_rate: float = Query(0.60, ge=0.0, le=1.0),
-    limit: int = Query(200, ge=50, le=500),
-    offset: int = Query(0, ge=0),
-):
-    if game_date is None:
-        game_date = datetime.now(NY_TZ).date().isoformat()
-
-    props = fetch_mobile_props(
-        game_date=game_date,
-        min_hit_rate=min_hit_rate,
-        limit=limit,
-        offset=offset,
-    )
-
-    return {
-        "date": game_date,
-        "count": len(props),
-        "props": props,
-    }
 
 
 # ==================================================

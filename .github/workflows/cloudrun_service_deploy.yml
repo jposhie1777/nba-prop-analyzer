@@ -39,13 +39,15 @@ jobs:
 
       - name: Deploy Cloud Run Service
         env:
-          BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY || secrets.BALDONTLIE_KEY }}
-          THE_ODDS_API_KEYS: "6a6a95c07344758a630d114072c479f7|a9d050d0dc417d93691414dca223de3b|a3a52054147a419cf9e7e71073efde9c|0845607e5be036c4bda268d0634ba852|d095b4969850467a5d80c454a0d1634f|6e21d303676b1ba6a3235e70f2661cf6|1f90bc6bc071b37bb7b620fc975ca6d5|4c8b88d619ec81041bdb3e4f007a5b63|245cc70e16794ae1d3a4f020c9499abb"
+          BDL_PGA_API_KEY: ${{ secrets.BDL_PGA_API_KEY }}
+          BDL_ATP_API_KEY: ${{ secrets.BDL_ATP_API_KEY }}
+          THE_ODDS_API_KEYS: ${{ secrets.THE_ODDS_API_KEYS }}
         run: |
           chmod +x mobile_api/deploy_cloudrun_service.sh
           mobile_api/deploy_cloudrun_service.sh \
             --project "$PROJECT_ID" \
             --region "$REGION" \
-            --bdl-key "$BALLDONTLIE_API_KEY" \
+            --pga-key "$BDL_PGA_API_KEY" \
+            --atp-key "$BDL_ATP_API_KEY" \
             --min-instances "${{ inputs.min_instances }}" \
             --max-instances "${{ inputs.max_instances }}"

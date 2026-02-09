@@ -3,7 +3,8 @@ set -euo pipefail
 
 PROJECT=""
 REGION=""
-BDL_KEY=""
+PGA_KEY=""
+ATP_KEY=""
 THE_ODDS_API_KEYS="${THE_ODDS_API_KEYS:-}"
 
 IMAGE=""
@@ -19,7 +20,7 @@ LIVE_INGEST_PRE_GAME_MINUTES="0"
 
 usage() {
   cat <<EOF
-Usage: $0 --project <PROJECT> --region <REGION> --bdl-key <KEY> [options]
+Usage: $0 --project <PROJECT> --region <REGION> --pga-key <KEY> --atp-key <KEY> [options]
 
 Options:
   --image <IMAGE>                 Container image (default: gcr.io/<PROJECT>/mobile-api:latest)
@@ -39,7 +40,8 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --project) PROJECT="$2"; shift 2;;
     --region) REGION="$2"; shift 2;;
-    --bdl-key) BDL_KEY="$2"; shift 2;;
+    --pga-key) PGA_KEY="$2"; shift 2;;
+    --atp-key) ATP_KEY="$2"; shift 2;;
     --image) IMAGE="$2"; shift 2;;
     --service-name) SERVICE_NAME="$2"; shift 2;;
     --min-instances) MIN_INSTANCES="$2"; shift 2;;
@@ -55,7 +57,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "${PROJECT}" || -z "${REGION}" || -z "${BDL_KEY}" ]]; then
+if [[ -z "${PROJECT}" || -z "${REGION}" || -z "${PGA_KEY}" || -z "${ATP_KEY}" ]]; then
   usage
   exit 1
 fi
@@ -119,7 +121,8 @@ fi
 case "${MODE}" in
   snapshot)
     ENV_VARS=(
-      "BALLDONTLIE_API_KEY=${BDL_KEY}"
+      "BDL_PGA_API_KEY=${PGA_KEY}"
+      "BDL_ATP_API_KEY=${ATP_KEY}"
       "GCP_PROJECT=${PROJECT}"
       "USE_SMART_SCHEDULER=false"
       "ENABLE_LIVE_INGEST=false"
@@ -129,7 +132,8 @@ case "${MODE}" in
     ;;
   live)
     ENV_VARS=(
-      "BALLDONTLIE_API_KEY=${BDL_KEY}"
+      "BDL_PGA_API_KEY=${PGA_KEY}"
+      "BDL_ATP_API_KEY=${ATP_KEY}"
       "GCP_PROJECT=${PROJECT}"
       "USE_SMART_SCHEDULER=true"
       "ENABLE_LIVE_INGEST=true"
@@ -137,11 +141,6 @@ case "${MODE}" in
       "LIVE_GAMES_SNAPSHOT_INTERVAL_SEC=${LIVE_GAMES_SNAPSHOT_INTERVAL_SEC}"
       "LIVE_INGEST_INTERVAL_SEC=${LIVE_INGEST_INTERVAL_SEC}"
       "LIVE_INGEST_PRE_GAME_MINUTES=${LIVE_INGEST_PRE_GAME_MINUTES}"
-      "ENABLE_LIVE_GAMES_INGEST=true"
-      "ENABLE_BOX_SCORES_INGEST=true"
-      "ENABLE_LIVE_PLAYER_STATS_INGEST=true"
-      "ENABLE_LIVE_ODDS_INGEST=true"
-      "ENABLE_LIVE_ODDS_FLATTEN=true"
       "ENABLE_PLAYER_STATS_INGEST=true"
     )
     ;;

@@ -6,9 +6,11 @@ import {
   Text,
   View,
 } from "react-native";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTheme } from "@/store/useTheme";
 import { useAtpTournamentBracket } from "@/hooks/atp/useAtpTournamentBracket";
+import { useAtpActiveTournaments } from "@/hooks/atp/useAtpActiveTournaments";
+import type { ActiveTournament } from "@/hooks/atp/useAtpActiveTournaments";
 import { useAtpQuery } from "@/hooks/atp/useAtpQuery";
 import type {
   AtpBracketMatch,
@@ -94,6 +96,20 @@ function isToday(value?: string | null) {
 const fmtPct = (v?: number | null) =>
   v == null ? "\u2014" : `${(v * 100).toFixed(1)}%`;
 const fmtNum = (v?: number | null) => (v == null ? "\u2014" : v.toFixed(2));
+
+function tournamentShortName(t: ActiveTournament): string {
+  return t.city || t.name || "Tournament";
+}
+
+function surfaceBadge(surface?: string | null): string {
+  if (!surface) return "";
+  const s = surface.toLowerCase();
+  if (s.includes("hard")) return "Hard";
+  if (s.includes("clay")) return "Clay";
+  if (s.includes("grass")) return "Grass";
+  if (s.includes("carpet")) return "Carpet";
+  return surface;
+}
 
 type Tab = "bracket" | "today";
 
@@ -501,13 +517,19 @@ function MetricRow({
   );
 }
 
-/* ───── Main screen ───── */
+/* ───── Per-tournament bracket view (keyed by tournament id) ───── */
 
-export default function AtpBracketScreen() {
-  const { colors } = useTheme();
+function TournamentBracketView({
+  tournamentId,
+  colors,
+}: {
+  tournamentId: number;
+  colors: any;
+}) {
   const [tab, setTab] = useState<Tab>("bracket");
 
   const { data, loading, error } = useAtpTournamentBracket({
+    tournamentId,
     upcomingLimit: 50,
   });
 
@@ -553,13 +575,11 @@ export default function AtpBracketScreen() {
         }
       }
     }
-    // Also include upcoming_matches that are today (may include matches not in rounds yet)
     for (const m of data?.upcoming_matches ?? []) {
       if (isToday(m.scheduled_at) && !all.some((e) => e.id === m.id)) {
         all.push(m);
       }
     }
-    // If no today matches, fall back to all upcoming (tournament may be in a different timezone)
     if (all.length === 0) {
       for (const m of data?.upcoming_matches ?? []) {
         if (!isCompleted(m)) all.push(m);
@@ -571,10 +591,7 @@ export default function AtpBracketScreen() {
   const surfaceLabel = header.surface ? `${header.surface} Court` : "Surface TBD";
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.surface.screen }}
-      contentContainerStyle={s.container}
-    >
+    <>
       {/* Tournament Header */}
       <View
         style={[
@@ -674,7 +691,7 @@ export default function AtpBracketScreen() {
         <View style={s.loadingContainer}>
           <ActivityIndicator color={colors.accent.primary} />
           <Text style={[s.statusText, { color: colors.text.muted }]}>
-            Loading...
+            Loading bracket...
           </Text>
         </View>
       ) : error ? (
@@ -682,7 +699,6 @@ export default function AtpBracketScreen() {
           {error}
         </Text>
       ) : tab === "bracket" ? (
-        /* ─── Bracket view ─── */
         <>
           {mainDrawRounds.length > 0 && (
             <View style={s.section}>
@@ -718,7 +734,6 @@ export default function AtpBracketScreen() {
           )}
         </>
       ) : (
-        /* ─── Today's matches view ─── */
         <View style={s.section}>
           {todayMatches.length === 0 ? (
             <View style={s.emptyState}>
@@ -741,6 +756,137 @@ export default function AtpBracketScreen() {
           )}
         </View>
       )}
+    </>
+  );
+}
+
+/* ───── Main screen ───── */
+
+export default function AtpBracketScreen() {
+  const { colors } = useTheme();
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+
+  const {
+    data: tournamentsData,
+    loading: tournamentsLoading,
+    error: tournamentsError,
+  } = useAtpActiveTournaments();
+
+  const tournaments = tournamentsData?.tournaments ?? [];
+
+  // Auto-select first tournament when data arrives
+  useEffect(() => {
+    if (tournaments.length > 0 && selectedId === null) {
+      setSelectedId(tournaments[0].id);
+    }
+  }, [tournaments, selectedId]);
+
+  // If the selected tournament is no longer in the list, reset
+  useEffect(() => {
+    if (
+      selectedId !== null &&
+      tournaments.length > 0 &&
+      !tournaments.some((t) => t.id === selectedId)
+    ) {
+      setSelectedId(tournaments[0].id);
+    }
+  }, [tournaments, selectedId]);
+
+  const selectedTournament = tournaments.find((t) => t.id === selectedId) ?? null;
+
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.surface.screen }}
+      contentContainerStyle={s.container}
+    >
+      {/* Tournament selector */}
+      {tournamentsLoading ? (
+        <View style={s.loadingContainer}>
+          <ActivityIndicator color={colors.accent.primary} />
+          <Text style={[s.statusText, { color: colors.text.muted }]}>
+            Finding active tournaments...
+          </Text>
+        </View>
+      ) : tournamentsError ? (
+        <Text style={[s.statusText, { color: colors.text.primary }]}>
+          {tournamentsError}
+        </Text>
+      ) : tournaments.length === 0 ? (
+        <View style={s.emptyState}>
+          <Text style={[s.emptyStateTitle, { color: colors.text.primary }]}>
+            No active tournaments
+          </Text>
+          <Text style={[s.emptyStateBody, { color: colors.text.muted }]}>
+            Check back when ATP tournaments are running.
+          </Text>
+        </View>
+      ) : (
+        <>
+          {/* Tournament pills */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.tournamentPillsRow}
+          >
+            {tournaments.map((t) => {
+              const active = t.id === selectedId;
+              const surface = surfaceBadge(t.surface);
+              return (
+                <Pressable
+                  key={t.id}
+                  onPress={() => setSelectedId(t.id)}
+                  style={[
+                    s.tournamentPill,
+                    {
+                      backgroundColor: active
+                        ? colors.accent.primary
+                        : colors.surface.card,
+                      borderColor: active
+                        ? colors.accent.primary
+                        : colors.border.subtle,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      s.tournamentPillName,
+                      {
+                        color: active ? "#fff" : colors.text.primary,
+                      },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {tournamentShortName(t)}
+                  </Text>
+                  {surface ? (
+                    <Text
+                      style={[
+                        s.tournamentPillSurface,
+                        {
+                          color: active
+                            ? "rgba(255,255,255,0.75)"
+                            : colors.text.muted,
+                        },
+                      ]}
+                    >
+                      {surface}
+                    </Text>
+                  ) : null}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
+          {/* Selected tournament bracket */}
+          {selectedId != null && (
+            <TournamentBracketView
+              key={selectedId}
+              tournamentId={selectedId}
+              colors={colors}
+            />
+          )}
+        </>
+      )}
     </ScrollView>
   );
 }
@@ -752,6 +898,29 @@ const s = StyleSheet.create({
     padding: 16,
     paddingBottom: 40,
     gap: 16,
+  },
+
+  /* Tournament pills */
+  tournamentPillsRow: {
+    gap: 10,
+    paddingVertical: 2,
+  },
+  tournamentPill: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: "center",
+    minWidth: 100,
+  },
+  tournamentPillName: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  tournamentPillSurface: {
+    fontSize: 10,
+    fontWeight: "500",
+    marginTop: 2,
   },
 
   /* Header */

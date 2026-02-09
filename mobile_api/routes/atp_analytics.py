@@ -348,6 +348,61 @@ def get_atp_upcoming_matches(
         _handle_error(err)
 
 
+@router.get("/active-tournaments")
+def get_atp_active_tournaments(
+    season: Optional[int] = None,
+):
+    """Return all tournaments that are currently active (today falls within
+    their start/end dates) or upcoming within the next 7 days."""
+    try:
+        selected_season = season or _current_season()
+        payload = fetch_one_page(
+            "/tournaments",
+            params={"season": selected_season, "per_page": 100},
+            cache_ttl=300,
+        )
+        tournaments = payload.get("data", []) or []
+
+        today = date.today()
+        window_end = today + timedelta(days=7)
+        active: List[Dict[str, Any]] = []
+
+        for tournament in tournaments:
+            start_raw = tournament.get("start_date")
+            end_raw = tournament.get("end_date")
+            if not start_raw or not end_raw:
+                continue
+            try:
+                start = datetime.strptime(start_raw, "%Y-%m-%d").date()
+                end = datetime.strptime(end_raw, "%Y-%m-%d").date()
+            except ValueError:
+                continue
+            # Include if currently running or starting within the next 7 days
+            if start <= today <= end or (today < start <= window_end):
+                active.append({
+                    "id": tournament.get("id"),
+                    "name": tournament.get("name"),
+                    "surface": tournament.get("surface"),
+                    "start_date": tournament.get("start_date"),
+                    "end_date": tournament.get("end_date"),
+                    "category": tournament.get("category"),
+                    "city": tournament.get("city"),
+                    "country": tournament.get("country"),
+                })
+
+        # Sort: currently running first, then by start date
+        active.sort(
+            key=lambda t: (
+                0 if _parse_date(t.get("start_date"), today) <= today else 1,
+                _parse_date(t.get("start_date"), today),
+            )
+        )
+
+        return {"tournaments": active, "count": len(active)}
+    except Exception as err:
+        _handle_error(err)
+
+
 @router.get("/tournament-bracket")
 def get_atp_tournament_bracket(
     tournament_id: Optional[int] = None,

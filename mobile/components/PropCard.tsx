@@ -39,6 +39,7 @@ export type PropCardProps = {
 
   bookmaker?: string;   // ✅ single source of truth
   books?: string;
+  bookOdds?: BookOdds[];
 
   homeTeam?: string;
   awayTeam?: string;
@@ -283,16 +284,15 @@ export default function PropCard(props: PropCardProps) {
   /* =========================
      BOOK
   ========================= */
-  const resolvedBook = useMemo(() => {
-  if (bookmaker) {
-    return { bookmaker, odds };
-  }
-  return null;
-}, [bookmaker, odds]);
-
-  const bookKey = resolveBookmakerKey(resolvedBook?.bookmaker);
-
-  const bookLogo = bookKey ? BOOKMAKER_LOGOS[bookKey] : null;
+  const resolvedBookOdds = useMemo(() => {
+    if (props.bookOdds && props.bookOdds.length > 0) {
+      return props.bookOdds;
+    }
+    if (bookmaker) {
+      return [{ bookmaker, odds }];
+    }
+    return [];
+  }, [props.bookOdds, bookmaker, odds]);
 
     
   /* =========================
@@ -355,17 +355,28 @@ export default function PropCard(props: PropCardProps) {
               </View>
 
               {/* ODDS CHIP */}
-              <View style={styles.oddsChip}>
-                {bookLogo && (
-                  <Image
-                    source={bookLogo}
-                    style={styles.bookLogoSmall}
-                    resizeMode="contain"
-                  />
-                )}
-                <Text style={styles.oddsText}>
-                  {formatOdds(resolvedBook?.odds ?? odds)}
-                </Text>
+              <View style={styles.oddsRow}>
+                {resolvedBookOdds.map((book) => {
+                  const bookKey = resolveBookmakerKey(book.bookmaker);
+                  const bookLogo = bookKey ? BOOKMAKER_LOGOS[bookKey] : null;
+                  return (
+                    <View
+                      key={`${book.bookmaker}-${book.odds}`}
+                      style={styles.oddsChip}
+                    >
+                      {bookLogo && (
+                        <Image
+                          source={bookLogo}
+                          style={styles.bookLogoSmall}
+                          resizeMode="contain"
+                        />
+                      )}
+                      <Text style={styles.oddsText}>
+                        {formatOdds(book.odds)}
+                      </Text>
+                    </View>
+                  );
+                })}
               </View>
             </View>
 
@@ -721,6 +732,12 @@ function makeStyles(colors: any) {
       paddingHorizontal: 10,
       paddingVertical: 6,
       borderRadius: 10,
+      gap: 6,
+    },
+
+    oddsRow: {
+      flexDirection: "row",
+      alignItems: "center",
       gap: 6,
     },
 

@@ -57,7 +57,26 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+<<<<<<< HEAD
+MISSING_ARGS=()
+if [[ -z "${PROJECT}" ]]; then
+  MISSING_ARGS+=("--project")
+fi
+if [[ -z "${REGION}" ]]; then
+  MISSING_ARGS+=("--region")
+fi
+if [[ -z "${PGA_KEY}" ]]; then
+  MISSING_ARGS+=("--pga-key")
+fi
+if [[ -z "${ATP_KEY}" ]]; then
+  MISSING_ARGS+=("--atp-key")
+fi
+
+if (( ${#MISSING_ARGS[@]} > 0 )); then
+  echo "Missing required arguments: ${MISSING_ARGS[*]}"
+=======
 if [[ -z "${PROJECT}" || -z "${REGION}" || -z "${PGA_KEY}" || -z "${ATP_KEY}" ]]; then
+>>>>>>> origin/main
   usage
   exit 1
 fi

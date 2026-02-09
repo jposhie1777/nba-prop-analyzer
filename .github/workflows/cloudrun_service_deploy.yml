@@ -43,6 +43,10 @@ jobs:
           BDL_ATP_API_KEY: ${{ secrets.BDL_ATP_API_KEY }}
           THE_ODDS_API_KEYS: ${{ secrets.THE_ODDS_API_KEYS }}
         run: |
+          if [[ -z "$BDL_PGA_API_KEY" || -z "$BDL_ATP_API_KEY" ]]; then
+            echo "Missing required secrets: BDL_PGA_API_KEY and/or BDL_ATP_API_KEY"
+            exit 1
+          fi
           chmod +x mobile_api/deploy_cloudrun_service.sh
           mobile_api/deploy_cloudrun_service.sh \
             --project "$PROJECT_ID" \

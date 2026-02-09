@@ -335,7 +335,7 @@ const DEFAULT_FILTERS: Filters = {
   market: "ALL",
   marketWindow: null,   // ✅
   hitRateWindow: "L5",
-  minHitRate: 0,
+  minHitRate: 80,
   minOdds: -750,
   maxOdds: 500,
 };
@@ -360,13 +360,36 @@ export function usePlayerPropsMaster({
 
   setLoading(true);
 
-  fetchPlayerPropsMaster({ limit, offset: 0 })
-    .then((rows) => {
+  const loadAllPages = async () => {
+    const pageSize = limit ?? 600;
+    let offset = 0;
+    let allRows: any[] = [];
+
+    while (mounted) {
+      const rows = await fetchPlayerPropsMaster({
+        limit: pageSize,
+        offset,
+      });
+
       if (!mounted) return;
 
-      console.log("📦 [MASTER] initial rows:", rows.length);
-      setRaw(rows);
-    })
+      console.log("📦 [MASTER] fetched rows:", rows.length);
+      allRows = [...allRows, ...rows];
+
+      if (rows.length < pageSize) {
+        break;
+      }
+
+      offset += rows.length;
+    }
+
+    if (mounted) {
+      console.log("📦 [MASTER] total rows:", allRows.length);
+      setRaw(allRows);
+    }
+  };
+
+  loadAllPages()
     .catch((e) => {
       console.error("❌ [MASTER] fetch failed", e);
     })
@@ -504,12 +527,14 @@ export function usePlayerPropsMaster({
           : filters.hitRateWindow === "L20"
           ? hitRateL20
           : hitRateL10;
+      const hitRatePct =
+        hitRate != null && hitRate <= 1 ? hitRate * 100 : hitRate;
 
-      if (hitRate == null) {
+      if (hitRatePct == null) {
         return filters.minHitRate <= 0;
       }
 
-      if (hitRate * 100 < filters.minHitRate) {
+      if (hitRatePct < filters.minHitRate) {
         return false;
       }
 
@@ -617,7 +642,10 @@ export function usePlayerPropsMaster({
         avg_l20: item.avgL20,
 
         hitRate,
-        hitRatePct: Math.round((hitRate ?? 0) * 100),
+        hitRatePct:
+          hitRate != null
+            ? Math.round(hitRate <= 1 ? hitRate * 100 : hitRate)
+            : 0,
         pace_l5: p.pace_l5 ?? null,
         pace_l10: p.pace_l10 ?? null,
         pace_l20: p.pace_l20 ?? null,

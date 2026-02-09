@@ -58,7 +58,9 @@ function formatMatchTime(value?: string | null) {
 }
 
 function formatMatchMeta(match: AtpBracketMatch) {
-  return isCompleted(match) ? formatMatchDay(match.scheduled_at) : formatMatchTime(match.scheduled_at);
+  return isCompleted(match)
+    ? formatMatchDay(match.scheduled_at)
+    : formatMatchTime(match.scheduled_at);
 }
 
 function isCompleted(m: AtpBracketMatch) {
@@ -79,6 +81,19 @@ function isQualifyingRound(r: AtpBracketRound) {
     n.includes("qualification") ||
     (n.startsWith("q") && /^q\d$/.test(n))
   );
+}
+
+function normalizeRoundName(name: string) {
+  const trimmed = name.trim();
+  const upper = trimmed.toUpperCase();
+  if (upper === "R32" || trimmed.toLowerCase() === "round of 32") {
+    return "Round of 32";
+  }
+  return trimmed;
+}
+
+function matchKey(match: AtpBracketMatch) {
+  return match.id != null ? `id:${match.id}` : `p:${match.player1}-${match.player2}`;
 }
 
 function isToday(value?: string | null) {
@@ -548,8 +563,34 @@ function TournamentBracketView({
     const rounds = data?.bracket.rounds ?? [];
     const qualifying: AtpBracketRound[] = [];
     const mainDraw: AtpBracketRound[] = [];
+    const upcomingMatches = data?.upcoming_matches ?? [];
+    const upcomingTimes = new Map<string, string>();
+    for (const match of upcomingMatches) {
+      if (match.scheduled_at) {
+        upcomingTimes.set(matchKey(match), match.scheduled_at);
+      }
+    }
     for (const round of rounds) {
-      (isQualifyingRound(round) ? qualifying : mainDraw).push(round);
+      const normalizedName = normalizeRoundName(round.name);
+      const target = isQualifyingRound(round) ? qualifying : mainDraw;
+      const matches = round.matches.map((match) => {
+        if (match.scheduled_at) return match;
+        const scheduledAt = upcomingTimes.get(matchKey(match));
+        return scheduledAt ? { ...match, scheduled_at: scheduledAt } : match;
+      });
+      const existing = target.find((item) => item.name === normalizedName);
+      if (existing) {
+        existing.matches.push(...matches);
+        if (existing.order == null && round.order != null) {
+          existing.order = round.order;
+        }
+      } else {
+        target.push({
+          name: normalizedName,
+          order: round.order,
+          matches,
+        });
+      }
     }
     let total = 0;
     let completed = 0;

@@ -1,8 +1,7 @@
 // app/(tabs)/nba/index.tsx
-import { ScrollView, View, Text, StyleSheet, Pressable } from "react-native";
+import { ScrollView, Text, StyleSheet, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "@/store/useTheme";
-import { useParlayTracker } from "@/store/useParlayTracker";
 import ThemeSelectorSection from "@/components/ThemeSelectorSection";
 
 /* ======================================================
@@ -51,8 +50,6 @@ function Tile({ title, subtitle, onPress }: any) {
 export default function NbaHome() {
   const router = useRouter();
   const { colors } = useTheme();
-  const { tracked } = useParlayTracker();
-  const trackedCount = Object.keys(tracked).length;
 
   return (
     <ScrollView
@@ -66,42 +63,6 @@ export default function NbaHome() {
       }}
     >
       <ThemeSelectorSection title="Theme selector" />
-      {/* ===========================
-          Live
-      ============================ */}
-      <Text
-        style={[
-          styles.h1,
-          { color: colors.text.primary },
-        ]}
-      >
-        Live
-      </Text>
-
-      <Tile
-        title={`Tracked Parlays${trackedCount > 0 ? ` (${trackedCount})` : ""}`}
-        subtitle="Active bet tracking"
-        onPress={() => router.push("/(tabs)/more/tracked-parlays")}
-      />
-
-      <Tile
-        title="Live Props"
-        subtitle="Real-time prop updates"
-        onPress={() => router.push("/(tabs)/live-props-dev")}
-      />
-
-      <Tile
-        title="Live Ladder"
-        subtitle="Live prop ladders by game"
-        onPress={() => router.push("/(tabs)/ladders")}
-      />
-
-      <Tile
-        title="Live Bad Lines"
-        subtitle="Real-time bad line detection"
-        onPress={() => router.push("/(tabs)/bad-lines")}
-      />
-
       {/* ===========================
           Analytics
       ============================ */}

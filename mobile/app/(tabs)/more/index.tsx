@@ -3,53 +3,16 @@ import { View, Text, Pressable, StyleSheet, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 
 import { useTheme } from "@/store/useTheme";
-import { useParlayTracker } from "@/store/useParlayTracker";
 
 export default function MoreIndexScreen() {
   const { colors } = useTheme();
   const router = useRouter();
-
-  const { tracked } = useParlayTracker();
-  const trackedCount = Object.keys(tracked).length;
 
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.surface.base }}
       contentContainerStyle={styles.container}
     >
-      {/* Tracked Parlays */}
-      <Pressable
-        onPress={() =>
-          router.push("/(tabs)/more/tracked-parlays")
-        }
-        style={[
-          styles.card,
-          {
-            backgroundColor: colors.surface.card,
-            borderColor: colors.border.subtle,
-          },
-        ]}
-      >
-        <Text
-          style={[
-            styles.title,
-            { color: colors.text.primary },
-          ]}
-        >
-          📊 Tracked Parlays
-          {trackedCount > 0 ? ` (${trackedCount})` : ""}
-        </Text>
-
-        <Text
-          style={[
-            styles.subtitle,
-            { color: colors.text.muted },
-          ]}
-        >
-          View and manage tracked bets
-        </Text>
-      </Pressable>
-
       {/* Prop Correlations */}
       <Pressable
         onPress={() =>
@@ -207,36 +170,6 @@ export default function MoreIndexScreen() {
           ]}
         >
           Teams most likely to hit 100 by the 3rd
-        </Text>
-      </Pressable>
-
-      {/* Live Props (DEV) */}
-      <Pressable
-        onPress={() => router.push("/live-props-dev")}
-        style={[
-          styles.card,
-          {
-            backgroundColor: colors.surface.card,
-            borderColor: colors.border.subtle,
-          },
-        ]}
-      >
-        <Text
-          style={[
-            styles.title,
-            { color: colors.text.primary },
-          ]}
-        >
-          🧪 Live Props (DEV)
-        </Text>
-
-        <Text
-          style={[
-            styles.subtitle,
-            { color: colors.text.muted },
-          ]}
-        >
-          Simulated live prop feed for testing
         </Text>
       </Pressable>
     </ScrollView>

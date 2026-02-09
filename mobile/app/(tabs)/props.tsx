@@ -1149,16 +1149,6 @@ export default function PropsTestScreen() {
               By Game
             </Text>
           </Pressable>
-          <Pressable
-            style={styles.subTab}
-            onPress={() =>
-              router.push("/(tabs)/live-props-dev")
-            }
-          >
-            <Text style={styles.subTabText}>
-              Live Props
-            </Text>
-          </Pressable>
         </View>
 
         {activeSubTab === "ALL" ? (

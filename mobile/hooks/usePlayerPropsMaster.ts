@@ -527,12 +527,14 @@ export function usePlayerPropsMaster({
           : filters.hitRateWindow === "L20"
           ? hitRateL20
           : hitRateL10;
+      const hitRatePct =
+        hitRate != null && hitRate <= 1 ? hitRate * 100 : hitRate;
 
-      if (hitRate == null) {
+      if (hitRatePct == null) {
         return filters.minHitRate <= 0;
       }
 
-      if (hitRate * 100 < filters.minHitRate) {
+      if (hitRatePct < filters.minHitRate) {
         return false;
       }
 
@@ -640,7 +642,10 @@ export function usePlayerPropsMaster({
         avg_l20: item.avgL20,
 
         hitRate,
-        hitRatePct: Math.round((hitRate ?? 0) * 100),
+        hitRatePct:
+          hitRate != null
+            ? Math.round(hitRate <= 1 ? hitRate * 100 : hitRate)
+            : 0,
         pace_l5: p.pace_l5 ?? null,
         pace_l10: p.pace_l10 ?? null,
         pace_l20: p.pace_l20 ?? null,

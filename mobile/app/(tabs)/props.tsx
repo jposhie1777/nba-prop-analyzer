@@ -426,7 +426,10 @@ export default function PropsTestScreen() {
             ? p.hit_rate_l10
             : p.hit_rate_l20;
 
-        if (hitRate != null && hitRate < filters.minHitRate) {
+        const hitRatePct =
+          hitRate != null && hitRate <= 1 ? hitRate * 100 : hitRate;
+
+        if (hitRatePct != null && hitRatePct < filters.minHitRate) {
           return false;
         }
 

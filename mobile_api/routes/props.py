@@ -11,8 +11,8 @@ router = APIRouter(
     tags=["props"],
 )
 
-DATASET = "odds_raw"
-VIEW = "v_nba_alt_player_props"
+DATASET = "nba_goat_data"
+VIEW = "v_alt_player_props_hit_rates"
 
 # ── Market key normalization ────────────────────────────────────────
 # Maps raw Odds API market_key values to the short keys the frontend expects.

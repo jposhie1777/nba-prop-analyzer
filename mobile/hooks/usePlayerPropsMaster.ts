@@ -451,6 +451,9 @@ export function usePlayerPropsMaster({
           hitRateL5: parseNumber(p.hit_rate_l5 ?? p.hitRateL5),
           hitRateL10: parseNumber(p.hit_rate_l10 ?? p.hitRateL10),
           hitRateL20: parseNumber(p.hit_rate_l20 ?? p.hitRateL20),
+          avgL5: parseNumber(p.avg_l5 ?? p.avgL5),
+          avgL10: parseNumber(p.avg_l10 ?? p.avgL10),
+          avgL20: parseNumber(p.avg_l20 ?? p.avgL20),
         };
       })
       .filter(Boolean) as Array<{
@@ -464,6 +467,9 @@ export function usePlayerPropsMaster({
         hitRateL5: number | null;
         hitRateL10: number | null;
         hitRateL20: number | null;
+        avgL5: number | null;
+        avgL10: number | null;
+        avgL20: number | null;
       }>;
 
     const filtered = normalized.filter((item) => {
@@ -604,6 +610,11 @@ export function usePlayerPropsMaster({
         hit_rate_l5: item.hitRateL5,
         hit_rate_l10: item.hitRateL10,
         hit_rate_l20: item.hitRateL20,
+
+        /* ---------- AVERAGES ---------- */
+        avg_l5: item.avgL5,
+        avg_l10: item.avgL10,
+        avg_l20: item.avgL20,
 
         hitRate,
         hitRatePct: Math.round((hitRate ?? 0) * 100),

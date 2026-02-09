@@ -38,6 +38,35 @@ ROUND_ORDER = {
     "q1": -3,
 }
 
+# Map abbreviated round names to their canonical display form.
+_ROUND_ALIASES: Dict[str, str] = {
+    "f": "Final",
+    "sf": "Semifinals",
+    "qf": "Quarterfinals",
+    "r16": "Round of 16",
+    "r32": "Round of 32",
+    "r64": "Round of 64",
+    "r128": "Round of 128",
+}
+
+
+def normalize_round_name(raw: str) -> str:
+    """Return a canonical round name, collapsing abbreviations like R32."""
+    key = raw.strip().lower().replace("-", " ")
+    alias = _ROUND_ALIASES.get(key)
+    if alias:
+        return alias
+    # Also handle cases like "R 32" with a space
+    compact = key.replace(" ", "")
+    alias = _ROUND_ALIASES.get(compact)
+    if alias:
+        return alias
+    # Match pattern like "r32", "r 32" that weren't caught above
+    m = re.match(r"^r\s*(\d+)$", key)
+    if m:
+        return f"Round of {m.group(1)}"
+    return raw.strip()
+
 _SCORE_RE = re.compile(r"(\d+)-(\d+)")
 _RETIRE_TOKENS = ("W/O", "WO", "RET", "DEF", "ABD", "ABN")
 

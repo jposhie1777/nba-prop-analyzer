@@ -508,7 +508,6 @@ export default function AtpBracketScreen() {
   const [tab, setTab] = useState<Tab>("bracket");
 
   const { data, loading, error } = useAtpTournamentBracket({
-    tournamentName: "Montpellier",
     upcomingLimit: 50,
   });
 

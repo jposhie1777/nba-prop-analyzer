@@ -11,25 +11,21 @@ router = APIRouter(
     tags=["props"],
 )
 
-DATASET = "nba_live"
-VIEW = "v_player_prop_odds_master"
+DATASET = "odds_raw"
+VIEW = "v_nba_alt_player_props"
 
 
 def build_where(
     game_date: Optional[str],
     market: Optional[str],
-    window: Optional[str],
 ):
     clauses = []
 
     if game_date:
-        clauses.append("game_date = @game_date")
+        clauses.append("request_date = @game_date")
 
     if market:
         clauses.append("market_key = @market")
-
-    if window:
-        clauses.append("market_window = @window")
 
     if not clauses:
         return ""
@@ -50,14 +46,13 @@ def read_props(
     where_sql = build_where(
         game_date,
         market,
-        window,
     )
 
     sql = f"""
     SELECT *
     FROM `{DATASET}.{VIEW}`
     {where_sql}
-    ORDER BY hit_rate_l10 DESC, prop_id
+    ORDER BY commence_time ASC, event_id, player_name, market_key, line
     LIMIT @limit
     OFFSET @offset
     """
@@ -74,10 +69,6 @@ def read_props(
     if market:
         params.append(
             bigquery.ScalarQueryParameter("market", "STRING", market)
-        )
-    if window:
-        params.append(
-            bigquery.ScalarQueryParameter("window", "STRING", window)
         )
 
     job = client.query(

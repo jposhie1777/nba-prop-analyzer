@@ -110,6 +110,34 @@ function normalizeMarketKey(value?: string) {
     .toLowerCase()
     .replace(/\s+/g, "")
     .replace(/_/g, "");
+  const altMarketMap: Record<string, string> = {
+    playerpoints: "pts",
+    playerpointsalternate: "pts",
+    pointsalternate: "pts",
+    playerrebounds: "reb",
+    playerreboundsalternate: "reb",
+    reboundsalternate: "reb",
+    playerassists: "ast",
+    playerassistsalternate: "ast",
+    assistsalternate: "ast",
+    playerthrees: "fg3m",
+    playerthreesalternate: "fg3m",
+    threesalternate: "fg3m",
+    playerpointsreboundsassists: "pra",
+    playerpointsreboundsassistsalternate: "pra",
+    pointsreboundsassistsalternate: "pra",
+    playerpointsrebounds: "pr",
+    playerpointsreboundsalternate: "pr",
+    pointsreboundsalternate: "pr",
+    playerpointsassists: "pa",
+    playerpointsassistsalternate: "pa",
+    pointsassistsalternate: "pa",
+    playerreboundsassists: "ra",
+    playerreboundsassistsalternate: "ra",
+    reboundsassistsalternate: "ra",
+  };
+  const alt = altMarketMap[key];
+  if (alt) return alt;
   if (["pts", "point", "points"].includes(key)) return "pts";
   if (["reb", "rebound", "rebounds"].includes(key)) return "reb";
   if (["ast", "assist", "assists"].includes(key)) return "ast";

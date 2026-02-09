@@ -507,6 +507,7 @@ export default function PropCard(props: PropCardProps) {
                         </Text>
                       </View>
                     )}
+                
                     {(opponentPaceRank != null || opponentPace != null) && (
                       <View style={styles.metricChip}>
                         <Text style={styles.metricChipLabel}>Opp Pace</Text>
@@ -514,24 +515,10 @@ export default function PropCard(props: PropCardProps) {
                           {opponentPaceRank != null
                             ? `#${opponentPaceRank}`
                             : opponentPace?.toFixed(1)}
-                  opponentPaceRank != null ||
-                  impliedTeamTotal != null ||
-                  spread != null) && (
-                  <View style={styles.chipRow}>
-                    {teamPaceRank != null && (
-                      <View style={styles.metricChip}>
-                        <Text style={styles.metricChipLabel}>Pace</Text>
-                        <Text style={styles.metricChipValue}>#{teamPaceRank}</Text>
-                      </View>
-                    )}
-                    {opponentPaceRank != null && (
-                      <View style={styles.metricChip}>
-                        <Text style={styles.metricChipLabel}>Opp Pace</Text>
-                        <Text style={styles.metricChipValue}>
-                          #{opponentPaceRank}
                         </Text>
                       </View>
                     )}
+                
                     {impliedTeamTotal != null && (
                       <View style={styles.metricChip}>
                         <Text style={styles.metricChipLabel}>Team TT</Text>
@@ -540,6 +527,7 @@ export default function PropCard(props: PropCardProps) {
                         </Text>
                       </View>
                     )}
+                
                     {spread != null && (
                       <View style={styles.metricChip}>
                         <Text style={styles.metricChipLabel}>Spread</Text>

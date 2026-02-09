@@ -10,22 +10,37 @@
 
 CREATE OR REPLACE VIEW `graphite-flare-477419-h7.nba_goat_data.v_alt_player_props_hit_rates` AS
 
-WITH base AS (
+WITH latest_request AS (
     SELECT
-        snapshot_ts,
-        request_date,
-        event_id,
-        sport_key,
-        sport_title,
-        commence_time,
-        home_team,
-        away_team,
-        payload
+        MAX(request_date) AS request_date
     FROM `graphite-flare-477419-h7.odds_raw.nba_alt_player_props`
-    WHERE snapshot_ts = (
-        SELECT MAX(snapshot_ts)
-        FROM `graphite-flare-477419-h7.odds_raw.nba_alt_player_props`
-    )
+),
+
+latest_snapshot_per_event AS (
+    SELECT
+        event_id,
+        MAX(snapshot_ts) AS snapshot_ts
+    FROM `graphite-flare-477419-h7.odds_raw.nba_alt_player_props`
+    WHERE request_date = (SELECT request_date FROM latest_request)
+    GROUP BY event_id
+),
+
+base AS (
+    SELECT
+        props.snapshot_ts,
+        props.request_date,
+        props.event_id,
+        props.sport_key,
+        props.sport_title,
+        props.commence_time,
+        props.home_team,
+        props.away_team,
+        props.payload
+    FROM `graphite-flare-477419-h7.odds_raw.nba_alt_player_props` AS props
+    JOIN latest_snapshot_per_event AS latest
+        ON props.event_id = latest.event_id
+        AND props.snapshot_ts = latest.snapshot_ts
+    WHERE props.request_date = (SELECT request_date FROM latest_request)
 ),
 
 bookmakers AS (

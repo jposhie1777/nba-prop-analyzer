@@ -50,7 +50,6 @@ export type PropCardProps = {
   opponentPace?: number;
   opponentStatAllowed?: number;
   opponentStatAllowedIsRate?: boolean;
-  teamPaceRank?: number;
   opponentPaceRank?: number;
   impliedTeamTotal?: number;
   spread?: number;
@@ -195,7 +194,6 @@ export default function PropCard(props: PropCardProps) {
     opponentPace,
     opponentStatAllowed,
     opponentStatAllowedIsRate,
-    teamPaceRank,
     opponentPaceRank,
     impliedTeamTotal,
     spread,

@@ -271,6 +271,16 @@ function normalizeTeamKey(team?: string) {
   return key;
 }
 
+function normalizeBookmakerKey(raw?: string) {
+  if (!raw) return null;
+  const key = raw.toLowerCase().replace(/[\s_]/g, "");
+  if (key.startsWith("draft")) return "draftkings";
+  if (key.startsWith("fan")) return "fanduel";
+  if (key === "dk") return "draftkings";
+  if (key === "fd") return "fanduel";
+  return key;
+}
+
 function resolveTeamLogo(team?: string) {
   const key = normalizeTeamKey(team);
   return key ? TEAM_LOGOS[key] : undefined;
@@ -398,12 +408,16 @@ export default function PropsTestScreen() {
      SANITIZE + FILTER + SORT
   ====================================================== */
   const props = useMemo(() => {
+    const allowedBooks = new Set(["draftkings", "fanduel"]);
     const cleaned = rawProps
       .filter((p) => {
         if (!p.player) return false;
         if (!p.market) return false;
         if (p.line == null) return false;
         if (!p.id) return false;
+
+        const bookKey = normalizeBookmakerKey(p.bookmaker);
+        if (!bookKey || !allowedBooks.has(bookKey)) return false;
 
         const hitRate =
           filters.hitRateWindow === "L5"
@@ -420,11 +434,55 @@ export default function PropsTestScreen() {
         if (p.odds > filters.maxOdds) return false;
 
         return true;
-      })
-      .map((p, idx) => ({
-        ...p,
-        id: `${p.id}::${idx}`,
-      }));
+      });
+
+    const groupedMap = new Map<
+      string,
+      {
+        base: any;
+        books: { bookmaker: string; odds: number }[];
+      }
+    >();
+
+    cleaned.forEach((p) => {
+      const bookKey = normalizeBookmakerKey(p.bookmaker);
+      if (!bookKey) return;
+      const marketKey = normalizeMarket(p.market);
+      const sideKey = p.side ?? "over";
+      const groupKey = `${p.player_id ?? p.player}::${marketKey}::${p.line}::${sideKey}`;
+      const existing = groupedMap.get(groupKey);
+      if (!existing) {
+        groupedMap.set(groupKey, {
+          base: {
+            ...p,
+            market: marketKey,
+            id: groupKey,
+          },
+          books: [{ bookmaker: bookKey, odds: p.odds }],
+        });
+        return;
+      }
+
+      existing.books.push({ bookmaker: bookKey, odds: p.odds });
+    });
+
+    const grouped = Array.from(groupedMap.values()).map((entry) => {
+      const sortedBooks = [...entry.books].sort((a, b) => {
+        const order = ["draftkings", "fanduel"];
+        const aIndex = order.indexOf(a.bookmaker);
+        const bIndex = order.indexOf(b.bookmaker);
+        return (aIndex === -1 ? 99 : aIndex) - (bIndex === -1 ? 99 : bIndex);
+      });
+      const bestBook = sortedBooks.reduce((best, current) =>
+        current.odds > best.odds ? current : best,
+      );
+      return {
+        ...entry.base,
+        odds: bestBook.odds,
+        bookmaker: bestBook.bookmaker,
+        bookOdds: sortedBooks,
+      };
+    });
 
     const getHitRateValue = (prop: any) =>
       filters.hitRateWindow === "L5"
@@ -433,7 +491,7 @@ export default function PropsTestScreen() {
         ? prop.hit_rate_l10
         : prop.hit_rate_l20;
 
-    cleaned.sort((a, b) => {
+    grouped.sort((a, b) => {
       if (sortOption === "ODDS") {
         const oddsDiff = (a.odds ?? 0) - (b.odds ?? 0);
         if (oddsDiff !== 0) return oddsDiff;
@@ -459,7 +517,7 @@ export default function PropsTestScreen() {
       return (a.player ?? "").localeCompare(b.player ?? "");
     });
 
-    return cleaned;
+    return grouped;
   }, [rawProps, filters, sortOption, badLineMap]);
 
   const gameGroups = useMemo(() => {
@@ -703,6 +761,7 @@ export default function PropsTestScreen() {
         <PropCard
           {...item}
           bookmaker={item.bookmaker}
+          bookOdds={item.bookOdds}
           playerId={item.player_id}
           scrollRef={scrollRef}
           saved={isSaved}

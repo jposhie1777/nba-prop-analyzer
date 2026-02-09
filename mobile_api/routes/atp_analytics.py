@@ -14,6 +14,7 @@ from atp.analytics import (
     build_set_distribution,
     build_surface_splits,
     build_tournament_performance,
+    normalize_round_name,
 )
 from atp.client import AtpApiError, fetch_one_page, fetch_paginated
 
@@ -126,7 +127,8 @@ def _player_id(player: Any) -> Optional[int]:
 
 
 def _format_match(match: Dict[str, Any]) -> Dict[str, Any]:
-    round_name = match.get("round") or match.get("round_name") or "Round"
+    round_raw = match.get("round") or match.get("round_name") or "Round"
+    round_name = normalize_round_name(str(round_raw))
     scheduled_raw = (
         match.get("start_time")
         or match.get("start_time_utc")

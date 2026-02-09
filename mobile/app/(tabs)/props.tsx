@@ -463,6 +463,16 @@ export default function PropsTestScreen() {
         return;
       }
 
+      const existingBook = existing.books.find(
+        (book) => book.bookmaker === bookKey,
+      );
+      if (existingBook) {
+        if (p.odds > existingBook.odds) {
+          existingBook.odds = p.odds;
+        }
+        return;
+      }
+
       existing.books.push({ bookmaker: bookKey, odds: p.odds });
     });
 

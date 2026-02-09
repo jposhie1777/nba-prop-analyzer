@@ -1,12 +1,13 @@
 import {
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useTheme } from "@/store/useTheme";
 import { useAtpTournamentBracket } from "@/hooks/atp/useAtpTournamentBracket";
 import { useAtpQuery } from "@/hooks/atp/useAtpQuery";
@@ -507,10 +508,17 @@ export default function AtpBracketScreen() {
   const { colors } = useTheme();
   const [tab, setTab] = useState<Tab>("bracket");
 
-  const { data, loading, error } = useAtpTournamentBracket({
+  const { data, loading, error, refetch } = useAtpTournamentBracket({
     tournamentName: "Montpellier",
     upcomingLimit: 50,
   });
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  }, [refetch]);
 
   const header = useMemo(() => {
     if (!data?.tournament) {
@@ -575,6 +583,13 @@ export default function AtpBracketScreen() {
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.surface.screen }}
       contentContainerStyle={s.container}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={colors.text.secondary}
+        />
+      }
     >
       {/* Tournament Header */}
       <View
@@ -607,6 +622,23 @@ export default function AtpBracketScreen() {
             </Text>
           </View>
         )}
+        <Pressable
+          onPress={onRefresh}
+          disabled={loading || refreshing}
+          style={[
+            s.refreshBtn,
+            {
+              backgroundColor: colors.accent.primary,
+              opacity: loading || refreshing ? 0.5 : 1,
+            },
+          ]}
+        >
+          {refreshing ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={s.refreshBtnText}>Refresh Bracket</Text>
+          )}
+        </Pressable>
       </View>
 
       {/* Segmented control */}
@@ -775,6 +807,16 @@ const s = StyleSheet.create({
   progressBar: { flex: 1, height: 4, borderRadius: 2, overflow: "hidden" },
   progressFill: { height: "100%", borderRadius: 2 },
   progressText: { fontSize: 11 },
+  refreshBtn: {
+    marginTop: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 36,
+  },
+  refreshBtnText: { fontSize: 13, fontWeight: "700", color: "#fff" },
 
   /* Segmented control */
   tabRow: { flexDirection: "row", gap: 10 },

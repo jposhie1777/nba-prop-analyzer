@@ -365,11 +365,6 @@ export function usePlayerPropsMaster({
       if (!mounted) return;
 
       console.log("📦 [MASTER] initial rows:", rows.length);
-
-      // 🔴 ADD THIS LINE
-      console.log("🧪 [MASTER] sample row keys:", Object.keys(rows[0] ?? {}));
-      console.log("🧪 [MASTER] sample row:", rows[0]);
-
       setRaw(rows);
     })
     .catch((e) => {
@@ -381,18 +376,6 @@ export function usePlayerPropsMaster({
     mounted = false;
   };
 }, [limit]);
-
-  /* ======================================================
-    DEBUG — MARKET KEYS (PART 5)
-  ====================================================== */
-  useEffect(() => {
-    if (!raw.length) return;
-
-    console.log(
-      "🧪 MARKET KEYS:",
-      Array.from(new Set(raw.map(r => r.market_key)))
-    );
-  }, [raw]);
 
   /* ======================================================
      FETCH NEXT PAGE
@@ -556,18 +539,6 @@ export function usePlayerPropsMaster({
       );
       const playerId =
         playerIdRaw != null ? Math.trunc(playerIdRaw) : undefined;
-
-      // 🔍 DEBUG — confirm whether teams exist at the DATA level
-      if (__DEV__ && (!p.home_team_abbr || !p.away_team_abbr)) {
-        console.warn("🚨 PROP HAS NO TEAMS", {
-          prop_id: p.prop_id,
-          game_id: p.game_id,
-          player: p.player_name,
-          home_team_abbr: p.home_team_abbr,
-          away_team_abbr: p.away_team_abbr,
-          matchup: matchupLabel,
-        });
-      }
 
       return {
         /* ---------- KEYS ---------- */

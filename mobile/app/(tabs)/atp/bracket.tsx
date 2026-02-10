@@ -828,7 +828,7 @@ export default function AtpBracketScreen() {
   const tournaments = tournamentsData?.tournaments ?? [];
 
   // Auto-select first tournament when data arrives
-  useEffect(() => {.
+  useEffect(() => {
     if (tournaments.length > 0 && selectedId === null) {
       setSelectedId(tournaments[0].id);
     }

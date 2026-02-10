@@ -586,8 +586,7 @@ function TournamentBracketView({
       const normalizedName = normalizeRoundName(round.name);
       const target = isQualifyingRound(round) ? qualifying : mainDraw;
       const matches = round.matches.map((match) => {
-        if (match.scheduled_at) return match;
-        const scheduledAt = upcomingTimes.get(matchKey(match));
+        const scheduledAt = upcomingTimes.get(matchKey(match)) || match.scheduled_at;
         return scheduledAt ? { ...match, scheduled_at: scheduledAt } : match;
       });
       const existing = target.find((item) => item.name === normalizedName);

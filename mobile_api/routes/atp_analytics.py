@@ -741,7 +741,10 @@ def atp_compare(
     start_season: Optional[int] = None,
     end_season: Optional[int] = None,
     surface: Optional[str] = None,
-    last_n: int = Query(12, ge=3, le=60),
+    last_n: int = Query(25, ge=5, le=80),
+    surface_last_n: int = Query(45, ge=10, le=150),
+    recent_last_n: int = Query(10, ge=3, le=30),
+    recent_surface_last_n: int = Query(20, ge=5, le=80),
     max_pages: Optional[int] = Query(5, ge=1, le=500),
 ):
     try:
@@ -768,6 +771,9 @@ def atp_compare(
             player_ids=player_ids,
             surface=surface,
             last_n=last_n,
+            surface_last_n=surface_last_n,
+            recent_last_n=recent_last_n,
+            recent_surface_last_n=recent_surface_last_n,
             rankings=rankings_map,
         )
     except Exception as err:

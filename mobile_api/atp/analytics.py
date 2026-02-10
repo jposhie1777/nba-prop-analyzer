@@ -573,7 +573,10 @@ def build_compare(
     *,
     player_ids: List[int],
     surface: Optional[str] = None,
-    last_n: int = 12,
+    last_n: int = 25,
+    surface_last_n: int = 45,
+    recent_last_n: int = 10,
+    recent_surface_last_n: int = 20,
     rankings: Optional[Dict[int, int]] = None,
 ) -> Dict[str, Any]:
     player_ids = list(dict.fromkeys(player_ids))
@@ -589,24 +592,39 @@ def build_compare(
         else:
             entries_surface = entries
 
-        recent = _recent(entries_surface, last_n)
-        wins = sum(1 for e in recent if e["result"] == "W")
-        win_rate = _safe_div(wins, len(recent)) if recent else 0.0
+        # Recent form win % (short window) drives the form score.
+        recent_form = _recent(entries, recent_last_n)
+        recent_form_wins = sum(1 for e in recent_form if e["result"] == "W")
+        recent_form_rate = _safe_div(recent_form_wins, len(recent_form)) if recent_form else 0.0
 
-        straight_sets_wins = sum(1 for e in recent if e.get("straight_sets_win"))
-        straight_sets_rate = _safe_div(straight_sets_wins, max(wins, 1)) if recent else 0.0
+        straight_sets_wins = sum(1 for e in recent_form if e.get("straight_sets_win"))
+        straight_sets_rate = _safe_div(straight_sets_wins, max(recent_form_wins, 1)) if recent_form else 0.0
 
-        tiebreak_rate = _safe_div(sum(1 for e in recent if e.get("tiebreak")), len(recent)) if recent else 0.0
+        tiebreak_rate = _safe_div(sum(1 for e in recent_form if e.get("tiebreak")), len(recent_form)) if recent_form else 0.0
 
-        form_score = (win_rate * 0.65) + (straight_sets_rate * 0.2) + ((1 - tiebreak_rate) * 0.15)
+        form_score = (recent_form_rate * 0.65) + (straight_sets_rate * 0.2) + ((1 - tiebreak_rate) * 0.15)
 
-        overall_wins = sum(1 for e in entries_surface if e["result"] == "W")
-        overall_rate = _safe_div(overall_wins, len(entries_surface)) if entries_surface else None
+        # Win % is from a medium overall window (all surfaces).
+        overall_recent = _recent(entries, last_n)
+        overall_wins = sum(1 for e in overall_recent if e["result"] == "W")
+        overall_rate = _safe_div(overall_wins, len(overall_recent)) if overall_recent else 0.0
+
+        # Surface win % is from a longer, surface-specific window.
+        surface_recent = _recent(entries_surface, surface_last_n)
+        surface_wins = sum(1 for e in surface_recent if e["result"] == "W")
+        surface_rate = _safe_div(surface_wins, len(surface_recent)) if surface_recent else None
+
+        # Recent surface win % is a shorter surface-specific form window.
+        recent_surface = _recent(entries_surface, recent_surface_last_n)
+        recent_surface_wins = sum(1 for e in recent_surface if e["result"] == "W")
+        recent_surface_rate = _safe_div(recent_surface_wins, len(recent_surface)) if recent_surface else None
 
         metrics[player_id] = {
             "form_score": round(form_score, 4),
-            "recent_win_rate": round(win_rate, 3),
-            "surface_win_rate": round(overall_rate, 3) if overall_rate is not None else None,
+            "recent_win_rate": round(overall_rate, 3),
+            "surface_win_rate": round(surface_rate, 3) if surface_rate is not None else None,
+            "recent_form_win_rate": round(recent_form_rate, 3),
+            "recent_surface_win_rate": round(recent_surface_rate, 3) if recent_surface_rate is not None else None,
             "ranking": rankings.get(player_id) if rankings else None,
         }
 
@@ -636,10 +654,10 @@ def build_compare(
     )
 
     weights = {
-        "form": 0.45,
-        "surface": 0.25,
-        "head_to_head": 0.2,
-        "ranking": 0.1,
+        "form": 0.40,
+        "surface": 0.35,
+        "head_to_head": 0.20,
+        "ranking": 0.05,
     }
 
     players_payload = []

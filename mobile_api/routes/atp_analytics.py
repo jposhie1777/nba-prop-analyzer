@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -98,9 +98,19 @@ def _parse_match_time(value: Optional[str]) -> Optional[datetime]:
     if not value:
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _is_scheduled_after(match: Dict[str, Any], cutoff: datetime) -> bool:
+    scheduled = _parse_match_time(match.get("scheduled_time"))
+    if scheduled is None:
+        return False
+    return scheduled >= cutoff
 
 
 def _player_label(player: Any) -> str:
@@ -130,7 +140,8 @@ def _format_match(match: Dict[str, Any]) -> Dict[str, Any]:
     round_raw = match.get("round") or match.get("round_name") or "Round"
     round_name = normalize_round_name(str(round_raw))
     scheduled_raw = (
-        match.get("start_time")
+        match.get("scheduled_time")
+        or match.get("start_time")
         or match.get("start_time_utc")
         or match.get("scheduled_at")
         or match.get("date")
@@ -345,6 +356,49 @@ def get_atp_upcoming_matches(
             },
             "matches": matches,
             "count": len(matches),
+        }
+    except Exception as err:
+        _handle_error(err)
+
+
+@router.get("/matches/upcoming-scheduled")
+def get_atp_upcoming_matches_scheduled(
+    season: Optional[int] = None,
+    tournament_ids: Optional[List[int]] = Query(None, alias="tournament_ids[]"),
+    round_name: Optional[str] = Query(None, alias="round"),
+    from_time: Optional[str] = Query(None, alias="from"),
+    include_completed: bool = Query(False),
+    per_page: int = Query(100, ge=1, le=100),
+    max_pages: Optional[int] = Query(10, ge=1, le=500),
+):
+    try:
+        cutoff = _parse_match_time(from_time) or datetime.now(timezone.utc)
+        params: Dict[str, Any] = {"season": season or _current_season()}
+        if tournament_ids:
+            params["tournament_ids[]"] = tournament_ids
+        if round_name:
+            params["round"] = round_name
+
+        matches = fetch_paginated(
+            "/matches",
+            params=params,
+            per_page=per_page,
+            max_pages=max_pages,
+            cache_ttl=300,
+        )
+
+        upcoming = [match for match in matches if _is_scheduled_after(match, cutoff)]
+        if not include_completed:
+            upcoming = [match for match in upcoming if match.get("match_status") != "F"]
+
+        upcoming.sort(
+            key=lambda match: _parse_match_time(match.get("scheduled_time")) or datetime.min.replace(tzinfo=timezone.utc)
+        )
+
+        return {
+            "cutoff": cutoff.isoformat(),
+            "count": len(upcoming),
+            "matches": upcoming,
         }
     except Exception as err:
         _handle_error(err)

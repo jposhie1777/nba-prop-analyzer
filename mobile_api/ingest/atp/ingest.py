@@ -81,13 +81,21 @@ def ensure_table(
     schema: List[bigquery.SchemaField],
 ) -> None:
     try:
-        client.get_table(table_id)
-        return
+        table = client.get_table(table_id)
     except NotFound:
         table = bigquery.Table(table_id, schema=schema)
         client.create_table(table)
-    except Conflict:
         return
+    except Conflict:
+        table = client.get_table(table_id)
+
+    existing_fields = {field.name for field in table.schema}
+    missing_fields = [field for field in schema if field.name not in existing_fields]
+    if not missing_fields:
+        return
+
+    table.schema = list(table.schema) + missing_fields
+    client.update_table(table, ["schema"])
 
 
 def insert_rows_to_bq(

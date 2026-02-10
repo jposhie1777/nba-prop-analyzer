@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
@@ -12,6 +13,7 @@ from .ingest import (
     ingest_players,
     ingest_rankings,
     ingest_tournaments,
+    ingest_upcoming_scheduled_matches,
 )
 
 
@@ -36,6 +38,17 @@ class AtpSeasonIngestRequest(BaseModel):
     season: int
     include_tournaments: bool = True
     include_matches: bool = True
+    create_tables: bool = True
+
+
+class AtpUpcomingScheduledIngestRequest(BaseModel):
+    season: Optional[int] = None
+    cutoff_time: Optional[str] = None
+    tournament_ids: Optional[list[int]] = None
+    round_name: Optional[str] = None
+    include_completed: bool = False
+    per_page: int = 100
+    max_pages: Optional[int] = 10
     create_tables: bool = True
 
 
@@ -79,6 +92,23 @@ def run_season(req: AtpSeasonIngestRequest):
                 create_tables=req.create_tables,
             )
         return summary
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/upcoming-scheduled")
+def run_upcoming_scheduled(req: AtpUpcomingScheduledIngestRequest):
+    try:
+        return ingest_upcoming_scheduled_matches(
+            season=req.season or datetime.utcnow().year,
+            cutoff_time=req.cutoff_time,
+            tournament_ids=req.tournament_ids,
+            round_name=req.round_name,
+            include_completed=req.include_completed,
+            per_page=req.per_page,
+            max_pages=req.max_pages,
+            create_tables=req.create_tables,
+        )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

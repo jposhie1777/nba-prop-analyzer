@@ -32,6 +32,15 @@ function formatDateRange(start?: string | null, end?: string | null) {
           year: "numeric",
         })
       : "TBD";
+  if (startDate && endDate) {
+    if (startDate.getMonth() === endDate.getMonth()) {
+      return `${startDate.toLocaleDateString(undefined, {
+        month: "short",
+      })} ${startDate.getDate()} - ${endDate.getDate()}, ${endDate.getFullYear()}`;
+    } else {
+      return `${fmt(startDate)} - ${fmt(endDate)}`;
+    }
+  }
   return `${fmt(startDate)} - ${fmt(endDate)}`;
 }
 
@@ -40,7 +49,6 @@ function formatMatchDay(value?: string | null) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "TBD";
   return d.toLocaleDateString(undefined, {
-    month: "short",
     day: "numeric",
   });
 }
@@ -49,18 +57,22 @@ function formatMatchTime(value?: string | null) {
   if (!value) return "TBD";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "TBD";
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+
+  if (isToday(value)) {
+    return d.toLocaleString(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } else {
+    return d.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+    });
+  }
 }
 
 function formatMatchMeta(match: AtpBracketMatch) {
-  return isCompleted(match)
-    ? formatMatchDay(match.scheduled_at)
-    : formatMatchTime(match.scheduled_at);
+  return formatMatchTime(match.scheduled_at);
 }
 
 function isCompleted(m: AtpBracketMatch) {
@@ -816,7 +828,7 @@ export default function AtpBracketScreen() {
   const tournaments = tournamentsData?.tournaments ?? [];
 
   // Auto-select first tournament when data arrives
-  useEffect(() => {
+  useEffect(() => {.
     if (tournaments.length > 0 && selectedId === null) {
       setSelectedId(tournaments[0].id);
     }

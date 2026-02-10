@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from google.api_core.exceptions import Conflict, NotFound
@@ -165,6 +165,8 @@ SCHEMA_MATCHES = [
     bigquery.SchemaField("number_of_sets", "INT64"),
     bigquery.SchemaField("match_status", "STRING"),
     bigquery.SchemaField("is_live", "BOOL"),
+    bigquery.SchemaField("scheduled_time", "TIMESTAMP"),
+    bigquery.SchemaField("not_before_text", "STRING"),
     bigquery.SchemaField("tournament_id", "INT64"),
     bigquery.SchemaField("tournament_name", "STRING"),
     bigquery.SchemaField("tournament_location", "STRING"),
@@ -271,6 +273,7 @@ def transform_match(record: Dict[str, Any], run_ts: str, season: Optional[int]) 
     player1 = record.get("player1") or {}
     player2 = record.get("player2") or {}
     winner = record.get("winner") or {}
+    scheduled_time = _parse_scheduled_time(record.get("scheduled_time"))
     return {
         "run_ts": run_ts,
         "ingested_at": _now_iso(),
@@ -282,6 +285,8 @@ def transform_match(record: Dict[str, Any], run_ts: str, season: Optional[int]) 
         "number_of_sets": record.get("number_of_sets"),
         "match_status": record.get("match_status"),
         "is_live": record.get("is_live"),
+        "scheduled_time": scheduled_time,
+        "not_before_text": record.get("not_before_text"),
         "tournament_id": tournament.get("id"),
         "tournament_name": tournament.get("name"),
         "tournament_location": tournament.get("location"),
@@ -297,6 +302,78 @@ def transform_match(record: Dict[str, Any], run_ts: str, season: Optional[int]) 
         "winner_id": winner.get("id"),
         "winner_name": winner.get("full_name"),
         "raw_json": _json_dump(record),
+    }
+
+
+def _parse_scheduled_time(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    else:
+        parsed = parsed.astimezone(timezone.utc)
+    return parsed.isoformat()
+
+
+def ingest_upcoming_scheduled_matches(
+    *,
+    season: int,
+    cutoff_time: Optional[str] = None,
+    tournament_ids: Optional[List[int]] = None,
+    round_name: Optional[str] = None,
+    include_completed: bool = False,
+    table: str = ATP_MATCHES_TABLE,
+    per_page: int = 100,
+    max_pages: Optional[int] = 10,
+    create_tables: bool = True,
+) -> Dict[str, Any]:
+    client = get_bq_client()
+    table_id = resolve_table_id(table, client.project)
+    if create_tables:
+        ensure_dataset(client, dataset_id_from_table_id(table_id))
+        ensure_table(client, table_id, SCHEMA_MATCHES)
+
+    params: Dict[str, Any] = {"season": season}
+    if tournament_ids:
+        params["tournament_ids[]"] = tournament_ids
+    if round_name:
+        params["round"] = round_name
+
+    cutoff = _parse_scheduled_time(cutoff_time)
+    if cutoff is None:
+        cutoff = datetime.now(timezone.utc).isoformat()
+
+    matches = fetch_paginated(
+        "/matches",
+        params=params,
+        per_page=per_page,
+        max_pages=max_pages,
+    )
+
+    filtered: List[Dict[str, Any]] = []
+    for match in matches:
+        scheduled = _parse_scheduled_time(match.get("scheduled_time"))
+        if not scheduled:
+            continue
+        if scheduled < cutoff:
+            continue
+        if not include_completed and match.get("match_status") == "F":
+            continue
+        filtered.append(match)
+
+    run_ts = _now_iso()
+    rows = [transform_match(record, run_ts, season) for record in filtered]
+    inserted = insert_rows_to_bq(rows, table, client=client)
+    return {
+        "table": table,
+        "season": season,
+        "cutoff": cutoff,
+        "records": len(filtered),
+        "inserted": inserted,
     }
 
 

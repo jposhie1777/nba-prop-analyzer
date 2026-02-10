@@ -59,6 +59,8 @@ CREATE TABLE IF NOT EXISTS `atp_data.matches` (
   number_of_sets INT64,
   match_status STRING,
   is_live BOOL,
+  scheduled_time TIMESTAMP,
+  not_before_text STRING,
   tournament_id INT64,
   tournament_name STRING,
   tournament_location STRING,

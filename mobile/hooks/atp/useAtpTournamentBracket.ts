@@ -1,4 +1,5 @@
 import { useAtpQuery } from "./useAtpQuery";
+import type { AtpCompareResponse } from "@/types/atp";
 
 export type AtpBracketMatch = {
   id: number | string | null;
@@ -35,6 +36,7 @@ export type AtpTournamentBracketResponse = {
     rounds: AtpBracketRound[];
   };
   upcoming_matches: AtpBracketMatch[];
+  match_analyses?: Record<string, AtpCompareResponse>;
   match_count: number;
 };
 

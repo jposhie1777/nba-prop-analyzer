@@ -292,10 +292,12 @@ function MatchAnalysisCard({
   match,
   surface,
   colors,
+  prefetchedAnalysis,
 }: {
   match: AtpBracketMatch;
   surface?: string | null;
   colors: any;
+  prefetchedAnalysis?: AtpCompareResponse | null;
 }) {
   const p1Id = match.player1_id;
   const p2Id = match.player2_id;
@@ -307,11 +309,12 @@ function MatchAnalysisCard({
       player_ids: hasBothIds ? [p1Id!, p2Id!] : [],
       surface: surface?.toLowerCase() || undefined,
     },
-    hasBothIds
+    hasBothIds && !prefetchedAnalysis
   );
 
-  const rec = data?.recommendation;
-  const players = data?.players ?? [];
+  const analysis = prefetchedAnalysis ?? data;
+  const rec = analysis?.recommendation;
+  const players = analysis?.players ?? [];
   const p1Data = players.find((p) => p.player_id === p1Id);
   const p2Data = players.find((p) => p.player_id === p2Id);
 
@@ -383,7 +386,7 @@ function MatchAnalysisCard({
         <Text style={[s.analysisError, { color: colors.text.muted }]}>
           Player data not available for analysis
         </Text>
-      ) : data ? (
+      ) : analysis ? (
         <View style={s.analyticsSection}>
           {/* Recommendation */}
           {rec && pickName && (
@@ -463,13 +466,13 @@ function MatchAnalysisCard({
           </View>
 
           {/* H2H summary */}
-          {data.head_to_head && data.head_to_head.starts > 0 && (
+          {analysis.head_to_head && analysis.head_to_head.starts > 0 && (
             <View style={[s.h2hRow, { backgroundColor: colors.surface.cardSoft }]}>
               <Text style={[s.h2hLabel, { color: colors.text.muted }]}>
                 Head-to-Head
               </Text>
               <Text style={[s.h2hValue, { color: colors.text.primary }]}>
-                {data.head_to_head.wins}-{data.head_to_head.losses} ({fmtPct(data.head_to_head.win_rate)})
+                {analysis.head_to_head.wins}-{analysis.head_to_head.losses} ({fmtPct(analysis.head_to_head.win_rate)})
               </Text>
             </View>
           )}
@@ -617,6 +620,8 @@ function TournamentBracketView({
       stats: { total, completed },
     };
   }, [data]);
+
+  const prefetchedAnalyses = data?.match_analyses ?? {};
 
   const todayMatches = useMemo(() => {
     const all: AtpBracketMatch[] = [];
@@ -803,6 +808,9 @@ function TournamentBracketView({
                 match={m}
                 surface={header.surface}
                 colors={colors}
+                prefetchedAnalysis={
+                  prefetchedAnalyses[String(m.id ?? `${m.player1}::${m.player2}`)] ?? null
+                }
               />
             ))
           )}

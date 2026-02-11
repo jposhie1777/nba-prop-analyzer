@@ -47,6 +47,208 @@ _ATP_COMPARE_DEFAULTS = {
 _ATP_COMPARE_CACHE_TABLE = os.getenv("ATP_COMPARE_CACHE_TABLE", "atp_data.atp_matchup_compare_cache")
 
 
+<<<<<<< HEAD
+_ATP_PLAYER_METRICS_TABLE = os.getenv("ATP_PLAYER_METRICS_TABLE", "atp_data.atp_player_compare_metrics")
+
+
+def _read_player_metrics_from_bq(player_ids: List[int], surface: Optional[str]) -> Dict[int, Dict[str, Any]]:
+    if not player_ids:
+        return {}
+    try:
+        client = get_bq_client()
+        surface_key = (surface or "").strip().lower()
+        sql = f"""
+        SELECT
+          player_id,
+          player_name,
+          surface_key,
+          overall_win_rate,
+          recent_win_rate,
+          straight_sets_win_rate,
+          tiebreak_rate,
+          form_score,
+          updated_at
+        FROM `{_ATP_PLAYER_METRICS_TABLE}`
+        WHERE player_id IN UNNEST(@player_ids)
+          AND surface_key IN UNNEST(@surface_keys)
+        QUALIFY ROW_NUMBER() OVER (
+          PARTITION BY player_id
+          ORDER BY IF(surface_key = @preferred_surface, 0, 1), updated_at DESC
+        ) = 1
+        """
+        preferred = surface_key or "all"
+        surface_keys = ["all"] if not surface_key else [surface_key, "all"]
+        job = client.query(
+            sql,
+            job_config=bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ArrayQueryParameter("player_ids", "INT64", player_ids),
+                    bigquery.ArrayQueryParameter("surface_keys", "STRING", surface_keys),
+                    bigquery.ScalarQueryParameter("preferred_surface", "STRING", preferred),
+                ]
+            ),
+        )
+        out: Dict[int, Dict[str, Any]] = {}
+        for row in job.result():
+            out[int(row["player_id"])] = dict(row)
+        return out
+    except Exception:
+        return {}
+
+
+def _read_h2h_from_bq(player_id: int, opponent_id: int, surface: Optional[str]) -> Dict[str, Any]:
+    try:
+        client = get_bq_client()
+        sql = """
+        SELECT
+          COUNT(1) AS starts,
+          SUM(CASE WHEN winner_id = @player_id THEN 1 ELSE 0 END) AS wins,
+          SUM(CASE WHEN winner_id = @opponent_id THEN 1 ELSE 0 END) AS losses
+        FROM `atp_data.matches`
+        WHERE (
+          (player1_id = @player_id AND player2_id = @opponent_id)
+          OR (player1_id = @opponent_id AND player2_id = @player_id)
+        )
+          AND (@surface IS NULL OR LOWER(surface) = @surface)
+        """
+        job = client.query(
+            sql,
+            job_config=bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter("player_id", "INT64", player_id),
+                    bigquery.ScalarQueryParameter("opponent_id", "INT64", opponent_id),
+                    bigquery.ScalarQueryParameter("surface", "STRING", (surface or "").lower() or None),
+                ]
+            ),
+        )
+        row = next(iter(job.result()), None)
+        starts = int(row["starts"] or 0) if row else 0
+        wins = int(row["wins"] or 0) if row else 0
+        losses = int(row["losses"] or 0) if row else 0
+        return {
+            "player_id": player_id,
+            "opponent_id": opponent_id,
+            "starts": starts,
+            "wins": wins,
+            "losses": losses,
+            "win_rate": (wins / starts) if starts else 0.0,
+            "by_surface": [],
+            "matches": [],
+        }
+    except Exception:
+        return {
+            "player_id": player_id,
+            "opponent_id": opponent_id,
+            "starts": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "by_surface": [],
+            "matches": [],
+        }
+
+
+def _build_compare_from_precomputed(
+    *,
+    player_ids: List[int],
+    surface: Optional[str],
+    rankings: Dict[int, Any],
+) -> Optional[Dict[str, Any]]:
+    metrics_rows = _read_player_metrics_from_bq(player_ids, surface)
+    if len(metrics_rows) < len(player_ids):
+        return None
+
+    weights = {
+        "form": 0.50,
+        "surface": 0.20,
+        "ranking": 0.10,
+        "head_to_head": 0.20,
+    }
+
+    players_payload: List[Dict[str, Any]] = []
+    for pid in player_ids:
+        row = metrics_rows.get(pid) or {}
+        players_payload.append(
+            {
+                "player_id": pid,
+                "rank": rankings.get(pid),
+                "score": 0.0,
+                "metrics": {
+                    "form_score": float(row.get("form_score") or 0.0),
+                    "recent_win_rate": float(row.get("recent_win_rate") or 0.0),
+                    "surface_win_rate": float(row.get("overall_win_rate") or 0.0),
+                    "ranking": rankings.get(pid),
+                    "recent_surface_win_rate": float(row.get("recent_win_rate") or 0.0),
+                    "straight_sets_win_rate": float(row.get("straight_sets_win_rate") or 0.0),
+                    "tiebreak_rate": float(row.get("tiebreak_rate") or 0.0),
+                },
+            }
+        )
+
+    def _normalize(values: Dict[int, Optional[float]], reverse: bool = False) -> Dict[int, float]:
+        valid = [float(v) for v in values.values() if v is not None]
+        if not valid:
+            return {k: 0.5 for k in values}
+        lo, hi = min(valid), max(valid)
+        if hi == lo:
+            return {k: 0.5 for k in values}
+        out: Dict[int, float] = {}
+        for k, v in values.items():
+            if v is None:
+                out[k] = 0.5
+            else:
+                n = (float(v) - lo) / (hi - lo)
+                out[k] = 1 - n if reverse else n
+        return out
+
+    form_norm = _normalize({p["player_id"]: p["metrics"]["form_score"] for p in players_payload})
+    surface_norm = _normalize({p["player_id"]: p["metrics"]["surface_win_rate"] for p in players_payload})
+    ranking_norm = _normalize({p["player_id"]: p["metrics"]["ranking"] for p in players_payload}, reverse=True)
+
+    h2h = {}
+    h2h_norm = {pid: 0.5 for pid in player_ids}
+    if len(player_ids) >= 2:
+        p1, p2 = player_ids[0], player_ids[1]
+        h2h = _read_h2h_from_bq(p1, p2, surface)
+        if h2h.get("starts"):
+            r = float(h2h.get("win_rate") or 0.0)
+            h2h_norm[p1] = r
+            h2h_norm[p2] = 1 - r
+
+    for row in players_payload:
+        pid = row["player_id"]
+        score = (
+            weights["form"] * form_norm.get(pid, 0.5)
+            + weights["surface"] * surface_norm.get(pid, 0.5)
+            + weights["ranking"] * ranking_norm.get(pid, 0.5)
+            + weights["head_to_head"] * h2h_norm.get(pid, 0.5)
+        )
+        row["score"] = round(score, 4)
+
+    players_payload.sort(key=lambda x: x["score"], reverse=True)
+    recommendation = None
+    if len(players_payload) >= 2:
+        edge = round(players_payload[0]["score"] - players_payload[1]["score"], 4)
+        if edge > 0.01:
+            recommendation = {
+                "player_id": players_payload[0]["player_id"],
+                "label": "Lean" if edge < 0.08 else "Pick",
+                "edge": edge,
+                "reasons": ["Precomputed form edge", "Precomputed surface edge"],
+            }
+
+    return {
+        "player_ids": player_ids,
+        "surface": surface,
+        "weights": weights,
+        "players": players_payload,
+        "head_to_head": h2h,
+        "recommendation": recommendation,
+    }
+
+
+=======
+>>>>>>> origin/main
 def _compare_cache_key(
     *,
     player_ids: List[int],
@@ -846,6 +1048,17 @@ def build_tournament_bracket_payload(
                 match_analyses[mkey] = payload_row
 
         if recompute_missing_analyses:
+<<<<<<< HEAD
+            rankings_payload = fetch_paginated("/rankings", params={"per_page": 100}, cache_ttl=900, max_pages=3)
+            rankings_map: Dict[int, Any] = {}
+            for row in rankings_payload:
+                player = row.get("player") or {}
+                pid = player.get("id")
+                if pid:
+                    rankings_map[int(pid)] = row.get("rank")
+
+=======
+>>>>>>> origin/main
             for match in upcoming_matches:
                 mkey = _match_analysis_key(match)
                 if mkey in match_analyses:
@@ -858,6 +1071,27 @@ def build_tournament_bracket_payload(
                 if not cache_key:
                     continue
                 try:
+<<<<<<< HEAD
+                    compare_payload = _build_compare_from_precomputed(
+                        player_ids=[int(p1), int(p2)],
+                        surface=(tournament.get("surface") or "").lower() or None,
+                        rankings=rankings_map,
+                    )
+                    if compare_payload is None:
+                        compare_payload = _build_compare_payload(
+                            player_ids=[int(p1), int(p2)],
+                            season=_ATP_COMPARE_DEFAULTS["season"],
+                            seasons_back=_ATP_COMPARE_DEFAULTS["seasons_back"],
+                            start_season=_ATP_COMPARE_DEFAULTS["start_season"],
+                            end_season=_ATP_COMPARE_DEFAULTS["end_season"],
+                            surface=(tournament.get("surface") or "").lower() or None,
+                            last_n=_ATP_COMPARE_DEFAULTS["last_n"],
+                            surface_last_n=_ATP_COMPARE_DEFAULTS["surface_last_n"],
+                            recent_last_n=_ATP_COMPARE_DEFAULTS["recent_last_n"],
+                            recent_surface_last_n=_ATP_COMPARE_DEFAULTS["recent_surface_last_n"],
+                            max_pages=_ATP_COMPARE_DEFAULTS["max_pages"],
+                        )
+=======
                     compare_payload = _build_compare_payload(
                         player_ids=[int(p1), int(p2)],
                         season=_ATP_COMPARE_DEFAULTS["season"],
@@ -871,6 +1105,7 @@ def build_tournament_bracket_payload(
                         recent_surface_last_n=_ATP_COMPARE_DEFAULTS["recent_surface_last_n"],
                         max_pages=_ATP_COMPARE_DEFAULTS["max_pages"],
                     )
+>>>>>>> origin/main
                     match_analyses[mkey] = compare_payload
                     _write_compare_to_bq(
                         cache_key=cache_key,
@@ -1141,6 +1376,7 @@ def atp_compare(
             recent_last_n=recent_last_n,
             recent_surface_last_n=recent_surface_last_n,
             max_pages=max_pages,
+<<<<<<< HEAD
         )
 
         cached_payload = _cache_get(_ATP_COMPARE_CACHE, compare_cache_key)
@@ -1151,6 +1387,48 @@ def atp_compare(
         if bq_cached is not None:
             _cache_set(_ATP_COMPARE_CACHE, compare_cache_key, bq_cached, ttl_seconds=1200)
             return bq_cached
+
+        rankings_payload = fetch_paginated("/rankings", params={"per_page": 100}, cache_ttl=900, max_pages=3)
+        rankings_map: Dict[int, Any] = {}
+        for row in rankings_payload:
+            player = row.get("player") or {}
+            pid = player.get("id")
+            if pid:
+                rankings_map[int(pid)] = row.get("rank")
+
+        precomputed_payload = _build_compare_from_precomputed(
+            player_ids=player_ids,
+            surface=surface,
+            rankings=rankings_map,
+        )
+        if precomputed_payload is not None:
+            _cache_set(_ATP_COMPARE_CACHE, compare_cache_key, precomputed_payload, ttl_seconds=1200)
+            _write_compare_to_bq(
+                cache_key=compare_cache_key,
+                payload=precomputed_payload,
+                player_ids=player_ids,
+                season=season,
+                seasons_back=seasons_back,
+                start_season=start_season,
+                end_season=end_season,
+                surface=surface,
+                tournament_id=None,
+                match_id=None,
+                ttl_seconds=12 * 3600,
+            )
+            return precomputed_payload
+=======
+        )
+
+        cached_payload = _cache_get(_ATP_COMPARE_CACHE, compare_cache_key)
+        if cached_payload is not None:
+            return cached_payload
+
+        bq_cached = _read_compare_from_bq(compare_cache_key)
+        if bq_cached is not None:
+            _cache_set(_ATP_COMPARE_CACHE, compare_cache_key, bq_cached, ttl_seconds=1200)
+            return bq_cached
+>>>>>>> origin/main
 
         payload = _build_compare_payload(
             player_ids=player_ids,

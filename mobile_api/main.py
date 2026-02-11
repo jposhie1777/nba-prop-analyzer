@@ -381,7 +381,11 @@ async def startup():
                         f" {datetime.now(NY_TZ).strftime('%I:%M %p ET')} ========"
                     )
 
-                    payload = await asyncio.to_thread(build_tournament_bracket_payload)
+                    payload = await asyncio.to_thread(
+                        build_tournament_bracket_payload,
+                        include_match_analyses=True,
+                        recompute_missing_analyses=True,
+                    )
                     tournament_name = (payload.get("tournament") or {}).get("name")
                     match_count = payload.get("match_count")
                     print(

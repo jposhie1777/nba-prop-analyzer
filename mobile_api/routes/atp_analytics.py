@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
+import json
+import os
+from threading import Lock
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from google.cloud import bigquery
+
+from bq import get_bq_client
 
 from atp.analytics import (
     _round_rank,
@@ -20,6 +26,245 @@ from atp.client import AtpApiError, fetch_one_page, fetch_paginated
 
 
 router = APIRouter(prefix="/atp", tags=["ATP"])
+
+
+_CACHE_LOCK = Lock()
+_ATP_COMPARE_CACHE: Dict[str, tuple[datetime, Dict[str, Any]]] = {}
+_ATP_BRACKET_CACHE: Dict[str, tuple[datetime, Dict[str, Any]]] = {}
+
+_ATP_COMPARE_DEFAULTS = {
+    "season": None,
+    "seasons_back": 2,
+    "start_season": None,
+    "end_season": None,
+    "surface": None,
+    "last_n": 25,
+    "surface_last_n": 45,
+    "recent_last_n": 10,
+    "recent_surface_last_n": 20,
+    "max_pages": 5,
+}
+_ATP_COMPARE_CACHE_TABLE = os.getenv("ATP_COMPARE_CACHE_TABLE", "atp_data.atp_matchup_compare_cache")
+
+
+def _compare_cache_key(
+    *,
+    player_ids: List[int],
+    season: Optional[int],
+    seasons_back: Optional[int],
+    start_season: Optional[int],
+    end_season: Optional[int],
+    surface: Optional[str],
+    last_n: int,
+    surface_last_n: int,
+    recent_last_n: int,
+    recent_surface_last_n: int,
+    max_pages: Optional[int],
+) -> str:
+    return "|".join(
+        [
+            ",".join(str(pid) for pid in sorted(player_ids)),
+            str(season or ""),
+            str(seasons_back if seasons_back is not None else ""),
+            str(start_season or ""),
+            str(end_season or ""),
+            (surface or "").strip().lower(),
+            str(last_n),
+            str(surface_last_n),
+            str(recent_last_n),
+            str(recent_surface_last_n),
+            str(max_pages or ""),
+        ]
+    )
+
+
+def _match_analysis_key(match: Dict[str, Any]) -> str:
+    return str(match.get("id") if match.get("id") is not None else f"{match.get('player1')}::{match.get('player2')}")
+
+
+def _ensure_compare_cache_table(client: bigquery.Client) -> None:
+    ddl = f"""
+    CREATE TABLE IF NOT EXISTS `{_ATP_COMPARE_CACHE_TABLE}` (
+      cache_key STRING NOT NULL,
+      player_ids STRING NOT NULL,
+      season INT64,
+      seasons_back INT64,
+      start_season INT64,
+      end_season INT64,
+      surface STRING,
+      tournament_id INT64,
+      match_id STRING,
+      payload_json STRING NOT NULL,
+      computed_at TIMESTAMP NOT NULL,
+      expires_at TIMESTAMP
+    )
+    PARTITION BY DATE(computed_at)
+    CLUSTER BY cache_key, tournament_id
+    """
+    client.query(ddl).result()
+
+
+def _read_compare_from_bq(cache_key: str) -> Optional[Dict[str, Any]]:
+    try:
+        client = get_bq_client()
+        _ensure_compare_cache_table(client)
+        sql = f"""
+        SELECT payload_json
+        FROM `{_ATP_COMPARE_CACHE_TABLE}`
+        WHERE cache_key = @cache_key
+          AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP())
+        ORDER BY computed_at DESC
+        LIMIT 1
+        """
+        job = client.query(
+            sql,
+            job_config=bigquery.QueryJobConfig(
+                query_parameters=[bigquery.ScalarQueryParameter("cache_key", "STRING", cache_key)]
+            ),
+        )
+        rows = list(job.result())
+        if not rows:
+            return None
+        return json.loads(rows[0]["payload_json"])
+    except Exception:
+        return None
+
+
+def _read_compare_batch_from_bq(cache_keys: List[str]) -> Dict[str, Dict[str, Any]]:
+    if not cache_keys:
+        return {}
+    try:
+        client = get_bq_client()
+        _ensure_compare_cache_table(client)
+        sql = f"""
+        SELECT cache_key, payload_json
+        FROM `{_ATP_COMPARE_CACHE_TABLE}`
+        WHERE cache_key IN UNNEST(@cache_keys)
+          AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP())
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY cache_key ORDER BY computed_at DESC) = 1
+        """
+        job = client.query(
+            sql,
+            job_config=bigquery.QueryJobConfig(
+                query_parameters=[bigquery.ArrayQueryParameter("cache_keys", "STRING", cache_keys)]
+            ),
+        )
+        out: Dict[str, Dict[str, Any]] = {}
+        for row in job.result():
+            out[row["cache_key"]] = json.loads(row["payload_json"])
+        return out
+    except Exception:
+        return {}
+
+
+def _write_compare_to_bq(
+    *,
+    cache_key: str,
+    payload: Dict[str, Any],
+    player_ids: List[int],
+    season: Optional[int],
+    seasons_back: Optional[int],
+    start_season: Optional[int],
+    end_season: Optional[int],
+    surface: Optional[str],
+    tournament_id: Optional[int],
+    match_id: Optional[str],
+    ttl_seconds: int = 3600,
+) -> None:
+    try:
+        client = get_bq_client()
+        _ensure_compare_cache_table(client)
+        now = datetime.now(timezone.utc)
+        row = {
+            "cache_key": cache_key,
+            "player_ids": ",".join(str(pid) for pid in sorted(player_ids)),
+            "season": season,
+            "seasons_back": seasons_back,
+            "start_season": start_season,
+            "end_season": end_season,
+            "surface": (surface or "").lower() or None,
+            "tournament_id": tournament_id,
+            "match_id": match_id,
+            "payload_json": json.dumps(payload),
+            "computed_at": now.isoformat(),
+            "expires_at": (now + timedelta(seconds=ttl_seconds)).isoformat(),
+        }
+        errors = client.insert_rows_json(_ATP_COMPARE_CACHE_TABLE, [row])
+        if errors:
+            print(f"[ATP_CACHE] insert_rows_json errors: {errors}")
+    except Exception as exc:
+        print(f"[ATP_CACHE] Failed to write compare cache: {exc}")
+
+
+def _build_compare_payload(
+    *,
+    player_ids: List[int],
+    season: Optional[int],
+    seasons_back: Optional[int],
+    start_season: Optional[int],
+    end_season: Optional[int],
+    surface: Optional[str],
+    last_n: int,
+    surface_last_n: int,
+    recent_last_n: int,
+    recent_surface_last_n: int,
+    max_pages: Optional[int],
+) -> Dict[str, Any]:
+    seasons = _resolve_seasons(
+        season=season,
+        seasons_back=seasons_back,
+        start_season=start_season,
+        end_season=end_season,
+    )
+    matches = _fetch_matches_for_seasons(seasons, max_pages=max_pages)
+
+    rankings_payload = fetch_paginated("/rankings", params={"per_page": 100}, cache_ttl=900, max_pages=3)
+    rankings_map = {}
+    for row in rankings_payload:
+        player = row.get("player") or {}
+        pid = player.get("id")
+        if pid:
+            rankings_map[pid] = row.get("rank")
+
+    return build_compare(
+        matches,
+        player_ids=player_ids,
+        surface=surface,
+        last_n=last_n,
+        surface_last_n=surface_last_n,
+        recent_last_n=recent_last_n,
+        recent_surface_last_n=recent_surface_last_n,
+        rankings=rankings_map,
+    )
+
+
+def _cache_get(
+    cache: Dict[str, tuple[datetime, Dict[str, Any]]],
+    key: str,
+) -> Optional[Dict[str, Any]]:
+    with _CACHE_LOCK:
+        cached = cache.get(key)
+        if not cached:
+            return None
+        expires_at, payload = cached
+        if datetime.now(timezone.utc) >= expires_at:
+            cache.pop(key, None)
+            return None
+        return payload
+
+
+def _cache_set(
+    cache: Dict[str, tuple[datetime, Dict[str, Any]]],
+    key: str,
+    payload: Dict[str, Any],
+    *,
+    ttl_seconds: int,
+) -> None:
+    with _CACHE_LOCK:
+        cache[key] = (
+            datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds),
+            payload,
+        )
 
 
 def _current_season() -> int:
@@ -466,6 +711,8 @@ def get_atp_tournament_bracket(
     season: Optional[int] = None,
     upcoming_limit: int = Query(6, ge=1, le=50),
     max_pages: Optional[int] = Query(20, ge=1, le=500),
+    include_match_analyses: bool = True,
+    recompute_missing_analyses: bool = False,
 ):
     try:
         return build_tournament_bracket_payload(
@@ -474,6 +721,8 @@ def get_atp_tournament_bracket(
             season=season,
             upcoming_limit=upcoming_limit,
             max_pages=max_pages,
+            include_match_analyses=include_match_analyses,
+            recompute_missing_analyses=recompute_missing_analyses,
         )
     except HTTPException:
         raise
@@ -488,7 +737,24 @@ def build_tournament_bracket_payload(
     season: Optional[int] = None,
     upcoming_limit: int = 6,
     max_pages: Optional[int] = 20,
+    include_match_analyses: bool = True,
+    recompute_missing_analyses: bool = False,
 ) -> Dict[str, Any]:
+    cache_key = "|".join(
+        [
+            str(tournament_id or ""),
+            (tournament_name or "").strip().lower(),
+            str(season or ""),
+            str(upcoming_limit),
+            str(max_pages or ""),
+            "1" if include_match_analyses else "0",
+        ]
+    )
+    if not recompute_missing_analyses:
+        cached_payload = _cache_get(_ATP_BRACKET_CACHE, cache_key)
+        if cached_payload is not None:
+            return cached_payload
+
     selected_season = season or _current_season()
     tournaments_payload = fetch_one_page(
         "/tournaments",
@@ -550,7 +816,79 @@ def build_tournament_bracket_payload(
     upcoming_matches.sort(key=match_sort_key)
     upcoming_matches = upcoming_matches[:upcoming_limit]
 
-    return {
+    match_analyses: Dict[str, Dict[str, Any]] = {}
+    if include_match_analyses and upcoming_matches:
+        match_to_cache_key: Dict[str, str] = {}
+        for match in upcoming_matches:
+            p1 = match.get("player1_id")
+            p2 = match.get("player2_id")
+            if p1 is None or p2 is None or p1 == p2:
+                continue
+            key = _compare_cache_key(
+                player_ids=[int(p1), int(p2)],
+                season=_ATP_COMPARE_DEFAULTS["season"],
+                seasons_back=_ATP_COMPARE_DEFAULTS["seasons_back"],
+                start_season=_ATP_COMPARE_DEFAULTS["start_season"],
+                end_season=_ATP_COMPARE_DEFAULTS["end_season"],
+                surface=(tournament.get("surface") or "").lower() or None,
+                last_n=_ATP_COMPARE_DEFAULTS["last_n"],
+                surface_last_n=_ATP_COMPARE_DEFAULTS["surface_last_n"],
+                recent_last_n=_ATP_COMPARE_DEFAULTS["recent_last_n"],
+                recent_surface_last_n=_ATP_COMPARE_DEFAULTS["recent_surface_last_n"],
+                max_pages=_ATP_COMPARE_DEFAULTS["max_pages"],
+            )
+            match_to_cache_key[_match_analysis_key(match)] = key
+
+        cached = _read_compare_batch_from_bq(list(set(match_to_cache_key.values())))
+        for mkey, ckey in match_to_cache_key.items():
+            payload_row = cached.get(ckey)
+            if payload_row is not None:
+                match_analyses[mkey] = payload_row
+
+        if recompute_missing_analyses:
+            for match in upcoming_matches:
+                mkey = _match_analysis_key(match)
+                if mkey in match_analyses:
+                    continue
+                p1 = match.get("player1_id")
+                p2 = match.get("player2_id")
+                if p1 is None or p2 is None or p1 == p2:
+                    continue
+                cache_key = match_to_cache_key.get(mkey)
+                if not cache_key:
+                    continue
+                try:
+                    compare_payload = _build_compare_payload(
+                        player_ids=[int(p1), int(p2)],
+                        season=_ATP_COMPARE_DEFAULTS["season"],
+                        seasons_back=_ATP_COMPARE_DEFAULTS["seasons_back"],
+                        start_season=_ATP_COMPARE_DEFAULTS["start_season"],
+                        end_season=_ATP_COMPARE_DEFAULTS["end_season"],
+                        surface=(tournament.get("surface") or "").lower() or None,
+                        last_n=_ATP_COMPARE_DEFAULTS["last_n"],
+                        surface_last_n=_ATP_COMPARE_DEFAULTS["surface_last_n"],
+                        recent_last_n=_ATP_COMPARE_DEFAULTS["recent_last_n"],
+                        recent_surface_last_n=_ATP_COMPARE_DEFAULTS["recent_surface_last_n"],
+                        max_pages=_ATP_COMPARE_DEFAULTS["max_pages"],
+                    )
+                    match_analyses[mkey] = compare_payload
+                    _write_compare_to_bq(
+                        cache_key=cache_key,
+                        payload=compare_payload,
+                        player_ids=[int(p1), int(p2)],
+                        season=_ATP_COMPARE_DEFAULTS["season"],
+                        seasons_back=_ATP_COMPARE_DEFAULTS["seasons_back"],
+                        start_season=_ATP_COMPARE_DEFAULTS["start_season"],
+                        end_season=_ATP_COMPARE_DEFAULTS["end_season"],
+                        surface=(tournament.get("surface") or "").lower() or None,
+                        tournament_id=tournament.get("id"),
+                        match_id=str(match.get("id")) if match.get("id") is not None else None,
+                        ttl_seconds=12 * 3600,
+                    )
+                except Exception:
+                    continue
+
+    payload = {
         "tournament": {
             "id": tournament.get("id"),
             "name": tournament.get("name"),
@@ -565,9 +903,49 @@ def build_tournament_bracket_payload(
             "rounds": round_list,
         },
         "upcoming_matches": upcoming_matches,
+        "match_analyses": match_analyses,
         "match_count": len(formatted_matches),
     }
 
+    # Cache aggressively because this payload is shared across users and only changes
+    # when ATP source data updates.
+    _cache_set(_ATP_BRACKET_CACHE, cache_key, payload, ttl_seconds=300)
+    return payload
+
+
+
+
+@router.post("/tournament-bracket/recompute")
+def recompute_atp_tournament_bracket(
+    tournament_id: Optional[int] = None,
+    tournament_name: Optional[str] = None,
+    season: Optional[int] = None,
+    upcoming_limit: int = Query(50, ge=1, le=100),
+    max_pages: Optional[int] = Query(20, ge=1, le=500),
+):
+    """
+    Force recompute matchup analyses for the tournament bracket and persist to BigQuery cache table.
+    """
+    try:
+        payload = build_tournament_bracket_payload(
+            tournament_id=tournament_id,
+            tournament_name=tournament_name,
+            season=season,
+            upcoming_limit=upcoming_limit,
+            max_pages=max_pages,
+            include_match_analyses=True,
+            recompute_missing_analyses=True,
+        )
+        return {
+            "status": "ok",
+            "tournament": payload.get("tournament"),
+            "analysis_count": len(payload.get("match_analyses") or {}),
+            "match_count": payload.get("match_count", 0),
+        }
+    except HTTPException:
+        raise
+    except Exception as err:
+        _handle_error(err)
 
 @router.get("/analytics/player-form")
 def atp_player_form(
@@ -750,31 +1128,58 @@ def atp_compare(
     try:
         if len(player_ids) < 2 or len(player_ids) > 3:
             raise HTTPException(status_code=400, detail="player_ids must include 2 or 3 IDs")
-        seasons = _resolve_seasons(
+
+        compare_cache_key = _compare_cache_key(
+            player_ids=player_ids,
             season=season,
             seasons_back=seasons_back,
             start_season=start_season,
             end_season=end_season,
-        )
-        matches = _fetch_matches_for_seasons(seasons, max_pages=max_pages)
-
-        rankings_payload = fetch_paginated("/rankings", params={"per_page": 100}, cache_ttl=900, max_pages=3)
-        rankings_map = {}
-        for row in rankings_payload:
-            player = row.get("player") or {}
-            pid = player.get("id")
-            if pid:
-                rankings_map[pid] = row.get("rank")
-
-        return build_compare(
-            matches,
-            player_ids=player_ids,
             surface=surface,
             last_n=last_n,
             surface_last_n=surface_last_n,
             recent_last_n=recent_last_n,
             recent_surface_last_n=recent_surface_last_n,
-            rankings=rankings_map,
+            max_pages=max_pages,
         )
+
+        cached_payload = _cache_get(_ATP_COMPARE_CACHE, compare_cache_key)
+        if cached_payload is not None:
+            return cached_payload
+
+        bq_cached = _read_compare_from_bq(compare_cache_key)
+        if bq_cached is not None:
+            _cache_set(_ATP_COMPARE_CACHE, compare_cache_key, bq_cached, ttl_seconds=1200)
+            return bq_cached
+
+        payload = _build_compare_payload(
+            player_ids=player_ids,
+            season=season,
+            seasons_back=seasons_back,
+            start_season=start_season,
+            end_season=end_season,
+            surface=surface,
+            last_n=last_n,
+            surface_last_n=surface_last_n,
+            recent_last_n=recent_last_n,
+            recent_surface_last_n=recent_surface_last_n,
+            max_pages=max_pages,
+        )
+
+        _cache_set(_ATP_COMPARE_CACHE, compare_cache_key, payload, ttl_seconds=1200)
+        _write_compare_to_bq(
+            cache_key=compare_cache_key,
+            payload=payload,
+            player_ids=player_ids,
+            season=season,
+            seasons_back=seasons_back,
+            start_season=start_season,
+            end_season=end_season,
+            surface=surface,
+            tournament_id=None,
+            match_id=None,
+            ttl_seconds=12 * 3600,
+        )
+        return payload
     except Exception as err:
         _handle_error(err)

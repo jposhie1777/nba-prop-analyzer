@@ -47,6 +47,7 @@ _ATP_COMPARE_DEFAULTS = {
 _ATP_COMPARE_CACHE_TABLE = os.getenv("ATP_COMPARE_CACHE_TABLE", "atp_data.atp_matchup_compare_cache")
 
 
+<<<<<<< HEAD
 _ATP_PLAYER_METRICS_TABLE = os.getenv("ATP_PLAYER_METRICS_TABLE", "atp_data.atp_player_compare_metrics")
 
 
@@ -246,6 +247,8 @@ def _build_compare_from_precomputed(
     }
 
 
+=======
+>>>>>>> origin/main
 def _compare_cache_key(
     *,
     player_ids: List[int],
@@ -1045,6 +1048,7 @@ def build_tournament_bracket_payload(
                 match_analyses[mkey] = payload_row
 
         if recompute_missing_analyses:
+<<<<<<< HEAD
             rankings_payload = fetch_paginated("/rankings", params={"per_page": 100}, cache_ttl=900, max_pages=3)
             rankings_map: Dict[int, Any] = {}
             for row in rankings_payload:
@@ -1053,6 +1057,8 @@ def build_tournament_bracket_payload(
                 if pid:
                     rankings_map[int(pid)] = row.get("rank")
 
+=======
+>>>>>>> origin/main
             for match in upcoming_matches:
                 mkey = _match_analysis_key(match)
                 if mkey in match_analyses:
@@ -1065,6 +1071,7 @@ def build_tournament_bracket_payload(
                 if not cache_key:
                     continue
                 try:
+<<<<<<< HEAD
                     compare_payload = _build_compare_from_precomputed(
                         player_ids=[int(p1), int(p2)],
                         surface=(tournament.get("surface") or "").lower() or None,
@@ -1084,6 +1091,21 @@ def build_tournament_bracket_payload(
                             recent_surface_last_n=_ATP_COMPARE_DEFAULTS["recent_surface_last_n"],
                             max_pages=_ATP_COMPARE_DEFAULTS["max_pages"],
                         )
+=======
+                    compare_payload = _build_compare_payload(
+                        player_ids=[int(p1), int(p2)],
+                        season=_ATP_COMPARE_DEFAULTS["season"],
+                        seasons_back=_ATP_COMPARE_DEFAULTS["seasons_back"],
+                        start_season=_ATP_COMPARE_DEFAULTS["start_season"],
+                        end_season=_ATP_COMPARE_DEFAULTS["end_season"],
+                        surface=(tournament.get("surface") or "").lower() or None,
+                        last_n=_ATP_COMPARE_DEFAULTS["last_n"],
+                        surface_last_n=_ATP_COMPARE_DEFAULTS["surface_last_n"],
+                        recent_last_n=_ATP_COMPARE_DEFAULTS["recent_last_n"],
+                        recent_surface_last_n=_ATP_COMPARE_DEFAULTS["recent_surface_last_n"],
+                        max_pages=_ATP_COMPARE_DEFAULTS["max_pages"],
+                    )
+>>>>>>> origin/main
                     match_analyses[mkey] = compare_payload
                     _write_compare_to_bq(
                         cache_key=cache_key,
@@ -1354,6 +1376,7 @@ def atp_compare(
             recent_last_n=recent_last_n,
             recent_surface_last_n=recent_surface_last_n,
             max_pages=max_pages,
+<<<<<<< HEAD
         )
 
         cached_payload = _cache_get(_ATP_COMPARE_CACHE, compare_cache_key)
@@ -1394,6 +1417,18 @@ def atp_compare(
                 ttl_seconds=12 * 3600,
             )
             return precomputed_payload
+=======
+        )
+
+        cached_payload = _cache_get(_ATP_COMPARE_CACHE, compare_cache_key)
+        if cached_payload is not None:
+            return cached_payload
+
+        bq_cached = _read_compare_from_bq(compare_cache_key)
+        if bq_cached is not None:
+            _cache_set(_ATP_COMPARE_CACHE, compare_cache_key, bq_cached, ttl_seconds=1200)
+            return bq_cached
+>>>>>>> origin/main
 
         payload = _build_compare_payload(
             player_ids=player_ids,

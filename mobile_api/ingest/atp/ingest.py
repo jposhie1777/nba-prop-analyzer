@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from google.api_core.exceptions import Conflict, NotFound
@@ -18,6 +18,19 @@ try:
     from .client import AtpApiError, fetch_paginated, get_rate_limits
 except ImportError:
     from mobile_api.ingest.atp.client import AtpApiError, fetch_paginated, get_rate_limits
+
+try:
+    from .schedule_filter import (
+        filter_scheduled_matches,
+        parse_match_time_iso,
+        resolve_cutoff_time,
+    )
+except ImportError:
+    from mobile_api.ingest.atp.schedule_filter import (
+        filter_scheduled_matches,
+        parse_match_time_iso,
+        resolve_cutoff_time,
+    )
 
 # ======================================================
 # Config
@@ -281,7 +294,7 @@ def transform_match(record: Dict[str, Any], run_ts: str, season: Optional[int]) 
     player1 = record.get("player1") or {}
     player2 = record.get("player2") or {}
     winner = record.get("winner") or {}
-    scheduled_time = _parse_scheduled_time(record.get("scheduled_time"))
+    scheduled_time = parse_match_time_iso(record.get("scheduled_time"))
     return {
         "run_ts": run_ts,
         "ingested_at": _now_iso(),
@@ -313,20 +326,6 @@ def transform_match(record: Dict[str, Any], run_ts: str, season: Optional[int]) 
     }
 
 
-def _parse_scheduled_time(value: Optional[str]) -> Optional[str]:
-    if not value:
-        return None
-    try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    else:
-        parsed = parsed.astimezone(timezone.utc)
-    return parsed.isoformat()
-
-
 def ingest_upcoming_scheduled_matches(
     *,
     season: int,
@@ -351,9 +350,7 @@ def ingest_upcoming_scheduled_matches(
     if round_name:
         params["round"] = round_name
 
-    cutoff = _parse_scheduled_time(cutoff_time)
-    if cutoff is None:
-        cutoff = datetime.now(timezone.utc).isoformat()
+    cutoff = resolve_cutoff_time(cutoff_time)
 
     matches = fetch_paginated(
         "/matches",
@@ -362,16 +359,11 @@ def ingest_upcoming_scheduled_matches(
         max_pages=max_pages,
     )
 
-    filtered: List[Dict[str, Any]] = []
-    for match in matches:
-        scheduled = _parse_scheduled_time(match.get("scheduled_time"))
-        if not scheduled:
-            continue
-        if scheduled < cutoff:
-            continue
-        if not include_completed and match.get("match_status") == "F":
-            continue
-        filtered.append(match)
+    filtered = filter_scheduled_matches(
+        matches,
+        cutoff=cutoff,
+        include_completed=include_completed,
+    )
 
     run_ts = _now_iso()
     rows = [transform_match(record, run_ts, season) for record in filtered]
@@ -379,7 +371,7 @@ def ingest_upcoming_scheduled_matches(
     return {
         "table": table,
         "season": season,
-        "cutoff": cutoff,
+        "cutoff": cutoff.isoformat(),
         "fetched": len(matches),
         "records": len(filtered),
         "inserted": inserted,

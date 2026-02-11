@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional
+from zoneinfo import ZoneInfo
+
+
+DEFAULT_CUTOFF_TIMEZONE = ZoneInfo("America/New_York")
 
 
 def parse_match_time(value: Optional[str]) -> Optional[datetime]:
@@ -21,14 +25,22 @@ def parse_match_time_iso(value: Optional[str]) -> Optional[str]:
     return parsed.isoformat() if parsed else None
 
 
-def default_utc_day_cutoff(now: Optional[datetime] = None) -> datetime:
-    current = now.astimezone(timezone.utc) if now else datetime.now(timezone.utc)
-    return datetime(current.year, current.month, current.day, tzinfo=timezone.utc)
+def default_new_york_day_cutoff(now: Optional[datetime] = None) -> datetime:
+    current_utc = now.astimezone(timezone.utc) if now else datetime.now(timezone.utc)
+    current_ny = current_utc.astimezone(DEFAULT_CUTOFF_TIMEZONE)
+    midnight_ny = datetime(
+        current_ny.year,
+        current_ny.month,
+        current_ny.day,
+        tzinfo=DEFAULT_CUTOFF_TIMEZONE,
+    )
+    # Keep cutoff in UTC to match normalized scheduled_time values.
+    return midnight_ny.astimezone(timezone.utc)
 
 
 def resolve_cutoff_time(cutoff_time: Optional[str], *, now: Optional[datetime] = None) -> datetime:
     if cutoff_time is None:
-        return default_utc_day_cutoff(now)
+        return default_new_york_day_cutoff(now)
     parsed = parse_match_time(cutoff_time)
     if parsed is None:
         raise ValueError(

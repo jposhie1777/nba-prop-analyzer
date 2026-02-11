@@ -22,34 +22,39 @@ class ScheduleFilterTests(unittest.TestCase):
         parsed = parse_match_time("2026-02-11T13:30:00Z")
         self.assertEqual(parsed, datetime(2026, 2, 11, 13, 30, tzinfo=timezone.utc))
 
-    def test_resolve_cutoff_defaults_to_start_of_utc_day(self) -> None:
+    def test_resolve_cutoff_defaults_to_start_of_new_york_day(self) -> None:
         now = datetime(2026, 2, 11, 18, 45, tzinfo=timezone.utc)
         cutoff = resolve_cutoff_time(None, now=now)
-        self.assertEqual(cutoff, datetime(2026, 2, 11, 0, 0, tzinfo=timezone.utc))
+        self.assertEqual(cutoff, datetime(2026, 2, 11, 5, 0, tzinfo=timezone.utc))
 
-    def test_filter_scheduled_matches_keeps_earlier_today_matches(self) -> None:
+    def test_resolve_cutoff_defaults_to_prior_utc_day_before_ny_midnight(self) -> None:
+        now = datetime(2026, 2, 11, 3, 0, tzinfo=timezone.utc)
+        cutoff = resolve_cutoff_time(None, now=now)
+        self.assertEqual(cutoff, datetime(2026, 2, 10, 5, 0, tzinfo=timezone.utc))
+
+    def test_filter_scheduled_matches_reflects_est_day_boundary(self) -> None:
         matches = [
-            {"id": 1, "scheduled_time": "2026-02-11T08:00:00Z", "match_status": "scheduled"},
-            {"id": 2, "scheduled_time": "2026-02-11T10:00:00Z", "match_status": "scheduled"},
-            {"id": 3, "scheduled_time": "2026-02-11T14:00:00Z", "match_status": "scheduled"},
+            {"id": 1, "scheduled_time": "2026-02-11T04:30:00Z", "match_status": "scheduled"},
+            {"id": 2, "scheduled_time": "2026-02-11T05:00:00Z", "match_status": "scheduled"},
+            {"id": 3, "scheduled_time": "2026-02-11T10:00:00Z", "match_status": "scheduled"},
             {"id": 4, "scheduled_time": "2026-02-11T16:00:00Z", "match_status": "scheduled"},
         ]
-        from_now = datetime(2026, 2, 11, 12, 0, tzinfo=timezone.utc)
-        from_day_start = datetime(2026, 2, 11, 0, 0, tzinfo=timezone.utc)
+        from_now_utc = datetime(2026, 2, 11, 12, 0, tzinfo=timezone.utc)
+        from_day_start_est = datetime(2026, 2, 11, 5, 0, tzinfo=timezone.utc)
 
         filtered_from_now = filter_scheduled_matches(
             matches,
-            cutoff=from_now,
+            cutoff=from_now_utc,
             include_completed=False,
         )
-        filtered_from_day_start = filter_scheduled_matches(
+        filtered_from_est_day_start = filter_scheduled_matches(
             matches,
-            cutoff=from_day_start,
+            cutoff=from_day_start_est,
             include_completed=False,
         )
 
-        self.assertEqual(len(filtered_from_now), 2)
-        self.assertEqual(len(filtered_from_day_start), 4)
+        self.assertEqual(len(filtered_from_now), 1)
+        self.assertEqual(len(filtered_from_est_day_start), 3)
 
     def test_filter_excludes_completed_when_flag_disabled(self) -> None:
         matches = [

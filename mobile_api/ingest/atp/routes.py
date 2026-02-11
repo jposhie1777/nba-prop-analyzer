@@ -48,7 +48,7 @@ class AtpUpcomingScheduledIngestRequest(BaseModel):
     round_name: Optional[str] = None
     include_completed: bool = False
     per_page: int = 100
-    max_pages: Optional[int] = 10
+    max_pages: Optional[int] = None
     create_tables: bool = True
 
 

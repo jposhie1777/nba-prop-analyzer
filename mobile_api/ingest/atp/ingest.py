@@ -336,7 +336,7 @@ def ingest_upcoming_scheduled_matches(
     include_completed: bool = False,
     table: str = ATP_MATCHES_TABLE,
     per_page: int = 100,
-    max_pages: Optional[int] = 10,
+    max_pages: Optional[int] = None,
     create_tables: bool = True,
 ) -> Dict[str, Any]:
     client = get_bq_client()
@@ -380,6 +380,7 @@ def ingest_upcoming_scheduled_matches(
         "table": table,
         "season": season,
         "cutoff": cutoff,
+        "fetched": len(matches),
         "records": len(filtered),
         "inserted": inserted,
     }

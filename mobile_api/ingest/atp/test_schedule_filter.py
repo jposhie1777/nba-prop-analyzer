@@ -32,6 +32,18 @@ class ScheduleFilterTests(unittest.TestCase):
         cutoff = resolve_cutoff_time(None, now=now)
         self.assertEqual(cutoff, datetime(2026, 2, 10, 5, 0, tzinfo=timezone.utc))
 
+    def test_resolve_cutoff_supports_next_day_offset(self) -> None:
+        now = datetime(2026, 2, 12, 22, 0, tzinfo=timezone.utc)
+        cutoff = resolve_cutoff_time(None, now=now, day_offset=1)
+        self.assertEqual(cutoff, datetime(2026, 2, 13, 5, 0, tzinfo=timezone.utc))
+
+    def test_explicit_cutoff_time_overrides_day_offset(self) -> None:
+        cutoff = resolve_cutoff_time(
+            "2026-02-15T00:00:00-05:00",
+            day_offset=1,
+        )
+        self.assertEqual(cutoff, datetime(2026, 2, 15, 5, 0, tzinfo=timezone.utc))
+
     def test_filter_scheduled_matches_reflects_est_day_boundary(self) -> None:
         matches = [
             {"id": 1, "scheduled_time": "2026-02-11T04:30:00Z", "match_status": "scheduled"},

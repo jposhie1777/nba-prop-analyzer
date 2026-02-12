@@ -330,6 +330,7 @@ def ingest_upcoming_scheduled_matches(
     *,
     season: int,
     cutoff_time: Optional[str] = None,
+    cutoff_day_offset: int = 0,
     tournament_ids: Optional[List[int]] = None,
     round_name: Optional[str] = None,
     include_completed: bool = False,
@@ -350,7 +351,7 @@ def ingest_upcoming_scheduled_matches(
     if round_name:
         params["round"] = round_name
 
-    cutoff = resolve_cutoff_time(cutoff_time)
+    cutoff = resolve_cutoff_time(cutoff_time, day_offset=cutoff_day_offset)
 
     matches = fetch_paginated(
         "/matches",
@@ -372,6 +373,7 @@ def ingest_upcoming_scheduled_matches(
         "table": table,
         "season": season,
         "cutoff": cutoff.isoformat(),
+        "cutoff_day_offset": cutoff_day_offset,
         "fetched": len(matches),
         "records": len(filtered),
         "inserted": inserted,

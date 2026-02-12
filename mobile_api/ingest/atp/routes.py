@@ -44,6 +44,7 @@ class AtpSeasonIngestRequest(BaseModel):
 class AtpUpcomingScheduledIngestRequest(BaseModel):
     season: Optional[int] = None
     cutoff_time: Optional[str] = None
+    cutoff_day_offset: int = 0
     tournament_ids: Optional[list[int]] = None
     round_name: Optional[str] = None
     include_completed: bool = False
@@ -102,6 +103,7 @@ def run_upcoming_scheduled(req: AtpUpcomingScheduledIngestRequest):
         return ingest_upcoming_scheduled_matches(
             season=req.season or datetime.utcnow().year,
             cutoff_time=req.cutoff_time,
+            cutoff_day_offset=req.cutoff_day_offset,
             tournament_ids=req.tournament_ids,
             round_name=req.round_name,
             include_completed=req.include_completed,

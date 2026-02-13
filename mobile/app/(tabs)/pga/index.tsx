@@ -1,296 +1,350 @@
-// app/(tabs)/pga/index.tsx
-import { ScrollView, View, Text, StyleSheet, Pressable, Platform } from "react-native";
+import { ScrollView, View, Text, StyleSheet, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+
 import { useTheme } from "@/store/useTheme";
 import ThemeSelectorSection from "@/components/ThemeSelectorSection";
-
-type IoniconName = keyof typeof Ionicons.glyphMap;
 
 type TileProps = {
   title: string;
   subtitle: string;
   route: string;
-  icon: IoniconName;
-  iconBg: string;
-  iconColor: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  accent: string;
 };
 
-function Tile({ title, subtitle, route, icon, iconBg, iconColor }: TileProps) {
+function TopStat({ label, value }: { label: string; value: string }) {
+  const { colors } = useTheme();
+
+  return (
+    <View
+      style={[
+        styles.topStat,
+        {
+          backgroundColor: colors.surface.card,
+          borderColor: colors.border.subtle,
+        },
+      ]}
+    >
+      <Text style={[styles.topStatLabel, { color: colors.text.muted }]}>{label}</Text>
+      <Text style={[styles.topStatValue, { color: colors.text.primary }]}>{value}</Text>
+    </View>
+  );
+}
+
+function ModuleTile({ title, subtitle, route, icon, accent }: TileProps) {
   const router = useRouter();
   const { colors } = useTheme();
 
   return (
     <Pressable
       onPress={() => router.push(route)}
-      style={({ pressed }) => [
+      style={[
         styles.tile,
         {
-          backgroundColor: colors.surface.card,
           borderColor: colors.border.subtle,
-          ...Platform.select({
-            ios: {
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.06,
-              shadowRadius: 8,
-            },
-            android: { elevation: 2 },
-            default: {},
-          }),
-          opacity: pressed ? 0.85 : 1,
-          transform: [{ scale: pressed ? 0.98 : 1 }],
+          backgroundColor: "#0B1529",
         },
       ]}
     >
-      <View style={[styles.iconWrap, { backgroundColor: iconBg }]}>
-        <Ionicons name={icon} size={20} color={iconColor} />
+      <View style={[styles.tileGlow, { backgroundColor: `${accent}16` }]} />
+      <View style={styles.tileHeader}>
+        <View style={styles.tileTitleRow}>
+          <View style={[styles.tileIconBubble, { backgroundColor: `${accent}25` }]}>
+            <Ionicons name={icon} size={15} color={accent} />
+          </View>
+          <Text style={[styles.tileTitle, { color: colors.text.primary }]}>{title}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={colors.text.muted} />
       </View>
-      <View style={styles.tileContent}>
-        <Text style={[styles.tileTitle, { color: colors.text.primary }]}>
-          {title}
-        </Text>
-        <Text style={[styles.tileSub, { color: colors.text.muted }]}>
-          {subtitle}
-        </Text>
-      </View>
-      <Ionicons
-        name="chevron-forward"
-        size={18}
-        color={colors.text.disabled ?? colors.text.muted}
-        style={styles.chevron}
-      />
+      <Text style={[styles.tileSub, { color: colors.text.muted }]}>{subtitle}</Text>
     </Pressable>
   );
 }
 
-type SectionHeaderProps = {
-  title: string;
-  color: string;
-};
-
-function SectionHeader({ title, color }: SectionHeaderProps) {
-  return (
-    <View style={styles.sectionHeader}>
-      <View style={[styles.sectionDot, { backgroundColor: color }]} />
-      <Text style={[styles.sectionTitle, { color }]}>{title}</Text>
-    </View>
-  );
-}
-
-const TILE_COLORS = {
-  green: { bg: "rgba(22,163,74,0.10)", fg: "#16A34A" },
-  blue: { bg: "rgba(37,99,235,0.10)", fg: "#2563EB" },
-  purple: { bg: "rgba(124,58,237,0.10)", fg: "#7C3AED" },
-  orange: { bg: "rgba(234,88,12,0.10)", fg: "#EA580C" },
-  teal: { bg: "rgba(13,148,136,0.10)", fg: "#0D9488" },
-  rose: { bg: "rgba(225,29,72,0.10)", fg: "#E11D48" },
-  amber: { bg: "rgba(217,119,6,0.10)", fg: "#D97706" },
-  indigo: { bg: "rgba(37,99,235,0.10)", fg: "#2563EB" },
-  cyan: { bg: "rgba(6,182,212,0.10)", fg: "#06B6D4" },
-  slate: { bg: "rgba(71,85,105,0.10)", fg: "#475569" },
-  emerald: { bg: "rgba(5,150,105,0.10)", fg: "#059669" },
-  sky: { bg: "rgba(2,132,199,0.10)", fg: "#0284C7" },
-};
-
 export default function PgaHome() {
+  const router = useRouter();
   const { colors } = useTheme();
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.surface.screen }}
-      contentContainerStyle={styles.container}
-    >
-      {/* Hero Section */}
-      <View style={[styles.hero, { backgroundColor: colors.accent.primary }]}>
-        <Text style={styles.heroTitle}>PGA Analytics</Text>
-        <Text style={styles.heroSub}>
-          Tournament results, course stats, and player profiles
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      <View style={[styles.hero, { borderColor: colors.border.subtle }]}> 
+        <View style={styles.heroGlow} />
+        <View style={styles.heroTopRow}>
+          <Text style={styles.eyebrow}>PGA DASHBOARD</Text>
+          <View style={styles.livePill}>
+            <View style={styles.liveDot} />
+            <Text style={styles.liveText}>Models Active</Text>
+          </View>
+        </View>
+
+        <Text style={styles.h1}>PGA Analytics + Betting Tools</Text>
+        <Text style={styles.sub}>
+          Course fit, player form, matchup edges, and simulation-driven probabilities in one clean workspace.
         </Text>
+
+        <View style={styles.topStatsRow}>
+          <TopStat label="Core Tools" value="12 Modules" />
+          <TopStat label="Model Focus" value="Course + Form" />
+          <TopStat label="Sim Stack" value="Monte Carlo" />
+        </View>
+
+        <Pressable
+          onPress={() => router.push("/(tabs)/pga/simulated-leaderboard")}
+          style={[styles.primaryButton, { backgroundColor: colors.accent.primary }]}
+        >
+          <Ionicons name="trophy-outline" size={15} color={colors.text.inverse} />
+          <Text style={[styles.primaryButtonText, { color: colors.text.inverse }]}>Open Simulated Leaderboard</Text>
+        </Pressable>
       </View>
+
       <ThemeSelectorSection title="Theme selector" />
 
-      {/* Player Analysis */}
-      <SectionHeader title="PLAYER ANALYSIS" color={TILE_COLORS.green.fg} />
-      <Tile
+      <Text style={[styles.sectionLabel, { color: colors.text.muted }]}>ANALYSIS MODULES</Text>
+
+      <ModuleTile
         title="Player Form + Consistency"
         subtitle="Recent form, volatility, and trend scores"
         route="/(tabs)/pga/player-form"
-        icon="trending-up"
-        iconBg={TILE_COLORS.green.bg}
-        iconColor={TILE_COLORS.green.fg}
+        icon="pulse"
+        accent="#39E4C9"
       />
-      <Tile
+      <ModuleTile
         title="Matchup Ratings"
         subtitle="Head-to-head performance vs another player"
         route="/(tabs)/pga/matchups"
         icon="people"
-        iconBg={TILE_COLORS.purple.bg}
-        iconColor={TILE_COLORS.purple.fg}
+        accent="#C4A5FF"
       />
-      <Tile
+      <ModuleTile
         title="Pairings Compare"
         subtitle="2-3 player comparison with best-bet pick"
         route="/(tabs)/pga/compare"
         icon="swap-horizontal"
-        iconBg={TILE_COLORS.blue.bg}
-        iconColor={TILE_COLORS.blue.fg}
+        accent="#5BA8FF"
       />
-
-      {/* Course Intelligence */}
-      <SectionHeader title="COURSE INTELLIGENCE" color={TILE_COLORS.teal.fg} />
-      <Tile
+      <ModuleTile
         title="Course Fit Model"
         subtitle="Course history + comp courses"
         route="/(tabs)/pga/course-fit"
-        icon="fitness"
-        iconBg={TILE_COLORS.teal.bg}
-        iconColor={TILE_COLORS.teal.fg}
+        icon="analytics"
+        accent="#7DD3FC"
       />
-      <Tile
+      <ModuleTile
         title="Course Profile"
-        subtitle="Hole distribution, yardage, par makeup"
+        subtitle="Hole distribution, yardage, and par makeup"
         route="/(tabs)/pga/course-profile"
         icon="map"
-        iconBg={TILE_COLORS.cyan.bg}
-        iconColor={TILE_COLORS.cyan.fg}
+        accent="#4EE09D"
       />
-      <Tile
+      <ModuleTile
         title="Comp-Course Clusters"
         subtitle="Most similar courses to the target"
         route="/(tabs)/pga/course-comps"
         icon="git-compare"
-        iconBg={TILE_COLORS.indigo.bg}
-        iconColor={TILE_COLORS.indigo.fg}
+        accent="#8FA8FF"
       />
-
-      {/* Tournament Insights */}
-      <SectionHeader title="TOURNAMENT INSIGHTS" color={TILE_COLORS.orange.fg} />
-      <Tile
+      <ModuleTile
         title="Tournament Difficulty"
         subtitle="Scoring environment and difficulty ranks"
         route="/(tabs)/pga/tournament-difficulty"
         icon="shield"
-        iconBg={TILE_COLORS.orange.bg}
-        iconColor={TILE_COLORS.orange.fg}
+        accent="#F39EA8"
       />
-      <Tile
+      <ModuleTile
         title="Region / Time Splits"
         subtitle="Player results by month and country"
         route="/(tabs)/pga/region-splits"
-        icon="globe"
-        iconBg={TILE_COLORS.amber.bg}
-        iconColor={TILE_COLORS.amber.fg}
+        icon="earth"
+        accent="#F5C26B"
       />
-      <Tile
+      <ModuleTile
         title="Cut Rates"
         subtitle="Make-cut vs missed-cut profiles"
         route="/(tabs)/pga/cut-rates"
         icon="cut"
-        iconBg={TILE_COLORS.rose.bg}
-        iconColor={TILE_COLORS.rose.fg}
+        accent="#FB7185"
       />
-
-      {/* Probabilities & Simulations */}
-      <SectionHeader title="SIMULATIONS" color={TILE_COLORS.indigo.fg} />
-      <Tile
+      <ModuleTile
         title="Placement Probabilities"
         subtitle="Win/top-5/top-10/top-20 rates"
         route="/(tabs)/pga/placement-probabilities"
         icon="podium"
-        iconBg={TILE_COLORS.emerald.bg}
-        iconColor={TILE_COLORS.emerald.fg}
+        accent="#34D399"
       />
-      <Tile
+      <ModuleTile
         title="Simulated Finishes"
         subtitle="Monte Carlo finish distribution"
         route="/(tabs)/pga/simulated-finishes"
         icon="dice"
-        iconBg={TILE_COLORS.sky.bg}
-        iconColor={TILE_COLORS.sky.fg}
+        accent="#38BDF8"
       />
-      <Tile
+      <ModuleTile
         title="Simulated Leaderboard"
         subtitle="Tournament-wide projected finish rankings"
         route="/(tabs)/pga/simulated-leaderboard"
         icon="trophy"
-        iconBg={TILE_COLORS.amber.bg}
-        iconColor={TILE_COLORS.amber.fg}
+        accent="#F59E0B"
       />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
+    flex: 1,
+    backgroundColor: "#050A18",
+  },
+  content: {
     padding: 16,
-    paddingBottom: 48,
+    paddingBottom: 44,
   },
   hero: {
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 18,
+    padding: 16,
+    backgroundColor: "#071731",
+    overflow: "hidden",
+    marginBottom: 12,
   },
-  heroTitle: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#FFFFFF",
-    letterSpacing: -0.3,
+  heroGlow: {
+    position: "absolute",
+    right: -72,
+    top: -64,
+    width: 220,
+    height: 220,
+    borderRadius: 999,
+    backgroundColor: "rgba(57,228,201,0.15)",
   },
-  heroSub: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.75)",
-    marginTop: 4,
-    lineHeight: 18,
-  },
-  sectionHeader: {
+  heroTopRow: {
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 20,
-    marginBottom: 8,
-    paddingLeft: 2,
   },
-  sectionDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 8,
-  },
-  sectionTitle: {
+  eyebrow: {
+    color: "#90B3E9",
     fontSize: 11,
     fontWeight: "700",
-    letterSpacing: 1.2,
+    letterSpacing: 1,
   },
-  tile: {
+  livePill: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(57,228,201,0.14)",
+    borderColor: "rgba(57,228,201,0.3)",
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: "#39E4C9",
+  },
+  liveText: {
+    color: "#8BF4E0",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  h1: {
+    marginTop: 14,
+    fontSize: 28,
+    fontWeight: "800",
+    color: "#E9F2FF",
+  },
+  sub: {
+    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#A7C0E8",
+    maxWidth: "95%",
+  },
+  topStatsRow: {
+    marginTop: 14,
+    flexDirection: "row",
+    gap: 8,
+  },
+  topStat: {
+    flex: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+  },
+  topStatLabel: {
+    fontSize: 11,
+  },
+  topStatValue: {
+    marginTop: 4,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  primaryButton: {
+    marginTop: 14,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  primaryButtonText: {
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  sectionLabel: {
+    marginTop: 4,
+    marginBottom: 6,
+    fontSize: 11,
+    letterSpacing: 1,
+    fontWeight: "700",
+  },
+  tile: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 14,
     padding: 14,
-    marginBottom: 8,
+    marginTop: 10,
+    overflow: "hidden",
   },
-  iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+  tileGlow: {
+    position: "absolute",
+    top: -46,
+    right: -42,
+    width: 120,
+    height: 120,
+    borderRadius: 999,
+  },
+  tileHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  tileTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+    paddingRight: 8,
+  },
+  tileIconBubble: {
+    width: 28,
+    height: 28,
+    borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
-  },
-  tileContent: {
-    flex: 1,
   },
   tileTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    letterSpacing: -0.1,
+    fontSize: 18,
+    fontWeight: "800",
+    flexShrink: 1,
   },
   tileSub: {
-    marginTop: 2,
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  chevron: {
-    marginLeft: 8,
+    marginTop: 8,
+    fontSize: 13,
+    lineHeight: 18,
   },
 });

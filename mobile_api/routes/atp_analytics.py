@@ -48,6 +48,7 @@ _ATP_COMPARE_CACHE_TABLE = os.getenv("ATP_COMPARE_CACHE_TABLE", "atp_data.atp_ma
 
 
 _ATP_PLAYER_METRICS_TABLE = os.getenv("ATP_PLAYER_METRICS_TABLE", "atp_data.atp_player_compare_metrics")
+_ATP_SHEET_DAILY_MATCHES_TABLE = os.getenv("ATP_SHEET_DAILY_MATCHES_TABLE", "atp_data.sheet_daily_matches")
 
 
 def _read_player_metrics_from_bq(player_ids: List[int], surface: Optional[str]) -> Dict[int, Dict[str, Any]]:
@@ -609,6 +610,102 @@ def _format_match(match: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _read_today_sheet_matches(
+    *,
+    tournament_id: Optional[int],
+    upcoming_limit: int,
+) -> List[Dict[str, Any]]:
+    client = get_bq_client()
+    sql = f"""
+    WITH latest AS (
+      SELECT
+        match_id,
+        match_date,
+        round,
+        match_status,
+        is_live,
+        scheduled_time,
+        not_before_text,
+        player1_id,
+        player1_full_name,
+        player2_id,
+        player2_full_name,
+        winner_id,
+        winner_full_name,
+        score,
+        sync_ts,
+        ROW_NUMBER() OVER (PARTITION BY match_id ORDER BY sync_ts DESC) AS rn
+      FROM `{_ATP_SHEET_DAILY_MATCHES_TABLE}`
+      WHERE match_date = CURRENT_DATE('America/New_York')
+        AND (@tournament_id IS NULL OR tournament_id = @tournament_id)
+    )
+    SELECT
+      match_id,
+      match_date,
+      round,
+      match_status,
+      is_live,
+      scheduled_time,
+      not_before_text,
+      player1_id,
+      player1_full_name,
+      player2_id,
+      player2_full_name,
+      winner_id,
+      winner_full_name,
+      score
+    FROM latest
+    WHERE rn = 1
+    ORDER BY scheduled_time ASC, match_id ASC
+    LIMIT @limit
+    """
+
+    job = client.query(
+        sql,
+        job_config=bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("tournament_id", "INT64", tournament_id),
+                bigquery.ScalarQueryParameter("limit", "INT64", upcoming_limit),
+            ]
+        ),
+    )
+
+    out: List[Dict[str, Any]] = []
+    for row in job.result():
+        scheduled = row.get("scheduled_time")
+        match_date = row.get("match_date")
+        not_before_text = (row.get("not_before_text") or "").strip()
+
+        # "Followed By" rows often come through as midnight placeholders.
+        # Leave scheduled_at empty for these so clients don't render prior-day dates by timezone shift.
+        scheduled_iso: Optional[str]
+        if scheduled and not (
+            scheduled.hour == 0 and scheduled.minute == 0 and scheduled.second == 0 and match_date is not None
+        ):
+            scheduled_iso = scheduled.isoformat()
+        else:
+            scheduled_iso = None
+
+        out.append(
+            {
+                "id": row.get("match_id"),
+                "round": normalize_round_name(str(row.get("round") or "Round")),
+                "round_order": _round_rank(str(row.get("round") or "Round")),
+                "status": row.get("match_status"),
+                "scheduled_at": scheduled_iso,
+                "player1": row.get("player1_full_name") or "TBD",
+                "player2": row.get("player2_full_name") or "TBD",
+                "player1_id": int(row.get("player1_id")) if row.get("player1_id") is not None else None,
+                "player2_id": int(row.get("player2_id")) if row.get("player2_id") is not None else None,
+                "winner": row.get("winner_full_name") or "TBD",
+                "score": row.get("score"),
+                "not_before_text": not_before_text or None,
+            }
+        )
+
+    return out
+
+
 def _select_tournament(
     tournaments: List[Dict[str, Any]],
     *,
@@ -1000,20 +1097,10 @@ def build_tournament_bracket_payload(
         )
     )
 
-    def match_sort_key(match: Dict[str, Any]) -> tuple:
-        scheduled = _parse_match_time(match.get("scheduled_at"))
-        return (
-            scheduled is None,
-            scheduled or datetime.max,
-        )
-
-    upcoming_matches = [
-        match
-        for match in formatted_matches
-        if match.get("status") != "F"
-    ]
-    upcoming_matches.sort(key=match_sort_key)
-    upcoming_matches = upcoming_matches[:upcoming_limit]
+    upcoming_matches = _read_today_sheet_matches(
+        tournament_id=tournament.get("id"),
+        upcoming_limit=upcoming_limit,
+    )
 
     match_analyses: Dict[str, Dict[str, Any]] = {}
     if include_match_analyses and upcoming_matches:

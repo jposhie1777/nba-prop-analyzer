@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import asyncio
 from ingest_espn_player_headshots import run_headshot_ingest
+from enrich_atp_player_headshots import run_atp_headshot_ingest
 from bq import get_bq_client
 
 router = APIRouter(prefix="/dev/bq", tags=["dev"])
@@ -186,6 +187,28 @@ async def refresh_player_headshots():
 
     return {
         "task": "refresh_player_headshots",
+        "status": "started",
+        "started_at": datetime.utcnow().isoformat(),
+    }
+
+# ======================================================
+# Manual ATP ESPN player headshot refresh (DEV ONLY)
+# ======================================================
+@router.post("/refresh-atp-player-headshots")
+async def refresh_atp_player_headshots():
+    if os.environ.get("RUNTIME_ENV") == "production":
+        return {
+            "task": "refresh_atp_player_headshots",
+            "status": "blocked",
+            "reason": "Not allowed in production",
+        }
+
+    asyncio.create_task(
+        asyncio.to_thread(run_atp_headshot_ingest)
+    )
+
+    return {
+        "task": "refresh_atp_player_headshots",
         "status": "started",
         "started_at": datetime.utcnow().isoformat(),
     }

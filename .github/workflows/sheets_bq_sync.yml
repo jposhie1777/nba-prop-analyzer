@@ -1,0 +1,54 @@
+name: Sheets → BigQuery Daily Sync
+
+on:
+  # Run daily at 10:00 UTC (adjust to your preferred time)
+  schedule:
+    - cron: "0 10 * * *"
+
+  # Manual trigger with optional date override
+  workflow_dispatch:
+    inputs:
+      match_date:
+        description: "Override match date (YYYY-MM-DD). Leave blank for today."
+        required: false
+        default: ""
+      truncate:
+        description: "Truncate BQ table before loading (true/false)"
+        required: false
+        default: "true"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      SHEETS_BQ_DATASET: "atp_data"
+      SHEETS_BQ_TABLE: "atp_data.sheet_daily_matches"
+      SHEETS_SPREADSHEET_ID: "1p_rmmiUgU18afioJJ3jCHh9XeX7V4gyHd_E0M3A8M3g"
+      SHEETS_MATCH_DATE: ${{ inputs.match_date }}
+      SHEETS_TRUNCATE_BEFORE_LOAD: ${{ inputs.truncate || 'true' }}
+      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install google-cloud-bigquery google-auth gspread pandas db-dtypes
+
+      - name: Configure GCP credentials
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
+
+      - name: Sync Google Sheets to BigQuery
+        run: |
+          python mobile_api/ingest/sheets/sync_to_bq.py

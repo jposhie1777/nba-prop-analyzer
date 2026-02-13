@@ -102,6 +102,20 @@ OPTIONS (
   description = 'ATP rankings (BallDontLie ATP API)'
 );
 
+CREATE TABLE IF NOT EXISTS `atp_data.player_lookup` (
+  player_id INT64,
+  player_name STRING,
+  espn_player_id INT64,
+  espn_display_name STRING,
+  player_image_url STRING,
+  last_verified TIMESTAMP,
+  source STRING
+)
+CLUSTER BY player_id
+OPTIONS (
+  description = 'ATP player ESPN headshot lookup (one row per player)'
+);
+
 CREATE TABLE IF NOT EXISTS `atp_data.atp_race` (
   run_ts TIMESTAMP,
   ingested_at TIMESTAMP,

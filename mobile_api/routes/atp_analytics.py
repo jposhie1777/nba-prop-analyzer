@@ -574,6 +574,11 @@ def _player_label(player: Any) -> str:
     return "TBD"
 
 
+def _is_placeholder_midnight_time(value: Any) -> bool:
+    """Return True when sheet placeholder time encodes unknown start as 00:00:00."""
+    return bool(value and value.hour == 0 and value.minute == 0 and value.second == 0)
+
+
 def _player_id(player: Any) -> Optional[int]:
     if isinstance(player, dict):
         pid = player.get("id")
@@ -679,9 +684,7 @@ def _read_today_sheet_matches(
         # "Followed By" rows often come through as midnight placeholders.
         # Leave scheduled_at empty for these so clients don't render prior-day dates by timezone shift.
         scheduled_iso: Optional[str]
-        if scheduled and not (
-            scheduled.hour == 0 and scheduled.minute == 0 and scheduled.second == 0 and match_date is not None
-        ):
+        if scheduled and not (_is_placeholder_midnight_time(scheduled) and match_date is not None):
             scheduled_iso = scheduled.isoformat()
         else:
             scheduled_iso = None

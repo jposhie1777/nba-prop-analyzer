@@ -15,7 +15,7 @@ Environment variables:
     SHEETS_WORKSHEET_INDEX               0-based worksheet tab index (default: 0)
     SHEETS_BQ_DATASET                    BigQuery dataset (default: atp_data)
     SHEETS_BQ_TABLE                      BigQuery table  (default: atp_data.sheet_daily_matches)
-    SHEETS_MATCH_DATE                    Override date filter (YYYY-MM-DD); defaults to today UTC
+    SHEETS_MATCH_DATE                    Override date filter (YYYY-MM-DD); defaults to today EST
     SHEETS_TRUNCATE_BEFORE_LOAD          Truncate the BQ table before loading (default: true)
 """
 from __future__ import annotations
@@ -24,6 +24,9 @@ import json
 import os
 import sys
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
+EST = ZoneInfo("America/New_York")
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -401,7 +404,7 @@ def sync_sheet_to_bq(
 
     # Resolve target date
     if match_date is None:
-        match_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        match_date = datetime.now(EST).strftime("%Y-%m-%d")
 
     table_id = resolve_table_id(table, bq_client.project)
     dataset_id = ".".join(table_id.split(".")[:2])
@@ -472,7 +475,7 @@ def main() -> None:
     print("=" * 60)
     print("Google Sheets -> BigQuery Sync")
     print(f"  Spreadsheet  : {SPREADSHEET_ID}")
-    print(f"  Match date   : {match_date or 'today (UTC)'}")
+    print(f"  Match date   : {match_date or 'today (EST)'}")
     print(f"  Target table : {table}")
     print(f"  Truncate     : {truncate}")
     print("=" * 60)

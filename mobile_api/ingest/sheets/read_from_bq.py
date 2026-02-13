@@ -14,7 +14,7 @@ Environment variables:
     GCP_PROJECT                          Google Cloud project ID
     SHEETS_BQ_DATASET                    BigQuery dataset (default: atp_data)
     SHEETS_BQ_TABLE                      BigQuery table  (default: atp_data.sheet_daily_matches)
-    SHEETS_MATCH_DATE                    Date to query (YYYY-MM-DD); defaults to today UTC
+    SHEETS_MATCH_DATE                    Date to query (YYYY-MM-DD); defaults to today EST
 """
 from __future__ import annotations
 
@@ -22,6 +22,9 @@ import json
 import os
 import sys
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
+EST = ZoneInfo("America/New_York")
 from pathlib import Path
 from typing import Optional
 
@@ -97,7 +100,7 @@ def read_daily_matches(
     table_id = resolve_table_id(table, client.project)
 
     if match_date is None:
-        match_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        match_date = datetime.now(EST).strftime("%Y-%m-%d")
 
     query = f"""
         SELECT *
@@ -155,7 +158,7 @@ def main() -> None:
     print("=" * 60)
     print("BigQuery Sheet Matches Reader")
     print(f"  Table      : {DEFAULT_TABLE}")
-    print(f"  Match date : {match_date or 'today (UTC)'}")
+    print(f"  Match date : {match_date or 'today (EST)'}")
     print("=" * 60)
 
     df = read_daily_matches(match_date=match_date)

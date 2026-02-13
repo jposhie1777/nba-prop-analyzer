@@ -652,6 +652,11 @@ def _read_today_sheet_matches(
       is_live,
       scheduled_time,
       not_before_text,
+    SELECT
+      match_id,
+      round,
+      match_status,
+      scheduled_time,
       player1_id,
       player1_full_name,
       player2_id,
@@ -662,6 +667,10 @@ def _read_today_sheet_matches(
     FROM latest
     WHERE rn = 1
     ORDER BY scheduled_time ASC, match_id ASC
+    FROM `{_ATP_SHEET_DAILY_MATCHES_TABLE}`
+    WHERE match_date = CURRENT_DATE('America/New_York')
+      AND (@tournament_id IS NULL OR tournament_id = @tournament_id)
+    ORDER BY scheduled_time ASC
     LIMIT @limit
     """
 
@@ -696,6 +705,7 @@ def _read_today_sheet_matches(
                 "round_order": _round_rank(str(row.get("round") or "Round")),
                 "status": row.get("match_status"),
                 "scheduled_at": scheduled_iso,
+                "scheduled_at": scheduled.isoformat() if scheduled else None,
                 "player1": row.get("player1_full_name") or "TBD",
                 "player2": row.get("player2_full_name") or "TBD",
                 "player1_id": int(row.get("player1_id")) if row.get("player1_id") is not None else None,

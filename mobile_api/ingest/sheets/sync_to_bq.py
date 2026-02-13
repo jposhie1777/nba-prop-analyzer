@@ -12,7 +12,8 @@ Environment variables:
     GOOGLE_APPLICATION_CREDENTIALS       Path to service-account JSON file
     GCP_PROJECT                          Google Cloud project ID
     SHEETS_SPREADSHEET_ID                Google Sheet ID (default provided)
-    SHEETS_WORKSHEET_INDEX               0-based worksheet tab index (default: 0)
+    SHEETS_WORKSHEET_NAME                Worksheet tab name (default: ATP Matches)
+    SHEETS_WORKSHEET_INDEX               0-based worksheet tab index fallback (default: 2)
     SHEETS_BQ_DATASET                    BigQuery dataset (default: atp_data)
     SHEETS_BQ_TABLE                      BigQuery table  (default: atp_data.sheet_daily_matches)
     SHEETS_MATCH_DATE                    Override date filter (YYYY-MM-DD); defaults to today EST
@@ -47,7 +48,8 @@ SPREADSHEET_ID = os.getenv(
     "SHEETS_SPREADSHEET_ID",
     "1p_rmmiUgU18afioJJ3jCHh9XeX7V4gyHd_E0M3A8M3g",
 )
-WORKSHEET_INDEX = int(os.getenv("SHEETS_WORKSHEET_INDEX", "0"))
+WORKSHEET_NAME = os.getenv("SHEETS_WORKSHEET_NAME", "ATP Matches")
+WORKSHEET_INDEX = int(os.getenv("SHEETS_WORKSHEET_INDEX", "2"))
 
 DEFAULT_DATASET = os.getenv("SHEETS_BQ_DATASET", "atp_data")
 DEFAULT_TABLE = os.getenv("SHEETS_BQ_TABLE", f"{DEFAULT_DATASET}.sheet_daily_matches")
@@ -429,7 +431,12 @@ def sync_sheet_to_bq(
     # Read all rows from the sheet
     print(f"  Opening spreadsheet {SPREADSHEET_ID} ...")
     spreadsheet = gs_client.open_by_key(SPREADSHEET_ID)
-    worksheet = spreadsheet.get_worksheet(WORKSHEET_INDEX)
+    try:
+        worksheet = spreadsheet.worksheet(WORKSHEET_NAME)
+        print(f"  Using worksheet: '{WORKSHEET_NAME}'")
+    except gspread.exceptions.WorksheetNotFound:
+        worksheet = spreadsheet.get_worksheet(WORKSHEET_INDEX)
+        print(f"  Worksheet '{WORKSHEET_NAME}' not found, using index {WORKSHEET_INDEX}")
     all_rows = worksheet.get_all_values()
 
     if not all_rows:

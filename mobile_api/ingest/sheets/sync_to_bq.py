@@ -375,13 +375,18 @@ def transform_row(row: List[Any], sync_ts: str, match_date: str) -> Dict[str, An
 
 
 def is_match_on_date(row: List[Any], target_date: str) -> bool:
-    """Check if a row's Scheduled Time falls on the target date (YYYY-MM-DD)."""
+    """Check if a row's Scheduled Time falls on the target date (YYYY-MM-DD).
+
+    The sheet stores times in UTC. We convert to EST before comparing
+    so that e.g. 2026-02-13T01:00:00Z → 2026-02-12 20:00 EST → matches Feb 12.
+    """
     raw = _cell(row, COL["scheduled_time"])
     if not raw:
         return False
     try:
-        dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
-        return dt.strftime("%Y-%m-%d") == target_date
+        dt_utc = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        dt_est = dt_utc.astimezone(EST)
+        return dt_est.strftime("%Y-%m-%d") == target_date
     except (ValueError, TypeError):
         return False
 

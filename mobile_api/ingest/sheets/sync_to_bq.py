@@ -456,19 +456,19 @@ def sync_sheet_to_bq(
         print("  No matches for today. Nothing to insert.")
         return {"table": table_id, "match_date": match_date, "total_rows": len(data_rows), "filtered": 0, "inserted": 0}
 
-    # Transform and insert
+    # Transform and load
     sync_ts = datetime.now(timezone.utc).isoformat()
     bq_rows = [transform_row(row, sync_ts, match_date) for row in today_rows]
 
-    # Insert in batches of 500
-    inserted = 0
-    batch_size = 500
-    for i in range(0, len(bq_rows), batch_size):
-        batch = bq_rows[i : i + batch_size]
-        errors = bq_client.insert_rows_json(table_id, batch)
-        if errors:
-            raise RuntimeError(f"BigQuery insert errors: {errors[:3]}")
-        inserted += len(batch)
+    # Use a load job (not streaming insert) so that TRUNCATE works immediately
+    job_config = bigquery.LoadJobConfig(
+        schema=SCHEMA,
+        source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
+        write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
+    )
+    load_job = bq_client.load_table_from_json(bq_rows, table_id, job_config=job_config)
+    load_job.result()  # wait for completion
+    inserted = load_job.output_rows
 
     print(f"  Inserted {inserted} rows into {table_id}")
     return {

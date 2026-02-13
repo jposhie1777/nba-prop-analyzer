@@ -9,8 +9,8 @@ type ThemeState = {
 };
 
 export const useTheme = create<ThemeState>((set) => ({
-  theme: "base",
-  colors: themes.base,
+  theme: "fanduel",
+  colors: themes.fanduel,
 
   setTheme: (theme) =>
     set({

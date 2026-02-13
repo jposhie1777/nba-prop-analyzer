@@ -379,16 +379,17 @@ def transform_row(row: List[Any], sync_ts: str, match_date: str) -> Dict[str, An
 def is_match_on_date(row: List[Any], target_date: str) -> bool:
     """Check if a row's Scheduled Time falls on the target date (YYYY-MM-DD).
 
-    The sheet stores times in UTC. We convert to EST before comparing
-    so that e.g. 2026-02-13T01:00:00Z → 2026-02-12 20:00 EST → matches Feb 12.
+    Compares against the UTC date from the timestamp, since the sheet groups
+    a day's slate by UTC date.  Matches with placeholder times (T00:00:00Z
+    for "Followed By" / TBD starts) belong to that UTC day's slate even
+    though they'd roll back a calendar day in EST.
     """
     raw = _cell(row, COL["scheduled_time"])
     if not raw:
         return False
     try:
         dt_utc = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
-        dt_est = dt_utc.astimezone(EST)
-        return dt_est.strftime("%Y-%m-%d") == target_date
+        return dt_utc.strftime("%Y-%m-%d") == target_date
     except (ValueError, TypeError):
         return False
 
@@ -411,7 +412,7 @@ def sync_sheet_to_bq(
 
     # Resolve target date
     if match_date is None:
-        match_date = datetime.now(EST).strftime("%Y-%m-%d")
+        match_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     table_id = resolve_table_id(table, bq_client.project)
     dataset_id = ".".join(table_id.split(".")[:2])

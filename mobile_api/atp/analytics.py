@@ -47,6 +47,13 @@ _ROUND_ALIASES: Dict[str, str] = {
     "r32": "Round of 32",
     "r64": "Round of 64",
     "r128": "Round of 128",
+    "quarterfinal": "Quarterfinals",
+    "quarter final": "Quarterfinals",
+    "quarter finals": "Quarterfinals",
+    "semifinal": "Semifinals",
+    "semi final": "Semifinals",
+    "semi finals": "Semifinals",
+    "finals": "Final",
 }
 
 

@@ -593,6 +593,7 @@ def _format_match(match: Dict[str, Any]) -> Dict[str, Any]:
         or match.get("start_date")
     )
     scheduled_at = _parse_match_time(scheduled_raw)
+    match_date = match.get("match_date")
     p1_raw = match.get("player1") or match.get("player_1")
     p2_raw = match.get("player2") or match.get("player_2")
     return {
@@ -601,6 +602,8 @@ def _format_match(match: Dict[str, Any]) -> Dict[str, Any]:
         "round_order": match.get("round_order") if match.get("round_order") is not None else _round_rank(round_name),
         "status": match.get("match_status"),
         "scheduled_at": scheduled_at.isoformat() if scheduled_at else None,
+        "match_date": str(match_date) if match_date is not None else None,
+        "not_before_text": match.get("not_before_text") or match.get("not_before"),
         "player1": _player_label(p1_raw),
         "player2": _player_label(p2_raw),
         "player1_id": _player_id(p1_raw),
@@ -621,7 +624,9 @@ def _read_today_sheet_matches(
       match_id,
       round,
       match_status,
+      match_date,
       scheduled_time,
+      not_before_text,
       player1_id,
       player1_full_name,
       player2_id,
@@ -656,6 +661,8 @@ def _read_today_sheet_matches(
                 "round_order": _round_rank(str(row.get("round") or "Round")),
                 "status": row.get("match_status"),
                 "scheduled_at": scheduled.isoformat() if scheduled else None,
+                "match_date": row.get("match_date").isoformat() if row.get("match_date") else None,
+                "not_before_text": row.get("not_before_text"),
                 "player1": row.get("player1_full_name") or "TBD",
                 "player2": row.get("player2_full_name") or "TBD",
                 "player1_id": int(row.get("player1_id")) if row.get("player1_id") is not None else None,

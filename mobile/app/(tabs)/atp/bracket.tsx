@@ -128,6 +128,14 @@ function isToday(value?: string | null) {
   );
 }
 
+function isMatchScheduledForToday(match: AtpBracketMatch) {
+  if (isToday(match.scheduled_at)) return true;
+  if (match.match_date) {
+    return isToday(`${match.match_date}T00:00:00`);
+  }
+  return false;
+}
+
 const fmtPct = (v?: number | null) =>
   v == null ? "\u2014" : `${(v * 100).toFixed(1)}%`;
 const fmtNum = (v?: number | null) => (v == null ? "\u2014" : v.toFixed(2));
@@ -640,12 +648,14 @@ function TournamentBracketView({
     };
 
     for (const m of data?.upcoming_matches ?? []) {
-      if (!isCompleted(m)) addIfMissing(m);
+      if (!isCompleted(m) && isMatchScheduledForToday(m)) {
+        addIfMissing(m);
+      }
     }
 
     for (const round of data?.bracket.rounds ?? []) {
       for (const m of round.matches) {
-        if (!isCompleted(m) && isToday(m.scheduled_at)) {
+        if (!isCompleted(m) && isMatchScheduledForToday(m)) {
           addIfMissing(m);
         }
       }

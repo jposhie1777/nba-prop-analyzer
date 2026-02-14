@@ -24,7 +24,7 @@ git push origin main
 
 
 cd mobile_api
-export GOOGLE_APPLICATION_CREDENTIALS="/workspaces/nba-prop-analyzer/mobile/secrets/gcp_service_account.json"
+export GOOGLE_APPLICATION_CREDENTIALS="/workspaces/nba-prop-analyzer/secrets/gcp_service_account.json"
 export GCP_PROJECT=graphite-flare-477419-h7
 export BALLDONTLIE_API_KEY=61082ce1-607a-4404-b059-2365d7649102
 python enrich_atp_player_headshots.py

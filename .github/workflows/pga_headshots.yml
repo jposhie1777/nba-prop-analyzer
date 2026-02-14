@@ -1,0 +1,39 @@
+name: PGA Headshot Enrichment
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Run weekly on Mondays at 6am UTC
+    - cron: "0 6 * * 1"
+
+jobs:
+  enrich-headshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r mobile_api/requirements.txt
+
+      - name: Configure GCP credentials
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
+
+      - name: Run PGA headshot enrichment
+        run: |
+          cd mobile_api
+          python enrich_pga_player_headshots.py

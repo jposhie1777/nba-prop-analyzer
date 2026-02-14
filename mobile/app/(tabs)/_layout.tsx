@@ -1,5 +1,5 @@
 // app/(tabs)/_layout.tsx
-import { Tabs, useSegments } from "expo-router";
+import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { HapticTab } from "@/components/haptic-tab";
 import { Colors } from "@/constants/theme";
@@ -7,7 +7,6 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { PulseHeader } from "@/components/layout/PulseHeader";
 import { LiveDataBridge } from "@/components/LiveDataBridge";
 
-type SportKey = "pga" | "atp";
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
 type TabConfig = {
@@ -16,80 +15,44 @@ type TabConfig = {
   icon: IoniconName;
 };
 
-const PGA_TABS: TabConfig[] = [
-  { name: "pga-matchups", title: "Matchup Ratings", icon: "stats-chart" },
-  { name: "pga-compare", title: "Pairings Compare", icon: "swap-horizontal" },
-  {
-    name: "pga-placement-probabilities",
-    title: "Placement Probability",
-    icon: "podium",
-  },
-  {
-    name: "pga-simulated-finishes",
-    title: "Simulated Finishes",
-    icon: "bar-chart",
-  },
-  {
-    name: "pga-simulated-leaderboard",
-    title: "Sim Leaderboard",
-    icon: "trophy",
-  },
-  { name: "home", title: "Home", icon: "home" },
+const STATIC_TABS: TabConfig[] = [
+  { name: "atp-bracket", title: "ATP Bracket", icon: "tennisball-outline" },
+  { name: "pga-compare", title: "PGA Pairings Compare", icon: "swap-horizontal" },
+  { name: "home", title: "Home Screen", icon: "home" },
 ];
-
-const ATP_TABS: TabConfig[] = [
-  { name: "atp-bracket", title: "Bracket", icon: "tennisball-outline" },
-  { name: "atp-head-to-head", title: "Head to Head", icon: "people" },
-  { name: "atp-compare", title: "Matchup Compare", icon: "analytics" },
-  {
-    name: "atp-tournament-performance",
-    title: "Tournament Performance",
-    icon: "trophy",
-  },
-  { name: "atp-surface-splits", title: "Surface Splits", icon: "grid" },
-  { name: "home", title: "Home", icon: "home" },
-];
-
-const SPORT_TABS: Record<SportKey, TabConfig[]> = {
-  pga: PGA_TABS,
-  atp: ATP_TABS,
-};
 
 const HIDDEN_SCREENS = [
+  "atp",
+  "atp-compare",
+  "atp-head-to-head",
+  "atp-surface-splits",
+  "atp-tournament-performance",
+  "bad-lines",
+  "first-basket",
+  "game-betting",
+  "injuries",
   "ladders",
+  "live",
+  "live-props-dev",
   "nba",
   "pga",
-  "atp",
-  "bad-lines",
-  "live-props-dev",
+  "pga-matchups",
+  "pga-placement-probabilities",
+  "pga-simulated-finishes",
+  "pga-simulated-leaderboard",
+  "props",
+  "trend-chart",
+  "wowy",
 ];
 
-const ALL_TAB_NAMES = [...PGA_TABS, ...ATP_TABS].map((tab) => tab.name);
-
 const ALL_SCREEN_NAMES = Array.from(
-  new Set([...ALL_TAB_NAMES, ...HIDDEN_SCREENS])
+  new Set([...STATIC_TABS.map((tab) => tab.name), ...HIDDEN_SCREENS])
 );
-
-const isPgaSegment = (segment: string) =>
-  segment === "pga" || segment.startsWith("pga-");
-const isAtpSegment = (segment: string) =>
-  segment === "atp" || segment.startsWith("atp-");
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
-  const segments = useSegments();
-
-  const activeSport: SportKey = segments.some(isPgaSegment)
-    ? "pga"
-    : segments.some(isAtpSegment)
-    ? "atp"
-    : "pga";
-
-  const activeTabs = SPORT_TABS[activeSport];
-  const activeNames = new Set(activeTabs.map((tab) => tab.name));
-  const hiddenScreens = ALL_SCREEN_NAMES.filter(
-    (name) => !activeNames.has(name)
-  );
+  const activeNames = new Set(STATIC_TABS.map((tab) => tab.name));
+  const hiddenScreens = ALL_SCREEN_NAMES.filter((name) => !activeNames.has(name));
 
   return (
     <>
@@ -98,13 +61,12 @@ export default function TabLayout() {
 
       <Tabs
         screenOptions={{
-          tabBarActiveTintColor:
-            Colors[colorScheme ?? "light"].tint,
+          tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
           tabBarButton: HapticTab,
           header: () => <PulseHeader />,
         }}
       >
-        {activeTabs.map((tab) => (
+        {STATIC_TABS.map((tab) => (
           <Tabs.Screen
             key={tab.name}
             name={tab.name}
@@ -118,11 +80,7 @@ export default function TabLayout() {
         ))}
 
         {hiddenScreens.map((name) => (
-          <Tabs.Screen
-            key={name}
-            name={name}
-            options={{ href: null }}
-          />
+          <Tabs.Screen key={name} name={name} options={{ href: null }} />
         ))}
       </Tabs>
     </>

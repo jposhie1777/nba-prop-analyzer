@@ -18,8 +18,6 @@ type TabConfig = {
 
 const NBA_TABS: TabConfig[] = [
   { name: "props", title: "Props", icon: "stats-chart" },
-  { name: "game-betting", title: "Game Bets", icon: "analytics" },
-  { name: "live", title: "Live", icon: "radio-outline" },
   { name: "first-basket", title: "First Basket", icon: "basketball" },
   { name: "injuries", title: "Injuries", icon: "medkit" },
   { name: "wowy", title: "WOWY", icon: "people" },
@@ -69,7 +67,9 @@ const SPORT_TABS: Record<SportKey, TabConfig[]> = {
 };
 
 const HIDDEN_SCREENS = [
+  "game-betting",
   "ladders",
+  "live",
   "nba",
   "pga",
   "atp",

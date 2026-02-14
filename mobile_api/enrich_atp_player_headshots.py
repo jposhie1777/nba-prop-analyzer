@@ -1,11 +1,13 @@
 # enrich_atp_player_headshots.py
 # ESPN-based headshot enrichment for ATP tennis players.
-# Modelled on ingest_espn_player_headshots.py (NBA version).
+# Uses ESPN's bulk athletes roster endpoint to avoid unreliable search API.
 
 import os
+import re
 import time
 import requests
 from datetime import datetime, timezone
+from unicodedata import normalize
 
 from google.cloud import bigquery
 from bq import get_bq_client
@@ -14,7 +16,15 @@ from bq import get_bq_client
 # CONFIG
 # ======================================================
 
-ESPN_SEARCH_URL = "https://site.web.api.espn.com/apis/common/v3/search"
+# Bulk roster: returns all ATP athletes with ESPN IDs
+ESPN_ATP_ATHLETES_URL = (
+    "https://sports.core.api.espn.com/v3/sports/tennis/atp/athletes"
+)
+
+# Fallback: individual athlete detail (returns headshot.href)
+ESPN_ATHLETE_DETAIL_URL = (
+    "https://site.api.espn.com/apis/site/v2/sports/tennis/atp/athletes/{id}"
+)
 
 HEADSHOT_TEMPLATE = (
     "https://a.espncdn.com/i/headshots/tennis/players/full/{id}.png"
@@ -46,6 +56,163 @@ def get_player_lookup_table() -> str:
 
 
 # ======================================================
+# NAME NORMALIZATION (handles accents, casing, hyphens)
+# ======================================================
+
+def normalize_name(name: str) -> str:
+    """Normalize a player name for fuzzy matching."""
+    # NFKD decomposition strips accents
+    s = normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+    s = s.lower().strip()
+    s = re.sub(r"[^a-z ]", "", s)       # drop hyphens, apostrophes, etc.
+    s = re.sub(r"\s+", " ", s)           # collapse whitespace
+    return s
+
+
+# ======================================================
+# ESPN BULK ATHLETE FETCH
+# ======================================================
+
+def fetch_espn_atp_roster():
+    """
+    Fetch all ATP athletes from ESPN's bulk roster endpoint.
+    Returns a dict mapping normalized_name -> { espn_id, displayName }.
+    Pages through results if needed.
+    """
+    roster = {}
+    page = 1
+    limit = 500
+
+    while True:
+        print(f"  Fetching ESPN ATP athletes page {page} ...")
+        resp = requests.get(
+            ESPN_ATP_ATHLETES_URL,
+            params={"limit": limit, "page": page},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        items = data.get("items", [])
+        if not items:
+            break
+
+        for item in items:
+            # items can be full objects or $ref links
+            espn_id = item.get("id")
+            display_name = item.get("displayName") or item.get("fullName")
+
+            if espn_id and display_name:
+                key = normalize_name(display_name)
+                roster[key] = {
+                    "espn_id": int(espn_id),
+                    "displayName": display_name,
+                }
+
+            # If item is a $ref link, extract the ID from the URL
+            ref = item.get("$ref", "")
+            if not espn_id and ref:
+                match = re.search(r"/athletes/(\d+)", ref)
+                if match:
+                    roster_id = int(match.group(1))
+                    # We'll resolve the name later via detail endpoint
+                    roster[f"__ref_{roster_id}"] = {
+                        "espn_id": roster_id,
+                        "displayName": None,
+                    }
+
+        page_count = data.get("pageCount", 1)
+        if page >= page_count:
+            break
+        page += 1
+        time.sleep(REQUEST_DELAY_SEC)
+
+    print(f"  ESPN roster loaded: {len(roster)} entries")
+    return roster
+
+
+def resolve_athlete_detail(espn_id: int):
+    """
+    Fetch a single athlete's detail to get their displayName and headshot.
+    """
+    try:
+        resp = requests.get(
+            ESPN_ATHLETE_DETAIL_URL.format(id=espn_id),
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return {
+            "espn_id": int(data.get("id", espn_id)),
+            "displayName": data.get("displayName", ""),
+            "headshot": data.get("headshot", {}).get("href"),
+        }
+    except Exception as e:
+        print(f"  Could not resolve ESPN athlete {espn_id}: {e}")
+        return None
+
+
+def build_espn_index():
+    """
+    Build a normalized-name -> espn_id index from the ESPN roster.
+    Resolves $ref entries that are missing display names.
+    """
+    roster = fetch_espn_atp_roster()
+
+    # Resolve any $ref-only entries (missing displayName)
+    refs_to_resolve = [
+        v for k, v in roster.items()
+        if k.startswith("__ref_") and v["displayName"] is None
+    ]
+
+    if refs_to_resolve:
+        print(f"  Resolving {len(refs_to_resolve)} $ref athletes ...")
+        for entry in refs_to_resolve:
+            detail = resolve_athlete_detail(entry["espn_id"])
+            if detail and detail["displayName"]:
+                key = normalize_name(detail["displayName"])
+                roster[key] = {
+                    "espn_id": detail["espn_id"],
+                    "displayName": detail["displayName"],
+                }
+            time.sleep(REQUEST_DELAY_SEC)
+
+    # Remove __ref_ placeholders
+    index = {
+        k: v for k, v in roster.items()
+        if not k.startswith("__ref_")
+    }
+
+    print(f"  Final ESPN index: {len(index)} named athletes")
+    return index
+
+
+def match_player(player_name: str, espn_index: dict):
+    """
+    Try to match a player name against the ESPN index.
+    Tries exact normalized match first, then last-name match.
+    """
+    key = normalize_name(player_name)
+
+    # Exact match
+    if key in espn_index:
+        return espn_index[key]
+
+    # Last name match (for names like "R. Nadal" vs "Rafael Nadal")
+    parts = key.split()
+    if parts:
+        last = parts[-1]
+        candidates = [
+            v for k, v in espn_index.items()
+            if k.split()[-1] == last and k.split()[0][0] == parts[0][0]
+        ]
+        if len(candidates) == 1:
+            return candidates[0]
+
+    return None
+
+
+# ======================================================
 # BIGQUERY READ (ATP PLAYERS — DEDUPED)
 # ======================================================
 
@@ -72,50 +239,6 @@ def fetch_atp_players():
         }
         for r in rows
     ]
-
-
-# ======================================================
-# ESPN LOOKUP
-# ======================================================
-
-def fetch_espn_player(player_name: str):
-    """
-    Name-based search against the ESPN common search API.
-    Filters to tennis players only.
-
-    ESPN v3 search returns: { "results": [ { "items": [ ... ] } ] }
-    Each item has id, displayName, type, sport, league, etc.
-    """
-    resp = requests.get(
-        ESPN_SEARCH_URL,
-        params={"query": player_name, "limit": 10},
-        timeout=10,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-
-    # ESPN nests items inside results[0].items
-    items = []
-    for result_group in data.get("results", []):
-        items.extend(result_group.get("items", []))
-    # Fallback: also check top-level items (legacy format)
-    items.extend(data.get("items", []))
-
-    for item in items:
-        if (
-            item.get("type") == "player"
-            and item.get("sport") == "tennis"
-        ):
-            espn_id = int(item["id"])
-            return {
-                "espn_player_id": espn_id,
-                "espn_display_name": item.get("displayName"),
-                "player_image_url": HEADSHOT_TEMPLATE.format(id=espn_id),
-                "last_verified": datetime.now(timezone.utc),
-                "source": "espn_search_v3",
-            }
-
-    return None
 
 
 # ======================================================
@@ -210,8 +333,17 @@ def upsert_player(player_id: int, player_name: str, espn_row: dict):
 def main():
     ensure_player_lookup_table()
 
+    # Step 1: Build ESPN name index (one bulk fetch, no per-player searches)
+    print("Building ESPN ATP athlete index ...")
+    espn_index = build_espn_index()
+
+    if not espn_index:
+        print("ERROR: Could not load ESPN ATP roster. Aborting.")
+        return
+
+    # Step 2: Load our ATP players from BigQuery
     players = fetch_atp_players()
-    print(f"Loaded {len(players)} ATP players")
+    print(f"Loaded {len(players)} ATP players from BigQuery")
 
     seen = set()
     matched = 0
@@ -225,20 +357,25 @@ def main():
         seen.add(player_id)
 
         name = p["player_name"]
-        print(f"ESPN lookup: {name} (player_id={player_id})")
+        espn_match = match_player(name, espn_index)
 
-        espn_row = fetch_espn_player(name)
-        if not espn_row:
-            print(f"  No ESPN tennis match for {name}")
+        if not espn_match:
+            print(f"  No ESPN match for {name}")
             missed += 1
-            time.sleep(REQUEST_DELAY_SEC)
             continue
 
-        upsert_player(player_id, name, espn_row)
-        print(f"  {name} -> ESPN ID {espn_row['espn_player_id']}")
-        matched += 1
+        espn_id = espn_match["espn_id"]
+        espn_row = {
+            "espn_player_id": espn_id,
+            "espn_display_name": espn_match["displayName"],
+            "player_image_url": HEADSHOT_TEMPLATE.format(id=espn_id),
+            "last_verified": datetime.now(timezone.utc),
+            "source": "espn_athletes_v3",
+        }
 
-        time.sleep(REQUEST_DELAY_SEC)
+        upsert_player(player_id, name, espn_row)
+        print(f"  {name} -> ESPN ID {espn_id}")
+        matched += 1
 
     print(f"Done. matched={matched}, missed={missed}, total={len(seen)}")
 

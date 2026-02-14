@@ -7,6 +7,8 @@ export type AtpBracketMatch = {
   round_order?: number | null;
   status?: string | null;
   scheduled_at?: string | null;
+  match_date?: string | null;
+  not_before_text?: string | null;
   player1: string;
   player2: string;
   player1_id?: number | null;

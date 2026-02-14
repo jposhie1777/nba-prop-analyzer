@@ -72,7 +72,15 @@ function formatMatchTime(value?: string | null) {
 }
 
 function formatMatchMeta(match: AtpBracketMatch) {
-  return formatMatchTime(match.scheduled_at);
+  if (match.not_before_text) return match.not_before_text;
+  if (match.scheduled_at) return formatMatchTime(match.scheduled_at);
+  if (match.match_date) {
+    const parsed = new Date(`${match.match_date}T00:00:00`);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    }
+  }
+  return "TBD";
 }
 
 function isCompleted(m: AtpBracketMatch) {
@@ -625,23 +633,24 @@ function TournamentBracketView({
 
   const todayMatches = useMemo(() => {
     const all: AtpBracketMatch[] = [];
+    const addIfMissing = (m: AtpBracketMatch) => {
+      if (!all.some((e) => e.id != null && m.id != null && e.id === m.id)) {
+        all.push(m);
+      }
+    };
+
+    for (const m of data?.upcoming_matches ?? []) {
+      if (!isCompleted(m)) addIfMissing(m);
+    }
+
     for (const round of data?.bracket.rounds ?? []) {
       for (const m of round.matches) {
         if (!isCompleted(m) && isToday(m.scheduled_at)) {
-          all.push(m);
+          addIfMissing(m);
         }
       }
     }
-    for (const m of data?.upcoming_matches ?? []) {
-      if (isToday(m.scheduled_at) && !all.some((e) => e.id === m.id)) {
-        all.push(m);
-      }
-    }
-    if (all.length === 0) {
-      for (const m of data?.upcoming_matches ?? []) {
-        if (!isCompleted(m)) all.push(m);
-      }
-    }
+
     return all;
   }, [data]);
 

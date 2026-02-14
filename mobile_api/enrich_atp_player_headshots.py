@@ -61,6 +61,8 @@ def get_player_lookup_table() -> str:
 
 def normalize_name(name: str) -> str:
     """Normalize a player name for fuzzy matching."""
+    if not name:
+        return ""
     # NFKD decomposition strips accents
     s = normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
     s = s.lower().strip()
@@ -357,6 +359,9 @@ def main():
         seen.add(player_id)
 
         name = p["player_name"]
+        if not name:
+            missed += 1
+            continue
         espn_match = match_player(name, espn_index)
 
         if not espn_match:

@@ -94,16 +94,26 @@ def fetch_espn_player(player_name: str):
     """
     ESPN does not expose a full NBA roster API.
     Name-based search is required.
+
+    ESPN v3 search returns: { "results": [ { "items": [ ... ] } ] }
+    Each item has id, displayName, type, sport, league, etc.
     """
     resp = requests.get(
         ESPN_SEARCH_URL,
-        params={"query": player_name, "type": "player"},
+        params={"query": player_name, "limit": 10},
         timeout=10,
     )
     resp.raise_for_status()
     data = resp.json()
 
-    for item in data.get("items", []):
+    # ESPN nests items inside results[0].items
+    items = []
+    for result_group in data.get("results", []):
+        items.extend(result_group.get("items", []))
+    # Fallback: also check top-level items (legacy format)
+    items.extend(data.get("items", []))
+
+    for item in items:
         if (
             item.get("type") == "player"
             and item.get("league") == "nba"

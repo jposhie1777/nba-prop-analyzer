@@ -8,10 +8,11 @@ import ThemeSelectorSection from "@/components/ThemeSelectorSection";
 type SportTileProps = {
   title: string;
   subtitle: string;
-  onPress: () => void;
+  onPress?: () => void;
   badge: string;
   accent: string;
   icon: keyof typeof Ionicons.glyphMap;
+  comingSoon?: boolean;
 };
 
 function StatChip({ label, value }: { label: string; value: string }) {
@@ -33,12 +34,21 @@ function StatChip({ label, value }: { label: string; value: string }) {
   );
 }
 
-function SportTile({ title, subtitle, onPress, badge, accent, icon }: SportTileProps) {
+function SportTile({
+  title,
+  subtitle,
+  onPress,
+  badge,
+  accent,
+  icon,
+  comingSoon = false,
+}: SportTileProps) {
   const { colors } = useTheme();
 
   return (
     <Pressable
       onPress={onPress}
+      disabled={comingSoon}
       style={[
         styles.tile,
         {
@@ -63,8 +73,14 @@ function SportTile({ title, subtitle, onPress, badge, accent, icon }: SportTileP
       <Text style={[styles.tileSub, { color: colors.text.muted }]}>{subtitle}</Text>
 
       <View style={[styles.tileFooter, { borderTopColor: colors.border.subtle }]}>
-        <Text style={[styles.tileFooterText, { color: colors.text.muted }]}>Open dashboard</Text>
-        <Ionicons name="arrow-forward" size={14} color={colors.text.muted} />
+        <Text style={[styles.tileFooterText, { color: colors.text.muted }]}>
+          {comingSoon ? "Coming soon" : "Open dashboard"}
+        </Text>
+        <Ionicons
+          name={comingSoon ? "time-outline" : "arrow-forward"}
+          size={14}
+          color={colors.text.muted}
+        />
       </View>
     </Pressable>
   );
@@ -79,7 +95,7 @@ export default function Home() {
       <View style={[styles.hero, { borderColor: colors.border.subtle }]}> 
         <View style={styles.heroGlow} />
         <View style={styles.heroTopRow}>
-          <Text style={styles.eyebrow}>NBA PROP ANALYZER</Text>
+          <Text style={styles.eyebrow}>PROP ANALYZER</Text>
           <View style={styles.livePill}>
             <View style={styles.liveDot} />
             <Text style={styles.livePillText}>Live Models</Text>
@@ -92,7 +108,7 @@ export default function Home() {
         </Text>
 
         <View style={styles.statsRow}>
-          <StatChip label="Sports" value="3 Active" />
+          <StatChip label="Sports" value="2 Active" />
           <StatChip label="Live Markets" value="20+" />
           <StatChip label="Tools" value="Models + EV" />
         </View>
@@ -100,14 +116,6 @@ export default function Home() {
 
       <ThemeSelectorSection title="Theme" />
 
-      <SportTile
-        title="NBA"
-        subtitle="Props, live edges, game environment, and deep player splits."
-        badge="PRIMARY"
-        icon="basketball"
-        accent="#39E4C9"
-        onPress={() => router.push("/(tabs)/nba")}
-      />
 
       <SportTile
         title="PGA"
@@ -126,6 +134,25 @@ export default function Home() {
         accent="#F4C76C"
         onPress={() => router.push("/(tabs)/atp")}
       />
+
+      <SportTile
+        title="EPL"
+        subtitle="Soccer analytics tools and market models are on the roadmap."
+        badge="COMING SOON"
+        icon="football"
+        accent="#A78BFA"
+        comingSoon
+      />
+
+      <SportTile
+        title="WTA"
+        subtitle="Women's tennis dashboards and matchup models are coming soon."
+        badge="COMING SOON"
+        icon="tennisball"
+        accent="#FB7185"
+        comingSoon
+      />
+
 
       <View
         style={[

@@ -7,7 +7,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { PulseHeader } from "@/components/layout/PulseHeader";
 import { LiveDataBridge } from "@/components/LiveDataBridge";
 
-type SportKey = "nba" | "pga" | "atp";
+type SportKey = "pga" | "atp";
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
 type TabConfig = {
@@ -15,18 +15,6 @@ type TabConfig = {
   title: string;
   icon: IoniconName;
 };
-
-const NBA_TABS: TabConfig[] = [
-  { name: "props", title: "Props", icon: "stats-chart" },
-  { name: "game-betting", title: "Game Bets", icon: "analytics" },
-  { name: "live", title: "Live", icon: "radio-outline" },
-  { name: "first-basket", title: "First Basket", icon: "basketball" },
-  { name: "injuries", title: "Injuries", icon: "medkit" },
-  { name: "wowy", title: "WOWY", icon: "people" },
-  { name: "trend-chart", title: "Trends", icon: "trending-up" },
-  { name: "more", title: "More", icon: "menu" },
-  { name: "home", title: "Home", icon: "home" },
-];
 
 const PGA_TABS: TabConfig[] = [
   { name: "pga-matchups", title: "Matchup Ratings", icon: "stats-chart" },
@@ -63,7 +51,6 @@ const ATP_TABS: TabConfig[] = [
 ];
 
 const SPORT_TABS: Record<SportKey, TabConfig[]> = {
-  nba: NBA_TABS,
   pga: PGA_TABS,
   atp: ATP_TABS,
 };
@@ -77,11 +64,7 @@ const HIDDEN_SCREENS = [
   "live-props-dev",
 ];
 
-const ALL_TAB_NAMES = [
-  ...NBA_TABS,
-  ...PGA_TABS,
-  ...ATP_TABS,
-].map((tab) => tab.name);
+const ALL_TAB_NAMES = [...PGA_TABS, ...ATP_TABS].map((tab) => tab.name);
 
 const ALL_SCREEN_NAMES = Array.from(
   new Set([...ALL_TAB_NAMES, ...HIDDEN_SCREENS])
@@ -100,7 +83,7 @@ export default function TabLayout() {
     ? "pga"
     : segments.some(isAtpSegment)
     ? "atp"
-    : "nba";
+    : "pga";
 
   const activeTabs = SPORT_TABS[activeSport];
   const activeNames = new Set(activeTabs.map((tab) => tab.name));

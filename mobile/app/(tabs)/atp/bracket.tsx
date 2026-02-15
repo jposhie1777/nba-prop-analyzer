@@ -1,5 +1,6 @@
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -358,12 +359,17 @@ function MatchAnalysisCard({
       {/* Players matchup */}
       <View style={s.matchupRow}>
         <View style={s.matchupPlayer}>
-          <Text
-            style={[s.matchupName, { color: colors.text.primary }]}
-            numberOfLines={1}
-          >
-            {match.player1}
-          </Text>
+          <View style={s.matchupIdentityRow}>
+            {match.player1_headshot_url ? (
+              <Image source={{ uri: match.player1_headshot_url }} style={s.matchupHeadshot} />
+            ) : null}
+            <Text
+              style={[s.matchupName, { color: colors.text.primary }]}
+              numberOfLines={1}
+            >
+              {match.player1}
+            </Text>
+          </View>
           {p1Data && (
             <Text style={[s.matchupScore, { color: colors.text.secondary }]}>
               Score: {fmtNum(p1Data.score)}
@@ -372,12 +378,17 @@ function MatchAnalysisCard({
         </View>
         <Text style={[s.vsText, { color: colors.text.muted }]}>vs</Text>
         <View style={[s.matchupPlayer, { alignItems: "flex-end" }]}>
-          <Text
-            style={[s.matchupName, { color: colors.text.primary, textAlign: "right" }]}
-            numberOfLines={1}
-          >
-            {match.player2}
-          </Text>
+          <View style={[s.matchupIdentityRow, { justifyContent: "flex-end" }]}>
+            <Text
+              style={[s.matchupName, { color: colors.text.primary, textAlign: "right" }]}
+              numberOfLines={1}
+            >
+              {match.player2}
+            </Text>
+            {match.player2_headshot_url ? (
+              <Image source={{ uri: match.player2_headshot_url }} style={s.matchupHeadshot} />
+            ) : null}
+          </View>
           {p2Data && (
             <Text style={[s.matchupScore, { color: colors.text.secondary }]}>
               Score: {fmtNum(p2Data.score)}
@@ -1088,6 +1099,16 @@ const s = StyleSheet.create({
     gap: 8,
   },
   matchupPlayer: { flex: 1, gap: 2 },
+  matchupIdentityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  matchupHeadshot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+  },
   matchupName: { fontSize: 15, fontWeight: "700" },
   matchupScore: { fontSize: 11 },
   vsText: { fontSize: 12, fontWeight: "600" },

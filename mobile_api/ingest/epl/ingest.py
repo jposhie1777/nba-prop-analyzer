@@ -48,40 +48,18 @@ def _ensure_dataset(client: bigquery.Client, table: str) -> None:
         client.create_dataset(dataset)
 
 
-def _expected_schema() -> list[bigquery.SchemaField]:
-    return [
-        bigquery.SchemaField("ingested_at", "TIMESTAMP", mode="REQUIRED"),
-        bigquery.SchemaField("season", "INT64", mode="REQUIRED"),
-        bigquery.SchemaField("entity_id", "STRING"),
-        bigquery.SchemaField("payload", "JSON"),
-    ]
-
-
-def _schema_matches(table_obj: bigquery.Table) -> bool:
-    actual = [(f.name, f.field_type, f.mode) for f in table_obj.schema]
-    expected = [(f.name, f.field_type, f.mode) for f in _expected_schema()]
-    return actual == expected
-
-
-def _create_table(client: bigquery.Client, table_id: str) -> None:
-    table_obj = bigquery.Table(table_id, schema=_expected_schema())
-    table_obj.time_partitioning = bigquery.TimePartitioning(field="ingested_at")
-    table_obj.clustering_fields = ["season", "entity_id"]
-    client.create_table(table_obj)
-
-
 def _ensure_table(client: bigquery.Client, table: str) -> str:
     table_id = _table_id(client, table)
     try:
-        table_obj = client.get_table(table_id)
+        client.get_table(table_id)
     except NotFound:
-        _create_table(client, table_id)
-        return table_id
-
-    if not _schema_matches(table_obj):
-        client.delete_table(table_id, not_found_ok=True)
-        _create_table(client, table_id)
-
+        schema = [
+            bigquery.SchemaField("ingested_at", "TIMESTAMP"),
+            bigquery.SchemaField("season", "INT64"),
+            bigquery.SchemaField("entity_id", "STRING"),
+            bigquery.SchemaField("payload", "JSON"),
+        ]
+        client.create_table(bigquery.Table(table_id, schema=schema))
     return table_id
 
 

@@ -49,6 +49,7 @@ _ATP_COMPARE_CACHE_TABLE = os.getenv("ATP_COMPARE_CACHE_TABLE", "atp_data.atp_ma
 
 _ATP_PLAYER_METRICS_TABLE = os.getenv("ATP_PLAYER_METRICS_TABLE", "atp_data.atp_player_compare_metrics")
 _ATP_SHEET_DAILY_MATCHES_TABLE = os.getenv("ATP_SHEET_DAILY_MATCHES_TABLE", "atp_data.sheet_daily_matches")
+_ATP_PLAYER_LOOKUP_TABLE = os.getenv("ATP_PLAYER_LOOKUP_TABLE", "atp_data.player_lookup")
 
 
 def _read_player_metrics_from_bq(player_ids: List[int], surface: Optional[str]) -> Dict[int, Dict[str, Any]]:
@@ -608,9 +609,71 @@ def _format_match(match: Dict[str, Any]) -> Dict[str, Any]:
         "player2": _player_label(p2_raw),
         "player1_id": _player_id(p1_raw),
         "player2_id": _player_id(p2_raw),
+        "player1_headshot_url": (p1_raw or {}).get("player_image_url") if isinstance(p1_raw, dict) else None,
+        "player2_headshot_url": (p2_raw or {}).get("player_image_url") if isinstance(p2_raw, dict) else None,
         "winner": _player_label(match.get("winner")),
         "score": match.get("score"),
     }
+
+
+def _fetch_atp_player_headshots(player_ids: List[int]) -> Dict[int, str]:
+    if not player_ids:
+        return {}
+
+    client = get_bq_client()
+    sql = f"""
+    WITH latest AS (
+      SELECT * EXCEPT (row_num)
+      FROM (
+        SELECT
+          player_id,
+          player_image_url,
+          ROW_NUMBER() OVER (
+            PARTITION BY player_id
+            ORDER BY last_verified DESC
+          ) AS row_num
+        FROM `{_ATP_PLAYER_LOOKUP_TABLE}`
+        WHERE player_id IN UNNEST(@player_ids)
+      )
+      WHERE row_num = 1
+    )
+    SELECT player_id, player_image_url
+    FROM latest
+    WHERE player_image_url IS NOT NULL
+    """
+
+    job = client.query(
+        sql,
+        job_config=bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ArrayQueryParameter("player_ids", "INT64", sorted(set(player_ids))),
+            ]
+        ),
+    )
+
+    return {
+        int(row.get("player_id")): row.get("player_image_url")
+        for row in job.result()
+        if row.get("player_id") is not None and row.get("player_image_url")
+    }
+
+
+def _attach_headshots(matches: List[Dict[str, Any]], headshots: Dict[int, str]) -> List[Dict[str, Any]]:
+    if not matches or not headshots:
+        return matches
+
+    enriched: List[Dict[str, Any]] = []
+    for match in matches:
+        player1_id = match.get("player1_id")
+        player2_id = match.get("player2_id")
+        enriched.append(
+            {
+                **match,
+                "player1_headshot_url": match.get("player1_headshot_url") or headshots.get(player1_id),
+                "player2_headshot_url": match.get("player2_headshot_url") or headshots.get(player2_id),
+            }
+        )
+    return enriched
 
 
 def _read_today_sheet_matches(
@@ -1046,6 +1109,27 @@ def build_tournament_bracket_payload(
     )
 
     formatted_matches = [_format_match(match) for match in matches]
+    player_ids: List[int] = []
+    for match in formatted_matches:
+        if match.get("player1_id") is not None:
+            player_ids.append(int(match["player1_id"]))
+        if match.get("player2_id") is not None:
+            player_ids.append(int(match["player2_id"]))
+
+    upcoming_matches = _read_today_sheet_matches(
+        tournament_id=tournament.get("id"),
+        upcoming_limit=upcoming_limit,
+    )
+    for match in upcoming_matches:
+        if match.get("player1_id") is not None:
+            player_ids.append(int(match["player1_id"]))
+        if match.get("player2_id") is not None:
+            player_ids.append(int(match["player2_id"]))
+
+    headshots = _fetch_atp_player_headshots(player_ids)
+    formatted_matches = _attach_headshots(formatted_matches, headshots)
+    upcoming_matches = _attach_headshots(upcoming_matches, headshots)
+
     rounds: Dict[str, Dict[str, Any]] = {}
     for match in formatted_matches:
         round_name = str(match.get("round") or "Round")
@@ -1064,11 +1148,6 @@ def build_tournament_bracket_payload(
             item.get("order") if item.get("order") is not None else 999,
             item.get("name"),
         )
-    )
-
-    upcoming_matches = _read_today_sheet_matches(
-        tournament_id=tournament.get("id"),
-        upcoming_limit=upcoming_limit,
     )
 
     match_analyses: Dict[str, Dict[str, Any]] = {}

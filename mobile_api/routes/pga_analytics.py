@@ -106,6 +106,54 @@ def _select_round_scores_tournament(
     return None
 
 
+
+
+def _fetch_pga_player_headshots(player_ids: List[int]) -> Dict[int, str]:
+    if not player_ids:
+        return {}
+
+    from google.cloud import bigquery
+
+    from bq import get_bq_client
+
+    client = get_bq_client()
+    table = f"`{client.project}.pga_data.player_lookup`"
+    sql = f"""
+    WITH latest AS (
+      SELECT * EXCEPT (row_num)
+      FROM (
+        SELECT
+          player_id,
+          player_image_url,
+          ROW_NUMBER() OVER (
+            PARTITION BY player_id
+            ORDER BY last_verified DESC
+          ) AS row_num
+        FROM {table}
+        WHERE player_id IN UNNEST(@player_ids)
+      )
+      WHERE row_num = 1
+    )
+    SELECT player_id, player_image_url
+    FROM latest
+    WHERE player_image_url IS NOT NULL
+    """
+
+    job = client.query(
+        sql,
+        job_config=bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ArrayQueryParameter("player_ids", "INT64", sorted(set(player_ids))),
+            ]
+        ),
+    )
+
+    return {
+        int(row.get("player_id")): row.get("player_image_url")
+        for row in job.result()
+        if row.get("player_id") is not None and row.get("player_image_url")
+    }
+
 def _resolve_round_scores_tournament(
     *,
     tournament_id: Optional[int],
@@ -454,6 +502,18 @@ def pga_compare(
             params={"player_ids": player_ids, "per_page": 100},
             cache_ttl=900,
         )
+        try:
+            headshots = _fetch_pga_player_headshots(player_ids)
+        except Exception:
+            headshots = {}
+        if headshots:
+            players = [
+                {
+                    **player,
+                    "player_image_url": headshots.get(player.get("id")),
+                }
+                for player in players
+            ]
 
         tournaments: List[Dict[str, Any]] = []
         courses: List[Dict[str, Any]] = []

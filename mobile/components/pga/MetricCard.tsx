@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Platform } from "react-native";
+import { View, Text, StyleSheet, Platform, Image } from "react-native";
 import { useTheme } from "@/store/useTheme";
 
 type MetricItem = {
@@ -9,10 +9,11 @@ type MetricItem = {
 type MetricCardProps = {
   title: string;
   subtitle?: string;
+  imageUrl?: string | null;
   metrics: MetricItem[];
 };
 
-export function MetricCard({ title, subtitle, metrics }: MetricCardProps) {
+export function MetricCard({ title, subtitle, imageUrl, metrics }: MetricCardProps) {
   const { colors } = useTheme();
 
   return (
@@ -39,14 +40,19 @@ export function MetricCard({ title, subtitle, metrics }: MetricCardProps) {
         style={[styles.accentBar, { backgroundColor: colors.accent.primary }]}
       />
       <View style={styles.inner}>
-        <Text style={[styles.title, { color: colors.text.primary }]}>
-          {title}
-        </Text>
-        {subtitle ? (
-          <Text style={[styles.subtitle, { color: colors.text.muted }]}>
-            {subtitle}
-          </Text>
-        ) : null}
+        <View style={styles.headerRow}>
+          <View style={styles.headerTextWrap}>
+            <Text style={[styles.title, { color: colors.text.primary }]}>
+              {title}
+            </Text>
+            {subtitle ? (
+              <Text style={[styles.subtitle, { color: colors.text.muted }]}>
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
+          {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.headshot} /> : null}
+        </View>
         <View
           style={[styles.divider, { backgroundColor: colors.border.subtle }]}
         />
@@ -85,6 +91,20 @@ const styles = StyleSheet.create({
   inner: {
     flex: 1,
     padding: 14,
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  headerTextWrap: {
+    flex: 1,
+  },
+  headshot: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
   },
   title: {
     fontSize: 15,

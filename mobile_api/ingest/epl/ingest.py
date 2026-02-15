@@ -107,6 +107,8 @@ def run_full_ingestion(current_season: int | None = None) -> Dict[str, Any]:
     team_ids: set[int] = set()
     match_ids: set[int] = set()
 
+    players = fetch_paginated("players")
+
     for season in seasons:
         teams = fetch_single("teams", {"season": season})
         teams_written += _write_rows(client, TABLE_TEAMS, season, teams)
@@ -119,7 +121,6 @@ def run_full_ingestion(current_season: int | None = None) -> Dict[str, Any]:
         matches_written += _write_rows(client, TABLE_MATCHES, season, matches)
         match_ids.update(int(m["id"]) for m in matches if m.get("id") is not None)
 
-        players = fetch_paginated("players")
         players_written += _write_rows(client, TABLE_PLAYERS, season, players)
 
     for season in seasons:

@@ -1,0 +1,48 @@
+name: EPL Backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      current_season:
+        description: "Current season year (YYYY). Workflow backfills this season and previous season"
+        required: false
+        default: ""
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+
+    env:
+      EPL_DATASET: "epl_data"
+      EPL_BQ_LOCATION: "US"
+      EPL_CURRENT_SEASON: ${{ inputs.current_season }}
+      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+      BDL_EPL_API_KEY: ${{ secrets.BDL_EPL_API_KEY || secrets.BALDONTLIE_KEY || secrets.BALLDONTLIE_API_KEY }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r mobile_api/requirements.txt
+
+      - name: Configure GCP credentials
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
+
+      - name: Apply EPL BigQuery DDL
+        run: |
+          python -m mobile_api.ingest.epl.apply_ddl
+
+      - name: Run EPL backfill (current + previous season)
+        run: |
+          python -m mobile_api.ingest.epl.backfill

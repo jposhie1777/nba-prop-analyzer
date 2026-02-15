@@ -57,7 +57,7 @@ def _ensure_table(client: bigquery.Client, table: str) -> str:
             bigquery.SchemaField("ingested_at", "TIMESTAMP"),
             bigquery.SchemaField("season", "INT64"),
             bigquery.SchemaField("entity_id", "STRING"),
-            bigquery.SchemaField("payload", "JSON"),
+            bigquery.SchemaField("payload", "STRING"),
         ]
         client.create_table(bigquery.Table(table_id, schema=schema))
     return table_id
@@ -75,7 +75,7 @@ def _write_rows(client: bigquery.Client, table: str, season: int, rows: Sequence
             "ingested_at": now,
             "season": season,
             "entity_id": str(r.get(entity_field) or ""),
-            "payload": r,
+            "payload": json.dumps(r, separators=(",", ":"), default=str),
         }
         for r in rows
     ]
@@ -107,6 +107,8 @@ def run_full_ingestion(current_season: int | None = None) -> Dict[str, Any]:
     team_ids: set[int] = set()
     match_ids: set[int] = set()
 
+    players = fetch_paginated("players")
+
     for season in seasons:
         teams = fetch_single("teams", {"season": season})
         teams_written += _write_rows(client, TABLE_TEAMS, season, teams)
@@ -119,7 +121,6 @@ def run_full_ingestion(current_season: int | None = None) -> Dict[str, Any]:
         matches_written += _write_rows(client, TABLE_MATCHES, season, matches)
         match_ids.update(int(m["id"]) for m in matches if m.get("id") is not None)
 
-        players = fetch_paginated("players")
         players_written += _write_rows(client, TABLE_PLAYERS, season, players)
 
     for season in seasons:

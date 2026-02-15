@@ -406,6 +406,7 @@ export default function CompareScreen() {
             key={row.player_id}
             title={`${row.rank}. ${row.player.display_name}`}
             subtitle={`Score: ${formatNum(row.score)}`}
+            imageUrl={row.player.player_image_url}
             metrics={[
               { label: "Form Score", value: formatNum(row.metrics.form_score) },
               {

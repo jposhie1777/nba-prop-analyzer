@@ -13,6 +13,8 @@ export type AtpBracketMatch = {
   player2: string;
   player1_id?: number | null;
   player2_id?: number | null;
+  player1_headshot_url?: string | null;
+  player2_headshot_url?: string | null;
   winner?: string;
   score?: string | null;
 };

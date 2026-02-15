@@ -7,6 +7,7 @@ export type PgaPlayer = {
   country_code?: string | null;
   owgr?: number | null;
   active?: boolean;
+  player_image_url?: string | null;
 };
 
 export type PgaCourse = {

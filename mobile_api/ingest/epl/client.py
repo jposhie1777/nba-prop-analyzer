@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 import requests
 
 BASE_URL = os.getenv("BDL_EPL_BASE_URL", "https://api.balldontlie.io/epl/v2")
-API_KEY = os.getenv("BALLDONTLIE_API_KEY", "")
+API_KEY = os.getenv("BDL_EPL_API_KEY") or os.getenv("BALLDONTLIE_API_KEY", "")
 TIMEOUT = int(os.getenv("BDL_EPL_TIMEOUT_SECONDS", "30"))
 
 

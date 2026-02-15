@@ -19,6 +19,7 @@ jobs:
       EPL_CURRENT_SEASON: ${{ inputs.current_season }}
       GCP_PROJECT: ${{ secrets.PROJECT_ID }}
       BDL_EPL_API_KEY: ${{ secrets.BDL_EPL_API_KEY || secrets.BALDONTLIE_KEY || secrets.BALLDONTLIE_API_KEY }}
+      BALLDONTLIE_API_KEY: ${{ secrets.BDL_EPL_API_KEY || secrets.BALDONTLIE_KEY || secrets.BALLDONTLIE_API_KEY }}
 
     steps:
       - name: Checkout repo

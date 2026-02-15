@@ -4,7 +4,10 @@ import json
 import os
 from datetime import datetime, timezone
 
-from ingest.epl.ingest import run_full_ingestion
+try:
+    from .ingest import run_full_ingestion
+except ImportError:
+    from mobile_api.ingest.epl.ingest import run_full_ingestion
 
 
 def _current_season() -> int:

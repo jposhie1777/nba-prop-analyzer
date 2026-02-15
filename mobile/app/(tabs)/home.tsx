@@ -1,9 +1,10 @@
-import { ScrollView, Text, StyleSheet, Pressable, View } from "react-native";
+import { ScrollView, Text, StyleSheet, Pressable, View, Image } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { useTheme } from "@/store/useTheme";
 import ThemeSelectorSection from "@/components/ThemeSelectorSection";
+import { LEAGUE_LOGOS } from "@/utils/leagueLogos";
 
 type SportTileProps = {
   title: string;
@@ -12,6 +13,7 @@ type SportTileProps = {
   badge: string;
   accent: string;
   icon: keyof typeof Ionicons.glyphMap;
+  logoUrl?: string;
   comingSoon?: boolean;
 };
 
@@ -41,6 +43,7 @@ function SportTile({
   badge,
   accent,
   icon,
+  logoUrl,
   comingSoon = false,
 }: SportTileProps) {
   const { colors } = useTheme();
@@ -61,7 +64,11 @@ function SportTile({
       <View style={styles.tileHeader}>
         <View style={styles.titleRow}>
           <View style={[styles.iconBubble, { backgroundColor: `${accent}22` }]}>
-            <Ionicons name={icon} size={16} color={accent} />
+            {logoUrl ? (
+              <Image source={{ uri: logoUrl }} style={styles.leagueLogo} />
+            ) : (
+              <Ionicons name={icon} size={16} color={accent} />
+            )}
           </View>
           <Text style={[styles.tileTitle, { color: colors.text.primary }]}>{title}</Text>
         </View>
@@ -122,6 +129,7 @@ export default function Home() {
         subtitle="Course fit, tournament sims, placements, and matchup tools."
         badge="NEW"
         icon="golf"
+        logoUrl={LEAGUE_LOGOS.PGA}
         accent="#7DD3FC"
         onPress={() => router.push("/(tabs)/pga")}
       />
@@ -131,6 +139,7 @@ export default function Home() {
         subtitle="Surface splits, player form, bracket projections, and H2H."
         badge="TRACKING"
         icon="tennisball"
+        logoUrl={LEAGUE_LOGOS.ATP}
         accent="#F4C76C"
         onPress={() => router.push("/(tabs)/atp")}
       />
@@ -140,6 +149,7 @@ export default function Home() {
         subtitle="Soccer analytics tools and market models are on the roadmap."
         badge="COMING SOON"
         icon="football"
+        logoUrl={LEAGUE_LOGOS.EPL}
         accent="#A78BFA"
         comingSoon
       />
@@ -149,6 +159,7 @@ export default function Home() {
         subtitle="Women's tennis dashboards and matchup models are coming soon."
         badge="COMING SOON"
         icon="tennisball"
+        logoUrl={LEAGUE_LOGOS.WTA}
         accent="#FB7185"
         comingSoon
       />
@@ -290,6 +301,11 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
+  },
+  leagueLogo: {
+    width: 20,
+    height: 20,
+    resizeMode: "contain",
   },
   tileTitle: {
     fontSize: 18,

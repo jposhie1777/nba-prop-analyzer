@@ -146,12 +146,12 @@ export default function Home() {
 
       <SportTile
         title="EPL"
-        subtitle="Soccer analytics tools and market models are on the roadmap."
-        badge="COMING SOON"
+        subtitle="Moneylines, BTTS, totals, and cards all tied into one hub."
+        badge="LIVE"
         icon="football"
         logoUrl={LEAGUE_LOGOS.EPL}
         accent="#A78BFA"
-        comingSoon
+        onPress={() => router.push("/(tabs)/epl")}
       />
 
       <SportTile

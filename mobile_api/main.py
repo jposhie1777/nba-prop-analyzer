@@ -81,6 +81,8 @@ from routes.atp_analytics import (
 )
 from routes.correlations import router as correlations_router
 from routes.game_environment import router as game_environment_router
+from routes.epl_analytics import router as epl_analytics_router
+from ingest.epl.ingest import ingest_yesterday_refresh as ingest_epl_yesterday_refresh
 
 # ==================================================
 # Game Advanced Stats V2 imports
@@ -176,6 +178,7 @@ app.include_router(atp_ingest_router)
 app.include_router(pga_ingest_router)
 app.include_router(correlations_router)
 app.include_router(game_environment_router)
+app.include_router(epl_analytics_router)
 
 # ==================================================
 # Startup hook (SMART SCHEDULED BACKGROUND TASKS)
@@ -400,6 +403,54 @@ async def startup():
 
         asyncio.create_task(atp_bracket_daily_refresh_loop())
         print("[STARTUP] -> ATP bracket daily refresh loop started")
+
+        # -----------------------------
+        # DAILY: EPL yesterday refresh (runs at 6:30 AM ET)
+        # -----------------------------
+        async def epl_yesterday_refresh_loop():
+            REFRESH_HOUR = 6
+            REFRESH_MINUTE = 30
+
+            print("[EPL] Daily refresh loop started")
+            print(
+                "[EPL] Scheduled to run at"
+                f" {REFRESH_HOUR}:{REFRESH_MINUTE:02d} AM ET"
+            )
+
+            while True:
+                try:
+                    now = datetime.now(NY_TZ)
+                    next_run = now.replace(
+                        hour=REFRESH_HOUR,
+                        minute=REFRESH_MINUTE,
+                        second=0,
+                        microsecond=0,
+                    )
+                    if now >= next_run:
+                        next_run = next_run + timedelta(days=1)
+
+                    wait_seconds = (next_run - now).total_seconds()
+                    print(
+                        "[EPL] Next run:"
+                        f" {next_run.strftime('%Y-%m-%d %I:%M %p ET')}"
+                        f" ({wait_seconds/3600:.1f} hours)"
+                    )
+                    await asyncio.sleep(wait_seconds)
+
+                    print(
+                        "\n[EPL] ======== DAILY YESTERDAY REFRESH @"
+                        f" {datetime.now(NY_TZ).strftime('%I:%M %p ET')} ========"
+                    )
+                    result = await asyncio.to_thread(ingest_epl_yesterday_refresh)
+                    print(f"[EPL] Result: {result}")
+                    print("[EPL] Daily refresh complete\n")
+
+                except Exception as e:
+                    print(f"[EPL] ERROR in daily loop: {e}")
+                    await asyncio.sleep(3600)
+
+        asyncio.create_task(epl_yesterday_refresh_loop())
+        print("[STARTUP] -> EPL daily yesterday refresh loop started")
 
         # -----------------------------
         # HOURLY: Pre-game Game Odds ingest (runs every hour until games start)

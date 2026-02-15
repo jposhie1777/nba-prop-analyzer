@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS `epl_data.teams` (
   ingested_at TIMESTAMP NOT NULL,
   season INT64 NOT NULL,
   entity_id STRING,
-  payload JSON
+  payload STRING
 )
 PARTITION BY DATE(ingested_at)
 CLUSTER BY season, entity_id
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS `epl_data.players` (
   ingested_at TIMESTAMP NOT NULL,
   season INT64 NOT NULL,
   entity_id STRING,
-  payload JSON
+  payload STRING
 )
 PARTITION BY DATE(ingested_at)
 CLUSTER BY season, entity_id
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS `epl_data.rosters` (
   ingested_at TIMESTAMP NOT NULL,
   season INT64 NOT NULL,
   entity_id STRING,
-  payload JSON
+  payload STRING
 )
 PARTITION BY DATE(ingested_at)
 CLUSTER BY season, entity_id
@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS `epl_data.standings` (
   ingested_at TIMESTAMP NOT NULL,
   season INT64 NOT NULL,
   entity_id STRING,
-  payload JSON
+  payload STRING
 )
 PARTITION BY DATE(ingested_at)
 CLUSTER BY season, entity_id
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS `epl_data.matches` (
   ingested_at TIMESTAMP NOT NULL,
   season INT64 NOT NULL,
   entity_id STRING,
-  payload JSON
+  payload STRING
 )
 PARTITION BY DATE(ingested_at)
 CLUSTER BY season, entity_id
@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS `epl_data.match_events` (
   ingested_at TIMESTAMP NOT NULL,
   season INT64 NOT NULL,
   entity_id STRING,
-  payload JSON
+  payload STRING
 )
 PARTITION BY DATE(ingested_at)
 CLUSTER BY season, entity_id
@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS `epl_data.match_lineups` (
   ingested_at TIMESTAMP NOT NULL,
   season INT64 NOT NULL,
   entity_id STRING,
-  payload JSON
+  payload STRING
 )
 PARTITION BY DATE(ingested_at)
 CLUSTER BY season, entity_id

@@ -9,7 +9,7 @@ EXPECTED_SCHEMA = [
     ("ingested_at", "TIMESTAMP"),
     ("season", "INT64"),
     ("entity_id", "STRING"),
-    ("payload", "JSON"),
+    ("payload", "STRING"),
 ]
 
 
@@ -33,7 +33,7 @@ def _table_ddl(dataset: str, table_name: str, description: str, replace: bool = 
       ingested_at TIMESTAMP NOT NULL,
       season INT64 NOT NULL,
       entity_id STRING,
-      payload JSON
+      payload STRING
     )
     PARTITION BY DATE(ingested_at)
     CLUSTER BY season, entity_id

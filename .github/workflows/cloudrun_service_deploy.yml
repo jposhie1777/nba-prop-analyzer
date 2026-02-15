@@ -45,11 +45,23 @@ jobs:
           gcloud auth list
           echo "== Active project =="
           gcloud config get-value project
-          echo "== Checking required IAM permissions =="
-          gcloud projects test-iam-permissions "$PROJECT_ID" \
-            --permissions=serviceusage.services.use,cloudbuild.builds.create,cloudbuild.builds.get,run.services.update
+          echo "== Checking API and service access =="
+          gcloud services list --enabled --project "$PROJECT_ID" \
+            --filter="name:(run.googleapis.com OR cloudbuild.googleapis.com OR artifactregistry.googleapis.com)"
+          echo "== Checking Cloud Run access (non-blocking) =="
+          if ! gcloud run services describe mobile-api --project "$PROJECT_ID" --region "$REGION" >/dev/null 2>&1; then
+            echo "::warning::Could not describe Cloud Run service 'mobile-api'. Continuing because deploy may still succeed with deploy-time permissions."
+          fi
+          echo "== Checking Cloud Build access (non-blocking) =="
+          if ! gcloud builds list --project "$PROJECT_ID" --limit=1 >/dev/null 2>&1; then
+            echo "::warning::Could not list Cloud Build history. Continuing because deploy may still succeed with build-create permissions."
+          fi
           echo "== Checking Cloud Build bucket access =="
-          gsutil ls "gs://${PROJECT_ID}_cloudbuild"
+          if ! gsutil ls "gs://${PROJECT_ID}_cloudbuild" >/dev/null 2>&1; then
+            echo "::error::Cannot access gs://${PROJECT_ID}_cloudbuild. Cloud Build uploads source to this bucket during gcloud builds submit."
+            echo "::error::Grant the deploy principal storage access to the Cloud Build bucket (for example roles/storage.objectAdmin on gs://${PROJECT_ID}_cloudbuild) and required Service Usage permission (serviceusage.services.use)."
+            exit 1
+          fi
 
       - name: Deploy Cloud Run Service
         env:

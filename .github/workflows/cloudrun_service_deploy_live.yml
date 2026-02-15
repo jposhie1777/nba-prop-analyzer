@@ -61,7 +61,11 @@ jobs:
             echo "::warning::Could not list Cloud Build history. Continuing because deploy may still succeed with build-create permissions."
           fi
           echo "== Checking Cloud Build bucket access =="
-          gsutil ls "gs://${PROJECT_ID}_cloudbuild"
+          if ! gsutil ls "gs://${PROJECT_ID}_cloudbuild" >/dev/null 2>&1; then
+            echo "::error::Cannot access gs://${PROJECT_ID}_cloudbuild. Cloud Build uploads source to this bucket during gcloud builds submit."
+            echo "::error::Grant the deploy principal storage access to the Cloud Build bucket (for example roles/storage.objectAdmin on gs://${PROJECT_ID}_cloudbuild) and required Service Usage permission (serviceusage.services.use)."
+            exit 1
+          fi
 
       - name: Deploy Cloud Run Service (Live)
         env:

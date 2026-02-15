@@ -80,6 +80,16 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+CLOUDBUILD_BUCKET="gs://${PROJECT}_cloudbuild"
+echo "==> Checking Cloud Build bucket access: ${CLOUDBUILD_BUCKET}"
+if ! gsutil ls "${CLOUDBUILD_BUCKET}" >/dev/null 2>&1; then
+  echo "ERROR: Cannot access ${CLOUDBUILD_BUCKET}."
+  echo "Cloud Build uploads source to this bucket for gcloud builds submit."
+  echo "Grant this deploy identity storage access to ${CLOUDBUILD_BUCKET} (for example roles/storage.objectAdmin)"
+  echo "and ensure it has Service Usage permission (serviceusage.services.use)."
+  exit 1
+fi
+
 echo "==> Building image ${IMAGE}"
 BUILD_ID=$(gcloud builds submit \
   --project "${PROJECT}" \

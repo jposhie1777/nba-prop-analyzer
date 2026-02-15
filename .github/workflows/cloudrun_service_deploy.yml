@@ -37,6 +37,20 @@ jobs:
         with:
           project_id: ${{ env.PROJECT_ID }}
 
+
+      - name: Preflight Google Cloud IAM checks
+        run: |
+          set -euo pipefail
+          echo "== Active identity =="
+          gcloud auth list
+          echo "== Active project =="
+          gcloud config get-value project
+          echo "== Checking required IAM permissions =="
+          gcloud projects test-iam-permissions "$PROJECT_ID" \
+            --permissions=serviceusage.services.use,cloudbuild.builds.create,cloudbuild.builds.get,run.services.update
+          echo "== Checking Cloud Build bucket access =="
+          gsutil ls "gs://${PROJECT_ID}_cloudbuild"
+
       - name: Deploy Cloud Run Service
         env:
           BDL_PGA_API_KEY: ${{ secrets.BDL_PGA_API_KEY }}

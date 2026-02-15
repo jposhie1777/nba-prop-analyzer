@@ -57,7 +57,7 @@ def _ensure_table(client: bigquery.Client, table: str) -> str:
             bigquery.SchemaField("ingested_at", "TIMESTAMP"),
             bigquery.SchemaField("season", "INT64"),
             bigquery.SchemaField("entity_id", "STRING"),
-            bigquery.SchemaField("payload", "JSON"),
+            bigquery.SchemaField("payload", "STRING"),
         ]
         client.create_table(bigquery.Table(table_id, schema=schema))
     return table_id
@@ -75,7 +75,7 @@ def _write_rows(client: bigquery.Client, table: str, season: int, rows: Sequence
             "ingested_at": now,
             "season": season,
             "entity_id": str(r.get(entity_field) or ""),
-            "payload": r,
+            "payload": json.dumps(r, separators=(",", ":"), default=str),
         }
         for r in rows
     ]

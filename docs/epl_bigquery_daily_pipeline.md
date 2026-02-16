@@ -75,7 +75,7 @@ USING (
     CAST(md.status AS STRING) AS status,
     CURRENT_TIMESTAMP() AS loaded_at,
     md.snapshot_ts AS source_snapshot_ts
-  FROM `project.epl_raw.match_data` md
+  FROM `epl_raw.match_data` md
 ) S
 ON T.match_id = S.match_id
 WHEN NOT MATCHED THEN
@@ -95,7 +95,7 @@ USING (
     LOWER(CAST(me.card AS STRING)) AS card_type,
     CURRENT_TIMESTAMP() AS loaded_at,
     me.snapshot_ts AS source_snapshot_ts
-  FROM `project.epl_raw.match_events` me
+  FROM `epl_raw.match_events` me
 ) S
 ON T.match_id = S.match_id AND T.event_id = S.event_id
 WHEN NOT MATCHED THEN

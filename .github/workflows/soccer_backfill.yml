@@ -1,0 +1,87 @@
+name: Soccer Backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      league:
+        description: "League to backfill"
+        required: true
+        type: choice
+        options:
+          - epl
+          - laliga
+          - mls
+        default: epl
+      current_season:
+        description: "Current season year (YYYY). Workflow backfills this season and previous season"
+        required: false
+        default: ""
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+
+    env:
+      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+
+      EPL_DATASET: "epl_data"
+      EPL_BQ_LOCATION: "US"
+      EPL_CURRENT_SEASON: ${{ inputs.current_season }}
+
+      LALIGA_DATASET: "laliga_data"
+      LALIGA_BQ_LOCATION: "US"
+      LALIGA_CURRENT_SEASON: ${{ inputs.current_season }}
+
+      MLS_DATASET: "mls_data"
+      MLS_BQ_LOCATION: "US"
+      MLS_CURRENT_SEASON: ${{ inputs.current_season }}
+
+      # Keep both aliases for compatibility with existing ingest clients.
+      BDL_EPL_API_KEY: ${{ secrets.BDL_EPL_API_KEY || secrets.BALDONTLIE_KEY || secrets.BALLDONTLIE_API_KEY }}
+      BDL_LALIGA_API_KEY: ${{ secrets.BDL_LALIGA_API_KEY || secrets.BALDONTLIE_KEY || secrets.BALLDONTLIE_API_KEY }}
+      BDL_MLS_API_KEY: ${{ secrets.BDL_MLS_API_KEY || secrets.BALDONTLIE_KEY || secrets.BALLDONTLIE_API_KEY }}
+      BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY || secrets.BALDONTLIE_KEY }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r mobile_api/requirements.txt
+
+      - name: Configure GCP credentials
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
+
+      - name: Apply EPL BigQuery DDL
+        if: ${{ inputs.league == 'epl' }}
+        run: python -m mobile_api.ingest.epl.apply_ddl
+
+      - name: Run EPL backfill (current + previous season)
+        if: ${{ inputs.league == 'epl' }}
+        run: python -m mobile_api.ingest.epl.backfill
+
+      - name: Apply LaLiga BigQuery DDL
+        if: ${{ inputs.league == 'laliga' }}
+        run: python -m mobile_api.ingest.laliga.apply_ddl
+
+      - name: Run LaLiga backfill (current + previous season)
+        if: ${{ inputs.league == 'laliga' }}
+        run: python -m mobile_api.ingest.laliga.backfill
+
+      - name: Apply MLS BigQuery DDL
+        if: ${{ inputs.league == 'mls' }}
+        run: python -m mobile_api.ingest.mls.apply_ddl
+
+      - name: Run MLS backfill (current + previous season)
+        if: ${{ inputs.league == 'mls' }}
+        run: python -m mobile_api.ingest.mls.backfill

@@ -676,6 +676,44 @@ def _attach_headshots(matches: List[Dict[str, Any]], headshots: Dict[int, str]) 
     return enriched
 
 
+def _match_identity(match: Dict[str, Any]) -> tuple:
+    """Return a stable identity key for deduplicating bracket matches."""
+    match_id = match.get("id")
+    if match_id is not None:
+        return ("id", str(match_id))
+
+    p1 = match.get("player1_id")
+    p2 = match.get("player2_id")
+    if p1 is not None and p2 is not None:
+        return ("players", tuple(sorted((int(p1), int(p2)))))
+
+    p1_name = str(match.get("player1") or "").strip().lower()
+    p2_name = str(match.get("player2") or "").strip().lower()
+    if p1_name and p2_name:
+        return ("names", tuple(sorted((p1_name, p2_name))))
+
+    return ("unknown", id(match))
+
+
+def _merge_missing_sheet_matches(
+    *,
+    formatted_matches: List[Dict[str, Any]],
+    sheet_matches: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Merge sheet-backed matches into ATP API matches when API is missing pairings."""
+    existing = {_match_identity(match) for match in formatted_matches}
+    merged = list(formatted_matches)
+
+    for match in sheet_matches:
+        identity = _match_identity(match)
+        if identity in existing:
+            continue
+        merged.append(match)
+        existing.add(identity)
+
+    return merged
+
+
 def _read_today_sheet_matches(
     *,
     tournament_id: Optional[int],
@@ -1037,7 +1075,7 @@ def get_atp_tournament_bracket(
     tournament_id: Optional[int] = None,
     tournament_name: Optional[str] = None,
     season: Optional[int] = None,
-    upcoming_limit: int = Query(6, ge=1, le=50),
+    upcoming_limit: int = Query(50, ge=1, le=50),
     max_pages: Optional[int] = Query(20, ge=1, le=500),
     include_match_analyses: bool = True,
     recompute_missing_analyses: bool = False,
@@ -1063,7 +1101,7 @@ def build_tournament_bracket_payload(
     tournament_id: Optional[int] = None,
     tournament_name: Optional[str] = None,
     season: Optional[int] = None,
-    upcoming_limit: int = 6,
+    upcoming_limit: int = 50,
     max_pages: Optional[int] = 20,
     include_match_analyses: bool = True,
     recompute_missing_analyses: bool = False,
@@ -1125,6 +1163,11 @@ def build_tournament_bracket_payload(
             player_ids.append(int(match["player1_id"]))
         if match.get("player2_id") is not None:
             player_ids.append(int(match["player2_id"]))
+
+    formatted_matches = _merge_missing_sheet_matches(
+        formatted_matches=formatted_matches,
+        sheet_matches=upcoming_matches,
+    )
 
     headshots = _fetch_atp_player_headshots(player_ids)
     formatted_matches = _attach_headshots(formatted_matches, headshots)

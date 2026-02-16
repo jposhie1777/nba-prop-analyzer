@@ -16,7 +16,7 @@ Environment variables:
     SHEETS_WORKSHEET_INDEX               0-based worksheet tab index fallback (default: 2)
     SHEETS_BQ_DATASET                    BigQuery dataset (default: atp_data)
     SHEETS_BQ_TABLE                      BigQuery table  (default: atp_data.sheet_daily_matches)
-    SHEETS_MATCH_DATE                    Override date filter (YYYY-MM-DD); defaults to today EST
+    SHEETS_MATCH_DATE                    Override date filter (YYYY-MM-DD); defaults to today UTC
     SHEETS_TRUNCATE_BEFORE_LOAD          Truncate the BQ table before loading (default: true)
 """
 from __future__ import annotations
@@ -421,14 +421,6 @@ def sync_sheet_to_bq(
     ensure_dataset(bq_client, dataset_id)
     ensure_table(bq_client, table_id, SCHEMA)
 
-    # Optionally truncate before loading
-    if truncate:
-        print(f"  Truncating {table_id} ...")
-        try:
-            bq_client.query(f"TRUNCATE TABLE `{table_id}`").result()
-        except Exception as exc:
-            print(f"  (truncate skipped: {exc})")
-
     # Read all rows from the sheet
     print(f"  Opening spreadsheet {SPREADSHEET_ID} ...")
     spreadsheet = gs_client.open_by_key(SPREADSHEET_ID)
@@ -453,8 +445,17 @@ def sync_sheet_to_bq(
     print(f"  Matches on {match_date}: {len(today_rows)}")
 
     if not today_rows:
-        print("  No matches for today. Nothing to insert.")
+        print("  No matches for today. Skipping load and preserving existing table data.")
         return {"table": table_id, "match_date": match_date, "total_rows": len(data_rows), "filtered": 0, "inserted": 0}
+
+    # Optionally truncate only when we actually have rows to load.
+    # This prevents accidental emptying of the table on date/input mismatches.
+    if truncate:
+        print(f"  Truncating {table_id} ...")
+        try:
+            bq_client.query(f"TRUNCATE TABLE `{table_id}`").result()
+        except Exception as exc:
+            print(f"  (truncate skipped: {exc})")
 
     # Transform and load
     sync_ts = datetime.now(timezone.utc).isoformat()
@@ -481,14 +482,14 @@ def sync_sheet_to_bq(
 
 
 def main() -> None:
-    match_date = os.getenv("SHEETS_MATCH_DATE")
+    match_date = (os.getenv("SHEETS_MATCH_DATE") or "").strip() or None
     table = os.getenv("SHEETS_BQ_TABLE", DEFAULT_TABLE)
     truncate = os.getenv("SHEETS_TRUNCATE_BEFORE_LOAD", "true").lower() == "true"
 
     print("=" * 60)
     print("Google Sheets -> BigQuery Sync")
     print(f"  Spreadsheet  : {SPREADSHEET_ID}")
-    print(f"  Match date   : {match_date or 'today (EST)'}")
+    print(f"  Match date   : {match_date or 'today (UTC)'}")
     print(f"  Target table : {table}")
     print(f"  Truncate     : {truncate}")
     print("=" * 60)

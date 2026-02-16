@@ -9,7 +9,7 @@ Environment variables:
     ATP_BACKFILL_YEARS    How many seasons back to fetch (default: 5)
     ATP_START_SEASON      Explicit start season (overrides BACKFILL_YEARS)
     ATP_END_SEASON        Explicit end season (overrides BACKFILL_YEARS)
-    ATP_TRUNCATE          Truncate tables before loading (default: true)
+    ATP_TRUNCATE          Truncate tables before loading (default: false)
     BDL_ATP_API_KEY       BallDontLie ATP API key
     BDL_ATP_TIER          Rate-limit tier: ALL_STAR or GOAT (default: ALL_STAR)
     GCP_PROJECT           Google Cloud project ID
@@ -60,7 +60,7 @@ def _truncate_table(client: bigquery.Client, table: str) -> None:
 
 def main() -> None:
     start_season, end_season = _season_range()
-    do_truncate = os.getenv("ATP_TRUNCATE", "true").lower() == "true"
+    do_truncate = os.getenv("ATP_TRUNCATE", "false").lower() == "true"
 
     print("=" * 60)
     print("ATP Backfill")

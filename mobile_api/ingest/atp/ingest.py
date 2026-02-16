@@ -496,20 +496,19 @@ def ingest_matches(
         ensure_table(client, table_id, SCHEMA_MATCHES)
 
     run_ts = _now_iso()
-    params: Dict[str, Any] = {}
-    if season is not None:
-        params["season"] = season
 
-    try:
+    # Prefer per-tournament fetching for comprehensive results;
+    # the generic /matches?season=X endpoint returns only a small subset.
+    if tournament_ids:
+        records = _fetch_matches_by_tournament(
+            season=season,
+            tournament_ids=tournament_ids,
+        )
+    else:
+        params: Dict[str, Any] = {}
+        if season is not None:
+            params["season"] = season
         records = fetch_paginated("/matches", params=params)
-    except AtpApiError:
-        if tournament_ids:
-            records = _fetch_matches_by_tournament(
-                season=season,
-                tournament_ids=tournament_ids,
-            )
-        else:
-            raise
 
     rows = [transform_match(record, run_ts, season) for record in records]
     inserted = insert_rows_to_bq(rows, table, client=client)

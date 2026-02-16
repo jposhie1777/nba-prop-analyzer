@@ -289,14 +289,52 @@ def _safe_bool(val: Any) -> Optional[bool]:
 
 
 def _parse_scheduled_time(val: Any) -> Optional[str]:
-    """Parse an ISO timestamp string; return ISO format or None."""
-    if not val:
+    """Parse a scheduled-time value; return ISO format or None.
+
+    Google Sheets may return timestamps in multiple textual formats depending
+    on sheet formatting (ISO strings, US-style date/time, hidden leading
+    apostrophes for text cells, etc.).
+    """
+    dt = _parse_sheet_datetime(val)
+    return dt.isoformat() if dt else None
+
+
+def _parse_sheet_datetime(val: Any) -> Optional[datetime]:
+    """Best-effort parse for sheet datetime values."""
+    if val is None:
         return None
+
+    if isinstance(val, datetime):
+        dt = val
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+    text = str(val).strip()
+    if not text:
+        return None
+
+    # Google Sheets sometimes stores plain-text timestamps with a leading
+    # apostrophe; strip it before parsing.
+    text = text.lstrip("'")
+
+    # Most common case: ISO timestamp with `Z` suffix.
     try:
-        dt = datetime.fromisoformat(str(val).replace("Z", "+00:00"))
-        return dt.isoformat()
-    except (ValueError, TypeError):
-        return None
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        pass
+
+    for fmt in (
+        "%Y-%m-%d %H:%M:%S",
+        "%m/%d/%Y %H:%M:%S",
+        "%m/%d/%Y %I:%M:%S %p",
+        "%m/%d/%Y %H:%M",
+        "%m/%d/%Y %I:%M %p",
+    ):
+        try:
+            return datetime.strptime(text, fmt).replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+
+    return None
 
 
 def _cell(row: List[Any], idx: int) -> Any:
@@ -387,11 +425,10 @@ def is_match_on_date(row: List[Any], target_date: str) -> bool:
     raw = _cell(row, COL["scheduled_time"])
     if not raw:
         return False
-    try:
-        dt_utc = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
-        return dt_utc.strftime("%Y-%m-%d") == target_date
-    except (ValueError, TypeError):
+    dt_utc = _parse_sheet_datetime(raw)
+    if dt_utc is None:
         return False
+    return dt_utc.strftime("%Y-%m-%d") == target_date
 
 
 # ======================================================

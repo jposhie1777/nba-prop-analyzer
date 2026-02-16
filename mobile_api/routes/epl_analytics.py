@@ -17,6 +17,7 @@ EPL_MATCHES_TABLE = os.getenv("EPL_MATCHES_TABLE", "epl_data.matches")
 EPL_STANDINGS_TABLE = os.getenv("EPL_STANDINGS_TABLE", "epl_data.standings")
 EPL_TEAMS_TABLE = os.getenv("EPL_TEAMS_TABLE", "epl_data.teams")
 EPL_MATCH_EVENTS_TABLE = os.getenv("EPL_MATCH_EVENTS_TABLE", "epl_data.match_events")
+EPL_TEAM_MASTER_METRICS_TABLE = os.getenv("EPL_TEAM_MASTER_METRICS_TABLE", "epl_data.team_master_metrics")
 
 
 def _logo_url(team_name: str) -> str:
@@ -361,4 +362,67 @@ def epl_upcoming_today(current_season: int = Query(default_factory=_season_defau
     for row in rows:
         row["home_logo"] = _logo_url(row.get("home_team") or "")
         row["away_logo"] = _logo_url(row.get("away_team") or "")
+    return rows
+
+
+@router.get("/epl/standings")
+def epl_standings():
+    sql = f"""
+    SELECT
+      team_id,
+      team_name,
+      team_short_name,
+      rank,
+      points,
+      goal_differential,
+      standing_note AS win_loss_record
+    FROM `{EPL_TEAM_MASTER_METRICS_TABLE}`
+    ORDER BY rank ASC, points DESC, goal_differential DESC, team_name ASC
+    """
+    rows = _query(sql, [])
+    for row in rows:
+        row["team_logo"] = _logo_url(row.get("team_name") or "")
+    return rows
+
+
+@router.get("/epl/team-master-metrics")
+def epl_team_master_metrics():
+    sql = f"""
+    SELECT
+      team_id,
+      team_name,
+      team_short_name,
+      rank,
+      points,
+      goal_differential,
+      points_per_game,
+      standing_note,
+      season_avg_goals_scored,
+      season_avg_goals_allowed,
+      season_score_rate,
+      season_allow_rate,
+      last10_avg_scored,
+      last10_avg_allowed,
+      last5_avg_scored,
+      last5_avg_allowed,
+      last3_avg_scored,
+      last3_avg_allowed,
+      season_team_cards_pg,
+      season_opponent_cards_pg,
+      season_total_cards_pg,
+      l10_team_cards_pg,
+      l10_opponent_cards_pg,
+      l10_total_cards_pg,
+      l5_team_cards_pg,
+      l5_opponent_cards_pg,
+      l5_total_cards_pg,
+      l3_team_cards_pg,
+      l3_opponent_cards_pg,
+      l3_total_cards_pg
+    FROM `{EPL_TEAM_MASTER_METRICS_TABLE}`
+    ORDER BY rank ASC, points DESC, team_name ASC
+    """
+    rows = _query(sql, [])
+    for row in rows:
+        row["team_logo"] = _logo_url(row.get("team_name") or "")
     return rows

@@ -32,6 +32,8 @@ const HIDDEN_SCREENS = [
   "epl/btts",
   "epl/cards",
   "epl/moneylines",
+  "epl/standings",
+  "epl/team-master-metrics",
   "epl/total-goals",
   "first-basket",
   "game-betting",

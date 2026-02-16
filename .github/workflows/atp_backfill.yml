@@ -18,7 +18,7 @@ on:
       truncate:
         description: "Truncate tables before backfill (true/false)"
         required: false
-        default: "true"
+        default: "false"
 
 jobs:
   backfill:

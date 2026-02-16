@@ -19,7 +19,7 @@ If your schema uses different names, replace them in the SQL below.
 Create flattened tables once:
 
 ```sql
-CREATE TABLE IF NOT EXISTS `project.epl_silver.matches_flat`
+CREATE TABLE IF NOT EXISTS `epl_silver.matches_flat`
 (
   match_id STRING,
   competition STRING,
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS `project.epl_silver.matches_flat`
 PARTITION BY match_date
 CLUSTER BY competition, season, home_team_id, away_team_id;
 
-CREATE TABLE IF NOT EXISTS `project.epl_silver.match_events_flat`
+CREATE TABLE IF NOT EXISTS `epl_silver.match_events_flat`
 (
   match_id STRING,
   event_id STRING,

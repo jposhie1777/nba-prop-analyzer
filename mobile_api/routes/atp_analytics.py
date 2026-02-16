@@ -736,7 +736,12 @@ def _read_today_sheet_matches(
       winner_full_name,
       score
     FROM `{_ATP_SHEET_DAILY_MATCHES_TABLE}`
-    WHERE match_date = CURRENT_DATE('America/New_York')
+    WHERE (
+      -- The Google sheet's "today" slate is keyed by UTC date, including
+      -- placeholder 00:00:00Z rows used for "Followed By" matches.
+      DATE(scheduled_time) = CURRENT_DATE('UTC')
+      OR match_date = CURRENT_DATE('UTC')
+    )
       AND (@tournament_id IS NULL OR tournament_id = @tournament_id)
     ORDER BY scheduled_time ASC
     LIMIT @limit
@@ -1066,6 +1071,56 @@ def get_atp_active_tournaments(
         )
 
         return {"tournaments": active, "count": len(active)}
+    except Exception as err:
+        _handle_error(err)
+
+
+@router.get("/sheet-daily-debug")
+def get_atp_sheet_daily_debug(
+    tournament_id: Optional[int] = None,
+):
+    """Debug view for ATP sheet_daily_matches ingestion health."""
+    try:
+        client = get_bq_client()
+        sql = f"""
+        SELECT
+          COUNT(1) AS rows_today_utc,
+          COUNTIF(match_status = 'scheduled') AS scheduled_rows_today_utc,
+          COUNTIF(match_status = 'in_progress') AS in_progress_rows_today_utc,
+          COUNTIF(match_status = 'finished' OR match_status = 'F') AS finished_rows_today_utc,
+          MAX(sync_ts) AS latest_sync_ts,
+          MIN(scheduled_time) AS min_scheduled_time,
+          MAX(scheduled_time) AS max_scheduled_time
+        FROM `{_ATP_SHEET_DAILY_MATCHES_TABLE}`
+        WHERE (
+          DATE(scheduled_time) = CURRENT_DATE('UTC')
+          OR match_date = CURRENT_DATE('UTC')
+        )
+          AND (@tournament_id IS NULL OR tournament_id = @tournament_id)
+        """
+
+        job = client.query(
+            sql,
+            job_config=bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter("tournament_id", "INT64", tournament_id),
+                ]
+            ),
+        )
+        row = next(iter(job.result()), None)
+
+        return {
+            "table": _ATP_SHEET_DAILY_MATCHES_TABLE,
+            "today_utc": datetime.now(timezone.utc).date().isoformat(),
+            "tournament_id": tournament_id,
+            "rows_today_utc": int(row.get("rows_today_utc") or 0) if row else 0,
+            "scheduled_rows_today_utc": int(row.get("scheduled_rows_today_utc") or 0) if row else 0,
+            "in_progress_rows_today_utc": int(row.get("in_progress_rows_today_utc") or 0) if row else 0,
+            "finished_rows_today_utc": int(row.get("finished_rows_today_utc") or 0) if row else 0,
+            "latest_sync_ts": row.get("latest_sync_ts").isoformat() if row and row.get("latest_sync_ts") else None,
+            "min_scheduled_time": row.get("min_scheduled_time").isoformat() if row and row.get("min_scheduled_time") else None,
+            "max_scheduled_time": row.get("max_scheduled_time").isoformat() if row and row.get("max_scheduled_time") else None,
+        }
     except Exception as err:
         _handle_error(err)
 

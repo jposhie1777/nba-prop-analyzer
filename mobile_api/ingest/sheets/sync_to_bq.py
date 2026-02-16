@@ -16,7 +16,7 @@ Environment variables:
     SHEETS_WORKSHEET_INDEX               0-based worksheet tab index fallback (default: 2)
     SHEETS_BQ_DATASET                    BigQuery dataset (default: atp_data)
     SHEETS_BQ_TABLE                      BigQuery table  (default: atp_data.sheet_daily_matches)
-    SHEETS_MATCH_DATE                    Override date filter (YYYY-MM-DD); defaults to today EST
+    SHEETS_MATCH_DATE                    Override date filter (YYYY-MM-DD); defaults to today UTC
     SHEETS_TRUNCATE_BEFORE_LOAD          Truncate the BQ table before loading (default: true)
 """
 from __future__ import annotations
@@ -102,28 +102,27 @@ COL = {
     "player2_weight_kg": 35,
     "player2_plays": 36,
     "player2_turned_pro": 37,
-    "winner_id": 38,
-    "winner_first_name": 39,
-    "winner_last_name": 40,
-    "winner_full_name": 41,
-    "winner_country": 42,
-    "winner_country_code": 43,
-    "winner_birth_place": 44,
-    "winner_age": 45,
-    "winner_height_cm": 46,
-    "winner_weight_kg": 47,
-    "winner_plays": 48,
-    "winner_turned_pro": 49,
-    "score": 50,
-    "duration": 51,
-    "number_of_sets": 52,
-    "match_status": 53,
-    "is_live": 54,
-    "scheduled_time": 55,
-    "not_before_text": 56,
-    "winner_label": 57,
+    "winner_label": 38,
+    "score": 39,
+    "duration": 40,
+    "number_of_sets": 41,
+    "match_status": 42,
+    "is_live": 43,
+    "scheduled_time": 44,
+    "not_before_text": 45,
+    "winner_id": 46,
+    "winner_first_name": 47,
+    "winner_last_name": 48,
+    "winner_full_name": 49,
+    "winner_country": 50,
+    "winner_country_code": 51,
+    "winner_birth_place": 52,
+    "winner_age": 53,
+    "winner_height_cm": 54,
+    "winner_weight_kg": 55,
+    "winner_plays": 56,
+    "winner_turned_pro": 57,
 }
-
 # ======================================================
 # BigQuery schema
 # ======================================================
@@ -352,7 +351,7 @@ def transform_row(row: List[Any], sync_ts: str, match_date: str) -> Dict[str, An
         "winner_id": _safe_int(_cell(row, COL["winner_id"])),
         "winner_first_name": _cell(row, COL["winner_first_name"]) or None,
         "winner_last_name": _cell(row, COL["winner_last_name"]) or None,
-        "winner_full_name": _cell(row, COL["winner_full_name"]) or None,
+        "winner_full_name": _cell(row, COL["winner_full_name"]) or _cell(row, COL["winner_label"]) or None,
         "winner_country": _cell(row, COL["winner_country"]) or None,
         "winner_country_code": _cell(row, COL["winner_country_code"]) or None,
         "winner_birth_place": _cell(row, COL["winner_birth_place"]) or None,
@@ -421,14 +420,6 @@ def sync_sheet_to_bq(
     ensure_dataset(bq_client, dataset_id)
     ensure_table(bq_client, table_id, SCHEMA)
 
-    # Optionally truncate before loading
-    if truncate:
-        print(f"  Truncating {table_id} ...")
-        try:
-            bq_client.query(f"TRUNCATE TABLE `{table_id}`").result()
-        except Exception as exc:
-            print(f"  (truncate skipped: {exc})")
-
     # Read all rows from the sheet
     print(f"  Opening spreadsheet {SPREADSHEET_ID} ...")
     spreadsheet = gs_client.open_by_key(SPREADSHEET_ID)
@@ -453,8 +444,32 @@ def sync_sheet_to_bq(
     print(f"  Matches on {match_date}: {len(today_rows)}")
 
     if not today_rows:
-        print("  No matches for today. Nothing to insert.")
+        parseable = 0
+        sample_scheduled = None
+        for row in data_rows:
+            raw = _cell(row, COL["scheduled_time"])
+            if sample_scheduled is None and raw:
+                sample_scheduled = raw
+            try:
+                if raw:
+                    datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+                    parseable += 1
+            except (ValueError, TypeError):
+                continue
+        print(
+            "  No matches for today. Skipping load and preserving existing table data. "
+            f"(parseable_scheduled_time_rows={parseable}, sample_scheduled_time={sample_scheduled!r})"
+        )
         return {"table": table_id, "match_date": match_date, "total_rows": len(data_rows), "filtered": 0, "inserted": 0}
+
+    # Optionally truncate only when we actually have rows to load.
+    # This prevents accidental emptying of the table on date/input mismatches.
+    if truncate:
+        print(f"  Truncating {table_id} ...")
+        try:
+            bq_client.query(f"TRUNCATE TABLE `{table_id}`").result()
+        except Exception as exc:
+            print(f"  (truncate skipped: {exc})")
 
     # Transform and load
     sync_ts = datetime.now(timezone.utc).isoformat()
@@ -481,14 +496,14 @@ def sync_sheet_to_bq(
 
 
 def main() -> None:
-    match_date = os.getenv("SHEETS_MATCH_DATE")
+    match_date = (os.getenv("SHEETS_MATCH_DATE") or "").strip() or None
     table = os.getenv("SHEETS_BQ_TABLE", DEFAULT_TABLE)
     truncate = os.getenv("SHEETS_TRUNCATE_BEFORE_LOAD", "true").lower() == "true"
 
     print("=" * 60)
     print("Google Sheets -> BigQuery Sync")
     print(f"  Spreadsheet  : {SPREADSHEET_ID}")
-    print(f"  Match date   : {match_date or 'today (EST)'}")
+    print(f"  Match date   : {match_date or 'today (UTC)'}")
     print(f"  Target table : {table}")
     print(f"  Truncate     : {truncate}")
     print("=" * 60)

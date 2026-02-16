@@ -1,11 +1,10 @@
 name: Sheets → BigQuery Daily Sync
 
 on:
-  # Run daily at 10:00 UTC (adjust to your preferred time)
+  # Run daily at 10:30 UTC (~5:30 AM EST / 6:30 AM EDT)
   schedule:
-    - cron: "0 10 * * *"
+    - cron: "30 10 * * *"
 
-  # Manual trigger with optional date override
   workflow_dispatch:
     inputs:
       match_date:

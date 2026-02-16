@@ -59,7 +59,7 @@ CLUSTER BY match_id, event_type, team_id;
 Use this **scheduled query** at 5:00 AM ET to process only records that have not yet been flattened:
 
 ```sql
-MERGE `project.epl_silver.matches_flat` T
+MERGE `epl_silver.matches_flat` T
 USING (
   SELECT
     CAST(md.match_id AS STRING) AS match_id,
@@ -81,7 +81,7 @@ ON T.match_id = S.match_id
 WHEN NOT MATCHED THEN
   INSERT ROW;
 
-MERGE `project.epl_silver.match_events_flat` T
+MERGE `epl_silver.match_events_flat` T
 USING (
   SELECT
     CAST(me.match_id AS STRING) AS match_id,

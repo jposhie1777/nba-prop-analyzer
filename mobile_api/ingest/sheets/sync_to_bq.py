@@ -124,6 +124,59 @@ COL = {
     "winner_label": 57,
 }
 
+# Alternate sheet layout used by ATP Matches where `Winner` is a label
+# before score/duration and winner profile columns appear after
+# `Not Before Text`.
+COL_ALT_WINNER_LABEL = {
+    **COL,
+    "winner_label": 38,
+    "score": 39,
+    "duration": 40,
+    "number_of_sets": 41,
+    "match_status": 42,
+    "is_live": 43,
+    "scheduled_time": 44,
+    "not_before_text": 45,
+    "winner_id": 46,
+    "winner_first_name": 47,
+    "winner_last_name": 48,
+    "winner_full_name": 49,
+    "winner_country": 50,
+    "winner_country_code": 51,
+    "winner_birth_place": 52,
+    "winner_age": 53,
+    "winner_height_cm": 54,
+    "winner_weight_kg": 55,
+    "winner_plays": 56,
+    "winner_turned_pro": 57,
+}
+
+
+def _normalized_header(value: Any) -> str:
+    return "".join(ch.lower() for ch in str(value) if ch.isalnum())
+
+
+def resolve_column_map(header_row: List[Any]) -> Dict[str, int]:
+    """Resolve column indexes from header layout.
+
+    Supports both known ATP sheet variants.
+    """
+    col_map = dict(COL)
+    normalized = [_normalized_header(h) for h in header_row]
+
+    # Variant detection: older layout has `Winner` text column at index 38.
+    if len(normalized) > 38 and normalized[38] == "winner":
+        col_map = dict(COL_ALT_WINNER_LABEL)
+
+    # Header-name override for scheduled/not-before when available.
+    for idx, name in enumerate(normalized):
+        if name == "scheduledtime":
+            col_map["scheduled_time"] = idx
+        elif name == "notbeforetext":
+            col_map["not_before_text"] = idx
+
+    return col_map
+
 # ======================================================
 # BigQuery schema
 # ======================================================
@@ -289,14 +342,52 @@ def _safe_bool(val: Any) -> Optional[bool]:
 
 
 def _parse_scheduled_time(val: Any) -> Optional[str]:
-    """Parse an ISO timestamp string; return ISO format or None."""
-    if not val:
+    """Parse a scheduled-time value; return ISO format or None.
+
+    Google Sheets may return timestamps in multiple textual formats depending
+    on sheet formatting (ISO strings, US-style date/time, hidden leading
+    apostrophes for text cells, etc.).
+    """
+    dt = _parse_sheet_datetime(val)
+    return dt.isoformat() if dt else None
+
+
+def _parse_sheet_datetime(val: Any) -> Optional[datetime]:
+    """Best-effort parse for sheet datetime values."""
+    if val is None:
         return None
+
+    if isinstance(val, datetime):
+        dt = val
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+    text = str(val).strip()
+    if not text:
+        return None
+
+    # Google Sheets sometimes stores plain-text timestamps with a leading
+    # apostrophe; strip it before parsing.
+    text = text.lstrip("'")
+
+    # Most common case: ISO timestamp with `Z` suffix.
     try:
-        dt = datetime.fromisoformat(str(val).replace("Z", "+00:00"))
-        return dt.isoformat()
-    except (ValueError, TypeError):
-        return None
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        pass
+
+    for fmt in (
+        "%Y-%m-%d %H:%M:%S",
+        "%m/%d/%Y %H:%M:%S",
+        "%m/%d/%Y %I:%M:%S %p",
+        "%m/%d/%Y %H:%M",
+        "%m/%d/%Y %I:%M %p",
+    ):
+        try:
+            return datetime.strptime(text, fmt).replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+
+    return None
 
 
 def _cell(row: List[Any], idx: int) -> Any:
@@ -306,77 +397,82 @@ def _cell(row: List[Any], idx: int) -> Any:
     return None
 
 
-def transform_row(row: List[Any], sync_ts: str, match_date: str) -> Dict[str, Any]:
+def transform_row(
+    row: List[Any],
+    sync_ts: str,
+    match_date: str,
+    col_map: Dict[str, int],
+) -> Dict[str, Any]:
     """Transform a single sheet row into a BigQuery-ready dict."""
     return {
         "sync_ts": sync_ts,
         "match_date": match_date,
-        "match_id": _safe_int(_cell(row, COL["match_id"])),
-        "tournament_id": _safe_int(_cell(row, COL["tournament_id"])),
-        "tournament_name": _cell(row, COL["tournament_name"]) or None,
-        "tournament_location": _cell(row, COL["tournament_location"]) or None,
-        "surface": _cell(row, COL["surface"]) or None,
-        "category": _cell(row, COL["category"]) or None,
-        "tournament_season": _safe_int(_cell(row, COL["tournament_season"])),
-        "tournament_start_date": _cell(row, COL["tournament_start_date"]) or None,
-        "tournament_end_date": _cell(row, COL["tournament_end_date"]) or None,
-        "prize_money": _safe_int(_cell(row, COL["prize_money"])),
-        "prize_currency": _cell(row, COL["prize_currency"]) or None,
-        "draw_size": _safe_int(_cell(row, COL["draw_size"])),
-        "season": _safe_int(_cell(row, COL["season"])),
-        "round": _cell(row, COL["round"]) or None,
-        "player1_id": _safe_int(_cell(row, COL["player1_id"])),
-        "player1_first_name": _cell(row, COL["player1_first_name"]) or None,
-        "player1_last_name": _cell(row, COL["player1_last_name"]) or None,
-        "player1_full_name": _cell(row, COL["player1_full_name"]) or None,
-        "player1_country": _cell(row, COL["player1_country"]) or None,
-        "player1_country_code": _cell(row, COL["player1_country_code"]) or None,
-        "player1_birth_place": _cell(row, COL["player1_birth_place"]) or None,
-        "player1_age": _safe_int(_cell(row, COL["player1_age"])),
-        "player1_height_cm": _safe_int(_cell(row, COL["player1_height_cm"])),
-        "player1_weight_kg": _safe_int(_cell(row, COL["player1_weight_kg"])),
-        "player1_plays": _cell(row, COL["player1_plays"]) or None,
-        "player1_turned_pro": _safe_int(_cell(row, COL["player1_turned_pro"])),
-        "player2_id": _safe_int(_cell(row, COL["player2_id"])),
-        "player2_first_name": _cell(row, COL["player2_first_name"]) or None,
-        "player2_last_name": _cell(row, COL["player2_last_name"]) or None,
-        "player2_full_name": _cell(row, COL["player2_full_name"]) or None,
-        "player2_country": _cell(row, COL["player2_country"]) or None,
-        "player2_country_code": _cell(row, COL["player2_country_code"]) or None,
-        "player2_birth_place": _cell(row, COL["player2_birth_place"]) or None,
-        "player2_age": _safe_int(_cell(row, COL["player2_age"])),
-        "player2_height_cm": _safe_int(_cell(row, COL["player2_height_cm"])),
-        "player2_weight_kg": _safe_int(_cell(row, COL["player2_weight_kg"])),
-        "player2_plays": _cell(row, COL["player2_plays"]) or None,
-        "player2_turned_pro": _safe_int(_cell(row, COL["player2_turned_pro"])),
-        "winner_id": _safe_int(_cell(row, COL["winner_id"])),
-        "winner_first_name": _cell(row, COL["winner_first_name"]) or None,
-        "winner_last_name": _cell(row, COL["winner_last_name"]) or None,
-        "winner_full_name": _cell(row, COL["winner_full_name"]) or None,
-        "winner_country": _cell(row, COL["winner_country"]) or None,
-        "winner_country_code": _cell(row, COL["winner_country_code"]) or None,
-        "winner_birth_place": _cell(row, COL["winner_birth_place"]) or None,
-        "winner_age": _safe_int(_cell(row, COL["winner_age"])),
-        "winner_height_cm": _safe_int(_cell(row, COL["winner_height_cm"])),
-        "winner_weight_kg": _safe_int(_cell(row, COL["winner_weight_kg"])),
-        "winner_plays": _cell(row, COL["winner_plays"]) or None,
-        "winner_turned_pro": _safe_int(_cell(row, COL["winner_turned_pro"])),
-        "score": _cell(row, COL["score"]) or None,
-        "duration": _cell(row, COL["duration"]) or None,
-        "number_of_sets": _safe_int(_cell(row, COL["number_of_sets"])),
-        "match_status": _cell(row, COL["match_status"]) or None,
-        "is_live": _safe_bool(_cell(row, COL["is_live"])),
-        "scheduled_time": _parse_scheduled_time(_cell(row, COL["scheduled_time"])),
-        "not_before_text": _cell(row, COL["not_before_text"]) or None,
+        "match_id": _safe_int(_cell(row, col_map["match_id"])),
+        "tournament_id": _safe_int(_cell(row, col_map["tournament_id"])),
+        "tournament_name": _cell(row, col_map["tournament_name"]) or None,
+        "tournament_location": _cell(row, col_map["tournament_location"]) or None,
+        "surface": _cell(row, col_map["surface"]) or None,
+        "category": _cell(row, col_map["category"]) or None,
+        "tournament_season": _safe_int(_cell(row, col_map["tournament_season"])),
+        "tournament_start_date": _cell(row, col_map["tournament_start_date"]) or None,
+        "tournament_end_date": _cell(row, col_map["tournament_end_date"]) or None,
+        "prize_money": _safe_int(_cell(row, col_map["prize_money"])),
+        "prize_currency": _cell(row, col_map["prize_currency"]) or None,
+        "draw_size": _safe_int(_cell(row, col_map["draw_size"])),
+        "season": _safe_int(_cell(row, col_map["season"])),
+        "round": _cell(row, col_map["round"]) or None,
+        "player1_id": _safe_int(_cell(row, col_map["player1_id"])),
+        "player1_first_name": _cell(row, col_map["player1_first_name"]) or None,
+        "player1_last_name": _cell(row, col_map["player1_last_name"]) or None,
+        "player1_full_name": _cell(row, col_map["player1_full_name"]) or None,
+        "player1_country": _cell(row, col_map["player1_country"]) or None,
+        "player1_country_code": _cell(row, col_map["player1_country_code"]) or None,
+        "player1_birth_place": _cell(row, col_map["player1_birth_place"]) or None,
+        "player1_age": _safe_int(_cell(row, col_map["player1_age"])),
+        "player1_height_cm": _safe_int(_cell(row, col_map["player1_height_cm"])),
+        "player1_weight_kg": _safe_int(_cell(row, col_map["player1_weight_kg"])),
+        "player1_plays": _cell(row, col_map["player1_plays"]) or None,
+        "player1_turned_pro": _safe_int(_cell(row, col_map["player1_turned_pro"])),
+        "player2_id": _safe_int(_cell(row, col_map["player2_id"])),
+        "player2_first_name": _cell(row, col_map["player2_first_name"]) or None,
+        "player2_last_name": _cell(row, col_map["player2_last_name"]) or None,
+        "player2_full_name": _cell(row, col_map["player2_full_name"]) or None,
+        "player2_country": _cell(row, col_map["player2_country"]) or None,
+        "player2_country_code": _cell(row, col_map["player2_country_code"]) or None,
+        "player2_birth_place": _cell(row, col_map["player2_birth_place"]) or None,
+        "player2_age": _safe_int(_cell(row, col_map["player2_age"])),
+        "player2_height_cm": _safe_int(_cell(row, col_map["player2_height_cm"])),
+        "player2_weight_kg": _safe_int(_cell(row, col_map["player2_weight_kg"])),
+        "player2_plays": _cell(row, col_map["player2_plays"]) or None,
+        "player2_turned_pro": _safe_int(_cell(row, col_map["player2_turned_pro"])),
+        "winner_id": _safe_int(_cell(row, col_map["winner_id"])),
+        "winner_first_name": _cell(row, col_map["winner_first_name"]) or None,
+        "winner_last_name": _cell(row, col_map["winner_last_name"]) or None,
+        "winner_full_name": _cell(row, col_map["winner_full_name"]) or None,
+        "winner_country": _cell(row, col_map["winner_country"]) or None,
+        "winner_country_code": _cell(row, col_map["winner_country_code"]) or None,
+        "winner_birth_place": _cell(row, col_map["winner_birth_place"]) or None,
+        "winner_age": _safe_int(_cell(row, col_map["winner_age"])),
+        "winner_height_cm": _safe_int(_cell(row, col_map["winner_height_cm"])),
+        "winner_weight_kg": _safe_int(_cell(row, col_map["winner_weight_kg"])),
+        "winner_plays": _cell(row, col_map["winner_plays"]) or None,
+        "winner_turned_pro": _safe_int(_cell(row, col_map["winner_turned_pro"])),
+        "score": _cell(row, col_map["score"]) or None,
+        "duration": _cell(row, col_map["duration"]) or None,
+        "number_of_sets": _safe_int(_cell(row, col_map["number_of_sets"])),
+        "match_status": _cell(row, col_map["match_status"]) or None,
+        "is_live": _safe_bool(_cell(row, col_map["is_live"])),
+        "scheduled_time": _parse_scheduled_time(_cell(row, col_map["scheduled_time"])),
+        "not_before_text": _cell(row, col_map["not_before_text"]) or None,
         "raw_json": json.dumps(
-            {str(k): _cell(row, v) for k, v in COL.items()},
+            {str(k): _cell(row, v) for k, v in col_map.items()},
             separators=(",", ":"),
             ensure_ascii=True,
         ),
     }
 
 
-def is_match_on_date(row: List[Any], target_date: str) -> bool:
+def is_match_on_date(row: List[Any], target_date: str, col_map: Dict[str, int]) -> bool:
     """Check if a row's Scheduled Time falls on the target date (YYYY-MM-DD).
 
     Compares against the UTC date from the timestamp, since the sheet groups
@@ -384,14 +480,13 @@ def is_match_on_date(row: List[Any], target_date: str) -> bool:
     for "Followed By" / TBD starts) belong to that UTC day's slate even
     though they'd roll back a calendar day in EST.
     """
-    raw = _cell(row, COL["scheduled_time"])
+    raw = _cell(row, col_map["scheduled_time"])
     if not raw:
         return False
-    try:
-        dt_utc = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
-        return dt_utc.strftime("%Y-%m-%d") == target_date
-    except (ValueError, TypeError):
+    dt_utc = _parse_sheet_datetime(raw)
+    if dt_utc is None:
         return False
+    return dt_utc.strftime("%Y-%m-%d") == target_date
 
 
 # ======================================================
@@ -436,12 +531,14 @@ def sync_sheet_to_bq(
         print("  Sheet is empty.")
         return {"table": table_id, "match_date": match_date, "total_rows": 0, "filtered": 0, "inserted": 0}
 
-    # Skip header row
+    # Resolve column layout from header, then skip header row
+    header_row = all_rows[0]
+    col_map = resolve_column_map(header_row)
     data_rows = all_rows[1:]
     print(f"  Total data rows in sheet: {len(data_rows)}")
 
     # Filter for target date
-    today_rows = [r for r in data_rows if is_match_on_date(r, match_date)]
+    today_rows = [r for r in data_rows if is_match_on_date(r, match_date, col_map)]
     print(f"  Matches on {match_date}: {len(today_rows)}")
 
     if not today_rows:
@@ -459,7 +556,7 @@ def sync_sheet_to_bq(
 
     # Transform and load
     sync_ts = datetime.now(timezone.utc).isoformat()
-    bq_rows = [transform_row(row, sync_ts, match_date) for row in today_rows]
+    bq_rows = [transform_row(row, sync_ts, match_date, col_map) for row in today_rows]
 
     # Use a load job (not streaming insert) so that TRUNCATE works immediately
     job_config = bigquery.LoadJobConfig(

@@ -11,6 +11,7 @@ type Props = {
   title: string;
   subtitle: string;
   columns: Column[];
+  leagueLabel?: string;
 };
 
 function formatCell(value: unknown): string {
@@ -19,7 +20,7 @@ function formatCell(value: unknown): string {
   return String(value);
 }
 
-export function EplTableScreen({ endpoint, title, subtitle, columns }: Props) {
+export function EplTableScreen({ endpoint, title, subtitle, columns, leagueLabel = "EPL" }: Props) {
   const { colors } = useTheme();
   const { data, loading, error } = useEplQuery<any[]>(endpoint);
 
@@ -28,12 +29,12 @@ export function EplTableScreen({ endpoint, title, subtitle, columns }: Props) {
   const header = useMemo(
     () => (
       <View style={[styles.hero, { borderColor: colors.border.subtle }]}> 
-        <Text style={styles.eyebrow}>EPL</Text>
+        <Text style={styles.eyebrow}>{leagueLabel}</Text>
         <Text style={styles.h1}>{title}</Text>
         <Text style={[styles.sub, { color: colors.text.muted }]}>{subtitle}</Text>
       </View>
     ),
-    [colors.border.subtle, colors.text.muted, subtitle, title]
+    [colors.border.subtle, colors.text.muted, leagueLabel, subtitle, title]
   );
 
   if (loading) {
@@ -48,7 +49,7 @@ export function EplTableScreen({ endpoint, title, subtitle, columns }: Props) {
     return (
       <View style={[styles.center, { backgroundColor: "#050A18", padding: 16 }]}> 
         <Text style={{ color: "#fff", textAlign: "center" }}>
-          Failed to load EPL data: {error}
+          Failed to load {leagueLabel} data: {error}
         </Text>
       </View>
     );

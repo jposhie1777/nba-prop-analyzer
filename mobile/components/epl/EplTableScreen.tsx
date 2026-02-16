@@ -83,7 +83,7 @@ export function EplTableScreen({ endpoint, title, subtitle, columns }: Props) {
       data={rows}
       keyExtractor={(item, idx) => `${item.match_id || item.team_name || idx}`}
       renderItem={({ item }) => {
-        const homeLogo = item.home_logo as string | undefined;
+        const homeLogo = (item.home_logo || item.team_logo) as string | undefined;
         const awayLogo = item.away_logo as string | undefined;
         return (
           <View style={[styles.card, { borderColor: colors.border.subtle }]}> 

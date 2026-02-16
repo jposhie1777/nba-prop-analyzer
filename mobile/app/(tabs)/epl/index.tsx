@@ -46,6 +46,22 @@ export default function EplHome() {
         </Text>
       </View>
 
+
+      <Tile
+        title="Standings"
+        subtitle="Rankings table with points, record, and goal differential."
+        route="/(tabs)/epl/standings"
+        icon="trophy-outline"
+        accent="#A78BFA"
+      />
+      <Tile
+        title="Team Master Metrics"
+        subtitle="Full team metrics table with season + rolling splits and card logs."
+        route="/(tabs)/epl/team-master-metrics"
+        icon="grid-outline"
+        accent="#22D3EE"
+      />
+
       <Tile
         title="Moneylines"
         subtitle="Model-driven fair prices and win percentages."

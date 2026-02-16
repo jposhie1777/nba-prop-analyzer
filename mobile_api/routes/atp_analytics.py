@@ -736,7 +736,12 @@ def _read_today_sheet_matches(
       winner_full_name,
       score
     FROM `{_ATP_SHEET_DAILY_MATCHES_TABLE}`
-    WHERE match_date = CURRENT_DATE('America/New_York')
+    WHERE (
+      -- The Google sheet's "today" slate is keyed by UTC date, including
+      -- placeholder 00:00:00Z rows used for "Followed By" matches.
+      DATE(scheduled_time) = CURRENT_DATE('UTC')
+      OR match_date = CURRENT_DATE('UTC')
+    )
       AND (@tournament_id IS NULL OR tournament_id = @tournament_id)
     ORDER BY scheduled_time ASC
     LIMIT @limit

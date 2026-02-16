@@ -421,14 +421,6 @@ def sync_sheet_to_bq(
     ensure_dataset(bq_client, dataset_id)
     ensure_table(bq_client, table_id, SCHEMA)
 
-    # Optionally truncate before loading
-    if truncate:
-        print(f"  Truncating {table_id} ...")
-        try:
-            bq_client.query(f"TRUNCATE TABLE `{table_id}`").result()
-        except Exception as exc:
-            print(f"  (truncate skipped: {exc})")
-
     # Read all rows from the sheet
     print(f"  Opening spreadsheet {SPREADSHEET_ID} ...")
     spreadsheet = gs_client.open_by_key(SPREADSHEET_ID)
@@ -453,8 +445,17 @@ def sync_sheet_to_bq(
     print(f"  Matches on {match_date}: {len(today_rows)}")
 
     if not today_rows:
-        print("  No matches for today. Nothing to insert.")
+        print("  No matches for today. Skipping load and preserving existing table data.")
         return {"table": table_id, "match_date": match_date, "total_rows": len(data_rows), "filtered": 0, "inserted": 0}
+
+    # Optionally truncate only when we actually have rows to load.
+    # This prevents accidental emptying of the table on date/input mismatches.
+    if truncate:
+        print(f"  Truncating {table_id} ...")
+        try:
+            bq_client.query(f"TRUNCATE TABLE `{table_id}`").result()
+        except Exception as exc:
+            print(f"  (truncate skipped: {exc})")
 
     # Transform and load
     sync_ts = datetime.now(timezone.utc).isoformat()

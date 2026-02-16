@@ -154,6 +154,27 @@ export default function Home() {
         onPress={() => router.push("/(tabs)/epl")}
       />
 
+
+      <SportTile
+        title="LaLiga"
+        subtitle="Moneylines, BTTS, totals, cards, and standings for Spain's top flight."
+        badge="LIVE"
+        icon="football"
+        logoUrl={LEAGUE_LOGOS.LALIGA}
+        accent="#F59E0B"
+        onPress={() => router.push("/(tabs)/laliga")}
+      />
+
+      <SportTile
+        title="MLS"
+        subtitle="US league dashboards with the same analytics stack as EPL."
+        badge="LIVE"
+        icon="football"
+        logoUrl={LEAGUE_LOGOS.MLS}
+        accent="#34D399"
+        onPress={() => router.push("/(tabs)/mls")}
+      />
+
       <SportTile
         title="WTA"
         subtitle="Women's tennis dashboards and matchup models are coming soon."

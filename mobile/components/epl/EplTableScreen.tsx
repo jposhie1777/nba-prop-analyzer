@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { ActivityIndicator, FlatList, Image, ScrollView, StyleSheet, Text, View } from "react-native";
-import Constants from "expo-constants";
+
+import { useEplQuery } from "@/hooks/epl/useEplQuery";
 import { useTheme } from "@/store/useTheme";
 
 type Column = { key: string; label: string };
@@ -12,8 +13,6 @@ type Props = {
   columns: Column[];
 };
 
-const API = Constants.expoConfig?.extra?.API_URL || "";
-
 function formatCell(value: unknown): string {
   if (value == null) return "-";
   if (typeof value === "number") return Number.isInteger(value) ? `${value}` : value.toFixed(2);
@@ -22,31 +21,9 @@ function formatCell(value: unknown): string {
 
 export function EplTableScreen({ endpoint, title, subtitle, columns }: Props) {
   const { colors } = useTheme();
-  const [rows, setRows] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, loading, error } = useEplQuery<any[]>(endpoint);
 
-  useEffect(() => {
-    let alive = true;
-    setLoading(true);
-    fetch(`${API}${endpoint}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (!alive) return;
-        setRows(Array.isArray(data) ? data : []);
-      })
-      .catch((e) => {
-        if (!alive) return;
-        setError(String(e));
-      })
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
-
-    return () => {
-      alive = false;
-    };
-  }, [endpoint]);
+  const rows = Array.isArray(data) ? data : [];
 
   const header = useMemo(
     () => (
@@ -69,8 +46,10 @@ export function EplTableScreen({ endpoint, title, subtitle, columns }: Props) {
 
   if (error) {
     return (
-      <View style={[styles.center, { backgroundColor: "#050A18", padding: 16 }]}>
-        <Text style={{ color: "#fff" }}>{error}</Text>
+      <View style={[styles.center, { backgroundColor: "#050A18", padding: 16 }]}> 
+        <Text style={{ color: "#fff", textAlign: "center" }}>
+          Failed to load EPL data: {error}
+        </Text>
       </View>
     );
   }
@@ -90,7 +69,7 @@ export function EplTableScreen({ endpoint, title, subtitle, columns }: Props) {
             {(item.home_team || item.team_name) && (
               <View style={styles.titleRow}>
                 {homeLogo ? <Image source={{ uri: homeLogo }} style={styles.logo} /> : null}
-                <Text style={[styles.teamText, { color: colors.text.primary }]}>
+                <Text style={[styles.teamText, { color: colors.text.primary }]}> 
                   {item.home_team && item.away_team
                     ? `${item.home_team} vs ${item.away_team}`
                     : item.team_name}

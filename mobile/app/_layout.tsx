@@ -23,7 +23,9 @@ import { useSavedProps } from "@/store/useSavedProps";
 import { useDevStore } from "@/lib/dev/devStore";
 import { installFetchInterceptor } from "@/lib/dev/interceptFetch";
 import { PropBetslipDrawer } from "@/components/prop/PropBetslipDrawer";
+import { AtpBetslipDrawer } from "@/components/atp/AtpBetslipDrawer";
 import { ensurePushRegistered } from "@/lib/notifications/registerForPush";
+import { useAtpBetslip } from "@/store/useAtpBetslip";
 
 /* -------------------------------------------------
    Expo Router settings
@@ -83,11 +85,16 @@ export default function RootLayout() {
      HYDRATE STORES
   -------------------------------- */
   const hydrateSavedProps = useSavedProps((s) => s.hydrate);
+  const hydrateAtpBetslip = useAtpBetslip((s) => s.hydrate);
 
   useEffect(() => {
     console.log("💧 Hydrating saved props");
     hydrateSavedProps();
   }, [hydrateSavedProps]);
+
+  useEffect(() => {
+    hydrateAtpBetslip();
+  }, [hydrateAtpBetslip]);
 
   useEffect(() => {
     if (__DEV__) {
@@ -129,6 +136,7 @@ export default function RootLayout() {
 
           {/* 🧪 GLOBAL OVERLAYS */}
           <PropBetslipDrawer />
+          <AtpBetslipDrawer />
 
           <StatusBar style="auto" />
         </ThemeProvider>

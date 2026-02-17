@@ -166,26 +166,27 @@ export default function AtpCompareScreen() {
 
         {(data?.players || []).map((row) => {
           const hasRich = row.metrics.l15_win_rate != null;
-          const metrics = [
+          const primaryMetrics = [
             { label: "Form Score", value: formatNum(row.metrics.form_score) },
             { label: "L15 Win %", value: formatPct(row.metrics.l15_win_rate ?? row.metrics.recent_win_rate) },
-            ...(hasRich ? [{ label: "L40 Win %", value: formatPct(row.metrics.l40_win_rate) }] : []),
             { label: "Surface Win %", value: formatPct(row.metrics.surface_win_rate) },
-            ...(hasRich ? [{ label: "vs Top 50", value: formatPct(row.metrics.win_rate_vs_top50) }] : []),
             { label: "Ranking", value: row.metrics.ranking ?? "—" },
-            ...(hasRich ? [
-              { label: "Str. Sets %", value: formatPct(row.metrics.straight_sets_win_rate) },
-              { label: "Tiebreak %", value: formatPct(row.metrics.tiebreak_rate) },
-              { label: "Streak", value: (row.metrics.current_win_streak ?? 0) > 0 ? `W${row.metrics.current_win_streak}` : (row.metrics.current_loss_streak ?? 0) > 0 ? `L${row.metrics.current_loss_streak}` : "—" },
-              { label: "Confidence", value: (row.metrics.sample_confidence ?? 0) >= 0.85 ? "High" : (row.metrics.sample_confidence ?? 0) >= 0.65 ? "Med" : "Low" },
-            ] : []),
           ];
+          const expandedMetrics = hasRich ? [
+            { label: "L40 Win %", value: formatPct(row.metrics.l40_win_rate) },
+            { label: "vs Top 50", value: formatPct(row.metrics.win_rate_vs_top50) },
+            { label: "Str. Sets %", value: formatPct(row.metrics.straight_sets_win_rate) },
+            { label: "Tiebreak %", value: formatPct(row.metrics.tiebreak_rate) },
+            { label: "Streak", value: (row.metrics.current_win_streak ?? 0) > 0 ? `W${row.metrics.current_win_streak}` : (row.metrics.current_loss_streak ?? 0) > 0 ? `L${row.metrics.current_loss_streak}` : "—" },
+            { label: "Confidence", value: (row.metrics.sample_confidence ?? 0) >= 0.85 ? "High" : (row.metrics.sample_confidence ?? 0) >= 0.65 ? "Med" : "Low" },
+          ] : [];
           return (
             <MetricCard
               key={row.player_id}
               title={`${row.rank}. ${playerNameMap.get(row.player_id) ?? row.player_id}`}
               subtitle={`Score: ${formatNum(row.score)}`}
-              metrics={metrics}
+              metrics={primaryMetrics}
+              expandedMetrics={expandedMetrics}
             />
           );
         })}

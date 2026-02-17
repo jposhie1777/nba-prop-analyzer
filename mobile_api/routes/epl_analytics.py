@@ -368,23 +368,33 @@ def epl_upcoming_today(current_season: int = Query(default_factory=_season_defau
 @router.get("/epl/standings")
 def epl_standings():
     sql = f"""
+    WITH latest_season AS (
+      SELECT MAX(season) AS season
+      FROM `{EPL_STANDINGS_TABLE}`
+    ),
+    latest_standings AS (
+      SELECT payload
+      FROM `{EPL_STANDINGS_TABLE}`
+      WHERE season = (SELECT season FROM latest_season)
+      QUALIFY ROW_NUMBER() OVER (PARTITION BY JSON_VALUE(payload, '$.team.id') ORDER BY ingested_at DESC) = 1
+    )
     SELECT
-      team_id,
-      team_name,
-      team_short_name,
-      rank,
-      wins,
-      losses,
-      draws,
-      points,
-      goal_differential,
+      CAST(JSON_VALUE(payload, '$.team.id') AS INT64) AS team_id,
+      JSON_VALUE(payload, '$.team.name') AS team_name,
+      JSON_VALUE(payload, '$.team.short_name') AS team_short_name,
+      CAST(JSON_VALUE(payload, '$.rank') AS INT64) AS rank,
+      CAST(JSON_VALUE(payload, '$.wins') AS INT64) AS wins,
+      CAST(JSON_VALUE(payload, '$.losses') AS INT64) AS losses,
+      CAST(JSON_VALUE(payload, '$.draws') AS INT64) AS draws,
+      CAST(JSON_VALUE(payload, '$.points') AS INT64) AS points,
+      CAST(JSON_VALUE(payload, '$.goal_difference') AS INT64) AS goal_differential,
       CONCAT(
-        CAST(COALESCE(wins, 0) AS STRING), '-',
-        CAST(COALESCE(losses, 0) AS STRING), '-',
-        CAST(COALESCE(draws, 0) AS STRING)
+        CAST(COALESCE(CAST(JSON_VALUE(payload, '$.wins') AS INT64), 0) AS STRING), '-',
+        CAST(COALESCE(CAST(JSON_VALUE(payload, '$.losses') AS INT64), 0) AS STRING), '-',
+        CAST(COALESCE(CAST(JSON_VALUE(payload, '$.draws') AS INT64), 0) AS STRING)
       ) AS win_loss_record,
-      standing_note
-    FROM `{EPL_TEAM_MASTER_METRICS_TABLE}`
+      JSON_VALUE(payload, '$.description') AS standing_note
+    FROM latest_standings
     ORDER BY rank ASC, points DESC, goal_differential DESC, team_name ASC
     """
     rows = _query(sql, [])

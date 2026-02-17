@@ -17,7 +17,7 @@ import type {
   AtpBracketMatch,
   AtpBracketRound,
 } from "@/hooks/atp/useAtpTournamentBracket";
-import type { AtpBettingAnalyticsResponse, AtpCompareResponse } from "@/types/atp";
+import type { AtpCompareResponse } from "@/types/atp";
 import { useAtpBettingAnalytics } from "@/hooks/atp/useAtpBettingAnalytics";
 
 /* ───── helpers ───── */
@@ -44,15 +44,6 @@ function formatDateRange(start?: string | null, end?: string | null) {
     }
   }
   return `${fmt(startDate)} - ${fmt(endDate)}`;
-}
-
-function formatMatchDay(value?: string | null) {
-  if (!value) return "TBD";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "TBD";
-  return d.toLocaleDateString(undefined, {
-    day: "numeric",
-  });
 }
 
 function formatMatchTime(value?: string | null) {
@@ -141,6 +132,7 @@ function isMatchScheduledForToday(match: AtpBracketMatch) {
 const fmtPct = (v?: number | null) =>
   v == null ? "\u2014" : `${(v * 100).toFixed(1)}%`;
 const fmtNum = (v?: number | null) => (v == null ? "\u2014" : v.toFixed(2));
+const fmtAvg = (v?: number | null) => (v == null ? "\u2014" : v.toFixed(1));
 
 function tournamentShortName(t: ActiveTournament): string {
   return t.city || t.name || "Tournament";
@@ -332,6 +324,7 @@ function MatchAnalysisCard({
   colors: any;
   prefetchedAnalysis?: AtpCompareResponse | null;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const p1Id = match.player1_id;
   const p2Id = match.player2_id;
   const hasBothIds = p1Id != null && p2Id != null && p1Id !== p2Id;
@@ -345,7 +338,6 @@ function MatchAnalysisCard({
     hasBothIds && !prefetchedAnalysis
   );
 
-  // Fetch direct betting analytics for extra detail (streaks, confidence)
   const { data: bettingData } = useAtpBettingAnalytics({
     playerIds: hasBothIds ? [p1Id!, p2Id!] : [],
     surface,
@@ -367,10 +359,21 @@ function MatchAnalysisCard({
         ? match.player2
         : null;
 
-  // Determine if we have richer metrics from the betting analytics table
   const hasRichMetrics = !!(
-    p1Data?.metrics.l15_win_rate != null || p1Data?.metrics.win_rate_vs_top50 != null ||
+    p1Data?.metrics.l15_win_rate != null ||
+    p1Data?.metrics.win_rate_vs_top50 != null ||
     b1?.l15_adj_win_rate != null
+  );
+
+  const hasDeepAnalytics = !!(
+    b1?.l10_adj_win_rate != null ||
+    b2?.l10_adj_win_rate != null ||
+    b1?.retirement_rate != null ||
+    b2?.retirement_rate != null ||
+    b1?.titles != null ||
+    b2?.titles != null ||
+    b1?.masters_win_rate != null ||
+    b2?.masters_win_rate != null
   );
 
   return (
@@ -380,24 +383,19 @@ function MatchAnalysisCard({
         { backgroundColor: colors.surface.card, borderColor: colors.border.subtle },
       ]}
     >
-      {/* Match header */}
       <View style={s.analysisHeader}>
         <Text style={[s.analysisRound, { color: colors.text.muted }]}>
-          {match.round} {"\u2022"} {formatMatchMeta(match)}
+          {match.round} {"•"} {formatMatchMeta(match)}
         </Text>
       </View>
 
-      {/* Players matchup */}
       <View style={s.matchupRow}>
         <View style={s.matchupPlayer}>
           <View style={s.matchupIdentityRow}>
             {match.player1_headshot_url ? (
               <Image source={{ uri: match.player1_headshot_url }} style={s.matchupHeadshot} />
             ) : null}
-            <Text
-              style={[s.matchupName, { color: colors.text.primary }]}
-              numberOfLines={1}
-            >
+            <Text style={[s.matchupName, { color: colors.text.primary }]} numberOfLines={1}>
               {match.player1}
             </Text>
           </View>
@@ -415,8 +413,22 @@ function MatchAnalysisCard({
               if (!streak) return null;
               const isWin = streak.startsWith("W");
               return (
-                <View style={[s.streakBadge, { backgroundColor: isWin ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)" }]}>
-                  <Text style={[s.streakBadgeText, { color: isWin ? colors.accent.success : "#ef4444" }]}>
+                <View
+                  style={[
+                    s.streakBadge,
+                    {
+                      backgroundColor: isWin
+                        ? "rgba(34,197,94,0.15)"
+                        : "rgba(239,68,68,0.15)",
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      s.streakBadgeText,
+                      { color: isWin ? colors.accent.success : "#ef4444" },
+                    ]}
+                  >
                     {streak}
                   </Text>
                 </View>
@@ -446,200 +458,260 @@ function MatchAnalysisCard({
               if (!streak) return null;
               const isWin = streak.startsWith("W");
               return (
-                <View style={[s.streakBadge, { backgroundColor: isWin ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)" }]}>
-                  <Text style={[s.streakBadgeText, { color: isWin ? colors.accent.success : "#ef4444" }]}>
+                <View
+                  style={[
+                    s.streakBadge,
+                    {
+                      backgroundColor: isWin
+                        ? "rgba(34,197,94,0.15)"
+                        : "rgba(239,68,68,0.15)",
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      s.streakBadgeText,
+                      { color: isWin ? colors.accent.success : "#ef4444" },
+                    ]}
+                  >
                     {streak}
                   </Text>
                 </View>
               );
             })()}
             {p2Data && (
-              <Text style={[s.matchupScore, { color: colors.text.secondary }]}>
-                Score: {fmtNum(p2Data.score)}
-              </Text>
+              <Text style={[s.matchupScore, { color: colors.text.secondary }]}>Score: {fmtNum(p2Data.score)}</Text>
             )}
           </View>
         </View>
       </View>
 
-      {/* Analytics */}
       {loading ? (
         <View style={s.analysisLoading}>
           <ActivityIndicator size="small" color={colors.accent.primary} />
-          <Text style={[s.analysisLoadingText, { color: colors.text.muted }]}>
-            Analyzing matchup...
-          </Text>
+          <Text style={[s.analysisLoadingText, { color: colors.text.muted }]}>Analyzing matchup...</Text>
         </View>
       ) : error ? (
-        <Text style={[s.analysisError, { color: colors.text.muted }]}>
-          Analysis unavailable
-        </Text>
+        <Text style={[s.analysisError, { color: colors.text.muted }]}>Analysis unavailable</Text>
       ) : !hasBothIds ? (
-        <Text style={[s.analysisError, { color: colors.text.muted }]}>
-          Player data not available for analysis
-        </Text>
+        <Text style={[s.analysisError, { color: colors.text.muted }]}>Player data not available for analysis</Text>
       ) : analysis ? (
         <View style={s.analyticsSection}>
-          {/* Recommendation */}
           {rec && pickName && (
             <View
               style={[
-                s.recCard,
-                { backgroundColor: colors.glow.success, borderColor: "rgba(34,197,94,0.3)" },
+                s.recCompact,
+                { backgroundColor: colors.surface.cardSoft, borderColor: colors.border.subtle },
               ]}
             >
-              <Text style={[s.recLabel, { color: colors.accent.success }]}>
-                PICK: {pickName}
+              <Text style={[s.recCompactLabel, { color: colors.text.muted }]}>Lean</Text>
+              <Text style={[s.recCompactPick, { color: colors.accent.success }]} numberOfLines={1}>
+                {pickName}
               </Text>
-              <Text style={[s.recEdge, { color: colors.text.primary }]}>
-                Edge: {fmtNum(rec.edge)}
-              </Text>
-              {rec.reasons.length > 0 && (
-                <Text style={[s.recReasons, { color: colors.text.secondary }]}>
-                  {rec.reasons.join(" \u2022 ")}
-                </Text>
-              )}
+              <Text style={[s.recCompactEdge, { color: colors.text.secondary }]}>Edge {fmtNum(rec.edge)}</Text>
             </View>
           )}
 
-          {/* Metrics comparison grid */}
-          <View style={s.metricsGrid}>
-            {/* Column headers */}
-            <View style={s.metricsHeaderRow}>
-              <Text style={[s.metricsHeaderLabel, { color: colors.text.muted }]} />
-              <Text
-                style={[s.metricsHeaderVal, { color: colors.text.muted }]}
-                numberOfLines={1}
-              >
-                {match.player1.split(" ").pop()}
-              </Text>
-              <Text
-                style={[s.metricsHeaderVal, { color: colors.text.muted, textAlign: "right" }]}
-                numberOfLines={1}
-              >
-                {match.player2.split(" ").pop()}
+          <View style={s.quickStatsRow}>
+            <View style={[s.quickStatPill, { backgroundColor: colors.surface.cardSoft }]}> 
+              <Text style={[s.quickStatLabel, { color: colors.text.muted }]}>Form</Text>
+              <Text style={[s.quickStatValue, { color: colors.text.primary }]}>
+                {fmtNum(p1Data?.metrics.form_score)} - {fmtNum(p2Data?.metrics.form_score)}
               </Text>
             </View>
-
-            <View style={[s.metricsGridDivider, { backgroundColor: colors.border.subtle }]} />
-
-            {/* Form */}
-            <MetricRow
-              label="Form"
-              v1={fmtNum(p1Data?.metrics.form_score)}
-              v2={fmtNum(p2Data?.metrics.form_score)}
-              better={compareBetter(p1Data?.metrics.form_score, p2Data?.metrics.form_score)}
-              colors={colors}
-            />
-            {/* Recent win rate (L15) */}
-            <MetricRow
-              label="L15 Win %"
-              v1={fmtPct(p1Data?.metrics.l15_win_rate ?? p1Data?.metrics.recent_win_rate)}
-              v2={fmtPct(p2Data?.metrics.l15_win_rate ?? p2Data?.metrics.recent_win_rate)}
-              better={compareBetter(
-                p1Data?.metrics.l15_win_rate ?? p1Data?.metrics.recent_win_rate,
-                p2Data?.metrics.l15_win_rate ?? p2Data?.metrics.recent_win_rate
-              )}
-              colors={colors}
-            />
-            {/* L40 win rate (medium-term) */}
-            {hasRichMetrics && (
-              <MetricRow
-                label="L40 Win %"
-                v1={fmtPct(p1Data?.metrics.l40_win_rate ?? b1?.l40_adj_win_rate)}
-                v2={fmtPct(p2Data?.metrics.l40_win_rate ?? b2?.l40_adj_win_rate)}
-                better={compareBetter(
-                  p1Data?.metrics.l40_win_rate ?? b1?.l40_adj_win_rate,
-                  p2Data?.metrics.l40_win_rate ?? b2?.l40_adj_win_rate
+            <View style={[s.quickStatPill, { backgroundColor: colors.surface.cardSoft }]}> 
+              <Text style={[s.quickStatLabel, { color: colors.text.muted }]}>L15</Text>
+              <Text style={[s.quickStatValue, { color: colors.text.primary }]}>
+                {fmtPct(p1Data?.metrics.l15_win_rate ?? p1Data?.metrics.recent_win_rate)} - {fmtPct(
+                  p2Data?.metrics.l15_win_rate ?? p2Data?.metrics.recent_win_rate
                 )}
-                colors={colors}
-              />
-            )}
-            {/* Surface win rate */}
-            <MetricRow
-              label={`${surface || "Surface"} %`}
-              v1={fmtPct(p1Data?.metrics.surface_win_rate)}
-              v2={fmtPct(p2Data?.metrics.surface_win_rate)}
-              better={compareBetter(p1Data?.metrics.surface_win_rate, p2Data?.metrics.surface_win_rate)}
-              colors={colors}
-            />
-            {/* vs Top 50 */}
-            {hasRichMetrics && (
-              <MetricRow
-                label="vs Top 50"
-                v1={fmtPct(p1Data?.metrics.win_rate_vs_top50 ?? b1?.adj_win_rate_vs_top50)}
-                v2={fmtPct(p2Data?.metrics.win_rate_vs_top50 ?? b2?.adj_win_rate_vs_top50)}
-                better={compareBetter(
-                  p1Data?.metrics.win_rate_vs_top50 ?? b1?.adj_win_rate_vs_top50,
-                  p2Data?.metrics.win_rate_vs_top50 ?? b2?.adj_win_rate_vs_top50
-                )}
-                colors={colors}
-              />
-            )}
-            {/* Ranking */}
-            <MetricRow
-              label="Ranking"
-              v1={p1Data?.metrics.ranking != null ? `#${p1Data.metrics.ranking}` : "\u2014"}
-              v2={p2Data?.metrics.ranking != null ? `#${p2Data.metrics.ranking}` : "\u2014"}
-              better={compareRanking(p1Data?.metrics.ranking, p2Data?.metrics.ranking)}
-              colors={colors}
-            />
-            {/* Straight sets / Tiebreak */}
-            {hasRichMetrics && (
-              <>
-                <MetricRow
-                  label="Str. Sets %"
-                  v1={fmtPct(p1Data?.metrics.straight_sets_win_rate ?? b1?.straight_sets_rate)}
-                  v2={fmtPct(p2Data?.metrics.straight_sets_win_rate ?? b2?.straight_sets_rate)}
-                  better={compareBetter(
-                    p1Data?.metrics.straight_sets_win_rate ?? b1?.straight_sets_rate,
-                    p2Data?.metrics.straight_sets_win_rate ?? b2?.straight_sets_rate
-                  )}
-                  colors={colors}
-                />
-                <MetricRow
-                  label="Tiebreak %"
-                  v1={fmtPct(p1Data?.metrics.tiebreak_rate ?? b1?.tiebreak_rate)}
-                  v2={fmtPct(p2Data?.metrics.tiebreak_rate ?? b2?.tiebreak_rate)}
-                  better={compareBetter(
-                    p2Data?.metrics.tiebreak_rate ?? b2?.tiebreak_rate,
-                    p1Data?.metrics.tiebreak_rate ?? b1?.tiebreak_rate
-                  )}
-                  colors={colors}
-                />
-              </>
-            )}
+              </Text>
+            </View>
+            <View style={[s.quickStatPill, { backgroundColor: colors.surface.cardSoft }]}> 
+              <Text style={[s.quickStatLabel, { color: colors.text.muted }]}>{surface || "Surface"}</Text>
+              <Text style={[s.quickStatValue, { color: colors.text.primary }]}>
+                {fmtPct(p1Data?.metrics.surface_win_rate)} - {fmtPct(p2Data?.metrics.surface_win_rate)}
+              </Text>
+            </View>
           </View>
 
-          {/* Confidence badges */}
-          {(b1 || b2) && (
-            <View style={[s.confidenceRow, { backgroundColor: colors.surface.cardSoft }]}>
-              <Text style={[s.confidenceLabel, { color: colors.text.muted }]}>
-                Data Confidence
-              </Text>
-              <View style={s.confidenceValues}>
-                <Text style={[s.confidenceVal, { color: colors.text.secondary }]}>
-                  {confidenceLabel(p1Data?.metrics.sample_confidence ?? b1?.sample_confidence)}
-                  {b1?.total_matches != null ? ` (${b1.total_matches})` : ""}
-                </Text>
-                <Text style={[s.confidenceVal, { color: colors.text.secondary, textAlign: "right" }]}>
-                  {confidenceLabel(p2Data?.metrics.sample_confidence ?? b2?.sample_confidence)}
-                  {b2?.total_matches != null ? ` (${b2.total_matches})` : ""}
-                </Text>
-              </View>
-            </View>
-          )}
+          {rec?.reasons.length ? (
+            <Text style={[s.recReasonsInline, { color: colors.text.muted }]} numberOfLines={2}>
+              {rec.reasons.join(" • ")}
+            </Text>
+          ) : null}
 
-          {/* H2H summary */}
-          {analysis.head_to_head && analysis.head_to_head.starts > 0 && (
-            <View style={[s.h2hRow, { backgroundColor: colors.surface.cardSoft }]}>
-              <Text style={[s.h2hLabel, { color: colors.text.muted }]}>
-                Head-to-Head
-              </Text>
-              <Text style={[s.h2hValue, { color: colors.text.primary }]}>
-                {analysis.head_to_head.wins}-{analysis.head_to_head.losses} ({fmtPct(analysis.head_to_head.win_rate)})
-              </Text>
-            </View>
+          <Pressable
+            onPress={() => setExpanded((prev) => !prev)}
+            style={[
+              s.expandBtn,
+              { borderColor: colors.border.subtle, backgroundColor: colors.surface.cardSoft },
+            ]}
+          >
+            <Text style={[s.expandBtnText, { color: colors.text.secondary }]}>
+              {expanded ? "Hide details" : "Show full analytics"}
+            </Text>
+          </Pressable>
+
+          {expanded && (
+            <>
+              <View style={s.metricsGrid}>
+                <View style={s.metricsHeaderRow}>
+                  <Text style={[s.metricsHeaderLabel, { color: colors.text.muted }]} />
+                  <Text style={[s.metricsHeaderVal, { color: colors.text.muted }]} numberOfLines={1}>
+                    {match.player1.split(" ").pop()}
+                  </Text>
+                  <Text
+                    style={[s.metricsHeaderVal, { color: colors.text.muted, textAlign: "right" }]}
+                    numberOfLines={1}
+                  >
+                    {match.player2.split(" ").pop()}
+                  </Text>
+                </View>
+                <View style={[s.metricsGridDivider, { backgroundColor: colors.border.subtle }]} />
+
+                <MetricRow
+                  label="Form"
+                  v1={fmtNum(p1Data?.metrics.form_score)}
+                  v2={fmtNum(p2Data?.metrics.form_score)}
+                  better={compareBetter(p1Data?.metrics.form_score, p2Data?.metrics.form_score)}
+                  colors={colors}
+                />
+                <MetricRow
+                  label="L15 Win %"
+                  v1={fmtPct(p1Data?.metrics.l15_win_rate ?? p1Data?.metrics.recent_win_rate)}
+                  v2={fmtPct(p2Data?.metrics.l15_win_rate ?? p2Data?.metrics.recent_win_rate)}
+                  better={compareBetter(
+                    p1Data?.metrics.l15_win_rate ?? p1Data?.metrics.recent_win_rate,
+                    p2Data?.metrics.l15_win_rate ?? p2Data?.metrics.recent_win_rate
+                  )}
+                  colors={colors}
+                />
+                {hasRichMetrics && (
+                  <MetricRow
+                    label="L40 Win %"
+                    v1={fmtPct(p1Data?.metrics.l40_win_rate ?? b1?.l40_adj_win_rate)}
+                    v2={fmtPct(p2Data?.metrics.l40_win_rate ?? b2?.l40_adj_win_rate)}
+                    better={compareBetter(
+                      p1Data?.metrics.l40_win_rate ?? b1?.l40_adj_win_rate,
+                      p2Data?.metrics.l40_win_rate ?? b2?.l40_adj_win_rate
+                    )}
+                    colors={colors}
+                  />
+                )}
+                <MetricRow
+                  label={`${surface || "Surface"} %`}
+                  v1={fmtPct(p1Data?.metrics.surface_win_rate)}
+                  v2={fmtPct(p2Data?.metrics.surface_win_rate)}
+                  better={compareBetter(p1Data?.metrics.surface_win_rate, p2Data?.metrics.surface_win_rate)}
+                  colors={colors}
+                />
+                {hasRichMetrics && (
+                  <>
+                    <MetricRow
+                      label="vs Top 50"
+                      v1={fmtPct(p1Data?.metrics.win_rate_vs_top50 ?? b1?.adj_win_rate_vs_top50)}
+                      v2={fmtPct(p2Data?.metrics.win_rate_vs_top50 ?? b2?.adj_win_rate_vs_top50)}
+                      better={compareBetter(
+                        p1Data?.metrics.win_rate_vs_top50 ?? b1?.adj_win_rate_vs_top50,
+                        p2Data?.metrics.win_rate_vs_top50 ?? b2?.adj_win_rate_vs_top50
+                      )}
+                      colors={colors}
+                    />
+                    <MetricRow
+                      label="Str. Sets %"
+                      v1={fmtPct(p1Data?.metrics.straight_sets_win_rate ?? b1?.straight_sets_rate)}
+                      v2={fmtPct(p2Data?.metrics.straight_sets_win_rate ?? b2?.straight_sets_rate)}
+                      better={compareBetter(
+                        p1Data?.metrics.straight_sets_win_rate ?? b1?.straight_sets_rate,
+                        p2Data?.metrics.straight_sets_win_rate ?? b2?.straight_sets_rate
+                      )}
+                      colors={colors}
+                    />
+                  </>
+                )}
+                <MetricRow
+                  label="Ranking"
+                  v1={p1Data?.metrics.ranking != null ? `#${p1Data.metrics.ranking}` : "—"}
+                  v2={p2Data?.metrics.ranking != null ? `#${p2Data.metrics.ranking}` : "—"}
+                  better={compareRanking(p1Data?.metrics.ranking, p2Data?.metrics.ranking)}
+                  colors={colors}
+                />
+              </View>
+
+              {hasDeepAnalytics && (
+                <View style={[s.deepAnalyticsCard, { backgroundColor: colors.surface.cardSoft }]}> 
+                  <Text style={[s.deepAnalyticsTitle, { color: colors.text.muted }]}>Expanded analytics</Text>
+                  <MetricRow
+                    label="L10 Adj %"
+                    v1={fmtPct(b1?.l10_adj_win_rate)}
+                    v2={fmtPct(b2?.l10_adj_win_rate)}
+                    better={compareBetter(b1?.l10_adj_win_rate, b2?.l10_adj_win_rate)}
+                    colors={colors}
+                  />
+                  <MetricRow
+                    label="L20 Surf Adj %"
+                    v1={fmtPct(b1?.l20_surface_adj_win_rate)}
+                    v2={fmtPct(b2?.l20_surface_adj_win_rate)}
+                    better={compareBetter(b1?.l20_surface_adj_win_rate, b2?.l20_surface_adj_win_rate)}
+                    colors={colors}
+                  />
+                  <MetricRow
+                    label="Avg Sets"
+                    v1={fmtAvg(b1?.avg_sets_per_match)}
+                    v2={fmtAvg(b2?.avg_sets_per_match)}
+                    better={compareBetter(b2?.avg_sets_per_match, b1?.avg_sets_per_match)}
+                    colors={colors}
+                  />
+                  <MetricRow
+                    label="Retirement %"
+                    v1={fmtPct(b1?.retirement_rate)}
+                    v2={fmtPct(b2?.retirement_rate)}
+                    better={compareBetter(b2?.retirement_rate, b1?.retirement_rate)}
+                    colors={colors}
+                  />
+                  <MetricRow
+                    label="Titles"
+                    v1={b1?.titles != null ? `${b1.titles}` : "—"}
+                    v2={b2?.titles != null ? `${b2.titles}` : "—"}
+                    better={compareBetter(b1?.titles, b2?.titles)}
+                    colors={colors}
+                  />
+                  <MetricRow
+                    label="Masters Win %"
+                    v1={fmtPct(b1?.masters_win_rate)}
+                    v2={fmtPct(b2?.masters_win_rate)}
+                    better={compareBetter(b1?.masters_win_rate, b2?.masters_win_rate)}
+                    colors={colors}
+                  />
+                </View>
+              )}
+
+              {(b1 || b2) && (
+                <View style={[s.confidenceRow, { backgroundColor: colors.surface.cardSoft }]}>
+                  <Text style={[s.confidenceLabel, { color: colors.text.muted }]}>Data Confidence</Text>
+                  <View style={s.confidenceValues}>
+                    <Text style={[s.confidenceVal, { color: colors.text.secondary }]}>
+                      {confidenceLabel(p1Data?.metrics.sample_confidence ?? b1?.sample_confidence)}
+                      {b1?.total_matches != null ? ` (${b1.total_matches})` : ""}
+                    </Text>
+                    <Text style={[s.confidenceVal, { color: colors.text.secondary, textAlign: "right" }]}>
+                      {confidenceLabel(p2Data?.metrics.sample_confidence ?? b2?.sample_confidence)}
+                      {b2?.total_matches != null ? ` (${b2.total_matches})` : ""}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {analysis.head_to_head && analysis.head_to_head.starts > 0 && (
+                <View style={[s.h2hRow, { backgroundColor: colors.surface.cardSoft }]}> 
+                  <Text style={[s.h2hLabel, { color: colors.text.muted }]}>Head-to-Head</Text>
+                  <Text style={[s.h2hValue, { color: colors.text.primary }]}> 
+                    {analysis.head_to_head.wins}-{analysis.head_to_head.losses} ({fmtPct(analysis.head_to_head.win_rate)})
+                  </Text>
+                </View>
+              )}
+            </>
           )}
         </View>
       ) : null}
@@ -901,7 +973,7 @@ function TournamentBracketView({
               },
             ]}
           >
-            Today's Matches
+            Today Matches
           </Text>
           {!loading && todayMatches.length > 0 && (
             <View style={[s.badge, { backgroundColor: colors.accent.primary }]}>
@@ -1265,15 +1337,30 @@ const s = StyleSheet.create({
   analyticsSection: { gap: 10 },
 
   /* Recommendation */
-  recCard: {
+  recCompact: {
     borderRadius: 10,
     borderWidth: 1,
-    padding: 10,
-    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    gap: 2,
   },
-  recLabel: { fontSize: 13, fontWeight: "800", letterSpacing: 0.3 },
-  recEdge: { fontSize: 12, fontWeight: "600" },
-  recReasons: { fontSize: 11, lineHeight: 16 },
+  recCompactLabel: { fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.3 },
+  recCompactPick: { fontSize: 16, fontWeight: "800" },
+  recCompactEdge: { fontSize: 12, fontWeight: "600" },
+  recReasonsInline: { fontSize: 11, lineHeight: 15 },
+
+  quickStatsRow: { flexDirection: "row", gap: 6 },
+  quickStatPill: { flex: 1, borderRadius: 8, paddingVertical: 7, paddingHorizontal: 8, gap: 1 },
+  quickStatLabel: { fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.3 },
+  quickStatValue: { fontSize: 11, fontWeight: "600" },
+
+  expandBtn: {
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 8,
+  },
+  expandBtnText: { fontSize: 12, fontWeight: "600" },
 
   /* Metrics grid */
   metricsGrid: { gap: 6 },
@@ -1288,6 +1375,10 @@ const s = StyleSheet.create({
   metricRow: { flexDirection: "row", alignItems: "center", paddingVertical: 3 },
   metricLabel: { flex: 1.2, fontSize: 12 },
   metricVal: { flex: 1, fontSize: 12 },
+
+
+  deepAnalyticsCard: { borderRadius: 10, padding: 10, gap: 4 },
+  deepAnalyticsTitle: { fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.3 },
 
   /* Confidence row */
   confidenceRow: {

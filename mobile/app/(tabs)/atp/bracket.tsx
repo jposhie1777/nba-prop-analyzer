@@ -19,6 +19,8 @@ import type {
 } from "@/hooks/atp/useAtpTournamentBracket";
 import type { AtpCompareResponse } from "@/types/atp";
 import { useAtpBettingAnalytics } from "@/hooks/atp/useAtpBettingAnalytics";
+import { useAtpBetslip } from "@/store/useAtpBetslip";
+import { useAtpBetslipDrawer } from "@/store/useAtpBetslipDrawer";
 
 /* ───── helpers ───── */
 
@@ -343,6 +345,9 @@ function MatchAnalysisCard({
     surface,
   });
 
+  const addToBetslip = useAtpBetslip((s) => s.add);
+  const openAtpBetslip = useAtpBetslipDrawer((s) => s.open);
+
   const analysis = prefetchedAnalysis ?? data;
   const rec = analysis?.recommendation;
   const players = analysis?.players ?? [];
@@ -364,6 +369,26 @@ function MatchAnalysisCard({
     p1Data?.metrics.win_rate_vs_top50 != null ||
     b1?.l15_adj_win_rate != null
   );
+
+  const p1Confidence = p1Data?.metrics.sample_confidence ?? b1?.sample_confidence;
+  const p2Confidence = p2Data?.metrics.sample_confidence ?? b2?.sample_confidence;
+
+  const addWinnerPick = (playerIndex: 1 | 2) => {
+    const playerName = playerIndex === 1 ? match.player1 : match.player2;
+    const opponentName = playerIndex === 1 ? match.player2 : match.player1;
+    const playerId = playerIndex === 1 ? p1Id ?? null : p2Id ?? null;
+
+    addToBetslip({
+      id: `${matchKey(match)}:winner:${playerIndex}`,
+      playerId,
+      player: playerName,
+      opponent: opponentName,
+      round: match.round,
+      matchTime: formatMatchMeta(match),
+      createdAt: new Date().toISOString(),
+    });
+    openAtpBetslip();
+  };
 
   const hasDeepAnalytics = !!(
     b1?.l10_adj_win_rate != null ||
@@ -512,6 +537,22 @@ function MatchAnalysisCard({
             </View>
           )}
 
+          {(b1 || b2) && (
+            <View style={[s.confidenceRow, { backgroundColor: colors.surface.cardSoft }]}> 
+              <Text style={[s.confidenceLabel, { color: colors.text.muted }]}>Data Confidence</Text>
+              <View style={s.confidenceValues}>
+                <Text style={[s.confidenceVal, { color: colors.text.secondary }]}>
+                  {confidenceLabel(p1Confidence)}
+                  {b1?.total_matches != null ? ` (${b1.total_matches})` : ""}
+                </Text>
+                <Text style={[s.confidenceVal, { color: colors.text.secondary, textAlign: "right" }]}>
+                  {confidenceLabel(p2Confidence)}
+                  {b2?.total_matches != null ? ` (${b2.total_matches})` : ""}
+                </Text>
+              </View>
+            </View>
+          )}
+
           <View style={s.quickStatsRow}>
             <View style={[s.quickStatPill, { backgroundColor: colors.surface.cardSoft }]}> 
               <Text style={[s.quickStatLabel, { color: colors.text.muted }]}>Form</Text>
@@ -540,6 +581,25 @@ function MatchAnalysisCard({
               {rec.reasons.join(" • ")}
             </Text>
           ) : null}
+
+          <View style={s.winnerButtonsRow}>
+            <Pressable
+              style={[s.winnerButton, { backgroundColor: colors.surface.cardSoft, borderColor: colors.border.subtle }]}
+              onPress={() => addWinnerPick(1)}
+            >
+              <Text style={[s.winnerButtonText, { color: colors.text.primary }]} numberOfLines={1}>
+                Add {match.player1} ML
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[s.winnerButton, { backgroundColor: colors.surface.cardSoft, borderColor: colors.border.subtle }]}
+              onPress={() => addWinnerPick(2)}
+            >
+              <Text style={[s.winnerButtonText, { color: colors.text.primary }]} numberOfLines={1}>
+                Add {match.player2} ML
+              </Text>
+            </Pressable>
+          </View>
 
           <Pressable
             onPress={() => setExpanded((prev) => !prev)}
@@ -684,22 +744,6 @@ function MatchAnalysisCard({
                     better={compareBetter(b1?.masters_win_rate, b2?.masters_win_rate)}
                     colors={colors}
                   />
-                </View>
-              )}
-
-              {(b1 || b2) && (
-                <View style={[s.confidenceRow, { backgroundColor: colors.surface.cardSoft }]}>
-                  <Text style={[s.confidenceLabel, { color: colors.text.muted }]}>Data Confidence</Text>
-                  <View style={s.confidenceValues}>
-                    <Text style={[s.confidenceVal, { color: colors.text.secondary }]}>
-                      {confidenceLabel(p1Data?.metrics.sample_confidence ?? b1?.sample_confidence)}
-                      {b1?.total_matches != null ? ` (${b1.total_matches})` : ""}
-                    </Text>
-                    <Text style={[s.confidenceVal, { color: colors.text.secondary, textAlign: "right" }]}>
-                      {confidenceLabel(p2Data?.metrics.sample_confidence ?? b2?.sample_confidence)}
-                      {b2?.total_matches != null ? ` (${b2.total_matches})` : ""}
-                    </Text>
-                  </View>
                 </View>
               )}
 
@@ -1348,6 +1392,17 @@ const s = StyleSheet.create({
   recCompactPick: { fontSize: 16, fontWeight: "800" },
   recCompactEdge: { fontSize: 12, fontWeight: "600" },
   recReasonsInline: { fontSize: 11, lineHeight: 15 },
+
+  winnerButtonsRow: { flexDirection: "row", gap: 8 },
+  winnerButton: {
+    flex: 1,
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingVertical: 9,
+    paddingHorizontal: 8,
+    alignItems: "center",
+  },
+  winnerButtonText: { fontSize: 12, fontWeight: "700" },
 
   quickStatsRow: { flexDirection: "row", gap: 6 },
   quickStatPill: { flex: 1, borderRadius: 8, paddingVertical: 7, paddingHorizontal: 8, gap: 1 },

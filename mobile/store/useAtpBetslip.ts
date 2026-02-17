@@ -1,0 +1,53 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { create } from "zustand";
+
+const KEY = "atp_betslip_v1";
+
+export type AtpSlipItem = {
+  id: string;
+  playerId: number | null;
+  player: string;
+  opponent: string;
+  tournamentName?: string;
+  round?: string;
+  matchTime?: string;
+  createdAt: string;
+};
+
+type State = {
+  items: AtpSlipItem[];
+  hydrate: () => Promise<void>;
+  add: (item: AtpSlipItem) => void;
+  remove: (id: string) => void;
+  clear: () => void;
+};
+
+export const useAtpBetslip = create<State>((set) => ({
+  items: [],
+
+  hydrate: async () => {
+    const raw = await AsyncStorage.getItem(KEY);
+    if (!raw) return;
+    set({ items: JSON.parse(raw) });
+  },
+
+  add: (item) =>
+    set((state) => {
+      if (state.items.some((existing) => existing.id === item.id)) return state;
+      const next = [...state.items, item];
+      AsyncStorage.setItem(KEY, JSON.stringify(next));
+      return { items: next };
+    }),
+
+  remove: (id) =>
+    set((state) => {
+      const next = state.items.filter((item) => item.id !== id);
+      AsyncStorage.setItem(KEY, JSON.stringify(next));
+      return { items: next };
+    }),
+
+  clear: () => {
+    AsyncStorage.setItem(KEY, "[]");
+    set({ items: [] });
+  },
+}));

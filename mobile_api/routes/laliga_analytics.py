@@ -373,9 +373,17 @@ def laliga_standings():
       team_name,
       team_short_name,
       rank,
+      wins,
+      losses,
+      draws,
       points,
       goal_differential,
-      standing_note AS win_loss_record
+      CONCAT(
+        CAST(COALESCE(wins, 0) AS STRING), '-',
+        CAST(COALESCE(losses, 0) AS STRING), '-',
+        CAST(COALESCE(draws, 0) AS STRING)
+      ) AS win_loss_record,
+      standing_note
     FROM `{LALIGA_TEAM_MASTER_METRICS_TABLE}`
     ORDER BY rank ASC, points DESC, goal_differential DESC, team_name ASC
     """

@@ -111,6 +111,21 @@ function matchKey(match: AtpBracketMatch) {
   return match.id != null ? `id:${match.id}` : `p:${match.player1}-${match.player2}`;
 }
 
+function lastName(name?: string | null) {
+  if (!name) return "Player";
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return parts[parts.length - 1] || name;
+}
+
+function matchupDisplayName(name?: string | null) {
+  if (!name) return "Player";
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return name;
+  const first = parts[0];
+  const surname = parts[parts.length - 1];
+  return `${first[0]}. ${surname}`;
+}
+
 function isToday(value?: string | null) {
   if (!value) return false;
   const d = new Date(value);
@@ -420,8 +435,8 @@ function MatchAnalysisCard({
             {match.player1_headshot_url ? (
               <Image source={{ uri: match.player1_headshot_url }} style={s.matchupHeadshot} />
             ) : null}
-            <Text style={[s.matchupName, { color: colors.text.primary }]} numberOfLines={1}>
-              {match.player1}
+            <Text style={[s.matchupName, { color: colors.text.primary }]} numberOfLines={2}>
+              {matchupDisplayName(match.player1)}
             </Text>
           </View>
           <View style={s.matchupSubRow}>
@@ -466,9 +481,9 @@ function MatchAnalysisCard({
           <View style={[s.matchupIdentityRow, { justifyContent: "flex-end" }]}>
             <Text
               style={[s.matchupName, { color: colors.text.primary, textAlign: "right" }]}
-              numberOfLines={1}
+              numberOfLines={2}
             >
-              {match.player2}
+              {matchupDisplayName(match.player2)}
             </Text>
             {match.player2_headshot_url ? (
               <Image source={{ uri: match.player2_headshot_url }} style={s.matchupHeadshot} />
@@ -588,7 +603,7 @@ function MatchAnalysisCard({
               onPress={() => addWinnerPick(1)}
             >
               <Text style={[s.winnerButtonText, { color: colors.text.primary }]} numberOfLines={1}>
-                Add {match.player1} ML
+                {lastName(match.player1)} ML
               </Text>
             </Pressable>
             <Pressable
@@ -596,7 +611,7 @@ function MatchAnalysisCard({
               onPress={() => addWinnerPick(2)}
             >
               <Text style={[s.winnerButtonText, { color: colors.text.primary }]} numberOfLines={1}>
-                Add {match.player2} ML
+                {lastName(match.player2)} ML
               </Text>
             </Pressable>
           </View>
@@ -1352,7 +1367,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-  matchupPlayer: { flex: 1, gap: 2 },
+  matchupPlayer: { flex: 1, minWidth: 0, gap: 2 },
   matchupIdentityRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1363,7 +1378,7 @@ const s = StyleSheet.create({
     height: 28,
     borderRadius: 14,
   },
-  matchupName: { fontSize: 15, fontWeight: "700" },
+  matchupName: { fontSize: 15, fontWeight: "700", lineHeight: 19 },
   matchupSubRow: {
     flexDirection: "row",
     alignItems: "center",

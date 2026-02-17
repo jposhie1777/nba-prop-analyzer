@@ -1,4 +1,6 @@
-import { View, Text, StyleSheet, Platform, Image } from "react-native";
+import { useState } from "react";
+import { View, Text, StyleSheet, Platform, Image, Pressable } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/store/useTheme";
 
 type MetricItem = {
@@ -11,10 +13,14 @@ type MetricCardProps = {
   subtitle?: string;
   imageUrl?: string | null;
   metrics: MetricItem[];
+  /** Metrics tucked behind a "More Details" toggle */
+  expandedMetrics?: MetricItem[];
 };
 
-export function MetricCard({ title, subtitle, imageUrl, metrics }: MetricCardProps) {
+export function MetricCard({ title, subtitle, imageUrl, metrics, expandedMetrics }: MetricCardProps) {
   const { colors } = useTheme();
+  const [expanded, setExpanded] = useState(false);
+  const hasExpandable = expandedMetrics && expandedMetrics.length > 0;
 
   return (
     <View
@@ -72,6 +78,43 @@ export function MetricCard({ title, subtitle, imageUrl, metrics }: MetricCardPro
             </View>
           ))}
         </View>
+
+        {hasExpandable ? (
+          <>
+            <Pressable
+              onPress={() => setExpanded((prev) => !prev)}
+              style={styles.expandToggle}
+            >
+              <Text style={[styles.expandLabel, { color: colors.accent.primary }]}>
+                {expanded ? "Less Details" : "More Details"}
+              </Text>
+              <Ionicons
+                name={expanded ? "chevron-up" : "chevron-down"}
+                size={14}
+                color={colors.accent.primary}
+              />
+            </Pressable>
+
+            {expanded ? (
+              <View style={styles.metrics}>
+                {expandedMetrics.map((metric) => (
+                  <View key={metric.label} style={styles.metricRow}>
+                    <Text
+                      style={[styles.metricLabel, { color: colors.text.muted }]}
+                    >
+                      {metric.label}
+                    </Text>
+                    <Text
+                      style={[styles.metricValue, { color: colors.text.primary }]}
+                    >
+                      {metric.value ?? "\u2014"}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </>
+        ) : null}
       </View>
     </View>
   );
@@ -137,5 +180,17 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textAlign: "right",
     flexShrink: 0,
+  },
+  expandToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingVertical: 8,
+    marginTop: 4,
+  },
+  expandLabel: {
+    fontSize: 12,
+    fontWeight: "600",
   },
 });

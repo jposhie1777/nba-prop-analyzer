@@ -17,7 +17,8 @@ import type {
   AtpBracketMatch,
   AtpBracketRound,
 } from "@/hooks/atp/useAtpTournamentBracket";
-import type { AtpCompareResponse } from "@/types/atp";
+import type { AtpBettingAnalyticsResponse, AtpCompareResponse } from "@/types/atp";
+import { useAtpBettingAnalytics } from "@/hooks/atp/useAtpBettingAnalytics";
 
 /* ───── helpers ───── */
 
@@ -305,6 +306,21 @@ function RoundColumn({
 
 /* ───── Today's matches: per-match analysis card ───── */
 
+function streakLabel(winStreak?: number | null, lossStreak?: number | null): string | null {
+  const ws = winStreak ?? 0;
+  const ls = lossStreak ?? 0;
+  if (ws >= 2) return `W${ws}`;
+  if (ls >= 2) return `L${ls}`;
+  return null;
+}
+
+function confidenceLabel(confidence?: number | null): string {
+  if (confidence == null) return "\u2014";
+  if (confidence >= 0.85) return "High";
+  if (confidence >= 0.65) return "Med";
+  return "Low";
+}
+
 function MatchAnalysisCard({
   match,
   surface,
@@ -329,11 +345,20 @@ function MatchAnalysisCard({
     hasBothIds && !prefetchedAnalysis
   );
 
+  // Fetch direct betting analytics for extra detail (streaks, confidence)
+  const { data: bettingData } = useAtpBettingAnalytics({
+    playerIds: hasBothIds ? [p1Id!, p2Id!] : [],
+    surface,
+  });
+
   const analysis = prefetchedAnalysis ?? data;
   const rec = analysis?.recommendation;
   const players = analysis?.players ?? [];
   const p1Data = players.find((p) => p.player_id === p1Id);
   const p2Data = players.find((p) => p.player_id === p2Id);
+
+  const b1 = p1Id != null ? bettingData?.players?.[p1Id] : null;
+  const b2 = p2Id != null ? bettingData?.players?.[p2Id] : null;
 
   const pickName =
     rec?.player_id === p1Id
@@ -341,6 +366,12 @@ function MatchAnalysisCard({
       : rec?.player_id === p2Id
         ? match.player2
         : null;
+
+  // Determine if we have richer metrics from the betting analytics table
+  const hasRichMetrics = !!(
+    p1Data?.metrics.l15_win_rate != null || p1Data?.metrics.win_rate_vs_top50 != null ||
+    b1?.l15_adj_win_rate != null
+  );
 
   return (
     <View
@@ -370,11 +401,28 @@ function MatchAnalysisCard({
               {match.player1}
             </Text>
           </View>
-          {p1Data && (
-            <Text style={[s.matchupScore, { color: colors.text.secondary }]}>
-              Score: {fmtNum(p1Data.score)}
-            </Text>
-          )}
+          <View style={s.matchupSubRow}>
+            {p1Data && (
+              <Text style={[s.matchupScore, { color: colors.text.secondary }]}>
+                Score: {fmtNum(p1Data.score)}
+              </Text>
+            )}
+            {(() => {
+              const streak = streakLabel(
+                p1Data?.metrics.current_win_streak ?? b1?.current_win_streak,
+                p1Data?.metrics.current_loss_streak ?? b1?.current_loss_streak,
+              );
+              if (!streak) return null;
+              const isWin = streak.startsWith("W");
+              return (
+                <View style={[s.streakBadge, { backgroundColor: isWin ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)" }]}>
+                  <Text style={[s.streakBadgeText, { color: isWin ? colors.accent.success : "#ef4444" }]}>
+                    {streak}
+                  </Text>
+                </View>
+              );
+            })()}
+          </View>
         </View>
         <Text style={[s.vsText, { color: colors.text.muted }]}>vs</Text>
         <View style={[s.matchupPlayer, { alignItems: "flex-end" }]}>
@@ -389,11 +437,28 @@ function MatchAnalysisCard({
               <Image source={{ uri: match.player2_headshot_url }} style={s.matchupHeadshot} />
             ) : null}
           </View>
-          {p2Data && (
-            <Text style={[s.matchupScore, { color: colors.text.secondary }]}>
-              Score: {fmtNum(p2Data.score)}
-            </Text>
-          )}
+          <View style={[s.matchupSubRow, { justifyContent: "flex-end" }]}>
+            {(() => {
+              const streak = streakLabel(
+                p2Data?.metrics.current_win_streak ?? b2?.current_win_streak,
+                p2Data?.metrics.current_loss_streak ?? b2?.current_loss_streak,
+              );
+              if (!streak) return null;
+              const isWin = streak.startsWith("W");
+              return (
+                <View style={[s.streakBadge, { backgroundColor: isWin ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)" }]}>
+                  <Text style={[s.streakBadgeText, { color: isWin ? colors.accent.success : "#ef4444" }]}>
+                    {streak}
+                  </Text>
+                </View>
+              );
+            })()}
+            {p2Data && (
+              <Text style={[s.matchupScore, { color: colors.text.secondary }]}>
+                Score: {fmtNum(p2Data.score)}
+              </Text>
+            )}
+          </View>
         </View>
       </View>
 
@@ -437,7 +502,7 @@ function MatchAnalysisCard({
             </View>
           )}
 
-          {/* Head-to-head metrics */}
+          {/* Metrics comparison grid */}
           <View style={s.metricsGrid}>
             {/* Column headers */}
             <View style={s.metricsHeaderRow}>
@@ -466,14 +531,30 @@ function MatchAnalysisCard({
               better={compareBetter(p1Data?.metrics.form_score, p2Data?.metrics.form_score)}
               colors={colors}
             />
-            {/* Win rate */}
+            {/* Recent win rate (L15) */}
             <MetricRow
-              label="Win Rate"
-              v1={fmtPct(p1Data?.metrics.recent_win_rate)}
-              v2={fmtPct(p2Data?.metrics.recent_win_rate)}
-              better={compareBetter(p1Data?.metrics.recent_win_rate, p2Data?.metrics.recent_win_rate)}
+              label="L15 Win %"
+              v1={fmtPct(p1Data?.metrics.l15_win_rate ?? p1Data?.metrics.recent_win_rate)}
+              v2={fmtPct(p2Data?.metrics.l15_win_rate ?? p2Data?.metrics.recent_win_rate)}
+              better={compareBetter(
+                p1Data?.metrics.l15_win_rate ?? p1Data?.metrics.recent_win_rate,
+                p2Data?.metrics.l15_win_rate ?? p2Data?.metrics.recent_win_rate
+              )}
               colors={colors}
             />
+            {/* L40 win rate (medium-term) */}
+            {hasRichMetrics && (
+              <MetricRow
+                label="L40 Win %"
+                v1={fmtPct(p1Data?.metrics.l40_win_rate ?? b1?.l40_adj_win_rate)}
+                v2={fmtPct(p2Data?.metrics.l40_win_rate ?? b2?.l40_adj_win_rate)}
+                better={compareBetter(
+                  p1Data?.metrics.l40_win_rate ?? b1?.l40_adj_win_rate,
+                  p2Data?.metrics.l40_win_rate ?? b2?.l40_adj_win_rate
+                )}
+                colors={colors}
+              />
+            )}
             {/* Surface win rate */}
             <MetricRow
               label={`${surface || "Surface"} %`}
@@ -482,6 +563,19 @@ function MatchAnalysisCard({
               better={compareBetter(p1Data?.metrics.surface_win_rate, p2Data?.metrics.surface_win_rate)}
               colors={colors}
             />
+            {/* vs Top 50 */}
+            {hasRichMetrics && (
+              <MetricRow
+                label="vs Top 50"
+                v1={fmtPct(p1Data?.metrics.win_rate_vs_top50 ?? b1?.adj_win_rate_vs_top50)}
+                v2={fmtPct(p2Data?.metrics.win_rate_vs_top50 ?? b2?.adj_win_rate_vs_top50)}
+                better={compareBetter(
+                  p1Data?.metrics.win_rate_vs_top50 ?? b1?.adj_win_rate_vs_top50,
+                  p2Data?.metrics.win_rate_vs_top50 ?? b2?.adj_win_rate_vs_top50
+                )}
+                colors={colors}
+              />
+            )}
             {/* Ranking */}
             <MetricRow
               label="Ranking"
@@ -490,7 +584,51 @@ function MatchAnalysisCard({
               better={compareRanking(p1Data?.metrics.ranking, p2Data?.metrics.ranking)}
               colors={colors}
             />
+            {/* Straight sets / Tiebreak */}
+            {hasRichMetrics && (
+              <>
+                <MetricRow
+                  label="Str. Sets %"
+                  v1={fmtPct(p1Data?.metrics.straight_sets_win_rate ?? b1?.straight_sets_rate)}
+                  v2={fmtPct(p2Data?.metrics.straight_sets_win_rate ?? b2?.straight_sets_rate)}
+                  better={compareBetter(
+                    p1Data?.metrics.straight_sets_win_rate ?? b1?.straight_sets_rate,
+                    p2Data?.metrics.straight_sets_win_rate ?? b2?.straight_sets_rate
+                  )}
+                  colors={colors}
+                />
+                <MetricRow
+                  label="Tiebreak %"
+                  v1={fmtPct(p1Data?.metrics.tiebreak_rate ?? b1?.tiebreak_rate)}
+                  v2={fmtPct(p2Data?.metrics.tiebreak_rate ?? b2?.tiebreak_rate)}
+                  better={compareBetter(
+                    p2Data?.metrics.tiebreak_rate ?? b2?.tiebreak_rate,
+                    p1Data?.metrics.tiebreak_rate ?? b1?.tiebreak_rate
+                  )}
+                  colors={colors}
+                />
+              </>
+            )}
           </View>
+
+          {/* Confidence badges */}
+          {(b1 || b2) && (
+            <View style={[s.confidenceRow, { backgroundColor: colors.surface.cardSoft }]}>
+              <Text style={[s.confidenceLabel, { color: colors.text.muted }]}>
+                Data Confidence
+              </Text>
+              <View style={s.confidenceValues}>
+                <Text style={[s.confidenceVal, { color: colors.text.secondary }]}>
+                  {confidenceLabel(p1Data?.metrics.sample_confidence ?? b1?.sample_confidence)}
+                  {b1?.total_matches != null ? ` (${b1.total_matches})` : ""}
+                </Text>
+                <Text style={[s.confidenceVal, { color: colors.text.secondary, textAlign: "right" }]}>
+                  {confidenceLabel(p2Data?.metrics.sample_confidence ?? b2?.sample_confidence)}
+                  {b2?.total_matches != null ? ` (${b2.total_matches})` : ""}
+                </Text>
+              </View>
+            </View>
+          )}
 
           {/* H2H summary */}
           {analysis.head_to_head && analysis.head_to_head.starts > 0 && (
@@ -1110,7 +1248,18 @@ const s = StyleSheet.create({
     borderRadius: 14,
   },
   matchupName: { fontSize: 15, fontWeight: "700" },
+  matchupSubRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
   matchupScore: { fontSize: 11 },
+  streakBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  streakBadgeText: { fontSize: 10, fontWeight: "700" },
   vsText: { fontSize: 12, fontWeight: "600" },
 
   analyticsSection: { gap: 10 },
@@ -1139,6 +1288,19 @@ const s = StyleSheet.create({
   metricRow: { flexDirection: "row", alignItems: "center", paddingVertical: 3 },
   metricLabel: { flex: 1.2, fontSize: 12 },
   metricVal: { flex: 1, fontSize: 12 },
+
+  /* Confidence row */
+  confidenceRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderRadius: 8,
+    padding: 10,
+    gap: 8,
+  },
+  confidenceLabel: { fontSize: 11, fontWeight: "600" },
+  confidenceValues: { flexDirection: "row", flex: 1, justifyContent: "space-between" },
+  confidenceVal: { fontSize: 11, fontWeight: "500" },
 
   /* H2H */
   h2hRow: {

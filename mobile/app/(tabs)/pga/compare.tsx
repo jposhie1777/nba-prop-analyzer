@@ -417,6 +417,8 @@ export default function CompareScreen() {
                 label: "H2H Win %",
                 value: formatPct(row.metrics.head_to_head_win_rate),
               },
+            ]}
+            expandedMetrics={[
               { label: "Top 10", value: formatPct(row.metrics.top10_prob) },
               { label: "Top 20", value: formatPct(row.metrics.top20_prob) },
               {

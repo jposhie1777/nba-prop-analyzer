@@ -48,6 +48,7 @@ _ATP_COMPARE_CACHE_TABLE = os.getenv("ATP_COMPARE_CACHE_TABLE", "atp_data.atp_ma
 
 
 _ATP_PLAYER_METRICS_TABLE = os.getenv("ATP_PLAYER_METRICS_TABLE", "atp_data.atp_player_compare_metrics")
+_ATP_BETTING_ANALYTICS_TABLE = os.getenv("ATP_BETTING_ANALYTICS_TABLE", "atp_data.atp_betting_analytics")
 _ATP_SHEET_DAILY_MATCHES_TABLE = os.getenv("ATP_SHEET_DAILY_MATCHES_TABLE", "atp_data.sheet_daily_matches")
 _ATP_PLAYER_LOOKUP_TABLE = os.getenv("ATP_PLAYER_LOOKUP_TABLE", "atp_data.player_lookup")
 
@@ -92,6 +93,55 @@ def _read_player_metrics_from_bq(player_ids: List[int], surface: Optional[str]) 
         out: Dict[int, Dict[str, Any]] = {}
         for row in job.result():
             out[int(row["player_id"])] = dict(row)
+        return out
+    except Exception:
+        return {}
+
+
+def _read_betting_analytics_from_bq(
+    player_ids: List[int],
+    surface: Optional[str] = None,
+) -> Dict[int, Dict[str, Any]]:
+    """Read precomputed betting analytics for one or more players.
+
+    Returns the surface-specific row when *surface* is given and falls back to
+    the 'all' row otherwise.  Result keyed by player_id.
+    """
+    if not player_ids:
+        return {}
+    try:
+        client = get_bq_client()
+        surface_key = (surface or "").strip().lower()
+        preferred = surface_key or "all"
+        surface_keys = [surface_key, "all"] if surface_key else ["all"]
+        sql = f"""
+        SELECT *
+        FROM `{_ATP_BETTING_ANALYTICS_TABLE}`
+        WHERE player_id IN UNNEST(@player_ids)
+          AND surface_key IN UNNEST(@surface_keys)
+        QUALIFY ROW_NUMBER() OVER (
+          PARTITION BY player_id
+          ORDER BY IF(surface_key = @preferred_surface, 0, 1), updated_at DESC
+        ) = 1
+        """
+        job = client.query(
+            sql,
+            job_config=bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ArrayQueryParameter("player_ids", "INT64", player_ids),
+                    bigquery.ArrayQueryParameter("surface_keys", "STRING", surface_keys),
+                    bigquery.ScalarQueryParameter("preferred_surface", "STRING", preferred),
+                ]
+            ),
+        )
+        out: Dict[int, Dict[str, Any]] = {}
+        for row in job.result():
+            row_dict = dict(row)
+            # Convert non-serialisable types
+            for k, v in row_dict.items():
+                if isinstance(v, datetime):
+                    row_dict[k] = v.isoformat()
+            out[int(row_dict["player_id"])] = row_dict
         return out
     except Exception:
         return {}
@@ -155,9 +205,14 @@ def _build_compare_from_precomputed(
     surface: Optional[str],
     rankings: Dict[int, Any],
 ) -> Optional[Dict[str, Any]]:
-    metrics_rows = _read_player_metrics_from_bq(player_ids, surface)
-    if len(metrics_rows) < len(player_ids):
-        return None
+    # Try richer betting analytics table first, fall back to legacy metrics.
+    betting_rows = _read_betting_analytics_from_bq(player_ids, surface)
+    use_betting = len(betting_rows) >= len(player_ids)
+
+    if not use_betting:
+        metrics_rows = _read_player_metrics_from_bq(player_ids, surface)
+        if len(metrics_rows) < len(player_ids):
+            return None
 
     weights = {
         "form": 0.50,
@@ -168,23 +223,50 @@ def _build_compare_from_precomputed(
 
     players_payload: List[Dict[str, Any]] = []
     for pid in player_ids:
-        row = metrics_rows.get(pid) or {}
-        players_payload.append(
-            {
-                "player_id": pid,
-                "rank": rankings.get(pid),
-                "score": 0.0,
-                "metrics": {
-                    "form_score": float(row.get("form_score") or 0.0),
-                    "recent_win_rate": float(row.get("recent_win_rate") or 0.0),
-                    "surface_win_rate": float(row.get("overall_win_rate") or 0.0),
-                    "ranking": rankings.get(pid),
-                    "recent_surface_win_rate": float(row.get("recent_win_rate") or 0.0),
-                    "straight_sets_win_rate": float(row.get("straight_sets_win_rate") or 0.0),
-                    "tiebreak_rate": float(row.get("tiebreak_rate") or 0.0),
-                },
-            }
-        )
+        if use_betting:
+            row = betting_rows.get(pid) or {}
+            players_payload.append(
+                {
+                    "player_id": pid,
+                    "rank": row.get("world_rank") or rankings.get(pid),
+                    "score": 0.0,
+                    "metrics": {
+                        "form_score": float(row.get("betting_form_score") or 0.0),
+                        "recent_win_rate": float(row.get("l15_adj_win_rate") or 0.0),
+                        "surface_win_rate": float(row.get("l20_surface_adj_win_rate") or row.get("adj_win_rate") or 0.0),
+                        "ranking": row.get("world_rank") or rankings.get(pid),
+                        "recent_surface_win_rate": float(row.get("l10_surface_adj_win_rate") or row.get("l15_adj_win_rate") or 0.0),
+                        "recent_form_win_rate": float(row.get("l10_adj_win_rate") or 0.0),
+                        "straight_sets_win_rate": float(row.get("straight_sets_rate") or 0.0),
+                        "tiebreak_rate": float(row.get("tiebreak_rate") or 0.0),
+                        "win_rate_vs_top50": float(row.get("adj_win_rate_vs_top50") or 0.0),
+                        "l15_win_rate": float(row.get("l15_adj_win_rate") or 0.0),
+                        "l40_win_rate": float(row.get("l40_adj_win_rate") or 0.0),
+                        "current_win_streak": int(row.get("current_win_streak") or 0),
+                        "current_loss_streak": int(row.get("current_loss_streak") or 0),
+                        "sample_confidence": float(row.get("sample_confidence") or 0.0),
+                        "titles": int(row.get("titles") or 0),
+                    },
+                }
+            )
+        else:
+            row = metrics_rows.get(pid) or {}
+            players_payload.append(
+                {
+                    "player_id": pid,
+                    "rank": rankings.get(pid),
+                    "score": 0.0,
+                    "metrics": {
+                        "form_score": float(row.get("form_score") or 0.0),
+                        "recent_win_rate": float(row.get("recent_win_rate") or 0.0),
+                        "surface_win_rate": float(row.get("overall_win_rate") or 0.0),
+                        "ranking": rankings.get(pid),
+                        "recent_surface_win_rate": float(row.get("recent_win_rate") or 0.0),
+                        "straight_sets_win_rate": float(row.get("straight_sets_win_rate") or 0.0),
+                        "tiebreak_rate": float(row.get("tiebreak_rate") or 0.0),
+                    },
+                }
+            )
 
     def _normalize(values: Dict[int, Optional[float]], reverse: bool = False) -> Dict[int, float]:
         valid = [float(v) for v in values.values() if v is not None]
@@ -1657,5 +1739,32 @@ def atp_compare(
             ttl_seconds=12 * 3600,
         )
         return payload
+    except Exception as err:
+        _handle_error(err)
+
+
+@router.get("/analytics/betting")
+def atp_betting_analytics(
+    player_ids: List[int] = Query(...),
+    surface: Optional[str] = None,
+):
+    """Return precomputed betting analytics for one or more players.
+
+    Reads from the ``atp_data.atp_betting_analytics`` materialized table that
+    is refreshed by a scheduled query.  Returns Bayesian-adjusted win rates,
+    rolling-window form, surface splits, tournament depth, streaks, and a
+    composite betting form score.
+    """
+    try:
+        if not player_ids:
+            raise HTTPException(status_code=400, detail="player_ids is required")
+        rows = _read_betting_analytics_from_bq(player_ids, surface)
+        return {
+            "surface": surface,
+            "count": len(rows),
+            "players": rows,
+        }
+    except HTTPException:
+        raise
     except Exception as err:
         _handle_error(err)

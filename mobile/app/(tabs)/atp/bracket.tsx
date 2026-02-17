@@ -330,6 +330,16 @@ function confidenceLabel(confidence?: number | null): string {
   return "Low";
 }
 
+function confidenceReliability(confidence?: number | null, totalMatches?: number | null): number {
+  const confidenceWeight = confidence == null ? 0.7 : Math.max(0.2, Math.min(1, confidence));
+  const sampleWeight =
+    totalMatches == null
+      ? 0.75
+      : Math.max(0.2, Math.min(1, totalMatches / 15));
+
+  return confidenceWeight * 0.7 + sampleWeight * 0.3;
+}
+
 function MatchAnalysisCard({
   match,
   surface,
@@ -387,6 +397,31 @@ function MatchAnalysisCard({
 
   const p1Confidence = p1Data?.metrics.sample_confidence ?? b1?.sample_confidence;
   const p2Confidence = p2Data?.metrics.sample_confidence ?? b2?.sample_confidence;
+
+  const recReliability =
+    rec?.player_id === p1Id
+      ? confidenceReliability(p1Confidence, b1?.total_matches)
+      : rec?.player_id === p2Id
+        ? confidenceReliability(p2Confidence, b2?.total_matches)
+        : null;
+
+  const opponentReliability =
+    rec?.player_id === p1Id
+      ? confidenceReliability(p2Confidence, b2?.total_matches)
+      : rec?.player_id === p2Id
+        ? confidenceReliability(p1Confidence, b1?.total_matches)
+        : null;
+
+  const confidenceAdjustedEdge =
+    rec?.edge != null && recReliability != null
+      ? rec.edge * Math.max(0.2, recReliability)
+      : null;
+
+  const shouldSuppressLean =
+    recReliability != null &&
+    opponentReliability != null &&
+    recReliability < 0.45 &&
+    opponentReliability > recReliability + 0.15;
 
   const addWinnerPick = (playerIndex: 1 | 2) => {
     const playerName = playerIndex === 1 ? match.player1 : match.player2;
@@ -545,10 +580,19 @@ function MatchAnalysisCard({
               ]}
             >
               <Text style={[s.recCompactLabel, { color: colors.text.muted }]}>Lean</Text>
-              <Text style={[s.recCompactPick, { color: colors.accent.success }]} numberOfLines={1}>
-                {pickName}
+              <Text
+                style={[
+                  s.recCompactPick,
+                  { color: shouldSuppressLean ? colors.text.secondary : colors.accent.success },
+                ]}
+                numberOfLines={1}
+              >
+                {shouldSuppressLean ? "No Lean (low confidence sample)" : pickName}
               </Text>
-              <Text style={[s.recCompactEdge, { color: colors.text.secondary }]}>Edge {fmtNum(rec.edge)}</Text>
+              <Text style={[s.recCompactEdge, { color: colors.text.secondary }]}> 
+                Edge {fmtNum(rec.edge)}
+                {confidenceAdjustedEdge != null ? ` • Adj ${fmtNum(confidenceAdjustedEdge)}` : ""}
+              </Text>
             </View>
           )}
 

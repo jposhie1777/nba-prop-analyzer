@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { useEplQuery } from "@/hooks/epl/useEplQuery";
 import { useTheme } from "@/store/useTheme";
@@ -30,6 +30,20 @@ type SoccerResponse = {
   all_markets: SoccerMarket[];
 };
 
+type NormalizedMarket = "alternate_totals" | "btts" | "double_chance" | "draw_no_bet" | "outright_winner" | "other";
+
+type MarketGroup = {
+  key: NormalizedMarket;
+  label: string;
+  bets: { market: SoccerMarket; index: number }[];
+};
+
+type BetSection = {
+  key: "goal_bets" | "match_bets" | "other_bets";
+  label: string;
+  groups: MarketGroup[];
+};
+
 function formatPct(value?: number) {
   if (value == null) return "-";
   return `${(value * 100).toFixed(1)}%`;
@@ -44,7 +58,7 @@ function formatPrice(price: number) {
   return price > 0 ? `+${price}` : `${price}`;
 }
 
-function displayMarket(market: string) {
+function normalizeMarket(market: string): NormalizedMarket {
   const normalized = market.trim().toLowerCase().replace(/-/g, "_").replace(/\s+/g, "_");
   if (["h2h", "moneyline", "match_winner", "winner", "outright_winner"].includes(normalized)) {
     return "outright_winner";
@@ -52,7 +66,20 @@ function displayMarket(market: string) {
   if (["alternate_totals", "alt_totals", "total_goals", "totals", "over_under"].includes(normalized)) {
     return "alternate_totals";
   }
-  return normalized;
+  if (["btts", "both_teams_to_score"].includes(normalized)) return "btts";
+  if (["double_chance"].includes(normalized)) return "double_chance";
+  if (["draw_no_bet", "dnb"].includes(normalized)) return "draw_no_bet";
+  return "other";
+}
+
+function displayMarket(market: string) {
+  const normalized = normalizeMarket(market);
+  if (normalized === "alternate_totals") return "Total Goals";
+  if (normalized === "btts") return "Both Teams to Score";
+  if (normalized === "double_chance") return "Double Chance";
+  if (normalized === "draw_no_bet") return "Draw No Bet";
+  if (normalized === "outright_winner") return "Outright Winner";
+  return market;
 }
 
 export default function SoccerTodayScreen() {
@@ -77,11 +104,42 @@ export default function SoccerTodayScreen() {
 
     return orderedGames.map((game) => {
       const markets = grouped.get(game) ?? [];
-      const defaultIndex = Math.max(
-        0,
-        markets.findIndex((m) => m.recommended),
-      );
-      return { game, markets, defaultIndex };
+      const defaultBet = markets.find((m) => m.recommended) ?? markets[0];
+
+      const goalBets: MarketGroup[] = [];
+      const matchBets: MarketGroup[] = [];
+      const otherBets: MarketGroup[] = [];
+
+      const byMarket = new Map<NormalizedMarket, { market: SoccerMarket; index: number }[]>();
+      for (const [index, market] of markets.entries()) {
+        const normalized = normalizeMarket(market.market);
+        if (!byMarket.has(normalized)) {
+          byMarket.set(normalized, []);
+        }
+        byMarket.get(normalized)?.push({ market, index });
+      }
+
+      byMarket.forEach((bets, key) => {
+        const group: MarketGroup = {
+          key,
+          label: displayMarket(bets[0]?.market.market ?? key),
+          bets,
+        };
+        if (["alternate_totals", "btts"].includes(key)) {
+          goalBets.push(group);
+        } else if (["double_chance", "draw_no_bet", "outright_winner"].includes(key)) {
+          matchBets.push(group);
+        } else {
+          otherBets.push(group);
+        }
+      });
+
+      const sections: BetSection[] = [];
+      if (goalBets.length) sections.push({ key: "goal_bets", label: "Goal Bets", groups: goalBets });
+      if (matchBets.length) sections.push({ key: "match_bets", label: "Match Bets", groups: matchBets });
+      if (otherBets.length) sections.push({ key: "other_bets", label: "Other Bets", groups: otherBets });
+
+      return { game, markets, defaultBet, sections };
     });
   }, [data?.all_markets, data?.suggestions]);
 
@@ -120,8 +178,10 @@ export default function SoccerTodayScreen() {
       data={games}
       keyExtractor={(item) => item.game}
       renderItem={({ item }) => {
-        const selectedIndex = selectedByGame[item.game] ?? item.defaultIndex;
-        const selectedBet = item.markets[selectedIndex] ?? item.markets[0];
+        const selectedBet =
+          item.markets[selectedByGame[item.game]] ??
+          item.defaultBet ??
+          item.markets[0];
 
         if (!selectedBet) {
           return null;
@@ -138,33 +198,50 @@ export default function SoccerTodayScreen() {
               </View>
             </View>
 
-            <View style={styles.betPillRow}>
-              {item.markets.map((market, marketIndex) => {
-                const selected = marketIndex === selectedIndex;
-                return (
-                  <Pressable
-                    key={`${market.market}-${market.outcome}-${market.line ?? marketIndex}`}
-                    onPress={() =>
-                      setSelectedByGame((prev) => ({
-                        ...prev,
-                        [item.game]: marketIndex,
-                      }))
-                    }
-                    style={[
-                      styles.betPill,
-                      {
-                        borderColor: selected ? "#3B82F6" : colors.border.subtle,
-                        backgroundColor: selected ? "rgba(59,130,246,0.22)" : "transparent",
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.betPillText, { color: selected ? "#DBEAFE" : colors.text.muted }]}>
-                      {displayMarket(market.market)}: {market.outcome}
-                      {formatLine(market.line)}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+            <View style={styles.sectionWrap}>
+              {item.sections.map((section) => (
+                <View key={section.key} style={styles.sectionBlock}>
+                  <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{section.label}</Text>
+
+                  {section.groups.map((group) => (
+                    <View key={group.key} style={styles.marketGroup}>
+                      <Text style={[styles.marketGroupTitle, { color: colors.text.muted }]}>{group.label}</Text>
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.betPillScrollRow}
+                      >
+                        {group.bets.map(({ market, index }, marketIndex) => {
+                          const selected = index === selectedByGame[item.game] || (selectedByGame[item.game] == null && market === selectedBet);
+                          return (
+                            <Pressable
+                              key={`${group.key}-${market.outcome}-${market.line ?? marketIndex}`}
+                              onPress={() =>
+                                setSelectedByGame((prev) => ({
+                                  ...prev,
+                                  [item.game]: index,
+                                }))
+                              }
+                              style={[
+                                styles.betPill,
+                                {
+                                  borderColor: selected ? "#3B82F6" : colors.border.subtle,
+                                  backgroundColor: selected ? "rgba(59,130,246,0.22)" : "transparent",
+                                },
+                              ]}
+                            >
+                              <Text style={[styles.betPillText, { color: selected ? "#DBEAFE" : colors.text.muted }]}>
+                                {market.outcome}
+                                {formatLine(market.line)}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </ScrollView>
+                    </View>
+                  ))}
+                </View>
+              ))}
             </View>
 
             <Text style={[styles.market, { color: colors.text.primary }]}> 
@@ -260,7 +337,12 @@ const styles = StyleSheet.create({
   market: { fontWeight: "700", fontSize: 13 },
   meta: { fontSize: 12 },
   metricsRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 2 },
-  betPillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
+  sectionWrap: { marginTop: 4, gap: 10 },
+  sectionBlock: { gap: 6 },
+  sectionTitle: { fontSize: 11, fontWeight: "800", letterSpacing: 0.4, textTransform: "uppercase" },
+  marketGroup: { gap: 6 },
+  marketGroupTitle: { fontSize: 11, fontWeight: "700" },
+  betPillScrollRow: { flexDirection: "row", gap: 8, paddingRight: 8 },
   betPill: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 999,

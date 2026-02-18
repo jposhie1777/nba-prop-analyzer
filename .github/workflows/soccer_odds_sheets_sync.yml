@@ -1,0 +1,53 @@
+name: Soccer Odds Sheets → BigQuery Daily Sync
+
+on:
+  # Approximate 6:15 AM ET year-round using UTC split for EST vs EDT.
+  # EST months (Nov-Mar): 11:15 UTC ~= 6:15 AM ET
+  schedule:
+    - cron: "15 11 * 11-12,1-3 *"
+    # EDT months (Apr-Oct): 10:15 UTC ~= 6:15 AM ET
+    - cron: "15 10 * 4-10 *"
+
+  workflow_dispatch:
+    inputs:
+      truncate:
+        description: "Truncate BQ table before loading (true/false)"
+        required: false
+        default: "true"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+      SOCCER_ODDS_SHEETS_SPREADSHEET_ID: "1p_rmmiUgU18afioJJ3jCHh9XeX7V4gyHd_E0M3A8M3g"
+      SOCCER_ODDS_WORKSHEETS: "EPL Odds,La Liga Odds,MLS Odds"
+      SOCCER_ODDS_BQ_DATASET: "soccer_data"
+      SOCCER_ODDS_BQ_TABLE: "soccer_data.odds_lines"
+      SOCCER_ODDS_TRUNCATE_BEFORE_LOAD: ${{ inputs.truncate || 'true' }}
+      SOCCER_ODDS_BQ_LOCATION: "US"
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install google-cloud-bigquery google-auth gspread pandas db-dtypes
+
+      - name: Configure GCP credentials
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
+
+      - name: Sync soccer odds Google Sheets to BigQuery
+        run: |
+          python mobile_api/ingest/sheets/sync_soccer_odds_to_bq.py

@@ -62,6 +62,8 @@ const HIDDEN_SCREENS = [
   "pga-simulated-finishes",
   "pga-simulated-leaderboard",
   "props",
+  "soccer",
+  "soccer/today",
   "trend-chart",
   "wowy",
 ];

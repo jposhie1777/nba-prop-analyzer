@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime
 from typing import Any, Dict, List, Optional
+
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Query
 from google.cloud import bigquery
@@ -12,6 +15,10 @@ from ingest.sheets.sync_soccer_odds_to_bq import sync_soccer_odds_to_bq
 router = APIRouter(tags=["Soccer"])
 
 SOCCER_ODDS_TABLE = os.getenv("SOCCER_ODDS_BQ_TABLE", "soccer_data.odds_lines")
+SOCCER_BETTING_ANALYSIS_TABLE = os.getenv(
+    "SOCCER_BETTING_ANALYSIS_BQ_TABLE", "soccer_data.betting_analysis"
+)
+ET_TZ = ZoneInfo("America/New_York")
 
 
 @router.post("/ingest/soccer/odds-from-sheets")
@@ -65,3 +72,157 @@ def soccer_odds_board(
     client = get_bq_client()
     job = client.query(sql, job_config=bigquery.QueryJobConfig(query_parameters=params))
     return [dict(row) for row in job.result()]
+
+
+def _american_to_decimal(odds: Optional[float]) -> Optional[float]:
+    if odds is None or odds == 0:
+        return None
+    if odds > 0:
+        return 1 + (odds / 100)
+    return 1 + (100 / abs(odds))
+
+
+def _american_to_implied_prob(odds: Optional[float]) -> Optional[float]:
+    dec = _american_to_decimal(odds)
+    if not dec or dec <= 0:
+        return None
+    return 1 / dec
+
+
+def _make_suggestion(row: Dict[str, Any]) -> Dict[str, Any]:
+    market = str(row.get("market") or "")
+    outcome = str(row.get("outcome") or "")
+    price = row.get("best_price")
+
+    home_attack = float(row.get("home_season_gf") or 0)
+    home_defense = float(row.get("home_season_ga") or 0)
+    away_attack = float(row.get("away_season_gf") or 0)
+    away_defense = float(row.get("away_season_ga") or 0)
+    home_recent_attack = float(row.get("home_l10_gf") or 0)
+    home_recent_defense = float(row.get("home_l10_ga") or 0)
+    away_recent_attack = float(row.get("away_l10_gf") or 0)
+    away_recent_defense = float(row.get("away_l10_ga") or 0)
+    combined_gf = float(row.get("combined_season_gf") or 0)
+    combined_cards = float(row.get("combined_season_cards") or 0)
+
+    home_strength = (home_attack - home_defense) + 0.35 * (
+        home_recent_attack - home_recent_defense
+    )
+    away_strength = (away_attack - away_defense) + 0.35 * (
+        away_recent_attack - away_recent_defense
+    )
+    strength_gap = away_strength - home_strength
+
+    implied_prob = _american_to_implied_prob(price) or 0.5
+    confidence = implied_prob
+    rationale = ""
+
+    if market == "btts":
+        if outcome.lower() == "yes":
+            confidence = max(implied_prob, min(0.82, 0.42 + combined_gf * 0.12))
+            rationale = (
+                f"Combined GF profile ({combined_gf:.2f}) points to both attacks finding the net."
+            )
+        elif outcome.lower() == "no":
+            confidence = max(implied_prob, min(0.82, 0.42 + max(0.0, 2.8 - combined_gf) * 0.14))
+            rationale = (
+                f"Lower scoring context ({combined_gf:.2f} combined GF) supports BTTS No."
+            )
+    elif market == "draw_no_bet":
+        wants_away = outcome == row.get("away_team")
+        favored_gap = strength_gap if wants_away else -strength_gap
+        confidence = max(implied_prob, min(0.86, 0.5 + favored_gap * 0.2))
+        rationale = (
+            "Draw protection with team-strength edge "
+            f"({favored_gap:+.2f} model gap)."
+        )
+    elif market == "double_chance":
+        supports_away = row.get("away_team") and str(row.get("away_team")) in outcome
+        supports_home = row.get("home_team") and str(row.get("home_team")) in outcome
+        favored_gap = strength_gap if supports_away and not supports_home else -strength_gap
+        confidence = max(implied_prob, min(0.9, 0.58 + abs(favored_gap) * 0.12))
+        rationale = (
+            "Double chance lowers variance while leaning into the stronger side profile."
+        )
+    else:
+        rationale = "Market is priced as a lean from today's team form and season profile."
+
+    confidence = max(0.01, min(0.99, confidence))
+    edge = confidence - implied_prob
+    return {
+        **row,
+        "implied_prob": round(implied_prob, 4),
+        "model_confidence": round(confidence, 4),
+        "edge": round(edge, 4),
+        "rationale": rationale,
+        "recommended": edge >= 0.035,
+    }
+
+
+@router.get("/soccer/todays-betting-analysis")
+def soccer_todays_betting_analysis(
+    league: Optional[str] = Query(default=None, description="EPL, LaLiga, or MLS"),
+    limit: int = Query(default=200, ge=1, le=1000),
+    min_edge: float = Query(default=0.035, ge=-1.0, le=1.0),
+) -> Dict[str, Any]:
+    client = get_bq_client()
+    today_et = datetime.now(tz=ET_TZ).date().isoformat()
+
+    filters: List[str] = ["DATE(start_time_et, 'America/New_York') = @today_et"]
+    params: List[bigquery.ScalarQueryParameter] = [
+        bigquery.ScalarQueryParameter("today_et", "DATE", today_et),
+        bigquery.ScalarQueryParameter("limit", "INT64", limit),
+    ]
+
+    if league:
+        filters.append("league = @league")
+        params.append(bigquery.ScalarQueryParameter("league", "STRING", league))
+
+    where_sql = " AND ".join(filters)
+
+    sql = f"""
+    SELECT
+      league,
+      game,
+      start_time_et,
+      home_team,
+      away_team,
+      market,
+      outcome,
+      line,
+      ARRAY_AGG(bookmaker ORDER BY price DESC LIMIT 1)[OFFSET(0)] AS best_bookmaker,
+      MAX(price) AS best_price,
+      ANY_VALUE(home_season_gf) AS home_season_gf,
+      ANY_VALUE(home_season_ga) AS home_season_ga,
+      ANY_VALUE(home_l10_gf) AS home_l10_gf,
+      ANY_VALUE(home_l10_ga) AS home_l10_ga,
+      ANY_VALUE(away_season_gf) AS away_season_gf,
+      ANY_VALUE(away_season_ga) AS away_season_ga,
+      ANY_VALUE(away_l10_gf) AS away_l10_gf,
+      ANY_VALUE(away_l10_ga) AS away_l10_ga,
+      ANY_VALUE(combined_season_gf) AS combined_season_gf,
+      ANY_VALUE(combined_season_cards) AS combined_season_cards
+    FROM `{SOCCER_BETTING_ANALYSIS_TABLE}`
+    WHERE {where_sql}
+    GROUP BY league, game, start_time_et, home_team, away_team, market, outcome, line
+    ORDER BY start_time_et ASC, league, game, market, outcome
+    LIMIT @limit
+    """
+
+    rows = [
+        _make_suggestion(dict(row))
+        for row in client.query(
+            sql, job_config=bigquery.QueryJobConfig(query_parameters=params)
+        ).result()
+    ]
+
+    suggestions = [row for row in rows if row.get("edge", 0) >= min_edge]
+    suggestions.sort(key=lambda row: row.get("edge", 0), reverse=True)
+
+    return {
+        "date_et": today_et,
+        "slate_size": len({f"{r.get('league')}|{r.get('game')}" for r in rows}),
+        "markets_count": len(rows),
+        "suggestions": suggestions,
+        "all_markets": rows,
+    }

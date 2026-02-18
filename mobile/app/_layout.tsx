@@ -24,8 +24,10 @@ import { useDevStore } from "@/lib/dev/devStore";
 import { installFetchInterceptor } from "@/lib/dev/interceptFetch";
 import { PropBetslipDrawer } from "@/components/prop/PropBetslipDrawer";
 import { AtpBetslipDrawer } from "@/components/atp/AtpBetslipDrawer";
+import { SoccerBetslipDrawer } from "@/components/soccer/SoccerBetslipDrawer";
 import { ensurePushRegistered } from "@/lib/notifications/registerForPush";
 import { useAtpBetslip } from "@/store/useAtpBetslip";
+import { useSoccerBetslip } from "@/store/useSoccerBetslip";
 
 /* -------------------------------------------------
    Expo Router settings
@@ -86,6 +88,7 @@ export default function RootLayout() {
   -------------------------------- */
   const hydrateSavedProps = useSavedProps((s) => s.hydrate);
   const hydrateAtpBetslip = useAtpBetslip((s) => s.hydrate);
+  const hydrateSoccerBetslip = useSoccerBetslip((s) => s.hydrate);
 
   useEffect(() => {
     console.log("💧 Hydrating saved props");
@@ -95,6 +98,10 @@ export default function RootLayout() {
   useEffect(() => {
     hydrateAtpBetslip();
   }, [hydrateAtpBetslip]);
+
+  useEffect(() => {
+    hydrateSoccerBetslip();
+  }, [hydrateSoccerBetslip]);
 
   useEffect(() => {
     if (__DEV__) {
@@ -137,6 +144,7 @@ export default function RootLayout() {
           {/* 🧪 GLOBAL OVERLAYS */}
           <PropBetslipDrawer />
           <AtpBetslipDrawer />
+          <SoccerBetslipDrawer />
 
           <StatusBar style="auto" />
         </ThemeProvider>

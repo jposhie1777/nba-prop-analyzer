@@ -6,3 +6,4 @@ google-auth
 python-dotenv
 pytz
 pydantic>=1.10
+gspread

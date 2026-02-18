@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from zoneinfo import ZoneInfo
 
@@ -19,7 +19,20 @@ SOCCER_BETTING_ANALYSIS_TABLE = os.getenv(
     "SOCCER_BETTING_ANALYSIS_BQ_TABLE", "soccer_data.betting_analysis"
 )
 ET_TZ = ZoneInfo("America/New_York")
-
+OUTRIGHT_WINNER_MARKETS: Set[str] = {
+    "h2h",
+    "moneyline",
+    "match_winner",
+    "winner",
+    "outright_winner",
+}
+ALT_TOTALS_MARKETS: Set[str] = {
+    "alternate_totals",
+    "alt_totals",
+    "total_goals",
+    "totals",
+    "over_under",
+}
 
 @router.post("/ingest/soccer/odds-from-sheets")
 def ingest_soccer_odds_from_sheets() -> Dict[str, Any]:
@@ -89,8 +102,23 @@ def _american_to_implied_prob(odds: Optional[float]) -> Optional[float]:
     return 1 / dec
 
 
+def _normalize_market(market: Any) -> str:
+    return str(market or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def _market_key(row: Dict[str, Any]) -> Tuple[Any, ...]:
+    return (
+        row.get("league"),
+        row.get("game"),
+        row.get("start_time_et"),
+        _normalize_market(row.get("market")),
+        row.get("outcome"),
+        row.get("line"),
+    )
+
+
 def _make_suggestion(row: Dict[str, Any]) -> Dict[str, Any]:
-    market = str(row.get("market") or "")
+    market = _normalize_market(row.get("market"))
     outcome = str(row.get("outcome") or "")
     price = row.get("best_price")
 
@@ -103,7 +131,6 @@ def _make_suggestion(row: Dict[str, Any]) -> Dict[str, Any]:
     away_recent_attack = float(row.get("away_l10_gf") or 0)
     away_recent_defense = float(row.get("away_l10_ga") or 0)
     combined_gf = float(row.get("combined_season_gf") or 0)
-    combined_cards = float(row.get("combined_season_cards") or 0)
 
     home_strength = (home_attack - home_defense) + 0.35 * (
         home_recent_attack - home_recent_defense
@@ -144,6 +171,31 @@ def _make_suggestion(row: Dict[str, Any]) -> Dict[str, Any]:
         rationale = (
             "Double chance lowers variance while leaning into the stronger side profile."
         )
+    elif market in OUTRIGHT_WINNER_MARKETS:
+        supports_away = row.get("away_team") and str(row.get("away_team")) in outcome
+        supports_home = row.get("home_team") and str(row.get("home_team")) in outcome
+        if supports_away and not supports_home:
+            favored_gap = strength_gap
+        elif supports_home and not supports_away:
+            favored_gap = -strength_gap
+        else:
+            favored_gap = 0.0
+        confidence = max(implied_prob, min(0.86, 0.48 + favored_gap * 0.22))
+        rationale = (
+            "Outright winner priced from team-strength profile and recent form signal "
+            f"({favored_gap:+.2f} model gap)."
+        )
+    elif market in ALT_TOTALS_MARKETS:
+        is_over = outcome.lower().startswith("over")
+        baseline_total = max(0.5, combined_gf)
+        total_line = float(row.get("line") or baseline_total)
+        line_gap = baseline_total - total_line
+        direction_gap = line_gap if is_over else -line_gap
+        confidence = max(implied_prob, min(0.88, 0.5 + direction_gap * 0.14))
+        rationale = (
+            "Alternate totals compares model scoring baseline to posted line "
+            f"(baseline {baseline_total:.2f} vs line {total_line:.2f})."
+        )
     else:
         rationale = "Market is priced as a lean from today's team form and season profile."
 
@@ -151,6 +203,7 @@ def _make_suggestion(row: Dict[str, Any]) -> Dict[str, Any]:
     edge = confidence - implied_prob
     return {
         **row,
+        "market": market,
         "implied_prob": round(implied_prob, 4),
         "model_confidence": round(confidence, 4),
         "edge": round(edge, 4),
@@ -159,27 +212,11 @@ def _make_suggestion(row: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-@router.get("/soccer/todays-betting-analysis")
-def soccer_todays_betting_analysis(
-    league: Optional[str] = Query(default=None, description="EPL, LaLiga, or MLS"),
-    limit: int = Query(default=200, ge=1, le=1000),
-    min_edge: float = Query(default=0.035, ge=-1.0, le=1.0),
-) -> Dict[str, Any]:
-    client = get_bq_client()
-    today_et = datetime.now(tz=ET_TZ).date().isoformat()
-
-    filters: List[str] = ["DATE(start_time_et, 'America/New_York') = @today_et"]
-    params: List[bigquery.ScalarQueryParameter] = [
-        bigquery.ScalarQueryParameter("today_et", "DATE", today_et),
-        bigquery.ScalarQueryParameter("limit", "INT64", limit),
-    ]
-
-    if league:
-        filters.append("league = @league")
-        params.append(bigquery.ScalarQueryParameter("league", "STRING", league))
-
-    where_sql = " AND ".join(filters)
-
+def _fetch_betting_analysis_rows(
+    client: bigquery.Client,
+    where_sql: str,
+    params: List[bigquery.ScalarQueryParameter],
+) -> List[Dict[str, Any]]:
     sql = f"""
     SELECT
       league,
@@ -208,13 +245,111 @@ def soccer_todays_betting_analysis(
     ORDER BY start_time_et ASC, league, game, market, outcome
     LIMIT @limit
     """
-
-    rows = [
-        _make_suggestion(dict(row))
+    return [
+        dict(row)
         for row in client.query(
-            sql, job_config=bigquery.QueryJobConfig(query_parameters=params)
+            sql,
+            job_config=bigquery.QueryJobConfig(query_parameters=params),
         ).result()
     ]
+
+
+def _fetch_supplemental_rows(
+    client: bigquery.Client,
+    where_sql: str,
+    params: List[bigquery.ScalarQueryParameter],
+) -> List[Dict[str, Any]]:
+    sql = f"""
+    SELECT
+      league,
+      game,
+      start_time_et,
+      home_team,
+      away_team,
+      market,
+      outcome,
+      line,
+      ARRAY_AGG(bookmaker ORDER BY price DESC LIMIT 1)[OFFSET(0)] AS best_bookmaker,
+      MAX(price) AS best_price
+    FROM `{SOCCER_ODDS_TABLE}`
+    WHERE {where_sql}
+      AND LOWER(REPLACE(REPLACE(market, '-', '_'), ' ', '_')) IN (
+        'h2h',
+        'moneyline',
+        'match_winner',
+        'winner',
+        'outright_winner',
+        'alternate_totals',
+        'alt_totals',
+        'total_goals',
+        'totals',
+        'over_under'
+      )
+    GROUP BY league, game, start_time_et, home_team, away_team, market, outcome, line
+    ORDER BY start_time_et ASC, league, game, market, outcome
+    LIMIT @limit
+    """
+    return [
+        dict(row)
+        for row in client.query(
+            sql,
+            job_config=bigquery.QueryJobConfig(query_parameters=params),
+        ).result()
+    ]
+
+
+@router.get("/soccer/todays-betting-analysis")
+def soccer_todays_betting_analysis(
+    league: Optional[str] = Query(default=None, description="EPL, LaLiga, or MLS"),
+    limit: int = Query(default=200, ge=1, le=1000),
+    min_edge: float = Query(default=0.035, ge=-1.0, le=1.0),
+) -> Dict[str, Any]:
+    client = get_bq_client()
+    today_et = datetime.now(tz=ET_TZ).date().isoformat()
+
+    filters: List[str] = ["DATE(start_time_et, 'America/New_York') = @today_et"]
+    params: List[bigquery.ScalarQueryParameter] = [
+        bigquery.ScalarQueryParameter("today_et", "DATE", today_et),
+        bigquery.ScalarQueryParameter("limit", "INT64", limit),
+    ]
+
+    if league:
+        filters.append("league = @league")
+        params.append(bigquery.ScalarQueryParameter("league", "STRING", league))
+
+    where_sql = " AND ".join(filters)
+
+    analysis_rows = _fetch_betting_analysis_rows(client, where_sql, params)
+    stats_by_game = {
+        (row.get("league"), row.get("game"), row.get("start_time_et")): {
+            "home_season_gf": row.get("home_season_gf"),
+            "home_season_ga": row.get("home_season_ga"),
+            "home_l10_gf": row.get("home_l10_gf"),
+            "home_l10_ga": row.get("home_l10_ga"),
+            "away_season_gf": row.get("away_season_gf"),
+            "away_season_ga": row.get("away_season_ga"),
+            "away_l10_gf": row.get("away_l10_gf"),
+            "away_l10_ga": row.get("away_l10_ga"),
+            "combined_season_gf": row.get("combined_season_gf"),
+            "combined_season_cards": row.get("combined_season_cards"),
+        }
+        for row in analysis_rows
+    }
+
+    existing_keys = {_market_key(row) for row in analysis_rows}
+    supplemental_rows = _fetch_supplemental_rows(client, where_sql, params)
+    merged_rows = list(analysis_rows)
+    for supplemental in supplemental_rows:
+        key = _market_key(supplemental)
+        if key in existing_keys:
+            continue
+        game_stats = stats_by_game.get(
+            (supplemental.get("league"), supplemental.get("game"), supplemental.get("start_time_et")),
+            {},
+        )
+        merged_rows.append({**supplemental, **game_stats})
+
+    rows = [_make_suggestion(row) for row in merged_rows]
 
     suggestions = [row for row in rows if row.get("edge", 0) >= min_edge]
     suggestions.sort(key=lambda row: row.get("edge", 0), reverse=True)

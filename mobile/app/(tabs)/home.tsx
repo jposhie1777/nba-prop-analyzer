@@ -176,6 +176,15 @@ export default function Home() {
       />
 
       <SportTile
+        title="Soccer Matchup Analyzer"
+        subtitle="Today's slate recommendations with one-tap save to the Gambly betslip drawer."
+        badge="LIVE"
+        icon="analytics"
+        accent="#22D3EE"
+        onPress={() => router.push("/(tabs)/soccer")}
+      />
+
+      <SportTile
         title="WTA"
         subtitle="Women's tennis dashboards and matchup models are coming soon."
         badge="COMING SOON"

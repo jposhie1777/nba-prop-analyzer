@@ -45,7 +45,7 @@ export default function SoccerHome() {
 
       <Tile
         title="Today's Matchup Analyzer"
-        subtitle="Top recommended bets from BTTS, Draw No Bet, and Double Chance markets."
+        subtitle="Top recommended bets from outright winner, alternate totals, BTTS, Draw No Bet, and Double Chance markets."
         route="/(tabs)/soccer/today"
         icon="football-outline"
         accent="#22D3EE"

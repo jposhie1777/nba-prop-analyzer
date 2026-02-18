@@ -44,6 +44,17 @@ function formatPrice(price: number) {
   return price > 0 ? `+${price}` : `${price}`;
 }
 
+function displayMarket(market: string) {
+  const normalized = market.trim().toLowerCase().replace(/-/g, "_").replace(/\s+/g, "_");
+  if (["h2h", "moneyline", "match_winner", "winner", "outright_winner"].includes(normalized)) {
+    return "outright_winner";
+  }
+  if (["alternate_totals", "alt_totals", "total_goals", "totals", "over_under"].includes(normalized)) {
+    return "alternate_totals";
+  }
+  return normalized;
+}
+
 export default function SoccerTodayScreen() {
   const { colors } = useTheme();
   const addToBetslip = useSoccerBetslip((s) => s.add);
@@ -148,7 +159,7 @@ export default function SoccerTodayScreen() {
                     ]}
                   >
                     <Text style={[styles.betPillText, { color: selected ? "#DBEAFE" : colors.text.muted }]}>
-                      {market.market}: {market.outcome}
+                      {displayMarket(market.market)}: {market.outcome}
                       {formatLine(market.line)}
                     </Text>
                   </Pressable>
@@ -157,7 +168,7 @@ export default function SoccerTodayScreen() {
             </View>
 
             <Text style={[styles.market, { color: colors.text.primary }]}> 
-              {selectedBet.market}: {selectedBet.outcome}
+              {displayMarket(selectedBet.market)}: {selectedBet.outcome}
               {formatLine(selectedBet.line)}
             </Text>
 

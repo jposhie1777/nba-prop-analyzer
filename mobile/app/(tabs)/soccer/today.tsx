@@ -44,6 +44,8 @@ type BetSection = {
   groups: MarketGroup[];
 };
 
+type TotalsSide = "over" | "under";
+
 function formatPct(value?: number) {
   if (value == null) return "-";
   return `${(value * 100).toFixed(1)}%`;
@@ -56,6 +58,25 @@ function formatLine(line?: number | null) {
 
 function formatPrice(price: number) {
   return price > 0 ? `+${price}` : `${price}`;
+}
+
+function getTotalsSide(outcome: string): TotalsSide | null {
+  const normalized = outcome.trim().toLowerCase();
+  if (normalized.startsWith("over")) return "over";
+  if (normalized.startsWith("under")) return "under";
+  return null;
+}
+
+function isIntegerOrHalf(line?: number | null) {
+  if (line == null) return false;
+  const rounded = Math.round(line * 2) / 2;
+  return Math.abs(line - rounded) < 1e-6;
+}
+
+function compareByLineAscending(a: SoccerMarket, b: SoccerMarket) {
+  const aLine = a.line ?? Number.POSITIVE_INFINITY;
+  const bLine = b.line ?? Number.POSITIVE_INFINITY;
+  return aLine - bLine;
 }
 
 function normalizeMarket(market: string): NormalizedMarket {
@@ -88,6 +109,7 @@ export default function SoccerTodayScreen() {
   const openDrawer = useSoccerBetslipDrawer((s) => s.open);
   const { data, loading, error, refetch } = useEplQuery<SoccerResponse>("/soccer/todays-betting-analysis");
   const [selectedByGame, setSelectedByGame] = useState<Record<string, number>>({});
+  const [totalsSideByGame, setTotalsSideByGame] = useState<Record<string, TotalsSide>>({});
 
   const games = useMemo(() => {
     const grouped = new Map<string, SoccerMarket[]>();
@@ -178,8 +200,19 @@ export default function SoccerTodayScreen() {
       data={games}
       keyExtractor={(item) => item.game}
       renderItem={({ item }) => {
+        const totalsSide = totalsSideByGame[item.game] ?? "over";
+        const totalsCandidates = item.markets
+          .filter((market) => normalizeMarket(market.market) === "alternate_totals")
+          .filter((market) => isIntegerOrHalf(market.line))
+          .filter((market) => getTotalsSide(market.outcome) === totalsSide)
+          .sort(compareByLineAscending);
+
+        const selectedIndex = selectedByGame[item.game];
+        const selectedByIndex = selectedIndex == null ? undefined : item.markets[selectedIndex];
+
         const selectedBet =
-          item.markets[selectedByGame[item.game]] ??
+          selectedByIndex ??
+          totalsCandidates[0] ??
           item.defaultBet ??
           item.markets[0];
 
@@ -211,7 +244,13 @@ export default function SoccerTodayScreen() {
                         showsHorizontalScrollIndicator={false}
                         contentContainerStyle={styles.betPillScrollRow}
                       >
-                        {group.bets.map(({ market, index }, marketIndex) => {
+                        {(group.key === "alternate_totals"
+                          ? group.bets
+                              .filter(({ market }) => isIntegerOrHalf(market.line))
+                              .filter(({ market }) => getTotalsSide(market.outcome) === (totalsSideByGame[item.game] ?? "over"))
+                              .sort((a, b) => compareByLineAscending(a.market, b.market))
+                          : group.bets
+                        ).map(({ market, index }, marketIndex) => {
                           const selected = index === selectedByGame[item.game] || (selectedByGame[item.game] == null && market === selectedBet);
                           return (
                             <Pressable
@@ -238,6 +277,45 @@ export default function SoccerTodayScreen() {
                           );
                         })}
                       </ScrollView>
+
+                      {group.key === "alternate_totals" && (
+                        <View style={styles.toggleRow}>
+                          {(["over", "under"] as TotalsSide[]).map((side) => {
+                            const isSelected = (totalsSideByGame[item.game] ?? "over") === side;
+                            return (
+                              <Pressable
+                                key={`${item.game}-${side}`}
+                                onPress={() => {
+                                  setTotalsSideByGame((prev) => ({ ...prev, [item.game]: side }));
+
+                                  const nextPick = group.bets
+                                    .filter(({ market }) => isIntegerOrHalf(market.line))
+                                    .filter(({ market }) => getTotalsSide(market.outcome) === side)
+                                    .sort((a, b) => compareByLineAscending(a.market, b.market))[0];
+
+                                  if (nextPick) {
+                                    setSelectedByGame((prev) => ({
+                                      ...prev,
+                                      [item.game]: nextPick.index,
+                                    }));
+                                  }
+                                }}
+                                style={[
+                                  styles.toggleBtn,
+                                  {
+                                    borderColor: isSelected ? "#3B82F6" : colors.border.subtle,
+                                    backgroundColor: isSelected ? "rgba(59,130,246,0.18)" : "transparent",
+                                  },
+                                ]}
+                              >
+                                <Text style={[styles.toggleText, { color: isSelected ? "#DBEAFE" : colors.text.muted }]}>
+                                  {side === "over" ? "Over" : "Under"}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      )}
                     </View>
                   ))}
                 </View>
@@ -342,6 +420,14 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 11, fontWeight: "800", letterSpacing: 0.4, textTransform: "uppercase" },
   marketGroup: { gap: 6 },
   marketGroupTitle: { fontSize: 11, fontWeight: "700" },
+  toggleRow: { flexDirection: "row", gap: 8 },
+  toggleBtn: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  toggleText: { fontSize: 11, fontWeight: "700" },
   betPillScrollRow: { flexDirection: "row", gap: 8, paddingRight: 8 },
   betPill: {
     borderWidth: StyleSheet.hairlineWidth,

@@ -84,9 +84,11 @@ from routes.game_environment import router as game_environment_router
 from routes.epl_analytics import router as epl_analytics_router
 from routes.laliga_analytics import router as laliga_analytics_router
 from routes.mls_analytics import router as mls_analytics_router
+from routes.soccer_analytics import router as soccer_analytics_router
 from ingest.epl.ingest import ingest_yesterday_refresh as ingest_epl_yesterday_refresh
 from ingest.laliga.ingest import ingest_yesterday_refresh as ingest_laliga_yesterday_refresh
 from ingest.mls.ingest import ingest_yesterday_refresh as ingest_mls_yesterday_refresh
+from ingest.sheets.sync_soccer_odds_to_bq import sync_soccer_odds_to_bq
 
 # ==================================================
 # Game Advanced Stats V2 imports
@@ -185,6 +187,7 @@ app.include_router(game_environment_router)
 app.include_router(epl_analytics_router)
 app.include_router(laliga_analytics_router)
 app.include_router(mls_analytics_router)
+app.include_router(soccer_analytics_router)
 
 # ==================================================
 # Startup hook (SMART SCHEDULED BACKGROUND TASKS)
@@ -347,6 +350,63 @@ async def startup():
 
         asyncio.create_task(season_averages_daily_loop())
         print("[STARTUP] -> Season Averages daily ingest loop started")
+
+        # -----------------------------
+        # DAILY: Soccer odds sheet sync (runs at 6:15 AM ET)
+        # -----------------------------
+        async def soccer_odds_sheet_sync_loop():
+            """
+            Daily loop that syncs soccer odds from Google Sheets into BigQuery.
+            Runs at 6:15 AM ET.
+            """
+            from datetime import timedelta
+
+            INGEST_HOUR = 6
+            INGEST_MINUTE = 15
+
+            print("[SOCCER_ODDS] Daily sync loop started")
+            print(
+                "[SOCCER_ODDS] Scheduled to run at"
+                f" {INGEST_HOUR}:{INGEST_MINUTE:02d} AM ET"
+            )
+
+            while True:
+                try:
+                    now = datetime.now(NY_TZ)
+                    next_run = now.replace(
+                        hour=INGEST_HOUR,
+                        minute=INGEST_MINUTE,
+                        second=0,
+                        microsecond=0,
+                    )
+
+                    if now >= next_run:
+                        next_run = next_run + timedelta(days=1)
+
+                    wait_seconds = (next_run - now).total_seconds()
+
+                    print(
+                        "[SOCCER_ODDS] Next run:"
+                        f" {next_run.strftime('%Y-%m-%d %I:%M %p ET')}"
+                        f" ({wait_seconds/3600:.1f} hours)"
+                    )
+
+                    await asyncio.sleep(wait_seconds)
+
+                    print(
+                        "\n[SOCCER_ODDS] ======== DAILY SHEETS SYNC @"
+                        f" {datetime.now(NY_TZ).strftime('%I:%M %p ET')} ========"
+                    )
+                    result = await asyncio.to_thread(sync_soccer_odds_to_bq)
+                    print(f"[SOCCER_ODDS] Result: {result}")
+                    print("[SOCCER_ODDS] Daily sync complete\n")
+
+                except Exception as e:
+                    print(f"[SOCCER_ODDS] ERROR in daily loop: {e}")
+                    await asyncio.sleep(3600)
+
+        asyncio.create_task(soccer_odds_sheet_sync_loop())
+        print("[STARTUP] -> Soccer odds sheets daily sync loop started")
 
         # -----------------------------
         # DAILY: ATP tournament bracket warm-up (runs at 6:00 AM ET)

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useEplQuery } from "@/hooks/epl/useEplQuery";
@@ -35,13 +35,44 @@ function formatPct(value?: number) {
   return `${(value * 100).toFixed(1)}%`;
 }
 
+function formatLine(line?: number | null) {
+  if (line == null) return "";
+  return ` (${line})`;
+}
+
+function formatPrice(price: number) {
+  return price > 0 ? `+${price}` : `${price}`;
+}
+
 export default function SoccerTodayScreen() {
   const { colors } = useTheme();
   const addToBetslip = useSoccerBetslip((s) => s.add);
   const openDrawer = useSoccerBetslipDrawer((s) => s.open);
   const { data, loading, error, refetch } = useEplQuery<SoccerResponse>("/soccer/todays-betting-analysis");
+  const [selectedByGame, setSelectedByGame] = useState<Record<string, number>>({});
 
-  const suggestions = useMemo(() => data?.suggestions ?? [], [data?.suggestions]);
+  const games = useMemo(() => {
+    const grouped = new Map<string, SoccerMarket[]>();
+    const orderedGames: string[] = [];
+    const candidates = data?.all_markets?.length ? data.all_markets : data?.suggestions ?? [];
+
+    for (const market of candidates) {
+      if (!grouped.has(market.game)) {
+        grouped.set(market.game, []);
+        orderedGames.push(market.game);
+      }
+      grouped.get(market.game)?.push(market);
+    }
+
+    return orderedGames.map((game) => {
+      const markets = grouped.get(game) ?? [];
+      const defaultIndex = Math.max(
+        0,
+        markets.findIndex((m) => m.recommended),
+      );
+      return { game, markets, defaultIndex };
+    });
+  }, [data?.all_markets, data?.suggestions]);
 
   if (loading) {
     return (
@@ -75,37 +106,78 @@ export default function SoccerTodayScreen() {
           </Text>
         </View>
       }
-      data={suggestions}
-      keyExtractor={(item, idx) => `${item.game}-${item.market}-${item.outcome}-${idx}`}
+      data={games}
+      keyExtractor={(item) => item.game}
       renderItem={({ item }) => {
-        const betId = `${item.game}-${item.market}-${item.outcome}-${item.line ?? "n/a"}`;
+        const selectedIndex = selectedByGame[item.game] ?? item.defaultIndex;
+        const selectedBet = item.markets[selectedIndex] ?? item.markets[0];
+
+        if (!selectedBet) {
+          return null;
+        }
+
+        const betId = `${selectedBet.game}-${selectedBet.market}-${selectedBet.outcome}-${selectedBet.line ?? "n/a"}`;
+
         return (
           <View style={[styles.card, { borderColor: colors.border.subtle }]}> 
             <View style={styles.cardTopRow}>
               <Text style={[styles.game, { color: colors.text.primary }]}>{item.game}</Text>
               <View style={styles.pricePill}>
-                <Text style={styles.priceText}>{item.best_price > 0 ? `+${item.best_price}` : `${item.best_price}`}</Text>
+                <Text style={styles.priceText}>{formatPrice(selectedBet.best_price)}</Text>
               </View>
             </View>
 
-            <Text style={[styles.market, { color: colors.text.primary }]}>
-              {item.market}: {item.outcome}
-              {item.line != null ? ` (${item.line})` : ""}
-            </Text>
-
-            <Text style={[styles.meta, { color: colors.text.muted }]}>
-              {item.league} • {item.best_bookmaker}
-            </Text>
-
-            <View style={styles.metricsRow}>
-              <Text style={[styles.metric, { color: colors.text.muted }]}>Implied {formatPct(item.implied_prob)}</Text>
-              <Text style={[styles.metric, { color: colors.text.muted }]}>Model {formatPct(item.model_confidence)}</Text>
-              <Text style={[styles.metric, { color: "#4ADE80" }]}>Edge {formatPct(item.edge)}</Text>
+            <View style={styles.betPillRow}>
+              {item.markets.map((market, marketIndex) => {
+                const selected = marketIndex === selectedIndex;
+                return (
+                  <Pressable
+                    key={`${market.market}-${market.outcome}-${market.line ?? marketIndex}`}
+                    onPress={() =>
+                      setSelectedByGame((prev) => ({
+                        ...prev,
+                        [item.game]: marketIndex,
+                      }))
+                    }
+                    style={[
+                      styles.betPill,
+                      {
+                        borderColor: selected ? "#3B82F6" : colors.border.subtle,
+                        backgroundColor: selected ? "rgba(59,130,246,0.22)" : "transparent",
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.betPillText, { color: selected ? "#DBEAFE" : colors.text.muted }]}>
+                      {market.market}: {market.outcome}
+                      {formatLine(market.line)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
 
-            {!!item.rationale && (
-              <Text style={[styles.rationale, { color: colors.text.muted }]}>{item.rationale}</Text>
-            )}
+            <Text style={[styles.market, { color: colors.text.primary }]}> 
+              {selectedBet.market}: {selectedBet.outcome}
+              {formatLine(selectedBet.line)}
+            </Text>
+
+            <Text style={[styles.meta, { color: colors.text.muted }]}> 
+              {selectedBet.league} • {selectedBet.best_bookmaker}
+            </Text>
+
+            <View style={[styles.analyticsBox, { borderColor: colors.border.subtle }]}> 
+              <Text style={[styles.analyticsTitle, { color: colors.text.primary }]}>Bet Analytics</Text>
+              <View style={styles.metricsRow}>
+                <Text style={[styles.metric, { color: colors.text.muted }]}>Implied {formatPct(selectedBet.implied_prob)}</Text>
+                <Text style={[styles.metric, { color: colors.text.muted }]}>Model {formatPct(selectedBet.model_confidence)}</Text>
+                <Text style={[styles.metric, { color: "#4ADE80" }]}>Edge {formatPct(selectedBet.edge)}</Text>
+                <Text style={[styles.metric, { color: colors.text.muted }]}>Odds {formatPrice(selectedBet.best_price)}</Text>
+              </View>
+
+              {!!selectedBet.rationale && (
+                <Text style={[styles.rationale, { color: colors.text.muted }]}>{selectedBet.rationale}</Text>
+              )}
+            </View>
 
             <View style={styles.actionsRow}>
               <Pressable
@@ -113,15 +185,15 @@ export default function SoccerTodayScreen() {
                 onPress={() => {
                   addToBetslip({
                     id: betId,
-                    league: item.league,
-                    game: item.game,
-                    start_time_et: item.start_time_et,
-                    market: item.market,
-                    outcome: item.outcome,
-                    line: item.line,
-                    price: item.best_price,
-                    bookmaker: item.best_bookmaker,
-                    rationale: item.rationale,
+                    league: selectedBet.league,
+                    game: selectedBet.game,
+                    start_time_et: selectedBet.start_time_et,
+                    market: selectedBet.market,
+                    outcome: selectedBet.outcome,
+                    line: selectedBet.line,
+                    price: selectedBet.best_price,
+                    bookmaker: selectedBet.best_bookmaker,
+                    rationale: selectedBet.rationale,
                   });
                 }}
               >
@@ -177,6 +249,23 @@ const styles = StyleSheet.create({
   market: { fontWeight: "700", fontSize: 13 },
   meta: { fontSize: 12 },
   metricsRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 2 },
+  betPillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
+  betPill: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  betPillText: { fontSize: 11, fontWeight: "700" },
+  analyticsBox: {
+    marginTop: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    padding: 10,
+    gap: 4,
+    backgroundColor: "rgba(148, 163, 184, 0.08)",
+  },
+  analyticsTitle: { fontSize: 12, fontWeight: "700" },
   metric: { fontSize: 12, fontWeight: "600" },
   rationale: { fontSize: 12, lineHeight: 16, marginTop: 2 },
   actionsRow: { flexDirection: "row", gap: 8, marginTop: 8 },

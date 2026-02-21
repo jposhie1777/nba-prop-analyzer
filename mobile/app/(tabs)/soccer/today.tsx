@@ -20,6 +20,19 @@ type SoccerMarket = {
   edge: number;
   rationale?: string;
   recommended?: boolean;
+  home_season_gf?: number;
+  home_season_ga?: number;
+  home_l10_gf?: number;
+  home_l10_ga?: number;
+  home_season_cards?: number;
+  away_season_gf?: number;
+  away_season_ga?: number;
+  away_l10_gf?: number;
+  away_l10_ga?: number;
+  away_season_cards?: number;
+  combined_season_gf?: number;
+  combined_season_ga?: number;
+  combined_season_cards?: number;
 };
 
 type SoccerResponse = {
@@ -45,6 +58,26 @@ type BetSection = {
 };
 
 type TotalsSide = "over" | "under";
+type LeagueFilter = "EPL" | "La Liga" | "MLS";
+type LeagueView = "bets" | "analytics";
+
+const LEAGUE_TABS: LeagueFilter[] = ["EPL", "La Liga", "MLS"];
+
+const ANALYTICS_FIELDS: { key: keyof SoccerMarket; label: string }[] = [
+  { key: "home_season_gf", label: "Home avg goals scored" },
+  { key: "home_season_ga", label: "Home avg goals against" },
+  { key: "home_l10_gf", label: "Home L10 goals scored" },
+  { key: "home_l10_ga", label: "Home L10 goals against" },
+  { key: "home_season_cards", label: "Home avg cards" },
+  { key: "away_season_gf", label: "Away avg goals scored" },
+  { key: "away_season_ga", label: "Away avg goals against" },
+  { key: "away_l10_gf", label: "Away L10 goals scored" },
+  { key: "away_l10_ga", label: "Away L10 goals against" },
+  { key: "away_season_cards", label: "Away avg cards" },
+  { key: "combined_season_gf", label: "Combined avg goals scored" },
+  { key: "combined_season_ga", label: "Combined avg goals against" },
+  { key: "combined_season_cards", label: "Combined avg cards" },
+];
 
 function formatPct(value?: number) {
   if (value == null) return "-";
@@ -103,11 +136,26 @@ function displayMarket(market: string) {
   return market;
 }
 
+function normalizeLeague(league: string): LeagueFilter | null {
+  const normalized = league.trim().toLowerCase().replace(/\s+/g, "");
+  if (normalized === "epl") return "EPL";
+  if (["laliga", "la_liga"].includes(normalized)) return "La Liga";
+  if (normalized === "mls") return "MLS";
+  return null;
+}
+
+function formatMetric(value?: number) {
+  if (value == null) return "-";
+  return Number.isInteger(value) ? `${value}` : value.toFixed(2);
+}
+
 export default function SoccerTodayScreen() {
   const { colors } = useTheme();
   const addToBetslip = useSoccerBetslip((s) => s.add);
   const openDrawer = useSoccerBetslipDrawer((s) => s.open);
   const { data, loading, error, refetch } = useEplQuery<SoccerResponse>("/soccer/todays-betting-analysis");
+  const [selectedLeague, setSelectedLeague] = useState<LeagueFilter>("EPL");
+  const [selectedView, setSelectedView] = useState<LeagueView>("bets");
   const [selectedByGame, setSelectedByGame] = useState<Record<string, number>>({});
   const [totalsSideByGame, setTotalsSideByGame] = useState<Record<string, TotalsSide>>({});
 
@@ -165,6 +213,11 @@ export default function SoccerTodayScreen() {
     });
   }, [data?.all_markets, data?.suggestions]);
 
+  const filteredGames = useMemo(
+    () => games.filter((game) => normalizeLeague(game.markets[0]?.league ?? "") === selectedLeague),
+    [games, selectedLeague]
+  );
+
   if (loading) {
     return (
       <View style={[styles.center, { backgroundColor: "#050A18" }]}>
@@ -192,12 +245,57 @@ export default function SoccerTodayScreen() {
         <View style={[styles.hero, { borderColor: colors.border.subtle }]}> 
           <Text style={styles.eyebrow}>SOCCER BETTING ANALYSIS</Text>
           <Text style={styles.h1}>Today&apos;s Suggested Bets</Text>
-          <Text style={[styles.sub, { color: colors.text.muted }]}>
+          <Text style={[styles.sub, { color: colors.text.muted }]}> 
             Date: {data?.date_et ?? "-"} • Games: {data?.slate_size ?? 0} • Markets: {data?.markets_count ?? 0}
           </Text>
+
+          <View style={styles.tabRow}>
+            {LEAGUE_TABS.map((league) => {
+              const isSelected = selectedLeague === league;
+              return (
+                <Pressable
+                  key={league}
+                  onPress={() => setSelectedLeague(league)}
+                  style={[
+                    styles.tabPill,
+                    {
+                      borderColor: isSelected ? "#3B82F6" : colors.border.subtle,
+                      backgroundColor: isSelected ? "rgba(59,130,246,0.22)" : "transparent",
+                    },
+                  ]}
+                >
+                  <Text style={[styles.tabPillText, { color: isSelected ? "#DBEAFE" : colors.text.muted }]}>{league}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <View style={styles.tabRow}>
+            {[
+              { key: "bets" as const, label: "Bet Board" },
+              { key: "analytics" as const, label: "Team Analytics" },
+            ].map((view) => {
+              const isSelected = selectedView === view.key;
+              return (
+                <Pressable
+                  key={view.key}
+                  onPress={() => setSelectedView(view.key)}
+                  style={[
+                    styles.tabPill,
+                    {
+                      borderColor: isSelected ? "#22D3EE" : colors.border.subtle,
+                      backgroundColor: isSelected ? "rgba(34,211,238,0.22)" : "transparent",
+                    },
+                  ]}
+                >
+                  <Text style={[styles.tabPillText, { color: isSelected ? "#CFFAFE" : colors.text.muted }]}>{view.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
       }
-      data={games}
+      data={filteredGames}
       keyExtractor={(item) => item.game}
       renderItem={({ item }) => {
         const totalsSide = totalsSideByGame[item.game] ?? "over";
@@ -221,6 +319,25 @@ export default function SoccerTodayScreen() {
         }
 
         const betId = `${selectedBet.game}-${selectedBet.market}-${selectedBet.outcome}-${selectedBet.line ?? "n/a"}`;
+
+        if (selectedView === "analytics") {
+          return (
+            <View style={[styles.card, { borderColor: colors.border.subtle }]}> 
+              <Text style={[styles.game, { color: colors.text.primary }]}>{item.game}</Text>
+              <Text style={[styles.meta, { color: colors.text.muted }]}>{selectedBet.league}</Text>
+
+              <View style={[styles.analyticsBox, { borderColor: colors.border.subtle }]}> 
+                <Text style={[styles.analyticsTitle, { color: colors.text.primary }]}>Team + Match Analytics</Text>
+                {ANALYTICS_FIELDS.map((field) => (
+                  <View key={`${item.game}-${field.key}`} style={styles.analyticsRow}>
+                    <Text style={[styles.analyticsKey, { color: colors.text.muted }]}>{field.label}</Text>
+                    <Text style={[styles.analyticsValue, { color: colors.text.primary }]}>{formatMetric(selectedBet[field.key] as number | undefined)}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          );
+        }
 
         return (
           <View style={[styles.card, { borderColor: colors.border.subtle }]}> 
@@ -374,9 +491,9 @@ export default function SoccerTodayScreen() {
         );
       }}
       ListEmptyComponent={
-        <View style={[styles.card, { borderColor: colors.border.subtle }]}>
-          <Text style={[styles.market, { color: colors.text.primary }]}>No recommended bets found yet.</Text>
-          <Text style={[styles.meta, { color: colors.text.muted }]}>Try lowering the edge threshold on the API if needed.</Text>
+        <View style={[styles.card, { borderColor: colors.border.subtle }]}> 
+          <Text style={[styles.market, { color: colors.text.primary }]}>No {selectedLeague} results found for this view.</Text>
+          <Text style={[styles.meta, { color: colors.text.muted }]}>Try another league or refresh once today&apos;s markets are ingested.</Text>
         </View>
       }
     />
@@ -401,6 +518,14 @@ const styles = StyleSheet.create({
   eyebrow: { color: "#90B3E9", fontSize: 11, fontWeight: "700" },
   h1: { color: "#E9F2FF", fontSize: 22, fontWeight: "800", marginTop: 8 },
   sub: { marginTop: 8, fontSize: 12 },
+  tabRow: { flexDirection: "row", gap: 8, marginTop: 10, flexWrap: "wrap" },
+  tabPill: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  tabPillText: { fontSize: 11, fontWeight: "800" },
   card: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 14,
@@ -445,6 +570,9 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(148, 163, 184, 0.08)",
   },
   analyticsTitle: { fontSize: 12, fontWeight: "700" },
+  analyticsRow: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
+  analyticsKey: { fontSize: 12 },
+  analyticsValue: { fontSize: 12, fontWeight: "700" },
   metric: { fontSize: 12, fontWeight: "600" },
   rationale: { fontSize: 12, lineHeight: 16, marginTop: 2 },
   actionsRow: { flexDirection: "row", gap: 8, marginTop: 8 },

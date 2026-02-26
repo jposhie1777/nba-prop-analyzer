@@ -195,3 +195,14 @@ def introspect_query_return_types() -> None:
 if __name__ == "__main__":
     print("Connecting to", ENDPOINT)
     introspect_query_return_types()
+
+    # Drill into the nested types that contain actual pairing/player data
+    print("\n--- Nested type drill-down ---")
+    for t in [
+        "TeeTimeRound", "TeeTimeRoundV2",
+        "TeeTimeGroup", "TeeTimeGroupV2",
+        "TeeTimePlayer", "TeeTimePlayerV2",
+        "GroupLocationData", "GroupLocationCourse",
+        "GroupLocationGroup", "GroupLocationPlayer",
+    ]:
+        introspect_type(t)

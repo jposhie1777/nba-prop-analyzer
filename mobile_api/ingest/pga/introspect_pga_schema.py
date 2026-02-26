@@ -113,7 +113,85 @@ def search_pairing_fields() -> None:
         print("  (none found — print full list above to find correct name)")
 
 
+def introspect_type(type_name: str) -> None:
+    """Recursively print fields on a named type."""
+    query = """
+    query IntrospectType($name: String!) {
+      __type(name: $name) {
+        name
+        kind
+        fields {
+          name
+          description
+          type { name kind ofType { name kind ofType { name kind ofType { name kind } } } }
+        }
+      }
+    }
+    """
+    resp = requests.post(
+        ENDPOINT, headers=HEADERS,
+        json={"query": query, "variables": {"name": type_name}},
+        timeout=20,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    t = (data.get("data") or {}).get("__type")
+    if not t:
+        print(f"  (type '{type_name}' not found)")
+        return
+    fields = t.get("fields") or []
+    print(f"\n  type {type_name} ({len(fields)} fields):")
+    for f in fields:
+        def rtype(tp: dict, depth: int = 0) -> str:
+            if tp is None:
+                return "?"
+            if tp.get("name"):
+                return tp["name"]
+            inner = tp.get("ofType") or {}
+            return f"{tp['kind']}({rtype(inner, depth+1)})"
+        print(f"    {f['name']}: {rtype(f['type'])}")
+        if f.get("description"):
+            print(f"      ↳ {f['description']}")
+
+
+def introspect_query_return_types() -> None:
+    """Show return types for teeTimes, teeTimesV2, and tournamentGroupLocations."""
+    # First get the return type names for each query
+    query = """
+    {
+      __schema {
+        queryType {
+          fields {
+            name
+            type { name kind ofType { name kind ofType { name kind } } }
+          }
+        }
+      }
+    }
+    """
+    resp = requests.post(ENDPOINT, headers=HEADERS, json={"query": query}, timeout=20)
+    resp.raise_for_status()
+    data = resp.json()
+    fields = data["data"]["__schema"]["queryType"]["fields"]
+
+    targets = {"teeTimes", "teeTimesV2", "teeTimesCompressedV2", "tournamentGroupLocations", "groupLocations"}
+    print("\n--- Return type introspection for tee-time queries ---")
+    for f in fields:
+        if f["name"] not in targets:
+            continue
+
+        def rtype(tp: dict) -> str:
+            if tp is None:
+                return "?"
+            if tp.get("name"):
+                return tp["name"]
+            return rtype(tp.get("ofType") or {})
+
+        ret = rtype(f["type"])
+        print(f"\n  {f['name']} → {ret}")
+        introspect_type(ret)
+
+
 if __name__ == "__main__":
     print("Connecting to", ENDPOINT)
-    introspect_queries()
-    search_pairing_fields()
+    introspect_query_return_types()

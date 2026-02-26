@@ -110,9 +110,13 @@ def test_fetch_pairings(tournament_id: str, round_id: str) -> bool:
     print(f"  {'-'*4}  {'-'*8}  {'-'*4}  {'-'*45}")
     for p in pairings[:5]:
         names = ", ".join(pl.display_name for pl in p.players)
-        tee = p.tee_time or "TBD"
-        if "T" in tee:
-            tee = tee.split("T")[1][:8]  # HH:MM:SS
+        raw = p.tee_time
+        if raw is None:
+            tee = "TBD"
+        elif isinstance(raw, str) and "T" in raw:
+            tee = raw.split("T")[1][:8]  # HH:MM:SS from ISO string
+        else:
+            tee = str(raw)
         print(f"  {p.group_number:>4}  {tee:>8}  {p.start_hole:>4}  {names}")
 
     if len(pairings) > 5:

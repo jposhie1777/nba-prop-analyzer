@@ -161,6 +161,21 @@ def _safe_int(value: Any) -> Optional[int]:
         return None
 
 
+def _format_tee_time(value: Any) -> Optional[str]:
+    """Convert AWSTimestamp (Unix epoch int or ISO string) to ISO-8601 string."""
+    if value is None:
+        return None
+    # AWSTimestamp comes back as an integer (Unix seconds)
+    try:
+        epoch = int(value)
+        from datetime import datetime, timezone
+        return datetime.fromtimestamp(epoch, tz=timezone.utc).isoformat()
+    except (ValueError, TypeError):
+        pass
+    # Already a string (ISO or other)
+    return str(value)
+
+
 def _parse_player(raw: Dict[str, Any]) -> PlayerInfo:
     bio = raw.get("playerBio") or {}
     name = raw.get("displayName") or ""
@@ -201,7 +216,7 @@ def _parse_tee_times(
                     round_number=rnd_int,
                     round_status=rnd_status,
                     group_number=_safe_int(grp.get("groupNumber")) or 0,
-                    tee_time=grp.get("teeTime"),
+                    tee_time=_format_tee_time(grp.get("teeTime")),
                     start_hole=_safe_int(grp.get("startTee")) or 1,
                     back_nine=bool(grp.get("backNine", False)),
                     course_id=grp.get("courseId"),

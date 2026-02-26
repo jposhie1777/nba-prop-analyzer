@@ -1,3 +1,11 @@
+./deploy_pga_pairings.sh \
+    --project  graphite-flare-477419-h7 \
+    --region   us-central1 \
+    --tournament R2026015 \
+    --skip-build
+
+### Change the tournament to the right ID
+
 cd nba-prop-analyzer
 git pull
 cd mobile_api

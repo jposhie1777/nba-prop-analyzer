@@ -496,4 +496,5 @@ assembled AS (
   LEFT JOIN streaks sk
     ON sk.player_id = lt.player_id
     AND lt.surface_key = 'all'          -- streaks are overall only
-);
+)
+SELECT * FROM assembled;

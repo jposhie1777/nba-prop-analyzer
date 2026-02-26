@@ -1,6 +1,25 @@
 -- BigQuery DDL for PGA data tables
 -- Dataset: pga_data
 
+-- ─── Latest pairings snapshot ────────────────────────────────────────────────
+-- One row per player × round × group, always reflecting the most-recent ingest.
+-- Use this view as the base for all pairing analytics.
+CREATE OR REPLACE VIEW `pga_data.v_pairings_latest` AS
+SELECT * EXCEPT (row_num)
+FROM (
+  SELECT
+    *,
+    ROW_NUMBER() OVER (
+      PARTITION BY tournament_id, round_number, group_number, player_id
+      ORDER BY run_ts DESC
+    ) AS row_num
+  FROM `pga_data.tournament_round_pairings`
+)
+WHERE row_num = 1;
+-- ─────────────────────────────────────────────────────────────────────────────
+
+
+
 -- Optional: create dataset (run once)
 -- CREATE SCHEMA IF NOT EXISTS `pga_data`;
 

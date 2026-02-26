@@ -162,17 +162,22 @@ def _safe_int(value: Any) -> Optional[int]:
 
 
 def _format_tee_time(value: Any) -> Optional[str]:
-    """Convert AWSTimestamp (Unix epoch int or ISO string) to ISO-8601 string."""
+    """Convert AWSTimestamp to ISO-8601 UTC string.
+
+    PGA Tour returns AWSTimestamp as a Unix epoch integer.  The value can be
+    in seconds (10 digits, ~1.7 B) or milliseconds (13 digits, ~1.7 T).
+    """
     if value is None:
         return None
-    # AWSTimestamp comes back as an integer (Unix seconds)
     try:
         epoch = int(value)
+        # Values > 1e11 are milliseconds; divide down to seconds first.
+        if epoch > 100_000_000_000:
+            epoch = epoch // 1000
         from datetime import datetime, timezone
         return datetime.fromtimestamp(epoch, tz=timezone.utc).isoformat()
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError, OSError):
         pass
-    # Already a string (ISO or other)
     return str(value)
 
 

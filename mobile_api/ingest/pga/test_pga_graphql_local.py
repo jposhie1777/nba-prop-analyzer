@@ -56,9 +56,9 @@ from ingest.pga.pga_tour_graphql import fetch_pairings, pairings_to_records  # n
 # ---------------------------------------------------------------------------
 # Defaults – override via CLI args
 # ---------------------------------------------------------------------------
-# Honda Classic 2025 is a publicly available tournament.
-# Change to the current week's tournament if this one is over.
-DEFAULT_TOURNAMENT = "R2025016"
+# Cognizant Classic in The Palm Beaches 2026 – currently IN PROGRESS.
+# Visible in the URL: pgatour.com/tournaments/2026/cognizant-classic-in-the-palm-beaches/R2026010/leaderboard
+DEFAULT_TOURNAMENT = "R2026010"
 DEFAULT_ROUND = "1"
 
 

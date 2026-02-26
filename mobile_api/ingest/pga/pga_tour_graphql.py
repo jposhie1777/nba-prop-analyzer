@@ -73,12 +73,6 @@ query TeeTimes($tournamentId: ID!) {
           lastName
           country
           amateur
-          tourBound
-          headshot
-          playerBio {
-            rankWorld
-            rankCountry
-          }
         }
       }
     }

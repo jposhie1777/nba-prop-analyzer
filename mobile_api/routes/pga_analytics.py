@@ -597,7 +597,12 @@ def pga_pairings(
             except (TypeError, ValueError):
                 pass
 
-        # Fetch results for all players in bulk
+        # Fetch all tournament results for the relevant seasons.  We intentionally
+        # do NOT filter by player_ids here because the pairings view stores player_id
+        # as STRING while tournament_results uses INT64; passing the converted list
+        # may return zero rows if there is any type-coercion discrepancy.  Fetching
+        # the full season results is safe (BigQuery handles it) and ensures analytics
+        # are computed correctly for every player in the field.
         season = season or _current_season()
         seasons = [season - offset for offset in range(seasons_back + 1)]
         results: List[Dict[str, Any]] = []
@@ -605,7 +610,7 @@ def pga_pairings(
             results.extend(
                 fetch_paginated(
                     "/tournament_results",
-                    params={"season": year, "player_ids": all_player_ids_int},
+                    params={"season": year},
                     cache_ttl=900,
                 )
             )
@@ -626,6 +631,29 @@ def pga_pairings(
             ]
 
         player_map = {p.get("id"): p for p in players_data}
+
+        # Supplement player_map with pairing display names for any players not
+        # found in the players_active table (avoids falling back to raw IDs).
+        for row in pairing_rows:
+            pid_str = row.get("player_id")
+            try:
+                pid_int = int(pid_str) if pid_str else None
+            except (TypeError, ValueError):
+                pid_int = None
+            if pid_int is not None and pid_int not in player_map:
+                first = row.get("player_first_name") or ""
+                last = row.get("player_last_name") or ""
+                display = (
+                    row.get("player_display_name")
+                    or f"{first} {last}".strip()
+                    or str(pid_int)
+                )
+                player_map[pid_int] = {
+                    "id": pid_int,
+                    "display_name": display,
+                    "first_name": first,
+                    "last_name": last,
+                }
 
         # Build output groups with analytics
         output_groups: List[Dict[str, Any]] = []
@@ -666,7 +694,7 @@ def pga_pairings(
                     analytics = build_compare(
                         results,
                         player_ids=group_player_ids,
-                        players=players_data,
+                        players=list(player_map.values()),
                         tournaments=[],
                         courses=[],
                         round_scores=None,

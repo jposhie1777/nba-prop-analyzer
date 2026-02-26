@@ -17,7 +17,8 @@ type TabConfig = {
 
 const STATIC_TABS: TabConfig[] = [
   { name: "atp-bracket", title: "ATP Bracket", icon: "tennisball-outline" },
-  { name: "pga-compare", title: "PGA Pairings Compare", icon: "swap-horizontal" },
+  { name: "pga-pairings", title: "PGA Pairings", icon: "golf-outline" },
+  { name: "pga-compare", title: "PGA Compare", icon: "swap-horizontal" },
   { name: "home", title: "Home Screen", icon: "home" },
   { name: "soccer", title: "Soccer Analyzer", icon: "football-outline" },
 ];

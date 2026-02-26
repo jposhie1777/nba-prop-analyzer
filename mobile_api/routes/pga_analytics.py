@@ -20,7 +20,7 @@ from pga.analytics import (
     build_simulated_leaderboard,
     build_tournament_difficulty,
 )
-from pga.bq import fetch_tournament_round_scores
+from pga.bq import fetch_round_pairings, fetch_tournament_round_scores
 from pga.client import PgaApiError, fetch_one_page, fetch_paginated
 from pga.utils import parse_iso_datetime
 
@@ -553,5 +553,149 @@ def pga_compare(
         )
         response["round_scores_tournament"] = round_scores_tournament
         return response
+    except Exception as err:
+        _handle_error(err)
+
+
+@router.get("/analytics/pairings")
+def pga_pairings(
+    tournament_id: Optional[str] = None,
+    round_number: Optional[int] = None,
+    season: Optional[int] = None,
+    seasons_back: int = Query(2, ge=0, le=5),
+    last_n_form: int = Query(10, ge=3, le=50),
+    last_n_placement: int = Query(20, ge=5, le=60),
+):
+    """
+    Return all pairing groups for a tournament round, each with compare analytics
+    and a best-bet recommendation.
+    """
+    try:
+        params: Dict[str, Any] = {}
+        if tournament_id:
+            params["tournament_id"] = tournament_id
+        if round_number:
+            params["round_numbers"] = [round_number]
+
+        pairing_rows = fetch_round_pairings(params)
+        if not pairing_rows:
+            return {"tournament_id": tournament_id, "round_number": round_number, "groups": []}
+
+        # Group players by (round_number, group_number)
+        from collections import defaultdict
+        groups: Dict[tuple, List[Dict[str, Any]]] = defaultdict(list)
+        for row in pairing_rows:
+            key = (row["round_number"], row["group_number"])
+            groups[key].append(row)
+
+        # Collect all unique player IDs (stored as strings in pairings)
+        all_player_id_strs = list({row["player_id"] for row in pairing_rows if row.get("player_id")})
+        all_player_ids_int = []
+        for pid in all_player_id_strs:
+            try:
+                all_player_ids_int.append(int(pid))
+            except (TypeError, ValueError):
+                pass
+
+        # Fetch results for all players in bulk
+        season = season or _current_season()
+        seasons = [season - offset for offset in range(seasons_back + 1)]
+        results: List[Dict[str, Any]] = []
+        for year in seasons:
+            results.extend(
+                fetch_paginated(
+                    "/tournament_results",
+                    params={"season": year, "player_ids": all_player_ids_int},
+                    cache_ttl=900,
+                )
+            )
+
+        players_data = fetch_paginated(
+            "/players",
+            params={"player_ids": all_player_ids_int, "per_page": 100},
+            cache_ttl=900,
+        )
+        try:
+            headshots = _fetch_pga_player_headshots(all_player_ids_int)
+        except Exception:
+            headshots = {}
+        if headshots:
+            players_data = [
+                {**p, "player_image_url": headshots.get(p.get("id"))}
+                for p in players_data
+            ]
+
+        player_map = {p.get("id"): p for p in players_data}
+
+        # Build output groups with analytics
+        output_groups: List[Dict[str, Any]] = []
+        for (rnd, grp_num), members in sorted(groups.items()):
+            group_player_id_strs = [m["player_id"] for m in members if m.get("player_id")]
+            group_player_ids = []
+            for pid in group_player_id_strs:
+                try:
+                    group_player_ids.append(int(pid))
+                except (TypeError, ValueError):
+                    pass
+
+            # Build player info from pairing rows + lookup
+            players_info: List[Dict[str, Any]] = []
+            for member in members:
+                pid_str = member.get("player_id")
+                try:
+                    pid_int = int(pid_str) if pid_str else None
+                except (TypeError, ValueError):
+                    pid_int = None
+                base = player_map.get(pid_int) or {}
+                players_info.append({
+                    "player_id": pid_str,
+                    "player_id_int": pid_int,
+                    "player_display_name": member.get("player_display_name"),
+                    "player_first_name": member.get("player_first_name"),
+                    "player_last_name": member.get("player_last_name"),
+                    "country": member.get("country"),
+                    "world_rank": member.get("world_rank"),
+                    "amateur": member.get("amateur"),
+                    "player_image_url": base.get("player_image_url"),
+                })
+
+            sample = members[0]
+            analytics = None
+            if len(group_player_ids) >= 2:
+                try:
+                    analytics = build_compare(
+                        results,
+                        player_ids=group_player_ids,
+                        players=players_data,
+                        tournaments=[],
+                        courses=[],
+                        round_scores=None,
+                        course_id=None,
+                        tournament_id=None,
+                        last_n_form=last_n_form,
+                        last_n_placement=last_n_placement,
+                    )
+                except Exception:
+                    analytics = None
+
+            output_groups.append({
+                "group_number": grp_num,
+                "round_number": rnd,
+                "round_status": sample.get("round_status"),
+                "tee_time": str(sample.get("tee_time")) if sample.get("tee_time") else None,
+                "start_hole": sample.get("start_hole"),
+                "back_nine": sample.get("back_nine"),
+                "course_name": sample.get("course_name"),
+                "players": players_info,
+                "analytics": analytics,
+            })
+
+        first_row = pairing_rows[0]
+        return {
+            "tournament_id": first_row.get("tournament_id"),
+            "round_number": round_number,
+            "snapshot_ts": first_row.get("snapshot_ts"),
+            "groups": output_groups,
+        }
     except Exception as err:
         _handle_error(err)

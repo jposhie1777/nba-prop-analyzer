@@ -1,18 +1,23 @@
 """
 PGA Tour GraphQL scraper for round pairings / tee times.
 
-PGA Tour exposes a public GraphQL orchestrator used by pgatour.com itself.
+Uses the official PGA Tour GraphQL orchestrator (the same API that powers
+pgatour.com). No account or paid subscription is required.
+
 Endpoint : https://orchestrator.pgatour.com/graphql
-Auth     : x-api-key header (public, embedded in the PGA Tour web app)
+Query    : teeTimes(id: $tournamentId)
 
-No account or paid subscription is required – this is the same API that
-powers https://www.pgatour.com/leaderboard and the tee-times pages.
+Schema path:
+  TeeTimes
+    .rounds[]          TeeTimeRound   (roundInt, roundStatus, …)
+      .groups[]        Group          (groupNumber, teeTime, startTee, …)
+        .players[]     Player         (id, displayName, firstName, …)
 
-Usage (standalone):
-    python pga_tour_graphql.py --tournament R2025016 --round 1
+Usage (standalone CLI):
+    python pga_tour_graphql.py --tournament R2026010 --round 1
 
 Usage (as a module):
-    from ingest.pga.pga_tour_graphql import fetch_pairings, Pairing
+    from ingest.pga.pga_tour_graphql import fetch_pairings, pairings_to_records
 """
 
 from __future__ import annotations
@@ -34,48 +39,49 @@ import requests
 GRAPHQL_ENDPOINT = "https://orchestrator.pgatour.com/graphql"
 
 # Public API key embedded in the PGA Tour web application.
-# This is NOT a secret – it is present in every unauthenticated request from
-# pgatour.com and is safe to commit.
+# Not a secret – present in every unauthenticated browser request to pgatour.com.
 DEFAULT_API_KEY = os.getenv("PGA_TOUR_GQL_API_KEY", "da2-gsrx5bibzbb4njvhl7t37wqyl4")
 
 DEFAULT_TIMEOUT = 20
 
 # ---------------------------------------------------------------------------
-# GraphQL query
+# GraphQL query  (verified against live schema via introspection)
 # ---------------------------------------------------------------------------
 
-# The `pairingsByRound` query returns all groups for a given round.
-# Each group contains: players (with player info), tee time, start hole,
-# and the round/course it belongs to.
-PAIRINGS_QUERY = """
-query PairingsByRound($tournamentId: ID!, $roundId: ID!, $cut: CutLineEnum) {
-  pairingsByRound(tournamentId: $tournamentId, roundId: $roundId, cut: $cut) {
-    pairings {
-      groupNumber
-      teeTime
-      startHole
-      players {
-        id
-        displayName
-        firstName
-        lastName
-        country
-        countryFlag
-        amateur
-        tourBound
-        headshot
-        playerBio {
-          rankWorld
-          rankCountry
+TEE_TIMES_QUERY = """
+query TeeTimes($tournamentId: ID!) {
+  teeTimes(id: $tournamentId) {
+    id
+    timezone
+    defaultRound
+    rounds {
+      roundInt
+      roundStatusDisplay
+      roundDisplay
+      roundStatus
+      groups {
+        groupNumber
+        teeTime
+        startTee
+        backNine
+        courseId
+        courseName
+        players {
+          id
+          displayName
+          firstName
+          lastName
+          country
+          amateur
+          tourBound
+          headshot
+          playerBio {
+            rankWorld
+            rankCountry
+          }
         }
       }
     }
-    roundComplete
-    roundStatus
-    roundNumber
-    tournamentId
-    courseId
-    courseName
   }
 }
 """
@@ -100,9 +106,12 @@ class PlayerInfo:
 class Pairing:
     tournament_id: str
     round_number: int
+    round_status: Optional[str]
     group_number: int
     tee_time: Optional[str]
     start_hole: int
+    back_nine: bool
+    course_id: Optional[str]
     course_name: Optional[str]
     players: List[PlayerInfo] = field(default_factory=list)
 
@@ -117,7 +126,6 @@ def _graphql_headers(api_key: str) -> Dict[str, str]:
         "Content-Type": "application/json",
         "x-api-key": api_key,
         "x-pgat-platform": "web",
-        # Mimic the Referer that pgatour.com sends so the request is accepted.
         "Referer": "https://www.pgatour.com/",
         "Origin": "https://www.pgatour.com",
     }
@@ -161,9 +169,14 @@ def _safe_int(value: Any) -> Optional[int]:
 
 def _parse_player(raw: Dict[str, Any]) -> PlayerInfo:
     bio = raw.get("playerBio") or {}
+    name = raw.get("displayName") or ""
+    if not name:
+        first = raw.get("firstName") or ""
+        last = raw.get("lastName") or ""
+        name = f"{first} {last}".strip()
     return PlayerInfo(
         player_id=str(raw.get("id", "")),
-        display_name=raw.get("displayName") or f"{raw.get('firstName', '')} {raw.get('lastName', '')}".strip(),
+        display_name=name,
         first_name=raw.get("firstName"),
         last_name=raw.get("lastName"),
         country=raw.get("country"),
@@ -172,29 +185,36 @@ def _parse_player(raw: Dict[str, Any]) -> PlayerInfo:
     )
 
 
-def _parse_pairings_response(
+def _parse_tee_times(
     data: Dict[str, Any],
     tournament_id: str,
+    round_number: int,
 ) -> List[Pairing]:
-    pairings_by_round = data.get("pairingsByRound") or {}
-    raw_pairings = pairings_by_round.get("pairings") or []
-    round_number = _safe_int(pairings_by_round.get("roundNumber")) or 0
-    course_name = pairings_by_round.get("courseName")
+    tee_times = data.get("teeTimes") or {}
+    rounds = tee_times.get("rounds") or []
 
     result: List[Pairing] = []
-    for raw in raw_pairings:
-        players = [_parse_player(p) for p in (raw.get("players") or [])]
-        result.append(
-            Pairing(
-                tournament_id=tournament_id,
-                round_number=round_number,
-                group_number=_safe_int(raw.get("groupNumber")) or 0,
-                tee_time=raw.get("teeTime"),
-                start_hole=_safe_int(raw.get("startHole")) or 1,
-                course_name=course_name,
-                players=players,
+    for rnd in rounds:
+        rnd_int = _safe_int(rnd.get("roundInt")) or 0
+        if round_number != 0 and rnd_int != round_number:
+            continue
+        rnd_status = rnd.get("roundStatusDisplay")
+        for grp in (rnd.get("groups") or []):
+            players = [_parse_player(p) for p in (grp.get("players") or [])]
+            result.append(
+                Pairing(
+                    tournament_id=tournament_id,
+                    round_number=rnd_int,
+                    round_status=rnd_status,
+                    group_number=_safe_int(grp.get("groupNumber")) or 0,
+                    tee_time=grp.get("teeTime"),
+                    start_hole=_safe_int(grp.get("startTee")) or 1,
+                    back_nine=bool(grp.get("backNine", False)),
+                    course_id=grp.get("courseId"),
+                    course_name=grp.get("courseName"),
+                    players=players,
+                )
             )
-        )
     return result
 
 
@@ -205,40 +225,33 @@ def _parse_pairings_response(
 
 def fetch_pairings(
     tournament_id: str,
-    round_id: str,
+    round_number: int | str,
     *,
-    cut: Optional[str] = None,
     api_key: str = DEFAULT_API_KEY,
     retries: int = 3,
 ) -> List[Pairing]:
     """
-    Fetch round pairings/tee times from the PGA Tour GraphQL API.
+    Fetch round pairings / tee times from the PGA Tour GraphQL API.
 
     Args:
-        tournament_id: PGA Tour tournament ID, e.g. ``"R2025016"``.
-        round_id:      Round number as a string, e.g. ``"1"``, ``"2"``, etc.
-        cut:           Optional cut filter.  Accepted values: ``"ALL"``,
-                       ``"MADE"``, ``"MISSED"`` (default ``None`` → all players).
-        api_key:       PGA Tour GraphQL API key (uses env var or built-in default).
-        retries:       Number of retry attempts on transient failures.
+        tournament_id: PGA Tour tournament ID, e.g. ``"R2026010"``.
+        round_number:  Round to return (1–4).  Pass ``0`` for all rounds.
+        api_key:       API key (uses env var ``PGA_TOUR_GQL_API_KEY`` or built-in default).
+        retries:       Number of retry attempts on transient HTTP failures.
 
     Returns:
-        List of :class:`Pairing` objects sorted by group number.
+        List of :class:`Pairing` objects sorted by (round_number, group_number).
     """
-    variables: Dict[str, Any] = {
-        "tournamentId": tournament_id,
-        "roundId": round_id,
-    }
-    if cut:
-        variables["cut"] = cut
+    rnd = int(round_number)
+    variables: Dict[str, Any] = {"tournamentId": tournament_id}
 
     backoff = 2
     last_exc: Optional[Exception] = None
     for attempt in range(retries):
         try:
-            data = _post_graphql(PAIRINGS_QUERY, variables, api_key=api_key)
-            pairings = _parse_pairings_response(data, tournament_id)
-            return sorted(pairings, key=lambda p: p.group_number)
+            data = _post_graphql(TEE_TIMES_QUERY, variables, api_key=api_key)
+            pairings = _parse_tee_times(data, tournament_id, rnd)
+            return sorted(pairings, key=lambda p: (p.round_number, p.group_number))
         except requests.HTTPError as exc:
             status = exc.response.status_code if exc.response is not None else 0
             if status in (429, 500, 502, 503, 504):
@@ -265,7 +278,6 @@ def pairings_to_records(
 ) -> List[Dict[str, Any]]:
     """
     Flatten pairings into a list of dicts suitable for BigQuery insertion.
-
     Each row represents one player in one group.
     """
     from datetime import datetime
@@ -280,9 +292,12 @@ def pairings_to_records(
                     "ingested_at": ts,
                     "tournament_id": pairing.tournament_id,
                     "round_number": pairing.round_number,
+                    "round_status": pairing.round_status,
                     "group_number": pairing.group_number,
                     "tee_time": pairing.tee_time,
                     "start_hole": pairing.start_hole,
+                    "back_nine": pairing.back_nine,
+                    "course_id": pairing.course_id,
                     "course_name": pairing.course_name,
                     "player_id": player.player_id,
                     "player_display_name": player.display_name,
@@ -297,7 +312,7 @@ def pairings_to_records(
 
 
 # ---------------------------------------------------------------------------
-# CLI entry point (for quick local testing)
+# CLI entry point
 # ---------------------------------------------------------------------------
 
 
@@ -305,55 +320,33 @@ def _cli() -> None:
     parser = argparse.ArgumentParser(
         description="Fetch PGA Tour round pairings from the official GraphQL API."
     )
-    parser.add_argument(
-        "--tournament",
-        required=True,
-        metavar="TOURNAMENT_ID",
-        help="PGA Tour tournament ID, e.g. R2025016",
-    )
-    parser.add_argument(
-        "--round",
-        required=True,
-        metavar="ROUND",
-        help="Round number (1-4)",
-    )
-    parser.add_argument(
-        "--cut",
-        choices=["ALL", "MADE", "MISSED"],
-        default=None,
-        help="Filter by cut status (default: all players)",
-    )
-    parser.add_argument(
-        "--json",
-        action="store_true",
-        dest="as_json",
-        help="Output raw JSON records instead of the default table",
-    )
+    parser.add_argument("--tournament", required=True, metavar="TOURNAMENT_ID",
+                        help="PGA Tour tournament ID, e.g. R2026010")
+    parser.add_argument("--round", required=True, metavar="ROUND",
+                        help="Round number 1-4 (or 0 for all rounds)")
+    parser.add_argument("--json", action="store_true", dest="as_json",
+                        help="Output flat JSON records instead of a table")
     args = parser.parse_args()
 
-    print(f"Fetching pairings: tournament={args.tournament} round={args.round} cut={args.cut}")
-    pairings = fetch_pairings(args.tournament, args.round, cut=args.cut)
+    print(f"Fetching: tournament={args.tournament} round={args.round}")
+    pairings = fetch_pairings(args.tournament, args.round)
 
     if not pairings:
         print("No pairings returned. Check the tournament ID and round number.")
         sys.exit(1)
 
     if args.as_json:
-        records = pairings_to_records(pairings)
-        print(json.dumps(records, indent=2, default=str))
+        print(json.dumps(pairings_to_records(pairings), indent=2, default=str))
         return
 
-    # Pretty-print as a table
-    print(f"\nFound {len(pairings)} groups\n")
-    print(f"{'Grp':>4}  {'Tee':>5}  {'Hole':>4}  {'Players'}")
+    print(f"\nFound {len(pairings)} groups  |  round {pairings[0].round_number}"
+          f"  |  {pairings[0].course_name or 'N/A'}\n")
+    print(f"{'Grp':>4}  {'Tee time (UTC)':>19}  {'Hole':>4}  Players")
     print("-" * 80)
     for p in pairings:
-        player_names = ", ".join(pl.display_name for pl in p.players)
+        names = ", ".join(pl.display_name for pl in p.players)
         tee = p.tee_time or "TBD"
-        # Trim ISO tee time to HH:MM for readability
-        if "T" in tee:
-            tee = tee.split("T")[1][:5]
-        print(f"{p.group_number:>4}  {tee:>5}  {p.start_hole:>4}  {player_names}")
+        print(f"{p.group_number:>4}  {tee:>19}  {p.start_hole:>4}  {names}")
 
 
 if __name__ == "__main__":

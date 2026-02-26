@@ -199,9 +199,6 @@ if __name__ == "__main__":
     # Drill into the nested types that contain actual pairing/player data
     print("\n--- Nested type drill-down ---")
     for t in [
-        "Group", "GroupV2",
-        "GroupPlayer", "GroupPlayerV2",
-        "GroupLocationPlayerData",
-        "GroupLocationHole",
+        "Player",
     ]:
         introspect_type(t)

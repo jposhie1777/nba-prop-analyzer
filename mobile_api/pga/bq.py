@@ -12,6 +12,7 @@ from bq import get_bq_client
 DATASET = os.getenv("PGA_DATASET", "pga_data")
 PLAYERS_TABLE = os.getenv("PGA_PLAYERS_TABLE", "players_active")
 ROUND_SCORES_TABLE = os.getenv("PGA_ROUND_SCORES_TABLE", "tournament_round_scores")
+PAIRINGS_VIEW = os.getenv("PGA_PAIRINGS_VIEW", "v_pairings_latest")
 
 
 def _table(client: bigquery.Client, table: str) -> str:
@@ -747,6 +748,103 @@ def fetch_tournament_course_stats(params: Optional[Dict[str, Any]] = None) -> Li
             }
         )
     return payload
+
+
+def fetch_round_pairings(params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """
+    Return the most-recent pairing snapshot for one or more rounds.
+
+    Supported params:
+        tournament_id  – PGA Tour tournament ID, e.g. ``"R2026010"``
+        round_numbers  – int or list[int]; omit to return all rounds
+        group_number   – int; filter to a single group
+        player_ids     – list[str]; filter to specific players
+    """
+    params = params or {}
+    client = get_bq_client()
+    project = client.project
+
+    view = f"`{project}.{DATASET}.{PAIRINGS_VIEW}`"
+    conditions: List[str] = []
+    query_params: List[bigquery.QueryParameter] = []
+
+    tournament_id = params.get("tournament_id")
+    if tournament_id:
+        conditions.append("tournament_id = @tournament_id")
+        query_params.append(
+            bigquery.ScalarQueryParameter("tournament_id", "STRING", tournament_id)
+        )
+
+    round_numbers = _normalize_int_list(params.get("round_numbers"))
+    if round_numbers:
+        conditions.append("round_number IN UNNEST(@round_numbers)")
+        query_params.append(
+            bigquery.ArrayQueryParameter("round_numbers", "INT64", round_numbers)
+        )
+
+    group_number = params.get("group_number")
+    if group_number is not None:
+        conditions.append("group_number = @group_number")
+        query_params.append(
+            bigquery.ScalarQueryParameter("group_number", "INT64", int(group_number))
+        )
+
+    player_ids = params.get("player_ids")
+    if player_ids:
+        conditions.append("player_id IN UNNEST(@player_ids)")
+        query_params.append(
+            bigquery.ArrayQueryParameter("player_ids", "STRING", list(player_ids))
+        )
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    query = f"""
+    SELECT
+      tournament_id,
+      round_number,
+      round_status,
+      group_number,
+      tee_time,
+      start_hole,
+      back_nine,
+      course_id,
+      course_name,
+      player_id,
+      player_display_name,
+      player_first_name,
+      player_last_name,
+      country,
+      world_rank,
+      amateur,
+      run_ts
+    FROM {view}
+    {where_clause}
+    ORDER BY round_number, group_number, player_display_name
+    """
+
+    rows = _run_query(client, query, query_params)
+    return [
+        {
+            "tournament_id": row.get("tournament_id"),
+            "round_number": row.get("round_number"),
+            "round_status": row.get("round_status"),
+            "group_number": row.get("group_number"),
+            "tee_time": row.get("tee_time"),
+            "start_hole": row.get("start_hole"),
+            "back_nine": row.get("back_nine"),
+            "course_id": row.get("course_id"),
+            "course_name": row.get("course_name"),
+            "player_id": row.get("player_id"),
+            "player_display_name": row.get("player_display_name"),
+            "player_first_name": row.get("player_first_name"),
+            "player_last_name": row.get("player_last_name"),
+            "country": row.get("country"),
+            "world_rank": row.get("world_rank"),
+            "amateur": row.get("amateur"),
+            "snapshot_ts": _iso(row.get("run_ts")),
+        }
+        for row in rows
+    ]
 
 
 def fetch_course_holes(params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:

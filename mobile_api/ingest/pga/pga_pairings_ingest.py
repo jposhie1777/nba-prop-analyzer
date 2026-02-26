@@ -21,6 +21,7 @@ from .pga_tour_graphql import fetch_pairings, pairings_to_records
 
 DATASET = os.getenv("PGA_DATASET", "pga_data")
 PAIRINGS_TABLE = os.getenv("PGA_PAIRINGS_TABLE", "tournament_round_pairings")
+PAIRINGS_VIEW = os.getenv("PGA_PAIRINGS_VIEW", "v_pairings_latest")
 DATASET_LOCATION = os.getenv("PGA_DATASET_LOCATION", "US")
 
 SCHEMA_PAIRINGS = [
@@ -88,6 +89,36 @@ def ensure_table(client: bigquery.Client, table_id: str) -> None:
         return
 
 
+def ensure_pairings_view(client: bigquery.Client, raw_table_id: str) -> None:
+    """Create or replace the v_pairings_latest view in BigQuery.
+
+    The view exposes a deduplicated snapshot: one row per
+    (tournament_id, round_number, group_number, player_id) using the
+    most-recent ``run_ts`` across all ingest runs.
+    """
+    view_id = _resolve_table_id(PAIRINGS_VIEW, client.project)
+    view_query = f"""
+    SELECT * EXCEPT (row_num)
+    FROM (
+      SELECT
+        *,
+        ROW_NUMBER() OVER (
+          PARTITION BY tournament_id, round_number, group_number, player_id
+          ORDER BY run_ts DESC
+        ) AS row_num
+      FROM `{raw_table_id}`
+    )
+    WHERE row_num = 1
+    """
+    view = bigquery.Table(view_id)
+    view.view_query = view_query
+    try:
+        client.get_table(view_id)
+        client.update_table(view, ["view_query"])
+    except NotFound:
+        client.create_table(view)
+
+
 def insert_rows(
     client: bigquery.Client,
     table: str,
@@ -152,6 +183,7 @@ def ingest_pairings(
     if create_tables:
         ensure_dataset(client, _dataset_id(table_id))
         ensure_table(client, table_id)
+        ensure_pairings_view(client, table_id)
 
     summary["inserted"] = insert_rows(client, PAIRINGS_TABLE, rows)
     return summary

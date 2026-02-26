@@ -79,7 +79,7 @@ def test_fetch_pairings(tournament_id: str, round_id: str) -> bool:
     """Return True if the test passes."""
     _print_separator(f"tournament={tournament_id}  round={round_id}")
     print(f"  Endpoint : https://orchestrator.pgatour.com/graphql")
-    print(f"  Query    : pairingsByRound")
+    print(f"  Query    : teeTimes")
     print()
 
     try:

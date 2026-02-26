@@ -132,7 +132,7 @@ def ingest_pairings(
     """
     run_ts = datetime.utcnow().isoformat()
 
-    pairings = fetch_pairings(tournament_id, str(round_number), cut=cut)
+    pairings = fetch_pairings(tournament_id, str(round_number))
     rows = pairings_to_records(pairings, run_ts=run_ts)
 
     summary: Dict[str, Any] = {

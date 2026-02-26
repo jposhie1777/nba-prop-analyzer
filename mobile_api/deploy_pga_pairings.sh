@@ -41,20 +41,17 @@ DRY_RUN="false"
 SCHED_WED="pga-pairings-wednesday"
 SCHED_THU="pga-pairings-thursday"
 SCHED_FRI="pga-pairings-friday"
-SCHED_SAT="pga-pairings-saturday"
-SCHED_SUN="pga-pairings-sunday"
+SCHED_EVE="pga-pairings-evening"
 
 # Cron expressions (America/New_York)
-#   Wed: every hour 10 am – 11 pm
-#   Thu: 8 am only
-#   Fri: 8 am only
-#   Sat: every 30 min 2 pm – 9 pm  (R3 published after R2 finishes ~3–6 pm ET)
-#   Sun: every 30 min 2 pm – 9 pm  (R4 published after R3 finishes ~3–7 pm ET)
-CRON_WED="0 10-23 * * 3"
-CRON_THU="0 8 * * 4"
+#   Wed: hourly 5pm–11pm          R1+R2 publication window
+#   Thu: midnight + 8am           midnight catches late-Wed publications; 8am safety
+#   Fri: 8am only                 R2 safety refresh
+#   Fri+Sat: hourly 6pm–11pm      R3 published Fri eve; R4 published Sat eve
+CRON_WED="0 17-23 * * 3"
+CRON_THU="0 0,8 * * 4"
 CRON_FRI="0 8 * * 5"
-CRON_SAT="*/30 14-21 * * 6"
-CRON_SUN="*/30 14-21 * * 0"
+CRON_EVE="0 18-23 * * 5,6"
 
 # ── Argument parsing ─────────────────────────────────────────────────────────
 usage() {
@@ -80,8 +77,7 @@ Scheduler name overrides:
   --sched-wed  <NAME>      (default: ${SCHED_WED})
   --sched-thu  <NAME>      (default: ${SCHED_THU})
   --sched-fri  <NAME>      (default: ${SCHED_FRI})
-  --sched-sat  <NAME>      (default: ${SCHED_SAT})
-  --sched-sun  <NAME>      (default: ${SCHED_SUN})
+  --sched-eve  <NAME>      Fri+Sat evening (default: ${SCHED_EVE})
 EOF
 }
 
@@ -102,8 +98,7 @@ while [[ $# -gt 0 ]]; do
     --sched-wed)  SCHED_WED="$2";      shift 2 ;;
     --sched-thu)  SCHED_THU="$2";      shift 2 ;;
     --sched-fri)  SCHED_FRI="$2";      shift 2 ;;
-    --sched-sat)  SCHED_SAT="$2";      shift 2 ;;
-    --sched-sun)  SCHED_SUN="$2";      shift 2 ;;
+    --sched-eve)  SCHED_EVE="$2";      shift 2 ;;
     -h|--help)    usage; exit 0 ;;
     *) echo "Unknown argument: $1"; usage; exit 1 ;;
   esac
@@ -217,19 +212,16 @@ upsert_scheduler() {
 echo ""
 echo "==> Creating/updating Cloud Scheduler jobs (tz: ${TIME_ZONE})"
 upsert_scheduler "${SCHED_WED}" "${CRON_WED}" \
-  "PGA pairings - Wednesday R1+R2 publish window (hourly 10am-11pm ET)"
+  "PGA pairings - Wednesday R1+R2 publish window (hourly 5pm-11pm ET)"
 
 upsert_scheduler "${SCHED_THU}" "${CRON_THU}" \
-  "PGA pairings - Thursday R1 safety refresh (8am ET)"
+  "PGA pairings - Thursday midnight + 8am (catches late-Wed; R1 safety)"
 
 upsert_scheduler "${SCHED_FRI}" "${CRON_FRI}" \
   "PGA pairings - Friday R2 safety refresh (8am ET)"
 
-upsert_scheduler "${SCHED_SAT}" "${CRON_SAT}" \
-  "PGA pairings - Saturday R3 publish window (every 30min 2-9pm ET)"
-
-upsert_scheduler "${SCHED_SUN}" "${CRON_SUN}" \
-  "PGA pairings - Sunday R4 publish window (every 30min 2-9pm ET)"
+upsert_scheduler "${SCHED_EVE}" "${CRON_EVE}" \
+  "PGA pairings - Fri+Sat evening R3/R4 publish window (hourly 6pm-11pm ET)"
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
@@ -240,11 +232,10 @@ echo "    Tournament    : ${TOURNAMENT_ID}"
 echo "    Dry run       : ${DRY_RUN}"
 echo ""
 echo "    Schedules (${TIME_ZONE}):"
-echo "      ${SCHED_WED}   : ${CRON_WED}   (R1+R2, hourly Wed 10am-11pm)"
-echo "      ${SCHED_THU}  : ${CRON_THU}         (R1 safety, Thu 8am)"
-echo "      ${SCHED_FRI}    : ${CRON_FRI}         (R2 safety, Fri 8am)"
-echo "      ${SCHED_SAT}  : ${CRON_SAT}  (R3, every 30min Sat 2-9pm)"
-echo "      ${SCHED_SUN}    : ${CRON_SUN}  (R4, every 30min Sun 2-9pm)"
+echo "      ${SCHED_WED}  : ${CRON_WED}      R1+R2, hourly Wed 5pm-11pm"
+echo "      ${SCHED_THU}  : ${CRON_THU}       R1 — midnight + 8am Thu"
+echo "      ${SCHED_FRI}  : ${CRON_FRI}              R2 safety, Fri 8am"
+echo "      ${SCHED_EVE}  : ${CRON_EVE}  R3/R4, hourly Fri+Sat 6pm-11pm"
 echo ""
 echo "    To update the tournament ID next week:"
 echo "      ./deploy_pga_pairings.sh --project ${PROJECT} --region ${REGION} \\"

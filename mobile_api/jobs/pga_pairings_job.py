@@ -6,20 +6,20 @@ calls the PGA Tour GraphQL API, and writes pairings to BigQuery.
 
 Round publication schedule
 --------------------------
-  Wednesday        R1 + R2 tee times are published (typically noon–6 pm ET)
+  Wednesday        R1 + R2 tee times published (typically late afternoon/evening)
   Thursday         R1 in play  – safety re-check R1 at 8 am
   Friday           R2 in play  – safety re-check R2 at 8 am
-  Saturday         R3 published after R2 finishes (~3–6 pm ET)
-  Sunday           R4 published after R3 finishes (~3–7 pm ET)
+                   R3 tee times published after R2 ends (Friday evening)
+  Saturday         R4 tee times published after R3 ends (Saturday evening)
+  Sunday           No pairing activity — not scheduled
   Monday/Tuesday   No tournament activity — job exits immediately
 
 Cloud Scheduler schedules (all America/New_York)
 -------------------------------------------------
-  Wed  10 am – 11 pm  hourly      : 0 10-23 * * 3
-  Thu  8 am            once       : 0 8 * * 4
-  Fri  8 am            once       : 0 8 * * 5
-  Sat  2 pm –  9 pm   every 30 min: */30 14-21 * * 6
-  Sun  2 pm –  9 pm   every 30 min: */30 14-21 * * 0
+  Wed  5 pm – 11 pm  hourly        : 0 17-23 * * 3
+  Thu  midnight + 8 am             : 0 0,8 * * 4   (catches late Wed publications)
+  Fri  8 am          safety check  : 0 8 * * 5
+  Fri/Sat  6 pm – 11 pm  hourly    : 0 18-23 * * 5,6
 
 Required env vars
 -----------------
@@ -54,11 +54,12 @@ ET = ZoneInfo("America/New_York")
 
 # Rounds to check per day-of-week  (ISO weekday: 1=Mon … 7=Sun)
 ROUNDS_BY_DOW: dict[int, list[int]] = {
-    3: [1, 2],   # Wednesday  — R1 + R2 publication day
-    4: [1],      # Thursday   — R1 safety refresh
-    5: [2],      # Friday     — R2 safety refresh
-    6: [3],      # Saturday   — R3 published after R2 ends
-    7: [4],      # Sunday     — R4 published after R3 ends
+    3: [1, 2],   # Wednesday  — R1 + R2 publication day (5pm–midnight ET)
+    4: [1],      # Thursday   — R1 safety refresh (midnight + 8am)
+    5: [2, 3],   # Friday     — R2 safety refresh (8am) + R3 check (evening)
+    6: [4],      # Saturday   — R4 published after R3 ends (evening)
+    # Sunday intentionally omitted — R4 pairings are for Mon play-offs only
+    # and are rarely published; no scheduler trigger on Sunday.
 }
 
 

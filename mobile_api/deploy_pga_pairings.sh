@@ -167,7 +167,7 @@ gcloud run jobs deploy "${JOB_NAME}" \
   --region   "${REGION}" \
   --image    "${IMAGE}" \
   --command  "python" \
-  --args     "-m,jobs.pga_pairings_job" \
+  --args="-m,jobs.pga_pairings_job" \
   --service-account "${SA_EMAIL}" \
   --set-env-vars "GCP_PROJECT=${PROJECT},PGA_CURRENT_TOURNAMENT_ID=${TOURNAMENT_ID},PGA_DRY_RUN=${DRY_RUN}" \
   --max-retries 2 \

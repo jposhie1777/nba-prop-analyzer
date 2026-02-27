@@ -239,34 +239,226 @@ def fetch_team_stats(season: int) -> List[Dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 def fetch_player_stats(season: int) -> List[Dict[str, Any]]:
-    season_id = _season_id_for_year(season)
+    """
+    Fetch per-player aggregated season statistics for *season*.
+
+    Returns a list of player-stat dicts:
+    player_name, club, position, appearances, goals, assists,
+    minutes_played, yellow_cards, red_cards, shots, etc.
+    """
+    params: Dict[str, Any] = {
+        "per_page": PAGE_SIZE,
+    }
+    path_candidates = [
+        os.getenv(
+            "MLSSOCCER_PLAYER_STATS_PATH",
+            "statistics/players/competitions/{competition_id}/seasons/{season_id}",
+        ),
+        os.getenv("MLSSOCCER_PLAYER_STATS_FALLBACK_PATH", "players/seasons/{season_id}"),
+        os.getenv("MLSSOCCER_PLAYER_STATS_FALLBACK_PATH_2", "players"),
+    ]
+    return _fetch_paginated_with_fallback(path_candidates, params, season=season)
 
     teams = fetch_team_stats(season)
 
-    all_players = []
+# ---------------------------------------------------------------------------
+# Per-match helpers (used by team_game_stats and player_game_stats)
+# ---------------------------------------------------------------------------
+
+_COMPLETED_STATUSES = frozenset(
+    {"final", "ft", "full time", "completed", "played", "finished", "post", "complete"}
+)
+
+
+def _is_match_completed(match: Dict[str, Any]) -> bool:
+    """Return True when the match result is decided."""
+    status = (
+        match.get("status")
+        or match.get("match_status")
+        or match.get("matchStatus")
+        or ""
+    ).lower()
+    if status in _COMPLETED_STATUSES:
+        return True
+    # Fallback: both scores present
+    home = (
+        match.get("home_score")
+        or match.get("score_home")
+        or match.get("homeScore")
+    )
+    away = (
+        match.get("away_score")
+        or match.get("score_away")
+        or match.get("awayScore")
+    )
+    return home is not None and away is not None
+
+
+def _get_rows(payload: Any) -> List[Dict[str, Any]]:
+    """
+    Extract a list of row-dicts from any API response shape the MLS API returns.
+    Handles plain lists, ``{"data": [...]}`` envelopes, and other common keys.
+    """
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        for key in (
+            "data", "content", "matches", "items", "results",
+            "statistics", "clubs", "players", "teams", "stats",
+        ):
+            val = payload.get(key)
+            if isinstance(val, list):
+                return val
+        # Single-object envelope
+        return [payload] if payload else []
+    return []
+
+
+def _fetch_stats_for_match(
+    base_path: str,
+    match_id: str,
+    extra_params: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Fetch statistics rows for a single match from *base_path*.
+
+    Tries the query-param filter approach first (``match_opta_id``, then
+    ``match_id``) and falls back to a match-scoped sub-path.  Returns an
+    empty list when the match has no published stats yet (e.g. upcoming).
+    """
+    params: Dict[str, Any] = {"per_page": PAGE_SIZE, "page": 1}
+    if extra_params:
+        params.update(extra_params)
+
+    for filter_key in ("match_opta_id", "match_id", "matchId"):
+        try:
+            payload = _get(base_path, {**params, filter_key: match_id})
+            rows = _get_rows(payload)
+            if rows:
+                return rows
+        except MlsSoccerApiError:
+            pass
+
+    # Last resort: try a match-scoped sub-path, e.g. matches/{id}/statistics/clubs
+    segment = "clubs" if "clubs" in base_path else "players"
+    try:
+        payload = _get(f"matches/{match_id}/statistics/{segment}", {"per_page": PAGE_SIZE})
+        return _get_rows(payload)
+    except MlsSoccerApiError:
+        pass
+
+    return []
+
+
+def fetch_team_game_stats(season: int) -> List[Dict[str, Any]]:
+    """
+    Fetch per-club per-match statistics for *season*.
+
+    Iterates over every completed match returned by the season schedule and
+    requests club statistics filtered to that match.  Each row is augmented
+    with ``match_id`` and ``match_date`` so downstream consumers don't need
+    to re-join.
+    """
+    season_id = _season_id_for_year(season)
+    if not season_id:
+        logger.warning(
+            "No season_id configured for year %d – skipping team_game_stats", season
+        )
+        return []
+    comp_id = _competition_id()
+
+    matches = fetch_schedule(season)
+    completed = [m for m in matches if _is_match_completed(m)]
+    logger.info("team_game_stats: %d completed matches to process", len(completed))
+
+    base_path = (
+        os.getenv(
+            "MLSSOCCER_TEAM_GAME_STATS_PATH",
+            f"statistics/clubs/competitions/{comp_id}/seasons/{season_id}",
+        )
+    )
+
+    all_rows: List[Dict[str, Any]] = []
+    for match in completed:
+        match_id = (
+            match.get("id")
+            or match.get("matchId")
+            or match.get("opta_id")
+            or ""
+        )
+        if not match_id:
+            continue
+
+        rows = _fetch_stats_for_match(base_path, match_id)
+        match_date = (
+            match.get("match_date")
+            or match.get("date")
+            or match.get("matchDate")
+            or ""
+        )
+        for row in rows:
+            row.setdefault("match_id", match_id)
+            row.setdefault("match_date", match_date)
+        all_rows.extend(rows)
+        time.sleep(0.05)  # polite rate-limiting between match requests
+
+    return all_rows
 
     for team in teams:
         team_id = team["team_id"]
 
-        url = (
-            f"{STATS_API}/statistics/players/competitions/"
-            f"{_competition_id()}/seasons/{season_id}/clubs/{team_id}"
+def fetch_player_game_stats(season: int) -> List[Dict[str, Any]]:
+    """
+    Fetch per-player per-match statistics for *season*.
+
+    Iterates over every completed match returned by the season schedule and
+    requests player statistics filtered to that match.  Each row is augmented
+    with ``match_id`` and ``match_date``.
+    """
+    season_id = _season_id_for_year(season)
+    if not season_id:
+        logger.warning(
+            "No season_id configured for year %d – skipping player_game_stats", season
         )
+        return []
+    comp_id = _competition_id()
 
-        payload = _get(url)
-        print("TEAM:", team_id)
-        print(json.dumps(payload, indent=2)[:500])
-        batch = payload.get("player_statistics", [])
+    matches = fetch_schedule(season)
+    completed = [m for m in matches if _is_match_completed(m)]
+    logger.info("player_game_stats: %d completed matches to process", len(completed))
 
-        all_players.extend(batch)
-        time.sleep(0.2)
+    base_path = (
+        os.getenv(
+            "MLSSOCCER_PLAYER_GAME_STATS_PATH",
+            f"statistics/players/competitions/{comp_id}/seasons/{season_id}",
+        )
+    )
 
-    # dedupe
-    unique = {p["player_id"]: p for p in all_players}
-    rows = list(unique.values())
+    all_rows: List[Dict[str, Any]] = []
+    for match in completed:
+        match_id = (
+            match.get("id")
+            or match.get("matchId")
+            or match.get("opta_id")
+            or ""
+        )
+        if not match_id:
+            continue
 
-    logger.info("player_stats: %d players", len(rows))
-    return rows
+        rows = _fetch_stats_for_match(base_path, match_id)
+        match_date = (
+            match.get("match_date")
+            or match.get("date")
+            or match.get("matchDate")
+            or ""
+        )
+        for row in rows:
+            row.setdefault("match_id", match_id)
+            row.setdefault("match_date", match_date)
+        all_rows.extend(rows)
+        time.sleep(0.05)  # polite rate-limiting between match requests
+
+    return all_rows
 
 
 # ---------------------------------------------------------------------------

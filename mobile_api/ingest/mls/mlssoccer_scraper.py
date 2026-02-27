@@ -184,7 +184,7 @@ def _paginate(
 
 def fetch_schedule(season: int) -> List[Dict[str, Any]]:
     season_id = _season_id_for_year(season)
-    url = f"{STATS_API}/v1/matches/seasons/{season_id}"
+    url = f"{STATS_API}/matches/seasons/{season_id}"
 
     rows: List[Dict[str, Any]] = []
     seen_ids: set = set()
@@ -235,7 +235,7 @@ def fetch_team_stats(season: int) -> List[Dict[str, Any]]:
     season_id = _season_id_for_year(season)
 
     url = (
-        f"{STATS_API}/v1/statistics/clubs/competitions/"
+        f"{STATS_API}/statistics/clubs/competitions/"
         f"{_competition_id()}/seasons/{season_id}"
     )
 
@@ -266,7 +266,7 @@ def fetch_player_stats(season: int) -> List[Dict[str, Any]]:
 
     url = (
         os.getenv("MLSSOCCER_PLAYER_STATS_URL")
-        or f"{STATS_API}/v1/statistics/players/competitions/{comp_id}/seasons/{season_id}"
+        or f"{STATS_API}/statistics/players/competitions/{comp_id}/seasons/{season_id}"
     )
 
     rows = _paginate(url, {})
@@ -354,7 +354,7 @@ def fetch_team_game_stats(season: int) -> List[Dict[str, Any]]:
 
     base_url = (
         os.getenv("MLSSOCCER_TEAM_GAME_STATS_URL")
-        or f"{STATS_API}/v1/statistics/clubs/competitions/{comp_id}/seasons/{season_id}"
+        or f"{STATS_API}/statistics/clubs/competitions/{comp_id}/seasons/{season_id}"
     )
 
     all_rows: List[Dict[str, Any]] = []
@@ -407,7 +407,7 @@ def fetch_player_game_stats(season: int) -> List[Dict[str, Any]]:
 
     base_url = (
         os.getenv("MLSSOCCER_PLAYER_GAME_STATS_URL")
-        or f"{STATS_API}/v1/statistics/players/competitions/{comp_id}/seasons/{season_id}"
+        or f"{STATS_API}/statistics/players/competitions/{comp_id}/seasons/{season_id}"
     )
 
     all_rows: List[Dict[str, Any]] = []

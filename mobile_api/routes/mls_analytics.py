@@ -17,6 +17,7 @@ from ingest.mls.mls_website_ingest import (
     ingest_team_game_stats,
     ingest_player_game_stats,
     run_website_ingestion,
+    run_website_backfill,
 )
 
 router = APIRouter(tags=["MLS"])
@@ -115,6 +116,21 @@ def ingest_mls_website_all(
 ):
     """Run all five mlssoccer.com ingests (schedule, team/player season stats, team/player game stats) in one call."""
     return run_website_ingestion(season=season, dry_run=dry_run)
+
+
+@router.post("/ingest/mls/website/backfill")
+def ingest_mls_website_backfill(
+    start_season: int = Query(default=2024),
+    end_season: int = Query(default=2026),
+    dry_run: bool = False,
+):
+    """
+    Backfill all five mlssoccer.com feeds for a range of seasons.
+
+    Defaults to 2024–2026 (covering last year, the transition, and the current 2026 season).
+    Pass start_season and end_season to override.
+    """
+    return run_website_backfill(start_season=start_season, end_season=end_season, dry_run=dry_run)
 
 
 @router.get("/mls/moneylines")

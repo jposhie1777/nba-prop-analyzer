@@ -349,3 +349,64 @@ def run_website_ingestion(
         "team_game_stats": team_game_stats_result,
         "player_game_stats": player_game_stats_result,
     }
+
+
+def run_website_backfill(
+    start_season: Optional[int] = None,
+    end_season: Optional[int] = None,
+    dry_run: bool = False,
+) -> Dict[str, Any]:
+    """
+    Backfill all five mlssoccer.com feeds for a range of seasons.
+
+    Iterates start_season..end_season inclusive, running all five ingest
+    functions for each year.  Defaults to the two seasons before the current
+    year through the current year (e.g. 2024–2026 when called in 2026).
+
+    Parameters
+    ----------
+    start_season: First season to backfill (default: current_year - 2)
+    end_season:   Last season to backfill  (default: current_year)
+    dry_run:      If True, fetch data but do NOT write to BigQuery.
+
+    Returns
+    -------
+    Dict keyed by season year, each containing the five per-feed results.
+    """
+    current_year = datetime.now(timezone.utc).year
+    if start_season is None:
+        start_season = current_year - 2
+    if end_season is None:
+        end_season = current_year
+
+    seasons = list(range(start_season, end_season + 1))
+    logger.info(
+        "[MLS backfill] Starting backfill for seasons %s (dry_run=%s)",
+        seasons,
+        dry_run,
+    )
+
+    results: Dict[str, Any] = {
+        "start_season": start_season,
+        "end_season": end_season,
+        "seasons_requested": seasons,
+        "dry_run": dry_run,
+        "by_season": {},
+    }
+
+    for season in seasons:
+        logger.info("[MLS backfill] Processing season %d", season)
+        season_result = run_website_ingestion(season=season, dry_run=dry_run)
+        results["by_season"][season] = season_result
+        logger.info(
+            "[MLS backfill] Season %d complete — schedule: %s, team_stats: %s, "
+            "player_stats: %s, team_game_stats: %s, player_game_stats: %s",
+            season,
+            season_result["schedule"]["fetched"],
+            season_result["team_stats"]["fetched"],
+            season_result["player_stats"]["fetched"],
+            season_result["team_game_stats"]["fetched"],
+            season_result["player_game_stats"]["fetched"],
+        )
+
+    return results

@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence
 
 from google.api_core.exceptions import NotFound
@@ -244,7 +244,11 @@ def ingest_player_stats(season: Optional[int] = None, dry_run: bool = False) -> 
     }
 
 
-def ingest_team_game_stats(season: Optional[int] = None, dry_run: bool = False) -> Dict[str, Any]:
+def ingest_team_game_stats(
+    season: Optional[int] = None,
+    only_date: Optional[date] = None,
+    dry_run: bool = False,
+) -> Dict[str, Any]:
     """
     Fetch per-club per-match stats from mlssoccer.com and write to BigQuery.
 
@@ -254,14 +258,15 @@ def ingest_team_game_stats(season: Optional[int] = None, dry_run: bool = False) 
 
     Parameters
     ----------
-    season:  MLS season year (default: current calendar year)
-    dry_run: If True, fetch and return counts but do NOT write to BigQuery.
+    season:    MLS season year (default: current calendar year)
+    only_date: If set, only ingest matches that occurred on this date.
+    dry_run:   If True, fetch and return counts but do NOT write to BigQuery.
     """
     if season is None:
         season = datetime.now(timezone.utc).year
 
     logger.info("[MLS team_game_stats] Fetching season %d from mlssoccer.com", season)
-    rows = fetch_team_game_stats(season)
+    rows = fetch_team_game_stats(season, only_date=only_date)
     logger.info("[MLS team_game_stats] Fetched %d rows", len(rows))
 
     # Build a compound key so each club-per-match row is uniquely addressable.
@@ -285,7 +290,11 @@ def ingest_team_game_stats(season: Optional[int] = None, dry_run: bool = False) 
     }
 
 
-def ingest_player_game_stats(season: Optional[int] = None, dry_run: bool = False) -> Dict[str, Any]:
+def ingest_player_game_stats(
+    season: Optional[int] = None,
+    only_date: Optional[date] = None,
+    dry_run: bool = False,
+) -> Dict[str, Any]:
     """
     Fetch per-player per-match stats from mlssoccer.com and write to BigQuery.
 
@@ -295,14 +304,15 @@ def ingest_player_game_stats(season: Optional[int] = None, dry_run: bool = False
 
     Parameters
     ----------
-    season:  MLS season year (default: current calendar year)
-    dry_run: If True, fetch and return counts but do NOT write to BigQuery.
+    season:    MLS season year (default: current calendar year)
+    only_date: If set, only ingest matches that occurred on this date.
+    dry_run:   If True, fetch and return counts but do NOT write to BigQuery.
     """
     if season is None:
         season = datetime.now(timezone.utc).year
 
     logger.info("[MLS player_game_stats] Fetching season %d from mlssoccer.com", season)
-    rows = fetch_player_game_stats(season)
+    rows = fetch_player_game_stats(season, only_date=only_date)
     logger.info("[MLS player_game_stats] Fetched %d rows", len(rows))
 
     # Build a compound key so each player-per-match row is uniquely addressable.
@@ -415,6 +425,57 @@ def run_website_backfill(
     return results
 
 
+def run_daily_ingestion(
+    target_date: Optional[date] = None,
+    dry_run: bool = False,
+) -> Dict[str, Any]:
+    """
+    Ingest game stats for a single date (default: yesterday).
+
+    Fetches team_game_stats and player_game_stats filtered to matches that
+    occurred on *target_date*.  Also refreshes the schedule and season
+    aggregate stats for the current season so totals stay current.
+
+    Parameters
+    ----------
+    target_date: Date to ingest (default: yesterday UTC).
+    dry_run:     If True, fetch and return counts but do NOT write to BigQuery.
+    """
+    if target_date is None:
+        target_date = (datetime.now(timezone.utc) - timedelta(days=1)).date()
+
+    season = target_date.year
+    logger.info("[MLS daily] Ingesting games for %s (season %d, dry_run=%s)", target_date, season, dry_run)
+
+    schedule_result = ingest_schedule(season=season, dry_run=dry_run)
+    team_stats_result = ingest_team_stats(season=season, dry_run=dry_run)
+    player_stats_result = ingest_player_stats(season=season, dry_run=dry_run)
+    team_game_stats_result = ingest_team_game_stats(season=season, only_date=target_date, dry_run=dry_run)
+    player_game_stats_result = ingest_player_game_stats(season=season, only_date=target_date, dry_run=dry_run)
+
+    logger.info(
+        "[MLS daily] %s complete — schedule: %s, team_stats: %s, player_stats: %s, "
+        "team_game_stats: %s, player_game_stats: %s",
+        target_date,
+        schedule_result["fetched"],
+        team_stats_result["fetched"],
+        player_stats_result["fetched"],
+        team_game_stats_result["fetched"],
+        player_game_stats_result["fetched"],
+    )
+
+    return {
+        "target_date": target_date.isoformat(),
+        "season": season,
+        "dry_run": dry_run,
+        "schedule": schedule_result,
+        "team_stats": team_stats_result,
+        "player_stats": player_stats_result,
+        "team_game_stats": team_game_stats_result,
+        "player_game_stats": player_game_stats_result,
+    }
+
+
 # ---------------------------------------------------------------------------
 # CLI entry-point  (used for backfill and ad-hoc runs)
 #
@@ -428,6 +489,12 @@ def run_website_backfill(
 #
 #   # Refresh current season only
 #   python -m mobile_api.ingest.mls.mls_website_ingest --mode season --season 2026
+#
+#   # Daily ingest for yesterday (default)
+#   python -m mobile_api.ingest.mls.mls_website_ingest --mode daily
+#
+#   # Daily ingest for a specific date
+#   python -m mobile_api.ingest.mls.mls_website_ingest --mode daily --date 2026-02-26
 # ---------------------------------------------------------------------------
 
 import argparse as _argparse
@@ -440,13 +507,13 @@ def _cli_main() -> None:
     )
 
     parser = _argparse.ArgumentParser(
-        description="MLS mlssoccer.com ingest — backfill or single-season run"
+        description="MLS mlssoccer.com ingest — backfill, single-season, or daily run"
     )
     parser.add_argument(
         "--mode",
-        choices=["backfill", "season"],
+        choices=["backfill", "season", "daily"],
         default="backfill",
-        help="'backfill' iterates a season range; 'season' runs a single season (default: backfill)",
+        help="'backfill' iterates a season range; 'season' runs a single season; 'daily' ingests yesterday's games",
     )
     parser.add_argument(
         "--start-season",
@@ -467,6 +534,12 @@ def _cli_main() -> None:
         help="Season year for single-season mode (default: current year)",
     )
     parser.add_argument(
+        "--date",
+        type=str,
+        default=None,
+        help="Target date for daily mode, YYYY-MM-DD (default: yesterday UTC)",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Fetch data but do NOT write to BigQuery",
@@ -480,6 +553,10 @@ def _cli_main() -> None:
             end_season=args.end_season,
             dry_run=args.dry_run,
         )
+        print(json.dumps(result, indent=2, default=str))
+    elif args.mode == "daily":
+        target_date = date.fromisoformat(args.date) if args.date else None
+        result = run_daily_ingestion(target_date=target_date, dry_run=args.dry_run)
         print(json.dumps(result, indent=2, default=str))
     else:
         result = run_website_ingestion(

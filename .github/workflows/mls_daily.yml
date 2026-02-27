@@ -1,0 +1,56 @@
+name: MLS Daily Ingest
+
+on:
+  schedule:
+    # 08:00 UTC = 3 AM ET / midnight PT — well after the latest MLS kickoffs finish
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Date to ingest (YYYY-MM-DD). Defaults to yesterday UTC."
+        required: false
+        default: ""
+      dry_run:
+        description: "Dry run — fetch data but do NOT write to BigQuery"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  daily-ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+      MLS_DATASET: "mls_data"
+      MLS_BQ_LOCATION: "US"
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r mobile_api/requirements.txt
+
+      - name: Configure GCP credentials
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
+
+      - name: Apply MLS BigQuery DDL
+        run: python -m mobile_api.ingest.mls.apply_ddl
+
+      - name: Run MLS daily ingest
+        run: |
+          python -m mobile_api.ingest.mls.mls_website_ingest \
+            --mode daily \
+            ${{ inputs.date != '' && format('--date {0}', inputs.date) || '' }} \
+            ${{ inputs.dry_run == 'true' && '--dry-run' || '' }}

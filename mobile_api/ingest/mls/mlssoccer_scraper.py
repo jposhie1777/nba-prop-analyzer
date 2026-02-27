@@ -39,6 +39,7 @@ DEFAULT_BASE_URLS = [
     "https://stats-api.mlssoccer.com",
     BASE_URL,
     "https://stats-api.mlssoccer.com/v2",
+    "https://sportapi.mlssoccer.com",
 ]
 DEFAULT_COMPETITION_ID = os.getenv("MLSSOCCER_COMPETITION_ID_V2", "MLS-COM-00000K")
 DEFAULT_SEASON_ID_BY_YEAR = {
@@ -120,8 +121,12 @@ def _season_id_for_year(season: int) -> Optional[str]:
     return DEFAULT_SEASON_ID_BY_YEAR.get(season)
 
 
+def _competition_id() -> str:
+    return os.getenv("MLSSOCCER_COMPETITION_ID_V2", DEFAULT_COMPETITION_ID)
+
+
 def _expand_path_template(path: str, season: Optional[int]) -> str:
-    """Resolve placeholders like {season_id} for modern MLS endpoints."""
+    """Resolve placeholders like {season_id}/{competition_id} in endpoint paths."""
     if "{season_id}" in path:
         if season is None:
             raise MlsSoccerApiError("Path requires {season_id} but season was not supplied")
@@ -132,6 +137,10 @@ def _expand_path_template(path: str, season: Optional[int]) -> str:
                 "Set MLSSOCCER_SEASON_ID_BY_YEAR (e.g. '2026:MLS-SEA-0001KA')."
             )
         path = path.replace("{season_id}", season_id)
+
+    if "{competition_id}" in path:
+        path = path.replace("{competition_id}", _competition_id())
+
     return path
 
 
@@ -183,9 +192,9 @@ def _fetch_paginated(path: str, params: Dict[str, Any], base_url: Optional[str] 
     path = _expand_path_template(path, season)
     params = dict(params)
 
-    use_page_style = "per_page" in params
+    use_page_style = "per_page" in params or "pageSize" in params
     if use_page_style:
-        page_size = int(params.get("per_page") or PAGE_SIZE)
+        page_size = int(params.get("per_page") or params.get("pageSize") or PAGE_SIZE)
         page = 1
     else:
         params.setdefault("limit", PAGE_SIZE)
@@ -204,7 +213,7 @@ def _fetch_paginated(path: str, params: Dict[str, Any], base_url: Optional[str] 
         if isinstance(payload, list):
             batch = payload
         elif isinstance(payload, dict):
-            batch = payload.get("data") or payload.get("content") or payload.get("matches") or []
+            batch = payload.get("data") or payload.get("content") or payload.get("matches") or payload.get("items") or payload.get("results") or []
             if not isinstance(batch, list):
                 batch = [payload] if payload else []
         else:
@@ -298,13 +307,15 @@ def fetch_team_stats(season: int) -> List[Dict[str, Any]]:
     possession_percentage, pass_completion, etc.
     """
     params: Dict[str, Any] = {
-        "competition_opta_id": COMPETITION_OPTA_ID,
-        "season_opta_id": season,
-        "order_by": "club_short_name",
+        "per_page": PAGE_SIZE,
     }
     path_candidates = [
-        os.getenv("MLSSOCCER_TEAM_STATS_PATH", "clubs"),
-        os.getenv("MLSSOCCER_TEAM_STATS_FALLBACK_PATH", "teams"),
+        os.getenv(
+            "MLSSOCCER_TEAM_STATS_PATH",
+            "statistics/clubs/competitions/{competition_id}/seasons/{season_id}",
+        ),
+        os.getenv("MLSSOCCER_TEAM_STATS_FALLBACK_PATH", "clubs"),
+        os.getenv("MLSSOCCER_TEAM_STATS_FALLBACK_PATH_2", "teams"),
     ]
     return _fetch_paginated_with_fallback(path_candidates, params, season=season)
 
@@ -318,13 +329,15 @@ def fetch_player_stats(season: int) -> List[Dict[str, Any]]:
     minutes_played, yellow_cards, red_cards, shots, etc.
     """
     params: Dict[str, Any] = {
-        "competition_opta_id": COMPETITION_OPTA_ID,
-        "season_opta_id": season,
-        "order_by": "player_last_name",
+        "pageSize": PAGE_SIZE,
     }
     path_candidates = [
-        os.getenv("MLSSOCCER_PLAYER_STATS_PATH", "players"),
-        os.getenv("MLSSOCCER_PLAYER_STATS_FALLBACK_PATH", "athletes"),
+        os.getenv(
+            "MLSSOCCER_PLAYER_STATS_PATH",
+            "api/stats/players/competition/{competition_id}/season/{season_id}/order/goals/desc",
+        ),
+        os.getenv("MLSSOCCER_PLAYER_STATS_FALLBACK_PATH", "players"),
+        os.getenv("MLSSOCCER_PLAYER_STATS_FALLBACK_PATH_2", "athletes"),
     ]
     return _fetch_paginated_with_fallback(path_candidates, params, season=season)
 

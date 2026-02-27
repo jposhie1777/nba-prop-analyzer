@@ -160,6 +160,18 @@ bind_role "roles/run.invoker"
 bind_role "roles/bigquery.dataEditor"
 bind_role "roles/bigquery.jobUser"
 
+# Cloud Scheduler fires scheduled jobs by minting an OAuth token AS the SA.
+# Without this, the scheduler silently fails (code=-1) even though the SA has
+# run.invoker. The Cloud Scheduler service agent needs serviceAccountTokenCreator
+# on the SA to impersonate it when making scheduled HTTP requests.
+echo "==> Granting Cloud Scheduler service agent token creator on ${SA_EMAIL}"
+PROJECT_NUMBER=$(gcloud projects describe "${PROJECT}" --format="value(projectNumber)")
+gcloud iam service-accounts add-iam-policy-binding "${SA_EMAIL}" \
+  --member="serviceAccount:service-${PROJECT_NUMBER}@gcp-sa-cloudscheduler.iam.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountTokenCreator" \
+  --project "${PROJECT}" >/dev/null 2>&1 \
+|| echo "==> WARNING: could not grant Cloud Scheduler token creator (may already exist)"
+
 # ── Cloud Run Job ────────────────────────────────────────────────────────────
 echo "==> Deploying Cloud Run Job: ${JOB_NAME}"
 gcloud run jobs deploy "${JOB_NAME}" \

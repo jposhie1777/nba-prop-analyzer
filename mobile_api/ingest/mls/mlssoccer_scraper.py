@@ -21,6 +21,7 @@ import json
 import logging
 import os
 import time
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -56,8 +57,15 @@ _DEFAULT_HEADERS: Dict[str, str] = {
 }
 
 
+@dataclass
 class MlsSoccerApiError(RuntimeError):
-    pass
+    message: str
+    status_code: Optional[int] = None
+    url: Optional[str] = None
+    response_body: Optional[str] = None
+
+    def __str__(self) -> str:
+        return self.message
 
 
 # ---------------------------------------------------------------------------
@@ -81,7 +89,10 @@ def _get(path: str, params: Optional[Dict[str, Any]] = None) -> Any:
                 logger.warning("Request error %s – retry %d in %.1fs", exc, attempt, delay)
                 time.sleep(delay)
                 continue
-            raise MlsSoccerApiError(f"Request failed after {RETRY_ATTEMPTS} attempts: {exc}") from exc
+            raise MlsSoccerApiError(
+                f"Request failed after {RETRY_ATTEMPTS} attempts: {exc}",
+                url=url,
+            ) from exc
 
         if resp.status_code < 400:
             return resp.json()
@@ -93,10 +104,13 @@ def _get(path: str, params: Optional[Dict[str, Any]] = None) -> Any:
             continue
 
         raise MlsSoccerApiError(
-            f"HTTP {resp.status_code} from {url}: {resp.text[:200]}"
+            f"HTTP {resp.status_code} from {url}: {resp.text[:200]}",
+            status_code=resp.status_code,
+            url=url,
+            response_body=resp.text[:1000],
         )
 
-    raise MlsSoccerApiError(f"Exhausted {RETRY_ATTEMPTS} retries for {url}")
+    raise MlsSoccerApiError(f"Exhausted {RETRY_ATTEMPTS} retries for {url}", url=url)
 
 
 def _fetch_paginated(path: str, params: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -135,6 +149,34 @@ def _fetch_paginated(path: str, params: Dict[str, Any]) -> List[Dict[str, Any]]:
     return rows
 
 
+def _fetch_paginated_with_fallback(paths: List[str], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Try a list of endpoint paths until one succeeds.
+
+    MLS has changed endpoint names over time (for example, /schedule -> /schedules).
+    If an endpoint returns 404, we automatically try the next candidate so ingest
+    jobs can keep running without a code deploy.
+    """
+    if not paths:
+        raise ValueError("paths must include at least one endpoint")
+
+    last_error: Optional[MlsSoccerApiError] = None
+    for i, path in enumerate(paths):
+        try:
+            if i > 0:
+                logger.info("Primary endpoint unavailable; trying fallback path '%s'", path)
+            return _fetch_paginated(path, params)
+        except MlsSoccerApiError as exc:
+            last_error = exc
+            if exc.status_code == 404 and i < len(paths) - 1:
+                continue
+            raise
+
+    if last_error:
+        raise last_error
+    raise MlsSoccerApiError("No endpoint paths were attempted")
+
+
 # ---------------------------------------------------------------------------
 # Public fetch functions
 # ---------------------------------------------------------------------------
@@ -152,7 +194,11 @@ def fetch_schedule(season: int) -> List[Dict[str, Any]]:
         "season_opta_id": season,
         "order_by": "match_date",
     }
-    return _fetch_paginated("schedule", params)
+    path_candidates = [
+        os.getenv("MLSSOCCER_SCHEDULE_PATH", "schedule"),
+        os.getenv("MLSSOCCER_SCHEDULE_FALLBACK_PATH", "schedules"),
+    ]
+    return _fetch_paginated_with_fallback(path_candidates, params)
 
 
 def fetch_team_stats(season: int) -> List[Dict[str, Any]]:
@@ -168,7 +214,11 @@ def fetch_team_stats(season: int) -> List[Dict[str, Any]]:
         "season_opta_id": season,
         "order_by": "club_short_name",
     }
-    return _fetch_paginated("clubs", params)
+    path_candidates = [
+        os.getenv("MLSSOCCER_TEAM_STATS_PATH", "clubs"),
+        os.getenv("MLSSOCCER_TEAM_STATS_FALLBACK_PATH", "teams"),
+    ]
+    return _fetch_paginated_with_fallback(path_candidates, params)
 
 
 def fetch_player_stats(season: int) -> List[Dict[str, Any]]:
@@ -184,7 +234,11 @@ def fetch_player_stats(season: int) -> List[Dict[str, Any]]:
         "season_opta_id": season,
         "order_by": "player_last_name",
     }
-    return _fetch_paginated("players", params)
+    path_candidates = [
+        os.getenv("MLSSOCCER_PLAYER_STATS_PATH", "players"),
+        os.getenv("MLSSOCCER_PLAYER_STATS_FALLBACK_PATH", "athletes"),
+    ]
+    return _fetch_paginated_with_fallback(path_candidates, params)
 
 
 def fetch_team_game_stats(season: int) -> List[Dict[str, Any]]:
@@ -201,7 +255,11 @@ def fetch_team_game_stats(season: int) -> List[Dict[str, Any]]:
         "season_opta_id": season,
         "order_by": "match_date",
     }
-    return _fetch_paginated("stats/clubs", params)
+    path_candidates = [
+        os.getenv("MLSSOCCER_TEAM_GAME_STATS_PATH", "stats/clubs"),
+        os.getenv("MLSSOCCER_TEAM_GAME_STATS_FALLBACK_PATH", "match-stats/clubs"),
+    ]
+    return _fetch_paginated_with_fallback(path_candidates, params)
 
 
 def fetch_player_game_stats(season: int) -> List[Dict[str, Any]]:
@@ -218,7 +276,11 @@ def fetch_player_game_stats(season: int) -> List[Dict[str, Any]]:
         "season_opta_id": season,
         "order_by": "match_date",
     }
-    return _fetch_paginated("stats/players", params)
+    path_candidates = [
+        os.getenv("MLSSOCCER_PLAYER_GAME_STATS_PATH", "stats/players"),
+        os.getenv("MLSSOCCER_PLAYER_GAME_STATS_FALLBACK_PATH", "match-stats/players"),
+    ]
+    return _fetch_paginated_with_fallback(path_candidates, params)
 
 
 # ---------------------------------------------------------------------------

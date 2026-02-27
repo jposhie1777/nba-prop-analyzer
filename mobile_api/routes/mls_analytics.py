@@ -10,6 +10,12 @@ from google.cloud import bigquery
 
 from bq import get_bq_client
 from ingest.mls.ingest import ingest_yesterday_refresh, run_full_ingestion
+from ingest.mls.mls_website_ingest import (
+    ingest_schedule,
+    ingest_team_stats,
+    ingest_player_stats,
+    run_website_ingestion,
+)
 
 router = APIRouter(tags=["MLS"])
 
@@ -49,6 +55,46 @@ def ingest_mls_full(current_season: int = Query(default_factory=_season_default)
 @router.post("/ingest/mls/yesterday-refresh")
 def ingest_mls_yesterday(current_season: int = Query(default_factory=_season_default)):
     return ingest_yesterday_refresh(current_season=current_season)
+
+
+# ------------------------------------------------------------------
+# mlssoccer.com scraper ingest endpoints
+# ------------------------------------------------------------------
+
+@router.post("/ingest/mls/website/schedule")
+def ingest_mls_website_schedule(
+    season: int = Query(default_factory=_season_default),
+    dry_run: bool = False,
+):
+    """Fetch the MLS match schedule from stats-api.mlssoccer.com and write to BigQuery."""
+    return ingest_schedule(season=season, dry_run=dry_run)
+
+
+@router.post("/ingest/mls/website/team-stats")
+def ingest_mls_website_team_stats(
+    season: int = Query(default_factory=_season_default),
+    dry_run: bool = False,
+):
+    """Fetch per-club season stats from stats-api.mlssoccer.com and write to BigQuery."""
+    return ingest_team_stats(season=season, dry_run=dry_run)
+
+
+@router.post("/ingest/mls/website/player-stats")
+def ingest_mls_website_player_stats(
+    season: int = Query(default_factory=_season_default),
+    dry_run: bool = False,
+):
+    """Fetch per-player season stats from stats-api.mlssoccer.com and write to BigQuery."""
+    return ingest_player_stats(season=season, dry_run=dry_run)
+
+
+@router.post("/ingest/mls/website/all")
+def ingest_mls_website_all(
+    season: int = Query(default_factory=_season_default),
+    dry_run: bool = False,
+):
+    """Run all three mlssoccer.com ingests (schedule, team stats, player stats) in one call."""
+    return run_website_ingestion(season=season, dry_run=dry_run)
 
 
 @router.get("/mls/moneylines")

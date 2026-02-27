@@ -73,6 +73,10 @@ def main() -> None:
         ("matches", "MLS matches payload snapshots from BallDontLie API"),
         ("match_events", "MLS match events payload snapshots from BallDontLie API"),
         ("match_lineups", "MLS match lineups payload snapshots from BallDontLie API"),
+        # mlssoccer.com scraper tables
+        ("mlssoccer_schedule", "MLS match schedule snapshots from stats-api.mlssoccer.com"),
+        ("mlssoccer_team_stats", "MLS per-club season stats from stats-api.mlssoccer.com"),
+        ("mlssoccer_player_stats", "MLS per-player season stats from stats-api.mlssoccer.com"),
     ]
 
     for table_name, description in tables:

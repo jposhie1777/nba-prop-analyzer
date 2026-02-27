@@ -88,3 +88,67 @@ CLUSTER BY season, entity_id
 OPTIONS (
   description = 'MLS match lineups payload snapshots from BallDontLie MLS API'
 );
+
+-- ============================================================
+-- mlssoccer.com scraper tables (stats-api.mlssoccer.com)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS `mls_data.mlssoccer_schedule` (
+  ingested_at TIMESTAMP NOT NULL,
+  season INT64 NOT NULL,
+  entity_id STRING,
+  payload STRING
+)
+PARTITION BY DATE(ingested_at)
+CLUSTER BY season, entity_id
+OPTIONS (
+  description = 'MLS match schedule snapshots from stats-api.mlssoccer.com'
+);
+
+CREATE TABLE IF NOT EXISTS `mls_data.mlssoccer_team_stats` (
+  ingested_at TIMESTAMP NOT NULL,
+  season INT64 NOT NULL,
+  entity_id STRING,
+  payload STRING
+)
+PARTITION BY DATE(ingested_at)
+CLUSTER BY season, entity_id
+OPTIONS (
+  description = 'MLS per-club season stats from stats-api.mlssoccer.com'
+);
+
+CREATE TABLE IF NOT EXISTS `mls_data.mlssoccer_player_stats` (
+  ingested_at TIMESTAMP NOT NULL,
+  season INT64 NOT NULL,
+  entity_id STRING,
+  payload STRING
+)
+PARTITION BY DATE(ingested_at)
+CLUSTER BY season, entity_id
+OPTIONS (
+  description = 'MLS per-player season stats from stats-api.mlssoccer.com'
+);
+
+CREATE TABLE IF NOT EXISTS `mls_data.mlssoccer_team_game_stats` (
+  ingested_at TIMESTAMP NOT NULL,
+  season INT64 NOT NULL,
+  entity_id STRING,
+  payload STRING
+)
+PARTITION BY DATE(ingested_at)
+CLUSTER BY season, entity_id
+OPTIONS (
+  description = 'MLS per-club per-match stats from stats-api.mlssoccer.com (entity_id = match_id_club_id)'
+);
+
+CREATE TABLE IF NOT EXISTS `mls_data.mlssoccer_player_game_stats` (
+  ingested_at TIMESTAMP NOT NULL,
+  season INT64 NOT NULL,
+  entity_id STRING,
+  payload STRING
+)
+PARTITION BY DATE(ingested_at)
+CLUSTER BY season, entity_id
+OPTIONS (
+  description = 'MLS per-player per-match stats from stats-api.mlssoccer.com (entity_id = match_id_player_id)'
+);

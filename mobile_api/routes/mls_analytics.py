@@ -10,6 +10,15 @@ from google.cloud import bigquery
 
 from bq import get_bq_client
 from ingest.mls.ingest import ingest_yesterday_refresh, run_full_ingestion
+from ingest.mls.mls_website_ingest import (
+    ingest_schedule,
+    ingest_team_stats,
+    ingest_player_stats,
+    ingest_team_game_stats,
+    ingest_player_game_stats,
+    run_website_ingestion,
+    run_website_backfill,
+)
 
 router = APIRouter(tags=["MLS"])
 
@@ -49,6 +58,79 @@ def ingest_mls_full(current_season: int = Query(default_factory=_season_default)
 @router.post("/ingest/mls/yesterday-refresh")
 def ingest_mls_yesterday(current_season: int = Query(default_factory=_season_default)):
     return ingest_yesterday_refresh(current_season=current_season)
+
+
+# ------------------------------------------------------------------
+# mlssoccer.com scraper ingest endpoints
+# ------------------------------------------------------------------
+
+@router.post("/ingest/mls/website/schedule")
+def ingest_mls_website_schedule(
+    season: int = Query(default_factory=_season_default),
+    dry_run: bool = False,
+):
+    """Fetch the MLS match schedule from stats-api.mlssoccer.com and write to BigQuery."""
+    return ingest_schedule(season=season, dry_run=dry_run)
+
+
+@router.post("/ingest/mls/website/team-stats")
+def ingest_mls_website_team_stats(
+    season: int = Query(default_factory=_season_default),
+    dry_run: bool = False,
+):
+    """Fetch per-club season stats from stats-api.mlssoccer.com and write to BigQuery."""
+    return ingest_team_stats(season=season, dry_run=dry_run)
+
+
+@router.post("/ingest/mls/website/player-stats")
+def ingest_mls_website_player_stats(
+    season: int = Query(default_factory=_season_default),
+    dry_run: bool = False,
+):
+    """Fetch per-player season stats from stats-api.mlssoccer.com and write to BigQuery."""
+    return ingest_player_stats(season=season, dry_run=dry_run)
+
+
+@router.post("/ingest/mls/website/team-game-stats")
+def ingest_mls_website_team_game_stats(
+    season: int = Query(default_factory=_season_default),
+    dry_run: bool = False,
+):
+    """Fetch per-club per-match stats from stats-api.mlssoccer.com and write to BigQuery."""
+    return ingest_team_game_stats(season=season, dry_run=dry_run)
+
+
+@router.post("/ingest/mls/website/player-game-stats")
+def ingest_mls_website_player_game_stats(
+    season: int = Query(default_factory=_season_default),
+    dry_run: bool = False,
+):
+    """Fetch per-player per-match stats from stats-api.mlssoccer.com and write to BigQuery."""
+    return ingest_player_game_stats(season=season, dry_run=dry_run)
+
+
+@router.post("/ingest/mls/website/all")
+def ingest_mls_website_all(
+    season: int = Query(default_factory=_season_default),
+    dry_run: bool = False,
+):
+    """Run all five mlssoccer.com ingests (schedule, team/player season stats, team/player game stats) in one call."""
+    return run_website_ingestion(season=season, dry_run=dry_run)
+
+
+@router.post("/ingest/mls/website/backfill")
+def ingest_mls_website_backfill(
+    start_season: int = Query(default=2024),
+    end_season: int = Query(default=2026),
+    dry_run: bool = False,
+):
+    """
+    Backfill all five mlssoccer.com feeds for a range of seasons.
+
+    Defaults to 2024–2026 (covering last year, the transition, and the current 2026 season).
+    Pass start_season and end_season to override.
+    """
+    return run_website_backfill(start_season=start_season, end_season=end_season, dry_run=dry_run)
 
 
 @router.get("/mls/moneylines")

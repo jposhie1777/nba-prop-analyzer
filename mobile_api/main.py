@@ -88,6 +88,7 @@ from routes.soccer_analytics import router as soccer_analytics_router
 from ingest.epl.ingest import ingest_yesterday_refresh as ingest_epl_yesterday_refresh
 from ingest.laliga.ingest import ingest_yesterday_refresh as ingest_laliga_yesterday_refresh
 from ingest.mls.ingest import ingest_yesterday_refresh as ingest_mls_yesterday_refresh
+from ingest.mls.mls_website_ingest import run_website_ingestion as ingest_mls_website_daily
 from ingest.sheets.sync_soccer_odds_to_bq import sync_soccer_odds_to_bq
 
 # ==================================================
@@ -591,6 +592,46 @@ async def startup():
 
         asyncio.create_task(mls_yesterday_refresh_loop())
         print("[STARTUP] -> MLS daily yesterday refresh loop started")
+
+        # -----------------------------
+        # DAILY: MLS website (mlssoccer.com) season refresh (runs at 7:05 AM ET)
+        # Refreshes schedule, season stats, and per-game stats for current season.
+        # -----------------------------
+        async def mls_website_daily_refresh_loop():
+            print("[MLS_WEBSITE] Daily refresh loop started")
+            print("[MLS_WEBSITE] Scheduled to run at 07:05 AM ET every day")
+
+            while True:
+                try:
+                    now = datetime.now(NY_TZ)
+                    next_run = now.replace(hour=7, minute=5, second=0, microsecond=0)
+                    if now >= next_run:
+                        next_run = next_run + timedelta(days=1)
+
+                    wait_seconds = (next_run - now).total_seconds()
+                    print(
+                        "[MLS_WEBSITE] Next run:"
+                        f" {next_run.strftime('%Y-%m-%d %I:%M %p ET')}"
+                        f" ({wait_seconds/3600:.1f} hours)"
+                    )
+                    await asyncio.sleep(wait_seconds)
+
+                    season = datetime.now(NY_TZ).year
+                    print(
+                        "\n[MLS_WEBSITE] ======== DAILY SEASON REFRESH @"
+                        f" {datetime.now(NY_TZ).strftime('%I:%M %p ET')}"
+                        f" season={season} ========"
+                    )
+                    result = await asyncio.to_thread(ingest_mls_website_daily, season)
+                    print(f"[MLS_WEBSITE] Result: {result}")
+                    print("[MLS_WEBSITE] Daily refresh complete\n")
+
+                except Exception as e:
+                    print(f"[MLS_WEBSITE] ERROR in daily loop: {e}")
+                    await asyncio.sleep(3600)
+
+        asyncio.create_task(mls_website_daily_refresh_loop())
+        print("[STARTUP] -> MLS website daily refresh loop started")
 
         # -----------------------------
         # HOURLY: Pre-game Game Odds ingest (runs every hour until games start)

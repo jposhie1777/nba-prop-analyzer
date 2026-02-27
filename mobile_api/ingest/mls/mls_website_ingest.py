@@ -410,3 +410,81 @@ def run_website_backfill(
         )
 
     return results
+
+
+# ---------------------------------------------------------------------------
+# CLI entry-point  (used for backfill and ad-hoc runs)
+#
+# Examples
+# --------
+#   # Dry-run backfill 2024–2026, prints counts without writing
+#   python -m mobile_api.ingest.mls.mls_website_ingest --mode backfill --start-season 2024 --end-season 2026 --dry-run
+#
+#   # Live backfill 2024–2026
+#   python -m mobile_api.ingest.mls.mls_website_ingest --mode backfill --start-season 2024 --end-season 2026
+#
+#   # Refresh current season only
+#   python -m mobile_api.ingest.mls.mls_website_ingest --mode season --season 2026
+# ---------------------------------------------------------------------------
+
+import argparse as _argparse
+
+
+def _cli_main() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+    )
+
+    parser = _argparse.ArgumentParser(
+        description="MLS mlssoccer.com ingest — backfill or single-season run"
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["backfill", "season"],
+        default="backfill",
+        help="'backfill' iterates a season range; 'season' runs a single season (default: backfill)",
+    )
+    parser.add_argument(
+        "--start-season",
+        type=int,
+        default=2024,
+        help="First season to backfill (backfill mode, default: 2024)",
+    )
+    parser.add_argument(
+        "--end-season",
+        type=int,
+        default=2026,
+        help="Last season to backfill (backfill mode, default: 2026)",
+    )
+    parser.add_argument(
+        "--season",
+        type=int,
+        default=None,
+        help="Season year for single-season mode (default: current year)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Fetch data but do NOT write to BigQuery",
+    )
+
+    args = parser.parse_args()
+
+    if args.mode == "backfill":
+        result = run_website_backfill(
+            start_season=args.start_season,
+            end_season=args.end_season,
+            dry_run=args.dry_run,
+        )
+        print(json.dumps(result, indent=2, default=str))
+    else:
+        result = run_website_ingestion(
+            season=args.season,
+            dry_run=args.dry_run,
+        )
+        print(json.dumps(result, indent=2, default=str))
+
+
+if __name__ == "__main__":
+    _cli_main()

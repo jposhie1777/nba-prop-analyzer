@@ -56,6 +56,7 @@ latest_tournaments AS (
 results_in_scope AS (
   SELECT
     r.player_id,
+    r.player_display_name,
     COALESCE(t.start_date, r.tournament_start_date)                       AS start_date,
     r.position,
     r.position_numeric,
@@ -80,6 +81,7 @@ ranked AS (
 form AS (
   SELECT
     player_id,
+    ANY_VALUE(player_display_name)                       AS player_display_name,
     COUNT(*)                                             AS form_starts,
     ROUND(AVG(finish_value),                         2) AS avg_finish,
     ROUND(AVG(IF(position_numeric <= 10, 1.0, 0.0)), 3) AS top10_rate,
@@ -100,6 +102,8 @@ placement AS (
 )
 SELECT
   f.player_id,
+  f.player_display_name,
+  LOWER(TRIM(f.player_display_name))                   AS player_display_name_norm,
   f.form_starts,
   f.avg_finish,
   f.top10_rate,
@@ -119,7 +123,9 @@ LEFT JOIN placement p USING (player_id);
 
 -- ─── Pairings + analytics (single-query API source) ──────────────────────────
 -- LEFT JOINs v_pairings_latest with v_player_stats.
--- SAFE_CAST handles the STRING player_id in pairings → INT64 in stats.
+-- pairings.player_id = PGA Tour GraphQL ID (STRING)
+-- tournament_results.player_id = BallDontLie ID (INT64)  ← different namespaces
+-- So we join on normalised display name instead.
 -- Queried by: pga/analytics/pairings endpoint (fetch_pairings_analytics)
 CREATE OR REPLACE VIEW `pga_data.v_pairings_analytics` AS
 SELECT
@@ -140,7 +146,7 @@ SELECT
   p.world_rank,
   p.amateur,
   p.run_ts,
-  SAFE_CAST(p.player_id AS INT64) AS player_id_int,
+  s.player_id                      AS bdl_player_id,
   s.form_score,
   s.form_starts,
   s.avg_finish,
@@ -153,7 +159,7 @@ SELECT
   s.top20_prob
 FROM `pga_data.v_pairings_latest`  p
 LEFT JOIN `pga_data.v_player_stats` s
-       ON SAFE_CAST(p.player_id AS INT64) = s.player_id;
+       ON LOWER(TRIM(p.player_display_name)) = s.player_display_name_norm;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 

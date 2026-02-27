@@ -11,7 +11,7 @@ Round publication schedule
   Friday           R2 in play  – safety re-check R2 at 8 am
                    R3 tee times published after R2 ends (Friday evening)
   Saturday         R4 tee times published after R3 ends (Saturday evening)
-  Sunday           No pairing activity — not scheduled
+  Sunday           R4 in play  – morning safety re-check R4 at 5 am
   Monday/Tuesday   No tournament activity — job exits immediately
 
 Cloud Scheduler schedules (all America/New_York)
@@ -20,6 +20,7 @@ Cloud Scheduler schedules (all America/New_York)
   Thu  midnight + 8 am             : 0 0,8 * * 4   (catches late Wed publications)
   Fri  8 am          safety check  : 0 8 * * 5
   Fri/Sat  6 pm – 11 pm  hourly    : 0 18-23 * * 5,6
+  Thu–Sun  5 am      morning check : 0 5 * * 0,4,5,6
 
 Required env vars
 -----------------
@@ -55,11 +56,10 @@ ET = ZoneInfo("America/New_York")
 # Rounds to check per day-of-week  (ISO weekday: 1=Mon … 7=Sun)
 ROUNDS_BY_DOW: dict[int, list[int]] = {
     3: [1, 2],   # Wednesday  — R1 + R2 publication day (5pm–midnight ET)
-    4: [1],      # Thursday   — R1 safety refresh (midnight + 8am)
-    5: [2, 3],   # Friday     — R2 safety refresh (8am) + R3 check (evening)
-    6: [4],      # Saturday   — R4 published after R3 ends (evening)
-    # Sunday intentionally omitted — R4 pairings are for Mon play-offs only
-    # and are rarely published; no scheduler trigger on Sunday.
+    4: [1],      # Thursday   — R1 safety refresh (midnight + 8am + 5am)
+    5: [2, 3],   # Friday     — R2 safety refresh (5am + 8am) + R3 check (evening)
+    6: [4],      # Saturday   — R4 published after R3 ends (evening + 5am)
+    7: [4],      # Sunday     — R4 morning safety check (5am)
 }
 
 

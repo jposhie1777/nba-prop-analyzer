@@ -42,16 +42,19 @@ SCHED_WED="pga-pairings-wednesday"
 SCHED_THU="pga-pairings-thursday"
 SCHED_FRI="pga-pairings-friday"
 SCHED_EVE="pga-pairings-evening"
+SCHED_5AM="pga-pairings-5am"
 
 # Cron expressions (America/New_York)
 #   Wed: hourly 5pm–11pm          R1+R2 publication window
 #   Thu: midnight + 8am           midnight catches late-Wed publications; 8am safety
 #   Fri: 8am only                 R2 safety refresh
 #   Fri+Sat: hourly 6pm–11pm      R3 published Fri eve; R4 published Sat eve
+#   Thu–Sun: 5am                  morning safety check for each active round
 CRON_WED="0 17-23 * * 3"
 CRON_THU="0 0,8 * * 4"
 CRON_FRI="0 8 * * 5"
 CRON_EVE="0 18-23 * * 5,6"
+CRON_5AM="0 5 * * 0,4,5,6"
 
 # ── Argument parsing ─────────────────────────────────────────────────────────
 usage() {
@@ -78,6 +81,7 @@ Scheduler name overrides:
   --sched-thu  <NAME>      (default: ${SCHED_THU})
   --sched-fri  <NAME>      (default: ${SCHED_FRI})
   --sched-eve  <NAME>      Fri+Sat evening (default: ${SCHED_EVE})
+  --sched-5am  <NAME>      Thu–Sun 5am morning check (default: ${SCHED_5AM})
 EOF
 }
 
@@ -99,6 +103,7 @@ while [[ $# -gt 0 ]]; do
     --sched-thu)  SCHED_THU="$2";      shift 2 ;;
     --sched-fri)  SCHED_FRI="$2";      shift 2 ;;
     --sched-eve)  SCHED_EVE="$2";      shift 2 ;;
+    --sched-5am)  SCHED_5AM="$2";      shift 2 ;;
     -h|--help)    usage; exit 0 ;;
     *) echo "Unknown argument: $1"; usage; exit 1 ;;
   esac
@@ -159,6 +164,18 @@ echo "==> Granting IAM roles (best-effort)"
 bind_role "roles/run.invoker"
 bind_role "roles/bigquery.dataEditor"
 bind_role "roles/bigquery.jobUser"
+
+# Cloud Scheduler fires scheduled jobs by minting an OAuth token AS the SA.
+# Without this, the scheduler silently fails (code=-1) even though the SA has
+# run.invoker. The Cloud Scheduler service agent needs serviceAccountTokenCreator
+# on the SA to impersonate it when making scheduled HTTP requests.
+echo "==> Granting Cloud Scheduler service agent token creator on ${SA_EMAIL}"
+PROJECT_NUMBER=$(gcloud projects describe "${PROJECT}" --format="value(projectNumber)")
+gcloud iam service-accounts add-iam-policy-binding "${SA_EMAIL}" \
+  --member="serviceAccount:service-${PROJECT_NUMBER}@gcp-sa-cloudscheduler.iam.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountTokenCreator" \
+  --project "${PROJECT}" >/dev/null 2>&1 \
+|| echo "==> WARNING: could not grant Cloud Scheduler token creator (may already exist)"
 
 # ── Cloud Run Job ────────────────────────────────────────────────────────────
 echo "==> Deploying Cloud Run Job: ${JOB_NAME}"
@@ -223,6 +240,9 @@ upsert_scheduler "${SCHED_FRI}" "${CRON_FRI}" \
 upsert_scheduler "${SCHED_EVE}" "${CRON_EVE}" \
   "PGA pairings - Fri+Sat evening R3/R4 publish window (hourly 6pm-11pm ET)"
 
+upsert_scheduler "${SCHED_5AM}" "${CRON_5AM}" \
+  "PGA pairings - Thu-Sun morning safety check (5am ET)"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "==> Deployment complete"
@@ -236,6 +256,7 @@ echo "      ${SCHED_WED}  : ${CRON_WED}      R1+R2, hourly Wed 5pm-11pm"
 echo "      ${SCHED_THU}  : ${CRON_THU}       R1 — midnight + 8am Thu"
 echo "      ${SCHED_FRI}  : ${CRON_FRI}              R2 safety, Fri 8am"
 echo "      ${SCHED_EVE}  : ${CRON_EVE}  R3/R4, hourly Fri+Sat 6pm-11pm"
+echo "      ${SCHED_5AM}      : ${CRON_5AM}        morning safety, Thu-Sun 5am"
 echo ""
 echo "    To update the tournament ID next week:"
 echo "      ./deploy_pga_pairings.sh --project ${PROJECT} --region ${REGION} \\"

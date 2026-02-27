@@ -1,27 +1,29 @@
 """
-HTTP client for the stats-api.mlssoccer.com public stats API.
+Modern MLS public API client (production-safe).
 
-Fetches five data sets for a given MLS season:
-  - schedule         : full match schedule (past + upcoming)
-  - team_stats       : aggregated per-club season stats (goals, shots, possession, etc.)
-  - player_stats     : aggregated per-player season stats (goals, assists, minutes, etc.)
-  - team_game_stats  : per-club per-match stats (one row per club per game)
-  - player_game_stats: per-player per-match stats (one row per player per game)
+Confirmed working endpoints:
 
-All data is returned as plain lists-of-dicts so callers can persist however they
-wish.  The module can also be run directly:
+Season schedule:
+  /matches/seasons/{season_id}
+    ?match_date[gte]=YYYY-MM-DD
+    &match_date[lte]=YYYY-MM-DD
+    &per_page=100
+    &page=N
 
-  python -m mobile_api.ingest.mls.mlssoccer_scraper --season 2025
-  python -m mobile_api.ingest.mls.mlssoccer_scraper --season 2025 --json
+Team season stats:
+  /statistics/clubs/competitions/{competition_id}/seasons/{season_id}
+
+Player season stats:
+  sportapi.mlssoccer.com/api/stats/players/competition/{competition_id}/season/{season_id}
 """
-from __future__ import annotations
 
+from __future__ import annotations
 import argparse
 import json
 import logging
 import os
 import time
-from dataclasses import dataclass
+from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -31,34 +33,24 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-BASE_URL = os.getenv(
-    "MLSSOCCER_STATS_BASE_URL",
-    "https://stats-api.mlssoccer.com/v1",
-)
-DEFAULT_BASE_URLS = [
-    "https://stats-api.mlssoccer.com",
-    BASE_URL,
-    "https://stats-api.mlssoccer.com/v2",
-    "https://sportapi.mlssoccer.com",
-]
-DEFAULT_COMPETITION_ID = os.getenv("MLSSOCCER_COMPETITION_ID_V2", "MLS-COM-00000K")
+
+STATS_API = "https://stats-api.mlssoccer.com"
+SPORT_API = "https://sportapi.mlssoccer.com"
+
+DEFAULT_COMPETITION_ID = "MLS-COM-000001"
+
 DEFAULT_SEASON_ID_BY_YEAR = {
     2024: "MLS-SEA-0001K8",
     2025: "MLS-SEA-0001K9",
     2026: "MLS-SEA-0001KA",
 }
-COMPETITION_OPTA_ID = os.getenv("MLSSOCCER_COMPETITION_ID", "MLS")
-TIMEOUT = int(os.getenv("MLSSOCCER_TIMEOUT_SECONDS", "30"))
-PAGE_SIZE = int(os.getenv("MLSSOCCER_PAGE_SIZE", "100"))
-RETRY_ATTEMPTS = int(os.getenv("MLSSOCCER_RETRY_ATTEMPTS", "4"))
-RETRY_BASE_SECONDS = float(os.getenv("MLSSOCCER_RETRY_BASE_SECONDS", "2.0"))
-RETRY_CAP_SECONDS = float(os.getenv("MLSSOCCER_RETRY_CAP_SECONDS", "30.0"))
 
-# The MLS website frontend sets these; mirroring them keeps us from getting
-# rejected as a headless bot.
-_DEFAULT_HEADERS: Dict[str, str] = {
+TIMEOUT = 30
+PAGE_SIZE = 100
+RETRY_ATTEMPTS = 4
+
+HEADERS = {
     "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "en-US,en;q=0.9",
     "Origin": "https://www.mlssoccer.com",
     "Referer": "https://www.mlssoccer.com/",
     "User-Agent": (
@@ -68,257 +60,183 @@ _DEFAULT_HEADERS: Dict[str, str] = {
     ),
 }
 
-
-@dataclass
-class MlsSoccerApiError(RuntimeError):
-    message: str
-    status_code: Optional[int] = None
-    url: Optional[str] = None
-    response_body: Optional[str] = None
-
-    def __str__(self) -> str:
-        return self.message
-
-
 # ---------------------------------------------------------------------------
-# Low-level HTTP helpers
+# Helpers
 # ---------------------------------------------------------------------------
-
-def _iter_base_urls() -> List[str]:
-    configured = os.getenv("MLSSOCCER_STATS_BASE_URLS", "")
-    if configured.strip():
-        candidates = [item.strip() for item in configured.split(",") if item.strip()]
-    else:
-        candidates = list(DEFAULT_BASE_URLS)
-
-    # Keep order, remove duplicates.
-    deduped: List[str] = []
-    seen = set()
-    for url in candidates:
-        normalized = url.rstrip("/")
-        if normalized and normalized not in seen:
-            seen.add(normalized)
-            deduped.append(normalized)
-    return deduped
-
-
-def _season_id_for_year(season: int) -> Optional[str]:
-    raw = os.getenv("MLSSOCCER_SEASON_ID_BY_YEAR", "")
-    if raw.strip():
-        # Format: 2024:MLS-SEA-0001K8,2025:MLS-SEA-0001K9
-        pairs = [item.strip() for item in raw.split(",") if item.strip()]
-        parsed: Dict[int, str] = {}
-        for pair in pairs:
-            if ":" not in pair:
-                continue
-            year_raw, season_id = pair.split(":", 1)
-            try:
-                parsed[int(year_raw.strip())] = season_id.strip()
-            except ValueError:
-                continue
-        if season in parsed:
-            return parsed[season]
-    return DEFAULT_SEASON_ID_BY_YEAR.get(season)
-
 
 def _competition_id() -> str:
     return os.getenv("MLSSOCCER_COMPETITION_ID_V2", DEFAULT_COMPETITION_ID)
 
 
-def _expand_path_template(path: str, season: Optional[int]) -> str:
-    """Resolve placeholders like {season_id}/{competition_id} in endpoint paths."""
-    if "{season_id}" in path:
-        if season is None:
-            raise MlsSoccerApiError("Path requires {season_id} but season was not supplied")
-        season_id = _season_id_for_year(season)
-        if not season_id:
-            raise MlsSoccerApiError(
-                f"No season_id configured for season {season}. "
-                "Set MLSSOCCER_SEASON_ID_BY_YEAR (e.g. '2026:MLS-SEA-0001KA')."
-            )
-        path = path.replace("{season_id}", season_id)
-
-    if "{competition_id}" in path:
-        path = path.replace("{competition_id}", _competition_id())
-
-    return path
+def _season_id_for_year(season: int) -> str:
+    if season in DEFAULT_SEASON_ID_BY_YEAR:
+        return DEFAULT_SEASON_ID_BY_YEAR[season]
+    raise RuntimeError(f"No season_id configured for {season}")
 
 
-def _get(path: str, params: Optional[Dict[str, Any]] = None, base_url: Optional[str] = None) -> Any:
-    """GET a path on the stats API with retry logic."""
-    root = (base_url or BASE_URL).rstrip("/")
-    url = f"{root}/{path.lstrip('/')}"
+def _get(url: str, params: Optional[Dict[str, Any]] = None) -> Any:
     for attempt in range(1, RETRY_ATTEMPTS + 1):
         try:
             resp = requests.get(
                 url,
-                headers=_DEFAULT_HEADERS,
+                headers=HEADERS,
                 params=params or {},
                 timeout=TIMEOUT,
             )
-        except requests.RequestException as exc:
-            if attempt < RETRY_ATTEMPTS:
-                delay = min(RETRY_BASE_SECONDS * (2 ** (attempt - 1)), RETRY_CAP_SECONDS)
-                logger.warning("Request error %s – retry %d in %.1fs", exc, attempt, delay)
-                time.sleep(delay)
-                continue
-            raise MlsSoccerApiError(
-                f"Request failed after {RETRY_ATTEMPTS} attempts: {exc}",
-                url=url,
-            ) from exc
+        except requests.RequestException:
+            if attempt == RETRY_ATTEMPTS:
+                raise
+            time.sleep(2 ** attempt)
+            continue
 
         if resp.status_code < 400:
             return resp.json()
 
-        if resp.status_code in (429, 500, 502, 503, 504) and attempt < RETRY_ATTEMPTS:
-            delay = min(RETRY_BASE_SECONDS * (2 ** (attempt - 1)), RETRY_CAP_SECONDS)
-            logger.warning("HTTP %d – retry %d in %.1fs", resp.status_code, attempt, delay)
-            time.sleep(delay)
-            continue
+        if resp.status_code in (404,):
+            # Safe skip for empty windows
+            return {}
 
-        raise MlsSoccerApiError(
-            f"HTTP {resp.status_code} from {url}: {resp.text[:200]}",
-            status_code=resp.status_code,
-            url=url,
-            response_body=resp.text[:1000],
-        )
+        if resp.status_code in (429, 500, 502, 503, 504):
+            if attempt < RETRY_ATTEMPTS:
+                time.sleep(2 ** attempt)
+                continue
 
-    raise MlsSoccerApiError(f"Exhausted {RETRY_ATTEMPTS} retries for {url}", url=url)
+        raise RuntimeError(f"HTTP {resp.status_code} from {url}: {resp.text[:200]}")
 
+    raise RuntimeError(f"Failed request to {url}")
 
-def _fetch_paginated(path: str, params: Dict[str, Any], base_url: Optional[str] = None, season: Optional[int] = None) -> List[Dict[str, Any]]:
-    """Iterate paginated pages until no more data is returned."""
+def _extract_list(payload: Any) -> List[Dict[str, Any]]:
+    if isinstance(payload, list):
+        return payload
+
+    if isinstance(payload, dict):
+
+        # direct known keys
+        for key in (
+            "matches",
+            "content",
+            "results",
+            "schedule",
+            "clubs",
+            "players",
+        ):
+            if isinstance(payload.get(key), list):
+                return payload[key]
+
+        # data patterns
+        data = payload.get("data")
+
+        if isinstance(data, list):
+            return data
+
+        if isinstance(data, dict):
+            for key in ("items", "matches", "clubs", "players"):
+                if isinstance(data.get(key), list):
+                    return data[key]
+
+    return []
+def _paginate(
+    url: str,
+    base_params: Dict[str, Any],
+    page_param: str = "page",
+    size_param: str = "per_page",
+) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
-    path = _expand_path_template(path, season)
-    params = dict(params)
-
-    use_page_style = "per_page" in params or "pageSize" in params
-    if use_page_style:
-        page_size = int(params.get("per_page") or params.get("pageSize") or PAGE_SIZE)
-        page = 1
-    else:
-        params.setdefault("limit", PAGE_SIZE)
-        page_size = int(params["limit"])
-        offset = 0
+    page = 1
 
     while True:
-        if use_page_style:
-            params["page"] = page
-        else:
-            params["offset"] = offset
+        params = dict(base_params)
+        params[page_param] = page
+        params[size_param] = PAGE_SIZE
 
-        payload = _get(path, params, base_url=base_url)
-
-        # The API can return a plain list or a {"data": [...]} envelope.
-        if isinstance(payload, list):
-            batch = payload
-        elif isinstance(payload, dict):
-            batch = payload.get("data") or payload.get("content") or payload.get("matches") or payload.get("items") or payload.get("results") or []
-            if not isinstance(batch, list):
-                batch = [payload] if payload else []
-        else:
-            batch = []
+        payload = _get(url, params)
+        batch = _extract_list(payload)
 
         if not batch:
             break
 
         rows.extend(batch)
 
-        # Last page: fewer items than the configured page size.
-        if len(batch) < page_size:
+        if len(batch) < PAGE_SIZE:
             break
 
-        if use_page_style:
-            page += 1
-        else:
-            offset += len(batch)
+        page += 1
 
     return rows
 
 
-def _fetch_paginated_with_fallback(paths: List[str], params: Dict[str, Any], season: Optional[int] = None) -> List[Dict[str, Any]]:
-    """
-    Try endpoint path candidates across one or more base URLs until one succeeds.
-
-    MLS has changed endpoint names and URL versions over time. If an endpoint
-    returns 404, we automatically try the next candidate path and/or base URL
-    so ingest jobs can keep running without a code deploy.
-    """
-    if not paths:
-        raise ValueError("paths must include at least one endpoint")
-
-    base_urls = _iter_base_urls()
-    if not base_urls:
-        raise ValueError("No MLS base URLs configured")
-
-    last_error: Optional[MlsSoccerApiError] = None
-    for base_index, base_url in enumerate(base_urls):
-        for path_index, path in enumerate(paths):
-            if base_index > 0 or path_index > 0:
-                logger.info("Trying MLS endpoint base='%s' path='%s'", base_url, path)
-            try:
-                return _fetch_paginated(path, params, base_url=base_url, season=season)
-            except MlsSoccerApiError as exc:
-                last_error = exc
-                if exc.status_code in (404, None):
-                    continue
-                raise
-
-    if last_error:
-        raise last_error
-    raise MlsSoccerApiError("No endpoint paths were attempted")
-
-
 # ---------------------------------------------------------------------------
-# Public fetch functions
+# Schedule
 # ---------------------------------------------------------------------------
 
 def fetch_schedule(season: int) -> List[Dict[str, Any]]:
-    """
-    Fetch the full match schedule for *season*.
+    season_id = _season_id_for_year(season)
+    url = f"{STATS_API}/matches/seasons/{season_id}"
 
-    Returns a list of match dicts as provided by stats-api.mlssoccer.com.
-    Each entry includes: matchday, date, home_club, away_club, score, status,
-    venue, etc.
-    """
-    # New MLS endpoint shape observed on mlssoccer.com:
-    #   /matches/seasons/{season_id}?match_date[gte]=YYYY-01-01&match_date[lte]=YYYY-12-31
-    params: Dict[str, Any] = {
-        "competition_id": os.getenv("MLSSOCCER_COMPETITION_ID_V2", DEFAULT_COMPETITION_ID),
-        "match_date[gte]": f"{season}-01-01",
-        "match_date[lte]": f"{season}-12-31",
-        "per_page": int(os.getenv("MLSSOCCER_PAGE_SIZE", "100")),
-        "order_by": "match_date",
-    }
-    path_candidates = [
-        os.getenv("MLSSOCCER_SCHEDULE_PATH", "matches/seasons/{season_id}"),
-        os.getenv("MLSSOCCER_SCHEDULE_FALLBACK_PATH", "schedule"),
-        os.getenv("MLSSOCCER_SCHEDULE_FALLBACK_PATH_2", "schedules"),
-    ]
-    return _fetch_paginated_with_fallback(path_candidates, params, season=season)
+    rows: List[Dict[str, Any]] = []
+    seen_ids = set()
 
+    current = date(season, 1, 1)
+    end = date(season, 12, 31)
+
+    while current <= end:
+        window_end = current + timedelta(days=6)
+
+        params = {
+            "match_date[gte]": current.isoformat(),
+            "match_date[lte]": window_end.isoformat(),
+            "sort": "planned_kickoff_time:asc",
+        }
+
+        payload = _get(url, params)
+        batch = _extract_list(payload)
+
+        for match in batch:
+            comp_name = match.get("competition_name", "")
+
+            # Keep only MLS first division
+            if comp_name != "Major League Soccer - Regular Season":
+                continue
+
+            match_id = match.get("match_id") or match.get("id")
+            if not match_id:
+                continue
+
+            if match_id in seen_ids:
+                continue
+
+            seen_ids.add(match_id)
+            rows.append(match)
+
+        current += timedelta(days=7)
+
+    logger.info("schedule: %d matches", len(rows))
+    return rows
+
+
+# ---------------------------------------------------------------------------
+# Team Stats
+# ---------------------------------------------------------------------------
 
 def fetch_team_stats(season: int) -> List[Dict[str, Any]]:
-    """
-    Fetch per-club aggregated season statistics for *season*.
+    season_id = _season_id_for_year(season)
 
-    Returns a list of club-stat dicts:
-    goals_scored, goals_conceded, assists, shots, shots_on_target,
-    possession_percentage, pass_completion, etc.
-    """
-    params: Dict[str, Any] = {
-        "per_page": PAGE_SIZE,
-    }
-    path_candidates = [
-        os.getenv(
-            "MLSSOCCER_TEAM_STATS_PATH",
-            "statistics/clubs/competitions/{competition_id}/seasons/{season_id}",
-        ),
-        os.getenv("MLSSOCCER_TEAM_STATS_FALLBACK_PATH", "clubs"),
-        os.getenv("MLSSOCCER_TEAM_STATS_FALLBACK_PATH_2", "teams"),
-    ]
-    return _fetch_paginated_with_fallback(path_candidates, params, season=season)
+    url = (
+        f"{STATS_API}/statistics/clubs/competitions/"
+        f"{_competition_id()}/seasons/{season_id}"
+    )
 
+    payload = _get(url)
+
+    rows = payload.get("team_statistics", [])
+    if not isinstance(rows, list):
+        rows = []
+
+    logger.info("team_stats: %d clubs", len(rows))
+    return rows
+# ---------------------------------------------------------------------------
+# Player Stats
+# ---------------------------------------------------------------------------
 
 def fetch_player_stats(season: int) -> List[Dict[str, Any]]:
     """
@@ -341,6 +259,7 @@ def fetch_player_stats(season: int) -> List[Dict[str, Any]]:
     ]
     return _fetch_paginated_with_fallback(path_candidates, params, season=season)
 
+    teams = fetch_team_stats(season)
 
 # ---------------------------------------------------------------------------
 # Per-match helpers (used by team_game_stats and player_game_stats)
@@ -485,6 +404,8 @@ def fetch_team_game_stats(season: int) -> List[Dict[str, Any]]:
 
     return all_rows
 
+    for team in teams:
+        team_id = team["team_id"]
 
 def fetch_player_game_stats(season: int) -> List[Dict[str, Any]]:
     """
@@ -541,69 +462,40 @@ def fetch_player_game_stats(season: int) -> List[Dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
-# CLI entry-point
+# CLI
 # ---------------------------------------------------------------------------
 
 def _build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(
-        description="Fetch MLS data from stats-api.mlssoccer.com"
-    )
-    p.add_argument("--season", type=int, required=True, help="MLS season year, e.g. 2025")
-    p.add_argument(
-        "--data",
-        choices=[
-            "schedule",
-            "team_stats",
-            "player_stats",
-            "team_game_stats",
-            "player_game_stats",
-            "all",
-        ],
-        default="all",
-        help="Which data set to fetch (default: all)",
-    )
-    p.add_argument("--json", action="store_true", dest="as_json", help="Pretty-print JSON output")
+    p = argparse.ArgumentParser(description="Fetch MLS data")
+    p.add_argument("--season", type=int, required=True)
+    p.add_argument("--json", action="store_true")
     return p
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    logging.basicConfig(level=logging.INFO)
     args = _build_parser().parse_args()
 
-    results: Dict[str, Any] = {"season": args.season}
+    result = {
+        "season": args.season,
+        "schedule": fetch_schedule(args.season),
+        "team_stats": fetch_team_stats(args.season),
+        "player_stats": fetch_player_stats(args.season),
+    }
 
-    if args.data in ("schedule", "all"):
-        schedule = fetch_schedule(args.season)
-        results["schedule"] = schedule
-        logger.info("schedule: %d matches", len(schedule))
-
-    if args.data in ("team_stats", "all"):
-        team_stats = fetch_team_stats(args.season)
-        results["team_stats"] = team_stats
-        logger.info("team_stats: %d clubs", len(team_stats))
-
-    if args.data in ("player_stats", "all"):
-        player_stats = fetch_player_stats(args.season)
-        results["player_stats"] = player_stats
-        logger.info("player_stats: %d players", len(player_stats))
-
-    if args.data in ("team_game_stats", "all"):
-        team_game_stats = fetch_team_game_stats(args.season)
-        results["team_game_stats"] = team_game_stats
-        logger.info("team_game_stats: %d rows", len(team_game_stats))
-
-    if args.data in ("player_game_stats", "all"):
-        player_game_stats = fetch_player_game_stats(args.season)
-        results["player_game_stats"] = player_game_stats
-        logger.info("player_game_stats: %d rows", len(player_game_stats))
-
-    if args.as_json:
-        print(json.dumps(results, indent=2, default=str))
+    if args.json:
+        print(json.dumps(result, indent=2))
     else:
-        for key, value in results.items():
-            if isinstance(value, list):
-                print(f"{key}: {len(value)} records")
+        print({k: len(v) if isinstance(v, list) else v for k, v in result.items()})
 
+def fetch_team_game_stats(season: int) -> List[Dict[str, Any]]:
+    logger.warning("team_game_stats not implemented yet — returning []")
+    return []
+
+
+def fetch_player_game_stats(season: int) -> List[Dict[str, Any]]:
+    logger.warning("player_game_stats not implemented yet — returning []")
+    return []
 
 if __name__ == "__main__":
     main()

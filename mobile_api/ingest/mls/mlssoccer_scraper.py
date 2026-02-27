@@ -21,6 +21,7 @@ import json
 import logging
 import os
 import time
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -34,6 +35,11 @@ BASE_URL = os.getenv(
     "MLSSOCCER_STATS_BASE_URL",
     "https://stats-api.mlssoccer.com/v1",
 )
+DEFAULT_BASE_URLS = [
+    BASE_URL,
+    "https://stats-api.mlssoccer.com",
+    "https://stats-api.mlssoccer.com/v2",
+]
 COMPETITION_OPTA_ID = os.getenv("MLSSOCCER_COMPETITION_ID", "MLS")
 TIMEOUT = int(os.getenv("MLSSOCCER_TIMEOUT_SECONDS", "30"))
 PAGE_SIZE = int(os.getenv("MLSSOCCER_PAGE_SIZE", "100"))
@@ -56,17 +62,43 @@ _DEFAULT_HEADERS: Dict[str, str] = {
 }
 
 
+@dataclass
 class MlsSoccerApiError(RuntimeError):
-    pass
+    message: str
+    status_code: Optional[int] = None
+    url: Optional[str] = None
+    response_body: Optional[str] = None
+
+    def __str__(self) -> str:
+        return self.message
 
 
 # ---------------------------------------------------------------------------
 # Low-level HTTP helpers
 # ---------------------------------------------------------------------------
 
-def _get(path: str, params: Optional[Dict[str, Any]] = None) -> Any:
+def _iter_base_urls() -> List[str]:
+    configured = os.getenv("MLSSOCCER_STATS_BASE_URLS", "")
+    if configured.strip():
+        candidates = [item.strip() for item in configured.split(",") if item.strip()]
+    else:
+        candidates = list(DEFAULT_BASE_URLS)
+
+    # Keep order, remove duplicates.
+    deduped: List[str] = []
+    seen = set()
+    for url in candidates:
+        normalized = url.rstrip("/")
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            deduped.append(normalized)
+    return deduped
+
+
+def _get(path: str, params: Optional[Dict[str, Any]] = None, base_url: Optional[str] = None) -> Any:
     """GET a path on the stats API with retry logic."""
-    url = f"{BASE_URL}/{path.lstrip('/')}"
+    root = (base_url or BASE_URL).rstrip("/")
+    url = f"{root}/{path.lstrip('/')}"
     for attempt in range(1, RETRY_ATTEMPTS + 1):
         try:
             resp = requests.get(
@@ -81,7 +113,10 @@ def _get(path: str, params: Optional[Dict[str, Any]] = None) -> Any:
                 logger.warning("Request error %s – retry %d in %.1fs", exc, attempt, delay)
                 time.sleep(delay)
                 continue
-            raise MlsSoccerApiError(f"Request failed after {RETRY_ATTEMPTS} attempts: {exc}") from exc
+            raise MlsSoccerApiError(
+                f"Request failed after {RETRY_ATTEMPTS} attempts: {exc}",
+                url=url,
+            ) from exc
 
         if resp.status_code < 400:
             return resp.json()
@@ -93,13 +128,16 @@ def _get(path: str, params: Optional[Dict[str, Any]] = None) -> Any:
             continue
 
         raise MlsSoccerApiError(
-            f"HTTP {resp.status_code} from {url}: {resp.text[:200]}"
+            f"HTTP {resp.status_code} from {url}: {resp.text[:200]}",
+            status_code=resp.status_code,
+            url=url,
+            response_body=resp.text[:1000],
         )
 
-    raise MlsSoccerApiError(f"Exhausted {RETRY_ATTEMPTS} retries for {url}")
+    raise MlsSoccerApiError(f"Exhausted {RETRY_ATTEMPTS} retries for {url}", url=url)
 
 
-def _fetch_paginated(path: str, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _fetch_paginated(path: str, params: Dict[str, Any], base_url: Optional[str] = None) -> List[Dict[str, Any]]:
     """Iterate offset-based pages until no more data is returned."""
     rows: List[Dict[str, Any]] = []
     params = dict(params)
@@ -108,7 +146,7 @@ def _fetch_paginated(path: str, params: Dict[str, Any]) -> List[Dict[str, Any]]:
 
     while True:
         params["offset"] = offset
-        payload = _get(path, params)
+        payload = _get(path, params, base_url=base_url)
 
         # The API can return a plain list or a {"data": [...]} envelope.
         if isinstance(payload, list):
@@ -135,6 +173,39 @@ def _fetch_paginated(path: str, params: Dict[str, Any]) -> List[Dict[str, Any]]:
     return rows
 
 
+def _fetch_paginated_with_fallback(paths: List[str], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Try endpoint path candidates across one or more base URLs until one succeeds.
+
+    MLS has changed endpoint names and URL versions over time. If an endpoint
+    returns 404, we automatically try the next candidate path and/or base URL
+    so ingest jobs can keep running without a code deploy.
+    """
+    if not paths:
+        raise ValueError("paths must include at least one endpoint")
+
+    base_urls = _iter_base_urls()
+    if not base_urls:
+        raise ValueError("No MLS base URLs configured")
+
+    last_error: Optional[MlsSoccerApiError] = None
+    for base_index, base_url in enumerate(base_urls):
+        for path_index, path in enumerate(paths):
+            if base_index > 0 or path_index > 0:
+                logger.info("Trying MLS endpoint base='%s' path='%s'", base_url, path)
+            try:
+                return _fetch_paginated(path, params, base_url=base_url)
+            except MlsSoccerApiError as exc:
+                last_error = exc
+                if exc.status_code == 404:
+                    continue
+                raise
+
+    if last_error:
+        raise last_error
+    raise MlsSoccerApiError("No endpoint paths were attempted")
+
+
 # ---------------------------------------------------------------------------
 # Public fetch functions
 # ---------------------------------------------------------------------------
@@ -152,7 +223,11 @@ def fetch_schedule(season: int) -> List[Dict[str, Any]]:
         "season_opta_id": season,
         "order_by": "match_date",
     }
-    return _fetch_paginated("schedule", params)
+    path_candidates = [
+        os.getenv("MLSSOCCER_SCHEDULE_PATH", "schedule"),
+        os.getenv("MLSSOCCER_SCHEDULE_FALLBACK_PATH", "schedules"),
+    ]
+    return _fetch_paginated_with_fallback(path_candidates, params)
 
 
 def fetch_team_stats(season: int) -> List[Dict[str, Any]]:
@@ -168,7 +243,11 @@ def fetch_team_stats(season: int) -> List[Dict[str, Any]]:
         "season_opta_id": season,
         "order_by": "club_short_name",
     }
-    return _fetch_paginated("clubs", params)
+    path_candidates = [
+        os.getenv("MLSSOCCER_TEAM_STATS_PATH", "clubs"),
+        os.getenv("MLSSOCCER_TEAM_STATS_FALLBACK_PATH", "teams"),
+    ]
+    return _fetch_paginated_with_fallback(path_candidates, params)
 
 
 def fetch_player_stats(season: int) -> List[Dict[str, Any]]:
@@ -184,7 +263,11 @@ def fetch_player_stats(season: int) -> List[Dict[str, Any]]:
         "season_opta_id": season,
         "order_by": "player_last_name",
     }
-    return _fetch_paginated("players", params)
+    path_candidates = [
+        os.getenv("MLSSOCCER_PLAYER_STATS_PATH", "players"),
+        os.getenv("MLSSOCCER_PLAYER_STATS_FALLBACK_PATH", "athletes"),
+    ]
+    return _fetch_paginated_with_fallback(path_candidates, params)
 
 
 def fetch_team_game_stats(season: int) -> List[Dict[str, Any]]:
@@ -201,7 +284,11 @@ def fetch_team_game_stats(season: int) -> List[Dict[str, Any]]:
         "season_opta_id": season,
         "order_by": "match_date",
     }
-    return _fetch_paginated("stats/clubs", params)
+    path_candidates = [
+        os.getenv("MLSSOCCER_TEAM_GAME_STATS_PATH", "stats/clubs"),
+        os.getenv("MLSSOCCER_TEAM_GAME_STATS_FALLBACK_PATH", "match-stats/clubs"),
+    ]
+    return _fetch_paginated_with_fallback(path_candidates, params)
 
 
 def fetch_player_game_stats(season: int) -> List[Dict[str, Any]]:
@@ -218,7 +305,11 @@ def fetch_player_game_stats(season: int) -> List[Dict[str, Any]]:
         "season_opta_id": season,
         "order_by": "match_date",
     }
-    return _fetch_paginated("stats/players", params)
+    path_candidates = [
+        os.getenv("MLSSOCCER_PLAYER_GAME_STATS_PATH", "stats/players"),
+        os.getenv("MLSSOCCER_PLAYER_GAME_STATS_FALLBACK_PATH", "match-stats/players"),
+    ]
+    return _fetch_paginated_with_fallback(path_candidates, params)
 
 
 # ---------------------------------------------------------------------------

@@ -381,7 +381,7 @@ def _fetch_stats_for_match(
 # Team game stats (per-club per-match)
 # ---------------------------------------------------------------------------
 
-def fetch_team_game_stats(season: int) -> List[Dict[str, Any]]:
+def fetch_team_game_stats(season: int, only_date: Optional[date] = None) -> List[Dict[str, Any]]:
     """
     Fetch per-club per-match statistics for *season*.
 
@@ -389,17 +389,22 @@ def fetch_team_game_stats(season: int) -> List[Dict[str, Any]]:
     club statistics filtered to that match.  Each row is augmented with
     ``match_id`` and ``match_date`` so downstream consumers don't need
     to re-join against the schedule.
+
+    Parameters
+    ----------
+    only_date: If provided, only process matches whose match_date equals this date.
     """
     season_id = _season_id_for_year(season)
     comp_id = _competition_id()
 
     matches = fetch_schedule(season)
-
-    # DEBUG: inspect first match structure
-    if matches:
-        print("DEBUG SAMPLE MATCH:")
-
     completed = [m for m in matches if _is_match_completed(m)]
+    if only_date is not None:
+        only_str = only_date.isoformat()
+        completed = [
+            m for m in completed
+            if (m.get("match_date") or m.get("date") or m.get("matchDate") or "").startswith(only_str)
+        ]
     logger.info("team_game_stats: %d completed matches to process", len(completed))
 
     base_url = (
@@ -440,19 +445,29 @@ def fetch_team_game_stats(season: int) -> List[Dict[str, Any]]:
 # Player game stats (per-player per-match)
 # ---------------------------------------------------------------------------
 
-def fetch_player_game_stats(season: int) -> List[Dict[str, Any]]:
+def fetch_player_game_stats(season: int, only_date: Optional[date] = None) -> List[Dict[str, Any]]:
     """
     Fetch per-player per-match statistics for *season*.
 
     Iterates every completed match from the season schedule and requests
     player statistics filtered to that match.  Each row is augmented with
     ``match_id`` and ``match_date``.
+
+    Parameters
+    ----------
+    only_date: If provided, only process matches whose match_date equals this date.
     """
     season_id = _season_id_for_year(season)
     comp_id = _competition_id()
 
     matches = fetch_schedule(season)
     completed = [m for m in matches if _is_match_completed(m)]
+    if only_date is not None:
+        only_str = only_date.isoformat()
+        completed = [
+            m for m in completed
+            if (m.get("match_date") or m.get("date") or m.get("matchDate") or "").startswith(only_str)
+        ]
     logger.info("player_game_stats: %d completed matches to process", len(completed))
 
     base_url = (

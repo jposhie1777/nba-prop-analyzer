@@ -208,7 +208,37 @@ def create_views() -> None:
     print("All views created successfully.")
 
 
+def print_sql(project: str) -> None:
+    """Print the CREATE VIEW statements so they can be pasted into BigQuery console."""
+    separator = "\n" + "─" * 72 + "\n"
+    print(separator)
+    print("-- View 1 of 2: v_player_stats")
+    print(_sql_v_player_stats(project))
+    print(separator)
+    print("-- View 2 of 2: v_pairings_analytics")
+    print(_sql_v_pairings_analytics(project))
+    print(separator)
+    print(
+        "Paste each block into the BigQuery console and click Run.\n"
+        "Run v_player_stats first, then v_pairings_analytics."
+    )
+
+
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Create pga_data BigQuery views")
+    parser.add_argument(
+        "--print-sql",
+        metavar="PROJECT_ID",
+        help="Print the CREATE VIEW SQL for the given GCP project instead of executing it",
+    )
+    args = parser.parse_args()
+
+    if args.print_sql:
+        print_sql(args.print_sql)
+        sys.exit(0)
+
     try:
         create_views()
     except Exception as exc:

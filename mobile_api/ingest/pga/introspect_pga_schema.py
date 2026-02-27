@@ -4,11 +4,19 @@ Introspect the PGA Tour GraphQL schema to discover real query/field names.
 Run this to find the correct operation names before updating the scraper:
     python mobile_api/ingest/pga/introspect_pga_schema.py
 
+Modes
+-----
+  (default)   Tee-time query return types + Player type drill-down
+  --all       Print every top-level query field with args
+  --discover  Search for stat / leaderboard / scorecard / schedule / rank /
+              course / player / shot queries and drill into their return types
+
 Copy the output and share it so the scraper query can be fixed.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -192,13 +200,146 @@ def introspect_query_return_types() -> None:
         introspect_type(ret)
 
 
-if __name__ == "__main__":
-    print("Connecting to", ENDPOINT)
-    introspect_query_return_types()
+def _fetch_all_query_fields() -> list:
+    """Return the full list of top-level Query fields with args and return types."""
+    query = """
+    {
+      __schema {
+        queryType {
+          fields {
+            name
+            description
+            args {
+              name
+              defaultValue
+              type { name kind ofType { name kind ofType { name kind } } }
+            }
+            type { name kind ofType { name kind ofType { name kind } } }
+          }
+        }
+      }
+    }
+    """
+    resp = requests.post(ENDPOINT, headers=HEADERS, json={"query": query}, timeout=20)
+    resp.raise_for_status()
+    data = resp.json()
+    if "errors" in data:
+        print("Introspection errors:", json.dumps(data["errors"], indent=2))
+        return []
+    return data["data"]["__schema"]["queryType"]["fields"]
 
-    # Drill into the nested types that contain actual pairing/player data
-    print("\n--- Nested type drill-down ---")
-    for t in [
-        "Player",
-    ]:
-        introspect_type(t)
+
+def _resolve_type_name(tp: dict) -> str:
+    if tp is None:
+        return "?"
+    if tp.get("name"):
+        return tp["name"]
+    return _resolve_type_name(tp.get("ofType") or {})
+
+
+def _type_sig(tp: dict) -> str:
+    """Human-readable type string including NON_NULL / LIST wrappers."""
+    if tp is None:
+        return "?"
+    kind = tp.get("kind", "")
+    name = tp.get("name")
+    inner = tp.get("ofType")
+    if name:
+        return name
+    if kind == "NON_NULL":
+        return f"{_type_sig(inner)}!"
+    if kind == "LIST":
+        return f"[{_type_sig(inner)}]"
+    return _type_sig(inner) if inner else "?"
+
+
+def discover_data_fields() -> None:
+    """
+    Search for stat / leaderboard / scorecard / schedule / rank / course /
+    player / shot query fields, print their args, then drill into return types.
+    """
+    KEYWORD_GROUPS = {
+        "stats":       {"stat", "strokes", "gained", "driving", "putting", "approach"},
+        "leaderboard": {"leaderboard", "standings", "scoreboard", "results"},
+        "scorecards":  {"scorecard", "holescore", "hole", "score"},
+        "schedule":    {"schedule", "calendar", "tournament"},
+        "rankings":    {"rank", "ranking", "fedex", "owgr", "points"},
+        "course":      {"course", "hole", "yardage", "layout"},
+        "player":      {"player", "profile", "bio", "athlete"},
+        "shot":        {"shot", "shotlink", "trackman", "strokes"},
+    }
+
+    all_fields = _fetch_all_query_fields()
+    if not all_fields:
+        return
+
+    # Build a name→field lookup
+    by_name = {f["name"]: f for f in all_fields}
+
+    # Group matches (a field can appear in multiple groups)
+    groups: dict[str, list] = {g: [] for g in KEYWORD_GROUPS}
+    for fname, field in by_name.items():
+        lower = fname.lower()
+        desc_lower = (field.get("description") or "").lower()
+        for group_name, keywords in KEYWORD_GROUPS.items():
+            if any(kw in lower or kw in desc_lower for kw in keywords):
+                groups[group_name].append(field)
+
+    # Track which return types we've already drilled into
+    drilled: set[str] = set()
+
+    for group_name, matches in groups.items():
+        if not matches:
+            continue
+        print(f"\n{'='*60}")
+        print(f"  CATEGORY: {group_name.upper()}  ({len(matches)} queries)")
+        print(f"{'='*60}")
+
+        for f in sorted(matches, key=lambda x: x["name"]):
+            args = f.get("args", [])
+            arg_parts = []
+            for a in args:
+                default = f" = {a['defaultValue']}" if a.get("defaultValue") is not None else ""
+                arg_parts.append(f"{a['name']}: {_type_sig(a['type'])}{default}")
+            arg_str = ", ".join(arg_parts) if arg_parts else ""
+            ret_type = _resolve_type_name(f["type"])
+            print(f"\n  {f['name']}({arg_str}) → {_type_sig(f['type'])}")
+            if f.get("description"):
+                print(f"    ↳ {f['description']}")
+
+            # Drill into the return type once
+            if ret_type and ret_type not in drilled and ret_type not in {
+                "String", "Int", "Float", "Boolean", "ID", "?",
+            }:
+                drilled.add(ret_type)
+                introspect_type(ret_type)
+
+    print(f"\n{'='*60}")
+    print(f"  Drilled into {len(drilled)} return type(s): {sorted(drilled)}")
+    print(f"{'='*60}\n")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="PGA Tour GraphQL schema introspection")
+    parser.add_argument(
+        "--all", action="store_true",
+        help="Print every top-level query field with args",
+    )
+    parser.add_argument(
+        "--discover", action="store_true",
+        help="Search stat/leaderboard/scorecard/schedule/rank/course/player/shot queries",
+    )
+    args = parser.parse_args()
+
+    print("Connecting to", ENDPOINT)
+
+    if args.all:
+        introspect_queries()
+    elif args.discover:
+        discover_data_fields()
+    else:
+        # Default: tee-time return types + Player drill-down (original behaviour)
+        introspect_query_return_types()
+        print("\n--- Nested type drill-down ---")
+        for t in ["Player"]:
+            introspect_type(t)

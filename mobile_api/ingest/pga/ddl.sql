@@ -18,6 +18,145 @@ FROM (
 WHERE row_num = 1;
 -- ─────────────────────────────────────────────────────────────────────────────
 
+-- ─── Per-player form / placement stats (last 3 seasons) ──────────────────────
+-- Mirrors Python finish_value() / is_cut() logic.
+-- Requires: tournament_results, tournaments
+-- Used by: v_pairings_analytics, pga/analytics/pairings endpoint
+CREATE OR REPLACE VIEW `pga_data.v_player_stats` AS
+WITH
+seasons AS (
+  SELECT s AS season
+  FROM UNNEST(
+    GENERATE_ARRAY(EXTRACT(YEAR FROM CURRENT_DATE()) - 2,
+                   EXTRACT(YEAR FROM CURRENT_DATE()))
+  ) s
+),
+latest_results AS (
+  SELECT * EXCEPT(rn)
+  FROM (
+    SELECT *,
+      ROW_NUMBER() OVER (
+        PARTITION BY tournament_id, player_id, season ORDER BY run_ts DESC
+      ) AS rn
+    FROM `pga_data.tournament_results`
+  )
+  WHERE rn = 1
+),
+latest_tournaments AS (
+  SELECT * EXCEPT(rn)
+  FROM (
+    SELECT *,
+      ROW_NUMBER() OVER (
+        PARTITION BY tournament_id, season ORDER BY run_ts DESC
+      ) AS rn
+    FROM `pga_data.tournaments`
+  )
+  WHERE rn = 1
+),
+results_in_scope AS (
+  SELECT
+    r.player_id,
+    COALESCE(t.start_date, r.tournament_start_date)                       AS start_date,
+    r.position,
+    r.position_numeric,
+    CASE
+      WHEN REGEXP_CONTAINS(UPPER(COALESCE(r.position, '')),
+                           r'^(MC|CUT|WD|DQ|MDF|DMQ)') THEN 80.0
+      ELSE COALESCE(CAST(r.position_numeric AS FLOAT64), 80.0)
+    END AS finish_value,
+    CASE
+      WHEN REGEXP_CONTAINS(UPPER(COALESCE(r.position, '')),
+                           r'^(MC|CUT|WD|DQ|MDF|DMQ)') THEN 1 ELSE 0
+    END AS is_cut
+  FROM latest_results r
+  INNER JOIN seasons           s ON r.season          = s.season
+  LEFT  JOIN latest_tournaments t ON t.tournament_id  = r.tournament_id
+                                  AND t.season        = r.season
+),
+ranked AS (
+  SELECT *, ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY start_date DESC) AS rn
+  FROM results_in_scope
+),
+form AS (
+  SELECT
+    player_id,
+    COUNT(*)                                             AS form_starts,
+    ROUND(AVG(finish_value),                         2) AS avg_finish,
+    ROUND(AVG(IF(position_numeric <= 10, 1.0, 0.0)), 3) AS top10_rate,
+    ROUND(AVG(IF(position_numeric <= 20, 1.0, 0.0)), 3) AS top20_rate,
+    ROUND(AVG(CAST(is_cut AS FLOAT64)),              3) AS cut_rate
+  FROM ranked WHERE rn <= 10
+  GROUP BY player_id HAVING COUNT(*) >= 2
+),
+placement AS (
+  SELECT
+    player_id,
+    COUNT(*)                                             AS placement_starts,
+    ROUND(AVG(IF(position_numeric <= 5,  1.0, 0.0)), 3) AS top5_prob,
+    ROUND(AVG(IF(position_numeric <= 10, 1.0, 0.0)), 3) AS top10_prob,
+    ROUND(AVG(IF(position_numeric <= 20, 1.0, 0.0)), 3) AS top20_prob
+  FROM ranked WHERE rn <= 20
+  GROUP BY player_id HAVING COUNT(*) >= 3
+)
+SELECT
+  f.player_id,
+  f.form_starts,
+  f.avg_finish,
+  f.top10_rate,
+  f.top20_rate,
+  f.cut_rate,
+  ROUND(
+    (f.top10_rate * 0.5) + (f.top20_rate * 0.3)
+    + ((1 - f.cut_rate) * 0.2) - (f.avg_finish / 100.0),
+    4
+  )                AS form_score,
+  p.placement_starts,
+  p.top5_prob,
+  p.top10_prob,
+  p.top20_prob
+FROM form f
+LEFT JOIN placement p USING (player_id);
+
+-- ─── Pairings + analytics (single-query API source) ──────────────────────────
+-- LEFT JOINs v_pairings_latest with v_player_stats.
+-- SAFE_CAST handles the STRING player_id in pairings → INT64 in stats.
+-- Queried by: pga/analytics/pairings endpoint (fetch_pairings_analytics)
+CREATE OR REPLACE VIEW `pga_data.v_pairings_analytics` AS
+SELECT
+  p.tournament_id,
+  p.round_number,
+  p.round_status,
+  p.group_number,
+  p.tee_time,
+  p.start_hole,
+  p.back_nine,
+  p.course_id,
+  p.course_name,
+  p.player_id,
+  p.player_display_name,
+  p.player_first_name,
+  p.player_last_name,
+  p.country,
+  p.world_rank,
+  p.amateur,
+  p.run_ts,
+  SAFE_CAST(p.player_id AS INT64) AS player_id_int,
+  s.form_score,
+  s.form_starts,
+  s.avg_finish,
+  s.top10_rate,
+  s.top20_rate,
+  s.cut_rate,
+  s.placement_starts,
+  s.top5_prob,
+  s.top10_prob,
+  s.top20_prob
+FROM `pga_data.v_pairings_latest`  p
+LEFT JOIN `pga_data.v_player_stats` s
+       ON SAFE_CAST(p.player_id AS INT64) = s.player_id;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+
 
 
 -- Optional: create dataset (run once)

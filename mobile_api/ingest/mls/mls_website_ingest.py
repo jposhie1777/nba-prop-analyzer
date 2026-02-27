@@ -132,9 +132,12 @@ def _write_rows(
         for r in rows
     ]
 
-    errors = client.insert_rows_json(table_id, payload_rows)
-    if errors:
-        raise RuntimeError(f"BigQuery insert errors for {table_id}: {errors[:3]}")
+    chunk_size = 500
+    for i in range(0, len(payload_rows), chunk_size):
+        chunk = payload_rows[i : i + chunk_size]
+        errors = client.insert_rows_json(table_id, chunk)
+        if errors:
+            raise RuntimeError(f"BigQuery insert errors for {table_id}: {errors[:3]}")
 
     logger.info("Wrote %d rows to %s", len(payload_rows), table_id)
     return len(payload_rows)

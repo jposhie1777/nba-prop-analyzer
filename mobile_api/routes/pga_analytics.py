@@ -610,7 +610,7 @@ def pga_pairings(
             groups[(row["round_number"], row["group_number"])].append(row)
 
         # ── Fetch headshots once for all players (best-effort) ────────────────
-        all_ids_int = [r["player_id_int"] for r in rows if r.get("player_id_int")]
+        all_ids_int = [r["bdl_player_id"] for r in rows if r.get("bdl_player_id")]
         try:
             headshots = _fetch_pga_player_headshots(list(set(all_ids_int)))
         except Exception:
@@ -624,24 +624,24 @@ def pga_pairings(
             players_info = [
                 {
                     "player_id":          m["player_id"],
-                    "player_id_int":      m["player_id_int"],
+                    "bdl_player_id":      m["bdl_player_id"],
                     "player_display_name": m["player_display_name"],
                     "player_first_name":  m["player_first_name"],
                     "player_last_name":   m["player_last_name"],
                     "country":            m["country"],
                     "world_rank":         m["world_rank"],
                     "amateur":            m["amateur"],
-                    "player_image_url":   headshots.get(m["player_id_int"]),
+                    "player_image_url":   headshots.get(m["bdl_player_id"]),
                 }
                 for m in members
             ]
 
             # ── Per-group analytics ───────────────────────────────────────────
             analytics = None
-            pids = [m["player_id_int"] for m in members if m.get("player_id_int")]
+            pids = [m["bdl_player_id"] for m in members if m.get("bdl_player_id")]
             if len(pids) >= 2:
-                form_raw   = {m["player_id_int"]: m.get("form_score")  for m in members if m.get("player_id_int")}
-                top10_raw  = {m["player_id_int"]: m.get("top10_prob")  for m in members if m.get("player_id_int")}
+                form_raw   = {m["bdl_player_id"]: m.get("form_score")  for m in members if m.get("bdl_player_id")}
+                top10_raw  = {m["bdl_player_id"]: m.get("top10_prob")  for m in members if m.get("bdl_player_id")}
 
                 form_norm  = _normalize_group(form_raw)
                 top10_norm = _normalize_group(top10_raw)
@@ -652,7 +652,7 @@ def pga_pairings(
 
                 players_out: List[Dict[str, Any]] = []
                 for m in members:
-                    pid = m.get("player_id_int")
+                    pid = m.get("bdl_player_id")
                     if pid is None:
                         continue
                     parts, wts = [], []
@@ -704,21 +704,21 @@ def pga_pairings(
                     if top["metrics"].get("form_score") is not None and (
                         all(
                             (m.get("form_score") or float("-inf")) <= (top["metrics"]["form_score"] or float("-inf"))
-                            for m in members if m.get("player_id_int") != top["player_id"]
+                            for m in members if m.get("bdl_player_id") != top["player_id"]
                         )
                     ):
                         reasons.append("Best recent form")
                     if top["metrics"].get("top10_prob") is not None and (
                         all(
                             (m.get("top10_prob") or float("-inf")) <= (top["metrics"]["top10_prob"] or float("-inf"))
-                            for m in members if m.get("player_id_int") != top["player_id"]
+                            for m in members if m.get("bdl_player_id") != top["player_id"]
                         )
                     ):
                         reasons.append("Highest top-10 rate")
                     if top["metrics"].get("avg_finish") is not None and (
                         all(
                             (m.get("avg_finish") or float("inf")) >= (top["metrics"]["avg_finish"] or float("inf"))
-                            for m in members if m.get("player_id_int") != top["player_id"]
+                            for m in members if m.get("bdl_player_id") != top["player_id"]
                         )
                     ):
                         reasons.append("Best avg finish")

@@ -172,9 +172,7 @@ SELECT
   p.world_rank,
   p.amateur,
   p.run_ts,
-  -- Cast the STRING player_id from the pairings view to INT64 so we can
-  -- join with the INT64 player_id used across tournament_results / players.
-  SAFE_CAST(p.player_id AS INT64)  AS player_id_int,
+  s.player_id                      AS bdl_player_id,
   s.form_score,
   s.form_starts,
   s.avg_finish,

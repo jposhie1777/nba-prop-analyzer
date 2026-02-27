@@ -847,6 +847,114 @@ def fetch_round_pairings(params: Optional[Dict[str, Any]] = None) -> List[Dict[s
     ]
 
 
+def fetch_pairings_analytics(params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """
+    Query v_pairings_analytics — the pre-joined view that combines
+    v_pairings_latest with per-player form / placement stats computed
+    from the last 3 seasons of tournament_results.
+
+    One BigQuery round-trip returns everything the pairings endpoint needs.
+
+    Supported params:
+        tournament_id  – STRING, e.g. ``"R2026010"``
+        round_numbers  – int or list[int]
+    """
+    params = params or {}
+    client = get_bq_client()
+    project = client.project
+
+    view = f"`{project}.{DATASET}.v_pairings_analytics`"
+    conditions: List[str] = []
+    query_params: List[bigquery.QueryParameter] = []
+
+    tournament_id = params.get("tournament_id")
+    if tournament_id:
+        conditions.append("tournament_id = @tournament_id")
+        query_params.append(
+            bigquery.ScalarQueryParameter("tournament_id", "STRING", tournament_id)
+        )
+
+    round_numbers = _normalize_int_list(params.get("round_numbers"))
+    if round_numbers:
+        conditions.append("round_number IN UNNEST(@round_numbers)")
+        query_params.append(
+            bigquery.ArrayQueryParameter("round_numbers", "INT64", round_numbers)
+        )
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    query = f"""
+    SELECT
+      tournament_id,
+      round_number,
+      round_status,
+      group_number,
+      tee_time,
+      start_hole,
+      back_nine,
+      course_id,
+      course_name,
+      player_id,
+      player_id_int,
+      player_display_name,
+      player_first_name,
+      player_last_name,
+      country,
+      world_rank,
+      amateur,
+      run_ts,
+      form_score,
+      form_starts,
+      avg_finish,
+      top10_rate,
+      top20_rate,
+      cut_rate,
+      placement_starts,
+      top5_prob,
+      top10_prob,
+      top20_prob
+    FROM {view}
+    {where_clause}
+    ORDER BY round_number, group_number, player_display_name
+    """
+
+    rows = _run_query(client, query, query_params)
+    return [
+        {
+            "tournament_id":        row.get("tournament_id"),
+            "round_number":         row.get("round_number"),
+            "round_status":         row.get("round_status"),
+            "group_number":         row.get("group_number"),
+            "tee_time":             row.get("tee_time"),
+            "start_hole":           row.get("start_hole"),
+            "back_nine":            row.get("back_nine"),
+            "course_id":            row.get("course_id"),
+            "course_name":          row.get("course_name"),
+            "player_id":            row.get("player_id"),
+            "player_id_int":        row.get("player_id_int"),
+            "player_display_name":  row.get("player_display_name"),
+            "player_first_name":    row.get("player_first_name"),
+            "player_last_name":     row.get("player_last_name"),
+            "country":              row.get("country"),
+            "world_rank":           row.get("world_rank"),
+            "amateur":              row.get("amateur"),
+            "snapshot_ts":          _iso(row.get("run_ts")),
+            # analytics (None when player has < min_events history)
+            "form_score":           row.get("form_score"),
+            "form_starts":          row.get("form_starts"),
+            "avg_finish":           row.get("avg_finish"),
+            "top10_rate":           row.get("top10_rate"),
+            "top20_rate":           row.get("top20_rate"),
+            "cut_rate":             row.get("cut_rate"),
+            "placement_starts":     row.get("placement_starts"),
+            "top5_prob":            row.get("top5_prob"),
+            "top10_prob":           row.get("top10_prob"),
+            "top20_prob":           row.get("top20_prob"),
+        }
+        for row in rows
+    ]
+
+
 def fetch_course_holes(params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     params = params or {}
     client = get_bq_client()

@@ -77,6 +77,8 @@ def main() -> None:
         ("mlssoccer_schedule", "MLS match schedule snapshots from stats-api.mlssoccer.com"),
         ("mlssoccer_team_stats", "MLS per-club season stats from stats-api.mlssoccer.com"),
         ("mlssoccer_player_stats", "MLS per-player season stats from stats-api.mlssoccer.com"),
+        ("mlssoccer_team_game_stats", "MLS per-club per-match stats from stats-api.mlssoccer.com (entity_id = match_id_club_id)"),
+        ("mlssoccer_player_game_stats", "MLS per-player per-match stats from stats-api.mlssoccer.com (entity_id = match_id_player_id)"),
     ]
 
     for table_name, description in tables:

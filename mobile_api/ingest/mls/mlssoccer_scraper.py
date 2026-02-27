@@ -1,10 +1,12 @@
 """
 HTTP client for the stats-api.mlssoccer.com public stats API.
 
-Fetches three data sets for a given MLS season:
-  - schedule  : full match schedule (past + upcoming)
-  - team_stats : aggregated per-club stats (goals, shots, possession, etc.)
-  - player_stats: aggregated per-player stats (goals, assists, minutes, etc.)
+Fetches five data sets for a given MLS season:
+  - schedule         : full match schedule (past + upcoming)
+  - team_stats       : aggregated per-club season stats (goals, shots, possession, etc.)
+  - player_stats     : aggregated per-player season stats (goals, assists, minutes, etc.)
+  - team_game_stats  : per-club per-match stats (one row per club per game)
+  - player_game_stats: per-player per-match stats (one row per player per game)
 
 All data is returned as plain lists-of-dicts so callers can persist however they
 wish.  The module can also be run directly:
@@ -185,6 +187,40 @@ def fetch_player_stats(season: int) -> List[Dict[str, Any]]:
     return _fetch_paginated("players", params)
 
 
+def fetch_team_game_stats(season: int) -> List[Dict[str, Any]]:
+    """
+    Fetch per-club per-match statistics for *season*.
+
+    Targets the /v1/stats/clubs endpoint which returns one row per club per
+    completed match, including: match_id, club_id, possession_percentage,
+    shots, shots_on_target, passes, pass_completion, fouls, corners, offsides,
+    goals_scored, goals_conceded, etc.
+    """
+    params: Dict[str, Any] = {
+        "competition_opta_id": COMPETITION_OPTA_ID,
+        "season_opta_id": season,
+        "order_by": "match_date",
+    }
+    return _fetch_paginated("stats/clubs", params)
+
+
+def fetch_player_game_stats(season: int) -> List[Dict[str, Any]]:
+    """
+    Fetch per-player per-match statistics for *season*.
+
+    Targets the /v1/stats/players endpoint which returns one row per player per
+    completed match, including: match_id, player_id, club_id, position,
+    minutes_played, goals, assists, shots, shots_on_target, passes,
+    key_passes, yellow_cards, red_cards, tackles, interceptions, etc.
+    """
+    params: Dict[str, Any] = {
+        "competition_opta_id": COMPETITION_OPTA_ID,
+        "season_opta_id": season,
+        "order_by": "match_date",
+    }
+    return _fetch_paginated("stats/players", params)
+
+
 # ---------------------------------------------------------------------------
 # CLI entry-point
 # ---------------------------------------------------------------------------
@@ -196,7 +232,14 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--season", type=int, required=True, help="MLS season year, e.g. 2025")
     p.add_argument(
         "--data",
-        choices=["schedule", "team_stats", "player_stats", "all"],
+        choices=[
+            "schedule",
+            "team_stats",
+            "player_stats",
+            "team_game_stats",
+            "player_game_stats",
+            "all",
+        ],
         default="all",
         help="Which data set to fetch (default: all)",
     )
@@ -224,6 +267,16 @@ def main() -> None:
         player_stats = fetch_player_stats(args.season)
         results["player_stats"] = player_stats
         logger.info("player_stats: %d players", len(player_stats))
+
+    if args.data in ("team_game_stats", "all"):
+        team_game_stats = fetch_team_game_stats(args.season)
+        results["team_game_stats"] = team_game_stats
+        logger.info("team_game_stats: %d rows", len(team_game_stats))
+
+    if args.data in ("player_game_stats", "all"):
+        player_game_stats = fetch_player_game_stats(args.season)
+        results["player_game_stats"] = player_game_stats
+        logger.info("player_game_stats: %d rows", len(player_game_stats))
 
     if args.as_json:
         print(json.dumps(results, indent=2, default=str))

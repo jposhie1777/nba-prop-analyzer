@@ -1,10 +1,12 @@
 """
 BigQuery ingest layer for mlssoccer.com scraped data.
 
-Writes three datasets to BigQuery:
-  - mls_data.mlssoccer_schedule     (match schedule from stats-api.mlssoccer.com)
-  - mls_data.mlssoccer_team_stats   (per-club season stats)
-  - mls_data.mlssoccer_player_stats (per-player season stats)
+Writes five datasets to BigQuery:
+  - mls_data.mlssoccer_schedule          (match schedule from stats-api.mlssoccer.com)
+  - mls_data.mlssoccer_team_stats        (per-club season aggregate stats)
+  - mls_data.mlssoccer_player_stats      (per-player season aggregate stats)
+  - mls_data.mlssoccer_team_game_stats   (per-club per-match stats)
+  - mls_data.mlssoccer_player_game_stats (per-player per-match stats)
 
 Usage
 -----
@@ -25,9 +27,21 @@ from google.api_core.exceptions import NotFound
 from google.cloud import bigquery
 
 try:
-    from .mlssoccer_scraper import fetch_schedule, fetch_team_stats, fetch_player_stats
+    from .mlssoccer_scraper import (
+        fetch_schedule,
+        fetch_team_stats,
+        fetch_player_stats,
+        fetch_team_game_stats,
+        fetch_player_game_stats,
+    )
 except ImportError:
-    from mobile_api.ingest.mls.mlssoccer_scraper import fetch_schedule, fetch_team_stats, fetch_player_stats
+    from mobile_api.ingest.mls.mlssoccer_scraper import (
+        fetch_schedule,
+        fetch_team_stats,
+        fetch_player_stats,
+        fetch_team_game_stats,
+        fetch_player_game_stats,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +54,8 @@ LOCATION = os.getenv("MLS_BQ_LOCATION", "US")
 TABLE_SCHEDULE = os.getenv("MLS_SCHEDULE_TABLE", f"{DATASET}.mlssoccer_schedule")
 TABLE_TEAM_STATS = os.getenv("MLS_TEAM_STATS_TABLE", f"{DATASET}.mlssoccer_team_stats")
 TABLE_PLAYER_STATS = os.getenv("MLS_PLAYER_STATS_TABLE", f"{DATASET}.mlssoccer_player_stats")
+TABLE_TEAM_GAME_STATS = os.getenv("MLS_TEAM_GAME_STATS_TABLE", f"{DATASET}.mlssoccer_team_game_stats")
+TABLE_PLAYER_GAME_STATS = os.getenv("MLS_PLAYER_GAME_STATS_TABLE", f"{DATASET}.mlssoccer_player_game_stats")
 
 
 # ---------------------------------------------------------------------------
@@ -225,13 +241,95 @@ def ingest_player_stats(season: Optional[int] = None, dry_run: bool = False) -> 
     }
 
 
+def ingest_team_game_stats(season: Optional[int] = None, dry_run: bool = False) -> Dict[str, Any]:
+    """
+    Fetch per-club per-match stats from mlssoccer.com and write to BigQuery.
+
+    One row per club per completed match: possession, shots, passes, corners,
+    fouls, goals, etc.  entity_id is set to "<match_id>_<club_id>" so each
+    club-match combination is a unique key.
+
+    Parameters
+    ----------
+    season:  MLS season year (default: current calendar year)
+    dry_run: If True, fetch and return counts but do NOT write to BigQuery.
+    """
+    if season is None:
+        season = datetime.now(timezone.utc).year
+
+    logger.info("[MLS team_game_stats] Fetching season %d from mlssoccer.com", season)
+    rows = fetch_team_game_stats(season)
+    logger.info("[MLS team_game_stats] Fetched %d rows", len(rows))
+
+    # Build a compound key so each club-per-match row is uniquely addressable.
+    for row in rows:
+        match_id = row.get("match_id") or row.get("matchId") or ""
+        club_id = row.get("club_id") or row.get("clubId") or row.get("id") or ""
+        row["_entity_id"] = f"{match_id}_{club_id}"
+
+    written = 0
+    if not dry_run:
+        client = _get_bq_client()
+        written = _write_rows(client, TABLE_TEAM_GAME_STATS, season, rows, entity_field="_entity_id")
+
+    return {
+        "source": "mlssoccer.com",
+        "data": "team_game_stats",
+        "season": season,
+        "fetched": len(rows),
+        "written": written,
+        "dry_run": dry_run,
+    }
+
+
+def ingest_player_game_stats(season: Optional[int] = None, dry_run: bool = False) -> Dict[str, Any]:
+    """
+    Fetch per-player per-match stats from mlssoccer.com and write to BigQuery.
+
+    One row per player per completed match: minutes, goals, assists, shots,
+    passes, key passes, tackles, yellow/red cards, etc.  entity_id is set to
+    "<match_id>_<player_id>" so each player-match combination is a unique key.
+
+    Parameters
+    ----------
+    season:  MLS season year (default: current calendar year)
+    dry_run: If True, fetch and return counts but do NOT write to BigQuery.
+    """
+    if season is None:
+        season = datetime.now(timezone.utc).year
+
+    logger.info("[MLS player_game_stats] Fetching season %d from mlssoccer.com", season)
+    rows = fetch_player_game_stats(season)
+    logger.info("[MLS player_game_stats] Fetched %d rows", len(rows))
+
+    # Build a compound key so each player-per-match row is uniquely addressable.
+    for row in rows:
+        match_id = row.get("match_id") or row.get("matchId") or ""
+        player_id = row.get("player_id") or row.get("playerId") or row.get("id") or ""
+        row["_entity_id"] = f"{match_id}_{player_id}"
+
+    written = 0
+    if not dry_run:
+        client = _get_bq_client()
+        written = _write_rows(client, TABLE_PLAYER_GAME_STATS, season, rows, entity_field="_entity_id")
+
+    return {
+        "source": "mlssoccer.com",
+        "data": "player_game_stats",
+        "season": season,
+        "fetched": len(rows),
+        "written": written,
+        "dry_run": dry_run,
+    }
+
+
 def run_website_ingestion(
     season: Optional[int] = None,
     dry_run: bool = False,
 ) -> Dict[str, Any]:
     """
-    Run all three mlssoccer.com ingests (schedule, team stats, player stats)
-    for the given season in a single call.
+    Run all five mlssoccer.com ingests in a single call:
+    schedule, team stats, player stats, team game stats, player game stats.
     """
     if season is None:
         season = datetime.now(timezone.utc).year
@@ -239,6 +337,8 @@ def run_website_ingestion(
     schedule_result = ingest_schedule(season=season, dry_run=dry_run)
     team_stats_result = ingest_team_stats(season=season, dry_run=dry_run)
     player_stats_result = ingest_player_stats(season=season, dry_run=dry_run)
+    team_game_stats_result = ingest_team_game_stats(season=season, dry_run=dry_run)
+    player_game_stats_result = ingest_player_game_stats(season=season, dry_run=dry_run)
 
     return {
         "season": season,
@@ -246,4 +346,6 @@ def run_website_ingestion(
         "schedule": schedule_result,
         "team_stats": team_stats_result,
         "player_stats": player_stats_result,
+        "team_game_stats": team_game_stats_result,
+        "player_game_stats": player_game_stats_result,
     }

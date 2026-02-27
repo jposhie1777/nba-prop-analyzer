@@ -14,6 +14,8 @@ from ingest.mls.mls_website_ingest import (
     ingest_schedule,
     ingest_team_stats,
     ingest_player_stats,
+    ingest_team_game_stats,
+    ingest_player_game_stats,
     run_website_ingestion,
 )
 
@@ -88,12 +90,30 @@ def ingest_mls_website_player_stats(
     return ingest_player_stats(season=season, dry_run=dry_run)
 
 
+@router.post("/ingest/mls/website/team-game-stats")
+def ingest_mls_website_team_game_stats(
+    season: int = Query(default_factory=_season_default),
+    dry_run: bool = False,
+):
+    """Fetch per-club per-match stats from stats-api.mlssoccer.com and write to BigQuery."""
+    return ingest_team_game_stats(season=season, dry_run=dry_run)
+
+
+@router.post("/ingest/mls/website/player-game-stats")
+def ingest_mls_website_player_game_stats(
+    season: int = Query(default_factory=_season_default),
+    dry_run: bool = False,
+):
+    """Fetch per-player per-match stats from stats-api.mlssoccer.com and write to BigQuery."""
+    return ingest_player_game_stats(season=season, dry_run=dry_run)
+
+
 @router.post("/ingest/mls/website/all")
 def ingest_mls_website_all(
     season: int = Query(default_factory=_season_default),
     dry_run: bool = False,
 ):
-    """Run all three mlssoccer.com ingests (schedule, team stats, player stats) in one call."""
+    """Run all five mlssoccer.com ingests (schedule, team/player season stats, team/player game stats) in one call."""
     return run_website_ingestion(season=season, dry_run=dry_run)
 
 

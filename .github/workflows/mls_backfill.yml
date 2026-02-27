@@ -1,0 +1,62 @@
+name: MLS Backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_season:
+        description: "First season to backfill (YYYY)"
+        required: false
+        default: "2024"
+      end_season:
+        description: "Last season to backfill (YYYY)"
+        required: false
+        default: "2025"
+      dry_run:
+        description: "Dry run — fetch data but do NOT write to BigQuery"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    env:
+      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+      MLS_DATASET: "mls_data"
+      MLS_BQ_LOCATION: "US"
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r mobile_api/requirements.txt
+
+      - name: Configure GCP credentials
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
+
+      - name: Apply MLS BigQuery DDL
+        run: python -m mobile_api.ingest.mls.apply_ddl
+
+      # ------------------------------------------------------------------
+      # mlssoccer.com stats API
+      # Fetches schedule, team stats, player stats, team/player game stats
+      # ------------------------------------------------------------------
+      - name: Run MLS website backfill (${{ inputs.start_season }}–${{ inputs.end_season }})
+        run: |
+          python -m mobile_api.ingest.mls.mls_website_ingest \
+            --mode backfill \
+            --start-season ${{ inputs.start_season }} \
+            --end-season ${{ inputs.end_season }} \
+            ${{ inputs.dry_run == 'true' && '--dry-run' || '' }}

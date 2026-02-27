@@ -26,11 +26,6 @@ jobs:
       GCP_PROJECT: ${{ secrets.PROJECT_ID }}
       MLS_DATASET: "mls_data"
       MLS_BQ_LOCATION: "US"
-      # BallDontLie backfill uses _season_window(current_season) = [current_season-1, current_season].
-      # Setting this to end_season covers start_season..end_season for the 2-season window.
-      MLS_CURRENT_SEASON: ${{ inputs.end_season }}
-      BDL_MLS_API_KEY: ${{ secrets.BDL_MLS_API_KEY || secrets.BALDONTLIE_KEY || secrets.BALLDONTLIE_API_KEY }}
-      BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY || secrets.BALDONTLIE_KEY }}
 
     steps:
       - name: Checkout repo
@@ -55,14 +50,7 @@ jobs:
         run: python -m mobile_api.ingest.mls.apply_ddl
 
       # ------------------------------------------------------------------
-      # Pipeline 1: BallDontLie API
-      # Fetches teams, players, rosters, standings, matches, events, lineups
-      # ------------------------------------------------------------------
-      - name: Run MLS BallDontLie backfill (${{ inputs.start_season }}–${{ inputs.end_season }})
-        run: python -m mobile_api.ingest.mls.backfill
-
-      # ------------------------------------------------------------------
-      # Pipeline 2: mlssoccer.com stats API
+      # mlssoccer.com stats API
       # Fetches schedule, team stats, player stats, team/player game stats
       # ------------------------------------------------------------------
       - name: Run MLS website backfill (${{ inputs.start_season }}–${{ inputs.end_season }})

@@ -33,7 +33,6 @@ jobs:
       PGA_END_SEASON: ${{ inputs.end_season }}
       PGA_TRUNCATE: ${{ inputs.truncate }}
       GCP_PROJECT: ${{ secrets.PROJECT_ID }}
-      BDL_PGA_API_KEY: ${{ secrets.BDL_PGA_API_KEY || secrets.BALDONTLIE_KEY || secrets.BALLDONTLIE_API_KEY }}
       PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/mobile_api
 
     steps:
@@ -55,9 +54,9 @@ jobs:
           echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
           echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
 
-      - name: Run PGA backfill
+      - name: Run PGA GraphQL backfill (schedule + leaderboard)
         run: |
-          python mobile_api/ingest/pga/backfill.py
+          python mobile_api/ingest/pga/pga_graphql_backfill.py
 
       - name: Backfill stats and rankings
         run: |
@@ -78,4 +77,23 @@ jobs:
             python -m mobile_api.ingest.pga.pga_stats_ingest --year $year --tour R
             python -m mobile_api.ingest.pga.pga_rankings_ingest --year $year --tour R
             sleep 2
+          done
+
+      - name: Backfill scorecards (stat-overview supplements)
+        run: |
+          START=${{ inputs.start_season }}
+          END=${{ inputs.end_season }}
+          YEARS=${{ inputs.years }}
+
+          if [ -n "$START" ] && [ -n "$END" ]; then
+            YEAR_LIST=$(seq $START $END)
+          else
+            CURRENT=$(date +%Y)
+            YEAR_LIST=$(seq $((CURRENT - YEARS + 1)) $CURRENT)
+          fi
+
+          for year in $YEAR_LIST; do
+            echo "=== Scorecards for $year ==="
+            python -m mobile_api.ingest.pga.pga_scorecards_ingest --year $year --tour R
+            sleep 3
           done

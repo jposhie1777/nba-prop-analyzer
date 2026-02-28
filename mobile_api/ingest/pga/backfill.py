@@ -156,6 +156,33 @@ def ensure_tables(client: bigquery.Client) -> None:
 
     create_table(
         client,
+        "player_round_stats",
+        [
+            bigquery.SchemaField("run_ts", "TIMESTAMP", mode="REQUIRED"),
+            bigquery.SchemaField("ingested_at", "TIMESTAMP", mode="REQUIRED"),
+            bigquery.SchemaField("season", "INT64"),
+            bigquery.SchemaField("tournament_id", "INT64", mode="REQUIRED"),
+            bigquery.SchemaField("tournament_name", "STRING"),
+            bigquery.SchemaField("player_id", "INT64", mode="REQUIRED"),
+            bigquery.SchemaField("player_display_name", "STRING"),
+            bigquery.SchemaField("round_number", "INT64"),
+            bigquery.SchemaField("sg_total", "FLOAT64"),
+            bigquery.SchemaField("sg_total_rank", "INT64"),
+            bigquery.SchemaField("sg_off_tee", "FLOAT64"),
+            bigquery.SchemaField("sg_off_tee_rank", "INT64"),
+            bigquery.SchemaField("sg_approach", "FLOAT64"),
+            bigquery.SchemaField("sg_approach_rank", "INT64"),
+            bigquery.SchemaField("sg_around_green", "FLOAT64"),
+            bigquery.SchemaField("sg_around_green_rank", "INT64"),
+            bigquery.SchemaField("sg_putting", "FLOAT64"),
+            bigquery.SchemaField("sg_putting_rank", "INT64"),
+        ],
+        partition_field="season",
+        cluster_fields=["tournament_id", "player_id"],
+    )
+
+    create_table(
+        client,
         "tournament_round_scores",
         [
             bigquery.SchemaField("run_ts", "TIMESTAMP", mode="REQUIRED"),
@@ -459,6 +486,71 @@ def normalize_course_holes(
     return rows
 
 
+def normalize_round_results(
+    results: Iterable[Dict[str, Any]],
+    run_ts: str,
+) -> List[Dict[str, Any]]:
+    rows = []
+    for record in results:
+        tournament = record.get("tournament") or {}
+        player = record.get("player") or {}
+        tournament_id = tournament.get("id") or record.get("tournament_id")
+        player_id = player.get("id") or record.get("player_id")
+        if not tournament_id or not player_id:
+            continue
+        rows.append({
+            "run_ts": run_ts,
+            "ingested_at": run_ts,
+            "season": tournament.get("season"),
+            "tournament_id": tournament_id,
+            "tournament_name": tournament.get("name"),
+            "tournament_start_date": tournament.get("start_date"),
+            "round_number": record.get("round_number") or record.get("round"),
+            "round_date": record.get("round_date") or record.get("date"),
+            "player_id": player_id,
+            "player_display_name": player.get("display_name"),
+            "round_score": record.get("round_score") or record.get("score") or record.get("strokes"),
+            "par_relative_score": record.get("par_relative_score") or record.get("score_to_par"),
+            "total_score": record.get("total_score") or record.get("cumulative_score"),
+        })
+    return rows
+
+
+def normalize_player_round_stats(
+    stats: Iterable[Dict[str, Any]],
+    run_ts: str,
+) -> List[Dict[str, Any]]:
+    rows = []
+    for record in stats:
+        tournament = record.get("tournament") or {}
+        player = record.get("player") or {}
+        tournament_id = tournament.get("id") or record.get("tournament_id")
+        player_id = player.get("id") or record.get("player_id")
+        if not tournament_id or not player_id:
+            continue
+        rows.append({
+            "run_ts": run_ts,
+            "ingested_at": run_ts,
+            "season": tournament.get("season"),
+            "tournament_id": tournament_id,
+            "tournament_name": tournament.get("name"),
+            "player_id": player_id,
+            "player_display_name": player.get("display_name"),
+            "round_number": record.get("round_number"),
+            "sg_total": record.get("sg_total"),
+            "sg_total_rank": record.get("sg_total_rank"),
+            "sg_off_tee": record.get("sg_off_tee"),
+            "sg_off_tee_rank": record.get("sg_off_tee_rank"),
+            "sg_approach": record.get("sg_approach"),
+            "sg_approach_rank": record.get("sg_approach_rank"),
+            "sg_around_green": record.get("sg_around_green"),
+            "sg_around_green_rank": record.get("sg_around_green_rank"),
+            "sg_putting": record.get("sg_putting"),
+            "sg_putting_rank": record.get("sg_putting_rank"),
+        })
+    return rows
+
+
 def truncate_table(client: bigquery.Client, table: str) -> None:
     table_id = f"{client.project}.{DATASET}.{table}"
     client.query(f"TRUNCATE TABLE `{table_id}`").result()
@@ -476,6 +568,7 @@ def main() -> None:
             "tournaments",
             "tournament_results",
             "tournament_round_scores",
+            "player_round_stats",
             "tournament_course_stats",
             "course_holes",
         ]:
@@ -526,6 +619,34 @@ def main() -> None:
         )
         insert_rows(client, "tournament_course_stats", normalize_course_stats(course_stats, run_ts))
         time.sleep(1.1)
+
+        print(f"Fetching per-round scores for {len(tournaments)} tournaments in {season}...")
+        for tournament in tournaments:
+            tid = tournament.get("id")
+            if not tid:
+                continue
+            round_results = _fetch_paginated_retry(
+                "/player_round_results",
+                params={"tournament_ids[]": [tid]},
+                per_page=100,
+                max_pages=100,
+            )
+            insert_rows(client, "tournament_round_scores", normalize_round_results(round_results, run_ts))
+            time.sleep(0.5)
+
+        print(f"Fetching strokes gained stats for {len(tournaments)} tournaments in {season}...")
+        for tournament in tournaments:
+            tid = tournament.get("id")
+            if not tid:
+                continue
+            sg_stats = _fetch_paginated_retry(
+                "/player_round_stats",
+                params={"tournament_ids[]": [tid], "round_number": -1},
+                per_page=100,
+                max_pages=50,
+            )
+            insert_rows(client, "player_round_stats", normalize_player_round_stats(sg_stats, run_ts))
+            time.sleep(0.5)
 
     print("PGA backfill complete.")
 

@@ -51,6 +51,14 @@ def _normalize_int_list(value: Any) -> Optional[List[int]]:
     return [int(value)]
 
 
+def _normalize_str_list(value: Any) -> Optional[List[str]]:
+    if value is None:
+        return None
+    if isinstance(value, list):
+        return [str(v) for v in value if v is not None]
+    return [str(value)]
+
+
 def _iso(value: Any) -> Any:
     if isinstance(value, (datetime, date)):
         return value.isoformat()
@@ -126,7 +134,7 @@ def _query_players(
     *,
     search: Optional[str],
     active: Optional[bool],
-    player_ids: Optional[List[int]],
+    player_ids: Optional[List[str]],
     limit: Optional[int] = None,
     offset: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
@@ -149,7 +157,7 @@ def _query_players(
 
     if player_ids:
         conditions.append("player_id IN UNNEST(@player_ids)")
-        params.append(bigquery.ArrayQueryParameter("player_ids", "INT64", player_ids))
+        params.append(bigquery.ArrayQueryParameter("player_ids", "STRING", player_ids))
 
     where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
@@ -248,7 +256,7 @@ def _query_tournaments(
     *,
     season: Optional[int],
     status: Optional[str],
-    tournament_ids: Optional[List[int]],
+    tournament_ids: Optional[List[str]],
     limit: Optional[int] = None,
     offset: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
@@ -267,7 +275,7 @@ def _query_tournaments(
     if tournament_ids:
         conditions.append("tournament_id IN UNNEST(@tournament_ids)")
         params.append(
-            bigquery.ArrayQueryParameter("tournament_ids", "INT64", tournament_ids)
+            bigquery.ArrayQueryParameter("tournament_ids", "STRING", tournament_ids)
         )
 
     where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
@@ -321,7 +329,7 @@ def fetch_players_page(params: Optional[Dict[str, Any]] = None) -> Dict[str, Any
         client,
         search=search,
         active=active,
-        player_ids=None,
+        player_ids=_normalize_str_list(params.get("player_ids")),
         limit=per_page + 1,
         offset=offset,
     )
@@ -357,7 +365,7 @@ def fetch_tournaments_page(params: Optional[Dict[str, Any]] = None) -> Dict[str,
 
     season = params.get("season")
     status = params.get("status")
-    tournament_ids = _normalize_int_list(params.get("tournament_ids"))
+    tournament_ids = _normalize_str_list(params.get("tournament_ids"))
     per_page = int(params.get("per_page") or 50)
     cursor = params.get("cursor")
     offset = int(cursor or 0)
@@ -380,7 +388,7 @@ def fetch_players(params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any
     client = get_bq_client()
     search = params.get("search")
     active = _normalize_bool(params.get("active"))
-    player_ids = _normalize_int_list(params.get("player_ids"))
+    player_ids = _normalize_str_list(params.get("player_ids"))
     rows = _query_players(
         client,
         search=search,
@@ -404,7 +412,7 @@ def fetch_tournaments(params: Optional[Dict[str, Any]] = None) -> List[Dict[str,
     client = get_bq_client()
     season = params.get("season")
     status = params.get("status")
-    tournament_ids = _normalize_int_list(params.get("tournament_ids"))
+    tournament_ids = _normalize_str_list(params.get("tournament_ids"))
     rows = _query_tournaments(
         client,
         season=int(season) if season is not None else None,
@@ -420,8 +428,8 @@ def fetch_tournament_results(params: Optional[Dict[str, Any]] = None) -> List[Di
     project = client.project
 
     season = params.get("season")
-    tournament_ids = _normalize_int_list(params.get("tournament_ids"))
-    player_ids = _normalize_int_list(params.get("player_ids"))
+    tournament_ids = _normalize_str_list(params.get("tournament_ids"))
+    player_ids = _normalize_str_list(params.get("player_ids"))
 
     results_table = f"`{project}.{DATASET}.tournament_results`"
     players_table = f"`{project}.{DATASET}.{PLAYERS_TABLE}`"
@@ -437,13 +445,13 @@ def fetch_tournament_results(params: Optional[Dict[str, Any]] = None) -> List[Di
     if tournament_ids:
         conditions.append("r.tournament_id IN UNNEST(@tournament_ids)")
         query_params.append(
-            bigquery.ArrayQueryParameter("tournament_ids", "INT64", tournament_ids)
+            bigquery.ArrayQueryParameter("tournament_ids", "STRING", tournament_ids)
         )
 
     if player_ids:
         conditions.append("r.player_id IN UNNEST(@player_ids)")
         query_params.append(
-            bigquery.ArrayQueryParameter("player_ids", "INT64", player_ids)
+            bigquery.ArrayQueryParameter("player_ids", "STRING", player_ids)
         )
 
     where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
@@ -527,8 +535,8 @@ def fetch_tournament_round_scores(params: Optional[Dict[str, Any]] = None) -> Li
     project = client.project
 
     season = params.get("season")
-    tournament_ids = _normalize_int_list(params.get("tournament_ids"))
-    player_ids = _normalize_int_list(params.get("player_ids"))
+    tournament_ids = _normalize_str_list(params.get("tournament_ids"))
+    player_ids = _normalize_str_list(params.get("player_ids"))
     round_numbers = _normalize_int_list(params.get("round_numbers"))
 
     table = f"`{project}.{DATASET}.{ROUND_SCORES_TABLE}`"
@@ -543,13 +551,13 @@ def fetch_tournament_round_scores(params: Optional[Dict[str, Any]] = None) -> Li
     if tournament_ids:
         conditions.append("tournament_id IN UNNEST(@tournament_ids)")
         query_params.append(
-            bigquery.ArrayQueryParameter("tournament_ids", "INT64", tournament_ids)
+            bigquery.ArrayQueryParameter("tournament_ids", "STRING", tournament_ids)
         )
 
     if player_ids:
         conditions.append("player_id IN UNNEST(@player_ids)")
         query_params.append(
-            bigquery.ArrayQueryParameter("player_ids", "INT64", player_ids)
+            bigquery.ArrayQueryParameter("player_ids", "STRING", player_ids)
         )
 
     if round_numbers:

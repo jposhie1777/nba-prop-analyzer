@@ -358,22 +358,93 @@ def _is_match_completed(match: Dict[str, Any]) -> bool:
 
     return False
 
+def _row_belongs_to_match(row: Dict[str, Any], match_id: str) -> bool:
+    """
+    Return True when a stats row is demonstrably tied to *match_id*.
+
+    Season-aggregate rows returned by the /statistics/…/seasons/… endpoint
+    do NOT contain a match_id field, so they will always return False here.
+    Per-match rows (from a match-scoped URL or a correctly-filtered endpoint)
+    should carry the match identifier in one of the common field names.
+    """
+    row_mid = str(
+        row.get("match_id")
+        or row.get("matchId")
+        or row.get("match_opta_id")
+        or row.get("optaMatchId")
+        or row.get("opta_id")
+        or ""
+    )
+    return bool(row_mid) and row_mid == str(match_id)
+
+
 def _fetch_stats_for_match(
     base_url: str,
     match_id: str,
 ) -> List[Dict[str, Any]]:
     """
-    Fetch statistics rows for one match from *base_url*.
+    Fetch per-match statistics rows for one match.
 
-    Tries several match-filter query-param names in order
-    (match_opta_id → match_id → matchId).  Returns [] when the
-    match has no published stats yet (upcoming or data not available).
+    Strategy (in priority order):
+
+    1. Try a match-scoped URL path  (base_url/matches/<match_id>).
+       If the API returns rows via this path we trust them without further
+       validation because the URL itself scopes the request.
+
+    2. Try query-parameter filtering on the season endpoint and VALIDATE
+       that every returned row actually carries *match_id*.  The MLS
+       season-statistics endpoint silently ignores unknown filter params and
+       returns full-season aggregates; accepting those rows is the root cause
+       of "player game stats showing season totals for every match".
+
+    Returns [] when no match-specific rows are found (upcoming matches or
+    stats not yet published).
     """
-    for filter_key in ("match_opta_id", "match_id", "matchId"):
-        payload = _get(base_url, {filter_key: match_id, "per_page": PAGE_SIZE})
-        rows = _extract_list(payload)
-        if rows:
-            return rows
+    # --- 1. Match-scoped path (preferred) ---
+    for match_url in (
+        base_url.rstrip("/") + f"/matches/{match_id}",
+    ):
+        try:
+            payload = _get(match_url)
+        except RuntimeError:
+            payload = {}
+
+        if payload and payload != {}:
+            rows = _extract_list(payload)
+            if rows:
+                logger.debug(
+                    "match stats via path: %s → %d rows", match_url, len(rows)
+                )
+                return rows
+
+    # --- 2. Query-param filtering with strict validation ---
+    for filter_key in ("match_opta_id", "match_id", "matchId", "optaMatchId"):
+        try:
+            payload = _get(base_url, {filter_key: match_id, "per_page": PAGE_SIZE})
+        except RuntimeError:
+            continue
+
+        all_rows = _extract_list(payload)
+        if not all_rows:
+            continue
+
+        match_rows = [r for r in all_rows if _row_belongs_to_match(r, match_id)]
+        if match_rows:
+            logger.debug(
+                "match stats via filter %s=%s → %d/%d rows",
+                filter_key, match_id, len(match_rows), len(all_rows),
+            )
+            return match_rows
+
+        # all_rows is non-empty but none belong to this match → the endpoint
+        # returned season aggregates (filter was ignored).  Try next key.
+        logger.debug(
+            "filter %s=%s returned %d rows but none matched match_id — "
+            "likely season aggregates, skipping",
+            filter_key, match_id, len(all_rows),
+        )
+
+    logger.info("No per-match stats found for match_id=%s", match_id)
     return []
 
 
@@ -424,13 +495,18 @@ def fetch_team_game_stats(season: int, only_date: Optional[date] = None) -> List
             match.get("match_id")
             or match.get("id")
             or match.get("matchId")
-            or match.get("opta_id")
             or ""
         )
+        opta_id = match.get("opta_id") or match.get("optaId") or match_id
         if not match_id:
             continue
 
-        rows = _fetch_stats_for_match(base_url, match_id)
+        # Try with opta_id first (MLS stats API uses opta identifiers),
+        # then fall back to the schedule match_id.
+        rows = _fetch_stats_for_match(base_url, opta_id)
+        if not rows and opta_id != match_id:
+            rows = _fetch_stats_for_match(base_url, match_id)
+
         match_date = (
             match.get("match_date")
             or match.get("date")
@@ -439,6 +515,7 @@ def fetch_team_game_stats(season: int, only_date: Optional[date] = None) -> List
         )
         for row in rows:
             row.setdefault("match_id", match_id)
+            row.setdefault("opta_id", opta_id)
             row.setdefault("match_date", match_date)
         all_rows.extend(rows)
         time.sleep(0.05)  # polite rate-limiting between match requests
@@ -493,13 +570,18 @@ def fetch_player_game_stats(season: int, only_date: Optional[date] = None) -> Li
             match.get("match_id")
             or match.get("id")
             or match.get("matchId")
-            or match.get("opta_id")
             or ""
         )
+        opta_id = match.get("opta_id") or match.get("optaId") or match_id
         if not match_id:
             continue
 
-        rows = _fetch_stats_for_match(base_url, match_id)
+        # Try with opta_id first (MLS stats API uses opta identifiers),
+        # then fall back to the schedule match_id.
+        rows = _fetch_stats_for_match(base_url, opta_id)
+        if not rows and opta_id != match_id:
+            rows = _fetch_stats_for_match(base_url, match_id)
+
         match_date = (
             match.get("match_date")
             or match.get("date")
@@ -508,6 +590,7 @@ def fetch_player_game_stats(season: int, only_date: Optional[date] = None) -> Li
         )
         for row in rows:
             row.setdefault("match_id", match_id)
+            row.setdefault("opta_id", opta_id)
             row.setdefault("match_date", match_date)
         all_rows.extend(rows)
         time.sleep(0.05)  # polite rate-limiting between match requests

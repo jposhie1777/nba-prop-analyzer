@@ -60,7 +60,6 @@ query StatOverview($tourCode: TourCode!, $year: Int!) {
       displayName
       subCategories {
         displayName
-        stats
       }
     }
     stats {
@@ -169,10 +168,7 @@ def _parse_stat_overview(data: Dict[str, Any]) -> StatOverviewResult:
     categories: List[StatCategory] = []
     for cat in overview.get("categories") or []:
         sub_cats = [
-            {
-                "display_name": s.get("displayName"),
-                "stats": s.get("stats"),
-            }
+            {"display_name": s.get("displayName")}
             for s in (cat.get("subCategories") or [])
         ]
         categories.append(

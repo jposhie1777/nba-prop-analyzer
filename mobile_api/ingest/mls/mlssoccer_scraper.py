@@ -18,13 +18,12 @@ Player season stats:
 
 Per-match club stats (one row per club per completed match):
   /matches/{sportec_id}
-    The same direct endpoint the MLS website uses for the match stats page.
-    Extracts club rows from the "clubs" / "clubStats" key of the response.
+    Response shape: {match_information, environment, home, away, referees, last_matches}
+    Extracts home and away dicts as two team rows (stat_type="teams").
 
 Per-match player stats (one row per player per completed match):
   /matches/{sportec_id}
-    Same direct endpoint. Extracts player rows from the "players" /
-    "playerStats" key of the response.
+    Same endpoint. Extracts home.players + away.players (stat_type="players").
 """
 
 from __future__ import annotations
@@ -384,7 +383,7 @@ def _row_belongs_to_match(row: Dict[str, Any], match_id: str) -> bool:
 def _fetch_stats_for_match(
     base_url: str,
     match_id: str,
-    preferred_keys: tuple = (),
+    stat_type: str = "any",
 ) -> List[Dict[str, Any]]:
     """
     Fetch per-match statistics rows for one match.
@@ -392,9 +391,12 @@ def _fetch_stats_for_match(
     Strategy (in priority order):
 
     1. Try the direct match endpoint: STATS_API/matches/<match_id>.
-       This is the endpoint the MLS website itself uses for the match stats
-       page (confirmed via network inspection). If it returns rows we trust
-       them without further validation.
+       Response has keys: match_information, environment, home, away,
+       referees, last_matches (confirmed via network inspection).
+
+       stat_type="teams"   → returns [home_dict, away_dict] (one row per club)
+       stat_type="players" → returns home.players + away.players
+       stat_type="any"     → falls back to _extract_list
 
     2. Try base_url/matches/<match_id> as a secondary path attempt.
 
@@ -404,28 +406,45 @@ def _fetch_stats_for_match(
        returns full-season aggregates; accepting those rows is the root cause
        of "player game stats showing season totals for every match".
 
-    preferred_keys: when provided, try these dict keys first before falling
-    back to _extract_list. Use this to pull team rows vs player rows from a
-    combined response (e.g. "clubs" for team stats, "players" for player stats).
-
     Returns [] when no match-specific rows are found (upcoming matches or
     stats not yet published).
     """
     def _try_extract(payload: Any) -> List[Dict[str, Any]]:
         if not payload or payload == {}:
             return []
-        if preferred_keys and isinstance(payload, dict):
-            for key in preferred_keys:
-                val = payload.get(key)
-                if isinstance(val, list) and val:
-                    return val
-            # preferred_keys didn't match — log actual keys so we can fix them
-            logger.warning(
-                "preferred_keys %s not found in match response; "
-                "actual top-level keys: %s",
-                preferred_keys,
-                list(payload.keys())[:20],
-            )
+
+        if isinstance(payload, dict) and ("home" in payload or "away" in payload):
+            if stat_type == "teams":
+                rows = []
+                for side in ("home", "away"):
+                    team = payload.get(side)
+                    if isinstance(team, dict):
+                        rows.append({"side": side, **team})
+                return rows
+
+            if stat_type == "players":
+                rows = []
+                for side in ("home", "away"):
+                    team = payload.get(side)
+                    if not isinstance(team, dict):
+                        continue
+                    # Try common key names for the player list
+                    players = (
+                        team.get("players")
+                        or team.get("player_statistics")
+                        or team.get("playerStats")
+                        or team.get("lineup")
+                        or []
+                    )
+                    if isinstance(players, list) and players:
+                        rows.extend(players)
+                    else:
+                        logger.warning(
+                            "No player list found in '%s'; available keys: %s",
+                            side, list(team.keys())[:20],
+                        )
+                return rows
+
         return _extract_list(payload)
 
     # --- 1. Match-scoped paths (preferred) ---
@@ -531,10 +550,9 @@ def fetch_team_game_stats(season: int, only_date: Optional[date] = None) -> List
 
         # Try with opta_id first (MLS stats API uses opta identifiers),
         # then fall back to the schedule match_id.
-        _club_keys = ("clubs", "clubStats", "club_statistics", "team_statistics", "teamStats")
-        rows = _fetch_stats_for_match(base_url, opta_id, preferred_keys=_club_keys)
+        rows = _fetch_stats_for_match(base_url, opta_id, stat_type="teams")
         if not rows and opta_id != match_id:
-            rows = _fetch_stats_for_match(base_url, match_id, preferred_keys=_club_keys)
+            rows = _fetch_stats_for_match(base_url, match_id, stat_type="teams")
 
         match_date = (
             match.get("match_date")
@@ -607,10 +625,9 @@ def fetch_player_game_stats(season: int, only_date: Optional[date] = None) -> Li
 
         # Try with opta_id first (MLS stats API uses opta identifiers),
         # then fall back to the schedule match_id.
-        _player_keys = ("players", "playerStats", "player_statistics")
-        rows = _fetch_stats_for_match(base_url, opta_id, preferred_keys=_player_keys)
+        rows = _fetch_stats_for_match(base_url, opta_id, stat_type="players")
         if not rows and opta_id != match_id:
-            rows = _fetch_stats_for_match(base_url, match_id, preferred_keys=_player_keys)
+            rows = _fetch_stats_for_match(base_url, match_id, stat_type="players")
 
         match_date = (
             match.get("match_date")

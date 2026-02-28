@@ -230,11 +230,14 @@ def _fetch_all_query_fields() -> list:
 
 
 def _resolve_type_name(tp: dict) -> str:
-    if tp is None:
+    if not tp:
         return "?"
     if tp.get("name"):
         return tp["name"]
-    return _resolve_type_name(tp.get("ofType") or {})
+    inner = tp.get("ofType")
+    if inner is None:
+        return "?"
+    return _resolve_type_name(inner)
 
 
 def _type_sig(tp: dict) -> str:

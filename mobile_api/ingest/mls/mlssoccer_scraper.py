@@ -17,11 +17,14 @@ Player season stats:
   /statistics/players/competitions/{competition_id}/seasons/{season_id}
 
 Per-match club stats (one row per club per completed match):
-  Fetched by iterating completed matches from the schedule and filtering
-  the season stats endpoint by match_opta_id / match_id.
+  /matches/{sportec_id}
+    The same direct endpoint the MLS website uses for the match stats page.
+    Extracts club rows from the "clubs" / "clubStats" key of the response.
 
 Per-match player stats (one row per player per completed match):
-  Same iteration strategy as per-match club stats.
+  /matches/{sportec_id}
+    Same direct endpoint. Extracts player rows from the "players" /
+    "playerStats" key of the response.
 """
 
 from __future__ import annotations
@@ -381,27 +384,46 @@ def _row_belongs_to_match(row: Dict[str, Any], match_id: str) -> bool:
 def _fetch_stats_for_match(
     base_url: str,
     match_id: str,
+    preferred_keys: tuple = (),
 ) -> List[Dict[str, Any]]:
     """
     Fetch per-match statistics rows for one match.
 
     Strategy (in priority order):
 
-    1. Try a match-scoped URL path  (base_url/matches/<match_id>).
-       If the API returns rows via this path we trust them without further
-       validation because the URL itself scopes the request.
+    1. Try the direct match endpoint: STATS_API/matches/<match_id>.
+       This is the endpoint the MLS website itself uses for the match stats
+       page (confirmed via network inspection). If it returns rows we trust
+       them without further validation.
 
-    2. Try query-parameter filtering on the season endpoint and VALIDATE
+    2. Try base_url/matches/<match_id> as a secondary path attempt.
+
+    3. Try query-parameter filtering on the season endpoint and VALIDATE
        that every returned row actually carries *match_id*.  The MLS
        season-statistics endpoint silently ignores unknown filter params and
        returns full-season aggregates; accepting those rows is the root cause
        of "player game stats showing season totals for every match".
 
+    preferred_keys: when provided, try these dict keys first before falling
+    back to _extract_list. Use this to pull team rows vs player rows from a
+    combined response (e.g. "clubs" for team stats, "players" for player stats).
+
     Returns [] when no match-specific rows are found (upcoming matches or
     stats not yet published).
     """
-    # --- 1. Match-scoped path (preferred) ---
+    def _try_extract(payload: Any) -> List[Dict[str, Any]]:
+        if not payload or payload == {}:
+            return []
+        if preferred_keys and isinstance(payload, dict):
+            for key in preferred_keys:
+                val = payload.get(key)
+                if isinstance(val, list) and val:
+                    return val
+        return _extract_list(payload)
+
+    # --- 1. Match-scoped paths (preferred) ---
     for match_url in (
+        f"{STATS_API}/matches/{match_id}",          # correct direct endpoint
         base_url.rstrip("/") + f"/matches/{match_id}",
     ):
         try:
@@ -409,13 +431,12 @@ def _fetch_stats_for_match(
         except RuntimeError:
             payload = {}
 
-        if payload and payload != {}:
-            rows = _extract_list(payload)
-            if rows:
-                logger.debug(
-                    "match stats via path: %s → %d rows", match_url, len(rows)
-                )
-                return rows
+        rows = _try_extract(payload)
+        if rows:
+            logger.debug(
+                "match stats via path: %s → %d rows", match_url, len(rows)
+            )
+            return rows
 
     # --- 2. Query-param filtering with strict validation ---
     for filter_key in ("match_opta_id", "match_id", "matchId", "optaMatchId"):
@@ -503,9 +524,10 @@ def fetch_team_game_stats(season: int, only_date: Optional[date] = None) -> List
 
         # Try with opta_id first (MLS stats API uses opta identifiers),
         # then fall back to the schedule match_id.
-        rows = _fetch_stats_for_match(base_url, opta_id)
+        _club_keys = ("clubs", "clubStats", "club_statistics", "team_statistics", "teamStats")
+        rows = _fetch_stats_for_match(base_url, opta_id, preferred_keys=_club_keys)
         if not rows and opta_id != match_id:
-            rows = _fetch_stats_for_match(base_url, match_id)
+            rows = _fetch_stats_for_match(base_url, match_id, preferred_keys=_club_keys)
 
         match_date = (
             match.get("match_date")
@@ -578,9 +600,10 @@ def fetch_player_game_stats(season: int, only_date: Optional[date] = None) -> Li
 
         # Try with opta_id first (MLS stats API uses opta identifiers),
         # then fall back to the schedule match_id.
-        rows = _fetch_stats_for_match(base_url, opta_id)
+        _player_keys = ("players", "playerStats", "player_statistics")
+        rows = _fetch_stats_for_match(base_url, opta_id, preferred_keys=_player_keys)
         if not rows and opta_id != match_id:
-            rows = _fetch_stats_for_match(base_url, match_id)
+            rows = _fetch_stats_for_match(base_url, match_id, preferred_keys=_player_keys)
 
         match_date = (
             match.get("match_date")

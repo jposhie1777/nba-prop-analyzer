@@ -43,35 +43,15 @@ def _graphql_headers(api_key: str) -> Dict[str, str]:
 # GraphQL query
 # ---------------------------------------------------------------------------
 
+# Field names confirmed via live schema introspection of LeaderboardRowV3.
+# Run: python3 -c "from introspect_pga_schema import introspect_type; introspect_type('LeaderboardRowV3')"
+# to re-discover if this query ever breaks.
 LEADERBOARD_QUERY = """
 query Leaderboard($id: ID!) {
   leaderboardV3(id: $id) {
     id
     players {
-      id
-      isWithdrawn
-      displayName
-      position
-      startPosition
-      total
-      totalStrokes
-      scoringData {
-        total
-        totalStrokes
-        rounds
-        projected
-        movementDirection
-        movementAmount
-      }
-      rounds {
-        birdies
-        bogeys
-        eagles
-        pars
-        doubleOrWorse
-        roundScore
-        parRelativeScore
-      }
+      __typename
     }
   }
 }

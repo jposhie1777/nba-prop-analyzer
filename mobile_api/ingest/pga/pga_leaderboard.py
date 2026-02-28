@@ -51,7 +51,35 @@ query Leaderboard($id: ID!) {
   leaderboardV3(id: $id) {
     id
     players {
-      __typename
+      ... on PlayerRowV3 {
+        id
+        leaderboardSortOrder
+        player {
+          id
+          firstName
+          lastName
+          displayName
+          country
+          amateur
+          status
+        }
+        scoringData {
+          currentRound
+          playerState
+          backNine
+          totalStrokes
+          total
+          totalSort
+          thru
+          score
+          scoreSort
+          position
+          rounds
+          roundStatus
+          movementDirection
+          movementAmount
+        }
+      }
     }
   }
 }
@@ -64,24 +92,31 @@ query Leaderboard($id: ID!) {
 
 @dataclass
 class RoundSummary:
-    birdies: Optional[int] = None
-    bogeys: Optional[int] = None
-    eagles: Optional[int] = None
-    pars: Optional[int] = None
-    double_or_worse: Optional[int] = None
-    round_score: Optional[int] = None
-    par_relative_score: Optional[int] = None
+    round_number: int
+    score: Optional[str] = None          # score to par string e.g. "-4", "E", "+2"
 
 
 @dataclass
 class LeaderboardPlayer:
     player_id: str
     display_name: str
+    first_name: str = ""
+    last_name: str = ""
+    country: str = ""
+    amateur: bool = False
     position: Optional[str] = None
-    start_position: Optional[str] = None
+    sort_order: Optional[int] = None     # leaderboardSortOrder
     total: Optional[str] = None          # score to par, e.g. "-10" or "E"
-    total_strokes: Optional[int] = None
-    is_withdrawn: bool = False
+    total_sort: Optional[int] = None     # numeric sort key for total
+    total_strokes: Optional[str] = None  # raw stroke count string
+    thru: Optional[str] = None           # "F", "18", "9", etc.
+    score: Optional[str] = None          # current-round score to par
+    current_round: Optional[int] = None
+    player_state: Optional[str] = None   # e.g. "active", "cut", "wd"
+    round_status: Optional[str] = None
+    back_nine: bool = False
+    movement_direction: Optional[str] = None
+    movement_amount: Optional[str] = None
     rounds: List[RoundSummary] = field(default_factory=list)
 
 
@@ -125,36 +160,51 @@ def _safe_int(v: Any) -> Optional[int]:
         return None
 
 
-def _parse_round(raw: Dict[str, Any]) -> RoundSummary:
-    return RoundSummary(
-        birdies=_safe_int(raw.get("birdies")),
-        bogeys=_safe_int(raw.get("bogeys")),
-        eagles=_safe_int(raw.get("eagles")),
-        pars=_safe_int(raw.get("pars")),
-        double_or_worse=_safe_int(raw.get("doubleOrWorse")),
-        round_score=_safe_int(raw.get("roundScore")),
-        par_relative_score=_safe_int(raw.get("parRelativeScore")),
-    )
+def _parse_player(raw: Dict[str, Any]) -> Optional["LeaderboardPlayer"]:
+    # Skip InformationRow items (cut-line banners etc.) — they have no 'player' key
+    player_info = raw.get("player")
+    if not player_info:
+        return None
 
-
-def _parse_player(raw: Dict[str, Any]) -> LeaderboardPlayer:
     scoring = raw.get("scoringData") or {}
-    rounds_raw = raw.get("rounds") or []
+    rounds_raw = scoring.get("rounds") or []
+
     return LeaderboardPlayer(
-        player_id=str(raw.get("id", "")),
-        display_name=raw.get("displayName") or "",
-        position=raw.get("position"),
-        start_position=raw.get("startPosition"),
-        total=raw.get("total") or scoring.get("total"),
-        total_strokes=_safe_int(raw.get("totalStrokes") or scoring.get("totalStrokes")),
-        is_withdrawn=bool(raw.get("isWithdrawn", False)),
-        rounds=[_parse_round(r) for r in rounds_raw if isinstance(r, dict)],
+        player_id=str(player_info.get("id") or raw.get("id", "")),
+        display_name=player_info.get("displayName") or "",
+        first_name=player_info.get("firstName") or "",
+        last_name=player_info.get("lastName") or "",
+        country=player_info.get("country") or "",
+        amateur=bool(player_info.get("amateur", False)),
+        position=scoring.get("position"),
+        sort_order=_safe_int(raw.get("leaderboardSortOrder")),
+        total=scoring.get("total"),
+        total_sort=_safe_int(scoring.get("totalSort")),
+        total_strokes=scoring.get("totalStrokes"),
+        thru=scoring.get("thru"),
+        score=scoring.get("score"),
+        current_round=_safe_int(scoring.get("currentRound")),
+        player_state=str(scoring.get("playerState") or ""),
+        round_status=scoring.get("roundStatus"),
+        back_nine=bool(scoring.get("backNine", False)),
+        movement_direction=str(scoring.get("movementDirection") or ""),
+        movement_amount=scoring.get("movementAmount"),
+        rounds=[
+            RoundSummary(round_number=i + 1, score=s if isinstance(s, str) else str(s))
+            for i, s in enumerate(rounds_raw)
+            if s is not None
+        ],
     )
 
 
 def _parse_leaderboard(data: Dict[str, Any]) -> List[LeaderboardPlayer]:
     lb = data.get("leaderboardV3") or {}
-    return [_parse_player(p) for p in (lb.get("players") or [])]
+    results = []
+    for p in lb.get("players") or []:
+        parsed = _parse_player(p)
+        if parsed is not None:
+            results.append(parsed)
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -237,27 +287,29 @@ def leaderboard_to_records(
             "tournament_id": tournament_id,
             "player_id": p.player_id,
             "player_display_name": p.display_name,
+            "first_name": p.first_name,
+            "last_name": p.last_name,
+            "country": p.country,
+            "amateur": p.amateur,
             "position": p.position,
-            "start_position": p.start_position,
+            "sort_order": p.sort_order,
             "total": p.total,
+            "total_sort": p.total_sort,
             "total_strokes": p.total_strokes,
-            "is_withdrawn": p.is_withdrawn,
+            "thru": p.thru,
+            "score": p.score,
+            "current_round": p.current_round,
+            "player_state": p.player_state,
+            "round_status": p.round_status,
+            "back_nine": p.back_nine,
+            "movement_direction": p.movement_direction,
+            "movement_amount": p.movement_amount,
         }
         if p.rounds:
-            for i, rnd in enumerate(p.rounds, start=1):
+            for rnd in p.rounds:
                 row = dict(base)
-                row.update(
-                    {
-                        "round_number": i,
-                        "birdies": rnd.birdies,
-                        "bogeys": rnd.bogeys,
-                        "eagles": rnd.eagles,
-                        "pars": rnd.pars,
-                        "double_or_worse": rnd.double_or_worse,
-                        "round_score": rnd.round_score,
-                        "round_par_relative_score": rnd.par_relative_score,
-                    }
-                )
+                row["round_number"] = rnd.round_number
+                row["round_score"] = rnd.score
                 rows.append(row)
         else:
             rows.append(base)
@@ -312,14 +364,15 @@ def _cli() -> None:
         )
         return
 
-    print(f"\n{'Pos':>5}  {'Player':30}  {'Total':>6}  {'Strokes':>7}  {'Status'}")
-    print("-" * 65)
+    print(f"\n{'Pos':>5}  {'Player':30}  {'Total':>6}  {'Strokes':>7}  {'Thru':>5}  {'State'}")
+    print("-" * 75)
     for p in players[:30]:
         pos = p.position or "?"
         total = p.total or "?"
-        strokes = str(p.total_strokes) if p.total_strokes is not None else "?"
-        status = "WD" if p.is_withdrawn else ""
-        print(f"{pos:>5}  {p.display_name:30}  {total:>6}  {strokes:>7}  {status}")
+        strokes = p.total_strokes or "?"
+        thru = p.thru or "?"
+        state = p.player_state or ""
+        print(f"{pos:>5}  {p.display_name:30}  {total:>6}  {strokes:>7}  {thru:>5}  {state}")
     if len(players) > 30:
         print(f"  ... and {len(players) - 30} more players")
 

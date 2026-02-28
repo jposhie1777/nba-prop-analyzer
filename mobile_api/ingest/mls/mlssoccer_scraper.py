@@ -419,6 +419,13 @@ def _fetch_stats_for_match(
                 val = payload.get(key)
                 if isinstance(val, list) and val:
                     return val
+            # preferred_keys didn't match — log actual keys so we can fix them
+            logger.warning(
+                "preferred_keys %s not found in match response; "
+                "actual top-level keys: %s",
+                preferred_keys,
+                list(payload.keys())[:20],
+            )
         return _extract_list(payload)
 
     # --- 1. Match-scoped paths (preferred) ---

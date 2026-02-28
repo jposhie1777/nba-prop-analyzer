@@ -403,7 +403,13 @@ def fetch_team_game_stats(season: int, only_date: Optional[date] = None) -> List
         only_str = only_date.isoformat()
         completed = [
             m for m in completed
-            if (m.get("match_date") or m.get("date") or m.get("matchDate") or "").startswith(only_str)
+            if (
+                m.get("match_date")
+                or m.get("date")
+                or m.get("matchDate")
+                or m.get("planned_kickoff_time")
+                or ""
+            ).startswith(only_str)
         ]
     logger.info("team_game_stats: %d completed matches to process", len(completed))
 
@@ -466,7 +472,13 @@ def fetch_player_game_stats(season: int, only_date: Optional[date] = None) -> Li
         only_str = only_date.isoformat()
         completed = [
             m for m in completed
-            if (m.get("match_date") or m.get("date") or m.get("matchDate") or "").startswith(only_str)
+            if (
+                m.get("match_date")
+                or m.get("date")
+                or m.get("matchDate")
+                or m.get("planned_kickoff_time")
+                or ""
+            ).startswith(only_str)
         ]
     logger.info("player_game_stats: %d completed matches to process", len(completed))
 

@@ -12,6 +12,16 @@ EXPECTED_SCHEMA = [
     ("payload", "STRING"),
 ]
 
+# BigQuery normalises standard-SQL type names to their legacy aliases when
+# returning schema via the REST API (e.g. INT64 → INTEGER, FLOAT64 → FLOAT).
+# Normalise both sides before comparing so a mismatch doesn't trigger an
+# accidental CREATE OR REPLACE TABLE (which would wipe all historical data).
+_BQ_TYPE_NORMALIZE = {
+    "INTEGER": "INT64",
+    "FLOAT": "FLOAT64",
+    "BOOLEAN": "BOOL",
+}
+
 
 def _get_bq_client() -> bigquery.Client:
     project = os.getenv("GCP_PROJECT") or os.getenv("GOOGLE_CLOUD_PROJECT")
@@ -42,8 +52,15 @@ def _table_ddl(dataset: str, table_name: str, description: str, replace: bool = 
 
 
 def _schema_matches(table: bigquery.Table) -> bool:
-    actual = [(field.name, field.field_type) for field in table.schema]
-    return actual == EXPECTED_SCHEMA
+    actual = [
+        (field.name, _BQ_TYPE_NORMALIZE.get(field.field_type, field.field_type))
+        for field in table.schema
+    ]
+    expected = [
+        (name, _BQ_TYPE_NORMALIZE.get(typ, typ))
+        for name, typ in EXPECTED_SCHEMA
+    ]
+    return actual == expected
 
 
 def _ensure_table(client: bigquery.Client, dataset: str, table_name: str, description: str) -> None:

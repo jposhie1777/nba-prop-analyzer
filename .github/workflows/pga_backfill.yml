@@ -57,3 +57,24 @@ jobs:
       - name: Run PGA backfill
         run: |
           python mobile_api/ingest/pga/backfill.py
+
+      - name: Backfill stats and rankings
+        run: |
+          START=${{ inputs.start_season }}
+          END=${{ inputs.end_season }}
+          YEARS=${{ inputs.years }}
+
+          # Derive year range
+          if [ -n "$START" ] && [ -n "$END" ]; then
+            YEAR_LIST=$(seq $START $END)
+          else
+            CURRENT=$(date +%Y)
+            YEAR_LIST=$(seq $((CURRENT - YEARS + 1)) $CURRENT)
+          fi
+
+          for year in $YEAR_LIST; do
+            echo "=== Stats + rankings for $year ==="
+            python -m mobile_api.ingest.pga.pga_stats_ingest --year $year --tour R
+            python -m mobile_api.ingest.pga.pga_rankings_ingest --year $year --tour R
+            sleep 2
+          done

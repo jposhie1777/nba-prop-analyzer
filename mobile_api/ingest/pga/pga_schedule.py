@@ -43,8 +43,10 @@ def _graphql_headers(api_key: str) -> Dict[str, str]:
 # GraphQL query
 # ---------------------------------------------------------------------------
 
-# The schedule query buckets events into completed / current / upcoming.
-# Each bucket contains a list of tournament objects.
+# Confirmed valid fields via live schema errors:
+#   - no endDate, no inSeasonTournament, no "current" bucket
+#   - status is ScheduleTournamentStatus (object, needs sub-selection)
+#   - __typename probe lets us discover what fields status actually has
 SCHEDULE_QUERY = """
 query Schedule($tourCode: String!, $year: String) {
   schedule(tourCode: $tourCode, year: $year) {
@@ -53,28 +55,12 @@ query Schedule($tourCode: String!, $year: String) {
         id
         tournamentName
         startDate
-        endDate
         city
         state
         country
-        status
         purse
         champion
-        inSeasonTournament
-      }
-    }
-    current {
-      tournaments {
-        id
-        tournamentName
-        startDate
-        endDate
-        city
-        state
-        country
-        status
-        purse
-        inSeasonTournament
+        status { __typename }
       }
     }
     upcoming {
@@ -82,13 +68,11 @@ query Schedule($tourCode: String!, $year: String) {
         id
         tournamentName
         startDate
-        endDate
         city
         state
         country
-        status
         purse
-        inSeasonTournament
+        status { __typename }
       }
     }
   }
@@ -104,16 +88,14 @@ query Schedule($tourCode: String!, $year: String) {
 class ScheduleTournament:
     tournament_id: str
     name: str
-    bucket: str               # "completed" | "current" | "upcoming"
+    bucket: str               # "completed" | "upcoming"
     start_date: Optional[str] = None
-    end_date: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     country: Optional[str] = None
-    status: Optional[str] = None
+    status_type: Optional[str] = None   # __typename of the status object
     purse: Optional[str] = None
     champion: Optional[str] = None
-    in_season_tournament: Optional[bool] = None
 
 
 # ---------------------------------------------------------------------------
@@ -148,26 +130,25 @@ def _post_graphql(
 
 
 def _parse_tournament(raw: Dict[str, Any], bucket: str) -> ScheduleTournament:
+    status_obj = raw.get("status") or {}
     return ScheduleTournament(
         tournament_id=str(raw.get("id") or ""),
         name=raw.get("tournamentName") or raw.get("name") or "",
         bucket=bucket,
         start_date=raw.get("startDate"),
-        end_date=raw.get("endDate"),
         city=raw.get("city"),
         state=raw.get("state"),
         country=raw.get("country"),
-        status=raw.get("status"),
+        status_type=status_obj.get("__typename"),
         purse=raw.get("purse"),
         champion=raw.get("champion"),
-        in_season_tournament=raw.get("inSeasonTournament"),
     )
 
 
 def _parse_schedule(data: Dict[str, Any]) -> List[ScheduleTournament]:
     schedule = data.get("schedule") or {}
     tournaments: List[ScheduleTournament] = []
-    for bucket in ("completed", "current", "upcoming"):
+    for bucket in ("completed", "upcoming"):
         section = schedule.get(bucket) or {}
         for raw in section.get("tournaments") or []:
             if isinstance(raw, dict):
@@ -254,8 +235,10 @@ def get_active_tournament_ids(
     Useful as a first step before calling :func:`fetch_leaderboard` or
     :func:`fetch_scorecard`.
     """
+    # "upcoming" with a start_date in the past/today is effectively in-progress;
+    # refine once we know the concrete status sub-fields.
     tournaments = fetch_schedule(tour_code, year, api_key=api_key)
-    return [t.tournament_id for t in tournaments if t.bucket == "current" and t.tournament_id]
+    return [t.tournament_id for t in tournaments if t.bucket == "upcoming" and t.tournament_id]
 
 
 def schedule_to_records(
@@ -275,14 +258,12 @@ def schedule_to_records(
             "name": t.name,
             "bucket": t.bucket,
             "start_date": t.start_date,
-            "end_date": t.end_date,
             "city": t.city,
             "state": t.state,
             "country": t.country,
-            "status": t.status,
+            "status_type": t.status_type,
             "purse": t.purse,
             "champion": t.champion,
-            "in_season_tournament": t.in_season_tournament,
         }
         for t in tournaments
     ]
@@ -345,7 +326,7 @@ def _cli() -> None:
         start = (t.start_date or "")[:10]
         print(
             f"{t.tournament_id:15}  {name:40}  {start:10}  "
-            f"{t.bucket:10}  {t.status or ''}"
+            f"{t.bucket:10}  {t.status_type or ''}"
         )
 
 

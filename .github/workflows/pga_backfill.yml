@@ -80,17 +80,8 @@ jobs:
           done
 
       - name: Discover ScorecardV3 schema (for debugging field names)
-        run: |
-          python -c "
-import sys; sys.path.insert(0, '.'); sys.path.insert(0, 'mobile_api')
-from mobile_api.ingest.pga.introspect_pga_schema import introspect_type
-print('=== ScorecardV3 fields ===')
-introspect_type('ScorecardV3')
-print()
-print('=== ScorecardRound / CourseRound fields ===')
-for t in ['ScorecardRound', 'CourseRound', 'ScorecardRoundV3', 'CourseRoundV3']:
-    introspect_type(t)
-" || echo "Schema discovery failed (network issue) — continuing"
+        continue-on-error: true
+        run: python mobile_api/ingest/pga/introspect_pga_schema.py --discover
 
       - name: Backfill scorecards (stat-overview supplements)
         run: |

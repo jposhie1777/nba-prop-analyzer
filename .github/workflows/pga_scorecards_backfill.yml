@@ -1,0 +1,61 @@
+name: PGA Scorecards Backfill
+
+# Run this separately from the main backfill — one year at a time is safer
+# given the volume of API calls (~100-150 scorecards per tournament).
+on:
+  workflow_dispatch:
+    inputs:
+      year:
+        description: "Season year to backfill (YYYY)"
+        required: true
+        default: "2025"
+      tour:
+        description: "Tour code"
+        required: false
+        default: "R"
+      tournament:
+        description: "Optional: single PGA Tour tournament ID (e.g. R2026010)"
+        required: false
+        default: ""
+
+jobs:
+  scorecards-backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360  # 6h — full season of scorecards can take a while
+
+    env:
+      PGA_DATASET: "pga_data"
+      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/mobile_api
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r mobile_api/requirements.txt
+
+      - name: Configure GCP credentials
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
+
+      - name: Ingest scorecards
+        run: |
+          TOURNAMENT="${{ inputs.tournament }}"
+          if [ -n "$TOURNAMENT" ]; then
+            echo "Ingesting scorecards for tournament $TOURNAMENT"
+            python -m mobile_api.ingest.pga.pga_scorecards_ingest --tournament "$TOURNAMENT"
+          else
+            echo "Ingesting scorecards for full season ${{ inputs.year }}"
+            python -m mobile_api.ingest.pga.pga_scorecards_ingest \
+              --year ${{ inputs.year }} \
+              --tour ${{ inputs.tour }}
+          fi

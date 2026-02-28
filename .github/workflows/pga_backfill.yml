@@ -79,3 +79,22 @@ jobs:
             python -m mobile_api.ingest.pga.pga_rankings_ingest --year $year --tour R
             sleep 2
           done
+
+      - name: Backfill scorecards (stat-overview supplements)
+        run: |
+          START=${{ inputs.start_season }}
+          END=${{ inputs.end_season }}
+          YEARS=${{ inputs.years }}
+
+          if [ -n "$START" ] && [ -n "$END" ]; then
+            YEAR_LIST=$(seq $START $END)
+          else
+            CURRENT=$(date +%Y)
+            YEAR_LIST=$(seq $((CURRENT - YEARS + 1)) $CURRENT)
+          fi
+
+          for year in $YEAR_LIST; do
+            echo "=== Scorecards for $year ==="
+            python -m mobile_api.ingest.pga.pga_scorecards_ingest --year $year --tour R
+            sleep 3
+          done

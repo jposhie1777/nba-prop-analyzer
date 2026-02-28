@@ -68,3 +68,10 @@ jobs:
           YEAR=$(date +%Y)
           TOUR="${{ inputs.tour || 'R' }}"
           python -m mobile_api.ingest.pga.pga_rankings_ingest --year $YEAR --tour $TOUR
+
+      - name: Ingest scorecards for current week's tournament
+        run: |
+          # Fetch scorecards for today's active tournament (identified via schedule)
+          YEAR=$(date +%Y)
+          TOUR="${{ inputs.tour || 'R' }}"
+          python -m mobile_api.ingest.pga.pga_scorecards_ingest --year $YEAR --tour $TOUR

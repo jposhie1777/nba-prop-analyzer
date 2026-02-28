@@ -57,101 +57,105 @@ def _ensure_dataset(client: bigquery.Client) -> None:
     client.create_dataset(ds, exists_ok=True)
 
 
-def _create_table(
-    client: bigquery.Client,
+_TABLES: list = []  # populated by _register_table calls
+
+def _register_table(
     name: str,
     schema: List[bigquery.SchemaField],
-    *,
     cluster_fields: Optional[List[str]] = None,
 ) -> None:
-    table = bigquery.Table(f"{client.project}.{DATASET}.{name}", schema=schema)
-    if cluster_fields:
-        table.clustering_fields = cluster_fields
-    client.create_table(table, exists_ok=True)
+    _TABLES.append((name, schema, cluster_fields))
 
 
-def _ensure_tables(client: bigquery.Client) -> None:
-    _create_table(
-        client,
-        "players",
-        [
-            bigquery.SchemaField("run_ts", "TIMESTAMP", mode="REQUIRED"),
-            bigquery.SchemaField("ingested_at", "TIMESTAMP", mode="REQUIRED"),
-            bigquery.SchemaField("player_id", "STRING", mode="REQUIRED"),
-            bigquery.SchemaField("display_name", "STRING"),
-            bigquery.SchemaField("first_name", "STRING"),
-            bigquery.SchemaField("last_name", "STRING"),
-            bigquery.SchemaField("country", "STRING"),
-            bigquery.SchemaField("amateur", "BOOL"),
-        ],
-        cluster_fields=["player_id"],
-    )
+_register_table(
+    "players",
+    [
+        bigquery.SchemaField("run_ts", "TIMESTAMP", mode="REQUIRED"),
+        bigquery.SchemaField("ingested_at", "TIMESTAMP", mode="REQUIRED"),
+        bigquery.SchemaField("player_id", "STRING", mode="REQUIRED"),
+        bigquery.SchemaField("display_name", "STRING"),
+        bigquery.SchemaField("first_name", "STRING"),
+        bigquery.SchemaField("last_name", "STRING"),
+        bigquery.SchemaField("country", "STRING"),
+        bigquery.SchemaField("amateur", "BOOL"),
+    ],
+    ["player_id"],
+)
 
-    _create_table(
-        client,
-        "tournaments",
-        [
-            bigquery.SchemaField("run_ts", "TIMESTAMP", mode="REQUIRED"),
-            bigquery.SchemaField("ingested_at", "TIMESTAMP", mode="REQUIRED"),
-            bigquery.SchemaField("tournament_id", "STRING", mode="REQUIRED"),
-            bigquery.SchemaField("tour_code", "STRING"),
-            bigquery.SchemaField("season", "INT64"),
-            bigquery.SchemaField("name", "STRING"),
-            bigquery.SchemaField("start_date", "STRING"),
-            bigquery.SchemaField("city", "STRING"),
-            bigquery.SchemaField("state", "STRING"),
-            bigquery.SchemaField("country", "STRING"),
-            bigquery.SchemaField("purse", "STRING"),
-            bigquery.SchemaField("status", "STRING"),
-            bigquery.SchemaField("champion", "STRING"),
-        ],
-        cluster_fields=["tournament_id", "season"],
-    )
+_register_table(
+    "tournaments",
+    [
+        bigquery.SchemaField("run_ts", "TIMESTAMP", mode="REQUIRED"),
+        bigquery.SchemaField("ingested_at", "TIMESTAMP", mode="REQUIRED"),
+        bigquery.SchemaField("tournament_id", "STRING", mode="REQUIRED"),
+        bigquery.SchemaField("tour_code", "STRING"),
+        bigquery.SchemaField("season", "INT64"),
+        bigquery.SchemaField("name", "STRING"),
+        bigquery.SchemaField("start_date", "STRING"),
+        bigquery.SchemaField("city", "STRING"),
+        bigquery.SchemaField("state", "STRING"),
+        bigquery.SchemaField("country", "STRING"),
+        bigquery.SchemaField("purse", "STRING"),
+        bigquery.SchemaField("status", "STRING"),
+        bigquery.SchemaField("champion", "STRING"),
+    ],
+    ["tournament_id", "season"],
+)
 
-    _create_table(
-        client,
-        "tournament_results",
-        [
-            bigquery.SchemaField("run_ts", "TIMESTAMP", mode="REQUIRED"),
-            bigquery.SchemaField("ingested_at", "TIMESTAMP", mode="REQUIRED"),
-            bigquery.SchemaField("season", "INT64"),
-            bigquery.SchemaField("tournament_id", "STRING", mode="REQUIRED"),
-            bigquery.SchemaField("tournament_name", "STRING"),
-            bigquery.SchemaField("tournament_start_date", "STRING"),
-            bigquery.SchemaField("player_id", "STRING", mode="REQUIRED"),
-            bigquery.SchemaField("player_display_name", "STRING"),
-            bigquery.SchemaField("position", "STRING"),
-            bigquery.SchemaField("position_numeric", "INT64"),
-            bigquery.SchemaField("par_relative_score", "INT64"),
-            bigquery.SchemaField("total_strokes", "INT64"),
-        ],
-        cluster_fields=["tournament_id", "player_id"],
-    )
+_register_table(
+    "tournament_results",
+    [
+        bigquery.SchemaField("run_ts", "TIMESTAMP", mode="REQUIRED"),
+        bigquery.SchemaField("ingested_at", "TIMESTAMP", mode="REQUIRED"),
+        bigquery.SchemaField("season", "INT64"),
+        bigquery.SchemaField("tournament_id", "STRING", mode="REQUIRED"),
+        bigquery.SchemaField("tournament_name", "STRING"),
+        bigquery.SchemaField("tournament_start_date", "STRING"),
+        bigquery.SchemaField("player_id", "STRING", mode="REQUIRED"),
+        bigquery.SchemaField("player_display_name", "STRING"),
+        bigquery.SchemaField("position", "STRING"),
+        bigquery.SchemaField("position_numeric", "INT64"),
+        bigquery.SchemaField("par_relative_score", "INT64"),
+        bigquery.SchemaField("total_strokes", "INT64"),
+    ],
+    ["tournament_id", "player_id"],
+)
 
-    _create_table(
-        client,
-        "tournament_round_scores",
-        [
-            bigquery.SchemaField("run_ts", "TIMESTAMP", mode="REQUIRED"),
-            bigquery.SchemaField("ingested_at", "TIMESTAMP", mode="REQUIRED"),
-            bigquery.SchemaField("season", "INT64"),
-            bigquery.SchemaField("tournament_id", "STRING", mode="REQUIRED"),
-            bigquery.SchemaField("tournament_name", "STRING"),
-            bigquery.SchemaField("tournament_start_date", "STRING"),
-            bigquery.SchemaField("round_number", "INT64"),
-            bigquery.SchemaField("player_id", "STRING", mode="REQUIRED"),
-            bigquery.SchemaField("player_display_name", "STRING"),
-            bigquery.SchemaField("round_score", "INT64"),
-            bigquery.SchemaField("par_relative_score", "INT64"),
-            bigquery.SchemaField("total_score", "INT64"),
-        ],
-        cluster_fields=["tournament_id", "player_id", "round_number"],
-    )
+_register_table(
+    "tournament_round_scores",
+    [
+        bigquery.SchemaField("run_ts", "TIMESTAMP", mode="REQUIRED"),
+        bigquery.SchemaField("ingested_at", "TIMESTAMP", mode="REQUIRED"),
+        bigquery.SchemaField("season", "INT64"),
+        bigquery.SchemaField("tournament_id", "STRING", mode="REQUIRED"),
+        bigquery.SchemaField("tournament_name", "STRING"),
+        bigquery.SchemaField("tournament_start_date", "STRING"),
+        bigquery.SchemaField("round_number", "INT64"),
+        bigquery.SchemaField("player_id", "STRING", mode="REQUIRED"),
+        bigquery.SchemaField("player_display_name", "STRING"),
+        bigquery.SchemaField("round_score", "INT64"),
+        bigquery.SchemaField("par_relative_score", "INT64"),
+        bigquery.SchemaField("total_score", "INT64"),
+    ],
+    ["tournament_id", "player_id", "round_number"],
+)
 
 
-def _truncate(client: bigquery.Client, tables: List[str]) -> None:
-    for t in tables:
-        client.query(f"TRUNCATE TABLE `{client.project}.{DATASET}.{t}`").result()
+def _ensure_tables(client: bigquery.Client, *, drop_existing: bool = False) -> None:
+    """Create (or recreate) the required BQ tables.
+
+    When ``drop_existing=True`` (i.e. the backfill runs with PGA_TRUNCATE=true)
+    the old tables are dropped first so that schema changes (INT64→STRING IDs,
+    added columns, changed column types) take effect cleanly.
+    """
+    for name, schema, cluster in _TABLES:
+        table_ref = f"{client.project}.{DATASET}.{name}"
+        if drop_existing:
+            client.delete_table(table_ref, not_found_ok=True)
+        bq_table = bigquery.Table(table_ref, schema=schema)
+        if cluster:
+            bq_table.clustering_fields = cluster
+        client.create_table(bq_table, exists_ok=True)
 
 
 def _insert(
@@ -324,16 +328,11 @@ def _season_range() -> List[int]:
 def main() -> None:
     client = _get_client()
     _ensure_dataset(client)
-    _ensure_tables(client)
 
     truncate = os.getenv("PGA_TRUNCATE", "true").lower() == "true"
-    if truncate:
-        _truncate(client, [
-            "players",
-            "tournaments",
-            "tournament_results",
-            "tournament_round_scores",
-        ])
+    # When truncating, drop and recreate so schema changes (e.g. INT64→STRING IDs,
+    # new columns) take effect. When not truncating, only create if missing.
+    _ensure_tables(client, drop_existing=truncate)
 
     run_ts = datetime.utcnow().isoformat()
     tour_code = TOUR_CODE

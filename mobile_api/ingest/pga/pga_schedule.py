@@ -129,13 +129,27 @@ def _post_graphql(
 # ---------------------------------------------------------------------------
 
 
+def _ms_to_date(value: Any) -> Optional[str]:
+    """Convert AWSTimestamp (seconds or ms epoch) to YYYY-MM-DD UTC string."""
+    if value is None:
+        return None
+    try:
+        from datetime import datetime, timezone
+        epoch = int(value)
+        if epoch > 100_000_000_000:   # milliseconds
+            epoch = epoch // 1000
+        return datetime.fromtimestamp(epoch, tz=timezone.utc).strftime("%Y-%m-%d")
+    except (ValueError, TypeError, OverflowError, OSError):
+        return str(value)
+
+
 def _parse_tournament(raw: Dict[str, Any], bucket: str) -> ScheduleTournament:
     status_obj = raw.get("status") or {}
     return ScheduleTournament(
         tournament_id=str(raw.get("id") or ""),
         name=raw.get("tournamentName") or raw.get("name") or "",
         bucket=bucket,
-        start_date=raw.get("startDate"),
+        start_date=_ms_to_date(raw.get("startDate")),
         city=raw.get("city"),
         state=raw.get("state"),
         country=raw.get("country"),
@@ -149,10 +163,14 @@ def _parse_schedule(data: Dict[str, Any]) -> List[ScheduleTournament]:
     schedule = data.get("schedule") or {}
     tournaments: List[ScheduleTournament] = []
     for bucket in ("completed", "upcoming"):
-        section = schedule.get(bucket) or {}
-        for raw in section.get("tournaments") or []:
-            if isinstance(raw, dict):
-                tournaments.append(_parse_tournament(raw, bucket))
+        # Each bucket is a list of "week" groups, each with a tournaments list.
+        groups = schedule.get(bucket) or []
+        for group in groups:
+            if not isinstance(group, dict):
+                continue
+            for raw in group.get("tournaments") or []:
+                if isinstance(raw, dict):
+                    tournaments.append(_parse_tournament(raw, bucket))
     return tournaments
 
 

@@ -321,3 +321,43 @@ CLUSTER BY course_id
 OPTIONS (
   description = 'PGA course holes (BallDontLie PGA API)'
 );
+
+CREATE TABLE IF NOT EXISTS `pga_data.player_stats` (
+  run_ts TIMESTAMP NOT NULL,
+  ingested_at TIMESTAMP NOT NULL,
+  tour_code STRING,
+  year INT64,
+  stat_id STRING,
+  stat_name STRING,
+  tour_avg STRING,
+  player_id STRING,
+  player_name STRING,
+  stat_title STRING,
+  stat_value STRING,
+  rank INT64,
+  country STRING,
+  country_flag STRING
+)
+PARTITION BY RANGE_BUCKET(year, GENERATE_ARRAY(2015, 2035, 1))
+CLUSTER BY tour_code, stat_id, player_id
+OPTIONS (
+  description = 'PGA Tour per-stat player rankings (statOverview GraphQL)'
+);
+
+CREATE TABLE IF NOT EXISTS `pga_data.priority_rankings` (
+  run_ts TIMESTAMP NOT NULL,
+  ingested_at TIMESTAMP NOT NULL,
+  tour_code STRING,
+  year INT64,
+  display_year STRING,
+  through_text STRING,
+  category_name STRING,
+  rank INT64,
+  player_id STRING,
+  display_name STRING
+)
+PARTITION BY RANGE_BUCKET(year, GENERATE_ARRAY(2015, 2035, 1))
+CLUSTER BY tour_code, year, category_name, player_id
+OPTIONS (
+  description = 'PGA Tour priority rankings / FedEx Cup standings (priorityRankings GraphQL)'
+);

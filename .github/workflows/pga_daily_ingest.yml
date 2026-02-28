@@ -1,0 +1,69 @@
+name: PGA Daily Ingest
+
+on:
+  schedule:
+    - cron: "0 10 * * *"  # 10:00 UTC daily (6am ET)
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Target date for round scores (YYYY-MM-DD, default: yesterday)"
+        required: false
+        default: ""
+      tour:
+        description: "Tour code"
+        required: false
+        default: "R"
+
+jobs:
+  daily-ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      PGA_DATASET: "pga_data"
+      PGA_DATASET_LOCATION: "US"
+      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+      BDL_PGA_API_KEY: ${{ secrets.BDL_PGA_API_KEY || secrets.BALDONTLIE_KEY || secrets.BALLDONTLIE_API_KEY }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r mobile_api/requirements.txt
+
+      - name: Configure GCP credentials
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
+
+      - name: Ingest round scores
+        run: |
+          ARGS=""
+          if [ -n "${{ inputs.date }}" ]; then
+            ARGS="--date ${{ inputs.date }}"
+          fi
+          python -m mobile_api.ingest.pga.round_scores $ARGS
+
+      - name: Ingest pairings
+        run: |
+          python -m mobile_api.ingest.pga.pga_pairings_ingest
+
+      - name: Ingest stats snapshot
+        run: |
+          YEAR=$(date +%Y)
+          TOUR="${{ inputs.tour || 'R' }}"
+          python -m mobile_api.ingest.pga.pga_stats_ingest --year $YEAR --tour $TOUR
+
+      - name: Ingest rankings snapshot
+        run: |
+          YEAR=$(date +%Y)
+          TOUR="${{ inputs.tour || 'R' }}"
+          python -m mobile_api.ingest.pga.pga_rankings_ingest --year $YEAR --tour $TOUR

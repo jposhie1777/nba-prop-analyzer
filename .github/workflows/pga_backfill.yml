@@ -34,6 +34,7 @@ jobs:
       PGA_TRUNCATE: ${{ inputs.truncate }}
       GCP_PROJECT: ${{ secrets.PROJECT_ID }}
       BDL_PGA_API_KEY: ${{ secrets.BDL_PGA_API_KEY || secrets.BALDONTLIE_KEY || secrets.BALLDONTLIE_API_KEY }}
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/mobile_api
 
     steps:
       - name: Checkout repo

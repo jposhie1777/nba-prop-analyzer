@@ -24,11 +24,11 @@ from urllib3.util.retry import Retry
 
 logger = logging.getLogger(__name__)
 
-BASE_API = os.getenv("PREMIERLEAGUE_API_BASE", "https://footballapi.premierleague.com/football")
+BASE_API = os.getenv("PREMIERLEAGUE_API_BASE", "https://footballapi.pulselive.com/football")
 DEFAULT_COMPETITION_ID = os.getenv("PREMIERLEAGUE_COMPETITION_ID", "1")
 
 TIMEOUT = 30
-PAGE_SIZE = 100
+PAGE_SIZE = int(os.getenv("PREMIERLEAGUE_PAGE_SIZE", "20"))
 RETRY_ATTEMPTS = 6
 
 HEADERS = {
@@ -67,14 +67,20 @@ def _competition_id() -> str:
 
 def _season_id_for_year(season: int) -> str:
     """
-    Resolve a Premier League API season id for a calendar year.
+    Resolve a Premier League `compSeason` id.
 
-    Configuration options:
-      - PREMIERLEAGUE_SEASON_ID_BY_YEAR_JSON='{"2024":"578","2025":"619"}'
+    `--season` accepts either:
+      - a compSeason id directly (e.g. 578), or
+      - a calendar year that is mapped via env vars.
+
+    Mapping options:
+      - PREMIERLEAGUE_SEASON_ID_BY_YEAR_JSON='{"2025":"719"}'
       - PREMIERLEAGUE_SEASON_ID_<YEAR>=<id>
-
-    Fallback is the provided year string itself.
+      - PREMIERLEAGUE_DEFAULT_COMPSEASON=<id> (fallback)
     """
+    if season < 1900:
+        return str(season)
+
     mapping_json = os.getenv("PREMIERLEAGUE_SEASON_ID_BY_YEAR_JSON", "")
     if mapping_json:
         try:
@@ -88,7 +94,15 @@ def _season_id_for_year(season: int) -> str:
     if env_value:
         return env_value
 
-    return str(season)
+    default_compseason = os.getenv("PREMIERLEAGUE_DEFAULT_COMPSEASON")
+    if default_compseason:
+        return default_compseason
+
+    raise RuntimeError(
+        f"No compSeason mapping configured for season={season}. "
+        "Set PREMIERLEAGUE_SEASON_ID_<YEAR> (e.g. PREMIERLEAGUE_SEASON_ID_2025=719) "
+        "or pass a direct compSeason id like --season 578."
+    )
 
 
 def _get(url: str, params: Optional[Dict[str, Any]] = None) -> Any:
@@ -172,7 +186,23 @@ def _paginate(
             break
 
         rows.extend(batch)
-        if len(batch) < PAGE_SIZE:
+
+        page_info = payload.get("pageInfo") if isinstance(payload, dict) else None
+        if isinstance(page_info, dict):
+            num_pages = page_info.get("numPages")
+            try:
+                if num_pages is not None and page + 1 >= int(num_pages):
+                    break
+            except (TypeError, ValueError):
+                pass
+
+            response_page_size = page_info.get("pageSize")
+            try:
+                if response_page_size is not None and len(batch) < int(response_page_size):
+                    break
+            except (TypeError, ValueError):
+                pass
+        elif len(batch) < PAGE_SIZE:
             break
 
         page += 1

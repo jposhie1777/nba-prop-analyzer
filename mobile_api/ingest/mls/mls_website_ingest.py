@@ -17,9 +17,11 @@ Usage
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
+import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -51,11 +53,12 @@ logger = logging.getLogger(__name__)
 DATASET = os.getenv("MLS_DATASET", "mls_data")
 LOCATION = os.getenv("MLS_BQ_LOCATION", "US")
 
-TABLE_SCHEDULE = os.getenv("MLS_SCHEDULE_TABLE", f"{DATASET}.mlssoccer_schedule")
-TABLE_TEAM_STATS = os.getenv("MLS_TEAM_STATS_TABLE", f"{DATASET}.mlssoccer_team_stats")
-TABLE_PLAYER_STATS = os.getenv("MLS_PLAYER_STATS_TABLE", f"{DATASET}.mlssoccer_player_stats")
-TABLE_TEAM_GAME_STATS = os.getenv("MLS_TEAM_GAME_STATS_TABLE", f"{DATASET}.mlssoccer_team_game_stats")
-TABLE_PLAYER_GAME_STATS = os.getenv("MLS_PLAYER_GAME_STATS_TABLE", f"{DATASET}.mlssoccer_player_game_stats")
+# New raw tables (Option A — new tables beside existing ones, zero data loss)
+TABLE_SCHEDULE = os.getenv("MLS_SCHEDULE_TABLE", f"{DATASET}.raw_schedule_json")
+TABLE_TEAM_STATS = os.getenv("MLS_TEAM_STATS_TABLE", f"{DATASET}.raw_team_season_json")
+TABLE_PLAYER_STATS = os.getenv("MLS_PLAYER_STATS_TABLE", f"{DATASET}.raw_player_season_json")
+TABLE_TEAM_GAME_STATS = os.getenv("MLS_TEAM_GAME_STATS_TABLE", f"{DATASET}.raw_team_match_json")
+TABLE_PLAYER_GAME_STATS = os.getenv("MLS_PLAYER_GAME_STATS_TABLE", f"{DATASET}.raw_player_match_json")
 
 
 # ---------------------------------------------------------------------------
@@ -96,6 +99,9 @@ def _ensure_table(client: bigquery.Client, table: str) -> str:
             bigquery.SchemaField("season", "INT64", mode="REQUIRED"),
             bigquery.SchemaField("entity_id", "STRING"),
             bigquery.SchemaField("payload", "STRING"),
+            bigquery.SchemaField("payload_hash", "STRING"),
+            bigquery.SchemaField("ingest_run_id", "STRING"),
+            bigquery.SchemaField("source", "STRING"),
         ]
         bq_table = bigquery.Table(table_id, schema=schema)
         bq_table.time_partitioning = bigquery.TimePartitioning(
@@ -108,12 +114,19 @@ def _ensure_table(client: bigquery.Client, table: str) -> str:
     return table_id
 
 
+def _payload_hash(payload_str: str) -> str:
+    """SHA-256 of the canonical JSON payload string for dedup / change detection."""
+    return hashlib.sha256(payload_str.encode()).hexdigest()
+
+
 def _write_rows(
     client: bigquery.Client,
     table: str,
     season: int,
     rows: Sequence[Dict[str, Any]],
     entity_field: str = "id",
+    ingest_run_id: Optional[str] = None,
+    source: str = "mlssoccer.com",
 ) -> int:
     if not rows:
         return 0
@@ -121,16 +134,24 @@ def _write_rows(
     _ensure_dataset(client, table)
     table_id = _ensure_table(client, table)
 
+    # One stable run ID per call (callers can pass one to group a whole ingest run)
+    run_id = ingest_run_id or str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
-    payload_rows = [
-        {
-            "ingested_at": now,
-            "season": season,
-            "entity_id": str(r.get(entity_field) or ""),
-            "payload": json.dumps(r, separators=(",", ":"), default=str),
-        }
-        for r in rows
-    ]
+
+    payload_rows = []
+    for r in rows:
+        payload_str = json.dumps(r, separators=(",", ":"), default=str, sort_keys=True)
+        payload_rows.append(
+            {
+                "ingested_at": now,
+                "season": season,
+                "entity_id": str(r.get(entity_field) or ""),
+                "payload": payload_str,
+                "payload_hash": _payload_hash(payload_str),
+                "ingest_run_id": run_id,
+                "source": source,
+            }
+        )
 
     chunk_size = 500
     for i in range(0, len(payload_rows), chunk_size):
@@ -139,7 +160,7 @@ def _write_rows(
         if errors:
             raise RuntimeError(f"BigQuery insert errors for {table_id}: {errors[:3]}")
 
-    logger.info("Wrote %d rows to %s", len(payload_rows), table_id)
+    logger.info("Wrote %d rows to %s (run_id=%s)", len(payload_rows), table_id, run_id)
     return len(payload_rows)
 
 
@@ -167,10 +188,20 @@ def ingest_schedule(season: Optional[int] = None, dry_run: bool = False) -> Dict
     schedule = fetch_schedule(season)
     logger.info("[MLS schedule] Fetched %d matches", len(schedule))
 
+    # Stable natural key: match_id
+    for row in schedule:
+        row["_entity_id"] = str(
+            row.get("match_id") or row.get("id") or row.get("matchId") or ""
+        )
+
     written = 0
     if not dry_run:
+        run_id = str(uuid.uuid4())
         client = _get_bq_client()
-        written = _write_rows(client, TABLE_SCHEDULE, season, schedule, entity_field="id")
+        written = _write_rows(
+            client, TABLE_SCHEDULE, season, schedule,
+            entity_field="_entity_id", ingest_run_id=run_id,
+        )
 
     return {
         "source": "mlssoccer.com",
@@ -198,10 +229,20 @@ def ingest_team_stats(season: Optional[int] = None, dry_run: bool = False) -> Di
     team_stats = fetch_team_stats(season)
     logger.info("[MLS team_stats] Fetched %d clubs", len(team_stats))
 
+    # Stable natural key: team_id (or club_id)
+    for row in team_stats:
+        row["_entity_id"] = str(
+            row.get("team_id") or row.get("club_id") or row.get("id") or ""
+        )
+
     written = 0
     if not dry_run:
+        run_id = str(uuid.uuid4())
         client = _get_bq_client()
-        written = _write_rows(client, TABLE_TEAM_STATS, season, team_stats, entity_field="id")
+        written = _write_rows(
+            client, TABLE_TEAM_STATS, season, team_stats,
+            entity_field="_entity_id", ingest_run_id=run_id,
+        )
 
     return {
         "source": "mlssoccer.com",
@@ -229,10 +270,20 @@ def ingest_player_stats(season: Optional[int] = None, dry_run: bool = False) -> 
     player_stats = fetch_player_stats(season)
     logger.info("[MLS player_stats] Fetched %d players", len(player_stats))
 
+    # Stable natural key: player_id
+    for row in player_stats:
+        row["_entity_id"] = str(
+            row.get("player_id") or row.get("id") or row.get("playerId") or ""
+        )
+
     written = 0
     if not dry_run:
+        run_id = str(uuid.uuid4())
         client = _get_bq_client()
-        written = _write_rows(client, TABLE_PLAYER_STATS, season, player_stats, entity_field="id")
+        written = _write_rows(
+            client, TABLE_PLAYER_STATS, season, player_stats,
+            entity_field="_entity_id", ingest_run_id=run_id,
+        )
 
     return {
         "source": "mlssoccer.com",
@@ -269,16 +320,23 @@ def ingest_team_game_stats(
     rows = fetch_team_game_stats(season, only_date=only_date)
     logger.info("[MLS team_game_stats] Fetched %d rows", len(rows))
 
-    # Build a compound key so each club-per-match row is uniquely addressable.
+    # Stable natural key: match_id_team_id
     for row in rows:
         match_id = row.get("match_id") or row.get("matchId") or ""
-        club_id = row.get("club_id") or row.get("clubId") or row.get("id") or ""
-        row["_entity_id"] = f"{match_id}_{club_id}"
+        team_id = (
+            row.get("team_id") or row.get("club_id")
+            or row.get("clubId") or row.get("id") or ""
+        )
+        row["_entity_id"] = f"{match_id}_{team_id}"
 
     written = 0
     if not dry_run:
+        run_id = str(uuid.uuid4())
         client = _get_bq_client()
-        written = _write_rows(client, TABLE_TEAM_GAME_STATS, season, rows, entity_field="_entity_id")
+        written = _write_rows(
+            client, TABLE_TEAM_GAME_STATS, season, rows,
+            entity_field="_entity_id", ingest_run_id=run_id,
+        )
 
     return {
         "source": "mlssoccer.com",
@@ -315,16 +373,22 @@ def ingest_player_game_stats(
     rows = fetch_player_game_stats(season, only_date=only_date)
     logger.info("[MLS player_game_stats] Fetched %d rows", len(rows))
 
-    # Build a compound key so each player-per-match row is uniquely addressable.
+    # Stable natural key: match_id_player_id
     for row in rows:
         match_id = row.get("match_id") or row.get("matchId") or ""
-        player_id = row.get("player_id") or row.get("playerId") or row.get("id") or ""
+        player_id = (
+            row.get("player_id") or row.get("playerId") or row.get("id") or ""
+        )
         row["_entity_id"] = f"{match_id}_{player_id}"
 
     written = 0
     if not dry_run:
+        run_id = str(uuid.uuid4())
         client = _get_bq_client()
-        written = _write_rows(client, TABLE_PLAYER_GAME_STATS, season, rows, entity_field="_entity_id")
+        written = _write_rows(
+            client, TABLE_PLAYER_GAME_STATS, season, rows,
+            entity_field="_entity_id", ingest_run_id=run_id,
+        )
 
     return {
         "source": "mlssoccer.com",

@@ -32,8 +32,9 @@ import json
 import logging
 import os
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 import requests
 
@@ -360,6 +361,33 @@ def _is_match_completed(match: Dict[str, Any]) -> bool:
 
     return False
 
+_TZ_ET = ZoneInfo("America/New_York")
+
+
+def _match_local_date(match: Dict[str, Any]) -> str:
+    """
+    Return the match's local US/Eastern date as 'YYYY-MM-DD'.
+
+    MLS API timestamps (planned_kickoff_time) are UTC.  A 7:30 PM ET kickoff
+    is midnight UTC the next day, so comparing against a raw UTC date string
+    drops all evening games.  Convert to Eastern time before extracting the date.
+    """
+    kickoff = match.get("planned_kickoff_time", "")
+    if kickoff:
+        try:
+            dt = datetime.fromisoformat(kickoff.replace("Z", "+00:00"))
+            return dt.astimezone(_TZ_ET).date().isoformat()
+        except ValueError:
+            pass
+    # Fall back to whichever date field the API provides (already local or bare date)
+    return (
+        match.get("match_date")
+        or match.get("date")
+        or match.get("matchDate")
+        or ""
+    )[:10]
+
+
 def _row_belongs_to_match(row: Dict[str, Any], match_id: str) -> bool:
     """
     Return True when a stats row is demonstrably tied to *match_id*.
@@ -519,16 +547,7 @@ def fetch_team_game_stats(season: int, only_date: Optional[date] = None) -> List
     completed = [m for m in matches if _is_match_completed(m)]
     if only_date is not None:
         only_str = only_date.isoformat()
-        completed = [
-            m for m in completed
-            if (
-                m.get("match_date")
-                or m.get("date")
-                or m.get("matchDate")
-                or m.get("planned_kickoff_time")
-                or ""
-            ).startswith(only_str)
-        ]
+        completed = [m for m in completed if _match_local_date(m) == only_str]
     logger.info("team_game_stats: %d completed matches to process", len(completed))
 
     base_url = (
@@ -594,16 +613,7 @@ def fetch_player_game_stats(season: int, only_date: Optional[date] = None) -> Li
     completed = [m for m in matches if _is_match_completed(m)]
     if only_date is not None:
         only_str = only_date.isoformat()
-        completed = [
-            m for m in completed
-            if (
-                m.get("match_date")
-                or m.get("date")
-                or m.get("matchDate")
-                or m.get("planned_kickoff_time")
-                or ""
-            ).startswith(only_str)
-        ]
+        completed = [m for m in completed if _match_local_date(m) == only_str]
     logger.info("player_game_stats: %d completed matches to process", len(completed))
 
     base_url = (

@@ -21,14 +21,23 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+import os
+
 import requests
 
-from .pga_tour_graphql import (
-    GRAPHQL_ENDPOINT,
-    DEFAULT_API_KEY,
-    DEFAULT_TIMEOUT,
-    _graphql_headers,
-)
+GRAPHQL_ENDPOINT = "https://orchestrator.pgatour.com/graphql"
+DEFAULT_API_KEY = os.getenv("PGA_TOUR_GQL_API_KEY", "da2-gsrx5bibzbb4njvhl7t37wqyl4")
+DEFAULT_TIMEOUT = 20
+
+
+def _graphql_headers(api_key: str) -> Dict[str, str]:
+    return {
+        "Content-Type": "application/json",
+        "x-api-key": api_key,
+        "x-pgat-platform": "web",
+        "Referer": "https://www.pgatour.com/",
+        "Origin": "https://www.pgatour.com",
+    }
 
 # ---------------------------------------------------------------------------
 # GraphQL query

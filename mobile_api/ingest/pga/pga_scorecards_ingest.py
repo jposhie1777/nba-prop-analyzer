@@ -40,6 +40,21 @@ TABLE = os.getenv("PGA_SCORECARDS_TABLE", "player_scorecards")
 CHUNK_SIZE = 500
 DELAY_BETWEEN_PLAYERS = float(os.getenv("PGA_SCORECARD_DELAY", "0.4"))
 
+_ROUND_SCORES_SCHEMA = [
+    bigquery.SchemaField("run_ts", "TIMESTAMP", mode="REQUIRED"),
+    bigquery.SchemaField("ingested_at", "TIMESTAMP", mode="REQUIRED"),
+    bigquery.SchemaField("season", "INT64"),
+    bigquery.SchemaField("tournament_id", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("tournament_name", "STRING"),
+    bigquery.SchemaField("tournament_start_date", "STRING"),
+    bigquery.SchemaField("round_number", "INTEGER"),
+    bigquery.SchemaField("player_id", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("player_display_name", "STRING"),
+    bigquery.SchemaField("round_score", "INTEGER"),
+    bigquery.SchemaField("par_relative_score", "INTEGER"),
+    bigquery.SchemaField("total_score", "INTEGER"),
+]
+
 _SCHEMA = [
     bigquery.SchemaField("run_ts", "TIMESTAMP", mode="REQUIRED"),
     bigquery.SchemaField("ingested_at", "TIMESTAMP", mode="REQUIRED"),
@@ -88,6 +103,47 @@ def _ensure_table(client: bigquery.Client) -> str:
     return f"{client.project}.{DATASET}.{TABLE}"
 
 
+def _ensure_round_scores_table(client: bigquery.Client) -> str:
+    bq_table = bigquery.Table(
+        f"{client.project}.{DATASET}.tournament_round_scores",
+        schema=_ROUND_SCORES_SCHEMA,
+    )
+    bq_table.clustering_fields = ["tournament_id", "player_id", "round_number"]
+    client.create_table(bq_table, exists_ok=True)
+    return f"{client.project}.{DATASET}.tournament_round_scores"
+
+
+def _scorecard_to_round_scores(
+    scorecard,
+    *,
+    run_ts: str,
+    season: Optional[int] = None,
+    tournament_name: Optional[str] = None,
+    tournament_start_date: Optional[str] = None,
+) -> list:
+    """Extract per-round summary rows from a scorecard for tournament_round_scores."""
+    rows = []
+    cumulative = 0
+    for rnd in scorecard.rounds:
+        if rnd.strokes is not None:
+            cumulative += rnd.strokes
+        rows.append({
+            "run_ts": run_ts,
+            "ingested_at": run_ts,
+            "season": season,
+            "tournament_id": scorecard.tournament_id,
+            "tournament_name": tournament_name,
+            "tournament_start_date": tournament_start_date,
+            "round_number": rnd.round_number,
+            "player_id": scorecard.player_id,
+            "player_display_name": scorecard.display_name,
+            "round_score": rnd.strokes,
+            "par_relative_score": rnd.par_relative_score,
+            "total_score": cumulative if rnd.strokes is not None else None,
+        })
+    return rows
+
+
 def _insert_rows(client: bigquery.Client, table_id: str, rows: list) -> int:
     if not rows:
         return 0
@@ -110,17 +166,28 @@ def ingest_tournament_scorecards(
     run_ts: Optional[str] = None,
     client: Optional[bigquery.Client] = None,
     table_id: Optional[str] = None,
+    round_scores_table_id: Optional[str] = None,
+    season: Optional[int] = None,
+    tournament_name: Optional[str] = None,
+    tournament_start_date: Optional[str] = None,
 ) -> dict:
     """
     Ingest scorecards for all players in a single tournament.
 
+    Also writes per-round score summaries to ``tournament_round_scores``
+    (round_score = actual strokes, par_relative_score, cumulative total_score).
+
     Args:
-        tournament_id: PGA Tour tournament ID string, e.g. ``"R2026010"``.
-        dry_run:       Fetch but skip BigQuery writes.
-        create_tables: Auto-create the BQ table if missing.
-        run_ts:        ISO timestamp for run_ts / ingested_at fields.
-        client:        Reuse an existing BQ client (avoids repeated auth).
-        table_id:      Reuse a resolved table ID.
+        tournament_id:         PGA Tour tournament ID string, e.g. ``"R2026010"``.
+        dry_run:               Fetch but skip BigQuery writes.
+        create_tables:         Auto-create BQ tables if missing.
+        run_ts:                ISO timestamp for run_ts / ingested_at fields.
+        client:                Reuse an existing BQ client.
+        table_id:              Reuse a resolved scorecards table ID.
+        round_scores_table_id: Reuse a resolved round_scores table ID.
+        season:                Season year for round scores.
+        tournament_name:       Tournament name for round scores denorm.
+        tournament_start_date: Tournament start date for round scores denorm.
 
     Returns:
         Dict with ``tournament_id``, ``players_found``, ``rows_inserted``.
@@ -138,8 +205,14 @@ def ingest_tournament_scorecards(
             client = _bq_client()
         if table_id is None:
             table_id = _ensure_table(client) if create_tables else f"{client.project}.{DATASET}.{TABLE}"
+        if round_scores_table_id is None:
+            round_scores_table_id = (
+                _ensure_round_scores_table(client) if create_tables
+                else f"{client.project}.{DATASET}.tournament_round_scores"
+            )
 
     all_rows: list = []
+    all_round_rows: list = []
     skipped = 0
     for player in players:
         try:
@@ -151,16 +224,25 @@ def ingest_tournament_scorecards(
             continue
 
         if scorecard:
-            records = scorecard_to_records(scorecard, run_ts=ts)
-            all_rows.extend(records)
+            all_rows.extend(scorecard_to_records(scorecard, run_ts=ts))
+            all_round_rows.extend(_scorecard_to_round_scores(
+                scorecard,
+                run_ts=ts,
+                season=season,
+                tournament_name=tournament_name,
+                tournament_start_date=tournament_start_date,
+            ))
 
         time.sleep(DELAY_BETWEEN_PLAYERS)
 
     inserted = 0
-    if not dry_run and all_rows:
-        inserted = _insert_rows(client, table_id, all_rows)
+    if not dry_run:
+        if all_rows:
+            inserted = _insert_rows(client, table_id, all_rows)
+        if all_round_rows:
+            _insert_rows(client, round_scores_table_id, all_round_rows)
 
-    print(f"  [scorecards] {tournament_id}: {len(all_rows)} rows, {skipped} skipped, {inserted} inserted")
+    print(f"  [scorecards] {tournament_id}: {len(all_rows)} hole rows, {len(all_round_rows)} round rows, {skipped} skipped")
     return {
         "tournament_id": tournament_id,
         "players_found": len(players),
@@ -190,9 +272,14 @@ def ingest_season_scorecards(
 
     client = None
     table_id = None
+    round_scores_table_id = None
     if not dry_run:
         client = _bq_client()
         table_id = _ensure_table(client) if create_tables else f"{client.project}.{DATASET}.{TABLE}"
+        round_scores_table_id = (
+            _ensure_round_scores_table(client) if create_tables
+            else f"{client.project}.{DATASET}.tournament_round_scores"
+        )
 
     total_inserted = 0
     for t in completed:
@@ -203,6 +290,10 @@ def ingest_season_scorecards(
             run_ts=ts,
             client=client,
             table_id=table_id,
+            round_scores_table_id=round_scores_table_id,
+            season=year,
+            tournament_name=t.name,
+            tournament_start_date=t.start_date,
         )
         total_inserted += result["rows_inserted"]
         time.sleep(1.0)

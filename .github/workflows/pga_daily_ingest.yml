@@ -23,7 +23,6 @@ jobs:
       PGA_DATASET: "pga_data"
       PGA_DATASET_LOCATION: "US"
       GCP_PROJECT: ${{ secrets.PROJECT_ID }}
-      BDL_PGA_API_KEY: ${{ secrets.BDL_PGA_API_KEY || secrets.BALDONTLIE_KEY || secrets.BALLDONTLIE_API_KEY }}
       PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/mobile_api
 
     steps:
@@ -44,14 +43,6 @@ jobs:
         run: |
           echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
           echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
-
-      - name: Ingest round scores
-        run: |
-          ARGS=""
-          if [ -n "${{ inputs.date }}" ]; then
-            ARGS="--date ${{ inputs.date }}"
-          fi
-          python -m mobile_api.ingest.pga.round_scores $ARGS
 
       - name: Ingest pairings
         run: |

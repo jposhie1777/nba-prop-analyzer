@@ -46,9 +46,11 @@ def _graphql_headers(api_key: str) -> Dict[str, str]:
 SCORECARD_QUERY = """
 query Scorecard($id: ID!, $playerId: ID!) {
   scorecardV3(tournamentId: $id, playerId: $playerId) {
-    playerId
-    displayName
-    rounds {
+    player {
+      id
+      displayName
+    }
+    courseRounds {
       roundNumber
       parRelativeScore
       strokes
@@ -73,9 +75,11 @@ query Scorecard($id: ID!, $playerId: ID!) {
 SCORECARD_STATS_QUERY = """
 query ScorecardStats($id: ID!, $playerId: ID!) {
   scorecardStats(id: $id, playerId: $playerId) {
-    playerId
-    displayName
-    rounds {
+    player {
+      id
+      displayName
+    }
+    courseRounds {
       roundNumber
       parRelativeScore
       strokes
@@ -232,11 +236,18 @@ def _parse_scorecard(
     raw = data.get(key)
     if not raw:
         return None
+    # Support both schema shapes:
+    #   Old (assumed): playerId / displayName at root, rounds field
+    #   New (confirmed): player { id, displayName } nested, courseRounds field
+    player_obj = raw.get("player") or {}
+    player_id = str(player_obj.get("id") or raw.get("playerId") or "")
+    display_name = player_obj.get("displayName") or raw.get("displayName") or ""
+    rounds_data = raw.get("courseRounds") or raw.get("rounds") or []
     return PlayerScorecard(
-        player_id=str(raw.get("playerId") or ""),
-        display_name=raw.get("displayName") or "",
+        player_id=player_id,
+        display_name=display_name,
         tournament_id=tournament_id,
-        rounds=[_parse_round(r) for r in (raw.get("rounds") or []) if isinstance(r, dict)],
+        rounds=[_parse_round(r) for r in rounds_data if isinstance(r, dict)],
     )
 
 

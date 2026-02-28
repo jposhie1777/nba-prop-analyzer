@@ -26,6 +26,8 @@ logger = logging.getLogger(__name__)
 
 BASE_API = os.getenv("PREMIERLEAGUE_API_BASE", "https://footballapi.pulselive.com/football")
 DEFAULT_COMPETITION_ID = os.getenv("PREMIERLEAGUE_COMPETITION_ID", "1")
+SDP_API_BASE = os.getenv("PREMIERLEAGUE_SDP_API_BASE", "https://sdp-prem-prod.premier-league-prod.pulselive.com/api")
+DEFAULT_SDP_COMPETITION_ID = os.getenv("PREMIERLEAGUE_SDP_COMPETITION_ID", "8")
 
 TIMEOUT = 30
 PAGE_SIZE = int(os.getenv("PREMIERLEAGUE_PAGE_SIZE", "20"))
@@ -63,6 +65,30 @@ _session.mount("http://", _adapter)
 
 def _competition_id() -> str:
     return os.getenv("PREMIERLEAGUE_COMPETITION_ID", DEFAULT_COMPETITION_ID)
+
+
+def _sdp_competition_id() -> str:
+    return os.getenv("PREMIERLEAGUE_SDP_COMPETITION_ID", DEFAULT_SDP_COMPETITION_ID)
+
+
+def _season_year_for_sdp(season: int) -> str:
+    """Resolve season year for SDP endpoints (`/seasons/{year}`)."""
+    if season >= 1900:
+        return str(season)
+
+    mapped_year = os.getenv(f"PREMIERLEAGUE_SEASON_YEAR_FOR_COMPSEASON_{season}")
+    if mapped_year:
+        return mapped_year
+
+    fallback_year = os.getenv("PREMIERLEAGUE_DEFAULT_SEASON_YEAR")
+    if fallback_year:
+        return fallback_year
+
+    raise RuntimeError(
+        f"No season year configured for compSeason={season}. "
+        f"Set PREMIERLEAGUE_SEASON_YEAR_FOR_COMPSEASON_{season}=YYYY "
+        "or pass a year like --season 2025."
+    )
 
 
 def _season_id_for_year(season: int) -> str:
@@ -225,19 +251,43 @@ def fetch_schedule(season: int) -> List[Dict[str, Any]]:
 
 
 def fetch_team_stats(season: int) -> List[Dict[str, Any]]:
-    season_id = _season_id_for_year(season)
-    url = os.getenv("PREMIERLEAGUE_TEAM_STATS_URL", f"{BASE_API}/stats/team")
-    params = {"comps": _competition_id(), "compSeasons": season_id}
-    rows = _extract_list(_get(url, params))
+    """
+    Fetch season team data from Premier League SDP endpoint.
+
+    Default endpoint (from browser traffic):
+      /v1/competitions/{competition}/seasons/{season_year}/teams
+    """
+    season_year = _season_year_for_sdp(season)
+    url = os.getenv(
+        "PREMIERLEAGUE_TEAM_STATS_URL",
+        f"{SDP_API_BASE}/v1/competitions/{_sdp_competition_id()}/seasons/{season_year}/teams",
+    )
+
+    rows = _paginate(url, {"_limit": PAGE_SIZE}, page_param="_page", size_param="_limit")
     logger.info("team_stats: %d rows", len(rows))
     return rows
 
 
 def fetch_player_stats(season: int) -> List[Dict[str, Any]]:
-    season_id = _season_id_for_year(season)
-    url = os.getenv("PREMIERLEAGUE_PLAYER_STATS_URL", f"{BASE_API}/stats/player")
-    params = {"comps": _competition_id(), "compSeasons": season_id}
-    rows = _extract_list(_get(url, params))
+    """
+    Fetch season player leaderboard rows from Premier League SDP endpoint.
+
+    Default endpoint (from browser traffic):
+      /v3/competitions/{competition}/seasons/{season_year}/players/stats/leaderboard
+    """
+    season_year = _season_year_for_sdp(season)
+    url = os.getenv(
+        "PREMIERLEAGUE_PLAYER_STATS_URL",
+        f"{SDP_API_BASE}/v3/competitions/{_sdp_competition_id()}/seasons/{season_year}/players/stats/leaderboard",
+    )
+
+    sort = os.getenv("PREMIERLEAGUE_PLAYER_STATS_SORT", "total_passes:desc")
+    payload = _get(url, {"_sort": sort})
+    rows = _extract_list(payload)
+
+    if not rows:
+        logger.warning("player_stats: 0 rows for sort=%s; try different PREMIERLEAGUE_PLAYER_STATS_SORT", sort)
+
     logger.info("player_stats: %d rows", len(rows))
     return rows
 

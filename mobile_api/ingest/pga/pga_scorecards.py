@@ -46,9 +46,23 @@ def _graphql_headers(api_key: str) -> Dict[str, str]:
 SCORECARD_QUERY = """
 query Scorecard($id: ID!, $playerId: ID!) {
   scorecardV3(tournamentId: $id, playerId: $playerId) {
-    playerId
-    displayName
-    rounds {
+    id
+    tournamentName
+    currentRound
+    groupNumber
+    teeTime
+    backNine
+    totalStrokes
+
+    player {
+      id
+      displayName
+      firstName
+      lastName
+      country
+    }
+
+    roundScores {
       roundNumber
       parRelativeScore
       strokes
@@ -210,35 +224,34 @@ def _parse_round(raw: Dict[str, Any]) -> ScorecardRound:
         round_number=_safe_int(raw.get("roundNumber")) or 0,
         par_relative_score=_safe_int(raw.get("parRelativeScore")),
         strokes=_safe_int(raw.get("strokes")),
-        birdies=_safe_int(raw.get("birdies")),
-        bogeys=_safe_int(raw.get("bogeys")),
-        eagles=_safe_int(raw.get("eagles")),
-        pars=_safe_int(raw.get("pars")),
-        double_or_worse=_safe_int(raw.get("doubleOrWorse")),
-        greens_in_regulation=_safe_int(raw.get("greensInRegulation")),
-        fairways_hit=_safe_int(raw.get("fairwaysHit")),
-        putts=_safe_int(raw.get("putts")),
-        driving_distance=_safe_int(raw.get("drivingDistance")),
-        driving_accuracy=_safe_float(raw.get("drivingAccuracy")),
-        holes=[_parse_hole(h) for h in (raw.get("holes") or []) if isinstance(h, dict)],
+        holes=[
+            _parse_hole(h)
+            for h in (raw.get("holes") or [])
+            if isinstance(h, dict)
+        ],
     )
-
 
 def _parse_scorecard(
     data: Dict[str, Any],
     tournament_id: str,
-    key: str = "scorecardV3",
 ) -> Optional[PlayerScorecard]:
-    raw = data.get(key)
+
+    raw = data.get("scorecardV3")
     if not raw:
         return None
-    return PlayerScorecard(
-        player_id=str(raw.get("playerId") or ""),
-        display_name=raw.get("displayName") or "",
-        tournament_id=tournament_id,
-        rounds=[_parse_round(r) for r in (raw.get("rounds") or []) if isinstance(r, dict)],
-    )
 
+    player = raw.get("player") or {}
+
+    return PlayerScorecard(
+        player_id=str(player.get("id") or ""),
+        display_name=player.get("displayName") or "",
+        tournament_id=tournament_id,
+        rounds=[
+            _parse_round(r)
+            for r in (raw.get("roundScores") or [])
+            if isinstance(r, dict)
+        ],
+    )
 
 # ---------------------------------------------------------------------------
 # Public API

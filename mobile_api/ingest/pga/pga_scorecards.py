@@ -30,6 +30,22 @@ DEFAULT_API_KEY = os.getenv("PGA_TOUR_GQL_API_KEY", "da2-gsrx5bibzbb4njvhl7t37wq
 DEFAULT_TIMEOUT = 20
 
 
+class GraphQLQueryError(RuntimeError):
+    """GraphQL response-level error with access to the structured errors list."""
+
+    def __init__(self, errors: List[Dict[str, Any]]):
+        self.errors = errors
+        super().__init__(f"GraphQL errors: {json.dumps(errors, indent=2)}")
+
+    def has_field_undefined(self, *, type_name: str, field_name: str) -> bool:
+        target = f"Field '{field_name}' in type '{type_name}' is undefined"
+        for err in self.errors:
+            msg = str((err or {}).get("message") or "")
+            if "FieldUndefined" in msg and target in msg:
+                return True
+        return False
+
+
 def _graphql_headers(api_key: str) -> Dict[str, str]:
     return {
         "Content-Type": "application/json",
@@ -50,7 +66,7 @@ query Scorecard($id: ID!, $playerId: ID!) {
       id
       displayName
     }
-    courseRounds {
+    rounds {
       roundNumber
       parRelativeScore
       strokes
@@ -70,6 +86,9 @@ query Scorecard($id: ID!, $playerId: ID!) {
   }
 }
 """
+
+# Backward-compatible fallback for older schema variants.
+SCORECARD_QUERY_LEGACY = SCORECARD_QUERY.replace("    rounds {", "    courseRounds {")
 
 # scorecardStats gives aggregate stats per player per round (no hole detail)
 SCORECARD_STATS_QUERY = """
@@ -167,7 +186,7 @@ def _post_graphql(
     result = resp.json()
     errors = result.get("errors")
     if errors:
-        raise RuntimeError(f"GraphQL errors: {json.dumps(errors, indent=2)}")
+        raise GraphQLQueryError(errors)
     return result.get("data", {})
 
 
@@ -236,9 +255,8 @@ def _parse_scorecard(
     raw = data.get(key)
     if not raw:
         return None
-    # Support both schema shapes:
-    #   Old (assumed): playerId / displayName at root, rounds field
-    #   New (confirmed): player { id, displayName } nested, courseRounds field
+    # Support both schema shapes for round lists (`rounds` vs `courseRounds`).
+    # Player identity can also be nested (`player { id, displayName }`) or root-level.
     player_obj = raw.get("player") or {}
     player_id = str(player_obj.get("id") or raw.get("playerId") or "")
     display_name = player_obj.get("displayName") or raw.get("displayName") or ""
@@ -280,7 +298,22 @@ def fetch_scorecard(
     last_exc: Optional[Exception] = None
     for attempt in range(retries):
         try:
-            data = _post_graphql(SCORECARD_QUERY, variables, api_key=api_key)
+            try:
+                data = _post_graphql(SCORECARD_QUERY, variables, api_key=api_key)
+            except GraphQLQueryError as exc:
+                # PGA schema has changed between `courseRounds` and `rounds` over time.
+                # Retry the legacy query when the current field isn't available.
+                if not exc.has_field_undefined(type_name="ScorecardV3", field_name="rounds"):
+                    raise
+
+                try:
+                    data = _post_graphql(SCORECARD_QUERY_LEGACY, variables, api_key=api_key)
+                except GraphQLQueryError as legacy_exc:
+                    # If both variants are undefined, surface the *primary* (current)
+                    # schema error so logs reflect the main query attempted.
+                    if legacy_exc.has_field_undefined(type_name="ScorecardV3", field_name="courseRounds"):
+                        raise exc
+                    raise
             return _parse_scorecard(data, tournament_id, key="scorecardV3")
         except requests.HTTPError as exc:
             status = exc.response.status_code if exc.response is not None else 0
@@ -298,6 +331,37 @@ def fetch_scorecard(
                 continue
             raise
     raise RuntimeError(f"Exceeded {retries} retries. Last error: {last_exc}")
+
+
+def merge_scorecards(
+    detail: Optional[PlayerScorecard],
+    stats: Optional[PlayerScorecard],
+) -> Optional[PlayerScorecard]:
+    """Merge scorecard detail (holes) with scorecardStats round aggregates."""
+    if detail is None:
+        return stats
+    if stats is None:
+        return detail
+
+    detail_by_round = {r.round_number: r for r in detail.rounds}
+    for s in stats.rounds:
+        rnd = detail_by_round.get(s.round_number)
+        if rnd is None:
+            detail.rounds.append(s)
+            continue
+        rnd.birdies = s.birdies
+        rnd.bogeys = s.bogeys
+        rnd.eagles = s.eagles
+        rnd.pars = s.pars
+        rnd.double_or_worse = s.double_or_worse
+        rnd.greens_in_regulation = s.greens_in_regulation
+        rnd.fairways_hit = s.fairways_hit
+        rnd.putts = s.putts
+        rnd.driving_distance = s.driving_distance
+        rnd.driving_accuracy = s.driving_accuracy
+
+    detail.rounds.sort(key=lambda r: r.round_number)
+    return detail
 
 
 def fetch_scorecard_stats(

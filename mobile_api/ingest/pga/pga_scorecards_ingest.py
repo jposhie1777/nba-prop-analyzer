@@ -33,7 +33,12 @@ from google.cloud import bigquery
 
 from .pga_leaderboard import fetch_leaderboard
 from .pga_schedule import fetch_schedule
-from .pga_scorecards import fetch_scorecard, scorecard_to_records
+from .pga_scorecards import (
+    fetch_scorecard,
+    fetch_scorecard_stats,
+    merge_scorecards,
+    scorecard_to_records,
+)
 
 DATASET = os.getenv("PGA_DATASET", "pga_data")
 TABLE = os.getenv("PGA_SCORECARDS_TABLE", "player_scorecards")
@@ -216,7 +221,9 @@ def ingest_tournament_scorecards(
     skipped = 0
     for player in players:
         try:
-            scorecard = fetch_scorecard(tournament_id, player.player_id)
+            detail = fetch_scorecard(tournament_id, player.player_id)
+            stats = fetch_scorecard_stats(tournament_id, player.player_id)
+            scorecard = merge_scorecards(detail, stats)
         except Exception as exc:
             print(f"    [scorecards] skip {player.player_id} ({player.display_name}): {exc}")
             skipped += 1

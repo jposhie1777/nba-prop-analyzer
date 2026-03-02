@@ -199,10 +199,6 @@ def _paginate(
             break
 
         rows.extend(batch)
-
-        if len(batch) < PAGE_SIZE:
-            break
-
         page += 1
 
     if page > MAX_PAGES:
@@ -301,17 +297,15 @@ def fetch_player_stats(season: int) -> List[Dict[str, Any]]:
         or f"{STATS_API}/statistics/players/competitions/{comp_id}/seasons/{season_id}"
     )
 
-    logger.info("Fetching player_stats from %s", url)
-    payload = _get(url)
-    rows = _extract_list(payload)
+    # Use sportapi as the primary paginated source; stats-api caps at ~20 (top players only).
+    sportapi_url = f"{SPORT_API}/api/stats/players/competition/{comp_id}/season/{season_id}"
+    logger.info("Fetching player_stats (sportapi) from %s", sportapi_url)
+    rows = _paginate(sportapi_url, {}, page_param="page", size_param="pageSize")
 
     if not rows:
-        logger.warning("Primary player stats endpoint returned 0 rows — trying fallback")
-
-    if not rows:
-        # Fallback: try sportapi endpoint
-        fallback = f"{SPORT_API}/api/stats/players/competition/{comp_id}/season/{season_id}"
-        rows = _paginate(fallback, {}, page_param="page", size_param="pageSize")
+        logger.warning("sportapi player stats returned 0 rows — trying stats-api fallback")
+        logger.info("Fetching player_stats (fallback) from %s", url)
+        rows = _paginate(url, {})
 
     logger.info("player_stats: %d players", len(rows))
     return rows
@@ -342,11 +336,12 @@ def _is_match_completed(match: Dict[str, Any]) -> bool:
 
 def _match_id_from_row(row: Dict[str, Any]) -> str:
     return str(
-        row.get("id")
-        or row.get("match_id")
+        row.get("match_id")
         or row.get("matchId")
+        or row.get("sportecId")
         or row.get("optaId")
         or row.get("opta_id")
+        or row.get("id")
         or ""
     )
 
@@ -378,10 +373,12 @@ def _fetch_matches_bulk_sportapi(match_ids: List[str]) -> Dict[str, Dict[str, An
             logger.warning("bySportecIds batch [%d:%d] failed: %s", i, i + len(batch), exc)
             payload = {}
 
+        _ID_FIELDS = ("sportecId", "id", "match_id", "matchId", "optaId", "opta_id")
         for m in _extract_list(payload):
-            mid = _match_id_from_row(m)
-            if mid:
-                result[mid] = m
+            for field in _ID_FIELDS:
+                key = str(m.get(field) or "")
+                if key:
+                    result[key] = m
 
         # Per-match fallback for any IDs missing from the bulk response
         for mid in batch:
@@ -390,8 +387,11 @@ def _fetch_matches_bulk_sportapi(match_ids: List[str]) -> Dict[str, Dict[str, An
             try:
                 m = _get(f"{SPORT_API}/api/matches/{mid}")
                 if isinstance(m, dict) and m:
-                    key = _match_id_from_row(m) or mid
-                    result[key] = m
+                    for field in _ID_FIELDS:
+                        key = str(m.get(field) or "")
+                        if key:
+                            result[key] = m
+                    result.setdefault(mid, m)
             except RuntimeError:
                 pass
             time.sleep(0.05)

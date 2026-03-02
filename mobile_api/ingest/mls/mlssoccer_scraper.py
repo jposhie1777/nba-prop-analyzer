@@ -297,13 +297,15 @@ def fetch_player_stats(season: int) -> List[Dict[str, Any]]:
         or f"{STATS_API}/statistics/players/competitions/{comp_id}/seasons/{season_id}"
     )
 
-    logger.info("Fetching player_stats from %s", url)
-    rows = _paginate(url, {})
+    # Use sportapi as the primary paginated source; stats-api caps at ~20 (top players only).
+    sportapi_url = f"{SPORT_API}/api/stats/players/competition/{comp_id}/season/{season_id}"
+    logger.info("Fetching player_stats (sportapi) from %s", sportapi_url)
+    rows = _paginate(sportapi_url, {}, page_param="page", size_param="pageSize")
 
     if not rows:
-        logger.warning("Primary player stats endpoint returned 0 rows — trying fallback")
-        fallback = f"{SPORT_API}/api/stats/players/competition/{comp_id}/season/{season_id}"
-        rows = _paginate(fallback, {}, page_param="page", size_param="pageSize")
+        logger.warning("sportapi player stats returned 0 rows — trying stats-api fallback")
+        logger.info("Fetching player_stats (fallback) from %s", url)
+        rows = _paginate(url, {})
 
     logger.info("player_stats: %d players", len(rows))
     return rows

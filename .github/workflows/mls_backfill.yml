@@ -10,7 +10,7 @@ on:
       end_season:
         description: "Last season to backfill (YYYY)"
         required: false
-        default: "2025"
+        default: "2026"
       dry_run:
         description: "Dry run — fetch data but do NOT write to BigQuery"
         required: false

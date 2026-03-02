@@ -199,10 +199,6 @@ def _paginate(
             break
 
         rows.extend(batch)
-
-        if len(batch) < PAGE_SIZE:
-            break
-
         page += 1
 
     if page > MAX_PAGES:
@@ -302,14 +298,10 @@ def fetch_player_stats(season: int) -> List[Dict[str, Any]]:
     )
 
     logger.info("Fetching player_stats from %s", url)
-    payload = _get(url)
-    rows = _extract_list(payload)
+    rows = _paginate(url, {})
 
     if not rows:
         logger.warning("Primary player stats endpoint returned 0 rows — trying fallback")
-
-    if not rows:
-        # Fallback: try sportapi endpoint
         fallback = f"{SPORT_API}/api/stats/players/competition/{comp_id}/season/{season_id}"
         rows = _paginate(fallback, {}, page_param="page", size_param="pageSize")
 

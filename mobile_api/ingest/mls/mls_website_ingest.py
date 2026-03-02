@@ -164,6 +164,31 @@ def _write_rows(
     return len(payload_rows)
 
 
+def _truncate_table(client: bigquery.Client, table: str) -> None:
+    """Truncate a target BigQuery table if it exists."""
+    table_id = _table_id(client, table)
+    query = f"TRUNCATE TABLE `{table_id}`"
+    client.query(query).result()
+    logger.info("Truncated table %s", table_id)
+
+
+def truncate_website_tables() -> Dict[str, Any]:
+    """Truncate all mlssoccer.com raw ingestion tables."""
+    client = _get_bq_client()
+    tables = [
+        TABLE_SCHEDULE,
+        TABLE_TEAM_STATS,
+        TABLE_PLAYER_STATS,
+        TABLE_TEAM_GAME_STATS,
+        TABLE_PLAYER_GAME_STATS,
+    ]
+    truncated: List[str] = []
+    for table in tables:
+        _truncate_table(client, table)
+        truncated.append(_table_id(client, table))
+    return {"truncated_tables": truncated}
+
+
 # ---------------------------------------------------------------------------
 # Public ingest functions
 # ---------------------------------------------------------------------------
@@ -432,6 +457,7 @@ def run_website_backfill(
     start_season: Optional[int] = None,
     end_season: Optional[int] = None,
     dry_run: bool = False,
+    truncate_first: bool = False,
 ) -> Dict[str, Any]:
     """
     Backfill all five mlssoccer.com feeds for a range of seasons.
@@ -445,6 +471,7 @@ def run_website_backfill(
     start_season: First season to backfill (default: current_year - 2)
     end_season:   Last season to backfill  (default: current_year)
     dry_run:      If True, fetch data but do NOT write to BigQuery.
+    truncate_first: If True, truncate all mlssoccer raw tables before backfill.
 
     Returns
     -------
@@ -468,8 +495,22 @@ def run_website_backfill(
         "end_season": end_season,
         "seasons_requested": seasons,
         "dry_run": dry_run,
+        "truncate_first": truncate_first,
         "by_season": {},
     }
+
+    if truncate_first:
+        if dry_run:
+            logger.info("[MLS backfill] dry_run=True, skipping truncate_first")
+            results["truncate"] = {
+                "requested": True,
+                "executed": False,
+                "reason": "dry_run",
+            }
+        else:
+            logger.info("[MLS backfill] Truncating mlssoccer raw tables before backfill")
+            truncation = truncate_website_tables()
+            results["truncate"] = {"requested": True, "executed": True, **truncation}
 
     for season in seasons:
         logger.info("[MLS backfill] Processing season %d", season)
@@ -608,6 +649,11 @@ def _cli_main() -> None:
         action="store_true",
         help="Fetch data but do NOT write to BigQuery",
     )
+    parser.add_argument(
+        "--truncate-first",
+        action="store_true",
+        help="Backfill mode only: truncate all mlssoccer raw tables before writing",
+    )
 
     args = parser.parse_args()
 
@@ -616,6 +662,7 @@ def _cli_main() -> None:
             start_season=args.start_season,
             end_season=args.end_season,
             dry_run=args.dry_run,
+            truncate_first=args.truncate_first,
         )
         print(json.dumps(result, indent=2, default=str))
     elif args.mode == "daily":

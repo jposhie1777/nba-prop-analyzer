@@ -24,5 +24,7 @@
 ## True wipe + backfill (mlssoccer website ingest)
 
 - Use the backfill CLI with `--truncate-first` to empty the five mlssoccer raw tables before repopulating:
-  - `python -m mobile_api.ingest.mls.mls_website_ingest --mode backfill --start-season 2024 --end-season 2026 --truncate-first`
+  - `python -m mobile_api.ingest.mls.mls_website_ingest --mode backfill --start-season 2024 --end-season 2026 --truncate-first` (or `--wipe`)
 - Safety guard: if `--dry-run` is also provided, truncate is skipped and only fetch/count behavior runs.
+
+- `--wipe` is a shorthand alias for `--truncate-first`.

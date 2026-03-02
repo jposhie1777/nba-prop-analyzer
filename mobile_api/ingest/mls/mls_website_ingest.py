@@ -164,12 +164,19 @@ def _write_rows(
     return len(payload_rows)
 
 
-def _truncate_table(client: bigquery.Client, table: str) -> None:
+def _truncate_table(client: bigquery.Client, table: str) -> bool:
     """Truncate a target BigQuery table if it exists."""
     table_id = _table_id(client, table)
+    try:
+        client.get_table(table_id)
+    except NotFound:
+        logger.warning("Table %s does not exist; skipping truncate", table_id)
+        return False
+
     query = f"TRUNCATE TABLE `{table_id}`"
     client.query(query).result()
     logger.info("Truncated table %s", table_id)
+    return True
 
 
 def truncate_website_tables() -> Dict[str, Any]:
@@ -183,10 +190,14 @@ def truncate_website_tables() -> Dict[str, Any]:
         TABLE_PLAYER_GAME_STATS,
     ]
     truncated: List[str] = []
+    skipped_missing: List[str] = []
     for table in tables:
-        _truncate_table(client, table)
-        truncated.append(_table_id(client, table))
-    return {"truncated_tables": truncated}
+        table_id = _table_id(client, table)
+        if _truncate_table(client, table):
+            truncated.append(table_id)
+        else:
+            skipped_missing.append(table_id)
+    return {"truncated_tables": truncated, "skipped_missing_tables": skipped_missing}
 
 
 # ---------------------------------------------------------------------------
@@ -485,9 +496,10 @@ def run_website_backfill(
 
     seasons = list(range(start_season, end_season + 1))
     logger.info(
-        "[MLS backfill] Starting backfill for seasons %s (dry_run=%s)",
+        "[MLS backfill] Starting backfill for seasons %s (dry_run=%s, truncate_first=%s)",
         seasons,
         dry_run,
+        truncate_first,
     )
 
     results: Dict[str, Any] = {
@@ -654,15 +666,25 @@ def _cli_main() -> None:
         action="store_true",
         help="Backfill mode only: truncate all mlssoccer raw tables before writing",
     )
+    parser.add_argument(
+        "--wipe",
+        action="store_true",
+        help="Alias for --truncate-first",
+    )
 
     args = parser.parse_args()
+
+    if (args.truncate_first or args.wipe) and args.mode != "backfill":
+        parser.error("--truncate-first/--wipe can only be used with --mode backfill")
+
+    truncate_first = args.truncate_first or args.wipe
 
     if args.mode == "backfill":
         result = run_website_backfill(
             start_season=args.start_season,
             end_season=args.end_season,
             dry_run=args.dry_run,
-            truncate_first=args.truncate_first,
+            truncate_first=truncate_first,
         )
         print(json.dumps(result, indent=2, default=str))
     elif args.mode == "daily":

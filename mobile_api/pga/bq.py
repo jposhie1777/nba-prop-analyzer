@@ -441,13 +441,13 @@ def fetch_tournament_results(params: Optional[Dict[str, Any]] = None) -> List[Di
     if tournament_ids:
         conditions.append("r.tournament_id IN UNNEST(@tournament_ids)")
         query_params.append(
-            bigquery.ArrayQueryParameter("tournament_ids", "INT64", tournament_ids)
+            bigquery.ArrayQueryParameter("tournament_ids", "STRING", tournament_ids)
         )
 
     if player_ids:
         conditions.append("r.player_id IN UNNEST(@player_ids)")
         query_params.append(
-            bigquery.ArrayQueryParameter("player_ids", "INT64", player_ids)
+            bigquery.ArrayQueryParameter("player_ids", "STRING", player_ids)
         )
 
     where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""

@@ -468,7 +468,7 @@ def run_website_backfill(
     start_season: Optional[int] = None,
     end_season: Optional[int] = None,
     dry_run: bool = False,
-    truncate_first: bool = False,
+    truncate_first: bool = True,
 ) -> Dict[str, Any]:
     """
     Backfill all five mlssoccer.com feeds for a range of seasons.
@@ -664,7 +664,13 @@ def _cli_main() -> None:
     parser.add_argument(
         "--truncate-first",
         action="store_true",
-        help="Backfill mode only: truncate all mlssoccer raw tables before writing",
+        default=True,
+        help="Backfill mode only: truncate all mlssoccer raw tables before writing (default: True)",
+    )
+    parser.add_argument(
+        "--no-truncate",
+        action="store_true",
+        help="Backfill mode only: skip the pre-backfill truncation",
     )
     parser.add_argument(
         "--wipe",
@@ -674,10 +680,13 @@ def _cli_main() -> None:
 
     args = parser.parse_args()
 
-    if (args.truncate_first or args.wipe) and args.mode != "backfill":
-        parser.error("--truncate-first/--wipe can only be used with --mode backfill")
+    if args.no_truncate and args.mode != "backfill":
+        parser.error("--no-truncate can only be used with --mode backfill")
 
-    truncate_first = args.truncate_first or args.wipe
+    if args.no_truncate:
+        truncate_first = False
+    else:
+        truncate_first = True
 
     if args.mode == "backfill":
         result = run_website_backfill(

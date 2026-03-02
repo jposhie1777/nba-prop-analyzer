@@ -379,7 +379,7 @@ def _row_belongs_to_match(row: Dict[str, Any], match_id: str) -> bool:
 
 
 def _fetch_stats_for_match(
-    base_url: str,
+    base_urls: List[str],
     match_id: str,
 ) -> List[Dict[str, Any]]:
     """
@@ -387,23 +387,24 @@ def _fetch_stats_for_match(
 
     Strategy (in priority order):
 
-    1. Try a match-scoped URL path  (base_url/matches/<match_id>).
-       If the API returns rows via this path we trust them without further
-       validation because the URL itself scopes the request.
+    1. Try match-scoped URL paths  (base_url/matches/<match_id>) for each
+       base_url provided.  Tried in priority order: season-scoped URL first,
+       then competition-scoped URL (without the season segment) as a fallback.
+       The MLS stats API sometimes exposes per-match stats only at the
+       competition level, not the season level.
 
-    2. Try query-parameter filtering on the season endpoint and VALIDATE
-       that every returned row actually carries *match_id*.  The MLS
-       season-statistics endpoint silently ignores unknown filter params and
-       returns full-season aggregates; accepting those rows is the root cause
-       of "player game stats showing season totals for every match".
+    2. Try query-parameter filtering on each base URL and VALIDATE that every
+       returned row actually carries *match_id*.  The MLS season-statistics
+       endpoint silently ignores unknown filter params and returns full-season
+       aggregates; accepting those rows is the root cause of "player game stats
+       showing season totals for every match".
 
     Returns [] when no match-specific rows are found (upcoming matches or
     stats not yet published).
     """
-    # --- 1. Match-scoped path (preferred) ---
-    for match_url in (
-        base_url.rstrip("/") + f"/matches/{match_id}",
-    ):
+    # --- 1. Match-scoped paths (preferred) ---
+    for base_url in base_urls:
+        match_url = base_url.rstrip("/") + f"/matches/{match_id}"
         try:
             payload = _get(match_url)
         except RuntimeError:
@@ -418,33 +419,34 @@ def _fetch_stats_for_match(
                 return rows
 
     # --- 2. Query-param filtering with strict validation ---
-    for filter_key in ("match_opta_id", "match_id", "matchId", "optaMatchId"):
-        try:
-            payload = _get(base_url, {filter_key: match_id, "per_page": PAGE_SIZE})
-        except RuntimeError:
-            continue
+    for base_url in base_urls:
+        for filter_key in ("match_opta_id", "match_id", "matchId", "optaMatchId"):
+            try:
+                payload = _get(base_url, {filter_key: match_id, "per_page": PAGE_SIZE})
+            except RuntimeError:
+                continue
 
-        all_rows = _extract_list(payload)
-        if not all_rows:
-            continue
+            all_rows = _extract_list(payload)
+            if not all_rows:
+                continue
 
-        match_rows = [r for r in all_rows if _row_belongs_to_match(r, match_id)]
-        if match_rows:
+            match_rows = [r for r in all_rows if _row_belongs_to_match(r, match_id)]
+            if match_rows:
+                logger.debug(
+                    "match stats via filter %s=%s → %d/%d rows",
+                    filter_key, match_id, len(match_rows), len(all_rows),
+                )
+                return match_rows
+
+            # all_rows is non-empty but none belong to this match → the endpoint
+            # returned season aggregates (filter was ignored).  Try next key.
             logger.debug(
-                "match stats via filter %s=%s → %d/%d rows",
-                filter_key, match_id, len(match_rows), len(all_rows),
+                "filter %s=%s returned %d rows but none matched match_id — "
+                "likely season aggregates, skipping",
+                filter_key, match_id, len(all_rows),
             )
-            return match_rows
 
-        # all_rows is non-empty but none belong to this match → the endpoint
-        # returned season aggregates (filter was ignored).  Try next key.
-        logger.debug(
-            "filter %s=%s returned %d rows but none matched match_id — "
-            "likely season aggregates, skipping",
-            filter_key, match_id, len(all_rows),
-        )
-
-    logger.info("No per-match stats found for match_id=%s", match_id)
+    logger.debug("No per-match stats found for match_id=%s", match_id)
     return []
 
 
@@ -484,12 +486,17 @@ def fetch_team_game_stats(season: int, only_date: Optional[date] = None) -> List
         ]
     logger.info("team_game_stats: %d completed matches to process", len(completed))
 
-    base_url = (
+    season_base_url = (
         os.getenv("MLSSOCCER_TEAM_GAME_STATS_URL")
         or f"{STATS_API}/statistics/clubs/competitions/{comp_id}/seasons/{season_id}"
     )
+    # Also try the competition-level URL (no season segment) — the MLS stats
+    # API exposes per-match data at this level for some seasons.
+    comp_base_url = f"{STATS_API}/statistics/clubs/competitions/{comp_id}"
+    base_urls = [season_base_url, comp_base_url]
 
     all_rows: List[Dict[str, Any]] = []
+    no_stats_count = 0
     for match in completed:
         match_id = (
             match.get("match_id")
@@ -503,9 +510,12 @@ def fetch_team_game_stats(season: int, only_date: Optional[date] = None) -> List
 
         # Try with opta_id first (MLS stats API uses opta identifiers),
         # then fall back to the schedule match_id.
-        rows = _fetch_stats_for_match(base_url, opta_id)
+        rows = _fetch_stats_for_match(base_urls, opta_id)
         if not rows and opta_id != match_id:
-            rows = _fetch_stats_for_match(base_url, match_id)
+            rows = _fetch_stats_for_match(base_urls, match_id)
+
+        if not rows:
+            no_stats_count += 1
 
         match_date = (
             match.get("match_date")
@@ -520,6 +530,11 @@ def fetch_team_game_stats(season: int, only_date: Optional[date] = None) -> List
         all_rows.extend(rows)
         time.sleep(0.05)  # polite rate-limiting between match requests
 
+    if no_stats_count:
+        logger.info(
+            "team_game_stats: %d/%d completed matches had no per-match stats available",
+            no_stats_count, len(completed),
+        )
     logger.info("team_game_stats: %d rows total", len(all_rows))
     return all_rows
 
@@ -559,12 +574,16 @@ def fetch_player_game_stats(season: int, only_date: Optional[date] = None) -> Li
         ]
     logger.info("player_game_stats: %d completed matches to process", len(completed))
 
-    base_url = (
+    season_base_url = (
         os.getenv("MLSSOCCER_PLAYER_GAME_STATS_URL")
         or f"{STATS_API}/statistics/players/competitions/{comp_id}/seasons/{season_id}"
     )
+    # Also try the competition-level URL (no season segment).
+    comp_base_url = f"{STATS_API}/statistics/players/competitions/{comp_id}"
+    base_urls = [season_base_url, comp_base_url]
 
     all_rows: List[Dict[str, Any]] = []
+    no_stats_count = 0
     for match in completed:
         match_id = (
             match.get("match_id")
@@ -578,9 +597,12 @@ def fetch_player_game_stats(season: int, only_date: Optional[date] = None) -> Li
 
         # Try with opta_id first (MLS stats API uses opta identifiers),
         # then fall back to the schedule match_id.
-        rows = _fetch_stats_for_match(base_url, opta_id)
+        rows = _fetch_stats_for_match(base_urls, opta_id)
         if not rows and opta_id != match_id:
-            rows = _fetch_stats_for_match(base_url, match_id)
+            rows = _fetch_stats_for_match(base_urls, match_id)
+
+        if not rows:
+            no_stats_count += 1
 
         match_date = (
             match.get("match_date")
@@ -595,6 +617,11 @@ def fetch_player_game_stats(season: int, only_date: Optional[date] = None) -> Li
         all_rows.extend(rows)
         time.sleep(0.05)  # polite rate-limiting between match requests
 
+    if no_stats_count:
+        logger.info(
+            "player_game_stats: %d/%d completed matches had no per-match stats available",
+            no_stats_count, len(completed),
+        )
     logger.info("player_game_stats: %d rows total", len(all_rows))
     return all_rows
 

@@ -505,7 +505,7 @@ def fetch_tournament_results(params: Optional[Dict[str, Any]] = None) -> List[Di
     LEFT JOIN latest_tournaments t
       ON t.tournament_id = r.tournament_id AND t.season = r.season
     LEFT JOIN latest_players p
-      ON p.player_id = r.player_id
+      ON CAST(p.player_id AS STRING) = r.player_id
     {where_clause}
     """
 

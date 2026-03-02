@@ -373,7 +373,48 @@ def _fetch_matches_bulk_sportapi(match_ids: List[str]) -> Dict[str, Dict[str, An
             logger.warning("bySportecIds batch [%d:%d] failed: %s", i, i + len(batch), exc)
             payload = {}
 
+        # Diagnostic: log the raw response shape for the first batch so we can
+        # confirm the extraction path being taken.
+        if i == 0:
+            if isinstance(payload, dict):
+                logger.info(
+                    "bySportecIds batch 0 response: dict with keys=%s",
+                    list(payload.keys())[:20],
+                )
+            elif isinstance(payload, list):
+                logger.info(
+                    "bySportecIds batch 0 response: list of %d items; "
+                    "first item keys=%s",
+                    len(payload),
+                    list(payload[0].keys())[:20] if payload else [],
+                )
+            else:
+                logger.info("bySportecIds batch 0 response type: %s", type(payload))
+
         _ID_FIELDS = ("sportecId", "id", "match_id", "matchId", "optaId", "opta_id")
+
+        # Handle response shaped as {sportecId: matchObj, ...}
+        if (
+            isinstance(payload, dict)
+            and not any(isinstance(payload.get(k), list) for k in (
+                "matches", "content", "results", "items", "data",
+            ))
+        ):
+            # Check if ALL values are dicts (keyed-by-id map)
+            values = list(payload.values())
+            if values and all(isinstance(v, dict) for v in values):
+                logger.info(
+                    "bySportecIds: detected keyed-by-id map with %d entries", len(values)
+                )
+                for key_from_response, m in payload.items():
+                    result[str(key_from_response)] = m
+                    for field in _ID_FIELDS:
+                        k = str(m.get(field) or "")
+                        if k:
+                            result[k] = m
+                time.sleep(0.1)
+                continue  # skip _extract_list path and per-match fallback for this batch
+
         for m in _extract_list(payload):
             for field in _ID_FIELDS:
                 key = str(m.get(field) or "")
@@ -423,6 +464,7 @@ def _team_rows_from_sportapi_match(
         team_obj = (
             sportapi_match.get(f"{side}Team")
             or sportapi_match.get(f"{side}_team")
+            or sportapi_match.get(side)
         )
         if not isinstance(team_obj, dict):
             continue
@@ -431,6 +473,11 @@ def _team_rows_from_sportapi_match(
         row.setdefault("match_date", match_date)
         row["side"] = side
         rows.append(row)
+    if not rows:
+        logger.info(
+            "_team_rows: no teams found; match keys=%s",
+            list(sportapi_match.keys())[:30],
+        )
     return rows
 
 
@@ -486,11 +533,20 @@ def _player_rows_from_sportapi_match(
                 side,
             )
 
-    # Pattern 3: top-level players list
+    # Pattern 3: top-level players list (various field names)
     if not rows:
         _add_players(
-            sportapi_match.get("players") or sportapi_match.get("playerStatistics"),
+            sportapi_match.get("players")
+            or sportapi_match.get("playerStatistics")
+            or sportapi_match.get("playerStats"),
             "",
+        )
+
+    # Diagnostic: log the match object keys when we still have no rows
+    if not rows:
+        logger.info(
+            "_player_rows: no players found; match keys=%s",
+            list(sportapi_match.keys())[:30],
         )
 
     return rows

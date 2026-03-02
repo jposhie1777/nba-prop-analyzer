@@ -334,11 +334,12 @@ def _is_match_completed(match: Dict[str, Any]) -> bool:
 
 def _match_id_from_row(row: Dict[str, Any]) -> str:
     return str(
-        row.get("id")
-        or row.get("match_id")
+        row.get("match_id")
         or row.get("matchId")
+        or row.get("sportecId")
         or row.get("optaId")
         or row.get("opta_id")
+        or row.get("id")
         or ""
     )
 
@@ -370,10 +371,12 @@ def _fetch_matches_bulk_sportapi(match_ids: List[str]) -> Dict[str, Dict[str, An
             logger.warning("bySportecIds batch [%d:%d] failed: %s", i, i + len(batch), exc)
             payload = {}
 
+        _ID_FIELDS = ("sportecId", "id", "match_id", "matchId", "optaId", "opta_id")
         for m in _extract_list(payload):
-            mid = _match_id_from_row(m)
-            if mid:
-                result[mid] = m
+            for field in _ID_FIELDS:
+                key = str(m.get(field) or "")
+                if key:
+                    result[key] = m
 
         # Per-match fallback for any IDs missing from the bulk response
         for mid in batch:
@@ -382,8 +385,11 @@ def _fetch_matches_bulk_sportapi(match_ids: List[str]) -> Dict[str, Dict[str, An
             try:
                 m = _get(f"{SPORT_API}/api/matches/{mid}")
                 if isinstance(m, dict) and m:
-                    key = _match_id_from_row(m) or mid
-                    result[key] = m
+                    for field in _ID_FIELDS:
+                        key = str(m.get(field) or "")
+                        if key:
+                            result[key] = m
+                    result.setdefault(mid, m)
             except RuntimeError:
                 pass
             time.sleep(0.05)

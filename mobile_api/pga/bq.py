@@ -279,30 +279,34 @@ def _query_tournaments(
         params.append(bigquery.ScalarQueryParameter("offset", "INT64", offset or 0))
 
     query = f"""
-    WITH latest AS (
-      SELECT * EXCEPT(row_num)
-      FROM (
-        SELECT *, ROW_NUMBER() OVER (PARTITION BY tournament_id, season ORDER BY run_ts DESC) AS row_num
-        FROM {table}
-      )
-      WHERE row_num = 1
-    )
-    SELECT
-      tournament_id,
-      season,
-      name,
-      start_date,
-      end_date,
-      city,
-      state,
-      country,
-      course_name,
-      status,
-      courses
-    FROM latest
-    {where_clause}
-    ORDER BY start_date DESC, name
-    {limit_clause}
+        WITH latest AS (
+        SELECT * EXCEPT(row_num)
+        FROM (
+            SELECT *,
+                ROW_NUMBER() OVER (
+                    PARTITION BY tournament_id, season
+                    ORDER BY run_ts DESC
+                ) AS row_num
+            FROM {table}
+        )
+        WHERE row_num = 1
+        )
+        SELECT
+        tournament_id,
+        season,
+        name,
+        start_date,
+        end_date,
+        city,
+        state,
+        country,
+        purse,
+        status,
+        champion
+        FROM latest
+        {where_clause}
+        ORDER BY start_date DESC, name
+        {limit_clause}
     """
     return _run_query(client, query, params)
 

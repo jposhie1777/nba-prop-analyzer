@@ -27,7 +27,7 @@ import json
 import logging
 import os
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -327,8 +327,29 @@ def _is_match_completed(match: Dict[str, Any]) -> bool:
     if status in {"finalwhistle", "final", "ft", "completed", "finished"}:
         return True
 
-    # Fallback: MLS returns score fields only for completed matches
+    # Fallback: non-null goals indicate a completed match.
+    # Guard against false positives: stats-api returns home_team_goals=0 (not null)
+    # for upcoming matches, so only trust goals if the kickoff time is in the past.
     if match.get("home_team_goals") is not None and match.get("away_team_goals") is not None:
+        kickoff_str = (
+            match.get("planned_kickoff_time")
+            or match.get("match_date")
+            or match.get("matchDate")
+            or match.get("date")
+            or ""
+        )
+        if kickoff_str:
+            try:
+                ks = str(kickoff_str)
+                if ks.endswith("Z"):
+                    ks = ks[:-1] + "+00:00"
+                kickoff_dt = datetime.fromisoformat(ks)
+                if kickoff_dt.tzinfo is None:
+                    kickoff_dt = kickoff_dt.replace(tzinfo=timezone.utc)
+                if kickoff_dt >= datetime.now(timezone.utc):
+                    return False  # future match — goals are API defaults, not real
+            except (ValueError, TypeError):
+                pass
         return True
 
     return False
@@ -665,37 +686,66 @@ def fetch_team_game_stats(season: int, only_date: Optional[date] = None) -> List
 def _fetch_player_stats_for_match_sportapi(
     match_sportec_id: str,
     opta_match_id: str,
+    season: int = 0,
 ) -> List[Dict[str, Any]]:
     """
-    Try dedicated sportapi per-match player stats endpoints.
+    Try dedicated per-match player stats endpoints across both APIs.
 
-    Attempts several URL patterns used by sportapi.mlssoccer.com for per-match
-    player statistics, returning the first non-empty result.
+    Attempts several URL + param patterns, returning the first non-empty result.
+    Logs the working URL so we can harden the implementation once confirmed.
 
     Returns a (possibly empty) list of player stat dicts.
     """
-    candidates = [
-        f"{SPORT_API}/api/stats/players/match/{match_sportec_id}",
-        f"{SPORT_API}/api/stats/players/match/{opta_match_id}",
-        f"{SPORT_API}/api/matches/{match_sportec_id}/players",
-        f"{SPORT_API}/api/matches/{match_sportec_id}/stats",
-        f"{SPORT_API}/api/matches/{match_sportec_id}/lineups",
+    comp_id = _competition_id()
+    season_id = DEFAULT_SEASON_ID_BY_YEAR.get(season, "") if season else ""
+
+    # Each entry: (url, params_dict)
+    candidates: List[tuple] = [
+        # sportapi: match-center (most likely to embed full lineup + stats)
+        (f"{SPORT_API}/api/matchcenter/{match_sportec_id}", {}),
+        (f"{SPORT_API}/api/matchcenter/{match_sportec_id}/lineups", {}),
+        (f"{SPORT_API}/api/matchcenter/{match_sportec_id}/stats", {}),
+        # sportapi: dedicated stats endpoint with season context
+        (
+            f"{SPORT_API}/api/stats/players/competition/{comp_id}/season/{season_id}",
+            {"match": match_sportec_id},
+        ) if season_id else None,
+        # sportapi: match-level stats path
+        (f"{SPORT_API}/api/stats/players/match/{match_sportec_id}", {}),
+        (f"{SPORT_API}/api/stats/players/match/{opta_match_id}", {}),
+        # sportapi: sub-resources of the match object
+        (f"{SPORT_API}/api/matches/{match_sportec_id}/players", {}),
+        (f"{SPORT_API}/api/matches/{match_sportec_id}/lineups", {}),
+        (f"{SPORT_API}/api/matches/{match_sportec_id}/stats", {}),
+        # stats-api: player stats filtered by opta match_id
+        (
+            f"{STATS_API}/statistics/players/competitions/{comp_id}/seasons/{season_id}",
+            {"match_id": opta_match_id},
+        ) if season_id and opta_match_id else None,
+        (
+            f"{STATS_API}/statistics/players/competitions/{comp_id}/seasons/{season_id}",
+            {"match": opta_match_id},
+        ) if season_id and opta_match_id else None,
     ]
 
-    for url in candidates:
+    for entry in candidates:
+        if entry is None:
+            continue
+        url, params = entry
         try:
-            payload = _get(url)
+            payload = _get(url, params or None)
         except RuntimeError:
             continue
 
         rows = _extract_list(payload)
         if rows:
             logger.info(
-                "_fetch_player_stats_for_match: found %d rows at %s", len(rows), url
+                "_fetch_player_stats_for_match: found %d rows at %s params=%s",
+                len(rows), url, params,
             )
             return rows
 
-        # Also handle keyed-by-side responses: {"home": [...], "away": [...]}
+        # Handle keyed-by-side responses: {"home": [...], "away": [...]}
         if isinstance(payload, dict):
             combined: List[Dict[str, Any]] = []
             for side in ("home", "away", "homeTeam", "awayTeam"):
@@ -706,7 +756,6 @@ def _fetch_player_stats_for_match_sportapi(
                             p.setdefault("side", side.replace("Team", ""))
                             combined.append(p)
                 elif isinstance(val, dict):
-                    # might be {"players": [...]}
                     for pl_key in ("players", "roster", "lineup"):
                         pl = val.get(pl_key)
                         if isinstance(pl, list):
@@ -717,8 +766,7 @@ def _fetch_player_stats_for_match_sportapi(
             if combined:
                 logger.info(
                     "_fetch_player_stats_for_match: found %d rows (keyed-by-side) at %s",
-                    len(combined),
-                    url,
+                    len(combined), url,
                 )
                 return combined
 
@@ -802,7 +850,7 @@ def fetch_player_game_stats(season: int, only_date: Optional[date] = None) -> Li
                 or schedule_row.get("match_id")
                 or ""
             )
-            rows = _fetch_player_stats_for_match_sportapi(mid, opta_id)
+            rows = _fetch_player_stats_for_match_sportapi(mid, opta_id, season=season)
             if rows:
                 if not dedicated_endpoint_hit:
                     logger.info(

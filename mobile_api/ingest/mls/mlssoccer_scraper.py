@@ -14,11 +14,9 @@ Player season stats:
   stats-api  /statistics/players/competitions/{competition_id}/seasons/{season_id}
 
 Per-match club/player stats:
-  sportapi   /api/matches/bySportecIds/{id1},{id2},...
-               Bulk-fetch up to SPORT_API_BATCH_SIZE matches per request.
-               Returns a list of full match objects (scores, team/player data).
-  sportapi   /api/matches/{match_id}
-               Per-match fallback when a match is absent from the bulk response.
+  stats-api  /statistics/clubs/matches/{match_id}
+  stats-api  /statistics/players/matches/{match_id}
+               Canonical per-game endpoints used by mlssoccer.com's match center.
 """
 
 from __future__ import annotations
@@ -595,6 +593,73 @@ def _player_rows_from_sportapi_match(
     return rows
 
 
+def _fetch_team_stats_for_match_stats_api(match_id: str) -> List[Dict[str, Any]]:
+    """Fetch per-team per-match rows from stats-api for a single match."""
+    payload = _get(f"{STATS_API}/statistics/clubs/matches/{match_id}")
+
+    if not isinstance(payload, dict):
+        return []
+
+    rows: List[Dict[str, Any]] = []
+    entries = payload.get("match_statistics_list")
+    if isinstance(entries, list):
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            match_stats = entry.get("match_statistics")
+            if not isinstance(match_stats, dict):
+                continue
+            team_stats = match_stats.get("team_statistics")
+            if not isinstance(team_stats, list):
+                continue
+            for team_row in team_stats:
+                if not isinstance(team_row, dict):
+                    continue
+                row = dict(team_row)
+                row.setdefault("match_id", match_stats.get("match_id") or match_id)
+                row.setdefault("match_date", match_stats.get("planned_kick_off") or match_stats.get("kick_off") or "")
+                rows.append(row)
+    return rows
+
+
+def _fetch_player_stats_for_match_stats_api(match_id: str) -> List[Dict[str, Any]]:
+    """Fetch all per-player per-match rows from stats-api for a single match."""
+    rows: List[Dict[str, Any]] = []
+    page = 1
+    per_page = 200
+
+    while True:
+        payload = _get(
+            f"{STATS_API}/statistics/players/matches/{match_id}",
+            {"per_page": per_page, "page": page},
+        )
+
+        if not isinstance(payload, dict):
+            break
+
+        match_stats = payload.get("match_statistics")
+        if not isinstance(match_stats, dict):
+            break
+
+        player_stats = match_stats.get("player_statistics")
+        if not isinstance(player_stats, list) or not player_stats:
+            break
+
+        for player_row in player_stats:
+            if not isinstance(player_row, dict):
+                continue
+            row = dict(player_row)
+            row.setdefault("match_id", match_stats.get("match_id") or match_id)
+            row.setdefault("match_date", match_stats.get("planned_kick_off") or match_stats.get("kick_off") or "")
+            rows.append(row)
+
+        if len(player_stats) < per_page:
+            break
+        page += 1
+
+    return rows
+
+
 # ---------------------------------------------------------------------------
 # Team game stats (per-club per-match)
 # ---------------------------------------------------------------------------
@@ -602,12 +667,10 @@ def _player_rows_from_sportapi_match(
 
 def fetch_team_game_stats(season: int, only_date: Optional[date] = None) -> List[Dict[str, Any]]:
     """
-    Fetch per-club per-match statistics for *season*.
+    Fetch per-club per-match statistics for *season* from stats-api.
 
-    Uses sportapi.mlssoccer.com/api/matches/bySportecIds (bulk) to retrieve
-    full match objects for all completed matches, then extracts the homeTeam
-    and awayTeam sub-objects as individual rows.  Falls back to per-match
-    requests for any IDs absent from the bulk response.
+    Source endpoint per match:
+      /statistics/clubs/matches/{match_id}
 
     Parameters
     ----------
@@ -629,44 +692,29 @@ def fetch_team_game_stats(season: int, only_date: Optional[date] = None) -> List
         ]
     logger.info("team_game_stats: %d completed matches to process", len(completed))
 
-    # Build ordered match_id list and schedule lookup (deduplicated)
+    # Build ordered match_id list (deduplicated)
     seen: set = set()
     ordered_ids: List[str] = []
-    schedule_by_id: Dict[str, Dict[str, Any]] = {}
     for m in completed:
         mid = str(m.get("match_id") or m.get("id") or m.get("matchId") or "")
         if mid and mid not in seen:
             seen.add(mid)
             ordered_ids.append(mid)
-            schedule_by_id[mid] = m
-
-    sportapi_data = _fetch_matches_bulk_sportapi(ordered_ids)
-    logger.info(
-        "team_game_stats: sportapi returned %d/%d matches",
-        len(sportapi_data), len(ordered_ids),
-    )
 
     all_rows: List[Dict[str, Any]] = []
     no_stats_count = 0
     for mid in ordered_ids:
-        schedule_row = schedule_by_id[mid]
-        match_date = (
-            schedule_row.get("match_date")
-            or schedule_row.get("date")
-            or schedule_row.get("matchDate")
-            or schedule_row.get("planned_kickoff_time")
-            or ""
-        )
-        sportapi_match = sportapi_data.get(mid)
-        if not sportapi_match:
-            logger.info("No per-match stats found for match_id=%s", mid)
-            no_stats_count += 1
-            continue
+        rows: List[Dict[str, Any]] = []
 
-        rows = _team_rows_from_sportapi_match(sportapi_match, mid, match_date)
+        try:
+            rows = _fetch_team_stats_for_match_stats_api(mid)
+        except RuntimeError as exc:
+            logger.info("team_game_stats: stats-api endpoint failed for match_id=%s: %s", mid, exc)
+
         if not rows:
             logger.info("No team rows extracted for match_id=%s", mid)
             no_stats_count += 1
+
         all_rows.extend(rows)
 
     if no_stats_count:
@@ -780,10 +828,10 @@ def _fetch_player_stats_for_match_sportapi(
 
 def fetch_player_game_stats(season: int, only_date: Optional[date] = None) -> List[Dict[str, Any]]:
     """
-    Fetch per-player per-match statistics for *season*.
+    Fetch per-player per-match statistics for *season* from stats-api.
 
-    Uses the same sportapi bulk strategy as fetch_team_game_stats but extracts
-    per-player rows from each match object's lineups / player data.
+    Source endpoint per match:
+      /statistics/players/matches/{match_id}
 
     Parameters
     ----------
@@ -807,67 +855,25 @@ def fetch_player_game_stats(season: int, only_date: Optional[date] = None) -> Li
 
     seen: set = set()
     ordered_ids: List[str] = []
-    schedule_by_id: Dict[str, Dict[str, Any]] = {}
     for m in completed:
         mid = str(m.get("match_id") or m.get("id") or m.get("matchId") or "")
         if mid and mid not in seen:
             seen.add(mid)
             ordered_ids.append(mid)
-            schedule_by_id[mid] = m
-
-    sportapi_data = _fetch_matches_bulk_sportapi(ordered_ids)
-    logger.info(
-        "player_game_stats: sportapi returned %d/%d matches",
-        len(sportapi_data), len(ordered_ids),
-    )
 
     all_rows: List[Dict[str, Any]] = []
     no_stats_count = 0
-    dedicated_endpoint_hit = False  # log once when the fallback first succeeds
 
     for mid in ordered_ids:
-        schedule_row = schedule_by_id[mid]
-        match_date = (
-            schedule_row.get("match_date")
-            or schedule_row.get("date")
-            or schedule_row.get("matchDate")
-            or schedule_row.get("planned_kickoff_time")
-            or ""
-        )
-
         rows: List[Dict[str, Any]] = []
 
-        # Primary: extract from bySportecIds bulk response
-        sportapi_match = sportapi_data.get(mid)
-        if sportapi_match:
-            rows = _player_rows_from_sportapi_match(sportapi_match, mid, match_date)
-
-        # Secondary: dedicated per-match player stats endpoint
-        if not rows:
-            opta_id = str(
-                schedule_row.get("opta_id")
-                or schedule_row.get("optaId")
-                or schedule_row.get("match_id")
-                or ""
-            )
-            rows = _fetch_player_stats_for_match_sportapi(mid, opta_id, season=season)
-            if rows:
-                if not dedicated_endpoint_hit:
-                    logger.info(
-                        "player_game_stats: dedicated endpoint yielded rows (first hit match_id=%s)",
-                        mid,
-                    )
-                    dedicated_endpoint_hit = True
-                for row in rows:
-                    row.setdefault("match_id", mid)
-                    row.setdefault("match_date", match_date)
-                time.sleep(0.05)
+        try:
+            rows = _fetch_player_stats_for_match_stats_api(mid)
+        except RuntimeError as exc:
+            logger.info("player_game_stats: stats-api endpoint failed for match_id=%s: %s", mid, exc)
 
         if not rows:
-            if not sportapi_match:
-                logger.info("No per-match player stats found for match_id=%s", mid)
-            else:
-                logger.info("No player rows extracted for match_id=%s", mid)
+            logger.info("No player rows extracted for match_id=%s", mid)
             no_stats_count += 1
 
         all_rows.extend(rows)

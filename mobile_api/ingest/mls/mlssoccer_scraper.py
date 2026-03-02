@@ -14,11 +14,11 @@ Player season stats:
   stats-api  /statistics/players/competitions/{competition_id}/seasons/{season_id}
 
 Per-match club/player stats:
+  stats-api  /statistics/clubs/matches/{match_id}
+  stats-api  /statistics/players/matches/{match_id}
+               Canonical per-game endpoints used by mlssoccer.com's match center.
   sportapi   /api/matches/bySportecIds/{id1},{id2},...
-               Bulk-fetch up to SPORT_API_BATCH_SIZE matches per request.
-               Returns a list of full match objects (scores, team/player data).
-  sportapi   /api/matches/{match_id}
-               Per-match fallback when a match is absent from the bulk response.
+               Fallback source when stats-api does not return rows.
 """
 
 from __future__ import annotations
@@ -595,6 +595,64 @@ def _player_rows_from_sportapi_match(
     return rows
 
 
+def _fetch_team_stats_for_match_stats_api(match_id: str) -> List[Dict[str, Any]]:
+    """Fetch per-team per-match rows from stats-api for a single match."""
+    payload = _get(f"{STATS_API}/statistics/clubs/matches/{match_id}")
+
+    if not isinstance(payload, dict):
+        return []
+
+    rows: List[Dict[str, Any]] = []
+    entries = payload.get("match_statistics_list")
+    if isinstance(entries, list):
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            match_stats = entry.get("match_statistics")
+            if not isinstance(match_stats, dict):
+                continue
+            team_stats = match_stats.get("team_statistics")
+            if not isinstance(team_stats, list):
+                continue
+            for team_row in team_stats:
+                if not isinstance(team_row, dict):
+                    continue
+                row = dict(team_row)
+                row.setdefault("match_id", match_stats.get("match_id") or match_id)
+                row.setdefault("match_date", match_stats.get("planned_kick_off") or match_stats.get("kick_off") or "")
+                rows.append(row)
+    return rows
+
+
+def _fetch_player_stats_for_match_stats_api(match_id: str) -> List[Dict[str, Any]]:
+    """Fetch per-player per-match rows from stats-api for a single match."""
+    payload = _get(
+        f"{STATS_API}/statistics/players/matches/{match_id}",
+        {"per_page": 200},
+    )
+
+    if not isinstance(payload, dict):
+        return []
+
+    match_stats = payload.get("match_statistics")
+    if not isinstance(match_stats, dict):
+        return []
+
+    player_stats = match_stats.get("player_statistics")
+    if not isinstance(player_stats, list):
+        return []
+
+    rows: List[Dict[str, Any]] = []
+    for player_row in player_stats:
+        if not isinstance(player_row, dict):
+            continue
+        row = dict(player_row)
+        row.setdefault("match_id", match_stats.get("match_id") or match_id)
+        row.setdefault("match_date", match_stats.get("planned_kick_off") or match_stats.get("kick_off") or "")
+        rows.append(row)
+    return rows
+
+
 # ---------------------------------------------------------------------------
 # Team game stats (per-club per-match)
 # ---------------------------------------------------------------------------
@@ -657,13 +715,18 @@ def fetch_team_game_stats(season: int, only_date: Optional[date] = None) -> List
             or schedule_row.get("planned_kickoff_time")
             or ""
         )
-        sportapi_match = sportapi_data.get(mid)
-        if not sportapi_match:
-            logger.info("No per-match stats found for match_id=%s", mid)
-            no_stats_count += 1
-            continue
+        rows: List[Dict[str, Any]] = []
 
-        rows = _team_rows_from_sportapi_match(sportapi_match, mid, match_date)
+        try:
+            rows = _fetch_team_stats_for_match_stats_api(mid)
+        except RuntimeError as exc:
+            logger.info("team_game_stats: stats-api endpoint failed for match_id=%s: %s", mid, exc)
+
+        if not rows:
+            sportapi_match = sportapi_data.get(mid)
+            if sportapi_match:
+                rows = _team_rows_from_sportapi_match(sportapi_match, mid, match_date)
+
         if not rows:
             logger.info("No team rows extracted for match_id=%s", mid)
             no_stats_count += 1
@@ -837,12 +900,18 @@ def fetch_player_game_stats(season: int, only_date: Optional[date] = None) -> Li
 
         rows: List[Dict[str, Any]] = []
 
-        # Primary: extract from bySportecIds bulk response
+        # Primary: stats-api per-match endpoint used by mlssoccer.com match center.
+        try:
+            rows = _fetch_player_stats_for_match_stats_api(mid)
+        except RuntimeError as exc:
+            logger.info("player_game_stats: stats-api endpoint failed for match_id=%s: %s", mid, exc)
+
+        # Secondary: extract from bySportecIds bulk response.
         sportapi_match = sportapi_data.get(mid)
-        if sportapi_match:
+        if not rows and sportapi_match:
             rows = _player_rows_from_sportapi_match(sportapi_match, mid, match_date)
 
-        # Secondary: dedicated per-match player stats endpoint
+        # Tertiary: dedicated discovery endpoint permutations.
         if not rows:
             opta_id = str(
                 schedule_row.get("opta_id")

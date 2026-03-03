@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -9,6 +10,8 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
+from google.api_core import exceptions as gcp_exceptions
+from google.api_core.retry import Retry
 from google.cloud import bigquery
 
 from atp_client import ATPClient
@@ -67,14 +70,66 @@ def _truncate_tables(client: bigquery.Client) -> None:
         client.query(f"TRUNCATE TABLE `{_table(t)}`").result()
 
 
+def _chunked(rows: Sequence[Dict[str, Any]], size: int) -> Iterable[Sequence[Dict[str, Any]]]:
+    for idx in range(0, len(rows), size):
+        yield rows[idx : idx + size]
+
+
+def _row_insert_id(row: Dict[str, Any], idx: int) -> str:
+    encoded = json.dumps(row, sort_keys=True, default=str).encode("utf-8")
+    return f"{hashlib.md5(encoded).hexdigest()}-{idx}"
+
+
 def _insert_rows(client: bigquery.Client, table_name: str, rows: Iterable[Dict[str, Any]]) -> int:
     rows_list = list(rows)
     if not rows_list:
         return 0
-    errors = client.insert_rows_json(_table(table_name), rows_list)
-    if errors:
-        raise RuntimeError(f"BigQuery insert error for {table_name}: {errors}")
-    return len(rows_list)
+
+    batch_size = int(os.getenv("ATP_BQ_INSERT_BATCH_SIZE", "200"))
+    max_attempts = int(os.getenv("ATP_BQ_INSERT_MAX_ATTEMPTS", "8"))
+    base_sleep = float(os.getenv("ATP_BQ_INSERT_RETRY_SECONDS", "2"))
+
+    inserted = 0
+    for batch_number, batch in enumerate(_chunked(rows_list, batch_size), start=1):
+        row_ids = [_row_insert_id(row, idx) for idx, row in enumerate(batch)]
+
+        last_exc: Optional[Exception] = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                errors = client.insert_rows_json(
+                    _table(table_name),
+                    list(batch),
+                    row_ids=row_ids,
+                    retry=Retry(deadline=60),
+                )
+                if errors:
+                    raise RuntimeError(
+                        f"BigQuery insert row errors for table={table_name} batch={batch_number}: {errors}"
+                    )
+                inserted += len(batch)
+                last_exc = None
+                break
+            except (
+                gcp_exceptions.RetryError,
+                gcp_exceptions.ServiceUnavailable,
+                gcp_exceptions.InternalServerError,
+                gcp_exceptions.TooManyRequests,
+                ConnectionError,
+            ) as exc:
+                last_exc = exc
+                if attempt < max_attempts:
+                    time.sleep(base_sleep * (2 ** (attempt - 1)))
+            except Exception as exc:
+                last_exc = exc
+                if attempt < max_attempts:
+                    time.sleep(base_sleep * (2 ** (attempt - 1)))
+
+        if last_exc is not None:
+            raise RuntimeError(
+                f"Failed insert_rows_json for table={table_name} batch={batch_number} after {max_attempts} attempts"
+            ) from last_exc
+
+    return inserted
 
 
 def _raw_row(snapshot_ts: str, ingest_run_id: str, endpoint_key: str, response: Dict[str, Any], payload_key: str) -> Dict[str, Any]:

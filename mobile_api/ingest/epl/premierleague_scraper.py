@@ -62,11 +62,16 @@ def _get(path: str, params: Optional[Dict[str, Any]] = None) -> Any:
         if response.status_code in (429, 500, 502, 503, 504) and attempt < 5:
             time.sleep(2**attempt)
             continue
+        seen.add(mid)
+        unique_rows.append(row)
 
         raise PremierLeagueApiError(f"{response.status_code} from {url}: {response.text[:300]}")
 
     raise PremierLeagueApiError(f"Retry budget exhausted for {url}")
 
+def fetch_match_details(match_id: str | int) -> Dict[str, Any]:
+    payload = _get(f"v2/matches/{match_id}")
+    return payload if isinstance(payload, dict) else {}
 
 def fetch_matchweek_schedule(season: int, matchweek: int) -> List[Dict[str, Any]]:
     payload = _get(

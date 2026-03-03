@@ -205,7 +205,6 @@ def _build_standings_from_match_details(match_details: Sequence[Dict[str, Any]])
         )
     )
 
-
     for idx, row in enumerate(standings, start=1):
         goals_for = int(row.get("goals_for") or 0)
         goals_against = int(row.get("goals_against") or 0)
@@ -214,7 +213,6 @@ def _build_standings_from_match_details(match_details: Sequence[Dict[str, Any]])
         row["id"] = str((row.get("team") or {}).get("id") or "")
 
     return standings
-
 
 
 def run_full_ingestion(current_season: int | None = None) -> Dict[str, Any]:
@@ -234,7 +232,6 @@ def run_full_ingestion(current_season: int | None = None) -> Dict[str, Any]:
         matches_written += _write_rows(client, TABLE_MATCHES, season, schedule_rows, entity_field="matchId")
         teams_written += _write_rows(client, TABLE_TEAMS, season, teams, entity_field="id")
         players_written += _write_rows(client, TABLE_PLAYERS, season, players, entity_field="id")
-
 
         details_rows = []
         event_rows = []
@@ -261,7 +258,6 @@ def run_full_ingestion(current_season: int | None = None) -> Dict[str, Any]:
         if not standings:
             standings = _build_standings_from_match_details(details_rows)
         standings_written += _write_rows(client, TABLE_STANDINGS, season, standings, entity_field="id")
-
 
         details_written += _write_rows(client, TABLE_MATCH_DETAILS, season, details_rows, entity_field="_entity_id")
         events_written += _write_rows(client, TABLE_MATCH_EVENTS, season, event_rows, entity_field="_entity_id")
@@ -314,7 +310,6 @@ def run_backfill(start_season: int, end_season: int, truncate_first: bool = Fals
 
         teams = fetch_team_stats(season) or _build_team_rows(schedule_rows)
         players = fetch_player_stats(season)
-
 
         details_rows = []
         event_rows = []

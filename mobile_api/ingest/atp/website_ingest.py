@@ -80,6 +80,19 @@ def _row_insert_id(row: Dict[str, Any], idx: int) -> str:
     return f"{hashlib.md5(encoded).hexdigest()}-{idx}"
 
 
+def _load_rows_with_job(client: bigquery.Client, table_name: str, rows: Sequence[Dict[str, Any]]) -> None:
+    if not rows:
+        return
+
+    job_config = bigquery.LoadJobConfig(
+        write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
+        source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
+        ignore_unknown_values=False,
+    )
+    job = client.load_table_from_json(rows, _table(table_name), job_config=job_config)
+    job.result()
+
+
 def _insert_rows(client: bigquery.Client, table_name: str, rows: Iterable[Dict[str, Any]]) -> int:
     rows_list = list(rows)
     if not rows_list:
@@ -125,9 +138,16 @@ def _insert_rows(client: bigquery.Client, table_name: str, rows: Iterable[Dict[s
                     time.sleep(base_sleep * (2 ** (attempt - 1)))
 
         if last_exc is not None:
-            raise RuntimeError(
-                f"Failed insert_rows_json for table={table_name} batch={batch_number} after {max_attempts} attempts"
-            ) from last_exc
+            # Fallback path: streaming insertAll may intermittently fail with SSL EOFs
+            # on hosted runners. Use a BigQuery load job append for this batch.
+            try:
+                _load_rows_with_job(client, table_name, batch)
+                inserted += len(batch)
+            except Exception as load_exc:
+                raise RuntimeError(
+                    f"Failed insert_rows_json for table={table_name} batch={batch_number} after {max_attempts} attempts; "
+                    "load job fallback also failed"
+                ) from load_exc
 
     return inserted
 

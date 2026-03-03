@@ -1,0 +1,79 @@
+name: ATP Daily Ingest
+
+on:
+  schedule:
+    # 12:00 UTC = 8:00 AM ET — after overnight matches finish, before afternoon draws
+    - cron: "0 12 * * *"
+  workflow_dispatch:
+    inputs:
+      season:
+        description: "Season year (YYYY, default: current year)"
+        required: false
+        default: ""
+      skip_players:
+        description: "Skip player roster refresh (true/false)"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  daily-ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      ATP_DATASET: "atp_data"
+      ATP_BQ_LOCATION: "US"
+      BDL_ATP_TIER: "ALL_STAR"
+      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+      BDL_ATP_API_KEY: ${{ secrets.BDL_ATP_API_KEY || secrets.BALDONTLIE_KEY || secrets.BALLDONTLIE_API_KEY }}
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/mobile_api
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r mobile_api/requirements.txt
+
+      - name: Configure GCP credentials
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
+
+      - name: Resolve season
+        id: season
+        run: |
+          if [ -n "${{ inputs.season }}" ]; then
+            echo "year=${{ inputs.season }}" >> $GITHUB_OUTPUT
+          else
+            echo "year=$(date +%Y)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Ingest players
+        if: ${{ inputs.skip_players != 'true' }}
+        run: |
+          python mobile_api/ingest/atp/ingest.py players
+
+      - name: Ingest tournaments
+        run: |
+          python mobile_api/ingest/atp/ingest.py tournaments ${{ steps.season.outputs.year }}
+
+      - name: Ingest matches
+        run: |
+          python mobile_api/ingest/atp/ingest.py matches ${{ steps.season.outputs.year }}
+
+      - name: Ingest rankings
+        run: |
+          python mobile_api/ingest/atp/ingest.py rankings
+
+      - name: Ingest ATP Race standings
+        run: |
+          python mobile_api/ingest/atp/ingest.py race

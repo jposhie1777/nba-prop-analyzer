@@ -1,4 +1,5 @@
 # Add one endpoint per line.
 # ATP examples (replace with current known API URLs from captures):
-https://www.atptour.com/
-https://www.nhl.com/
+https://app.atptour.com/api/v2/gateway/livematches/website?scoringTournamentLevel=tour
+https://www.atptour.com/en/-/www/StatsLeaderboard/TopFive/52week/all?v=1
+https://www.atptour.com/en/-/www/rank/sglroll/10?v=1

@@ -7,6 +7,14 @@ on:
         description: "Current season year (YYYY). Workflow backfills this season and previous season"
         required: false
         default: ""
+      truncate_first:
+        description: "Truncate EPL ingest tables before rebuild (true/false)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 jobs:
   backfill:
@@ -40,10 +48,19 @@ jobs:
           echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
           echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
 
+      - name: Verify EPL ingest source snapshot
+        run: |
+          echo "Running commit: $(git rev-parse --short HEAD)"
+          python -m py_compile mobile_api/ingest/epl/*.py
+
       - name: Apply EPL BigQuery DDL
         run: |
           python -m mobile_api.ingest.epl.apply_ddl
 
       - name: Run EPL backfill (current + previous season)
         run: |
-          python -m mobile_api.ingest.epl.backfill
+          if [ "${{ inputs.truncate_first }}" = "true" ]; then
+            python -m mobile_api.ingest.epl.backfill --truncate-first
+          else
+            python -m mobile_api.ingest.epl.backfill --no-truncate-first
+          fi

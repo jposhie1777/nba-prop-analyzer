@@ -34,6 +34,9 @@ HEADERS = {
 class PremierLeagueApiError(RuntimeError):
     pass
 
+        if response.status_code in (429, 500, 502, 503, 504) and attempt < 5:
+            time.sleep(2**attempt)
+            continue
 
 def _session() -> requests.Session:
     s = requests.Session()
@@ -62,11 +65,16 @@ def _get(path: str, params: Optional[Dict[str, Any]] = None) -> Any:
         if response.status_code in (429, 500, 502, 503, 504) and attempt < 5:
             time.sleep(2**attempt)
             continue
+        seen.add(mid)
+        unique_rows.append(row)
 
         raise PremierLeagueApiError(f"{response.status_code} from {url}: {response.text[:300]}")
 
     raise PremierLeagueApiError(f"Retry budget exhausted for {url}")
 
+def fetch_match_details(match_id: str | int) -> Dict[str, Any]:
+    payload = _get(f"v2/matches/{match_id}")
+    return payload if isinstance(payload, dict) else {}
 
 def fetch_matchweek_schedule(season: int, matchweek: int) -> List[Dict[str, Any]]:
     payload = _get(
@@ -126,7 +134,12 @@ def fetch_match_events(match_id: str | int) -> Dict[str, Any]:
 
 
 def fetch_team_stats(season: int) -> List[Dict[str, Any]]:
-    payload = _get(f"v1/competitions/{COMPETITION_ID}/seasons/{season}/teams", {"_limit": 100})
+    try:
+        payload = _get(f"v1/competitions/{COMPETITION_ID}/seasons/{season}/teams", {"_limit": 100})
+    except PremierLeagueApiError as exc:
+        logger.warning("team_stats unavailable for season=%s: %s", season, exc)
+        return []
+
     if isinstance(payload, dict) and isinstance(payload.get("data"), list):
         return payload["data"]
     return []
@@ -139,7 +152,11 @@ def fetch_standings(season: int) -> List[Dict[str, Any]]:
         f"v1/competitions/{COMPETITION_ID}/seasons/{season}/standings",
         f"v1/competitions/{COMPETITION_ID}/seasons/{season}/tables",
     ):
-        payload = _get(path, {"_limit": 100})
+        try:
+            payload = _get(path, {"_limit": 100})
+        except PremierLeagueApiError as exc:
+            logger.warning("standings endpoint failed path=%s season=%s: %s", path, season, exc)
+            continue
         if isinstance(payload, dict) and isinstance(payload.get("data"), list):
             return payload["data"]
     return []
@@ -147,10 +164,15 @@ def fetch_standings(season: int) -> List[Dict[str, Any]]:
 
 def fetch_player_stats(season: int) -> List[Dict[str, Any]]:
     # Endpoint exists but can be unstable / schema variant by stat sort.
-    payload = _get(
-        f"v3/competitions/{COMPETITION_ID}/seasons/{season}/players/stats/leaderboard",
-        {"_sort": os.getenv("PREMIERLEAGUE_PLAYER_STATS_SORT", "total_passes:desc")},
-    )
+    try:
+        payload = _get(
+            f"v3/competitions/{COMPETITION_ID}/seasons/{season}/players/stats/leaderboard",
+            {"_sort": os.getenv("PREMIERLEAGUE_PLAYER_STATS_SORT", "total_passes:desc")},
+        )
+    except PremierLeagueApiError as exc:
+        logger.warning("player_stats unavailable for season=%s: %s", season, exc)
+        return []
+
     if isinstance(payload, dict) and isinstance(payload.get("data"), list):
         return payload["data"]
     return []

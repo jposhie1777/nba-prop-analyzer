@@ -122,6 +122,7 @@ def _write_rows(client: bigquery.Client, table: str, season: int, rows: Sequence
 def _season_window(current_season: int | None = None) -> list[int]:
     year = current_season or datetime.now(timezone.utc).year
     return [year - 1, year]
+<<<<<<< codex/setup-premier-league-data-ingestion-q8tk7z
 
 
 def _build_team_rows(schedule_rows: Sequence[Dict[str, Any]]) -> list[Dict[str, Any]]:
@@ -134,6 +135,100 @@ def _build_team_rows(schedule_rows: Sequence[Dict[str, Any]]) -> list[Dict[str, 
             if team_id:
                 teams[team_id] = t
     return list(teams.values())
+
+
+def _build_standings_from_match_details(match_details: Sequence[Dict[str, Any]]) -> list[Dict[str, Any]]:
+    table: Dict[str, Dict[str, Any]] = {}
+
+    def _ensure_team(team: Dict[str, Any]) -> Dict[str, Any]:
+        team_id = str(team.get("id") or "")
+        if not team_id:
+            return {}
+        row = table.setdefault(
+            team_id,
+            {
+                "team": {
+                    "id": team_id,
+                    "name": team.get("name") or team.get("shortName") or "",
+                    "shortName": team.get("shortName") or team.get("name") or "",
+                },
+                "games_played": 0,
+                "points": 0,
+                "goals_for": 0,
+                "goals_against": 0,
+            },
+        )
+        return row
+
+    for match in match_details:
+        if str(match.get("period") or "") != "FullTime":
+            continue
+
+        home = match.get("homeTeam") or {}
+        away = match.get("awayTeam") or {}
+        if not home or not away:
+            continue
+
+        home_row = _ensure_team(home)
+        away_row = _ensure_team(away)
+        if not home_row or not away_row:
+            continue
+
+        try:
+            home_goals = int(home.get("score") or 0)
+            away_goals = int(away.get("score") or 0)
+        except (TypeError, ValueError):
+            continue
+
+        home_row["games_played"] += 1
+        away_row["games_played"] += 1
+
+        home_row["goals_for"] += home_goals
+        home_row["goals_against"] += away_goals
+        away_row["goals_for"] += away_goals
+        away_row["goals_against"] += home_goals
+
+        if home_goals > away_goals:
+            home_row["points"] += 3
+        elif home_goals < away_goals:
+            away_row["points"] += 3
+        else:
+            home_row["points"] += 1
+            away_row["points"] += 1
+
+    standings = list(table.values())
+    standings.sort(
+        key=lambda r: (
+            -int(r.get("points") or 0),
+            -int((r.get("goals_for") or 0) - (r.get("goals_against") or 0)),
+            -int(r.get("goals_for") or 0),
+            str((r.get("team") or {}).get("name") or ""),
+        )
+    )
+=======
+>>>>>>> main
+
+    for idx, row in enumerate(standings, start=1):
+        goals_for = int(row.get("goals_for") or 0)
+        goals_against = int(row.get("goals_against") or 0)
+        row["goal_difference"] = goals_for - goals_against
+        row["rank"] = idx
+        row["id"] = str((row.get("team") or {}).get("id") or "")
+
+<<<<<<< codex/setup-premier-league-data-ingestion-q8tk7z
+    return standings
+=======
+def _build_team_rows(schedule_rows: Sequence[Dict[str, Any]]) -> list[Dict[str, Any]]:
+    teams: Dict[str, Dict[str, Any]] = {}
+    for m in schedule_rows:
+        home = m.get("homeTeam") or {}
+        away = m.get("awayTeam") or {}
+        for t in (home, away):
+            team_id = str(t.get("id") or "")
+            if team_id:
+                teams[team_id] = t
+    return list(teams.values())
+>>>>>>> main
 
 
 def run_full_ingestion(current_season: int | None = None) -> Dict[str, Any]:
@@ -153,8 +248,11 @@ def run_full_ingestion(current_season: int | None = None) -> Dict[str, Any]:
         matches_written += _write_rows(client, TABLE_MATCHES, season, schedule_rows, entity_field="matchId")
         teams_written += _write_rows(client, TABLE_TEAMS, season, teams, entity_field="id")
         players_written += _write_rows(client, TABLE_PLAYERS, season, players, entity_field="id")
+<<<<<<< codex/setup-premier-league-data-ingestion-q8tk7z
+=======
         standings = fetch_standings(season)
         standings_written += _write_rows(client, TABLE_STANDINGS, season, standings, entity_field="id")
+>>>>>>> main
 
         details_rows = []
         event_rows = []
@@ -177,6 +275,14 @@ def run_full_ingestion(current_season: int | None = None) -> Dict[str, Any]:
                 side["_entity_id"] = f"{match_id}_{side_name}"
                 stat_rows.append(side)
 
+<<<<<<< codex/setup-premier-league-data-ingestion-q8tk7z
+        standings = fetch_standings(season)
+        if not standings:
+            standings = _build_standings_from_match_details(details_rows)
+        standings_written += _write_rows(client, TABLE_STANDINGS, season, standings, entity_field="id")
+
+=======
+>>>>>>> main
         details_written += _write_rows(client, TABLE_MATCH_DETAILS, season, details_rows, entity_field="_entity_id")
         events_written += _write_rows(client, TABLE_MATCH_EVENTS, season, event_rows, entity_field="_entity_id")
         team_stats_written += _write_rows(client, TABLE_MATCH_TEAM_STATS, season, stat_rows, entity_field="_entity_id")
@@ -228,7 +334,10 @@ def run_backfill(start_season: int, end_season: int, truncate_first: bool = Fals
 
         teams = fetch_team_stats(season) or _build_team_rows(schedule_rows)
         players = fetch_player_stats(season)
+<<<<<<< codex/setup-premier-league-data-ingestion-q8tk7z
+=======
         standings = fetch_standings(season)
+>>>>>>> main
 
         details_rows = []
         event_rows = []
@@ -251,6 +360,13 @@ def run_backfill(start_season: int, end_season: int, truncate_first: bool = Fals
                 side["_entity_id"] = f"{match_id}_{side_name}"
                 stat_rows.append(side)
 
+<<<<<<< codex/setup-premier-league-data-ingestion-q8tk7z
+        standings = fetch_standings(season)
+        if not standings:
+            standings = _build_standings_from_match_details(details_rows)
+
+=======
+>>>>>>> main
         season_result = {
             "teams": _write_rows(client, TABLE_TEAMS, season, teams, entity_field="id"),
             "players": _write_rows(client, TABLE_PLAYERS, season, players, entity_field="id"),

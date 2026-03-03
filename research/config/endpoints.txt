@@ -1,0 +1,4 @@
+# Add one endpoint per line.
+# ATP examples (replace with current known API URLs from captures):
+https://www.atptour.com/
+https://www.nhl.com/

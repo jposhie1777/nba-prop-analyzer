@@ -19,3 +19,9 @@
 3. If the same schema/type error persists, run the hard reset SQL once.
 4. Run EPL backfill again.
 5. Continue using `apply_ddl` as the normal pre-backfill step.
+
+
+## Backfill truncate option
+
+- Backfill supports `--truncate-first` to clear EPL ingest target tables before rebuilding from the requested season range.
+- Default behavior remains append-only (`--no-truncate-first` or omit flag).

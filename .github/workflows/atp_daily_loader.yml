@@ -1,29 +1,19 @@
-name: ATP Backfill
+name: ATP Daily Loader
 
 on:
+  schedule:
+    - cron: "15 9 * * *"
   workflow_dispatch:
     inputs:
-      years:
-        description: "How many seasons to backfill (default 5)"
-        required: false
-        default: "5"
-      start_year:
-        description: "Optional start year (YYYY)"
+      year:
+        description: "Optional target year override (YYYY)"
         required: false
         default: ""
-      end_year:
-        description: "Optional end year (YYYY)"
-        required: false
-        default: ""
-      truncate:
-        description: "Truncate ATP website tables before backfill (true/false)"
-        required: false
-        default: "true"
 
 jobs:
-  backfill:
+  daily-loader:
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 120
 
     env:
       ATP_DATASET: "atp_data"
@@ -54,18 +44,10 @@ jobs:
         run: |
           python -m mobile_api.ingest.atp.apply_website_ddl
 
-      - name: Run ATP website backfill
+      - name: Run ATP daily website loader (append-only)
         run: |
-          ARGS="--mode backfill --years ${{ inputs.years }} --sleep 0.2"
-          if [ -n "${{ inputs.start_year }}" ]; then
-            ARGS="$ARGS --start-year ${{ inputs.start_year }}"
-          fi
-          if [ -n "${{ inputs.end_year }}" ]; then
-            ARGS="$ARGS --end-year ${{ inputs.end_year }}"
-          fi
-          if [ "${{ inputs.truncate }}" = "true" ]; then
-            ARGS="$ARGS --truncate"
-          else
-            ARGS="$ARGS --no-truncate"
+          ARGS="--mode daily --sleep 0.2"
+          if [ -n "${{ inputs.year }}" ]; then
+            ARGS="$ARGS --start-year ${{ inputs.year }} --end-year ${{ inputs.year }}"
           fi
           python -m mobile_api.ingest.atp.website_ingest $ARGS

@@ -48,6 +48,11 @@ jobs:
           echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
           echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
 
+      - name: Verify EPL ingest source snapshot
+        run: |
+          echo "Running commit: $(git rev-parse --short HEAD)"
+          python -m py_compile mobile_api/ingest/epl/*.py
+
       - name: Apply EPL BigQuery DDL
         run: |
           python -m mobile_api.ingest.epl.apply_ddl

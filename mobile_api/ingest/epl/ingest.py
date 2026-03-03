@@ -3,26 +3,42 @@ from __future__ import annotations
 import json
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Iterable, List, Sequence
+from typing import Any, Dict, Sequence
 
 from google.api_core.exceptions import NotFound
 from google.cloud import bigquery
 
 try:
-    from .client import fetch_paginated, fetch_single
+    from .premierleague_scraper import (
+        fetch_match_details,
+        fetch_match_events,
+        fetch_match_stats,
+        fetch_player_stats,
+        fetch_schedule,
+        fetch_standings,
+        fetch_team_stats,
+    )
 except ImportError:
-    from mobile_api.ingest.epl.client import fetch_paginated, fetch_single
+    from mobile_api.ingest.epl.premierleague_scraper import (
+        fetch_match_details,
+        fetch_match_events,
+        fetch_match_stats,
+        fetch_player_stats,
+        fetch_schedule,
+        fetch_standings,
+        fetch_team_stats,
+    )
 
 DATASET = os.getenv("EPL_DATASET", "epl_data")
 LOCATION = os.getenv("EPL_BQ_LOCATION", "US")
 
 TABLE_TEAMS = os.getenv("EPL_TEAMS_TABLE", f"{DATASET}.teams")
 TABLE_PLAYERS = os.getenv("EPL_PLAYERS_TABLE", f"{DATASET}.players")
-TABLE_ROSTERS = os.getenv("EPL_ROSTERS_TABLE", f"{DATASET}.rosters")
 TABLE_STANDINGS = os.getenv("EPL_STANDINGS_TABLE", f"{DATASET}.standings")
 TABLE_MATCHES = os.getenv("EPL_MATCHES_TABLE", f"{DATASET}.matches")
+TABLE_MATCH_DETAILS = os.getenv("EPL_MATCH_DETAILS_TABLE", f"{DATASET}.match_details")
 TABLE_MATCH_EVENTS = os.getenv("EPL_MATCH_EVENTS_TABLE", f"{DATASET}.match_events")
-TABLE_MATCH_LINEUPS = os.getenv("EPL_MATCH_LINEUPS_TABLE", f"{DATASET}.match_lineups")
+TABLE_MATCH_TEAM_STATS = os.getenv("EPL_MATCH_TEAM_STATS_TABLE", f"{DATASET}.match_team_stats")
 
 
 def _get_bq_client() -> bigquery.Client:
@@ -31,15 +47,11 @@ def _get_bq_client() -> bigquery.Client:
 
 
 def _table_id(client: bigquery.Client, table: str) -> str:
-    if table.count(".") == 2:
-        return table
-    return f"{client.project}.{table}"
+    return table if table.count(".") == 2 else f"{client.project}.{table}"
 
 
 def _ensure_dataset(client: bigquery.Client, table: str) -> None:
-    table_id = _table_id(client, table)
-    parts = table_id.split(".")
-    dataset_id = ".".join(parts[:2])
+    dataset_id = ".".join(_table_id(client, table).split(".")[:2])
     try:
         client.get_dataset(dataset_id)
     except NotFound:
@@ -63,12 +75,34 @@ def _ensure_table(client: bigquery.Client, table: str) -> str:
     return table_id
 
 
-def _write_rows(client: bigquery.Client, table: str, season: int, rows: Sequence[Dict[str, Any]], entity_field: str = "id") -> int:
+
+
+def _truncate_table_if_exists(client: bigquery.Client, table: str) -> bool:
+    table_id = _table_id(client, table)
+    try:
+        client.get_table(table_id)
+    except NotFound:
+        return False
+    client.query(f"TRUNCATE TABLE `{table_id}`").result()
+    return True
+
+
+def _target_tables() -> list[str]:
+    return [
+        TABLE_TEAMS,
+        TABLE_PLAYERS,
+        TABLE_STANDINGS,
+        TABLE_MATCHES,
+        TABLE_MATCH_DETAILS,
+        TABLE_MATCH_EVENTS,
+        TABLE_MATCH_TEAM_STATS,
+    ]
+
+def _write_rows(client: bigquery.Client, table: str, season: int, rows: Sequence[Dict[str, Any]], entity_field: str) -> int:
     if not rows:
         return 0
     _ensure_dataset(client, table)
     table_id = _ensure_table(client, table)
-
     now = datetime.now(timezone.utc).isoformat()
     payload_rows = [
         {
@@ -85,93 +119,198 @@ def _write_rows(client: bigquery.Client, table: str, season: int, rows: Sequence
     return len(payload_rows)
 
 
-def _season_window(current_season: int | None = None) -> List[int]:
-    if current_season is None:
-        current_season = datetime.now(timezone.utc).year
-    return [current_season - 1, current_season]
+def _season_window(current_season: int | None = None) -> list[int]:
+    year = current_season or datetime.now(timezone.utc).year
+    return [year - 1, year]
 
 
-def _iter_chunk(values: Sequence[int], size: int = 50) -> Iterable[Sequence[int]]:
-    for i in range(0, len(values), size):
-        yield values[i : i + size]
+def _build_team_rows(schedule_rows: Sequence[Dict[str, Any]]) -> list[Dict[str, Any]]:
+    teams: Dict[str, Dict[str, Any]] = {}
+    for m in schedule_rows:
+        home = m.get("homeTeam") or {}
+        away = m.get("awayTeam") or {}
+        for t in (home, away):
+            team_id = str(t.get("id") or "")
+            if team_id:
+                teams[team_id] = t
+    return list(teams.values())
 
 
 def run_full_ingestion(current_season: int | None = None) -> Dict[str, Any]:
-    seasons = _season_window(current_season)
     client = _get_bq_client()
-    results: Dict[str, Any] = {"seasons": seasons}
+    seasons = _season_window(current_season)
 
-    teams_written = players_written = rosters_written = standings_written = 0
-    matches_written = events_written = lineups_written = 0
-
-    team_ids: set[int] = set()
-    match_ids: set[int] = set()
-
-    players = fetch_paginated("players")
+    teams_written = players_written = standings_written = 0
+    matches_written = details_written = events_written = team_stats_written = 0
 
     for season in seasons:
-        teams = fetch_single("teams", {"season": season})
-        teams_written += _write_rows(client, TABLE_TEAMS, season, teams)
-        team_ids.update(int(t["id"]) for t in teams if t.get("id") is not None)
+        schedule_rows = fetch_schedule(season)
+        match_ids = [str(m.get("matchId") or "") for m in schedule_rows if m.get("matchId")]
 
-        standings = fetch_single("standings", {"season": season})
-        standings_written += _write_rows(client, TABLE_STANDINGS, season, standings, entity_field="rank")
+        teams = fetch_team_stats(season) or _build_team_rows(schedule_rows)
+        players = fetch_player_stats(season)
 
-        matches = fetch_paginated("matches", {"season": season})
-        matches_written += _write_rows(client, TABLE_MATCHES, season, matches)
-        match_ids.update(int(m["id"]) for m in matches if m.get("id") is not None)
+        matches_written += _write_rows(client, TABLE_MATCHES, season, schedule_rows, entity_field="matchId")
+        teams_written += _write_rows(client, TABLE_TEAMS, season, teams, entity_field="id")
+        players_written += _write_rows(client, TABLE_PLAYERS, season, players, entity_field="id")
+        standings = fetch_standings(season)
+        standings_written += _write_rows(client, TABLE_STANDINGS, season, standings, entity_field="id")
 
-        players_written += _write_rows(client, TABLE_PLAYERS, season, players)
+        details_rows = []
+        event_rows = []
+        stat_rows = []
+        for match_id in match_ids:
+            detail = fetch_match_details(match_id)
+            if detail:
+                detail["_entity_id"] = match_id
+                details_rows.append(detail)
+
+            events = fetch_match_events(match_id)
+            if events:
+                events["matchId"] = match_id
+                events["_entity_id"] = match_id
+                event_rows.append(events)
+
+            for side in fetch_match_stats(match_id):
+                side_name = str(side.get("side") or "unknown").lower()
+                side["matchId"] = match_id
+                side["_entity_id"] = f"{match_id}_{side_name}"
+                stat_rows.append(side)
+
+        details_written += _write_rows(client, TABLE_MATCH_DETAILS, season, details_rows, entity_field="_entity_id")
+        events_written += _write_rows(client, TABLE_MATCH_EVENTS, season, event_rows, entity_field="_entity_id")
+        team_stats_written += _write_rows(client, TABLE_MATCH_TEAM_STATS, season, stat_rows, entity_field="_entity_id")
+
+    return {
+        "seasons": seasons,
+        "teams": teams_written,
+        "players": players_written,
+        "standings": standings_written,
+        "matches": matches_written,
+        "match_details": details_written,
+        "match_events": events_written,
+        "match_team_stats": team_stats_written,
+    }
+
+
+def run_backfill(start_season: int, end_season: int, truncate_first: bool = False) -> Dict[str, Any]:
+    """Backfill EPL ingest tables for an inclusive season range."""
+    if end_season < start_season:
+        raise ValueError("end_season must be greater than or equal to start_season")
+
+    client = _get_bq_client()
+    seasons = list(range(start_season, end_season + 1))
+    by_season: Dict[int, Dict[str, int]] = {}
+
+    truncated_tables: list[str] = []
+    skipped_missing_tables: list[str] = []
+    if truncate_first:
+        for table in _target_tables():
+            table_id = _table_id(client, table)
+            if _truncate_table_if_exists(client, table):
+                truncated_tables.append(table_id)
+            else:
+                skipped_missing_tables.append(table_id)
+
+    totals = {
+        "teams": 0,
+        "players": 0,
+        "standings": 0,
+        "matches": 0,
+        "match_details": 0,
+        "match_events": 0,
+        "match_team_stats": 0,
+    }
 
     for season in seasons:
-        for team_id in sorted(team_ids):
-            roster = fetch_single("rosters", {"team_id": team_id, "season": season})
-            rosters_written += _write_rows(client, TABLE_ROSTERS, season, roster, entity_field="player")
+        schedule_rows = fetch_schedule(season)
+        match_ids = [str(m.get("matchId") or "") for m in schedule_rows if m.get("matchId")]
 
-    for season in seasons:
-        for chunk in _iter_chunk(sorted(match_ids), size=20):
-            events = fetch_paginated("match_events", {"match_ids[]": list(chunk)})
-            events_written += _write_rows(client, TABLE_MATCH_EVENTS, season, events)
-            lineups = fetch_paginated("match_lineups", {"match_ids[]": list(chunk)})
-            lineups_written += _write_rows(client, TABLE_MATCH_LINEUPS, season, lineups, entity_field="player")
+        teams = fetch_team_stats(season) or _build_team_rows(schedule_rows)
+        players = fetch_player_stats(season)
+        standings = fetch_standings(season)
 
-    results.update(
-        {
-            "teams": teams_written,
-            "players": players_written,
-            "rosters": rosters_written,
-            "standings": standings_written,
-            "matches": matches_written,
-            "match_events": events_written,
-            "match_lineups": lineups_written,
+        details_rows = []
+        event_rows = []
+        stat_rows = []
+        for match_id in match_ids:
+            detail = fetch_match_details(match_id)
+            if detail:
+                detail["_entity_id"] = match_id
+                details_rows.append(detail)
+
+            events = fetch_match_events(match_id)
+            if events:
+                events["matchId"] = match_id
+                events["_entity_id"] = match_id
+                event_rows.append(events)
+
+            for side in fetch_match_stats(match_id):
+                side_name = str(side.get("side") or "unknown").lower()
+                side["matchId"] = match_id
+                side["_entity_id"] = f"{match_id}_{side_name}"
+                stat_rows.append(side)
+
+        season_result = {
+            "teams": _write_rows(client, TABLE_TEAMS, season, teams, entity_field="id"),
+            "players": _write_rows(client, TABLE_PLAYERS, season, players, entity_field="id"),
+            "standings": _write_rows(client, TABLE_STANDINGS, season, standings, entity_field="id"),
+            "matches": _write_rows(client, TABLE_MATCHES, season, schedule_rows, entity_field="matchId"),
+            "match_details": _write_rows(client, TABLE_MATCH_DETAILS, season, details_rows, entity_field="_entity_id"),
+            "match_events": _write_rows(client, TABLE_MATCH_EVENTS, season, event_rows, entity_field="_entity_id"),
+            "match_team_stats": _write_rows(client, TABLE_MATCH_TEAM_STATS, season, stat_rows, entity_field="_entity_id"),
         }
-    )
-    return results
+
+        for key, value in season_result.items():
+            totals[key] += value
+        by_season[season] = season_result
+
+    return {
+        "start_season": start_season,
+        "end_season": end_season,
+        "seasons_requested": seasons,
+        "truncate_first": truncate_first,
+        "truncated_tables": truncated_tables,
+        "skipped_missing_tables": skipped_missing_tables,
+        "totals": totals,
+        "by_season": by_season,
+    }
 
 
 def ingest_yesterday_refresh(current_season: int | None = None) -> Dict[str, Any]:
     client = _get_bq_client()
-    seasons = _season_window(current_season)
-    season = seasons[-1]
+    season = _season_window(current_season)[-1]
     yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).date().isoformat()
 
-    teams = fetch_single("teams", {"season": season})
-    standings = fetch_single("standings", {"season": season})
-    matches = fetch_paginated("matches", {"dates[]": [yesterday], "season": season})
+    schedule = [m for m in fetch_schedule(season) if str(m.get("kickoff") or "").startswith(yesterday)]
+    match_ids = [str(m.get("matchId") or "") for m in schedule if m.get("matchId")]
 
-    match_ids = [int(m["id"]) for m in matches if m.get("id") is not None]
-    events: List[Dict[str, Any]] = []
-    lineups: List[Dict[str, Any]] = []
-    for chunk in _iter_chunk(match_ids, size=20):
-        events.extend(fetch_paginated("match_events", {"match_ids[]": list(chunk)}))
-        lineups.extend(fetch_paginated("match_lineups", {"match_ids[]": list(chunk)}))
+    details_rows = []
+    event_rows = []
+    stat_rows = []
+    for match_id in match_ids:
+        detail = fetch_match_details(match_id)
+        if detail:
+            detail["_entity_id"] = match_id
+            details_rows.append(detail)
+
+        events = fetch_match_events(match_id)
+        if events:
+            events["matchId"] = match_id
+            events["_entity_id"] = match_id
+            event_rows.append(events)
+
+        for side in fetch_match_stats(match_id):
+            side_name = str(side.get("side") or "unknown").lower()
+            side["matchId"] = match_id
+            side["_entity_id"] = f"{match_id}_{side_name}"
+            stat_rows.append(side)
 
     return {
         "date": yesterday,
         "season": season,
-        "teams": _write_rows(client, TABLE_TEAMS, season, teams),
-        "standings": _write_rows(client, TABLE_STANDINGS, season, standings, entity_field="rank"),
-        "matches": _write_rows(client, TABLE_MATCHES, season, matches),
-        "match_events": _write_rows(client, TABLE_MATCH_EVENTS, season, events),
-        "match_lineups": _write_rows(client, TABLE_MATCH_LINEUPS, season, lineups, entity_field="player"),
+        "matches": _write_rows(client, TABLE_MATCHES, season, schedule, entity_field="matchId"),
+        "match_details": _write_rows(client, TABLE_MATCH_DETAILS, season, details_rows, entity_field="_entity_id"),
+        "match_events": _write_rows(client, TABLE_MATCH_EVENTS, season, event_rows, entity_field="_entity_id"),
+        "match_team_stats": _write_rows(client, TABLE_MATCH_TEAM_STATS, season, stat_rows, entity_field="_entity_id"),
     }

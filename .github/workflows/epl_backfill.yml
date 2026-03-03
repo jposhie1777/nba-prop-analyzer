@@ -7,6 +7,14 @@ on:
         description: "Current season year (YYYY). Workflow backfills this season and previous season"
         required: false
         default: ""
+      truncate_first:
+        description: "Truncate EPL ingest tables before rebuild (true/false)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 jobs:
   backfill:
@@ -46,4 +54,8 @@ jobs:
 
       - name: Run EPL backfill (current + previous season)
         run: |
-          python -m mobile_api.ingest.epl.backfill
+          if [ "${{ inputs.truncate_first }}" = "true" ]; then
+            python -m mobile_api.ingest.epl.backfill --truncate-first
+          else
+            python -m mobile_api.ingest.epl.backfill --no-truncate-first
+          fi

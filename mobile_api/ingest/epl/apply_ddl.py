@@ -66,13 +66,14 @@ def main() -> None:
     client.query(f'CREATE SCHEMA IF NOT EXISTS `{dataset}` OPTIONS(location = "{location}")').result()
 
     tables = [
-        ("teams", "EPL teams payload snapshots from BallDontLie v2"),
-        ("players", "EPL players payload snapshots from BallDontLie v2"),
-        ("rosters", "EPL team roster payload snapshots from BallDontLie v2"),
-        ("standings", "EPL standings payload snapshots from BallDontLie v2"),
-        ("matches", "EPL matches payload snapshots from BallDontLie v2"),
-        ("match_events", "EPL match events payload snapshots from BallDontLie v2"),
-        ("match_lineups", "EPL match lineups payload snapshots from BallDontLie v2"),
+        ("teams", "EPL teams payload snapshots from premierleague.com public API"),
+        ("players", "EPL players payload snapshots from premierleague.com public API"),
+        ("rosters", "EPL team roster payload snapshots from premierleague.com public API"),
+        ("standings", "EPL standings payload snapshots from premierleague.com public API"),
+        ("matches", "EPL matches payload snapshots from premierleague.com public API"),
+        ("match_events", "EPL match events payload snapshots from premierleague.com public API"),
+        ("match_details", "EPL match detail payload snapshots from premierleague.com public API"),
+        ("match_team_stats", "EPL per-match team stats payload snapshots from premierleague.com public API"),
     ]
 
     for table_name, description in tables:

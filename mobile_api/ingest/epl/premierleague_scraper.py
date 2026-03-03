@@ -136,7 +136,7 @@ def fetch_match_events(match_id: str | int) -> Dict[str, Any]:
 def fetch_team_stats(season: int) -> List[Dict[str, Any]]:
     try:
         payload = _get(f"v1/competitions/{COMPETITION_ID}/seasons/{season}/teams", {"_limit": 100})
-    except PremierLeagueApiError as exc:
+    except Exception as exc:
         logger.warning("team_stats unavailable for season=%s: %s", season, exc)
         return []
 
@@ -154,7 +154,7 @@ def fetch_standings(season: int) -> List[Dict[str, Any]]:
     ):
         try:
             payload = _get(path, {"_limit": 100})
-        except PremierLeagueApiError as exc:
+        except Exception as exc:
             logger.warning("standings endpoint failed path=%s season=%s: %s", path, season, exc)
             continue
         if isinstance(payload, dict) and isinstance(payload.get("data"), list):
@@ -169,7 +169,7 @@ def fetch_player_stats(season: int) -> List[Dict[str, Any]]:
             f"v3/competitions/{COMPETITION_ID}/seasons/{season}/players/stats/leaderboard",
             {"_sort": os.getenv("PREMIERLEAGUE_PLAYER_STATS_SORT", "total_passes:desc")},
         )
-    except PremierLeagueApiError as exc:
+    except Exception as exc:
         logger.warning("player_stats unavailable for season=%s: %s", season, exc)
         return []
 

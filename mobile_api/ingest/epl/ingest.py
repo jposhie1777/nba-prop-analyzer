@@ -170,6 +170,77 @@ def run_full_ingestion(current_season: int | None = None) -> Dict[str, Any]:
     }
 
 
+def run_backfill(start_season: int, end_season: int) -> Dict[str, Any]:
+    """Backfill EPL ingest tables for an inclusive season range."""
+    if end_season < start_season:
+        raise ValueError("end_season must be greater than or equal to start_season")
+
+    client = _get_bq_client()
+    seasons = list(range(start_season, end_season + 1))
+    by_season: Dict[int, Dict[str, int]] = {}
+
+    totals = {
+        "teams": 0,
+        "players": 0,
+        "standings": 0,
+        "matches": 0,
+        "match_details": 0,
+        "match_events": 0,
+        "match_team_stats": 0,
+    }
+
+    for season in seasons:
+        schedule_rows = fetch_schedule(season)
+        match_ids = [str(m.get("matchId") or "") for m in schedule_rows if m.get("matchId")]
+
+        teams = fetch_team_stats(season) or _build_team_rows(schedule_rows)
+        players = fetch_player_stats(season)
+        standings = fetch_standings(season)
+
+        details_rows = []
+        event_rows = []
+        stat_rows = []
+        for match_id in match_ids:
+            detail = fetch_match_details(match_id)
+            if detail:
+                detail["_entity_id"] = match_id
+                details_rows.append(detail)
+
+            events = fetch_match_events(match_id)
+            if events:
+                events["matchId"] = match_id
+                events["_entity_id"] = match_id
+                event_rows.append(events)
+
+            for side in fetch_match_stats(match_id):
+                side_name = str(side.get("side") or "unknown").lower()
+                side["matchId"] = match_id
+                side["_entity_id"] = f"{match_id}_{side_name}"
+                stat_rows.append(side)
+
+        season_result = {
+            "teams": _write_rows(client, TABLE_TEAMS, season, teams, entity_field="id"),
+            "players": _write_rows(client, TABLE_PLAYERS, season, players, entity_field="id"),
+            "standings": _write_rows(client, TABLE_STANDINGS, season, standings, entity_field="id"),
+            "matches": _write_rows(client, TABLE_MATCHES, season, schedule_rows, entity_field="matchId"),
+            "match_details": _write_rows(client, TABLE_MATCH_DETAILS, season, details_rows, entity_field="_entity_id"),
+            "match_events": _write_rows(client, TABLE_MATCH_EVENTS, season, event_rows, entity_field="_entity_id"),
+            "match_team_stats": _write_rows(client, TABLE_MATCH_TEAM_STATS, season, stat_rows, entity_field="_entity_id"),
+        }
+
+        for key, value in season_result.items():
+            totals[key] += value
+        by_season[season] = season_result
+
+    return {
+        "start_season": start_season,
+        "end_season": end_season,
+        "seasons_requested": seasons,
+        "totals": totals,
+        "by_season": by_season,
+    }
+
+
 def ingest_yesterday_refresh(current_season: int | None = None) -> Dict[str, Any]:
     client = _get_bq_client()
     season = _season_window(current_season)[-1]

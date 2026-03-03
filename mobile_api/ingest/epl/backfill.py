@@ -28,7 +28,20 @@ def main() -> None:
     if args.start_season is not None or args.end_season is not None:
         end_season = args.end_season if args.end_season is not None else _current_season()
         start_season = args.start_season if args.start_season is not None else end_season
-        result = run_backfill(start_season=start_season, end_season=end_season, truncate_first=args.truncate_first)
+        result = run_backfill(
+            start_season=start_season,
+            end_season=end_season,
+            truncate_first=args.truncate_first,
+        )
+    elif args.truncate_first:
+        # For workflow usage where no explicit season range is passed,
+        # truncate/rebuild should still run the standard previous+current window.
+        current_season = _current_season()
+        result = run_backfill(
+            start_season=current_season - 1,
+            end_season=current_season,
+            truncate_first=True,
+        )
     else:
         current_season = _current_season()
         result = run_full_ingestion(current_season=current_season)

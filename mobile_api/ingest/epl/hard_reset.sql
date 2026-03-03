@@ -11,7 +11,8 @@ DROP TABLE IF EXISTS `epl_data.rosters`;
 DROP TABLE IF EXISTS `epl_data.standings`;
 DROP TABLE IF EXISTS `epl_data.matches`;
 DROP TABLE IF EXISTS `epl_data.match_events`;
-DROP TABLE IF EXISTS `epl_data.match_lineups`;
+DROP TABLE IF EXISTS `epl_data.match_details`;
+DROP TABLE IF EXISTS `epl_data.match_team_stats`;
 
 CREATE TABLE `epl_data.teams` (
   ingested_at TIMESTAMP NOT NULL,
@@ -21,7 +22,7 @@ CREATE TABLE `epl_data.teams` (
 )
 PARTITION BY DATE(ingested_at)
 CLUSTER BY season, entity_id
-OPTIONS (description = 'EPL teams payload snapshots from BallDontLie v2');
+OPTIONS (description = 'EPL teams payload snapshots from premierleague.com public API');
 
 CREATE TABLE `epl_data.players` (
   ingested_at TIMESTAMP NOT NULL,
@@ -31,7 +32,7 @@ CREATE TABLE `epl_data.players` (
 )
 PARTITION BY DATE(ingested_at)
 CLUSTER BY season, entity_id
-OPTIONS (description = 'EPL players payload snapshots from BallDontLie v2');
+OPTIONS (description = 'EPL players payload snapshots from premierleague.com public API');
 
 CREATE TABLE `epl_data.rosters` (
   ingested_at TIMESTAMP NOT NULL,
@@ -41,7 +42,7 @@ CREATE TABLE `epl_data.rosters` (
 )
 PARTITION BY DATE(ingested_at)
 CLUSTER BY season, entity_id
-OPTIONS (description = 'EPL team roster payload snapshots from BallDontLie v2');
+OPTIONS (description = 'EPL team roster payload snapshots from premierleague.com public API');
 
 CREATE TABLE `epl_data.standings` (
   ingested_at TIMESTAMP NOT NULL,
@@ -51,7 +52,7 @@ CREATE TABLE `epl_data.standings` (
 )
 PARTITION BY DATE(ingested_at)
 CLUSTER BY season, entity_id
-OPTIONS (description = 'EPL standings payload snapshots from BallDontLie v2');
+OPTIONS (description = 'EPL standings payload snapshots from premierleague.com public API');
 
 CREATE TABLE `epl_data.matches` (
   ingested_at TIMESTAMP NOT NULL,
@@ -61,7 +62,7 @@ CREATE TABLE `epl_data.matches` (
 )
 PARTITION BY DATE(ingested_at)
 CLUSTER BY season, entity_id
-OPTIONS (description = 'EPL matches payload snapshots from BallDontLie v2');
+OPTIONS (description = 'EPL matches payload snapshots from premierleague.com public API');
 
 CREATE TABLE `epl_data.match_events` (
   ingested_at TIMESTAMP NOT NULL,
@@ -71,9 +72,9 @@ CREATE TABLE `epl_data.match_events` (
 )
 PARTITION BY DATE(ingested_at)
 CLUSTER BY season, entity_id
-OPTIONS (description = 'EPL match events payload snapshots from BallDontLie v2');
+OPTIONS (description = 'EPL match events payload snapshots from premierleague.com public API');
 
-CREATE TABLE `epl_data.match_lineups` (
+CREATE TABLE `epl_data.match_details` (
   ingested_at TIMESTAMP NOT NULL,
   season INT64 NOT NULL,
   entity_id STRING,
@@ -81,4 +82,14 @@ CREATE TABLE `epl_data.match_lineups` (
 )
 PARTITION BY DATE(ingested_at)
 CLUSTER BY season, entity_id
-OPTIONS (description = 'EPL match lineups payload snapshots from BallDontLie v2');
+OPTIONS (description = 'EPL match detail payload snapshots from premierleague.com public API');
+
+CREATE TABLE `epl_data.match_team_stats` (
+  ingested_at TIMESTAMP NOT NULL,
+  season INT64 NOT NULL,
+  entity_id STRING,
+  payload STRING
+)
+PARTITION BY DATE(ingested_at)
+CLUSTER BY season, entity_id
+OPTIONS (description = 'EPL per-match team stats payload snapshots from premierleague.com public API');

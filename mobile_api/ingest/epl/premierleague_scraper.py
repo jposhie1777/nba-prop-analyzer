@@ -34,9 +34,6 @@ HEADERS = {
 class PremierLeagueApiError(RuntimeError):
     pass
 
-        if response.status_code in (429, 500, 502, 503, 504) and attempt < 5:
-            time.sleep(2**attempt)
-            continue
 
 def _session() -> requests.Session:
     s = requests.Session()
@@ -122,6 +119,9 @@ def fetch_match_details(match_id: str | int) -> Dict[str, Any]:
     payload = _get(f"v2/matches/{match_id}")
     return payload if isinstance(payload, dict) else {}
 
+def fetch_match_details(match_id: str | int) -> Dict[str, Any]:
+    payload = _get(f"v2/matches/{match_id}")
+    return payload if isinstance(payload, dict) else {}
 
 def fetch_match_stats(match_id: str | int) -> List[Dict[str, Any]]:
     payload = _get(f"v3/matches/{match_id}/stats")

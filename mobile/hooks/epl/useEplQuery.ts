@@ -47,6 +47,7 @@ export function useEplQuery<T>(
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
 
   const url = useMemo(() => buildUrl(API_BASE, path, params), [path, params]);
 
@@ -56,10 +57,16 @@ export function useEplQuery<T>(
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, FETCH_TIMEOUT_MS);
 
-    setLoading(true);
-    setError(null);
+    if (mountedRef.current) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const res = await fetch(url, {
         credentials: "omit",
@@ -70,25 +77,33 @@ export function useEplQuery<T>(
         throw new Error(text || `HTTP ${res.status}`);
       }
       const json = await res.json();
-      if (!controller.signal.aborted) {
+      if (!controller.signal.aborted && mountedRef.current) {
         setData(json);
       }
     } catch (err: any) {
-      if (err?.name === "AbortError") return;
+      if (!mountedRef.current) return;
+      if (err?.name === "AbortError") {
+        if (timedOut) {
+          setError("Request timed out. Please retry.");
+        }
+        return;
+      }
       if (!controller.signal.aborted) {
         setError(err?.message ?? "Unknown error");
       }
     } finally {
       clearTimeout(timer);
-      if (!controller.signal.aborted) {
+      if (mountedRef.current) {
         setLoading(false);
       }
     }
   }, [enabled, url]);
 
   useEffect(() => {
+    mountedRef.current = true;
     fetchData();
     return () => {
+      mountedRef.current = false;
       abortRef.current?.abort();
     };
   }, [fetchData]);

@@ -378,6 +378,13 @@ def epl_betting_analytics(
     only_best_price: bool = Query(default=False),
     limit: int = Query(default=200, ge=1, le=1000),
 ):
+    import logging, time, traceback
+    log = logging.getLogger("epl_betting_analytics")
+    log.setLevel(logging.DEBUG)
+    t0 = time.time()
+    log.info("[EPL-ANALYTICS] start table=%s market=%s bookmaker=%s min_edge=%s only_best_price=%s limit=%s",
+             SOCCER_EPL_BETTING_ANALYTICS_TABLE, market, bookmaker, min_edge, only_best_price, limit)
+
     filters = ["DATE(start_time_et, 'America/New_York') = CURRENT_DATE('America/New_York')"]
     params: List[bigquery.ScalarQueryParameter] = [
         bigquery.ScalarQueryParameter("limit", "INT64", limit)
@@ -396,6 +403,7 @@ def epl_betting_analytics(
         filters.append("is_best_price = TRUE")
 
     where_sql = " AND ".join(filters)
+    log.info("[EPL-ANALYTICS] WHERE: %s", where_sql)
 
     sql = f"""
     WITH base AS (
@@ -458,18 +466,32 @@ def epl_betting_analytics(
         "rows": [],
     }
     try:
+        log.info("[EPL-ANALYTICS] firing BQ query")
         rows = _query(sql, params)
-    except NotFound:
+        log.info("[EPL-ANALYTICS] BQ query done in %.2fs, got %d top-level rows", time.time() - t0, len(rows))
+    except NotFound as e:
+        log.error("[EPL-ANALYTICS] NotFound: %s", e)
         return empty
+    except Exception as e:
+        log.error("[EPL-ANALYTICS] BQ error after %.2fs: %s\n%s", time.time() - t0, e, traceback.format_exc())
+        raise
 
     if not rows:
+        log.warning("[EPL-ANALYTICS] query returned 0 rows")
         return empty
 
-    payload = dict(rows[0])
-    # Nested ARRAY<STRUCT> rows are BigQuery Row objects; convert to plain dicts.
-    payload["rows"] = [dict(r) for r in (payload.get("rows") or [])]
-    payload["date_et"] = datetime.now(timezone.utc).date().isoformat()
-    return payload
+    try:
+        payload = dict(rows[0])
+        # Nested ARRAY<STRUCT> rows are BigQuery Row objects; convert to plain dicts.
+        nested = payload.get("rows") or []
+        log.info("[EPL-ANALYTICS] nested rows count=%d", len(nested))
+        payload["rows"] = [dict(r) for r in nested]
+        payload["date_et"] = datetime.now(timezone.utc).date().isoformat()
+        log.info("[EPL-ANALYTICS] done total=%.2fs", time.time() - t0)
+        return payload
+    except Exception as e:
+        log.error("[EPL-ANALYTICS] serialization error: %s\n%s", e, traceback.format_exc())
+        raise
 
 
 @router.get("/epl/standings")

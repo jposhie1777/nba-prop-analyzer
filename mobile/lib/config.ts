@@ -9,7 +9,11 @@ const EXTRA_API_URL =
   // @ts-ignore - legacy manifest fallback
   Constants.manifest?.extra?.EXPO_PUBLIC_API_URL;
 
-const DEFAULT_API_BASE = "https://pulse-mobile-api-763243624328.us-central1.run.app";
+const IS_WEB = typeof window !== "undefined";
+
+const DEFAULT_API_BASE = IS_WEB
+  ? "/api"
+  : "https://pulse-mobile-api-763243624328.us-central1.run.app";
 
 function normalizeApiBase(url: string): string {
   const trimmed = url.trim();

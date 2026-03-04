@@ -38,6 +38,26 @@ function buildUrl(base: string, path: string, params?: Params): string {
   return `${normalizedBase}${normalizedPath}${qs}`;
 }
 
+function networkFetchFailed(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err ?? "");
+  return message.toLowerCase().includes("failed to fetch");
+}
+
+function getFallbackBases(base: string): string[] {
+  const candidates = [base];
+
+  if (typeof window !== "undefined") {
+    const origin = window.location?.origin;
+    if (origin) {
+      candidates.push(`${origin}/api`);
+      candidates.push(origin);
+    }
+    candidates.push("/api");
+  }
+
+  return Array.from(new Set(candidates));
+}
+
 export function useEplQuery<T>(
   path: string,
   params?: Params,
@@ -49,7 +69,10 @@ export function useEplQuery<T>(
   const abortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
 
-  const url = useMemo(() => buildUrl(API_BASE, path, params), [path, params]);
+  const urls = useMemo(
+    () => getFallbackBases(API_BASE).map((base) => buildUrl(base, path, params)),
+    [path, params]
+  );
 
   const fetchData = useCallback(async () => {
     if (!enabled) return;
@@ -68,17 +91,39 @@ export function useEplQuery<T>(
       setError(null);
     }
     try {
-      const res = await fetch(url, {
-        credentials: "omit",
-        signal: controller.signal,
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || `HTTP ${res.status}`);
+      let lastNetworkError: unknown = null;
+
+      for (const url of urls) {
+        try {
+          const res = await fetch(url, {
+            credentials: "omit",
+            signal: controller.signal,
+          });
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(text || `HTTP ${res.status}`);
+          }
+          const json = await res.json();
+          if (!controller.signal.aborted && mountedRef.current) {
+            setData(json);
+          }
+          return;
+        } catch (err) {
+          if (controller.signal.aborted) {
+            throw err;
+          }
+
+          if (networkFetchFailed(err)) {
+            lastNetworkError = err;
+            continue;
+          }
+
+          throw err;
+        }
       }
-      const json = await res.json();
-      if (!controller.signal.aborted && mountedRef.current) {
-        setData(json);
+
+      if (lastNetworkError) {
+        throw new Error(`Failed to fetch (tried: ${urls.join(", ")})`);
       }
     } catch (err: any) {
       if (!mountedRef.current) return;
@@ -97,7 +142,7 @@ export function useEplQuery<T>(
         setLoading(false);
       }
     }
-  }, [enabled, url]);
+  }, [enabled, urls]);
 
   useEffect(() => {
     mountedRef.current = true;

@@ -90,6 +90,14 @@ export default function EplHome() {
         icon="warning-outline"
         accent="#F87171"
       />
+
+      <Tile
+        title="Betting Analytics"
+        subtitle="Filter EPL lines by market/book, compare edge vs consensus, and save bets to Gambly betslip."
+        route="/(tabs)/epl/betting-analytics"
+        icon="stats-chart-outline"
+        accent="#38BDF8"
+      />
     </ScrollView>
   );
 }

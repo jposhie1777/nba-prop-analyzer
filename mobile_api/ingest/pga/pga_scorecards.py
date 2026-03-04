@@ -189,6 +189,11 @@ def _post_graphql(
 def _safe_int(v: Any) -> Optional[int]:
     if v is None:
         return None
+    if isinstance(v, str):
+        value = v.strip()
+        if not value or value in {"-", "E"}:
+            return None
+        v = value
     try:
         return int(v)
     except (ValueError, TypeError):
@@ -234,14 +239,41 @@ def _parse_round(raw: Dict[str, Any]) -> ScorecardRound:
 def _parse_scorecard(
     data: Dict[str, Any],
     tournament_id: str,
+    *,
+    key: str,
 ) -> Optional[PlayerScorecard]:
 
-    raw = data.get("scorecardV3")
+    raw = data.get(key)
     if not raw:
         return None
 
-    player = raw.get("player") or {}
+    if key == "scorecardStats":
+        return PlayerScorecard(
+            player_id=str(raw.get("playerId") or ""),
+            display_name=raw.get("displayName") or "",
+            tournament_id=tournament_id,
+            rounds=[
+                ScorecardRound(
+                    round_number=_safe_int(r.get("roundNumber")) or 0,
+                    par_relative_score=_safe_int(r.get("parRelativeScore")),
+                    strokes=_safe_int(r.get("strokes")),
+                    birdies=_safe_int(r.get("birdies")),
+                    bogeys=_safe_int(r.get("bogeys")),
+                    eagles=_safe_int(r.get("eagles")),
+                    pars=_safe_int(r.get("pars")),
+                    double_or_worse=_safe_int(r.get("doubleOrWorse")),
+                    greens_in_regulation=_safe_int(r.get("greensInRegulation")),
+                    fairways_hit=_safe_int(r.get("fairwaysHit")),
+                    putts=_safe_int(r.get("putts")),
+                    driving_distance=_safe_int(r.get("drivingDistance")),
+                    driving_accuracy=_safe_float(r.get("drivingAccuracy")),
+                )
+                for r in (raw.get("rounds") or [])
+                if isinstance(r, dict)
+            ],
+        )
 
+    player = raw.get("player") or {}
     return PlayerScorecard(
         player_id=str(player.get("id") or ""),
         display_name=player.get("displayName") or "",
@@ -294,6 +326,8 @@ def fetch_scorecard(
             raise
         except Exception as exc:
             last_exc = exc
+            if "FieldUndefined" in str(exc) and "scorecardV3" in str(exc):
+                return None
             if attempt < retries - 1:
                 time.sleep(backoff)
                 backoff *= 2

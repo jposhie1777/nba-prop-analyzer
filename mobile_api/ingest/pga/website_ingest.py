@@ -222,11 +222,17 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
         print(f"[website] season={yr}: tournaments={len(tournament_ids)}")
 
         for tournament_id in tournament_ids:
+            players = []
             try:
                 players = fetch_leaderboard(tournament_id)
                 lb_rows = leaderboard_to_records(tournament_id, players)
                 summary["leaderboard_rows"] += insert_rows(client, LEADERBOARD_TABLE, lb_rows)
+            except Exception as exc:
+                message = f"tournament={tournament_id} leaderboard error={exc}"
+                print(f"[website] WARN {message}")
+                summary["errors"].append(message)
 
+            try:
                 pairings_summary = ingest_pairings(
                     tournament_id=tournament_id,
                     round_number=0,
@@ -234,9 +240,14 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
                     dry_run=False,
                 )
                 summary["pairings_rows"] += int(pairings_summary.get("inserted", 0))
+            except Exception as exc:
+                message = f"tournament={tournament_id} pairings error={exc}"
+                print(f"[website] WARN {message}")
+                summary["errors"].append(message)
 
-                player_ids = sorted({str(p.player_id) for p in players if getattr(p, "player_id", None)})
-                for player_id in player_ids:
+            player_ids = sorted({str(p.player_id) for p in players if getattr(p, "player_id", None)})
+            for player_id in player_ids:
+                try:
                     card = fetch_scorecard(tournament_id, player_id)
                     if card is None:
                         card = fetch_scorecard_stats(tournament_id, player_id)
@@ -244,10 +255,10 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
                         continue
                     sc_rows = scorecard_to_records(card)
                     summary["scorecard_rows"] += insert_rows(client, SCORECARDS_TABLE, sc_rows)
-            except Exception as exc:
-                message = f"tournament={tournament_id} error={exc}"
-                print(f"[website] WARN {message}")
-                summary["errors"].append(message)
+                except Exception as exc:
+                    message = f"tournament={tournament_id} player={player_id} scorecard error={exc}"
+                    print(f"[website] WARN {message}")
+                    summary["errors"].append(message)
 
     return summary
 

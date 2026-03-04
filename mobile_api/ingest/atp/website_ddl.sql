@@ -112,10 +112,17 @@ CREATE TABLE IF NOT EXISTS `atp_data.atp_h2h_matches` (
   round_short_name STRING,
   round_long_name STRING,
   match_time STRING,
-  is_match_live BOOL
+  is_match_live BOOL,
+  player_set_scores STRING,
+  opponent_set_scores STRING,
+  scoreline_display STRING
 )
 PARTITION BY DATE(snapshot_ts_utc)
 CLUSTER BY left_player_id, right_player_id;
+
+ALTER TABLE `atp_data.atp_h2h_matches` ADD COLUMN IF NOT EXISTS player_set_scores STRING;
+ALTER TABLE `atp_data.atp_h2h_matches` ADD COLUMN IF NOT EXISTS opponent_set_scores STRING;
+ALTER TABLE `atp_data.atp_h2h_matches` ADD COLUMN IF NOT EXISTS scoreline_display STRING;
 
 CREATE TABLE IF NOT EXISTS `atp_data.atp_match_schedule` (
   snapshot_ts_utc TIMESTAMP NOT NULL,

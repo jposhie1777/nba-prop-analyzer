@@ -43,11 +43,38 @@ def test_normalize_top_seeds_and_h2h():
     h2h_rows = normalize_head_to_head(
         "C0E9",
         "TD51",
-        {"Tournaments": [{"EventId": "807", "MatchResults": [{"MatchId": "MS001", "Round": {"LongName": "Final"}}]}]},
+        {
+            "Tournaments": [
+                {
+                    "EventId": "807",
+                    "MatchResults": [
+                        {
+                            "MatchId": "MS001",
+                            "Round": {"LongName": "Final"},
+                            "PlayerTeam": {
+                                "Sets": [
+                                    {"SetNumber": 1, "SetScore": 7, "TieBreakScore": 4},
+                                    {"SetNumber": 2, "SetScore": 6, "TieBreakScore": None},
+                                ]
+                            },
+                            "OpponentTeam": {
+                                "Sets": [
+                                    {"SetNumber": 1, "SetScore": 6, "TieBreakScore": None},
+                                    {"SetNumber": 2, "SetScore": 4, "TieBreakScore": None},
+                                ]
+                            },
+                        }
+                    ],
+                }
+            ]
+        },
         snapshot_ts_utc="2026-01-01T00:00:00+00:00",
     )
     assert len(h2h_rows) == 1
     assert h2h_rows[0].round_long_name == "Final"
+    assert h2h_rows[0].player_set_scores == "7 6"
+    assert h2h_rows[0].opponent_set_scores == "6 4"
+    assert h2h_rows[0].scoreline_display == "7(4)-6 6-4"
 
 
 def test_normalize_match_schedule_html():

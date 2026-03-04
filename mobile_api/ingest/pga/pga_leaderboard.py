@@ -93,7 +93,7 @@ query Leaderboard($id: ID!) {
 @dataclass
 class RoundSummary:
     round_number: int
-    score: Optional[str] = None          # score to par string e.g. "-4", "E", "+2"
+    score: Optional[int] = None
 
 
 @dataclass
@@ -108,7 +108,7 @@ class LeaderboardPlayer:
     sort_order: Optional[int] = None     # leaderboardSortOrder
     total: Optional[str] = None          # score to par, e.g. "-10" or "E"
     total_sort: Optional[int] = None     # numeric sort key for total
-    total_strokes: Optional[str] = None  # raw stroke count string
+    total_strokes: Optional[int] = None
     thru: Optional[str] = None           # "F", "18", "9", etc.
     score: Optional[str] = None          # current-round score to par
     current_round: Optional[int] = None
@@ -116,7 +116,7 @@ class LeaderboardPlayer:
     round_status: Optional[str] = None
     back_nine: bool = False
     movement_direction: Optional[str] = None
-    movement_amount: Optional[str] = None
+    movement_amount: Optional[int] = None
     rounds: List[RoundSummary] = field(default_factory=list)
 
 
@@ -154,6 +154,11 @@ def _post_graphql(
 def _safe_int(v: Any) -> Optional[int]:
     if v is None:
         return None
+    if isinstance(v, str):
+        value = v.strip()
+        if not value or value in {"-", "E"}:
+            return None
+        v = value
     try:
         return int(v)
     except (ValueError, TypeError):
@@ -180,7 +185,7 @@ def _parse_player(raw: Dict[str, Any]) -> Optional["LeaderboardPlayer"]:
         sort_order=_safe_int(raw.get("leaderboardSortOrder")),
         total=scoring.get("total"),
         total_sort=_safe_int(scoring.get("totalSort")),
-        total_strokes=scoring.get("totalStrokes"),
+        total_strokes=_safe_int(scoring.get("totalStrokes")),
         thru=scoring.get("thru"),
         score=scoring.get("score"),
         current_round=_safe_int(scoring.get("currentRound")),
@@ -188,9 +193,9 @@ def _parse_player(raw: Dict[str, Any]) -> Optional["LeaderboardPlayer"]:
         round_status=scoring.get("roundStatus"),
         back_nine=bool(scoring.get("backNine", False)),
         movement_direction=str(scoring.get("movementDirection") or ""),
-        movement_amount=scoring.get("movementAmount"),
+        movement_amount=_safe_int(scoring.get("movementAmount")),
         rounds=[
-            RoundSummary(round_number=i + 1, score=s if isinstance(s, str) else str(s))
+            RoundSummary(round_number=i + 1, score=_safe_int(s))
             for i, s in enumerate(rounds_raw)
             if s is not None
         ],

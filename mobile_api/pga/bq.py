@@ -29,6 +29,20 @@ def _run_query(
     return [dict(row) for row in rows]
 
 
+def _table_has_column(client: bigquery.Client, table_name: str, column_name: str) -> bool:
+    query = f"""
+    SELECT 1
+    FROM `{client.project}.{DATASET}.INFORMATION_SCHEMA.COLUMNS`
+    WHERE table_name = @table_name AND column_name = @column_name
+    LIMIT 1
+    """
+    params: List[bigquery.QueryParameter] = [
+        bigquery.ScalarQueryParameter("table_name", "STRING", table_name),
+        bigquery.ScalarQueryParameter("column_name", "STRING", column_name),
+    ]
+    return bool(_run_query(client, query, params))
+
+
 def _normalize_bool(value: Any) -> Optional[bool]:
     if value is None:
         return None
@@ -430,6 +444,11 @@ def fetch_tournament_results(params: Optional[Dict[str, Any]] = None) -> List[Di
     results_table = f"`{project}.{DATASET}.tournament_results`"
     players_table = f"`{project}.{DATASET}.{PLAYERS_TABLE}`"
     tournaments_table = f"`{project}.{DATASET}.tournaments`"
+    tournament_courses_expr = (
+        "t.courses AS tournament_courses"
+        if _table_has_column(client, "tournaments", "courses")
+        else "CAST(NULL AS STRING) AS tournament_courses"
+    )
 
     conditions: List[str] = []
     query_params: List[bigquery.QueryParameter] = []
@@ -488,7 +507,7 @@ def fetch_tournament_results(params: Optional[Dict[str, Any]] = None) -> List[Di
       t.country AS tournament_country,
       t.course_name AS tournament_course_name,
       t.status AS tournament_status,
-      t.courses AS tournament_courses,
+      {tournament_courses_expr},
       r.player_id,
       COALESCE(p.display_name, r.player_display_name) AS player_display_name,
       p.first_name AS player_first_name,
@@ -629,6 +648,11 @@ def fetch_tournament_course_stats(params: Optional[Dict[str, Any]] = None) -> Li
     stats_table = f"`{project}.{DATASET}.tournament_course_stats`"
     courses_table = f"`{project}.{DATASET}.courses`"
     tournaments_table = f"`{project}.{DATASET}.tournaments`"
+    tournament_courses_expr = (
+        "t.courses AS tournament_courses"
+        if _table_has_column(client, "tournaments", "courses")
+        else "CAST(NULL AS STRING) AS tournament_courses"
+    )
 
     conditions: List[str] = []
     query_params: List[bigquery.QueryParameter] = []
@@ -703,7 +727,7 @@ def fetch_tournament_course_stats(params: Optional[Dict[str, Any]] = None) -> Li
       t.country AS tournament_country,
       t.course_name AS tournament_course_name,
       t.status AS tournament_status,
-      t.courses AS tournament_courses,
+      {tournament_courses_expr},
       s.course_id,
       c.name AS course_name,
       c.city AS course_city,

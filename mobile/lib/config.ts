@@ -37,8 +37,8 @@ function normalizeApiBase(url: string): string {
 }
 
 const rawApiBase =
-  process.env.EXPO_PUBLIC_API_URL ??
   EXTRA_API_URL ??
+  process.env.EXPO_PUBLIC_API_URL ??
   DEFAULT_API_BASE;
 
 export const API_BASE = normalizeApiBase(rawApiBase);

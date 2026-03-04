@@ -118,6 +118,11 @@ export function useEplQuery<T>(
             const text = await res.text();
             throw new Error(text || `HTTP ${res.status}`);
           }
+          const contentType = res.headers.get("content-type") ?? "";
+          if (!contentType.includes("application/json")) {
+            lastNetworkError = new Error(`Non-JSON response from ${url}`);
+            continue;
+          }
           const json = await res.json();
           if (!controller.signal.aborted && mountedRef.current) {
             setData(json);

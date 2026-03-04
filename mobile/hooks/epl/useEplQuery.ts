@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { API_BASE } from "@/lib/config";
+import { API_BASE, CLOUD_API_BASE } from "@/lib/config";
 
 type QueryResult<T> = {
   data: T | null;
@@ -31,6 +31,48 @@ function toQueryString(params?: Params): string {
 
 const FETCH_TIMEOUT_MS = 30_000;
 
+function buildUrl(base: string, path: string, params?: Params): string {
+  const normalizedBase = base.replace(/\/+$/, "");
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const qs = toQueryString(params);
+  return `${normalizedBase}${normalizedPath}${qs}`;
+}
+
+function networkFetchFailed(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err ?? "");
+  return message.toLowerCase().includes("failed to fetch");
+}
+
+function getFallbackBases(base: string): string[] {
+  const candidates = [base];
+
+  const pulseHostVariant = base.replace(
+    /https:\/\/mobile-api-(\d+)\.us-central1\.run\.app/i,
+    "https://pulse-mobile-api-$1.us-central1.run.app"
+  );
+  const mobileHostVariant = base.replace(
+    /https:\/\/pulse-mobile-api-(\d+)\.us-central1\.run\.app/i,
+    "https://mobile-api-$1.us-central1.run.app"
+  );
+
+  candidates.push(pulseHostVariant, mobileHostVariant);
+
+  // Always include the canonical Cloud Run URL as a fallback, in case the
+  // configured base uses the project-number URL format which may be unreachable.
+  candidates.push(CLOUD_API_BASE);
+
+  if (typeof window !== "undefined") {
+    const origin = window.location?.origin;
+    if (origin) {
+      candidates.push(`${origin}/api`);
+      candidates.push(origin);
+    }
+    candidates.push("/api");
+  }
+
+  return Array.from(new Set(candidates));
+}
+
 export function useEplQuery<T>(
   path: string,
   params?: Params,
@@ -40,11 +82,12 @@ export function useEplQuery<T>(
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
 
-  const url = useMemo(() => {
-    const qs = toQueryString(params);
-    return `${API_BASE}${path}${qs}`;
-  }, [path, params]);
+  const urls = useMemo(
+    () => getFallbackBases(API_BASE).map((base) => buildUrl(base, path, params)),
+    [path, params]
+  );
 
   const fetchData = useCallback(async () => {
     if (!enabled) return;
@@ -52,39 +95,80 @@ export function useEplQuery<T>(
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, FETCH_TIMEOUT_MS);
 
-    setLoading(true);
-    setError(null);
+    if (mountedRef.current) {
+      setLoading(true);
+      setError(null);
+    }
     try {
-      const res = await fetch(url, {
-        credentials: "omit",
-        signal: controller.signal,
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || `HTTP ${res.status}`);
+      let lastNetworkError: unknown = null;
+
+      for (const url of urls) {
+        try {
+          const res = await fetch(url, {
+            credentials: "omit",
+            signal: controller.signal,
+          });
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(text || `HTTP ${res.status}`);
+          }
+          const contentType = res.headers.get("content-type") ?? "";
+          if (!contentType.includes("application/json")) {
+            lastNetworkError = new Error(`Non-JSON response from ${url}`);
+            continue;
+          }
+          const json = await res.json();
+          if (!controller.signal.aborted && mountedRef.current) {
+            setData(json);
+          }
+          return;
+        } catch (err) {
+          if (controller.signal.aborted) {
+            throw err;
+          }
+
+          if (networkFetchFailed(err)) {
+            lastNetworkError = err;
+            continue;
+          }
+
+          throw err;
+        }
       }
-      const json = await res.json();
-      if (!controller.signal.aborted) {
-        setData(json);
+
+      if (lastNetworkError) {
+        throw new Error(`Failed to fetch (tried: ${urls.join(", ")})`);
       }
     } catch (err: any) {
-      if (err?.name === "AbortError") return;
+      if (!mountedRef.current) return;
+      if (err?.name === "AbortError") {
+        if (timedOut) {
+          setError("Request timed out. Please retry.");
+        }
+        return;
+      }
       if (!controller.signal.aborted) {
         setError(err?.message ?? "Unknown error");
       }
     } finally {
       clearTimeout(timer);
-      if (!controller.signal.aborted) {
+      if (mountedRef.current) {
         setLoading(false);
       }
     }
-  }, [enabled, url]);
+  }, [enabled, urls]);
 
   useEffect(() => {
+    mountedRef.current = true;
     fetchData();
     return () => {
+      mountedRef.current = false;
       abortRef.current?.abort();
     };
   }, [fetchData]);

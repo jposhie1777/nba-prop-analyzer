@@ -4,6 +4,10 @@
   "outputDirectory": "dist",
   "routes": [
     {
+      "src": "/api/(.*)",
+      "dest": "https://mobile-api-763243624328.us-central1.run.app/$1"
+    },
+    {
       "src": "/_expo/(.*)",
       "dest": "/_expo/$1",
       "headers": {

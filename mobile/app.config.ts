@@ -22,7 +22,7 @@ const config: ExpoConfig = {
   },
 
   extra: {
-    API_URL: "https://pulse-mobile-api-763243624328.us-central1.run.app",
+    API_URL: "https://mobile-api-763243624328.us-central1.run.app",
     eas: {
       projectId: "f7f03566-58a4-46dd-acfb-93291bc04752",
     },

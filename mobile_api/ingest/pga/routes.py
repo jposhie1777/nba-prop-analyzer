@@ -10,6 +10,7 @@ from .round_scores import ingest_round_scores
 from .pga_pairings_ingest import ingest_pairings
 from .pga_stats_ingest import ingest_stats
 from .pga_rankings_ingest import ingest_rankings
+from .website_ingest import run_website_backfill, run_website_ingestion
 
 
 router = APIRouter(
@@ -131,6 +132,36 @@ def run_pairings(req: PgaPairingsRequest):
             create_tables=req.create_tables,
             dry_run=req.dry_run,
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+class PgaWebsiteIngestionRequest(BaseModel):
+    season: Optional[int] = None
+
+
+@router.post("/website/full")
+def run_website_full(req: PgaWebsiteIngestionRequest):
+    """Run website-only PGA ingestion and write all available data to BigQuery."""
+    try:
+        return run_website_ingestion(
+            season=req.season,
+            create_tables=True,
+            truncate_first=False,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/website/backfill")
+def run_website_backfill_route():
+    """Run website-only PGA backfill (create/truncate/write)."""
+    try:
+        return run_website_backfill()
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:

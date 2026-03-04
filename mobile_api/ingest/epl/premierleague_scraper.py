@@ -119,9 +119,6 @@ def fetch_match_details(match_id: str | int) -> Dict[str, Any]:
     payload = _get(f"v2/matches/{match_id}")
     return payload if isinstance(payload, dict) else {}
 
-def fetch_match_details(match_id: str | int) -> Dict[str, Any]:
-    payload = _get(f"v2/matches/{match_id}")
-    return payload if isinstance(payload, dict) else {}
 
 def fetch_match_stats(match_id: str | int) -> List[Dict[str, Any]]:
     payload = _get(f"v3/matches/{match_id}/stats")
@@ -164,18 +161,69 @@ def fetch_standings(season: int) -> List[Dict[str, Any]]:
 
 def fetch_player_stats(season: int) -> List[Dict[str, Any]]:
     # Endpoint exists but can be unstable / schema variant by stat sort.
-    try:
-        payload = _get(
-            f"v3/competitions/{COMPETITION_ID}/seasons/{season}/players/stats/leaderboard",
-            {"_sort": os.getenv("PREMIERLEAGUE_PLAYER_STATS_SORT", "total_passes:desc")},
+    # Attempt pagination first because some responses default to a short leaderboard page.
+    def _player_id(row: Dict[str, Any]) -> str:
+        player = row.get("player") if isinstance(row.get("player"), dict) else {}
+        return str(
+            row.get("playerId")
+            or row.get("player_id")
+            or player.get("id")
+            or row.get("id")
+            or ""
         )
+
+    base_params = {
+        "_sort": os.getenv("PREMIERLEAGUE_PLAYER_STATS_SORT", "total_passes:desc"),
+    }
+    per_page = int(os.getenv("PREMIERLEAGUE_PLAYER_STATS_PAGE_SIZE", "100"))
+    max_pages = int(os.getenv("PREMIERLEAGUE_PLAYER_STATS_MAX_PAGES", "20"))
+
+    aggregated: List[Dict[str, Any]] = []
+
+    try:
+        for page in range(max_pages):
+            params = dict(base_params)
+            params["_limit"] = per_page
+            params["_page"] = page
+            payload = _get(
+                f"v3/competitions/{COMPETITION_ID}/seasons/{season}/players/stats/leaderboard",
+                params,
+            )
+            if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+                break
+
+            rows = payload["data"]
+            if not rows:
+                break
+
+            aggregated.extend(rows)
+            if len(rows) < per_page:
+                break
     except Exception as exc:
         logger.warning("player_stats unavailable for season=%s: %s", season, exc)
         return []
 
-    if isinstance(payload, dict) and isinstance(payload.get("data"), list):
-        return payload["data"]
-    return []
+    # Fallback in case API ignores _page/_limit parameters.
+    if not aggregated:
+        payload = _get(
+            f"v3/competitions/{COMPETITION_ID}/seasons/{season}/players/stats/leaderboard",
+            base_params,
+        )
+        if isinstance(payload, dict) and isinstance(payload.get("data"), list):
+            aggregated = payload["data"]
+
+    deduped: List[Dict[str, Any]] = []
+    seen_player_ids: set[str] = set()
+    for row in aggregated:
+        pid = _player_id(row)
+        if pid and pid in seen_player_ids:
+            continue
+        if pid:
+            seen_player_ids.add(pid)
+        deduped.append(row)
+
+    logger.info("player_stats season=%s rows=%s (raw=%s)", season, len(deduped), len(aggregated))
+    return deduped
 
 
 def fetch_team_game_stats(season: int, only_date: Optional[date] = None) -> List[Dict[str, Any]]:

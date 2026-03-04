@@ -19,6 +19,10 @@ EPL_TEAMS_TABLE = os.getenv("EPL_TEAMS_TABLE", "epl_data.teams")
 EPL_MATCH_EVENTS_TABLE = os.getenv("EPL_MATCH_EVENTS_TABLE", "epl_data.match_events")
 EPL_TEAM_MASTER_METRICS_TABLE = os.getenv("EPL_TEAM_MASTER_METRICS_TABLE", "epl_data.team_master_metrics")
 
+SOCCER_EPL_BETTING_ANALYTICS_TABLE = os.getenv(
+    "SOCCER_EPL_BETTING_ANALYTICS_TABLE", "soccer_data.epl_betting_analytics"
+)
+
 
 def _logo_url(team_name: str) -> str:
     encoded = quote(team_name)
@@ -363,6 +367,101 @@ def epl_upcoming_today(current_season: int = Query(default_factory=_season_defau
         row["home_logo"] = _logo_url(row.get("home_team") or "")
         row["away_logo"] = _logo_url(row.get("away_team") or "")
     return rows
+
+
+@router.get("/epl/betting-analytics")
+def epl_betting_analytics(
+    market: str | None = Query(default=None),
+    bookmaker: str | None = Query(default=None),
+    min_edge: float | None = Query(default=None),
+    only_best_price: bool = Query(default=False),
+    limit: int = Query(default=200, ge=1, le=1000),
+):
+    filters = ["DATE(start_time_et, 'America/New_York') = CURRENT_DATE('America/New_York')"]
+    params: List[bigquery.ScalarQueryParameter] = [
+        bigquery.ScalarQueryParameter("limit", "INT64", limit)
+    ]
+
+    if market:
+        filters.append("LOWER(market) = LOWER(@market)")
+        params.append(bigquery.ScalarQueryParameter("market", "STRING", market))
+    if bookmaker:
+        filters.append("LOWER(bookmaker) = LOWER(@bookmaker)")
+        params.append(bigquery.ScalarQueryParameter("bookmaker", "STRING", bookmaker))
+    if min_edge is not None:
+        filters.append("COALESCE(probability_vs_market, 0) >= @min_edge")
+        params.append(bigquery.ScalarQueryParameter("min_edge", "FLOAT64", min_edge))
+    if only_best_price:
+        filters.append("is_best_price = TRUE")
+
+    where_sql = " AND ".join(filters)
+
+    sql = f"""
+    WITH base AS (
+      SELECT
+        ingested_at,
+        league,
+        game,
+        start_time_et,
+        bookmaker,
+        market,
+        outcome,
+        line,
+        price,
+        implied_probability,
+        no_vig_probability,
+        market_hold,
+        market_avg_price,
+        market_min_price,
+        market_max_price,
+        market_consensus_fair_probability,
+        probability_vs_market,
+        is_best_price,
+        price_rank,
+        model_expected_total_goals,
+        model_away_win_form_edge,
+        model_home_win_form_edge,
+        model_total_line_edge,
+        model_edge_tier,
+        analytics_updated_at
+      FROM `{SOCCER_EPL_BETTING_ANALYTICS_TABLE}`
+      WHERE {where_sql}
+    ),
+    markets AS (
+      SELECT DISTINCT market
+      FROM base
+      WHERE market IS NOT NULL
+    ),
+    books AS (
+      SELECT DISTINCT bookmaker
+      FROM base
+      WHERE bookmaker IS NOT NULL
+    )
+    SELECT AS STRUCT
+      (SELECT ARRAY_AGG(market ORDER BY market) FROM markets) AS available_markets,
+      (SELECT ARRAY_AGG(bookmaker ORDER BY bookmaker) FROM books) AS available_bookmakers,
+      (SELECT COUNT(*) FROM base) AS row_count,
+      ARRAY(
+        SELECT AS STRUCT *
+        FROM base
+        ORDER BY start_time_et ASC, game, market, outcome, price DESC
+        LIMIT @limit
+      ) AS rows
+    """
+
+    rows = _query(sql, params)
+    if not rows:
+        return {
+            "date_et": datetime.now(timezone.utc).date().isoformat(),
+            "row_count": 0,
+            "available_markets": [],
+            "available_bookmakers": [],
+            "rows": [],
+        }
+
+    payload = rows[0]
+    payload["date_et"] = datetime.now(timezone.utc).date().isoformat()
+    return payload
 
 
 @router.get("/epl/standings")

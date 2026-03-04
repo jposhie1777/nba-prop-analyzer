@@ -100,6 +100,18 @@ def ingest_stats(
     else:
         table_id = f"{client.project}.{DATASET}.{TABLE}"
 
+    # Keep one fresh snapshot per (tour_code, year) and avoid duplicate accumulation.
+    delete_sql = (
+        f"DELETE FROM `{table_id}` WHERE tour_code = @tour_code AND year = @year"
+    )
+    delete_cfg = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("tour_code", "STRING", tour_code),
+            bigquery.ScalarQueryParameter("year", "INT64", int(year)),
+        ]
+    )
+    client.query(delete_sql, job_config=delete_cfg).result()
+
     inserted = 0
     for i in range(0, len(records), CHUNK_SIZE):
         chunk = records[i : i + CHUNK_SIZE]

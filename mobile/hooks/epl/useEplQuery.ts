@@ -31,6 +31,13 @@ function toQueryString(params?: Params): string {
 
 const FETCH_TIMEOUT_MS = 30_000;
 
+function buildUrl(base: string, path: string, params?: Params): string {
+  const normalizedBase = base.replace(/\/+$/, "");
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const qs = toQueryString(params);
+  return `${normalizedBase}${normalizedPath}${qs}`;
+}
+
 export function useEplQuery<T>(
   path: string,
   params?: Params,
@@ -41,10 +48,7 @@ export function useEplQuery<T>(
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  const url = useMemo(() => {
-    const qs = toQueryString(params);
-    return `${API_BASE}${path}${qs}`;
-  }, [path, params]);
+  const url = useMemo(() => buildUrl(API_BASE, path, params), [path, params]);
 
   const fetchData = useCallback(async () => {
     if (!enabled) return;

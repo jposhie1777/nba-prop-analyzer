@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 import time
 from datetime import datetime
@@ -176,6 +177,29 @@ def _tournament_ids(rows: Iterable[Dict[str, Any]]) -> List[str]:
     return values
 
 
+def _scorecard_workers() -> int:
+    value = os.getenv("PGA_SCORECARD_WORKERS", "8")
+    try:
+        return max(1, min(32, int(value)))
+    except (TypeError, ValueError):
+        return 8
+
+
+def _fetch_scorecard_rows_for_player(
+    tournament_id: str,
+    player_id: str,
+) -> tuple[str, List[Dict[str, Any]], Optional[str]]:
+    try:
+        card = fetch_scorecard(tournament_id, player_id)
+        if card is None:
+            card = fetch_scorecard_stats(tournament_id, player_id)
+        if card is None:
+            return (player_id, [], None)
+        return (player_id, scorecard_to_records(card), None)
+    except Exception as exc:
+        return (player_id, [], str(exc))
+
+
 def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool = True, truncate_first: bool = False) -> Dict[str, Any]:
     client = _bq_client()
     ensure_dataset(client)
@@ -246,19 +270,35 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
                 summary["errors"].append(message)
 
             player_ids = sorted({str(p.player_id) for p in players if getattr(p, "player_id", None)})
-            for player_id in player_ids:
-                try:
-                    card = fetch_scorecard(tournament_id, player_id)
-                    if card is None:
-                        card = fetch_scorecard_stats(tournament_id, player_id)
-                    if card is None:
+            if not player_ids:
+                continue
+
+            scorecard_rows_batch: List[Dict[str, Any]] = []
+            workers = _scorecard_workers()
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                futures = [
+                    executor.submit(_fetch_scorecard_rows_for_player, tournament_id, player_id)
+                    for player_id in player_ids
+                ]
+                for future in as_completed(futures):
+                    player_id, rows, error = future.result()
+                    if error:
+                        message = (
+                            f"tournament={tournament_id} player={player_id} "
+                            f"scorecard error={error}"
+                        )
+                        print(f"[website] WARN {message}")
+                        summary["errors"].append(message)
                         continue
-                    sc_rows = scorecard_to_records(card)
-                    summary["scorecard_rows"] += insert_rows(client, SCORECARDS_TABLE, sc_rows)
-                except Exception as exc:
-                    message = f"tournament={tournament_id} player={player_id} scorecard error={exc}"
-                    print(f"[website] WARN {message}")
-                    summary["errors"].append(message)
+                    if rows:
+                        scorecard_rows_batch.extend(rows)
+
+            if scorecard_rows_batch:
+                summary["scorecard_rows"] += insert_rows(
+                    client,
+                    SCORECARDS_TABLE,
+                    scorecard_rows_batch,
+                )
 
     return summary
 

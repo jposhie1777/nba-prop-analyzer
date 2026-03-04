@@ -15,8 +15,17 @@ const DEFAULT_API_BASE = IS_WEB
   ? "/api"
   : "https://pulse-mobile-api-763243624328.us-central1.run.app";
 
+function fixKnownApiHostTypos(url: string): string {
+  // Backward-compat: older envs used mobile-api-<project>.run.app,
+  // but deployed service host is pulse-mobile-api-<project>.run.app.
+  return url.replace(
+    /https:\/\/mobile-api-(\d+)\.us-central1\.run\.app/i,
+    "https://pulse-mobile-api-$1.us-central1.run.app"
+  );
+}
+
 function normalizeApiBase(url: string): string {
-  const trimmed = url.trim();
+  const trimmed = fixKnownApiHostTypos(url.trim());
   if (!trimmed) return `${DEFAULT_API_BASE}/`;
 
   // Keep relative URLs (e.g. "/api") for web proxy setups.

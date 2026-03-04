@@ -147,6 +147,7 @@ class MatchResultRow:
     tournament_slug: str
     tournament_id: str
     day_label: Optional[str]
+    match_date: Optional[str]
     round_and_court: Optional[str]
     match_duration: Optional[str]
     player_1_name: Optional[str]

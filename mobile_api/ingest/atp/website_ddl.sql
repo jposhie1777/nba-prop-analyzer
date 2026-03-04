@@ -148,6 +148,7 @@ CREATE TABLE IF NOT EXISTS `atp_data.atp_match_results` (
   tournament_slug STRING,
   tournament_id STRING,
   day_label STRING,
+  match_date DATE,
   round_and_court STRING,
   match_duration STRING,
   player_1_name STRING,
@@ -165,3 +166,5 @@ CREATE TABLE IF NOT EXISTS `atp_data.atp_match_results` (
 )
 PARTITION BY DATE(snapshot_ts_utc)
 CLUSTER BY tournament_id, tournament_slug;
+
+ALTER TABLE `atp_data.atp_match_results` ADD COLUMN IF NOT EXISTS match_date DATE;

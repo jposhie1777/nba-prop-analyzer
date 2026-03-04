@@ -265,7 +265,22 @@ def normalize_match_schedule_html(tournament_slug: str, tournament_id: str, sche
 
 def normalize_match_results_html(tournament_slug: str, tournament_id: str, results_html: str, snapshot_ts_utc: str | None = None) -> List[MatchResultRow]:
     ts = snapshot_ts_utc or utc_now_iso()
-    day_label = _find(r"<div class=\"tournament-day\">\s*<h4>\s*(.*?)\s*</h4>", results_html)
+    day_label = _find(r"<div class=['\"]tournament-day['\"]>\s*<h4>\s*(.*?)\s*</h4>", results_html)
+    if not day_label:
+        day_label = _find(r"<div class=['\"]tournament-day['\"]>\s*<h4>\s*([^<].*?)\s*<", results_html)
+
+    def _parse_match_date(label: str | None) -> str | None:
+        if not label:
+            return None
+        cleaned = re.sub(r"\s*\(?Day\s*\(?\d+\)?\)?\s*$", "", label, flags=re.IGNORECASE).strip()
+        for fmt in ["%a, %d %B, %Y", "%A, %B %d, %Y", "%A, %d %B, %Y"]:
+            try:
+                return datetime.strptime(cleaned, fmt).date().isoformat()
+            except ValueError:
+                continue
+        return None
+
+    match_date = _parse_match_date(day_label)
     rows: List[MatchResultRow] = []
 
     def _extract_stats_items(match_html: str) -> List[str]:
@@ -335,6 +350,7 @@ def normalize_match_results_html(tournament_slug: str, tournament_id: str, resul
                 tournament_slug,
                 tournament_id,
                 day_label,
+                match_date,
                 round_and_court,
                 duration,
                 p1_name,

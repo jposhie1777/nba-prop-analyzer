@@ -108,6 +108,7 @@ def test_normalize_match_results_html():
     rows = normalize_match_results_html("indian-wells", "404", html, snapshot_ts_utc="2026-01-01T00:00:00+00:00")
     assert len(rows) == 1
     assert rows[0].day_label == "Mon, 02 March, 2026 Day (2)"
+    assert rows[0].match_date == "2026-03-02"
     assert rows[0].round_and_court == "1st Round Qualifying - Stadium 5"
     assert rows[0].h2h_url == "/h2h"
     assert rows[0].player_1_scores == "6 7(6)"

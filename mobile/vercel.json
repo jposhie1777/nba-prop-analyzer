@@ -5,7 +5,7 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "https://mobile-api-ib5cx6l6fq-uc.a.run.app/$1"
+      "dest": "https://mobile-api-763243624328.us-central1.run.app/$1"
     },
     {
       "src": "/_expo/(.*)",

@@ -11,7 +11,7 @@ const EXTRA_API_URL =
 
 const IS_WEB = typeof window !== "undefined";
 
-export const CLOUD_API_BASE = "https://mobile-api-ib5cx6l6fq-uc.a.run.app";
+export const CLOUD_API_BASE = "https://mobile-api-763243624328.us-central1.run.app";
 
 const DEFAULT_API_BASE = IS_WEB ? "/api" : CLOUD_API_BASE;
 

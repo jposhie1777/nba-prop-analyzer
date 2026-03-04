@@ -265,9 +265,7 @@ def normalize_match_schedule_html(tournament_slug: str, tournament_id: str, sche
 
 def normalize_match_results_html(tournament_slug: str, tournament_id: str, results_html: str, snapshot_ts_utc: str | None = None) -> List[MatchResultRow]:
     ts = snapshot_ts_utc or utc_now_iso()
-    day_label = _find(r"<div class=\"tournament-day\">\s*<h4>\s*(.*?)\s*</h4>", results_html) or _find(
-        r"<h4>\s*(.*?Day.*?|.*?\d{4}.*?)\s*</h4>", results_html
-    )
+    day_label = _find(r"<div class=\"tournament-day\">\s*<h4>\s*(.*?)\s*</h4>", results_html)
     rows: List[MatchResultRow] = []
 
     def _extract_stats_items(match_html: str) -> List[str]:
@@ -284,9 +282,21 @@ def normalize_match_results_html(tournament_slug: str, tournament_id: str, resul
         name = _find(r'<div class="name">\s*(.*?)\s*</div>', item_html)
         profile_url = _find_href(r'<div class="name">\s*<a href="([^"]+)"', item_html)
         is_winner = "class=\"winner\"" in item_html
-        scores_section = _find(r'<div class="scores">\s*(.*?)\s*</div>', item_html) or ""
-        score_values = re.findall(r"<span>(\d+)</span>", scores_section)
-        score_text = " ".join(score_values) if score_values else None
+
+        score_text = None
+        score_items = re.findall(r'<div class="score-item">(.*?)</div>', item_html, flags=re.IGNORECASE | re.DOTALL)
+        if score_items:
+            parts: List[str] = []
+            for score_item in score_items:
+                vals = re.findall(r"<span>(\d+)</span>", score_item)
+                if not vals:
+                    continue
+                if len(vals) >= 2:
+                    parts.append(f"{vals[0]}({vals[1]})")
+                else:
+                    parts.append(vals[0])
+            score_text = " ".join(parts) if parts else None
+
         return name, profile_url, is_winner, score_text
 
     chunks = results_html.split('<div class="match">')

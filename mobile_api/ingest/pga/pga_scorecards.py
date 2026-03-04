@@ -365,6 +365,8 @@ def fetch_scorecard_stats(
             raise
         except Exception as exc:
             last_exc = exc
+            if "FieldUndefined" in str(exc) and "scorecardStats" in str(exc):
+                return None
             if attempt < retries - 1:
                 time.sleep(backoff)
                 backoff *= 2

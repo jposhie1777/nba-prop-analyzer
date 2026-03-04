@@ -455,7 +455,7 @@ def epl_betting_analytics(
         FROM base
         ORDER BY start_time_et ASC, game, market, outcome, price DESC
         LIMIT @limit
-      ) AS rows
+      ) AS records
     """
 
     empty = {
@@ -483,7 +483,7 @@ def epl_betting_analytics(
     try:
         payload = dict(rows[0])
         # Nested ARRAY<STRUCT> rows are BigQuery Row objects; convert to plain dicts.
-        nested = payload.get("rows") or []
+        nested = payload.get("records") or []
         log.info("[EPL-ANALYTICS] nested rows count=%d", len(nested))
         payload["rows"] = [dict(r) for r in nested]
         payload["date_et"] = datetime.now(timezone.utc).date().isoformat()

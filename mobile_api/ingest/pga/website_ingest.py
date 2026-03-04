@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 import time
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Dict, Iterable, List, Optional
 
 from google.api_core.exceptions import Conflict, NotFound
@@ -13,7 +12,6 @@ from .pga_leaderboard import fetch_leaderboard, leaderboard_to_records
 from .pga_pairings_ingest import ingest_pairings
 from .pga_rankings_ingest import ingest_rankings
 from .pga_schedule import fetch_schedule, schedule_to_records
-from .pga_scorecards import fetch_scorecard, fetch_scorecard_stats, scorecard_to_records
 from .pga_stats_ingest import ingest_stats
 
 DATASET = os.getenv("PGA_DATASET", "pga_data")
@@ -177,27 +175,64 @@ def _tournament_ids(rows: Iterable[Dict[str, Any]]) -> List[str]:
     return values
 
 
-def _scorecard_workers() -> int:
-    value = os.getenv("PGA_SCORECARD_WORKERS", "8")
+def _parse_date(value: Any) -> Optional[date]:
+    if not value:
+        return None
+    if isinstance(value, date):
+        return value
     try:
-        return max(1, min(32, int(value)))
+        return datetime.fromisoformat(str(value)).date()
     except (TypeError, ValueError):
-        return 8
+        return None
 
 
-def _fetch_scorecard_rows_for_player(
+def _focused_tournament_ids(schedule_rows: List[Dict[str, Any]]) -> List[str]:
+    today = datetime.utcnow().date()
+    upcoming: List[tuple[date, str]] = []
+    completed: List[tuple[date, str]] = []
+
+    for row in schedule_rows:
+        tournament_id = str(row.get("tournament_id") or "").strip()
+        if not tournament_id:
+            continue
+        start_date = _parse_date(row.get("start_date"))
+        if not start_date:
+            continue
+        bucket = str(row.get("bucket") or "").strip().lower()
+        if bucket == "upcoming" and start_date <= today:
+            upcoming.append((start_date, tournament_id))
+        elif bucket == "completed":
+            completed.append((start_date, tournament_id))
+
+    if upcoming:
+        return [max(upcoming, key=lambda item: item[0])[1]]
+    if completed:
+        return [max(completed, key=lambda item: item[0])[1]]
+    return _tournament_ids(schedule_rows)[:1]
+
+
+def _round_score_rows_from_leaderboard(
     tournament_id: str,
-    player_id: str,
-) -> tuple[str, List[Dict[str, Any]], Optional[str]]:
-    try:
-        card = fetch_scorecard(tournament_id, player_id)
-        if card is None:
-            card = fetch_scorecard_stats(tournament_id, player_id)
-        if card is None:
-            return (player_id, [], None)
-        return (player_id, scorecard_to_records(card), None)
-    except Exception as exc:
-        return (player_id, [], str(exc))
+    leaderboard_rows: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for row in leaderboard_rows:
+        round_number = row.get("round_number")
+        round_score = row.get("round_score")
+        if round_number is None or round_score is None:
+            continue
+        rows.append(
+            {
+                "run_ts": row.get("run_ts"),
+                "ingested_at": row.get("ingested_at"),
+                "tournament_id": tournament_id,
+                "player_id": row.get("player_id"),
+                "player_display_name": row.get("player_display_name"),
+                "round_number": round_number,
+                "round_par_relative_score": round_score,
+            }
+        )
+    return rows
 
 
 def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool = True, truncate_first: bool = False) -> Dict[str, Any]:
@@ -242,8 +277,8 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
         summary["stats_rows"] += int(stats.get("rows_inserted", 0))
         summary["rankings_rows"] += int(rankings.get("rows_inserted", 0))
 
-        tournament_ids = _tournament_ids(schedule_rows)
-        print(f"[website] season={yr}: tournaments={len(tournament_ids)}")
+        tournament_ids = _focused_tournament_ids(schedule_rows)
+        print(f"[website] season={yr}: focused_tournaments={len(tournament_ids)}")
 
         for tournament_id in tournament_ids:
             players = []
@@ -251,6 +286,9 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
                 players = fetch_leaderboard(tournament_id)
                 lb_rows = leaderboard_to_records(tournament_id, players)
                 summary["leaderboard_rows"] += insert_rows(client, LEADERBOARD_TABLE, lb_rows)
+                score_rows = _round_score_rows_from_leaderboard(tournament_id, lb_rows)
+                if score_rows:
+                    summary["scorecard_rows"] += insert_rows(client, SCORECARDS_TABLE, score_rows)
             except Exception as exc:
                 message = f"tournament={tournament_id} leaderboard error={exc}"
                 print(f"[website] WARN {message}")
@@ -268,37 +306,6 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
                 message = f"tournament={tournament_id} pairings error={exc}"
                 print(f"[website] WARN {message}")
                 summary["errors"].append(message)
-
-            player_ids = sorted({str(p.player_id) for p in players if getattr(p, "player_id", None)})
-            if not player_ids:
-                continue
-
-            scorecard_rows_batch: List[Dict[str, Any]] = []
-            workers = _scorecard_workers()
-            with ThreadPoolExecutor(max_workers=workers) as executor:
-                futures = [
-                    executor.submit(_fetch_scorecard_rows_for_player, tournament_id, player_id)
-                    for player_id in player_ids
-                ]
-                for future in as_completed(futures):
-                    player_id, rows, error = future.result()
-                    if error:
-                        message = (
-                            f"tournament={tournament_id} player={player_id} "
-                            f"scorecard error={error}"
-                        )
-                        print(f"[website] WARN {message}")
-                        summary["errors"].append(message)
-                        continue
-                    if rows:
-                        scorecard_rows_batch.extend(rows)
-
-            if scorecard_rows_batch:
-                summary["scorecard_rows"] += insert_rows(
-                    client,
-                    SCORECARDS_TABLE,
-                    scorecard_rows_batch,
-                )
 
     return summary
 

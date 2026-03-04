@@ -112,6 +112,9 @@ class HeadToHeadMatchRow:
     round_long_name: Optional[str]
     match_time: Optional[str]
     is_match_live: Optional[bool]
+    player_set_scores: Optional[str]
+    opponent_set_scores: Optional[str]
+    scoreline_display: Optional[str]
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

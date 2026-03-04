@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ActivityIndicator, FlatList, Image, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { useEplQuery } from "@/hooks/epl/useEplQuery";
 import { useTheme } from "@/store/useTheme";
@@ -22,7 +22,7 @@ function formatCell(value: unknown): string {
 
 export function EplTableScreen({ endpoint, title, subtitle, columns, leagueLabel = "EPL" }: Props) {
   const { colors } = useTheme();
-  const { data, loading, error } = useEplQuery<any[]>(endpoint);
+  const { data, loading, error, refetch } = useEplQuery<any[]>(endpoint);
 
   const rows = Array.isArray(data) ? data : [];
 
@@ -51,6 +51,12 @@ export function EplTableScreen({ endpoint, title, subtitle, columns, leagueLabel
         <Text style={{ color: "#fff", textAlign: "center" }}>
           Failed to load {leagueLabel} data: {error}
         </Text>
+        <Pressable
+          onPress={refetch}
+          style={[styles.retryBtn, { borderColor: colors.border.subtle }]}
+        >
+          <Text style={{ color: colors.text.primary, fontWeight: "700" }}>Retry</Text>
+        </Pressable>
       </View>
     );
   }
@@ -62,6 +68,12 @@ export function EplTableScreen({ endpoint, title, subtitle, columns, leagueLabel
       ListHeaderComponent={header}
       data={rows}
       keyExtractor={(item, idx) => `${item.match_id || item.team_name || idx}`}
+      ListEmptyComponent={
+        <View style={[styles.card, { borderColor: colors.border.subtle }]}> 
+          <Text style={[styles.teamText, { color: colors.text.primary }]}>No {leagueLabel} rows available.</Text>
+          <Text style={[styles.key, { color: colors.text.muted }]}>No upcoming matches found for this view right now.</Text>
+        </View>
+      }
       renderItem={({ item }) => {
         const homeLogo = (item.home_logo || item.team_logo) as string | undefined;
         const awayLogo = item.away_logo as string | undefined;
@@ -97,6 +109,13 @@ export function EplTableScreen({ endpoint, title, subtitle, columns, leagueLabel
 
 const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
+  retryBtn: {
+    marginTop: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
   hero: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 16,

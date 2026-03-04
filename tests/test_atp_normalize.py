@@ -93,12 +93,13 @@ def test_normalize_match_schedule_html():
 
 def test_normalize_match_results_html():
     html = '''
+    <h4>TOURNAMENT RESULTS</h4>
     <div class="tournament-day"><h4>Mon, 02 March, 2026 <span>Day (2)</span></h4></div>
     <div class="match">
       <div class="match-header"><span><strong>1st Round Qualifying - Stadium 5</strong></span><span>01:44:19</span></div>
       <div class="match-content"><div class="match-stats">
-        <div class="stats-item"><div class="player-info"><div class="name"><a href="/en/players/vit-kopriva/ki82/overview">Vit Kopriva</a></div><div class="winner"><span class="icon-checkmark"></span></div></div><div class="scores"><div class="score-item"><span>6</span></div></div></div>
-        <div class="stats-item"><div class="player-info"><div class="name"><a href="/en/players/rei-sakamoto/s0uv/overview">Rei Sakamoto</a></div></div><div class="scores"><div class="score-item"><span>4</span></div></div></div>
+        <div class="stats-item"><div class="player-info"><div class="name"><a href="/en/players/vit-kopriva/ki82/overview">Vit Kopriva</a></div><div class="winner"><span class="icon-checkmark"></span></div></div><div class="scores"><div class="score-item"><span>6</span></div><div class="score-item"><span>7</span><span>6</span></div></div></div>
+        <div class="stats-item"><div class="player-info"><div class="name"><a href="/en/players/rei-sakamoto/s0uv/overview">Rei Sakamoto</a></div></div><div class="scores"><div class="score-item"><span>4</span></div><div class="score-item"><span>6</span></div></div></div>
       </div></div>
       <div class="match-footer"><div class="match-umpire">Ump: Chase Urban</div><div class="match-cta"><a href="/h2h">H2H</a><a href="/stats">Stats</a></div></div>
       <div class="match-notes">Game Set and Match Vit Kopriva.</div>
@@ -106,5 +107,8 @@ def test_normalize_match_results_html():
     '''
     rows = normalize_match_results_html("indian-wells", "404", html, snapshot_ts_utc="2026-01-01T00:00:00+00:00")
     assert len(rows) == 1
+    assert rows[0].day_label == "Mon, 02 March, 2026 Day (2)"
     assert rows[0].round_and_court == "1st Round Qualifying - Stadium 5"
     assert rows[0].h2h_url == "/h2h"
+    assert rows[0].player_1_scores == "6 7(6)"
+    assert rows[0].player_2_scores == "4 6"

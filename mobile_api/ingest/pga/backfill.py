@@ -242,6 +242,7 @@ def _fetch_paginated_retry(
     *,
     per_page: int = 100,
     max_pages: int = 200,
+    source: str = "api",
 ) -> List[Dict[str, Any]]:
     backoff = 5
     for attempt in range(5):
@@ -252,6 +253,7 @@ def _fetch_paginated_retry(
                 per_page=per_page,
                 max_pages=max_pages,
                 cache_ttl=0,
+                source=source,
             )
         except PgaApiError as exc:
             message = str(exc)

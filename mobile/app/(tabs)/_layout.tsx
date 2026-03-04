@@ -35,6 +35,7 @@ const HIDDEN_SCREENS = [
   "mls",
   "epl/btts",
   "epl/cards",
+  "epl/betting-analytics",
   "epl/moneylines",
   "epl/standings",
   "epl/team-master-metrics",

@@ -70,6 +70,14 @@ export default function EplHome() {
         accent="#60A5FA"
       />
       <Tile
+        title="Betting Analytics"
+        subtitle="NEW: Compare FD/DK lines, filter by market, and send picks to your Gambly betslip."
+        route="/(tabs)/epl/betting-analytics"
+        icon="stats-chart-outline"
+        accent="#38BDF8"
+      />
+
+      <Tile
         title="Both Teams To Score"
         subtitle="BTTS probability from team scoring + concession rates."
         route="/(tabs)/epl/btts"
@@ -90,6 +98,7 @@ export default function EplHome() {
         icon="warning-outline"
         accent="#F87171"
       />
+
     </ScrollView>
   );
 }

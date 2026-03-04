@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { API_BASE } from "@/lib/config";
+import { API_BASE, CLOUD_API_BASE } from "@/lib/config";
 
 type QueryResult<T> = {
   data: T | null;
@@ -56,6 +56,10 @@ function getFallbackBases(base: string): string[] {
   );
 
   candidates.push(pulseHostVariant, mobileHostVariant);
+
+  // Always include the canonical Cloud Run URL as a fallback, in case the
+  // configured base uses the project-number URL format which may be unreachable.
+  candidates.push(CLOUD_API_BASE);
 
   if (typeof window !== "undefined") {
     const origin = window.location?.origin;

@@ -11,9 +11,9 @@ const EXTRA_API_URL =
 
 const IS_WEB = typeof window !== "undefined";
 
-const DEFAULT_API_BASE = IS_WEB
-  ? "/api"
-  : "https://mobile-api-ib5cx6l6fq-uc.a.run.app";
+export const CLOUD_API_BASE = "https://mobile-api-ib5cx6l6fq-uc.a.run.app";
+
+const DEFAULT_API_BASE = IS_WEB ? "/api" : CLOUD_API_BASE;
 
 function fixKnownApiHostTypos(url: string): string {
   // Backward-compat: some envs used pulse-mobile-api-<project>.run.app,

@@ -15,8 +15,9 @@ import argparse
 import datetime
 import os
 import time
-from typing import Optional
+from typing import Dict, List, Optional, Set, Tuple
 
+from google.api_core.exceptions import BadRequest
 from google.cloud import bigquery
 
 from .pga_stats_scraper import fetch_stat_overview, stat_players_to_records
@@ -99,6 +100,59 @@ def ingest_stats(
         table_id = _ensure_table(client)
     else:
         table_id = f"{client.project}.{DATASET}.{TABLE}"
+
+    # Keep one fresh snapshot per (tour_code, year) and avoid duplicate accumulation.
+    delete_sql = f"DELETE FROM `{table_id}` WHERE tour_code = @tour_code AND year = @year"
+    query_params = [
+        bigquery.ScalarQueryParameter("tour_code", "STRING", tour_code),
+        bigquery.ScalarQueryParameter("year", "INT64", int(year)),
+    ]
+    delete_cfg = bigquery.QueryJobConfig(query_parameters=query_params)
+
+    delete_performed = True
+    try:
+        client.query(delete_sql, job_config=delete_cfg).result()
+    except BadRequest as exc:
+        message = str(exc)
+        if "streaming buffer" in message and "not supported" in message:
+            delete_performed = False
+            print(
+                "[stats] Delete skipped because table has a streaming buffer; "
+                "falling back to insert-time de-duplication."
+            )
+        else:
+            raise
+
+    if not delete_performed:
+        existing_sql = f"""
+            SELECT stat_id, player_id, rank, stat_value
+            FROM `{table_id}`
+            WHERE tour_code = @tour_code AND year = @year
+        """
+        existing_cfg = bigquery.QueryJobConfig(query_parameters=query_params)
+        existing_rows = client.query(existing_sql, job_config=existing_cfg).result()
+        existing_keys: Set[Tuple[str, str, int, str]] = {
+            (
+                str(row.get("stat_id") or ""),
+                str(row.get("player_id") or ""),
+                int(row.get("rank") or 0),
+                str(row.get("stat_value") or ""),
+            )
+            for row in existing_rows
+        }
+
+        deduped_records: List[Dict[str, object]] = []
+        for record in records:
+            key = (
+                str(record.get("stat_id") or ""),
+                str(record.get("player_id") or ""),
+                int(record.get("rank") or 0),
+                str(record.get("stat_value") or ""),
+            )
+            if key in existing_keys:
+                continue
+            deduped_records.append(record)
+        records = deduped_records
 
     inserted = 0
     for i in range(0, len(records), CHUNK_SIZE):

@@ -46,6 +46,17 @@ function networkFetchFailed(err: unknown): boolean {
 function getFallbackBases(base: string): string[] {
   const candidates = [base];
 
+  const pulseHostVariant = base.replace(
+    /https:\/\/mobile-api-(\d+)\.us-central1\.run\.app/i,
+    "https://pulse-mobile-api-$1.us-central1.run.app"
+  );
+  const mobileHostVariant = base.replace(
+    /https:\/\/pulse-mobile-api-(\d+)\.us-central1\.run\.app/i,
+    "https://mobile-api-$1.us-central1.run.app"
+  );
+
+  candidates.push(pulseHostVariant, mobileHostVariant);
+
   if (typeof window !== "undefined") {
     const origin = window.location?.origin;
     if (origin) {

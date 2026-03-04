@@ -6,6 +6,7 @@ from typing import Any, Dict, List
 from urllib.parse import quote
 
 from fastapi import APIRouter, Query
+from google.api_core.exceptions import NotFound
 from google.cloud import bigquery
 
 from bq import get_bq_client
@@ -449,17 +450,24 @@ def epl_betting_analytics(
       ) AS rows
     """
 
-    rows = _query(sql, params)
-    if not rows:
-        return {
-            "date_et": datetime.now(timezone.utc).date().isoformat(),
-            "row_count": 0,
-            "available_markets": [],
-            "available_bookmakers": [],
-            "rows": [],
-        }
+    empty = {
+        "date_et": datetime.now(timezone.utc).date().isoformat(),
+        "row_count": 0,
+        "available_markets": [],
+        "available_bookmakers": [],
+        "rows": [],
+    }
+    try:
+        rows = _query(sql, params)
+    except NotFound:
+        return empty
 
-    payload = rows[0]
+    if not rows:
+        return empty
+
+    payload = dict(rows[0])
+    # Nested ARRAY<STRUCT> rows are BigQuery Row objects; convert to plain dicts.
+    payload["rows"] = [dict(r) for r in (payload.get("rows") or [])]
     payload["date_et"] = datetime.now(timezone.utc).date().isoformat()
     return payload
 

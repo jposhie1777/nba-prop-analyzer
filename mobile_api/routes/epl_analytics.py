@@ -25,6 +25,37 @@ SOCCER_EPL_BETTING_ANALYTICS_TABLE = os.getenv(
 )
 
 
+def _split_table_ref(table_ref: str) -> tuple[str | None, str, str]:
+    parts = table_ref.split('.')
+    if len(parts) == 2:
+        return None, parts[0], parts[1]
+    if len(parts) == 3:
+        return parts[0], parts[1], parts[2]
+    raise ValueError(f"Unsupported BigQuery table reference: {table_ref}")
+
+
+def _table_columns(table_ref: str) -> set[str]:
+    project, dataset, table = _split_table_ref(table_ref)
+    client = get_bq_client()
+    project = project or client.project
+    sql = f"""
+    SELECT column_name
+    FROM `{project}.{dataset}.INFORMATION_SCHEMA.COLUMNS`
+    WHERE table_name = @table
+    """
+    job = client.query(
+        sql,
+        job_config=bigquery.QueryJobConfig(
+            query_parameters=[bigquery.ScalarQueryParameter("table", "STRING", table)]
+        ),
+    )
+    return {r["column_name"] for r in job.result()}
+
+
+def _select_or_null(column: str, columns: set[str]) -> str:
+    return column if column in columns else f"NULL AS {column}"
+
+
 def _logo_url(team_name: str) -> str:
     encoded = quote(team_name)
     return (
@@ -385,6 +416,8 @@ def epl_betting_analytics(
     log.info("[EPL-ANALYTICS] start table=%s market=%s bookmaker=%s min_edge=%s only_best_price=%s limit=%s",
              SOCCER_EPL_BETTING_ANALYTICS_TABLE, market, bookmaker, min_edge, only_best_price, limit)
 
+    table_columns = _table_columns(SOCCER_EPL_BETTING_ANALYTICS_TABLE)
+
     filters = ["DATE(start_time_et, 'America/New_York') = CURRENT_DATE('America/New_York')"]
     params: List[bigquery.ScalarQueryParameter] = [
         bigquery.ScalarQueryParameter("limit", "INT64", limit)
@@ -397,42 +430,54 @@ def epl_betting_analytics(
         filters.append("LOWER(bookmaker) = LOWER(@bookmaker)")
         params.append(bigquery.ScalarQueryParameter("bookmaker", "STRING", bookmaker))
     if min_edge is not None:
-        filters.append("COALESCE(probability_vs_market, 0) >= @min_edge")
-        params.append(bigquery.ScalarQueryParameter("min_edge", "FLOAT64", min_edge))
+        if "probability_vs_market" in table_columns:
+            filters.append("COALESCE(probability_vs_market, 0) >= @min_edge")
+            params.append(bigquery.ScalarQueryParameter("min_edge", "FLOAT64", min_edge))
+        else:
+            log.warning("[EPL-ANALYTICS] probability_vs_market column missing; skipping min_edge filter")
     if only_best_price:
-        filters.append("is_best_price = TRUE")
+        if "is_best_price" in table_columns:
+            filters.append("is_best_price = TRUE")
+        else:
+            log.warning("[EPL-ANALYTICS] is_best_price column missing; skipping only_best_price filter")
 
     where_sql = " AND ".join(filters)
     log.info("[EPL-ANALYTICS] WHERE: %s", where_sql)
 
+    base_select = [
+        "ingested_at",
+        "league",
+        "game",
+        "start_time_et",
+        "bookmaker",
+        "market",
+        "outcome",
+        "line",
+        "price",
+        _select_or_null("implied_probability", table_columns),
+        _select_or_null("no_vig_probability", table_columns),
+        _select_or_null("market_hold", table_columns),
+        _select_or_null("market_avg_price", table_columns),
+        _select_or_null("market_min_price", table_columns),
+        _select_or_null("market_max_price", table_columns),
+        _select_or_null("market_consensus_fair_probability", table_columns),
+        _select_or_null("probability_vs_market", table_columns),
+        _select_or_null("is_best_price", table_columns),
+        _select_or_null("price_rank", table_columns),
+        _select_or_null("model_expected_total_goals", table_columns),
+        _select_or_null("model_away_win_form_edge", table_columns),
+        _select_or_null("model_home_win_form_edge", table_columns),
+        _select_or_null("model_total_line_edge", table_columns),
+        _select_or_null("model_edge_tier", table_columns),
+        _select_or_null("analytics_updated_at", table_columns),
+    ]
+
+    select_sql = ",\n        ".join(base_select)
+
     sql = f"""
     WITH base AS (
       SELECT
-        ingested_at,
-        league,
-        game,
-        start_time_et,
-        bookmaker,
-        market,
-        outcome,
-        line,
-        price,
-        implied_probability,
-        no_vig_probability,
-        market_hold,
-        market_avg_price,
-        market_min_price,
-        market_max_price,
-        market_consensus_fair_probability,
-        probability_vs_market,
-        is_best_price,
-        price_rank,
-        model_expected_total_goals,
-        model_away_win_form_edge,
-        model_home_win_form_edge,
-        model_total_line_edge,
-        model_edge_tier,
-        analytics_updated_at
+        {select_sql}
       FROM `{SOCCER_EPL_BETTING_ANALYTICS_TABLE}`
       WHERE {where_sql}
     ),

@@ -551,12 +551,10 @@ export default function EplBettingAnalyticsScreen() {
             {data?.date_et ?? "–"} · {visibleGroups.length} matches
           </Text>
 
-          {/* Market selector */}
-          <Text style={[styles.filterLabel, { color: colors.text.muted }]}>Market</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.pillRow}
+            contentContainerStyle={styles.controlRow}
           >
             {markets.map((market) => {
               const active = selectedMarket === market;
@@ -565,18 +563,18 @@ export default function EplBettingAnalyticsScreen() {
                   key={market}
                   onPress={() => setSelectedMarket(market)}
                   style={[
-                    styles.pill,
+                    styles.smallBtn,
                     {
                       borderColor: active ? "#22D3EE" : colors.border.subtle,
                       backgroundColor: active
-                        ? "rgba(34,211,238,0.22)"
-                        : "transparent",
+                        ? "rgba(34,211,238,0.20)"
+                        : "rgba(2,6,23,0.35)",
                     },
                   ]}
                 >
                   <Text
                     style={[
-                      styles.pillText,
+                      styles.smallBtnText,
                       { color: active ? "#CFFAFE" : colors.text.muted },
                     ]}
                   >
@@ -585,23 +583,36 @@ export default function EplBettingAnalyticsScreen() {
                 </Pressable>
               );
             })}
-          </ScrollView>
 
-          {/* Best price toggle */}
-          <Pressable
-            style={[styles.toggleBtn, { borderColor: colors.border.subtle }]}
-            onPress={() => setOnlyBestPrice((v) => !v)}
-          >
-            <View
+            <Pressable
               style={[
-                styles.toggleDot,
-                { backgroundColor: onlyBestPrice ? "#22D3EE" : colors.text.muted },
+                styles.smallBtn,
+                styles.bestPriceBtn,
+                {
+                  borderColor: onlyBestPrice ? "#22D3EE" : colors.border.subtle,
+                  backgroundColor: onlyBestPrice
+                    ? "rgba(34,211,238,0.20)"
+                    : "rgba(2,6,23,0.35)",
+                },
               ]}
-            />
-            <Text style={[styles.toggleLabel, { color: colors.text.primary }]}>
-              {onlyBestPrice ? "Best price only" : "All prices"}
-            </Text>
-          </Pressable>
+              onPress={() => setOnlyBestPrice((v) => !v)}
+            >
+              <View
+                style={[
+                  styles.toggleDot,
+                  { backgroundColor: onlyBestPrice ? "#22D3EE" : colors.text.muted },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.smallBtnText,
+                  { color: onlyBestPrice ? "#CFFAFE" : colors.text.muted },
+                ]}
+              >
+                Best price
+              </Text>
+            </Pressable>
+          </ScrollView>
         </View>
       }
       renderItem={({ item }) => (
@@ -649,27 +660,19 @@ const styles = StyleSheet.create({
   eyebrow: { color: "#90B3E9", fontSize: 11, fontWeight: "700", letterSpacing: 1 },
   h1: { color: "#E9F2FF", fontSize: 22, fontWeight: "800", marginTop: 6 },
   sub: { marginTop: 4, fontSize: 12 },
-  filterLabel: { fontSize: 11, fontWeight: "700", marginTop: 14 },
-  pillRow: { gap: 8, paddingTop: 8, paddingRight: 12 },
-  pill: {
+  controlRow: { gap: 8, marginTop: 12, paddingRight: 12 },
+  smallBtn: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-  },
-  pillText: { fontSize: 11, fontWeight: "700" },
-  toggleBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    minHeight: 30,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    marginTop: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
   },
+  bestPriceBtn: { gap: 6 },
+  smallBtnText: { fontSize: 11, fontWeight: "700" },
   toggleDot: { width: 8, height: 8, borderRadius: 4 },
-  toggleLabel: { fontSize: 12, fontWeight: "700" },
 
   // Game card
   card: {

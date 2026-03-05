@@ -70,6 +70,12 @@ def _truncate_tables(client: bigquery.Client) -> None:
         client.query(f"TRUNCATE TABLE `{_table(t)}`").result()
 
 
+
+
+def _truncate_table(client: bigquery.Client, table_name: str) -> None:
+    client.query(f"TRUNCATE TABLE `{_table(table_name)}`").result()
+
+
 def _chunked(rows: Sequence[Dict[str, Any]], size: int) -> Iterable[Sequence[Dict[str, Any]]]:
     for idx in range(0, len(rows), size):
         yield rows[idx : idx + size]
@@ -169,7 +175,7 @@ def _raw_row(snapshot_ts: str, ingest_run_id: str, endpoint_key: str, response: 
     }
 
 
-def run_ingest(start_year: int, end_year: int, truncate: bool, sleep_seconds: float) -> Dict[str, Any]:
+def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule: bool, sleep_seconds: float) -> Dict[str, Any]:
     snapshot_ts = utc_now_iso()
     ingest_run_id = str(uuid.uuid4())
     client = _bq_client()
@@ -177,6 +183,9 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, sleep_seconds: fl
 
     if truncate:
         _truncate_tables(client)
+
+    if truncate_schedule:
+        _truncate_table(client, "atp_match_schedule")
 
     raw_rows: List[Dict[str, Any]] = []
     month_rows: List[Dict[str, Any]] = []
@@ -276,6 +285,7 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, sleep_seconds: fl
         "start_year": start_year,
         "end_year": end_year,
         "truncate": truncate,
+        "truncate_schedule": truncate_schedule,
         "written": written,
     }
 
@@ -287,6 +297,7 @@ def main() -> None:
     parser.add_argument("--end-year", type=int, default=None)
     parser.add_argument("--years", type=int, default=5)
     parser.add_argument("--truncate", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--truncate-schedule", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--sleep", type=float, default=0.2)
     args = parser.parse_args()
 
@@ -295,12 +306,14 @@ def main() -> None:
         start_year = args.start_year or now_year
         end_year = args.end_year or now_year
         truncate = False
+        truncate_schedule = bool(args.truncate_schedule)
     else:
         end_year = args.end_year or now_year
         start_year = args.start_year if args.start_year is not None else max(1990, end_year - args.years + 1)
         truncate = bool(args.truncate)
+        truncate_schedule = bool(args.truncate_schedule)
 
-    result = run_ingest(start_year=start_year, end_year=end_year, truncate=truncate, sleep_seconds=args.sleep)
+    result = run_ingest(start_year=start_year, end_year=end_year, truncate=truncate, truncate_schedule=truncate_schedule, sleep_seconds=args.sleep)
     print(json.dumps(result, indent=2, sort_keys=True))
 
 

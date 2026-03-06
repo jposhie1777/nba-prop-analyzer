@@ -23,13 +23,10 @@ query ActivePlayers($tourCode: TourCode!) {
   playerDirectory(tourCode: $tourCode) {
     players {
       id
-      playerId
       firstName
       lastName
       displayName
       shortName
-      amateur
-      active
       country
       countryFlag
     }
@@ -144,7 +141,87 @@ def _ensure_tables(client: bigquery.Client) -> tuple[str, str]:
     stats_table.description = "PGA website player stats (one row per player per year)"
     client.create_table(stats_table, exists_ok=True)
 
+    _ensure_required_columns(
+        client,
+        active_table_id,
+        [
+            ("run_ts", "TIMESTAMP"),
+            ("ingested_at", "TIMESTAMP"),
+            ("player_id", "STRING"),
+            ("display_name", "STRING"),
+            ("active", "BOOL"),
+            ("player_payload", "STRING"),
+        ],
+    )
+    _ensure_required_columns(
+        client,
+        stats_table_id,
+        [
+            ("run_ts", "TIMESTAMP"),
+            ("ingested_at", "TIMESTAMP"),
+            ("tour_code", "STRING"),
+            ("year", "INT64"),
+            ("player_id", "STRING"),
+            ("player_name", "STRING"),
+            ("country", "STRING"),
+            ("country_flag", "STRING"),
+            ("stats_payload", "STRING"),
+            ("tour_averages", "STRING"),
+        ],
+    )
+
     return active_table_id, stats_table_id
+
+
+def _ensure_required_columns(
+    client: bigquery.Client,
+    table_id: str,
+    required_columns: List[tuple[str, str]],
+) -> None:
+    table = client.get_table(table_id)
+    existing = {field.name.lower() for field in table.schema}
+    for col_name, col_type in required_columns:
+        if col_name.lower() in existing:
+            continue
+        client.query(
+            f"ALTER TABLE `{table_id}` ADD COLUMN IF NOT EXISTS {col_name} {col_type}"
+        ).result()
+        existing.add(col_name.lower())
+
+
+def _delete_existing_stats_rows(
+    client: bigquery.Client,
+    table_id: str,
+    *,
+    year: int,
+    tour_code: str,
+) -> None:
+    table = client.get_table(table_id)
+    cols = {field.name.lower() for field in table.schema}
+
+    if "year" in cols and "tour_code" in cols:
+        sql = f"DELETE FROM `{table_id}` WHERE year = @year AND tour_code = @tour_code"
+        params = [
+            bigquery.ScalarQueryParameter("year", "INT64", int(year)),
+            bigquery.ScalarQueryParameter("tour_code", "STRING", tour_code),
+        ]
+    elif "year" in cols:
+        sql = f"DELETE FROM `{table_id}` WHERE year = @year"
+        params = [bigquery.ScalarQueryParameter("year", "INT64", int(year))]
+    elif "tour_code" in cols:
+        sql = f"DELETE FROM `{table_id}` WHERE tour_code = @tour_code"
+        params = [bigquery.ScalarQueryParameter("tour_code", "STRING", tour_code)]
+    else:
+        sql = f"TRUNCATE TABLE `{table_id}`"
+        params = []
+
+    if params:
+        client.query(
+            sql,
+            job_config=bigquery.QueryJobConfig(query_parameters=params),
+        ).result()
+    else:
+        client.query(sql).result()
 
 
 def _flatten_player_directory(data: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -237,16 +314,9 @@ def ingest_website_players_and_stats(
     _ensure_dataset(client)
     active_table_id, stats_table_id = _ensure_tables(client)
 
-    client.query(f"TRUNCATE TABLE `{active_table_id}`").result()
-    client.query(
-        f"DELETE FROM `{stats_table_id}` WHERE year = @year AND tour_code = @tour_code",
-        job_config=bigquery.QueryJobConfig(
-            query_parameters=[
-                bigquery.ScalarQueryParameter("year", "INT64", int(year)),
-                bigquery.ScalarQueryParameter("tour_code", "STRING", tour_code),
-            ]
-        ),
-    ).result()
+    if refresh_active_players:
+        client.query(f"TRUNCATE TABLE `{active_table_id}`").result()
+    _delete_existing_stats_rows(client, stats_table_id, year=year, tour_code=tour_code)
 
     active_payload = []
     if refresh_active_players:

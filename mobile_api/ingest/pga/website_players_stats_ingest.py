@@ -8,6 +8,7 @@ import time
 from typing import Any, Dict, List, Optional, Set
 
 import requests
+from google.api_core.exceptions import BadRequest
 from google.cloud import bigquery
 
 DATASET = os.getenv("PGA_DATASET", "pga_data")
@@ -195,7 +196,7 @@ def _delete_existing_stats_rows(
     *,
     year: int,
     tour_code: str,
-) -> None:
+) -> bool:
     table = client.get_table(table_id)
     cols = {field.name.lower() for field in table.schema}
 
@@ -215,13 +216,51 @@ def _delete_existing_stats_rows(
         sql = f"TRUNCATE TABLE `{table_id}`"
         params = []
 
-    if params:
-        client.query(
-            sql,
-            job_config=bigquery.QueryJobConfig(query_parameters=params),
-        ).result()
-    else:
-        client.query(sql).result()
+    try:
+        if params:
+            client.query(
+                sql,
+                job_config=bigquery.QueryJobConfig(query_parameters=params),
+            ).result()
+        else:
+            client.query(sql).result()
+        return True
+    except BadRequest as exc:
+        message = str(exc)
+        if "streaming buffer" in message and "not supported" in message:
+            return False
+        raise
+
+
+def _existing_player_ids_for_scope(
+    client: bigquery.Client,
+    table_id: str,
+    *,
+    year: int,
+    tour_code: str,
+) -> Set[str]:
+    table = client.get_table(table_id)
+    cols = {field.name.lower() for field in table.schema}
+    if "player_id" not in cols:
+        return set()
+
+    where = []
+    params: List[bigquery.QueryParameter] = []
+    if "year" in cols:
+        where.append("year = @year")
+        params.append(bigquery.ScalarQueryParameter("year", "INT64", int(year)))
+    elif "season_year" in cols:
+        where.append("season_year = @year")
+        params.append(bigquery.ScalarQueryParameter("year", "INT64", int(year)))
+
+    if "tour_code" in cols:
+        where.append("tour_code = @tour_code")
+        params.append(bigquery.ScalarQueryParameter("tour_code", "STRING", tour_code))
+
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+    query = f"SELECT DISTINCT player_id FROM `{table_id}` {where_sql}"
+    rows = client.query(query, job_config=bigquery.QueryJobConfig(query_parameters=params)).result()
+    return {str(r.get('player_id') or '').strip() for r in rows if str(r.get('player_id') or '').strip()}
 
 
 def _flatten_player_directory(data: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -338,7 +377,7 @@ def ingest_website_players_and_stats(
 
     if refresh_active_players:
         client.query(f"TRUNCATE TABLE `{active_table_id}`").result()
-    _delete_existing_stats_rows(client, stats_table_id, year=year, tour_code=tour_code)
+    delete_performed = _delete_existing_stats_rows(client, stats_table_id, year=year, tour_code=tour_code)
 
     active_payload = []
     if refresh_active_players:
@@ -363,7 +402,18 @@ def ingest_website_players_and_stats(
     stats_rows = _group_player_stats(stats_raw, year, active_player_ids)
 
     stats_payload: List[Dict[str, Any]] = []
+    existing_player_ids: Set[str] = set()
+    if not delete_performed:
+        existing_player_ids = _existing_player_ids_for_scope(
+            client,
+            stats_table_id,
+            year=year,
+            tour_code=tour_code,
+        )
+
     for row in stats_rows:
+        if existing_player_ids and str(row.get("player_id") or "") in existing_player_ids:
+            continue
         rep = _representative_stat(row)
         insert_row: Dict[str, Any] = {}
 

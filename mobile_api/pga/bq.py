@@ -802,6 +802,23 @@ def fetch_round_pairings(params: Optional[Dict[str, Any]] = None) -> List[Dict[s
         query_params.append(
             bigquery.ScalarQueryParameter("tournament_id", "STRING", tournament_id)
         )
+    else:
+        # Default to the latest season/tournament snapshot so callers that omit
+        # tournament_id don't receive stale historical pairings.
+        conditions.append(
+            "tournament_id = ("
+            " SELECT tournament_id FROM "
+            " ("
+            "   SELECT tournament_id,"
+            "          MAX(run_ts) AS latest_run_ts,"
+            "          MAX(SAFE_CAST(SUBSTR(tournament_id, 2, 4) AS INT64)) AS season_year"
+            "   FROM " + view +
+            "   GROUP BY tournament_id"
+            " )"
+            " ORDER BY season_year DESC, latest_run_ts DESC, tournament_id DESC"
+            " LIMIT 1"
+            ")"
+        )
 
     round_numbers = _normalize_int_list(params.get("round_numbers"))
     if round_numbers:
@@ -900,6 +917,21 @@ def fetch_pairings_analytics(params: Optional[Dict[str, Any]] = None) -> List[Di
         conditions.append("tournament_id = @tournament_id")
         query_params.append(
             bigquery.ScalarQueryParameter("tournament_id", "STRING", tournament_id)
+        )
+    else:
+        conditions.append(
+            "tournament_id = ("
+            " SELECT tournament_id FROM "
+            " ("
+            "   SELECT tournament_id,"
+            "          MAX(run_ts) AS latest_run_ts,"
+            "          MAX(SAFE_CAST(SUBSTR(tournament_id, 2, 4) AS INT64)) AS season_year"
+            "   FROM " + view +
+            "   GROUP BY tournament_id"
+            " )"
+            " ORDER BY season_year DESC, latest_run_ts DESC, tournament_id DESC"
+            " LIMIT 1"
+            ")"
         )
 
     round_numbers = _normalize_int_list(params.get("round_numbers"))

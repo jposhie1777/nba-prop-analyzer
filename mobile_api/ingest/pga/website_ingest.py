@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, Iterable, List, Optional
 
 from google.api_core.exceptions import Conflict, NotFound
@@ -12,7 +12,7 @@ from .pga_leaderboard import fetch_leaderboard, leaderboard_to_records
 from .pga_pairings_ingest import ingest_pairings
 from .pga_rankings_ingest import ingest_rankings
 from .pga_schedule import fetch_schedule, schedule_to_records
-from .pga_stats_ingest import ingest_stats
+from .pga_stats_ingest import ingest_website_player_stats
 
 DATASET = os.getenv("PGA_DATASET", "pga_data")
 DATASET_LOCATION = os.getenv("PGA_DATASET_LOCATION", "US")
@@ -22,7 +22,7 @@ LEADERBOARD_TABLE = os.getenv("PGA_WEBSITE_LEADERBOARD_TABLE", "website_leaderbo
 SCORECARDS_TABLE = os.getenv("PGA_WEBSITE_SCORECARDS_TABLE", "website_scorecards")
 
 RANKINGS_TABLE = os.getenv("PGA_RANKINGS_TABLE", "priority_rankings")
-STATS_TABLE = os.getenv("PGA_STATS_TABLE", "player_stats")
+WEBSITE_PLAYER_STATS_TABLE = os.getenv("PGA_WEBSITE_PLAYER_STATS_TABLE", "website_player_stats")
 PAIRINGS_TABLE = os.getenv("PGA_PAIRINGS_TABLE", "tournament_round_pairings")
 
 SCHEMA_SCHEDULE = [
@@ -139,6 +139,22 @@ def truncate_table(client: bigquery.Client, table: str) -> None:
     client.query(f"TRUNCATE TABLE `{_table_id(client, table)}`").result()
 
 
+def prune_table_to_tournament(client: bigquery.Client, table: str, tournament_id: str) -> int:
+    """Delete rows for all tournaments except the selected tournament."""
+    table_id = _table_id(client, table)
+    query = f"DELETE FROM `{table_id}` WHERE tournament_id != @tournament_id"
+    job = client.query(
+        query,
+        job_config=bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("tournament_id", "STRING", tournament_id)
+            ]
+        ),
+    )
+    job.result()
+    return int(getattr(job, "num_dml_affected_rows", 0) or 0)
+
+
 def insert_rows(client: bigquery.Client, table: str, rows: List[Dict[str, Any]], *, chunk_size: int = 500) -> int:
     if not rows:
         return 0
@@ -211,6 +227,92 @@ def _focused_tournament_ids(schedule_rows: List[Dict[str, Any]]) -> List[str]:
     return _tournament_ids(schedule_rows)[:1]
 
 
+def _has_started_upcoming_tournament(schedule_rows: List[Dict[str, Any]], *, today: Optional[date] = None) -> bool:
+    check_date = today or datetime.utcnow().date()
+    for row in schedule_rows:
+        start_date = _parse_date(row.get("start_date"))
+        if not start_date:
+            continue
+        bucket = str(row.get("bucket") or "").strip().lower()
+        if bucket == "upcoming" and start_date <= check_date:
+            return True
+    return False
+
+
+def _maybe_weekly_truncate_pairings_table(
+    client: bigquery.Client,
+    schedule_rows: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Truncate pairings table once per week on a configured weekday when idle.
+
+    Intended for daily ingestion runs: clear stale previous-week pairings before
+    new Wednesday/Thursday publication windows when no event is in progress.
+    """
+    enabled = os.getenv("PGA_PAIRINGS_WEEKLY_TRUNCATE", "true").strip().lower() == "true"
+    day_name = os.getenv("PGA_PAIRINGS_WEEKLY_TRUNCATE_DAY", "wednesday").strip().lower()
+    target_days = {
+        "monday": 0,
+        "tuesday": 1,
+        "wednesday": 2,
+        "thursday": 3,
+        "friday": 4,
+        "saturday": 5,
+        "sunday": 6,
+    }
+    target_weekday = target_days.get(day_name, 2)
+
+    today = datetime.utcnow().date()
+    details: Dict[str, Any] = {
+        "enabled": enabled,
+        "today_weekday": today.weekday(),
+        "target_weekday": target_weekday,
+        "truncated": False,
+        "reason": None,
+    }
+    if not enabled:
+        details["reason"] = "disabled"
+        return details
+
+    if today.weekday() != target_weekday:
+        details["reason"] = "not_scheduled_day"
+        return details
+
+    if _has_started_upcoming_tournament(schedule_rows, today=today):
+        details["reason"] = "active_tournament_detected"
+        return details
+
+    table_id = _table_id(client, PAIRINGS_TABLE)
+    lower_bound = datetime.utcnow() - timedelta(days=6)
+    recent_query = f"""
+    SELECT MAX(run_ts) AS latest_run_ts
+    FROM `{table_id}`
+    WHERE run_ts >= @lower_bound
+    """
+    try:
+        result = list(
+            client.query(
+                recent_query,
+                job_config=bigquery.QueryJobConfig(
+                    query_parameters=[
+                        bigquery.ScalarQueryParameter("lower_bound", "TIMESTAMP", lower_bound)
+                    ]
+                ),
+            ).result()
+        )
+        latest = result[0].get("latest_run_ts") if result else None
+        if latest is not None:
+            details["reason"] = "already_has_recent_rows"
+            return details
+    except Exception as exc:
+        details["reason"] = f"recent_row_check_failed: {exc}"
+        return details
+
+    truncate_table(client, PAIRINGS_TABLE)
+    details["truncated"] = True
+    details["reason"] = "weekly_reset"
+    return details
+
+
 def _round_score_rows_from_leaderboard(
     tournament_id: str,
     leaderboard_rows: List[Dict[str, Any]],
@@ -235,7 +337,7 @@ def _round_score_rows_from_leaderboard(
     return rows
 
 
-def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool = True, truncate_first: bool = False) -> Dict[str, Any]:
+def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool = True, truncate_first: bool = False, weekly_pairings_truncate: bool = False) -> Dict[str, Any]:
     client = _bq_client()
     ensure_dataset(client)
 
@@ -245,14 +347,19 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
         ensure_table(client, SCORECARDS_TABLE, SCHEMA_SCORECARDS)
 
     if truncate_first:
-        for table in [SCHEDULE_TABLE, LEADERBOARD_TABLE, SCORECARDS_TABLE, RANKINGS_TABLE, STATS_TABLE, PAIRINGS_TABLE]:
+        for table in [SCHEDULE_TABLE, LEADERBOARD_TABLE, SCORECARDS_TABLE, RANKINGS_TABLE, WEBSITE_PLAYER_STATS_TABLE, PAIRINGS_TABLE]:
             try:
                 truncate_table(client, table)
             except Exception:
                 # table may not exist if create_tables=False for external tables
                 pass
 
-    seasons = [season] if season else _season_range()
+    if season is not None:
+        seasons = [season]
+    elif truncate_first:
+        seasons = _season_range()
+    else:
+        seasons = [datetime.utcnow().year]
     summary: Dict[str, Any] = {
         "mode": "website_only",
         "seasons": seasons,
@@ -260,9 +367,12 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
         "leaderboard_rows": 0,
         "scorecard_rows": 0,
         "pairings_rows": 0,
-        "stats_rows": 0,
+        "website_player_stats_rows": 0,
         "rankings_rows": 0,
         "errors": [],
+        "pairings_truncate": {"enabled": bool(weekly_pairings_truncate), "truncated": False, "reason": None},
+        "leaderboard_pruned_other_tournaments": 0,
+        "scorecards_pruned_other_tournaments": 0,
     }
 
     for yr in seasons:
@@ -271,10 +381,16 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
         schedule_rows = schedule_to_records(tournaments)
         summary["schedule_rows"] += insert_rows(client, SCHEDULE_TABLE, schedule_rows)
 
+        if weekly_pairings_truncate:
+            truncate_summary = _maybe_weekly_truncate_pairings_table(client, schedule_rows)
+            summary["pairings_truncate"] = truncate_summary
+            if truncate_summary.get("truncated"):
+                print("[website] pairings table weekly truncate complete")
+
         # website stats/rankings ingests (already writes to BQ)
-        stats = ingest_stats(year=yr, tour_code="R", dry_run=False, create_tables=create_tables)
+        website_stats = ingest_website_player_stats(year=yr, tour_code="R", dry_run=False, create_tables=create_tables)
         rankings = ingest_rankings(year=yr, tour_code="R", dry_run=False, create_tables=create_tables)
-        summary["stats_rows"] += int(stats.get("rows_inserted", 0))
+        summary["website_player_stats_rows"] += int(website_stats.get("rows_inserted", 0))
         summary["rankings_rows"] += int(rankings.get("rows_inserted", 0))
 
         tournament_ids = _focused_tournament_ids(schedule_rows)
@@ -285,6 +401,15 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
             try:
                 players = fetch_leaderboard(tournament_id)
                 lb_rows = leaderboard_to_records(tournament_id, players)
+
+                # Keep leaderboard/scorecard tables focused on current tournament.
+                summary["leaderboard_pruned_other_tournaments"] += prune_table_to_tournament(
+                    client, LEADERBOARD_TABLE, tournament_id
+                )
+                summary["scorecards_pruned_other_tournaments"] += prune_table_to_tournament(
+                    client, SCORECARDS_TABLE, tournament_id
+                )
+
                 summary["leaderboard_rows"] += insert_rows(client, LEADERBOARD_TABLE, lb_rows)
                 score_rows = _round_score_rows_from_leaderboard(tournament_id, lb_rows)
                 if score_rows:
@@ -294,12 +419,17 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
                 print(f"[website] WARN {message}")
                 summary["errors"].append(message)
 
+            # Keep pairings table focused to the current event only.
+            if yr != datetime.utcnow().year:
+                continue
+
             try:
                 pairings_summary = ingest_pairings(
                     tournament_id=tournament_id,
                     round_number=0,
                     create_tables=create_tables,
                     dry_run=False,
+                    keep_only_tournament=True,
                 )
                 summary["pairings_rows"] += int(pairings_summary.get("inserted", 0))
             except Exception as exc:
@@ -310,5 +440,15 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
     return summary
 
 
+def run_daily_ingestion(*, season: Optional[int] = None, create_tables: bool = True) -> Dict[str, Any]:
+    """Daily PGA website ingest with optional weekly pairings table reset."""
+    return run_website_ingestion(
+        season=season,
+        create_tables=create_tables,
+        truncate_first=False,
+        weekly_pairings_truncate=True,
+    )
+
+
 def run_website_backfill() -> Dict[str, Any]:
-    return run_website_ingestion(season=None, create_tables=True, truncate_first=True)
+    return run_website_ingestion(season=None, create_tables=True, truncate_first=True, weekly_pairings_truncate=False)

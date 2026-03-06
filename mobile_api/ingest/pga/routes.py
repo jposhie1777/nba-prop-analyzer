@@ -10,7 +10,7 @@ from .round_scores import ingest_round_scores
 from .pga_pairings_ingest import ingest_pairings
 from .pga_stats_ingest import ingest_stats
 from .pga_rankings_ingest import ingest_rankings
-from .website_ingest import run_website_backfill, run_website_ingestion
+from .website_ingest import run_daily_ingestion, run_website_backfill, run_website_ingestion
 
 
 router = APIRouter(
@@ -141,6 +141,18 @@ def run_pairings(req: PgaPairingsRequest):
 class PgaWebsiteIngestionRequest(BaseModel):
     season: Optional[int] = None
 
+
+
+
+@router.post("/website/daily")
+def run_website_daily(req: PgaWebsiteIngestionRequest):
+    """Run daily PGA website ingestion (includes pairings + weekly stale reset)."""
+    try:
+        return run_daily_ingestion(season=req.season, create_tables=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 @router.post("/website/full")
 def run_website_full(req: PgaWebsiteIngestionRequest):

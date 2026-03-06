@@ -140,8 +140,20 @@ def _normalize_country(payload: Dict[str, Any]) -> Tuple[Optional[str], Optional
 
 def _looks_like_stat_row(item: Dict[str, Any]) -> bool:
     has_stat_identity = any(k in item for k in ["statId", "stat_id", "id", "statCode", "key", "statKey"])
-    has_value = any(k in item for k in ["statValue", "value", "displayValue", "playerValue", "currentValue"])
-    has_title = any(k in item for k in ["statName", "name", "title", "statTitle", "label"])
+    has_value = any(
+        k in item
+        for k in [
+            "statValue",
+            "value",
+            "displayValue",
+            "playerValue",
+            "currentValue",
+            "seasonValue",
+            "valueNumeric",
+            "formattedValue",
+        ]
+    )
+    has_title = any(k in item for k in ["statName", "name", "title", "statTitle", "label", "description"])
     return has_value and (has_stat_identity or has_title)
 
 
@@ -215,15 +227,16 @@ def _to_stat_player_row(
     country_flag: Optional[str],
     tour_code: str,
     year: int,
+    strict_year: bool = True,
 ) -> Optional[StatPlayerRow]:
     row_year = _year_from_row(row)
-    if row_year is not None and row_year != year:
+    if strict_year and row_year is not None and row_year != year:
         return None
 
     stat_id = _pick(row, ["statId", "stat_id", "statCode", "statKey", "key", "id"]) or ""
     stat_name = _pick(row, ["statName", "name", "title", "label", "statTitle"]) or ""
     stat_title = _pick(row, ["statTitle", "title", "label", "statLabel"]) or stat_name
-    stat_value = _pick(row, ["statValue", "displayValue", "value", "playerValue", "currentValue"]) or ""
+    stat_value = _pick(row, ["statValue", "displayValue", "value", "playerValue", "currentValue", "seasonValue", "formattedValue", "valueNumeric"]) or ""
     rank = _safe_int(_pick(row, ["rank", "position", "statRank"])) or 0
     tour_avg = _pick(row, ["tourAvg", "tourAverage", "pgaTourAverage", "fieldAverage", "avg", "average"])
 
@@ -268,9 +281,27 @@ def parse_player_stats(
             country_flag=country_flag,
             tour_code=tour_code,
             year=year,
+            strict_year=True,
         )
         if parsed is not None:
             rows.append(parsed)
+
+    # Fallback: if strict year filtering yields nothing, keep rows regardless of year.
+    # PGA payloads can report season-year labels that don't equal calendar year.
+    if not rows:
+        for raw in raw_rows:
+            parsed = _to_stat_player_row(
+                raw,
+                player_id=player_id,
+                player_name=player_name,
+                country=country,
+                country_flag=country_flag,
+                tour_code=tour_code,
+                year=year,
+                strict_year=False,
+            )
+            if parsed is not None:
+                rows.append(parsed)
 
     # Final row-level dedupe for noisy payloads.
     deduped: List[StatPlayerRow] = []
@@ -317,16 +348,18 @@ def fetch_stat_overview_for_players(
                     time.sleep(backoff)
                     backoff *= 2
                     continue
-                raise
+                last_exc = exc
+                break
             except Exception as exc:
                 last_exc = exc
                 if attempt < retries - 1:
                     time.sleep(backoff)
                     backoff *= 2
                     continue
-                raise RuntimeError(
-                    f"Failed fetching stats for player_id={player_id}. Last error: {last_exc}"
-                ) from exc
+                break
+
+        if last_exc is not None:
+            print(f"[stats] WARN player_id={player_id} skipped: {last_exc}")
 
     return StatOverviewResult(tour_code=tour_code, year=year, categories=[], players=players)
 

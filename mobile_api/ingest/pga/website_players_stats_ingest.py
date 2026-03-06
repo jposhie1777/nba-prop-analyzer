@@ -292,6 +292,27 @@ def _group_player_stats(data: Dict[str, Any], current_year: int, active_player_i
     return list(grouped.values())
 
 
+def _safe_rank(value: Any) -> int:
+    try:
+        return int(str(value))
+    except (TypeError, ValueError):
+        return 10**9
+
+
+def _representative_stat(player_row: Dict[str, Any]) -> Dict[str, Any]:
+    stats_map = player_row.get("stats") or {}
+    if not stats_map:
+        return {}
+    stats_values = list(stats_map.values())
+    stats_values.sort(key=lambda item: (_safe_rank(item.get("rank")), str(item.get("stat_id") or "")))
+    return stats_values[0]
+
+
+def _table_columns(client: bigquery.Client, table_id: str) -> Set[str]:
+    table = client.get_table(table_id)
+    return {field.name for field in table.schema}
+
+
 def ingest_website_players_and_stats(
     year: Optional[int] = None,
     tour_code: str = "R",
@@ -313,6 +334,7 @@ def ingest_website_players_and_stats(
     client = _bq_client()
     _ensure_dataset(client)
     active_table_id, stats_table_id = _ensure_tables(client)
+    stats_columns = _table_columns(client, stats_table_id)
 
     if refresh_active_players:
         client.query(f"TRUNCATE TABLE `{active_table_id}`").result()
@@ -340,21 +362,49 @@ def ingest_website_players_and_stats(
     stats_raw = _post_graphql(STAT_OVERVIEW_QUERY, {"tourCode": tour_code, "year": year})
     stats_rows = _group_player_stats(stats_raw, year, active_player_ids)
 
-    stats_payload = [
-        {
-            "run_ts": now,
-            "ingested_at": now,
-            "tour_code": tour_code,
-            "year": year,
-            "player_id": row["player_id"],
-            "player_name": row.get("player_name"),
-            "country": row.get("country"),
-            "country_flag": row.get("country_flag"),
-            "stats_payload": json.dumps(row.get("stats") or {}, separators=(",", ":"), default=str),
-            "tour_averages": json.dumps(row.get("tour_averages") or {}, separators=(",", ":"), default=str),
-        }
-        for row in stats_rows
-    ]
+    stats_payload: List[Dict[str, Any]] = []
+    for row in stats_rows:
+        rep = _representative_stat(row)
+        insert_row: Dict[str, Any] = {}
+
+        if "run_ts" in stats_columns:
+            insert_row["run_ts"] = now
+        if "ingested_at" in stats_columns:
+            insert_row["ingested_at"] = now
+        if "tour_code" in stats_columns:
+            insert_row["tour_code"] = tour_code
+        if "year" in stats_columns:
+            insert_row["year"] = year
+        if "season_year" in stats_columns:
+            insert_row["season_year"] = year
+        if "player_id" in stats_columns:
+            insert_row["player_id"] = row["player_id"]
+        if "player_name" in stats_columns:
+            insert_row["player_name"] = row.get("player_name")
+        if "country" in stats_columns:
+            insert_row["country"] = row.get("country")
+        if "country_flag" in stats_columns:
+            insert_row["country_flag"] = row.get("country_flag")
+        if "stats_payload" in stats_columns:
+            insert_row["stats_payload"] = json.dumps(row.get("stats") or {}, separators=(",", ":"), default=str)
+        if "tour_averages" in stats_columns:
+            insert_row["tour_averages"] = json.dumps(row.get("tour_averages") or {}, separators=(",", ":"), default=str)
+
+        # Compatibility for pre-existing schemas that still expose per-stat columns.
+        if "stat_id" in stats_columns:
+            insert_row["stat_id"] = rep.get("stat_id")
+        if "stat_name" in stats_columns:
+            insert_row["stat_name"] = rep.get("stat_name")
+        if "stat_title" in stats_columns:
+            insert_row["stat_title"] = rep.get("stat_title")
+        if "stat_value" in stats_columns:
+            insert_row["stat_value"] = rep.get("stat_value")
+        if "rank" in stats_columns:
+            insert_row["rank"] = rep.get("rank")
+        if "tour_avg" in stats_columns:
+            insert_row["tour_avg"] = rep.get("tour_avg")
+
+        stats_payload.append(insert_row)
 
     for start in range(0, len(active_payload), 500):
         errors = client.insert_rows_json(active_table_id, active_payload[start : start + 500])

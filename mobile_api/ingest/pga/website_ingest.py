@@ -139,6 +139,22 @@ def truncate_table(client: bigquery.Client, table: str) -> None:
     client.query(f"TRUNCATE TABLE `{_table_id(client, table)}`").result()
 
 
+def prune_table_to_tournament(client: bigquery.Client, table: str, tournament_id: str) -> int:
+    """Delete rows for all tournaments except the selected tournament."""
+    table_id = _table_id(client, table)
+    query = f"DELETE FROM `{table_id}` WHERE tournament_id != @tournament_id"
+    job = client.query(
+        query,
+        job_config=bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("tournament_id", "STRING", tournament_id)
+            ]
+        ),
+    )
+    job.result()
+    return int(getattr(job, "num_dml_affected_rows", 0) or 0)
+
+
 def insert_rows(client: bigquery.Client, table: str, rows: List[Dict[str, Any]], *, chunk_size: int = 500) -> int:
     if not rows:
         return 0
@@ -338,7 +354,12 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
                 # table may not exist if create_tables=False for external tables
                 pass
 
-    seasons = [season] if season else _season_range()
+    if season is not None:
+        seasons = [season]
+    elif truncate_first:
+        seasons = _season_range()
+    else:
+        seasons = [datetime.utcnow().year]
     summary: Dict[str, Any] = {
         "mode": "website_only",
         "seasons": seasons,
@@ -350,6 +371,8 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
         "rankings_rows": 0,
         "errors": [],
         "pairings_truncate": {"enabled": bool(weekly_pairings_truncate), "truncated": False, "reason": None},
+        "leaderboard_pruned_other_tournaments": 0,
+        "scorecards_pruned_other_tournaments": 0,
     }
 
     for yr in seasons:
@@ -378,6 +401,15 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
             try:
                 players = fetch_leaderboard(tournament_id)
                 lb_rows = leaderboard_to_records(tournament_id, players)
+
+                # Keep leaderboard/scorecard tables focused on current tournament.
+                summary["leaderboard_pruned_other_tournaments"] += prune_table_to_tournament(
+                    client, LEADERBOARD_TABLE, tournament_id
+                )
+                summary["scorecards_pruned_other_tournaments"] += prune_table_to_tournament(
+                    client, SCORECARDS_TABLE, tournament_id
+                )
+
                 summary["leaderboard_rows"] += insert_rows(client, LEADERBOARD_TABLE, lb_rows)
                 score_rows = _round_score_rows_from_leaderboard(tournament_id, lb_rows)
                 if score_rows:
@@ -387,12 +419,17 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
                 print(f"[website] WARN {message}")
                 summary["errors"].append(message)
 
+            # Keep pairings table focused to the current event only.
+            if yr != datetime.utcnow().year:
+                continue
+
             try:
                 pairings_summary = ingest_pairings(
                     tournament_id=tournament_id,
                     round_number=0,
                     create_tables=create_tables,
                     dry_run=False,
+                    keep_only_tournament=True,
                 )
                 summary["pairings_rows"] += int(pairings_summary.get("inserted", 0))
             except Exception as exc:

@@ -278,14 +278,19 @@ def leaderboard_to_records(
     """
     Flatten leaderboard players into BigQuery-ready row dicts.
 
-    Produces one row per player when there are no round breakdowns, or one row
-    per (player, round) when round data is present.
+    Produces one row per player. When round-by-round data exists, include the
+    latest round's number/score for convenience without duplicating players.
     """
     from datetime import datetime
 
     ts = run_ts or datetime.utcnow().isoformat()
     rows: List[Dict[str, Any]] = []
     for p in players:
+        latest_round = max(
+            (rnd for rnd in (p.rounds or []) if rnd.round_number is not None),
+            key=lambda rnd: rnd.round_number,
+            default=None,
+        )
         base = {
             "run_ts": ts,
             "ingested_at": ts,
@@ -309,15 +314,10 @@ def leaderboard_to_records(
             "back_nine": p.back_nine,
             "movement_direction": p.movement_direction,
             "movement_amount": p.movement_amount,
+            "round_number": latest_round.round_number if latest_round else None,
+            "round_score": latest_round.score if latest_round else None,
         }
-        if p.rounds:
-            for rnd in p.rounds:
-                row = dict(base)
-                row["round_number"] = rnd.round_number
-                row["round_score"] = rnd.score
-                rows.append(row)
-        else:
-            rows.append(base)
+        rows.append(base)
     return rows
 
 

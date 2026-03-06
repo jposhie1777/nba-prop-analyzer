@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, Iterable, List, Optional
 
 from google.api_core.exceptions import Conflict, NotFound
@@ -211,6 +211,92 @@ def _focused_tournament_ids(schedule_rows: List[Dict[str, Any]]) -> List[str]:
     return _tournament_ids(schedule_rows)[:1]
 
 
+def _has_started_upcoming_tournament(schedule_rows: List[Dict[str, Any]], *, today: Optional[date] = None) -> bool:
+    check_date = today or datetime.utcnow().date()
+    for row in schedule_rows:
+        start_date = _parse_date(row.get("start_date"))
+        if not start_date:
+            continue
+        bucket = str(row.get("bucket") or "").strip().lower()
+        if bucket == "upcoming" and start_date <= check_date:
+            return True
+    return False
+
+
+def _maybe_weekly_truncate_pairings_table(
+    client: bigquery.Client,
+    schedule_rows: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Truncate pairings table once per week on a configured weekday when idle.
+
+    Intended for daily ingestion runs: clear stale previous-week pairings before
+    new Wednesday/Thursday publication windows when no event is in progress.
+    """
+    enabled = os.getenv("PGA_PAIRINGS_WEEKLY_TRUNCATE", "true").strip().lower() == "true"
+    day_name = os.getenv("PGA_PAIRINGS_WEEKLY_TRUNCATE_DAY", "wednesday").strip().lower()
+    target_days = {
+        "monday": 0,
+        "tuesday": 1,
+        "wednesday": 2,
+        "thursday": 3,
+        "friday": 4,
+        "saturday": 5,
+        "sunday": 6,
+    }
+    target_weekday = target_days.get(day_name, 2)
+
+    today = datetime.utcnow().date()
+    details: Dict[str, Any] = {
+        "enabled": enabled,
+        "today_weekday": today.weekday(),
+        "target_weekday": target_weekday,
+        "truncated": False,
+        "reason": None,
+    }
+    if not enabled:
+        details["reason"] = "disabled"
+        return details
+
+    if today.weekday() != target_weekday:
+        details["reason"] = "not_scheduled_day"
+        return details
+
+    if _has_started_upcoming_tournament(schedule_rows, today=today):
+        details["reason"] = "active_tournament_detected"
+        return details
+
+    table_id = _table_id(client, PAIRINGS_TABLE)
+    lower_bound = datetime.utcnow() - timedelta(days=6)
+    recent_query = f"""
+    SELECT MAX(run_ts) AS latest_run_ts
+    FROM `{table_id}`
+    WHERE run_ts >= @lower_bound
+    """
+    try:
+        result = list(
+            client.query(
+                recent_query,
+                job_config=bigquery.QueryJobConfig(
+                    query_parameters=[
+                        bigquery.ScalarQueryParameter("lower_bound", "TIMESTAMP", lower_bound)
+                    ]
+                ),
+            ).result()
+        )
+        latest = result[0].get("latest_run_ts") if result else None
+        if latest is not None:
+            details["reason"] = "already_has_recent_rows"
+            return details
+    except Exception as exc:
+        details["reason"] = f"recent_row_check_failed: {exc}"
+        return details
+
+    truncate_table(client, PAIRINGS_TABLE)
+    details["truncated"] = True
+    details["reason"] = "weekly_reset"
+    return details
+
+
 def _round_score_rows_from_leaderboard(
     tournament_id: str,
     leaderboard_rows: List[Dict[str, Any]],
@@ -235,7 +321,7 @@ def _round_score_rows_from_leaderboard(
     return rows
 
 
-def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool = True, truncate_first: bool = False) -> Dict[str, Any]:
+def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool = True, truncate_first: bool = False, weekly_pairings_truncate: bool = False) -> Dict[str, Any]:
     client = _bq_client()
     ensure_dataset(client)
 
@@ -263,6 +349,7 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
         "stats_rows": 0,
         "rankings_rows": 0,
         "errors": [],
+        "pairings_truncate": {"enabled": bool(weekly_pairings_truncate), "truncated": False, "reason": None},
     }
 
     for yr in seasons:
@@ -270,6 +357,12 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
         tournaments = fetch_schedule(tour_code="R", year=str(yr))
         schedule_rows = schedule_to_records(tournaments)
         summary["schedule_rows"] += insert_rows(client, SCHEDULE_TABLE, schedule_rows)
+
+        if weekly_pairings_truncate:
+            truncate_summary = _maybe_weekly_truncate_pairings_table(client, schedule_rows)
+            summary["pairings_truncate"] = truncate_summary
+            if truncate_summary.get("truncated"):
+                print("[website] pairings table weekly truncate complete")
 
         # website stats/rankings ingests (already writes to BQ)
         stats = ingest_stats(year=yr, tour_code="R", dry_run=False, create_tables=create_tables)
@@ -310,5 +403,15 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
     return summary
 
 
+def run_daily_ingestion(*, season: Optional[int] = None, create_tables: bool = True) -> Dict[str, Any]:
+    """Daily PGA website ingest with optional weekly pairings table reset."""
+    return run_website_ingestion(
+        season=season,
+        create_tables=create_tables,
+        truncate_first=False,
+        weekly_pairings_truncate=True,
+    )
+
+
 def run_website_backfill() -> Dict[str, Any]:
-    return run_website_ingestion(season=None, create_tables=True, truncate_first=True)
+    return run_website_ingestion(season=None, create_tables=True, truncate_first=True, weekly_pairings_truncate=False)

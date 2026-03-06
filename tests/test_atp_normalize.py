@@ -82,7 +82,7 @@ def test_normalize_match_schedule_html():
     <h4 class="day">Mon, 02 March, 2026 <span>(Day 2)</span></h4>
     <div class="schedule" data-matchdate="2026-03-02">
       <div class="schedule-header"><div class="schedule-location-timestamp"><span><strong>Stadium 3</strong></span><span class="matchtime">Starts At 10:00</span></div><div class="schedule-type">Q1</div></div>
-      <div class="schedule-content"><div class="schedule-players"><div class="player"><div class="name"><a href="/en/players/p1/aaa/overview"><span>S.</span> Shimabukuro</a><div class="rank"><span>(22)</span></div></div></div><div class="status">Defeats</div><div class="opponent"><div class="name"><a href="/en/players/p2/bbb/overview">Colton Smith</a></div></div></div></div>
+      <div class="schedule-content"><div class="schedule-players"><div class="player"><div class="name"><a href="/en/players/p1/aaa/overview"><span>S.</span> Shimabukuro</a><div class="rank"><span>(22)</span></div></div></div><div class="status">Vs</div><div class="opponent"><div class="name"><a href="/en/players/p2/bbb/overview">Colton Smith</a></div></div></div></div>
     </div>
     '''
     rows = normalize_match_schedule_html("indian-wells", "404", html, snapshot_ts_utc="2026-01-01T00:00:00+00:00")
@@ -113,3 +113,35 @@ def test_normalize_match_results_html():
     assert rows[0].h2h_url == "/h2h"
     assert rows[0].player_1_scores == "6 7(6)"
     assert rows[0].player_2_scores == "4 6"
+
+def test_normalize_match_schedule_html_filters_past_completed_and_noise_rows():
+    html = '''
+    <h4 class="day">Wed, 04 March, 2026 <span>(Day 4)</span></h4>
+    <div class="schedule" data-matchdate="2026-03-04">
+      <div class="schedule-header"><div class="schedule-location-timestamp"><span><strong>Stadium 1</strong></span><span class="matchtime">Starts At 11:00</span></div><div class="schedule-type">R128</div></div>
+      <div class="schedule-content"><div class="schedule-players"><div class="player"><div class="name"><a href="/en/players/p1/aaa/overview">Player One</a></div></div><div class="status">Vs</div><div class="opponent"><div class="name"><a href="/en/players/p2/bbb/overview">Player Two</a></div></div></div></div>
+    </div>
+    <div class="schedule" data-matchdate="2026-03-04">
+      <div class="schedule-header"><div class="schedule-location-timestamp"><span><strong>Stadium 2</strong></span><span class="matchtime">Starts At 11:00</span></div><div class="schedule-type">R128</div></div>
+      <div class="schedule-content"><div class="schedule-players"><div class="player"><div class="name"><a href="/en/players/p3/ccc/overview">Player Three</a></div></div><div class="status">Defeats</div><div class="opponent"><div class="name"><a href="/en/players/p4/ddd/overview">Player Four</a></div></div></div></div>
+    </div>
+    <div class="schedule" data-matchdate="2026-03-04">
+      <div class="schedule-header"><div class="schedule-location-timestamp"><span><strong>Sign up for ATP Tour newsletters</strong></span><span class="matchtime">Followed By</span></div></div>
+      <div class="schedule-content"><div class="schedule-players"><div class="player"><div class="name"><a href="/en/players/p5/eee/overview">Noise Row</a></div></div><div class="status">Vs</div><div class="opponent"><div class="name"><a href="/en/players/p6/fff/overview">Noise Opponent</a></div></div></div></div>
+    </div>
+    '''
+    rows = normalize_match_schedule_html("indian-wells", "404", html, snapshot_ts_utc="2026-03-04T12:00:00+00:00")
+    assert len(rows) == 1
+    assert rows[0].player_1_name == "Player One"
+
+
+def test_normalize_match_schedule_html_filters_past_day_rows():
+    html = '''
+    <h4 class="day">Sun, 01 March, 2026 <span>(Day 1)</span></h4>
+    <div class="schedule" data-matchdate="2026-03-01">
+      <div class="schedule-header"><div class="schedule-location-timestamp"><span><strong>Court 1</strong></span><span class="matchtime">Starts At 09:00</span></div><div class="schedule-type">R32</div></div>
+      <div class="schedule-content"><div class="schedule-players"><div class="player"><div class="name"><a href="/en/players/p1/aaa/overview">Past Player A</a></div></div><div class="status">Vs</div><div class="opponent"><div class="name"><a href="/en/players/p2/bbb/overview">Past Player B</a></div></div></div></div>
+    </div>
+    '''
+    rows = normalize_match_schedule_html("indian-wells", "404", html, snapshot_ts_utc="2026-03-05T12:00:00+00:00")
+    assert rows == []

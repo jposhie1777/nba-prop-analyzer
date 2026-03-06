@@ -1,0 +1,445 @@
+"""
+Request URL
+https://orchestrator.pgatour.com/graphql
+Request Method
+POST
+Status Code
+200 OK
+Remote Address
+13.35.107.51:443
+Referrer Policy
+strict-origin-when-cross-origin
+access-control-allow-credentials
+true
+access-control-allow-origin
+https://www.pgatour.com
+access-control-expose-headers
+x-pgat-platform,x-api-key,content-type,x-amz-*,authorization,previewmode
+content-encoding
+br
+content-type
+application/json;charset=UTF-8
+date
+Fri, 06 Mar 2026 15:57:08 GMT
+server
+CloudFront
+vary
+Accept-Encoding
+vary
+Origin
+via
+1.1 3813b580abd80b917609fcbfdb710f06.cloudfront.net (CloudFront)
+x-amz-cf-id
+2lcIsMGfxompGStaJt01KdFzJHvPJicIfCksGJ7BgtajgjRpswyCGw==
+x-amz-cf-pop
+PHL51-P3
+x-cache
+Miss from cloudfront
+:authority
+orchestrator.pgatour.com
+:method
+POST
+:path
+/graphql
+:scheme
+https
+accept
+application/graphql-response+json, application/json
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+en-US,en;q=0.9
+content-length
+502
+content-type
+application/json
+origin
+https://www.pgatour.com
+priority
+u=1, i
+referer
+https://www.pgatour.com/
+sec-ch-ua
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-site
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+x-api-key
+da2-gsrx5bibzbb4njvhl7t37wqyl4
+x-pgat-platform
+web
+"""
+
+
+{
+    "data": {
+        "groupLocations": {
+            "tournamentId": "R2026009",
+            "courses": [
+                {
+                    "tournamentAndCourseId": "R2026009009",
+                    "tournamentId": "R2026009",
+                    "courseId": "009",
+                    "round": 2,
+                    "courseName": "Arnold Palmer's Bay Hill Club & Lodge",
+                    "holes": [
+                        {
+                            "holeNumber": 1,
+                            "par": 4,
+                            "yardage": 453,
+                            "groups": [
+                                {
+                                    "groupSort": "0001B",
+                                    "groupNum": 1,
+                                    "round": 2,
+                                    "location": "FAIRWAY",
+                                    "color": "#FDF4A6",
+                                    "playerData": {
+                                        "addressingBall": null,
+                                        "nextToHit": null
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "holeNumber": 2,
+                            "par": 3,
+                            "yardage": 200,
+                            "groups": [
+                                {
+                                    "groupSort": "0002A",
+                                    "groupNum": 36,
+                                    "round": 2,
+                                    "location": "TEE",
+                                    "color": "#A1D9FF",
+                                    "playerData": {
+                                        "addressingBall": null,
+                                        "nextToHit": null
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "holeNumber": 3,
+                            "par": 4,
+                            "yardage": 438,
+                            "groups": [
+                                {
+                                    "groupSort": "0003B",
+                                    "groupNum": 35,
+                                    "round": 2,
+                                    "location": "FAIRWAY",
+                                    "color": "#FDF4A6",
+                                    "playerData": {
+                                        "addressingBall": null,
+                                        "nextToHit": null
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "holeNumber": 4,
+                            "par": 5,
+                            "yardage": 578,
+                            "groups": [
+                                {
+                                    "groupSort": "0004B",
+                                    "groupNum": 34,
+                                    "round": 2,
+                                    "location": "FAIRWAY",
+                                    "color": "#FDF4A6",
+                                    "playerData": {
+                                        "addressingBall": null,
+                                        "nextToHit": null
+                                    }
+                                },
+                                {
+                                    "groupSort": "0004C",
+                                    "groupNum": 33,
+                                    "round": 2,
+                                    "location": "GREEN",
+                                    "color": "#50BF93",
+                                    "playerData": {
+                                        "addressingBall": null,
+                                        "nextToHit": "33448"
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "holeNumber": 5,
+                            "par": 4,
+                            "yardage": 383,
+                            "groups": [
+                                {
+                                    "groupSort": "0005C",
+                                    "groupNum": 32,
+                                    "round": 2,
+                                    "location": "GREEN",
+                                    "color": "#50BF93",
+                                    "playerData": {
+                                        "addressingBall": null,
+                                        "nextToHit": null
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "holeNumber": 6,
+                            "par": 5,
+                            "yardage": 561,
+                            "groups": [
+                                {
+                                    "groupSort": "0006A",
+                                    "groupNum": 31,
+                                    "round": 2,
+                                    "location": "TEE",
+                                    "color": "#A1D9FF",
+                                    "playerData": {
+                                        "addressingBall": "51349",
+                                        "nextToHit": null
+                                    }
+                                },
+                                {
+                                    "groupSort": "0006B",
+                                    "groupNum": 30,
+                                    "round": 2,
+                                    "location": "FAIRWAY",
+                                    "color": "#FDF4A6",
+                                    "playerData": {
+                                        "addressingBall": null,
+                                        "nextToHit": null
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "holeNumber": 7,
+                            "par": 3,
+                            "yardage": 200,
+                            "groups": [
+                                {
+                                    "groupSort": "0007B",
+                                    "groupNum": 29,
+                                    "round": 2,
+                                    "location": "FAIRWAY",
+                                    "color": "#FDF4A6",
+                                    "playerData": {
+                                        "addressingBall": null,
+                                        "nextToHit": null
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "holeNumber": 8,
+                            "par": 4,
+                            "yardage": 445,
+                            "groups": [
+                                {
+                                    "groupSort": "0008B",
+                                    "groupNum": 28,
+                                    "round": 2,
+                                    "location": "FAIRWAY",
+                                    "color": "#FDF4A6",
+                                    "playerData": {
+                                        "addressingBall": null,
+                                        "nextToHit": null
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "holeNumber": 9,
+                            "par": 4,
+                            "yardage": 484,
+                            "groups": [
+                                {
+                                    "groupSort": "0009B",
+                                    "groupNum": 27,
+                                    "round": 2,
+                                    "location": "FAIRWAY",
+                                    "color": "#FDF4A6",
+                                    "playerData": {
+                                        "addressingBall": null,
+                                        "nextToHit": null
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "holeNumber": 10,
+                            "par": 4,
+                            "yardage": 381,
+                            "groups": [
+                                {
+                                    "groupSort": "0010B",
+                                    "groupNum": 26,
+                                    "round": 2,
+                                    "location": "FAIRWAY",
+                                    "color": "#FDF4A6",
+                                    "playerData": {
+                                        "addressingBall": null,
+                                        "nextToHit": null
+                                    }
+                                },
+                                {
+                                    "groupSort": "0010C",
+                                    "groupNum": 25,
+                                    "round": 2,
+                                    "location": "GREEN",
+                                    "color": "#50BF93",
+                                    "playerData": {
+                                        "addressingBall": "55893",
+                                        "nextToHit": null
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "holeNumber": 11,
+                            "par": 4,
+                            "yardage": 442,
+                            "groups": [
+                                {
+                                    "groupSort": "0011B",
+                                    "groupNum": 24,
+                                    "round": 2,
+                                    "location": "FAIRWAY",
+                                    "color": "#FDF4A6",
+                                    "playerData": {
+                                        "addressingBall": null,
+                                        "nextToHit": null
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "holeNumber": 12,
+                            "par": 5,
+                            "yardage": 574,
+                            "groups": [
+                                {
+                                    "groupSort": "0012B",
+                                    "groupNum": 23,
+                                    "round": 2,
+                                    "location": "FAIRWAY",
+                                    "color": "#FDF4A6",
+                                    "playerData": {
+                                        "addressingBall": null,
+                                        "nextToHit": null
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "holeNumber": 13,
+                            "par": 4,
+                            "yardage": 371,
+                            "groups": [
+                                {
+                                    "groupSort": "0013B",
+                                    "groupNum": 22,
+                                    "round": 2,
+                                    "location": "FAIRWAY",
+                                    "color": "#FDF4A6",
+                                    "playerData": {
+                                        "addressingBall": null,
+                                        "nextToHit": null
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "holeNumber": 14,
+                            "par": 3,
+                            "yardage": 182,
+                            "groups": [
+                                {
+                                    "groupSort": "0014A",
+                                    "groupNum": 21,
+                                    "round": 2,
+                                    "location": "TEE",
+                                    "color": "#A1D9FF",
+                                    "playerData": {
+                                        "addressingBall": null,
+                                        "nextToHit": null
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "holeNumber": 15,
+                            "par": 4,
+                            "yardage": 484,
+                            "groups": [
+                                {
+                                    "groupSort": "0015A",
+                                    "groupNum": 20,
+                                    "round": 2,
+                                    "location": "TEE",
+                                    "color": "#A1D9FF",
+                                    "playerData": {
+                                        "addressingBall": null,
+                                        "nextToHit": null
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "holeNumber": 16,
+                            "par": 5,
+                            "yardage": 513,
+                            "groups": [
+                                {
+                                    "groupSort": "0016B",
+                                    "groupNum": 19,
+                                    "round": 2,
+                                    "location": "FAIRWAY",
+                                    "color": "#FDF4A6",
+                                    "playerData": {
+                                        "addressingBall": null,
+                                        "nextToHit": null
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "holeNumber": 17,
+                            "par": 3,
+                            "yardage": 205,
+                            "groups": []
+                        },
+                        {
+                            "holeNumber": 18,
+                            "par": 4,
+                            "yardage": 464,
+                            "groups": [
+                                {
+                                    "groupSort": "0018C",
+                                    "groupNum": 36,
+                                    "round": 1,
+                                    "location": "GREEN",
+                                    "color": "#50BF93",
+                                    "playerData": {
+                                        "addressingBall": null,
+                                        "nextToHit": null
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import html
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Tuple
 
 from atp_models import (
@@ -196,10 +196,24 @@ def normalize_head_to_head(left_player_id: str, right_player_id: str, h2h_json: 
 
 def normalize_match_schedule_html(tournament_slug: str, tournament_id: str, schedule_html: str, snapshot_ts_utc: str | None = None) -> List[MatchScheduleRow]:
     ts = snapshot_ts_utc or utc_now_iso()
+    snapshot_date = datetime.fromisoformat(ts.replace("Z", "+00:00")).date()
     day = _find(r'<h4 class="day">\s*(.*?)\s*</h4>', schedule_html) or _find(
         r'<div class="tournament-day">\s*<h4>\s*(.*?)\s*</h4>', schedule_html
     )
     rows: List[MatchScheduleRow] = []
+
+    def _parse_day_date(day_label: str | None) -> date | None:
+        if not day_label:
+            return None
+        cleaned = re.sub(r"\s*\(?Day\s*\(?\d+\)?\)?\s*$", "", day_label, flags=re.IGNORECASE).strip()
+        for fmt in ["%a, %d %B, %Y", "%A, %B %d, %Y", "%A, %d %B, %Y"]:
+            try:
+                return datetime.strptime(cleaned, fmt).date()
+            except ValueError:
+                continue
+        return None
+
+    day_date = _parse_day_date(day)
 
     def _extract_name_url_seed(block: str) -> Tuple[str | None, str | None, str | None]:
         name_text = _find(r'<div class="name">\s*(.*?)\s*</div>', block)
@@ -240,6 +254,23 @@ def normalize_match_schedule_html(tournament_slug: str, tournament_id: str, sche
                 p1_url = hrefs[0]
             if not p2_url and len(hrefs) > 1:
                 p2_url = hrefs[1]
+
+        status_lower = (status_text or "").strip().lower()
+        court_lower = (court_name or "").strip().lower()
+        p1_lower = (p1_name or "").lower()
+        p2_lower = (p2_name or "").lower()
+
+        # Keep this dataset focused on truly upcoming matches.
+        if day_date and day_date < snapshot_date:
+            continue
+        if "newsletter" in court_lower or "sign up" in court_lower:
+            continue
+        if "{{" in p1_lower or "{{" in p2_lower:
+            continue
+        if status_lower.startswith("defeat"):
+            continue
+        if not start_label and status_lower not in {"vs", "v"}:
+            continue
 
         rows.append(
             MatchScheduleRow(

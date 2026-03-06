@@ -140,6 +140,22 @@ def insert_rows(
     return total
 
 
+def prune_to_tournament(client: bigquery.Client, table: str, tournament_id: str) -> int:
+    """Delete rows for all tournaments except the provided one."""
+    table_id = _resolve_table_id(table, client.project)
+    query = f"DELETE FROM `{table_id}` WHERE tournament_id != @tournament_id"
+    job = client.query(
+        query,
+        job_config=bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("tournament_id", "STRING", tournament_id)
+            ]
+        ),
+    )
+    job.result()
+    return int(getattr(job, "num_dml_affected_rows", 0) or 0)
+
+
 def ingest_pairings(
     tournament_id: str,
     round_number: int,
@@ -147,6 +163,7 @@ def ingest_pairings(
     cut: Optional[str] = None,
     create_tables: bool = True,
     dry_run: bool = False,
+    keep_only_tournament: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """
     Fetch pairings from PGA Tour GraphQL and insert into BigQuery.
@@ -157,6 +174,8 @@ def ingest_pairings(
         cut:            Optional cut filter: ``"ALL"``, ``"MADE"``, ``"MISSED"``.
         create_tables:  Auto-create the BigQuery dataset/table if missing.
         dry_run:        If ``True``, fetch data but skip the BigQuery insert.
+        keep_only_tournament: If True, remove rows for other tournaments before
+                              inserting this run so the table only holds one event.
 
     Returns:
         Summary dict with record counts and status.
@@ -166,12 +185,16 @@ def ingest_pairings(
     pairings = fetch_pairings(tournament_id, str(round_number))
     rows = pairings_to_records(pairings, run_ts=run_ts)
 
+    if keep_only_tournament is None:
+        keep_only_tournament = os.getenv("PGA_PAIRINGS_KEEP_ONLY_CURRENT", "true").strip().lower() == "true"
+
     summary: Dict[str, Any] = {
         "tournament_id": tournament_id,
         "round_number": round_number,
         "groups": len(pairings),
         "player_rows": len(rows),
         "dry_run": dry_run,
+        "keep_only_tournament": keep_only_tournament,
     }
 
     if dry_run:
@@ -184,6 +207,9 @@ def ingest_pairings(
         ensure_dataset(client, _dataset_id(table_id))
         ensure_table(client, table_id)
         ensure_pairings_view(client, table_id)
+
+    if keep_only_tournament:
+        summary["pruned_other_tournaments"] = prune_to_tournament(client, PAIRINGS_TABLE, tournament_id)
 
     summary["inserted"] = insert_rows(client, PAIRINGS_TABLE, rows)
     return summary

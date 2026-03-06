@@ -361,3 +361,34 @@ CLUSTER BY tour_code, year, category_name, player_id
 OPTIONS (
   description = 'PGA Tour priority rankings / FedEx Cup standings (priorityRankings GraphQL)'
 );
+
+CREATE TABLE IF NOT EXISTS `pga_data.website_active_players` (
+  run_ts TIMESTAMP NOT NULL,
+  ingested_at TIMESTAMP NOT NULL,
+  player_id STRING NOT NULL,
+  display_name STRING,
+  active BOOL,
+  player_payload STRING
+)
+CLUSTER BY player_id
+OPTIONS (
+  description = 'PGA website active players with full endpoint payload'
+);
+
+CREATE TABLE IF NOT EXISTS `pga_data.website_player_stats` (
+  run_ts TIMESTAMP NOT NULL,
+  ingested_at TIMESTAMP NOT NULL,
+  tour_code STRING,
+  year INT64,
+  player_id STRING NOT NULL,
+  player_name STRING,
+  country STRING,
+  country_flag STRING,
+  stats_payload STRING,
+  tour_averages STRING
+)
+PARTITION BY RANGE_BUCKET(year, GENERATE_ARRAY(2015, 2035, 1))
+CLUSTER BY tour_code, year, player_id
+OPTIONS (
+  description = 'PGA website player stats (one row per player, includes all stats and tour averages as JSON)'
+);

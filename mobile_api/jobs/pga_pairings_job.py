@@ -25,11 +25,12 @@ Cloud Scheduler schedules (all America/New_York)
 Required env vars
 -----------------
   GCP_PROJECT                – GCP project (used by BigQuery client)
-  PGA_CURRENT_TOURNAMENT_ID  – Tournament ID, e.g. "R2026010"
-                               Update this at the start of each week.
 
 Optional env vars
 -----------------
+  PGA_CURRENT_TOURNAMENT_ID  – Explicit tournament ID override, e.g. "R2026010"
+                               If unset, the job auto-detects the active event
+                               from the PGA Tour schedule API.
   PGA_DATASET        – BigQuery dataset  (default: pga_data)
   PGA_PAIRINGS_TABLE – BigQuery table    (default: tournament_round_pairings)
   PGA_DRY_RUN        – Set to "true" to fetch without writing to BigQuery
@@ -50,6 +51,7 @@ if str(_repo) not in sys.path:
     sys.path.insert(0, str(_repo))
 
 from ingest.pga.pga_pairings_ingest import ingest_pairings  # noqa: E402
+from ingest.pga.pga_schedule import fetch_schedule  # noqa: E402
 
 ET = ZoneInfo("America/New_York")
 
@@ -64,14 +66,60 @@ ROUNDS_BY_DOW: dict[int, list[int]] = {
 
 
 def _get_tournament_id() -> str:
+    """Resolve the tournament ID for this job run.
+
+    Resolution order:
+      1) PGA_CURRENT_TOURNAMENT_ID env var (manual override)
+      2) Current season schedule lookup (latest upcoming event whose start
+         date is today or earlier; else latest completed event)
+    """
     tid = os.getenv("PGA_CURRENT_TOURNAMENT_ID", "").strip()
-    if not tid:
+    if tid:
+        return tid
+
+    season = str(datetime.now(ET).year)
+    tournaments = fetch_schedule(tour_code="R", year=season)
+    if not tournaments:
         raise RuntimeError(
-            "PGA_CURRENT_TOURNAMENT_ID is not set. "
-            "Set it to the current tournament ID, e.g. 'R2026010'. "
-            "Find it in the URL on pgatour.com."
+            "Could not auto-detect PGA tournament ID: schedule returned no events. "
+            "Set PGA_CURRENT_TOURNAMENT_ID explicitly."
         )
-    return tid
+
+    today = datetime.now(ET).date()
+
+    def _to_date(value: object):
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(str(value)).date()
+        except ValueError:
+            return None
+
+    upcoming_started = []
+    completed = []
+    for tournament in tournaments:
+        if not tournament.tournament_id:
+            continue
+        start_date = _to_date(tournament.start_date)
+        if not start_date:
+            continue
+
+        row = (start_date, tournament.tournament_id)
+        if tournament.bucket == "upcoming" and start_date <= today:
+            upcoming_started.append(row)
+        elif tournament.bucket == "completed":
+            completed.append(row)
+
+    if upcoming_started:
+        return max(upcoming_started, key=lambda item: item[0])[1]
+
+    if completed:
+        return max(completed, key=lambda item: item[0])[1]
+
+    raise RuntimeError(
+        "Could not auto-detect PGA tournament ID from schedule. "
+        "Set PGA_CURRENT_TOURNAMENT_ID explicitly."
+    )
 
 
 def _dry_run() -> bool:

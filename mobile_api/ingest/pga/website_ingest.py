@@ -13,6 +13,7 @@ from .pga_pairings_ingest import ingest_pairings
 from .pga_rankings_ingest import ingest_rankings
 from .pga_schedule import fetch_schedule, schedule_to_records
 from .pga_stats_ingest import ingest_stats
+from .website_players_stats_ingest import ingest_website_players_and_stats
 
 DATASET = os.getenv("PGA_DATASET", "pga_data")
 DATASET_LOCATION = os.getenv("PGA_DATASET_LOCATION", "US")
@@ -348,6 +349,8 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
         "pairings_rows": 0,
         "stats_rows": 0,
         "rankings_rows": 0,
+        "website_active_players_rows": 0,
+        "website_player_stats_rows": 0,
         "errors": [],
         "pairings_truncate": {"enabled": bool(weekly_pairings_truncate), "truncated": False, "reason": None},
     }
@@ -369,6 +372,20 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
         rankings = ingest_rankings(year=yr, tour_code="R", dry_run=False, create_tables=create_tables)
         summary["stats_rows"] += int(stats.get("rows_inserted", 0))
         summary["rankings_rows"] += int(rankings.get("rows_inserted", 0))
+
+        if yr == datetime.utcnow().year:
+            try:
+                website_players_stats = ingest_website_players_and_stats(year=yr, tour_code="R")
+                summary["website_active_players_rows"] += int(
+                    website_players_stats.get("active_players_written", 0)
+                )
+                summary["website_player_stats_rows"] += int(
+                    website_players_stats.get("stats_players_written", 0)
+                )
+            except Exception as exc:
+                message = f"season={yr} website_players_stats error={exc}"
+                print(f"[website] WARN {message}")
+                summary["errors"].append(message)
 
         tournament_ids = _focused_tournament_ids(schedule_rows)
         print(f"[website] season={yr}: focused_tournaments={len(tournament_ids)}")

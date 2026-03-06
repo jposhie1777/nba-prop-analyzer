@@ -355,7 +355,7 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
         "pairings_truncate": {"enabled": bool(weekly_pairings_truncate), "truncated": False, "reason": None},
     }
 
-    for yr in seasons:
+    for idx, yr in enumerate(seasons):
         print(f"[website] season={yr}: fetching schedule")
         tournaments = fetch_schedule(tour_code="R", year=str(yr))
         schedule_rows = schedule_to_records(tournaments)
@@ -373,19 +373,22 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
         summary["stats_rows"] += int(stats.get("rows_inserted", 0))
         summary["rankings_rows"] += int(rankings.get("rows_inserted", 0))
 
-        if yr == datetime.utcnow().year:
-            try:
-                website_players_stats = ingest_website_players_and_stats(year=yr, tour_code="R")
-                summary["website_active_players_rows"] += int(
-                    website_players_stats.get("active_players_written", 0)
-                )
-                summary["website_player_stats_rows"] += int(
-                    website_players_stats.get("stats_players_written", 0)
-                )
-            except Exception as exc:
-                message = f"season={yr} website_players_stats error={exc}"
-                print(f"[website] WARN {message}")
-                summary["errors"].append(message)
+        try:
+            website_players_stats = ingest_website_players_and_stats(
+                year=yr,
+                tour_code="R",
+                refresh_active_players=(idx == 0),
+            )
+            summary["website_active_players_rows"] += int(
+                website_players_stats.get("active_players_written", 0)
+            )
+            summary["website_player_stats_rows"] += int(
+                website_players_stats.get("stats_players_written", 0)
+            )
+        except Exception as exc:
+            message = f"season={yr} website_players_stats error={exc}"
+            print(f"[website] WARN {message}")
+            summary["errors"].append(message)
 
         tournament_ids = _focused_tournament_ids(schedule_rows)
         print(f"[website] season={yr}: focused_tournaments={len(tournament_ids)}")

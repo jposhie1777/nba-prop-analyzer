@@ -5,7 +5,7 @@ import datetime as dt
 import json
 import os
 import time
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 import requests
 from google.cloud import bigquery
@@ -19,8 +19,21 @@ GRAPHQL_ENDPOINT = "https://orchestrator.pgatour.com/graphql"
 API_KEY = os.getenv("PGA_TOUR_GQL_API_KEY", "da2-gsrx5bibzbb4njvhl7t37wqyl4")
 
 ACTIVE_PLAYERS_QUERY = """
-query ActivePlayers {
-  playerDirectory
+query ActivePlayers($tourCode: TourCode!) {
+  playerDirectory(tourCode: $tourCode) {
+    players {
+      id
+      playerId
+      firstName
+      lastName
+      displayName
+      shortName
+      amateur
+      active
+      country
+      countryFlag
+    }
+  }
 }
 """.strip()
 
@@ -141,7 +154,7 @@ def _flatten_player_directory(data: Dict[str, Any]) -> List[Dict[str, Any]]:
     if isinstance(root, list):
         players = root
     elif isinstance(root, dict):
-        players = root.get("players") or root.get("items") or []
+        players = root.get("players") or root.get("items") or root.get("rows") or []
     else:
         players = []
 
@@ -163,7 +176,7 @@ def _flatten_player_directory(data: Dict[str, Any]) -> List[Dict[str, Any]]:
     return rows
 
 
-def _group_player_stats(data: Dict[str, Any], current_year: int, active_player_ids: set[str]) -> List[Dict[str, Any]]:
+def _group_player_stats(data: Dict[str, Any], current_year: int, active_player_ids: Set[str]) -> List[Dict[str, Any]]:
     overview = (data or {}).get("statOverview") or {}
     year = int(overview.get("year") or 0)
     if year != current_year:
@@ -202,16 +215,23 @@ def _group_player_stats(data: Dict[str, Any], current_year: int, active_player_i
     return list(grouped.values())
 
 
-def ingest_website_players_and_stats(year: Optional[int] = None, tour_code: str = "R") -> Dict[str, int]:
+def ingest_website_players_and_stats(
+    year: Optional[int] = None,
+    tour_code: str = "R",
+    *,
+    refresh_active_players: bool = True,
+) -> Dict[str, int]:
     year = year or dt.datetime.utcnow().year
     now = dt.datetime.utcnow().isoformat()
 
-    players_raw = _post_graphql(ACTIVE_PLAYERS_QUERY)
-    active_rows = _flatten_player_directory(players_raw)
-    active_player_ids = {r["player_id"] for r in active_rows if r.get("active")}
+    active_rows: List[Dict[str, Any]] = []
+    active_player_ids: Set[str] = set()
+    if refresh_active_players:
+        players_raw = _post_graphql(ACTIVE_PLAYERS_QUERY, {"tourCode": tour_code})
+        active_rows = _flatten_player_directory(players_raw)
+        active_player_ids = {r["player_id"] for r in active_rows if r.get("active")}
 
-    stats_raw = _post_graphql(STAT_OVERVIEW_QUERY, {"tourCode": tour_code, "year": year})
-    stats_rows = _group_player_stats(stats_raw, year, active_player_ids)
+    stats_rows: List[Dict[str, Any]] = []
 
     client = _bq_client()
     _ensure_dataset(client)
@@ -228,15 +248,27 @@ def ingest_website_players_and_stats(year: Optional[int] = None, tour_code: str 
         ),
     ).result()
 
-    active_payload = [
-        {
-            "run_ts": now,
-            "ingested_at": now,
-            **row,
-        }
-        for row in active_rows
-        if row.get("active")
-    ]
+    active_payload = []
+    if refresh_active_players:
+        active_payload = [
+            {
+                "run_ts": now,
+                "ingested_at": now,
+                **row,
+            }
+            for row in active_rows
+            if row.get("active")
+        ]
+    else:
+        # Reuse active player IDs from latest table snapshot when skipping refresh.
+        latest_ids_sql = f"SELECT DISTINCT player_id FROM `{active_table_id}`"
+        for row in client.query(latest_ids_sql).result():
+            pid = str(row.get("player_id") or "").strip()
+            if pid:
+                active_player_ids.add(pid)
+
+    stats_raw = _post_graphql(STAT_OVERVIEW_QUERY, {"tourCode": tour_code, "year": year})
+    stats_rows = _group_player_stats(stats_raw, year, active_player_ids)
 
     stats_payload = [
         {

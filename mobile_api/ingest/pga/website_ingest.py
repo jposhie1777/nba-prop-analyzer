@@ -12,7 +12,7 @@ from .pga_leaderboard import fetch_leaderboard, leaderboard_to_records
 from .pga_pairings_ingest import ingest_pairings
 from .pga_rankings_ingest import ingest_rankings
 from .pga_schedule import fetch_schedule, schedule_to_records
-from .pga_stats_ingest import ingest_stats
+from .pga_stats_ingest import ingest_website_player_stats
 
 DATASET = os.getenv("PGA_DATASET", "pga_data")
 DATASET_LOCATION = os.getenv("PGA_DATASET_LOCATION", "US")
@@ -22,7 +22,7 @@ LEADERBOARD_TABLE = os.getenv("PGA_WEBSITE_LEADERBOARD_TABLE", "website_leaderbo
 SCORECARDS_TABLE = os.getenv("PGA_WEBSITE_SCORECARDS_TABLE", "website_scorecards")
 
 RANKINGS_TABLE = os.getenv("PGA_RANKINGS_TABLE", "priority_rankings")
-STATS_TABLE = os.getenv("PGA_STATS_TABLE", "player_stats")
+WEBSITE_PLAYER_STATS_TABLE = os.getenv("PGA_WEBSITE_PLAYER_STATS_TABLE", "website_player_stats")
 PAIRINGS_TABLE = os.getenv("PGA_PAIRINGS_TABLE", "tournament_round_pairings")
 
 SCHEMA_SCHEDULE = [
@@ -347,7 +347,7 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
         ensure_table(client, SCORECARDS_TABLE, SCHEMA_SCORECARDS)
 
     if truncate_first:
-        for table in [SCHEDULE_TABLE, LEADERBOARD_TABLE, SCORECARDS_TABLE, RANKINGS_TABLE, STATS_TABLE, PAIRINGS_TABLE]:
+        for table in [SCHEDULE_TABLE, LEADERBOARD_TABLE, SCORECARDS_TABLE, RANKINGS_TABLE, WEBSITE_PLAYER_STATS_TABLE, PAIRINGS_TABLE]:
             try:
                 truncate_table(client, table)
             except Exception:
@@ -367,7 +367,7 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
         "leaderboard_rows": 0,
         "scorecard_rows": 0,
         "pairings_rows": 0,
-        "stats_rows": 0,
+        "website_player_stats_rows": 0,
         "rankings_rows": 0,
         "errors": [],
         "pairings_truncate": {"enabled": bool(weekly_pairings_truncate), "truncated": False, "reason": None},
@@ -388,9 +388,9 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
                 print("[website] pairings table weekly truncate complete")
 
         # website stats/rankings ingests (already writes to BQ)
-        stats = ingest_stats(year=yr, tour_code="R", dry_run=False, create_tables=create_tables)
+        website_stats = ingest_website_player_stats(year=yr, tour_code="R", dry_run=False, create_tables=create_tables)
         rankings = ingest_rankings(year=yr, tour_code="R", dry_run=False, create_tables=create_tables)
-        summary["stats_rows"] += int(stats.get("rows_inserted", 0))
+        summary["website_player_stats_rows"] += int(website_stats.get("rows_inserted", 0))
         summary["rankings_rows"] += int(rankings.get("rows_inserted", 0))
 
         tournament_ids = _focused_tournament_ids(schedule_rows)

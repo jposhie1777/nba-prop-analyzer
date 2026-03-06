@@ -15,7 +15,7 @@ import argparse
 import datetime
 import os
 import time
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from google.api_core.exceptions import BadRequest
 from google.cloud import bigquery
@@ -24,6 +24,7 @@ from .pga_stats_scraper import fetch_stat_overview, stat_players_to_records
 
 DATASET = os.getenv("PGA_DATASET", "pga_data")
 TABLE = os.getenv("PGA_STATS_TABLE", "player_stats")
+WEBSITE_TABLE = os.getenv("PGA_WEBSITE_PLAYER_STATS_TABLE", "website_player_stats")
 CHUNK_SIZE = 500
 PLAYERS_TABLE = os.getenv("PGA_PLAYERS_TABLE", "players_active")
 
@@ -43,6 +44,24 @@ _SCHEMA = [
     bigquery.SchemaField("country", "STRING"),
     bigquery.SchemaField("country_flag", "STRING"),
 ]
+
+_WEBSITE_SCHEMA = [
+    bigquery.SchemaField("run_ts", "TIMESTAMP", mode="REQUIRED"),
+    bigquery.SchemaField("ingested_at", "TIMESTAMP", mode="REQUIRED"),
+    bigquery.SchemaField("tour_code", "STRING"),
+    bigquery.SchemaField("season_year", "INTEGER"),
+    bigquery.SchemaField("player_id", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("player_name", "STRING"),
+    bigquery.SchemaField("country", "STRING"),
+    bigquery.SchemaField("country_flag", "STRING"),
+    bigquery.SchemaField("stat_id", "STRING"),
+    bigquery.SchemaField("stat_name", "STRING"),
+    bigquery.SchemaField("stat_title", "STRING"),
+    bigquery.SchemaField("stat_value", "STRING"),
+    bigquery.SchemaField("rank", "INTEGER"),
+    bigquery.SchemaField("tour_avg", "STRING"),
+]
+
 
 
 def _bq_client() -> bigquery.Client:
@@ -84,6 +103,76 @@ def _ensure_table(client: bigquery.Client) -> str:
     bq_table.description = "PGA Tour per-player stat rows from profile stats endpoint"
     client.create_table(bq_table, exists_ok=True)
     return f"{client.project}.{DATASET}.{TABLE}"
+
+
+def _ensure_website_table(client: bigquery.Client) -> str:
+    """Create flattened website stats table if needed."""
+    bq_table = bigquery.Table(
+        f"{client.project}.{DATASET}.{WEBSITE_TABLE}",
+        schema=_WEBSITE_SCHEMA,
+    )
+    bq_table.range_partitioning = bigquery.RangePartitioning(
+        field="season_year",
+        range_=bigquery.PartitionRange(start=2015, end=2035, interval=1),
+    )
+    bq_table.clustering_fields = ["tour_code", "season_year", "player_id"]
+    bq_table.description = "PGA website player stats flattened (one row per player/stat)"
+    client.create_table(bq_table, exists_ok=True)
+    return f"{client.project}.{DATASET}.{WEBSITE_TABLE}"
+
+
+def ingest_website_player_stats(
+    year: int,
+    tour_code: str = "R",
+    dry_run: bool = False,
+    create_tables: bool = True,
+    run_ts: Optional[str] = None,
+) -> dict:
+    """Ingest flattened one-row-per-player-stat data into website_player_stats."""
+    ts = run_ts or datetime.datetime.utcnow().isoformat()
+    client = _bq_client()
+    player_ids = _fetch_active_player_ids(client)
+    if not player_ids:
+        print("[website_player_stats] No active PGA players found; skipping.")
+        return {"rows_fetched": 0, "rows_inserted": 0, "active_players": 0}
+
+    result = fetch_stat_overview(tour_code=tour_code, year=year, player_ids=player_ids)
+    per_stat_rows = stat_players_to_records(result, run_ts=ts)
+    website_rows: List[Dict[str, Any]] = []
+    for row in per_stat_rows:
+        mapped = dict(row)
+        mapped["season_year"] = mapped.pop("year", year)
+        website_rows.append(mapped)
+
+    rows_fetched = len(website_rows)
+    print(f"[website_player_stats] Built {rows_fetched} player-stat rows for {tour_code}/{year}.")
+    if dry_run or not website_rows:
+        return {"rows_fetched": rows_fetched, "rows_inserted": 0, "active_players": len(player_ids)}
+
+    if create_tables:
+        table_id = _ensure_website_table(client)
+    else:
+        table_id = f"{client.project}.{DATASET}.{WEBSITE_TABLE}"
+
+    delete_sql = f"DELETE FROM `{table_id}` WHERE tour_code = @tour_code AND season_year = @season_year"
+    delete_cfg = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("tour_code", "STRING", tour_code),
+            bigquery.ScalarQueryParameter("season_year", "INT64", int(year)),
+        ]
+    )
+    client.query(delete_sql, job_config=delete_cfg).result()
+
+    inserted = 0
+    for i in range(0, len(website_rows), CHUNK_SIZE):
+        chunk = website_rows[i : i + CHUNK_SIZE]
+        errors = client.insert_rows_json(table_id, chunk)
+        if errors:
+            raise RuntimeError(f"BigQuery insert errors: {errors}")
+        inserted += len(chunk)
+        time.sleep(0.05)
+
+    return {"rows_fetched": rows_fetched, "rows_inserted": inserted, "active_players": len(player_ids)}
 
 
 def ingest_stats(

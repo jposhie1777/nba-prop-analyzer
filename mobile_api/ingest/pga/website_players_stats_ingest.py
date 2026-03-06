@@ -237,8 +237,7 @@ def ingest_website_players_and_stats(
     _ensure_dataset(client)
     active_table_id, stats_table_id = _ensure_tables(client)
 
-    if refresh_active_players:
-        client.query(f"TRUNCATE TABLE `{active_table_id}`").result()
+    client.query(f"TRUNCATE TABLE `{active_table_id}`").result()
     client.query(
         f"DELETE FROM `{stats_table_id}` WHERE year = @year AND tour_code = @tour_code",
         job_config=bigquery.QueryJobConfig(

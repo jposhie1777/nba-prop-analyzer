@@ -1,5 +1,5 @@
 """
-Ingest PGA Tour player stats (statOverview) → BigQuery.
+Ingest PGA Tour player stats (profile stats endpoint) → BigQuery.
 
 Fetches all stat leaderboards for a tour and season, then writes one row
 per (player, stat) to the ``player_stats`` BigQuery table.
@@ -25,6 +25,7 @@ from .pga_stats_scraper import fetch_stat_overview, stat_players_to_records
 DATASET = os.getenv("PGA_DATASET", "pga_data")
 TABLE = os.getenv("PGA_STATS_TABLE", "player_stats")
 CHUNK_SIZE = 500
+PLAYERS_TABLE = os.getenv("PGA_PLAYERS_TABLE", "players_active")
 
 _SCHEMA = [
     bigquery.SchemaField("run_ts", "TIMESTAMP", mode="REQUIRED"),
@@ -49,6 +50,26 @@ def _bq_client() -> bigquery.Client:
     return bigquery.Client(project=project)
 
 
+def _fetch_active_player_ids(client: bigquery.Client) -> List[str]:
+    table_id = f"`{client.project}.{DATASET}.{PLAYERS_TABLE}`"
+    query = f"""
+    WITH latest AS (
+      SELECT * EXCEPT(row_num)
+      FROM (
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY run_ts DESC) AS row_num
+        FROM {table_id}
+      )
+      WHERE row_num = 1
+    )
+    SELECT CAST(player_id AS STRING) AS player_id
+    FROM latest
+    WHERE COALESCE(active, TRUE) = TRUE
+    ORDER BY player_id
+    """
+    rows = client.query(query).result()
+    return [str(row.get("player_id")) for row in rows if row.get("player_id") is not None]
+
+
 def _ensure_table(client: bigquery.Client) -> str:
     """Create the player_stats table if it doesn't exist; return the full table ID."""
     bq_table = bigquery.Table(
@@ -60,7 +81,7 @@ def _ensure_table(client: bigquery.Client) -> str:
         range_=bigquery.PartitionRange(start=2015, end=2035, interval=1),
     )
     bq_table.clustering_fields = ["tour_code", "stat_id", "player_id"]
-    bq_table.description = "PGA Tour per-stat player rankings (statOverview GraphQL)"
+    bq_table.description = "PGA Tour per-player stat rows from profile stats endpoint"
     client.create_table(bq_table, exists_ok=True)
     return f"{client.project}.{DATASET}.{TABLE}"
 
@@ -73,7 +94,7 @@ def ingest_stats(
     run_ts: Optional[str] = None,
 ) -> dict:
     """
-    Fetch stats from the PGA Tour GraphQL API and write to BigQuery.
+    Fetch stats from PGA player profile stats API and write to BigQuery.
 
     Args:
         year:          Season year.
@@ -86,16 +107,22 @@ def ingest_stats(
         Dict with ``rows_fetched`` and ``rows_inserted`` counts.
     """
     ts = run_ts or datetime.datetime.utcnow().isoformat()
-    result = fetch_stat_overview(tour_code=tour_code, year=year)
+    client = _bq_client()
+    player_ids = _fetch_active_player_ids(client)
+    if not player_ids:
+        print("[stats] No active PGA players found; skipping stats ingest.")
+        return {"rows_fetched": 0, "rows_inserted": 0, "active_players": 0}
+
+    print(f"[stats] Fetching stats for {len(player_ids)} active players ({tour_code}/{year}).")
+    result = fetch_stat_overview(tour_code=tour_code, year=year, player_ids=player_ids)
     records = stat_players_to_records(result, run_ts=ts)
 
     rows_fetched = len(records)
     print(f"[stats] Fetched {rows_fetched} stat-player rows for {tour_code}/{year}.")
 
     if dry_run or not records:
-        return {"rows_fetched": rows_fetched, "rows_inserted": 0}
+        return {"rows_fetched": rows_fetched, "rows_inserted": 0, "active_players": len(player_ids)}
 
-    client = _bq_client()
     if create_tables:
         table_id = _ensure_table(client)
     else:
@@ -164,7 +191,7 @@ def ingest_stats(
         time.sleep(0.05)
 
     print(f"[stats] Inserted {inserted} rows into {table_id}.")
-    return {"rows_fetched": rows_fetched, "rows_inserted": inserted}
+    return {"rows_fetched": rows_fetched, "rows_inserted": inserted, "active_players": len(player_ids)}
 
 
 def _cli() -> None:

@@ -59,6 +59,23 @@ query StatOverview($tourCode: TourCode!, $year: Int!) {
 }
 """.strip()
 
+# Columns that belonged to the old one-row-per-stat schema and must be removed.
+_LEGACY_STATS_COLUMNS = {"season_year", "stat_id", "stat_name", "stat_title", "stat_value", "rank", "tour_avg"}
+
+# Clean target schema for website_player_stats.
+_STATS_SCHEMA = [
+    bigquery.SchemaField("run_ts", "TIMESTAMP", mode="REQUIRED"),
+    bigquery.SchemaField("ingested_at", "TIMESTAMP", mode="REQUIRED"),
+    bigquery.SchemaField("tour_code", "STRING"),
+    bigquery.SchemaField("year", "INT64"),
+    bigquery.SchemaField("player_id", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("player_name", "STRING"),
+    bigquery.SchemaField("country", "STRING"),
+    bigquery.SchemaField("country_flag", "STRING"),
+    bigquery.SchemaField("stats_payload", "STRING"),
+    bigquery.SchemaField("tour_averages", "STRING"),
+]
+
 
 def _headers() -> Dict[str, str]:
     return {
@@ -105,6 +122,21 @@ def _ensure_dataset(client: bigquery.Client) -> None:
     client.create_dataset(dataset, exists_ok=True)
 
 
+def _drop_legacy_columns(client: bigquery.Client, table_id: str) -> None:
+    """Drop old single-stat columns that no longer belong in the wide-format table."""
+    table = client.get_table(table_id)
+    existing = {field.name.lower() for field in table.schema}
+    to_drop = _LEGACY_STATS_COLUMNS & existing
+    for col in sorted(to_drop):
+        try:
+            client.query(
+                f"ALTER TABLE `{table_id}` DROP COLUMN IF EXISTS `{col}`"
+            ).result()
+        except Exception as exc:
+            # Non-fatal: log and continue (e.g. streaming-buffer restriction).
+            print(f"[website_player_stats] WARN could not drop column {col}: {exc}")
+
+
 def _ensure_tables(client: bigquery.Client) -> tuple[str, str]:
     active_table_id = _table_id(client, ACTIVE_PLAYERS_TABLE)
     active_schema = [
@@ -121,54 +153,35 @@ def _ensure_tables(client: bigquery.Client) -> tuple[str, str]:
     client.create_table(active_table, exists_ok=True)
 
     stats_table_id = _table_id(client, PLAYER_STATS_TABLE)
-    stats_schema = [
-        bigquery.SchemaField("run_ts", "TIMESTAMP", mode="REQUIRED"),
-        bigquery.SchemaField("ingested_at", "TIMESTAMP", mode="REQUIRED"),
-        bigquery.SchemaField("tour_code", "STRING"),
-        bigquery.SchemaField("year", "INT64"),
-        bigquery.SchemaField("player_id", "STRING", mode="REQUIRED"),
-        bigquery.SchemaField("player_name", "STRING"),
-        bigquery.SchemaField("country", "STRING"),
-        bigquery.SchemaField("country_flag", "STRING"),
-        bigquery.SchemaField("stats_payload", "STRING"),
-        bigquery.SchemaField("tour_averages", "STRING"),
-    ]
-    stats_table = bigquery.Table(stats_table_id, schema=stats_schema)
+    stats_table = bigquery.Table(stats_table_id, schema=_STATS_SCHEMA)
     stats_table.range_partitioning = bigquery.RangePartitioning(
         field="year",
         range_=bigquery.PartitionRange(start=2015, end=2035, interval=1),
     )
     stats_table.clustering_fields = ["tour_code", "year", "player_id"]
-    stats_table.description = "PGA website player stats (one row per player per year)"
+    stats_table.description = (
+        "PGA website player stats — one row per active player + one TOUR_AVERAGE row; "
+        "stats_payload and tour_averages are JSON strings keyed by stat_id"
+    )
     client.create_table(stats_table, exists_ok=True)
 
+    # Migrate: remove stale single-stat columns from pre-existing tables.
+    _drop_legacy_columns(client, stats_table_id)
+
+    # Ensure new columns are present in case the table pre-dates them.
     _ensure_required_columns(
         client,
         active_table_id,
-        [
-            ("run_ts", "TIMESTAMP"),
-            ("ingested_at", "TIMESTAMP"),
-            ("player_id", "STRING"),
-            ("display_name", "STRING"),
-            ("active", "BOOL"),
-            ("player_payload", "STRING"),
-        ],
+        [("run_ts", "TIMESTAMP"), ("ingested_at", "TIMESTAMP"), ("player_id", "STRING"),
+         ("display_name", "STRING"), ("active", "BOOL"), ("player_payload", "STRING")],
     )
     _ensure_required_columns(
         client,
         stats_table_id,
-        [
-            ("run_ts", "TIMESTAMP"),
-            ("ingested_at", "TIMESTAMP"),
-            ("tour_code", "STRING"),
-            ("year", "INT64"),
-            ("player_id", "STRING"),
-            ("player_name", "STRING"),
-            ("country", "STRING"),
-            ("country_flag", "STRING"),
-            ("stats_payload", "STRING"),
-            ("tour_averages", "STRING"),
-        ],
+        [("run_ts", "TIMESTAMP"), ("ingested_at", "TIMESTAMP"), ("tour_code", "STRING"),
+         ("year", "INT64"), ("player_id", "STRING"), ("player_name", "STRING"),
+         ("country", "STRING"), ("country_flag", "STRING"),
+         ("stats_payload", "STRING"), ("tour_averages", "STRING")],
     )
 
     return active_table_id, stats_table_id
@@ -249,9 +262,6 @@ def _existing_player_ids_for_scope(
     if "year" in cols:
         where.append("year = @year")
         params.append(bigquery.ScalarQueryParameter("year", "INT64", int(year)))
-    elif "season_year" in cols:
-        where.append("season_year = @year")
-        params.append(bigquery.ScalarQueryParameter("year", "INT64", int(year)))
 
     if "tour_code" in cols:
         where.append("tour_code = @tour_code")
@@ -260,7 +270,7 @@ def _existing_player_ids_for_scope(
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
     query = f"SELECT DISTINCT player_id FROM `{table_id}` {where_sql}"
     rows = client.query(query, job_config=bigquery.QueryJobConfig(query_parameters=params)).result()
-    return {str(r.get('player_id') or '').strip() for r in rows if str(r.get('player_id') or '').strip()}
+    return {str(r.get("player_id") or "").strip() for r in rows if str(r.get("player_id") or "").strip()}
 
 
 def _flatten_player_directory(data: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -292,39 +302,61 @@ def _flatten_player_directory(data: Dict[str, Any]) -> List[Dict[str, Any]]:
     return rows
 
 
-def _group_player_stats(data: Dict[str, Any], current_year: int, active_player_ids: Set[str]) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    """Return (player_rows, tour_avg_map) where tour_avg_map is keyed by stat_id."""
+def _group_player_stats(
+    data: Dict[str, Any],
+    current_year: int,
+    active_player_ids: Set[str],
+) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """
+    Return (player_rows, tour_avg_map).
+
+    Every player row contains ALL stats exposed by the API — stats where the
+    player has no ranking are included with stat_value=null and rank=null so
+    that consumers always see a consistent set of columns in stats_payload.
+
+    tour_avg_map is keyed by stat_id and used to build the TOUR_AVERAGE row.
+    """
     overview = (data or {}).get("statOverview") or {}
     year = int(overview.get("year") or 0)
     if year != current_year:
         return [], {}
 
-    grouped: Dict[str, Dict[str, Any]] = {}
-    # Collect all tour averages across every stat for the TOUR_AVERAGE row.
-    tour_avg_map: Dict[str, Any] = {}  # stat_id -> {stat_id, stat_name, stat_title, stat_value, rank, tour_avg}
+    raw_stats = overview.get("stats") or []
 
-    for stat in overview.get("stats") or []:
-        stat_id = str(stat.get("statId") or "")
+    # ── Pass 1: collect all stat metadata and build tour_avg_map ─────────────
+    # stat_id -> {stat_id, stat_name, stat_title, stat_value=tourAvg, rank=null, tour_avg}
+    tour_avg_map: Dict[str, Any] = {}
+    for stat in raw_stats:
+        stat_id = str(stat.get("statId") or "").strip()
+        if not stat_id or stat_id in tour_avg_map:
+            continue
         stat_name = stat.get("statName")
         tour_avg = stat.get("tourAvg")
-
-        # Build tour average entry for this stat (stat_title from first player row, fallback to stat_name).
         first_player = next(iter(stat.get("players") or []), None)
         stat_title = (first_player or {}).get("statTitle") or stat_name
-        if stat_id and stat_id not in tour_avg_map:
-            tour_avg_map[stat_id] = {
-                "stat_id": stat_id,
-                "stat_name": stat_name,
-                "stat_title": stat_title,
-                "stat_value": tour_avg,
-                "rank": None,
-                "tour_avg": tour_avg,
-            }
+        tour_avg_map[stat_id] = {
+            "stat_id": stat_id,
+            "stat_name": stat_name,
+            "stat_title": stat_title,
+            "stat_value": tour_avg,
+            "rank": None,
+            "tour_avg": tour_avg,
+        }
+
+    # ── Pass 2: build per-player grouped data ─────────────────────────────────
+    grouped: Dict[str, Dict[str, Any]] = {}
+    for stat in raw_stats:
+        stat_id = str(stat.get("statId") or "").strip()
+        if not stat_id:
+            continue
+        stat_name = stat.get("statName")
+        tour_avg = stat.get("tourAvg")
 
         for row in stat.get("players") or []:
             player_id = str(row.get("playerId") or "").strip()
             if not player_id or (active_player_ids and player_id not in active_player_ids):
                 continue
+
             item = grouped.setdefault(
                 player_id,
                 {
@@ -346,23 +378,25 @@ def _group_player_stats(data: Dict[str, Any], current_year: int, active_player_i
             }
             item["tour_averages"][stat_id] = tour_avg
 
+    # ── Pass 3: fill null entries for every stat not present for each player ──
+    null_template_by_stat = {
+        stat_id: {
+            "stat_id": stat_id,
+            "stat_name": meta["stat_name"],
+            "stat_title": meta["stat_title"],
+            "stat_value": None,
+            "rank": None,
+            "tour_avg": meta["tour_avg"],
+        }
+        for stat_id, meta in tour_avg_map.items()
+    }
+    for item in grouped.values():
+        for stat_id, null_entry in null_template_by_stat.items():
+            if stat_id not in item["stats"]:
+                item["stats"][stat_id] = null_entry
+                item["tour_averages"][stat_id] = null_entry["tour_avg"]
+
     return list(grouped.values()), tour_avg_map
-
-
-def _safe_rank(value: Any) -> int:
-    try:
-        return int(str(value))
-    except (TypeError, ValueError):
-        return 10**9
-
-
-def _representative_stat(player_row: Dict[str, Any]) -> Dict[str, Any]:
-    stats_map = player_row.get("stats") or {}
-    if not stats_map:
-        return {}
-    stats_values = list(stats_map.values())
-    stats_values.sort(key=lambda item: (_safe_rank(item.get("rank")), str(item.get("stat_id") or "")))
-    return stats_values[0]
 
 
 def _table_columns(client: bigquery.Client, table_id: str) -> Set[str]:
@@ -386,8 +420,6 @@ def ingest_website_players_and_stats(
         active_rows = _flatten_player_directory(players_raw)
         active_player_ids = {r["player_id"] for r in active_rows if r.get("active")}
 
-    stats_rows: List[Dict[str, Any]] = []
-
     client = _bq_client()
     _ensure_dataset(client)
     active_table_id, stats_table_id = _ensure_tables(client)
@@ -400,18 +432,13 @@ def ingest_website_players_and_stats(
     active_payload = []
     if refresh_active_players:
         active_payload = [
-            {
-                "run_ts": now,
-                "ingested_at": now,
-                **row,
-            }
+            {"run_ts": now, "ingested_at": now, **row}
             for row in active_rows
             if row.get("active")
         ]
     else:
-        # Reuse active player IDs from latest table snapshot when skipping refresh.
-        latest_ids_sql = f"SELECT DISTINCT player_id FROM `{active_table_id}`"
-        for row in client.query(latest_ids_sql).result():
+        # Reuse active player IDs from the latest table snapshot.
+        for row in client.query(f"SELECT DISTINCT player_id FROM `{active_table_id}`").result():
             pid = str(row.get("player_id") or "").strip()
             if pid:
                 active_player_ids.add(pid)
@@ -419,98 +446,51 @@ def ingest_website_players_and_stats(
     stats_raw = _post_graphql(STAT_OVERVIEW_QUERY, {"tourCode": tour_code, "year": year})
     stats_rows, tour_avg_map = _group_player_stats(stats_raw, year, active_player_ids)
 
-    stats_payload: List[Dict[str, Any]] = []
     existing_player_ids: Set[str] = set()
     if not delete_performed:
         existing_player_ids = _existing_player_ids_for_scope(
-            client,
-            stats_table_id,
-            year=year,
-            tour_code=tour_code,
+            client, stats_table_id, year=year, tour_code=tour_code
         )
 
+    stats_payload: List[Dict[str, Any]] = []
     for row in stats_rows:
         if existing_player_ids and str(row.get("player_id") or "") in existing_player_ids:
             continue
-        rep = _representative_stat(row)
-        insert_row: Dict[str, Any] = {}
+        insert_row: Dict[str, Any] = {
+            "run_ts": now,
+            "ingested_at": now,
+            "tour_code": tour_code,
+            "year": year,
+            "player_id": row["player_id"],
+            "player_name": row.get("player_name"),
+            "country": row.get("country"),
+            "country_flag": row.get("country_flag"),
+            "stats_payload": json.dumps(row.get("stats") or {}, separators=(",", ":"), default=str),
+            "tour_averages": json.dumps(row.get("tour_averages") or {}, separators=(",", ":"), default=str),
+        }
+        # Only include keys that exist in the actual table schema.
+        stats_payload.append({k: v for k, v in insert_row.items() if k in stats_columns})
 
-        if "run_ts" in stats_columns:
-            insert_row["run_ts"] = now
-        if "ingested_at" in stats_columns:
-            insert_row["ingested_at"] = now
-        if "tour_code" in stats_columns:
-            insert_row["tour_code"] = tour_code
-        if "year" in stats_columns:
-            insert_row["year"] = year
-        if "season_year" in stats_columns:
-            insert_row["season_year"] = year
-        if "player_id" in stats_columns:
-            insert_row["player_id"] = row["player_id"]
-        if "player_name" in stats_columns:
-            insert_row["player_name"] = row.get("player_name")
-        if "country" in stats_columns:
-            insert_row["country"] = row.get("country")
-        if "country_flag" in stats_columns:
-            insert_row["country_flag"] = row.get("country_flag")
-        if "stats_payload" in stats_columns:
-            insert_row["stats_payload"] = json.dumps(row.get("stats") or {}, separators=(",", ":"), default=str)
-        if "tour_averages" in stats_columns:
-            insert_row["tour_averages"] = json.dumps(row.get("tour_averages") or {}, separators=(",", ":"), default=str)
-
-        # Compatibility for pre-existing schemas that still expose per-stat columns.
-        if "stat_id" in stats_columns:
-            insert_row["stat_id"] = rep.get("stat_id")
-        if "stat_name" in stats_columns:
-            insert_row["stat_name"] = rep.get("stat_name")
-        if "stat_title" in stats_columns:
-            insert_row["stat_title"] = rep.get("stat_title")
-        if "stat_value" in stats_columns:
-            insert_row["stat_value"] = rep.get("stat_value")
-        if "rank" in stats_columns:
-            insert_row["rank"] = rep.get("rank")
-        if "tour_avg" in stats_columns:
-            insert_row["tour_avg"] = rep.get("tour_avg")
-
-        stats_payload.append(insert_row)
-
-    # Append the Tour Average row last (player_id = TOUR_AVERAGE).
-    # Skip if already present (e.g. when delete_performed=False and it was written earlier).
+    # ── Tour Average row (always last) ────────────────────────────────────────
     tour_avg_player_id = "TOUR_AVERAGE"
     if tour_avg_map and tour_avg_player_id not in existing_player_ids:
-        tour_avg_row: Dict[str, Any] = {}
-        if "run_ts" in stats_columns:
-            tour_avg_row["run_ts"] = now
-        if "ingested_at" in stats_columns:
-            tour_avg_row["ingested_at"] = now
-        if "tour_code" in stats_columns:
-            tour_avg_row["tour_code"] = tour_code
-        if "year" in stats_columns:
-            tour_avg_row["year"] = year
-        if "season_year" in stats_columns:
-            tour_avg_row["season_year"] = year
-        if "player_id" in stats_columns:
-            tour_avg_row["player_id"] = tour_avg_player_id
-        if "player_name" in stats_columns:
-            tour_avg_row["player_name"] = "Tour Average"
-        if "country" in stats_columns:
-            tour_avg_row["country"] = None
-        if "country_flag" in stats_columns:
-            tour_avg_row["country_flag"] = None
-        if "stats_payload" in stats_columns:
-            tour_avg_row["stats_payload"] = json.dumps(tour_avg_map, separators=(",", ":"), default=str)
-        if "tour_averages" in stats_columns:
-            # tour_averages: {stat_id: tourAvg value string}
-            tour_avg_row["tour_averages"] = json.dumps(
+        tour_avg_row: Dict[str, Any] = {
+            "run_ts": now,
+            "ingested_at": now,
+            "tour_code": tour_code,
+            "year": year,
+            "player_id": tour_avg_player_id,
+            "player_name": "Tour Average",
+            "country": None,
+            "country_flag": None,
+            "stats_payload": json.dumps(tour_avg_map, separators=(",", ":"), default=str),
+            "tour_averages": json.dumps(
                 {sid: entry.get("tour_avg") for sid, entry in tour_avg_map.items()},
                 separators=(",", ":"),
                 default=str,
-            )
-        # Compatibility columns — leave as null for the tour average row.
-        for col in ("stat_id", "stat_name", "stat_title", "stat_value", "rank", "tour_avg"):
-            if col in stats_columns:
-                tour_avg_row[col] = None
-        stats_payload.append(tour_avg_row)
+            ),
+        }
+        stats_payload.append({k: v for k, v in tour_avg_row.items() if k in stats_columns})
 
     for start in range(0, len(active_payload), 500):
         errors = client.insert_rows_json(active_table_id, active_payload[start : start + 500])
@@ -524,7 +504,6 @@ def ingest_website_players_and_stats(
             raise RuntimeError(f"player stats insert errors: {errors[:2]}")
         time.sleep(0.05)
 
-    # stats_players_written includes the Tour Average row in the count.
     return {
         "active_players_fetched": len(active_rows),
         "active_players_written": len(active_payload),

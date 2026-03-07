@@ -1,0 +1,150 @@
+"""
+Request URL
+https://www.atptour.com/en/-/tournaments/404/whoisplaying
+Request Method
+GET
+Status Code
+200 OK
+Remote Address
+104.18.24.149:443
+Referrer Policy
+strict-origin-when-cross-origin
+age
+2837
+cache-control
+public, no-cache="Set-Cookie", max-age=300, s-maxage=3600
+cf-cache-status
+HIT
+cf-ray
+9d8a05ebfa74255d-EWR
+content-encoding
+gzip
+content-type
+application/json; charset=utf-8
+date
+Sat, 07 Mar 2026 13:42:23 GMT
+last-modified
+Sat, 07 Mar 2026 12:55:05 GMT
+server
+cloudflare
+strict-transport-security
+max-age=15552000; includeSubDomains
+vary
+Accept-Encoding
+x-cd
+2
+:authority
+www.atptour.com
+:method
+GET
+:path
+/en/-/tournaments/404/whoisplaying
+:scheme
+https
+accept
+application/json, text/plain, */*
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+en-US,en;q=0.9
+cookie
+__cf_bm=3U4g9QHHUiZo8OcphvKicpTg0TNiE9i5kzcRVBru5BE-1772890558-1.0.1.1-U7uV2dSSXB_ZQyBlD2K2_d4dXhOqbF62UlN_JZPZBp4uRSVpWoBQq6z3vl1gbdHGfWo5ICFbUMM6kO54lcyvFsMAFzzpC8GdXJueuuJQBxo; minUnifiedSessionToken10=%7B%22sessionId%22%3A%225111435bf4-4faca6b559-355e0f2c23-c41fe2951b-7704a0b7d4%22%2C%22uid%22%3A%223348930234-cc8bc7eb83-9745c526bd-464de8c868-a711ef781a%22%2C%22__sidts__%22%3A1772890558742%2C%22__uidts__%22%3A1772890558742%7D; minVersion={"experiment":-1458757693,"minFlavor":"domadaptermi-1.17.1.340.js100"}; cf_clearance=usSFbPlH7WF4c6.JXk00zCMVGRhLNkB3Nw7XE9_GvtU-1772890559-1.2.1.1-u3bbhlXOrCNAlA0PL2O_CTfMsg75KT_ment8qPIPgTlA7jQr9g7OFfnya5OcqHm4cpviTscr4dvMwYnU1oxPxt9.FG2R2KW.PML.c3qCZQrrmfJGjWh47NqIuKLKOq9ZrgM_kWHW0JaHcxA3X5hmcXT0.Yg0BJ0bWRRqBISbGxFM7AQ1ord4nB1WHNX99p5Mosm8a1KREuxKKrTHzeFzmWMm30FJ.UlNF18QlUw962c; _ga=GA1.1.443397702.1772890563; OptanonAlertBoxClosed=2026-03-07T13:36:07.077Z; _gcl_au=1.1.286074004.1772890567; __exponea_etc__=f06be8be-f17e-4c65-822f-21a18ab06f9b; _tt_enable_cookie=1; _ttp=01KK486CP1GRRN2QECPSN5QJ9N_.tt.1; __exponea_time2__=-0.010711908340454102; _fbp=fb.1.1772890567498.933993624877127812; __gads=ID=8d8a980f30697c65:T=1772890560:RT=1772890916:S=ALNI_MY_OT2JfnwIq7DfRJwIRMn1I7mtNg; __gpi=UID=0000139ae91e9d37:T=1772890560:RT=1772890916:S=ALNI_MawlnxVh3x-_nmf5LZ1wEO1N3S79w; __eoi=ID=c43207811fae7234:T=1772890560:RT=1772890916:S=AA-AfjY9FMqWaXojXOVUpalpGVcb; OptanonConsent=isGpcEnabled=0&datestamp=Sat+Mar+07+2026+08%3A41%3A57+GMT-0500+(Eastern+Standard+Time)&version=202601.1.0&browserGpcFlag=0&isIABGlobal=false&hosts=&consentId=6e907974-705a-4d1e-be36-cf8d6dd62fd7&interactionCount=1&isAnonUser=1&landingPath=NotLandingPage&groups=C0003%3A1%2CC0001%3A1%2CC0002%3A1%2CC0004%3A1%2CSPD_BG%3A1&intType=1&crTime=1772890567418&geolocation=US%3BNY&AwaitingReconsent=false; ttcsid=1772890567364::_nTsGbZOGoTIqKskamKv.1.1772890942789.0; ttcsid_CES2GFBC77UAS1JKFA70=1772890567364::ifeYcOv3_l6LWrB2pJBe.1.1772890942789.1; _ga_D7VPPXYD0V=GS2.1.s1772890562$o1$g1$t1772890942$j35$l0$h0
+priority
+u=1, i
+referer
+https://www.atptour.com/en/tournaments/indian-wells/404/overview
+sec-ch-ua
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+"""
+
+{
+    "PlayersList": [
+        {
+            "FirstName": "Carlos",
+            "LastName": "Alcaraz",
+            "HeadshotUrl": "/-/media/tennis/players/head-shot/2024/02/06/20/42/alcaraz_head_2024.png",
+            "CountryFlagUrl": "/-/media/images/flags/esp.svg",
+            "ProfileUrl": "/en/players/carlos-alcaraz/a0e2/overview",
+            "IsDoublesWinner": false,
+            "IsSinglesWinner": false
+        },
+        {
+            "FirstName": "Jannik",
+            "LastName": "Sinner",
+            "HeadshotUrl": "/-/media/tennis/players/head-shot/2026/02/17/17/27/sinner_head_2026.png",
+            "CountryFlagUrl": "/-/media/images/flags/ita.svg",
+            "ProfileUrl": "/en/players/jannik-sinner/s0ag/overview",
+            "IsDoublesWinner": false,
+            "IsSinglesWinner": false
+        },
+        {
+            "FirstName": "Novak",
+            "LastName": "Djokovic",
+            "HeadshotUrl": "/-/media/tennis/players/head-shot/2026/02/17/17/12/djokovic_head_2026.png",
+            "CountryFlagUrl": "/-/media/images/flags/srb.svg",
+            "ProfileUrl": "/en/players/novak-djokovic/d643/overview",
+            "IsDoublesWinner": false,
+            "IsSinglesWinner": false
+        },
+        {
+            "FirstName": "Alexander",
+            "LastName": "Zverev",
+            "HeadshotUrl": "/-/media/tennis/players/head-shot/2026/02/17/16/53/zverev_head_2026.png",
+            "CountryFlagUrl": "/-/media/images/flags/ger.svg",
+            "ProfileUrl": "/en/players/alexander-zverev/z355/overview",
+            "IsDoublesWinner": false,
+            "IsSinglesWinner": false
+        },
+        {
+            "FirstName": "Lorenzo",
+            "LastName": "Musetti",
+            "HeadshotUrl": "/-/media/tennis/players/head-shot/2026/02/17/20/32/musetti_head_2026.png",
+            "CountryFlagUrl": "/-/media/images/flags/ita.svg",
+            "ProfileUrl": "/en/players/lorenzo-musetti/m0ej/overview",
+            "IsDoublesWinner": false,
+            "IsSinglesWinner": false
+        },
+        {
+            "FirstName": "Felix",
+            "LastName": "Auger-Aliassime",
+            "HeadshotUrl": "/-/media/tennis/players/head-shot/2026/03/04/08/35/auger-aliassime_head_2026.png",
+            "CountryFlagUrl": "/-/media/images/flags/can.svg",
+            "ProfileUrl": "/en/players/felix-auger-aliassime/ag37/overview",
+            "IsDoublesWinner": false,
+            "IsSinglesWinner": false
+        },
+        {
+            "FirstName": "Taylor",
+            "LastName": "Fritz",
+            "HeadshotUrl": "/-/media/tennis/players/head-shot/2026/02/17/17/15/fritz_head_2026.png",
+            "CountryFlagUrl": "/-/media/images/flags/usa.svg",
+            "ProfileUrl": "/en/players/taylor-fritz/fb98/overview",
+            "IsDoublesWinner": false,
+            "IsSinglesWinner": false
+        },
+        {
+            "FirstName": "Alex",
+            "LastName": "de Minaur",
+            "HeadshotUrl": "/-/media/tennis/players/gladiator/2026/01/20/00/47/de-minaur_head_2026_final.png",
+            "CountryFlagUrl": "/-/media/images/flags/aus.svg",
+            "ProfileUrl": "/en/players/alex-de-minaur/dh58/overview",
+            "IsDoublesWinner": false,
+            "IsSinglesWinner": false
+        }
+    ],
+    "DoublesWinners": null,
+    "SinglesWinner": null,
+    "EventYear": 2025
+}

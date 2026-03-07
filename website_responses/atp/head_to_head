@@ -1,0 +1,240 @@
+"""
+Request URL
+https://www.atptour.com/en/-/www/h2h/m0ni/gc88
+Request Method
+GET
+Status Code
+200 OK
+Remote Address
+104.18.24.149:443
+Referrer Policy
+strict-origin-when-cross-origin
+cache-control
+public, no-cache="Set-Cookie", max-age=300, s-maxage=600
+cf-cache-status
+EXPIRED
+cf-ray
+9d8a19f0bfde255d-EWR
+content-encoding
+gzip
+content-type
+application/json; charset=utf-8
+date
+Sat, 07 Mar 2026 13:56:03 GMT
+last-modified
+Sat, 07 Mar 2026 13:56:03 GMT
+server
+cloudflare
+strict-transport-security
+max-age=15552000; includeSubDomains
+vary
+Accept-Encoding
+x-cd
+2
+:authority
+www.atptour.com
+:method
+GET
+:path
+/en/-/www/h2h/m0ni/gc88
+:scheme
+https
+accept
+application/json, text/plain, */*
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+en-US,en;q=0.9
+cookie
+minVersion={"experiment":-1458757693,"minFlavor":"domadaptermi-1.17.1.340.js100"}; _ga=GA1.1.443397702.1772890563; OptanonAlertBoxClosed=2026-03-07T13:36:07.077Z; _gcl_au=1.1.286074004.1772890567; __exponea_etc__=f06be8be-f17e-4c65-822f-21a18ab06f9b; _tt_enable_cookie=1; _ttp=01KK486CP1GRRN2QECPSN5QJ9N_.tt.1; __exponea_time2__=-0.010711908340454102; _fbp=fb.1.1772890567498.933993624877127812; __cf_bm=iRVuSZusG4n.ofg9EIPFuLOrJll.gQJPE0C.8zl57ME-1772891625-1.0.1.1-tuFcyR0Mbke3UUL0LliwRLcSgmTFPMYzDCUvUbg42.MtWrQT9FIBaAYzWzt9CeT2ylrqD8YLWenpAZnvNj7lFd.Hh9IdgVHbknmS3zPFPfY; __gads=ID=8d8a980f30697c65:T=1772890560:RT=1772891627:S=ALNI_MY_OT2JfnwIq7DfRJwIRMn1I7mtNg; __gpi=UID=0000139ae91e9d37:T=1772890560:RT=1772891627:S=ALNI_MawlnxVh3x-_nmf5LZ1wEO1N3S79w; __eoi=ID=c43207811fae7234:T=1772890560:RT=1772891627:S=AA-AfjY9FMqWaXojXOVUpalpGVcb; cf_clearance=KT32ipFTuA.GyhedZnjWHZyN2Bf1ihohmZz7Wnh_Q70-1772891627-1.2.1.1-.nGbdqmR2LtzDUHu9plEulR8b4QKzA597j5EZrQApR6yht75_8QIgNG4R2bk2O6NH4UJUm8vjuzhV.GP1bQb2D2bfkDydh2wxW2S.VjWadyPoda0jU6QM9MHLFztULTLpPAOG32tlKhajBDZYMB7ZJn2JVDGGOmhAUwWII3r6nsecRp5IzpLIIgVSicc0DwW4Ub6NTm_eKNg9C4TcpgaBpaRjgx5x4TQQ6geeJOSRsw; minUnifiedSessionToken10=%7B%22sessionId%22%3A%225111435bf4-4faca6b559-355e0f2c23-c41fe2951b-7704a0b7d4%22%2C%22uid%22%3A%223348930234-cc8bc7eb83-9745c526bd-464de8c868-a711ef781a%22%2C%22__sidts__%22%3A1772891745931%2C%22__uidts__%22%3A1772891745931%7D; OptanonConsent=isGpcEnabled=0&datestamp=Sat+Mar+07+2026+08%3A55%3A48+GMT-0500+(Eastern+Standard+Time)&version=202601.1.0&browserGpcFlag=0&isIABGlobal=false&hosts=&consentId=6e907974-705a-4d1e-be36-cf8d6dd62fd7&interactionCount=1&isAnonUser=1&landingPath=NotLandingPage&groups=C0003%3A1%2CC0001%3A1%2CC0002%3A1%2CC0004%3A1%2CSPD_BG%3A1&intType=1&crTime=1772890567418&geolocation=US%3BNY&AwaitingReconsent=false; ttcsid=1772890567364::_nTsGbZOGoTIqKskamKv.1.1772891762050.0; ttcsid_CES2GFBC77UAS1JKFA70=1772890567364::ifeYcOv3_l6LWrB2pJBe.1.1772891762050.1; _ga_D7VPPXYD0V=GS2.1.s1772890562$o1$g1$t1772891762$j42$l0$h0
+priority
+u=1, i
+referer
+https://www.atptour.com/en/players/atp-head-2-head/jakub-mensik-vs-marcos-giron/m0ni/gc88
+sec-ch-ua
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+"""
+
+{
+    "showDetailLink": "/en/players/atp-head-2-head/jakub-mensik-vs-marcos-giron/m0ni/gc88",
+    "Type": "H2H",
+    "PlayerTeam1": {
+        "PlayerId": "M0NI",
+        "PartnerId": null,
+        "PlayerFirstName": "Jakub",
+        "PlayerLastName": "Mensik",
+        "PlayerFullName": "Jakub Mensik",
+        "PlayerShortName": "J. Mensik",
+        "PlayerGladiatorImage": "/-/media/alias/player-gladiator/m0ni",
+        "PlayerHeadshotImage": "/-/media/alias/player-headshot/m0ni",
+        "PlayerCountryCode": "CZE",
+        "PlayerCountryName": "Czechia",
+        "PlayerCountryFlag": "/-/media/images/flags/cze.svg",
+        "PlayerProfileUrl": "/en/players/jakub-mensik/m0ni/overview",
+        "PartnerFirstName": null,
+        "PartnerLastName": null,
+        "PartnerFullName": " ",
+        "PartnerShortName": ". ",
+        "PartnerGladiatorImage": "/-/media/alias/player-gladiator/",
+        "PartnerHeadshotImage": "/-/media/alias/player-headshot/",
+        "PartnerCountryCode": null,
+        "PartnerCountryName": null,
+        "PartnerCountryFlag": "/-/media/images/flags/ghost-flag.png",
+        "PartnerProfileUrl": null,
+        "TeamGladiatorImage": null,
+        "Record": 2,
+        "RecordWinPercentage": "100%",
+        "Ranking": 12,
+        "Age": 20,
+        "BirthDate": "2005-09-01T00:00:00",
+        "BirthPlace": "Czechia",
+        "BirthCity": "Prostejov",
+        "Residence": null,
+        "HeightCm": 196,
+        "WeightKg": 87,
+        "HeightFt": "6'5\"",
+        "WeightLb": 191,
+        "PlayHand": "R",
+        "PlayHandDisplayFormat": "Right-Handed",
+        "BackHand": {
+            "Id": "2",
+            "Description": "Two-Handed"
+        },
+        "ProYear": 2022,
+        "YearToDateWins": 13,
+        "YearToDateLosses": 4,
+        "YearToDateTitles": 1,
+        "CareerTitles": 2,
+        "CareerPrizeMoneyFormatted": "$5,525,803",
+        "SglCareerWon": 74,
+        "SglCareerLost": 45
+    },
+    "PlayerTeam2": {
+        "PlayerId": "GC88",
+        "PartnerId": null,
+        "PlayerFirstName": "Marcos",
+        "PlayerLastName": "Giron",
+        "PlayerFullName": "Marcos Giron",
+        "PlayerShortName": "M. Giron",
+        "PlayerGladiatorImage": "/-/media/alias/player-gladiator/gc88",
+        "PlayerHeadshotImage": "/-/media/alias/player-headshot/gc88",
+        "PlayerCountryCode": "USA",
+        "PlayerCountryName": "United States",
+        "PlayerCountryFlag": "/-/media/images/flags/usa.svg",
+        "PlayerProfileUrl": "/en/players/marcos-giron/gc88/overview",
+        "PartnerFirstName": null,
+        "PartnerLastName": null,
+        "PartnerFullName": " ",
+        "PartnerShortName": ". ",
+        "PartnerGladiatorImage": "/-/media/alias/player-gladiator/",
+        "PartnerHeadshotImage": "/-/media/alias/player-headshot/",
+        "PartnerCountryCode": null,
+        "PartnerCountryName": null,
+        "PartnerCountryFlag": "/-/media/images/flags/ghost-flag.png",
+        "PartnerProfileUrl": null,
+        "TeamGladiatorImage": null,
+        "Record": 0,
+        "RecordWinPercentage": "0%",
+        "Ranking": 69,
+        "Age": 32,
+        "BirthDate": "1993-07-24T00:00:00",
+        "BirthPlace": "United States",
+        "BirthCity": "Thousand Oaks, CA, USA",
+        "Residence": null,
+        "HeightCm": 180,
+        "WeightKg": 77,
+        "HeightFt": "5'11\"",
+        "WeightLb": 170,
+        "PlayHand": "R",
+        "PlayHandDisplayFormat": "Right-Handed",
+        "BackHand": {
+            "Id": "2",
+            "Description": "Two-Handed"
+        },
+        "ProYear": 2014,
+        "YearToDateWins": 7,
+        "YearToDateLosses": 5,
+        "YearToDateTitles": 0,
+        "CareerTitles": 1,
+        "CareerPrizeMoneyFormatted": "$6,523,792",
+        "SglCareerWon": 134,
+        "SglCareerLost": 151
+    },
+    "Tournaments": [
+        {
+            "EventYear": 2026,
+            "EventId": "404",
+            "EventName": "ATP Masters 1000 Indian Wells",
+            "EventDisplayName": "ATP Masters 1000 Indian Wells",
+            "EventCity": "Indian Wells",
+            "EventLocation": "CA, U.S.A.",
+            "EventLevel": "Tour",
+            "EventType": "1000",
+            "InOutdoor": "O",
+            "InOutdoorDisplay": "Outdoor",
+            "Surface": "Hard",
+            "SurfaceSubCat": "Plexipave",
+            "Matches": [
+                {
+                    "MatchId": "MS059",
+                    "Round": {
+                        "Id": "2",
+                        "ShortName": "R64",
+                        "LongName": "Round of 64"
+                    },
+                    "Winner": "M0NI",
+                    "ResultString": "75 76(4)",
+                    "MatchStatsUrl": "/en/scores/match-stats/archive/2026/404/ms059",
+                    "Reason": null
+                }
+            ],
+            "ResultsUrl": "/en/scores/archive/indian-wells/404/2026/results",
+            "DrawsUrl": "/en/scores/archive/indian-wells/404/2026/draws",
+            "TournamentUrl": "/en/tournaments/indian-wells/404/overview"
+        },
+        {
+            "EventYear": 2025,
+            "EventId": "540",
+            "EventName": "Wimbledon",
+            "EventDisplayName": "Wimbledon",
+            "EventCity": "London",
+            "EventLocation": "Great Britain",
+            "EventLevel": "GS",
+            "EventType": "GS",
+            "InOutdoor": "O",
+            "InOutdoorDisplay": "Outdoor",
+            "Surface": "Grass",
+            "SurfaceSubCat": null,
+            "Matches": [
+                {
+                    "MatchId": "MS043",
+                    "Round": {
+                        "Id": "2",
+                        "ShortName": "R64",
+                        "LongName": "Round of 64"
+                    },
+                    "Winner": "M0NI",
+                    "ResultString": "64 36 64 76(4)",
+                    "MatchStatsUrl": "/en/scores/match-stats/archive/2025/540/ms043",
+                    "Reason": null
+                }
+            ],
+            "ResultsUrl": "/en/scores/archive/wimbledon/540/2025/results",
+            "DrawsUrl": "/en/scores/archive/wimbledon/540/2025/draws",
+            "TournamentUrl": "/en/tournaments/wimbledon/540/overview"
+        }
+    ],
+    "OtherTournaments": []
+}

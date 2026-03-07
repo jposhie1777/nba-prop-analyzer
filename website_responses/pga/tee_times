@@ -1,0 +1,1677 @@
+ """
+ Headers:
+ Request URL
+https://www.pgatour.com/tournaments/2026/arnold-palmer-invitational-presented-by-mastercard/R2026009/tee-times
+Request Method
+GET
+Status Code
+200 OK
+Remote Address
+3.166.192.56:443
+Referrer Policy
+strict-origin-when-cross-origin
+age
+106
+cache-control
+public, max-age=30, stale-while-revalidate=120
+content-encoding
+gzip
+content-type
+text/html; charset=utf-8
+date
+Fri, 06 Mar 2026 22:56:08 GMT
+etag
+"kwfz72gd9g9hxr"
+server
+nginx
+vary
+Accept-Encoding
+vary
+Origin
+via
+1.1 6887397a910283333c0340fbd0331e24.cloudfront.net (CloudFront)
+x-amz-cf-id
+F22gQ-Sw8EaNZl2dJUGo5_ata5Ovb73uSXgMQPZVBO_HL50F7E9Csw==
+x-amz-cf-pop
+PHL51-P2
+x-cache
+Hit from cloudfront
+x-powered-by
+Next.js
+:authority
+www.pgatour.com
+:method
+GET
+:path
+/tournaments/2026/arnold-palmer-invitational-presented-by-mastercard/R2026009/tee-times
+:scheme
+https
+accept
+text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+en-US,en;q=0.9
+cache-control
+max-age=0
+cookie
+cw-test-20250625_prebid-v2-test_1_99=control; OTGPPConsent=DBABLA~BVQqAAAAAACA.QA; _ga=GA1.1.1989643818.1772712470; _lr_env_src_ats=false; permutive-id=1732cde9-4039-4b29-bdfb-bbf1f54de7a7; _gcl_au=1.1.1965367970.1772712471; gig_bootstrap_3_IscKmAoYcuwP8zpTnatC3hXBUm8rPuI-Hg_cZJ-jL-M7LgqCkxmwe-ps1Qy7PoWd=auth_ver4; _scor_uid=948adeace1a747c6be43cd6342919f56; _fbp=fb.1.1772712471313.988048294939449945; __qca=P1-cf4318f4-7ca0-4696-a1f5-1bd6110437a7; hb_insticator_uid=7570206b-9a9d-4c0b-90c4-4d2376a02379; _pubcid=12057a14-c366-431c-8325-e32e0fe561f9; _cc_id=951ab6c7ad8f5fe0fedea621a291dc59; panoramaId_expiry=1773317272583; panoramaId=60218f1998dd96992a9061a2b48a185ca02ccf0dfebd8c4dffb7b7f813a3102e; panoramaIdType=panoDevice; AMP_MKTG_38168c7a64=JTdCJTdE; cto_bundle=OHcs4l9vV0lYYjhtMnJGd0lQaVpRQWE2akRHaiUyRmIwQjNWeVh1eU9JZlYyUklXM3RCcW1VQyUyRjA5dTJZVEZyaUJ4MHV4UnV4alF6TXU3QVNEaWN2eDJCRiUyQnpGRjlUOWY2Zjh2QzdDd2sxajV1WThVZE9yaFNDMVV5d1UlMkY1M09OTGtYMnpWSzdYaHJJNUtnRnIlMkJiVmIlMkJ5SUVGMHclM0QlM0Q; _lr_geo_location_state=NJ; _lr_geo_location=US; connectId={"ttl":86400000,"lastUsed":1772805428746,"lastSynced":1772805428746}; _lr_retry_request=true; OptanonConsent=isGpcEnabled=0&datestamp=Fri+Mar+06+2026+17%3A54%3A23+GMT-0500+(Eastern+Standard+Time)&version=202512.1.0&browserGpcFlag=0&isIABGlobal=false&hosts=&consentId=f4f53e8b-6c63-4e10-b9a0-6dc4928bdf89&interactionCount=1&isAnonUser=1&landingPath=NotLandingPage&GPPCookiesCount=1&gppSid=7&groups=C0001%3A1%2CC0002%3A1%2CC0003%3A1%2COSSTA_BG%3A1%2CC0005%3A1%2CC0004%3A1&crTime=1772712539294&AwaitingReconsent=false; ab.storage.sessionId.814e4b46-fad6-45d3-88ae-29c0693a22f3=g%3Ab6a21e0f-9e7a-a6bd-712e-d4f14bbfd151%7Ce%3A1772839463462%7Cc%3A1772837663462%7Cl%3A1772837663462; ab.storage.deviceId.814e4b46-fad6-45d3-88ae-29c0693a22f3=g%3A66fd5066-78a8-9001-3974-e9aded113899%7Ce%3Aundefined%7Cc%3A1772712471094%7Cl%3A1772837663463; _parsely_session={%22sid%22:5%2C%22surl%22:%22https://www.pgatour.com/%22%2C%22sref%22:%22%22%2C%22sts%22:1772837663518%2C%22slts%22:1772825508545}; _parsely_visitor={%22id%22:%22pid=c5810a53-83e3-4eea-8c9c-6e7a70ce1d96%22%2C%22session_count%22:5%2C%22last_session_ts%22:1772837663518}; __gads=ID=0b10f650f9f48889:T=1772712471:RT=1772837709:S=ALNI_MZODllSCO-H5x6dXoBEapJ2lElTzw; __gpi=UID=000012ff3587bc6f:T=1772712471:RT=1772837709:S=ALNI_MbM_FTBpxita56r9X9PHWlvu2lO0Q; __eoi=ID=7e2288aa003fac94:T=1772712471:RT=1772837709:S=AA-AfjYizXjAKl9IsIlFLN-0uC00; _parsely_slot_click={%22url%22:%22https://www.pgatour.com/tournaments/2026/arnold-palmer-invitational-presented-by-mastercard/R2026009/tee-times%22%2C%22x%22:689%2C%22y%22:401%2C%22xpath%22:%22//*[@id=%5C%22tabs-%C2%ABr5l%C2%BB--tab-2%5C%22]/a[1]%22%2C%22href%22:%22https://www.pgatour.com/tournaments/2026/arnold-palmer-invitational-presented-by-mastercard/R2026009/tee-times%22}; _ga_D4BWM9D122=GS2.1.s1772837662$o5$g1$t1772837725$j57$l0$h0; _awl=2.1772837725.5-7bed4c956de8cd1b96a03c160812277d-6763652d75732d6561737431-0; AMP_38168c7a64=JTdCJTIyZGV2aWNlSWQlMjIlM0ElMjI5OGMwNGU3OC1jNDlhLTQxNTctYjZmZS05NjZkYTZjMjQ5M2ElMjIlMkMlMjJzZXNzaW9uSWQlMjIlM0ExNzcyODM3NjY0NTc2JTJDJTIyb3B0T3V0JTIyJTNBZmFsc2UlMkMlMjJsYXN0RXZlbnRUaW1lJTIyJTNBMTc3MjgzNzg2NTU4NSUyQyUyMmxhc3RFdmVudElkJTIyJTNBMzI5JTdE
+if-none-match
+"m6kf7gotn39s8a"
+priority
+u=0, i
+sec-ch-ua
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+sec-fetch-dest
+document
+sec-fetch-mode
+navigate
+sec-fetch-site
+same-origin
+sec-fetch-user
+?1
+upgrade-insecure-requests
+1
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+ """
+ 
+ {
+    "dehydratedAt": 1772837723827,
+    "state": {
+        "data": {
+            "__typename": "TeeTimesV2",
+            "id": "R2026009",
+            "courses": [
+                {
+                    "__typename": "Course",
+                    "id": "009",
+                    "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge",
+                    "courseCode": "BH",
+                    "scoringLevel": "TOURCAST",
+                    "hostCourse": true,
+                    "features": [
+                        "GROUPINGS",
+                        "GROUP_TRACKER"
+                    ]
+                }
+            ],
+            "defaultRound": 2,
+            "rounds": [
+                {
+                    "__typename": "TeeTimeRoundV2",
+                    "id": "R20260091",
+                    "roundInt": 1,
+                    "roundDisplay": "R1",
+                    "roundStatus": "OFFICIAL",
+                    "roundStatusDisplay": "Official",
+                    "roundStatusColor": "GREEN",
+                    "groups": [
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 1,
+                            "teeTime": 1772714400000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=1\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=1\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "34076",
+                                    "firstName": "Joel",
+                                    "lastName": "Dahmen",
+                                    "shortName": "J. Dahmen",
+                                    "displayName": "Joel Dahmen",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "63931",
+                                    "firstName": "Daniel",
+                                    "lastName": "Bennett",
+                                    "shortName": "D. Bennett",
+                                    "displayName": "Daniel Bennett",
+                                    "amateur": true,
+                                    "abbreviations": "(a)",
+                                    "abbreviationsAccessibilityText": "Player is an amateur",
+                                    "country": "RSA",
+                                    "countryFlag": "RSA",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 2,
+                            "teeTime": 1772715000000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=2\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=2\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "27064",
+                                    "firstName": "Jhonattan",
+                                    "lastName": "Vegas",
+                                    "shortName": "J. Vegas",
+                                    "displayName": "Jhonattan Vegas",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "VEN",
+                                    "countryFlag": "VEN",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "35532",
+                                    "firstName": "Tom",
+                                    "lastName": "Hoge",
+                                    "shortName": "T. Hoge",
+                                    "displayName": "Tom Hoge",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 3,
+                            "teeTime": 1772715600000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=3\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=3\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "29936",
+                                    "firstName": "Ryan",
+                                    "lastName": "Fox",
+                                    "shortName": "R. Fox",
+                                    "displayName": "Ryan Fox",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "NZL",
+                                    "countryFlag": "NZL",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "29420",
+                                    "firstName": "Billy",
+                                    "lastName": "Horschel",
+                                    "shortName": "B. Horschel",
+                                    "displayName": "Billy Horschel",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 4,
+                            "teeTime": 1772716200000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=4\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=4\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "46443",
+                                    "firstName": "Brian",
+                                    "lastName": "Campbell",
+                                    "shortName": "B. Campbell",
+                                    "displayName": "Brian Campbell",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "36699",
+                                    "firstName": "Patrick",
+                                    "lastName": "Rodgers",
+                                    "shortName": "P. Rodgers",
+                                    "displayName": "Patrick Rodgers",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 5,
+                            "teeTime": 1772716800000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=5\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=5\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "59141",
+                                    "firstName": "Matt",
+                                    "lastName": "McCarty",
+                                    "shortName": "M. McCarty",
+                                    "displayName": "Matt McCarty",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "51977",
+                                    "firstName": "Max",
+                                    "lastName": "Greyserman",
+                                    "shortName": "M. Greyserman",
+                                    "displayName": "Max Greyserman",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 6,
+                            "teeTime": 1772717400000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=6\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=6\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "49947",
+                                    "firstName": "Taylor",
+                                    "lastName": "Moore",
+                                    "shortName": "T. Moore",
+                                    "displayName": "Taylor Moore",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "34256",
+                                    "firstName": "Andrew",
+                                    "lastName": "Putnam",
+                                    "shortName": "A. Putnam",
+                                    "displayName": "Andrew Putnam",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 7,
+                            "teeTime": 1772718000000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=7\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=7\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "40026",
+                                    "firstName": "Daniel",
+                                    "lastName": "Berger",
+                                    "shortName": "D. Berger",
+                                    "displayName": "Daniel Berger",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "27349",
+                                    "firstName": "Alex",
+                                    "lastName": "Noren",
+                                    "shortName": "A. Noren",
+                                    "displayName": "Alex Noren",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "SWE",
+                                    "countryFlag": "SWE",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 8,
+                            "teeTime": 1772718600000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=8\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=8\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "37378",
+                                    "firstName": "Min Woo",
+                                    "lastName": "Lee",
+                                    "shortName": "M. Lee",
+                                    "displayName": "Min Woo Lee",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "AUS",
+                                    "countryFlag": "AUS",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "57364",
+                                    "firstName": "Michael",
+                                    "lastName": "Thorbjornsen",
+                                    "shortName": "M. Thorbjornsen",
+                                    "displayName": "Michael Thorbjornsen",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 9,
+                            "teeTime": 1772719500000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=9\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=9\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "57975",
+                                    "firstName": "Harry",
+                                    "lastName": "Hall",
+                                    "shortName": "H. Hall",
+                                    "displayName": "Harry Hall",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "ENG",
+                                    "countryFlag": "ENG",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "39997",
+                                    "firstName": "Corey",
+                                    "lastName": "Conners",
+                                    "shortName": "C. Conners",
+                                    "displayName": "Corey Conners",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "CAN",
+                                    "countryFlag": "CAN",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 10,
+                            "teeTime": 1772720100000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=10\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=10\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "57366",
+                                    "firstName": "Cameron",
+                                    "lastName": "Young",
+                                    "shortName": "C. Young",
+                                    "displayName": "Cameron Young",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "49960",
+                                    "firstName": "Sepp",
+                                    "lastName": "Straka",
+                                    "shortName": "S. Straka",
+                                    "displayName": "Sepp Straka",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "AUT",
+                                    "countryFlag": "AUT",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 11,
+                            "teeTime": 1772720700000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=11\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=11\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "34099",
+                                    "firstName": "Harris",
+                                    "lastName": "English",
+                                    "shortName": "H. English",
+                                    "displayName": "Harris English",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "35450",
+                                    "firstName": "Patrick",
+                                    "lastName": "Cantlay",
+                                    "shortName": "P. Cantlay",
+                                    "displayName": "Patrick Cantlay",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 12,
+                            "teeTime": 1772721300000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=12\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=12\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "51997",
+                                    "firstName": "Andrew",
+                                    "lastName": "Novak",
+                                    "shortName": "A. Novak",
+                                    "displayName": "Andrew Novak",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "52215",
+                                    "firstName": "Robert",
+                                    "lastName": "MacIntyre",
+                                    "shortName": "R. MacIntyre",
+                                    "displayName": "Robert MacIntyre",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "SCO",
+                                    "countryFlag": "SCO",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 13,
+                            "teeTime": 1772721900000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=13\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=13\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "27644",
+                                    "firstName": "Brian",
+                                    "lastName": "Harman",
+                                    "shortName": "B. Harman",
+                                    "displayName": "Brian Harman",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "56630",
+                                    "firstName": "Akshay",
+                                    "lastName": "Bhatia",
+                                    "shortName": "A. Bhatia",
+                                    "displayName": "Akshay Bhatia",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 14,
+                            "teeTime": 1772722500000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=14\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=14\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "50525",
+                                    "firstName": "Collin",
+                                    "lastName": "Morikawa",
+                                    "shortName": "C. Morikawa",
+                                    "displayName": "Collin Morikawa",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "22405",
+                                    "firstName": "Justin",
+                                    "lastName": "Rose",
+                                    "shortName": "J. Rose",
+                                    "displayName": "Justin Rose",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "ENG",
+                                    "countryFlag": "ENG",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 15,
+                            "teeTime": 1772723100000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=15\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=15\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "48081",
+                                    "firstName": "Xander",
+                                    "lastName": "Schauffele",
+                                    "shortName": "X. Schauffele",
+                                    "displayName": "Xander Schauffele",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "33204",
+                                    "firstName": "Shane",
+                                    "lastName": "Lowry",
+                                    "shortName": "S. Lowry",
+                                    "displayName": "Shane Lowry",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "IRL",
+                                    "countryFlag": "IRL",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 16,
+                            "teeTime": 1772724000000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=16\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=16\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "46046",
+                                    "firstName": "Scottie",
+                                    "lastName": "Scheffler",
+                                    "shortName": "S. Scheffler",
+                                    "displayName": "Scottie Scheffler",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "34098",
+                                    "firstName": "Russell",
+                                    "lastName": "Henley",
+                                    "shortName": "R. Henley",
+                                    "displayName": "Russell Henley",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 17,
+                            "teeTime": 1772724600000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=17\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=17\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "63343",
+                                    "firstName": "Aldrich",
+                                    "lastName": "Potgieter",
+                                    "shortName": "A. Potgieter",
+                                    "displayName": "Aldrich Potgieter",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "RSA",
+                                    "countryFlag": "RSA",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "24502",
+                                    "firstName": "Adam",
+                                    "lastName": "Scott",
+                                    "shortName": "A. Scott",
+                                    "displayName": "Adam Scott",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "AUS",
+                                    "countryFlag": "AUS",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 18,
+                            "teeTime": 1772725200000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=18\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=18\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "49771",
+                                    "firstName": "J.T.",
+                                    "lastName": "Poston",
+                                    "shortName": "J. Poston",
+                                    "displayName": "J.T. Poston",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "39546",
+                                    "firstName": "Keith",
+                                    "lastName": "Mitchell",
+                                    "shortName": "K. Mitchell",
+                                    "displayName": "Keith Mitchell",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 19,
+                            "teeTime": 1772725800000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=19\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=19\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "52453",
+                                    "firstName": "Nicolai",
+                                    "lastName": "Højgaard",
+                                    "shortName": "N. Højgaard",
+                                    "displayName": "Nicolai Højgaard",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "DEN",
+                                    "countryFlag": "DEN",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "50095",
+                                    "firstName": "Austin",
+                                    "lastName": "Smotherman",
+                                    "shortName": "A. Smotherman",
+                                    "displayName": "Austin Smotherman",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 20,
+                            "teeTime": 1772726400000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=20\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=20\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "37455",
+                                    "firstName": "Si Woo",
+                                    "lastName": "Kim",
+                                    "shortName": "S. Kim",
+                                    "displayName": "Si Woo Kim",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "KOR",
+                                    "countryFlag": "KOR",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "34021",
+                                    "firstName": "Bud",
+                                    "lastName": "Cauley",
+                                    "shortName": "B. Cauley",
+                                    "displayName": "Bud Cauley",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 21,
+                            "teeTime": 1772727000000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=21\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=21\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "25900",
+                                    "firstName": "Lucas",
+                                    "lastName": "Glover",
+                                    "shortName": "L. Glover",
+                                    "displayName": "Lucas Glover",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "51287",
+                                    "firstName": "Ryo",
+                                    "lastName": "Hisatsune",
+                                    "shortName": "R. Hisatsune",
+                                    "displayName": "Ryo Hisatsune",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "JPN",
+                                    "countryFlag": "JPN",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 22,
+                            "teeTime": 1772727600000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=22\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=22\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "59018",
+                                    "firstName": "Ryan",
+                                    "lastName": "Gerard",
+                                    "shortName": "R. Gerard",
+                                    "displayName": "Ryan Gerard",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "28089",
+                                    "firstName": "Jason",
+                                    "lastName": "Day",
+                                    "shortName": "J. Day",
+                                    "displayName": "Jason Day",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "AUS",
+                                    "countryFlag": "AUS",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 23,
+                            "teeTime": 1772728500000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=23\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=23\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "40250",
+                                    "firstName": "Taylor",
+                                    "lastName": "Pendrith",
+                                    "shortName": "T. Pendrith",
+                                    "displayName": "Taylor Pendrith",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "CAN",
+                                    "countryFlag": "CAN",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "47993",
+                                    "firstName": "Denny",
+                                    "lastName": "McCarthy",
+                                    "shortName": "D. McCarthy",
+                                    "displayName": "Denny McCarthy",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 24,
+                            "teeTime": 1772729100000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=24\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=24\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "48117",
+                                    "firstName": "Kurt",
+                                    "lastName": "Kitayama",
+                                    "shortName": "K. Kitayama",
+                                    "displayName": "Kurt Kitayama",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "59836",
+                                    "firstName": "Pierceson",
+                                    "lastName": "Coody",
+                                    "shortName": "P. Coody",
+                                    "displayName": "Pierceson Coody",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 25,
+                            "teeTime": 1772729700000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=25\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=25\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "34046",
+                                    "firstName": "Jordan",
+                                    "lastName": "Spieth",
+                                    "shortName": "J. Spieth",
+                                    "displayName": "Jordan Spieth",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "55893",
+                                    "firstName": "Sam",
+                                    "lastName": "Stevens",
+                                    "shortName": "S. Stevens",
+                                    "displayName": "Sam Stevens",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 26,
+                            "teeTime": 1772730300000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=26\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=26\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "35296",
+                                    "firstName": "Haotong",
+                                    "lastName": "Li",
+                                    "shortName": "H. Li",
+                                    "displayName": "Haotong Li",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "CHN",
+                                    "countryFlag": "CHN",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "40098",
+                                    "firstName": "Matt",
+                                    "lastName": "Fitzpatrick",
+                                    "shortName": "M. Fitzpatrick",
+                                    "displayName": "Matt Fitzpatrick",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "ENG",
+                                    "countryFlag": "ENG",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 27,
+                            "teeTime": 1772730900000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=27\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=27\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "47504",
+                                    "firstName": "Sam",
+                                    "lastName": "Burns",
+                                    "shortName": "S. Burns",
+                                    "displayName": "Sam Burns",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "39971",
+                                    "firstName": "Sungjae",
+                                    "lastName": "Im",
+                                    "shortName": "S. Im",
+                                    "displayName": "Sungjae Im",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "KOR",
+                                    "countryFlag": "KOR",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 28,
+                            "teeTime": 1772731500000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=28\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=28\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "39324",
+                                    "firstName": "J.J.",
+                                    "lastName": "Spaun",
+                                    "shortName": "J. Spaun",
+                                    "displayName": "J.J. Spaun",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "25493",
+                                    "firstName": "Nick",
+                                    "lastName": "Taylor",
+                                    "shortName": "N. Taylor",
+                                    "displayName": "Nick Taylor",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "CAN",
+                                    "countryFlag": "CAN",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 29,
+                            "teeTime": 1772732100000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=29\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=29\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "33141",
+                                    "firstName": "Keegan",
+                                    "lastName": "Bradley",
+                                    "shortName": "K. Bradley",
+                                    "displayName": "Keegan Bradley",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "46442",
+                                    "firstName": "Maverick",
+                                    "lastName": "McNealy",
+                                    "shortName": "M. McNealy",
+                                    "displayName": "Maverick McNealy",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 30,
+                            "teeTime": 1772733000000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=30\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=30\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "54591",
+                                    "firstName": "Ben",
+                                    "lastName": "Griffin",
+                                    "shortName": "B. Griffin",
+                                    "displayName": "Ben Griffin",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "30911",
+                                    "firstName": "Tommy",
+                                    "lastName": "Fleetwood",
+                                    "shortName": "T. Fleetwood",
+                                    "displayName": "Tommy Fleetwood",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "ENG",
+                                    "countryFlag": "ENG",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 31,
+                            "teeTime": 1772733600000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=31\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=31\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "51349",
+                                    "firstName": "Nico",
+                                    "lastName": "Echavarria",
+                                    "shortName": "N. Echavarria",
+                                    "displayName": "Nico Echavarria",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "COL",
+                                    "countryFlag": "COL",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "52955",
+                                    "firstName": "Ludvig",
+                                    "lastName": "Åberg",
+                                    "shortName": "L. Åberg",
+                                    "displayName": "Ludvig Åberg",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "SWE",
+                                    "countryFlag": "SWE",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 32,
+                            "teeTime": 1772734200000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=32\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=32\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "60004",
+                                    "firstName": "Jacob",
+                                    "lastName": "Bridgeman",
+                                    "shortName": "J. Bridgeman",
+                                    "displayName": "Jacob Bridgeman",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "59095",
+                                    "firstName": "Chris",
+                                    "lastName": "Gotterup",
+                                    "shortName": "C. Gotterup",
+                                    "displayName": "Chris Gotterup",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 33,
+                            "teeTime": 1772734800000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=33\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=33\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "33448",
+                                    "firstName": "Justin",
+                                    "lastName": "Thomas",
+                                    "shortName": "J. Thomas",
+                                    "displayName": "Justin Thomas",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "32839",
+                                    "firstName": "Hideki",
+                                    "lastName": "Matsuyama",
+                                    "shortName": "H. Matsuyama",
+                                    "displayName": "Hideki Matsuyama",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "JPN",
+                                    "countryFlag": "JPN",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 34,
+                            "teeTime": 1772735400000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=34\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=34\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "28237",
+                                    "firstName": "Rory",
+                                    "lastName": "McIlroy",
+                                    "shortName": "R. McIlroy",
+                                    "displayName": "Rory McIlroy",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "NIR",
+                                    "countryFlag": "NIR",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "46717",
+                                    "firstName": "Viktor",
+                                    "lastName": "Hovland",
+                                    "shortName": "V. Hovland",
+                                    "displayName": "Viktor Hovland",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "NOR",
+                                    "countryFlag": "NOR",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 35,
+                            "teeTime": 1772736000000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=35\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=35\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "32102",
+                                    "firstName": "Rickie",
+                                    "lastName": "Fowler",
+                                    "shortName": "R. Fowler",
+                                    "displayName": "Rickie Fowler",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "39975",
+                                    "firstName": "Michael",
+                                    "lastName": "Kim",
+                                    "shortName": "M. Kim",
+                                    "displayName": "Michael Kim",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        },
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumber": 36,
+                            "teeTime": 1772736600000,
+                            "startTee": 1,
+                            "tourcastURL": "https://tourcast.pgatour.com/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=36\u0026gv=yes",
+                            "tourcastURLWeb": "true",
+                            "tourcastURI": "/tourcast.html?id=R2026009\u0026webview=true#/hole-view?round=1\u0026hole=\u003choleNumber\u003e\u0026cid=009\u0026group=36\u0026gv=yes",
+                            "backNine": false,
+                            "players": [
+                                {
+                                    "__typename": "Player",
+                                    "id": "30926",
+                                    "firstName": "Chris",
+                                    "lastName": "Kirk",
+                                    "shortName": "C. Kirk",
+                                    "displayName": "Chris Kirk",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#0084FF"
+                                },
+                                {
+                                    "__typename": "Player",
+                                    "id": "51634",
+                                    "firstName": "Sahith",
+                                    "lastName": "Theegala",
+                                    "shortName": "S. Theegala",
+                                    "displayName": "Sahith Theegala",
+                                    "amateur": false,
+                                    "abbreviations": "",
+                                    "abbreviationsAccessibilityText": "",
+                                    "country": "USA",
+                                    "countryFlag": "USA",
+                                    "lineColor": "#FF4F04"
+                                }
+                            ],
+                            "courseId": "009",
+                            "courseName": "Arnold Palmer's Bay Hill Club \u0026 Lodge"
+                        }
+                    ]
+                },
+                {
+                    "__typename": "TeeTimeRoundV2",
+                    "id": "R20260092",
+                    "roundInt": 2,
+                    "roundDisplay": "R2",
+                    "roundStatus": "IN_PROGRESS",
+                    "roundStatusDisplay": "In Progress",
+                    "roundStatusColor": "RED",
+                    "groups": [
+                        {
+                            "__typename": "GroupV2",
+                            "showScorecard": true,
+                            "groupNumb

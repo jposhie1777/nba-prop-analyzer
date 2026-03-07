@@ -1,0 +1,3150 @@
+{
+    "playerId": "52955",
+    "summaryData": {
+        "tabs": [
+            {
+                "label": "Overview",
+                "type": "OVERVIEW",
+                "apiPath": "/player/profiles/52955"
+            },
+            {
+                "label": "Career",
+                "type": "CAREER",
+                "apiPath": "/player/profiles/52955/career"
+            },
+            {
+                "label": "Results",
+                "type": "RESULTS",
+                "apiPath": "/player/profiles/52955/results"
+            },
+            {
+                "label": "News & Video",
+                "type": "NEWS_VIDEO",
+                "apiPath": "/player/profiles/52955/latest"
+            },
+            {
+                "label": "Stats",
+                "type": "STATS",
+                "apiPath": "/player/profiles/52955/stats"
+            },
+            {
+                "label": "Bio",
+                "type": "BIO",
+                "apiPath": "/player/profiles/52955/bio"
+            }
+        ],
+        "summaryData": {
+            "firstName": "Ludvig",
+            "lastName": "Åberg",
+            "country": "Sweden",
+            "countryCode": "SWE",
+            "born": "October 31, 1999",
+            "age": "26",
+            "turnedPro": "2023",
+            "birthplace": "Eslov, Sweden",
+            "college": "Texas Tech University",
+            "tglTeam": {
+                "name": "The Bay Golf Club",
+                "logo": {
+                    "__typename": "ImageAsset",
+                    "imageOrg": "pgatour-prod",
+                    "imagePath": "https://res.cloudinary.com/dettuon1j/image/upload/<TRANSFORMATION_PLACEHOLDER>/v1698156036/content/dam/tgl/teams/BAY/BAY",
+                    "assetType": "image",
+                    "deliveryType": "fetch"
+                },
+                "url": "https://tglgolf.com/thebaygolfclub"
+            },
+            "careerHighlights": [
+                {
+                    "title": "PGA TOUR Wins",
+                    "data": "2"
+                },
+                {
+                    "title": "Wins (2026)",
+                    "data": "0"
+                },
+                {
+                    "title": "Top 10 (2026)",
+                    "data": "0"
+                },
+                {
+                    "title": "FedExCup Standings",
+                    "subTitle": "PTS: 72",
+                    "tooltip": "The current point total for the year that the player has earned in the FedExCup points race.",
+                    "logo": {
+                        "__typename": "ImageAsset",
+                        "imageOrg": "pgatour-prod",
+                        "imagePath": "temp/standings/FedExCup-Light",
+                        "assetType": "image"
+                    },
+                    "logoDark": {
+                        "__typename": "ImageAsset",
+                        "imageOrg": "pgatour-prod",
+                        "imagePath": "temp/standings/fedexcup-dark2",
+                        "assetType": "image"
+                    },
+                    "data": "88",
+                    "selectionName": "fedexcup"
+                },
+                {
+                    "title": "FedExCup Fall Standings",
+                    "subTitle": "-",
+                    "tooltip": "FedExCup Fall Points list will finalize eligibility for the next season. Players ranked No. 51 and beyond will carry their FedExCup Points from the Regular Season and first FedExCup Playoffs event into the FedExCup Fall and will continue to accumulate FedExCup Points.",
+                    "logo": {
+                        "__typename": "ImageAsset",
+                        "imageOrg": "pgatour-prod",
+                        "imagePath": "pgatour/sponsors/tour-cup-logos/fec-fall/StandAlone-FedExCup-FALL_RGB",
+                        "assetType": "image"
+                    },
+                    "logoDark": {
+                        "__typename": "ImageAsset",
+                        "imageOrg": "pgatour-prod",
+                        "imagePath": "pgatour/sponsors/tour-cup-logos/fec-fall/StandAlone-FedExCup-FALL_RGB-rev",
+                        "assetType": "image"
+                    },
+                    "data": "-",
+                    "dataLogo": {
+                        "__typename": "ImageAsset",
+                        "imageOrg": "pgatour-prod",
+                        "imagePath": "pgatour/sponsors/tour-cup-logos/fec-fall/FEC-Fall-50_H-RGB-%281%29",
+                        "assetType": "image"
+                    },
+                    "dataLogoDark": {
+                        "__typename": "ImageAsset",
+                        "imageOrg": "pgatour-prod",
+                        "imagePath": "pgatour/icons/player-profile/fedexcup/top50-dark",
+                        "assetType": "image"
+                    },
+                    "selectionName": "fedexcup_fall"
+                },
+                {
+                    "title": "World Rank (OWGR)",
+                    "data": "23",
+                    "tooltip": "The Official World Golf Ranking, which is endorsed by the four major championships and the five professional tours which make up the International Federation of PGA Tours, is issued every Monday, following completion of the previous week's tournaments from around the world. This statistic is the average number of points earned per event in the last 104 weeks. These points are awarded based upon finish position as well as the strength of the field. The points are initially worth double their original value and decline gradually over this two-year period. There are 8 13-week periods and points decline by .25 times their value each period."
+                }
+            ],
+            "socials": [
+                {
+                    "type": "instagram",
+                    "url": "https://www.instagram.com/luddeaberg/?hl=en"
+                }
+            ]
+        }
+    },
+    "playerCompareOptions": [
+        {
+            "label": "Tour",
+            "queryArg": "tour",
+            "options": [
+                {
+                    "value": "R",
+                    "label": "PGA TOUR",
+                    "selected": true
+                }
+            ]
+        },
+        {
+            "label": "Season",
+            "queryArg": "season",
+            "options": [
+                {
+                    "value": "2026",
+                    "label": "2026",
+                    "selected": true
+                },
+                {
+                    "value": "2025",
+                    "label": "2025",
+                    "selected": false
+                },
+                {
+                    "value": "2024",
+                    "label": "2024",
+                    "selected": false
+                },
+                {
+                    "value": "2023",
+                    "label": "2022-2023",
+                    "selected": false
+                },
+                {
+                    "value": "2022",
+                    "label": "2021-2022",
+                    "selected": false
+                }
+            ]
+        }
+    ],
+    "compareCategoryPills": [
+        {
+            "displayText": "Strokes Gained",
+            "category": "STROKES_GAINED"
+        },
+        {
+            "displayText": "Driving",
+            "category": "OFF_TEE"
+        },
+        {
+            "displayText": "Approach",
+            "category": "APPROACH_GREEN"
+        },
+        {
+            "displayText": "Short Game",
+            "category": "AROUND_GREEN"
+        },
+        {
+            "displayText": "Putting",
+            "category": "PUTTING"
+        },
+        {
+            "displayText": "Scoring",
+            "category": "SCORING"
+        }
+    ],
+    "comparisonData": {
+        "header": "Strokes Gained",
+        "headerRow": [
+            {
+                "playerId": "52955",
+                "displayText": "Ludvig Åberg",
+                "country": "SWE",
+                "yearData": true
+            }
+        ],
+        "rows": [
+            {
+                "statName": "SG: Total",
+                "statId": "02675",
+                "values": [
+                    {
+                        "displayValue": "-0.040",
+                        "bold": true,
+                        "rank": "93rd",
+                        "rankDeviation": -0.05084745762711873
+                    }
+                ]
+            },
+            {
+                "statName": "SG: Off the Tee",
+                "statId": "02567",
+                "values": [
+                    {
+                        "displayValue": "0.082",
+                        "bold": true,
+                        "rank": "82nd",
+                        "rankDeviation": 0.07344632768361581
+                    }
+                ]
+            },
+            {
+                "statName": "SG: Approach the Green",
+                "statId": "02568",
+                "values": [
+                    {
+                        "displayValue": "-0.041",
+                        "bold": true,
+                        "rank": "94th",
+                        "rankDeviation": -0.062146892655367214
+                    }
+                ]
+            },
+            {
+                "statName": "SG: Around the Green",
+                "statId": "02569",
+                "values": [
+                    {
+                        "displayValue": "0.019",
+                        "bold": true,
+                        "rank": "90th",
+                        "rankDeviation": -0.016949152542372836
+                    }
+                ]
+            },
+            {
+                "statName": "SG: Putting",
+                "statId": "02564",
+                "values": [
+                    {
+                        "displayValue": "-0.100",
+                        "bold": true,
+                        "rank": "106th",
+                        "rankDeviation": -0.19774011299435035
+                    }
+                ]
+            }
+        ]
+    },
+    "statOptions": [
+        {
+            "label": "Tour",
+            "queryArg": "tour",
+            "options": [
+                {
+                    "value": "R",
+                    "label": "PGA TOUR",
+                    "selected": true
+                }
+            ]
+        },
+        {
+            "label": "Season",
+            "queryArg": "season",
+            "options": [
+                {
+                    "value": "2026",
+                    "label": "2026",
+                    "selected": true
+                },
+                {
+                    "value": "2025",
+                    "label": "2025",
+                    "selected": false
+                },
+                {
+                    "value": "2024",
+                    "label": "2024",
+                    "selected": false
+                },
+                {
+                    "value": "2023",
+                    "label": "2022-2023",
+                    "selected": false
+                },
+                {
+                    "value": "2022",
+                    "label": "2021-2022",
+                    "selected": false
+                }
+            ]
+        }
+    ],
+    "statPills": [
+        {
+            "category": "ALL",
+            "displayText": "All"
+        },
+        {
+            "category": "STROKES_GAINED",
+            "displayText": "Strokes Gained"
+        },
+        {
+            "category": "SCORING",
+            "displayText": "Scoring"
+        },
+        {
+            "category": "DRIVING",
+            "displayText": "Driving"
+        },
+        {
+            "category": "APPROACH",
+            "displayText": "Approach"
+        },
+        {
+            "category": "AROUND_GREEN",
+            "displayText": "Around the Green"
+        },
+        {
+            "category": "PUTTING",
+            "displayText": "Putting"
+        },
+        {
+            "category": "STREAKS",
+            "displayText": "Streaks"
+        },
+        {
+            "category": "MONEY_FINISHES",
+            "displayText": "Money Finishes"
+        }
+    ],
+    "statOverviewHeaders": [
+        {
+            "name": "stat",
+            "displayText": "STAT",
+            "statProperty": "title",
+            "mobileOnly": true
+        },
+        {
+            "name": "value",
+            "displayText": "VALUE",
+            "statProperty": "value",
+            "mobileOnly": false
+        },
+        {
+            "name": "rank",
+            "displayText": "RANK",
+            "statProperty": "rank",
+            "mobileOnly": true
+        },
+        {
+            "name": "supportingStat",
+            "displayText": "SUPPORTING STAT",
+            "statProperty": "supportingStat",
+            "mobileOnly": false
+        },
+        {
+            "name": "supportingStatValue",
+            "displayText": "VALUE",
+            "statProperty": "supportingValue",
+            "mobileOnly": false
+        }
+    ],
+    "statsOverview": [
+        {
+            "statId": "02675",
+            "aboveOrBelow": "BELOW",
+            "fieldAverage": "",
+            "category": [
+                "STROKES_GAINED",
+                "SCORING"
+            ],
+            "rank": "93",
+            "rankDeviation": -0.05084745762711873,
+            "title": "SG: Total",
+            "value": "-0.040"
+        },
+        {
+            "statId": "02567",
+            "aboveOrBelow": "ABOVE",
+            "fieldAverage": "",
+            "category": [
+                "STROKES_GAINED",
+                "DRIVING"
+            ],
+            "rank": "82",
+            "rankDeviation": 0.07344632768361581,
+            "title": "SG: Off The Tee",
+            "value": "0.082"
+        },
+        {
+            "statId": "02568",
+            "aboveOrBelow": "BELOW",
+            "fieldAverage": "",
+            "category": [
+                "STROKES_GAINED",
+                "APPROACH"
+            ],
+            "rank": "94",
+            "rankDeviation": -0.062146892655367214,
+            "title": "SG: Approach to Green",
+            "value": "-0.041"
+        },
+        {
+            "statId": "02564",
+            "aboveOrBelow": "BELOW",
+            "fieldAverage": "",
+            "category": [
+                "STROKES_GAINED",
+                "PUTTING"
+            ],
+            "rank": "106",
+            "rankDeviation": -0.19774011299435035,
+            "title": "SG: Putting",
+            "value": "-0.100"
+        },
+        {
+            "statId": "129",
+            "aboveOrBelow": "ABOVE",
+            "fieldAverage": "",
+            "category": [
+                "DRIVING"
+            ],
+            "rank": "78",
+            "rankDeviation": 0.11864406779661019,
+            "title": "Total Driving",
+            "value": "172"
+        },
+        {
+            "statId": "101",
+            "aboveOrBelow": "ABOVE",
+            "fieldAverage": "",
+            "category": [
+                "DRIVING"
+            ],
+            "rank": "81",
+            "rankDeviation": 0.0847457627118644,
+            "title": "Driving Distance",
+            "value": "304.7"
+        },
+        {
+            "statId": "102",
+            "aboveOrBelow": "BELOW",
+            "fieldAverage": "",
+            "category": [
+                "DRIVING"
+            ],
+            "rank": "91",
+            "rankDeviation": -0.02824858757062154,
+            "title": "Driving Accuracy",
+            "value": "58.93%"
+        },
+        {
+            "statId": "103",
+            "aboveOrBelow": "ABOVE",
+            "fieldAverage": "",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "40",
+            "rankDeviation": 0.5480225988700564,
+            "title": "GIR %",
+            "value": "72.22%"
+        },
+        {
+            "statId": "331",
+            "aboveOrBelow": "ABOVE",
+            "fieldAverage": "",
+            "category": [
+                "APPROACH",
+                "AROUND_GREEN"
+            ],
+            "rank": "8",
+            "rankDeviation": 0.9096045197740112,
+            "title": "Proximity",
+            "value": "33' 7"
+        },
+        {
+            "statId": "336",
+            "aboveOrBelow": "ABOVE",
+            "fieldAverage": "",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "66",
+            "rankDeviation": 0.2542372881355932,
+            "title": "Approach > 200 yds",
+            "value": "48' 8"
+        },
+        {
+            "statId": "130",
+            "aboveOrBelow": "BELOW",
+            "fieldAverage": "",
+            "category": [
+                "AROUND_GREEN"
+            ],
+            "rank": "173",
+            "rankDeviation": -0.9548022598870056,
+            "title": "Scrambling",
+            "value": "46.67%"
+        },
+        {
+            "statId": "111",
+            "aboveOrBelow": "BELOW",
+            "fieldAverage": "",
+            "category": [
+                "AROUND_GREEN"
+            ],
+            "rank": "140",
+            "rankDeviation": -0.5819209039548023,
+            "title": "Sand Save %",
+            "value": "44.44%"
+        },
+        {
+            "statId": "363",
+            "aboveOrBelow": "BELOW",
+            "fieldAverage": "",
+            "category": [
+                "AROUND_GREEN"
+            ],
+            "rank": "157",
+            "rankDeviation": -0.7740112994350283,
+            "title": "Scrambling from rough",
+            "value": "45.45%"
+        },
+        {
+            "statId": "104",
+            "aboveOrBelow": "ABOVE",
+            "fieldAverage": "",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "31",
+            "rankDeviation": 0.6497175141242938,
+            "title": "Putting Avg",
+            "value": "1.705"
+        },
+        {
+            "statId": "119",
+            "aboveOrBelow": "BELOW",
+            "fieldAverage": "",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "89",
+            "rankDeviation": -0.005649717514124353,
+            "title": "Putts Per Round",
+            "value": "28.92"
+        },
+        {
+            "statId": "413",
+            "aboveOrBelow": "BELOW",
+            "fieldAverage": "",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "138",
+            "rankDeviation": -0.5593220338983051,
+            "title": "One-putt %",
+            "value": "37.04%"
+        },
+        {
+            "statId": "108",
+            "aboveOrBelow": "ABOVE",
+            "fieldAverage": "",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "87",
+            "rankDeviation": 0.016949152542372836,
+            "title": "Scoring Average",
+            "value": "69.75"
+        },
+        {
+            "statId": "143",
+            "aboveOrBelow": "BELOW",
+            "fieldAverage": "",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "91",
+            "rankDeviation": -0.02824858757062154,
+            "title": "Par 4",
+            "value": "4.00"
+        },
+        {
+            "statId": "156",
+            "aboveOrBelow": "ABOVE",
+            "fieldAverage": "",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "9",
+            "rankDeviation": 0.8983050847457628,
+            "title": "Birdie Average",
+            "value": "5.08"
+        },
+        {
+            "statId": "",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "category": [
+                "POINTS_RANKINGS"
+            ],
+            "rank": "-",
+            "title": "FedExCup Fall Points",
+            "value": "-"
+        }
+    ],
+    "statHeaders": [
+        {
+            "name": "stat",
+            "displayText": "STAT",
+            "statProperty": "title",
+            "mobileOnly": true
+        },
+        {
+            "name": "value",
+            "displayText": "VALUE",
+            "statProperty": "value",
+            "mobileOnly": true
+        },
+        {
+            "name": "rank",
+            "displayText": "RANK",
+            "statProperty": "rank",
+            "mobileOnly": true
+        },
+        {
+            "name": "supportingStat",
+            "displayText": "SUPPORTING STAT",
+            "statProperty": "supportingStat",
+            "mobileOnly": false
+        },
+        {
+            "name": "supportingStatValue",
+            "displayText": "VALUE",
+            "statProperty": "supportingValue",
+            "mobileOnly": false
+        }
+    ],
+    "stats": [
+        {
+            "statId": "02675",
+            "category": [
+                "STROKES_GAINED",
+                "SCORING"
+            ],
+            "rank": "93",
+            "title": "SG: Total",
+            "value": "-0.040",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total SG:T",
+                "value": "-0.357"
+            },
+            "supportingValue": {
+                "description": "Measured Rounds",
+                "value": "9"
+            }
+        },
+        {
+            "statId": "02674",
+            "category": [
+                "STROKES_GAINED",
+                "DRIVING"
+            ],
+            "rank": "84",
+            "title": "SG: Tee-to-Green",
+            "value": "0.060",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "SG:OTT",
+                "value": "0.082"
+            },
+            "supportingValue": {
+                "description": "Measured Rounds",
+                "value": "9"
+            }
+        },
+        {
+            "statId": "02567",
+            "category": [
+                "STROKES_GAINED",
+                "DRIVING"
+            ],
+            "rank": "82",
+            "title": "SG: Off-the-Tee",
+            "value": "0.082",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total SG:OTT",
+                "value": "0.740"
+            },
+            "supportingValue": {
+                "description": "Measured Rounds",
+                "value": "9"
+            }
+        },
+        {
+            "statId": "02568",
+            "category": [
+                "STROKES_GAINED",
+                "APPROACH"
+            ],
+            "rank": "94",
+            "title": "SG: Approach the Green",
+            "value": "-0.041",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total SG:APP",
+                "value": "-0.370"
+            },
+            "supportingValue": {
+                "description": "Measured Rounds",
+                "value": "9"
+            }
+        },
+        {
+            "statId": "02569",
+            "category": [
+                "STROKES_GAINED",
+                "AROUND_GREEN"
+            ],
+            "rank": "90",
+            "title": "SG: Around-the-Green",
+            "value": "0.019",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total SG:ARG",
+                "value": "0.171"
+            },
+            "supportingValue": {
+                "description": "Measured Rounds",
+                "value": "9"
+            }
+        },
+        {
+            "statId": "02564",
+            "category": [
+                "STROKES_GAINED",
+                "PUTTING"
+            ],
+            "rank": "106",
+            "title": "SG: Putting",
+            "value": "-0.100",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total SG:Putting",
+                "value": "-0.898"
+            },
+            "supportingValue": {
+                "description": "Measured Rounds",
+                "value": "9"
+            }
+        },
+        {
+            "statId": "159",
+            "category": [
+                "DRIVING"
+            ],
+            "rank": "85",
+            "title": "Longest Drives",
+            "value": "361",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Tournament",
+                "value": "AT&T Pebble Beach"
+            },
+            "supportingValue": {
+                "description": "Round",
+                "value": "3"
+            }
+        },
+        {
+            "statId": "101",
+            "category": [
+                "DRIVING"
+            ],
+            "rank": "81",
+            "title": "Driving Distance",
+            "value": "304.7",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance",
+                "value": "7,313"
+            },
+            "supportingValue": {
+                "description": "Total Drives",
+                "value": "24"
+            }
+        },
+        {
+            "statId": "317",
+            "category": [
+                "DRIVING"
+            ],
+            "rank": "89",
+            "title": "Driving Distance - All Drives",
+            "value": "292.0",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance",
+                "value": "36,795"
+            },
+            "supportingValue": {
+                "description": "# of Drives",
+                "value": "126"
+            }
+        },
+        {
+            "statId": "102",
+            "category": [
+                "DRIVING"
+            ],
+            "rank": "91",
+            "title": "Driving Accuracy Percentage",
+            "value": "58.93%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Fairways Hit",
+                "value": "99"
+            },
+            "supportingValue": {
+                "description": "Possible Fairways",
+                "value": "168"
+            }
+        },
+        {
+            "statId": "459",
+            "category": [
+                "DRIVING"
+            ],
+            "rank": "149",
+            "title": "Left Rough Tendency",
+            "value": "17.07%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Left rough",
+                "value": "21"
+            },
+            "supportingValue": {
+                "description": "Possible Fwys",
+                "value": "123"
+            }
+        },
+        {
+            "statId": "460",
+            "category": [
+                "DRIVING"
+            ],
+            "rank": "66",
+            "title": "Right Rough Tendency",
+            "value": "15.45%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Right rough",
+                "value": "19"
+            },
+            "supportingValue": {
+                "description": "Possible Fwys",
+                "value": "123"
+            }
+        },
+        {
+            "statId": "02420",
+            "category": [
+                "DRIVING"
+            ],
+            "rank": "148",
+            "title": "Distance from Edge of Fairway",
+            "value": "33' 0",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (Feet)",
+                "value": "1,650.083"
+            },
+            "supportingValue": {
+                "description": "Total Strokes",
+                "value": "50"
+            }
+        },
+        {
+            "statId": "02401",
+            "category": [
+                "DRIVING"
+            ],
+            "rank": "59",
+            "title": "Club Head Speed",
+            "value": "118.26",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Club Head Speed",
+                "value": "5,085.04"
+            },
+            "supportingValue": {
+                "description": "Total Attempts",
+                "value": "43"
+            }
+        },
+        {
+            "statId": "02412",
+            "category": [
+                "DRIVING"
+            ],
+            "rank": "87",
+            "title": "Total Driving Efficiency",
+            "value": "170",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "",
+                "value": ""
+            },
+            "supportingValue": {
+                "description": "Carry Efficiency Rank",
+                "value": "36"
+            }
+        },
+        {
+            "statId": "103",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "40",
+            "title": "Greens in Regulation Percentage",
+            "value": "72.22%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Greens Hit",
+                "value": "156"
+            },
+            "supportingValue": {
+                "description": "# Holes",
+                "value": "216"
+            }
+        },
+        {
+            "statId": "331",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "8",
+            "title": "Proximity to Hole",
+            "value": "33' 7",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "5,341.083"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "159"
+            }
+        },
+        {
+            "statId": "02361",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "37",
+            "title": "Approaches from > 275 yards",
+            "value": "71' 5",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "214.250"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "3"
+            }
+        },
+        {
+            "statId": "02360",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "35",
+            "title": "Approaches from 250-275 yards",
+            "value": "51' 2",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "255.833"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "5"
+            }
+        },
+        {
+            "statId": "02359",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "79",
+            "title": "Approaches from 225-250 yards",
+            "value": "48' 8",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "486.500"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "10"
+            }
+        },
+        {
+            "statId": "02358",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "84",
+            "title": "Approaches from 200-225 yards",
+            "value": "40' 8",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "406.833"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "10"
+            }
+        },
+        {
+            "statId": "336",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "66",
+            "title": "Approaches from > 200 yards",
+            "value": "48' 8",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "1,363.417"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "28"
+            }
+        },
+        {
+            "statId": "337",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "24",
+            "title": "Approaches from 175-200 yards",
+            "value": "28' 11",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "694.333"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "24"
+            }
+        },
+        {
+            "statId": "338",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "109",
+            "title": "Approaches from 150-175 yards",
+            "value": "29' 11",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "629.083"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "21"
+            }
+        },
+        {
+            "statId": "339",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "144",
+            "title": "Approaches from 125-150 yards",
+            "value": "26' 3",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "446.333"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "17"
+            }
+        },
+        {
+            "statId": "340",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "29",
+            "title": "Approaches from 50-125 yards",
+            "value": "16' 1",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "370.000"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "23"
+            }
+        },
+        {
+            "statId": "074",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "75",
+            "title": "Approaches from 100-125 yards",
+            "value": "19' 5",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "233.333"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "12"
+            }
+        },
+        {
+            "statId": "075",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "52",
+            "title": "Approaches from 75-100 yards",
+            "value": "14' 11",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "104.250"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "7"
+            }
+        },
+        {
+            "statId": "076",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "20",
+            "title": "Approaches from 50-75 yards",
+            "value": "8' 1",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "32.417"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "4"
+            }
+        },
+        {
+            "statId": "02329",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "19",
+            "title": "Approaches from inside 100 yards",
+            "value": "12' 5",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "136.667"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "11"
+            }
+        },
+        {
+            "statId": "02331",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "79",
+            "title": "Approaches from > 100 yards",
+            "value": "33' 0",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "3,366.500"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "102"
+            }
+        },
+        {
+            "statId": "431",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "57",
+            "title": "Fairway Proximity",
+            "value": "31' 0",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "",
+                "value": ""
+            },
+            "supportingValue": {
+                "description": "Attempts",
+                "value": "113"
+            }
+        },
+        {
+            "statId": "437",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "14",
+            "title": "Rough Proximity",
+            "value": "38' 9",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (inches)",
+                "value": "16,283"
+            },
+            "supportingValue": {
+                "description": "Attempts",
+                "value": "35"
+            }
+        },
+        {
+            "statId": "432",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "109",
+            "title": "Left Rough Proximity",
+            "value": "48' 0",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "",
+                "value": ""
+            },
+            "supportingValue": {
+                "description": "Attempts",
+                "value": "17"
+            }
+        },
+        {
+            "statId": "433",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "5",
+            "title": "Right Rough Proximity",
+            "value": "30' 1",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "",
+                "value": ""
+            },
+            "supportingValue": {
+                "description": "Attempts",
+                "value": "18"
+            }
+        },
+        {
+            "statId": "02375",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "-",
+            "title": "Approaches from > 275 yards (Rgh)",
+            "value": "-",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": ""
+        },
+        {
+            "statId": "02374",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "90",
+            "title": "Approaches from 250-275 yards (Rgh)",
+            "value": "102' 9",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "102.750"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "1"
+            }
+        },
+        {
+            "statId": "02373",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "42",
+            "title": "Approaches from 225-250 yards (Rgh)",
+            "value": "57' 10",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "115.583"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "2"
+            }
+        },
+        {
+            "statId": "02372",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "15",
+            "title": "Approaches from 200-225 yards (Rgh)",
+            "value": "44' 10",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "89.667"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "2"
+            }
+        },
+        {
+            "statId": "02371",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "15",
+            "title": "Approaches from > 100 yards (Rgh)",
+            "value": "40' 9",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "1,262.917"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "31"
+            }
+        },
+        {
+            "statId": "02370",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "83",
+            "title": "Approaches from inside 100 yards (Rgh)",
+            "value": "23' 6",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "94.000"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "4"
+            }
+        },
+        {
+            "statId": "02369",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "26",
+            "title": "Approaches from > 200 yards (Rgh)",
+            "value": "61' 7",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "308.000"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "5"
+            }
+        },
+        {
+            "statId": "02368",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "97",
+            "title": "Approaches from 175-200 yards (Rgh)",
+            "value": "54' 11",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "329.333"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "6"
+            }
+        },
+        {
+            "statId": "02367",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "8",
+            "title": "Approaches from 150-175 yards (Rgh)",
+            "value": "29' 6",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "265.333"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "9"
+            }
+        },
+        {
+            "statId": "02366",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "69",
+            "title": "Approaches from 125-150 yards (Rgh)",
+            "value": "32' 11",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "230.167"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "7"
+            }
+        },
+        {
+            "statId": "02365",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "111",
+            "title": "Approaches from 50-125 yards (Rgh)",
+            "value": "28' 9",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "201.000"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "7"
+            }
+        },
+        {
+            "statId": "02364",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "118",
+            "title": "Approaches from 100-125 yards (Rgh)",
+            "value": "32' 6",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "130.083"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "4"
+            }
+        },
+        {
+            "statId": "02363",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "11",
+            "title": "Approaches from 75-100 yards (Rgh)",
+            "value": "9' 5",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "9.417"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "1"
+            }
+        },
+        {
+            "statId": "02362",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "114",
+            "title": "Approaches from 50-75 yards (Rgh)",
+            "value": "30' 9",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "61.500"
+            },
+            "supportingValue": {
+                "description": "# of Attempts",
+                "value": "2"
+            }
+        },
+        {
+            "statId": "419",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "96",
+            "title": "Going for the Green",
+            "value": "64.10%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Attempts",
+                "value": "25"
+            },
+            "supportingValue": {
+                "description": "Non-Attempts",
+                "value": "14"
+            }
+        },
+        {
+            "statId": "486",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "59",
+            "title": "Going for the Green - Hit Green Pct.",
+            "value": "28.00%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Successes",
+                "value": "7"
+            },
+            "supportingValue": {
+                "description": "Attempts",
+                "value": "25"
+            }
+        },
+        {
+            "statId": "02357",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "40",
+            "title": "Going for the Green - Birdie or Better",
+            "value": "68.00%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "# of Birdie or Better",
+                "value": "17"
+            },
+            "supportingValue": {
+                "description": "Attempts",
+                "value": "25"
+            }
+        },
+        {
+            "statId": "350",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "8",
+            "title": "Total Hole Outs",
+            "value": "6",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "",
+                "value": ""
+            },
+            "supportingValue": {
+                "description": "",
+                "value": ""
+            }
+        },
+        {
+            "statId": "351",
+            "category": [
+                "APPROACH"
+            ],
+            "rank": "11",
+            "title": "Longest Hole Outs (in yards)",
+            "value": "138",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Tournament",
+                "value": "AT&T Pebble Beach"
+            },
+            "supportingValue": {
+                "description": "Round- Course",
+                "value": "4"
+            }
+        },
+        {
+            "statId": "130",
+            "category": [
+                "AROUND_GREEN"
+            ],
+            "rank": "173",
+            "title": "Scrambling",
+            "value": "46.67%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Par or Better",
+                "value": "28"
+            },
+            "supportingValue": {
+                "description": "Missed GIR",
+                "value": "60"
+            }
+        },
+        {
+            "statId": "363",
+            "category": [
+                "AROUND_GREEN"
+            ],
+            "rank": "157",
+            "title": "Scrambling from the Rough",
+            "value": "45.45%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Successes",
+                "value": "10"
+            },
+            "supportingValue": {
+                "description": "Attempts",
+                "value": "22"
+            }
+        },
+        {
+            "statId": "364",
+            "category": [
+                "AROUND_GREEN"
+            ],
+            "rank": "-",
+            "title": "Scrambling from the Fringe",
+            "value": "-",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": ""
+        },
+        {
+            "statId": "366",
+            "category": [
+                "AROUND_GREEN"
+            ],
+            "rank": "145",
+            "title": "Scrambling from > 30 yards",
+            "value": "14.29%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Successes",
+                "value": "1"
+            },
+            "supportingValue": {
+                "description": "Attempts",
+                "value": "7"
+            }
+        },
+        {
+            "statId": "367",
+            "category": [
+                "AROUND_GREEN"
+            ],
+            "rank": "128",
+            "title": "Scrambling from 20-30 yards",
+            "value": "45.45%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Successes",
+                "value": "5"
+            },
+            "supportingValue": {
+                "description": "Attempts",
+                "value": "11"
+            }
+        },
+        {
+            "statId": "368",
+            "category": [
+                "AROUND_GREEN"
+            ],
+            "rank": "173",
+            "title": "Scrambling from 10-20 yards",
+            "value": "45.45%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Successes",
+                "value": "10"
+            },
+            "supportingValue": {
+                "description": "Attempts",
+                "value": "22"
+            }
+        },
+        {
+            "statId": "369",
+            "category": [
+                "AROUND_GREEN"
+            ],
+            "rank": "147",
+            "title": "Scrambling from < 10 yards",
+            "value": "75.00%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Successes",
+                "value": "6"
+            },
+            "supportingValue": {
+                "description": "Attempts",
+                "value": "8"
+            }
+        },
+        {
+            "statId": "111",
+            "category": [
+                "AROUND_GREEN"
+            ],
+            "rank": "140",
+            "title": "Sand Save Percentage",
+            "value": "44.44%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "# Saves",
+                "value": "8"
+            },
+            "supportingValue": {
+                "description": "# Bunkers",
+                "value": "18"
+            }
+        },
+        {
+            "statId": "375",
+            "category": [
+                "AROUND_GREEN"
+            ],
+            "rank": "129",
+            "title": "Proximity to Hole from Sand",
+            "value": "10' 5",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Distance (feet)",
+                "value": "156.750"
+            },
+            "supportingValue": {
+                "description": "# of Shots",
+                "value": "15"
+            }
+        },
+        {
+            "statId": "02428",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "148",
+            "title": "Total Putting",
+            "value": "254.3",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "",
+                "value": ""
+            },
+            "supportingValue": {
+                "description": "",
+                "value": ""
+            }
+        },
+        {
+            "statId": "104",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "31",
+            "title": "Putting Average",
+            "value": "1.705",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "GIR Putts",
+                "value": "266"
+            },
+            "supportingValue": {
+                "description": "Greens Hit",
+                "value": "156"
+            }
+        },
+        {
+            "statId": "402",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "89",
+            "title": "Overall Putting Average",
+            "value": "1.606",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "# of Putts",
+                "value": "347"
+            },
+            "supportingValue": {
+                "description": "# of Holes",
+                "value": "216"
+            }
+        },
+        {
+            "statId": "115",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "17",
+            "title": "Birdie or Better Conversion Percentage",
+            "value": "37.66%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "# Birdies",
+                "value": "58"
+            },
+            "supportingValue": {
+                "description": "Greens Hit",
+                "value": "154"
+            }
+        },
+        {
+            "statId": "119",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "89",
+            "title": "Putts Per Round",
+            "value": "28.92",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Putts",
+                "value": "347"
+            },
+            "supportingValue": {
+                "description": "Total Rounds",
+                "value": "12"
+            }
+        },
+        {
+            "statId": "393",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "78",
+            "title": "Putts per Round - Round 1",
+            "value": "28.75",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Putts",
+                "value": "115"
+            },
+            "supportingValue": {
+                "description": "Total Rounds",
+                "value": "4"
+            }
+        },
+        {
+            "statId": "394",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "167",
+            "title": "Putts per Round - Round 2",
+            "value": "31.00",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Putts",
+                "value": "124"
+            },
+            "supportingValue": {
+                "description": "Total Rounds",
+                "value": "4"
+            }
+        },
+        {
+            "statId": "395",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "14",
+            "title": "Putts per Round - Round 3",
+            "value": "27.00",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Putts",
+                "value": "54"
+            },
+            "supportingValue": {
+                "description": "Total Rounds",
+                "value": "2"
+            }
+        },
+        {
+            "statId": "396",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "22",
+            "title": "Putts per Round - Round 4",
+            "value": "27.00",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Putts",
+                "value": "54"
+            },
+            "supportingValue": {
+                "description": "Total Rounds",
+                "value": "2"
+            }
+        },
+        {
+            "statId": "413",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "138",
+            "title": "One-Putt Percentage",
+            "value": "37.04%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "# of 1 putts",
+                "value": "80"
+            },
+            "supportingValue": {
+                "description": "# of holes",
+                "value": "216"
+            }
+        },
+        {
+            "statId": "498",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "153",
+            "title": "Longest Putts",
+            "value": "29' 7",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Year/Tourn#",
+                "value": "The Genesis"
+            },
+            "supportingValue": {
+                "description": "Round",
+                "value": "4"
+            }
+        },
+        {
+            "statId": "426",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "124",
+            "title": "3-Putt Avoidance",
+            "value": "3.24%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total 3 Putts",
+                "value": "7"
+            },
+            "supportingValue": {
+                "description": "Total Holes (overall)",
+                "value": "216"
+            }
+        },
+        {
+            "statId": "408",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "61",
+            "title": "Putting from - > 25'",
+            "value": "6.45%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Attempts",
+                "value": "31"
+            },
+            "supportingValue": {
+                "description": "Putts made",
+                "value": "2"
+            }
+        },
+        {
+            "statId": "407",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "122",
+            "title": "Putting from - 20-25'",
+            "value": "5.88%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Attempts",
+                "value": "17"
+            },
+            "supportingValue": {
+                "description": "Putts made",
+                "value": "1"
+            }
+        },
+        {
+            "statId": "406",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "88",
+            "title": "Putting from - 15-20'",
+            "value": "17.39%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Attempts",
+                "value": "23"
+            },
+            "supportingValue": {
+                "description": "Putts made",
+                "value": "4"
+            }
+        },
+        {
+            "statId": "405",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "1",
+            "title": "Putting from - 10-15'",
+            "value": "50.00%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Attempts",
+                "value": "16"
+            },
+            "supportingValue": {
+                "description": "Putts made",
+                "value": "8"
+            }
+        },
+        {
+            "statId": "484",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "173",
+            "title": "Putting - Inside 10'",
+            "value": "82.94%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Attempts",
+                "value": "170"
+            },
+            "supportingValue": {
+                "description": "Putts made",
+                "value": "141"
+            }
+        },
+        {
+            "statId": "348",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "-",
+            "title": "Putting from 10'",
+            "value": "11.11%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Attempts",
+                "value": "9"
+            },
+            "supportingValue": {
+                "description": "",
+                "value": ""
+            }
+        },
+        {
+            "statId": "347",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "7",
+            "title": "Putting from 9'",
+            "value": "64.29%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Attempts",
+                "value": "14"
+            },
+            "supportingValue": {
+                "description": "",
+                "value": ""
+            }
+        },
+        {
+            "statId": "346",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "-",
+            "title": "Putting from 8'",
+            "value": "20.00%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Attempts",
+                "value": "5"
+            },
+            "supportingValue": {
+                "description": "",
+                "value": ""
+            }
+        },
+        {
+            "statId": "345",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "-",
+            "title": "Putting from 7'",
+            "value": "66.67%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Attempts",
+                "value": "6"
+            },
+            "supportingValue": {
+                "description": "",
+                "value": ""
+            }
+        },
+        {
+            "statId": "344",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "-",
+            "title": "Putting from 6'",
+            "value": "57.14%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Attempts",
+                "value": "7"
+            },
+            "supportingValue": {
+                "description": "",
+                "value": ""
+            }
+        },
+        {
+            "statId": "343",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "137",
+            "title": "Putting from 5'",
+            "value": "63.64%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Attempts",
+                "value": "11"
+            },
+            "supportingValue": {
+                "description": "",
+                "value": ""
+            }
+        },
+        {
+            "statId": "485",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "171",
+            "title": "Putting from 4-8'",
+            "value": "55.17%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Attempts",
+                "value": "29"
+            },
+            "supportingValue": {
+                "description": "Putts made",
+                "value": "16"
+            }
+        },
+        {
+            "statId": "342",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "59",
+            "title": "Putting from 4'",
+            "value": "94.44%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Attempts",
+                "value": "18"
+            },
+            "supportingValue": {
+                "description": "",
+                "value": ""
+            }
+        },
+        {
+            "statId": "341",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "171",
+            "title": "Putting from 3'",
+            "value": "98.00%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Attempts",
+                "value": "100"
+            },
+            "supportingValue": {
+                "description": "",
+                "value": ""
+            }
+        },
+        {
+            "statId": "438",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "122",
+            "title": "Average Distance of Putts made",
+            "value": "70' 1",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Dist. (inches)",
+                "value": "7,568"
+            },
+            "supportingValue": {
+                "description": "Total Rounds",
+                "value": "9"
+            }
+        },
+        {
+            "statId": "349",
+            "category": [
+                "PUTTING"
+            ],
+            "rank": "42",
+            "title": "Approach Putt Performance",
+            "value": "2' 1",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "",
+                "value": ""
+            },
+            "supportingValue": {
+                "description": "Attempts",
+                "value": "96"
+            }
+        },
+        {
+            "statId": "120",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "121",
+            "title": "Scoring Average (Adjusted)",
+            "value": "71.908",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Strokes",
+                "value": "837"
+            },
+            "supportingValue": {
+                "description": "Total Adjustment",
+                "value": "25.890"
+            }
+        },
+        {
+            "statId": "108",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "87",
+            "title": "Scoring Average (Actual)",
+            "value": "69.75",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Strokes",
+                "value": "837"
+            },
+            "supportingValue": {
+                "description": "Total Rounds",
+                "value": "12"
+            }
+        },
+        {
+            "statId": "299",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "101",
+            "title": "Lowest Round",
+            "value": "66",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Tourn/Course",
+                "value": "The Genesis/The"
+            },
+            "supportingValue": {
+                "description": "Round",
+                "value": "4"
+            }
+        },
+        {
+            "statId": "156",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "9",
+            "title": "Birdie Average",
+            "value": "5.08",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "# of Birdies",
+                "value": "61"
+            },
+            "supportingValue": {
+                "description": "Total Rounds",
+                "value": "12"
+            }
+        },
+        {
+            "statId": "107",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "90",
+            "title": "Total Birdies",
+            "value": "61",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "",
+                "value": ""
+            },
+            "supportingValue": {
+                "description": "",
+                "value": ""
+            }
+        },
+        {
+            "statId": "155",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "52",
+            "title": "Eagles (Holes per)",
+            "value": "108.0",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "# of Holes",
+                "value": "216"
+            },
+            "supportingValue": {
+                "description": "# of Eagles",
+                "value": "2"
+            }
+        },
+        {
+            "statId": "106",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "59",
+            "title": "Total Eagles",
+            "value": "2",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "",
+                "value": ""
+            },
+            "supportingValue": {
+                "description": "",
+                "value": ""
+            }
+        },
+        {
+            "statId": "105",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "7",
+            "title": "Par Breakers",
+            "value": "29.17%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "# Birdies/Eagles",
+                "value": "63"
+            },
+            "supportingValue": {
+                "description": "# Holes",
+                "value": "216"
+            }
+        },
+        {
+            "statId": "160",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "53",
+            "title": "Bounce Back",
+            "value": "25.71%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "",
+                "value": ""
+            },
+            "supportingValue": {
+                "description": "",
+                "value": ""
+            }
+        },
+        {
+            "statId": "112",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "2",
+            "title": "Par 3 Birdie or Better Leaders",
+            "value": "25.00%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Par 3 Birdies or Better",
+                "value": "12"
+            },
+            "supportingValue": {
+                "description": "Par 3 Holes",
+                "value": "48"
+            }
+        },
+        {
+            "statId": "113",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "67",
+            "title": "Par 4 Birdie or Better Leaders",
+            "value": "19.35%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Par 4 Birdies or Better",
+                "value": "24"
+            },
+            "supportingValue": {
+                "description": "Par 4 Holes",
+                "value": "124"
+            }
+        },
+        {
+            "statId": "114",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "19",
+            "title": "Par 5 Birdie or Better Leaders",
+            "value": "61.36%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Par 5 Birdies or Better",
+                "value": "27"
+            },
+            "supportingValue": {
+                "description": "Par 5 Holes",
+                "value": "44"
+            }
+        },
+        {
+            "statId": "352",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "7",
+            "title": "Birdie or Better Percentage",
+            "value": "29.17%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Birdies",
+                "value": "63"
+            },
+            "supportingValue": {
+                "description": "Total Holes",
+                "value": "216"
+            }
+        },
+        {
+            "statId": "02414",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "147",
+            "title": "Bogey Avoidance",
+            "value": "17.59%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Bogeys",
+                "value": "38"
+            },
+            "supportingValue": {
+                "description": "Holes Played",
+                "value": "216"
+            }
+        },
+        {
+            "statId": "118",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "5",
+            "title": "Final Round Scoring Average",
+            "value": "66.50",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Strokes",
+                "value": "133"
+            },
+            "supportingValue": {
+                "description": "Total Rounds",
+                "value": "2"
+            }
+        },
+        {
+            "statId": "219",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "1",
+            "title": "Final Round Performance",
+            "value": "100.00%",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "",
+                "value": ""
+            },
+            "supportingValue": {
+                "description": "",
+                "value": ""
+            }
+        },
+        {
+            "statId": "148",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "170",
+            "title": "Round 1 Scoring Average",
+            "value": "73.25",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Strokes",
+                "value": "293"
+            },
+            "supportingValue": {
+                "description": "Total Rounds",
+                "value": "4"
+            }
+        },
+        {
+            "statId": "149",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "49",
+            "title": "Round 2 Scoring Average",
+            "value": "69.00",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Strokes",
+                "value": "276"
+            },
+            "supportingValue": {
+                "description": "Total Rounds",
+                "value": "4"
+            }
+        },
+        {
+            "statId": "117",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "13",
+            "title": "Round 3 Scoring Average",
+            "value": "67.50",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Strokes",
+                "value": "135"
+            },
+            "supportingValue": {
+                "description": "Total Rounds",
+                "value": "2"
+            }
+        },
+        {
+            "statId": "285",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "5",
+            "title": "Round 4 Scoring Average",
+            "value": "66.50",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Strokes",
+                "value": "133"
+            },
+            "supportingValue": {
+                "description": "Total Rounds",
+                "value": "2"
+            }
+        },
+        {
+            "statId": "142",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "62",
+            "title": "Par 3 Scoring Average",
+            "value": "3.02",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Strokes",
+                "value": "145"
+            },
+            "supportingValue": {
+                "description": "Total Holes",
+                "value": "48"
+            }
+        },
+        {
+            "statId": "143",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "91",
+            "title": "Par 4 Scoring Average",
+            "value": "4.00",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Strokes",
+                "value": "496"
+            },
+            "supportingValue": {
+                "description": "Total Holes",
+                "value": "124"
+            }
+        },
+        {
+            "statId": "144",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "47",
+            "title": "Par 5 Scoring Average",
+            "value": "4.45",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Strokes",
+                "value": "196"
+            },
+            "supportingValue": {
+                "description": "Total Holes",
+                "value": "44"
+            }
+        },
+        {
+            "statId": "207",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "85",
+            "title": "Front 9 Scoring Average",
+            "value": "34.58",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Strokes",
+                "value": "415"
+            },
+            "supportingValue": {
+                "description": "Total Holes",
+                "value": "12"
+            }
+        },
+        {
+            "statId": "208",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "90",
+            "title": "Back 9 Scoring Average",
+            "value": "35.17",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Strokes",
+                "value": "422"
+            },
+            "supportingValue": {
+                "description": "Total Holes",
+                "value": "12"
+            }
+        },
+        {
+            "statId": "292",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "105",
+            "title": "Early Scoring Average",
+            "value": "69.86",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Strokes",
+                "value": "489"
+            },
+            "supportingValue": {
+                "description": "Total Early Rounds",
+                "value": "7"
+            }
+        },
+        {
+            "statId": "293",
+            "category": [
+                "SCORING"
+            ],
+            "rank": "71",
+            "title": "Late Scoring Average",
+            "value": "69.60",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Total Strokes",
+                "value": "348"
+            },
+            "supportingValue": {
+                "description": "Total Late Rounds",
+                "value": "5"
+            }
+        },
+        {
+            "statId": "122",
+            "category": [
+                "STREAKS"
+            ],
+            "rank": "112",
+            "title": "Consecutive Cuts",
+            "value": "2",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "",
+                "value": ""
+            },
+            "supportingValue": {
+                "description": "",
+                "value": ""
+            }
+        },
+        {
+            "statId": "483",
+            "category": [
+                "STREAKS"
+            ],
+            "rank": "120",
+            "title": "Current Streak without a 3-Putt",
+            "value": "14",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "",
+                "value": ""
+            },
+            "supportingValue": {
+                "description": "",
+                "value": ""
+            }
+        },
+        {
+            "statId": "297",
+            "category": [
+                "STREAKS"
+            ],
+            "rank": "138",
+            "title": "Consecutive Fairways Hit",
+            "value": "7",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Current Streak",
+                "value": "2"
+            },
+            "supportingValue": {
+                "description": "",
+                "value": ""
+            }
+        },
+        {
+            "statId": "298",
+            "category": [
+                "STREAKS"
+            ],
+            "rank": "109",
+            "title": "Consecutive GIR",
+            "value": "11",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Current Streak",
+                "value": "5"
+            },
+            "supportingValue": {
+                "description": "Round",
+                "value": "1"
+            }
+        },
+        {
+            "statId": "296",
+            "category": [
+                "STREAKS"
+            ],
+            "rank": "37",
+            "title": "Consecutive Sand Saves",
+            "value": "5",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Current Streak",
+                "value": "2"
+            },
+            "supportingValue": {
+                "description": "Round",
+                "value": "1"
+            }
+        },
+        {
+            "statId": "295",
+            "category": [
+                "STREAKS"
+            ],
+            "rank": "40",
+            "title": "Best YTD 1-Putt or Better Streak",
+            "value": "6",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "",
+                "value": ""
+            },
+            "supportingValue": {
+                "description": "",
+                "value": ""
+            }
+        },
+        {
+            "statId": "294",
+            "category": [
+                "STREAKS"
+            ],
+            "rank": "150",
+            "title": "Best YTD Streak w/o a 3-Putt",
+            "value": "61",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "Current Streak",
+                "value": "14"
+            },
+            "supportingValue": {
+                "description": "",
+                "value": ""
+            }
+        },
+        {
+            "statId": "482",
+            "category": [
+                "STREAKS"
+            ],
+            "rank": "166",
+            "title": "YTD Par or Better Streak",
+            "value": "3",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "",
+                "value": ""
+            },
+            "supportingValue": {
+                "description": "",
+                "value": ""
+            }
+        },
+        {
+            "statId": "449",
+            "category": [
+                "STREAKS"
+            ],
+            "rank": "4",
+            "title": "Consecutive Par 3 Birdies",
+            "value": "4",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "",
+                "value": ""
+            },
+            "supportingValue": {
+                "description": "",
+                "value": ""
+            }
+        },
+        {
+            "statId": "452",
+            "category": [
+                "STREAKS"
+            ],
+            "rank": "21",
+            "title": "Consecutive Holes Below Par",
+            "value": "4",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "",
+                "value": ""
+            },
+            "supportingValue": {
+                "description": "",
+                "value": ""
+            }
+        },
+        {
+            "statId": "02672",
+            "category": [
+                "STREAKS"
+            ],
+            "rank": "19",
+            "title": "Consecutive Birdies Streak",
+            "value": "4",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "",
+                "value": ""
+            },
+            "supportingValue": {
+                "description": "",
+                "value": ""
+            }
+        },
+        {
+            "statId": "02673",
+            "category": [
+                "STREAKS"
+            ],
+            "rank": "84",
+            "title": "Consecutive Birdies/Eagles streak",
+            "value": "1",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "",
+                "value": ""
+            },
+            "supportingValue": {
+                "description": "",
+                "value": ""
+            }
+        },
+        {
+            "statId": "109",
+            "category": [
+                "MONEY_FINISHES"
+            ],
+            "rank": "69",
+            "title": "Official Money",
+            "value": "$337,875",
+            "aboveOrBelow": "EVEN",
+            "fieldAverage": "",
+            "supportingStat": {
+                "description": "",
+                "value": ""
+            },
+            "supportingValue": {
+                "description": "YTD Victories",
+                "value": ""
+            }
+        }
+    ]
+}

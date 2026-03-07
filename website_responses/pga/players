@@ -1,0 +1,3508 @@
+"""
+Request URL
+https://data-api.pgatour.com/player/list/R
+Request Method
+GET
+Status Code
+200 OK
+Remote Address
+18.238.4.84:443
+Referrer Policy
+strict-origin-when-cross-origin
+access-control-allow-headers
+*
+access-control-allow-methods
+OPTIONS,GET,POST
+access-control-allow-origin
+*
+age
+190
+content-encoding
+br
+content-type
+application/json
+date
+Fri, 06 Mar 2026 19:29:12 GMT
+vary
+accept-encoding
+via
+1.1 05bd49fbda5fb9ac5e967827ba783846.cloudfront.net (CloudFront), 1.1 2a78cba32e1e70413cb851835f0eb89c.cloudfront.net (CloudFront)
+x-amz-apigw-id
+Z0OpXFZYoAMEHbA=
+x-amz-cf-id
+_LkJtSjz9sJM0RadFexUA9X8i7wrN8-uitzK1TZwYg932AnD1mL7pQ==
+x-amz-cf-pop
+IAD55-P9
+x-amz-cf-pop
+PHL51-P1
+x-amzn-requestid
+c6f19a4d-7e0a-4a9a-a2ce-a1d846ccdd77
+x-amzn-trace-id
+Root=1-69ab2b08-5fd1a27d3b9352ef0c1c1108;Parent=12f3275a3e339fcf;Sampled=0;Lineage=1:74d258bf:0
+x-cache
+Hit from cloudfront
+:authority
+data-api.pgatour.com
+:method
+GET
+:path
+/player/list/R
+:scheme
+https
+accept
+*/*
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+en-US,en;q=0.9
+origin
+https://www.pgatour.com
+priority
+u=1, i
+referer
+https://www.pgatour.com/
+sec-ch-ua
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-site
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+"""
+
+{
+    "tourCode": "R",
+    "players": [
+        {
+            "id": "01001",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Tommy",
+            "lastName": "Aaron",
+            "shortName": "T Aaron",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "89",
+                "id": "01001"
+            },
+            "primaryTour": "S",
+            "nameVariants": [
+                "tommyaaron",
+                "otmmyaaron",
+                "tmomyaaron",
+                "tomymaaron",
+                "tommayaron",
+                "tommyaraon",
+                "tommyaaorn",
+                "tommyaarno"
+            ],
+            "displayName": "Tommy Aaron",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01001.jpg"
+        },
+        {
+            "id": "12855",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Jerry",
+            "lastName": "Abbott",
+            "shortName": "J Abbott",
+            "alphaSort": "A",
+            "country": "",
+            "countryFlag": "",
+            "playerBio": {
+                "id": "12855"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "jerryabbott",
+                "ejrryabbott",
+                "jreryabbott",
+                "jeryrabbott",
+                "jerraybbott",
+                "jerrybabott",
+                "jerryabobtt",
+                "jerryabbtot"
+            ],
+            "displayName": "Jerry Abbott",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_12855.jpg"
+        },
+        {
+            "id": "12856",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Pat",
+            "lastName": "Abbott",
+            "shortName": "P Abbott",
+            "alphaSort": "A",
+            "country": "",
+            "countryFlag": "",
+            "playerBio": {
+                "id": "12856"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "patabbott",
+                "aptabbott",
+                "ptaabbott",
+                "paatbbott",
+                "patbabott",
+                "patabobtt",
+                "patabbtot"
+            ],
+            "displayName": "Pat Abbott",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_12856.jpg"
+        },
+        {
+            "id": "01003",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Bob",
+            "lastName": "Ackerman",
+            "shortName": "B Ackerman",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "72",
+                "id": "01003"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "bobackerman",
+                "obbackerman",
+                "bboackerman",
+                "boabckerman",
+                "bobcakerman",
+                "bobakcerman",
+                "bobacekrman",
+                "bobackreman",
+                "bobackemran",
+                "bobackeramn",
+                "bobackermna"
+            ],
+            "displayName": "Bob Ackerman",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01003.jpg"
+        },
+        {
+            "id": "20051",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Joe",
+            "lastName": "Acosta, Jr.",
+            "shortName": "J Acosta, Jr.",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "52",
+                "id": "20051"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "joeacosta,jr.",
+                "ojeacosta,jr.",
+                "jeoacosta,jr.",
+                "joaecosta,jr.",
+                "joecaosta,jr.",
+                "joeaocsta,jr.",
+                "joeacsota,jr.",
+                "joeacotsa,jr.",
+                "joeacosat,jr.",
+                "joeacost,ajr.",
+                "joeacostaj,r.",
+                "joeacosta,rj.",
+                "joeacosta,j.r"
+            ],
+            "displayName": "Joe Acosta, Jr.",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_20051.jpg"
+        },
+        {
+            "id": "11249",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Rick",
+            "lastName": "Acton",
+            "shortName": "R Acton",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "id": "11249"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "rickacton",
+                "irckacton",
+                "rcikacton",
+                "rikcacton",
+                "ricakcton",
+                "rickcaton",
+                "rickatcon",
+                "rickacotn",
+                "rickactno"
+            ],
+            "displayName": "Rick Acton",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_11249.jpg"
+        },
+        {
+            "id": "23778",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Brad",
+            "lastName": "Adamonis",
+            "shortName": "B Adamonis",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "1996",
+                "education": "Miami",
+                "age": "53",
+                "id": "23778"
+            },
+            "primaryTour": "H",
+            "nameVariants": [
+                "bradadamonis",
+                "rbadadamonis",
+                "bardadamonis",
+                "brdaadamonis",
+                "braaddamonis",
+                "braddaamonis",
+                "bradaadmonis",
+                "bradadmaonis",
+                "bradadaomnis",
+                "bradadamnois",
+                "bradadamoins",
+                "bradadamonsi"
+            ],
+            "displayName": "Brad Adamonis",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_23778.jpg"
+        },
+        {
+            "id": "01005",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Adam",
+            "lastName": "Adams",
+            "shortName": "A Adams",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "69",
+                "id": "01005"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "adamadams",
+                "daamadams",
+                "aadmadams",
+                "admaadams",
+                "adaamdams",
+                "adamdaams",
+                "adamaadms",
+                "adamadmas",
+                "adamadasm"
+            ],
+            "displayName": "Adam Adams",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01005.jpg"
+        },
+        {
+            "id": "29910",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Blake",
+            "lastName": "Adams",
+            "shortName": "B Adams",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "2001",
+                "education": "Georgia Southern University",
+                "age": "50",
+                "id": "29910"
+            },
+            "primaryTour": "H",
+            "nameVariants": [
+                "blakeadams",
+                "lbakeadams",
+                "balkeadams",
+                "blkaeadams",
+                "blaekadams",
+                "blakaedams",
+                "blakedaams",
+                "blakeaadms",
+                "blakeadmas",
+                "blakeadasm"
+            ],
+            "displayName": "Blake Adams",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_29910.jpg"
+        },
+        {
+            "id": "01006",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "John",
+            "lastName": "Adams",
+            "shortName": "J Adams",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "71",
+                "id": "01006"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "johnadams",
+                "ojhnadams",
+                "jhonadams",
+                "jonhadams",
+                "johandams",
+                "johndaams",
+                "johnaadms",
+                "johnadmas",
+                "johnadasm"
+            ],
+            "displayName": "John Adams",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01006.jpg"
+        },
+        {
+            "id": "01007",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Sam",
+            "lastName": "Adams",
+            "shortName": "S Adams",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "79",
+                "id": "01007"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "samadams",
+                "asmadams",
+                "smaadams",
+                "saamdams",
+                "samdaams",
+                "samaadms",
+                "samadmas",
+                "samadasm"
+            ],
+            "displayName": "Sam Adams",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01007.jpg"
+        },
+        {
+            "id": "06142",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Mitch",
+            "lastName": "Adcock",
+            "shortName": "M Adcock",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "70",
+                "id": "06142"
+            },
+            "primaryTour": "S",
+            "nameVariants": [
+                "mitchadcock",
+                "imtchadcock",
+                "mtichadcock",
+                "micthadcock",
+                "mithcadcock",
+                "mitcahdcock",
+                "mitchdacock",
+                "mitchacdock",
+                "mitchadocck",
+                "mitchadccok",
+                "mitchadcokc"
+            ],
+            "displayName": "Mitch Adcock",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_06142.jpg"
+        },
+        {
+            "id": "27796",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Joe",
+            "lastName": "Affrunti",
+            "shortName": "J Affrunti",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "2004",
+                "education": "University of Illinois",
+                "age": "44",
+                "id": "27796"
+            },
+            "primaryTour": "H",
+            "nameVariants": [
+                "joeaffrunti",
+                "ojeaffrunti",
+                "jeoaffrunti",
+                "joaeffrunti",
+                "joefafrunti",
+                "joeafrfunti",
+                "joeaffurnti",
+                "joeaffrnuti",
+                "joeaffrutni",
+                "joeaffrunit"
+            ],
+            "displayName": "Joe Affrunti",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_27796.jpg"
+        },
+        {
+            "id": "12891",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Jim",
+            "lastName": "Ahern",
+            "shortName": "J Ahern",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "77",
+                "id": "12891"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "jimahern",
+                "ijmahern",
+                "jmiahern",
+                "jiamhern",
+                "jimhaern",
+                "jimaehrn",
+                "jimahren",
+                "jimahenr"
+            ],
+            "displayName": "Jim Ahern",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_12891.jpg"
+        },
+        {
+            "id": "24461",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Thomas",
+            "lastName": "Aiken",
+            "shortName": "T Aiken",
+            "alphaSort": "A",
+            "country": "South Africa",
+            "countryFlag": "RSA",
+            "playerBio": {
+                "turnedPro": "2002",
+                "age": "42",
+                "id": "24461"
+            },
+            "primaryTour": "H",
+            "nameVariants": [
+                "thomasaiken",
+                "htomasaiken",
+                "tohmasaiken",
+                "thmoasaiken",
+                "thoamsaiken",
+                "thomsaaiken",
+                "thomaasiken",
+                "thomasiaken",
+                "thomasakien",
+                "thomasaiekn",
+                "thomasaikne"
+            ],
+            "displayName": "Thomas Aiken",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_24461.jpg"
+        },
+        {
+            "id": "67118",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Kihei",
+            "lastName": "Akina",
+            "shortName": "K Akina",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "20",
+                "id": "67118"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "kiheiakina",
+                "ikheiakina",
+                "khieiakina",
+                "kiehiakina",
+                "kihieakina",
+                "kiheaikina",
+                "kiheikaina",
+                "kiheiaikna",
+                "kiheiaknia",
+                "kiheiakian"
+            ],
+            "displayName": "Kihei Akina",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_67118.jpg"
+        },
+        {
+            "id": "01011",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Rafael",
+            "lastName": "Alarcon",
+            "shortName": "R Alarcon",
+            "alphaSort": "A",
+            "country": "Mexico",
+            "countryFlag": "MEX",
+            "playerBio": {
+                "age": "67",
+                "id": "01011"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "rafaelalarcon",
+                "arfaelalarcon",
+                "rfaaelalarcon",
+                "raafelalarcon",
+                "rafealalarcon",
+                "rafalealarcon",
+                "rafaeallarcon",
+                "rafaellaarcon",
+                "rafaelaalrcon",
+                "rafaelalracon",
+                "rafaelalacron",
+                "rafaelalarocn",
+                "rafaelalarcno"
+            ],
+            "displayName": "Rafael Alarcon",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01011.jpg"
+        },
+        {
+            "id": "49303",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Anders",
+            "lastName": "Albertson",
+            "shortName": "A Albertson",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "2015",
+                "education": "Georgia Tech",
+                "age": "32",
+                "id": "49303"
+            },
+            "primaryTour": "H",
+            "nameVariants": [
+                "andersalbertson",
+                "nadersalbertson",
+                "adnersalbertson",
+                "anedrsalbertson",
+                "andresalbertson",
+                "andesralbertson",
+                "anderaslbertson",
+                "anderslabertson",
+                "andersablertson",
+                "andersalebrtson",
+                "andersalbretson",
+                "andersalbetrson",
+                "andersalberston",
+                "andersalbertosn",
+                "andersalbertsno"
+            ],
+            "displayName": "Anders Albertson",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_49303.jpg"
+        },
+        {
+            "id": "01012",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Jim",
+            "lastName": "Albus",
+            "shortName": "J Albus",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "1968",
+                "education": "Bucknell",
+                "age": "85",
+                "id": "01012"
+            },
+            "primaryTour": "S",
+            "nameVariants": [
+                "jimalbus",
+                "ijmalbus",
+                "jmialbus",
+                "jiamlbus",
+                "jimlabus",
+                "jimablus",
+                "jimalubs",
+                "jimalbsu"
+            ],
+            "displayName": "Jim Albus",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01012.jpg"
+        },
+        {
+            "id": "29745",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Tyler",
+            "lastName": "Aldridge",
+            "shortName": "T Aldridge",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "2004",
+                "education": "Boise State University",
+                "age": "41",
+                "id": "29745"
+            },
+            "primaryTour": "H",
+            "nameVariants": [
+                "tyleraldridge",
+                "ytleraldridge",
+                "tlyeraldridge",
+                "tyelraldridge",
+                "tylrealdridge",
+                "tylearldridge",
+                "tylerladridge",
+                "tyleradlridge",
+                "tyleralrdidge",
+                "tyleraldirdge",
+                "tyleraldrdige",
+                "tyleraldrigde",
+                "tyleraldrideg"
+            ],
+            "displayName": "Tyler Aldridge",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_29745.jpg"
+        },
+        {
+            "id": "12914",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Skip",
+            "lastName": "Alexander",
+            "shortName": "S Alexander",
+            "alphaSort": "A",
+            "country": "",
+            "countryFlag": "",
+            "playerBio": {
+                "id": "12914"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "skipalexander",
+                "ksipalexander",
+                "sikpalexander",
+                "skpialexander",
+                "skiaplexander",
+                "skiplaexander",
+                "skipaelxander",
+                "skipalxeander",
+                "skipaleaxnder",
+                "skipalexnader",
+                "skipalexadner",
+                "skipalexanedr",
+                "skipalexandre"
+            ],
+            "displayName": "Skip Alexander",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_12914.jpg"
+        },
+        {
+            "id": "33408",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Tyson",
+            "lastName": "Alexander",
+            "shortName": "T Alexander",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "2010",
+                "education": "University of Florida",
+                "age": "37",
+                "id": "33408"
+            },
+            "primaryTour": "H",
+            "nameVariants": [
+                "tysonalexander",
+                "ytsonalexander",
+                "tsyonalexander",
+                "tyosnalexander",
+                "tysnoalexander",
+                "tysoanlexander",
+                "tysonlaexander",
+                "tysonaelxander",
+                "tysonalxeander",
+                "tysonaleaxnder",
+                "tysonalexnader",
+                "tysonalexadner",
+                "tysonalexanedr",
+                "tysonalexandre"
+            ],
+            "displayName": "Tyson Alexander",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_33408.jpg"
+        },
+        {
+            "id": "20771",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Steven",
+            "lastName": "Alker",
+            "shortName": "S Alker",
+            "alphaSort": "A",
+            "country": "New Zealand",
+            "countryFlag": "NZL",
+            "playerBio": {
+                "turnedPro": "1995",
+                "education": "New Zealand education",
+                "age": "54",
+                "id": "20771"
+            },
+            "primaryTour": "S",
+            "nameVariants": [
+                "stevenalker",
+                "tsevenalker",
+                "setvenalker",
+                "stveenalker",
+                "steevnalker",
+                "stevnealker",
+                "steveanlker",
+                "stevenlaker",
+                "stevenakler",
+                "stevenalekr",
+                "stevenalkre"
+            ],
+            "displayName": "Steven Alker",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_20771.jpg"
+        },
+        {
+            "id": "21633",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Steve",
+            "lastName": "Allan",
+            "shortName": "S Allan",
+            "alphaSort": "A",
+            "country": "Australia",
+            "countryFlag": "AUS",
+            "playerBio": {
+                "turnedPro": "1996",
+                "age": "52",
+                "id": "21633"
+            },
+            "primaryTour": "S",
+            "nameVariants": [
+                "steveallan",
+                "tseveallan",
+                "setveallan",
+                "stveeallan",
+                "steevallan",
+                "stevaellan",
+                "stevelalan",
+                "stevealaln",
+                "steveallna"
+            ],
+            "displayName": "Steve Allan",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_21633.jpg"
+        },
+        {
+            "id": "12920",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Bob",
+            "lastName": "Allard",
+            "shortName": "B Allard",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "77",
+                "id": "12920"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "boballard",
+                "obballard",
+                "bboallard",
+                "boabllard",
+                "boblalard",
+                "bobalalrd",
+                "boballrad",
+                "boballadr"
+            ],
+            "displayName": "Bob Allard",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_12920.jpg"
+        },
+        {
+            "id": "01014",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Fulton",
+            "lastName": "Allem",
+            "shortName": "F Allem",
+            "alphaSort": "A",
+            "country": "South Africa",
+            "countryFlag": "RSA",
+            "playerBio": {
+                "turnedPro": "1976",
+                "age": "68",
+                "id": "01014"
+            },
+            "primaryTour": "S",
+            "nameVariants": [
+                "fultonallem",
+                "ufltonallem",
+                "flutonallem",
+                "futlonallem",
+                "fulotnallem",
+                "fultnoallem",
+                "fultoanllem",
+                "fultonlalem",
+                "fultonalelm",
+                "fultonallme"
+            ],
+            "displayName": "Fulton Allem",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01014.jpg"
+        },
+        {
+            "id": "06197",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Michael",
+            "lastName": "Allen",
+            "shortName": "M Allen",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "1984",
+                "education": "University of Nevada",
+                "age": "67",
+                "id": "06197"
+            },
+            "primaryTour": "S",
+            "nameVariants": [
+                "michaelallen",
+                "imchaelallen",
+                "mcihaelallen",
+                "mihcaelallen",
+                "micahelallen",
+                "michealallen",
+                "michaleallen",
+                "michaealllen",
+                "michaellalen",
+                "michaelaleln",
+                "michaelallne"
+            ],
+            "displayName": "Michael Allen",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_06197.jpg"
+        },
+        {
+            "id": "01016",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Ras",
+            "lastName": "Allen",
+            "shortName": "R Allen",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "80",
+                "id": "01016"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "rasallen",
+                "arsallen",
+                "rsaallen",
+                "raasllen",
+                "raslalen",
+                "rasaleln",
+                "rasallne"
+            ],
+            "displayName": "Ras Allen",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01016.jpg"
+        },
+        {
+            "id": "10885",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Robert",
+            "lastName": "Allenby",
+            "shortName": "R Allenby",
+            "alphaSort": "A",
+            "country": "Australia",
+            "countryFlag": "AUS",
+            "playerBio": {
+                "turnedPro": "1991",
+                "age": "54",
+                "id": "10885"
+            },
+            "primaryTour": "S",
+            "nameVariants": [
+                "robertallenby",
+                "orbertallenby",
+                "rboertallenby",
+                "roebrtallenby",
+                "robretallenby",
+                "robetrallenby",
+                "roberatllenby",
+                "robertlalenby",
+                "robertalelnby",
+                "robertallneby",
+                "robertallebny",
+                "robertallenyb"
+            ],
+            "displayName": "Robert Allenby",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_10885.jpg"
+        },
+        {
+            "id": "01017",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Bud",
+            "lastName": "Allin",
+            "shortName": "B Allin",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "id": "01017"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "budallin",
+                "ubdallin",
+                "bduallin",
+                "buadllin",
+                "budlalin",
+                "budaliln",
+                "budallni"
+            ],
+            "displayName": "Bud Allin",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01017.jpg"
+        },
+        {
+            "id": "23540",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Jason",
+            "lastName": "Allred",
+            "shortName": "J Allred",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "2002",
+                "education": "Pepperdine University",
+                "age": "45",
+                "id": "23540"
+            },
+            "primaryTour": "H",
+            "nameVariants": [
+                "jasonallred",
+                "ajsonallred",
+                "jsaonallred",
+                "jaosnallred",
+                "jasnoallred",
+                "jasoanllred",
+                "jasonlalred",
+                "jasonalrled",
+                "jasonallerd",
+                "jasonallrde"
+            ],
+            "displayName": "Jason Allred",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_23540.jpg"
+        },
+        {
+            "id": "01018",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Stanton",
+            "lastName": "Altgelt",
+            "shortName": "S Altgelt",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "id": "01018"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "stantonaltgelt",
+                "tsantonaltgelt",
+                "satntonaltgelt",
+                "stnatonaltgelt",
+                "statnonaltgelt",
+                "stanotnaltgelt",
+                "stantnoaltgelt",
+                "stantoanltgelt",
+                "stantonlatgelt",
+                "stantonatlgelt",
+                "stantonalgtelt",
+                "stantonalteglt",
+                "stantonaltglet",
+                "stantonaltgetl"
+            ],
+            "displayName": "Stanton Altgelt",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01018.jpg"
+        },
+        {
+            "id": "06004",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Stephen",
+            "lastName": "Ames",
+            "shortName": "S Ames",
+            "alphaSort": "A",
+            "country": "Canada",
+            "countryFlag": "CAN",
+            "playerBio": {
+                "turnedPro": "1987",
+                "education": "Lynn University",
+                "age": "61",
+                "id": "06004"
+            },
+            "primaryTour": "S",
+            "nameVariants": [
+                "stephenames",
+                "tsephenames",
+                "setphenames",
+                "stpehenames",
+                "stehpenames",
+                "stepehnames",
+                "stephneames",
+                "stepheanmes",
+                "stephenmaes",
+                "stephenaems",
+                "stephenamse"
+            ],
+            "displayName": "Stephen Ames",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_06004.jpg"
+        },
+        {
+            "id": "33948",
+            "tourCode": "R",
+            "isPrimary": true,
+            "isActive": false,
+            "firstName": "Byeong Hun",
+            "lastName": "An",
+            "shortName": "B An",
+            "alphaSort": "A",
+            "country": "Republic of Korea",
+            "countryFlag": "KOR",
+            "playerBio": {
+                "turnedPro": "2011",
+                "education": "University of California-Berkeley",
+                "age": "34",
+                "id": "33948"
+            },
+            "primaryTour": "R",
+            "nameVariants": [
+                "byeonghunan",
+                "ybeonghunan",
+                "beyonghunan",
+                "byoenghunan",
+                "byenoghunan",
+                "byeognhunan",
+                "byeonhgunan",
+                "byeonguhnan",
+                "byeonghnuan",
+                "byeonghuann",
+                "byeonghunna"
+            ],
+            "displayName": "Byeong Hun An",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_33948.jpg"
+        },
+        {
+            "id": "45526",
+            "tourCode": "R",
+            "isPrimary": true,
+            "isActive": false,
+            "firstName": "Abraham",
+            "lastName": "Ancer",
+            "shortName": "A Ancer",
+            "alphaSort": "A",
+            "country": "Mexico",
+            "countryFlag": "MEX",
+            "playerBio": {
+                "turnedPro": "2013",
+                "education": "University of Oklahoma",
+                "age": "35",
+                "id": "45526"
+            },
+            "primaryTour": "R",
+            "nameVariants": [
+                "abrahamancer",
+                "barahamancer",
+                "arbahamancer",
+                "abarhamancer",
+                "abrhaamancer",
+                "abraahmancer",
+                "abrahmaancer",
+                "abrahaamncer",
+                "abrahamnacer",
+                "abrahamacner",
+                "abrahamanecr",
+                "abrahamancre"
+            ],
+            "displayName": "Abraham Ancer",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_45526.jpg"
+        },
+        {
+            "id": "52370",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Mason",
+            "lastName": "Andersen",
+            "shortName": "M Andersen",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "2022",
+                "education": "Arizona State University",
+                "age": "27",
+                "id": "52370"
+            },
+            "primaryTour": "H",
+            "nameVariants": [
+                "masonandersen",
+                "amsonandersen",
+                "msaonandersen",
+                "maosnandersen",
+                "masnoandersen",
+                "masoanndersen",
+                "masonnadersen",
+                "masonadnersen",
+                "masonanedrsen",
+                "masonandresen",
+                "masonandesren",
+                "masonanderesn",
+                "masonandersne"
+            ],
+            "displayName": "Mason Andersen",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_52370.jpg"
+        },
+        {
+            "id": "12955",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Andy",
+            "lastName": "Anderson",
+            "shortName": "A Anderson",
+            "alphaSort": "A",
+            "country": "",
+            "countryFlag": "",
+            "playerBio": {
+                "id": "12955"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "andyanderson",
+                "nadyanderson",
+                "adnyanderson",
+                "anydanderson",
+                "andaynderson",
+                "andynaderson",
+                "andyadnerson",
+                "andyanedrson",
+                "andyandreson",
+                "andyandesron",
+                "andyanderosn",
+                "andyandersno"
+            ],
+            "displayName": "Andy Anderson",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_12955.jpg"
+        },
+        {
+            "id": "12960",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Brad",
+            "lastName": "Anderson",
+            "shortName": "B Anderson",
+            "alphaSort": "A",
+            "country": "",
+            "countryFlag": "",
+            "playerBio": {
+                "id": "12960"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "bradanderson",
+                "rbadanderson",
+                "bardanderson",
+                "brdaanderson",
+                "braadnderson",
+                "bradnaderson",
+                "bradadnerson",
+                "bradanedrson",
+                "bradandreson",
+                "bradandesron",
+                "bradanderosn",
+                "bradandersno"
+            ],
+            "displayName": "Brad Anderson",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_12960.jpg"
+        },
+        {
+            "id": "23036",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Chris",
+            "lastName": "Anderson",
+            "shortName": "C Anderson",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "1992",
+                "education": "Mount San Antonio College",
+                "age": "55",
+                "id": "23036"
+            },
+            "primaryTour": "H",
+            "nameVariants": [
+                "chrisanderson",
+                "hcrisanderson",
+                "crhisanderson",
+                "chirsanderson",
+                "chrsianderson",
+                "chriasnderson",
+                "chrisnaderson",
+                "chrisadnerson",
+                "chrisanedrson",
+                "chrisandreson",
+                "chrisandesron",
+                "chrisanderosn",
+                "chrisandersno"
+            ],
+            "displayName": "Chris Anderson",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_23036.jpg"
+        },
+        {
+            "id": "06006",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "JC",
+            "lastName": "Anderson",
+            "shortName": "J Anderson",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "64",
+                "id": "06006"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "jcanderson",
+                "cjanderson",
+                "jacnderson",
+                "jcnaderson",
+                "jcadnerson",
+                "jcanedrson",
+                "jcandreson",
+                "jcandesron",
+                "jcanderosn",
+                "jcandersno"
+            ],
+            "displayName": "JC Anderson",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_06006.jpg"
+        },
+        {
+            "id": "25083",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Jeremy",
+            "lastName": "Anderson",
+            "shortName": "J Anderson",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "47",
+                "id": "25083"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "jeremyanderson",
+                "ejremyanderson",
+                "jreemyanderson",
+                "jeermyanderson",
+                "jermeyanderson",
+                "jereymanderson",
+                "jeremaynderson",
+                "jeremynaderson",
+                "jeremyadnerson",
+                "jeremyanedrson",
+                "jeremyandreson",
+                "jeremyandesron",
+                "jeremyanderosn",
+                "jeremyandersno"
+            ],
+            "displayName": "Jeremy Anderson",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_25083.jpg"
+        },
+        {
+            "id": "01023",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Jerry",
+            "lastName": "Anderson",
+            "shortName": "J Anderson",
+            "alphaSort": "A",
+            "country": "Canada",
+            "countryFlag": "CAN",
+            "playerBio": {
+                "age": "70",
+                "id": "01023"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "jerryanderson",
+                "ejrryanderson",
+                "jreryanderson",
+                "jeryranderson",
+                "jerraynderson",
+                "jerrynaderson",
+                "jerryadnerson",
+                "jerryanedrson",
+                "jerryandreson",
+                "jerryandesron",
+                "jerryanderosn",
+                "jerryandersno"
+            ],
+            "displayName": "Jerry Anderson",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01023.jpg"
+        },
+        {
+            "id": "33120",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Mark",
+            "lastName": "Anderson",
+            "shortName": "M Anderson",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "2009",
+                "education": "University of South Carolina",
+                "age": "40",
+                "id": "33120"
+            },
+            "primaryTour": "H",
+            "nameVariants": [
+                "markanderson",
+                "amrkanderson",
+                "mrakanderson",
+                "makranderson",
+                "maraknderson",
+                "marknaderson",
+                "markadnerson",
+                "markanedrson",
+                "markandreson",
+                "markandesron",
+                "markanderosn",
+                "markandersno"
+            ],
+            "displayName": "Mark Anderson",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_33120.jpg"
+        },
+        {
+            "id": "29620",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Willie",
+            "lastName": "Anderson",
+            "shortName": "W Anderson",
+            "alphaSort": "A",
+            "country": "",
+            "countryFlag": "",
+            "playerBio": {
+                "id": "29620"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "willieanderson",
+                "iwllieanderson",
+                "wlilieanderson",
+                "wilileanderson",
+                "willeianderson",
+                "williaenderson",
+                "willienaderson",
+                "willieadnerson",
+                "willieanedrson",
+                "willieandreson",
+                "willieandesron",
+                "willieanderosn",
+                "willieandersno"
+            ],
+            "displayName": "Willie Anderson",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_29620.jpg"
+        },
+        {
+            "id": "01024",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Billy",
+            "lastName": "Andrade",
+            "shortName": "B Andrade",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "1987",
+                "education": "Wake Forest University",
+                "age": "62",
+                "id": "01024"
+            },
+            "primaryTour": "S",
+            "nameVariants": [
+                "billyandrade",
+                "ibllyandrade",
+                "blilyandrade",
+                "bilylandrade",
+                "billayndrade",
+                "billynadrade",
+                "billyadnrade",
+                "billyanrdade",
+                "billyandarde",
+                "billyandrdae",
+                "billyandraed"
+            ],
+            "displayName": "Billy Andrade",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01024.jpg"
+        },
+        {
+            "id": "12982",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Dale",
+            "lastName": "Andreason",
+            "shortName": "D Andreason",
+            "alphaSort": "A",
+            "country": "",
+            "countryFlag": "",
+            "playerBio": {
+                "id": "12982"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "daleandreason",
+                "adleandreason",
+                "dlaeandreason",
+                "daelandreason",
+                "dalaendreason",
+                "dalenadreason",
+                "daleadnreason",
+                "daleanrdeason",
+                "daleanderason",
+                "daleandraeson",
+                "daleandresaon",
+                "daleandreaosn",
+                "daleandreasno"
+            ],
+            "displayName": "Dale Andreason",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_12982.jpg"
+        },
+        {
+            "id": "01030",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Isao",
+            "lastName": "Aoki",
+            "shortName": "I Aoki",
+            "alphaSort": "A",
+            "country": "Japan",
+            "countryFlag": "JPN",
+            "playerBio": {
+                "turnedPro": "1964",
+                "age": "83",
+                "id": "01030"
+            },
+            "primaryTour": "S",
+            "nameVariants": [
+                "isaoaoki",
+                "siaoaoki",
+                "iasoaoki",
+                "isoaaoki",
+                "isaaooki",
+                "isaooaki",
+                "isaoakoi",
+                "isaoaoik"
+            ],
+            "displayName": "Isao Aoki",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01030.jpg"
+        },
+        {
+            "id": "30978",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Kiradech",
+            "lastName": "Aphibarnrat",
+            "shortName": "K Aphibarnrat",
+            "alphaSort": "A",
+            "country": "Thailand",
+            "countryFlag": "THA",
+            "playerBio": {
+                "turnedPro": "2008",
+                "age": "36",
+                "id": "30978"
+            },
+            "primaryTour": "H",
+            "nameVariants": [
+                "kiradechaphibarnrat",
+                "ikradechaphibarnrat",
+                "kriadechaphibarnrat",
+                "kiardechaphibarnrat",
+                "kirdaechaphibarnrat",
+                "kiraedchaphibarnrat",
+                "kiradcehaphibarnrat",
+                "kiradehcaphibarnrat",
+                "kiradecahphibarnrat",
+                "kiradechpahibarnrat",
+                "kiradechahpibarnrat",
+                "kiradechapihbarnrat",
+                "kiradechaphbiarnrat",
+                "kiradechaphiabrnrat",
+                "kiradechaphibranrat",
+                "kiradechaphibanrrat",
+                "kiradechaphibarrnat",
+                "kiradechaphibarnart",
+                "kiradechaphibarnrta"
+            ],
+            "displayName": "Kiradech Aphibarnrat",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_30978.jpg"
+        },
+        {
+            "id": "20098",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Stuart",
+            "lastName": "Appleby",
+            "shortName": "S Appleby",
+            "alphaSort": "A",
+            "country": "Australia",
+            "countryFlag": "AUS",
+            "playerBio": {
+                "turnedPro": "1992",
+                "age": "54",
+                "id": "20098"
+            },
+            "primaryTour": "S",
+            "nameVariants": [
+                "stuartappleby",
+                "tsuartappleby",
+                "sutartappleby",
+                "staurtappleby",
+                "sturatappleby",
+                "stuatrappleby",
+                "stuaratppleby",
+                "stuartpapleby",
+                "stuartaplpeby",
+                "stuartappelby",
+                "stuartapplbey",
+                "stuartappleyb"
+            ],
+            "displayName": "Stuart Appleby",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_20098.jpg"
+        },
+        {
+            "id": "25936",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Alex",
+            "lastName": "Aragon",
+            "shortName": "A Aragon",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "2001",
+                "education": "Stanford University",
+                "age": "46",
+                "id": "25936"
+            },
+            "primaryTour": "H",
+            "nameVariants": [
+                "alexaragon",
+                "laexaragon",
+                "aelxaragon",
+                "alxearagon",
+                "aleaxragon",
+                "alexraagon",
+                "alexaargon",
+                "alexargaon",
+                "alexaraogn",
+                "alexaragno"
+            ],
+            "displayName": "Alex Aragon",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_25936.jpg"
+        },
+        {
+            "id": "01032",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Kikuo",
+            "lastName": "Arai",
+            "shortName": "K Arai",
+            "alphaSort": "A",
+            "country": "Japan",
+            "countryFlag": "JPN",
+            "playerBio": {
+                "age": "82",
+                "id": "01032"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "kikuoarai",
+                "ikkuoarai",
+                "kkiuoarai",
+                "kiukoarai",
+                "kikouarai",
+                "kikuaorai",
+                "kikuoraai",
+                "kikuoaari",
+                "kikuoaria"
+            ],
+            "displayName": "Kikuo Arai",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01032.jpg"
+        },
+        {
+            "id": "01033",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "George",
+            "lastName": "Archer",
+            "shortName": "G Archer",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "id": "01033"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "georgearcher",
+                "egorgearcher",
+                "goergearcher",
+                "gerogearcher",
+                "geogrearcher",
+                "georegarcher",
+                "georgaercher",
+                "georgeracher",
+                "georgeacrher",
+                "georgearhcer",
+                "georgearcehr",
+                "georgearchre"
+            ],
+            "displayName": "George Archer",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01033.jpg"
+        },
+        {
+            "id": "11689",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Ray",
+            "lastName": "Arinno",
+            "shortName": "R Arinno",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "78",
+                "id": "11689"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "rayarinno",
+                "aryarinno",
+                "ryaarinno",
+                "raayrinno",
+                "rayrainno",
+                "rayairnno",
+                "rayarnino",
+                "rayarinon"
+            ],
+            "displayName": "Ray Arinno",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_11689.jpg"
+        },
+        {
+            "id": "19803",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Ryan",
+            "lastName": "Armour",
+            "shortName": "R Armour",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "1999",
+                "education": "Ohio State University",
+                "age": "50",
+                "id": "19803"
+            },
+            "primaryTour": "S",
+            "nameVariants": [
+                "ryanarmour",
+                "yranarmour",
+                "raynarmour",
+                "rynaarmour",
+                "ryaanrmour",
+                "ryanramour",
+                "ryanamrour",
+                "ryanaromur",
+                "ryanarmuor",
+                "ryanarmoru"
+            ],
+            "displayName": "Ryan Armour",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_19803.jpg"
+        },
+        {
+            "id": "13024",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Tommy",
+            "lastName": "Armour",
+            "shortName": "T Armour",
+            "alphaSort": "A",
+            "country": "Scotland",
+            "countryFlag": "SCO",
+            "playerBio": {
+                "id": "13024"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "tommyarmour",
+                "otmmyarmour",
+                "tmomyarmour",
+                "tomymarmour",
+                "tommayrmour",
+                "tommyramour",
+                "tommyamrour",
+                "tommyaromur",
+                "tommyarmuor",
+                "tommyarmoru"
+            ],
+            "displayName": "Tommy Armour",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_13024.jpg"
+        },
+        {
+            "id": "01035",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Tommy",
+            "lastName": "Armour III",
+            "shortName": "T Armour III",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "1981",
+                "education": "University of New Mexico",
+                "age": "66",
+                "id": "01035"
+            },
+            "primaryTour": "S",
+            "nameVariants": [
+                "tommyarmouriii",
+                "otmmyarmouriii",
+                "tmomyarmouriii",
+                "tomymarmouriii",
+                "tommayrmouriii",
+                "tommyramouriii",
+                "tommyamrouriii",
+                "tommyaromuriii",
+                "tommyarmuoriii",
+                "tommyarmoruiii",
+                "tommyarmouirii"
+            ],
+            "displayName": "Tommy Armour III",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01035.jpg"
+        },
+        {
+            "id": "07781",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Ty",
+            "lastName": "Armstrong",
+            "shortName": "T Armstrong",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "66",
+                "id": "07781"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "tyarmstrong",
+                "ytarmstrong",
+                "tayrmstrong",
+                "tyramstrong",
+                "tyamrstrong",
+                "tyarsmtrong",
+                "tyarmtsrong",
+                "tyarmsrtong",
+                "tyarmstorng",
+                "tyarmstrnog",
+                "tyarmstrogn"
+            ],
+            "displayName": "Ty Armstrong",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_07781.jpg"
+        },
+        {
+            "id": "01036",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Wally",
+            "lastName": "Armstrong",
+            "shortName": "W Armstrong",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "80",
+                "id": "01036"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "wallyarmstrong",
+                "awllyarmstrong",
+                "wlalyarmstrong",
+                "walylarmstrong",
+                "wallayrmstrong",
+                "wallyramstrong",
+                "wallyamrstrong",
+                "wallyarsmtrong",
+                "wallyarmtsrong",
+                "wallyarmsrtong",
+                "wallyarmstorng",
+                "wallyarmstrnog",
+                "wallyarmstrogn"
+            ],
+            "displayName": "Wally Armstrong",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01036.jpg"
+        },
+        {
+            "id": "01037",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Dewey",
+            "lastName": "Arnette",
+            "shortName": "D Arnette",
+            "nickName": "Dewey",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "67",
+                "id": "01037"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "deweyarnette",
+                "edweyarnette",
+                "dweeyarnette",
+                "deewyarnette",
+                "dewyearnette",
+                "deweayrnette",
+                "deweyranette",
+                "deweyanrette",
+                "deweyarentte",
+                "deweyarntete",
+                "deweyarnetet"
+            ],
+            "displayName": "Dewey Arnette",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01037.jpg"
+        },
+        {
+            "id": "01039",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Perry",
+            "lastName": "Arthur",
+            "shortName": "P Arthur",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "71",
+                "id": "01039"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "perryarthur",
+                "eprryarthur",
+                "preryarthur",
+                "peryrarthur",
+                "perrayrthur",
+                "perryrathur",
+                "perryatrhur",
+                "perryarhtur",
+                "perryartuhr",
+                "perryarthru"
+            ],
+            "displayName": "Perry Arthur",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01039.jpg"
+        },
+        {
+            "id": "11472",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Bruce",
+            "lastName": "Ashworth",
+            "shortName": "B Ashworth",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "76",
+                "id": "11472"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "bruceashworth",
+                "rbuceashworth",
+                "burceashworth",
+                "brcueashworth",
+                "bruecashworth",
+                "brucaeshworth",
+                "brucesahworth",
+                "bruceahsworth",
+                "bruceaswhorth",
+                "bruceashowrth",
+                "bruceashwroth",
+                "bruceashwotrh",
+                "bruceashworht"
+            ],
+            "displayName": "Bruce Ashworth",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_11472.jpg"
+        },
+        {
+            "id": "47125",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Matt",
+            "lastName": "Atkins",
+            "shortName": "M Atkins",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "2013",
+                "education": "University of South Carolina-Aiken",
+                "age": "35",
+                "id": "47125"
+            },
+            "primaryTour": "H",
+            "nameVariants": [
+                "mattatkins",
+                "amttatkins",
+                "mtatatkins",
+                "matattkins",
+                "matttakins",
+                "mattaktins",
+                "mattatikns",
+                "mattatknis",
+                "mattatkisn"
+            ],
+            "displayName": "Matt Atkins",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_47125.jpg"
+        },
+        {
+            "id": "21407",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Arjun",
+            "lastName": "Atwal",
+            "shortName": "A Atwal",
+            "alphaSort": "A",
+            "country": "India",
+            "countryFlag": "IND",
+            "playerBio": {
+                "turnedPro": "1995",
+                "education": "Nassau Community College",
+                "age": "52",
+                "id": "21407"
+            },
+            "primaryTour": "S",
+            "nameVariants": [
+                "arjunatwal",
+                "rajunatwal",
+                "ajrunatwal",
+                "arujnatwal",
+                "arjnuatwal",
+                "arjuantwal",
+                "arjuntawal",
+                "arjunawtal",
+                "arjunatawl",
+                "arjunatwla"
+            ],
+            "displayName": "Arjun Atwal",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_21407.jpg"
+        },
+        {
+            "id": "01040",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Emlyn",
+            "lastName": "Aubrey",
+            "shortName": "E Aubrey",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "62",
+                "id": "01040"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "emlynaubrey",
+                "melynaubrey",
+                "elmynaubrey",
+                "emylnaubrey",
+                "emlnyaubrey",
+                "emlyanubrey",
+                "emlynuabrey",
+                "emlynaburey",
+                "emlynaurbey",
+                "emlynaubery",
+                "emlynaubrye"
+            ],
+            "displayName": "Emlyn Aubrey",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01040.jpg"
+        },
+        {
+            "id": "29625",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Laurie",
+            "lastName": "Auchterlonie",
+            "shortName": "L Auchterlonie",
+            "alphaSort": "A",
+            "country": "",
+            "countryFlag": "",
+            "playerBio": {
+                "id": "29625"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "laurieauchterlonie",
+                "alurieauchterlonie",
+                "luarieauchterlonie",
+                "laruieauchterlonie",
+                "lauireauchterlonie",
+                "laureiauchterlonie",
+                "lauriaeuchterlonie",
+                "laurieuachterlonie",
+                "laurieacuhterlonie",
+                "laurieauhcterlonie",
+                "laurieauctherlonie",
+                "laurieauchetrlonie",
+                "laurieauchtrelonie",
+                "laurieauchtelronie",
+                "laurieauchterolnie",
+                "laurieauchterlnoie",
+                "laurieauchterloine",
+                "laurieauchterlonei"
+            ],
+            "displayName": "Laurie Auchterlonie",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_29625.jpg"
+        },
+        {
+            "id": "13061",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "George",
+            "lastName": "Aulbach",
+            "shortName": "G Aulbach",
+            "alphaSort": "A",
+            "country": "",
+            "countryFlag": "",
+            "playerBio": {
+                "id": "13061"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "georgeaulbach",
+                "egorgeaulbach",
+                "goergeaulbach",
+                "gerogeaulbach",
+                "geogreaulbach",
+                "georegaulbach",
+                "georgaeulbach",
+                "georgeualbach",
+                "georgealubach",
+                "georgeaublach",
+                "georgeaulabch",
+                "georgeaulbcah",
+                "georgeaulbahc"
+            ],
+            "displayName": "George Aulbach",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_13061.jpg"
+        },
+        {
+            "id": "05013",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Hampton",
+            "lastName": "Auld",
+            "shortName": "H Auld",
+            "alphaSort": "A",
+            "country": "",
+            "countryFlag": "",
+            "playerBio": {
+                "id": "05013"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "hamptonauld",
+                "ahmptonauld",
+                "hmaptonauld",
+                "hapmtonauld",
+                "hamtponauld",
+                "hampotnauld",
+                "hamptnoauld",
+                "hamptoanuld",
+                "hamptonuald",
+                "hamptonalud",
+                "hamptonaudl"
+            ],
+            "displayName": "Hampton Auld",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_05013.jpg"
+        },
+        {
+            "id": "07867",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Woody",
+            "lastName": "Austin",
+            "shortName": "W Austin",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "1986",
+                "education": "University of Miami",
+                "age": "62",
+                "id": "07867"
+            },
+            "primaryTour": "S",
+            "nameVariants": [
+                "woodyaustin",
+                "owodyaustin",
+                "wodoyaustin",
+                "wooydaustin",
+                "woodayustin",
+                "woodyuastin",
+                "woodyasutin",
+                "woodyautsin",
+                "woodyausitn",
+                "woodyaustni"
+            ],
+            "displayName": "Woody Austin",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_07867.jpg"
+        },
+        {
+            "id": "65871",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Thomas",
+            "lastName": "Avant",
+            "shortName": "T Avant",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "28",
+                "id": "65871"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "thomasavant",
+                "htomasavant",
+                "tohmasavant",
+                "thmoasavant",
+                "thoamsavant",
+                "thomsaavant",
+                "thomaasvant",
+                "thomasvaant",
+                "thomasaavnt",
+                "thomasavnat",
+                "thomasavatn"
+            ],
+            "displayName": "Thomas Avant",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_65871.jpg"
+        },
+        {
+            "id": "23048",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Eric",
+            "lastName": "Axley",
+            "shortName": "E Axley",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "1997",
+                "education": "East Tennessee State University",
+                "age": "51",
+                "id": "23048"
+            },
+            "primaryTour": "S",
+            "nameVariants": [
+                "ericaxley",
+                "reicaxley",
+                "eircaxley",
+                "erciaxley",
+                "eriacxley",
+                "ericxaley",
+                "ericalxey",
+                "ericaxely",
+                "ericaxlye"
+            ],
+            "displayName": "Eric Axley",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_23048.jpg"
+        },
+        {
+            "id": "01041",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Tommy",
+            "lastName": "Aycock",
+            "shortName": "T Aycock",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "id": "01041"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "tommyaycock",
+                "otmmyaycock",
+                "tmomyaycock",
+                "tomymaycock",
+                "tommayycock",
+                "tommyyacock",
+                "tommyacyock",
+                "tommyayocck",
+                "tommyayccok",
+                "tommyaycokc"
+            ],
+            "displayName": "Tommy Aycock",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01041.jpg"
+        },
+        {
+            "id": "13078",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Laurie",
+            "lastName": "Ayton",
+            "shortName": "L Ayton",
+            "alphaSort": "A",
+            "country": "",
+            "countryFlag": "",
+            "playerBio": {
+                "id": "13078"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "laurieayton",
+                "alurieayton",
+                "luarieayton",
+                "laruieayton",
+                "lauireayton",
+                "laureiayton",
+                "lauriaeyton",
+                "laurieyaton",
+                "laurieatyon",
+                "laurieayotn",
+                "laurieaytno"
+            ],
+            "displayName": "Laurie Ayton",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_13078.jpg"
+        },
+        {
+            "id": "01042",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Paul",
+            "lastName": "Azinger",
+            "shortName": "P Azinger",
+            "alphaSort": "A",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "1981",
+                "education": "Brevard Junior College",
+                "age": "66",
+                "id": "01042"
+            },
+            "primaryTour": "S",
+            "nameVariants": [
+                "paulazinger",
+                "apulazinger",
+                "pualazinger",
+                "paluazinger",
+                "paualzinger",
+                "paulzainger",
+                "paulaiznger",
+                "paulazniger",
+                "paulazigner",
+                "paulazinegr",
+                "paulazingre"
+            ],
+            "displayName": "Paul Azinger",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01042.jpg"
+        },
+        {
+            "id": "52955",
+            "tourCode": "R",
+            "isPrimary": true,
+            "isActive": true,
+            "firstName": "Ludvig",
+            "lastName": "Åberg",
+            "shortName": "L Åberg",
+            "alphaSort": "Å",
+            "country": "Sweden",
+            "countryFlag": "SWE",
+            "playerBio": {
+                "turnedPro": "2023",
+                "education": "Texas Tech University",
+                "age": "26",
+                "id": "52955"
+            },
+            "primaryTour": "R",
+            "nameVariants": [
+                "ludvigåberg",
+                "uldvigåberg",
+                "lduvigåberg",
+                "luvdigåberg",
+                "ludivgåberg",
+                "ludvgiåberg",
+                "ludviågberg",
+                "ludvigbåerg",
+                "ludvigåebrg",
+                "ludvigåbreg",
+                "ludvigåbegr"
+            ],
+            "displayName": "Ludvig Åberg",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_52955.jpg"
+        },
+        {
+            "id": "22371",
+            "tourCode": "R",
+            "isPrimary": true,
+            "isActive": true,
+            "firstName": "Aaron",
+            "lastName": "Baddeley",
+            "shortName": "A Baddeley",
+            "alphaSort": "B",
+            "country": "Australia",
+            "countryFlag": "AUS",
+            "playerBio": {
+                "turnedPro": "2000",
+                "age": "44",
+                "id": "22371"
+            },
+            "primaryTour": "R",
+            "nameVariants": [
+                "aaronbaddeley",
+                "araonbaddeley",
+                "aaornbaddeley",
+                "aarnobaddeley",
+                "aarobnaddeley",
+                "aaronabddeley",
+                "aaronbdadeley",
+                "aaronbadedley",
+                "aaronbaddleey",
+                "aaronbaddeely",
+                "aaronbaddelye"
+            ],
+            "displayName": "Aaron Baddeley",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_22371.jpg"
+        },
+        {
+            "id": "28259",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Sangmoon",
+            "lastName": "Bae",
+            "shortName": "S Bae",
+            "alphaSort": "B",
+            "country": "Republic of Korea",
+            "countryFlag": "KOR",
+            "playerBio": {
+                "turnedPro": "2004",
+                "education": "Sungkyunkwan University",
+                "age": "39",
+                "id": "28259"
+            },
+            "primaryTour": "H",
+            "nameVariants": [
+                "sangmoonbae",
+                "asngmoonbae",
+                "snagmoonbae",
+                "sagnmoonbae",
+                "sanmgoonbae",
+                "sangomonbae",
+                "sangmonobae",
+                "sangmoobnae",
+                "sangmoonabe",
+                "sangmoonbea"
+            ],
+            "displayName": "Sangmoon Bae",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_28259.jpg"
+        },
+        {
+            "id": "13088",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Eddie",
+            "lastName": "Baening",
+            "shortName": "E Baening",
+            "alphaSort": "B",
+            "country": "",
+            "countryFlag": "",
+            "playerBio": {
+                "id": "13088"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "eddiebaening",
+                "dediebaening",
+                "edidebaening",
+                "eddeibaening",
+                "eddibeaening",
+                "eddieabening",
+                "eddiebeaning",
+                "eddiebaneing",
+                "eddiebaeinng",
+                "eddiebaennig",
+                "eddiebaenign"
+            ],
+            "displayName": "Eddie Baening",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_13088.jpg"
+        },
+        {
+            "id": "20498",
+            "tourCode": "R",
+            "isPrimary": true,
+            "isActive": false,
+            "firstName": "Briny",
+            "lastName": "Baird",
+            "shortName": "B Baird",
+            "alphaSort": "B",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "1995",
+                "education": "Valdosta State University",
+                "age": "53",
+                "id": "20498"
+            },
+            "primaryTour": "R",
+            "nameVariants": [
+                "brinybaird",
+                "rbinybaird",
+                "birnybaird",
+                "brniybaird",
+                "briynbaird",
+                "brinbyaird",
+                "brinyabird",
+                "brinybiard",
+                "brinybarid",
+                "brinybaidr"
+            ],
+            "displayName": "Briny Baird",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_20498.jpg"
+        },
+        {
+            "id": "01045",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Butch",
+            "lastName": "Baird",
+            "shortName": "B Baird",
+            "alphaSort": "B",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "89",
+                "id": "01045"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "butchbaird",
+                "ubtchbaird",
+                "btuchbaird",
+                "bucthbaird",
+                "buthcbaird",
+                "butcbhaird",
+                "butchabird",
+                "butchbiard",
+                "butchbarid",
+                "butchbaidr"
+            ],
+            "displayName": "Butch Baird",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01045.jpg"
+        },
+        {
+            "id": "33404",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Chris",
+            "lastName": "Baker",
+            "shortName": "C Baker",
+            "alphaSort": "B",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "2008",
+                "education": "Iowa State University",
+                "age": "40",
+                "id": "33404"
+            },
+            "primaryTour": "H",
+            "nameVariants": [
+                "chrisbaker",
+                "hcrisbaker",
+                "crhisbaker",
+                "chirsbaker",
+                "chrsibaker",
+                "chribsaker",
+                "chrisabker",
+                "chrisbkaer",
+                "chrisbaekr",
+                "chrisbakre"
+            ],
+            "displayName": "Chris Baker",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_33404.jpg"
+        },
+        {
+            "id": "13110",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Ralph",
+            "lastName": "Baker",
+            "shortName": "R Baker",
+            "alphaSort": "B",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "90",
+                "id": "13110"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "ralphbaker",
+                "arlphbaker",
+                "rlaphbaker",
+                "raplhbaker",
+                "ralhpbaker",
+                "ralpbhaker",
+                "ralphabker",
+                "ralphbkaer",
+                "ralphbaekr",
+                "ralphbakre"
+            ],
+            "displayName": "Ralph Baker",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_13110.jpg"
+        },
+        {
+            "id": "01049",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Ian",
+            "lastName": "Baker-Finch",
+            "shortName": "I Baker-Finch",
+            "alphaSort": "B",
+            "country": "Australia",
+            "countryFlag": "AUS",
+            "playerBio": {
+                "age": "65",
+                "id": "01049"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "ianbaker-finch",
+                "ainbaker-finch",
+                "inabaker-finch",
+                "iabnaker-finch",
+                "ianabker-finch",
+                "ianbkaer-finch",
+                "ianbaekr-finch",
+                "ianbakre-finch",
+                "ianbake-rfinch",
+                "ianbakerf-inch",
+                "ianbaker-ifnch",
+                "ianbaker-fnich",
+                "ianbaker-ficnh",
+                "ianbaker-finhc"
+            ],
+            "displayName": "Ian Baker-Finch",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01049.jpg"
+        },
+        {
+            "id": "01050",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Al",
+            "lastName": "Balding",
+            "shortName": "A Balding",
+            "alphaSort": "B",
+            "country": "Canada",
+            "countryFlag": "CAN",
+            "playerBio": {
+                "id": "01050"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "albalding",
+                "labalding",
+                "ablalding",
+                "alablding",
+                "alblading",
+                "albadling",
+                "albalidng",
+                "albaldnig",
+                "albaldign"
+            ],
+            "displayName": "Al Balding",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01050.jpg"
+        },
+        {
+            "id": "05016",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Errie",
+            "lastName": "Ball",
+            "shortName": "E Ball",
+            "alphaSort": "B",
+            "country": "",
+            "countryFlag": "",
+            "playerBio": {
+                "id": "05016"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "errieball",
+                "rerieball",
+                "erireball",
+                "erreiball",
+                "erribeall",
+                "errieabll",
+                "errieblal"
+            ],
+            "displayName": "Errie Ball",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_05016.jpg"
+        },
+        {
+            "id": "01051",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Seve",
+            "lastName": "Ballesteros",
+            "shortName": "S Ballesteros",
+            "alphaSort": "B",
+            "country": "Spain",
+            "countryFlag": "ESP",
+            "playerBio": {
+                "turnedPro": "1974",
+                "id": "01051"
+            },
+            "primaryTour": "S",
+            "nameVariants": [
+                "seveballesteros",
+                "esveballesteros",
+                "sveeballesteros",
+                "seevballesteros",
+                "sevbeallesteros",
+                "seveabllesteros",
+                "seveblalesteros",
+                "sevebalelsteros",
+                "seveballseteros",
+                "seveballetseros",
+                "seveballesetros",
+                "seveballestreos",
+                "seveballesteors",
+                "seveballesterso"
+            ],
+            "displayName": "Seve Ballesteros",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01051.jpg"
+        },
+        {
+            "id": "13133",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Lou",
+            "lastName": "Barbaro",
+            "shortName": "L Barbaro",
+            "alphaSort": "B",
+            "country": "",
+            "countryFlag": "",
+            "playerBio": {
+                "id": "13133"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "loubarbaro",
+                "olubarbaro",
+                "luobarbaro",
+                "lobuarbaro",
+                "louabrbaro",
+                "loubrabaro",
+                "loubabraro",
+                "loubarabro",
+                "loubarbrao",
+                "loubarbaor"
+            ],
+            "displayName": "Lou Barbaro",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_13133.jpg"
+        },
+        {
+            "id": "13132",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Bob",
+            "lastName": "Barbarossa",
+            "shortName": "B Barbarossa",
+            "alphaSort": "B",
+            "country": "",
+            "countryFlag": "",
+            "playerBio": {
+                "id": "13132"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "bobbarbarossa",
+                "obbbarbarossa",
+                "bbobarbarossa",
+                "bobabrbarossa",
+                "bobbrabarossa",
+                "bobbabrarossa",
+                "bobbarabrossa",
+                "bobbarbraossa",
+                "bobbarbaorssa",
+                "bobbarbarsosa",
+                "bobbarbarosas"
+            ],
+            "displayName": "Bob Barbarossa",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_13132.jpg"
+        },
+        {
+            "id": "21739",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Aaron",
+            "lastName": "Barber",
+            "shortName": "A Barber",
+            "alphaSort": "B",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "1996",
+                "education": "University of Minnesota",
+                "age": "53",
+                "id": "21739"
+            },
+            "primaryTour": "H",
+            "nameVariants": [
+                "aaronbarber",
+                "araonbarber",
+                "aaornbarber",
+                "aarnobarber",
+                "aarobnarber",
+                "aaronabrber",
+                "aaronbraber",
+                "aaronbabrer",
+                "aaronbarebr",
+                "aaronbarbre"
+            ],
+            "displayName": "Aaron Barber",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_21739.jpg"
+        },
+        {
+            "id": "35545",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Blayne",
+            "lastName": "Barber",
+            "shortName": "B Barber",
+            "alphaSort": "B",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "2012",
+                "education": "Auburn University",
+                "age": "36",
+                "id": "35545"
+            },
+            "primaryTour": "H",
+            "nameVariants": [
+                "blaynebarber",
+                "lbaynebarber",
+                "balynebarber",
+                "blyanebarber",
+                "blanyebarber",
+                "blayenbarber",
+                "blaynbearber",
+                "blayneabrber",
+                "blaynebraber",
+                "blaynebabrer",
+                "blaynebarebr",
+                "blaynebarbre"
+            ],
+            "displayName": "Blayne Barber",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_35545.jpg"
+        },
+        {
+            "id": "01054",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Dave",
+            "lastName": "Barber",
+            "shortName": "D Barber",
+            "alphaSort": "B",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "79",
+                "id": "01054"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "davebarber",
+                "advebarber",
+                "dvaebarber",
+                "daevbarber",
+                "davbearber",
+                "daveabrber",
+                "davebraber",
+                "davebabrer",
+                "davebarebr",
+                "davebarbre"
+            ],
+            "displayName": "Dave Barber",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01054.jpg"
+        },
+        {
+            "id": "01055",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Jerry",
+            "lastName": "Barber",
+            "shortName": "J Barber",
+            "alphaSort": "B",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "id": "01055"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "jerrybarber",
+                "ejrrybarber",
+                "jrerybarber",
+                "jeryrbarber",
+                "jerrbyarber",
+                "jerryabrber",
+                "jerrybraber",
+                "jerrybabrer",
+                "jerrybarebr",
+                "jerrybarbre"
+            ],
+            "displayName": "Jerry Barber",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01055.jpg"
+        },
+        {
+            "id": "01056",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Jim",
+            "lastName": "Barber",
+            "shortName": "J Barber",
+            "alphaSort": "B",
+            "country": "",
+            "countryFlag": "",
+            "playerBio": {
+                "id": "01056"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "jimbarber",
+                "ijmbarber",
+                "jmibarber",
+                "jibmarber",
+                "jimabrber",
+                "jimbraber",
+                "jimbabrer",
+                "jimbarebr",
+                "jimbarbre"
+            ],
+            "displayName": "Jim Barber",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01056.jpg"
+        },
+        {
+            "id": "01057",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Miller",
+            "lastName": "Barber",
+            "shortName": "M Barber",
+            "alphaSort": "B",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "id": "01057"
+            },
+            "primaryTour": "S",
+            "nameVariants": [
+                "millerbarber",
+                "imllerbarber",
+                "mlilerbarber",
+                "milelrbarber",
+                "millrebarber",
+                "millebrarber",
+                "millerabrber",
+                "millerbraber",
+                "millerbabrer",
+                "millerbarebr",
+                "millerbarbre"
+            ],
+            "displayName": "Miller Barber",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01057.jpg"
+        },
+        {
+            "id": "23613",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Rich",
+            "lastName": "Barcelo",
+            "shortName": "R Barcelo",
+            "alphaSort": "B",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "1998",
+                "education": "University of Nevada",
+                "age": "50",
+                "id": "23613"
+            },
+            "primaryTour": "H",
+            "nameVariants": [
+                "richbarcelo",
+                "irchbarcelo",
+                "rcihbarcelo",
+                "rihcbarcelo",
+                "ricbharcelo",
+                "richabrcelo",
+                "richbracelo",
+                "richbacrelo",
+                "richbareclo",
+                "richbarcleo",
+                "richbarceol"
+            ],
+            "displayName": "Rich Barcelo",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_23613.jpg"
+        },
+        {
+            "id": "39982",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Jakub",
+            "lastName": "Bares",
+            "shortName": "J Bares",
+            "alphaSort": "B",
+            "country": "Czechia",
+            "countryFlag": "CZE",
+            "playerBio": {
+                "id": "39982"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "jakubbares",
+                "ajkubbares",
+                "jkaubbares",
+                "jaukbbares",
+                "jakbubares",
+                "jakubabres",
+                "jakubbraes",
+                "jakubbaers",
+                "jakubbarse"
+            ],
+            "displayName": "Jakub Bares",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_39982.jpg"
+        },
+        {
+            "id": "37212",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Paul",
+            "lastName": "Barjon",
+            "shortName": "P Barjon",
+            "alphaSort": "B",
+            "country": "France",
+            "countryFlag": "FRA",
+            "playerBio": {
+                "turnedPro": "2016",
+                "education": "Texas Christian University",
+                "age": "33",
+                "id": "37212"
+            },
+            "primaryTour": "H",
+            "nameVariants": [
+                "paulbarjon",
+                "apulbarjon",
+                "pualbarjon",
+                "palubarjon",
+                "paublarjon",
+                "paulabrjon",
+                "paulbrajon",
+                "paulbajron",
+                "paulbarojn",
+                "paulbarjno"
+            ],
+            "displayName": "Paul Barjon",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_37212.jpg"
+        },
+        {
+            "id": "11692",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Jim",
+            "lastName": "Barker",
+            "shortName": "J Barker",
+            "nickName": "Jim",
+            "alphaSort": "B",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "78",
+                "id": "11692"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "jamesbarker",
+                "ajmesbarker",
+                "jmaesbarker",
+                "jaemsbarker",
+                "jamsebarker",
+                "jamebsarker",
+                "jamesabrker",
+                "jamesbraker",
+                "jamesbakrer",
+                "jamesbarekr",
+                "jamesbarkre"
+            ],
+            "displayName": "Jim Barker",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_11692.jpg"
+        },
+        {
+            "id": "06863",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Paul",
+            "lastName": "Barkhouse",
+            "shortName": "P Barkhouse",
+            "alphaSort": "B",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "85",
+                "id": "06863"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "paulbarkhouse",
+                "apulbarkhouse",
+                "pualbarkhouse",
+                "palubarkhouse",
+                "paublarkhouse",
+                "paulabrkhouse",
+                "paulbrakhouse",
+                "paulbakrhouse",
+                "paulbarhkouse",
+                "paulbarkohuse",
+                "paulbarkhuose",
+                "paulbarkhosue",
+                "paulbarkhoues"
+            ],
+            "displayName": "Paul Barkhouse",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_06863.jpg"
+        },
+        {
+            "id": "19824",
+            "tourCode": "R",
+            "isPrimary": true,
+            "isActive": false,
+            "firstName": "Craig",
+            "lastName": "Barlow",
+            "shortName": "C Barlow",
+            "alphaSort": "B",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "1995",
+                "education": "Taft Junior College",
+                "age": "53",
+                "id": "19824"
+            },
+            "primaryTour": "R",
+            "nameVariants": [
+                "craigbarlow",
+                "rcaigbarlow",
+                "carigbarlow",
+                "criagbarlow",
+                "cragibarlow",
+                "craibgarlow",
+                "craigabrlow",
+                "craigbralow",
+                "craigbalrow",
+                "craigbarolw",
+                "craigbarlwo"
+            ],
+            "displayName": "Craig Barlow",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_19824.jpg"
+        },
+        {
+            "id": "34374",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Erik",
+            "lastName": "Barnes",
+            "shortName": "E Barnes",
+            "alphaSort": "B",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "2011",
+                "education": "Austin Peay State University",
+                "age": "38",
+                "id": "34374"
+            },
+            "primaryTour": "H",
+            "nameVariants": [
+                "erikbarnes",
+                "reikbarnes",
+                "eirkbarnes",
+                "erkibarnes",
+                "eribkarnes",
+                "erikabrnes",
+                "erikbranes",
+                "erikbanres",
+                "erikbarens",
+                "erikbarnse"
+            ],
+            "displayName": "Erik Barnes",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_34374.jpg"
+        },
+        {
+            "id": "13158",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Jim",
+            "lastName": "Barnes",
+            "shortName": "J Barnes",
+            "nickName": "Jim",
+            "alphaSort": "B",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "id": "13158"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "jamesbarnes",
+                "ajmesbarnes",
+                "jmaesbarnes",
+                "jaemsbarnes",
+                "jamsebarnes",
+                "jamebsarnes",
+                "jamesabrnes",
+                "jamesbranes",
+                "jamesbanres",
+                "jamesbarens",
+                "jamesbarnse"
+            ],
+            "displayName": "Jim Barnes",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_13158.jpg"
+        },
+        {
+            "id": "24846",
+            "tourCode": "R",
+            "isPrimary": true,
+            "isActive": false,
+            "firstName": "Ricky",
+            "lastName": "Barnes",
+            "shortName": "R Barnes",
+            "alphaSort": "B",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "turnedPro": "2003",
+                "education": "University of Arizona",
+                "age": "45",
+                "id": "24846"
+            },
+            "primaryTour": "R",
+            "nameVariants": [
+                "rickybarnes",
+                "irckybarnes",
+                "rcikybarnes",
+                "rikcybarnes",
+                "ricykbarnes",
+                "rickbyarnes",
+                "rickyabrnes",
+                "rickybranes",
+                "rickybanres",
+                "rickybarens",
+                "rickybarnse"
+            ],
+            "displayName": "Ricky Barnes",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_24846.jpg"
+        },
+        {
+            "id": "05023",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "John",
+            "lastName": "Barnum",
+            "shortName": "J Barnum",
+            "alphaSort": "B",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "114",
+                "id": "05023"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "johnbarnum",
+                "ojhnbarnum",
+                "jhonbarnum",
+                "jonhbarnum",
+                "johbnarnum",
+                "johnabrnum",
+                "johnbranum",
+                "johnbanrum",
+                "johnbarunm",
+                "johnbarnmu"
+            ],
+            "displayName": "John Barnum",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_05023.jpg"
+        },
+        {
+            "id": "01060",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Dave",
+            "lastName": "Barr",
+            "shortName": "D Barr",
+            "alphaSort": "B",
+            "country": "Canada",
+            "countryFlag": "CAN",
+            "playerBio": {
+                "age": "74",
+                "id": "01060"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "davebarr",
+                "advebarr",
+                "dvaebarr",
+                "daevbarr",
+                "davbearr",
+                "daveabrr",
+                "davebrar"
+            ],
+            "displayName": "Dave Barr",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01060.jpg"
+        },
+        {
+            "id": "01061",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Ray",
+            "lastName": "Barr, Jr.",
+            "shortName": "R Barr, Jr.",
+            "alphaSort": "B",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "67",
+                "id": "01061"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "raybarr,jr.",
+                "arybarr,jr.",
+                "ryabarr,jr.",
+                "rabyarr,jr.",
+                "rayabrr,jr.",
+                "raybrar,jr.",
+                "raybar,rjr.",
+                "raybarrj,r.",
+                "raybarr,rj.",
+                "raybarr,j.r"
+            ],
+            "displayName": "Ray Barr, Jr.",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_01061.jpg"
+        },
+        {
+            "id": "12661",
+            "tourCode": "R",
+            "isPrimary": false,
+            "isActive": false,
+            "firstName": "Todd",
+            "lastName": "Barranger",
+            "shortName": "T Barranger",
+            "alphaSort": "B",
+            "country": "United States",
+            "countryFlag": "USA",
+            "playerBio": {
+                "age": "57",
+                "id": "12661"
+            },
+            "primaryTour": "",
+            "nameVariants": [
+                "toddbarranger",
+                "otddbarranger",
+                "tdodbarranger",
+                "todbdarranger",
+                "toddabrranger",
+                "toddbraranger",
+                "toddbararnger",
+                "toddbarrnager",
+                "toddbarragner",
+                "toddbarranegr",
+                "toddbarrangre"
+            ],
+            "displayName": "Todd Barranger",
+            "headshot": "https://pga-tour-res.cloudinary.com/image/upload/c_thumb,g_face,w_280,h_350,z_0.7/headshots_12661.jpg"
+        },

@@ -36,7 +36,7 @@ from .pga_player_profile_stats_scraper import (
 from .pga_stats_scraper import fetch_stat_overview
 
 DATASET = os.getenv("PGA_DATASET", "pga_data")
-TABLE = os.getenv("PGA_PLAYER_PROFILE_STATS_TABLE", "player_profile_stats")
+TABLE = os.getenv("PGA_PLAYER_PROFILE_STATS_TABLE", "website_player_profile_stats")
 CHUNK_SIZE = 500
 
 # Concurrency: fetch multiple players in parallel, but stay polite
@@ -83,7 +83,7 @@ def _ensure_table(client: bigquery.Client) -> str:
     )
     bq_table.clustering_fields = ["tour_code", "player_id", "stat_id"]
     bq_table.description = (
-        "PGA Tour per-player profile stats overview scraped from pgatour.com "
+        "PGA Tour per-player profile stats scraped from pgatour.com "
         "player stats pages (__NEXT_DATA__ statsOverview)."
     )
     client.create_table(bq_table, exists_ok=True)

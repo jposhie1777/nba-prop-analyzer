@@ -77,5 +77,6 @@ jobs:
             echo "=== Stats + rankings for $year ==="
             python -m mobile_api.ingest.pga.pga_stats_ingest --year $year --tour R
             python -m mobile_api.ingest.pga.pga_rankings_ingest --year $year --tour R
+            python -m mobile_api.ingest.pga.pga_player_profile_stats_ingest --season $year --tour R
             sleep 2
           done

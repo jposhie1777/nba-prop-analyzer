@@ -68,3 +68,9 @@ jobs:
           YEAR=$(date +%Y)
           TOUR="${{ inputs.tour || 'R' }}"
           python -m mobile_api.ingest.pga.pga_rankings_ingest --year $YEAR --tour $TOUR
+
+      - name: Ingest player profile stats
+        run: |
+          YEAR=$(date +%Y)
+          TOUR="${{ inputs.tour || 'R' }}"
+          python -m mobile_api.ingest.pga.pga_player_profile_stats_ingest --season $YEAR --tour $TOUR

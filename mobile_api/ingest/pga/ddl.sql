@@ -1,19 +1,34 @@
 -- BigQuery DDL for PGA data tables
 -- Dataset: pga_data
 
--- ─── Latest pairings snapshot ────────────────────────────────────────────────
--- One row per player × round × group, always reflecting the most-recent ingest.
+-- ─── Latest pairings snapshot (current tournament only) ──────────────────────
+-- Scoped to the single most-recent tournament (highest season year, then
+-- latest run_ts).  One row per player × round × group.
 -- Use this view as the base for all pairing analytics.
 CREATE OR REPLACE VIEW `pga_data.v_pairings_latest` AS
+WITH current_tournament AS (
+  SELECT tournament_id
+  FROM (
+    SELECT
+      tournament_id,
+      MAX(run_ts)                                              AS latest_run_ts,
+      MAX(SAFE_CAST(SUBSTR(tournament_id, 2, 4) AS INT64))    AS season_year
+    FROM `pga_data.tournament_round_pairings`
+    GROUP BY tournament_id
+  )
+  ORDER BY season_year DESC, latest_run_ts DESC, tournament_id DESC
+  LIMIT 1
+)
 SELECT * EXCEPT (row_num)
 FROM (
   SELECT
-    *,
+    p.*,
     ROW_NUMBER() OVER (
-      PARTITION BY tournament_id, round_number, group_number, player_id
-      ORDER BY run_ts DESC
+      PARTITION BY p.tournament_id, p.round_number, p.group_number, p.player_id
+      ORDER BY p.run_ts DESC
     ) AS row_num
-  FROM `pga_data.tournament_round_pairings`
+  FROM `pga_data.tournament_round_pairings` p
+  INNER JOIN current_tournament ct ON p.tournament_id = ct.tournament_id
 )
 WHERE row_num = 1;
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -375,6 +390,13 @@ OPTIONS (
   description = 'PGA website active players with full endpoint payload'
 );
 
+-- One row per active player per tour/year, plus one final row with
+-- player_id = 'TOUR_AVERAGE' / player_name = 'Tour Average'.
+--
+-- stats_payload   JSON STRING: {stat_id: {stat_id, stat_name, stat_title,
+--                   stat_value, rank, tour_avg}, ...}
+-- tour_averages   JSON STRING: {stat_id: tourAvg_string, ...}
+--                 For the TOUR_AVERAGE row stat_value == tour_avg for each stat.
 CREATE TABLE IF NOT EXISTS `pga_data.website_player_stats` (
   run_ts TIMESTAMP NOT NULL,
   ingested_at TIMESTAMP NOT NULL,
@@ -390,5 +412,5 @@ CREATE TABLE IF NOT EXISTS `pga_data.website_player_stats` (
 PARTITION BY RANGE_BUCKET(year, GENERATE_ARRAY(2015, 2035, 1))
 CLUSTER BY tour_code, year, player_id
 OPTIONS (
-  description = 'PGA website player stats (one row per player, includes all stats and tour averages as JSON)'
+  description = 'PGA website player stats — one row per active player + one TOUR_AVERAGE row; all stats and averages stored as JSON keyed by stat_id'
 );

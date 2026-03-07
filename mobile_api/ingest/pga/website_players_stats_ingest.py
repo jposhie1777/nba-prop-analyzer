@@ -292,17 +292,35 @@ def _flatten_player_directory(data: Dict[str, Any]) -> List[Dict[str, Any]]:
     return rows
 
 
-def _group_player_stats(data: Dict[str, Any], current_year: int, active_player_ids: Set[str]) -> List[Dict[str, Any]]:
+def _group_player_stats(data: Dict[str, Any], current_year: int, active_player_ids: Set[str]) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """Return (player_rows, tour_avg_map) where tour_avg_map is keyed by stat_id."""
     overview = (data or {}).get("statOverview") or {}
     year = int(overview.get("year") or 0)
     if year != current_year:
-        return []
+        return [], {}
 
     grouped: Dict[str, Dict[str, Any]] = {}
+    # Collect all tour averages across every stat for the TOUR_AVERAGE row.
+    tour_avg_map: Dict[str, Any] = {}  # stat_id -> {stat_id, stat_name, stat_title, stat_value, rank, tour_avg}
+
     for stat in overview.get("stats") or []:
         stat_id = str(stat.get("statId") or "")
         stat_name = stat.get("statName")
         tour_avg = stat.get("tourAvg")
+
+        # Build tour average entry for this stat (stat_title from first player row, fallback to stat_name).
+        first_player = next(iter(stat.get("players") or []), None)
+        stat_title = (first_player or {}).get("statTitle") or stat_name
+        if stat_id and stat_id not in tour_avg_map:
+            tour_avg_map[stat_id] = {
+                "stat_id": stat_id,
+                "stat_name": stat_name,
+                "stat_title": stat_title,
+                "stat_value": tour_avg,
+                "rank": None,
+                "tour_avg": tour_avg,
+            }
+
         for row in stat.get("players") or []:
             player_id = str(row.get("playerId") or "").strip()
             if not player_id or (active_player_ids and player_id not in active_player_ids):
@@ -328,7 +346,7 @@ def _group_player_stats(data: Dict[str, Any], current_year: int, active_player_i
             }
             item["tour_averages"][stat_id] = tour_avg
 
-    return list(grouped.values())
+    return list(grouped.values()), tour_avg_map
 
 
 def _safe_rank(value: Any) -> int:
@@ -399,7 +417,7 @@ def ingest_website_players_and_stats(
                 active_player_ids.add(pid)
 
     stats_raw = _post_graphql(STAT_OVERVIEW_QUERY, {"tourCode": tour_code, "year": year})
-    stats_rows = _group_player_stats(stats_raw, year, active_player_ids)
+    stats_rows, tour_avg_map = _group_player_stats(stats_raw, year, active_player_ids)
 
     stats_payload: List[Dict[str, Any]] = []
     existing_player_ids: Set[str] = set()
@@ -456,6 +474,44 @@ def ingest_website_players_and_stats(
 
         stats_payload.append(insert_row)
 
+    # Append the Tour Average row last (player_id = TOUR_AVERAGE).
+    # Skip if already present (e.g. when delete_performed=False and it was written earlier).
+    tour_avg_player_id = "TOUR_AVERAGE"
+    if tour_avg_map and tour_avg_player_id not in existing_player_ids:
+        tour_avg_row: Dict[str, Any] = {}
+        if "run_ts" in stats_columns:
+            tour_avg_row["run_ts"] = now
+        if "ingested_at" in stats_columns:
+            tour_avg_row["ingested_at"] = now
+        if "tour_code" in stats_columns:
+            tour_avg_row["tour_code"] = tour_code
+        if "year" in stats_columns:
+            tour_avg_row["year"] = year
+        if "season_year" in stats_columns:
+            tour_avg_row["season_year"] = year
+        if "player_id" in stats_columns:
+            tour_avg_row["player_id"] = tour_avg_player_id
+        if "player_name" in stats_columns:
+            tour_avg_row["player_name"] = "Tour Average"
+        if "country" in stats_columns:
+            tour_avg_row["country"] = None
+        if "country_flag" in stats_columns:
+            tour_avg_row["country_flag"] = None
+        if "stats_payload" in stats_columns:
+            tour_avg_row["stats_payload"] = json.dumps(tour_avg_map, separators=(",", ":"), default=str)
+        if "tour_averages" in stats_columns:
+            # tour_averages: {stat_id: tourAvg value string}
+            tour_avg_row["tour_averages"] = json.dumps(
+                {sid: entry.get("tour_avg") for sid, entry in tour_avg_map.items()},
+                separators=(",", ":"),
+                default=str,
+            )
+        # Compatibility columns — leave as null for the tour average row.
+        for col in ("stat_id", "stat_name", "stat_title", "stat_value", "rank", "tour_avg"):
+            if col in stats_columns:
+                tour_avg_row[col] = None
+        stats_payload.append(tour_avg_row)
+
     for start in range(0, len(active_payload), 500):
         errors = client.insert_rows_json(active_table_id, active_payload[start : start + 500])
         if errors:
@@ -468,6 +524,7 @@ def ingest_website_players_and_stats(
             raise RuntimeError(f"player stats insert errors: {errors[:2]}")
         time.sleep(0.05)
 
+    # stats_players_written includes the Tour Average row in the count.
     return {
         "active_players_fetched": len(active_rows),
         "active_players_written": len(active_payload),

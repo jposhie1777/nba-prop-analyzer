@@ -92,21 +92,35 @@ def ensure_table(client: bigquery.Client, table_id: str) -> None:
 def ensure_pairings_view(client: bigquery.Client, raw_table_id: str) -> None:
     """Create or replace the v_pairings_latest view in BigQuery.
 
-    The view exposes a deduplicated snapshot: one row per
-    (tournament_id, round_number, group_number, player_id) using the
-    most-recent ``run_ts`` across all ingest runs.
+    The view exposes a deduplicated snapshot scoped to the single most-recent
+    tournament (by season year then latest run_ts).  One row per
+    (tournament_id, round_number, group_number, player_id).
     """
     view_id = _resolve_table_id(PAIRINGS_VIEW, client.project)
     view_query = f"""
+    WITH current_tournament AS (
+      SELECT tournament_id
+      FROM (
+        SELECT
+          tournament_id,
+          MAX(run_ts) AS latest_run_ts,
+          MAX(SAFE_CAST(SUBSTR(tournament_id, 2, 4) AS INT64)) AS season_year
+        FROM `{raw_table_id}`
+        GROUP BY tournament_id
+      )
+      ORDER BY season_year DESC, latest_run_ts DESC, tournament_id DESC
+      LIMIT 1
+    )
     SELECT * EXCEPT (row_num)
     FROM (
       SELECT
-        *,
+        p.*,
         ROW_NUMBER() OVER (
-          PARTITION BY tournament_id, round_number, group_number, player_id
-          ORDER BY run_ts DESC
+          PARTITION BY p.tournament_id, p.round_number, p.group_number, p.player_id
+          ORDER BY p.run_ts DESC
         ) AS row_num
-      FROM `{raw_table_id}`
+      FROM `{raw_table_id}` p
+      INNER JOIN current_tournament ct ON p.tournament_id = ct.tournament_id
     )
     WHERE row_num = 1
     """

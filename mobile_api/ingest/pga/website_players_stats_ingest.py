@@ -305,10 +305,13 @@ def _flatten_player_directory(data: Dict[str, Any]) -> List[Dict[str, Any]]:
 def _group_player_stats(
     data: Dict[str, Any],
     current_year: int,
-    active_player_ids: Set[str],
 ) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """
     Return (player_rows, tour_avg_map).
+
+    Includes ALL players who appear in any stat ranking for the given year —
+    no filtering by active_player_ids so that the full field is captured
+    (the stats API already scopes results to the requested tourCode).
 
     Every player row contains ALL stats exposed by the API — stats where the
     player has no ranking are included with stat_value=null and rank=null so
@@ -354,7 +357,7 @@ def _group_player_stats(
 
         for row in stat.get("players") or []:
             player_id = str(row.get("playerId") or "").strip()
-            if not player_id or (active_player_ids and player_id not in active_player_ids):
+            if not player_id:
                 continue
 
             item = grouped.setdefault(
@@ -444,7 +447,7 @@ def ingest_website_players_and_stats(
                 active_player_ids.add(pid)
 
     stats_raw = _post_graphql(STAT_OVERVIEW_QUERY, {"tourCode": tour_code, "year": year})
-    stats_rows, tour_avg_map = _group_player_stats(stats_raw, year, active_player_ids)
+    stats_rows, tour_avg_map = _group_player_stats(stats_raw, year)
 
     existing_player_ids: Set[str] = set()
     if not delete_performed:

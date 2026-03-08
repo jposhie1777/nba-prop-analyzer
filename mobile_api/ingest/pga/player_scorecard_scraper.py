@@ -69,6 +69,7 @@ class PlayerTournamentScorecard:
     tournament_id: str
     tournament_name: str
     tournament_date: str
+    course_name: Optional[str]
     position: str
     r1: Optional[int]
     r2: Optional[int]
@@ -225,8 +226,12 @@ def _find_results_data(
         results_data = data.get("resultsData") or []
         rows: List[Dict[str, Any]] = []
         for section in results_data:
+            section_course = section.get("courseName") or section.get("course")
             for entry in section.get("data") or []:
                 if entry.get("tournamentId"):
+                    if section_course and "__course_name" not in entry:
+                        entry = dict(entry)
+                        entry["__course_name"] = section_course
                     rows.append(entry)
         return rows
 
@@ -309,6 +314,26 @@ def _season_from_tournament_id(tournament_id: str) -> int:
         return 0
 
 
+def _extract_course_name(entry: Dict[str, Any]) -> Optional[str]:
+    """Best-effort extraction of course name from resultsData entry payload."""
+    direct_keys = ("courseName", "course", "hostCourse", "venue", "course_name")
+    for key in direct_keys:
+        value = entry.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        if isinstance(value, dict):
+            for nested_key in ("name", "displayName", "courseName"):
+                nested = value.get(nested_key)
+                if isinstance(nested, str) and nested.strip():
+                    return nested.strip()
+
+    section_course = entry.get("__course_name")
+    if isinstance(section_course, str) and section_course.strip():
+        return section_course.strip()
+
+    return None
+
+
 def _parse_tournament_entry(
     entry: Dict[str, Any],
     player_id: str,
@@ -327,6 +352,7 @@ def _parse_tournament_entry(
     tournament_date = str(fields[0]).strip() if len(fields) > 0 else ""
     tournament_name = str(fields[1]).strip() if len(fields) > 1 else ""
     position = str(fields[2]).strip() if len(fields) > 2 else ""
+    course_name = _extract_course_name(entry)
     r1 = _safe_int(fields[3]) if len(fields) > 3 else None
     r2 = _safe_int(fields[4]) if len(fields) > 4 else None
     r3 = _safe_int(fields[5]) if len(fields) > 5 else None
@@ -341,6 +367,7 @@ def _parse_tournament_entry(
         tournament_id=tournament_id,
         tournament_name=tournament_name,
         tournament_date=tournament_date,
+        course_name=course_name,
         position=position,
         r1=r1,
         r2=r2,
@@ -475,6 +502,7 @@ def scorecard_history_to_records(
             "tournament_id": r.tournament_id,
             "tournament_name": r.tournament_name,
             "tournament_date": r.tournament_date,
+            "course_name": r.course_name,
             "player_id": r.player_id,
             "player_display_name": r.player_name,
             "position": r.position,
@@ -554,13 +582,13 @@ def _cli() -> None:
 
     print(f"\n  {rows[0].player_name} — {rows[0].season} ({args.tour})\n")
     print(
-        f"  {'Date':12}  {'Tournament':35}  {'Pos':5}  "
+        f"  {'Date':12}  {'Tournament':28}  {'Course':24}  {'Pos':5}  "
         f"{'R1':>4}  {'R2':>4}  {'R3':>4}  {'R4':>4}  {'Total':>5}  {'ToPar':>6}"
     )
-    print("  " + "-" * 95)
+    print("  " + "-" * 124)
     for r in rows:
         print(
-            f"  {r.tournament_date:12}  {r.tournament_name[:35]:35}  {r.position:5}  "
+            f"  {r.tournament_date:12}  {r.tournament_name[:28]:28}  {(r.course_name or '-')[:24]:24}  {r.position:5}  "
             f"{str(r.r1 or '-'):>4}  {str(r.r2 or '-'):>4}  "
             f"{str(r.r3 or '-'):>4}  {str(r.r4 or '-'):>4}  "
             f"{str(r.total_strokes or '-'):>5}  {str(r.to_par or '-'):>6}"

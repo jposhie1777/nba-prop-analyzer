@@ -1,78 +1,62 @@
-COMPRESSED RESPONSE
-{
-    "data": {
-        "oddsToWinCompressed": {
-            "id": "R2026009-2032-american",
-            "payload": "H4sIAAAAAAAAA7WXP2/bQAzFv8utsQ0e/91RW9F06OIEjYsMRQc31mAgtQPFGYIg372I60F3yiDI5qYDpJ+Ip8dH6i3sN5vn1f5+u/u+CU34gYAKYHMEwvn6b9ttH9a7MDve9m23/vPYbkJz6F7aWXh6XL+23XNofr2dro8Iwgh4eiI04SoCAJzOd/vuEJoI8f/xetu1D4ftfheacH1zv/y46+njfATFTJnD+6ykM7D26Cg1HWU6HVmGtdfFn1M9GKojH40RPOvHTObIZ4C+PvNIUsIXiYfwn7fjjIPRUxozS558BnOW3rKv9aOn/mhGrq0lBp6thUmZnf0z+L6Xi2WzJJ7VJxZPPiuzZ/BjIvbtXhTX4GcUz+4iVd9003JtiElqfNIzsoGNXN0DOikbvt4s71ZflqsxCmXI/XyWwSvkrHwQ9vQP5xg9py+bsSdfQLCfb1lKuC1k4t4jUanwzmBhjmcszBItOeuuRa5RTZ+6D0p03tcSpf68xcF/yifscZUjRs9ZKMjimWasqezVi2axoBWbAtVw+oQ90jG+M1xUqe91zlX+LvLUyhNNmx9jK0+kdbqX9MleT9VeeeH0wuya6hbZ859HDKyvDtde5+l9pADg6Rklo8tq8/v9HwE9nRzOEgAA"
-        }
-    }
-}
-
-PAYLOAD
-{,…}
-operationName
-: 
-"oddsToWinCompressed"
-query
-: 
-"query oddsToWinCompressed($tournamentId: ID!) { oddsToWinCompressed(oddsToWinId: $tournamentId) { id payload }}"
-variables
-: 
-{tournamentId: "R2026009"}
-
-HEADERS
+Headers
 Request URL
-https://orchestrator.pgatour.com/graphql
+https://data-api.pgatour.com/odds/tournament/R2026009/2032
 Request Method
-POST
+GET
 Status Code
 200 OK
 Remote Address
-13.249.91.124:443
+18.164.124.60:443
 Referrer Policy
 strict-origin-when-cross-origin
-access-control-allow-credentials
-true
+access-control-allow-headers
+*
+access-control-allow-methods
+OPTIONS,GET
 access-control-allow-origin
-https://www.pgatour.com
-access-control-expose-headers
-x-pgat-platform,x-api-key,content-type,x-amz-*,authorization,previewmode
-content-length
-725
+*
+age
+68
+cache-control
+max-age=60, stale-while-revalidate=30
+content-encoding
+br
 content-type
-application/json;charset=UTF-8
+application/json
 date
-Sun, 08 Mar 2026 11:51:20 GMT
-server
-CloudFront
+Sun, 08 Mar 2026 12:12:08 GMT
 vary
-Origin
+accept-encoding
 via
-1.1 714aec87803632a2b6676117b4a6b042.cloudfront.net (CloudFront)
+1.1 2510b8fd8f66d8d997f4df0d6c348a18.cloudfront.net (CloudFront), 1.1 441f91af2fc013470161b54d14d10a44.cloudfront.net (CloudFront)
+x-amz-apigw-id
+Z50f4G2moAMEAPQ=
 x-amz-cf-id
-rJ4E2h2CwF0wXXi-Fw8pPhVbuE86Bfk6C5SQbK9cGsQFqurFa4IrUw==
+X5MoEoLm9w0-adIwyXUiKaEDNZU13R38Fgg52-BaxTZjuATmPSvL3w==
 x-amz-cf-pop
-JFK52-P9
+IAD55-P9
+x-amz-cf-pop
+JFK50-P7
+x-amzn-requestid
+0b4d4984-24ce-473a-9fbe-619bab017884
+x-amzn-trace-id
+Root=1-69ad6798-49087b14585d601519cc5b9a;Parent=58e3027c68c15fd3;Sampled=0;Lineage=1:b13738ce:0
 x-cache
-Miss from cloudfront
+Hit from cloudfront
 :authority
-orchestrator.pgatour.com
+data-api.pgatour.com
 :method
-POST
+GET
 :path
-/graphql
+/odds/tournament/R2026009/2032
 :scheme
 https
 accept
-application/graphql-response+json, application/json
+*/*
 accept-encoding
 gzip, deflate, br, zstd
 accept-language
 en-US,en;q=0.9
-content-length
-201
-content-type
-application/json
 origin
 https://www.pgatour.com
 priority
@@ -93,10 +77,1014 @@ sec-fetch-site
 same-site
 user-agent
 Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
-x-api-key
-da2-gsrx5bibzbb4njvhl7t37wqyl4
-x-pgat-platform
-web
 
-
-LARGER RESPONSE SHAPE
+LARGER RESPONSE 
+{
+    "market": "Outright Winner",
+    "marketDisplayName": "To Win",
+    "marketId": 2032,
+    "bettingProvider": "fanduel",
+    "marketType": "ODDS_TO_WIN",
+    "subMarketsSelectable": false,
+    "subMarkets": [
+        {
+            "subMarketName": "Tournament Winner",
+            "oddsDataGroup": [
+                {
+                    "title": "Tournament Winner",
+                    "groupDisplay": false,
+                    "oddsData": [
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "32102",
+                                            "displayName": "Rickie Fowler",
+                                            "shortName": "R. Fowler"
+                                        }
+                                    ],
+                                    "oddsValue": "+10000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "32102"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "34046",
+                                            "displayName": "Jordan Spieth",
+                                            "shortName": "J. Spieth"
+                                        }
+                                    ],
+                                    "oddsValue": "+25000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "34046"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "24502",
+                                            "displayName": "Adam Scott",
+                                            "shortName": "A. Scott"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "24502"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "30926",
+                                            "displayName": "Chris Kirk",
+                                            "shortName": "C. Kirk"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "30926"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "29420",
+                                            "displayName": "Billy Horschel",
+                                            "shortName": "B. Horschel"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "29420"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "32839",
+                                            "displayName": "Hideki Matsuyama",
+                                            "shortName": "H. Matsuyama"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "32839"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "40026",
+                                            "displayName": "Daniel Berger",
+                                            "shortName": "D. Berger"
+                                        }
+                                    ],
+                                    "oddsValue": "-135",
+                                    "oddDirection": "UP",
+                                    "optionId": "18384",
+                                    "entityId": "40026"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "34021",
+                                            "displayName": "Bud Cauley",
+                                            "shortName": "B. Cauley"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "34021"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "39997",
+                                            "displayName": "Corey Conners",
+                                            "shortName": "C. Conners"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "39997"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "34099",
+                                            "displayName": "Harris English",
+                                            "shortName": "H. English"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "34099"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "40098",
+                                            "displayName": "Matt Fitzpatrick",
+                                            "shortName": "M. Fitzpatrick"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "40098"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "30911",
+                                            "displayName": "Tommy Fleetwood",
+                                            "shortName": "T. Fleetwood"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "30911"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "29936",
+                                            "displayName": "Ryan Fox",
+                                            "shortName": "R. Fox"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "29936"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "25900",
+                                            "displayName": "Lucas Glover",
+                                            "shortName": "L. Glover"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "25900"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "27644",
+                                            "displayName": "Brian Harman",
+                                            "shortName": "B. Harman"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "27644"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "34098",
+                                            "displayName": "Russell Henley",
+                                            "shortName": "R. Henley"
+                                        }
+                                    ],
+                                    "oddsValue": "+10000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "34098"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "39975",
+                                            "displayName": "Michael Kim",
+                                            "shortName": "M. Kim"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "39975"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "37455",
+                                            "displayName": "Si Woo Kim",
+                                            "shortName": "S.W. Kim"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "37455"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "46442",
+                                            "displayName": "Maverick McNealy",
+                                            "shortName": "M. McNealy"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "46442"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "27349",
+                                            "displayName": "Alex Noren",
+                                            "shortName": "A. Noren"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "27349"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "40250",
+                                            "displayName": "Taylor Pendrith",
+                                            "shortName": "T. Pendrith"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "40250"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "34256",
+                                            "displayName": "Andrew Putnam",
+                                            "shortName": "A. Putnam"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "34256"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "36699",
+                                            "displayName": "Patrick Rodgers",
+                                            "shortName": "P. Rodgers"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "36699"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "46046",
+                                            "displayName": "Scottie Scheffler",
+                                            "shortName": "S. Scheffler"
+                                        }
+                                    ],
+                                    "oddsValue": "+17500",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "46046"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "25493",
+                                            "displayName": "Nick Taylor",
+                                            "shortName": "N. Taylor"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "25493"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "27064",
+                                            "displayName": "Jhonattan Vegas",
+                                            "shortName": "J. Vegas"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18384",
+                                    "entityId": "27064"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "48081",
+                                            "displayName": "Xander Schauffele",
+                                            "shortName": "X. Schauffele"
+                                        }
+                                    ],
+                                    "oddsValue": "+50000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "48081"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "39546",
+                                            "displayName": "Keith Mitchell",
+                                            "shortName": "K. Mitchell"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "39546"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "48117",
+                                            "displayName": "Kurt Kitayama",
+                                            "shortName": "K. Kitayama"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "48117"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "49947",
+                                            "displayName": "Taylor Moore",
+                                            "shortName": "T. Moore"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "49947"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "50525",
+                                            "displayName": "Collin Morikawa",
+                                            "shortName": "C. Morikawa"
+                                        }
+                                    ],
+                                    "oddsValue": "+850",
+                                    "oddDirection": "UP",
+                                    "optionId": "18384",
+                                    "entityId": "50525"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "51634",
+                                            "displayName": "Sahith Theegala",
+                                            "shortName": "S. Theegala"
+                                        }
+                                    ],
+                                    "oddsValue": "+22500",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "51634"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "51977",
+                                            "displayName": "Max Greyserman",
+                                            "shortName": "M. Greyserman"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "51977"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "49960",
+                                            "displayName": "Sepp Straka",
+                                            "shortName": "S. Straka"
+                                        }
+                                    ],
+                                    "oddsValue": "+1300",
+                                    "oddDirection": "UP",
+                                    "optionId": "18384",
+                                    "entityId": "49960"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "51997",
+                                            "displayName": "Andrew Novak",
+                                            "shortName": "A. Novak"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "51997"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "37378",
+                                            "displayName": "Min Woo Lee",
+                                            "shortName": "M. Lee"
+                                        }
+                                    ],
+                                    "oddsValue": "+2200",
+                                    "oddDirection": "UP",
+                                    "optionId": "18384",
+                                    "entityId": "37378"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "52215",
+                                            "displayName": "Robert MacIntyre",
+                                            "shortName": "R. MacIntyre"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "52215"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "52453",
+                                            "displayName": "Nicolai Højgaard",
+                                            "shortName": "N. Højgaard"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "52453"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "46717",
+                                            "displayName": "Viktor Hovland",
+                                            "shortName": "V. Hovland"
+                                        }
+                                    ],
+                                    "oddsValue": "+17500",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "46717"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "52955",
+                                            "displayName": "Ludvig Åberg",
+                                            "shortName": "L. Åberg"
+                                        }
+                                    ],
+                                    "oddsValue": "+3300",
+                                    "oddDirection": "UP",
+                                    "optionId": "18384",
+                                    "entityId": "52955"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "51349",
+                                            "displayName": "Nico Echavarria",
+                                            "shortName": "N. Echavarria"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "51349"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "56630",
+                                            "displayName": "Akshay Bhatia",
+                                            "shortName": "A. Bhatia"
+                                        }
+                                    ],
+                                    "oddsValue": "+480",
+                                    "oddDirection": "UP",
+                                    "optionId": "18384",
+                                    "entityId": "56630"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "57364",
+                                            "displayName": "Michael Thorbjornsen",
+                                            "shortName": "M. Thorbjornsen"
+                                        }
+                                    ],
+                                    "oddsValue": "+75000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "57364"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "57366",
+                                            "displayName": "Cameron Young",
+                                            "shortName": "Cam. Young"
+                                        }
+                                    ],
+                                    "oddsValue": "+1000",
+                                    "oddDirection": "UP",
+                                    "optionId": "18384",
+                                    "entityId": "57366"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "57975",
+                                            "displayName": "Harry Hall",
+                                            "shortName": "H. Hall"
+                                        }
+                                    ],
+                                    "oddsValue": "+15000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "57975"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "51287",
+                                            "displayName": "Ryo Hisatsune",
+                                            "shortName": "R. Hisatsune"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "51287"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "59141",
+                                            "displayName": "Matt McCarty",
+                                            "shortName": "M. McCarty"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "59141"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "59095",
+                                            "displayName": "Chris Gotterup",
+                                            "shortName": "C. Gotterup"
+                                        }
+                                    ],
+                                    "oddsValue": "+4500",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "59095"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "60004",
+                                            "displayName": "Jacob Bridgeman",
+                                            "shortName": "J. Bridgeman"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "60004"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "63931",
+                                            "displayName": "Daniel Bennett",
+                                            "shortName": "D. Bennett"
+                                        }
+                                    ],
+                                    "oddsValue": "+100000",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18384",
+                                    "entityId": "63931"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "availableMarkets": [
+        {
+            "id": 2032,
+            "name": "Outright Winner",
+            "book": "fanduel",
+            "displayName": "To Win"
+        },
+        {
+            "id": 2039,
+            "name": "Matchup Props",
+            "book": "fanduel",
+            "displayName": "Matchup"
+        },
+        {
+            "id": 2033,
+            "name": "Finish",
+            "book": "fanduel",
+            "displayName": "Finishes"
+        },
+        {
+            "id": 2036,
+            "name": "Group Props",
+            "book": "fanduel",
+            "displayName": "Groups"
+        },
+        {
+            "id": 2085,
+            "name": "3 Ball",
+            "book": "fanduel",
+            "displayName": "3 Ball"
+        },
+        {
+            "id": 2038,
+            "name": "Nationality",
+            "book": "fanduel",
+            "displayName": "Nationality"
+        }
+    ]
+}

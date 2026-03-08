@@ -64,7 +64,9 @@ const WINDOW_TABS: AnalyticsWindow[] = ["l3", "l5", "l7", "season", "current_sea
 
 function normalizeMarket(market: string): NormalizedMarket {
   const normalized = market.trim().toLowerCase().replace(/-/g, "_").replace(/\s+/g, "_");
-  if (["h2h", "moneyline", "match_winner", "winner", "outright_winner"].includes(normalized)) return "outright_winner";
+  if (["h2h", "moneyline", "match_winner", "winner", "outright_winner", "spreads", "spread"].includes(normalized)) {
+    return "outright_winner";
+  }
   if (["alternate_totals", "alt_totals", "total_goals", "totals", "over_under", "team_totals"].includes(normalized)) {
     return "alternate_totals";
   }
@@ -79,8 +81,26 @@ function displayMarket(market: NormalizedMarket) {
   if (market === "btts") return "BTTS";
   if (market === "double_chance") return "Double Chance";
   if (market === "draw_no_bet") return "Draw No Bet";
-  if (market === "outright_winner") return "Winner";
+  if (market === "outright_winner") return "Moneyline";
   return "Other";
+}
+
+function hasAnalytics(market: SoccerMarket) {
+  return [
+    market.home_l3_goals_scored,
+    market.home_l5_goals_scored,
+    market.home_l7_goals_scored,
+    market.away_l3_goals_scored,
+    market.away_l5_goals_scored,
+    market.away_l7_goals_scored,
+    market.home_season_gf,
+    market.away_season_gf,
+  ].some((value) => value != null);
+}
+
+function isGoalTotalWithinRange(market: SoccerMarket) {
+  if (market.line == null) return false;
+  return market.line <= 4.5;
 }
 
 function normalizeLeague(league: string): LeagueFilter | null {
@@ -260,21 +280,36 @@ export default function SoccerTodayScreen() {
           { alternate_totals: [], btts: [], draw_no_bet: [], double_chance: [], outright_winner: [], other: [] }
         );
 
-        const marketOptions = (["alternate_totals", "btts", "draw_no_bet", "double_chance", "outright_winner"] as NormalizedMarket[]).filter(
-          (key) => byMarket[key].length > 0
-        );
+        const availableMarketEntries = ["alternate_totals", "btts", "draw_no_bet", "double_chance", "outright_winner", "other"]
+          .map((key) => {
+            const typedKey = key as NormalizedMarket;
+            const source = byMarket[typedKey] ?? [];
+            const values = typedKey === "alternate_totals" ? source.filter(isGoalTotalWithinRange) : source;
+            return { key: typedKey, values };
+          })
+          .filter((entry) => entry.values.length > 0);
+
+        const marketOptions = availableMarketEntries.map((entry) => entry.key);
 
         if (!marketOptions.length) return null;
 
-        const activeMarket = selectedMarketByGame[item.game] ?? marketOptions[0];
-        const candidates = byMarket[activeMarket].slice().sort((a, b) => (a.line ?? 0) - (b.line ?? 0));
+        const activeMarket = marketOptions.includes(selectedMarketByGame[item.game])
+          ? selectedMarketByGame[item.game]
+          : marketOptions[0];
+        const candidates = (activeMarket === "alternate_totals"
+          ? byMarket[activeMarket].filter(isGoalTotalWithinRange)
+          : byMarket[activeMarket]
+        )
+          .slice()
+          .sort((a, b) => (a.line ?? 0) - (b.line ?? 0));
         const selectedOutcomeKey = selectedOutcomeByGame[item.game] ?? outcomeKey(candidates[0]);
         const selectedBet = candidates.find((market) => outcomeKey(market) === selectedOutcomeKey) ?? candidates[0];
 
         if (!selectedBet) return null;
 
+        const analyticsSource = item.markets.find(hasAnalytics) ?? selectedBet;
         const window = selectedWindowByGame[item.game] ?? "l5";
-        const analytics = analyticsForWindow(selectedBet, window);
+        const analytics = analyticsForWindow(analyticsSource, window);
         const { awayTeam, homeTeam } = parseGame(item.game);
 
         const betId = `${selectedBet.game}-${selectedBet.market}-${selectedBet.outcome}-${selectedBet.line ?? "n/a"}`;

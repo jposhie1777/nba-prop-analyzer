@@ -16,7 +16,7 @@ router = APIRouter(tags=["Soccer"])
 
 SOCCER_ODDS_TABLE = os.getenv("SOCCER_ODDS_BQ_TABLE", "soccer_data.odds_lines")
 SOCCER_BETTING_ANALYSIS_TABLE = os.getenv(
-    "SOCCER_BETTING_ANALYSIS_BQ_TABLE", "soccer_data.betting_analysis"
+    "SOCCER_BETTING_ANALYSIS_BQ_TABLE", "soccer_data.mls_betting_analytics"
 )
 ET_TZ = ZoneInfo("America/New_York")
 OUTRIGHT_WINNER_MARKETS: Set[str] = {

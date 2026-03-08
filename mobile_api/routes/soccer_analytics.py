@@ -16,7 +16,7 @@ router = APIRouter(tags=["Soccer"])
 
 SOCCER_ODDS_TABLE = os.getenv("SOCCER_ODDS_BQ_TABLE", "soccer_data.odds_lines")
 SOCCER_BETTING_ANALYSIS_TABLE = os.getenv(
-    "SOCCER_BETTING_ANALYSIS_BQ_TABLE", "soccer_data.betting_analysis"
+    "SOCCER_BETTING_ANALYSIS_BQ_TABLE", "soccer_data.mls_betting_analytics"
 )
 ET_TZ = ZoneInfo("America/New_York")
 OUTRIGHT_WINNER_MARKETS: Set[str] = {
@@ -220,7 +220,7 @@ def _fetch_betting_analysis_rows(
 ) -> List[Dict[str, Any]]:
     sql = f"""
     SELECT
-      league,
+      'MLS' AS league,
       game,
       start_time_et,
       home_team,
@@ -230,20 +230,48 @@ def _fetch_betting_analysis_rows(
       line,
       ARRAY_AGG(bookmaker ORDER BY price DESC LIMIT 1)[OFFSET(0)] AS best_bookmaker,
       MAX(price) AS best_price,
-      ANY_VALUE(home_season_gf) AS home_season_gf,
-      ANY_VALUE(home_season_ga) AS home_season_ga,
-      ANY_VALUE(home_l10_gf) AS home_l10_gf,
-      ANY_VALUE(home_l10_ga) AS home_l10_ga,
-      ANY_VALUE(away_season_gf) AS away_season_gf,
-      ANY_VALUE(away_season_ga) AS away_season_ga,
-      ANY_VALUE(away_l10_gf) AS away_l10_gf,
-      ANY_VALUE(away_l10_ga) AS away_l10_ga,
-      ANY_VALUE(combined_season_gf) AS combined_season_gf,
-      ANY_VALUE(combined_season_cards) AS combined_season_cards
+      ANY_VALUE(home_l3_goals_scored) AS home_l3_goals_scored,
+      ANY_VALUE(home_l3_goals_allowed) AS home_l3_goals_allowed,
+      ANY_VALUE(home_l3_win_rate) AS home_l3_win_rate,
+      ANY_VALUE(home_l3_scored_rate) AS home_l3_scored_rate,
+      ANY_VALUE(home_l3_conceded_rate) AS home_l3_conceded_rate,
+      ANY_VALUE(home_l3_corners_for) AS home_l3_corners_for,
+      ANY_VALUE(home_l3_corners_against) AS home_l3_corners_against,
+      ANY_VALUE(home_l3_game_corners) AS home_l3_game_corners,
+      ANY_VALUE(home_l5_goals_scored) AS home_l5_goals_scored,
+      ANY_VALUE(home_l5_goals_allowed) AS home_l5_goals_allowed,
+      ANY_VALUE(home_l5_win_rate) AS home_l5_win_rate,
+      ANY_VALUE(home_l5_scored_rate) AS home_l5_scored_rate,
+      ANY_VALUE(home_l5_conceded_rate) AS home_l5_conceded_rate,
+      ANY_VALUE(home_l5_corners_for) AS home_l5_corners_for,
+      ANY_VALUE(home_l5_corners_against) AS home_l5_corners_against,
+      ANY_VALUE(home_l5_game_corners) AS home_l5_game_corners,
+      ANY_VALUE(home_l7_goals_scored) AS home_l7_goals_scored,
+      ANY_VALUE(home_l7_goals_allowed) AS home_l7_goals_allowed,
+      ANY_VALUE(home_l7_win_rate) AS home_l7_win_rate,
+      ANY_VALUE(away_l3_goals_scored) AS away_l3_goals_scored,
+      ANY_VALUE(away_l3_goals_allowed) AS away_l3_goals_allowed,
+      ANY_VALUE(away_l3_win_rate) AS away_l3_win_rate,
+      ANY_VALUE(away_l3_scored_rate) AS away_l3_scored_rate,
+      ANY_VALUE(away_l3_conceded_rate) AS away_l3_conceded_rate,
+      ANY_VALUE(away_l3_corners_for) AS away_l3_corners_for,
+      ANY_VALUE(away_l3_corners_against) AS away_l3_corners_against,
+      ANY_VALUE(away_l3_game_corners) AS away_l3_game_corners,
+      ANY_VALUE(away_l5_goals_scored) AS away_l5_goals_scored,
+      ANY_VALUE(away_l5_goals_allowed) AS away_l5_goals_allowed,
+      ANY_VALUE(away_l5_win_rate) AS away_l5_win_rate,
+      ANY_VALUE(away_l5_scored_rate) AS away_l5_scored_rate,
+      ANY_VALUE(away_l5_conceded_rate) AS away_l5_conceded_rate,
+      ANY_VALUE(away_l5_corners_for) AS away_l5_corners_for,
+      ANY_VALUE(away_l5_corners_against) AS away_l5_corners_against,
+      ANY_VALUE(away_l5_game_corners) AS away_l5_game_corners,
+      ANY_VALUE(away_l7_goals_scored) AS away_l7_goals_scored,
+      ANY_VALUE(away_l7_goals_allowed) AS away_l7_goals_allowed,
+      ANY_VALUE(away_l7_win_rate) AS away_l7_win_rate
     FROM `{SOCCER_BETTING_ANALYSIS_TABLE}`
     WHERE {where_sql}
-    GROUP BY league, game, start_time_et, home_team, away_team, market, outcome, line
-    ORDER BY start_time_et ASC, league, game, market, outcome
+    GROUP BY game, start_time_et, home_team, away_team, market, outcome, line
+    ORDER BY start_time_et ASC, game, market, outcome
     LIMIT @limit
     """
     return [
@@ -314,25 +342,58 @@ def soccer_todays_betting_analysis(
         bigquery.ScalarQueryParameter("limit", "INT64", limit),
     ]
 
-    if league:
-        filters.append("league = @league")
-        params.append(bigquery.ScalarQueryParameter("league", "STRING", league))
+    if league and league.strip().lower() != "mls":
+        return {
+            "date_et": today_et,
+            "slate_size": 0,
+            "markets_count": 0,
+            "suggestions": [],
+            "all_markets": [],
+        }
 
     where_sql = " AND ".join(filters)
 
     analysis_rows = _fetch_betting_analysis_rows(client, where_sql, params)
     stats_by_game = {
         (row.get("league"), row.get("game"), row.get("start_time_et")): {
-            "home_season_gf": row.get("home_season_gf"),
-            "home_season_ga": row.get("home_season_ga"),
-            "home_l10_gf": row.get("home_l10_gf"),
-            "home_l10_ga": row.get("home_l10_ga"),
-            "away_season_gf": row.get("away_season_gf"),
-            "away_season_ga": row.get("away_season_ga"),
-            "away_l10_gf": row.get("away_l10_gf"),
-            "away_l10_ga": row.get("away_l10_ga"),
-            "combined_season_gf": row.get("combined_season_gf"),
-            "combined_season_cards": row.get("combined_season_cards"),
+            "home_l3_goals_scored": row.get("home_l3_goals_scored"),
+            "home_l3_goals_allowed": row.get("home_l3_goals_allowed"),
+            "home_l3_win_rate": row.get("home_l3_win_rate"),
+            "home_l3_scored_rate": row.get("home_l3_scored_rate"),
+            "home_l3_conceded_rate": row.get("home_l3_conceded_rate"),
+            "home_l3_corners_for": row.get("home_l3_corners_for"),
+            "home_l3_corners_against": row.get("home_l3_corners_against"),
+            "home_l3_game_corners": row.get("home_l3_game_corners"),
+            "home_l5_goals_scored": row.get("home_l5_goals_scored"),
+            "home_l5_goals_allowed": row.get("home_l5_goals_allowed"),
+            "home_l5_win_rate": row.get("home_l5_win_rate"),
+            "home_l5_scored_rate": row.get("home_l5_scored_rate"),
+            "home_l5_conceded_rate": row.get("home_l5_conceded_rate"),
+            "home_l5_corners_for": row.get("home_l5_corners_for"),
+            "home_l5_corners_against": row.get("home_l5_corners_against"),
+            "home_l5_game_corners": row.get("home_l5_game_corners"),
+            "home_l7_goals_scored": row.get("home_l7_goals_scored"),
+            "home_l7_goals_allowed": row.get("home_l7_goals_allowed"),
+            "home_l7_win_rate": row.get("home_l7_win_rate"),
+            "away_l3_goals_scored": row.get("away_l3_goals_scored"),
+            "away_l3_goals_allowed": row.get("away_l3_goals_allowed"),
+            "away_l3_win_rate": row.get("away_l3_win_rate"),
+            "away_l3_scored_rate": row.get("away_l3_scored_rate"),
+            "away_l3_conceded_rate": row.get("away_l3_conceded_rate"),
+            "away_l3_corners_for": row.get("away_l3_corners_for"),
+            "away_l3_corners_against": row.get("away_l3_corners_against"),
+            "away_l3_game_corners": row.get("away_l3_game_corners"),
+            "away_l5_goals_scored": row.get("away_l5_goals_scored"),
+            "away_l5_goals_allowed": row.get("away_l5_goals_allowed"),
+            "away_l5_win_rate": row.get("away_l5_win_rate"),
+            "away_l5_scored_rate": row.get("away_l5_scored_rate"),
+            "away_l5_conceded_rate": row.get("away_l5_conceded_rate"),
+            "away_l5_corners_for": row.get("away_l5_corners_for"),
+            "away_l5_corners_against": row.get("away_l5_corners_against"),
+            "away_l5_game_corners": row.get("away_l5_game_corners"),
+            "away_l7_goals_scored": row.get("away_l7_goals_scored"),
+            "away_l7_goals_allowed": row.get("away_l7_goals_allowed"),
+            "away_l7_win_rate": row.get("away_l7_win_rate"),
         }
         for row in analysis_rows
     }

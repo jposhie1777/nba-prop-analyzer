@@ -460,9 +460,39 @@ def ingest_pga_odds(tournament_id: Optional[str] = None) -> Dict[str, Any]:
     tname = _resolve_tournament_name(tid)
     print(f"[odds] Tournament: {tid} — {tname or '(name not found)'}")
 
-    print(f"[odds] Loading player name map from website_active_players …")
-    player_name_map = _fetch_player_name_map(client)
-    print(f"[odds]   {len(player_name_map)} player names loaded")
+    # ── Fetch REST markets first to build a reliable player-name map ──────────
+    # The REST API returns display_name directly; these IDs match the To Win
+    # compressed payload, so we use them to fill in names there rather than
+    # relying on website_active_players (which may use a different ID format).
+    rest_responses: Dict[int, Any] = {}
+    for market_id in REST_MARKET_IDS:
+        print(f"[odds] Fetching REST market {market_id} …")
+        resp = fetch_rest_market(tid, market_id)
+        if resp is not None:
+            rest_responses[market_id] = resp
+        else:
+            print(f"[odds]   WARN market {market_id} fetch failed")
+
+    # Build name map from REST responses
+    player_name_map: Dict[str, str] = {}
+    for resp in rest_responses.values():
+        for sub in resp.get("subMarkets", []):
+            for group in sub.get("oddsDataGroup", []):
+                for item in group.get("oddsData", []):
+                    for entry in item.get("group", []):
+                        for player in entry.get("players", []):
+                            pid = str(player.get("playerId") or "").strip()
+                            name = player.get("displayName")
+                            if pid and name and pid not in player_name_map:
+                                player_name_map[pid] = name
+
+    # Supplement with website_active_players for any IDs not covered above
+    bq_name_map = _fetch_player_name_map(client)
+    for pid, name in bq_name_map.items():
+        if pid not in player_name_map:
+            player_name_map[pid] = name
+
+    print(f"[odds] Player name map: {len(player_name_map)} entries")
 
     print(f"[odds] Truncating {DATASET}.{ODDS_TABLE} …")
     _truncate_table(client)
@@ -490,10 +520,9 @@ def ingest_pga_odds(tournament_id: Optional[str] = None) -> Dict[str, Any]:
         summary["errors"].append(msg)
         summary["markets"][TO_WIN_MARKET_ID] = {"rows": 0, "error": msg}
 
-    # ── REST markets ──────────────────────────────────────────────────────────
+    # ── REST markets (write from already-fetched responses) ───────────────────
     for market_id in REST_MARKET_IDS:
-        print(f"[odds] Fetching REST market {market_id} …")
-        response = fetch_rest_market(tid, market_id)
+        response = rest_responses.get(market_id)
         if response is not None:
             rows = _flatten_rest_market(response, tid, ingested_at, tname, player_name_map)
             written = _insert_rows(client, rows)

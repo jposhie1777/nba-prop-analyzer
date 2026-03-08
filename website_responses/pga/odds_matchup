@@ -1,0 +1,379 @@
+HEADERS
+Request URL
+https://data-api.pgatour.com/odds/tournament/R2026009/2039
+Request Method
+GET
+Status Code
+200 OK (from disk cache)
+Remote Address
+18.164.124.60:443
+Referrer Policy
+strict-origin-when-cross-origin
+access-control-allow-headers
+*
+access-control-allow-methods
+OPTIONS,GET
+access-control-allow-origin
+*
+cache-control
+max-age=60, stale-while-revalidate=30
+content-encoding
+br
+content-type
+application/json
+date
+Sun, 08 Mar 2026 11:55:06 GMT
+vary
+accept-encoding
+via
+1.1 491eed8806756bcb1c9eb958ecf7ed5a.cloudfront.net (CloudFront), 1.1 b85629c88fd144a4bf7989a1ad1ecc54.cloudfront.net (CloudFront)
+x-amz-apigw-id
+Z5yALEvroAMEKlA=
+x-amz-cf-id
+k9juEOJc1--yzjLe8dmu-YW6EL2n1AyPICBZFnWksGviu2ukbYg4vw==
+x-amz-cf-pop
+IAD55-P9, JFK50-P7
+x-amzn-requestid
+e42f1ea9-08c7-4ee4-a3e4-8c5712a6ff13
+x-amzn-trace-id
+Root=1-69ad639a-5375f3fa59d211cf0fe72a69;Parent=046160c735592c73;Sampled=0;Lineage=1:b13738ce:0
+x-cache
+Miss from cloudfront
+referer
+https://www.pgatour.com/
+sec-ch-ua
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"macOS"
+user-agent
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+RESPONSE
+{
+    "market": "Matchup Props",
+    "marketDisplayName": "Matchup",
+    "marketId": 2039,
+    "bettingProvider": "fanduel",
+    "marketType": "MATCHUP_PROPS",
+    "subMarketsSelectable": true,
+    "subMarkets": [
+        {
+            "subMarketName": "Best Score - Round 3",
+            "oddsDataGroup": [
+                {
+                    "title": "Best Score",
+                    "groupDisplay": true,
+                    "oddsData": [
+                        {
+                            "type": "GROUP",
+                            "groupCount": 2,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "51634",
+                                            "displayName": "Sahith Theegala",
+                                            "shortName": "S. Theegala"
+                                        }
+                                    ],
+                                    "oddsValue": "+600",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18559",
+                                    "entityId": "51634"
+                                },
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "52955",
+                                            "displayName": "Ludvig Åberg",
+                                            "shortName": "L. Åberg"
+                                        }
+                                    ],
+                                    "oddsValue": "-1000",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18559",
+                                    "entityId": "52955"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "GROUP",
+                            "groupCount": 2,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "40026",
+                                            "displayName": "Daniel Berger",
+                                            "shortName": "D. Berger"
+                                        }
+                                    ],
+                                    "oddsValue": "+1000",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18559",
+                                    "entityId": "40026"
+                                },
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "56630",
+                                            "displayName": "Akshay Bhatia",
+                                            "shortName": "A. Bhatia"
+                                        }
+                                    ],
+                                    "oddsValue": "-25000",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18559",
+                                    "entityId": "56630"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "subMarketName": "Best Score - Tournament",
+            "oddsDataGroup": [
+                {
+                    "title": "Best Score",
+                    "groupDisplay": true,
+                    "oddsData": [
+                        {
+                            "type": "GROUP",
+                            "groupCount": 2,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "37455",
+                                            "displayName": "Si Woo Kim",
+                                            "shortName": "S.W. Kim"
+                                        }
+                                    ],
+                                    "oddsValue": "+1100",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18442",
+                                    "entityId": "37455"
+                                },
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "57366",
+                                            "displayName": "Cameron Young",
+                                            "shortName": "Cam. Young"
+                                        }
+                                    ],
+                                    "oddsValue": "-4000",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18442",
+                                    "entityId": "57366"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "GROUP",
+                            "groupCount": 2,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "34046",
+                                            "displayName": "Jordan Spieth",
+                                            "shortName": "J. Spieth"
+                                        }
+                                    ],
+                                    "oddsValue": "+450",
+                                    "oddDirection": "DOWN",
+                                    "optionId": "18442",
+                                    "entityId": "34046"
+                                },
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "37378",
+                                            "displayName": "Min Woo Lee",
+                                            "shortName": "M. Lee"
+                                        }
+                                    ],
+                                    "oddsValue": "-600",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18442",
+                                    "entityId": "37378"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "GROUP",
+                            "groupCount": 2,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "32102",
+                                            "displayName": "Rickie Fowler",
+                                            "shortName": "R. Fowler"
+                                        }
+                                    ],
+                                    "oddsValue": "-600",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18442",
+                                    "entityId": "32102"
+                                },
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "46442",
+                                            "displayName": "Maverick McNealy",
+                                            "shortName": "M. McNealy"
+                                        }
+                                    ],
+                                    "oddsValue": "+400",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18442",
+                                    "entityId": "46442"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "GROUP",
+                            "groupCount": 2,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "34099",
+                                            "displayName": "Harris English",
+                                            "shortName": "H. English"
+                                        }
+                                    ],
+                                    "oddsValue": "+200",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18442",
+                                    "entityId": "34099"
+                                },
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "46717",
+                                            "displayName": "Viktor Hovland",
+                                            "shortName": "V. Hovland"
+                                        }
+                                    ],
+                                    "oddsValue": "-300",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18442",
+                                    "entityId": "46717"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "GROUP",
+                            "groupCount": 2,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "32839",
+                                            "displayName": "Hideki Matsuyama",
+                                            "shortName": "H. Matsuyama"
+                                        }
+                                    ],
+                                    "oddsValue": "+400",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18442",
+                                    "entityId": "32839"
+                                },
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "40098",
+                                            "displayName": "Matt Fitzpatrick",
+                                            "shortName": "M. Fitzpatrick"
+                                        }
+                                    ],
+                                    "oddsValue": "-600",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18442",
+                                    "entityId": "40098"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "GROUP",
+                            "groupCount": 2,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "34098",
+                                            "displayName": "Russell Henley",
+                                            "shortName": "R. Henley"
+                                        }
+                                    ],
+                                    "oddsValue": "-300",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18442",
+                                    "entityId": "34098"
+                                },
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "48081",
+                                            "displayName": "Xander Schauffele",
+                                            "shortName": "X. Schauffele"
+                                        }
+                                    ],
+                                    "oddsValue": "+200",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18442",
+                                    "entityId": "48081"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "availableMarkets": [
+        {
+            "id": 2032,
+            "name": "Outright Winner",
+            "book": "fanduel",
+            "displayName": "To Win"
+        },
+        {
+            "id": 2039,
+            "name": "Matchup Props",
+            "book": "fanduel",
+            "displayName": "Matchup"
+        },
+        {
+            "id": 2033,
+            "name": "Finish",
+            "book": "fanduel",
+            "displayName": "Finishes"
+        },
+        {
+            "id": 2036,
+            "name": "Group Props",
+            "book": "fanduel",
+            "displayName": "Groups"
+        },
+        {
+            "id": 2085,
+            "name": "3 Ball",
+            "book": "fanduel",
+            "displayName": "3 Ball"
+        },
+        {
+            "id": 2038,
+            "name": "Nationality",
+            "book": "fanduel",
+            "displayName": "Nationality"
+        }
+    ]
+}

@@ -1,0 +1,183 @@
+HEADERS
+Request URL
+https://data-api.pgatour.com/odds/tournament/R2026009/2085
+Request Method
+GET
+Status Code
+200 OK
+Remote Address
+18.164.124.60:443
+Referrer Policy
+strict-origin-when-cross-origin
+access-control-allow-headers
+*
+access-control-allow-methods
+OPTIONS,GET
+access-control-allow-origin
+*
+cache-control
+max-age=60, stale-while-revalidate=30
+content-encoding
+br
+content-type
+application/json
+date
+Sun, 08 Mar 2026 12:02:05 GMT
+vary
+accept-encoding
+via
+1.1 00e0f62ba1cdeab8bad39e117c167ac4.cloudfront.net (CloudFront), 1.1 b85629c88fd144a4bf7989a1ad1ecc54.cloudfront.net (CloudFront)
+x-amz-apigw-id
+Z5zBtHp_IAMEgvQ=
+x-amz-cf-id
+tnO_C1_8ON160rcMBkTMggF5xru0J1z8Rb_0WMfEfUoFYb3fwSW9tA==
+x-amz-cf-pop
+IAD55-P9
+x-amz-cf-pop
+JFK50-P7
+x-amzn-requestid
+87c0d10e-54c6-4e6e-b819-ee1009a5585a
+x-amzn-trace-id
+Root=1-69ad653d-5b5ec07925b8889064dc50d1;Parent=6dd6061f77632cff;Sampled=0;Lineage=1:b13738ce:0
+x-cache
+Miss from cloudfront
+:authority
+data-api.pgatour.com
+:method
+GET
+:path
+/odds/tournament/R2026009/2085
+:scheme
+https
+accept
+*/*
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+en-US,en;q=0.9
+origin
+https://www.pgatour.com
+priority
+u=1, i
+referer
+https://www.pgatour.com/
+sec-ch-ua
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"macOS"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-site
+user-agent
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+RESPONSE
+{
+    "market": "3 Ball",
+    "marketDisplayName": "3 Ball",
+    "marketId": 2085,
+    "bettingProvider": "fanduel",
+    "marketType": "THREE_BALL",
+    "subMarketsSelectable": false,
+    "subMarkets": [
+        {
+            "subMarketName": "Best Score - Tournament",
+            "oddsDataGroup": [
+                {
+                    "title": "Best Score",
+                    "groupDisplay": true,
+                    "oddsData": [
+                        {
+                            "type": "GROUP",
+                            "groupCount": 3,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "24502",
+                                            "displayName": "Adam Scott",
+                                            "shortName": "A. Scott"
+                                        }
+                                    ],
+                                    "oddsValue": "+380",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18411",
+                                    "entityId": "24502"
+                                },
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "46442",
+                                            "displayName": "Maverick McNealy",
+                                            "shortName": "M. McNealy"
+                                        }
+                                    ],
+                                    "oddsValue": "+700",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18411",
+                                    "entityId": "46442"
+                                },
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "59095",
+                                            "displayName": "Chris Gotterup",
+                                            "shortName": "C. Gotterup"
+                                        }
+                                    ],
+                                    "oddsValue": "-320",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18411",
+                                    "entityId": "59095"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "availableMarkets": [
+        {
+            "id": 2032,
+            "name": "Outright Winner",
+            "book": "fanduel",
+            "displayName": "To Win"
+        },
+        {
+            "id": 2039,
+            "name": "Matchup Props",
+            "book": "fanduel",
+            "displayName": "Matchup"
+        },
+        {
+            "id": 2033,
+            "name": "Finish",
+            "book": "fanduel",
+            "displayName": "Finishes"
+        },
+        {
+            "id": 2036,
+            "name": "Group Props",
+            "book": "fanduel",
+            "displayName": "Groups"
+        },
+        {
+            "id": 2085,
+            "name": "3 Ball",
+            "book": "fanduel",
+            "displayName": "3 Ball"
+        },
+        {
+            "id": 2038,
+            "name": "Nationality",
+            "book": "fanduel",
+            "displayName": "Nationality"
+        }
+    ]
+}

@@ -1,0 +1,298 @@
+HEADERS
+Request URL
+https://data-api.pgatour.com/odds/tournament/R2026009/2036
+Request Method
+GET
+Status Code
+200 OK
+Remote Address
+18.164.124.60:443
+Referrer Policy
+strict-origin-when-cross-origin
+access-control-allow-headers
+*
+access-control-allow-methods
+OPTIONS,GET
+access-control-allow-origin
+*
+cache-control
+max-age=60, stale-while-revalidate=30
+content-encoding
+br
+content-type
+application/json
+date
+Sun, 08 Mar 2026 12:01:06 GMT
+vary
+accept-encoding
+via
+1.1 1ae744582b6105b6f02e8971c5c713be.cloudfront.net (CloudFront), 1.1 b85629c88fd144a4bf7989a1ad1ecc54.cloudfront.net (CloudFront)
+x-amz-apigw-id
+Z5y4bHhlIAMEE5A=
+x-amz-cf-id
+F3CETLV250xb8J_nuRNcKtOTT6iQSpUOGAlRQB0k8ThueobYMO8eFw==
+x-amz-cf-pop
+IAD55-P9
+x-amz-cf-pop
+JFK50-P7
+x-amzn-requestid
+8df8eca9-0419-460f-b4cc-306cd399e356
+x-amzn-trace-id
+Root=1-69ad6502-23e85c4351239bd834f73dd4;Parent=566b809c97bc6433;Sampled=0;Lineage=1:b13738ce:0
+x-cache
+Miss from cloudfront
+:authority
+data-api.pgatour.com
+:method
+GET
+:path
+/odds/tournament/R2026009/2036
+:scheme
+https
+accept
+*/*
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+en-US,en;q=0.9
+origin
+https://www.pgatour.com
+priority
+u=1, i
+referer
+https://www.pgatour.com/
+sec-ch-ua
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"macOS"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-site
+user-agent
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+RESPONSE
+{
+    "market": "Group Props",
+    "marketDisplayName": "Groups",
+    "marketId": 2036,
+    "bettingProvider": "fanduel",
+    "marketType": "GROUP",
+    "subMarketsSelectable": false,
+    "subMarkets": [
+        {
+            "subMarketName": "Best Score - Tournament",
+            "oddsDataGroup": [
+                {
+                    "title": "Group A",
+                    "groupDisplay": false,
+                    "groupId": "263854",
+                    "oddsData": [
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "34099",
+                                            "displayName": "Harris English",
+                                            "shortName": "H. English"
+                                        }
+                                    ],
+                                    "oddsValue": "+2200",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18411",
+                                    "entityId": "34099"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "52215",
+                                            "displayName": "Robert MacIntyre",
+                                            "shortName": "R. MacIntyre"
+                                        }
+                                    ],
+                                    "oddsValue": "+12500",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18411",
+                                    "entityId": "52215"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "46717",
+                                            "displayName": "Viktor Hovland",
+                                            "shortName": "V. Hovland"
+                                        }
+                                    ],
+                                    "oddsValue": "+550",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18411",
+                                    "entityId": "46717"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "57366",
+                                            "displayName": "Cameron Young",
+                                            "shortName": "Cam. Young"
+                                        }
+                                    ],
+                                    "oddsValue": "-700",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18411",
+                                    "entityId": "57366"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "title": "Group B",
+                    "groupDisplay": false,
+                    "groupId": "263855",
+                    "oddsData": [
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "32839",
+                                            "displayName": "Hideki Matsuyama",
+                                            "shortName": "H. Matsuyama"
+                                        }
+                                    ],
+                                    "oddsValue": "+20000",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18411",
+                                    "entityId": "32839"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "40098",
+                                            "displayName": "Matt Fitzpatrick",
+                                            "shortName": "M. Fitzpatrick"
+                                        }
+                                    ],
+                                    "oddsValue": "+2500",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18411",
+                                    "entityId": "40098"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "37455",
+                                            "displayName": "Si Woo Kim",
+                                            "shortName": "S.W. Kim"
+                                        }
+                                    ],
+                                    "oddsValue": "+1600",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18411",
+                                    "entityId": "37455"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "SINGLE",
+                            "groupCount": 1,
+                            "group": [
+                                {
+                                    "players": [
+                                        {
+                                            "playerId": "50525",
+                                            "displayName": "Collin Morikawa",
+                                            "shortName": "C. Morikawa"
+                                        }
+                                    ],
+                                    "oddsValue": "-2000",
+                                    "oddDirection": "CONSTANT",
+                                    "optionId": "18411",
+                                    "entityId": "50525"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "availableMarkets": [
+        {
+            "id": 2032,
+            "name": "Outright Winner",
+            "book": "fanduel",
+            "displayName": "To Win"
+        },
+        {
+            "id": 2039,
+            "name": "Matchup Props",
+            "book": "fanduel",
+            "displayName": "Matchup"
+        },
+        {
+            "id": 2033,
+            "name": "Finish",
+            "book": "fanduel",
+            "displayName": "Finishes"
+        },
+        {
+            "id": 2036,
+            "name": "Group Props",
+            "book": "fanduel",
+            "displayName": "Groups"
+        },
+        {
+            "id": 2085,
+            "name": "3 Ball",
+            "book": "fanduel",
+            "displayName": "3 Ball"
+        },
+        {
+            "id": 2038,
+            "name": "Nationality",
+            "book": "fanduel",
+            "displayName": "Nationality"
+        }
+    ]
+}

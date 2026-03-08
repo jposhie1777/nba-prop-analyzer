@@ -3,6 +3,7 @@ from pathlib import Path
 from mobile_api.ingest.atp.website_ingest import (
     _extract_h2h_ids,
     _extract_slug_and_tournament_id,
+    _extract_daily_schedule_time_fields,
     _flatten_html_payload,
     _load_capture_file,
 )
@@ -43,3 +44,14 @@ def test_flatten_html_payload_extracts_text_and_links():
     assert any("Round of 32" in chunk for chunk in text_chunks)
     assert links[0]["href"] == "/en/test"
     assert links[0]["text"] == "ATP Link"
+
+
+def test_daily_schedule_time_field_extraction():
+    capture = _load_capture_file(Path("website_responses/atp/daily_schedule"))
+
+    start_times, not_before_times, schedule_items = _extract_daily_schedule_time_fields(capture["payload_text"])
+
+    assert any(item.startswith("Starts At") for item in start_times)
+    assert any(item.startswith("Not Before") for item in not_before_times)
+    assert any(item.get("time_type") == "starts_at" for item in schedule_items)
+    assert any(item.get("time_type") == "not_before" for item in schedule_items)

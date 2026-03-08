@@ -248,6 +248,46 @@ def _flatten_html_payload(payload_html: Optional[str]) -> Tuple[List[str], List[
     return text_chunks[:500], links[:500]
 
 
+
+
+def _extract_daily_schedule_time_fields(payload_html: Optional[str]) -> Tuple[List[str], List[str], List[Dict[str, Optional[str]]]]:
+    if not payload_html:
+        return [], [], []
+
+    start_times: List[str] = []
+    not_before_times: List[str] = []
+    schedule_time_items: List[Dict[str, Optional[str]]] = []
+
+    pattern = re.compile(
+        r'<div class="schedule"[^>]*data-datetime="([^"]*)"[^>]*data-displaytime="([^"]*)"[^>]*>',
+        flags=re.IGNORECASE,
+    )
+
+    for m in pattern.finditer(payload_html):
+        data_datetime = (m.group(1) or '').strip() or None
+        display_time = (m.group(2) or '').strip()
+        if not display_time:
+            continue
+
+        lower = display_time.lower()
+        time_type = None
+        if lower.startswith('starts at'):
+            time_type = 'starts_at'
+            start_times.append(display_time)
+        elif lower.startswith('not before'):
+            time_type = 'not_before'
+            not_before_times.append(display_time)
+
+        schedule_time_items.append(
+            {
+                'display_time': display_time,
+                'data_datetime': data_datetime,
+                'time_type': time_type,
+            }
+        )
+
+    return start_times[:500], not_before_times[:500], schedule_time_items[:500]
+
 def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule: bool, sleep_seconds: float) -> Dict[str, Any]:
     del sleep_seconds
 
@@ -308,6 +348,9 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
 
     daily_schedule_capture = captures["daily_schedule"]
     daily_text_chunks, daily_links = _flatten_html_payload(daily_schedule_capture.get("payload_text"))
+    daily_start_times, daily_not_before_times, daily_time_items = _extract_daily_schedule_time_fields(
+        daily_schedule_capture.get("payload_text")
+    )
     daily_schedule_rows.append(
         {
             "snapshot_ts_utc": snapshot_ts,
@@ -316,6 +359,9 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
             "payload_html": daily_schedule_capture.get("payload_text"),
             "flattened_text_chunks": daily_text_chunks,
             "flattened_links": daily_links,
+            "start_time_labels": daily_start_times,
+            "not_before_labels": daily_not_before_times,
+            "schedule_time_items": daily_time_items,
         }
     )
     sched_slug, sched_tid = _extract_slug_and_tournament_id(daily_schedule_capture.get("request_url"))

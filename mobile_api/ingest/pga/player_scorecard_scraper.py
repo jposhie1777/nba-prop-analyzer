@@ -39,12 +39,14 @@ import re
 import sys
 import time
 import urllib.parse
+import unicodedata
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import requests
 
 RESULTS_PAGE_BASE = "https://www.pgatour.com/player"
+RESULTS_PAGE_BASE_ALT = "https://pgatour.com/player"
 DEFAULT_TIMEOUT = 30
 
 # Tracks seasons for which we've already emitted a structure-change debug message,
@@ -67,6 +69,7 @@ class PlayerTournamentScorecard:
     tournament_id: str
     tournament_name: str
     tournament_date: str
+    course_name: Optional[str]
     position: str
     r1: Optional[int]
     r2: Optional[int]
@@ -101,6 +104,17 @@ def _browser_headers() -> Dict[str, str]:
         "sec-fetch-site": "same-origin",
     }
 
+def _prepare_session() -> requests.Session:
+    """Create a session and prime pgatour cookies to reduce bot 404 responses."""
+    session = requests.Session()
+    session.headers.update(_browser_headers())
+    try:
+        session.get("https://pgatour.com/", timeout=DEFAULT_TIMEOUT)
+    except Exception:
+        # Best-effort cookie priming only.
+        pass
+    return session
+
 
 def _name_to_url_slug(name: str) -> str:
     """
@@ -112,6 +126,47 @@ def _name_to_url_slug(name: str) -> str:
     """
     slug = name.replace(" ", "-")
     return urllib.parse.quote(slug, safe="-")
+
+
+def _name_to_ascii_slug(name: str) -> str:
+    """Return a lower-case ASCII slug for newer PGA Tour URL variants."""
+    normalized = unicodedata.normalize("NFKD", name)
+    ascii_name = normalized.encode("ascii", "ignore").decode("ascii")
+    cleaned = re.sub(r"[^A-Za-z0-9\- ]+", "", ascii_name)
+    collapsed = re.sub(r"\s+", "-", cleaned.strip())
+    return collapsed.lower()
+
+
+def _candidate_results_urls(player_id: str, player_name: str) -> List[str]:
+    """
+    Build resilient URL candidates for PGA results pages.
+
+    PGA occasionally changes URL casing/path conventions. We try a few known
+    variants so a single convention change does not zero out all rows.
+    """
+    display_slug = _name_to_url_slug(player_name)
+    ascii_slug = _name_to_ascii_slug(player_name)
+
+    candidates = [
+        f"{RESULTS_PAGE_BASE}/{player_id}/{display_slug}/results",
+        f"{RESULTS_PAGE_BASE}/{player_id}/{ascii_slug}/results",
+        f"https://www.pgatour.com/players/{player_id}/{ascii_slug}/results",
+        f"{RESULTS_PAGE_BASE}/{player_id}/results",
+        f"{RESULTS_PAGE_BASE_ALT}/{player_id}/{display_slug}/results",
+        f"{RESULTS_PAGE_BASE_ALT}/{player_id}/{ascii_slug}/results",
+        f"https://pgatour.com/players/{player_id}/{ascii_slug}/results",
+        f"{RESULTS_PAGE_BASE_ALT}/{player_id}/results",
+    ]
+
+    # Deduplicate while preserving order.
+    deduped: List[str] = []
+    seen = set()
+    for url in candidates:
+        if url in seen:
+            continue
+        seen.add(url)
+        deduped.append(url)
+    return deduped
 
 
 # ---------------------------------------------------------------------------
@@ -171,8 +226,12 @@ def _find_results_data(
         results_data = data.get("resultsData") or []
         rows: List[Dict[str, Any]] = []
         for section in results_data:
+            section_course = section.get("courseName") or section.get("course")
             for entry in section.get("data") or []:
                 if entry.get("tournamentId"):
+                    if section_course and "__course_name" not in entry:
+                        entry = dict(entry)
+                        entry["__course_name"] = section_course
                     rows.append(entry)
         return rows
 
@@ -255,6 +314,26 @@ def _season_from_tournament_id(tournament_id: str) -> int:
         return 0
 
 
+def _extract_course_name(entry: Dict[str, Any]) -> Optional[str]:
+    """Best-effort extraction of course name from resultsData entry payload."""
+    direct_keys = ("courseName", "course", "hostCourse", "venue", "course_name")
+    for key in direct_keys:
+        value = entry.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        if isinstance(value, dict):
+            for nested_key in ("name", "displayName", "courseName"):
+                nested = value.get(nested_key)
+                if isinstance(nested, str) and nested.strip():
+                    return nested.strip()
+
+    section_course = entry.get("__course_name")
+    if isinstance(section_course, str) and section_course.strip():
+        return section_course.strip()
+
+    return None
+
+
 def _parse_tournament_entry(
     entry: Dict[str, Any],
     player_id: str,
@@ -273,6 +352,7 @@ def _parse_tournament_entry(
     tournament_date = str(fields[0]).strip() if len(fields) > 0 else ""
     tournament_name = str(fields[1]).strip() if len(fields) > 1 else ""
     position = str(fields[2]).strip() if len(fields) > 2 else ""
+    course_name = _extract_course_name(entry)
     r1 = _safe_int(fields[3]) if len(fields) > 3 else None
     r2 = _safe_int(fields[4]) if len(fields) > 4 else None
     r3 = _safe_int(fields[5]) if len(fields) > 5 else None
@@ -287,6 +367,7 @@ def _parse_tournament_entry(
         tournament_id=tournament_id,
         tournament_name=tournament_name,
         tournament_date=tournament_date,
+        course_name=course_name,
         position=position,
         r1=r1,
         r2=r2,
@@ -327,8 +408,8 @@ def fetch_player_scorecard_history(
         List of :class:`PlayerTournamentScorecard` (one per tournament).
         Returns an empty list if the player page has no results data.
     """
-    url_slug = _name_to_url_slug(player_name)
-    url = f"{RESULTS_PAGE_BASE}/{player_id}/{url_slug}/results"
+    candidate_urls = _candidate_results_urls(player_id, player_name)
+    session = _prepare_session()
     params: Dict[str, str] = {"tour": tour_code}
     if season is not None:
         params["season"] = str(season)
@@ -337,37 +418,43 @@ def fetch_player_scorecard_history(
     last_exc: Optional[Exception] = None
     resp: Optional[requests.Response] = None
 
-    for attempt in range(retries):
-        try:
-            resp = requests.get(
-                url,
-                headers=_browser_headers(),
-                params=params,
-                timeout=timeout,
-            )
-            if resp.status_code == 404:
-                print(
-                    f"[scorecard_scraper] DEBUG 404 for player={player_id} url={url}",
-                    flush=True,
+    for url in candidate_urls:
+        for attempt in range(retries):
+            try:
+                resp = session.get(
+                    url,
+                    params=params,
+                    timeout=timeout,
                 )
-                return []
-            resp.raise_for_status()
-            break
-        except requests.HTTPError as exc:
-            status = exc.response.status_code if exc.response is not None else 0
-            if status in (429, 500, 502, 503, 504):
+                if resp.status_code in (403, 404):
+                    break
+                resp.raise_for_status()
+                break
+            except requests.HTTPError as exc:
+                status = exc.response.status_code if exc.response is not None else 0
+                if status in (429, 500, 502, 503, 504):
+                    last_exc = exc
+                    time.sleep(backoff)
+                    backoff *= 2
+                    continue
+                raise
+            except Exception as exc:
                 last_exc = exc
-                time.sleep(backoff)
-                backoff *= 2
-                continue
-            raise
-        except Exception as exc:
-            last_exc = exc
-            if attempt < retries - 1:
-                time.sleep(backoff)
-                backoff *= 2
-                continue
-            raise
+                if attempt < retries - 1:
+                    time.sleep(backoff)
+                    backoff *= 2
+                    continue
+                raise
+        # success path
+        if resp is not None and resp.status_code not in (403, 404):
+            break
+
+    if resp is not None and resp.status_code in (403, 404):
+        print(
+            f"[scorecard_scraper] DEBUG {resp.status_code} for player={player_id}; tried urls={candidate_urls}; params={params}",
+            flush=True,
+        )
+        return []
 
     if resp is None:
         raise RuntimeError(f"Exceeded {retries} retries. Last error: {last_exc}")
@@ -415,6 +502,7 @@ def scorecard_history_to_records(
             "tournament_id": r.tournament_id,
             "tournament_name": r.tournament_name,
             "tournament_date": r.tournament_date,
+            "course_name": r.course_name,
             "player_id": r.player_id,
             "player_display_name": r.player_name,
             "position": r.position,
@@ -494,13 +582,13 @@ def _cli() -> None:
 
     print(f"\n  {rows[0].player_name} — {rows[0].season} ({args.tour})\n")
     print(
-        f"  {'Date':12}  {'Tournament':35}  {'Pos':5}  "
+        f"  {'Date':12}  {'Tournament':28}  {'Course':24}  {'Pos':5}  "
         f"{'R1':>4}  {'R2':>4}  {'R3':>4}  {'R4':>4}  {'Total':>5}  {'ToPar':>6}"
     )
-    print("  " + "-" * 95)
+    print("  " + "-" * 124)
     for r in rows:
         print(
-            f"  {r.tournament_date:12}  {r.tournament_name[:35]:35}  {r.position:5}  "
+            f"  {r.tournament_date:12}  {r.tournament_name[:28]:28}  {(r.course_name or '-')[:24]:24}  {r.position:5}  "
             f"{str(r.r1 or '-'):>4}  {str(r.r2 or '-'):>4}  "
             f"{str(r.r3 or '-'):>4}  {str(r.r4 or '-'):>4}  "
             f"{str(r.total_strokes or '-'):>5}  {str(r.to_par or '-'):>6}"

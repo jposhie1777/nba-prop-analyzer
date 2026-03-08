@@ -1,0 +1,53 @@
+name: ATP Odds Daily Loader
+
+on:
+  schedule:
+    - cron: "0 11 * * *"   # 11:00 UTC = 6:00 AM ET (UTC-5 winter / UTC-4 summer)
+
+  workflow_dispatch:
+    inputs:
+      url:
+        description: >
+          Oddspedia URL to scrape (e.g. https://www.oddspedia.com/us/tennis/odds).
+          Leave blank to use the default tennis odds page.
+        required: false
+        default: ""
+
+jobs:
+  odds-loader:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      ODDSPEDIA_DATASET: "oddspedia"
+      ODDSPEDIA_DATASET_LOCATION: "US"
+      ODDSPEDIA_TABLE: "atp_odds"
+      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/mobile_api
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install requests google-cloud-bigquery google-auth
+
+      - name: Configure GCP credentials
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
+
+      - name: Ingest ATP odds → oddspedia.atp_odds
+        run: |
+          ARGS=""
+          if [ -n "${{ inputs.url }}" ]; then
+            ARGS="--url ${{ inputs.url }}"
+          fi
+          python -m mobile_api.ingest.atp.oddspedia_odds_ingest $ARGS

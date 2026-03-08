@@ -122,6 +122,19 @@ def _ensure_table(client: bigquery.Client) -> None:
         pass
 
 
+def _add_missing_columns(client: bigquery.Client) -> None:
+    """Patch the live table schema with any columns present in SCHEMA but not yet in BQ."""
+    tid = _table_id(client, ODDS_TABLE)
+    table = client.get_table(tid)
+    existing = {f.name for f in table.schema}
+    new_fields = [f for f in SCHEMA if f.name not in existing]
+    if not new_fields:
+        return
+    table.schema = list(table.schema) + new_fields
+    client.update_table(table, ["schema"])
+    print(f"[odds] Added {len(new_fields)} new column(s): {[f.name for f in new_fields]}")
+
+
 def _truncate_table(client: bigquery.Client) -> None:
     tid = _table_id(client, ODDS_TABLE)
     client.query(f"TRUNCATE TABLE `{tid}`").result()
@@ -442,6 +455,7 @@ def ingest_pga_odds(tournament_id: Optional[str] = None) -> Dict[str, Any]:
     client = _bq_client()
     _ensure_dataset(client)
     _ensure_table(client)
+    _add_missing_columns(client)
 
     tname = _resolve_tournament_name(tid)
     print(f"[odds] Tournament: {tid} — {tname or '(name not found)'}")

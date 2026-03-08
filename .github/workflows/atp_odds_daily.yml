@@ -34,10 +34,13 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: |
           pip install --upgrade pip
-          pip install requests google-cloud-bigquery google-auth
+          pip install playwright google-cloud-bigquery google-auth
+
+      - name: Install Playwright Chromium
+        run: playwright install chromium --with-deps
 
       - name: Configure GCP credentials
         run: |

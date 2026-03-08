@@ -198,7 +198,7 @@ class OddspediaClient:
             record: Dict[str, Any] = {
                 "match_id": match_id,
                 "sport": sport,
-                "date_utc": match.get("md"),
+                "date_utc": _normalise_ts(match.get("md")),
                 "home_team": match.get("ht"),
                 "away_team": match.get("at"),
                 "home_team_id": match.get("ht_id"),
@@ -250,6 +250,20 @@ class OddspediaClient:
 # ------------------------------------------------------------------
 # Utility functions
 # ------------------------------------------------------------------
+
+def _normalise_ts(value: Optional[str]) -> Optional[str]:
+    """Normalise an Oddspedia timestamp for BigQuery.
+
+    Oddspedia returns e.g. "2026-03-08 18:00:00+00" with a bare two-digit
+    offset.  BigQuery's TIMESTAMP parser requires either no offset or the
+    full "+HH:MM" form.  Since the column is date_utc we simply strip the
+    offset so the value is unambiguously UTC.
+    """
+    if not value:
+        return value
+    # Drop everything from the first "+" onward ("… 18:00:00+00" → "… 18:00:00")
+    return value.split("+")[0].rstrip()
+
 
 def _parse_float(value: Any) -> Optional[float]:
     try:

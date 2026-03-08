@@ -65,6 +65,7 @@ TO_WIN_MARKET_ID = 2032
 SCHEMA: List[bigquery.SchemaField] = [
     bigquery.SchemaField("ingested_at",         "TIMESTAMP", mode="REQUIRED"),
     bigquery.SchemaField("tournament_id",        "STRING",    mode="REQUIRED"),
+    bigquery.SchemaField("tournament_name",      "STRING"),
     bigquery.SchemaField("market_id",            "INT64",     mode="REQUIRED"),
     bigquery.SchemaField("market_name",          "STRING"),
     bigquery.SchemaField("market_display_name",  "STRING"),
@@ -204,12 +205,46 @@ def fetch_to_win(tournament_id: str) -> Optional[Dict[str, Any]]:
         print(f"[odds] WARN To Win (GraphQL) failed: {exc}")
         return None
 
+# ── Enrichment helpers ────────────────────────────────────────────────────────
+
+def _fetch_player_name_map(client: bigquery.Client) -> Dict[str, str]:
+    """Return {player_id: display_name} from the latest snapshot in website_active_players."""
+    table = _table_id(client, "website_active_players")
+    query = f"""
+        SELECT player_id, display_name
+        FROM `{table}`
+        WHERE run_ts = (SELECT MAX(run_ts) FROM `{table}`)
+          AND display_name IS NOT NULL
+    """
+    try:
+        return {row.player_id: row.display_name for row in client.query(query).result()}
+    except Exception as exc:
+        print(f"[odds] WARN could not load player names: {exc}")
+        return {}
+
+
+def _resolve_tournament_name(tournament_id: str) -> Optional[str]:
+    """Look up the human-readable tournament name from the PGA schedule."""
+    try:
+        from .pga_schedule import fetch_schedule, schedule_to_records
+        year = tournament_id[1:5] if len(tournament_id) >= 5 else str(datetime.now(timezone.utc).year)
+        rows = schedule_to_records(fetch_schedule(tour_code="R", year=year))
+        for row in rows:
+            if str(row.get("tournament_id") or "") == tournament_id:
+                return row.get("name")
+    except Exception as exc:
+        print(f"[odds] WARN could not resolve tournament name: {exc}")
+    return None
+
+
 # ── Flatteners ────────────────────────────────────────────────────────────────
 
 def _flatten_rest_market(
     response: Dict[str, Any],
     tournament_id: str,
     ingested_at: str,
+    tournament_name: Optional[str] = None,
+    player_name_map: Optional[Dict[str, str]] = None,
 ) -> List[Dict[str, Any]]:
     """Flatten one REST market response into a list of table rows.
 
@@ -217,6 +252,7 @@ def _flatten_rest_market(
     Players within the same matchup/3-ball group share the same group_index.
     """
     rows: List[Dict[str, Any]] = []
+    player_name_map = player_name_map or {}
 
     market_id           = response.get("marketId")
     market_name         = response.get("market")
@@ -238,9 +274,11 @@ def _flatten_rest_market(
                     entity_id     = group_entry.get("entityId")
 
                     for player in group_entry.get("players", []):
+                        pid = player.get("playerId")
                         rows.append({
                             "ingested_at":          ingested_at,
                             "tournament_id":        tournament_id,
+                            "tournament_name":      tournament_name,
                             "market_id":            market_id,
                             "market_name":          market_name,
                             "market_display_name":  market_display_name,
@@ -249,8 +287,8 @@ def _flatten_rest_market(
                             "sub_market_name":      sub_market_name,
                             "group_type":           group_type,
                             "group_index":          group_index,
-                            "player_id":            player.get("playerId"),
-                            "display_name":         player.get("displayName"),
+                            "player_id":            pid,
+                            "display_name":         player.get("displayName") or player_name_map.get(str(pid or "")),
                             "short_name":           player.get("shortName"),
                             "odds_value":           odds_value,
                             "odds_direction":       odds_direction,
@@ -265,22 +303,23 @@ def _flatten_to_win(
     decoded: Dict[str, Any],
     tournament_id: str,
     ingested_at: str,
+    tournament_name: Optional[str] = None,
+    player_name_map: Optional[Dict[str, str]] = None,
 ) -> List[Dict[str, Any]]:
-    """Flatten the decoded To Win payload into a list of table rows.
-
-    Note: the compressed payload does not include display_name / short_name.
-    Join against pga_data.website_active_players on player_id to get names.
-    """
+    """Flatten the decoded To Win payload into a list of table rows."""
     rows: List[Dict[str, Any]] = []
+    player_name_map = player_name_map or {}
 
     if not decoded.get("oddsEnabled", True):
         print("[odds] INFO To Win: oddsEnabled=False, skipping")
         return rows
 
     for player in decoded.get("players", []):
+        pid = player.get("playerId")
         rows.append({
             "ingested_at":          ingested_at,
             "tournament_id":        tournament_id,
+            "tournament_name":      tournament_name,
             "market_id":            TO_WIN_MARKET_ID,
             "market_name":          "Outright Winner",
             "market_display_name":  "To Win",
@@ -289,9 +328,9 @@ def _flatten_to_win(
             "sub_market_name":      None,
             "group_type":           "SINGLE",
             "group_index":          0,
-            "player_id":            player.get("playerId"),
-            "display_name":         None,   # not in compressed payload
-            "short_name":           None,   # not in compressed payload
+            "player_id":            pid,
+            "display_name":         player_name_map.get(str(pid or "")),
+            "short_name":           None,
             "odds_value":           player.get("odds"),
             "odds_direction":       player.get("oddsDirection"),
             "odds_sort":            player.get("oddsSort"),
@@ -404,11 +443,19 @@ def ingest_pga_odds(tournament_id: Optional[str] = None) -> Dict[str, Any]:
     _ensure_dataset(client)
     _ensure_table(client)
 
+    tname = _resolve_tournament_name(tid)
+    print(f"[odds] Tournament: {tid} — {tname or '(name not found)'}")
+
+    print(f"[odds] Loading player name map from website_active_players …")
+    player_name_map = _fetch_player_name_map(client)
+    print(f"[odds]   {len(player_name_map)} player names loaded")
+
     print(f"[odds] Truncating {DATASET}.{ODDS_TABLE} …")
     _truncate_table(client)
 
     summary: Dict[str, Any] = {
         "tournament_id": tid,
+        "tournament_name": tname,
         "ingested_at": ingested_at,
         "rows_written": 0,
         "markets": {},
@@ -419,7 +466,7 @@ def ingest_pga_odds(tournament_id: Optional[str] = None) -> Dict[str, Any]:
     print(f"[odds] Fetching To Win (market {TO_WIN_MARKET_ID}) …")
     to_win_data = fetch_to_win(tid)
     if to_win_data is not None:
-        rows = _flatten_to_win(to_win_data, tid, ingested_at)
+        rows = _flatten_to_win(to_win_data, tid, ingested_at, tname, player_name_map)
         written = _insert_rows(client, rows)
         summary["markets"][TO_WIN_MARKET_ID] = {"rows": written}
         summary["rows_written"] += written
@@ -434,7 +481,7 @@ def ingest_pga_odds(tournament_id: Optional[str] = None) -> Dict[str, Any]:
         print(f"[odds] Fetching REST market {market_id} …")
         response = fetch_rest_market(tid, market_id)
         if response is not None:
-            rows = _flatten_rest_market(response, tid, ingested_at)
+            rows = _flatten_rest_market(response, tid, ingested_at, tname, player_name_map)
             written = _insert_rows(client, rows)
             market_name = response.get("marketDisplayName", str(market_id))
             summary["markets"][market_id] = {"name": market_name, "rows": written}

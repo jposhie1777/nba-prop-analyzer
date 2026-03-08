@@ -1,0 +1,53 @@
+name: PGA Odds Daily Loader
+
+on:
+  schedule:
+    - cron: "0 10 * * *"   # 10:00 UTC daily (6am ET)
+  workflow_dispatch:
+    inputs:
+      tournament_id:
+        description: >
+          Tournament ID to load odds for (e.g. R2026009).
+          Leave blank to auto-detect the active tournament from the PGA schedule.
+          Use this when a round is delayed and the next round has not been announced yet.
+        required: false
+        default: ""
+
+jobs:
+  odds-loader:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      PGA_DATASET: "pga_data"
+      PGA_DATASET_LOCATION: "US"
+      PGA_ODDS_TABLE: "website_odds"
+      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/mobile_api
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r mobile_api/requirements.txt
+
+      - name: Configure GCP credentials
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
+
+      - name: Ingest PGA odds (all 5 markets)
+        run: |
+          ARGS=""
+          if [ -n "${{ inputs.tournament_id }}" ]; then
+            ARGS="--tournament-id ${{ inputs.tournament_id }}"
+          fi
+          python -m mobile_api.ingest.pga.pga_odds_ingest $ARGS

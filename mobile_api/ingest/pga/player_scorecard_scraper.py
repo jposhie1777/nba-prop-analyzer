@@ -149,6 +149,16 @@ def _find_results_data(
             next_data["props"]["pageProps"]["dehydratedState"]["queries"]
         )
     except (KeyError, TypeError):
+        # dehydratedState or queries key missing — site structure may have changed.
+        import sys as _sys
+        page_props_keys = list((next_data.get("props") or {}).get("pageProps") or {})
+        print(
+            f"[scorecard_scraper] DEBUG player={player_id} season={season}: "
+            f"dehydratedState.queries not found in __NEXT_DATA__. "
+            f"pageProps keys: {page_props_keys}",
+            file=_sys.stderr,
+            flush=True,
+        )
         return []
 
     def _extract_tournament_rows(query: Dict) -> List[Dict[str, Any]]:

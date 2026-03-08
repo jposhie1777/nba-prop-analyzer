@@ -346,6 +346,10 @@ def fetch_player_scorecard_history(
                 timeout=timeout,
             )
             if resp.status_code == 404:
+                print(
+                    f"[scorecard_scraper] DEBUG 404 for player={player_id} url={url}",
+                    flush=True,
+                )
                 return []
             resp.raise_for_status()
             break

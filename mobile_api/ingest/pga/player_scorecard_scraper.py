@@ -47,6 +47,10 @@ import requests
 RESULTS_PAGE_BASE = "https://www.pgatour.com/player"
 DEFAULT_TIMEOUT = 30
 
+# Tracks seasons for which we've already emitted a structure-change debug message,
+# so we don't spam 214 identical lines per season.
+_DEBUG_LOGGED_SEASONS: set = set()
+
 
 # ---------------------------------------------------------------------------
 # Data model
@@ -150,15 +154,16 @@ def _find_results_data(
         )
     except (KeyError, TypeError):
         # dehydratedState or queries key missing — site structure may have changed.
-        import sys as _sys
-        page_props_keys = list((next_data.get("props") or {}).get("pageProps") or {})
-        print(
-            f"[scorecard_scraper] DEBUG player={player_id} season={season}: "
-            f"dehydratedState.queries not found in __NEXT_DATA__. "
-            f"pageProps keys: {page_props_keys}",
-            file=_sys.stderr,
-            flush=True,
-        )
+        log_key = ("no_dehydrated", season)
+        if log_key not in _DEBUG_LOGGED_SEASONS:
+            _DEBUG_LOGGED_SEASONS.add(log_key)
+            page_props_keys = list((next_data.get("props") or {}).get("pageProps") or {})
+            print(
+                f"[scorecard_scraper] DEBUG player={player_id} season={season}: "
+                f"dehydratedState.queries not found in __NEXT_DATA__. "
+                f"pageProps keys: {page_props_keys}",
+                flush=True,
+            )
         return []
 
     def _extract_tournament_rows(query: Dict) -> List[Dict[str, Any]]:
@@ -210,20 +215,17 @@ def _find_results_data(
                 return rows
 
     # Diagnostic: log what query keys are present so we can debug structure changes.
-    all_keys = [
-        q.get("queryKey", [])
-        for q in queries
-        if q.get("queryKey")
-    ]
-    import sys as _sys
-    print(
-        f"[scorecard_scraper] DEBUG player={player_id} season={season}: "
-        f"no resultsData found. "
-        f"Query keys present ({len(all_keys)}): "
-        + ", ".join(str(k[:2]) for k in all_keys[:10]),
-        file=_sys.stderr,
-        flush=True,
-    )
+    log_key = ("no_results", season)
+    if log_key not in _DEBUG_LOGGED_SEASONS:
+        _DEBUG_LOGGED_SEASONS.add(log_key)
+        all_keys = [q.get("queryKey", []) for q in queries if q.get("queryKey")]
+        print(
+            f"[scorecard_scraper] DEBUG player={player_id} season={season}: "
+            f"no resultsData found. "
+            f"Query keys present ({len(all_keys)}): "
+            + ", ".join(str(k[:2]) for k in all_keys[:10]),
+            flush=True,
+        )
 
     return []
 

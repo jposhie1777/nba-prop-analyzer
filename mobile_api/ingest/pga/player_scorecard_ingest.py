@@ -85,6 +85,7 @@ _SCHEMA = [
     bigquery.SchemaField("tournament_id", "STRING", mode="REQUIRED"),
     bigquery.SchemaField("tournament_name", "STRING"),
     bigquery.SchemaField("tournament_date", "STRING"),
+    bigquery.SchemaField("course_name", "STRING"),
     bigquery.SchemaField("player_id", "STRING", mode="REQUIRED"),
     bigquery.SchemaField("player_display_name", "STRING"),
     bigquery.SchemaField("position", "STRING"),
@@ -131,9 +132,23 @@ def _ensure_table(client: bigquery.Client, *, truncate: bool = False) -> str:
         "cumulative total.  Source: pgatour.com player results pages."
     )
     client.create_table(bq_table, exists_ok=True)
+    _ensure_required_columns(client, table_id)
     if truncate:
         client.query(f"TRUNCATE TABLE `{table_id}`").result()
     return table_id
+
+
+def _ensure_required_columns(client: bigquery.Client, table_id: str) -> None:
+    """Add any columns from _SCHEMA that are missing from an existing table."""
+    table = client.get_table(table_id)
+    existing = {field.name.lower() for field in table.schema}
+    for field in _SCHEMA:
+        if field.name.lower() in existing:
+            continue
+        client.query(
+            f"ALTER TABLE `{table_id}` ADD COLUMN IF NOT EXISTS {field.name} {field.field_type}"
+        ).result()
+
 
 
 def _insert_rows(

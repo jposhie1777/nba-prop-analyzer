@@ -39,6 +39,7 @@ import re
 import sys
 import time
 import urllib.parse
+import unicodedata
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -112,6 +113,43 @@ def _name_to_url_slug(name: str) -> str:
     """
     slug = name.replace(" ", "-")
     return urllib.parse.quote(slug, safe="-")
+
+
+def _name_to_ascii_slug(name: str) -> str:
+    """Return a lower-case ASCII slug for newer PGA Tour URL variants."""
+    normalized = unicodedata.normalize("NFKD", name)
+    ascii_name = normalized.encode("ascii", "ignore").decode("ascii")
+    cleaned = re.sub(r"[^A-Za-z0-9\- ]+", "", ascii_name)
+    collapsed = re.sub(r"\s+", "-", cleaned.strip())
+    return collapsed.lower()
+
+
+def _candidate_results_urls(player_id: str, player_name: str) -> List[str]:
+    """
+    Build resilient URL candidates for PGA results pages.
+
+    PGA occasionally changes URL casing/path conventions. We try a few known
+    variants so a single convention change does not zero out all rows.
+    """
+    display_slug = _name_to_url_slug(player_name)
+    ascii_slug = _name_to_ascii_slug(player_name)
+
+    candidates = [
+        f"https://www.pgatour.com/player/{player_id}/{display_slug}/results",
+        f"https://www.pgatour.com/player/{player_id}/{ascii_slug}/results",
+        f"https://www.pgatour.com/players/{player_id}/{ascii_slug}/results",
+        f"https://www.pgatour.com/player/{player_id}/results",
+    ]
+
+    # Deduplicate while preserving order.
+    deduped: List[str] = []
+    seen = set()
+    for url in candidates:
+        if url in seen:
+            continue
+        seen.add(url)
+        deduped.append(url)
+    return deduped
 
 
 # ---------------------------------------------------------------------------
@@ -327,8 +365,7 @@ def fetch_player_scorecard_history(
         List of :class:`PlayerTournamentScorecard` (one per tournament).
         Returns an empty list if the player page has no results data.
     """
-    url_slug = _name_to_url_slug(player_name)
-    url = f"{RESULTS_PAGE_BASE}/{player_id}/{url_slug}/results"
+    candidate_urls = _candidate_results_urls(player_id, player_name)
     params: Dict[str, str] = {"tour": tour_code}
     if season is not None:
         params["season"] = str(season)
@@ -337,37 +374,44 @@ def fetch_player_scorecard_history(
     last_exc: Optional[Exception] = None
     resp: Optional[requests.Response] = None
 
-    for attempt in range(retries):
-        try:
-            resp = requests.get(
-                url,
-                headers=_browser_headers(),
-                params=params,
-                timeout=timeout,
-            )
-            if resp.status_code == 404:
-                print(
-                    f"[scorecard_scraper] DEBUG 404 for player={player_id} url={url}",
-                    flush=True,
+    for url in candidate_urls:
+        for attempt in range(retries):
+            try:
+                resp = requests.get(
+                    url,
+                    headers=_browser_headers(),
+                    params=params,
+                    timeout=timeout,
                 )
-                return []
-            resp.raise_for_status()
-            break
-        except requests.HTTPError as exc:
-            status = exc.response.status_code if exc.response is not None else 0
-            if status in (429, 500, 502, 503, 504):
+                if resp.status_code == 404:
+                    break
+                resp.raise_for_status()
+                break
+            except requests.HTTPError as exc:
+                status = exc.response.status_code if exc.response is not None else 0
+                if status in (429, 500, 502, 503, 504):
+                    last_exc = exc
+                    time.sleep(backoff)
+                    backoff *= 2
+                    continue
+                raise
+            except Exception as exc:
                 last_exc = exc
-                time.sleep(backoff)
-                backoff *= 2
-                continue
-            raise
-        except Exception as exc:
-            last_exc = exc
-            if attempt < retries - 1:
-                time.sleep(backoff)
-                backoff *= 2
-                continue
-            raise
+                if attempt < retries - 1:
+                    time.sleep(backoff)
+                    backoff *= 2
+                    continue
+                raise
+        # success path
+        if resp is not None and resp.status_code != 404:
+            break
+
+    if resp is not None and resp.status_code == 404:
+        print(
+            f"[scorecard_scraper] DEBUG 404 for player={player_id}; tried urls={candidate_urls}",
+            flush=True,
+        )
+        return []
 
     if resp is None:
         raise RuntimeError(f"Exceeded {retries} retries. Last error: {last_exc}")

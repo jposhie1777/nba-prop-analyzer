@@ -1,22 +1,28 @@
 """
 Oddspedia odds scraper.
 
-Fetches the Oddspedia odds page for a given sport/URL, evaluates the embedded
-Nuxt SSR state (window.__NUXT__) via a Node.js subprocess to fully resolve the
-compressed IIFE, and returns a clean list of matches with their odds.
+Fetches the Oddspedia odds page for a given sport/URL and returns a clean list
+of matches with their odds.
 
-Requirements: Node.js must be installed (node >=14).
-Python deps: requests (already in requirements.txt).
+Live URL scraping uses Playwright (headless Chromium) to bypass bot-detection
+and reads window.__NUXT__ directly from the browser context.
+
+File-based scraping (for local testing) evaluates the embedded Nuxt SSR state
+via a Node.js subprocess.
+
+Requirements:
+  Live scraping : playwright Python package + `playwright install chromium`
+  File scraping : Node.js >=14
 
 Usage:
     from oddspedia_client import OddspediaClient
 
     client = OddspediaClient()
 
-    # From a live URL
+    # From a live URL (uses Playwright)
     matches = client.scrape("https://www.oddspedia.com/us/tennis/odds")
 
-    # From a saved HTML file (for testing)
+    # From a saved HTML file (uses Node.js, no browser needed)
     matches = client.scrape_file("website_responses/oddspedia/test")
 """
 
@@ -24,15 +30,10 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
 LOGGER = logging.getLogger(__name__)
 
@@ -43,7 +44,7 @@ MARKET_NAMES: Dict[str, str] = {
 }
 
 # Node.js snippet that evaluates the __NUXT__ IIFE and prints the JSON we need.
-# The HTML path is injected as a command-line argument (process.argv[2]).
+# Used only by scrape_file(); live scraping reads __NUXT__ directly via Playwright.
 _NODE_EXTRACTOR = r"""
 const fs   = require('fs');
 const vm   = require('vm');
@@ -68,53 +69,69 @@ class OddspediaClient:
 
     def __init__(
         self,
-        timeout: int = 20,
         user_agent: str = (
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         ),
+        page_timeout_ms: int = 60_000,
     ) -> None:
-        self.timeout = timeout
-        self._session = requests.Session()
-        self._session.headers.update({
-            "User-Agent": user_agent,
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        })
-        retry = Retry(
-            total=4,
-            backoff_factor=1.0,
-            status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["GET"],
-            raise_on_status=False,
-            respect_retry_after_header=True,
-        )
-        adapter = HTTPAdapter(max_retries=retry)
-        self._session.mount("https://", adapter)
-        self._session.mount("http://", adapter)
+        self._user_agent = user_agent
+        self._page_timeout_ms = page_timeout_ms
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
     def scrape(self, url: str) -> List[Dict[str, Any]]:
-        """Fetch *url* and return a list of match-odds dicts."""
-        LOGGER.info("Fetching %s", url)
-        response = self._session.get(url, timeout=self.timeout)
-        response.raise_for_status()
-        return self._parse_html(response.text)
+        """Fetch *url* using Playwright and return a list of match-odds dicts.
+
+        Playwright runs headless Chromium, which bypasses basic bot-detection
+        and evaluates the page's JavaScript so window.__NUXT__ is fully
+        resolved before we read it.
+        """
+        from playwright.sync_api import sync_playwright
+
+        LOGGER.info("Fetching %s via Playwright", url)
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=True)
+            context = browser.new_context(
+                user_agent=self._user_agent,
+                locale="en-US",
+                viewport={"width": 1920, "height": 1080},
+                extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
+            )
+            page = context.new_page()
+            page.goto(url, wait_until="networkidle", timeout=self._page_timeout_ms)
+            nuxt_data = page.evaluate("() => window.__NUXT__")
+            browser.close()
+
+        return self._build_records_from_nuxt(nuxt_data)
 
     def scrape_file(self, path: str | Path) -> List[Dict[str, Any]]:
-        """Parse a saved HTML file and return a list of match-odds dicts."""
+        """Parse a saved HTML file via Node.js and return a list of match-odds dicts.
+
+        Does not require Playwright — useful for local testing against saved
+        responses without a browser.
+        """
         html = Path(path).read_text(encoding="utf-8", errors="replace")
-        return self._parse_html(html)
+        return self._parse_html_via_node(html)
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _parse_html(self, html: str) -> List[Dict[str, Any]]:
-        """Write html to a temp file, evaluate via Node, return clean records."""
+    def _build_records_from_nuxt(self, nuxt_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Build records from an already-resolved __NUXT__ dict (Playwright path)."""
+        data0 = (nuxt_data.get("data") or [{}])[0]
+        raw = {
+            "matchList": data0.get("matchList", []),
+            "odds":      data0.get("odds", {}),
+            "sport":     (data0.get("currentSport") or {}).get("slug"),
+        }
+        return self._build_records(raw)
+
+    def _parse_html_via_node(self, html: str) -> List[Dict[str, Any]]:
+        """Write html to a temp file, evaluate via Node.js, return clean records."""
         with tempfile.NamedTemporaryFile(
             suffix=".html", mode="w", encoding="utf-8", delete=False
         ) as tmp:
@@ -122,13 +139,13 @@ class OddspediaClient:
             tmp_path = tmp.name
 
         try:
-            raw = self._evaluate_nuxt(tmp_path)
+            raw = self._evaluate_nuxt_via_node(tmp_path)
         finally:
             Path(tmp_path).unlink(missing_ok=True)
 
         return self._build_records(raw)
 
-    def _evaluate_nuxt(self, html_path: str) -> Dict[str, Any]:
+    def _evaluate_nuxt_via_node(self, html_path: str) -> Dict[str, Any]:
         """Run the Node.js extractor against *html_path* and return parsed JSON."""
         with tempfile.NamedTemporaryFile(
             suffix=".js", mode="w", encoding="utf-8", delete=False

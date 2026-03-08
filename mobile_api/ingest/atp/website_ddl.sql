@@ -60,7 +60,9 @@ CREATE TABLE IF NOT EXISTS `atp_data.website_daily_schedule` (
   snapshot_ts_utc TIMESTAMP NOT NULL,
   ingest_run_id STRING NOT NULL,
   url STRING,
-  payload_html STRING
+  payload_html STRING,
+  flattened_text_chunks ARRAY<STRING>,
+  flattened_links ARRAY<STRUCT<href STRING, text STRING>>
 )
 PARTITION BY DATE(snapshot_ts_utc);
 
@@ -87,7 +89,9 @@ CREATE TABLE IF NOT EXISTS `atp_data.website_draws` (
   snapshot_ts_utc TIMESTAMP NOT NULL,
   ingest_run_id STRING NOT NULL,
   url STRING,
-  payload_html STRING
+  payload_html STRING,
+  flattened_text_chunks ARRAY<STRING>,
+  flattened_links ARRAY<STRUCT<href STRING, text STRING>>
 )
 PARTITION BY DATE(snapshot_ts_utc);
 
@@ -137,9 +141,20 @@ CREATE TABLE IF NOT EXISTS `atp_data.website_match_results` (
   snapshot_ts_utc TIMESTAMP NOT NULL,
   ingest_run_id STRING NOT NULL,
   url STRING,
-  payload_html STRING
+  payload_html STRING,
+  flattened_text_chunks ARRAY<STRING>,
+  flattened_links ARRAY<STRUCT<href STRING, text STRING>>
 )
 PARTITION BY DATE(snapshot_ts_utc);
+
+ALTER TABLE `atp_data.website_daily_schedule` ADD COLUMN IF NOT EXISTS flattened_text_chunks ARRAY<STRING>;
+ALTER TABLE `atp_data.website_daily_schedule` ADD COLUMN IF NOT EXISTS flattened_links ARRAY<STRUCT<href STRING, text STRING>>;
+
+ALTER TABLE `atp_data.website_draws` ADD COLUMN IF NOT EXISTS flattened_text_chunks ARRAY<STRING>;
+ALTER TABLE `atp_data.website_draws` ADD COLUMN IF NOT EXISTS flattened_links ARRAY<STRUCT<href STRING, text STRING>>;
+
+ALTER TABLE `atp_data.website_match_results` ADD COLUMN IF NOT EXISTS flattened_text_chunks ARRAY<STRING>;
+ALTER TABLE `atp_data.website_match_results` ADD COLUMN IF NOT EXISTS flattened_links ARRAY<STRUCT<href STRING, text STRING>>;
 
 CREATE TABLE IF NOT EXISTS `atp_data.website_match_results_rows` (
   snapshot_ts_utc TIMESTAMP NOT NULL,

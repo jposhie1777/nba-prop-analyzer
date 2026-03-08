@@ -1,6 +1,11 @@
 from pathlib import Path
 
-from mobile_api.ingest.atp.website_ingest import _extract_h2h_ids, _extract_slug_and_tournament_id, _load_capture_file
+from mobile_api.ingest.atp.website_ingest import (
+    _extract_h2h_ids,
+    _extract_slug_and_tournament_id,
+    _flatten_html_payload,
+    _load_capture_file,
+)
 
 
 def test_load_capture_file_json_extracts_payload():
@@ -27,3 +32,14 @@ def test_url_extractors():
 
     assert (slug, tournament_id) == ("indian-wells", "404")
     assert (left_id, right_id) == ("M0NI", "GC88")
+
+
+def test_flatten_html_payload_extracts_text_and_links():
+    html = '<div><a href="/en/test">ATP Link</a><span>Round of 32</span></div>'
+
+    text_chunks, links = _flatten_html_payload(html)
+
+    assert any("ATP Link" in chunk for chunk in text_chunks)
+    assert any("Round of 32" in chunk for chunk in text_chunks)
+    assert links[0]["href"] == "/en/test"
+    assert links[0]["text"] == "ATP Link"

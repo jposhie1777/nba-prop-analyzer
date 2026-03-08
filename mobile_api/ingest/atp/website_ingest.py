@@ -220,6 +220,34 @@ def _safe_json_str(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
+def _flatten_html_payload(payload_html: Optional[str]) -> Tuple[List[str], List[Dict[str, Optional[str]]]]:
+    if not payload_html:
+        return [], []
+
+    text_only = re.sub(r"<script[\s\S]*?</script>", " ", payload_html, flags=re.IGNORECASE)
+    text_only = re.sub(r"<style[\s\S]*?</style>", " ", text_only, flags=re.IGNORECASE)
+    text_only = re.sub(r"<[^>]+>", " ", text_only)
+    text_only = re.sub(r"\s+", " ", text_only)
+
+    text_chunks: List[str] = []
+    for chunk in re.split(r"[\r\n]+", text_only):
+        cleaned = chunk.strip()
+        if cleaned:
+            text_chunks.append(cleaned)
+
+    links: List[Dict[str, Optional[str]]] = []
+    for m in re.finditer(
+        r'<a[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
+        payload_html,
+        flags=re.IGNORECASE | re.DOTALL,
+    ):
+        link_text = re.sub(r"<[^>]+>", " ", m.group(2))
+        link_text = re.sub(r"\s+", " ", link_text).strip()
+        links.append({"href": m.group(1).strip(), "text": link_text or None})
+
+    return text_chunks[:500], links[:500]
+
+
 def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule: bool, sleep_seconds: float) -> Dict[str, Any]:
     del sleep_seconds
 
@@ -279,12 +307,15 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
             ]
 
     daily_schedule_capture = captures["daily_schedule"]
+    daily_text_chunks, daily_links = _flatten_html_payload(daily_schedule_capture.get("payload_text"))
     daily_schedule_rows.append(
         {
             "snapshot_ts_utc": snapshot_ts,
             "ingest_run_id": ingest_run_id,
             "url": daily_schedule_capture.get("request_url"),
             "payload_html": daily_schedule_capture.get("payload_text"),
+            "flattened_text_chunks": daily_text_chunks,
+            "flattened_links": daily_links,
         }
     )
     sched_slug, sched_tid = _extract_slug_and_tournament_id(daily_schedule_capture.get("request_url"))
@@ -302,12 +333,15 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
         )
 
     draws_capture = captures["draws"]
+    draws_text_chunks, draws_links = _flatten_html_payload(draws_capture.get("payload_text"))
     draws_rows.append(
         {
             "snapshot_ts_utc": snapshot_ts,
             "ingest_run_id": ingest_run_id,
             "url": draws_capture.get("request_url"),
             "payload_html": draws_capture.get("payload_text"),
+            "flattened_text_chunks": draws_text_chunks,
+            "flattened_links": draws_links,
         }
     )
     bracket_rows.append(
@@ -339,12 +373,15 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
         )
 
     results_capture = captures["match_results"]
+    results_text_chunks, results_links = _flatten_html_payload(results_capture.get("payload_text"))
     match_results_rows.append(
         {
             "snapshot_ts_utc": snapshot_ts,
             "ingest_run_id": ingest_run_id,
             "url": results_capture.get("request_url"),
             "payload_html": results_capture.get("payload_text"),
+            "flattened_text_chunks": results_text_chunks,
+            "flattened_links": results_links,
         }
     )
     result_slug, result_tid = _extract_slug_and_tournament_id(results_capture.get("request_url"))

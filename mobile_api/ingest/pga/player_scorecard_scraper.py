@@ -199,6 +199,22 @@ def _find_results_data(
             if rows:
                 return rows
 
+    # Diagnostic: log what query keys are present so we can debug structure changes.
+    all_keys = [
+        q.get("queryKey", [])
+        for q in queries
+        if q.get("queryKey")
+    ]
+    import sys as _sys
+    print(
+        f"[scorecard_scraper] DEBUG player={player_id} season={season}: "
+        f"no resultsData found. "
+        f"Query keys present ({len(all_keys)}): "
+        + ", ".join(str(k[:2]) for k in all_keys[:10]),
+        file=_sys.stderr,
+        flush=True,
+    )
+
     return []
 
 

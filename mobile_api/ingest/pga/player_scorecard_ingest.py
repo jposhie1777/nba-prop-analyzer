@@ -162,13 +162,68 @@ def _insert_rows(
 # ---------------------------------------------------------------------------
 
 
+def _get_players_from_website_active_players(
+    client: Optional["bigquery.Client"] = None,
+) -> List[Dict[str, str]]:
+    """
+    Return ``{player_id, player_name}`` dicts for all active players stored in
+    the ``website_active_players`` BigQuery table.  This table is populated by
+    the ``playerDirectory`` GraphQL query and contains the full tour roster
+    (~500+ players), unlike the ``statOverview`` endpoint which only returns
+    players with measured stat entries (~17).
+    """
+    import json as _json
+
+    c = client or _bq_client()
+    project = c.project
+    table_id = f"{project}.{DATASET}.website_active_players"
+    query = f"""
+        SELECT player_id, display_name, player_payload
+        FROM `{table_id}`
+        WHERE active = TRUE
+    """
+    try:
+        rows = list(c.query(query).result())
+    except Exception as exc:
+        print(
+            f"[player_scorecard] WARN: could not query website_active_players: {exc}",
+            flush=True,
+        )
+        return []
+
+    seen: Set[str] = set()
+    players: List[Dict[str, str]] = []
+    for row in rows:
+        pid = str(row.get("player_id") or "").strip()
+        if not pid or pid in seen:
+            continue
+        seen.add(pid)
+        # Prefer display_name column; fall back to payload displayName field.
+        name = str(row.get("display_name") or "").strip()
+        if not name:
+            try:
+                payload = _json.loads(row.get("player_payload") or "{}")
+                name = (
+                    payload.get("displayName")
+                    or payload.get("playerName")
+                    or payload.get("name")
+                    or ""
+                )
+            except Exception:
+                pass
+        if name:
+            players.append({"player_id": pid, "player_name": name})
+    return players
+
+
 def _get_active_players_from_stat_overview(
     tour_code: str = "R",
     season: int = 2026,
 ) -> List[Dict[str, str]]:
     """
     Return ``{player_id, player_name}`` dicts for all players who appear in at
-    least one stat leaderboard for this season.  Used during backfill.
+    least one stat leaderboard for this season.  Used as a fallback when the
+    ``website_active_players`` table is unavailable.
     """
     result = fetch_stat_overview(tour_code=tour_code, year=season)
     seen: Set[str] = set()
@@ -404,6 +459,25 @@ def run_backfill(
         "errors": [],
     }
 
+    # Build the full player list once from website_active_players (BigQuery).
+    # Fall back to the statOverview API if BQ is unavailable or empty.
+    print(
+        "[player_scorecard] Loading player list from website_active_players…",
+        flush=True,
+    )
+    bq_players = _get_players_from_website_active_players()
+    if bq_players:
+        print(
+            f"[player_scorecard] Found {len(bq_players)} players in website_active_players.",
+            flush=True,
+        )
+    else:
+        print(
+            "[player_scorecard] website_active_players returned no players; "
+            "will fall back to statOverview per season.",
+            flush=True,
+        )
+
     first = True
     for season in seasons:
         print(
@@ -411,9 +485,12 @@ def run_backfill(
             flush=True,
         )
         try:
-            players = _get_active_players_from_stat_overview(
-                tour_code=tour_code, season=season
-            )
+            if bq_players:
+                players = bq_players
+            else:
+                players = _get_active_players_from_stat_overview(
+                    tour_code=tour_code, season=season
+                )
             if not players:
                 print(
                     f"[player_scorecard] No active players for season={season}, skipping.",

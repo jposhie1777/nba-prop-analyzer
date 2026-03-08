@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
+import requests
 from google.api_core import exceptions as gcp_exceptions
 from google.api_core.retry import Retry
 from google.cloud import bigquery
@@ -216,6 +217,40 @@ def _extract_h2h_ids(url: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
     return m.group(1).upper(), m.group(2).upper()
 
 
+def _extract_player_id_from_profile_url(profile_url: Optional[str]) -> Optional[str]:
+    if not profile_url:
+        return None
+    m = re.search(r"/en/players/[^/]+/([^/?#]+)/", profile_url, flags=re.IGNORECASE)
+    if not m:
+        return None
+    return m.group(1).upper()
+
+
+def _build_h2h_pairs_from_schedule_rows(rows: Sequence[Dict[str, Any]]) -> List[Tuple[str, str]]:
+    seen: Set[Tuple[str, str]] = set()
+    ordered_pairs: List[Tuple[str, str]] = []
+    for row in rows:
+        p1 = _extract_player_id_from_profile_url(row.get("player_1_profile_url"))
+        p2 = _extract_player_id_from_profile_url(row.get("player_2_profile_url"))
+        if not p1 or not p2 or p1 == p2:
+            continue
+        key = tuple(sorted((p1, p2)))
+        if key in seen:
+            continue
+        seen.add(key)
+        ordered_pairs.append((p1, p2))
+    return ordered_pairs
+
+
+def _fetch_json_url(url: str, timeout: int = 20) -> Optional[Dict[str, Any]]:
+    try:
+        response = requests.get(url, timeout=timeout, headers={"User-Agent": "nba-prop-analyzer-atp-website-ingest/1.0"})
+        response.raise_for_status()
+        return response.json()
+    except Exception:
+        return None
+
+
 def _safe_json_str(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False)
 
@@ -401,22 +436,35 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
     )
 
     h2h_capture = captures["head_to_head"]
-    h2h_rows.append(
-        {
-            "snapshot_ts_utc": snapshot_ts,
-            "ingest_run_id": ingest_run_id,
-            "url": h2h_capture.get("request_url"),
-            "payload_json": _safe_json_str(h2h_capture.get("payload_json")),
-        }
-    )
-    left_id, right_id = _extract_h2h_ids(h2h_capture.get("request_url"))
-    if left_id and right_id and isinstance(h2h_capture.get("payload_json"), dict):
-        h2h_match_rows.extend(
-            [
-                row.to_dict()
-                for row in normalize_head_to_head(left_id, right_id, h2h_capture["payload_json"], snapshot_ts_utc=snapshot_ts)
-            ]
+    h2h_pairs = _build_h2h_pairs_from_schedule_rows(upcoming_match_rows)
+
+    fallback_left_id, fallback_right_id = _extract_h2h_ids(h2h_capture.get("request_url"))
+    fallback_payload = h2h_capture.get("payload_json") if isinstance(h2h_capture.get("payload_json"), dict) else None
+    if not h2h_pairs and fallback_left_id and fallback_right_id:
+        h2h_pairs = [(fallback_left_id, fallback_right_id)]
+
+    for left_id, right_id in h2h_pairs:
+        h2h_url = f"https://www.atptour.com/en/-/www/h2h/{left_id.lower()}/{right_id.lower()}"
+        payload_json = _fetch_json_url(h2h_url)
+        if payload_json is None and fallback_payload and {left_id, right_id} == {fallback_left_id, fallback_right_id}:
+            payload_json = fallback_payload
+
+        h2h_rows.append(
+            {
+                "snapshot_ts_utc": snapshot_ts,
+                "ingest_run_id": ingest_run_id,
+                "url": h2h_url,
+                "payload_json": _safe_json_str(payload_json),
+            }
         )
+
+        if isinstance(payload_json, dict):
+            h2h_match_rows.extend(
+                [
+                    row.to_dict()
+                    for row in normalize_head_to_head(left_id, right_id, payload_json, snapshot_ts_utc=snapshot_ts)
+                ]
+            )
 
     results_capture = captures["match_results"]
     results_text_chunks, results_links = _flatten_html_payload(results_capture.get("payload_text"))
@@ -444,35 +492,71 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
             ]
         )
 
-    for endpoint, court_type in [
-        ("player_stats_all", "all"),
-        ("player_stats_clay", "clay"),
-        ("player_stats_grass", "grass"),
-        ("player_stats_hard", "hard"),
-    ]:
-        capture = captures[endpoint]
-        payload_json = capture.get("payload_json")
-        player_stats_rows.append(
-            {
-                "snapshot_ts_utc": snapshot_ts,
-                "ingest_run_id": ingest_run_id,
-                "court_type": court_type,
-                "url": capture.get("request_url"),
-                "payload_json": _safe_json_str(payload_json),
-            }
-        )
-        if isinstance(payload_json, dict):
-            stats_block = payload_json.get("FirstStats") or {}
-            for stat_name, stat_value in stats_block.items():
-                player_stats_records_rows.append(
-                    {
-                        "snapshot_ts_utc": snapshot_ts,
-                        "ingest_run_id": ingest_run_id,
-                        "court_type": court_type,
-                        "stat_name": str(stat_name),
-                        "stat_value": json.dumps(stat_value, ensure_ascii=False) if isinstance(stat_value, (dict, list)) else str(stat_value),
-                    }
-                )
+    player_ids: Set[str] = set()
+    for row in upcoming_match_rows:
+        p1 = _extract_player_id_from_profile_url(row.get("player_1_profile_url"))
+        p2 = _extract_player_id_from_profile_url(row.get("player_2_profile_url"))
+        if p1:
+            player_ids.add(p1)
+        if p2:
+            player_ids.add(p2)
+
+    default_stats_captures = {
+        "all": captures["player_stats_all"],
+        "clay": captures["player_stats_clay"],
+        "grass": captures["player_stats_grass"],
+        "hard": captures["player_stats_hard"],
+    }
+    surface_path = {
+        "all": "all",
+        "clay": "Clay",
+        "grass": "Grass",
+        "hard": "Hard",
+    }
+
+    if not player_ids:
+        fallback_payload = default_stats_captures["all"].get("payload_json")
+        fallback_player_id = None
+        if isinstance(fallback_payload, dict):
+            fallback_player_id = (fallback_payload.get("Stats") or {}).get("PlayerId")
+        if fallback_player_id:
+            player_ids.add(str(fallback_player_id).upper())
+
+    for player_id in sorted(player_ids):
+        for court_type in ["all", "clay", "grass", "hard"]:
+            url = f"https://www.atptour.com/en/-/www/stats/{player_id.lower()}/all/{surface_path[court_type]}?v=1"
+            payload_json = _fetch_json_url(url)
+
+            default_capture = default_stats_captures[court_type]
+            default_payload = default_capture.get("payload_json") if isinstance(default_capture.get("payload_json"), dict) else None
+            if payload_json is None and isinstance(default_payload, dict):
+                default_player_id = ((default_payload.get("Stats") or {}).get("PlayerId") or "").upper()
+                if default_player_id == player_id:
+                    payload_json = default_payload
+                    url = default_capture.get("request_url") or url
+
+            player_stats_rows.append(
+                {
+                    "snapshot_ts_utc": snapshot_ts,
+                    "ingest_run_id": ingest_run_id,
+                    "court_type": court_type,
+                    "url": url,
+                    "payload_json": _safe_json_str(payload_json),
+                }
+            )
+
+            if isinstance(payload_json, dict):
+                stats_block = payload_json.get("Stats") or {}
+                for stat_name, stat_value in stats_block.items():
+                    player_stats_records_rows.append(
+                        {
+                            "snapshot_ts_utc": snapshot_ts,
+                            "ingest_run_id": ingest_run_id,
+                            "court_type": court_type,
+                            "stat_name": str(stat_name),
+                            "stat_value": json.dumps(stat_value, ensure_ascii=False) if isinstance(stat_value, (dict, list)) else str(stat_value),
+                        }
+                    )
 
     who_capture = captures["who_is_playing"]
     who_payload = who_capture.get("payload_json")

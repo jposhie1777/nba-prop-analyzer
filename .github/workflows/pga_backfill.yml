@@ -80,3 +80,25 @@ jobs:
             python -m mobile_api.ingest.pga.pga_player_profile_stats_ingest --season $year --tour R
             sleep 2
           done
+
+      - name: Backfill player scorecard history
+        run: |
+          START=${{ inputs.start_season }}
+          END=${{ inputs.end_season }}
+          YEARS=${{ inputs.years }}
+          TRUNCATE=${{ inputs.truncate }}
+
+          ARGS="--backfill --tour R"
+
+          if [ -n "$START" ] && [ -n "$END" ]; then
+            ARGS="$ARGS --start-season $START --end-season $END"
+          elif [ -n "$YEARS" ]; then
+            ARGS="$ARGS --years $YEARS"
+          fi
+
+          if [ "$TRUNCATE" != "true" ]; then
+            ARGS="$ARGS --no-truncate"
+          fi
+
+          echo "Running: python -m mobile_api.ingest.pga.player_scorecard_ingest $ARGS"
+          python -m mobile_api.ingest.pga.player_scorecard_ingest $ARGS

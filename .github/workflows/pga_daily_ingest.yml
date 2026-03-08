@@ -74,3 +74,13 @@ jobs:
           YEAR=$(date +%Y)
           TOUR="${{ inputs.tour || 'R' }}"
           python -m mobile_api.ingest.pga.pga_player_profile_stats_ingest --season $YEAR --tour $TOUR
+
+      - name: Ingest player scorecard history (daily)
+        run: |
+          YEAR=$(date +%Y)
+          TOUR="${{ inputs.tour || 'R' }}"
+          ARGS="--daily --tour $TOUR --season $YEAR"
+          if [ -n "${{ inputs.date }}" ]; then
+            echo "Note: --date override provided; tournament auto-detection used (date not forwarded to scorecard ingest)"
+          fi
+          python -m mobile_api.ingest.pga.player_scorecard_ingest $ARGS

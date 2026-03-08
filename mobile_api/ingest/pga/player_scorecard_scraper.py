@@ -46,6 +46,7 @@ from typing import Any, Dict, List, Optional
 import requests
 
 RESULTS_PAGE_BASE = "https://www.pgatour.com/player"
+RESULTS_PAGE_BASE_ALT = "https://pgatour.com/player"
 DEFAULT_TIMEOUT = 30
 
 # Tracks seasons for which we've already emitted a structure-change debug message,
@@ -102,6 +103,17 @@ def _browser_headers() -> Dict[str, str]:
         "sec-fetch-site": "same-origin",
     }
 
+def _prepare_session() -> requests.Session:
+    """Create a session and prime pgatour cookies to reduce bot 404 responses."""
+    session = requests.Session()
+    session.headers.update(_browser_headers())
+    try:
+        session.get("https://pgatour.com/", timeout=DEFAULT_TIMEOUT)
+    except Exception:
+        # Best-effort cookie priming only.
+        pass
+    return session
+
 
 def _name_to_url_slug(name: str) -> str:
     """
@@ -135,10 +147,14 @@ def _candidate_results_urls(player_id: str, player_name: str) -> List[str]:
     ascii_slug = _name_to_ascii_slug(player_name)
 
     candidates = [
-        f"https://www.pgatour.com/player/{player_id}/{display_slug}/results",
-        f"https://www.pgatour.com/player/{player_id}/{ascii_slug}/results",
+        f"{RESULTS_PAGE_BASE}/{player_id}/{display_slug}/results",
+        f"{RESULTS_PAGE_BASE}/{player_id}/{ascii_slug}/results",
         f"https://www.pgatour.com/players/{player_id}/{ascii_slug}/results",
-        f"https://www.pgatour.com/player/{player_id}/results",
+        f"{RESULTS_PAGE_BASE}/{player_id}/results",
+        f"{RESULTS_PAGE_BASE_ALT}/{player_id}/{display_slug}/results",
+        f"{RESULTS_PAGE_BASE_ALT}/{player_id}/{ascii_slug}/results",
+        f"https://pgatour.com/players/{player_id}/{ascii_slug}/results",
+        f"{RESULTS_PAGE_BASE_ALT}/{player_id}/results",
     ]
 
     # Deduplicate while preserving order.
@@ -366,6 +382,7 @@ def fetch_player_scorecard_history(
         Returns an empty list if the player page has no results data.
     """
     candidate_urls = _candidate_results_urls(player_id, player_name)
+    session = _prepare_session()
     params: Dict[str, str] = {"tour": tour_code}
     if season is not None:
         params["season"] = str(season)
@@ -377,13 +394,12 @@ def fetch_player_scorecard_history(
     for url in candidate_urls:
         for attempt in range(retries):
             try:
-                resp = requests.get(
+                resp = session.get(
                     url,
-                    headers=_browser_headers(),
                     params=params,
                     timeout=timeout,
                 )
-                if resp.status_code == 404:
+                if resp.status_code in (403, 404):
                     break
                 resp.raise_for_status()
                 break
@@ -403,12 +419,12 @@ def fetch_player_scorecard_history(
                     continue
                 raise
         # success path
-        if resp is not None and resp.status_code != 404:
+        if resp is not None and resp.status_code not in (403, 404):
             break
 
-    if resp is not None and resp.status_code == 404:
+    if resp is not None and resp.status_code in (403, 404):
         print(
-            f"[scorecard_scraper] DEBUG 404 for player={player_id}; tried urls={candidate_urls}",
+            f"[scorecard_scraper] DEBUG {resp.status_code} for player={player_id}; tried urls={candidate_urls}; params={params}",
             flush=True,
         )
         return []

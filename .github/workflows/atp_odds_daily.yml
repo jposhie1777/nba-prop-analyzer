@@ -37,7 +37,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
-          pip install playwright google-cloud-bigquery google-auth
+          pip install playwright playwright-stealth google-cloud-bigquery google-auth
 
       - name: Install Playwright Chromium
         run: playwright install chromium --with-deps

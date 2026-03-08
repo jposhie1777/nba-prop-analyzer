@@ -302,23 +302,74 @@ def _flatten_to_win(
 
 # ── Tournament ID resolution ──────────────────────────────────────────────────
 
-def _auto_detect_tournament_id() -> str:
-    """Detect the active/most-recent tournament from the PGA schedule."""
+def _auto_detect_tournament_id(lookahead_days: int = 7) -> str:
+    """Detect the best tournament ID to load odds for.
+
+    Priority order:
+      1. In-progress  — "upcoming" bucket with start_date <= today
+      2. Starting soon — "upcoming" bucket with start_date within the next
+                         ``lookahead_days`` days (catches Mon/Tue before a
+                         Thursday-start event whose odds are already posted)
+      3. Most recently completed — fallback when nothing is active or imminent
+
+    ``lookahead_days=7`` comfortably covers Mon–Wed before any Thursday start.
+    """
     from .pga_schedule import fetch_schedule, schedule_to_records
-    from .website_ingest import _focused_tournament_ids
 
     current_year = datetime.now(timezone.utc).year
     print(f"[odds] Auto-detecting tournament ID for {current_year} season …")
     tournaments = fetch_schedule(tour_code="R", year=str(current_year))
     schedule_rows = schedule_to_records(tournaments)
-    ids = _focused_tournament_ids(schedule_rows)
-    if not ids:
-        raise RuntimeError(
-            "Could not auto-detect an active tournament. "
-            "Pass --tournament-id explicitly or set PGA_TOURNAMENT_ID."
-        )
-    print(f"[odds] Auto-detected tournament: {ids[0]}")
-    return ids[0]
+
+    today = datetime.now(timezone.utc).date()
+    lookahead_cutoff = today + __import__("datetime").timedelta(days=lookahead_days)
+
+    in_progress: list[tuple] = []
+    starting_soon: list[tuple] = []
+    completed: list[tuple] = []
+
+    for row in schedule_rows:
+        tid = str(row.get("tournament_id") or "").strip()
+        if not tid:
+            continue
+        raw_date = row.get("start_date")
+        if not raw_date:
+            continue
+        try:
+            from datetime import date as _date
+            start = _date.fromisoformat(str(raw_date)[:10])
+        except (ValueError, TypeError):
+            continue
+
+        bucket = str(row.get("bucket") or "").strip().lower()
+        if bucket == "upcoming":
+            if start <= today:
+                in_progress.append((start, tid))
+            elif start <= lookahead_cutoff:
+                starting_soon.append((start, tid))
+        elif bucket == "completed":
+            completed.append((start, tid))
+
+    if in_progress:
+        chosen = max(in_progress, key=lambda x: x[0])[1]
+        print(f"[odds] Detected in-progress tournament: {chosen}")
+        return chosen
+
+    if starting_soon:
+        # Pick the soonest upcoming event so odds are for the right week
+        chosen = min(starting_soon, key=lambda x: x[0])[1]
+        print(f"[odds] No active tournament — detected upcoming tournament starting soon: {chosen}")
+        return chosen
+
+    if completed:
+        chosen = max(completed, key=lambda x: x[0])[1]
+        print(f"[odds] No active or upcoming tournament — falling back to most recently completed: {chosen}")
+        return chosen
+
+    raise RuntimeError(
+        "Could not auto-detect a tournament. "
+        "Pass --tournament-id explicitly or set PGA_TOURNAMENT_ID."
+    )
 
 
 def _resolve_tournament_id(override: Optional[str] = None) -> str:

@@ -238,40 +238,74 @@ def _find_results_data(
     str_player_id = str(player_id)
     str_season = str(season) if season else None
 
-    # First pass: prefer query matching player_id + season (if specified)
-    for query in queries:
-        key = query.get("queryKey") or []
+    def _query_params_from_key(key: List[Any]) -> Dict[str, Any]:
+        """Return the most relevant params dict from a queryKey."""
+        params: Dict[str, Any] = {}
+        for part in key:
+            if isinstance(part, dict):
+                params.update(part)
+        return params
+
+    def _dedupe_tournaments(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        deduped: List[Dict[str, Any]] = []
+        seen_tids = set()
+        for row in rows:
+            tid = str(row.get("tournamentId") or "").strip()
+            if not tid or tid in seen_tids:
+                continue
+            seen_tids.add(tid)
+            deduped.append(row)
+        return deduped
+
+    def _collect_rows(predicate) -> List[Dict[str, Any]]:
+        collected: List[Dict[str, Any]] = []
+        for query in queries:
+            key = query.get("queryKey") or []
+            if not predicate(key):
+                continue
+            collected.extend(_extract_tournament_rows(query))
+        return _dedupe_tournaments(collected)
+
+    # First pass: collect all queries matching player_id + season + tour.
+    def _strict_match(key: List[Any]) -> bool:
         if not key or key[0] != "playerProfileResults":
-            continue
+            return False
         if len(key) < 2 or str(key[1]) != str_player_id:
-            continue
-        params: Dict = key[3] if len(key) > 3 else {}
+            return False
+        params = _query_params_from_key(key)
         if str_season and str(params.get("season") or "") != str_season:
-            continue
-        if str(params.get("tour") or "") != tour_code:
-            continue
-        rows = _extract_tournament_rows(query)
-        if rows:
-            return rows
+            return False
+        return str(params.get("tour") or "") == tour_code
 
-    # Second pass: any playerProfileResults for this player with resultsData
-    for query in queries:
-        key = query.get("queryKey") or []
+    rows = _collect_rows(_strict_match)
+    if rows:
+        return rows
+
+    # Second pass: player/tour match but season may be encoded differently.
+    def _player_tour_match(key: List[Any]) -> bool:
         if not key or key[0] != "playerProfileResults":
-            continue
+            return False
         if len(key) < 2 or str(key[1]) != str_player_id:
-            continue
-        rows = _extract_tournament_rows(query)
-        if rows:
-            return rows
+            return False
+        params = _query_params_from_key(key)
+        return str(params.get("tour") or "") == tour_code
 
-    # Third pass: any playerProfileResults query with resultsData
-    for query in queries:
-        key = query.get("queryKey") or []
-        if key and key[0] == "playerProfileResults":
-            rows = _extract_tournament_rows(query)
-            if rows:
-                return rows
+    rows = _collect_rows(_player_tour_match)
+    if rows:
+        return rows
+
+    # Third pass: any playerProfileResults for this player.
+    def _player_only_match(key: List[Any]) -> bool:
+        return bool(key) and key[0] == "playerProfileResults" and len(key) > 1 and str(key[1]) == str_player_id
+
+    rows = _collect_rows(_player_only_match)
+    if rows:
+        return rows
+
+    # Fourth pass: any playerProfileResults query with resultsData.
+    rows = _collect_rows(lambda key: bool(key) and key[0] == "playerProfileResults")
+    if rows:
+        return rows
 
     # Diagnostic: log what query keys are present so we can debug structure changes.
     log_key = ("no_results", season)
@@ -476,8 +510,23 @@ def fetch_player_scorecard_history(
     results: List[PlayerTournamentScorecard] = []
     for entry in raw_entries:
         record = _parse_tournament_entry(entry, player_id, player_name)
-        if record is not None:
-            results.append(record)
+        if record is None:
+            continue
+        results.append(record)
+
+    if season is not None:
+        season_rows = [r for r in results if int(r.season or 0) == int(season)]
+        if season_rows:
+            return season_rows
+        if results:
+            seasons_found = sorted({int(r.season or 0) for r in results if r.season})
+            print(
+                f"[scorecard_scraper] DEBUG player={player_id} requested season={season} "
+                f"but found seasons={seasons_found}; returning 0 rows for this season.",
+                flush=True,
+            )
+        return []
+
     return results
 
 

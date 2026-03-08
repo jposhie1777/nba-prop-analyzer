@@ -85,11 +85,20 @@ class OddspediaClient:
     def scrape(self, url: str) -> List[Dict[str, Any]]:
         """Fetch *url* using Playwright and return a list of match-odds dicts.
 
-        Playwright runs headless Chromium, which bypasses basic bot-detection
-        and evaluates the page's JavaScript so window.__NUXT__ is fully
-        resolved before we read it.
+        Uses headless Chromium with playwright-stealth to mask automation
+        signals (navigator.webdriver, etc.) that trigger Cloudflare blocks.
+
+        Waits only for DOMContentLoaded because window.__NUXT__ is embedded
+        in the SSR HTML — no JS execution is needed.  "networkidle" is
+        intentionally avoided: Cloudflare's challenge scripts keep the
+        network busy indefinitely and cause a 60 s timeout.
         """
         from playwright.sync_api import sync_playwright
+
+        try:
+            from playwright_stealth import stealth_sync as _stealth_sync
+        except ImportError:
+            _stealth_sync = None
 
         LOGGER.info("Fetching %s via Playwright", url)
         with sync_playwright() as pw:
@@ -101,7 +110,12 @@ class OddspediaClient:
                 extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
             )
             page = context.new_page()
-            page.goto(url, wait_until="networkidle", timeout=self._page_timeout_ms)
+            if _stealth_sync is not None:
+                _stealth_sync(page)
+            page.goto(url, wait_until="domcontentloaded", timeout=self._page_timeout_ms)
+            # __NUXT__ is injected by SSR into the initial HTML, so it's
+            # available immediately after the DOM is parsed.
+            page.wait_for_function("() => !!window.__NUXT__", timeout=15_000)
             nuxt_data = page.evaluate("() => window.__NUXT__")
             browser.close()
 

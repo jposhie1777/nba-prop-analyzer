@@ -238,6 +238,14 @@ def _find_results_data(
     str_player_id = str(player_id)
     str_season = str(season) if season else None
 
+    def _query_params_from_key(key: List[Any]) -> Dict[str, Any]:
+        """Return the most relevant params dict from a queryKey."""
+        params: Dict[str, Any] = {}
+        for part in key:
+            if isinstance(part, dict):
+                params.update(part)
+        return params
+
     def _dedupe_tournaments(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         deduped: List[Dict[str, Any]] = []
         seen_tids = set()
@@ -264,7 +272,7 @@ def _find_results_data(
             return False
         if len(key) < 2 or str(key[1]) != str_player_id:
             return False
-        params: Dict = key[3] if len(key) > 3 and isinstance(key[3], dict) else {}
+        params = _query_params_from_key(key)
         if str_season and str(params.get("season") or "") != str_season:
             return False
         return str(params.get("tour") or "") == tour_code
@@ -279,7 +287,7 @@ def _find_results_data(
             return False
         if len(key) < 2 or str(key[1]) != str_player_id:
             return False
-        params: Dict = key[3] if len(key) > 3 and isinstance(key[3], dict) else {}
+        params = _query_params_from_key(key)
         return str(params.get("tour") or "") == tour_code
 
     rows = _collect_rows(_player_tour_match)
@@ -503,8 +511,6 @@ def fetch_player_scorecard_history(
     for entry in raw_entries:
         record = _parse_tournament_entry(entry, player_id, player_name)
         if record is None:
-            continue
-        if season is not None and record.season and int(record.season) != int(season):
             continue
         results.append(record)
     return results

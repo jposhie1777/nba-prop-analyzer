@@ -423,12 +423,13 @@ def _parse_tournament_entry(
 # GraphQL fallback for historical seasons
 # ---------------------------------------------------------------------------
 
-# PGA Tour GraphQL query for player tournament history by season.
-# The operation name matches the React Query key used client-side:
-#   ["playerProfileResults", playerId, "season", {"season": "2023", "tour": "R"}]
-_PLAYER_PROFILE_RESULTS_QUERY = """
-query PlayerProfileResults($playerId: ID!, $season: String, $tour: String) {
-  playerProfileResults(playerId: $playerId, season: $season, tour: $tour) {
+# Confirmed via live schema introspection (introspect_pga_schema.py --all):
+#   playerProfileTournamentResults(playerId: NON_NULL(ID), tourCode: TourCode)
+# No season arg — returns ALL seasons for the player; we filter locally.
+# tourCode is an enum type, not String.
+_PLAYER_TOURNAMENT_RESULTS_QUERY = """
+query PlayerTournamentHistory($playerId: ID!, $tourCode: TourCode) {
+  playerProfileTournamentResults(playerId: $playerId, tourCode: $tourCode) {
     resultsData {
       courseName
       course
@@ -441,6 +442,20 @@ query PlayerProfileResults($playerId: ID!, $season: String, $tour: String) {
 }
 """
 
+# Set to True once we've logged the first GQL response structure.
+_GQL_STRUCTURE_LOGGED: bool = False
+
+
+def _gql_headers() -> Dict[str, str]:
+    return {
+        "Content-Type": "application/json",
+        "x-api-key": DEFAULT_API_KEY,
+        "x-pgat-platform": "web",
+        "Referer": "https://www.pgatour.com/",
+        "Origin": "https://www.pgatour.com",
+    }
+
+
 
 def _fetch_player_results_via_graphql(
     player_id: str,
@@ -450,56 +465,60 @@ def _fetch_player_results_via_graphql(
     timeout: int = DEFAULT_TIMEOUT,
 ) -> List[Dict[str, Any]]:
     """
-    Fetch player tournament results directly from the PGA Tour GraphQL API.
+    Fetch ALL tournament results for a player via playerProfileTournamentResults.
 
-    Used as a fallback when the HTML page's __NEXT_DATA__ only contains current-
-    season data (pgatour.com SSR does not hydrate historical seasons server-side;
-    the browser fetches them client-side via this same GraphQL endpoint).
+    The API has no season filter — it returns every season.  The caller is
+    responsible for filtering by the desired season after parsing.
 
-    Returns raw tournament entry dicts in the same format as _find_results_data,
-    ready for _parse_tournament_entry.  Returns [] on any error.
+    Returns raw tournament entry dicts (same format as _find_results_data).
+    Returns [] on any error.
     """
-    headers = {
-        "Content-Type": "application/json",
-        "x-api-key": DEFAULT_API_KEY,
-        "x-pgat-platform": "web",
-        "Referer": "https://www.pgatour.com/",
-        "Origin": "https://www.pgatour.com",
-    }
-    variables = {
-        "playerId": str(player_id),
-        "season": str(season),
-        "tour": tour_code,
-    }
+    global _GQL_STRUCTURE_LOGGED
+
     _log_once = season not in _GQL_FALLBACK_LOGGED
+
     try:
         resp = requests.post(
             GRAPHQL_ENDPOINT,
-            headers=headers,
-            json={"query": _PLAYER_PROFILE_RESULTS_QUERY, "variables": variables},
+            headers=_gql_headers(),
+            json={
+                "query": _PLAYER_TOURNAMENT_RESULTS_QUERY,
+                "variables": {"playerId": str(player_id), "tourCode": tour_code},
+            },
             timeout=timeout,
         )
         resp.raise_for_status()
         data = resp.json()
+
         if "errors" in data:
             if _log_once:
                 _GQL_FALLBACK_LOGGED.add(season)
                 print(
-                    f"[scorecard_scraper] GQL fallback season={season}: "
-                    f"GraphQL returned errors: {data['errors'][:2]}",
+                    f"[scorecard_scraper] GQL fallback season={season} "
+                    f"player={player_id}: errors={data['errors'][:1]}",
                     flush=True,
                 )
             return []
-        profile = (data.get("data") or {}).get("playerProfileResults") or {}
-        if _log_once:
-            _GQL_FALLBACK_LOGGED.add(season)
-            top_keys = list((data.get("data") or {}).keys())
+
+        profile = (data.get("data") or {}).get("playerProfileTournamentResults") or {}
+        results_data = profile.get("resultsData") or []
+
+        # Log structure once so we can verify the shape looks correct.
+        if not _GQL_STRUCTURE_LOGGED:
+            _GQL_STRUCTURE_LOGGED = True
+            first_section = results_data[0] if results_data else {}
+            first_entry = (first_section.get("data") or [{}])[0]
             print(
-                f"[scorecard_scraper] GQL fallback season={season} player={player_id}: "
-                f"data keys={top_keys}, resultsData sections={len(profile.get('resultsData') or [])}",
+                f"[scorecard_scraper] GQL structure (player={player_id}): "
+                f"resultsData sections={len(results_data)}, "
+                f"first section keys={list(first_section.keys())}, "
+                f"first entry keys={list(first_entry.keys())}",
                 flush=True,
             )
-        results_data = profile.get("resultsData") or []
+
+        if _log_once:
+            _GQL_FALLBACK_LOGGED.add(season)
+
         rows: List[Dict[str, Any]] = []
         for section in results_data:
             section_course = section.get("courseName") or section.get("course")
@@ -510,12 +529,13 @@ def _fetch_player_results_via_graphql(
                         entry["__course_name"] = section_course
                     rows.append(entry)
         return rows
+
     except Exception as exc:
         if _log_once:
             _GQL_FALLBACK_LOGGED.add(season)
             print(
-                f"[scorecard_scraper] GQL fallback season={season} player={player_id}: "
-                f"request failed: {type(exc).__name__}: {exc}",
+                f"[scorecard_scraper] GQL fallback season={season} "
+                f"player={player_id}: {type(exc).__name__}: {exc}",
                 flush=True,
             )
         return []

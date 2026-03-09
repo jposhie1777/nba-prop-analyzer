@@ -15,6 +15,7 @@ DATASET = os.getenv("PGA_DATASET", "pga_data")
 LOCATION = os.getenv("PGA_DATASET_LOCATION", "US")
 ACTIVE_PLAYERS_TABLE = os.getenv("PGA_WEBSITE_ACTIVE_PLAYERS_TABLE", "website_active_players")
 PLAYER_STATS_TABLE = os.getenv("PGA_WEBSITE_PLAYER_STATS_TABLE", "website_player_stats")
+PROFILE_STATS_TABLE = os.getenv("PGA_PLAYER_PROFILE_STATS_TABLE", "website_player_profile_stats")
 
 GRAPHQL_ENDPOINT = "https://orchestrator.pgatour.com/graphql"
 API_KEY = os.getenv("PGA_TOUR_GQL_API_KEY", "da2-gsrx5bibzbb4njvhl7t37wqyl4")
@@ -294,16 +295,63 @@ def _flatten_player_directory(data: Dict[str, Any]) -> List[Dict[str, Any]]:
     return rows
 
 
+def _load_profile_stats_from_bq(
+    client: bigquery.Client,
+    year: int,
+    tour_code: str,
+) -> Dict[str, Dict[str, Any]]:
+    """
+    Read website_player_profile_stats for (tour_code, season=year) and return
+    {player_id: {stat_id: stat_dict}}.  Returns empty dict on any failure.
+    """
+    table_id = f"{client.project}.{DATASET}.{PROFILE_STATS_TABLE}"
+    try:
+        sql = (
+            f"SELECT player_id, stat_id, stat_title, stat_value, rank "
+            f"FROM `{table_id}` "
+            f"WHERE tour_code = @tour_code AND season = @season"
+        )
+        params = [
+            bigquery.ScalarQueryParameter("tour_code", "STRING", tour_code),
+            bigquery.ScalarQueryParameter("season", "INT64", year),
+        ]
+        by_player: Dict[str, Dict[str, Any]] = {}
+        for row in client.query(sql, job_config=bigquery.QueryJobConfig(query_parameters=params)).result():
+            pid = str(row.get("player_id") or "").strip()
+            sid = str(row.get("stat_id") or "").strip()
+            if not pid or not sid:
+                continue
+            title = str(row.get("stat_title") or "")
+            by_player.setdefault(pid, {})[sid] = {
+                "stat_id": sid,
+                "stat_name": title,
+                "stat_title": title,
+                "stat_value": str(row.get("stat_value") or ""),
+                "rank": row.get("rank"),
+                "tour_avg": None,
+            }
+        return by_player
+    except Exception as exc:
+        print(
+            f"[website_player_stats] WARN: could not load profile stats from BQ ({exc}); "
+            f"stats_payload will use statOverview data only.",
+            flush=True,
+        )
+        return {}
+
+
 def _group_player_stats(
     data: Dict[str, Any],
     current_year: int,
     active_player_ids: Set[str],
     active_player_info: Optional[Dict[str, Dict[str, Any]]] = None,
+    profile_stats_by_player: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     overview = (data or {}).get("statOverview") or {}
     year = int(overview.get("year") or 0)
 
-    # Collect all available stat metadata so every player row has every stat key.
+    # Collect stat metadata from statOverview — provides tour averages and a stat
+    # key template even for players without personal profile-stat data.
     all_stat_meta: Dict[str, Dict[str, Any]] = {}
     for stat in overview.get("stats") or []:
         stat_id = str(stat.get("statId") or "")
@@ -312,6 +360,17 @@ def _group_player_stats(
                 "stat_name": stat.get("statName"),
                 "tour_avg": stat.get("tourAvg"),
             }
+
+    # Merge stat IDs that appear in profile stats but not in statOverview.
+    profile = profile_stats_by_player or {}
+    for player_stats in profile.values():
+        for sid in player_stats:
+            if sid not in all_stat_meta:
+                pstat = player_stats[sid]
+                all_stat_meta[sid] = {
+                    "stat_name": pstat.get("stat_name"),
+                    "tour_avg": None,
+                }
 
     def _empty_stats() -> Dict[str, Any]:
         return {
@@ -329,8 +388,7 @@ def _group_player_stats(
     def _empty_tour_averages() -> Dict[str, Any]:
         return {sid: meta["tour_avg"] for sid, meta in all_stat_meta.items()}
 
-    # Seed one row for EVERY active player so we always get 1 row per active player,
-    # even for those who have not yet accumulated any stats this season.
+    # Seed one row for EVERY active player (guaranteed 1 row per active player).
     info = active_player_info or {}
     grouped: Dict[str, Dict[str, Any]] = {}
     for pid in active_player_ids:
@@ -344,7 +402,35 @@ def _group_player_stats(
             "tour_averages": _empty_tour_averages(),
         }
 
-    # Fill in real stat values for players who appear in the stat leaderboards.
+    # --- Pass 1: fill real stat values from website_player_profile_stats (primary). ---
+    # Profile stats are player-centric and populated for every player regardless of
+    # minimum-round requirements, so they give far more coverage than statOverview.
+    for pid, player_stats in profile.items():
+        if active_player_ids and pid not in active_player_ids:
+            continue
+        if pid not in grouped:
+            pinfo = info.get(pid) or {}
+            grouped[pid] = {
+                "player_id": pid,
+                "player_name": pinfo.get("player_name") or pinfo.get("display_name"),
+                "country": pinfo.get("country"),
+                "country_flag": pinfo.get("country_flag"),
+                "stats": _empty_stats(),
+                "tour_averages": _empty_tour_averages(),
+            }
+        for sid, pstat in player_stats.items():
+            if sid in grouped[pid]["stats"]:
+                # Preserve tour_avg from statOverview; overwrite value/rank with profile data.
+                grouped[pid]["stats"][sid].update({
+                    "stat_title": pstat.get("stat_title"),
+                    "stat_value": pstat.get("stat_value"),
+                    "rank": pstat.get("rank"),
+                })
+            else:
+                grouped[pid]["stats"][sid] = {**pstat, "tour_avg": all_stat_meta.get(sid, {}).get("tour_avg")}
+            grouped[pid]["tour_averages"].setdefault(sid, None)
+
+    # --- Pass 2: apply statOverview data (adds tour_avg; fills any gaps not in profile). ---
     for stat in overview.get("stats") or []:
         stat_id = str(stat.get("statId") or "")
         stat_name = stat.get("statName")
@@ -357,7 +443,6 @@ def _group_player_stats(
                 continue
 
             if player_id not in grouped:
-                # Player appeared in stats but wasn't in the active directory — include anyway.
                 grouped[player_id] = {
                     "player_id": player_id,
                     "player_name": row.get("playerName"),
@@ -367,7 +452,6 @@ def _group_player_stats(
                     "tour_averages": _empty_tour_averages(),
                 }
             else:
-                # Backfill player identity fields if the directory didn't have them.
                 if not grouped[player_id].get("player_name"):
                     grouped[player_id]["player_name"] = row.get("playerName")
                 if not grouped[player_id].get("country"):
@@ -375,14 +459,20 @@ def _group_player_stats(
                 if not grouped[player_id].get("country_flag"):
                     grouped[player_id]["country_flag"] = row.get("countryFlag")
 
-            grouped[player_id]["stats"][stat_id] = {
-                "stat_id": stat_id,
-                "stat_name": stat_name,
-                "stat_title": row.get("statTitle"),
-                "stat_value": row.get("statValue"),
-                "rank": row.get("rank"),
-                "tour_avg": tour_avg,
-            }
+            # Always apply tour_avg from statOverview; only overwrite value/rank if
+            # profile stats didn't already fill this stat.
+            existing = grouped[player_id]["stats"].get(stat_id, {})
+            if not existing.get("stat_value"):
+                grouped[player_id]["stats"][stat_id] = {
+                    "stat_id": stat_id,
+                    "stat_name": stat_name,
+                    "stat_title": row.get("statTitle"),
+                    "stat_value": row.get("statValue"),
+                    "rank": row.get("rank"),
+                    "tour_avg": tour_avg,
+                }
+            else:
+                grouped[player_id]["stats"][stat_id]["tour_avg"] = tour_avg
             grouped[player_id]["tour_averages"][stat_id] = tour_avg
 
     return list(grouped.values())
@@ -478,7 +568,20 @@ def ingest_website_players_and_stats(
             }
 
     stats_raw = _post_graphql(STAT_OVERVIEW_QUERY, {"tourCode": tour_code, "year": year})
-    stats_rows = _group_player_stats(stats_raw, year, active_player_ids, active_player_info)
+    profile_stats = _load_profile_stats_from_bq(client, year, tour_code)
+    if profile_stats:
+        print(
+            f"[website_player_stats] Loaded profile stats for {len(profile_stats)} players "
+            f"from BQ ({tour_code}/{year}).",
+            flush=True,
+        )
+    else:
+        print(
+            f"[website_player_stats] No profile stats in BQ for {tour_code}/{year}; "
+            f"stats_payload will use statOverview data only.",
+            flush=True,
+        )
+    stats_rows = _group_player_stats(stats_raw, year, active_player_ids, active_player_info, profile_stats)
 
     stats_payload: List[Dict[str, Any]] = []
     existing_player_ids: Set[str] = set()

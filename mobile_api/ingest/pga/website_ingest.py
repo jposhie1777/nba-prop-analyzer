@@ -12,6 +12,7 @@ from .pga_leaderboard import fetch_leaderboard, leaderboard_to_records
 from .pga_pairings_ingest import ingest_pairings
 from .pga_rankings_ingest import ingest_rankings
 from .pga_schedule import fetch_schedule, schedule_to_records
+from .pga_player_profile_stats_ingest import ingest_player_profile_stats
 from .pga_stats_ingest import ingest_stats
 from .website_players_stats_ingest import ingest_website_players_and_stats
 
@@ -372,6 +373,19 @@ def run_website_ingestion(*, season: Optional[int] = None, create_tables: bool =
         rankings = ingest_rankings(year=yr, tour_code="R", dry_run=False, create_tables=create_tables)
         summary["stats_rows"] += int(stats.get("rows_inserted", 0))
         summary["rankings_rows"] += int(rankings.get("rows_inserted", 0))
+
+        try:
+            # Profile stats must be written before website_player_stats so that
+            # ingest_website_players_and_stats can read them from BQ to build stats_payload.
+            ingest_player_profile_stats(
+                season=yr,
+                tour_code="R",
+                dry_run=False,
+                create_tables=create_tables,
+            )
+        except Exception as exc:
+            print(f"[website] WARN season={yr} profile_stats error={exc}")
+            summary["errors"].append(f"season={yr} profile_stats error={exc}")
 
         try:
             website_players_stats = ingest_website_players_and_stats(

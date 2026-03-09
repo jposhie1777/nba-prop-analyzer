@@ -385,6 +385,31 @@ def _parse_tournament_entry(
     if not tournament_id:
         return None
 
+    # Named-field format from playerProfileTournamentResults GQL
+    # (PlayerProfileTournamentRow type — confirmed via schema introspection).
+    if entry.get("tournamentName") is not None:
+        round_scores = {
+            r.get("roundNum"): r.get("roundScore")
+            for r in (entry.get("roundScores") or [])
+        }
+        return PlayerTournamentScorecard(
+            player_id=player_id,
+            player_name=player_name,
+            season=entry.get("year"),
+            tournament_id=tournament_id,
+            tournament_name=str(entry.get("tournamentName") or ""),
+            tournament_date=str(entry.get("date") or entry.get("startDate") or ""),
+            course_name=str(entry.get("courseName") or ""),
+            position=str(entry.get("position") or ""),
+            r1=_safe_int(round_scores.get(1)),
+            r2=_safe_int(round_scores.get(2)),
+            r3=_safe_int(round_scores.get(3)),
+            r4=_safe_int(round_scores.get(4)),
+            total_strokes=_safe_int(entry.get("total")),
+            to_par=str(entry.get("toPar") or ""),
+        )
+
+    # Legacy fields[] format from HTML __NEXT_DATA__ scrape.
     fields: List[str] = entry.get("fields") or []
     if len(fields) < 8:
         return None
@@ -434,7 +459,17 @@ query PlayerTournamentHistory($playerId: ID!, $tourCode: TourCode) {
       tournamentNum
       tournaments {
         tournamentId
-        fields
+        tournamentName
+        courseName
+        date
+        year
+        position
+        roundScores {
+          roundNum
+          roundScore
+        }
+        total
+        toPar
       }
     }
   }

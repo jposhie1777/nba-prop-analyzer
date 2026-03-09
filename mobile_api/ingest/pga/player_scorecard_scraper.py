@@ -430,13 +430,9 @@ def _parse_tournament_entry(
 _PLAYER_TOURNAMENT_RESULTS_QUERY = """
 query PlayerTournamentHistory($playerId: ID!, $tourCode: TourCode) {
   playerProfileTournamentResults(playerId: $playerId, tourCode: $tourCode) {
-    resultsData {
-      courseName
-      course
-      data {
-        tournamentId
-        fields
-      }
+    tournaments {
+      tournamentId
+      fields
     }
   }
 }
@@ -473,9 +469,12 @@ def _probe_type_fields(type_name: str, timeout: int) -> None:
               name kind
               ofType {
                 name kind
-                fields {
-                  name
-                  type { name kind ofType { name kind } }
+                ofType {
+                  name kind
+                  fields {
+                    name
+                    type { name kind ofType { name kind } }
+                  }
                 }
               }
             }
@@ -502,6 +501,18 @@ def _probe_type_fields(type_name: str, timeout: int) -> None:
                 return "[" + _sig(t.get("ofType")) + "]"
             return t.get("name") or _sig(t.get("ofType"))
 
+        def _elem_fields(tp: dict) -> List[str]:
+            """Walk NON_NULL/LIST wrappers to find the object's fields list."""
+            node = tp
+            for _ in range(5):
+                sub = node.get("ofType")
+                if not sub:
+                    break
+                if sub.get("fields"):
+                    return [f["name"] for f in sub["fields"]]
+                node = sub
+            return []
+
         print(
             f"[scorecard_scraper] TYPE PROBE {type_name} "
             f"({len(fields)} fields):",
@@ -509,12 +520,10 @@ def _probe_type_fields(type_name: str, timeout: int) -> None:
         )
         for f in fields:
             tp = f["type"]
-            nested = tp.get("ofType") or {}
-            sub_fields = (nested.get("ofType") or {}).get("fields") or []
-            sub_names = [s["name"] for s in sub_fields]
+            sub_names = _elem_fields(tp)
             print(
                 f"  {f['name']}: {_sig(tp)}"
-                + (f"  (sub-fields: {sub_names})" if sub_names else ""),
+                + (f"  (item-fields: {sub_names})" if sub_names else ""),
                 flush=True,
             )
     except Exception as exc:
@@ -561,9 +570,10 @@ def _fetch_player_results_via_graphql(
         if "errors" in data:
             global _GQL_TYPE_PROBED
             error_msgs = [e.get("message", "") for e in data["errors"]]
-            # If resultsData doesn't exist, probe the real type fields once.
+            # On any FieldUndefined, probe the type once so we can see its
+            # actual field names in the logs and fix the query on the next pass.
             if not _GQL_TYPE_PROBED and any(
-                "FieldUndefined" in m and "resultsData" in m for m in error_msgs
+                "FieldUndefined" in m for m in error_msgs
             ):
                 _GQL_TYPE_PROBED = True
                 _probe_type_fields("PlayerProfileTournamentResults", timeout)
@@ -577,20 +587,22 @@ def _fetch_player_results_via_graphql(
             return []
 
         profile = (data.get("data") or {}).get("playerProfileTournamentResults") or {}
-        results_data = profile.get("resultsData") or []
+        # `tournaments` is a flat list of tournament entries (no resultsData wrapper).
+        tournaments = profile.get("tournaments") or []
 
         if _log_once:
             _GQL_FALLBACK_LOGGED.add(season)
+            first = tournaments[0] if tournaments else {}
+            print(
+                f"[scorecard_scraper] GQL tournaments (player={player_id}): "
+                f"count={len(tournaments)}, first keys={list(first.keys())}",
+                flush=True,
+            )
 
         rows: List[Dict[str, Any]] = []
-        for section in results_data:
-            section_course = section.get("courseName") or section.get("course")
-            for entry in section.get("data") or []:
-                if entry.get("tournamentId"):
-                    if section_course and "__course_name" not in entry:
-                        entry = dict(entry)
-                        entry["__course_name"] = section_course
-                    rows.append(entry)
+        for entry in tournaments:
+            if entry.get("tournamentId"):
+                rows.append(entry)
         return rows
 
     except Exception as exc:

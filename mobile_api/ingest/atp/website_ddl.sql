@@ -142,13 +142,27 @@ CLUSTER BY left_player_id, right_player_id;
 
 CREATE TABLE IF NOT EXISTS `atp_data.website_match_results` (
   snapshot_ts_utc TIMESTAMP NOT NULL,
-  ingest_run_id STRING NOT NULL,
-  url STRING,
-  payload_html STRING,
-  flattened_text_chunks ARRAY<STRING>,
-  flattened_links ARRAY<STRUCT<href STRING, text STRING>>
+  tournament_slug STRING,
+  tournament_id STRING,
+  day_label STRING,
+  match_date DATE,
+  round_and_court STRING,
+  match_duration STRING,
+  player_1_name STRING,
+  player_1_profile_url STRING,
+  player_1_is_winner BOOL,
+  player_1_scores STRING,
+  player_2_name STRING,
+  player_2_profile_url STRING,
+  player_2_is_winner BOOL,
+  player_2_scores STRING,
+  h2h_url STRING,
+  stats_url STRING,
+  umpire STRING,
+  match_notes STRING
 )
-PARTITION BY DATE(snapshot_ts_utc);
+PARTITION BY DATE(snapshot_ts_utc)
+CLUSTER BY tournament_id, tournament_slug;
 
 ALTER TABLE `atp_data.website_daily_schedule` ADD COLUMN IF NOT EXISTS flattened_text_chunks ARRAY<STRING>;
 ALTER TABLE `atp_data.website_daily_schedule` ADD COLUMN IF NOT EXISTS flattened_links ARRAY<STRUCT<href STRING, text STRING>>;
@@ -160,8 +174,28 @@ ALTER TABLE `atp_data.website_daily_schedule` ADD COLUMN IF NOT EXISTS schedule_
 ALTER TABLE `atp_data.website_draws` ADD COLUMN IF NOT EXISTS flattened_text_chunks ARRAY<STRING>;
 ALTER TABLE `atp_data.website_draws` ADD COLUMN IF NOT EXISTS flattened_links ARRAY<STRUCT<href STRING, text STRING>>;
 
-ALTER TABLE `atp_data.website_match_results` ADD COLUMN IF NOT EXISTS flattened_text_chunks ARRAY<STRING>;
-ALTER TABLE `atp_data.website_match_results` ADD COLUMN IF NOT EXISTS flattened_links ARRAY<STRUCT<href STRING, text STRING>>;
+-- Migration: website_match_results was previously a raw-HTML blob table.
+-- It is now the historical per-match results table (one row per completed match).
+-- If the table already exists with the old schema, add the new parsed columns.
+-- The raw HTML payload is retained in website_raw_responses (endpoint_key="match_results").
+ALTER TABLE `atp_data.website_match_results` ADD COLUMN IF NOT EXISTS tournament_slug STRING;
+ALTER TABLE `atp_data.website_match_results` ADD COLUMN IF NOT EXISTS tournament_id STRING;
+ALTER TABLE `atp_data.website_match_results` ADD COLUMN IF NOT EXISTS day_label STRING;
+ALTER TABLE `atp_data.website_match_results` ADD COLUMN IF NOT EXISTS match_date DATE;
+ALTER TABLE `atp_data.website_match_results` ADD COLUMN IF NOT EXISTS round_and_court STRING;
+ALTER TABLE `atp_data.website_match_results` ADD COLUMN IF NOT EXISTS match_duration STRING;
+ALTER TABLE `atp_data.website_match_results` ADD COLUMN IF NOT EXISTS player_1_name STRING;
+ALTER TABLE `atp_data.website_match_results` ADD COLUMN IF NOT EXISTS player_1_profile_url STRING;
+ALTER TABLE `atp_data.website_match_results` ADD COLUMN IF NOT EXISTS player_1_is_winner BOOL;
+ALTER TABLE `atp_data.website_match_results` ADD COLUMN IF NOT EXISTS player_1_scores STRING;
+ALTER TABLE `atp_data.website_match_results` ADD COLUMN IF NOT EXISTS player_2_name STRING;
+ALTER TABLE `atp_data.website_match_results` ADD COLUMN IF NOT EXISTS player_2_profile_url STRING;
+ALTER TABLE `atp_data.website_match_results` ADD COLUMN IF NOT EXISTS player_2_is_winner BOOL;
+ALTER TABLE `atp_data.website_match_results` ADD COLUMN IF NOT EXISTS player_2_scores STRING;
+ALTER TABLE `atp_data.website_match_results` ADD COLUMN IF NOT EXISTS h2h_url STRING;
+ALTER TABLE `atp_data.website_match_results` ADD COLUMN IF NOT EXISTS stats_url STRING;
+ALTER TABLE `atp_data.website_match_results` ADD COLUMN IF NOT EXISTS umpire STRING;
+ALTER TABLE `atp_data.website_match_results` ADD COLUMN IF NOT EXISTS match_notes STRING;
 
 CREATE TABLE IF NOT EXISTS `atp_data.website_match_results_rows` (
   snapshot_ts_utc TIMESTAMP NOT NULL,

@@ -194,7 +194,7 @@ def normalize_head_to_head(left_player_id: str, right_player_id: str, h2h_json: 
     return rows
 
 
-def normalize_match_schedule_html(tournament_slug: str, tournament_id: str, schedule_html: str, snapshot_ts_utc: str | None = None) -> List[MatchScheduleRow]:
+def normalize_match_schedule_html(tournament_slug: str, tournament_id: str, schedule_html: str, snapshot_ts_utc: str | None = None, include_past: bool = False) -> List[MatchScheduleRow]:
     ts = snapshot_ts_utc or utc_now_iso()
     snapshot_date = datetime.fromisoformat(ts.replace("Z", "+00:00")).date()
     day = _find(r'<h4 class="day">\s*(.*?)\s*</h4>', schedule_html) or _find(
@@ -242,18 +242,30 @@ def normalize_match_schedule_html(tournament_slug: str, tournament_id: str, sche
         p1_name, p1_url, p1_seed = _extract_name_url_seed(player_block)
         p2_name, p2_url, p2_seed = _extract_name_url_seed(opponent_block)
 
-        if not p1_name or not p2_name:
-            # fallback for layouts that don't include player/opponent wrappers
-            name_blocks = re.findall(r'<div class="name">\s*(.*?)\s*</div>', row_html, flags=re.IGNORECASE | re.DOTALL)
-            hrefs = re.findall(r'<div class="name">\s*<a href="([^"]+)"', row_html, flags=re.IGNORECASE | re.DOTALL)
-            if not p1_name and len(name_blocks) > 0:
-                p1_name = _strip_tags(name_blocks[0])
-            if not p2_name and len(name_blocks) > 1:
-                p2_name = _strip_tags(name_blocks[1])
-            if not p1_url and len(hrefs) > 0:
-                p1_url = hrefs[0]
-            if not p2_url and len(hrefs) > 1:
-                p2_url = hrefs[1]
+        if not p1_name or not p2_name or not p1_url or not p2_url:
+            # Robust fallback: find all ATP player profile links directly in the schedule block.
+            # This handles cases where <div class="rank"> precedes <a href> inside <div class="name">
+            # (common for ATP opponents) which breaks the simpler block-extraction approach.
+            player_links = re.findall(
+                r'href="(/en/players/(?!atp-head-2-head)[^"]+/overview)"[^>]*>(.*?)</a>',
+                row_html,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            if not p1_url and len(player_links) > 0:
+                p1_url = player_links[0][0]
+            if not p2_url and len(player_links) > 1:
+                p2_url = player_links[1][0]
+            if not p1_name and len(player_links) > 0:
+                p1_name = _strip_tags(player_links[0][1]).replace("\xa0", " ").strip() or p1_name
+            if not p2_name and len(player_links) > 1:
+                p2_name = _strip_tags(player_links[1][1]).replace("\xa0", " ").strip() or p2_name
+            # For WTA players (no profile link), fall back to name-div text
+            if not p1_name or not p2_name:
+                name_blocks = re.findall(r'<div class="name">\s*(.*?)\s*</div>', row_html, flags=re.IGNORECASE | re.DOTALL)
+                if not p1_name and len(name_blocks) > 0:
+                    p1_name = _strip_tags(name_blocks[0])
+                if not p2_name and len(name_blocks) > 1:
+                    p2_name = _strip_tags(name_blocks[1])
 
         status_lower = (status_text or "").strip().lower()
         court_lower = (court_name or "").strip().lower()
@@ -261,7 +273,7 @@ def normalize_match_schedule_html(tournament_slug: str, tournament_id: str, sche
         p2_lower = (p2_name or "").lower()
 
         # Keep this dataset focused on truly upcoming matches.
-        if day_date and day_date < snapshot_date:
+        if not include_past and day_date and day_date < snapshot_date:
             continue
         if "newsletter" in court_lower or "sign up" in court_lower:
             continue

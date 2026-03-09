@@ -423,23 +423,138 @@ def _parse_tournament_entry(
 # GraphQL fallback for historical seasons
 # ---------------------------------------------------------------------------
 
-# PGA Tour GraphQL query for player tournament history by season.
-# The operation name matches the React Query key used client-side:
-#   ["playerProfileResults", playerId, "season", {"season": "2023", "tour": "R"}]
-_PLAYER_PROFILE_RESULTS_QUERY = """
-query PlayerProfileResults($playerId: ID!, $season: String, $tour: String) {
-  playerProfileResults(playerId: $playerId, season: $season, tour: $tour) {
-    resultsData {
-      courseName
-      course
-      data {
-        tournamentId
-        fields
+# Cached introspection result: maps field_name -> list of arg names.
+# None = not yet probed.  Empty dict = probed but nothing found.
+_GQL_FIELD_CACHE: Optional[Dict[str, List[str]]] = None
+
+
+def _gql_headers() -> Dict[str, str]:
+    return {
+        "Content-Type": "application/json",
+        "x-api-key": DEFAULT_API_KEY,
+        "x-pgat-platform": "web",
+        "Referer": "https://www.pgatour.com/",
+        "Origin": "https://www.pgatour.com",
+    }
+
+
+def _introspect_player_result_fields(timeout: int) -> Dict[str, List[str]]:
+    """
+    Query the PGA Tour GraphQL schema and return every field whose name
+    contains both 'player' and any of {'result','history','career','profile'},
+    PLUS every field that accepts both a playerId-style arg and a season/year arg.
+
+    Returns {field_name: [arg_name, ...]} for each candidate.
+    Logs everything found so the caller can identify the correct field.
+    """
+    introspect_q = """
+    {
+      __schema {
+        queryType {
+          fields {
+            name
+            args { name type { name kind } }
+          }
+        }
       }
     }
-  }
-}
+    """
+    try:
+        resp = requests.post(
+            GRAPHQL_ENDPOINT,
+            headers=_gql_headers(),
+            json={"query": introspect_q},
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        schema_data = resp.json()
+        all_fields = schema_data["data"]["__schema"]["queryType"]["fields"]
+    except Exception as exc:
+        print(
+            f"[scorecard_scraper] GQL schema introspection failed: "
+            f"{type(exc).__name__}: {exc}",
+            flush=True,
+        )
+        return {}
+
+    result_keywords = {"result", "history", "career", "profile", "season"}
+    candidates: Dict[str, List[str]] = {}
+
+    for f in all_fields:
+        name_lower = f["name"].lower()
+        arg_names = [a["name"] for a in f.get("args", [])]
+        arg_lower = {a.lower() for a in arg_names}
+
+        # Include if name has "player" + any result-ish keyword
+        if "player" in name_lower and any(k in name_lower for k in result_keywords):
+            candidates[f["name"]] = arg_names
+            continue
+
+        # Include if field accepts a player ID arg + a season/year arg
+        has_player_arg = any("player" in a or a in {"id"} for a in arg_lower)
+        has_season_arg = any(a in {"season", "year"} for a in arg_lower)
+        if has_player_arg and has_season_arg:
+            candidates[f["name"]] = arg_names
+
+    # Always log what we found — one-time diagnostic.
+    all_player_names = sorted(
+        f["name"] for f in all_fields if "player" in f["name"].lower()
+    )
+    print(
+        f"[scorecard_scraper] GQL schema probe — "
+        f"all 'player' fields ({len(all_player_names)}): {all_player_names}",
+        flush=True,
+    )
+    print(
+        f"[scorecard_scraper] GQL schema probe — "
+        f"result/history/season candidates: "
+        + ", ".join(
+            f"{k}({', '.join(v)})" for k, v in candidates.items()
+        ) if candidates else
+        f"[scorecard_scraper] GQL schema probe — no result/history candidates found.",
+        flush=True,
+    )
+    return candidates
+
+
+def _build_results_query(field_name: str, arg_names: List[str]) -> tuple:
+    """
+    Build a GraphQL query string and variables dict for the given field,
+    trying common arg name conventions for playerId, season, and tour.
+    Returns (query_str, variables_dict).
+    """
+    arg_lower = {a.lower(): a for a in arg_names}
+
+    # Map our logical params to whatever the field actually uses.
+    player_arg = (
+        arg_lower.get("playerid")
+        or arg_lower.get("playerid")  # same, but handles capitalisation
+        or arg_lower.get("id")
+        or "playerId"
+    )
+    season_arg = arg_lower.get("season") or arg_lower.get("year") or "season"
+    tour_arg = (
+        arg_lower.get("tour")
+        or arg_lower.get("tourcode")
+        or arg_lower.get("tourid")
+        or "tour"
+    )
+
+    query_str = f"""
+query _HistoricalResults(${player_arg}: ID!, ${season_arg}: String, ${tour_arg}: String) {{
+  {field_name}({player_arg}: ${player_arg}, {season_arg}: ${season_arg}, {tour_arg}: ${tour_arg}) {{
+    resultsData {{
+      courseName
+      course
+      data {{
+        tournamentId
+        fields
+      }}
+    }}
+  }}
+}}
 """
+    return query_str, player_arg, season_arg, tour_arg
 
 
 def _fetch_player_results_via_graphql(
@@ -459,66 +574,89 @@ def _fetch_player_results_via_graphql(
     Returns raw tournament entry dicts in the same format as _find_results_data,
     ready for _parse_tournament_entry.  Returns [] on any error.
     """
-    headers = {
-        "Content-Type": "application/json",
-        "x-api-key": DEFAULT_API_KEY,
-        "x-pgat-platform": "web",
-        "Referer": "https://www.pgatour.com/",
-        "Origin": "https://www.pgatour.com",
-    }
-    variables = {
-        "playerId": str(player_id),
-        "season": str(season),
-        "tour": tour_code,
-    }
+    global _GQL_FIELD_CACHE
+
     _log_once = season not in _GQL_FALLBACK_LOGGED
-    try:
-        resp = requests.post(
-            GRAPHQL_ENDPOINT,
-            headers=headers,
-            json={"query": _PLAYER_PROFILE_RESULTS_QUERY, "variables": variables},
-            timeout=timeout,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        if "errors" in data:
-            if _log_once:
-                _GQL_FALLBACK_LOGGED.add(season)
-                print(
-                    f"[scorecard_scraper] GQL fallback season={season}: "
-                    f"GraphQL returned errors: {data['errors'][:2]}",
-                    flush=True,
-                )
-            return []
-        profile = (data.get("data") or {}).get("playerProfileResults") or {}
-        if _log_once:
-            _GQL_FALLBACK_LOGGED.add(season)
-            top_keys = list((data.get("data") or {}).keys())
-            print(
-                f"[scorecard_scraper] GQL fallback season={season} player={player_id}: "
-                f"data keys={top_keys}, resultsData sections={len(profile.get('resultsData') or [])}",
-                flush=True,
-            )
-        results_data = profile.get("resultsData") or []
-        rows: List[Dict[str, Any]] = []
-        for section in results_data:
-            section_course = section.get("courseName") or section.get("course")
-            for entry in section.get("data") or []:
-                if entry.get("tournamentId"):
-                    if section_course and "__course_name" not in entry:
-                        entry = dict(entry)
-                        entry["__course_name"] = section_course
-                    rows.append(entry)
-        return rows
-    except Exception as exc:
+
+    # Introspect schema once to find the real field name.
+    if _GQL_FIELD_CACHE is None:
+        _GQL_FIELD_CACHE = _introspect_player_result_fields(timeout)
+
+    if not _GQL_FIELD_CACHE:
         if _log_once:
             _GQL_FALLBACK_LOGGED.add(season)
             print(
-                f"[scorecard_scraper] GQL fallback season={season} player={player_id}: "
-                f"request failed: {type(exc).__name__}: {exc}",
+                f"[scorecard_scraper] GQL fallback season={season}: "
+                f"no suitable query field found in schema — skipping GQL fallback.",
                 flush=True,
             )
         return []
+
+    headers = _gql_headers()
+
+    for field_name, arg_names in _GQL_FIELD_CACHE.items():
+        query_str, player_arg, season_arg, tour_arg = _build_results_query(
+            field_name, arg_names
+        )
+        variables = {
+            player_arg: str(player_id),
+            season_arg: str(season),
+            tour_arg: tour_code,
+        }
+        try:
+            resp = requests.post(
+                GRAPHQL_ENDPOINT,
+                headers=headers,
+                json={"query": query_str, "variables": variables},
+                timeout=timeout,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            if "errors" in data:
+                if _log_once:
+                    _GQL_FALLBACK_LOGGED.add(season)
+                    print(
+                        f"[scorecard_scraper] GQL fallback season={season} "
+                        f"field={field_name}: errors={data['errors'][:1]}",
+                        flush=True,
+                    )
+                continue  # try next candidate
+
+            field_data = (data.get("data") or {}).get(field_name) or {}
+            results_data = field_data.get("resultsData") or []
+
+            if _log_once:
+                _GQL_FALLBACK_LOGGED.add(season)
+                print(
+                    f"[scorecard_scraper] GQL fallback season={season} "
+                    f"field={field_name}: "
+                    f"resultsData sections={len(results_data)}",
+                    flush=True,
+                )
+
+            rows: List[Dict[str, Any]] = []
+            for section in results_data:
+                section_course = section.get("courseName") or section.get("course")
+                for entry in section.get("data") or []:
+                    if entry.get("tournamentId"):
+                        if section_course and "__course_name" not in entry:
+                            entry = dict(entry)
+                            entry["__course_name"] = section_course
+                        rows.append(entry)
+            if rows:
+                return rows
+
+        except Exception as exc:
+            if _log_once:
+                _GQL_FALLBACK_LOGGED.add(season)
+                print(
+                    f"[scorecard_scraper] GQL fallback season={season} "
+                    f"field={field_name}: {type(exc).__name__}: {exc}",
+                    flush=True,
+                )
+
+    return []
 
 
 # ---------------------------------------------------------------------------

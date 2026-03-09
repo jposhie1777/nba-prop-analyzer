@@ -285,6 +285,8 @@ def _flatten_player_directory(data: Dict[str, Any]) -> List[Dict[str, Any]]:
             {
                 "player_id": player_id,
                 "display_name": player.get("displayName") or player.get("playerName") or player.get("name"),
+                "country": player.get("country"),
+                "country_flag": player.get("countryFlag"),
                 "active": is_active,
                 "player_payload": json.dumps(player, separators=(",", ":"), default=str),
             }
@@ -292,33 +294,88 @@ def _flatten_player_directory(data: Dict[str, Any]) -> List[Dict[str, Any]]:
     return rows
 
 
-def _group_player_stats(data: Dict[str, Any], current_year: int, active_player_ids: Set[str]) -> List[Dict[str, Any]]:
+def _group_player_stats(
+    data: Dict[str, Any],
+    current_year: int,
+    active_player_ids: Set[str],
+    active_player_info: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
     overview = (data or {}).get("statOverview") or {}
     year = int(overview.get("year") or 0)
-    if year != current_year:
-        return []
 
+    # Collect all available stat metadata so every player row has every stat key.
+    all_stat_meta: Dict[str, Dict[str, Any]] = {}
+    for stat in overview.get("stats") or []:
+        stat_id = str(stat.get("statId") or "")
+        if stat_id:
+            all_stat_meta[stat_id] = {
+                "stat_name": stat.get("statName"),
+                "tour_avg": stat.get("tourAvg"),
+            }
+
+    def _empty_stats() -> Dict[str, Any]:
+        return {
+            sid: {
+                "stat_id": sid,
+                "stat_name": meta["stat_name"],
+                "stat_title": None,
+                "stat_value": None,
+                "rank": None,
+                "tour_avg": meta["tour_avg"],
+            }
+            for sid, meta in all_stat_meta.items()
+        }
+
+    def _empty_tour_averages() -> Dict[str, Any]:
+        return {sid: meta["tour_avg"] for sid, meta in all_stat_meta.items()}
+
+    # Seed one row for EVERY active player so we always get 1 row per active player,
+    # even for those who have not yet accumulated any stats this season.
+    info = active_player_info or {}
     grouped: Dict[str, Dict[str, Any]] = {}
+    for pid in active_player_ids:
+        pinfo = info.get(pid) or {}
+        grouped[pid] = {
+            "player_id": pid,
+            "player_name": pinfo.get("player_name") or pinfo.get("display_name"),
+            "country": pinfo.get("country"),
+            "country_flag": pinfo.get("country_flag"),
+            "stats": _empty_stats(),
+            "tour_averages": _empty_tour_averages(),
+        }
+
+    # Fill in real stat values for players who appear in the stat leaderboards.
     for stat in overview.get("stats") or []:
         stat_id = str(stat.get("statId") or "")
         stat_name = stat.get("statName")
         tour_avg = stat.get("tourAvg")
         for row in stat.get("players") or []:
             player_id = str(row.get("playerId") or "").strip()
-            if not player_id or (active_player_ids and player_id not in active_player_ids):
+            if not player_id:
                 continue
-            item = grouped.setdefault(
-                player_id,
-                {
+            if active_player_ids and player_id not in active_player_ids:
+                continue
+
+            if player_id not in grouped:
+                # Player appeared in stats but wasn't in the active directory — include anyway.
+                grouped[player_id] = {
                     "player_id": player_id,
                     "player_name": row.get("playerName"),
                     "country": row.get("country"),
                     "country_flag": row.get("countryFlag"),
-                    "stats": {},
-                    "tour_averages": {},
-                },
-            )
-            item["stats"][stat_id] = {
+                    "stats": _empty_stats(),
+                    "tour_averages": _empty_tour_averages(),
+                }
+            else:
+                # Backfill player identity fields if the directory didn't have them.
+                if not grouped[player_id].get("player_name"):
+                    grouped[player_id]["player_name"] = row.get("playerName")
+                if not grouped[player_id].get("country"):
+                    grouped[player_id]["country"] = row.get("country")
+                if not grouped[player_id].get("country_flag"):
+                    grouped[player_id]["country_flag"] = row.get("countryFlag")
+
+            grouped[player_id]["stats"][stat_id] = {
                 "stat_id": stat_id,
                 "stat_name": stat_name,
                 "stat_title": row.get("statTitle"),
@@ -326,7 +383,7 @@ def _group_player_stats(data: Dict[str, Any], current_year: int, active_player_i
                 "rank": row.get("rank"),
                 "tour_avg": tour_avg,
             }
-            item["tour_averages"][stat_id] = tour_avg
+            grouped[player_id]["tour_averages"][stat_id] = tour_avg
 
     return list(grouped.values())
 
@@ -363,10 +420,19 @@ def ingest_website_players_and_stats(
 
     active_rows: List[Dict[str, Any]] = []
     active_player_ids: Set[str] = set()
+    active_player_info: Dict[str, Dict[str, Any]] = {}
     if refresh_active_players:
         players_raw = _post_graphql(ACTIVE_PLAYERS_QUERY, {"tourCode": tour_code})
         active_rows = _flatten_player_directory(players_raw)
-        active_player_ids = {r["player_id"] for r in active_rows if r.get("active")}
+        for r in active_rows:
+            if r.get("active"):
+                pid = r["player_id"]
+                active_player_ids.add(pid)
+                active_player_info[pid] = {
+                    "player_name": r.get("display_name"),
+                    "country": r.get("country"),
+                    "country_flag": r.get("country_flag"),
+                }
 
     stats_rows: List[Dict[str, Any]] = []
 
@@ -385,21 +451,34 @@ def ingest_website_players_and_stats(
             {
                 "run_ts": now,
                 "ingested_at": now,
-                **row,
+                **{k: v for k, v in row.items() if k not in ("country", "country_flag")},
             }
             for row in active_rows
             if row.get("active")
         ]
     else:
-        # Reuse active player IDs from latest table snapshot when skipping refresh.
-        latest_ids_sql = f"SELECT DISTINCT player_id FROM `{active_table_id}`"
-        for row in client.query(latest_ids_sql).result():
+        # Reuse active player IDs and info from latest table snapshot when skipping refresh.
+        latest_info_sql = (
+            f"SELECT player_id, display_name, player_payload FROM `{active_table_id}`"
+        )
+        for row in client.query(latest_info_sql).result():
             pid = str(row.get("player_id") or "").strip()
-            if pid:
-                active_player_ids.add(pid)
+            if not pid:
+                continue
+            active_player_ids.add(pid)
+            payload: Dict[str, Any] = {}
+            try:
+                payload = json.loads(row.get("player_payload") or "{}")
+            except (json.JSONDecodeError, TypeError):
+                pass
+            active_player_info[pid] = {
+                "player_name": row.get("display_name"),
+                "country": payload.get("country"),
+                "country_flag": payload.get("countryFlag"),
+            }
 
     stats_raw = _post_graphql(STAT_OVERVIEW_QUERY, {"tourCode": tour_code, "year": year})
-    stats_rows = _group_player_stats(stats_raw, year, active_player_ids)
+    stats_rows = _group_player_stats(stats_raw, year, active_player_ids, active_player_info)
 
     stats_payload: List[Dict[str, Any]] = []
     existing_player_ids: Set[str] = set()

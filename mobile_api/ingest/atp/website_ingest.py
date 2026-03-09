@@ -251,6 +251,59 @@ def _fetch_json_url(url: str, timeout: int = 20) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _fetch_html_url(url: str, timeout: int = 30) -> Optional[str]:
+    """Fetch a URL as raw HTML text, returning None on any failure."""
+    try:
+        response = requests.get(
+            url,
+            timeout=timeout,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+            },
+        )
+        response.raise_for_status()
+        return response.text
+    except Exception:
+        return None
+
+
+def _extract_player_ids_from_html(html: str) -> Set[str]:
+    """Extract all unique ATP player IDs from /en/players/.../ID/overview URLs in any HTML."""
+    ids: Set[str] = set()
+    for m in re.finditer(
+        r"/en/players/(?!atp-head-2-head)[^/]+/([A-Za-z0-9]{4})/overview",
+        html,
+        flags=re.IGNORECASE,
+    ):
+        ids.add(m.group(1).upper())
+    return ids
+
+
+def _past_tournament_results_urls(tournament_dates_json: Dict[str, Any]) -> List[Tuple[str, str, str]]:
+    """Return (slug, tournament_id, full_results_url) for each past event in tournament_dates JSON.
+
+    URLs are built from the ScoresUrl field (archive URL) already present in the JSON.
+    Team-event suffixes like 'country-results' are normalised to 'results'.
+    """
+    out: List[Tuple[str, str, str]] = []
+    for month in tournament_dates_json.get("TournamentDates", []):
+        for t in month.get("Tournaments", []):
+            if not t.get("IsPastEvent"):
+                continue
+            scores_url = (t.get("ScoresUrl") or "").replace("country-results", "results")
+            if not scores_url:
+                continue
+            # Extract slug and id: /en/scores/archive/{slug}/{id}/{year}/results
+            m = re.search(r"/scores/(?:archive|current)/([^/]+)/([^/]+)/", scores_url)
+            if not m:
+                continue
+            slug, tid = m.group(1), m.group(2)
+            out.append((slug, tid, f"https://www.atptour.com{scores_url}"))
+    return out
+
+
 def _safe_json_str(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False)
 
@@ -349,6 +402,10 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
     if truncate_schedule:
         _truncate_table(client, "website_daily_schedule")
         _truncate_table(client, "website_upcoming_matches")
+        # Also clear match results so the live re-fetch of the full tournament
+        # results page doesn't create duplicate rows on each daily run.
+        _truncate_table(client, "website_match_results")
+        _truncate_table(client, "website_match_results_rows")
 
     captures = {key: _load_capture_file(path) for key, path in endpoint_files.items()}
 
@@ -381,6 +438,18 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
             ]
 
     daily_schedule_capture = captures["daily_schedule"]
+    # Try to refresh the daily schedule from ATP Tour so we always show today's matches.
+    # The slug/id come from the capture file URL, which identifies the active tournament.
+    _ds_slug, _ds_tid = _extract_slug_and_tournament_id(daily_schedule_capture.get("request_url"))
+    if _ds_slug and _ds_tid:
+        _live_schedule_url = f"https://www.atptour.com/en/scores/current/{_ds_slug}/{_ds_tid}/daily-schedule"
+        _live_schedule_html = _fetch_html_url(_live_schedule_url)
+        if _live_schedule_html:
+            daily_schedule_capture = {
+                **daily_schedule_capture,
+                "payload_text": _live_schedule_html,
+                "request_url": _live_schedule_url,
+            }
     daily_text_chunks, daily_links = _flatten_html_payload(daily_schedule_capture.get("payload_text"))
     daily_start_times, daily_not_before_times, daily_time_items = _extract_daily_schedule_time_fields(
         daily_schedule_capture.get("payload_text")
@@ -483,6 +552,18 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
 
     results_capture = captures["match_results"]
     result_slug, result_tid = _extract_slug_and_tournament_id(results_capture.get("request_url"))
+    # Try to fetch the current tournament's results page live.  The results page on ATP Tour
+    # always shows ALL completed matches for the current tournament (not just one day), so
+    # fetching it fresh gives us the complete running history for the active event.
+    if result_slug and result_tid:
+        _live_results_url = f"https://www.atptour.com/en/scores/current/{result_slug}/{result_tid}/results"
+        _live_results_html = _fetch_html_url(_live_results_url)
+        if _live_results_html:
+            results_capture = {
+                **results_capture,
+                "payload_text": _live_results_html,
+                "request_url": _live_results_url,
+            }
     if result_slug and result_tid and results_capture.get("payload_text"):
         # website_match_results is the historical per-match results table (one row per match).
         # The raw HTML payload is already stored in website_raw_responses (endpoint_key="match_results").
@@ -498,6 +579,23 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
             ]
         )
 
+    # Backfill: in multi-year mode fetch results from every past tournament in the calendar.
+    # The tournament_dates JSON lists all events for the current year with their archive URLs.
+    if start_year < end_year and isinstance(tournament_dates["payload_json"], dict):
+        for past_slug, past_tid, past_url in _past_tournament_results_urls(tournament_dates["payload_json"]):
+            if past_slug == result_slug and past_tid == result_tid:
+                continue  # current tournament already parsed above
+            past_html = _fetch_html_url(past_url)
+            if past_html:
+                parsed_match_results_rows.extend(
+                    [
+                        row.to_dict()
+                        for row in normalize_match_results_html(
+                            past_slug, past_tid, past_html, snapshot_ts_utc=snapshot_ts
+                        )
+                    ]
+                )
+
     player_ids: Set[str] = set()
     # Use all_schedule_rows (includes past matches) so a stale schedule file still yields player IDs.
     for row in all_schedule_rows:
@@ -507,6 +605,17 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
             player_ids.add(p1)
         if p2:
             player_ids.add(p2)
+    # Also mine draws HTML — the full bracket contains every player in the tournament draw.
+    draws_html = draws_capture.get("payload_text") or ""
+    if draws_html:
+        player_ids |= _extract_player_ids_from_html(draws_html)
+    # Also include seeded players from who_is_playing.
+    who_payload_for_ids = captures["who_is_playing"].get("payload_json")
+    if isinstance(who_payload_for_ids, dict):
+        for player in who_payload_for_ids.get("PlayersList", []) or []:
+            pid = _extract_player_id_from_profile_url(player.get("ProfileUrl"))
+            if pid:
+                player_ids.add(pid)
 
     default_stats_captures = {
         "all": captures["player_stats_all"],

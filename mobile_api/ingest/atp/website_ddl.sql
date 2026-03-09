@@ -142,6 +142,7 @@ CLUSTER BY left_player_id, right_player_id;
 
 CREATE TABLE IF NOT EXISTS `atp_data.website_match_results` (
   snapshot_ts_utc TIMESTAMP NOT NULL,
+  ingest_run_id STRING NOT NULL,
   tournament_slug STRING,
   tournament_id STRING,
   day_label STRING,

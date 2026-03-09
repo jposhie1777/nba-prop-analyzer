@@ -598,7 +598,11 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
         "tournament_bracket": _insert_rows(client, "website_tournament_bracket", bracket_rows),
         "head_to_head": _insert_rows(client, "website_head_to_head", h2h_rows),
         "head_to_head_matches": _insert_rows(client, "website_head_to_head_matches", h2h_match_rows),
-        "match_results": _insert_rows(client, "website_match_results", parsed_match_results_rows),
+        "match_results": _insert_rows(
+            client,
+            "website_match_results",
+            [{**row, "ingest_run_id": ingest_run_id} for row in parsed_match_results_rows],
+        ),
         "match_results_rows": _insert_rows(client, "website_match_results_rows", parsed_match_results_rows),
         "player_stats": _insert_rows(client, "website_player_stats", player_stats_rows),
         "player_stats_records": _insert_rows(client, "website_player_stats_records", player_stats_records_rows),

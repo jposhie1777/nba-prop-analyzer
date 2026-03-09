@@ -362,7 +362,6 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
     bracket_rows: List[Dict[str, Any]] = []
     h2h_rows: List[Dict[str, Any]] = []
     h2h_match_rows: List[Dict[str, Any]] = []
-    match_results_rows: List[Dict[str, Any]] = []
     parsed_match_results_rows: List[Dict[str, Any]] = []
     player_stats_rows: List[Dict[str, Any]] = []
     player_stats_records_rows: List[Dict[str, Any]] = []
@@ -400,7 +399,22 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
         }
     )
     sched_slug, sched_tid = _extract_slug_and_tournament_id(daily_schedule_capture.get("request_url"))
+    # All schedule rows (including past matches) — used to build H2H pairs and player IDs.
+    # The date filter is intentionally skipped here so that a schedule file captured on a
+    # previous day still produces valid player pairs for H2H and stats lookups.
+    all_schedule_rows: List[Dict[str, Any]] = []
     if sched_slug and sched_tid and daily_schedule_capture.get("payload_text"):
+        all_schedule_rows = [
+            row.to_dict()
+            for row in normalize_match_schedule_html(
+                sched_slug,
+                sched_tid,
+                daily_schedule_capture["payload_text"],
+                snapshot_ts_utc=snapshot_ts,
+                include_past=True,
+            )
+        ]
+        # Only truly upcoming matches go into website_upcoming_matches.
         upcoming_match_rows.extend(
             [
                 row.to_dict()
@@ -436,7 +450,8 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
     )
 
     h2h_capture = captures["head_to_head"]
-    h2h_pairs = _build_h2h_pairs_from_schedule_rows(upcoming_match_rows)
+    # Use all_schedule_rows (includes past matches) so a stale schedule file still produces pairs.
+    h2h_pairs = _build_h2h_pairs_from_schedule_rows(all_schedule_rows)
 
     fallback_left_id, fallback_right_id = _extract_h2h_ids(h2h_capture.get("request_url"))
     fallback_payload = h2h_capture.get("payload_json") if isinstance(h2h_capture.get("payload_json"), dict) else None
@@ -467,19 +482,10 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
             )
 
     results_capture = captures["match_results"]
-    results_text_chunks, results_links = _flatten_html_payload(results_capture.get("payload_text"))
-    match_results_rows.append(
-        {
-            "snapshot_ts_utc": snapshot_ts,
-            "ingest_run_id": ingest_run_id,
-            "url": results_capture.get("request_url"),
-            "payload_html": results_capture.get("payload_text"),
-            "flattened_text_chunks": results_text_chunks,
-            "flattened_links": results_links,
-        }
-    )
     result_slug, result_tid = _extract_slug_and_tournament_id(results_capture.get("request_url"))
     if result_slug and result_tid and results_capture.get("payload_text"):
+        # website_match_results is the historical per-match results table (one row per match).
+        # The raw HTML payload is already stored in website_raw_responses (endpoint_key="match_results").
         parsed_match_results_rows.extend(
             [
                 row.to_dict()
@@ -493,7 +499,8 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
         )
 
     player_ids: Set[str] = set()
-    for row in upcoming_match_rows:
+    # Use all_schedule_rows (includes past matches) so a stale schedule file still yields player IDs.
+    for row in all_schedule_rows:
         p1 = _extract_player_id_from_profile_url(row.get("player_1_profile_url"))
         p2 = _extract_player_id_from_profile_url(row.get("player_2_profile_url"))
         if p1:
@@ -591,7 +598,7 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
         "tournament_bracket": _insert_rows(client, "website_tournament_bracket", bracket_rows),
         "head_to_head": _insert_rows(client, "website_head_to_head", h2h_rows),
         "head_to_head_matches": _insert_rows(client, "website_head_to_head_matches", h2h_match_rows),
-        "match_results": _insert_rows(client, "website_match_results", match_results_rows),
+        "match_results": _insert_rows(client, "website_match_results", parsed_match_results_rows),
         "match_results_rows": _insert_rows(client, "website_match_results_rows", parsed_match_results_rows),
         "player_stats": _insert_rows(client, "website_player_stats", player_stats_rows),
         "player_stats_records": _insert_rows(client, "website_player_stats_records", player_stats_records_rows),

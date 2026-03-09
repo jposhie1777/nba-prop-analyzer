@@ -431,8 +431,11 @@ _PLAYER_TOURNAMENT_RESULTS_QUERY = """
 query PlayerTournamentHistory($playerId: ID!, $tourCode: TourCode) {
   playerProfileTournamentResults(playerId: $playerId, tourCode: $tourCode) {
     tournaments {
-      tournamentId
-      fields
+      tournamentNum
+      tournaments {
+        tournamentId
+        fields
+      }
     }
   }
 }
@@ -570,13 +573,16 @@ def _fetch_player_results_via_graphql(
         if "errors" in data:
             global _GQL_TYPE_PROBED
             error_msgs = [e.get("message", "") for e in data["errors"]]
-            # On any FieldUndefined, probe the type once so we can see its
-            # actual field names in the logs and fix the query on the next pass.
-            if not _GQL_TYPE_PROBED and any(
-                "FieldUndefined" in m for m in error_msgs
-            ):
+            if not _GQL_TYPE_PROBED and any("FieldUndefined" in m for m in error_msgs):
                 _GQL_TYPE_PROBED = True
-                _probe_type_fields("PlayerProfileTournamentResults", timeout)
+                # Extract the GraphQL type name from the error message so we
+                # probe the right type (e.g. "TournamentResults" not the root).
+                import re as _re
+                type_to_probe = "PlayerProfileTournamentResults"
+                m = _re.search(r"in type '(\w+)'", error_msgs[0])
+                if m:
+                    type_to_probe = m.group(1)
+                _probe_type_fields(type_to_probe, timeout)
             if _log_once:
                 _GQL_FALLBACK_LOGGED.add(season)
                 print(
@@ -587,22 +593,27 @@ def _fetch_player_results_via_graphql(
             return []
 
         profile = (data.get("data") or {}).get("playerProfileTournamentResults") or {}
-        # `tournaments` is a flat list of tournament entries (no resultsData wrapper).
-        tournaments = profile.get("tournaments") or []
+        # Structure: tournaments[]{tournamentNum, tournaments[]{tournamentId, fields}}
+        # Outer list groups by season (tournamentNum = year), inner list = entries.
+        groups = profile.get("tournaments") or []
 
         if _log_once:
             _GQL_FALLBACK_LOGGED.add(season)
-            first = tournaments[0] if tournaments else {}
+            first_group = groups[0] if groups else {}
+            first_entry = (first_group.get("tournaments") or [{}])[0]
             print(
-                f"[scorecard_scraper] GQL tournaments (player={player_id}): "
-                f"count={len(tournaments)}, first keys={list(first.keys())}",
+                f"[scorecard_scraper] GQL structure (player={player_id}): "
+                f"groups={len(groups)}, "
+                f"first group keys={list(first_group.keys())}, "
+                f"first entry keys={list(first_entry.keys())}",
                 flush=True,
             )
 
         rows: List[Dict[str, Any]] = []
-        for entry in tournaments:
-            if entry.get("tournamentId"):
-                rows.append(entry)
+        for group in groups:
+            for entry in group.get("tournaments") or []:
+                if entry.get("tournamentId"):
+                    rows.append(entry)
         return rows
 
     except Exception as exc:

@@ -56,6 +56,10 @@ DEFAULT_API_KEY = os.getenv("PGA_TOUR_GQL_API_KEY", "da2-gsrx5bibzbb4njvhl7t37wq
 # so we don't spam 214 identical lines per season.
 _DEBUG_LOGGED_SEASONS: set = set()
 
+# Tracks whether we've already logged the first GraphQL fallback attempt/result
+# so we get one diagnostic line per season without spamming 214 lines.
+_GQL_FALLBACK_LOGGED: set = set()
+
 
 # ---------------------------------------------------------------------------
 # Data model
@@ -467,6 +471,7 @@ def _fetch_player_results_via_graphql(
         "season": str(season),
         "tour": tour_code,
     }
+    _log_once = season not in _GQL_FALLBACK_LOGGED
     try:
         resp = requests.post(
             GRAPHQL_ENDPOINT,
@@ -477,8 +482,23 @@ def _fetch_player_results_via_graphql(
         resp.raise_for_status()
         data = resp.json()
         if "errors" in data:
+            if _log_once:
+                _GQL_FALLBACK_LOGGED.add(season)
+                print(
+                    f"[scorecard_scraper] GQL fallback season={season}: "
+                    f"GraphQL returned errors: {data['errors'][:2]}",
+                    flush=True,
+                )
             return []
         profile = (data.get("data") or {}).get("playerProfileResults") or {}
+        if _log_once:
+            _GQL_FALLBACK_LOGGED.add(season)
+            top_keys = list((data.get("data") or {}).keys())
+            print(
+                f"[scorecard_scraper] GQL fallback season={season} player={player_id}: "
+                f"data keys={top_keys}, resultsData sections={len(profile.get('resultsData') or [])}",
+                flush=True,
+            )
         results_data = profile.get("resultsData") or []
         rows: List[Dict[str, Any]] = []
         for section in results_data:
@@ -490,7 +510,14 @@ def _fetch_player_results_via_graphql(
                         entry["__course_name"] = section_course
                     rows.append(entry)
         return rows
-    except Exception:
+    except Exception as exc:
+        if _log_once:
+            _GQL_FALLBACK_LOGGED.add(season)
+            print(
+                f"[scorecard_scraper] GQL fallback season={season} player={player_id}: "
+                f"request failed: {type(exc).__name__}: {exc}",
+                flush=True,
+            )
         return []
 
 

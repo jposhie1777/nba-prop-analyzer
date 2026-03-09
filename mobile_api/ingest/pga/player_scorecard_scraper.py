@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 import time
@@ -48,6 +49,8 @@ import requests
 RESULTS_PAGE_BASE = "https://www.pgatour.com/player"
 RESULTS_PAGE_BASE_ALT = "https://pgatour.com/player"
 DEFAULT_TIMEOUT = 30
+GRAPHQL_ENDPOINT = "https://orchestrator.pgatour.com/graphql"
+DEFAULT_API_KEY = os.getenv("PGA_TOUR_GQL_API_KEY", "da2-gsrx5bibzbb4njvhl7t37wqyl4")
 
 # Tracks seasons for which we've already emitted a structure-change debug message,
 # so we don't spam 214 identical lines per season.
@@ -413,6 +416,85 @@ def _parse_tournament_entry(
 
 
 # ---------------------------------------------------------------------------
+# GraphQL fallback for historical seasons
+# ---------------------------------------------------------------------------
+
+# PGA Tour GraphQL query for player tournament history by season.
+# The operation name matches the React Query key used client-side:
+#   ["playerProfileResults", playerId, "season", {"season": "2023", "tour": "R"}]
+_PLAYER_PROFILE_RESULTS_QUERY = """
+query PlayerProfileResults($playerId: ID!, $season: String, $tour: String) {
+  playerProfileResults(playerId: $playerId, season: $season, tour: $tour) {
+    resultsData {
+      courseName
+      course
+      data {
+        tournamentId
+        fields
+      }
+    }
+  }
+}
+"""
+
+
+def _fetch_player_results_via_graphql(
+    player_id: str,
+    season: int,
+    tour_code: str = "R",
+    *,
+    timeout: int = DEFAULT_TIMEOUT,
+) -> List[Dict[str, Any]]:
+    """
+    Fetch player tournament results directly from the PGA Tour GraphQL API.
+
+    Used as a fallback when the HTML page's __NEXT_DATA__ only contains current-
+    season data (pgatour.com SSR does not hydrate historical seasons server-side;
+    the browser fetches them client-side via this same GraphQL endpoint).
+
+    Returns raw tournament entry dicts in the same format as _find_results_data,
+    ready for _parse_tournament_entry.  Returns [] on any error.
+    """
+    headers = {
+        "Content-Type": "application/json",
+        "x-api-key": DEFAULT_API_KEY,
+        "x-pgat-platform": "web",
+        "Referer": "https://www.pgatour.com/",
+        "Origin": "https://www.pgatour.com",
+    }
+    variables = {
+        "playerId": str(player_id),
+        "season": str(season),
+        "tour": tour_code,
+    }
+    try:
+        resp = requests.post(
+            GRAPHQL_ENDPOINT,
+            headers=headers,
+            json={"query": _PLAYER_PROFILE_RESULTS_QUERY, "variables": variables},
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if "errors" in data:
+            return []
+        profile = (data.get("data") or {}).get("playerProfileResults") or {}
+        results_data = profile.get("resultsData") or []
+        rows: List[Dict[str, Any]] = []
+        for section in results_data:
+            section_course = section.get("courseName") or section.get("course")
+            for entry in section.get("data") or []:
+                if entry.get("tournamentId"):
+                    if section_course and "__course_name" not in entry:
+                        entry = dict(entry)
+                        entry["__course_name"] = section_course
+                    rows.append(entry)
+        return rows
+    except Exception:
+        return []
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -518,6 +600,24 @@ def fetch_player_scorecard_history(
         season_rows = [r for r in results if int(r.season or 0) == int(season)]
         if season_rows:
             return season_rows
+
+        # HTML page returned wrong-season data (pgatour.com SSR always embeds the
+        # current season regardless of ?season= URL param).  Fall back to the PGA
+        # Tour GraphQL API, which is what the browser fetches client-side when the
+        # user selects a historical season from the dropdown.
+        gql_entries = _fetch_player_results_via_graphql(
+            player_id, season, tour_code, timeout=timeout
+        )
+        if gql_entries:
+            gql_results: List[PlayerTournamentScorecard] = []
+            for entry in gql_entries:
+                record = _parse_tournament_entry(entry, player_id, player_name)
+                if record is not None:
+                    gql_results.append(record)
+            season_rows = [r for r in gql_results if int(r.season or 0) == int(season)]
+            if season_rows:
+                return season_rows
+
         if results:
             seasons_found = sorted({int(r.season or 0) for r in results if r.season})
             print(

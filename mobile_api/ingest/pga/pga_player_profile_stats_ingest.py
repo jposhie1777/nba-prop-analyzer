@@ -36,6 +36,7 @@ from .pga_player_profile_stats_scraper import (
 from .pga_stats_scraper import fetch_stat_overview
 
 DATASET = os.getenv("PGA_DATASET", "pga_data")
+ACTIVE_PLAYERS_TABLE = os.getenv("PGA_WEBSITE_ACTIVE_PLAYERS_TABLE", "website_active_players")
 TABLE = os.getenv("PGA_PLAYER_PROFILE_STATS_TABLE", "website_player_profile_stats")
 CHUNK_SIZE = 500
 
@@ -100,9 +101,51 @@ def _get_active_players(
     season: int,
 ) -> List[Dict[str, str]]:
     """
-    Return a deduplicated list of {player_id, player_name} dicts for all players
-    who appear in at least one stat leaderboard this season.
+    Return a deduplicated list of {player_id, player_name} dicts for all active
+    players.  Primary source is the website_active_players BigQuery table (which
+    covers the full current roster); statOverview is used as a fallback only when
+    the table is unavailable or empty.
     """
+    print(
+        f"[profile_stats] Fetching active player list from {ACTIVE_PLAYERS_TABLE} "
+        f"({tour_code}/{season})…",
+        flush=True,
+    )
+    try:
+        client = _bq_client()
+        sql = (
+            f"SELECT player_id, display_name "
+            f"FROM `{client.project}.{DATASET}.{ACTIVE_PLAYERS_TABLE}` "
+            f"WHERE active = TRUE"
+        )
+        players: List[Dict[str, str]] = []
+        for row in client.query(sql).result():
+            pid = str(row.get("player_id") or "").strip()
+            if pid:
+                players.append(
+                    {
+                        "player_id": pid,
+                        "player_name": str(row.get("display_name") or "").strip(),
+                    }
+                )
+        if players:
+            print(
+                f"[profile_stats] Found {len(players)} active players from BQ table.",
+                flush=True,
+            )
+            return players
+        print(
+            "[profile_stats] BQ table empty; falling back to statOverview.",
+            flush=True,
+        )
+    except Exception as exc:
+        print(
+            f"[profile_stats] WARN: BQ table query failed ({exc}); "
+            f"falling back to statOverview.",
+            flush=True,
+        )
+
+    # Fallback: derive player list from stat leaderboards (may be sparse early-season).
     print(
         f"[profile_stats] Fetching active player list from statOverview "
         f"({tour_code}/{season})…",
@@ -110,13 +153,13 @@ def _get_active_players(
     )
     result = fetch_stat_overview(tour_code=tour_code, year=season)
     seen: set[str] = set()
-    players: List[Dict[str, str]] = []
+    players = []
     for p in result.players:
         if p.player_id and p.player_id not in seen:
             seen.add(p.player_id)
             players.append({"player_id": p.player_id, "player_name": p.player_name})
     print(
-        f"[profile_stats] Found {len(players)} unique active players.",
+        f"[profile_stats] Found {len(players)} unique active players from statOverview.",
         flush=True,
     )
     return players

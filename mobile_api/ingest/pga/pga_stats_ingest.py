@@ -15,7 +15,7 @@ import argparse
 import datetime
 import os
 import time
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional
 
 from google.api_core.exceptions import BadRequest
 from google.cloud import bigquery
@@ -109,50 +109,17 @@ def ingest_stats(
     ]
     delete_cfg = bigquery.QueryJobConfig(query_parameters=query_params)
 
-    delete_performed = True
     try:
         client.query(delete_sql, job_config=delete_cfg).result()
     except BadRequest as exc:
         message = str(exc)
         if "streaming buffer" in message and "not supported" in message:
-            delete_performed = False
             print(
                 "[stats] Delete skipped because table has a streaming buffer; "
-                "falling back to insert-time de-duplication."
+                "inserting fresh rows (duplicates will be resolved on next delete)."
             )
         else:
             raise
-
-    if not delete_performed:
-        existing_sql = f"""
-            SELECT stat_id, player_id, rank, stat_value
-            FROM `{table_id}`
-            WHERE tour_code = @tour_code AND year = @year
-        """
-        existing_cfg = bigquery.QueryJobConfig(query_parameters=query_params)
-        existing_rows = client.query(existing_sql, job_config=existing_cfg).result()
-        existing_keys: Set[Tuple[str, str, int, str]] = {
-            (
-                str(row.get("stat_id") or ""),
-                str(row.get("player_id") or ""),
-                int(row.get("rank") or 0),
-                str(row.get("stat_value") or ""),
-            )
-            for row in existing_rows
-        }
-
-        deduped_records: List[Dict[str, object]] = []
-        for record in records:
-            key = (
-                str(record.get("stat_id") or ""),
-                str(record.get("player_id") or ""),
-                int(record.get("rank") or 0),
-                str(record.get("stat_value") or ""),
-            )
-            if key in existing_keys:
-                continue
-            deduped_records.append(record)
-        records = deduped_records
 
     inserted = 0
     for i in range(0, len(records), CHUNK_SIZE):

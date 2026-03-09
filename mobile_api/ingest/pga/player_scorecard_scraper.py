@@ -442,8 +442,8 @@ query PlayerTournamentHistory($playerId: ID!, $tourCode: TourCode) {
 }
 """
 
-# Set to True once we've logged the first GQL response structure.
-_GQL_STRUCTURE_LOGGED: bool = False
+# Set to True once we've run the type introspection probe.
+_GQL_TYPE_PROBED: bool = False
 
 
 def _gql_headers() -> Dict[str, str]:
@@ -455,6 +455,74 @@ def _gql_headers() -> Dict[str, str]:
         "Origin": "https://www.pgatour.com",
     }
 
+
+def _probe_type_fields(type_name: str, timeout: int) -> None:
+    """
+    Introspect `type_name` 3 levels deep and log every field + its type.
+    Run once to discover the real field names when our hardcoded selection fails.
+    """
+    q = """
+    {
+      __type(name: "%s") {
+        name
+        fields {
+          name
+          type {
+            name kind
+            ofType {
+              name kind
+              ofType {
+                name kind
+                fields {
+                  name
+                  type { name kind ofType { name kind } }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    """ % type_name
+    try:
+        resp = requests.post(
+            GRAPHQL_ENDPOINT, headers=_gql_headers(),
+            json={"query": q}, timeout=timeout,
+        )
+        resp.raise_for_status()
+        type_info = (resp.json().get("data") or {}).get("__type") or {}
+        fields = type_info.get("fields") or []
+
+        def _sig(t: Optional[dict]) -> str:
+            if not t:
+                return "?"
+            if t.get("kind") == "NON_NULL":
+                return _sig(t.get("ofType")) + "!"
+            if t.get("kind") == "LIST":
+                return "[" + _sig(t.get("ofType")) + "]"
+            return t.get("name") or _sig(t.get("ofType"))
+
+        print(
+            f"[scorecard_scraper] TYPE PROBE {type_name} "
+            f"({len(fields)} fields):",
+            flush=True,
+        )
+        for f in fields:
+            tp = f["type"]
+            nested = tp.get("ofType") or {}
+            sub_fields = (nested.get("ofType") or {}).get("fields") or []
+            sub_names = [s["name"] for s in sub_fields]
+            print(
+                f"  {f['name']}: {_sig(tp)}"
+                + (f"  (sub-fields: {sub_names})" if sub_names else ""),
+                flush=True,
+            )
+    except Exception as exc:
+        print(
+            f"[scorecard_scraper] TYPE PROBE {type_name} failed: "
+            f"{type(exc).__name__}: {exc}",
+            flush=True,
+        )
 
 
 def _fetch_player_results_via_graphql(
@@ -491,6 +559,14 @@ def _fetch_player_results_via_graphql(
         data = resp.json()
 
         if "errors" in data:
+            global _GQL_TYPE_PROBED
+            error_msgs = [e.get("message", "") for e in data["errors"]]
+            # If resultsData doesn't exist, probe the real type fields once.
+            if not _GQL_TYPE_PROBED and any(
+                "FieldUndefined" in m and "resultsData" in m for m in error_msgs
+            ):
+                _GQL_TYPE_PROBED = True
+                _probe_type_fields("PlayerProfileTournamentResults", timeout)
             if _log_once:
                 _GQL_FALLBACK_LOGGED.add(season)
                 print(
@@ -502,19 +578,6 @@ def _fetch_player_results_via_graphql(
 
         profile = (data.get("data") or {}).get("playerProfileTournamentResults") or {}
         results_data = profile.get("resultsData") or []
-
-        # Log structure once so we can verify the shape looks correct.
-        if not _GQL_STRUCTURE_LOGGED:
-            _GQL_STRUCTURE_LOGGED = True
-            first_section = results_data[0] if results_data else {}
-            first_entry = (first_section.get("data") or [{}])[0]
-            print(
-                f"[scorecard_scraper] GQL structure (player={player_id}): "
-                f"resultsData sections={len(results_data)}, "
-                f"first section keys={list(first_section.keys())}, "
-                f"first entry keys={list(first_entry.keys())}",
-                flush=True,
-            )
 
         if _log_once:
             _GQL_FALLBACK_LOGGED.add(season)

@@ -1,0 +1,78 @@
+name: KBO Backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_month:
+        description: "First month to backfill (YYYY-MM)"
+        required: false
+        default: ""
+      end_month:
+        description: "Last month to backfill (YYYY-MM)"
+        required: false
+        default: ""
+      truncate_first:
+        description: "Delete rows in selected period before writing (true/false)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      dry_run:
+        description: "Fetch + parse only, do not write to BigQuery (true/false)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+
+    env:
+      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+      KBO_DATASET: "kbo_data"
+      KBO_BQ_LOCATION: "US"
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r mobile_api/requirements.txt
+
+      - name: Configure GCP credentials
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
+
+      - name: Apply KBO BigQuery DDL
+        run: python -m mobile_api.ingest.kbo.apply_ddl
+
+      - name: Run KBO backfill
+        run: |
+          ARGS=""
+          if [ -n "${{ inputs.start_month }}" ]; then
+            ARGS="$ARGS --start-month ${{ inputs.start_month }}"
+          fi
+          if [ -n "${{ inputs.end_month }}" ]; then
+            ARGS="$ARGS --end-month ${{ inputs.end_month }}"
+          fi
+          if [ "${{ inputs.truncate_first }}" = "true" ]; then
+            ARGS="$ARGS --truncate-first"
+          fi
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          python -m mobile_api.ingest.kbo.backfill $ARGS

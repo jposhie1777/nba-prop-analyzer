@@ -111,10 +111,49 @@ CLUSTER BY tournament_id, tournament_slug;
 CREATE TABLE IF NOT EXISTS `atp_data.website_head_to_head` (
   snapshot_ts_utc TIMESTAMP NOT NULL,
   ingest_run_id STRING NOT NULL,
-  url STRING,
-  payload_json STRING
+  left_player_id STRING,
+  right_player_id STRING,
+  event_id STRING,
+  event_year INT64,
+  tournament_name STRING,
+  surface STRING,
+  in_outdoor_display STRING,
+  match_id STRING,
+  winner_player_id STRING,
+  is_doubles BOOL,
+  is_qualifier BOOL,
+  round_short_name STRING,
+  round_long_name STRING,
+  match_time STRING,
+  is_match_live BOOL,
+  player_set_scores STRING,
+  opponent_set_scores STRING,
+  scoreline_display STRING
 )
-PARTITION BY DATE(snapshot_ts_utc);
+PARTITION BY DATE(snapshot_ts_utc)
+CLUSTER BY left_player_id, right_player_id;
+
+-- Migration: website_head_to_head previously stored a raw JSON blob per player pair.
+-- It now stores individual historical match rows (one row per H2H match).
+-- The raw JSON is already kept in website_raw_responses (endpoint_key="head_to_head").
+ALTER TABLE `atp_data.website_head_to_head` ADD COLUMN IF NOT EXISTS left_player_id STRING;
+ALTER TABLE `atp_data.website_head_to_head` ADD COLUMN IF NOT EXISTS right_player_id STRING;
+ALTER TABLE `atp_data.website_head_to_head` ADD COLUMN IF NOT EXISTS event_id STRING;
+ALTER TABLE `atp_data.website_head_to_head` ADD COLUMN IF NOT EXISTS event_year INT64;
+ALTER TABLE `atp_data.website_head_to_head` ADD COLUMN IF NOT EXISTS tournament_name STRING;
+ALTER TABLE `atp_data.website_head_to_head` ADD COLUMN IF NOT EXISTS surface STRING;
+ALTER TABLE `atp_data.website_head_to_head` ADD COLUMN IF NOT EXISTS in_outdoor_display STRING;
+ALTER TABLE `atp_data.website_head_to_head` ADD COLUMN IF NOT EXISTS match_id STRING;
+ALTER TABLE `atp_data.website_head_to_head` ADD COLUMN IF NOT EXISTS winner_player_id STRING;
+ALTER TABLE `atp_data.website_head_to_head` ADD COLUMN IF NOT EXISTS is_doubles BOOL;
+ALTER TABLE `atp_data.website_head_to_head` ADD COLUMN IF NOT EXISTS is_qualifier BOOL;
+ALTER TABLE `atp_data.website_head_to_head` ADD COLUMN IF NOT EXISTS round_short_name STRING;
+ALTER TABLE `atp_data.website_head_to_head` ADD COLUMN IF NOT EXISTS round_long_name STRING;
+ALTER TABLE `atp_data.website_head_to_head` ADD COLUMN IF NOT EXISTS match_time STRING;
+ALTER TABLE `atp_data.website_head_to_head` ADD COLUMN IF NOT EXISTS is_match_live BOOL;
+ALTER TABLE `atp_data.website_head_to_head` ADD COLUMN IF NOT EXISTS player_set_scores STRING;
+ALTER TABLE `atp_data.website_head_to_head` ADD COLUMN IF NOT EXISTS opponent_set_scores STRING;
+ALTER TABLE `atp_data.website_head_to_head` ADD COLUMN IF NOT EXISTS scoreline_display STRING;
 
 CREATE TABLE IF NOT EXISTS `atp_data.website_head_to_head_matches` (
   snapshot_ts_utc TIMESTAMP NOT NULL,

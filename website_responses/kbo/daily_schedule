@@ -1,0 +1,775 @@
+HEADERS
+Request URL
+https://eng.koreabaseball.com/Schedule/DailySchedule.aspx
+Request Method
+POST
+Status Code
+200 OK
+Remote Address
+211.188.50.245:443
+Referrer Policy
+strict-origin-when-cross-origin
+cache-control
+private
+content-encoding
+gzip
+content-length
+6669
+content-security-policy
+default-src 'self' * 'unsafe-inline'; script-src 'self' * 'unsafe-inline';
+content-type
+text/html; charset=utf-8
+date
+Tue, 10 Mar 2026 19:24:42 GMT
+server
+vary
+Accept-Encoding
+x-content-type-options
+nosniff
+x-frame-options
+SAMEORIGIN
+x-xss-protection
+1; mode=block
+:authority
+eng.koreabaseball.com
+:method
+POST
+:path
+/Schedule/DailySchedule.aspx
+:scheme
+https
+accept
+text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+en-US,en;q=0.9
+cache-control
+max-age=0
+content-length
+1507
+content-type
+application/x-www-form-urlencoded
+cookie
+ASP.NET_SessionId=q5zwjzbm3k1it4gvxip1r5tl; NCPVPCLBTG=4a6c5d22aa4a24b7c2c3830a0d212d5e5053bceb59dc39b8a6508c78982cde2b; _ga=GA1.2.1627851253.1773170579; _gid=GA1.2.1523187227.1773170579; _gat=1; _ga_GLNS6JWX88=GS2.2.s1773170579$o1$g1$t1773170693$j13$l0$h0
+origin
+https://eng.koreabaseball.com
+priority
+u=0, i
+referer
+https://eng.koreabaseball.com/Schedule/DailySchedule.aspx
+sec-ch-ua
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+sec-fetch-dest
+document
+sec-fetch-mode
+navigate
+sec-fetch-site
+same-origin
+sec-fetch-user
+?1
+upgrade-insecure-requests
+1
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+PAYLOAD
+__EVENTTARGET
+__EVENTARGUMENT
+__VIEWSTATE
+/wEPDwUKLTE0MDcyNTUyNA9kFgJmD2QWAmYPZBYCZg9kFgJmD2QWAgIDD2QWAgIDD2QWAgIBD2QWAgIBD2QWAgIBD2QWBAICDw8WAh4EVGV4dAUHMjAyNS4xMWRkAgQPEGQQFQsIQWxsIFRlYW0T7IK87ISxIOudvOydtOyYqOymiA1TU0cg656c642U7IqkE+uhr+uNsCDsnpDsnbTslrjsuKAQS0lBIO2DgOydtOqxsOymiBDrkZDsgrAg67Kg7Ja07IqkDExHIO2KuOyciOyKpBDtlZztmZQg7J206riA7IqkE+2CpOybgCDtnojslrTroZzspogPTkMg64uk7J2064W47IqkCUtUIOychOymiBULAAJTUwJTSwJMVAJIVAJPQgJMRwJISAJXTwJOQwJLVBQrAwtnZ2dnZ2dnZ2dnZ2RkGAEFHl9fQ29udHJvbHNSZXF1aXJlUG9zdEJhY2tLZXlfXxYDBVFjdGwwMCRjdGwwMCRjdGwwMCRjdGwwMCRjcGhDb250YWluZXIkY3BoQ29udGFpbmVyJGNwaENvbnRlbnQkY3BoQ29udGVudCRidG5CZWZvcmUFT2N0bDAwJGN0bDAwJGN0bDAwJGN0bDAwJGNwaENvbnRhaW5lciRjcGhDb250YWluZXIkY3BoQ29udGVudCRjcGhDb250ZW50JGJ0bk5leHQFVWN0bDAwJGN0bDAwJGN0bDAwJGN0bDAwJGNwaENvbnRhaW5lciRjcGhDb250YWluZXIkY3BoQ29udGVudCRjcGhDb250ZW50JGJ0blRlYW1TZWxlY3TkMj9Ke2I32IoWAiG/urbG1Z2avA==
+__VIEWSTATEGENERATOR
+2E0EBF16
+__EVENTVALIDATION
+/wEdAAaBV5UhhmB2JS+nIbyr03UY2E4cICodjCdim4JsrIdV9kcaVaDkq4TBwyAd9Dl2hVmFfoAqFeia/frqODUapOG5WoEdihRvbURGFilPpijvwx3vvgauOI9DwpIeX6n7zY2T6OwkMBQD2IftSW/61df4Wr+FWQ==
+ctl00$ctl00$ctl00$ctl00$cphHeader$txtPlayerSearch
+Player Search
+ctl00$ctl00$ctl00$ctl00$cphContainer$cphContainer$cphContent$cphContent$hdTeamCD
+ctl00$ctl00$ctl00$ctl00$cphContainer$cphContainer$cphContent$cphContent$btnBefore.x
+28
+ctl00$ctl00$ctl00$ctl00$cphContainer$cphContainer$cphContent$cphContent$btnBefore.y
+14
+
+RESPONSE
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head id="Head1"><meta http-equiv="Content-Type" content="text/html; charset=utf-8" /><meta http-equiv="x-ua-compatible" content="IE=9" /><title>
+	KBO
+</title><link rel="shortcut icon" type="image/x-icon" href="/images/common/favicon.ico" />
+	<link rel="stylesheet" type="text/css" href="//6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/eng/resources/min/css/common.min.css?version=20251030" />
+	<link rel="stylesheet" type="text/css" href="//6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/eng/resources/css/font.css?version=20251030"  crossorigin="anonymous"/>
+	<link rel="stylesheet" type="text/css" href="//6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/eng/resources/min/css/jquery-ui.min.css?version=20251030"/>
+	<script type="text/javascript" src="http://code.jquery.com/jquery-1.10.2.js"></script>
+	<script type="text/javascript" src="//6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/eng/resources/min/js/common.min.js?version=20241219"></script>
+	<script type="text/javascript" src="//6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/eng/resources/min/js/jquery-ui.min.js?version=20241219"></script>
+    
+
+
+<link rel="Stylesheet" type="text/css" href="//6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/eng/resources/min/css/layout.min.css?version=20251030" />
+
+<script type="text/javascript">    jQuery(function ($) { onLnb("0302"); });</script>
+
+
+
+
+    <script type="text/javascript">
+        (function (i, s, o, g, r, a, m) {
+        i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+            (i[r].q = i[r].q || []).push(arguments)
+        }, i[r].l = 1 * new Date(); a = s.createElement(o),
+            m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+        })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+
+        ga('create', 'UA-15700655-22', 'auto');
+        ga('send', 'pageview');
+    </script>
+</head>
+<body>
+    <form method="post" action="./DailySchedule.aspx" id="mainForm">
+<div class="aspNetHidden">
+<input type="hidden" name="__EVENTTARGET" id="__EVENTTARGET" value="" />
+<input type="hidden" name="__EVENTARGUMENT" id="__EVENTARGUMENT" value="" />
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="/wEPDwUKLTE0MDcyNTUyNA9kFgJmD2QWAmYPZBYCZg9kFgJmD2QWAgIDD2QWAgIDD2QWAgIBD2QWAgIBD2QWAgIBD2QWBAICDw8WAh4EVGV4dAUHMjAyNS4xMGRkAgQPEGQQFQsIQWxsIFRlYW0T7IK87ISxIOudvOydtOyYqOymiA1TU0cg656c642U7IqkE+uhr+uNsCDsnpDsnbTslrjsuKAQS0lBIO2DgOydtOqxsOymiBDrkZDsgrAg67Kg7Ja07IqkDExHIO2KuOyciOyKpBDtlZztmZQg7J206riA7IqkE+2CpOybgCDtnojslrTroZzspogPTkMg64uk7J2064W47IqkCUtUIOychOymiBULAAJTUwJTSwJMVAJIVAJPQgJMRwJISAJXTwJOQwJLVBQrAwtnZ2dnZ2dnZ2dnZ2RkGAEFHl9fQ29udHJvbHNSZXF1aXJlUG9zdEJhY2tLZXlfXxYDBVFjdGwwMCRjdGwwMCRjdGwwMCRjdGwwMCRjcGhDb250YWluZXIkY3BoQ29udGFpbmVyJGNwaENvbnRlbnQkY3BoQ29udGVudCRidG5CZWZvcmUFT2N0bDAwJGN0bDAwJGN0bDAwJGN0bDAwJGNwaENvbnRhaW5lciRjcGhDb250YWluZXIkY3BoQ29udGVudCRjcGhDb250ZW50JGJ0bk5leHQFVWN0bDAwJGN0bDAwJGN0bDAwJGN0bDAwJGNwaENvbnRhaW5lciRjcGhDb250YWluZXIkY3BoQ29udGVudCRjcGhDb250ZW50JGJ0blRlYW1TZWxlY3Ss4ky2aA9iMTeLr0eizQJE5lcoQw==" />
+</div>
+
+<script type="text/javascript">
+//<![CDATA[
+var theForm = document.forms['mainForm'];
+if (!theForm) {
+    theForm = document.mainForm;
+}
+function __doPostBack(eventTarget, eventArgument) {
+    if (!theForm.onsubmit || (theForm.onsubmit() != false)) {
+        theForm.__EVENTTARGET.value = eventTarget;
+        theForm.__EVENTARGUMENT.value = eventArgument;
+        theForm.submit();
+    }
+}
+//]]>
+</script>
+
+
+<div class="aspNetHidden">
+
+	<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="2E0EBF16" />
+	<input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="/wEdAAaRozkxJY5yRafmgm5fw9372E4cICodjCdim4JsrIdV9kcaVaDkq4TBwyAd9Dl2hVmFfoAqFeia/frqODUapOG5WoEdihRvbURGFilPpijvwx3vvgauOI9DwpIeX6n7zY0I6P7n1tUXV4huZ30MY/SDrAxOVg==" />
+</div>
+        
+<script type="text/javascript">
+function playerSearch() {
+    if (document.getElementById("cphHeader_txtPlayerSearch").value == "Player Search") {
+
+    }
+    else {
+        __doPostBack('ctl00$ctl00$ctl00$ctl00$cphHeader$btnPlayerSearch','');
+    }
+}
+</script>
+<div id="header">
+	<div id="header_top">
+		<div id="srch_bar">
+			<div class="srch_box">
+				<ul>
+					<li><a href="http://www.koreabaseball.com/Default.aspx" class="on"><img src="//6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/eng/resources/images/common/ico_lang_ko.png" alt="korean" />&nbsp;<span>Korean</span></a></li>
+					<li><a href="/Etc/Sitemap.aspx"><span class="last">Sitemap</span></a></li>
+					
+					<li>
+						<fieldset class="srch_player">
+							<input name="ctl00$ctl00$ctl00$ctl00$cphHeader$txtPlayerSearch" type="text" id="cphHeader_txtPlayerSearch" title="Player Search" value="Player Search" onclick="javascript:this.value=&#39;&#39;;" /><input type="image" title="search" src="//6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/eng/resources/images/common/btn_srch.png" onclick="javascript:playerSearch();" />
+						</fieldset>
+					</li>
+				</ul>
+			</div>
+		</div> <!--//srch_bar -->
+        <a id="cphHeader_btnPlayerSearch" href="javascript:__doPostBack(&#39;ctl00$ctl00$ctl00$ctl00$cphHeader$btnPlayerSearch&#39;,&#39;&#39;)"></a>
+		<div id="gnb" class="tabs">
+			<div class="gnb_tit">
+					<a href="/Default.aspx">
+						<img src="//6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/eng/resources/images/common/logo_kbo_k.png" alt="" />
+					</a>
+				
+			</div> <!--//gnb_tit -->
+			<ul class="tabMenu">
+				<li><a id="#tab1" href="/About/AboutKbo.aspx" class="depth_01"><span>ABOUT KBO</span></a></li>
+				<li><a id="#tab2" href="/Teams/TeamInformation.aspx" class="depth_02"><span>TEAMS</span></a></li>
+				<li><a id="#tab3" href="/Schedule/Scoreboard.aspx" class="depth_03"><span>SCHEDULE</span></a></li>
+				<li><a id="#tab4" href="/Standings/TeamStandings.aspx" class="depth_04"><span>STANDINGS</span></a></li>
+				<li class="last"><a id="#tab5" href="/stats/BattingTop5.aspx" class="depth_05"><span>STATS</span></a></li>
+			</ul>
+		</div> <!--//gnb -->
+	</div> <!--//header_top -->
+	<div class="gnb_sub tabContainer">
+		<div id="tab1" class="subarea tab-cont">
+			<ul>
+				<li><a href="/About/aboutkbo.aspx" class="about_01"><span>About KBO</span></a></li>
+				
+				<li class="last"><a href="/About/KBOProcedures.aspx" class="about_03"><span>KBO Procedures</span></a></li>
+				<!--<li class="last"><a href="/About/Changes.aspx" class="about_04"><span>Changes in 2015</span></a></li>-->
+			</ul>
+		</div> <!--//subarea -->
+		<div id="tab2" class="subarea tab-cont">
+			<ul>
+				<li><a href="/Teams/TeamInformation.aspx" class="team_01"><span>Team Information</span></a></li>
+				<li class="last"><a href="/Teams/PlayerSearch.aspx" class="team_02"><span>Player Search</span></a></li>
+			</ul>
+		</div> <!--//subarea -->
+		<div id="tab3" class="subarea tab-cont">
+			<ul>
+				<li><a href="/Schedule/Scoreboard.aspx" class="schedule_01"><span>Scoreboard</span></a></li>
+				<li class="last"><a href="/Schedule/DailySchedule.aspx" class="schedule_02"><span>Daily Schedule</span></a></li>
+			</ul>
+		</div> <!--//subarea -->
+		<div id="tab4" class="subarea tab-cont">
+			<ul>
+				<li class="last"><a href="/Standings/TeamStandings.aspx" class="standing_01"><span>Team Standings</span></a></li>
+			</ul>
+		</div> <!--//subarea -->
+		<div  id="tab5" class="subarea tab-cont">
+			<ul>
+				<li><a href="/stats/BattingTop5.aspx" class="stats_01 active"><span>Batting Top5</span></a></li>
+				<li><a href="/stats/PitchingTop5.aspx" class="stats_02"><span>Pitching Top5</span></a></li>
+				<li><a href="/stats/BattingLeaders.aspx" class="stats_03"><span>Batting Leaders</span></a></li>
+				<li><a href="/stats/PitchingLeaders.aspx" class="stats_04"><span>Pitching Leaders</span></a></li>
+				<li><a href="/stats/BattingByTeams.aspx" class="stats_05"><span>Batting By Teams</span></a></li>
+				<li><a href="/stats/PitchingByTeams.aspx" class="stats_06"><span>Pitching By Teams</span></a></li>
+				<li class="last"><a href="/stats/TeamStats.aspx" class="stats_07"><span>Team Stats</span></a></li>
+			</ul>
+		</div> <!--//subarea -->
+	</div> <!--//gnb_sub -->
+</div> <!--//header -->
+
+        
+
+<div id="container">
+	
+<div id="lnb">
+	<h2 class="schedule"><span>schedule</span></h2>
+	<ul>
+		<li><a id="lnb0301" href="/Schedule/Scoreboard.aspx" class="lnb_schedule_01"><span>score board</span></a></li>
+		<li><a id="lnb0302" href="/Schedule/DailySchedule.aspx" class="lnb_schedule_02"><span>daily schedule</span></a></li>
+	</ul>
+</div> <!--//lnb -->
+
+<div id="contents">
+<input type="hidden" name="ctl00$ctl00$ctl00$ctl00$cphContainer$cphContainer$cphContent$cphContent$hdTeamCD" id="cphContainer_cphContainer_cphContent_cphContent_hdTeamCD" />
+
+	<div class="tit_sub">
+		<div class="nav">
+			<ul>
+				<li class="home"><a href="/Default.aspx"><span>HOME</span></a> <span class="arrow">&gt;</span></li>
+				<li><a href="/Schedule/Scoreboard.aspx"><span>SCHEDULE</span></a> <span class="arrow">&gt;</span></li>
+				<li class="last"><a href="/Schedule/DailySchedule.aspx"><span>Daily Schedule</span></a></li>
+			</ul>
+		</div>
+		<h3 class="schedule02"><span>daily schedule</span></h3>
+	</div>
+	<div class="inner">
+		<div class="standing_day cal_only uifix">
+            <div class="datearea">
+                <input type="image" name="ctl00$ctl00$ctl00$ctl00$cphContainer$cphContainer$cphContent$cphContent$btnBefore" id="cphContainer_cphContainer_cphContent_cphContent_btnBefore" class="prev" alt="이전" src="https://6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/eng/resources/images/common/btn_cal_prev.png" />
+                <div class="today">
+		            <span id="cphContainer_cphContainer_cphContent_cphContent_lblGameMonth">2025.10</span>
+                </div>
+                <input type="image" name="ctl00$ctl00$ctl00$ctl00$cphContainer$cphContainer$cphContent$cphContent$btnNext" id="cphContainer_cphContainer_cphContent_cphContent_btnNext" class="next" alt="다음" src="https://6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/eng/resources/images/common/btn_cal_next.png" />
+            </div>
+		</div> <!--//standing day -->
+
+		<div class="tabarea">
+            
+			<div class="sub_tab_inner">
+				<div class="tbl_common">
+					<table summary="schdule">
+						<colgroup>
+							<col style="width:auto;" />
+						</colgroup>
+
+						<thead>
+							<tr>
+								<th scope="col"><span>DATE</span></th>
+								<th scope="col"><span>TYPE</span></th>
+								<th scope="col"><span>TIME</span></th>
+								<th scope="col" colspan="3"><span>GAME</span></th>
+								<th scope="col"><span>TV</span></th>
+								<th scope="col"><span>RADIO</span></th>
+								<th scope="col"><span>LOCATION</span></th>
+                                <th scope="col"><span>ETC</span></th>
+							</tr>
+						</thead>
+						<tbody>
+						    
+			                <tr>
+                                
+                                <td title="DATE" class="bd_r data_top" rowspan="3">10.01(WED)</td>
+                                
+                                <td title="TYPE" class="bd_r data_top" rowspan="3">REGULAR</td>
+                                
+				                <td class="TIME">18:30</td>
+                                <td title="GAME" class="loop_r">NC</td>
+                                <td title="GAME"><span class="score_schedule">7:3</span></td>
+                                <td title="GAME" class="loop_l">LG</td>
+				                <td class="TV">SPO-T<br />KN-T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">JAMSIL</td>
+				                <td class="ETC">-</td>
+			                </tr>
+			                
+			                <tr>
+                                
+				                <td class="TIME">18:30</td>
+                                <td title="GAME" class="loop_r">HANWHA</td>
+                                <td title="GAME"><span class="score_schedule">5:6</span></td>
+                                <td title="GAME" class="loop_l">SSG</td>
+				                <td class="TV">MS-T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">MUNHAK</td>
+				                <td class="ETC">-</td>
+			                </tr>
+			                
+			                <tr>
+                                
+				                <td class="TIME">18:30</td>
+                                <td title="GAME" class="loop_r">KT</td>
+                                <td title="GAME"><span class="score_schedule">9:3</span></td>
+                                <td title="GAME" class="loop_l">KIA</td>
+				                <td class="TV">SPO-2T<br />SS-T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">GWANGJU</td>
+				                <td class="ETC">-</td>
+			                </tr>
+			                
+			                <tr>
+                                
+                                <td title="DATE" class="bd_r data_top" rowspan="1">10.02(THU)</td>
+                                
+                                <td title="TYPE" class="bd_r data_top" rowspan="1">REGULAR</td>
+                                
+				                <td class="TIME">18:30</td>
+                                <td title="GAME" class="loop_r">SSG</td>
+                                <td title="GAME"><span class="score_schedule">2:7</span></td>
+                                <td title="GAME" class="loop_l">KIA</td>
+				                <td class="TV">SPO-T<br />KN-T<br />MS-T<br />SS-T<br />SPO-2T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">GWANGJU</td>
+				                <td class="ETC">-</td>
+			                </tr>
+			                
+			                <tr>
+                                
+                                <td title="DATE" class="bd_r data_top" rowspan="3">10.03(FRI)</td>
+                                
+                                <td title="TYPE" class="bd_r data_top" rowspan="3">REGULAR</td>
+                                
+				                <td class="TIME">17:00</td>
+                                <td title="GAME" class="loop_r">SSG</td>
+                                <td title="GAME"><span class="score_schedule">:</span></td>
+                                <td title="GAME" class="loop_l">NC</td>
+				                <td class="TV">SS-T<br />SPO-2T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">CHANGWON</td>
+				                <td class="ETC">POSTPONED</td>
+			                </tr>
+			                
+			                <tr>
+                                
+				                <td class="TIME">17:00</td>
+                                <td title="GAME" class="loop_r">HANWHA</td>
+                                <td title="GAME"><span class="score_schedule">6:6</span></td>
+                                <td title="GAME" class="loop_l">KT</td>
+				                <td class="TV">SPO-T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">SUWON</td>
+				                <td class="ETC">-</td>
+			                </tr>
+			                
+			                <tr>
+                                
+				                <td class="TIME">17:00</td>
+                                <td title="GAME" class="loop_r">SAMSUNG</td>
+                                <td title="GAME"><span class="score_schedule">:</span></td>
+                                <td title="GAME" class="loop_l">KIA</td>
+				                <td class="TV">MS-T<br />KN-T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">GWANGJU</td>
+				                <td class="ETC">POSTPONED</td>
+			                </tr>
+			                
+			                <tr>
+                                
+                                <td title="DATE" class="bd_r data_top" rowspan="2">10.04(SAT)</td>
+                                
+                                <td title="TYPE" class="bd_r data_top" rowspan="2">REGULAR</td>
+                                
+				                <td class="TIME">17:00</td>
+                                <td title="GAME" class="loop_r">SSG</td>
+                                <td title="GAME"><span class="score_schedule">1:7</span></td>
+                                <td title="GAME" class="loop_l">NC</td>
+				                <td class="TV">SPO-2T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">CHANGWON</td>
+				                <td class="ETC">-</td>
+			                </tr>
+			                
+			                <tr>
+                                
+				                <td class="TIME">17:00</td>
+                                <td title="GAME" class="loop_r">SAMSUNG</td>
+                                <td title="GAME"><span class="score_schedule">8:9</span></td>
+                                <td title="GAME" class="loop_l">KIA</td>
+				                <td class="TV">SPO-T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">GWANGJU</td>
+				                <td class="ETC">-</td>
+			                </tr>
+			                
+			                <tr>
+                                
+                                <td title="DATE" class="bd_r data_top" rowspan="1">10.06(MON)</td>
+                                
+                                <td title="TYPE" class="bd_r data_top" rowspan="1">Wild Card</td>
+                                
+				                <td class="TIME">14:00</td>
+                                <td title="GAME" class="loop_r">NC</td>
+                                <td title="GAME"><span class="score_schedule">4:1</span></td>
+                                <td title="GAME" class="loop_l">SAMSUNG</td>
+				                <td class="TV">S-T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">DAEGU</td>
+				                <td class="ETC">-</td>
+			                </tr>
+			                
+			                <tr>
+                                
+                                <td title="DATE" class="bd_r data_top" rowspan="1">10.07(TUE)</td>
+                                
+                                <td title="TYPE" class="bd_r data_top" rowspan="1">Wild Card</td>
+                                
+				                <td class="TIME">14:00</td>
+                                <td title="GAME" class="loop_r">NC</td>
+                                <td title="GAME"><span class="score_schedule">0:3</span></td>
+                                <td title="GAME" class="loop_l">SAMSUNG</td>
+				                <td class="TV">M-T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">DAEGU</td>
+				                <td class="ETC">-</td>
+			                </tr>
+			                
+			                <tr>
+                                
+                                <td title="DATE" class="bd_r data_top" rowspan="1">10.09(THU)</td>
+                                
+                                <td title="TYPE" class="bd_r data_top" rowspan="1">Playoff Semi-final game1</td>
+                                
+				                <td class="TIME">14:00</td>
+                                <td title="GAME" class="loop_r">SAMSUNG</td>
+                                <td title="GAME"><span class="score_schedule">5:2</span></td>
+                                <td title="GAME" class="loop_l">SSG</td>
+				                <td class="TV">M-T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">MUNHAK</td>
+				                <td class="ETC">-</td>
+			                </tr>
+			                
+			                <tr>
+                                
+                                <td title="DATE" class="bd_r data_top" rowspan="1">10.10(FRI)</td>
+                                
+                                <td title="TYPE" class="bd_r data_top" rowspan="1">Playoff Semi-final game2</td>
+                                
+				                <td class="TIME">18:30</td>
+                                <td title="GAME" class="loop_r">SAMSUNG</td>
+                                <td title="GAME"><span class="score_schedule">:</span></td>
+                                <td title="GAME" class="loop_l">SSG</td>
+				                <td class="TV">K-2T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">MUNHAK</td>
+				                <td class="ETC">POSTPONED</td>
+			                </tr>
+			                
+			                <tr>
+                                
+                                <td title="DATE" class="bd_r data_top" rowspan="1">10.11(SAT)</td>
+                                
+                                <td title="TYPE" class="bd_r data_top" rowspan="1">Playoff Semi-final game2</td>
+                                
+				                <td class="TIME">14:00</td>
+                                <td title="GAME" class="loop_r">SAMSUNG</td>
+                                <td title="GAME"><span class="score_schedule">3:4</span></td>
+                                <td title="GAME" class="loop_l">SSG</td>
+				                <td class="TV">K-2T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">MUNHAK</td>
+				                <td class="ETC">-</td>
+			                </tr>
+			                
+			                <tr>
+                                
+                                <td title="DATE" class="bd_r data_top" rowspan="1">10.13(MON)</td>
+                                
+                                <td title="TYPE" class="bd_r data_top" rowspan="1">Playoff Semi-final game3</td>
+                                
+				                <td class="TIME">18:30</td>
+                                <td title="GAME" class="loop_r">SSG</td>
+                                <td title="GAME"><span class="score_schedule">3:5</span></td>
+                                <td title="GAME" class="loop_l">SAMSUNG</td>
+				                <td class="TV">S-T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">DAEGU</td>
+				                <td class="ETC">-</td>
+			                </tr>
+			                
+			                <tr>
+                                
+                                <td title="DATE" class="bd_r data_top" rowspan="1">10.14(TUE)</td>
+                                
+                                <td title="TYPE" class="bd_r data_top" rowspan="1">Playoff Semi-final game4</td>
+                                
+				                <td class="TIME">18:30</td>
+                                <td title="GAME" class="loop_r">SSG</td>
+                                <td title="GAME"><span class="score_schedule">2:5</span></td>
+                                <td title="GAME" class="loop_l">SAMSUNG</td>
+				                <td class="TV">M-T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">DAEGU</td>
+				                <td class="ETC">-</td>
+			                </tr>
+			                
+			                <tr>
+                                
+                                <td title="DATE" class="bd_r data_top" rowspan="1">10.17(FRI)</td>
+                                
+                                <td title="TYPE" class="bd_r data_top" rowspan="1">Playoff final game1</td>
+                                
+				                <td class="TIME">18:30</td>
+                                <td title="GAME" class="loop_r">SAMSUNG</td>
+                                <td title="GAME"><span class="score_schedule">:</span></td>
+                                <td title="GAME" class="loop_l">HANWHA</td>
+				                <td class="TV">S-T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">DAEJEON</td>
+				                <td class="ETC">POSTPONED</td>
+			                </tr>
+			                
+			                <tr>
+                                
+                                <td title="DATE" class="bd_r data_top" rowspan="1">10.18(SAT)</td>
+                                
+                                <td title="TYPE" class="bd_r data_top" rowspan="1">Playoff final game1</td>
+                                
+				                <td class="TIME">14:00</td>
+                                <td title="GAME" class="loop_r">SAMSUNG</td>
+                                <td title="GAME"><span class="score_schedule">8:9</span></td>
+                                <td title="GAME" class="loop_l">HANWHA</td>
+				                <td class="TV">S-T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">DAEJEON</td>
+				                <td class="ETC">-</td>
+			                </tr>
+			                
+			                <tr>
+                                
+                                <td title="DATE" class="bd_r data_top" rowspan="1">10.19(SUN)</td>
+                                
+                                <td title="TYPE" class="bd_r data_top" rowspan="1">Playoff final game2</td>
+                                
+				                <td class="TIME">14:00</td>
+                                <td title="GAME" class="loop_r">SAMSUNG</td>
+                                <td title="GAME"><span class="score_schedule">7:3</span></td>
+                                <td title="GAME" class="loop_l">HANWHA</td>
+				                <td class="TV">M-T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">DAEJEON</td>
+				                <td class="ETC">-</td>
+			                </tr>
+			                
+			                <tr>
+                                
+                                <td title="DATE" class="bd_r data_top" rowspan="1">10.21(TUE)</td>
+                                
+                                <td title="TYPE" class="bd_r data_top" rowspan="1">Playoff final game3</td>
+                                
+				                <td class="TIME">18:30</td>
+                                <td title="GAME" class="loop_r">HANWHA</td>
+                                <td title="GAME"><span class="score_schedule">5:4</span></td>
+                                <td title="GAME" class="loop_l">SAMSUNG</td>
+				                <td class="TV">K-2T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">DAEGU</td>
+				                <td class="ETC">-</td>
+			                </tr>
+			                
+			                <tr>
+                                
+                                <td title="DATE" class="bd_r data_top" rowspan="1">10.22(WED)</td>
+                                
+                                <td title="TYPE" class="bd_r data_top" rowspan="1">Playoff final game4</td>
+                                
+				                <td class="TIME">18:30</td>
+                                <td title="GAME" class="loop_r">HANWHA</td>
+                                <td title="GAME"><span class="score_schedule">4:7</span></td>
+                                <td title="GAME" class="loop_l">SAMSUNG</td>
+				                <td class="TV">S-T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">DAEGU</td>
+				                <td class="ETC">-</td>
+			                </tr>
+			                
+			                <tr>
+                                
+                                <td title="DATE" class="bd_r data_top" rowspan="1">10.24(FRI)</td>
+                                
+                                <td title="TYPE" class="bd_r data_top" rowspan="1">Playoff final game5</td>
+                                
+				                <td class="TIME">18:30</td>
+                                <td title="GAME" class="loop_r">SAMSUNG</td>
+                                <td title="GAME"><span class="score_schedule">2:11</span></td>
+                                <td title="GAME" class="loop_l">HANWHA</td>
+				                <td class="TV">M-T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">DAEJEON</td>
+				                <td class="ETC">-</td>
+			                </tr>
+			                
+			                <tr>
+                                
+                                <td title="DATE" class="bd_r data_top" rowspan="1">10.26(SUN)</td>
+                                
+                                <td title="TYPE" class="bd_r data_top" rowspan="1">Korean Series game1</td>
+                                
+				                <td class="TIME">14:00</td>
+                                <td title="GAME" class="loop_r">HANWHA</td>
+                                <td title="GAME"><span class="score_schedule">2:8</span></td>
+                                <td title="GAME" class="loop_l">LG</td>
+				                <td class="TV">K-2T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">JAMSIL</td>
+				                <td class="ETC">-</td>
+			                </tr>
+			                
+			                <tr>
+                                
+                                <td title="DATE" class="bd_r data_top" rowspan="1">10.27(MON)</td>
+                                
+                                <td title="TYPE" class="bd_r data_top" rowspan="1">Korean Series game2</td>
+                                
+				                <td class="TIME">18:30</td>
+                                <td title="GAME" class="loop_r">HANWHA</td>
+                                <td title="GAME"><span class="score_schedule">5:13</span></td>
+                                <td title="GAME" class="loop_l">LG</td>
+				                <td class="TV">S-T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">JAMSIL</td>
+				                <td class="ETC">-</td>
+			                </tr>
+			                
+			                <tr>
+                                
+                                <td title="DATE" class="bd_r data_top" rowspan="1">10.29(WED)</td>
+                                
+                                <td title="TYPE" class="bd_r data_top" rowspan="1">Korean Series game3</td>
+                                
+				                <td class="TIME">18:30</td>
+                                <td title="GAME" class="loop_r">LG</td>
+                                <td title="GAME"><span class="score_schedule">3:7</span></td>
+                                <td title="GAME" class="loop_l">HANWHA</td>
+				                <td class="TV">M-T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">DAEJEON</td>
+				                <td class="ETC">-</td>
+			                </tr>
+			                
+			                <tr>
+                                
+                                <td title="DATE" class="bd_r data_top" rowspan="1">10.30(THU)</td>
+                                
+                                <td title="TYPE" class="bd_r data_top" rowspan="1">Korean Series game4</td>
+                                
+				                <td class="TIME">18:30</td>
+                                <td title="GAME" class="loop_r">LG</td>
+                                <td title="GAME"><span class="score_schedule">7:4</span></td>
+                                <td title="GAME" class="loop_l">HANWHA</td>
+				                <td class="TV">K-2T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">DAEJEON</td>
+				                <td class="ETC">-</td>
+			                </tr>
+			                
+			                <tr>
+                                
+                                <td title="DATE" class="bd_r data_top" rowspan="1">10.31(FRI)</td>
+                                
+                                <td title="TYPE" class="bd_r data_top" rowspan="1">Korean Series game5</td>
+                                
+				                <td class="TIME">18:30</td>
+                                <td title="GAME" class="loop_r">LG</td>
+                                <td title="GAME"><span class="score_schedule">4:1</span></td>
+                                <td title="GAME" class="loop_l">HANWHA</td>
+				                <td class="TV">S-T<br /></td>
+				                <td class="RADIO"></td>
+				                <td class="LOCATION">DAEJEON</td>
+				                <td class="ETC">-</td>
+			                </tr>
+			                
+						</tbody>
+					</table>
+				</div> <!--//tbl_common -->
+			</div> <!--//sub_tab_inner -->
+		</div> <!--//tabarea -->
+	</div> <!--//inner -->
+</div> <!--//contents -->
+
+
+</div> <!--//container -->
+
+
+        
+
+<div id="footer">
+	<div class="kbo_home">
+		<a href="/Default.aspx" title="kbo homepage"><span>KBO</span></a>
+	</div>
+	<div class="ebl">
+		<ul>
+			<li><a href="http://www.tigers.co.kr" class="" target="_blank" title="link title"><img src="//6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/eng/resources/images/ebl/regular/fixed/ebl_ft_HT.png" alt="" /></a></li>
+			<li><a href="http://www.samsunglions.com" class="" target="_blank" title="link title"><img src="//6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/eng/resources/images/ebl/regular/fixed/ebl_ft_SS.png" alt="" /></a></li>
+			<li><a href="http://www.lgtwins.com" class="" target="_blank" title="link title"><img src="//6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/eng/resources/images/ebl/regular/fixed/ebl_ft_LG.png" alt="" /></a></li>
+			<li><a href="http://www.doosanbears.com" class="" target="_blank" title="link title"><img src="//6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/eng/resources/images/ebl/regular/fixed/ebl_ft_OB.png" alt="" /></a></li>
+			<li><a href="http://ktwiz.co.kr"  class="" target="_blank" title="link title"><img src="//6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/eng/resources/images/ebl/regular/fixed/ebl_ft_KT.png" alt="" /></a></li>
+			<li><a href="http://www.ssglanders.com" class="" target="_blank" title="link title"><img src="//6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/eng/resources/images/ebl/regular/fixed/ebl_ft_SK.png" alt="" /></a></li>
+            <li><a href="http://www.giantsclub.com" class="" target="_blank" title="link title"><img src="//6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/eng/resources/images/ebl/regular/fixed/ebl_ft_LT.png" alt="" /></a></li>
+			<li class="last"><a href="http://www.hanwhaeagles.co.kr" class="" target="_blank" title="link title"><img src="//6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/eng/resources/images/ebl/regular/fixed/ebl_ft_HH.png" alt="" /></a></li>        
+			<li><a href="http://www.ncdinos.com" class="" target="_blank" title="link title"><img src="//6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/eng/resources/images/ebl/regular/fixed/ebl_ft_NC.png" alt="" /></a></li>
+			<li><a href="http://www.heroesbaseball.co.kr" class="" target="_blank" title="link title"><img src="//6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/eng/resources/images/ebl/regular/fixed/ebl_ft_WO.png" alt="" /></a></li>
+		</ul>
+		<p>&copy; Korea Baseball Organization, 278 Gangnam-daero, Gangnam-gu, Seoul, Korea 06258 TEL 02) 3460-4600</p>
+		<p>This is the official KBO website for our fans operated by sports2i co. LTD. </p>
+		<p>
+			Copyright&copy; 2010~2016 KBO. All rights reserved.
+			<img src="//6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/eng/resources/images/common/ico_w3c.png" alt="W3C 웹표준XHTML 1.0 Transitional준수" />
+		</p>
+	</div> <!--//ebl -->
+	<div class="verisign">
+		<img src="//6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/eng/resources/images/common/ico_verisign.png" alt="" />
+	</div>
+</div> <!--//footer -->
+
+
+    
+
+<script type="text/javascript">
+//<![CDATA[
+
+        function changeTeam(teamCode) {
+            document.getElementById('cphContainer_cphContainer_cphContent_cphContent_hdTeamCD').value = teamCode;
+    
+            var frm = document.getElementById('mainForm');
+            frm.submit();
+        }//]]>
+</script>
+</form>
+</body>
+</html>

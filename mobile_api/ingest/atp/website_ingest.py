@@ -346,14 +346,20 @@ def _extract_daily_schedule_time_fields(payload_html: Optional[str]) -> Tuple[Li
     not_before_times: List[str] = []
     schedule_time_items: List[Dict[str, Optional[str]]] = []
 
-    pattern = re.compile(
-        r'<div class="schedule"[^>]*data-datetime="([^"]*)"[^>]*data-displaytime="([^"]*)"[^>]*>',
-        flags=re.IGNORECASE,
-    )
+    # Match the entire opening <div class="schedule" ...> tag so we can search
+    # each attribute independently — the live-fetched HTML may have attributes in
+    # a different order than the captured file.
+    tag_pattern = re.compile(r'<div class="schedule"([^>]*)>', flags=re.IGNORECASE)
 
-    for m in pattern.finditer(payload_html):
-        data_datetime = (m.group(1) or '').strip() or None
-        display_time = (m.group(2) or '').strip()
+    for tag_m in tag_pattern.finditer(payload_html):
+        attrs = tag_m.group(1)
+        datetime_m = re.search(r'data-datetime="([^"]*)"', attrs, re.IGNORECASE)
+        displaytime_m = re.search(r'data-displaytime="([^"]*)"', attrs, re.IGNORECASE)
+        if not displaytime_m:
+            continue
+
+        data_datetime = (datetime_m.group(1) if datetime_m else '').strip() or None
+        display_time = displaytime_m.group(1).strip()
         if not display_time:
             continue
 
@@ -402,10 +408,12 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
     if truncate_schedule:
         _truncate_table(client, "website_daily_schedule")
         _truncate_table(client, "website_upcoming_matches")
-        # Also clear match results so the live re-fetch of the full tournament
-        # results page doesn't create duplicate rows on each daily run.
+        # Also clear match results and H2H so the live re-fetches don't create
+        # duplicate rows on each daily run.
         _truncate_table(client, "website_match_results")
         _truncate_table(client, "website_match_results_rows")
+        _truncate_table(client, "website_head_to_head")
+        _truncate_table(client, "website_head_to_head_matches")
 
     captures = {key: _load_capture_file(path) for key, path in endpoint_files.items()}
 
@@ -609,6 +617,10 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
     draws_html = draws_capture.get("payload_text") or ""
     if draws_html:
         player_ids |= _extract_player_ids_from_html(draws_html)
+    # Also extract from the results HTML — every player in a completed match has a profile link.
+    results_html_text = results_capture.get("payload_text") or ""
+    if results_html_text:
+        player_ids |= _extract_player_ids_from_html(results_html_text)
     # Also include seeded players from who_is_playing.
     who_payload_for_ids = captures["who_is_playing"].get("payload_json")
     if isinstance(who_payload_for_ids, dict):
@@ -705,7 +717,14 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
         "upcoming_matches": _insert_rows(client, "website_upcoming_matches", upcoming_match_rows),
         "draws": _insert_rows(client, "website_draws", draws_rows),
         "tournament_bracket": _insert_rows(client, "website_tournament_bracket", bracket_rows),
-        "head_to_head": _insert_rows(client, "website_head_to_head", h2h_rows),
+        # website_head_to_head now stores individual historical H2H match rows (one per match),
+        # mirroring the pattern used for website_match_results.
+        # The raw JSON blobs (h2h_rows) are already in website_raw_responses.
+        "head_to_head": _insert_rows(
+            client,
+            "website_head_to_head",
+            [{**row, "ingest_run_id": ingest_run_id} for row in h2h_match_rows],
+        ),
         "head_to_head_matches": _insert_rows(client, "website_head_to_head_matches", h2h_match_rows),
         "match_results": _insert_rows(
             client,

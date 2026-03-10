@@ -221,3 +221,67 @@ export type PgaCompareResponse = {
   recommendation?: PgaCompareRecommendation | null;
   round_scores_tournament?: PgaTournament | null;
 };
+
+export type PgaBettingOutrightRow = {
+  ingested_at?: string | null;
+  tournament_id?: string | null;
+  tournament_name?: string | null;
+  market_type?: string | null;
+  market_name?: string | null;
+  player_id?: number | null;
+  player_display_name?: string | null;
+  american_odds?: number | null;
+  implied_probability?: number | null;
+  tournaments_played?: number | null;
+  season_total_score_avg?: number | null;
+  l5_total_score_avg?: number | null;
+  cut_rate_l5?: number | null;
+  top10_rate_l5?: number | null;
+  weighted_l5_score?: number | null;
+  sg_total?: number | null;
+  sg_approach?: number | null;
+  sg_putting?: number | null;
+  course_delta?: number | null;
+};
+
+export type PgaPlayerSkillStatsRow = {
+  player_id?: number | null;
+  player_name?: string | null;
+  sg_total?: number | null;
+  sg_off_tee?: number | null;
+  sg_approach?: number | null;
+  sg_putting?: number | null;
+  driving_distance?: number | null;
+  driving_accuracy?: number | null;
+  gir_pct?: number | null;
+  scrambling_pct?: number | null;
+  putting_avg?: number | null;
+  putts_per_round?: number | null;
+  scoring_avg?: number | null;
+  birdie_avg?: number | null;
+};
+
+export type PgaRecentFormRow = {
+  season?: number | null;
+  player_id?: number | null;
+  player_display_name?: string | null;
+  tournaments_played?: number | null;
+  season_finish_avg?: number | null;
+  season_to_par_avg?: number | null;
+  season_cuts_made?: number | null;
+  l5_total_score_avg?: number | null;
+  l5_finish_avg?: number | null;
+  l5_to_par_avg?: number | null;
+  l5_cuts_made?: number | null;
+  l5_tournaments_considered?: number | null;
+  cut_rate_l5?: number | null;
+  top10_rate_l5?: number | null;
+  weighted_l5_score?: number | null;
+  form_trend_3?: number | null;
+  days_since_last_event?: number | null;
+  last_event_date?: string | null;
+  season_r1_avg?: number | null;
+  season_r2_avg?: number | null;
+  season_r3_avg?: number | null;
+  season_r4_avg?: number | null;
+};

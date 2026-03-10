@@ -103,6 +103,13 @@ export default function PgaHome() {
       <Text style={[styles.sectionLabel, { color: colors.text.muted }]}>ANALYSIS MODULES</Text>
 
       <ModuleTile
+        title="Betting Analytics"
+        subtitle="Outrights, player stats, and recent form tables"
+        route="/(tabs)/pga/betting-analytics"
+        icon="cash-outline"
+        accent="#4ADE80"
+      />
+      <ModuleTile
         title="Pairings + Best Bet"
         subtitle="Live pairings with analytics and betslip"
         route="/(tabs)/pga/pairings"

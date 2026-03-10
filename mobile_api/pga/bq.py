@@ -1015,6 +1015,203 @@ def fetch_pairings_analytics(params: Optional[Dict[str, Any]] = None) -> List[Di
     ]
 
 
+def fetch_betting_outrights(params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """Query pga_data.v_betting_outrights for the outrights betting tab."""
+    params = params or {}
+    client = get_bq_client()
+    project = client.project
+    view = f"`{project}.{DATASET}.v_betting_outrights`"
+
+    conditions: List[str] = []
+    query_params: List[bigquery.QueryParameter] = []
+
+    tournament_id = params.get("tournament_id")
+    if tournament_id:
+        conditions.append("tournament_id = @tournament_id")
+        query_params.append(
+            bigquery.ScalarQueryParameter("tournament_id", "STRING", tournament_id)
+        )
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    query = f"""
+    SELECT
+      ingested_at,
+      tournament_id,
+      tournament_name,
+      market_type,
+      market_name,
+      player_id,
+      player_display_name,
+      american_odds,
+      implied_probability,
+      tournaments_played,
+      season_total_score_avg,
+      l5_total_score_avg,
+      cut_rate_l5,
+      top10_rate_l5,
+      weighted_l5_score,
+      sg_total,
+      sg_approach,
+      sg_putting,
+      course_delta
+    FROM {view}
+    {where_clause}
+    ORDER BY american_odds ASC
+    """
+
+    rows = _run_query(client, query, query_params)
+    return [
+        {
+            "ingested_at": _iso(row.get("ingested_at")),
+            "tournament_id": row.get("tournament_id"),
+            "tournament_name": row.get("tournament_name"),
+            "market_type": row.get("market_type"),
+            "market_name": row.get("market_name"),
+            "player_id": row.get("player_id"),
+            "player_display_name": row.get("player_display_name"),
+            "american_odds": row.get("american_odds"),
+            "implied_probability": row.get("implied_probability"),
+            "tournaments_played": row.get("tournaments_played"),
+            "season_total_score_avg": row.get("season_total_score_avg"),
+            "l5_total_score_avg": row.get("l5_total_score_avg"),
+            "cut_rate_l5": row.get("cut_rate_l5"),
+            "top10_rate_l5": row.get("top10_rate_l5"),
+            "weighted_l5_score": row.get("weighted_l5_score"),
+            "sg_total": row.get("sg_total"),
+            "sg_approach": row.get("sg_approach"),
+            "sg_putting": row.get("sg_putting"),
+            "course_delta": row.get("course_delta"),
+        }
+        for row in rows
+    ]
+
+
+def fetch_player_skill_stats(params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """Query pga_data.website_player_skill_stats."""
+    params = params or {}
+    client = get_bq_client()
+    project = client.project
+    table = f"`{project}.{DATASET}.website_player_skill_stats`"
+
+    query = f"""
+    SELECT
+      player_id,
+      player_name,
+      sg_total,
+      sg_off_tee,
+      sg_approach,
+      sg_putting,
+      driving_distance,
+      driving_accuracy,
+      gir_pct,
+      scrambling_pct,
+      putting_avg,
+      putts_per_round,
+      scoring_avg,
+      birdie_avg
+    FROM {table}
+    ORDER BY sg_total DESC NULLS LAST
+    """
+
+    rows = _run_query(client, query, [])
+    return [
+        {
+            "player_id": row.get("player_id"),
+            "player_name": row.get("player_name"),
+            "sg_total": row.get("sg_total"),
+            "sg_off_tee": row.get("sg_off_tee"),
+            "sg_approach": row.get("sg_approach"),
+            "sg_putting": row.get("sg_putting"),
+            "driving_distance": row.get("driving_distance"),
+            "driving_accuracy": row.get("driving_accuracy"),
+            "gir_pct": row.get("gir_pct"),
+            "scrambling_pct": row.get("scrambling_pct"),
+            "putting_avg": row.get("putting_avg"),
+            "putts_per_round": row.get("putts_per_round"),
+            "scoring_avg": row.get("scoring_avg"),
+            "birdie_avg": row.get("birdie_avg"),
+        }
+        for row in rows
+    ]
+
+
+def fetch_recent_player_form(params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """Query pga_data.website_recent_player_form."""
+    params = params or {}
+    client = get_bq_client()
+    project = client.project
+    table = f"`{project}.{DATASET}.website_recent_player_form`"
+
+    season = params.get("season")
+    conditions: List[str] = []
+    query_params: List[bigquery.QueryParameter] = []
+
+    if season is not None:
+        conditions.append("season = @season")
+        query_params.append(bigquery.ScalarQueryParameter("season", "INT64", int(season)))
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    query = f"""
+    SELECT
+      season,
+      player_id,
+      player_display_name,
+      tournaments_played,
+      season_finish_avg,
+      season_to_par_avg,
+      season_cuts_made,
+      l5_total_score_avg,
+      l5_finish_avg,
+      l5_to_par_avg,
+      l5_cuts_made,
+      l5_tournaments_considered,
+      cut_rate_l5,
+      top10_rate_l5,
+      weighted_l5_score,
+      form_trend_3,
+      days_since_last_event,
+      last_event_date,
+      season_r1_avg,
+      season_r2_avg,
+      season_r3_avg,
+      season_r4_avg
+    FROM {table}
+    {where_clause}
+    ORDER BY weighted_l5_score DESC NULLS LAST
+    """
+
+    rows = _run_query(client, query, query_params)
+    return [
+        {
+            "season": row.get("season"),
+            "player_id": row.get("player_id"),
+            "player_display_name": row.get("player_display_name"),
+            "tournaments_played": row.get("tournaments_played"),
+            "season_finish_avg": row.get("season_finish_avg"),
+            "season_to_par_avg": row.get("season_to_par_avg"),
+            "season_cuts_made": row.get("season_cuts_made"),
+            "l5_total_score_avg": row.get("l5_total_score_avg"),
+            "l5_finish_avg": row.get("l5_finish_avg"),
+            "l5_to_par_avg": row.get("l5_to_par_avg"),
+            "l5_cuts_made": row.get("l5_cuts_made"),
+            "l5_tournaments_considered": row.get("l5_tournaments_considered"),
+            "cut_rate_l5": row.get("cut_rate_l5"),
+            "top10_rate_l5": row.get("top10_rate_l5"),
+            "weighted_l5_score": row.get("weighted_l5_score"),
+            "form_trend_3": row.get("form_trend_3"),
+            "days_since_last_event": row.get("days_since_last_event"),
+            "last_event_date": _iso(row.get("last_event_date")),
+            "season_r1_avg": row.get("season_r1_avg"),
+            "season_r2_avg": row.get("season_r2_avg"),
+            "season_r3_avg": row.get("season_r3_avg"),
+            "season_r4_avg": row.get("season_r4_avg"),
+        }
+        for row in rows
+    ]
+
+
 def fetch_course_holes(params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     params = params or {}
     client = get_bq_client()

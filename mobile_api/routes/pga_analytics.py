@@ -20,7 +20,14 @@ from pga.analytics import (
     build_simulated_leaderboard,
     build_tournament_difficulty,
 )
-from pga.bq import fetch_pairings_analytics, fetch_round_pairings, fetch_tournament_round_scores
+from pga.bq import (
+    fetch_pairings_analytics,
+    fetch_round_pairings,
+    fetch_tournament_round_scores,
+    fetch_betting_outrights,
+    fetch_player_skill_stats,
+    fetch_recent_player_form,
+)
 from pga.client import PgaApiError, fetch_one_page, fetch_paginated
 from pga.utils import parse_iso_datetime
 
@@ -754,5 +761,51 @@ def pga_pairings(
             "snapshot_ts":   first.get("snapshot_ts"),
             "groups":        output_groups,
         }
+    except Exception as err:
+        _handle_error(err)
+
+
+@router.get("/betting/outrights")
+def pga_betting_outrights(
+    tournament_id: Optional[str] = None,
+):
+    """Return betting outrights from pga_data.v_betting_outrights."""
+    try:
+        params: Dict[str, Any] = {}
+        if tournament_id:
+            params["tournament_id"] = tournament_id
+        rows = fetch_betting_outrights(params)
+        tournament_name = rows[0]["tournament_name"] if rows else None
+        return {
+            "tournament_id": tournament_id or (rows[0]["tournament_id"] if rows else None),
+            "tournament_name": tournament_name,
+            "count": len(rows),
+            "rows": rows,
+        }
+    except Exception as err:
+        _handle_error(err)
+
+
+@router.get("/betting/player-stats")
+def pga_betting_player_stats():
+    """Return player skill stats from pga_data.website_player_skill_stats."""
+    try:
+        rows = fetch_player_skill_stats()
+        return {"count": len(rows), "rows": rows}
+    except Exception as err:
+        _handle_error(err)
+
+
+@router.get("/betting/recent-form")
+def pga_betting_recent_form(
+    season: Optional[int] = None,
+):
+    """Return recent player form from pga_data.website_recent_player_form."""
+    try:
+        params: Dict[str, Any] = {}
+        if season:
+            params["season"] = season
+        rows = fetch_recent_player_form(params)
+        return {"count": len(rows), "rows": rows}
     except Exception as err:
         _handle_error(err)

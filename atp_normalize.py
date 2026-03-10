@@ -129,44 +129,20 @@ def normalize_head_to_head(left_player_id: str, right_player_id: str, h2h_json: 
     ts = snapshot_ts_utc or utc_now_iso()
     rows: List[HeadToHeadMatchRow] = []
 
-    def _fmt_set_score(set_score: Any, tb_score: Any) -> str:
-        if set_score is None:
-            return ""
-        if tb_score is None:
-            return str(set_score)
-        return f"{set_score}({tb_score})"
-
-    def _extract_team_scores(team: Dict[str, Any]) -> Tuple[str | None, List[str]]:
-        sets = team.get("Sets") or []
-        display_parts: List[str] = []
-        raw_parts: List[str] = []
-        for item in sets:
-            set_number = item.get("SetNumber")
-            if not isinstance(set_number, int) or set_number <= 0:
-                continue
-            set_score = item.get("SetScore")
-            tb_score = item.get("TieBreakScore")
-            if set_score is None:
-                continue
-            raw_parts.append(str(set_score))
-            display_parts.append(_fmt_set_score(set_score, tb_score))
-        return (" ".join(raw_parts) if raw_parts else None), display_parts
-
     for tournament in h2h_json.get("Tournaments", []) or []:
-        for match in tournament.get("MatchResults", []) or []:
+        # Actual key is "Matches" (not "MatchResults"); scores come from "ResultString"
+        # (e.g. "75 76(4)"), not from a PlayerTeam/OpponentTeam/Sets structure.
+        tournament_name = tournament.get("EventName") or tournament.get("EventDisplayName") or tournament.get("TournamentName")
+        for match in tournament.get("Matches", []) or []:
             round_info = match.get("Round") or {}
-            player_set_scores, player_display = _extract_team_scores(match.get("PlayerTeam") or {})
-            opponent_set_scores, opponent_display = _extract_team_scores(match.get("OpponentTeam") or {})
-            scoreline_display = None
-            if player_display or opponent_display:
-                pairs = []
-                max_len = max(len(player_display), len(opponent_display))
-                for idx in range(max_len):
-                    p_val = player_display[idx] if idx < len(player_display) else ""
-                    o_val = opponent_display[idx] if idx < len(opponent_display) else ""
-                    if p_val or o_val:
-                        pairs.append(f"{p_val}-{o_val}".strip("-"))
-                scoreline_display = " ".join(pairs) if pairs else None
+            winner_id = (match.get("Winner") or "").upper() or None
+            result_string = match.get("ResultString") or None
+
+            # Assign scores from the winner's perspective.
+            # If left_player won, player_set_scores carries the result; otherwise opponent does.
+            left_is_winner = bool(winner_id and winner_id == left_player_id.upper())
+            player_set_scores = result_string if left_is_winner else None
+            opponent_set_scores = result_string if (winner_id and not left_is_winner) else None
 
             rows.append(
                 HeadToHeadMatchRow(
@@ -175,11 +151,11 @@ def normalize_head_to_head(left_player_id: str, right_player_id: str, h2h_json: 
                     right_player_id,
                     tournament.get("EventId"),
                     tournament.get("EventYear"),
-                    tournament.get("TournamentName"),
+                    tournament_name,
                     tournament.get("Surface"),
                     tournament.get("InOutdoorDisplay"),
                     match.get("MatchId"),
-                    match.get("Winner"),
+                    winner_id,
                     match.get("IsDoubles"),
                     match.get("IsQualifier"),
                     round_info.get("ShortName"),
@@ -188,7 +164,7 @@ def normalize_head_to_head(left_player_id: str, right_player_id: str, h2h_json: 
                     match.get("IsMatchLive"),
                     player_set_scores,
                     opponent_set_scores,
-                    scoreline_display,
+                    result_string,
                 )
             )
     return rows

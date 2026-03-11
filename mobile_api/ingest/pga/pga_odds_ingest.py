@@ -56,8 +56,21 @@ GRAPHQL_URL = "https://orchestrator.pgatour.com/graphql"
 # Public key used by the PGA Tour frontend — safe to include as default.
 PGA_GRAPHQL_API_KEY = os.getenv("PGA_GRAPHQL_API_KEY", "da2-gsrx5bibzbb4njvhl7t37wqyl4")
 
-# REST market IDs (Finish, Group Props, Matchup Props, 3 Ball)
-REST_MARKET_IDS = [2033, 2036, 2039, 2085]
+# REST market types we want to ingest (To Win is handled separately via GraphQL).
+# The PGA Tour API uses different numeric market IDs across tournaments, so we
+# discover the correct IDs at runtime and filter by these logical type names.
+DESIRED_REST_MARKET_TYPES = frozenset({
+    "FINISH",
+    "GROUP",
+    "GROUP_PROPS",       # some tournaments use GROUP_PROPS, others GROUP
+    "MATCHUP_PROPS",
+    "THREE_BALL",
+    "PLAYER_PROPS",
+})
+
+# Fallback market IDs used when the available-markets endpoint is unavailable.
+# Two sets cover the ID ranges seen across different tournament series.
+_FALLBACK_REST_MARKET_IDS = [2033, 2036, 2039, 2085, 2096, 2105, 2106, 2108, 2109]
 TO_WIN_MARKET_ID = 2032
 
 # ── BigQuery schema ───────────────────────────────────────────────────────────
@@ -217,6 +230,54 @@ def fetch_to_win(tournament_id: str) -> Optional[Dict[str, Any]]:
     except Exception as exc:
         print(f"[odds] WARN To Win (GraphQL) failed: {exc}")
         return None
+
+
+def fetch_available_markets(tournament_id: str) -> Optional[List[Dict[str, Any]]]:
+    """Fetch the list of available odds markets for a tournament.
+
+    Hits the tournament-level endpoint (no market ID suffix) which returns an
+    ``availableMarkets`` array describing every market the API currently has for
+    this event, including each market's numeric ``id`` and logical ``marketType``.
+
+    Returns the availableMarkets list, or None if the endpoint is unavailable.
+    """
+    url = f"{REST_BASE_URL}/{tournament_id}"
+    try:
+        resp = requests.get(url, headers=_rest_headers(), timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+        markets = data.get("availableMarkets")
+        if isinstance(markets, list):
+            print(f"[odds] Available markets for {tournament_id}: "
+                  f"{[f'{m.get(\"id\")} ({m.get(\"marketType\")})' for m in markets]}")
+            return markets
+        print(f"[odds] WARN available-markets response missing 'availableMarkets' key; "
+              f"top-level keys: {list(data.keys()) if isinstance(data, dict) else type(data).__name__}")
+        return None
+    except Exception as exc:
+        print(f"[odds] WARN could not fetch available markets: {exc}")
+        return None
+
+
+def _rest_market_ids_for_tournament(tournament_id: str) -> List[int]:
+    """Return the REST market IDs to fetch for *tournament_id*.
+
+    Tries dynamic discovery via :func:`fetch_available_markets` first; falls
+    back to the combined legacy + new-format hardcoded list so the ingest still
+    works if the discovery endpoint is unavailable.
+    """
+    available = fetch_available_markets(tournament_id)
+    if available:
+        ids = [
+            m["id"] for m in available
+            if m.get("marketType") in DESIRED_REST_MARKET_TYPES and isinstance(m.get("id"), int)
+        ]
+        if ids:
+            return ids
+        print(f"[odds] WARN no desired market types found in available markets; "
+              f"types present: {[m.get('marketType') for m in available]}")
+    print(f"[odds] Falling back to hardcoded market IDs: {_FALLBACK_REST_MARKET_IDS}")
+    return _FALLBACK_REST_MARKET_IDS
 
 # ── Enrichment helpers ────────────────────────────────────────────────────────
 
@@ -473,12 +534,15 @@ def ingest_pga_odds(tournament_id: Optional[str] = None) -> Dict[str, Any]:
     tname = _resolve_tournament_name(tid)
     print(f"[odds] Tournament: {tid} — {tname or '(name not found)'}")
 
+    # ── Discover REST market IDs for this tournament ─────────────────────────
+    rest_market_ids = _rest_market_ids_for_tournament(tid)
+
     # ── Fetch REST markets first to build a reliable player-name map ──────────
     # The REST API returns display_name directly; these IDs match the To Win
     # compressed payload, so we use them to fill in names there rather than
     # relying on website_active_players (which may use a different ID format).
     rest_responses: Dict[int, Any] = {}
-    for market_id in REST_MARKET_IDS:
+    for market_id in rest_market_ids:
         print(f"[odds] Fetching REST market {market_id} …")
         resp = fetch_rest_market(tid, market_id)
         if resp is not None:
@@ -534,7 +598,7 @@ def ingest_pga_odds(tournament_id: Optional[str] = None) -> Dict[str, Any]:
         summary["markets"][TO_WIN_MARKET_ID] = {"rows": 0, "error": msg}
 
     # ── REST markets (write from already-fetched responses) ───────────────────
-    for market_id in REST_MARKET_IDS:
+    for market_id in rest_market_ids:
         response = rest_responses.get(market_id)
         if response is not None:
             rows = _flatten_rest_market(response, tid, ingested_at, tname, player_name_map)

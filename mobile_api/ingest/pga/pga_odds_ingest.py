@@ -248,8 +248,8 @@ def fetch_available_markets(tournament_id: str) -> Optional[List[Dict[str, Any]]
         data = resp.json()
         markets = data.get("availableMarkets")
         if isinstance(markets, list):
-            print(f"[odds] Available markets for {tournament_id}: "
-                  f"{[f'{m.get(\"id\")} ({m.get(\"marketType\")})' for m in markets]}")
+            market_summary = [str(m.get("id")) + " (" + str(m.get("marketType")) + ")" for m in markets]
+            print(f"[odds] Available markets for {tournament_id}: {market_summary}")
             return markets
         print(f"[odds] WARN available-markets response missing 'availableMarkets' key; "
               f"top-level keys: {list(data.keys()) if isinstance(data, dict) else type(data).__name__}")

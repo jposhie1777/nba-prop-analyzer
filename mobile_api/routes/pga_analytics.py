@@ -778,10 +778,8 @@ def pga_betting_outrights(
         if tournament_id:
             params["tournament_id"] = tournament_id
         rows = fetch_betting_outrights(params)
-        tournament_name = rows[0]["tournament_name"] if rows else None
         return {
             "tournament_id": tournament_id or (rows[0]["tournament_id"] if rows else None),
-            "tournament_name": tournament_name,
             "count": len(rows),
             "rows": rows,
         }

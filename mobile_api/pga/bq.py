@@ -1212,6 +1212,202 @@ def fetch_recent_player_form(params: Optional[Dict[str, Any]] = None) -> List[Di
     ]
 
 
+def fetch_betting_finishes(params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """Query pga_data.v_betting_finishes for the finishes betting tab."""
+    params = params or {}
+    client = get_bq_client()
+    project = client.project
+    view = f"`{project}.{DATASET}.v_betting_finishes`"
+
+    conditions: List[str] = []
+    query_params: List[bigquery.QueryParameter] = []
+
+    tournament_id = params.get("tournament_id")
+    if tournament_id:
+        conditions.append("tournament_id = @tournament_id")
+        query_params.append(
+            bigquery.ScalarQueryParameter("tournament_id", "STRING", tournament_id)
+        )
+
+    sub_market_name = params.get("sub_market_name")
+    if sub_market_name:
+        conditions.append("sub_market_name = @sub_market_name")
+        query_params.append(
+            bigquery.ScalarQueryParameter("sub_market_name", "STRING", sub_market_name)
+        )
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    query = f"""
+    SELECT
+      tournament_id,
+      tournament_name,
+      player_id,
+      player_display_name,
+      sub_market_name,
+      american_odds,
+      implied_probability,
+      model_probability,
+      betting_edge,
+      tournaments_played,
+      season_total_score_avg,
+      l5_total_score_avg,
+      cut_rate_l5,
+      top10_rate_l5,
+      sg_total,
+      sg_approach,
+      sg_putting,
+      course_delta
+    FROM {view}
+    {where_clause}
+    ORDER BY sub_market_name ASC, american_odds ASC
+    """
+
+    rows = _run_query(client, query, query_params)
+    return [
+        {
+            "tournament_id": row.get("tournament_id"),
+            "tournament_name": row.get("tournament_name"),
+            "player_id": row.get("player_id"),
+            "player_display_name": row.get("player_display_name"),
+            "sub_market_name": row.get("sub_market_name"),
+            "american_odds": row.get("american_odds"),
+            "implied_probability": row.get("implied_probability"),
+            "model_probability": row.get("model_probability"),
+            "betting_edge": row.get("betting_edge"),
+            "tournaments_played": row.get("tournaments_played"),
+            "season_total_score_avg": row.get("season_total_score_avg"),
+            "l5_total_score_avg": row.get("l5_total_score_avg"),
+            "cut_rate_l5": row.get("cut_rate_l5"),
+            "top10_rate_l5": row.get("top10_rate_l5"),
+            "sg_total": row.get("sg_total"),
+            "sg_approach": row.get("sg_approach"),
+            "sg_putting": row.get("sg_putting"),
+            "course_delta": row.get("course_delta"),
+        }
+        for row in rows
+    ]
+
+
+def fetch_betting_matchups(params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """Query pga_data.v_betting_matchups for the matchups betting tab."""
+    params = params or {}
+    client = get_bq_client()
+    project = client.project
+    view = f"`{project}.{DATASET}.v_betting_matchups`"
+
+    conditions: List[str] = []
+    query_params: List[bigquery.QueryParameter] = []
+
+    tournament_id = params.get("tournament_id")
+    if tournament_id:
+        conditions.append("tournament_id = @tournament_id")
+        query_params.append(
+            bigquery.ScalarQueryParameter("tournament_id", "STRING", tournament_id)
+        )
+
+    sub_market_name = params.get("sub_market_name")
+    if sub_market_name:
+        conditions.append("sub_market_name = @sub_market_name")
+        query_params.append(
+            bigquery.ScalarQueryParameter("sub_market_name", "STRING", sub_market_name)
+        )
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    query = f"""
+    SELECT
+      tournament_id,
+      sub_market_name,
+      group_index,
+      player_a,
+      player_b,
+      odds_a,
+      odds_b,
+      score_a,
+      score_b,
+      score_diff,
+      sg_diff,
+      approach_diff,
+      putting_diff,
+      course_fit_diff
+    FROM {view}
+    {where_clause}
+    ORDER BY sub_market_name ASC, group_index ASC
+    """
+
+    rows = _run_query(client, query, query_params)
+    return [
+        {
+            "tournament_id": row.get("tournament_id"),
+            "sub_market_name": row.get("sub_market_name"),
+            "group_index": row.get("group_index"),
+            "player_a": row.get("player_a"),
+            "player_b": row.get("player_b"),
+            "odds_a": row.get("odds_a"),
+            "odds_b": row.get("odds_b"),
+            "score_a": row.get("score_a"),
+            "score_b": row.get("score_b"),
+            "score_diff": row.get("score_diff"),
+            "sg_diff": row.get("sg_diff"),
+            "approach_diff": row.get("approach_diff"),
+            "putting_diff": row.get("putting_diff"),
+            "course_fit_diff": row.get("course_fit_diff"),
+        }
+        for row in rows
+    ]
+
+
+def fetch_betting_3ball(params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """Query pga_data.v_betting_3ball for the 3-ball betting tab."""
+    params = params or {}
+    client = get_bq_client()
+    project = client.project
+    view = f"`{project}.{DATASET}.v_betting_3ball`"
+
+    conditions: List[str] = []
+    query_params: List[bigquery.QueryParameter] = []
+
+    tournament_id = params.get("tournament_id")
+    if tournament_id:
+        conditions.append("tournament_id = @tournament_id")
+        query_params.append(
+            bigquery.ScalarQueryParameter("tournament_id", "STRING", tournament_id)
+        )
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    query = f"""
+    SELECT
+      tournament_id,
+      group_index,
+      player_id,
+      player_display_name,
+      american_odds,
+      implied_probability,
+      expected_round_score,
+      projected_rank
+    FROM {view}
+    {where_clause}
+    ORDER BY group_index ASC, projected_rank ASC
+    """
+
+    rows = _run_query(client, query, query_params)
+    return [
+        {
+            "tournament_id": row.get("tournament_id"),
+            "group_index": row.get("group_index"),
+            "player_id": row.get("player_id"),
+            "player_display_name": row.get("player_display_name"),
+            "american_odds": row.get("american_odds"),
+            "implied_probability": row.get("implied_probability"),
+            "expected_round_score": row.get("expected_round_score"),
+            "projected_rank": row.get("projected_rank"),
+        }
+        for row in rows
+    ]
+
+
 def fetch_course_holes(params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     params = params or {}
     client = get_bq_client()

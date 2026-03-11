@@ -15,6 +15,9 @@ import { AutoSortableTable } from "@/components/table/AutoSortableTable";
 import type { ColumnConfig } from "@/types/schema";
 import type {
   PgaBettingOutrightRow,
+  PgaBettingFinishRow,
+  PgaBettingMatchupRow,
+  PgaBetting3BallRow,
   PgaPlayerSkillStatsRow,
   PgaRecentFormRow,
 } from "@/types/pga";
@@ -250,6 +253,101 @@ const RECENT_FORM_COLUMNS: ColumnConfig[] = [
     isNumeric: true,
     formatter: (v) => fmt(v, 1),
   },
+];
+
+const FINISHES_COLUMNS: ColumnConfig[] = [
+  { key: "player_display_name", label: "Player", width: 140, isNumeric: false },
+  { key: "sub_market_name", label: "Market", width: 80, isNumeric: false },
+  {
+    key: "american_odds",
+    label: "Odds",
+    width: 72,
+    isNumeric: true,
+    formatter: fmtOdds,
+  },
+  {
+    key: "implied_probability",
+    label: "Impl%",
+    width: 64,
+    isNumeric: true,
+    formatter: fmtPct,
+  },
+  {
+    key: "model_probability",
+    label: "Model%",
+    width: 64,
+    isNumeric: true,
+    formatter: fmtPct,
+  },
+  {
+    key: "betting_edge",
+    label: "Edge",
+    width: 64,
+    isNumeric: true,
+    formatter: fmtPct,
+  },
+  {
+    key: "cut_rate_l5",
+    label: "Cut%L5",
+    width: 64,
+    isNumeric: true,
+    formatter: fmtPct,
+  },
+  {
+    key: "top10_rate_l5",
+    label: "T10%L5",
+    width: 64,
+    isNumeric: true,
+    formatter: fmtPct,
+  },
+  {
+    key: "sg_total",
+    label: "SG Tot",
+    width: 64,
+    isNumeric: true,
+    formatter: (v) => fmt(v, 3),
+  },
+  {
+    key: "sg_approach",
+    label: "SG App",
+    width: 64,
+    isNumeric: true,
+    formatter: (v) => fmt(v, 3),
+  },
+  {
+    key: "sg_putting",
+    label: "SG Putt",
+    width: 64,
+    isNumeric: true,
+    formatter: (v) => fmt(v, 3),
+  },
+];
+
+const THREE_BALL_COLUMNS: ColumnConfig[] = [
+  { key: "group_index", label: "Grp", width: 44, isNumeric: true },
+  { key: "player_display_name", label: "Player", width: 140, isNumeric: false },
+  {
+    key: "american_odds",
+    label: "Odds",
+    width: 72,
+    isNumeric: true,
+    formatter: fmtOdds,
+  },
+  {
+    key: "implied_probability",
+    label: "Impl%",
+    width: 64,
+    isNumeric: true,
+    formatter: fmtPct,
+  },
+  {
+    key: "expected_round_score",
+    label: "Exp Score",
+    width: 80,
+    isNumeric: true,
+    formatter: (v) => fmt(v, 1),
+  },
+  { key: "projected_rank", label: "Proj Rank", width: 80, isNumeric: true },
 ];
 
 // ─── Placeholder tab ──────────────────────────────────────────────────────────
@@ -508,6 +606,240 @@ function RecentFormTab({ colors }: { colors: any }) {
   );
 }
 
+// ─── Finishes tab ────────────────────────────────────────────────────────────
+
+type FinishesResponse = {
+  tournament_id?: string | null;
+  tournament_name?: string | null;
+  count: number;
+  rows: PgaBettingFinishRow[];
+};
+
+function FinishesTab({ colors }: { colors: any }) {
+  const { data, loading, error, refetch } =
+    usePgaQuery<FinishesResponse>("/pga/betting/finishes");
+
+  const rows = useMemo(() => data?.rows ?? [], [data]);
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator color={colors.accent.primary} />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.center, { gap: 10 }]}>
+        <Text style={{ color: colors.text.danger, textAlign: "center" }}>
+          {error}
+        </Text>
+        <Pressable
+          onPress={refetch}
+          style={[styles.retryBtn, { borderColor: colors.border.subtle }]}
+        >
+          <Text style={{ color: colors.text.primary, fontWeight: "700" }}>
+            Retry
+          </Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  if (!rows.length) {
+    return (
+      <View style={styles.center}>
+        <Text style={{ color: colors.text.muted }}>No finishes odds found.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.tableWrapper}>
+      {data?.tournament_name ? (
+        <Text style={[styles.tableNote, { color: colors.text.muted }]}>
+          {data.tournament_name} · {rows.length} lines
+        </Text>
+      ) : null}
+      <AutoSortableTable
+        data={rows}
+        columns={FINISHES_COLUMNS}
+        defaultSort="american_odds"
+      />
+    </View>
+  );
+}
+
+// ─── Matchups tab ────────────────────────────────────────────────────────────
+
+type MatchupsResponse = {
+  tournament_id?: string | null;
+  count: number;
+  rows: PgaBettingMatchupRow[];
+};
+
+function MatchupsTab({ colors }: { colors: any }) {
+  const { data, loading, error, refetch } =
+    usePgaQuery<MatchupsResponse>("/pga/betting/matchups");
+
+  const rows = useMemo(() => data?.rows ?? [], [data]);
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator color={colors.accent.primary} />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.center, { gap: 10 }]}>
+        <Text style={{ color: colors.text.danger, textAlign: "center" }}>
+          {error}
+        </Text>
+        <Pressable
+          onPress={refetch}
+          style={[styles.retryBtn, { borderColor: colors.border.subtle }]}
+        >
+          <Text style={{ color: colors.text.primary, fontWeight: "700" }}>
+            Retry
+          </Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  if (!rows.length) {
+    return (
+      <View style={styles.center}>
+        <Text style={{ color: colors.text.muted }}>No matchup odds found.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView style={styles.matchupsList}>
+      {data?.rows ? (
+        <Text style={[styles.tableNote, { color: colors.text.muted, padding: 4 }]}>
+          {rows.length} matchups · tap row to expand
+        </Text>
+      ) : null}
+      {rows.map((row, idx) => (
+        <View
+          key={`${row.group_index}-${idx}`}
+          style={[
+            styles.matchupCard,
+            { borderColor: colors.border.subtle, backgroundColor: "#0B1529" },
+          ]}
+        >
+          {row.sub_market_name ? (
+            <Text style={[styles.matchupMarket, { color: "#90B3E9" }]}>
+              {row.sub_market_name}
+            </Text>
+          ) : null}
+          <View style={styles.matchupRow}>
+            <View style={styles.matchupPlayer}>
+              <Text style={[styles.matchupName, { color: colors.text.primary }]}>
+                {row.player_a ?? "—"}
+              </Text>
+              <Text style={[styles.matchupOdds, { color: "#CFFAFE" }]}>
+                {fmtOdds(row.odds_a)}
+              </Text>
+            </View>
+            <Text style={[styles.matchupVs, { color: colors.text.muted }]}>vs</Text>
+            <View style={[styles.matchupPlayer, { alignItems: "flex-end" }]}>
+              <Text style={[styles.matchupName, { color: colors.text.primary }]}>
+                {row.player_b ?? "—"}
+              </Text>
+              <Text style={[styles.matchupOdds, { color: "#CFFAFE" }]}>
+                {fmtOdds(row.odds_b)}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.matchupStats}>
+            <Text style={[styles.matchupStat, { color: colors.text.muted }]}>
+              SG Diff: {fmt(row.sg_diff, 3)}
+            </Text>
+            <Text style={[styles.matchupStat, { color: colors.text.muted }]}>
+              Score Diff: {fmt(row.score_diff, 1)}
+            </Text>
+            <Text style={[styles.matchupStat, { color: colors.text.muted }]}>
+              App Diff: {fmt(row.approach_diff, 3)}
+            </Text>
+            <Text style={[styles.matchupStat, { color: colors.text.muted }]}>
+              Putt Diff: {fmt(row.putting_diff, 3)}
+            </Text>
+          </View>
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
+// ─── 3 Ball tab ───────────────────────────────────────────────────────────────
+
+type ThreeBallResponse = {
+  tournament_id?: string | null;
+  count: number;
+  rows: PgaBetting3BallRow[];
+};
+
+function ThreeBallTab({ colors }: { colors: any }) {
+  const { data, loading, error, refetch } =
+    usePgaQuery<ThreeBallResponse>("/pga/betting/3ball");
+
+  const rows = useMemo(() => data?.rows ?? [], [data]);
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator color={colors.accent.primary} />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.center, { gap: 10 }]}>
+        <Text style={{ color: colors.text.danger, textAlign: "center" }}>
+          {error}
+        </Text>
+        <Pressable
+          onPress={refetch}
+          style={[styles.retryBtn, { borderColor: colors.border.subtle }]}
+        >
+          <Text style={{ color: colors.text.primary, fontWeight: "700" }}>
+            Retry
+          </Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  if (!rows.length) {
+    return (
+      <View style={styles.center}>
+        <Text style={{ color: colors.text.muted }}>No 3-ball odds found.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.tableWrapper}>
+      <Text style={[styles.tableNote, { color: colors.text.muted }]}>
+        {rows.length} players · tap a column header to sort
+      </Text>
+      <AutoSortableTable
+        data={rows}
+        columns={THREE_BALL_COLUMNS}
+        defaultSort="group_index"
+      />
+    </View>
+  );
+}
+
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function PgaBettingAnalyticsScreen() {
@@ -523,11 +855,11 @@ export default function PgaBettingAnalyticsScreen() {
       case "recent_form":
         return <RecentFormTab colors={colors} />;
       case "finishes":
-        return <ComingSoonTab label="Finishes" colors={colors} />;
+        return <FinishesTab colors={colors} />;
       case "matchups":
-        return <ComingSoonTab label="Matchups" colors={colors} />;
+        return <MatchupsTab colors={colors} />;
       case "three_ball":
-        return <ComingSoonTab label="3 Ball" colors={colors} />;
+        return <ThreeBallTab colors={colors} />;
     }
   }
 
@@ -649,5 +981,52 @@ const styles = StyleSheet.create({
   },
   comingSoonSub: {
     fontSize: 13,
+  },
+  matchupsList: {
+    flex: 1,
+  },
+  matchupCard: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    gap: 6,
+  },
+  matchupMarket: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  matchupRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  matchupPlayer: {
+    flex: 1,
+    gap: 2,
+  },
+  matchupName: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  matchupOdds: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  matchupVs: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  matchupStats: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 4,
+  },
+  matchupStat: {
+    fontSize: 10,
   },
 });

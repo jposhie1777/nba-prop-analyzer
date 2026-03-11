@@ -25,6 +25,9 @@ from pga.bq import (
     fetch_round_pairings,
     fetch_tournament_round_scores,
     fetch_betting_outrights,
+    fetch_betting_finishes,
+    fetch_betting_matchups,
+    fetch_betting_3ball,
     fetch_player_skill_stats,
     fetch_recent_player_form,
 )
@@ -807,5 +810,70 @@ def pga_betting_recent_form(
             params["season"] = season
         rows = fetch_recent_player_form(params)
         return {"count": len(rows), "rows": rows}
+    except Exception as err:
+        _handle_error(err)
+
+
+@router.get("/betting/finishes")
+def pga_betting_finishes(
+    tournament_id: Optional[str] = None,
+    sub_market_name: Optional[str] = None,
+):
+    """Return finishes betting markets from pga_data.v_betting_finishes."""
+    try:
+        params: Dict[str, Any] = {}
+        if tournament_id:
+            params["tournament_id"] = tournament_id
+        if sub_market_name:
+            params["sub_market_name"] = sub_market_name
+        rows = fetch_betting_finishes(params)
+        tournament_name = rows[0]["tournament_name"] if rows else None
+        return {
+            "tournament_id": tournament_id or (rows[0]["tournament_id"] if rows else None),
+            "tournament_name": tournament_name,
+            "count": len(rows),
+            "rows": rows,
+        }
+    except Exception as err:
+        _handle_error(err)
+
+
+@router.get("/betting/matchups")
+def pga_betting_matchups(
+    tournament_id: Optional[str] = None,
+    sub_market_name: Optional[str] = None,
+):
+    """Return matchup betting markets from pga_data.v_betting_matchups."""
+    try:
+        params: Dict[str, Any] = {}
+        if tournament_id:
+            params["tournament_id"] = tournament_id
+        if sub_market_name:
+            params["sub_market_name"] = sub_market_name
+        rows = fetch_betting_matchups(params)
+        return {
+            "tournament_id": tournament_id or (rows[0]["tournament_id"] if rows else None),
+            "count": len(rows),
+            "rows": rows,
+        }
+    except Exception as err:
+        _handle_error(err)
+
+
+@router.get("/betting/3ball")
+def pga_betting_3ball(
+    tournament_id: Optional[str] = None,
+):
+    """Return 3-ball betting markets from pga_data.v_betting_3ball."""
+    try:
+        params: Dict[str, Any] = {}
+        if tournament_id:
+            params["tournament_id"] = tournament_id
+        rows = fetch_betting_3ball(params)
+        return {
+            "tournament_id": tournament_id or (rows[0]["tournament_id"] if rows else None),
+            "count": len(rows),
+            "rows": rows,
+        }
     except Exception as err:
         _handle_error(err)

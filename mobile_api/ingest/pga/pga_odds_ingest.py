@@ -37,7 +37,7 @@ import gzip
 import json
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -358,9 +358,13 @@ def _auto_detect_tournament_id(lookahead_days: int = 7) -> str:
     """Detect the best tournament ID to load odds for.
 
     Priority order:
-      1. In-progress  — "upcoming" bucket with start_date <= today
+      1. In-progress  — "upcoming" bucket with start_date <= today AND
+                        start_date + 4 days >= today (still within the ~4-day
+                        window of a Thu–Sun event; avoids re-selecting a
+                        finished tournament that the API hasn't yet moved to
+                        the "completed" bucket)
       2. Starting soon — "upcoming" bucket with start_date within the next
-                         ``lookahead_days`` days (catches Mon/Tue before a
+                         ``lookahead_days`` days (catches Mon/Tue/Wed before a
                          Thursday-start event whose odds are already posted)
       3. Most recently completed — fallback when nothing is active or imminent
 
@@ -374,7 +378,7 @@ def _auto_detect_tournament_id(lookahead_days: int = 7) -> str:
     schedule_rows = schedule_to_records(tournaments)
 
     today = datetime.now(timezone.utc).date()
-    lookahead_cutoff = today + __import__("datetime").timedelta(days=lookahead_days)
+    lookahead_cutoff = today + timedelta(days=lookahead_days)
 
     in_progress: list[tuple] = []
     starting_soon: list[tuple] = []
@@ -395,7 +399,16 @@ def _auto_detect_tournament_id(lookahead_days: int = 7) -> str:
 
         bucket = str(row.get("bucket") or "").strip().lower()
         if bucket == "upcoming":
-            if start <= today:
+            # PGA Tour events run ~4 days (Thu–Sun).  If start_date + 4 days is
+            # already in the past the tournament has almost certainly finished
+            # even if the API hasn't moved it to the "completed" bucket yet.
+            # Without this check we'd keep re-ingesting the stale prior-week
+            # tournament ID instead of picking up the next event, causing the
+            # round-specific REST markets (Finishes / Matchups / Groups / 3-Ball)
+            # to 404 while only the more-resilient To Win GraphQL endpoint
+            # returns any data.
+            likely_ended = (start + timedelta(days=4)) < today
+            if start <= today and not likely_ended:
                 in_progress.append((start, tid))
             elif start <= lookahead_cutoff:
                 starting_soon.append((start, tid))

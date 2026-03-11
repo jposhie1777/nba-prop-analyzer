@@ -543,6 +543,15 @@ def ingest_pga_odds(tournament_id: Optional[str] = None) -> Dict[str, Any]:
             summary["markets"][market_id] = {"name": market_name, "rows": written}
             summary["rows_written"] += written
             print(f"[odds]   {market_name} (market {market_id}): {written} rows written")
+            if written == 0:
+                top_keys = list(response.keys()) if isinstance(response, dict) else type(response).__name__
+                sub_markets = response.get("subMarkets") if isinstance(response, dict) else None
+                sub_count = len(sub_markets) if isinstance(sub_markets, list) else repr(sub_markets)
+                print(f"[odds]   DEBUG market {market_id} — top-level keys: {top_keys}")
+                print(f"[odds]   DEBUG market {market_id} — subMarkets count: {sub_count}")
+                if isinstance(sub_markets, list) and sub_markets:
+                    first = sub_markets[0]
+                    print(f"[odds]   DEBUG market {market_id} — first subMarket keys: {list(first.keys()) if isinstance(first, dict) else first}")
         else:
             msg = f"market {market_id} fetch failed"
             summary["errors"].append(msg)

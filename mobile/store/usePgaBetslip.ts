@@ -13,6 +13,11 @@ export type PgaSlipItem = {
   teeTime?: string;
   roundNumber?: number;
   createdAt: string;
+  // Bet-type specific fields
+  betType?: "outright" | "finish" | "matchup" | "3ball" | "group";
+  market?: string | null;
+  odds?: number | null;
+  description?: string | null;
 };
 
 type State = {

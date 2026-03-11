@@ -11,6 +11,9 @@ import { useMemo, useState } from "react";
 
 import { useTheme } from "@/store/useTheme";
 import { usePgaQuery } from "@/hooks/pga/usePgaQuery";
+import { usePgaBetslip } from "@/store/usePgaBetslip";
+import { usePgaBetslipDrawer } from "@/store/usePgaBetslipDrawer";
+import { PgaBetslipDrawer } from "@/components/pga/PgaBetslipDrawer";
 import { AutoSortableTable } from "@/components/table/AutoSortableTable";
 import type { ColumnConfig } from "@/types/schema";
 import type {
@@ -61,7 +64,7 @@ const TABS: { id: TabId; label: string }[] = [
 // ─── Column configs ───────────────────────────────────────────────────────────
 
 const OUTRIGHT_COLUMNS: ColumnConfig[] = [
-  { key: "player_display_name", label: "Player", width: 140, isNumeric: false },
+  { key: "player_display_name", label: "Player", width: 150, isNumeric: false },
   {
     key: "american_odds",
     label: "Odds",
@@ -76,25 +79,10 @@ const OUTRIGHT_COLUMNS: ColumnConfig[] = [
     isNumeric: true,
     formatter: fmtPct,
   },
-  { key: "tournaments_played", label: "Evts", width: 44, isNumeric: true },
   {
-    key: "cut_rate_l5",
-    label: "Cut%L5",
-    width: 64,
-    isNumeric: true,
-    formatter: fmtPct,
-  },
-  {
-    key: "top10_rate_l5",
-    label: "T10%L5",
-    width: 64,
-    isNumeric: true,
-    formatter: fmtPct,
-  },
-  {
-    key: "weighted_l5_score",
-    label: "WtdL5",
-    width: 64,
+    key: "expected_round_score",
+    label: "Exp Scr",
+    width: 72,
     isNumeric: true,
     formatter: (v) => fmt(v, 1),
   },
@@ -118,6 +106,13 @@ const OUTRIGHT_COLUMNS: ColumnConfig[] = [
     width: 64,
     isNumeric: true,
     formatter: (v) => fmt(v, 3),
+  },
+  {
+    key: "course_delta",
+    label: "Crs Δ",
+    width: 56,
+    isNumeric: true,
+    formatter: (v) => fmt(v, 2),
   },
 ];
 
@@ -257,7 +252,6 @@ const RECENT_FORM_COLUMNS: ColumnConfig[] = [
 
 const FINISHES_COLUMNS: ColumnConfig[] = [
   { key: "player_display_name", label: "Player", width: 140, isNumeric: false },
-  { key: "sub_market_name", label: "Market", width: 80, isNumeric: false },
   {
     key: "american_odds",
     label: "Odds",
@@ -323,50 +317,38 @@ const FINISHES_COLUMNS: ColumnConfig[] = [
   },
 ];
 
-const THREE_BALL_COLUMNS: ColumnConfig[] = [
-  { key: "group_index", label: "Grp", width: 44, isNumeric: true },
-  { key: "player_display_name", label: "Player", width: 140, isNumeric: false },
-  {
-    key: "american_odds",
-    label: "Odds",
-    width: 72,
-    isNumeric: true,
-    formatter: fmtOdds,
-  },
-  {
-    key: "implied_probability",
-    label: "Impl%",
-    width: 64,
-    isNumeric: true,
-    formatter: fmtPct,
-  },
-  {
-    key: "expected_round_score",
-    label: "Exp Score",
-    width: 80,
-    isNumeric: true,
-    formatter: (v) => fmt(v, 1),
-  },
-  { key: "projected_rank", label: "Proj Rank", width: 80, isNumeric: true },
-];
+// ─── Shared error/loading helpers ─────────────────────────────────────────────
 
-// ─── Placeholder tab ──────────────────────────────────────────────────────────
+function LoadingView({ colors }: { colors: any }) {
+  return (
+    <View style={styles.center}>
+      <ActivityIndicator color={colors.accent.primary} />
+    </View>
+  );
+}
 
-function ComingSoonTab({
-  label,
+function ErrorView({
+  error,
+  refetch,
   colors,
 }: {
-  label: string;
+  error: string;
+  refetch: () => void;
   colors: any;
 }) {
   return (
-    <View style={[styles.comingSoon, { borderColor: colors.border.subtle }]}>
-      <Text style={[styles.comingSoonTitle, { color: colors.text.primary }]}>
-        {label}
+    <View style={[styles.center, { gap: 10 }]}>
+      <Text style={{ color: colors.text.danger, textAlign: "center" }}>
+        {error}
       </Text>
-      <Text style={[styles.comingSoonSub, { color: colors.text.muted }]}>
-        Coming soon
-      </Text>
+      <Pressable
+        onPress={refetch}
+        style={[styles.retryBtn, { borderColor: colors.border.subtle }]}
+      >
+        <Text style={{ color: colors.text.primary, fontWeight: "700" }}>
+          Retry
+        </Text>
+      </Pressable>
     </View>
   );
 }
@@ -419,11 +401,34 @@ function TabBar({
   );
 }
 
+// ─── Save-to-betslip button ───────────────────────────────────────────────────
+
+function SaveBtn({
+  saved,
+  onPress,
+}: {
+  saved: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[
+        styles.saveBtn,
+        { backgroundColor: saved ? "rgba(34,211,238,0.25)" : "rgba(34,211,238,0.1)" },
+      ]}
+    >
+      <Text style={[styles.saveBtnText, { color: saved ? "#22D3EE" : "#90B3E9" }]}>
+        {saved ? "✓ Saved" : "+ Save"}
+      </Text>
+    </Pressable>
+  );
+}
+
 // ─── Outright Winners tab ─────────────────────────────────────────────────────
 
 type OutrightsResponse = {
   tournament_id?: string | null;
-  tournament_name?: string | null;
   count: number;
   rows: PgaBettingOutrightRow[];
 };
@@ -431,34 +436,13 @@ type OutrightsResponse = {
 function OutrightsTab({ colors }: { colors: any }) {
   const { data, loading, error, refetch } =
     usePgaQuery<OutrightsResponse>("/pga/betting/outrights");
+  const { add, remove, items } = usePgaBetslip();
+  const { open } = usePgaBetslipDrawer();
 
   const rows = useMemo(() => data?.rows ?? [], [data]);
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.accent.primary} />
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={[styles.center, { gap: 10 }]}>
-        <Text style={{ color: colors.text.danger, textAlign: "center" }}>
-          {error}
-        </Text>
-        <Pressable
-          onPress={refetch}
-          style={[styles.retryBtn, { borderColor: colors.border.subtle }]}
-        >
-          <Text style={{ color: colors.text.primary, fontWeight: "700" }}>
-            Retry
-          </Text>
-        </Pressable>
-      </View>
-    );
-  }
+  if (loading) return <LoadingView colors={colors} />;
+  if (error) return <ErrorView error={error} refetch={refetch} colors={colors} />;
 
   if (!rows.length) {
     return (
@@ -469,18 +453,72 @@ function OutrightsTab({ colors }: { colors: any }) {
   }
 
   return (
-    <View style={styles.tableWrapper}>
-      {data?.tournament_name ? (
-        <Text style={[styles.tableNote, { color: colors.text.muted }]}>
-          {data.tournament_name} · {rows.length} players
-        </Text>
-      ) : null}
-      <AutoSortableTable
-        data={rows}
-        columns={OUTRIGHT_COLUMNS}
-        defaultSort="american_odds"
-      />
-    </View>
+    <ScrollView style={styles.flex}>
+      <Text style={[styles.tableNote, { color: colors.text.muted, marginBottom: 8 }]}>
+        {rows.length} players · tap a column header to sort
+      </Text>
+      {rows.map((row, idx) => {
+        const itemId = `outright-${row.player_id ?? idx}`;
+        const saved = items.some((i) => i.id === itemId);
+        const oddsStr = fmtOdds(row.american_odds);
+        return (
+          <View
+            key={itemId}
+            style={[
+              styles.outrightCard,
+              { borderColor: colors.border.subtle, backgroundColor: "#0B1529" },
+            ]}
+          >
+            <View style={styles.outrightHeader}>
+              <Text style={[styles.outrightName, { color: colors.text.primary }]}>
+                {row.player_display_name ?? "—"}
+              </Text>
+              <View style={styles.outrightOddsRow}>
+                <Text style={[styles.outrightOdds, { color: "#CFFAFE" }]}>
+                  {oddsStr}
+                </Text>
+                <Text style={[styles.outrightImpl, { color: colors.text.muted }]}>
+                  {fmtPct(row.implied_probability)}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.outrightStats}>
+              <StatChip label="SG Tot" value={fmt(row.sg_total, 3)} colors={colors} />
+              <StatChip label="SG App" value={fmt(row.sg_approach, 3)} colors={colors} />
+              <StatChip label="SG Putt" value={fmt(row.sg_putting, 3)} colors={colors} />
+              {row.expected_round_score != null && (
+                <StatChip label="Exp Scr" value={fmt(row.expected_round_score, 1)} colors={colors} />
+              )}
+              {row.course_delta != null && (
+                <StatChip label="Crs Δ" value={fmt(row.course_delta, 2)} colors={colors} />
+              )}
+            </View>
+            <SaveBtn
+              saved={saved}
+              onPress={() => {
+                if (saved) {
+                  remove(itemId);
+                } else {
+                  add({
+                    id: itemId,
+                    playerId: row.player_id != null ? String(row.player_id) : null,
+                    playerLastName: row.player_display_name?.split(" ").pop() ?? "",
+                    playerDisplayName: row.player_display_name ?? "",
+                    groupPlayers: [],
+                    tournamentId: row.tournament_id ?? undefined,
+                    createdAt: new Date().toISOString(),
+                    betType: "outright",
+                    odds: row.american_odds,
+                    description: `${row.player_display_name} to WIN (${oddsStr})`,
+                  });
+                  open();
+                }
+              }}
+            />
+          </View>
+        );
+      })}
+    </ScrollView>
   );
 }
 
@@ -497,31 +535,8 @@ function PlayerStatsTab({ colors }: { colors: any }) {
 
   const rows = useMemo(() => data?.rows ?? [], [data]);
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.accent.primary} />
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={[styles.center, { gap: 10 }]}>
-        <Text style={{ color: colors.text.danger, textAlign: "center" }}>
-          {error}
-        </Text>
-        <Pressable
-          onPress={refetch}
-          style={[styles.retryBtn, { borderColor: colors.border.subtle }]}
-        >
-          <Text style={{ color: colors.text.primary, fontWeight: "700" }}>
-            Retry
-          </Text>
-        </Pressable>
-      </View>
-    );
-  }
+  if (loading) return <LoadingView colors={colors} />;
+  if (error) return <ErrorView error={error} refetch={refetch} colors={colors} />;
 
   if (!rows.length) {
     return (
@@ -558,31 +573,8 @@ function RecentFormTab({ colors }: { colors: any }) {
 
   const rows = useMemo(() => data?.rows ?? [], [data]);
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.accent.primary} />
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={[styles.center, { gap: 10 }]}>
-        <Text style={{ color: colors.text.danger, textAlign: "center" }}>
-          {error}
-        </Text>
-        <Pressable
-          onPress={refetch}
-          style={[styles.retryBtn, { borderColor: colors.border.subtle }]}
-        >
-          <Text style={{ color: colors.text.primary, fontWeight: "700" }}>
-            Retry
-          </Text>
-        </Pressable>
-      </View>
-    );
-  }
+  if (loading) return <LoadingView colors={colors} />;
+  if (error) return <ErrorView error={error} refetch={refetch} colors={colors} />;
 
   if (!rows.length) {
     return (
@@ -606,7 +598,7 @@ function RecentFormTab({ colors }: { colors: any }) {
   );
 }
 
-// ─── Finishes tab ────────────────────────────────────────────────────────────
+// ─── Finishes tab ─────────────────────────────────────────────────────────────
 
 type FinishesResponse = {
   tournament_id?: string | null;
@@ -615,39 +607,39 @@ type FinishesResponse = {
   rows: PgaBettingFinishRow[];
 };
 
+const FINISH_MARKET_FILTERS = ["All", "Top 5", "Top 10", "Top 20"];
+
 function FinishesTab({ colors }: { colors: any }) {
   const { data, loading, error, refetch } =
     usePgaQuery<FinishesResponse>("/pga/betting/finishes");
+  const { add, remove, items } = usePgaBetslip();
+  const { open } = usePgaBetslipDrawer();
+  const [marketFilter, setMarketFilter] = useState("All");
 
-  const rows = useMemo(() => data?.rows ?? [], [data]);
+  const allRows = useMemo(() => data?.rows ?? [], [data]);
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.accent.primary} />
-      </View>
-    );
-  }
+  const markets = useMemo(() => {
+    const set = new Set(allRows.map((r) => r.sub_market_name ?? "").filter(Boolean));
+    return Array.from(set).sort();
+  }, [allRows]);
 
-  if (error) {
-    return (
-      <View style={[styles.center, { gap: 10 }]}>
-        <Text style={{ color: colors.text.danger, textAlign: "center" }}>
-          {error}
-        </Text>
-        <Pressable
-          onPress={refetch}
-          style={[styles.retryBtn, { borderColor: colors.border.subtle }]}
-        >
-          <Text style={{ color: colors.text.primary, fontWeight: "700" }}>
-            Retry
-          </Text>
-        </Pressable>
-      </View>
-    );
-  }
+  const filters = useMemo(
+    () => ["All", ...markets],
+    [markets]
+  );
 
-  if (!rows.length) {
+  const rows = useMemo(
+    () =>
+      marketFilter === "All"
+        ? allRows
+        : allRows.filter((r) => r.sub_market_name === marketFilter),
+    [allRows, marketFilter]
+  );
+
+  if (loading) return <LoadingView colors={colors} />;
+  if (error) return <ErrorView error={error} refetch={refetch} colors={colors} />;
+
+  if (!allRows.length) {
     return (
       <View style={styles.center}>
         <Text style={{ color: colors.text.muted }}>No finishes odds found.</Text>
@@ -656,22 +648,129 @@ function FinishesTab({ colors }: { colors: any }) {
   }
 
   return (
-    <View style={styles.tableWrapper}>
-      {data?.tournament_name ? (
-        <Text style={[styles.tableNote, { color: colors.text.muted }]}>
-          {data.tournament_name} · {rows.length} lines
-        </Text>
-      ) : null}
-      <AutoSortableTable
-        data={rows}
-        columns={FINISHES_COLUMNS}
-        defaultSort="american_odds"
-      />
+    <View style={styles.flex}>
+      {/* Market filter pills */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterBar}
+      >
+        {filters.map((f) => {
+          const active = f === marketFilter;
+          return (
+            <Pressable
+              key={f}
+              onPress={() => setMarketFilter(f)}
+              style={[
+                styles.filterPill,
+                {
+                  borderColor: active ? "#22D3EE" : colors.border.subtle,
+                  backgroundColor: active
+                    ? "rgba(34,211,238,0.18)"
+                    : "rgba(2,6,23,0.35)",
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.filterPillText,
+                  { color: active ? "#CFFAFE" : colors.text.muted },
+                ]}
+              >
+                {f}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
+      <Text style={[styles.tableNote, { color: colors.text.muted, marginBottom: 8 }]}>
+        {rows.length} lines
+        {data?.tournament_name ? ` · ${data.tournament_name}` : ""}
+      </Text>
+
+      <ScrollView style={styles.flex}>
+        {rows.map((row, idx) => {
+          const itemId = `finish-${row.player_id}-${row.sub_market_name ?? idx}`;
+          const saved = items.some((i) => i.id === itemId);
+          const oddsStr = fmtOdds(row.american_odds);
+          return (
+            <View
+              key={itemId}
+              style={[
+                styles.finishCard,
+                { borderColor: colors.border.subtle, backgroundColor: "#0B1529" },
+              ]}
+            >
+              <View style={styles.finishTop}>
+                <View style={styles.finishLeft}>
+                  {row.sub_market_name ? (
+                    <Text style={[styles.finishMarket, { color: "#90B3E9" }]}>
+                      {row.sub_market_name}
+                    </Text>
+                  ) : null}
+                  <Text style={[styles.finishName, { color: colors.text.primary }]}>
+                    {row.player_display_name ?? "—"}
+                  </Text>
+                </View>
+                <View style={styles.finishRight}>
+                  <Text style={[styles.finishOdds, { color: "#CFFAFE" }]}>
+                    {oddsStr}
+                  </Text>
+                  <Text style={[styles.finishImpl, { color: colors.text.muted }]}>
+                    {fmtPct(row.implied_probability)} impl
+                  </Text>
+                  {row.model_probability != null && (
+                    <Text style={[styles.finishModel, {
+                      color: (row.betting_edge ?? 0) > 0 ? "#4ade80" : colors.text.muted
+                    }]}>
+                      {fmtPct(row.model_probability)} model
+                      {row.betting_edge != null
+                        ? ` · Edge: ${fmtPct(row.betting_edge)}`
+                        : ""}
+                    </Text>
+                  )}
+                </View>
+              </View>
+              <View style={styles.finishStats}>
+                <StatChip label="SG Tot" value={fmt(row.sg_total, 3)} colors={colors} />
+                <StatChip label="SG App" value={fmt(row.sg_approach, 3)} colors={colors} />
+                <StatChip label="SG Putt" value={fmt(row.sg_putting, 3)} colors={colors} />
+                <StatChip label="Cut%L5" value={fmtPct(row.cut_rate_l5)} colors={colors} />
+                <StatChip label="T10%L5" value={fmtPct(row.top10_rate_l5)} colors={colors} />
+              </View>
+              <SaveBtn
+                saved={saved}
+                onPress={() => {
+                  if (saved) {
+                    remove(itemId);
+                  } else {
+                    add({
+                      id: itemId,
+                      playerId: row.player_id != null ? String(row.player_id) : null,
+                      playerLastName: row.player_display_name?.split(" ").pop() ?? "",
+                      playerDisplayName: row.player_display_name ?? "",
+                      groupPlayers: [],
+                      tournamentId: row.tournament_id ?? undefined,
+                      createdAt: new Date().toISOString(),
+                      betType: "finish",
+                      market: row.sub_market_name,
+                      odds: row.american_odds,
+                      description: `${row.player_display_name} — ${row.sub_market_name ?? "Finish"} (${oddsStr})`,
+                    });
+                    open();
+                  }
+                }}
+              />
+            </View>
+          );
+        })}
+      </ScrollView>
     </View>
   );
 }
 
-// ─── Matchups tab ────────────────────────────────────────────────────────────
+// ─── Matchups tab ─────────────────────────────────────────────────────────────
 
 type MatchupsResponse = {
   tournament_id?: string | null;
@@ -679,37 +778,191 @@ type MatchupsResponse = {
   rows: PgaBettingMatchupRow[];
 };
 
+function MatchupCard({
+  row,
+  colors,
+}: {
+  row: PgaBettingMatchupRow;
+  colors: any;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const { add, remove, items } = usePgaBetslip();
+  const { open } = usePgaBetslipDrawer();
+
+  const idA = `matchup-a-${row.group_index}-${row.player_a}`;
+  const idB = `matchup-b-${row.group_index}-${row.player_b}`;
+  const savedA = items.some((i) => i.id === idA);
+  const savedB = items.some((i) => i.id === idB);
+
+  function savePlayer(side: "a" | "b") {
+    const id = side === "a" ? idA : idB;
+    const saved = side === "a" ? savedA : savedB;
+    const name = side === "a" ? row.player_a : row.player_b;
+    const opponent = side === "a" ? row.player_b : row.player_a;
+    const odds = side === "a" ? row.odds_a : row.odds_b;
+    const oddsStr = fmtOdds(odds);
+    if (saved) {
+      remove(id);
+    } else {
+      add({
+        id,
+        playerId: null,
+        playerLastName: name?.split(" ").pop() ?? "",
+        playerDisplayName: name ?? "",
+        groupPlayers: [name ?? "", opponent ?? ""].filter(Boolean),
+        createdAt: new Date().toISOString(),
+        betType: "matchup",
+        market: row.sub_market_name,
+        odds,
+        description: `${name} to beat ${opponent}${row.sub_market_name ? ` (${row.sub_market_name})` : ""} (${oddsStr})`,
+      });
+      open();
+    }
+  }
+
+  return (
+    <Pressable
+      onPress={() => setExpanded((v) => !v)}
+      style={[
+        styles.matchupCard,
+        { borderColor: colors.border.subtle, backgroundColor: "#0B1529" },
+      ]}
+    >
+      {row.sub_market_name ? (
+        <Text style={[styles.matchupMarket, { color: "#90B3E9" }]}>
+          {row.sub_market_name}
+        </Text>
+      ) : null}
+
+      {/* Player row */}
+      <View style={styles.matchupRow}>
+        <View style={styles.matchupSide}>
+          <Text style={[styles.matchupName, { color: colors.text.primary }]}>
+            {row.player_a ?? "—"}
+          </Text>
+          <Text style={[styles.matchupOdds, { color: "#CFFAFE" }]}>
+            {fmtOdds(row.odds_a)}
+          </Text>
+          <SaveBtn saved={savedA} onPress={() => savePlayer("a")} />
+        </View>
+
+        <Text style={[styles.matchupVs, { color: colors.text.muted }]}>vs</Text>
+
+        <View style={[styles.matchupSide, { alignItems: "flex-end" }]}>
+          <Text style={[styles.matchupName, { color: colors.text.primary }]}>
+            {row.player_b ?? "—"}
+          </Text>
+          <Text style={[styles.matchupOdds, { color: "#CFFAFE" }]}>
+            {fmtOdds(row.odds_b)}
+          </Text>
+          <SaveBtn saved={savedB} onPress={() => savePlayer("b")} />
+        </View>
+      </View>
+
+      {/* Collapsed summary diffs */}
+      {!expanded && (
+        <View style={styles.matchupDiffs}>
+          <Text style={[styles.matchupDiff, { color: colors.text.muted }]}>
+            SG Diff: {fmt(row.sg_diff, 3)}
+          </Text>
+          <Text style={[styles.matchupDiff, { color: colors.text.muted }]}>
+            Score Diff: {fmt(row.score_diff, 1)}
+          </Text>
+          <Text style={[styles.matchupDiff, { color: colors.text.muted }]}>
+            App Diff: {fmt(row.approach_diff, 3)}
+          </Text>
+          <Text style={[styles.matchupDiff, { color: colors.text.muted }]}>
+            Putt Diff: {fmt(row.putting_diff, 3)}
+          </Text>
+        </View>
+      )}
+
+      {/* Expanded per-player stats */}
+      {expanded && (
+        <View style={styles.matchupExpanded}>
+          <View style={[styles.matchupExpandedDivider, { backgroundColor: colors.border.subtle }]} />
+          <View style={styles.matchupStatsGrid}>
+            {/* Left column - Player A */}
+            <View style={styles.matchupPlayerStats}>
+              <Text style={[styles.matchupPlayerLabel, { color: "#90B3E9" }]}>
+                {row.player_a?.split(" ").pop() ?? "A"}
+              </Text>
+              <StatRow label="Exp Scr" value={fmt(row.score_a, 1)} colors={colors} />
+              <StatRow label="SG Total" value={fmt(
+                row.sg_diff != null && row.sg_diff > 0 ? row.sg_diff : null, 3
+              )} colors={colors} />
+              <StatRow label="SG App" value={fmt(
+                row.approach_diff != null && row.approach_diff > 0 ? row.approach_diff : null, 3
+              )} colors={colors} />
+              <StatRow label="SG Putt" value={fmt(
+                row.putting_diff != null && row.putting_diff > 0 ? row.putting_diff : null, 3
+              )} colors={colors} />
+            </View>
+
+            {/* Divider */}
+            <View style={[styles.matchupVertDivider, { backgroundColor: colors.border.subtle }]} />
+
+            {/* Right column - Player B */}
+            <View style={[styles.matchupPlayerStats, { alignItems: "flex-end" }]}>
+              <Text style={[styles.matchupPlayerLabel, { color: "#90B3E9" }]}>
+                {row.player_b?.split(" ").pop() ?? "B"}
+              </Text>
+              <StatRow label="Exp Scr" value={fmt(row.score_b, 1)} colors={colors} right />
+              <StatRow label="SG Total" value={fmt(
+                row.sg_diff != null && row.sg_diff < 0 ? -row.sg_diff : null, 3
+              )} colors={colors} right />
+              <StatRow label="SG App" value={fmt(
+                row.approach_diff != null && row.approach_diff < 0 ? -row.approach_diff : null, 3
+              )} colors={colors} right />
+              <StatRow label="SG Putt" value={fmt(
+                row.putting_diff != null && row.putting_diff < 0 ? -row.putting_diff : null, 3
+              )} colors={colors} right />
+            </View>
+          </View>
+
+          {/* Raw diffs */}
+          <View style={[styles.matchupDivider, { backgroundColor: colors.border.subtle }]} />
+          <View style={styles.matchupDiffs}>
+            <Text style={[styles.matchupDiff, { color: colors.text.muted }]}>
+              SG Diff: {fmt(row.sg_diff, 3)}
+            </Text>
+            <Text style={[styles.matchupDiff, { color: colors.text.muted }]}>
+              Score: {fmt(row.score_diff, 1)}
+            </Text>
+            <Text style={[styles.matchupDiff, { color: colors.text.muted }]}>
+              App: {fmt(row.approach_diff, 3)}
+            </Text>
+            <Text style={[styles.matchupDiff, { color: colors.text.muted }]}>
+              Putt: {fmt(row.putting_diff, 3)}
+            </Text>
+            {row.course_fit_diff != null && (
+              <Text style={[styles.matchupDiff, { color: colors.text.muted }]}>
+                Crs: {fmt(row.course_fit_diff, 3)}
+              </Text>
+            )}
+          </View>
+          <Text style={[styles.expandHint, { color: colors.text.muted }]}>
+            Tap to collapse ▲
+          </Text>
+        </View>
+      )}
+      {!expanded && (
+        <Text style={[styles.expandHint, { color: colors.text.muted }]}>
+          Tap to expand ▼
+        </Text>
+      )}
+    </Pressable>
+  );
+}
+
 function MatchupsTab({ colors }: { colors: any }) {
   const { data, loading, error, refetch } =
     usePgaQuery<MatchupsResponse>("/pga/betting/matchups");
 
   const rows = useMemo(() => data?.rows ?? [], [data]);
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.accent.primary} />
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={[styles.center, { gap: 10 }]}>
-        <Text style={{ color: colors.text.danger, textAlign: "center" }}>
-          {error}
-        </Text>
-        <Pressable
-          onPress={refetch}
-          style={[styles.retryBtn, { borderColor: colors.border.subtle }]}
-        >
-          <Text style={{ color: colors.text.primary, fontWeight: "700" }}>
-            Retry
-          </Text>
-        </Pressable>
-      </View>
-    );
-  }
+  if (loading) return <LoadingView colors={colors} />;
+  if (error) return <ErrorView error={error} refetch={refetch} colors={colors} />;
 
   if (!rows.length) {
     return (
@@ -720,59 +973,16 @@ function MatchupsTab({ colors }: { colors: any }) {
   }
 
   return (
-    <ScrollView style={styles.matchupsList}>
-      {data?.rows ? (
-        <Text style={[styles.tableNote, { color: colors.text.muted, padding: 4 }]}>
-          {rows.length} matchups · tap row to expand
-        </Text>
-      ) : null}
+    <ScrollView style={styles.flex}>
+      <Text style={[styles.tableNote, { color: colors.text.muted, marginBottom: 8 }]}>
+        {rows.length} matchups · tap card to expand stats
+      </Text>
       {rows.map((row, idx) => (
-        <View
+        <MatchupCard
           key={`${row.group_index}-${idx}`}
-          style={[
-            styles.matchupCard,
-            { borderColor: colors.border.subtle, backgroundColor: "#0B1529" },
-          ]}
-        >
-          {row.sub_market_name ? (
-            <Text style={[styles.matchupMarket, { color: "#90B3E9" }]}>
-              {row.sub_market_name}
-            </Text>
-          ) : null}
-          <View style={styles.matchupRow}>
-            <View style={styles.matchupPlayer}>
-              <Text style={[styles.matchupName, { color: colors.text.primary }]}>
-                {row.player_a ?? "—"}
-              </Text>
-              <Text style={[styles.matchupOdds, { color: "#CFFAFE" }]}>
-                {fmtOdds(row.odds_a)}
-              </Text>
-            </View>
-            <Text style={[styles.matchupVs, { color: colors.text.muted }]}>vs</Text>
-            <View style={[styles.matchupPlayer, { alignItems: "flex-end" }]}>
-              <Text style={[styles.matchupName, { color: colors.text.primary }]}>
-                {row.player_b ?? "—"}
-              </Text>
-              <Text style={[styles.matchupOdds, { color: "#CFFAFE" }]}>
-                {fmtOdds(row.odds_b)}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.matchupStats}>
-            <Text style={[styles.matchupStat, { color: colors.text.muted }]}>
-              SG Diff: {fmt(row.sg_diff, 3)}
-            </Text>
-            <Text style={[styles.matchupStat, { color: colors.text.muted }]}>
-              Score Diff: {fmt(row.score_diff, 1)}
-            </Text>
-            <Text style={[styles.matchupStat, { color: colors.text.muted }]}>
-              App Diff: {fmt(row.approach_diff, 3)}
-            </Text>
-            <Text style={[styles.matchupStat, { color: colors.text.muted }]}>
-              Putt Diff: {fmt(row.putting_diff, 3)}
-            </Text>
-          </View>
-        </View>
+          row={row}
+          colors={colors}
+        />
       ))}
     </ScrollView>
   );
@@ -786,37 +996,160 @@ type ThreeBallResponse = {
   rows: PgaBetting3BallRow[];
 };
 
+function ThreeBallGroupCard({
+  groupIndex,
+  players,
+  colors,
+}: {
+  groupIndex: number;
+  players: PgaBetting3BallRow[];
+  colors: any;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const { add, remove, items } = usePgaBetslip();
+  const { open } = usePgaBetslipDrawer();
+
+  const groupPlayerNames = players.map((p) => p.player_display_name ?? "");
+
+  return (
+    <View
+      style={[
+        styles.threeBallCard,
+        { borderColor: colors.border.subtle, backgroundColor: "#0B1529" },
+      ]}
+    >
+      <Text style={[styles.threeBallGroup, { color: "#90B3E9" }]}>
+        Group {groupIndex}
+      </Text>
+
+      {/* Player comparison grid */}
+      <View style={styles.threeBallGrid}>
+        {players.map((player, pidx) => {
+          const itemId = `3ball-${groupIndex}-${player.player_id ?? pidx}`;
+          const saved = items.some((i) => i.id === itemId);
+          const oddsStr = fmtOdds(player.american_odds);
+
+          return (
+            <View
+              key={itemId}
+              style={[
+                styles.threeBallPlayer,
+                pidx < players.length - 1 && {
+                  borderRightWidth: StyleSheet.hairlineWidth,
+                  borderRightColor: colors.border.subtle,
+                },
+              ]}
+            >
+              <Text
+                style={[styles.threeBallName, { color: colors.text.primary }]}
+                numberOfLines={2}
+              >
+                {player.player_display_name ?? "—"}
+              </Text>
+              <Text style={[styles.threeBallOdds, { color: "#CFFAFE" }]}>
+                {oddsStr}
+              </Text>
+              <Text style={[styles.threeBallImpl, { color: colors.text.muted }]}>
+                {fmtPct(player.implied_probability)}
+              </Text>
+              {player.projected_rank != null && (
+                <View
+                  style={[
+                    styles.threeBallRankBadge,
+                    {
+                      backgroundColor:
+                        player.projected_rank === 1
+                          ? "rgba(34,211,238,0.2)"
+                          : "rgba(255,255,255,0.05)",
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.threeBallRank,
+                      {
+                        color:
+                          player.projected_rank === 1 ? "#22D3EE" : colors.text.muted,
+                      },
+                    ]}
+                  >
+                    Proj #{player.projected_rank}
+                  </Text>
+                </View>
+              )}
+
+              {/* Expanded stats */}
+              {expanded && (
+                <View style={styles.threeBallExpandedStats}>
+                  <Text style={[styles.threeBallStat, { color: colors.text.muted }]}>
+                    Exp Scr: {fmt(player.expected_round_score, 1)}
+                  </Text>
+                </View>
+              )}
+
+              <SaveBtn
+                saved={saved}
+                onPress={() => {
+                  if (saved) {
+                    remove(itemId);
+                  } else {
+                    add({
+                      id: itemId,
+                      playerId: player.player_id != null ? String(player.player_id) : null,
+                      playerLastName: player.player_display_name?.split(" ").pop() ?? "",
+                      playerDisplayName: player.player_display_name ?? "",
+                      groupPlayers: groupPlayerNames,
+                      tournamentId: player.tournament_id ?? undefined,
+                      createdAt: new Date().toISOString(),
+                      betType: "3ball",
+                      odds: player.american_odds,
+                      description: `${player.player_display_name} to WIN 3-ball Grp ${groupIndex} (${oddsStr})`,
+                    });
+                    open();
+                  }
+                }}
+              />
+            </View>
+          );
+        })}
+      </View>
+
+      {/* Expand toggle */}
+      <Pressable
+        onPress={() => setExpanded((v) => !v)}
+        style={styles.threeBallExpandBtn}
+      >
+        <Text style={[styles.expandHint, { color: colors.text.muted }]}>
+          {expanded ? "Hide stats ▲" : "Show stats ▼"}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
 function ThreeBallTab({ colors }: { colors: any }) {
   const { data, loading, error, refetch } =
     usePgaQuery<ThreeBallResponse>("/pga/betting/3ball");
 
   const rows = useMemo(() => data?.rows ?? [], [data]);
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.accent.primary} />
-      </View>
-    );
-  }
+  // Group by group_index, preserving order
+  const groups = useMemo(() => {
+    const map = new Map<number, PgaBetting3BallRow[]>();
+    for (const row of rows) {
+      const key = row.group_index ?? 0;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(row);
+    }
+    // Sort players within each group by projected_rank
+    for (const [, players] of map) {
+      players.sort((a, b) => (a.projected_rank ?? 99) - (b.projected_rank ?? 99));
+    }
+    return Array.from(map.entries()).sort((a, b) => b[0] - a[0]);
+  }, [rows]);
 
-  if (error) {
-    return (
-      <View style={[styles.center, { gap: 10 }]}>
-        <Text style={{ color: colors.text.danger, textAlign: "center" }}>
-          {error}
-        </Text>
-        <Pressable
-          onPress={refetch}
-          style={[styles.retryBtn, { borderColor: colors.border.subtle }]}
-        >
-          <Text style={{ color: colors.text.primary, fontWeight: "700" }}>
-            Retry
-          </Text>
-        </Pressable>
-      </View>
-    );
-  }
+  if (loading) return <LoadingView colors={colors} />;
+  if (error) return <ErrorView error={error} refetch={refetch} colors={colors} />;
 
   if (!rows.length) {
     return (
@@ -827,15 +1160,56 @@ function ThreeBallTab({ colors }: { colors: any }) {
   }
 
   return (
-    <View style={styles.tableWrapper}>
-      <Text style={[styles.tableNote, { color: colors.text.muted }]}>
-        {rows.length} players · tap a column header to sort
+    <ScrollView style={styles.flex}>
+      <Text style={[styles.tableNote, { color: colors.text.muted, marginBottom: 8 }]}>
+        {groups.length} groups · {rows.length} players
       </Text>
-      <AutoSortableTable
-        data={rows}
-        columns={THREE_BALL_COLUMNS}
-        defaultSort="group_index"
-      />
+      {groups.map(([groupIndex, players]) => (
+        <ThreeBallGroupCard
+          key={groupIndex}
+          groupIndex={groupIndex}
+          players={players}
+          colors={colors}
+        />
+      ))}
+    </ScrollView>
+  );
+}
+
+// ─── Shared stat widgets ───────────────────────────────────────────────────────
+
+function StatChip({
+  label,
+  value,
+  colors,
+}: {
+  label: string;
+  value: string;
+  colors: any;
+}) {
+  return (
+    <View style={[styles.statChip, { backgroundColor: "rgba(255,255,255,0.05)" }]}>
+      <Text style={[styles.statChipLabel, { color: colors.text.muted }]}>{label}</Text>
+      <Text style={[styles.statChipValue, { color: colors.text.primary }]}>{value}</Text>
+    </View>
+  );
+}
+
+function StatRow({
+  label,
+  value,
+  colors,
+  right,
+}: {
+  label: string;
+  value: string;
+  colors: any;
+  right?: boolean;
+}) {
+  return (
+    <View style={[styles.statRow, right && { flexDirection: "row-reverse" }]}>
+      <Text style={[styles.statRowLabel, { color: colors.text.muted }]}>{label}</Text>
+      <Text style={[styles.statRowValue, { color: colors.text.primary }]}>{value}</Text>
     </View>
   );
 }
@@ -845,6 +1219,8 @@ function ThreeBallTab({ colors }: { colors: any }) {
 export default function PgaBettingAnalyticsScreen() {
   const { colors } = useTheme();
   const [activeTab, setActiveTab] = useState<TabId>("outrights");
+  const { items } = usePgaBetslip();
+  const { isOpen, toggle } = usePgaBetslipDrawer();
 
   function renderActiveTab() {
     switch (activeTab) {
@@ -874,13 +1250,26 @@ export default function PgaBettingAnalyticsScreen() {
       />
       <View style={[styles.screen, { backgroundColor: colors.surface.screen }]}>
         {/* Header */}
-        <View
-          style={[styles.header, { borderColor: colors.border.subtle }]}
-        >
+        <View style={[styles.header, { borderColor: colors.border.subtle }]}>
           <Text style={styles.eyebrow}>PGA BETTING ANALYTICS</Text>
-          <Text style={[styles.h1, { color: colors.text.primary }]}>
-            Bet Board
-          </Text>
+          <View style={styles.h1Row}>
+            <Text style={[styles.h1, { color: colors.text.primary }]}>
+              Bet Board
+            </Text>
+            {items.length > 0 && (
+              <Pressable
+                onPress={toggle}
+                style={[
+                  styles.betslipBadge,
+                  { backgroundColor: isOpen ? "rgba(34,211,238,0.25)" : "rgba(34,211,238,0.15)" },
+                ]}
+              >
+                <Text style={styles.betslipBadgeText}>
+                  Betslip ({items.length}) {isOpen ? "▼" : "▲"}
+                </Text>
+              </Pressable>
+            )}
+          </View>
           <Text style={[styles.sub, { color: colors.text.muted }]}>
             Sortable tables · tap any column header to sort
           </Text>
@@ -893,6 +1282,9 @@ export default function PgaBettingAnalyticsScreen() {
 
         {/* Tab content */}
         <View style={styles.content}>{renderActiveTab()}</View>
+
+        {/* Betslip drawer */}
+        <PgaBetslipDrawer />
       </View>
     </>
   );
@@ -901,9 +1293,8 @@ export default function PgaBettingAnalyticsScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-  },
+  screen: { flex: 1 },
+  flex: { flex: 1 },
   header: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     backgroundColor: "#071731",
@@ -917,10 +1308,25 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 1,
   },
+  h1Row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 4,
+  },
   h1: {
     fontSize: 22,
     fontWeight: "800",
-    marginTop: 4,
+  },
+  betslipBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  betslipBadgeText: {
+    color: "#22D3EE",
+    fontSize: 11,
+    fontWeight: "800",
   },
   sub: {
     fontSize: 12,
@@ -966,25 +1372,146 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
-  comingSoon: {
-    flex: 1,
-    justifyContent: "center",
+  // Save button
+  saveBtn: {
+    alignSelf: "flex-start",
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginTop: 6,
+  },
+  saveBtnText: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  // Stat chips
+  statChip: {
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
     alignItems: "center",
+  },
+  statChipLabel: {
+    fontSize: 9,
+    fontWeight: "600",
+    letterSpacing: 0.3,
+  },
+  statChipValue: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  statRow: {
+    flexDirection: "row",
+    gap: 6,
+    alignItems: "center",
+    marginBottom: 2,
+  },
+  statRowLabel: {
+    fontSize: 10,
+    width: 52,
+  },
+  statRowValue: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  // Outright cards
+  outrightCard: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 16,
-    backgroundColor: "#0B1529",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
     gap: 8,
   },
-  comingSoonTitle: {
+  outrightHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  outrightName: {
+    fontSize: 15,
+    fontWeight: "700",
+    flex: 1,
+  },
+  outrightOddsRow: {
+    alignItems: "flex-end",
+    gap: 2,
+  },
+  outrightOdds: {
     fontSize: 18,
     fontWeight: "800",
   },
-  comingSoonSub: {
-    fontSize: 13,
+  outrightImpl: {
+    fontSize: 11,
   },
-  matchupsList: {
+  outrightStats: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  // Filter bar
+  filterBar: {
+    gap: 8,
+    paddingBottom: 8,
+    paddingTop: 2,
+  },
+  filterPill: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  filterPillText: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  // Finish cards
+  finishCard: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    gap: 8,
+  },
+  finishTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  finishLeft: {
     flex: 1,
+    gap: 2,
   },
+  finishRight: {
+    alignItems: "flex-end",
+    gap: 2,
+  },
+  finishMarket: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  finishName: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  finishOdds: {
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  finishImpl: {
+    fontSize: 11,
+  },
+  finishModel: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  finishStats: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  // Matchup cards
   matchupCard: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 12,
@@ -1000,11 +1527,11 @@ const styles = StyleSheet.create({
   },
   matchupRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
     gap: 8,
   },
-  matchupPlayer: {
+  matchupSide: {
     flex: 1,
     gap: 2,
   },
@@ -1013,20 +1540,110 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   matchupOdds: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "800",
   },
   matchupVs: {
     fontSize: 11,
     fontWeight: "600",
+    paddingTop: 4,
   },
-  matchupStats: {
+  matchupDiffs: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
     marginTop: 4,
   },
-  matchupStat: {
+  matchupDiff: {
     fontSize: 10,
+  },
+  matchupExpanded: {
+    gap: 8,
+  },
+  matchupExpandedDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: 4,
+  },
+  matchupStatsGrid: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  matchupPlayerStats: {
+    flex: 1,
+    gap: 4,
+  },
+  matchupPlayerLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    marginBottom: 4,
+  },
+  matchupVertDivider: {
+    width: StyleSheet.hairlineWidth,
+  },
+  matchupDivider: {
+    height: StyleSheet.hairlineWidth,
+  },
+  expandHint: {
+    fontSize: 10,
+    textAlign: "center",
+    marginTop: 4,
+  },
+  // 3-ball cards
+  threeBallCard: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    gap: 8,
+  },
+  threeBallGroup: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  threeBallGrid: {
+    flexDirection: "row",
+    gap: 0,
+  },
+  threeBallPlayer: {
+    flex: 1,
+    paddingHorizontal: 6,
+    gap: 3,
+    alignItems: "center",
+  },
+  threeBallName: {
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  threeBallOdds: {
+    fontSize: 16,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  threeBallImpl: {
+    fontSize: 11,
+    textAlign: "center",
+  },
+  threeBallRankBadge: {
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  threeBallRank: {
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  threeBallExpandedStats: {
+    gap: 2,
+    alignItems: "center",
+  },
+  threeBallStat: {
+    fontSize: 10,
+    textAlign: "center",
+  },
+  threeBallExpandBtn: {
+    paddingTop: 4,
   },
 });

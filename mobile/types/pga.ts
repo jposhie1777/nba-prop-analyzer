@@ -223,21 +223,12 @@ export type PgaCompareResponse = {
 };
 
 export type PgaBettingOutrightRow = {
-  ingested_at?: string | null;
   tournament_id?: string | null;
-  tournament_name?: string | null;
-  market_type?: string | null;
-  market_name?: string | null;
   player_id?: number | null;
   player_display_name?: string | null;
   american_odds?: number | null;
   implied_probability?: number | null;
-  tournaments_played?: number | null;
-  season_total_score_avg?: number | null;
-  l5_total_score_avg?: number | null;
-  cut_rate_l5?: number | null;
-  top10_rate_l5?: number | null;
-  weighted_l5_score?: number | null;
+  expected_round_score?: number | null;
   sg_total?: number | null;
   sg_approach?: number | null;
   sg_putting?: number | null;

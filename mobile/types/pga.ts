@@ -244,6 +244,55 @@ export type PgaBettingOutrightRow = {
   course_delta?: number | null;
 };
 
+export type PgaBettingFinishRow = {
+  tournament_id?: string | null;
+  tournament_name?: string | null;
+  player_id?: string | null;
+  player_display_name?: string | null;
+  sub_market_name?: string | null;
+  american_odds?: number | null;
+  implied_probability?: number | null;
+  model_probability?: number | null;
+  betting_edge?: number | null;
+  tournaments_played?: number | null;
+  season_total_score_avg?: number | null;
+  l5_total_score_avg?: number | null;
+  cut_rate_l5?: number | null;
+  top10_rate_l5?: number | null;
+  sg_total?: number | null;
+  sg_approach?: number | null;
+  sg_putting?: number | null;
+  course_delta?: number | null;
+};
+
+export type PgaBettingMatchupRow = {
+  tournament_id?: string | null;
+  sub_market_name?: string | null;
+  group_index?: number | null;
+  player_a?: string | null;
+  player_b?: string | null;
+  odds_a?: number | null;
+  odds_b?: number | null;
+  score_a?: number | null;
+  score_b?: number | null;
+  score_diff?: number | null;
+  sg_diff?: number | null;
+  approach_diff?: number | null;
+  putting_diff?: number | null;
+  course_fit_diff?: number | null;
+};
+
+export type PgaBetting3BallRow = {
+  tournament_id?: string | null;
+  group_index?: number | null;
+  player_id?: string | null;
+  player_display_name?: string | null;
+  american_odds?: number | null;
+  implied_probability?: number | null;
+  expected_round_score?: number | null;
+  projected_rank?: number | null;
+};
+
 export type PgaPlayerSkillStatsRow = {
   player_id?: number | null;
   player_name?: string | null;

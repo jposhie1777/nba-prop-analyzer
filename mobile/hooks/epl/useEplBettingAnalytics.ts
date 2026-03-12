@@ -7,6 +7,8 @@ export type EplBettingAnalyticsRow = {
   league: string;
   game: string;
   start_time_et?: string;
+  home_team?: string | null;
+  away_team?: string | null;
   bookmaker: string;
   market: string;
   outcome: string;
@@ -28,6 +30,31 @@ export type EplBettingAnalyticsRow = {
   model_total_line_edge?: number | null;
   model_edge_tier?: "Strong" | "Medium" | "Lean" | null;
   analytics_updated_at?: string;
+  // Rolling stats from soccer_data.epl_betting_analytics
+  home_l3_goals_pg?: number | null;
+  home_l5_goals_pg?: number | null;
+  home_l7_goals_pg?: number | null;
+  away_l3_goals_pg?: number | null;
+  away_l5_goals_pg?: number | null;
+  away_l7_goals_pg?: number | null;
+  home_l3_goals_allowed_pg?: number | null;
+  home_l5_goals_allowed_pg?: number | null;
+  home_l7_goals_allowed_pg?: number | null;
+  away_l3_goals_allowed_pg?: number | null;
+  away_l5_goals_allowed_pg?: number | null;
+  away_l7_goals_allowed_pg?: number | null;
+  home_l3_corners_pg?: number | null;
+  home_l5_corners_pg?: number | null;
+  home_l7_corners_pg?: number | null;
+  away_l3_corners_pg?: number | null;
+  away_l5_corners_pg?: number | null;
+  away_l7_corners_pg?: number | null;
+  home_l3_win_rate?: number | null;
+  home_l5_win_rate?: number | null;
+  home_l7_win_rate?: number | null;
+  away_l3_win_rate?: number | null;
+  away_l5_win_rate?: number | null;
+  away_l7_win_rate?: number | null;
 };
 
 export type EplBettingAnalyticsResponse = {

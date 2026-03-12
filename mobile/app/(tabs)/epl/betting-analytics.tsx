@@ -84,6 +84,42 @@ type TeamMasterRow = {
   season_avg_goals_allowed?: number | null;
 };
 
+// Per-row stats sourced directly from soccer_data.epl_betting_analytics
+type RowStats = {
+  l3_goals?: number | null;
+  l5_goals?: number | null;
+  l3_goals_allowed?: number | null;
+  l5_goals_allowed?: number | null;
+  l3_win_rate?: number | null;
+  l3_corners?: number | null;
+  l5_corners?: number | null;
+};
+
+function extractRowStats(rows: EplBettingAnalyticsRow[], side: "home" | "away"): RowStats {
+  const first = rows[0];
+  if (!first) return {};
+  if (side === "home") {
+    return {
+      l3_goals: first.home_l3_goals_pg,
+      l5_goals: first.home_l5_goals_pg,
+      l3_goals_allowed: first.home_l3_goals_allowed_pg,
+      l5_goals_allowed: first.home_l5_goals_allowed_pg,
+      l3_win_rate: first.home_l3_win_rate,
+      l3_corners: first.home_l3_corners_pg,
+      l5_corners: first.home_l5_corners_pg,
+    };
+  }
+  return {
+    l3_goals: first.away_l3_goals_pg,
+    l5_goals: first.away_l5_goals_pg,
+    l3_goals_allowed: first.away_l3_goals_allowed_pg,
+    l5_goals_allowed: first.away_l5_goals_allowed_pg,
+    l3_win_rate: first.away_l3_win_rate,
+    l3_corners: first.away_l3_corners_pg,
+    l5_corners: first.away_l5_corners_pg,
+  };
+}
+
 type GameGroup = {
   game: string;
   homeTeam: string;
@@ -276,8 +312,15 @@ function GameCard({
     );
   }, [rows, selectedMarket]);
 
-  const homeStats = findTeam(teamMap, homeTeam);
-  const awayStats = findTeam(teamMap, awayTeam);
+  // Prefer row-level rolling stats from epl_betting_analytics; fall back to team master metrics
+  const homeRowStats = useMemo(() => extractRowStats(rows, "home"), [rows]);
+  const awayRowStats = useMemo(() => extractRowStats(rows, "away"), [rows]);
+  const homeTeamMetrics = findTeam(teamMap, homeTeam);
+  const awayTeamMetrics = findTeam(teamMap, awayTeam);
+
+  const hasRowStats =
+    homeRowStats.l3_goals != null || awayRowStats.l3_goals != null;
+  const hasTeamMetrics = homeTeamMetrics != null || awayTeamMetrics != null;
 
   // Model stats — first row with model data
   const modelRow = rows.find((r) => r.model_expected_total_goals != null || r.model_edge_tier != null);
@@ -328,10 +371,9 @@ function GameCard({
         ) : null}
       </View>
 
-      {/* ── Team stats ── */}
-      {(homeStats || awayStats) ? (
+      {/* ── Team stats (row-level from epl_betting_analytics) ── */}
+      {hasRowStats ? (
         <View style={[styles.statsBox, { borderColor: colors.border.subtle }]}>
-          {/* Column labels */}
           <View style={styles.statRow}>
             <Text style={[styles.statColHeader, { color: "#22D3EE" }]}>
               {homeTeam.split(" ").pop()}
@@ -341,40 +383,94 @@ function GameCard({
               {awayTeam.split(" ").pop()}
             </Text>
           </View>
-
           <StatRow
-            label="L3 Goals"
-            homeVal={formatMetric(homeStats?.last3_avg_scored)}
-            awayVal={formatMetric(awayStats?.last3_avg_scored)}
+            label="L3 Goals/Gm"
+            homeVal={formatMetric(homeRowStats.l3_goals)}
+            awayVal={formatMetric(awayRowStats.l3_goals)}
             colors={colors}
             highlightBetter="higher"
           />
           <StatRow
             label="L3 Goals Allowed"
-            homeVal={formatMetric(homeStats?.last3_avg_allowed)}
-            awayVal={formatMetric(awayStats?.last3_avg_allowed)}
+            homeVal={formatMetric(homeRowStats.l3_goals_allowed)}
+            awayVal={formatMetric(awayRowStats.l3_goals_allowed)}
             colors={colors}
             highlightBetter="lower"
           />
           <StatRow
-            label="L5 Goals"
-            homeVal={formatMetric(homeStats?.last5_avg_scored)}
-            awayVal={formatMetric(awayStats?.last5_avg_scored)}
+            label="L5 Goals/Gm"
+            homeVal={formatMetric(homeRowStats.l5_goals)}
+            awayVal={formatMetric(awayRowStats.l5_goals)}
             colors={colors}
             highlightBetter="higher"
           />
           <StatRow
             label="L5 Goals Allowed"
-            homeVal={formatMetric(homeStats?.last5_avg_allowed)}
-            awayVal={formatMetric(awayStats?.last5_avg_allowed)}
+            homeVal={formatMetric(homeRowStats.l5_goals_allowed)}
+            awayVal={formatMetric(awayRowStats.l5_goals_allowed)}
+            colors={colors}
+            highlightBetter="lower"
+          />
+          <StatRow
+            label="L3 Win Rate"
+            homeVal={formatPct(homeRowStats.l3_win_rate)}
+            awayVal={formatPct(awayRowStats.l3_win_rate)}
+            colors={colors}
+            highlightBetter="higher"
+          />
+          <StatRow
+            label="L3 Corners/Gm"
+            homeVal={formatMetric(homeRowStats.l3_corners)}
+            awayVal={formatMetric(awayRowStats.l3_corners)}
+            colors={colors}
+            highlightBetter="higher"
+          />
+        </View>
+      ) : hasTeamMetrics ? (
+        /* ── Fallback: team master metrics ── */
+        <View style={[styles.statsBox, { borderColor: colors.border.subtle }]}>
+          <View style={styles.statRow}>
+            <Text style={[styles.statColHeader, { color: "#22D3EE" }]}>
+              {homeTeam.split(" ").pop()}
+            </Text>
+            <Text style={[styles.statColHeaderCenter, { color: colors.text.muted }]} />
+            <Text style={[styles.statColHeader, { color: "#A78BFA", textAlign: "right" }]}>
+              {awayTeam.split(" ").pop()}
+            </Text>
+          </View>
+          <StatRow
+            label="L3 Goals"
+            homeVal={formatMetric(homeTeamMetrics?.last3_avg_scored)}
+            awayVal={formatMetric(awayTeamMetrics?.last3_avg_scored)}
+            colors={colors}
+            highlightBetter="higher"
+          />
+          <StatRow
+            label="L3 Goals Allowed"
+            homeVal={formatMetric(homeTeamMetrics?.last3_avg_allowed)}
+            awayVal={formatMetric(awayTeamMetrics?.last3_avg_allowed)}
+            colors={colors}
+            highlightBetter="lower"
+          />
+          <StatRow
+            label="L5 Goals"
+            homeVal={formatMetric(homeTeamMetrics?.last5_avg_scored)}
+            awayVal={formatMetric(awayTeamMetrics?.last5_avg_scored)}
+            colors={colors}
+            highlightBetter="higher"
+          />
+          <StatRow
+            label="L5 Goals Allowed"
+            homeVal={formatMetric(homeTeamMetrics?.last5_avg_allowed)}
+            awayVal={formatMetric(awayTeamMetrics?.last5_avg_allowed)}
             colors={colors}
             highlightBetter="lower"
           />
           {isCardsMarket ? (
             <StatRow
               label="L3 Cards/Gm"
-              homeVal={formatMetric(homeStats?.l3_team_cards_pg)}
-              awayVal={formatMetric(awayStats?.l3_team_cards_pg)}
+              homeVal={formatMetric(homeTeamMetrics?.l3_team_cards_pg)}
+              awayVal={formatMetric(awayTeamMetrics?.l3_team_cards_pg)}
               colors={colors}
             />
           ) : null}

@@ -246,21 +246,9 @@ export const useDevStore = create<DevStore>((set, get) => ({
 
   spTriggers: [
     {
-      id: "epl_team_pipeline",
-      label: "EPL Team Pipeline",
-      call: "CALL epl_data.sp_build_epl_team_pipeline();",
-      status: "idle",
-    },
-    {
       id: "mls_fact_tables",
       label: "MLS All Fact Tables",
       call: "CALL `mls_data.sp_build_all_fact_tables`();",
-      status: "idle",
-    },
-    {
-      id: "epl_betting_pipeline",
-      label: "EPL Betting Pipeline",
-      call: "CALL soccer_data.run_epl_betting_pipeline();",
       status: "idle",
     },
   ],

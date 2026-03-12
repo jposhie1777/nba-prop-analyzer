@@ -1,11 +1,14 @@
 """
-Scrape a tennis match page on Oddspedia and dump all available market IDs.
+Probe Oddspedia tennis pages and print sportsbook market-related API payloads.
 
-Step 1: Load the listing page and extract real match URLs from <a> tags.
-Step 2: Pick the first upcoming match URL.
-Step 3: Intercept all /api/v1/ responses on the match page.
+Workflow:
+1) Load listing page and inspect __NUXT__ for upcoming matches.
+2) Resolve a likely *match* URL (avoid editorial pages like /picks).
+3) Capture JSON responses from any URL containing '/api/' while loading the match page.
 """
-import json
+import re
+from urllib.parse import urlparse
+
 from playwright.sync_api import sync_playwright
 
 try:
@@ -18,6 +21,34 @@ UA = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 )
+EXCLUDE_PATH_TOKENS = {
+    "picks",
+    "odds",
+    "odds-explained",
+    "predictions",
+    "news",
+    "highlights",
+}
+
+
+def looks_like_match_path(url: str) -> bool:
+    parsed = urlparse(url)
+    if "/us/tennis/" not in parsed.path:
+        return False
+    if "#" in url:
+        return False
+
+    tail = parsed.path.split("/us/tennis/")[-1].strip("/")
+    if not tail:
+        return False
+
+    first_segment = tail.split("/")[0]
+    if first_segment in EXCLUDE_PATH_TOKENS:
+        return False
+
+    # Typical match slugs look like player-a-player-b or include an id suffix.
+    return bool(re.search(r"[a-z0-9]+-[a-z0-9]+", first_segment)) and first_segment.count("-") >= 2
+
 
 with sync_playwright() as pw:
     browser = pw.chromium.launch(headless=True)
@@ -26,83 +57,104 @@ with sync_playwright() as pw:
     if stealth:
         stealth(page)
 
-    # ── Step 1: listing page ──────────────────────────────────────────────
-    print(f"Step 1: loading listing page …\n  → {LISTING_URL}")
+    print(f"Step 1: loading listing page ...\n  -> {LISTING_URL}")
     page.goto(LISTING_URL, wait_until="domcontentloaded", timeout=60000)
-    page.wait_for_function("() => !!window.__NUXT__", timeout=15000)
+    page.wait_for_function("() => !!window.__NUXT__", timeout=20000)
 
     nuxt = page.evaluate("() => window.__NUXT__")
     data0 = (nuxt.get("data") or [{}])[0] or {}
     match_list = data0.get("matchList", [])
-    print(f"  matchList: {len(match_list)} entries")
+    print(f"  matchList entries: {len(match_list)}")
+    if match_list:
+        print(f"  matchList keys (sample): {sorted(list(match_list[0].keys()))[:20]}")
 
-    # Grab slugs of upcoming matches for filtering
     upcoming_slugs = set()
     for m in match_list:
         if m.get("winner") is None and m.get("matchstatus") == 1:
-            upcoming_slugs.update([m.get("ht_slug", ""), m.get("at_slug", "")])
-    print(f"  upcoming match slugs: {upcoming_slugs}")
+            for k in ("ht_slug", "at_slug", "slug", "url"):
+                v = m.get(k)
+                if isinstance(v, str) and v:
+                    upcoming_slugs.add(v)
+    print(f"  upcoming slug hints: {len(upcoming_slugs)}")
 
-    # Extract real hrefs from the page DOM
-    all_links = page.evaluate("""
+    all_links = page.evaluate(
+        """
         () => Array.from(document.querySelectorAll('a[href]'))
-                   .map(a => a.href)
-                   .filter(h => h.includes('/tennis/') && !h.endsWith('/tennis/odds') && !h.endsWith('/tennis'))
-    """)
+            .map(a => a.href)
+            .filter(h => h.includes('/us/tennis/'))
+        """
+    )
     all_links = list(dict.fromkeys(all_links))
     print(f"  tennis links found in DOM: {len(all_links)}")
-    for lnk in all_links[:8]:
+
+    match_candidates = [u for u in all_links if looks_like_match_path(u)]
+    print(f"  probable match links: {len(match_candidates)}")
+    for lnk in match_candidates[:8]:
         print(f"    {lnk}")
 
-    # Pick a link that contains an upcoming match slug
+    # Prefer candidate containing known upcoming slugs.
     match_url = None
-    for lnk in all_links:
+    for lnk in match_candidates:
         if any(slug and slug in lnk for slug in upcoming_slugs):
             match_url = lnk
             break
-    if not match_url and all_links:
-        match_url = all_links[0]
+
+    if not match_url and match_candidates:
+        match_url = match_candidates[0]
+
+    if not match_url:
+        raise RuntimeError("Could not find a likely match URL on listing page.")
+
     print(f"\n  using match URL: {match_url}")
 
-    # ── Step 2: match detail page with interception ───────────────────────
     api_calls = {}
-    all_resp_urls = []
+    api_meta = []
 
     def on_response(response):
-        all_resp_urls.append(f"{response.status} {response.url[:100]}")
-        if "/api/v1/" in response.url and response.status == 200:
-            try:
-                api_calls[response.url] = response.json()
-            except Exception:
-                pass
+        url = response.url
+        if "/api/" not in url:
+            return
+        meta = f"{response.status} {response.request.resource_type:>10} {url[:150]}"
+        api_meta.append(meta)
+        if response.status != 200:
+            return
+        ctype = response.headers.get("content-type", "")
+        if "json" not in ctype:
+            return
+        try:
+            api_calls[url] = response.json()
+        except Exception:
+            pass
 
     page.on("response", on_response)
 
-    print(f"\nStep 2: loading match page …\n  → {match_url}")
+    print(f"\nStep 2: loading match page ...\n  -> {match_url}")
     page.goto(match_url, wait_until="domcontentloaded", timeout=60000)
-    page.wait_for_timeout(8000)
+    page.wait_for_timeout(10000)
 
-    print(f"  responses captured: {len(all_resp_urls)}")
-    api_urls = [u for u in all_resp_urls if "/api/v1/" in u]
-    print(f"  /api/v1/ calls: {len(api_urls)}")
-    for u in api_urls:
-        print(f"    {u}")
+    print(f"  api/* responses captured: {len(api_meta)}")
+    for m in api_meta[:25]:
+        print(f"    {m}")
 
     browser.close()
 
-# ── Results ───────────────────────────────────────────────────────────────
-print(f"\n{'='*60}")
-print(f"Captured {len(api_calls)} successful /api/v1/ responses:")
+print(f"\n{'=' * 70}")
+print(f"Captured {len(api_calls)} successful JSON api responses")
 for url, body in api_calls.items():
-    endpoint = url.split("/api/v1/")[1].split("?")[0]
-    params   = url.split("?")[1] if "?" in url else ""
-    print(f"\n  [{endpoint}]  {params[:100]}")
+    parsed = urlparse(url)
+    endpoint = parsed.path
+    print(f"\n[{endpoint}] {parsed.query[:120]}")
     if isinstance(body, dict):
         d = body.get("data", body)
         if isinstance(d, dict):
-            markets = d.get("markets", {})
-            if markets:
-                print(f"  markets ({len(markets)}):")
-                print(json.dumps(markets, indent=4))
-            else:
-                print(f"  keys: {list(d.keys())[:12]}")
+            for key in ("markets", "bookies", "odds", "match", "event"):
+                if key in d:
+                    val = d[key]
+                    if isinstance(val, dict):
+                        print(f"  {key}: dict({len(val)})")
+                    elif isinstance(val, list):
+                        print(f"  {key}: list({len(val)})")
+                    else:
+                        print(f"  {key}: {type(val).__name__}")
+            if not any(k in d for k in ("markets", "bookies", "odds", "match", "event")):
+                print(f"  keys: {list(d.keys())[:15]}")

@@ -5,10 +5,13 @@ Fetches the Oddspedia odds page for a given sport/URL and returns a clean list
 of matches with their odds.
 
 Live URL scraping uses Playwright (headless Chromium) to bypass bot-detection
-and reads window.__NUXT__ directly from the browser context.
+and reads window.__NUXT__ directly from the browser context.  After the page
+loads, additional per-set market odds are fetched by calling the Oddspedia API
+from within the browser context (so Cloudflare cookies are already present).
 
 File-based scraping (for local testing) evaluates the embedded Nuxt SSR state
-via a Node.js subprocess.
+via a Node.js subprocess.  Per-set odds are not available in file mode since
+they require live API calls.
 
 Requirements:
   Live scraping : playwright Python package + `playwright install chromium`
@@ -19,7 +22,7 @@ Usage:
 
     client = OddspediaClient()
 
-    # From a live URL (uses Playwright)
+    # From a live URL (uses Playwright) — includes per-set odds
     matches = client.scrape("https://www.oddspedia.com/us/tennis/odds")
 
     # From a saved HTML file (uses Node.js, no browser needed)
@@ -32,16 +35,36 @@ import json
 import logging
 import subprocess
 import tempfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 LOGGER = logging.getLogger(__name__)
 
-# Market IDs found in Oddspedia's Nuxt state
+# ---------------------------------------------------------------------------
+# Market ID → human-readable name mapping
+# ---------------------------------------------------------------------------
+# IDs 201/301 come from window.__NUXT__ (SSR-embedded, always present).
+# IDs 204/205/304/305/407/408 are fetched live via the API after page load.
 MARKET_NAMES: Dict[str, str] = {
     "201": "moneyline",
+    "204": "set1_moneyline",
+    "205": "set2_moneyline",
     "301": "spread",
+    "304": "set1_spread",
+    "305": "set2_spread",
+    "401": "total",
+    "407": "set1_total",
+    "408": "set2_total",
 }
+
+# Per-set market IDs to fetch via the API after Playwright has loaded the page.
+# These are not included in the SSR Nuxt state — the browser fetches them
+# on-demand when the user clicks a tab.
+_SET_MARKET_IDS: List[int] = [204, 205, 304, 305, 407, 408]
+
+# Base URL for the Oddspedia odds API
+_API_BASE = "https://oddspedia.com/api/v1/getAmericanMaxOddsWithPagination"
 
 # Node.js snippet that evaluates the __NUXT__ IIFE and prints the JSON we need.
 # Used only by scrape_file(); live scraping reads __NUXT__ directly via Playwright.
@@ -88,10 +111,14 @@ class OddspediaClient:
         Uses headless Chromium with playwright-stealth to mask automation
         signals (navigator.webdriver, etc.) that trigger Cloudflare blocks.
 
+        After the page loads, per-set market odds (1st set moneyline/spread/
+        total, 2nd set moneyline/spread/total) are fetched by calling the
+        Oddspedia API via fetch() from within the browser context — this reuses
+        the Cloudflare cookies already established for the page load.
+
         Waits only for DOMContentLoaded because window.__NUXT__ is embedded
-        in the SSR HTML — no JS execution is needed.  "networkidle" is
-        intentionally avoided: Cloudflare's challenge scripts keep the
-        network busy indefinitely and cause a 60 s timeout.
+        in the SSR HTML.  "networkidle" is intentionally avoided: Cloudflare's
+        challenge scripts keep the network busy indefinitely.
         """
         from playwright.sync_api import sync_playwright
 
@@ -117,9 +144,71 @@ class OddspediaClient:
             # available immediately after the DOM is parsed.
             page.wait_for_function("() => !!window.__NUXT__", timeout=15_000)
             nuxt_data = page.evaluate("() => window.__NUXT__")
+
+            # Fetch per-set markets from the API while the browser session is
+            # still open so we inherit Cloudflare auth cookies.
+            extra_odds = self._fetch_set_markets_via_browser(page)
+
             browser.close()
 
-        return self._build_records_from_nuxt(nuxt_data)
+        return self._build_records_from_nuxt(nuxt_data, extra_odds=extra_odds)
+
+    def _fetch_set_markets_via_browser(self, page: Any) -> Dict[str, Dict[str, Any]]:
+        """Call the Oddspedia API for per-set markets from within the live browser context.
+
+        Because the browser has already passed Cloudflare's challenge for the
+        page load, fetch() calls made from the same context inherit those
+        cookies automatically.
+
+        Returns a dict of {match_id_str: {market_id_str: market_data}} that can
+        be merged into the records built from __NUXT__.
+        """
+        now = datetime.now(timezone.utc)
+        # Oddspedia's date window starts at 04:00 UTC (= midnight US Eastern DST)
+        window_start = now.replace(hour=4, minute=0, second=0, microsecond=0)
+        if now.hour < 4:
+            window_start -= timedelta(days=1)
+        window_end = window_start + timedelta(hours=23, minutes=59, seconds=59)
+
+        start_date = window_start.strftime("%Y-%m-%dT%H:%M:%SZ")
+        end_date   = window_end.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        combined: Dict[str, Dict[str, Any]] = {}
+
+        for ot in _SET_MARKET_IDS:
+            api_url = (
+                f"{_API_BASE}"
+                f"?geoCode=US&bookmakerGeoCode=US&bookmakerGeoState=VA&wettsteuer=0"
+                f"&startDate={start_date}&endDate={end_date}"
+                f"&sport=tennis&ot={ot}&excludeSpecialStatus=0&popularLeaguesOnly=0"
+                f"&sortBy=default&status=all&page=1&perPage=50&r=si&inplay=1&language=us"
+            )
+            LOGGER.info("Fetching set market ot=%s via browser fetch()", ot)
+            try:
+                result = page.evaluate(
+                    """async (url) => {
+                        const resp = await fetch(url, {
+                            headers: { "Accept": "application/json", "Accept-Language": "en-US,en;q=0.9" }
+                        });
+                        if (!resp.ok) return null;
+                        return await resp.json();
+                    }""",
+                    api_url,
+                )
+            except Exception as exc:
+                LOGGER.warning("set market ot=%s fetch failed: %s", ot, exc)
+                continue
+
+            if not result or "data" not in result:
+                LOGGER.warning("set market ot=%s returned no data", ot)
+                continue
+
+            for match_id, match_data in result["data"].get("matches", {}).items():
+                if match_id not in combined:
+                    combined[match_id] = {}
+                combined[match_id][str(ot)] = match_data
+
+        return combined
 
     def scrape_file(self, path: str | Path) -> List[Dict[str, Any]]:
         """Parse a saved HTML file via Node.js and return a list of match-odds dicts.
@@ -134,7 +223,11 @@ class OddspediaClient:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _build_records_from_nuxt(self, nuxt_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _build_records_from_nuxt(
+        self,
+        nuxt_data: Dict[str, Any],
+        extra_odds: Optional[Dict[str, Dict[str, Any]]] = None,
+    ) -> List[Dict[str, Any]]:
         """Build records from an already-resolved __NUXT__ dict (Playwright path)."""
         data0 = (nuxt_data.get("data") or [{}])[0]
         raw = {
@@ -142,7 +235,7 @@ class OddspediaClient:
             "odds":      data0.get("odds", {}),
             "sport":     (data0.get("currentSport") or {}).get("slug"),
         }
-        return self._build_records(raw)
+        return self._build_records(raw, extra_odds=extra_odds)
 
     def _parse_html_via_node(self, html: str) -> List[Dict[str, Any]]:
         """Write html to a temp file, evaluate via Node.js, return clean records."""
@@ -157,7 +250,7 @@ class OddspediaClient:
         finally:
             Path(tmp_path).unlink(missing_ok=True)
 
-        return self._build_records(raw)
+        return self._build_records(raw, extra_odds=None)
 
     def _evaluate_nuxt_via_node(self, html_path: str) -> Dict[str, Any]:
         """Run the Node.js extractor against *html_path* and return parsed JSON."""
@@ -184,8 +277,22 @@ class OddspediaClient:
 
         return json.loads(result.stdout)
 
-    def _build_records(self, raw: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Combine matchList and odds into clean per-match records."""
+    def _build_records(
+        self,
+        raw: Dict[str, Any],
+        extra_odds: Optional[Dict[str, Dict[str, Any]]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Combine matchList, NUXT-embedded odds, and extra API odds into records.
+
+        Parameters
+        ----------
+        raw:
+            Dict with ``matchList``, ``odds``, and ``sport`` keys — parsed from
+            window.__NUXT__ (or the Node.js extractor for file mode).
+        extra_odds:
+            Optional ``{match_id_str: {market_id_str: market_data}}`` dict with
+            per-set odds fetched directly from the API (Playwright mode only).
+        """
         match_list: List[Dict[str, Any]] = raw.get("matchList", [])
         odds_by_match: Dict[str, Any] = raw.get("odds", {}).get("matches", {})
         sport: Optional[str] = raw.get("sport")
@@ -207,6 +314,10 @@ class OddspediaClient:
                 "league_id": match.get("league_id"),
                 "markets": {},
             }
+
+            # Merge extra per-set odds (fetched via API) into this match's odds
+            if extra_odds and str(match_id) in extra_odds:
+                match_odds = {**match_odds, **extra_odds[str(match_id)]}
 
             for market_id, market_data in match_odds.items():
                 market_name = MARKET_NAMES.get(market_id, f"market_{market_id}")

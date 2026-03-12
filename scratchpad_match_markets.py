@@ -43,7 +43,10 @@ def _intercept_match_page(pw, url):
     if stealth:
         stealth(page)
 
+    all_urls = []
+
     def on_response(response):
+        all_urls.append(f"{response.status} {response.url}")
         if "/api/v1/" in response.url and response.status == 200:
             try:
                 body = response.json()
@@ -55,8 +58,13 @@ def _intercept_match_page(pw, url):
 
     print(f"  → {url}")
     page.goto(url, wait_until="domcontentloaded", timeout=60000)
-    # Wait a few seconds for XHR calls to complete
-    page.wait_for_timeout(5000)
+    page.wait_for_timeout(8000)  # wait for XHR to fire
+
+    print(f"  total responses captured: {len(all_urls)}")
+    print("  all URLs:")
+    for u in all_urls:
+        print(f"    {u[:120]}")
+
     browser.close()
 
     return api_calls

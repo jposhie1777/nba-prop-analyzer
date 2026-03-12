@@ -23,12 +23,19 @@ UA = (
 )
 EXCLUDE_PATH_TOKENS = {
     "picks",
-    "odds",
     "odds-explained",
     "predictions",
     "news",
     "highlights",
 }
+
+
+def _tennis_segments(path: str) -> list[str]:
+    raw_parts = [p for p in path.strip("/").split("/") if p]
+    if "tennis" in raw_parts:
+        tennis_idx = raw_parts.index("tennis")
+        return raw_parts[tennis_idx + 1 :]
+    return raw_parts
 
 
 def looks_like_match_path(url: str) -> bool:
@@ -38,16 +45,42 @@ def looks_like_match_path(url: str) -> bool:
     if "#" in url:
         return False
 
-    tail = parsed.path.split("/us/tennis/")[-1].strip("/")
-    if not tail:
+    segments = _tennis_segments(parsed.path)
+    if not segments:
         return False
 
-    first_segment = tail.split("/")[0]
-    if first_segment in EXCLUDE_PATH_TOKENS:
+    # Match pages can be nested below section paths (e.g. /us/tennis/odds/<match-slug>).
+    slug_segment = segments[-1]
+    if slug_segment in EXCLUDE_PATH_TOKENS:
+        return False
+    if slug_segment in {"odds", "live", "results", "fixtures"}:
         return False
 
     # Typical match slugs look like player-a-player-b or include an id suffix.
-    return bool(re.search(r"[a-z0-9]+-[a-z0-9]+", first_segment)) and first_segment.count("-") >= 2
+    has_two_sides = bool(re.search(r"[a-z0-9]+-[a-z0-9]+", slug_segment))
+    return has_two_sides and slug_segment.count("-") >= 1
+
+
+def build_match_candidates_from_data(match_list: list[dict]) -> list[str]:
+    candidates = []
+    for item in match_list:
+        raw_url = item.get("url")
+        if isinstance(raw_url, str) and raw_url:
+            if raw_url.startswith("http"):
+                candidates.append(raw_url)
+            else:
+                candidates.append(f"https://www.oddspedia.com{raw_url if raw_url.startswith('/') else '/' + raw_url}")
+
+        ht_slug = item.get("ht_slug")
+        at_slug = item.get("at_slug")
+        event_id = item.get("id") or item.get("match_id")
+        if isinstance(ht_slug, str) and isinstance(at_slug, str) and ht_slug and at_slug:
+            slug = f"{ht_slug}-{at_slug}"
+            if event_id:
+                slug = f"{slug}-{event_id}"
+            candidates.append(f"https://www.oddspedia.com/us/tennis/{slug}")
+
+    return list(dict.fromkeys(candidates))
 
 
 with sync_playwright() as pw:
@@ -88,6 +121,12 @@ with sync_playwright() as pw:
     print(f"  tennis links found in DOM: {len(all_links)}")
 
     match_candidates = [u for u in all_links if looks_like_match_path(u)]
+
+    data_candidates = [u for u in build_match_candidates_from_data(match_list) if looks_like_match_path(u)]
+    if data_candidates:
+        print(f"  match links inferred from __NUXT__: {len(data_candidates)}")
+
+    match_candidates = list(dict.fromkeys(data_candidates + match_candidates))
     print(f"  probable match links: {len(match_candidates)}")
     for lnk in match_candidates[:8]:
         print(f"    {lnk}")
@@ -95,7 +134,8 @@ with sync_playwright() as pw:
     # Prefer candidate containing known upcoming slugs.
     match_url = None
     for lnk in match_candidates:
-        if any(slug and slug in lnk for slug in upcoming_slugs):
+        parts = _tennis_segments(urlparse(lnk).path)
+        if any(slug and any(slug in p for p in parts) for slug in upcoming_slugs):
             match_url = lnk
             break
 

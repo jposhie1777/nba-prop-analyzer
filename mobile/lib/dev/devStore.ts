@@ -251,6 +251,30 @@ export const useDevStore = create<DevStore>((set, get) => ({
       call: "CALL `mls_data.sp_build_all_fact_tables`();",
       status: "idle",
     },
+    {
+      id: "epl_full_pipeline",
+      label: "EPL Full Pipeline",
+      call: "CALL `graphite-flare-477419-h7.epl_data.sp_build_epl_full_pipeline`();",
+      status: "idle",
+    },
+    {
+      id: "epl_betting_pipeline",
+      label: "EPL Betting Pipeline",
+      call: "CALL `graphite-flare-477419-h7.soccer_data.run_epl_betting_pipeline`();",
+      status: "idle",
+    },
+    {
+      id: "pga_course_fit",
+      label: "PGA Course Fit Pipeline",
+      call: "CALL `graphite-flare-477419-h7.pga_data.run_course_fit_pipeline`();",
+      status: "idle",
+    },
+    {
+      id: "pga_betting_platform",
+      label: "PGA Betting Platform",
+      call: "CALL `graphite-flare-477419-h7.pga_data.sp_build_betting_platform`();",
+      status: "idle",
+    },
   ],
 
   workflows: {

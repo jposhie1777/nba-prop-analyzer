@@ -107,6 +107,7 @@ export default function RootLayout() {
     if (__DEV__) {
       console.log("🧪 Hydrating dev flags");
       useDevStore.getState().actions.hydrateFlags();
+      useDevStore.getState().actions.hydrateGithubPat();
     }
   }, []);
 

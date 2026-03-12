@@ -11,9 +11,11 @@ const MAX_NETWORK_ITEMS = 50;
 const MAX_ERROR_ITEMS = 30;
 
 const DEV_FLAGS_STORAGE_KEY = "__DEV_FLAGS__";
+const GITHUB_PAT_STORAGE_KEY = "__DEV_GITHUB_PAT__";
+const GITHUB_REPO = "jposhie1777/nba-prop-analyzer";
 
 /* 🔴 NEW: DEV UNLOCK CONFIG */
-const DEV_UNLOCK_TAPS_REQUIRED = 5;
+const DEV_UNLOCK_TAPS_REQUIRED = 4;
 const DEV_UNLOCK_TAP_WINDOW_MS = 2000;
 const API_URL =
   Constants.expoConfig?.extra?.API_URL ??
@@ -66,6 +68,14 @@ type DataFreshness = {
   error?: string;
 };
 
+type WorkflowTrigger = {
+  id: string;
+  label: string;
+  status: "idle" | "loading" | "success" | "error";
+  lastTriggeredTs?: number;
+  error?: string;
+};
+
 /* --------------------------------------------------
    STORE SHAPE
 -------------------------------------------------- */
@@ -97,6 +107,12 @@ type DevStore = {
 
   freshness: {
     datasets: DataFreshness[];
+  };
+
+  githubPat: string;
+
+  workflows: {
+    triggers: WorkflowTrigger[];
   };
 
   actions: {
@@ -145,6 +161,10 @@ type DevStore = {
     ) => void;
 
     fetchFreshness: (key: string) => Promise<void>;
+
+    setGithubPat: (pat: string) => Promise<void>;
+    hydrateGithubPat: () => Promise<void>;
+    triggerWorkflow: (id: string) => Promise<void>;
   };
 };
 
@@ -206,6 +226,25 @@ export const useDevStore = create<DevStore>((set, get) => ({
       { key: "live_games", label: "Live Games" },
       { key: "props", label: "Props" },
       { key: "player_stats", label: "Player Stats" },
+    ],
+  },
+
+  githubPat: "",
+
+  workflows: {
+    triggers: [
+      { id: "epl_daily_loader.yml", label: "EPL Daily Loader", status: "idle" },
+      { id: "mls_daily.yml", label: "MLS Daily Loader", status: "idle" },
+      { id: "atp_daily_loader.yml", label: "ATP Daily Loader", status: "idle" },
+      { id: "atp_odds_daily.yml", label: "ATP Daily Odds", status: "idle" },
+      { id: "sheets_bq_sync.yml", label: "ATP Sheets → BQ", status: "idle" },
+      { id: "pga_daily_ingest.yml", label: "PGA Daily Loader", status: "idle" },
+      { id: "pga_odds_daily.yml", label: "PGA Daily Odds", status: "idle" },
+      { id: "soccer_odds_sheets_sync.yml", label: "Soccer Odds Sync", status: "idle" },
+      { id: "epl_backfill.yml", label: "EPL Backfill", status: "idle" },
+      { id: "mls_backfill.yml", label: "MLS Backfill", status: "idle" },
+      { id: "atp_backfill.yml", label: "ATP Backfill", status: "idle" },
+      { id: "pga_backfill.yml", label: "PGA Backfill", status: "idle" },
     ],
   },
 
@@ -491,6 +530,92 @@ export const useDevStore = create<DevStore>((set, get) => ({
           error: err?.message ?? "Failed to fetch freshness",
         });
       }
-    }
+    },
+
+    /* ---------------- GITHUB PAT ---------------- */
+    async setGithubPat(pat) {
+      set({ githubPat: pat });
+      try {
+        await AsyncStorage.setItem(GITHUB_PAT_STORAGE_KEY, pat);
+      } catch {
+        // dev-only, ignore
+      }
+    },
+
+    async hydrateGithubPat() {
+      try {
+        const pat = await AsyncStorage.getItem(GITHUB_PAT_STORAGE_KEY);
+        if (pat) set({ githubPat: pat });
+      } catch {
+        // dev-only, ignore
+      }
+    },
+
+    /* ---------------- WORKFLOW TRIGGERS ---------------- */
+    async triggerWorkflow(id) {
+      const { githubPat } = get();
+
+      if (!githubPat) {
+        set((state) => ({
+          workflows: {
+            triggers: state.workflows.triggers.map((t) =>
+              t.id === id
+                ? { ...t, status: "error", error: "No GitHub PAT set — enter one in GitHub Auth above" }
+                : t
+            ),
+          },
+        }));
+        return;
+      }
+
+      set((state) => ({
+        workflows: {
+          triggers: state.workflows.triggers.map((t) =>
+            t.id === id ? { ...t, status: "loading", error: undefined } : t
+          ),
+        },
+      }));
+
+      try {
+        const res = await fetch(
+          `https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/${id}/dispatches`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${githubPat}`,
+              Accept: "application/vnd.github+json",
+              "Content-Type": "application/json",
+              "X-GitHub-Api-Version": "2022-11-28",
+            },
+            body: JSON.stringify({ ref: "master" }),
+          }
+        );
+
+        if (res.status === 204 || res.ok) {
+          set((state) => ({
+            workflows: {
+              triggers: state.workflows.triggers.map((t) =>
+                t.id === id
+                  ? { ...t, status: "success", lastTriggeredTs: Date.now(), error: undefined }
+                  : t
+              ),
+            },
+          }));
+        } else {
+          const text = await res.text().catch(() => `HTTP ${res.status}`);
+          throw new Error(`HTTP ${res.status}: ${text.slice(0, 120)}`);
+        }
+      } catch (err: any) {
+        set((state) => ({
+          workflows: {
+            triggers: state.workflows.triggers.map((t) =>
+              t.id === id
+                ? { ...t, status: "error", error: err?.message ?? "Failed to trigger workflow" }
+                : t
+            ),
+          },
+        }));
+      }
+    },
   },
 }));

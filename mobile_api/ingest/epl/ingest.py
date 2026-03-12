@@ -362,6 +362,75 @@ def run_backfill(start_season: int, end_season: int, truncate_first: bool = Fals
     }
 
 
+def run_daily_ingest(
+    target_date: str | None = None,
+    current_season: int | None = None,
+    dry_run: bool = False,
+) -> Dict[str, Any]:
+    """Ingest EPL data for a specific date (defaults to yesterday UTC).
+
+    Writes match records, per-match details/events/team-stats for every
+    fixture that kicked off on *target_date*, plus a fresh season-level
+    snapshot of player stats and standings.
+    """
+    client = _get_bq_client()
+    season = _season_window(current_season)[-1]
+
+    if target_date is None:
+        target_date = (datetime.now(timezone.utc) - timedelta(days=1)).date().isoformat()
+
+    schedule = fetch_schedule(season)
+    day_matches = [m for m in schedule if str(m.get("kickoff") or "").startswith(target_date)]
+    match_ids = [str(m.get("matchId") or "") for m in day_matches if m.get("matchId")]
+
+    result: Dict[str, Any] = {
+        "date": target_date,
+        "season": season,
+        "matches_found": len(match_ids),
+        "dry_run": dry_run,
+    }
+
+    if dry_run:
+        result["match_ids"] = match_ids
+        return result
+
+    details_rows: list[Dict[str, Any]] = []
+    event_rows: list[Dict[str, Any]] = []
+    stat_rows: list[Dict[str, Any]] = []
+
+    for match_id in match_ids:
+        detail = fetch_match_details(match_id)
+        if detail:
+            detail["_entity_id"] = match_id
+            details_rows.append(detail)
+
+        events = fetch_match_events(match_id)
+        if events:
+            events["matchId"] = match_id
+            events["_entity_id"] = match_id
+            event_rows.append(events)
+
+        for side in fetch_match_stats(match_id):
+            side_name = str(side.get("side") or "unknown").lower()
+            side["matchId"] = match_id
+            side["_entity_id"] = f"{match_id}_{side_name}"
+            stat_rows.append(side)
+
+    players = fetch_player_stats(season)
+    standings = fetch_standings(season) or _build_standings_from_match_details(details_rows)
+
+    result.update({
+        "matches": _write_rows(client, TABLE_MATCHES, season, day_matches, entity_field="matchId"),
+        "match_details": _write_rows(client, TABLE_MATCH_DETAILS, season, details_rows, entity_field="_entity_id"),
+        "match_events": _write_rows(client, TABLE_MATCH_EVENTS, season, event_rows, entity_field="_entity_id"),
+        "match_team_stats": _write_rows(client, TABLE_MATCH_TEAM_STATS, season, stat_rows, entity_field="_entity_id"),
+        "players": _write_rows(client, TABLE_PLAYERS, season, players, entity_field="id"),
+        "standings": _write_rows(client, TABLE_STANDINGS, season, standings, entity_field="id"),
+    })
+
+    return result
+
+
 def ingest_yesterday_refresh(current_season: int | None = None) -> Dict[str, Any]:
     client = _get_bq_client()
     season = _season_window(current_season)[-1]

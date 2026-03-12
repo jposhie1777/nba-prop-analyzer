@@ -76,6 +76,16 @@ type WorkflowTrigger = {
   error?: string;
 };
 
+type SpTrigger = {
+  id: string;
+  label: string;
+  call: string;
+  status: "idle" | "loading" | "success" | "error";
+  lastTriggeredTs?: number;
+  jobId?: string;
+  error?: string;
+};
+
 /* --------------------------------------------------
    STORE SHAPE
 -------------------------------------------------- */
@@ -114,6 +124,8 @@ type DevStore = {
   workflows: {
     triggers: WorkflowTrigger[];
   };
+
+  spTriggers: SpTrigger[];
 
   actions: {
     logNetwork: (entry: Omit<NetworkLog, "id" | "ts">) => void;
@@ -165,6 +177,7 @@ type DevStore = {
     setGithubPat: (pat: string) => Promise<void>;
     hydrateGithubPat: () => Promise<void>;
     triggerWorkflow: (id: string, inputs?: Record<string, string>) => Promise<void>;
+    runSp: (id: string) => Promise<void>;
   };
 };
 
@@ -230,6 +243,27 @@ export const useDevStore = create<DevStore>((set, get) => ({
   },
 
   githubPat: "",
+
+  spTriggers: [
+    {
+      id: "epl_team_pipeline",
+      label: "EPL Team Pipeline",
+      call: "CALL epl_data.sp_build_epl_team_pipeline();",
+      status: "idle",
+    },
+    {
+      id: "mls_fact_tables",
+      label: "MLS All Fact Tables",
+      call: "CALL `mls_data.sp_build_all_fact_tables`();",
+      status: "idle",
+    },
+    {
+      id: "epl_betting_pipeline",
+      label: "EPL Betting Pipeline",
+      call: "CALL soccer_data.run_epl_betting_pipeline();",
+      status: "idle",
+    },
+  ],
 
   workflows: {
     triggers: [
@@ -529,6 +563,48 @@ export const useDevStore = create<DevStore>((set, get) => ({
         get().actions.updateFreshness(key, {
           error: err?.message ?? "Failed to fetch freshness",
         });
+      }
+    },
+
+    /* ---------------- STORED PROCEDURES ---------------- */
+    async runSp(id) {
+      set((state) => ({
+        spTriggers: state.spTriggers.map((s) =>
+          s.id === id ? { ...s, status: "loading", error: undefined, jobId: undefined } : s
+        ),
+      }));
+
+      const sp = get().spTriggers.find((s) => s.id === id);
+      if (!sp) return;
+
+      try {
+        const res = await fetch(`${API_URL}/dev/bq/run-sp`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ call: sp.call }),
+        });
+
+        const json = await res.json();
+
+        if (json.status === "started") {
+          set((state) => ({
+            spTriggers: state.spTriggers.map((s) =>
+              s.id === id
+                ? { ...s, status: "success", lastTriggeredTs: Date.now(), jobId: json.job_id, error: undefined }
+                : s
+            ),
+          }));
+        } else {
+          throw new Error(json.error ?? "Unknown error");
+        }
+      } catch (err: any) {
+        set((state) => ({
+          spTriggers: state.spTriggers.map((s) =>
+            s.id === id
+              ? { ...s, status: "error", error: err?.message ?? "Failed to run SP" }
+              : s
+          ),
+        }));
       }
     },
 

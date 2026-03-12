@@ -90,7 +90,7 @@ export default function DevHomeScreen() {
   const styles = React.useMemo(() => createDevStyles(colors), [colors]);
   const router = useRouter();
 
-  const { devUnlocked, githubPat, workflows, actions } = useDevStore();
+  const { devUnlocked, githubPat, workflows, spTriggers, actions } = useDevStore();
 
   const [drafts, setDrafts] = React.useState<Record<string, Record<string, string>>>(() =>
     Object.fromEntries(BACKFILL_IDS.map((id) => [id, buildDefaultDraft(id)]))
@@ -180,6 +180,19 @@ export default function DevHomeScreen() {
             styles={styles}
             colors={colors}
             onPress={() => actions.triggerWorkflow(t.id)}
+          />
+        ))}
+      </Section>
+
+      {/* ── Stored Procedures ── */}
+      <Section title="Stored Procedures" styles={styles} defaultOpen>
+        {spTriggers.map((sp) => (
+          <SpRow
+            key={sp.id}
+            sp={sp}
+            styles={styles}
+            colors={colors}
+            onPress={() => actions.runSp(sp.id)}
           />
         ))}
       </Section>
@@ -326,6 +339,55 @@ function BackfillRow({
       </Pressable>
 
       <Text style={[styles.mutedText, { fontSize: 10, marginTop: 6 }]}>{trigger.id}</Text>
+    </View>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   Stored procedure trigger row
+───────────────────────────────────────────── */
+function SpRow({
+  sp, styles, colors, onPress,
+}: {
+  sp: { id: string; label: string; call: string; status: string; lastTriggeredTs?: number; jobId?: string; error?: string };
+  styles: any; colors: any; onPress: () => void;
+}) {
+  const isLoading = sp.status === "loading";
+  const statusColor =
+    sp.status === "success" ? (colors.accent?.success ?? "#4CAF50") :
+    sp.status === "error"   ? (colors.accent?.danger  ?? "#FF6B6B") :
+    sp.status === "loading" ? (colors.accent?.primary ?? "#4A9EFF") :
+                               (colors.text?.muted    ?? "#888");
+  const statusLabel =
+    sp.status === "loading" ? "Starting…" :
+    sp.status === "success" ? `Started${sp.lastTriggeredTs ? " · " + new Date(sp.lastTriggeredTs).toLocaleTimeString() : ""}` :
+    sp.status === "error"   ? "Error" :
+                               "Not run";
+
+  return (
+    <View style={[styles.card, { marginBottom: 6 }]}>
+      <View style={localStyles.triggerRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.cardTitle}>{sp.label}</Text>
+          <Text style={[styles.mutedText, { color: statusColor, marginTop: 2 }]}>{statusLabel}</Text>
+          {sp.status === "success" && sp.jobId && (
+            <Text style={[styles.mutedText, { fontSize: 10, marginTop: 2 }]} numberOfLines={1}>
+              job: {sp.jobId}
+            </Text>
+          )}
+          {sp.status === "error" && sp.error && (
+            <Text style={[styles.dangerText, { marginTop: 2 }]} numberOfLines={2}>{sp.error}</Text>
+          )}
+        </View>
+        <Pressable
+          style={[styles.toolButton, localStyles.runBtn, isLoading && { opacity: 0.5 }]}
+          disabled={isLoading}
+          onPress={onPress}
+        >
+          <Text style={styles.toolTitle}>{isLoading ? "…" : "▶ Run"}</Text>
+        </Pressable>
+      </View>
+      <Text style={[styles.mutedText, { fontSize: 10, marginTop: 4 }]}>{sp.call}</Text>
     </View>
   );
 }

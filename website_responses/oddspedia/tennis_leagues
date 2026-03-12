@@ -1,0 +1,708 @@
+HEADERS
+Request URL
+https://oddspedia.com/api/v1/getLeagues?topLeaguesOnly=1&includeLeaguesWithoutMatches=1&sport=tennis&geoCode=US&language=us
+Request Method
+GET
+Status Code
+200 OK
+Remote Address
+172.64.153.135:443
+Referrer Policy
+strict-origin-when-cross-origin
+access-control-allow-headers
+Authorization, UserAgent, Origin, X-Auth-Token, Content-Type, X-User-Agent, sentry-trace
+access-control-allow-methods
+GET, POST, OPTIONS, PUT, PATCH, DELETE
+access-control-allow-origin
+*
+access-control-expose-headers
+Content-Security-Policy, Location, Cache-Control, Content-Language, Content-Type, Expires, Last-Modified, Pragma
+access-control-max-age
+600
+age
+0
+alt-svc
+h3=":443"; ma=86400
+cache-control
+private, no-cache
+cf-cache-status
+DYNAMIC
+cf-ray
+9db59900bfc352c0-EWR
+content-encoding
+br
+content-type
+application/json
+date
+Thu, 12 Mar 2026 20:37:35 GMT
+server
+cloudflare
+x-cache
+PASS
+x-cacheable
+NO
+x-varnish
+621689756
+:authority
+oddspedia.com
+:method
+GET
+:path
+/api/v1/getLeagues?topLeaguesOnly=1&includeLeaguesWithoutMatches=1&sport=tennis&geoCode=US&language=us
+:scheme
+https
+accept
+application/json, text/plain, */*
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+en-US,en;q=0.9
+cookie
+first_visit=no; AMCV_9CE579FD5DCD8B590A495E09%40AdobeOrg=MCMID|13437522215837061981434173506207755149; _hjSessionUser_2725666=eyJpZCI6IjA3NjVmODk5LWFiNDctNTI0ZS04YTdmLWRhMzAxNmVlYTExNCIsImNyZWF0ZWQiOjE3NzMxNzEwNjAxMDYsImV4aXN0aW5nIjp0cnVlfQ==; SSID=CQB9Wx0AAAAAAABwcbBpXpZAAHBxsGkCAAAAAAAAAAAA1CKzaQATkw; SSSC=2.G7615711695738017374.2|0.0; HAOSSID=3c40d5b13dcd0; __cflb=02DiuGPeMivJ1EyNVputTEMhoXkggnU9oMhUGdmMHwLwn; cf_clearance=ThnM16.0b9CYS2EA8JVIr.3l0ZblarpfedmbcXaurzY-1773347542-1.2.1.1-10y6Rgn2tSwWdKfIo3rVVE4KLZ9gFu.NnjFQDMGLqbtrqD7fdWfANGaZJ_9YG7cW1u7b078IeffSRF02iBq238j8Axwiuc3Uoir.z7wMhte36FpfUMCNNiMeu.GxZ0iziiEvvm9PNV6gEJ2_MBpal34Jj8V8L8ygtJR89RdEZSVjnl7agWtooCSCML98_txfXNiEElVGu8L0nQb_1xFWKP.SrRo7DF2EIqDnn7IzgwM; __cf_bm=ZvSIRaJZ10WMSL_oQz7HYn4Ui2tPH6e7YkyZnEIh7y8-1773347542.406314-1.0.1.1-QJeMcic1SAAeEz6r.QfKw9.Rf1NbNWWtRux5QQ_IjekB829ZZB.5NzYzCJWLz5MXztoFkF8yh4ewgaOAy4lnaFHGZRvBw5dNTF94x2gbuFAoMIeYwe_GLrf3cJufWaKv; adcloud={%22_les_v%22:%22c%2Cy%2Coddspedia.com%2C1773349366%22}; kndctr_9CE579FD5DCD8B590A495E09_AdobeOrg_identity=CiYxMzQzNzUyMjIxNTgzNzA2MTk4MTQzNDE3MzUwNjIwNzc1NTE0OVIQCP%5Fb7MnNMxgBKgNWQTYwAfABl%2DeBns4z; kndctr_9CE579FD5DCD8B590A495E09_AdobeOrg_cluster=va6; _hjSession_2725666=eyJpZCI6IjhiNjUxYmRmLTZjOTMtNDgxMS04ZGMzLWQ1NGJmMDk2MTJmMyIsImMiOjE3NzMzNDc1NzcxOTAsInMiOjAsInIiOjAsInNiIjowLCJzciI6MCwic2UiOjAsImZzIjowLCJzcCI6MX0=; accept-cookies=true; accept-tracking-cookies=true; SSRT=3SOzaQQBAA; _v_id_l={%22_v_id%22:%222010151105181951773347566389%22%2C%22_la%22:1773347841588}
+priority
+u=1, i
+referer
+https://oddspedia.com/us/tennis
+sec-ch-ua
+"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36
+
+
+
+RESPONSE
+{
+    "generated_at": "2026-03-12 20:37:35",
+    "data": [
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 454,
+            "category_name": "Australia",
+            "category_slug": "australia",
+            "category_slug_en": "australia",
+            "id": 1893,
+            "league_name": "ATP Australian Open",
+            "league_slug": "atp-australian-open",
+            "league_abbr": "Au Open",
+            "slug_en": "atp-australian-open",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1000,
+            "has_sr_coverage": true,
+            "is_league_archived": false
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 454,
+            "category_name": "Australia",
+            "category_slug": "australia",
+            "category_slug_en": "australia",
+            "id": 1897,
+            "league_name": "WTA Australian Open",
+            "league_slug": "wta-australian-open",
+            "league_abbr": "Au Open",
+            "slug_en": "wta-australian-open",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1010,
+            "has_sr_coverage": true,
+            "is_league_archived": true
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 408,
+            "category_name": "France",
+            "category_slug": "france",
+            "category_slug_en": "france",
+            "id": 1411,
+            "league_name": "ATP French Open",
+            "league_slug": "atp-french-open",
+            "league_abbr": "Roland-Garros",
+            "slug_en": "atp-french-open",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1020,
+            "has_sr_coverage": true,
+            "is_league_archived": false
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 408,
+            "category_name": "France",
+            "category_slug": "france",
+            "category_slug_en": "france",
+            "id": 1412,
+            "league_name": "WTA French Open",
+            "league_slug": "wta-french-open",
+            "league_abbr": "Roland-Garros",
+            "slug_en": "wta-french-open",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1030,
+            "has_sr_coverage": true,
+            "is_league_archived": true
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 635,
+            "category_name": "United Kingdom",
+            "category_slug": "united-kingdom",
+            "category_slug_en": "united-kingdom",
+            "id": 1784,
+            "league_name": "ATP Wimbledon",
+            "league_slug": "atp-wimbledon",
+            "league_abbr": "Wimbledon",
+            "slug_en": "atp-wimbledon",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1040,
+            "has_sr_coverage": true,
+            "is_league_archived": false
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 635,
+            "category_name": "United Kingdom",
+            "category_slug": "united-kingdom",
+            "category_slug_en": "united-kingdom",
+            "id": 1785,
+            "league_name": "WTA Wimbledon",
+            "league_slug": "wta-wimbledon",
+            "league_abbr": "Wimbledon",
+            "slug_en": "wta-wimbledon",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1050,
+            "has_sr_coverage": true,
+            "is_league_archived": false
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 459,
+            "category_name": "USA",
+            "category_slug": "usa",
+            "category_slug_en": "usa",
+            "id": 1419,
+            "league_name": "ATP US Open",
+            "league_slug": "atp-us-open",
+            "league_abbr": "US Open",
+            "slug_en": "atp-us-open",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1060,
+            "has_sr_coverage": true,
+            "is_league_archived": false
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 459,
+            "category_name": "USA",
+            "category_slug": "usa",
+            "category_slug_en": "usa",
+            "id": 1420,
+            "league_name": "WTA US Open",
+            "league_slug": "wta-us-open",
+            "league_abbr": "US Open",
+            "slug_en": "wta-us-open",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1070,
+            "has_sr_coverage": true,
+            "is_league_archived": false
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 575,
+            "category_name": "World",
+            "category_slug": "world",
+            "category_slug_en": "world",
+            "id": 1426,
+            "league_name": "ATP World Tour - Finals",
+            "league_slug": "atp-world-tour-finals",
+            "league_abbr": null,
+            "slug_en": "atp-world-tour-finals",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1100,
+            "has_sr_coverage": true,
+            "is_league_archived": false
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 575,
+            "category_name": "World",
+            "category_slug": "world",
+            "category_slug_en": "world",
+            "id": 1486,
+            "league_name": "WTA World Tour - Finals",
+            "league_slug": "wta-world-tour-finals",
+            "league_abbr": null,
+            "slug_en": "wta-world-tour-finals",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1110,
+            "has_sr_coverage": true,
+            "is_league_archived": false
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 459,
+            "category_name": "USA",
+            "category_slug": "usa",
+            "category_slug_en": "usa",
+            "id": 2136,
+            "league_name": "ATP Indian Wells ",
+            "league_slug": "atp-indian-wells",
+            "league_abbr": "Ind. Wells",
+            "slug_en": "atp-indian-wells",
+            "match_count_prematch": 2,
+            "match_count_inplay": 1,
+            "order": 1200,
+            "has_sr_coverage": true,
+            "is_league_archived": true
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 459,
+            "category_name": "USA",
+            "category_slug": "usa",
+            "category_slug_en": "usa",
+            "id": 2131,
+            "league_name": "WTA Indian Wells",
+            "league_slug": "wta-indian-wells",
+            "league_abbr": "WTA Ind. Wells",
+            "slug_en": "wta-indian-wells",
+            "match_count_prematch": 2,
+            "match_count_inplay": 1,
+            "order": 1205,
+            "has_sr_coverage": true,
+            "is_league_archived": true
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 459,
+            "category_name": "USA",
+            "category_slug": "usa",
+            "category_slug_en": "usa",
+            "id": 2490,
+            "league_name": "ATP Miami",
+            "league_slug": "atp-miami",
+            "league_abbr": "Miami",
+            "slug_en": "atp-miami",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1210,
+            "has_sr_coverage": true,
+            "is_league_archived": true
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 459,
+            "category_name": "USA",
+            "category_slug": "usa",
+            "category_slug_en": "usa",
+            "id": 2491,
+            "league_name": "WTA Miami",
+            "league_slug": "wta-miami",
+            "league_abbr": "WTA Miami",
+            "slug_en": "wta-miami",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1215,
+            "has_sr_coverage": true,
+            "is_league_archived": true
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 576,
+            "category_name": "Monaco",
+            "category_slug": "monaco",
+            "category_slug_en": "monaco",
+            "id": 2646,
+            "league_name": "ATP Monte Carlo",
+            "league_slug": "atp-monte-carlo",
+            "league_abbr": "Monte Carlo",
+            "slug_en": "atp-monte-carlo",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1220,
+            "has_sr_coverage": true,
+            "is_league_archived": true
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 438,
+            "category_name": "Spain",
+            "category_slug": "spain",
+            "category_slug_en": "spain",
+            "id": 2694,
+            "league_name": "ATP Madrid",
+            "league_slug": "atp-madrid",
+            "league_abbr": "Madrid",
+            "slug_en": "atp-madrid",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1230,
+            "has_sr_coverage": true,
+            "is_league_archived": true
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 438,
+            "category_name": "Spain",
+            "category_slug": "spain",
+            "category_slug_en": "spain",
+            "id": 2696,
+            "league_name": "WTA Madrid",
+            "league_slug": "wta-madrid",
+            "league_abbr": "WTA Madrid",
+            "slug_en": "wta-madrid",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1235,
+            "has_sr_coverage": true,
+            "is_league_archived": true
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 398,
+            "category_name": "Italy",
+            "category_slug": "italy",
+            "category_slug_en": "italy",
+            "id": 2713,
+            "league_name": "ATP Rome",
+            "league_slug": "atp-rome",
+            "league_abbr": "Rome",
+            "slug_en": "atp-rome",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1240,
+            "has_sr_coverage": true,
+            "is_league_archived": true
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 398,
+            "category_name": "Italy",
+            "category_slug": "italy",
+            "category_slug_en": "italy",
+            "id": 2715,
+            "league_name": "WTA Rome",
+            "league_slug": "wta-rome",
+            "league_abbr": null,
+            "slug_en": "wta-rome",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1245,
+            "has_sr_coverage": true,
+            "is_league_archived": true
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 385,
+            "category_name": "Canada",
+            "category_slug": "canada",
+            "category_slug_en": "canada",
+            "id": 2932,
+            "league_name": "ATP Montreal",
+            "league_slug": "atp-montreal",
+            "league_abbr": "Montreal",
+            "slug_en": "atp-montreal",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1250,
+            "has_sr_coverage": true,
+            "is_league_archived": true
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 385,
+            "category_name": "Canada",
+            "category_slug": "canada",
+            "category_slug_en": "canada",
+            "id": 1510,
+            "league_name": "WTA Montreal",
+            "league_slug": "wta-montreal",
+            "league_abbr": null,
+            "slug_en": "wta-montreal",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1255,
+            "has_sr_coverage": true,
+            "is_league_archived": true
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 385,
+            "category_name": "Canada",
+            "category_slug": "canada",
+            "category_slug_en": "canada",
+            "id": 1466,
+            "league_name": "ATP Toronto",
+            "league_slug": "atp-toronto",
+            "league_abbr": "Toronto",
+            "slug_en": "atp-toronto",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1260,
+            "has_sr_coverage": true,
+            "is_league_archived": true
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 385,
+            "category_name": "Canada",
+            "category_slug": "canada",
+            "category_slug_en": "canada",
+            "id": 2930,
+            "league_name": "WTA Toronto",
+            "league_slug": "wta-toronto",
+            "league_abbr": null,
+            "slug_en": "wta-toronto",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1265,
+            "has_sr_coverage": true,
+            "is_league_archived": true
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 459,
+            "category_name": "USA",
+            "category_slug": "usa",
+            "category_slug_en": "usa",
+            "id": 1461,
+            "league_name": "ATP Cincinnati",
+            "league_slug": "atp-cincinnati",
+            "league_abbr": "Cincinnati",
+            "slug_en": "atp-cincinnati",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1270,
+            "has_sr_coverage": true,
+            "is_league_archived": true
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 459,
+            "category_name": "USA",
+            "category_slug": "usa",
+            "category_slug_en": "usa",
+            "id": 1463,
+            "league_name": "WTA Cincinnati",
+            "league_slug": "wta-cincinnati",
+            "league_abbr": null,
+            "slug_en": "wta-cincinnati",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1275,
+            "has_sr_coverage": true,
+            "is_league_archived": true
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 424,
+            "category_name": "China",
+            "category_slug": "china",
+            "category_slug_en": "china",
+            "id": 1443,
+            "league_name": "ATP Shanghai",
+            "league_slug": "atp-shanghai",
+            "league_abbr": "Shanghai",
+            "slug_en": "atp-shanghai",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1280,
+            "has_sr_coverage": true,
+            "is_league_archived": true
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 408,
+            "category_name": "France",
+            "category_slug": "france",
+            "category_slug_en": "france",
+            "id": 1429,
+            "league_name": "ATP Paris",
+            "league_slug": "atp-paris",
+            "league_abbr": "Paris",
+            "slug_en": "atp-paris",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1290,
+            "has_sr_coverage": true,
+            "is_league_archived": true
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 383,
+            "category_name": "Austria",
+            "category_slug": "austria",
+            "category_slug_en": "austria",
+            "id": 1435,
+            "league_name": "ATP Vienna",
+            "league_slug": "atp-vienna",
+            "league_abbr": "ATP Vienna",
+            "slug_en": "atp-vienna",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1295,
+            "has_sr_coverage": true,
+            "is_league_archived": true
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 363,
+            "category_name": "Bulgaria",
+            "category_slug": "bulgaria",
+            "category_slug_en": "bulgaria",
+            "id": 3286,
+            "league_name": "ATP Sofia",
+            "league_slug": "atp-sofia",
+            "league_abbr": null,
+            "slug_en": "atp-sofia",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1300,
+            "has_sr_coverage": true,
+            "is_league_archived": true
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 575,
+            "category_name": "World",
+            "category_slug": "world",
+            "category_slug_en": "world",
+            "id": 9131,
+            "league_name": "ATP Cup",
+            "league_slug": "atp-cup",
+            "league_abbr": null,
+            "slug_en": "atp-cup",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1310,
+            "has_sr_coverage": false,
+            "is_league_archived": true
+        },
+        {
+            "sport_id": 5,
+            "sport_name": "Tennis",
+            "sport_slug": "tennis",
+            "sport_slug_en": "tennis",
+            "category_id": 438,
+            "category_name": "Spain",
+            "category_slug": "spain",
+            "category_slug_en": "spain",
+            "id": 2655,
+            "league_name": "ATP Barcelona",
+            "league_slug": "atp-barcelona",
+            "league_abbr": "ATP Barcelona",
+            "slug_en": "atp-barcelona",
+            "match_count_prematch": 0,
+            "match_count_inplay": 0,
+            "order": 1320,
+            "has_sr_coverage": true,
+            "is_league_archived": true
+        }
+    ]
+}

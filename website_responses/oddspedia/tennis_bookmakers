@@ -1,0 +1,1758 @@
+HEADERS
+Request URL
+https://oddspedia.com/api/v1/getBookmakers?geoCode=&geoState=&language=us
+Request Method
+GET
+Status Code
+200 OK
+Remote Address
+172.64.153.135:443
+Referrer Policy
+strict-origin-when-cross-origin
+access-control-allow-headers
+Authorization, UserAgent, Origin, X-Auth-Token, Content-Type, X-User-Agent, sentry-trace
+access-control-allow-methods
+GET, POST, OPTIONS, PUT, PATCH, DELETE
+access-control-allow-origin
+*
+access-control-expose-headers
+Content-Security-Policy, Location, Cache-Control, Content-Language, Content-Type, Expires, Last-Modified, Pragma
+access-control-max-age
+600
+age
+0
+alt-svc
+h3=":443"; ma=86400
+cache-control
+private, no-cache
+cf-cache-status
+DYNAMIC
+cf-ray
+9db59900afa052c0-EWR
+content-encoding
+br
+content-type
+application/json
+date
+Thu, 12 Mar 2026 20:37:35 GMT
+server
+cloudflare
+x-cache
+PASS
+x-cacheable
+NO
+x-varnish
+202068972
+:authority
+oddspedia.com
+:method
+GET
+:path
+/api/v1/getBookmakers?geoCode=&geoState=&language=us
+:scheme
+https
+accept
+application/json, text/plain, */*
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+en-US,en;q=0.9
+cookie
+first_visit=no; AMCV_9CE579FD5DCD8B590A495E09%40AdobeOrg=MCMID|13437522215837061981434173506207755149; _hjSessionUser_2725666=eyJpZCI6IjA3NjVmODk5LWFiNDctNTI0ZS04YTdmLWRhMzAxNmVlYTExNCIsImNyZWF0ZWQiOjE3NzMxNzEwNjAxMDYsImV4aXN0aW5nIjp0cnVlfQ==; SSID=CQB9Wx0AAAAAAABwcbBpXpZAAHBxsGkCAAAAAAAAAAAA1CKzaQATkw; SSSC=2.G7615711695738017374.2|0.0; HAOSSID=3c40d5b13dcd0; __cflb=02DiuGPeMivJ1EyNVputTEMhoXkggnU9oMhUGdmMHwLwn; cf_clearance=ThnM16.0b9CYS2EA8JVIr.3l0ZblarpfedmbcXaurzY-1773347542-1.2.1.1-10y6Rgn2tSwWdKfIo3rVVE4KLZ9gFu.NnjFQDMGLqbtrqD7fdWfANGaZJ_9YG7cW1u7b078IeffSRF02iBq238j8Axwiuc3Uoir.z7wMhte36FpfUMCNNiMeu.GxZ0iziiEvvm9PNV6gEJ2_MBpal34Jj8V8L8ygtJR89RdEZSVjnl7agWtooCSCML98_txfXNiEElVGu8L0nQb_1xFWKP.SrRo7DF2EIqDnn7IzgwM; __cf_bm=ZvSIRaJZ10WMSL_oQz7HYn4Ui2tPH6e7YkyZnEIh7y8-1773347542.406314-1.0.1.1-QJeMcic1SAAeEz6r.QfKw9.Rf1NbNWWtRux5QQ_IjekB829ZZB.5NzYzCJWLz5MXztoFkF8yh4ewgaOAy4lnaFHGZRvBw5dNTF94x2gbuFAoMIeYwe_GLrf3cJufWaKv; adcloud={%22_les_v%22:%22c%2Cy%2Coddspedia.com%2C1773349366%22}; kndctr_9CE579FD5DCD8B590A495E09_AdobeOrg_identity=CiYxMzQzNzUyMjIxNTgzNzA2MTk4MTQzNDE3MzUwNjIwNzc1NTE0OVIQCP%5Fb7MnNMxgBKgNWQTYwAfABl%2DeBns4z; kndctr_9CE579FD5DCD8B590A495E09_AdobeOrg_cluster=va6; _hjSession_2725666=eyJpZCI6IjhiNjUxYmRmLTZjOTMtNDgxMS04ZGMzLWQ1NGJmMDk2MTJmMyIsImMiOjE3NzMzNDc1NzcxOTAsInMiOjAsInIiOjAsInNiIjowLCJzciI6MCwic2UiOjAsImZzIjowLCJzcCI6MX0=; accept-cookies=true; accept-tracking-cookies=true; SSRT=3SOzaQQBAA; _v_id_l={%22_v_id%22:%222010151105181951773347566389%22%2C%22_la%22:1773347841588}
+priority
+u=1, i
+referer
+https://oddspedia.com/us/tennis
+sec-ch-ua
+"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36
+
+RESPONSE
+{
+    "generated_at": "2026-03-12 17:21:22",
+    "data": [
+        {
+            "id": 170,
+            "name": "Stake.com",
+            "slug": "stake-com",
+            "order": 1,
+            "rating": "9.8",
+            "user_rating": "3.8372093023255814",
+            "e2e_tracking_parameter": "clickId",
+            "has_affiliate_program": true,
+            "primary_color": "#192C38"
+        },
+        {
+            "id": 126,
+            "name": "bet365",
+            "slug": "bet365",
+            "order": 2,
+            "rating": "9.7",
+            "user_rating": "4.4691358024691358",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#126d50"
+        },
+        {
+            "id": 60,
+            "name": "1xBet",
+            "slug": "1xbet",
+            "order": 3,
+            "rating": "9.6",
+            "user_rating": "4.5339805825242718",
+            "e2e_tracking_parameter": "clickid",
+            "has_affiliate_program": true,
+            "primary_color": "#012f5e"
+        },
+        {
+            "id": 122,
+            "name": "22Bet",
+            "slug": "22bet",
+            "order": 4,
+            "rating": "9.5",
+            "user_rating": "3.5862068965517241",
+            "e2e_tracking_parameter": "subid",
+            "has_affiliate_program": true,
+            "primary_color": "#09393D"
+        },
+        {
+            "id": 140,
+            "name": "BetVictor",
+            "slug": "betvictor",
+            "order": 5,
+            "rating": "9.4",
+            "user_rating": 0,
+            "e2e_tracking_parameter": "c",
+            "has_affiliate_program": true,
+            "primary_color": "#252D37"
+        },
+        {
+            "id": 4,
+            "name": "Pinnacle",
+            "slug": "pinnacle",
+            "order": 6,
+            "rating": "9.3",
+            "user_rating": "3.9500000000000000",
+            "e2e_tracking_parameter": "c",
+            "has_affiliate_program": true,
+            "primary_color": "#0b1222"
+        },
+        {
+            "id": 624,
+            "name": "Fezbet",
+            "slug": "fezbet",
+            "order": 7,
+            "rating": "9.2",
+            "user_rating": "3.8333333333333333",
+            "e2e_tracking_parameter": "var1",
+            "has_affiliate_program": true,
+            "primary_color": "#19191D"
+        },
+        {
+            "id": 621,
+            "name": "BC.Game",
+            "slug": "bc-game",
+            "order": 8,
+            "rating": "9.1",
+            "user_rating": "4.2352941176470588",
+            "e2e_tracking_parameter": "visit_id",
+            "has_affiliate_program": true,
+            "primary_color": "#292d2e"
+        },
+        {
+            "id": 585,
+            "name": "Powbet",
+            "slug": "powbet",
+            "order": 9,
+            "rating": "8.9",
+            "user_rating": "2.2000000000000000",
+            "e2e_tracking_parameter": "var1",
+            "has_affiliate_program": true,
+            "primary_color": "#191829"
+        },
+        {
+            "id": 147,
+            "name": "Vave",
+            "slug": "vave",
+            "order": 10,
+            "rating": "8.9",
+            "user_rating": "4.0000000000000000",
+            "e2e_tracking_parameter": "subid",
+            "has_affiliate_program": true,
+            "primary_color": "#303E47"
+        },
+        {
+            "id": 56,
+            "name": "Bwin",
+            "slug": "bwin",
+            "order": 11,
+            "rating": "8.8",
+            "user_rating": "3.5833333333333333",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#000000"
+        },
+        {
+            "id": 521,
+            "name": "Betwinner",
+            "slug": "betwinner",
+            "order": 12,
+            "rating": "8.8",
+            "user_rating": "3.8000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#137858"
+        },
+        {
+            "id": 662,
+            "name": "Luva.Bet",
+            "slug": "luva-bet",
+            "order": 13,
+            "rating": "8.7",
+            "user_rating": 0,
+            "e2e_tracking_parameter": "c",
+            "has_affiliate_program": true,
+            "primary_color": "#2a2a2a"
+        },
+        {
+            "id": 661,
+            "name": "F12.Bet",
+            "slug": "f12-bet",
+            "order": 14,
+            "rating": "8.7",
+            "user_rating": "5.0000000000000000",
+            "e2e_tracking_parameter": "c",
+            "has_affiliate_program": true,
+            "primary_color": "#232429"
+        },
+        {
+            "id": 59,
+            "name": "Marathonbet",
+            "slug": "marathonbet",
+            "order": 15,
+            "rating": "8.6",
+            "user_rating": "4.0000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#304475"
+        },
+        {
+            "id": 110,
+            "name": "Betfair",
+            "slug": "betfair",
+            "order": 16,
+            "rating": "8.6",
+            "user_rating": "4.4166666666666667",
+            "e2e_tracking_parameter": "subid",
+            "has_affiliate_program": true,
+            "primary_color": "#ffb80c"
+        },
+        {
+            "id": 26,
+            "name": "Interwetten",
+            "slug": "interwetten",
+            "order": 17,
+            "rating": "8.5",
+            "user_rating": "4.2500000000000000",
+            "e2e_tracking_parameter": "subid",
+            "has_affiliate_program": true,
+            "primary_color": "#ffd129"
+        },
+        {
+            "id": 146,
+            "name": "20Bet",
+            "slug": "20bet",
+            "order": 18,
+            "rating": "8.5",
+            "user_rating": "4.1666666666666667",
+            "e2e_tracking_parameter": "subid",
+            "has_affiliate_program": true,
+            "primary_color": "#091D35"
+        },
+        {
+            "id": 668,
+            "name": "SeguroBet",
+            "slug": "seguro-bet",
+            "order": 19,
+            "rating": "8.4",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#0a8862"
+        },
+        {
+            "id": 124,
+            "name": "Megapari",
+            "slug": "megapari",
+            "order": 20,
+            "rating": "8.3",
+            "user_rating": "4.5666666666666667",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#212121"
+        },
+        {
+            "id": 79,
+            "name": "Betano",
+            "slug": "betano",
+            "order": 21,
+            "rating": "8.2",
+            "user_rating": "4.4814814814814815",
+            "e2e_tracking_parameter": "c",
+            "has_affiliate_program": true,
+            "primary_color": "#FF3D00"
+        },
+        {
+            "id": 88,
+            "name": "888sport",
+            "slug": "888sport",
+            "order": 22,
+            "rating": "8.2",
+            "user_rating": "4.3333333333333333",
+            "e2e_tracking_parameter": "anid",
+            "has_affiliate_program": true,
+            "primary_color": "#000000"
+        },
+        {
+            "id": 669,
+            "name": "JB",
+            "slug": "jb",
+            "order": 23,
+            "rating": "8.1",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#292d2e"
+        },
+        {
+            "id": 402,
+            "name": "Roobet",
+            "slug": "roobet",
+            "order": 24,
+            "rating": "8.1",
+            "user_rating": "5.0000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#302A58"
+        },
+        {
+            "id": 133,
+            "name": "BetMGM",
+            "slug": "betmgm",
+            "order": 25,
+            "rating": "8",
+            "user_rating": 0,
+            "e2e_tracking_parameter": "tdpeh",
+            "has_affiliate_program": true,
+            "primary_color": "#1e1e1e"
+        },
+        {
+            "id": 663,
+            "name": "Funbet",
+            "slug": "funbet",
+            "order": 26,
+            "rating": "8",
+            "user_rating": 0,
+            "e2e_tracking_parameter": "var1",
+            "has_affiliate_program": true,
+            "primary_color": "#1f1b36"
+        },
+        {
+            "id": 667,
+            "name": "Multibet",
+            "slug": "multibet",
+            "order": 27,
+            "rating": "7.9",
+            "user_rating": 0,
+            "e2e_tracking_parameter": "AFP",
+            "has_affiliate_program": true,
+            "primary_color": "#320992"
+        },
+        {
+            "id": 664,
+            "name": "Vegas Hero Sport",
+            "slug": "vegas-hero-sport",
+            "order": 28,
+            "rating": "7.8",
+            "user_rating": 0,
+            "e2e_tracking_parameter": "var1",
+            "has_affiliate_program": true,
+            "primary_color": "#181929"
+        },
+        {
+            "id": 665,
+            "name": "Dabble",
+            "slug": "dabble",
+            "order": 29,
+            "rating": "7.8",
+            "user_rating": "5.0000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": false,
+            "primary_color": "#754bf6"
+        },
+        {
+            "id": 68,
+            "name": "LeoVegas Sport",
+            "slug": "leovegas-sport",
+            "order": 30,
+            "rating": "7.8",
+            "user_rating": "3.2500000000000000",
+            "e2e_tracking_parameter": "subid",
+            "has_affiliate_program": true,
+            "primary_color": "#F5782E"
+        },
+        {
+            "id": 3,
+            "name": "Betway",
+            "slug": "betway",
+            "order": 31,
+            "rating": "7.7",
+            "user_rating": "3.5217391304347826",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#000000"
+        },
+        {
+            "id": 671,
+            "name": "Betpanda.io",
+            "slug": "betpanda-io",
+            "order": 32,
+            "rating": "7.7",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#07182B"
+        },
+        {
+            "id": 658,
+            "name": "Royalist Play",
+            "slug": "royalist-play",
+            "order": 33,
+            "rating": "7.6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": "cid",
+            "has_affiliate_program": true,
+            "primary_color": "#11161a"
+        },
+        {
+            "id": 659,
+            "name": "Wildz Sport",
+            "slug": "wildz-sport",
+            "order": 34,
+            "rating": "7.5",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#412786"
+        },
+        {
+            "id": 660,
+            "name": "LetsLucky",
+            "slug": "lets-lucky",
+            "order": 35,
+            "rating": "7.4",
+            "user_rating": 0,
+            "e2e_tracking_parameter": "visit_id",
+            "has_affiliate_program": true,
+            "primary_color": "#4c26aa"
+        },
+        {
+            "id": 657,
+            "name": "ToonieBet",
+            "slug": "tooniebet",
+            "order": 36,
+            "rating": "7.4",
+            "user_rating": 0,
+            "e2e_tracking_parameter": "var1",
+            "has_affiliate_program": true,
+            "primary_color": "#0a0a0a"
+        },
+        {
+            "id": 655,
+            "name": "Puntit",
+            "slug": "puntit",
+            "order": 37,
+            "rating": "7.3",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#0D0D0D"
+        },
+        {
+            "id": 652,
+            "name": "Campobet",
+            "slug": "campobet",
+            "order": 38,
+            "rating": "7.3",
+            "user_rating": 0,
+            "e2e_tracking_parameter": "var1",
+            "has_affiliate_program": true,
+            "primary_color": "#214134"
+        },
+        {
+            "id": 644,
+            "name": "Betplays",
+            "slug": "betplays",
+            "order": 39,
+            "rating": "7.3",
+            "user_rating": 0,
+            "e2e_tracking_parameter": "AFP",
+            "has_affiliate_program": true,
+            "primary_color": "#441E73"
+        },
+        {
+            "id": 654,
+            "name": "Winpot",
+            "slug": "winpot",
+            "order": 40,
+            "rating": "7.2",
+            "user_rating": 0,
+            "e2e_tracking_parameter": "payload",
+            "has_affiliate_program": true,
+            "primary_color": "#1C1C1C"
+        },
+        {
+            "id": 651,
+            "name": "Bankonbet",
+            "slug": "bankonbet",
+            "order": 41,
+            "rating": "7.2",
+            "user_rating": 0,
+            "e2e_tracking_parameter": "var1",
+            "has_affiliate_program": true,
+            "primary_color": "#1B1464"
+        },
+        {
+            "id": 650,
+            "name": "Riobet Sport",
+            "slug": "riobet-sport",
+            "order": 42,
+            "rating": "7.1",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#0E2213"
+        },
+        {
+            "id": 649,
+            "name": "Betiton",
+            "slug": "betiton",
+            "order": 43,
+            "rating": "7.1",
+            "user_rating": "5.0000000000000000",
+            "e2e_tracking_parameter": "cid",
+            "has_affiliate_program": true,
+            "primary_color": "#000000"
+        },
+        {
+            "id": 648,
+            "name": "We88",
+            "slug": "we88",
+            "order": 44,
+            "rating": "7",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#020202"
+        },
+        {
+            "id": 71,
+            "name": "Novibet",
+            "slug": "novibet",
+            "order": 45,
+            "rating": "7",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#313541"
+        },
+        {
+            "id": 647,
+            "name": "12Play",
+            "slug": "12play",
+            "order": 46,
+            "rating": "6.9",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#000000"
+        },
+        {
+            "id": 643,
+            "name": "Batery-bet",
+            "slug": "batery-bet",
+            "order": 47,
+            "rating": "6.9",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#17071D"
+        },
+        {
+            "id": 49,
+            "name": "bet-at-home",
+            "slug": "bet-at-home",
+            "order": 48,
+            "rating": "6.9",
+            "user_rating": "4.3333333333333333",
+            "e2e_tracking_parameter": "c",
+            "has_affiliate_program": true,
+            "primary_color": "#002554"
+        },
+        {
+            "id": 645,
+            "name": "Brazino777",
+            "slug": "brazino777",
+            "order": 49,
+            "rating": "6.8",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#005B00"
+        },
+        {
+            "id": 646,
+            "name": "RTbet",
+            "slug": "rtbet",
+            "order": 50,
+            "rating": "6.8",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#000000"
+        },
+        {
+            "id": 640,
+            "name": "Onabet",
+            "slug": "onabet",
+            "order": 51,
+            "rating": "6.8",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#1F1924"
+        },
+        {
+            "id": 641,
+            "name": "Esportes da Sorte",
+            "slug": "esportes-da-sorte",
+            "order": 52,
+            "rating": "6.7",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#0F1768"
+        },
+        {
+            "id": 495,
+            "name": "FanDuel",
+            "slug": "fanduel",
+            "order": 53,
+            "rating": "6.7",
+            "user_rating": 0,
+            "e2e_tracking_parameter": "c",
+            "has_affiliate_program": true,
+            "primary_color": "#0078FF"
+        },
+        {
+            "id": 121,
+            "name": "Melbet",
+            "slug": "melbet",
+            "order": 54,
+            "rating": "6.6",
+            "user_rating": "4.0000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#2A2F31"
+        },
+        {
+            "id": 500,
+            "name": "Caesars",
+            "slug": "caesars",
+            "order": 55,
+            "rating": "6.6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": "c",
+            "has_affiliate_program": true,
+            "primary_color": "#173030"
+        },
+        {
+            "id": 629,
+            "name": "Fanatics",
+            "slug": "fanatics",
+            "order": 56,
+            "rating": "6.6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#000000"
+        },
+        {
+            "id": 494,
+            "name": "DraftKings",
+            "slug": "draftkings",
+            "order": 57,
+            "rating": "6.6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": "https:\/\/dksb.sng.link\/As9kz\/50v7?_dl=https%3A%2F%2Fsportsbook.draftkings.com%2Fgateway%3Fs%3D757159136&pcid=426353&psn=2712&pcn=OSB_Bet5NCO&pscn=UpsideSpring_SportsOdds&pcrn=Web&pscid=ODDSP&pcrid=xx&wpcid=426353&wpsrc=2712&wpcn=OSB_Bet5NCO&wpscn=UpsideSpring_SportsOdds&wpcrn=Web&wpscid=ODDSP&wpcrid=xx&_forward_params=1",
+            "has_affiliate_program": true,
+            "primary_color": "#000000"
+        },
+        {
+            "id": 638,
+            "name": "Hard Rock Bet",
+            "slug": "hard-rock-bet",
+            "order": 58,
+            "rating": "6.5",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#000000"
+        },
+        {
+            "id": 639,
+            "name": "JugaBet",
+            "slug": "jugabet",
+            "order": 59,
+            "rating": "6.4",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#0B234F"
+        },
+        {
+            "id": 637,
+            "name": "Merkurbets",
+            "slug": "merkurbets",
+            "order": 60,
+            "rating": "6.4",
+            "user_rating": "2.5000000000000000",
+            "e2e_tracking_parameter": "c",
+            "has_affiliate_program": true,
+            "primary_color": "#002751"
+        },
+        {
+            "id": 144,
+            "name": "TonyBet",
+            "slug": "tonybet",
+            "order": 61,
+            "rating": "6.3",
+            "user_rating": "3.6666666666666667",
+            "e2e_tracking_parameter": "subid",
+            "has_affiliate_program": true,
+            "primary_color": "#252525"
+        },
+        {
+            "id": 636,
+            "name": "PowerPlay",
+            "slug": "powerplay",
+            "order": 62,
+            "rating": "6.3",
+            "user_rating": 0,
+            "e2e_tracking_parameter": "S1",
+            "has_affiliate_program": true,
+            "primary_color": "#000000"
+        },
+        {
+            "id": 139,
+            "name": "Parimatch",
+            "slug": "parimatch",
+            "order": 63,
+            "rating": "6.2",
+            "user_rating": "4.8000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#000000"
+        },
+        {
+            "id": 504,
+            "name": "Betobet",
+            "slug": "betobet",
+            "order": 64,
+            "rating": "6.2",
+            "user_rating": "1.9166666666666667",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#000000"
+        },
+        {
+            "id": 633,
+            "name": "All British Casino",
+            "slug": "all-british-casino",
+            "order": 65,
+            "rating": "6.1",
+            "user_rating": "5.0000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#030D28"
+        },
+        {
+            "id": 116,
+            "name": "1Bet",
+            "slug": "1bet",
+            "order": 66,
+            "rating": "6.1",
+            "user_rating": "1.00000000000000000000",
+            "e2e_tracking_parameter": "c",
+            "has_affiliate_program": true,
+            "primary_color": "#21272a"
+        },
+        {
+            "id": 50,
+            "name": "Betsson",
+            "slug": "betsson",
+            "order": 67,
+            "rating": "6",
+            "user_rating": "3.6000000000000000",
+            "e2e_tracking_parameter": "payload",
+            "has_affiliate_program": true,
+            "primary_color": "#fe6608"
+        },
+        {
+            "id": 108,
+            "name": "Mostbet",
+            "slug": "mostbet",
+            "order": 68,
+            "rating": "6",
+            "user_rating": "4.9425981873111782",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#003C78"
+        },
+        {
+            "id": 635,
+            "name": "Cashwin",
+            "slug": "cashwin",
+            "order": 69,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#21231A"
+        },
+        {
+            "id": 14,
+            "name": "Dafabet",
+            "slug": "dafabet",
+            "order": 70,
+            "rating": "6",
+            "user_rating": "4.5000000000000000",
+            "e2e_tracking_parameter": "subid",
+            "has_affiliate_program": true,
+            "primary_color": "#af0000"
+        },
+        {
+            "id": 6,
+            "name": "Unibet",
+            "slug": "unibet",
+            "order": 71,
+            "rating": "6",
+            "user_rating": "3.2500000000000000",
+            "e2e_tracking_parameter": "subid",
+            "has_affiliate_program": true,
+            "primary_color": "#000000"
+        },
+        {
+            "id": 184,
+            "name": "Goldenbet",
+            "slug": "goldenbet",
+            "order": 72,
+            "rating": "6",
+            "user_rating": "3.0000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#1B1B21"
+        },
+        {
+            "id": 673,
+            "name": "GoldRush",
+            "slug": "goldrush",
+            "order": 73,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#1E1E1E"
+        },
+        {
+            "id": 182,
+            "name": "Freshbet",
+            "slug": "freshbet",
+            "order": 74,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#1B1B21"
+        },
+        {
+            "id": 183,
+            "name": "Mystake",
+            "slug": "mystake",
+            "order": 75,
+            "rating": "6",
+            "user_rating": "3.5000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#000000"
+        },
+        {
+            "id": 64,
+            "name": "LVBET",
+            "slug": "lvbet",
+            "order": 76,
+            "rating": "6",
+            "user_rating": "3.3333333333333333",
+            "e2e_tracking_parameter": "subid",
+            "has_affiliate_program": true,
+            "primary_color": "#1B1B1B"
+        },
+        {
+            "id": 181,
+            "name": "Jackbit",
+            "slug": "jackbit",
+            "order": 77,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#0C121E"
+        },
+        {
+            "id": 70,
+            "name": "Vbet Sport",
+            "slug": "vbet",
+            "order": 78,
+            "rating": "6",
+            "user_rating": "3.1250000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#000c24"
+        },
+        {
+            "id": 632,
+            "name": "Nine Casino",
+            "slug": "nine-casino",
+            "order": 79,
+            "rating": "6",
+            "user_rating": "5.0000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#070E2A"
+        },
+        {
+            "id": 1,
+            "name": "NetBet",
+            "slug": "netbet",
+            "order": 80,
+            "rating": "6",
+            "user_rating": "2.0000000000000000",
+            "e2e_tracking_parameter": "siteid",
+            "has_affiliate_program": true,
+            "primary_color": "#333744"
+        },
+        {
+            "id": 331,
+            "name": "Bzeebet",
+            "slug": "bzeebet",
+            "order": 81,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": "subid",
+            "has_affiliate_program": true,
+            "primary_color": "#012939"
+        },
+        {
+            "id": 626,
+            "name": "Galera.Bet",
+            "slug": "galera-bet",
+            "order": 82,
+            "rating": "6",
+            "user_rating": "5.0000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#111c39"
+        },
+        {
+            "id": 628,
+            "name": "BetKwiff",
+            "slug": "betkwiff",
+            "order": 83,
+            "rating": "6",
+            "user_rating": "5.0000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#8225FA"
+        },
+        {
+            "id": 280,
+            "name": "Betibet",
+            "slug": "betibet",
+            "order": 84,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#000000"
+        },
+        {
+            "id": 8,
+            "name": "GG.BET",
+            "slug": "gg-bet",
+            "order": 85,
+            "rating": "6",
+            "user_rating": "4.3488372093023256",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#15171D"
+        },
+        {
+            "id": 145,
+            "name": "Ivibet",
+            "slug": "ivibet",
+            "order": 86,
+            "rating": "6",
+            "user_rating": "2.5000000000000000",
+            "e2e_tracking_parameter": "subid",
+            "has_affiliate_program": true,
+            "primary_color": "#22333B"
+        },
+        {
+            "id": 51,
+            "name": "Betsafe",
+            "slug": "betsafe",
+            "order": 87,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": "payload",
+            "has_affiliate_program": true,
+            "primary_color": "#0E0E0E"
+        },
+        {
+            "id": 625,
+            "name": "Admiralbet IT",
+            "slug": "admiralbet-it",
+            "order": 88,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#002454"
+        },
+        {
+            "id": 330,
+            "name": "HeySpin",
+            "slug": "heyspin",
+            "order": 89,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#000000"
+        },
+        {
+            "id": 117,
+            "name": "Weltbet",
+            "slug": "weltbet",
+            "order": 90,
+            "rating": "6",
+            "user_rating": "1.00000000000000000000",
+            "e2e_tracking_parameter": "c",
+            "has_affiliate_program": true,
+            "primary_color": "#1e1e1e"
+        },
+        {
+            "id": 546,
+            "name": "1xBit",
+            "slug": "1xbit",
+            "order": 91,
+            "rating": "6",
+            "user_rating": "4.2500000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#000000"
+        },
+        {
+            "id": 403,
+            "name": "BlueChip",
+            "slug": "bluechip",
+            "order": 92,
+            "rating": "6",
+            "user_rating": "4.3333333333333333",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#091938"
+        },
+        {
+            "id": 490,
+            "name": "BetRivers",
+            "slug": "betrivers",
+            "order": 93,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": "c",
+            "has_affiliate_program": true,
+            "primary_color": "#122A53"
+        },
+        {
+            "id": 642,
+            "name": "Desert Diamond",
+            "slug": "desert-diamond",
+            "order": 94,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#061A35"
+        },
+        {
+            "id": 594,
+            "name": "BK8",
+            "slug": "bk8",
+            "order": 95,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#0c4da2"
+        },
+        {
+            "id": 545,
+            "name": "Sportsbet.io",
+            "slug": "sportsbet-io",
+            "order": 96,
+            "rating": "6",
+            "user_rating": "3.5000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#222b33"
+        },
+        {
+            "id": 274,
+            "name": "10bet",
+            "slug": "10bet",
+            "order": 97,
+            "rating": "6",
+            "user_rating": "4.0000000000000000",
+            "e2e_tracking_parameter": "c",
+            "has_affiliate_program": true,
+            "primary_color": "#4E454A"
+        },
+        {
+            "id": 67,
+            "name": "BetUK",
+            "slug": "betuk",
+            "order": 98,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": "subid",
+            "has_affiliate_program": true,
+            "primary_color": "#09253b"
+        },
+        {
+            "id": 109,
+            "name": "Midnite",
+            "slug": "midnite",
+            "order": 99,
+            "rating": "6",
+            "user_rating": "4.0000000000000000",
+            "e2e_tracking_parameter": "c",
+            "has_affiliate_program": true,
+            "primary_color": "#080808"
+        },
+        {
+            "id": 582,
+            "name": "N1Bet",
+            "slug": "n1bet",
+            "order": 100,
+            "rating": "6",
+            "user_rating": "4.0000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#1A1A22"
+        },
+        {
+            "id": 603,
+            "name": "4rabet",
+            "slug": "4rabet",
+            "order": 101,
+            "rating": "6",
+            "user_rating": "4.4924242424242424",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#182638"
+        },
+        {
+            "id": 653,
+            "name": "Ballybet",
+            "slug": "bally-bet",
+            "order": 102,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#EC0000"
+        },
+        {
+            "id": 90,
+            "name": "bet90",
+            "slug": "bet90",
+            "order": 103,
+            "rating": "6",
+            "user_rating": "4.0000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#000000"
+        },
+        {
+            "id": 606,
+            "name": "Sportingwin",
+            "slug": "sportingwin",
+            "order": 104,
+            "rating": "6",
+            "user_rating": "1.3333333333333333",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": false,
+            "primary_color": "#0e89d3"
+        },
+        {
+            "id": 609,
+            "name": "France Pari",
+            "slug": "france-pari",
+            "order": 105,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": false,
+            "primary_color": "#1565c1"
+        },
+        {
+            "id": 69,
+            "name": "Casumo Sport",
+            "slug": "casumo-sport",
+            "order": 106,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#42089B"
+        },
+        {
+            "id": 468,
+            "name": "Caliente",
+            "slug": "caliente",
+            "order": 107,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#ff1600"
+        },
+        {
+            "id": 593,
+            "name": "Starcasino.it",
+            "slug": "starcasino-it",
+            "order": 108,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#17405c"
+        },
+        {
+            "id": 63,
+            "name": "LSbet",
+            "slug": "lsbet",
+            "order": 109,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": "AFP",
+            "has_affiliate_program": true,
+            "primary_color": "#353535"
+        },
+        {
+            "id": 13,
+            "name": "Sportingbet",
+            "slug": "sportingbet",
+            "order": 110,
+            "rating": "6",
+            "user_rating": "4.0000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#009ee0"
+        },
+        {
+            "id": 42,
+            "name": "William Hill",
+            "slug": "william-hill",
+            "order": 111,
+            "rating": "6",
+            "user_rating": "4.2857142857142857",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#041c40"
+        },
+        {
+            "id": 554,
+            "name": "Cloudbet",
+            "slug": "cloudbet",
+            "order": 113,
+            "rating": "6",
+            "user_rating": "3.5000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#292929"
+        },
+        {
+            "id": 510,
+            "name": "Bet9ja",
+            "slug": "bet9ja",
+            "order": 114,
+            "rating": "6",
+            "user_rating": "5.0000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#343841"
+        },
+        {
+            "id": 547,
+            "name": "Sports Interaction",
+            "slug": "sports-interaction",
+            "order": 115,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#08112a"
+        },
+        {
+            "id": 551,
+            "name": "Coolbet",
+            "slug": "coolbet",
+            "order": 116,
+            "rating": "6",
+            "user_rating": "4.0000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": false,
+            "primary_color": "#2c2c36"
+        },
+        {
+            "id": 550,
+            "name": "DoradoBet",
+            "slug": "doradobet",
+            "order": 117,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#b78522"
+        },
+        {
+            "id": 533,
+            "name": "TeApuesto",
+            "slug": "teapuesto",
+            "order": 118,
+            "rating": "6",
+            "user_rating": "5.0000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": false,
+            "primary_color": "#000000"
+        },
+        {
+            "id": 143,
+            "name": "Codere",
+            "slug": "codere",
+            "order": 119,
+            "rating": "6",
+            "user_rating": "5.0000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#79C002"
+        },
+        {
+            "id": 586,
+            "name": "Giocodigitale",
+            "slug": "giocodigitale",
+            "order": 120,
+            "rating": "6",
+            "user_rating": "1.00000000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#000000"
+        },
+        {
+            "id": 552,
+            "name": "Betcris",
+            "slug": "betcris",
+            "order": 121,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#035c9c"
+        },
+        {
+            "id": 101,
+            "name": "NetBet IT",
+            "slug": "netbet-it",
+            "order": 122,
+            "rating": "6",
+            "user_rating": "3.0000000000000000",
+            "e2e_tracking_parameter": "siteid",
+            "has_affiliate_program": true,
+            "primary_color": "#333744"
+        },
+        {
+            "id": 674,
+            "name": "Brasil.bet",
+            "slug": "brasil-bet",
+            "order": 123,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#017541"
+        },
+        {
+            "id": 522,
+            "name": "Yajuego",
+            "slug": "yajuego",
+            "order": 124,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#002d72"
+        },
+        {
+            "id": 528,
+            "name": "Paf.es",
+            "slug": "paf-es",
+            "order": 125,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#25ac61"
+        },
+        {
+            "id": 600,
+            "name": "Winamax Sport",
+            "slug": "winamax-sport",
+            "order": 126,
+            "rating": "6",
+            "user_rating": "4.5000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#121111"
+        },
+        {
+            "id": 672,
+            "name": "EasyBet",
+            "slug": "easybet",
+            "order": 127,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#FFD600"
+        },
+        {
+            "id": 579,
+            "name": "GanaBet",
+            "slug": "ganabet",
+            "order": 128,
+            "rating": "6",
+            "user_rating": "4.0000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#036f2a"
+        },
+        {
+            "id": 541,
+            "name": "RaceBets",
+            "slug": "racebets",
+            "order": 129,
+            "rating": "6",
+            "user_rating": "4.0000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#333333"
+        },
+        {
+            "id": 17,
+            "name": "Ladbrokes",
+            "slug": "ladbrokes",
+            "order": 130,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#e81b24"
+        },
+        {
+            "id": 47,
+            "name": "Coral",
+            "slug": "coral",
+            "order": 131,
+            "rating": "6",
+            "user_rating": "5.0000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#0e4b95"
+        },
+        {
+            "id": 503,
+            "name": "Nossaaposta",
+            "slug": "nossaaposta",
+            "order": 132,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#F27420"
+        },
+        {
+            "id": 577,
+            "name": "Inkabet",
+            "slug": "inkabet",
+            "order": 133,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#292929"
+        },
+        {
+            "id": 534,
+            "name": "Admiralbet",
+            "slug": "admiralbet",
+            "order": 134,
+            "rating": "6",
+            "user_rating": "4.3333333333333333",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#002554"
+        },
+        {
+            "id": 12,
+            "name": "Rivalo",
+            "slug": "rivalo",
+            "order": 135,
+            "rating": "6",
+            "user_rating": "4.0000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#003366"
+        },
+        {
+            "id": 675,
+            "name": "Gbets",
+            "slug": "gbets",
+            "order": 136,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#062925"
+        },
+        {
+            "id": 573,
+            "name": "Hollywoodbets",
+            "slug": "hollywoodbets",
+            "order": 137,
+            "rating": "6",
+            "user_rating": "4.0000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#622c8a"
+        },
+        {
+            "id": 506,
+            "name": "Pin-up",
+            "slug": "pin-up",
+            "order": 138,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#13131b"
+        },
+        {
+            "id": 35,
+            "name": "betFIRST",
+            "slug": "betfirst",
+            "order": 139,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": "siteid",
+            "has_affiliate_program": true,
+            "primary_color": "#202020"
+        },
+        {
+            "id": 511,
+            "name": "Betcity",
+            "slug": "betcity",
+            "order": 140,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#0291f1"
+        },
+        {
+            "id": 91,
+            "name": "SpeedyBet",
+            "slug": "speedybet",
+            "order": 141,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#414C5A"
+        },
+        {
+            "id": 84,
+            "name": "Paddy Power",
+            "slug": "paddy-power",
+            "order": 142,
+            "rating": "6",
+            "user_rating": "1.00000000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": false,
+            "primary_color": "#0e4b40"
+        },
+        {
+            "id": 479,
+            "name": "Betflag",
+            "slug": "betflag",
+            "order": 143,
+            "rating": "6",
+            "user_rating": "4.5000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#002742"
+        },
+        {
+            "id": 590,
+            "name": "SportPesa",
+            "slug": "sportpesa",
+            "order": 144,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": false,
+            "primary_color": "#020b14"
+        },
+        {
+            "id": 55,
+            "name": "Bets10",
+            "slug": "bets10",
+            "order": 145,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": "payload",
+            "has_affiliate_program": true,
+            "primary_color": "#1a1a1a"
+        },
+        {
+            "id": 472,
+            "name": "Betfred",
+            "slug": "betfred",
+            "order": 146,
+            "rating": "6",
+            "user_rating": "5.0000000000000000",
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": true,
+            "primary_color": "#06468b"
+        },
+        {
+            "id": 469,
+            "name": "Paston",
+            "slug": "paston",
+            "order": 147,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": false,
+            "primary_color": "#0190ed"
+        },
+        {
+            "id": 601,
+            "name": "Partouche",
+            "slug": "partouche",
+            "order": 148,
+            "rating": "6",
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": false,
+            "primary_color": "#d11e12"
+        },
+        {
+            "id": 670,
+            "name": "Betxchange",
+            "slug": null,
+            "order": null,
+            "rating": null,
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": false,
+            "primary_color": null
+        },
+        {
+            "id": 676,
+            "name": "Pantherbets",
+            "slug": null,
+            "order": null,
+            "rating": null,
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": false,
+            "primary_color": null
+        },
+        {
+            "id": 677,
+            "name": "Tic tac bets",
+            "slug": null,
+            "order": null,
+            "rating": null,
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": false,
+            "primary_color": null
+        },
+        {
+            "id": 656,
+            "name": "Proline+",
+            "slug": null,
+            "order": null,
+            "rating": null,
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": false,
+            "primary_color": null
+        },
+        {
+            "id": 111,
+            "name": "Betfair EX",
+            "slug": "betfair-ex",
+            "order": null,
+            "rating": null,
+            "user_rating": 0,
+            "e2e_tracking_parameter": null,
+            "has_affiliate_program": false,
+            "primary_color": null
+        }
+    ]
+}

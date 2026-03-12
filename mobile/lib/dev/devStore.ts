@@ -164,7 +164,7 @@ type DevStore = {
 
     setGithubPat: (pat: string) => Promise<void>;
     hydrateGithubPat: () => Promise<void>;
-    triggerWorkflow: (id: string) => Promise<void>;
+    triggerWorkflow: (id: string, inputs?: Record<string, string>) => Promise<void>;
   };
 };
 
@@ -552,7 +552,7 @@ export const useDevStore = create<DevStore>((set, get) => ({
     },
 
     /* ---------------- WORKFLOW TRIGGERS ---------------- */
-    async triggerWorkflow(id) {
+    async triggerWorkflow(id, inputs) {
       const { githubPat } = get();
 
       if (!githubPat) {
@@ -587,7 +587,7 @@ export const useDevStore = create<DevStore>((set, get) => ({
               "Content-Type": "application/json",
               "X-GitHub-Api-Version": "2022-11-28",
             },
-            body: JSON.stringify({ ref: "master" }),
+            body: JSON.stringify({ ref: "master", inputs: inputs ?? {} }),
           }
         );
 

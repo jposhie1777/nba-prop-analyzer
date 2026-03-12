@@ -41,17 +41,34 @@ with sync_playwright() as pw:
     match_list = data0.get("matchList", [])
     print(f"  found {len(match_list)} matches")
 
-    # Step 2: pick first upcoming (not inplay, not archived) match
+    # Debug: show status of first 10 matches
+    print("\n  Match statuses (first 10):")
+    for m in match_list[:10]:
+        print(f"    {m.get('ht')} vs {m.get('at')} | "
+              f"inplay={m.get('inplay')} winner={m.get('winner')} "
+              f"matchstatus={m.get('matchstatus')} archived={m.get('is_match_archived')}")
+
+    # Step 2: prefer upcoming (winner=0, not inplay) → inplay → any
     match_url = None
-    for m in match_list:
-        ht, at = m.get("ht_slug"), m.get("at_slug")
-        if ht and at and not m.get("inplay") and not m.get("is_match_archived"):
+    for status_filter in ("upcoming", "inplay", "any"):
+        for m in match_list:
+            ht, at = m.get("ht_slug"), m.get("at_slug")
+            if not ht or not at:
+                continue
+            is_inplay = m.get("inplay", False)
+            is_done   = m.get("winner", 0) != 0  # winner set = match over
+            if status_filter == "upcoming" and (is_inplay or is_done):
+                continue
+            if status_filter == "inplay" and not is_inplay:
+                continue
             match_url = f"https://www.oddspedia.com/us/tennis/{ht}-{at}"
-            print(f"  picked upcoming: {m.get('ht')} vs {m.get('at')} @ {m.get('md')}")
+            print(f"\n  picked [{status_filter}]: {m.get('ht')} vs {m.get('at')} @ {m.get('md')}")
+            break
+        if match_url:
             break
 
     if not match_url:
-        raise SystemExit("No matches found on listing page.")
+        raise SystemExit("No matches with slugs found.")
 
     # Step 3: scrape the match detail page
     print("\nStep 2: fetching match detail page …")

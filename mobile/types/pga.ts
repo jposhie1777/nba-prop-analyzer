@@ -264,13 +264,14 @@ export type PgaBettingMatchupRow = {
   player_b?: string | null;
   odds_a?: number | null;
   odds_b?: number | null;
-  score_a?: number | null;
-  score_b?: number | null;
-  score_diff?: number | null;
-  sg_diff?: number | null;
-  approach_diff?: number | null;
-  putting_diff?: number | null;
-  course_fit_diff?: number | null;
+  round_avg_a?: number | null;
+  round_avg_b?: number | null;
+  round_avg_diff?: number | null;
+  cut_rate_diff?: number | null;
+  top10_rate_diff?: number | null;
+  sg_total_diff?: number | null;
+  sg_approach_diff?: number | null;
+  sg_putting_diff?: number | null;
 };
 
 export type PgaBetting3BallRow = {
@@ -280,8 +281,12 @@ export type PgaBetting3BallRow = {
   player_display_name?: string | null;
   american_odds?: number | null;
   implied_probability?: number | null;
-  expected_round_score?: number | null;
-  projected_rank?: number | null;
+  round_avg?: number | null;
+  cut_rate_l5?: number | null;
+  top10_rate_l5?: number | null;
+  sg_total?: number | null;
+  sg_approach?: number | null;
+  sg_putting?: number | null;
 };
 
 export type PgaPlayerSkillStatsRow = {

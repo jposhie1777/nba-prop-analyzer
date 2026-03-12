@@ -1306,13 +1306,14 @@ def fetch_betting_matchups(params: Optional[Dict[str, Any]] = None) -> List[Dict
       player_b,
       odds_a,
       odds_b,
-      score_a,
-      score_b,
-      score_diff,
-      sg_diff,
-      approach_diff,
-      putting_diff,
-      course_fit_diff
+      round_avg_a,
+      round_avg_b,
+      round_avg_diff,
+      cut_rate_diff,
+      top10_rate_diff,
+      sg_total_diff,
+      sg_approach_diff,
+      sg_putting_diff
     FROM {view}
     {where_clause}
     ORDER BY sub_market_name ASC, group_index ASC
@@ -1328,13 +1329,14 @@ def fetch_betting_matchups(params: Optional[Dict[str, Any]] = None) -> List[Dict
             "player_b": row.get("player_b"),
             "odds_a": row.get("odds_a"),
             "odds_b": row.get("odds_b"),
-            "score_a": row.get("score_a"),
-            "score_b": row.get("score_b"),
-            "score_diff": row.get("score_diff"),
-            "sg_diff": row.get("sg_diff"),
-            "approach_diff": row.get("approach_diff"),
-            "putting_diff": row.get("putting_diff"),
-            "course_fit_diff": row.get("course_fit_diff"),
+            "round_avg_a": row.get("round_avg_a"),
+            "round_avg_b": row.get("round_avg_b"),
+            "round_avg_diff": row.get("round_avg_diff"),
+            "cut_rate_diff": row.get("cut_rate_diff"),
+            "top10_rate_diff": row.get("top10_rate_diff"),
+            "sg_total_diff": row.get("sg_total_diff"),
+            "sg_approach_diff": row.get("sg_approach_diff"),
+            "sg_putting_diff": row.get("sg_putting_diff"),
         }
         for row in rows
     ]
@@ -1367,11 +1369,15 @@ def fetch_betting_3ball(params: Optional[Dict[str, Any]] = None) -> List[Dict[st
       player_display_name,
       american_odds,
       implied_probability,
-      expected_round_score,
-      projected_rank
+      round_avg,
+      cut_rate_l5,
+      top10_rate_l5,
+      sg_total,
+      sg_approach,
+      sg_putting
     FROM {view}
     {where_clause}
-    ORDER BY group_index ASC, projected_rank ASC
+    ORDER BY group_index ASC, implied_probability DESC
     """
 
     rows = _run_query(client, query, query_params)
@@ -1383,8 +1389,12 @@ def fetch_betting_3ball(params: Optional[Dict[str, Any]] = None) -> List[Dict[st
             "player_display_name": row.get("player_display_name"),
             "american_odds": row.get("american_odds"),
             "implied_probability": row.get("implied_probability"),
-            "expected_round_score": row.get("expected_round_score"),
-            "projected_rank": row.get("projected_rank"),
+            "round_avg": row.get("round_avg"),
+            "cut_rate_l5": row.get("cut_rate_l5"),
+            "top10_rate_l5": row.get("top10_rate_l5"),
+            "sg_total": row.get("sg_total"),
+            "sg_approach": row.get("sg_approach"),
+            "sg_putting": row.get("sg_putting"),
         }
         for row in rows
     ]

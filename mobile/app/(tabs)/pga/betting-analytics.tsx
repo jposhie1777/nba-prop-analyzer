@@ -863,16 +863,16 @@ function MatchupCard({
       {!expanded && (
         <View style={styles.matchupDiffs}>
           <Text style={[styles.matchupDiff, { color: colors.text.muted }]}>
-            SG Diff: {fmt(row.sg_diff, 3)}
+            SG Diff: {fmt(row.sg_total_diff, 3)}
           </Text>
           <Text style={[styles.matchupDiff, { color: colors.text.muted }]}>
-            Score Diff: {fmt(row.score_diff, 1)}
+            Avg Score Diff: {fmt(row.round_avg_diff, 1)}
           </Text>
           <Text style={[styles.matchupDiff, { color: colors.text.muted }]}>
-            App Diff: {fmt(row.approach_diff, 3)}
+            App Diff: {fmt(row.sg_approach_diff, 3)}
           </Text>
           <Text style={[styles.matchupDiff, { color: colors.text.muted }]}>
-            Putt Diff: {fmt(row.putting_diff, 3)}
+            Putt Diff: {fmt(row.sg_putting_diff, 3)}
           </Text>
         </View>
       )}
@@ -887,15 +887,15 @@ function MatchupCard({
               <Text style={[styles.matchupPlayerLabel, { color: "#90B3E9" }]}>
                 {row.player_a?.split(" ").pop() ?? "A"}
               </Text>
-              <StatRow label="Exp Scr" value={fmt(row.score_a, 1)} colors={colors} />
+              <StatRow label="Avg Scr" value={fmt(row.round_avg_a, 1)} colors={colors} />
               <StatRow label="SG Total" value={fmt(
-                row.sg_diff != null && row.sg_diff > 0 ? row.sg_diff : null, 3
+                row.sg_total_diff != null && row.sg_total_diff > 0 ? row.sg_total_diff : null, 3
               )} colors={colors} />
               <StatRow label="SG App" value={fmt(
-                row.approach_diff != null && row.approach_diff > 0 ? row.approach_diff : null, 3
+                row.sg_approach_diff != null && row.sg_approach_diff > 0 ? row.sg_approach_diff : null, 3
               )} colors={colors} />
               <StatRow label="SG Putt" value={fmt(
-                row.putting_diff != null && row.putting_diff > 0 ? row.putting_diff : null, 3
+                row.sg_putting_diff != null && row.sg_putting_diff > 0 ? row.sg_putting_diff : null, 3
               )} colors={colors} />
             </View>
 
@@ -907,15 +907,15 @@ function MatchupCard({
               <Text style={[styles.matchupPlayerLabel, { color: "#90B3E9" }]}>
                 {row.player_b?.split(" ").pop() ?? "B"}
               </Text>
-              <StatRow label="Exp Scr" value={fmt(row.score_b, 1)} colors={colors} right />
+              <StatRow label="Avg Scr" value={fmt(row.round_avg_b, 1)} colors={colors} right />
               <StatRow label="SG Total" value={fmt(
-                row.sg_diff != null && row.sg_diff < 0 ? -row.sg_diff : null, 3
+                row.sg_total_diff != null && row.sg_total_diff < 0 ? -row.sg_total_diff : null, 3
               )} colors={colors} right />
               <StatRow label="SG App" value={fmt(
-                row.approach_diff != null && row.approach_diff < 0 ? -row.approach_diff : null, 3
+                row.sg_approach_diff != null && row.sg_approach_diff < 0 ? -row.sg_approach_diff : null, 3
               )} colors={colors} right />
               <StatRow label="SG Putt" value={fmt(
-                row.putting_diff != null && row.putting_diff < 0 ? -row.putting_diff : null, 3
+                row.sg_putting_diff != null && row.sg_putting_diff < 0 ? -row.sg_putting_diff : null, 3
               )} colors={colors} right />
             </View>
           </View>
@@ -924,22 +924,23 @@ function MatchupCard({
           <View style={[styles.matchupDivider, { backgroundColor: colors.border.subtle }]} />
           <View style={styles.matchupDiffs}>
             <Text style={[styles.matchupDiff, { color: colors.text.muted }]}>
-              SG Diff: {fmt(row.sg_diff, 3)}
+              SG Diff: {fmt(row.sg_total_diff, 3)}
             </Text>
             <Text style={[styles.matchupDiff, { color: colors.text.muted }]}>
-              Score: {fmt(row.score_diff, 1)}
+              Avg Score: {fmt(row.round_avg_diff, 1)}
             </Text>
             <Text style={[styles.matchupDiff, { color: colors.text.muted }]}>
-              App: {fmt(row.approach_diff, 3)}
+              App: {fmt(row.sg_approach_diff, 3)}
             </Text>
             <Text style={[styles.matchupDiff, { color: colors.text.muted }]}>
-              Putt: {fmt(row.putting_diff, 3)}
+              Putt: {fmt(row.sg_putting_diff, 3)}
             </Text>
-            {row.course_fit_diff != null && (
-              <Text style={[styles.matchupDiff, { color: colors.text.muted }]}>
-                Crs: {fmt(row.course_fit_diff, 3)}
-              </Text>
-            )}
+            <Text style={[styles.matchupDiff, { color: colors.text.muted }]}>
+              Cut Rate: {fmt(row.cut_rate_diff, 2)}
+            </Text>
+            <Text style={[styles.matchupDiff, { color: colors.text.muted }]}>
+              Top 10: {fmt(row.top10_rate_diff, 2)}
+            </Text>
           </View>
           <Text style={[styles.expandHint, { color: colors.text.muted }]}>
             Tap to collapse ▲
@@ -1052,37 +1053,27 @@ function ThreeBallGroupCard({
               <Text style={[styles.threeBallImpl, { color: colors.text.muted }]}>
                 {fmtPct(player.implied_probability)}
               </Text>
-              {player.projected_rank != null && (
-                <View
-                  style={[
-                    styles.threeBallRankBadge,
-                    {
-                      backgroundColor:
-                        player.projected_rank === 1
-                          ? "rgba(34,211,238,0.2)"
-                          : "rgba(255,255,255,0.05)",
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.threeBallRank,
-                      {
-                        color:
-                          player.projected_rank === 1 ? "#22D3EE" : colors.text.muted,
-                      },
-                    ]}
-                  >
-                    Proj #{player.projected_rank}
-                  </Text>
-                </View>
-              )}
 
               {/* Expanded stats */}
               {expanded && (
                 <View style={styles.threeBallExpandedStats}>
                   <Text style={[styles.threeBallStat, { color: colors.text.muted }]}>
-                    Exp Scr: {fmt(player.expected_round_score, 1)}
+                    Avg Scr: {fmt(player.round_avg, 1)}
+                  </Text>
+                  <Text style={[styles.threeBallStat, { color: colors.text.muted }]}>
+                    Cut%: {fmtPct(player.cut_rate_l5)}
+                  </Text>
+                  <Text style={[styles.threeBallStat, { color: colors.text.muted }]}>
+                    Top10%: {fmtPct(player.top10_rate_l5)}
+                  </Text>
+                  <Text style={[styles.threeBallStat, { color: colors.text.muted }]}>
+                    SG Tot: {fmt(player.sg_total, 3)}
+                  </Text>
+                  <Text style={[styles.threeBallStat, { color: colors.text.muted }]}>
+                    SG App: {fmt(player.sg_approach, 3)}
+                  </Text>
+                  <Text style={[styles.threeBallStat, { color: colors.text.muted }]}>
+                    SG Putt: {fmt(player.sg_putting, 3)}
                   </Text>
                 </View>
               )}
@@ -1141,9 +1132,9 @@ function ThreeBallTab({ colors }: { colors: any }) {
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(row);
     }
-    // Sort players within each group by projected_rank
+    // Sort players within each group by implied_probability descending
     for (const [, players] of map) {
-      players.sort((a, b) => (a.projected_rank ?? 99) - (b.projected_rank ?? 99));
+      players.sort((a, b) => (b.implied_probability ?? 0) - (a.implied_probability ?? 0));
     }
     return Array.from(map.entries()).sort((a, b) => b[0] - a[0]);
   }, [rows]);

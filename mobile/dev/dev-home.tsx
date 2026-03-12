@@ -1,532 +1,545 @@
-// /app/(dev)/dev-home.tsx
+// /dev/dev-home.tsx  —  Dev Console (Workflow Triggers)
 import React from "react";
-import { ScrollView, View, Text, Pressable, AppState } from "react-native";
-import Constants from "expo-constants";
+import {
+  ScrollView,
+  View,
+  Text,
+  Pressable,
+  TextInput,
+  StyleSheet,
+  Switch,
+  AppState,
+} from "react-native";
 import { useRouter } from "expo-router";
-
 import { useTheme } from "@/store/useTheme";
-import { createDevStyles } from "./devStyles";
 import { useDevStore } from "@/lib/dev/devStore";
-import { BqTableCard } from "./components/BqTableCard";
-import { useBqDatasetTables } from "@/lib/dev/useBqDatasetTables";
-import { useBqRoutines } from "@/lib/dev/useBqRoutines";
+import { createDevStyles } from "./devStyles";
 
+/* ─────────────────────────────────────────────
+   Input field definitions per backfill workflow
+───────────────────────────────────────────── */
+type FieldDef =
+  | { key: string; label: string; type: "text"; placeholder: string; default: string }
+  | { key: string; label: string; type: "toggle"; default: boolean };
+
+const BACKFILL_CONFIGS: Record<string, { fields: FieldDef[] }> = {
+  "epl_backfill.yml": {
+    fields: [
+      { key: "current_season", label: "Current Season (YYYY)", type: "text", placeholder: "e.g. 2025", default: "" },
+      { key: "truncate_first", label: "Truncate tables first", type: "toggle", default: false },
+    ],
+  },
+  "mls_backfill.yml": {
+    fields: [
+      { key: "start_season", label: "Start Season (YYYY)", type: "text", placeholder: "e.g. 2024", default: "2024" },
+      { key: "end_season", label: "End Season (YYYY)", type: "text", placeholder: "e.g. 2025", default: "2025" },
+      { key: "dry_run", label: "Dry run (no writes)", type: "toggle", default: false },
+    ],
+  },
+  "atp_backfill.yml": {
+    fields: [
+      { key: "years", label: "Seasons to backfill", type: "text", placeholder: "e.g. 5", default: "5" },
+      { key: "start_year", label: "Start Year (YYYY)", type: "text", placeholder: "optional", default: "" },
+      { key: "end_year", label: "End Year (YYYY)", type: "text", placeholder: "optional", default: "" },
+      { key: "truncate", label: "Truncate tables first", type: "toggle", default: true },
+    ],
+  },
+  "pga_backfill.yml": {
+    fields: [
+      { key: "years", label: "Seasons to backfill", type: "text", placeholder: "e.g. 5", default: "5" },
+      { key: "start_season", label: "Start Season (YYYY)", type: "text", placeholder: "optional", default: "" },
+      { key: "end_season", label: "End Season (YYYY)", type: "text", placeholder: "optional", default: "" },
+      { key: "truncate", label: "Truncate tables first", type: "toggle", default: true },
+    ],
+  },
+};
+
+const DAILY_LOADER_IDS = [
+  "epl_daily_loader.yml",
+  "mls_daily.yml",
+  "atp_daily_loader.yml",
+  "atp_odds_daily.yml",
+  "sheets_bq_sync.yml",
+  "pga_daily_ingest.yml",
+  "pga_odds_daily.yml",
+  "soccer_odds_sheets_sync.yml",
+];
+
+const BACKFILL_IDS = [
+  "epl_backfill.yml",
+  "mls_backfill.yml",
+  "atp_backfill.yml",
+  "pga_backfill.yml",
+];
+
+function buildDefaultDraft(id: string): Record<string, string> {
+  const config = BACKFILL_CONFIGS[id];
+  if (!config) return {};
+  const out: Record<string, string> = {};
+  for (const f of config.fields) {
+    out[f.key] = f.type === "toggle" ? (f.default ? "true" : "false") : f.default;
+  }
+  return out;
+}
+
+/* ─────────────────────────────────────────────
+   Main screen
+───────────────────────────────────────────── */
 export default function DevHomeScreen() {
   const { colors } = useTheme();
   const styles = React.useMemo(() => createDevStyles(colors), [colors]);
   const router = useRouter();
-  const goatTables = useBqDatasetTables("nba_goat_data");
-  const liveTables = useBqDatasetTables("nba_live");
-  const goatRoutines = useBqRoutines("nba_goat_data");
-  const liveRoutines = useBqRoutines("nba_live");
-  const { devUnlocked, health, flags, sse, freshness, actions } =
-    useDevStore();
 
-  const appVersion =
-    Constants.expoConfig?.version ??
-    // @ts-ignore
-    Constants.manifest?.version ??
-    "unknown";
+  const { devUnlocked, githubPat, workflows, spTriggers, actions } = useDevStore();
 
-  const runtimeEnv =
-    Constants.expoConfig?.extra?.RUNTIME_ENV ??
-    // @ts-ignore
-    Constants.manifest?.extra?.RUNTIME_ENV ??
-    "unknown";
+  const [drafts, setDrafts] = React.useState<Record<string, Record<string, string>>>(() =>
+    Object.fromEntries(BACKFILL_IDS.map((id) => [id, buildDefaultDraft(id)]))
+  );
 
-  const apiUrl =
-    Constants.expoConfig?.extra?.API_URL ??
-    // @ts-ignore
-    Constants.manifest?.extra?.API_URL ??
-    "unknown";
+  const setField = (workflowId: string, key: string, value: string) => {
+    setDrafts((prev) => ({
+      ...prev,
+      [workflowId]: { ...prev[workflowId], [key]: value },
+    }));
+  };
 
-  /* --------------------------------------------------
-     🔴 4D: AUTO-REFRESH ON APP RESUME (DEV ONLY)
--------------------------------------------------- */
   React.useEffect(() => {
-    const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") {
-        actions.runAllHealthChecks();
-        freshness.datasets.forEach((d) =>
-          actions.fetchFreshness(d.key)
-        );
-      }
-    });
-
-    return () => {
-      sub.remove();
-    };
-  }, [actions, freshness.datasets]);
-
-  /* 🔴 ALSO: run once on initial mount */
-  React.useEffect(() => {
-    actions.runAllHealthChecks();
-    freshness.datasets.forEach((d) =>
-      actions.fetchFreshness(d.key)
-    );
+    actions.hydrateGithubPat();
   }, []);
 
+  React.useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "background") actions.resetDevUnlock();
+    });
+    return () => sub.remove();
+  }, [actions]);
+
+  /* ── Locked gate ── */
   if (!devUnlocked) {
     return (
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
         <Text style={styles.title}>Dev Console</Text>
-        <Text style={styles.mutedText}>
-          Tap the logo 5 times to unlock this page.
-        </Text>
-        <Pressable
-          style={styles.toolButton}
-          onPress={() => router.back()}
-        >
-          <Text style={styles.toolTitle}>Back</Text>
+        <Text style={styles.mutedText}>Tap the Pulse logo 4 times to unlock.</Text>
+        <Pressable style={styles.toolButton} onPress={() => router.replace("/(tabs)/home")}>
+          <Text style={styles.toolTitle}>⌂ Home</Text>
         </Pressable>
       </ScrollView>
     );
   }
 
-  const goatTableItems = goatTables.items;
-  const liveTableItems = liveTables.items;
-
-  const goatBaseTables = goatTableItems.filter(
-    (item) => item.type !== "VIEW"
-  );
-  const goatViews = goatTableItems.filter(
-    (item) => item.type === "VIEW"
-  );
-  const liveBaseTables = liveTableItems.filter(
-    (item) => item.type !== "VIEW"
-  );
-  const liveViews = liveTableItems.filter(
-    (item) => item.type === "VIEW"
-  );
-
-  const goatTablesWithData = goatBaseTables.filter(
-    (item) => item.rowCount == null || item.rowCount > 0
-  );
-  const goatViewsWithData = goatViews.filter(
-    (item) => item.rowCount == null || item.rowCount > 0
-  );
-  const liveTablesWithData = liveBaseTables.filter(
-    (item) => item.rowCount == null || item.rowCount > 0
-  );
-  const liveViewsWithData = liveViews.filter(
-    (item) => item.rowCount == null || item.rowCount > 0
-  );
+  const triggers = workflows.triggers;
+  const dailyTriggers = triggers.filter((t) => DAILY_LOADER_IDS.includes(t.id));
+  const backfillTriggers = triggers.filter((t) => BACKFILL_IDS.includes(t.id));
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Dev Console</Text>
-      
-      <Text selectable style={{ color: "white", fontSize: 12 }}>
-        API URL: {process.env.EXPO_PUBLIC_API_URL ?? "❌ UNDEFINED"}
-      </Text>
-      {/* ENVIRONMENT */}
-      <Section title="Environment & Build" styles={styles}>
-        <KV label="ENV" value={runtimeEnv} styles={styles} />
-        <KV label="API_URL" value={apiUrl} styles={styles} />
-        <KV label="APP_VERSION" value={appVersion} styles={styles} />
-      </Section>
-
-      {/* API HEALTH */}
-      <Section title="API Health" styles={styles}>
-        <ToolButton
-          label="Run All Health Checks"
-          subtitle="Ping backend debug endpoints"
-          onPress={actions.runAllHealthChecks}
-          styles={styles}
-        />
-
-        {health.checks.map((check) => (
-          <View key={check.key} style={styles.card}>
-            <Text style={styles.cardTitle}>{check.label}</Text>
-
-            <Text style={styles.mutedText}>
-              {check.lastStatus
-                ? `Status ${check.lastStatus} • ${check.lastMs}ms`
-                : "Not checked yet"}
-            </Text>
-
-            {check.error && (
-              <Text style={styles.dangerText}>{check.error}</Text>
-            )}
-
-            {check.lastOkTs && (
-              <Text style={styles.mutedText}>
-                Last OK: {new Date(check.lastOkTs).toLocaleTimeString()}
-              </Text>
-            )}
-
-            <Pressable
-              style={[styles.toolButton, { marginTop: 8 }]}
-              onPress={() => actions.runHealthCheck(check.key)}
-            >
-              <Text style={styles.toolTitle}>Run Check</Text>
-            </Pressable>
-          </View>
-        ))}
-      </Section>
-
-      {/* FEATURE FLAGS */}
-      <Section title="Feature Flags" styles={styles}>
-        {Object.entries(flags.values).map(([key, enabled]) => (
+      {/* Header */}
+      <View style={localStyles.headerRow}>
+        <Text style={styles.title}>Dev Console</Text>
+        <View style={localStyles.headerBtns}>
           <Pressable
-            key={key}
-            style={[
-              styles.card,
-              enabled && { borderColor: colors.accent.primary },
-            ]}
-            onPress={() => actions.toggleFlag(key)}
+            style={[styles.toolButton, localStyles.smallBtn]}
+            onPress={() => router.replace("/(tabs)/home")}
           >
-            <View
-              style={{ flexDirection: "row", justifyContent: "space-between" }}
-            >
-              <Text style={styles.cardTitle}>{key}</Text>
-              <Text
-                style={[
-                  styles.cardTitle,
-                  enabled ? styles.on : styles.mutedText,
-                ]}
-              >
-                {enabled ? "ON" : "OFF"}
-              </Text>
-            </View>
-
-            <Text style={styles.mutedText}>Tap to toggle (local only)</Text>
+            <Text style={styles.toolTitle}>⌂ Home</Text>
           </Pressable>
-        ))}
-      </Section>
-
-      {/* LIVE STREAM (SSE) */}
-      <Section title="Live Stream (SSE)" styles={styles}>
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>
-            Status:{" "}
-            <Text
-              style={{
-                color: sse.connected
-                  ? colors.accent.success
-                  : colors.accent.danger,
-              }}
-            >
-              {sse.connected ? "CONNECTED" : "DISCONNECTED"}
-            </Text>
-          </Text>
-
-          <Text style={styles.mutedText}>Events received: {sse.eventCount}</Text>
-
-          {sse.lastEventTs && (
-            <Text style={styles.mutedText}>
-              Last event: {new Date(sse.lastEventTs).toLocaleTimeString()}
-            </Text>
-          )}
-
-          {sse.lastError && (
-            <Text style={styles.dangerText}>Error: {sse.lastError}</Text>
-          )}
+          <Pressable
+            style={[styles.toolButton, localStyles.smallBtn]}
+            onPress={() => {
+              actions.resetDevUnlock();
+              router.replace("/(tabs)/home");
+            }}
+          >
+            <Text style={styles.toolTitle}>🔒 Lock</Text>
+          </Pressable>
         </View>
+      </View>
 
-        <Text style={styles.mutedText}>
-          Reflects the current live score stream connection state.
+      {/* ── GitHub Auth ── */}
+      <Section title="GitHub Auth" styles={styles} defaultOpen>
+        <PATInput
+          pat={githubPat}
+          colors={colors}
+          styles={styles}
+          onSave={async (val) => { await actions.setGithubPat(val); }}
+          onClear={async () => { await actions.setGithubPat(""); }}
+        />
+        <Text style={[styles.mutedText, { marginTop: 6 }]}>
+          Needs a GitHub PAT with{" "}
+          <Text style={{ fontStyle: "italic" }}>workflow</Text> scope.
+          Stored locally on this device only.
         </Text>
       </Section>
 
-      {/* DATA FRESHNESS */}
-      <Section title="Data Freshness" styles={styles}>
-        {freshness.datasets.map((d) => (
-          <View key={d.key} style={styles.card}>
-            ...
-          </View>
+      {/* ── Daily Loaders ── */}
+      <Section title="Daily Loaders" styles={styles} defaultOpen>
+        {dailyTriggers.map((t) => (
+          <SimpleWorkflowRow
+            key={t.id}
+            trigger={t}
+            styles={styles}
+            colors={colors}
+            onPress={() => actions.triggerWorkflow(t.id)}
+          />
         ))}
-      
-        <Text style={styles.mutedText}>
-          Confirms backend ingestion & BigQuery freshness.
-        </Text>
       </Section>
-      
-      {/* BIGQUERY TABLES + VIEWS */}
-      <Section
-        title="BigQuery Tables & Views"
-        styles={styles}
-        defaultOpen={false}
-      >
-        <Text style={styles.mutedText}>
-          Schema + latest row preview for tables and views with data.
-        </Text>
-        {goatTables.lastRefreshed && (
-          <Text style={styles.mutedText}>
-            Last updated:{" "}
-            {new Date(goatTables.lastRefreshed).toLocaleString()}
-          </Text>
-        )}
-        
-        <Pressable
-          style={[styles.toolButton, { marginTop: 6 }]}
-          onPress={async () => {
-            await fetch(
-              `${apiUrl}/dev/bq/refresh-metadata?dataset=nba_goat_data`,
-              { method: "POST" }
-            );
-            goatTables.reload();
-          }}
-        >
-          <Text style={styles.toolTitle}>Refresh nba_goat_data now</Text>
-        </Pressable>
-        {goatTables.loading ? (
-          <Text style={styles.mutedText}>Loading nba_goat_data tables…</Text>
-        ) : goatTables.error ? (
-          <Text style={styles.dangerText}>{goatTables.error}</Text>
-        ) : (
-          <>
-            <Text style={styles.sectionSubtitle}>Tables</Text>
-            {goatTablesWithData.map((table) => (
-              <BqTableCard
-                key={table.name}
-                dataset="nba_goat_data"
-                table={table.name}
-                tableType={table.type}
-                rowCount={table.rowCount}
-              />
-            ))}
-            <Text style={[styles.sectionSubtitle, { marginTop: 12 }]}>
-              Views
-            </Text>
-            {goatViewsWithData.map((view) => (
-              <BqTableCard
-                key={view.name}
-                dataset="nba_goat_data"
-                table={view.name}
-                tableType={view.type}
-                rowCount={view.rowCount}
-              />
-            ))}
-          </>
-        )}
-        <Text style={[styles.sectionSubtitle, { marginTop: 12 }]}>
-          nba_live
-        </Text>
-        {liveTables.lastRefreshed && (
-          <Text style={styles.mutedText}>
-            Last updated:{" "}
-            {new Date(liveTables.lastRefreshed).toLocaleString()}
-          </Text>
-        )}
-        
-        <Pressable
-          style={[styles.toolButton, { marginTop: 6 }]}
-          onPress={async () => {
-            await fetch(
-              `${apiUrl}/dev/bq/refresh-metadata?dataset=nba_live`,
-              { method: "POST" }
-            );
-            liveTables.reload();
-          }}
-        >
-          <Text style={styles.toolTitle}>Refresh nba_live now</Text>
-        </Pressable>
-        {liveTables.loading ? (
-          <Text style={styles.mutedText}>Loading nba_live tables…</Text>
-        ) : liveTables.error ? (
-          <Text style={styles.dangerText}>{liveTables.error}</Text>
-        ) : (
-          <>
-            <Text style={styles.sectionSubtitle}>Tables</Text>
-            {liveTablesWithData.map((table) => (
-              <BqTableCard
-                key={table.name}
-                dataset="nba_live"
-                table={table.name}
-                tableType={table.type}
-                rowCount={table.rowCount}
-              />
-            ))}
-            <Text style={[styles.sectionSubtitle, { marginTop: 12 }]}>
-              Views
-            </Text>
-            {liveViewsWithData.map((view) => (
-              <BqTableCard
-                key={view.name}
-                dataset="nba_live"
-                table={view.name}
-                tableType={view.type}
-                rowCount={view.rowCount}
-              />
-            ))}
-          </>
-        )}
+
+      {/* ── Stored Procedures ── */}
+      <Section title="Stored Procedures" styles={styles} defaultOpen>
+        {spTriggers.map((sp) => (
+          <SpRow
+            key={sp.id}
+            sp={sp}
+            styles={styles}
+            colors={colors}
+            onPress={() => actions.runSp(sp.id)}
+          />
+        ))}
       </Section>
-      <Pressable
-        style={[styles.toolButton, { marginTop: 8 }]}
-        onPress={async () => {
-          await fetch(
-            `${apiUrl}/dev/bq/refresh-player-headshots`,
-            { method: "POST" }
-          );
-          alert("Player headshot refresh started");
-        }}
-      >
-        <Text style={styles.toolTitle}>
-          Refresh ESPN Player Headshots
+
+      {/* ── Manual Backfills ── */}
+      <Section title="Manual Backfills" styles={styles} defaultOpen={false}>
+        <Text style={[styles.mutedText, { marginBottom: 8 }]}>
+          Configure inputs then tap ▶ Run Backfill. Kicks off a GitHub Actions run immediately.
         </Text>
-        <Text style={styles.toolSubtitle}>
-          Updates player_lookup (manual)
-        </Text>
-      </Pressable>
-
-      {/* BIGQUERY ROUTINES */}
-      <Section title="BigQuery Stored Procedures" styles={styles} defaultOpen={false}>
-        <Text style={styles.mutedText}>
-          Stored procedures + SQL definitions (read-only).
-        </Text>
-
-        <Pressable
-          style={[styles.toolButton, { marginTop: 6 }]}
-          onPress={() => {
-            goatRoutines.reload();
-            liveRoutines.reload();
-          }}
-        >
-          <Text style={styles.toolTitle}>Refresh routines</Text>
-        </Pressable>
-
-        <Text style={[styles.sectionSubtitle, { marginTop: 12 }]}>
-          nba_goat_data
-        </Text>
-        {goatRoutines.loading ? (
-          <Text style={styles.mutedText}>Loading routines…</Text>
-        ) : goatRoutines.error ? (
-          <Text style={styles.dangerText}>{goatRoutines.error}</Text>
-        ) : goatRoutines.items.length === 0 ? (
-          <Text style={styles.mutedText}>No routines found.</Text>
-        ) : (
-          goatRoutines.items.map((routine) => (
-            <View key={routine.name} style={styles.card}>
-              <Text style={styles.cardTitle}>{routine.name}</Text>
-              {routine.type && (
-                <Text style={styles.mutedText}>{routine.type}</Text>
-              )}
-              {routine.definition && (
-                <Text style={styles.codeBlock} numberOfLines={12}>
-                  {routine.definition}
-                </Text>
-              )}
-            </View>
-          ))
-        )}
-
-        <Text style={[styles.sectionSubtitle, { marginTop: 12 }]}>
-          nba_live
-        </Text>
-        {liveRoutines.loading ? (
-          <Text style={styles.mutedText}>Loading routines…</Text>
-        ) : liveRoutines.error ? (
-          <Text style={styles.dangerText}>{liveRoutines.error}</Text>
-        ) : liveRoutines.items.length === 0 ? (
-          <Text style={styles.mutedText}>No routines found.</Text>
-        ) : (
-          liveRoutines.items.map((routine) => (
-            <View key={routine.name} style={styles.card}>
-              <Text style={styles.cardTitle}>{routine.name}</Text>
-              {routine.type && (
-                <Text style={styles.mutedText}>{routine.type}</Text>
-              )}
-              {routine.definition && (
-                <Text style={styles.codeBlock} numberOfLines={12}>
-                  {routine.definition}
-                </Text>
-              )}
-            </View>
-          ))
-        )}
-      </Section>
-      {/* DEVELOPER TOOLS */}
-      <Section title="Developer Tools" styles={styles}>
-        <ToolButton
-          label="Backend Files"
-          subtitle="Browse backend endpoints & docs"
-          onPress={() => router.push("/(dev)/backend-files")}
-          styles={styles}
-        />
-
-        <ToolButton
-          label="Code Viewer"
-          subtitle="Quick access to important source files"
-          onPress={() => router.push("/(dev)/code-viewer")}
-          styles={styles}
-        />
-
-        <ToolButton
-          label="Network Logs"
-          subtitle="Inspect API calls, latency, and errors"
-          onPress={() => router.push("/(dev)/network-logs")}
-          styles={styles}
-        />
+        {backfillTriggers.map((t) => (
+          <BackfillRow
+            key={t.id}
+            trigger={t}
+            draft={drafts[t.id] ?? {}}
+            styles={styles}
+            colors={colors}
+            onFieldChange={(key, val) => setField(t.id, key, val)}
+            onRun={() => {
+              const inputs = Object.fromEntries(
+                Object.entries(drafts[t.id] ?? {}).filter(([, v]) => v !== "")
+              );
+              actions.triggerWorkflow(t.id, inputs);
+            }}
+          />
+        ))}
       </Section>
     </ScrollView>
   );
 }
 
-/* ---------------------------------- */
-/* Reusable local components           */
-/* ---------------------------------- */
-
-function Section({
-  title,
-  children,
-  styles,
-  defaultOpen = true,
+/* ─────────────────────────────────────────────
+   Daily loader row — no inputs needed
+───────────────────────────────────────────── */
+function SimpleWorkflowRow({
+  trigger, styles, colors, onPress,
 }: {
-  title: string;
-  children: React.ReactNode;
-  styles: any;
-  defaultOpen?: boolean;
+  trigger: { id: string; label: string; status: string; lastTriggeredTs?: number; error?: string };
+  styles: any; colors: any; onPress: () => void;
 }) {
-  const [open, setOpen] = React.useState(defaultOpen);
+  const isLoading = trigger.status === "loading";
+  const statusColor =
+    trigger.status === "success" ? (colors.accent?.success ?? "#4CAF50") :
+    trigger.status === "error"   ? (colors.accent?.danger  ?? "#FF6B6B") :
+    trigger.status === "loading" ? (colors.accent?.primary ?? "#4A9EFF") :
+                                   (colors.text?.muted     ?? "#888");
+  const statusLabel =
+    trigger.status === "loading" ? "Triggering…" :
+    trigger.status === "success" ? `Triggered${trigger.lastTriggeredTs ? " · " + new Date(trigger.lastTriggeredTs).toLocaleTimeString() : ""}` :
+    trigger.status === "error"   ? "Error" :
+                                   "Not triggered";
 
   return (
+    <View style={[styles.card, { marginBottom: 6 }]}>
+      <View style={localStyles.triggerRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.cardTitle}>{trigger.label}</Text>
+          <Text style={[styles.mutedText, { color: statusColor, marginTop: 2 }]}>{statusLabel}</Text>
+          {trigger.status === "error" && trigger.error && (
+            <Text style={[styles.dangerText, { marginTop: 2 }]} numberOfLines={2}>{trigger.error}</Text>
+          )}
+        </View>
+        <Pressable
+          style={[styles.toolButton, localStyles.runBtn, isLoading && { opacity: 0.5 }]}
+          disabled={isLoading}
+          onPress={onPress}
+        >
+          <Text style={styles.toolTitle}>{isLoading ? "…" : "▶ Run"}</Text>
+        </Pressable>
+      </View>
+      <Text style={[styles.mutedText, { fontSize: 10, marginTop: 4 }]}>{trigger.id}</Text>
+    </View>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   Backfill row — input fields + run button
+───────────────────────────────────────────── */
+function BackfillRow({
+  trigger, draft, styles, colors, onFieldChange, onRun,
+}: {
+  trigger: { id: string; label: string; status: string; lastTriggeredTs?: number; error?: string };
+  draft: Record<string, string>;
+  styles: any; colors: any;
+  onFieldChange: (key: string, val: string) => void;
+  onRun: () => void;
+}) {
+  const config = BACKFILL_CONFIGS[trigger.id];
+  const isLoading = trigger.status === "loading";
+  const statusColor =
+    trigger.status === "success" ? (colors.accent?.success ?? "#4CAF50") :
+    trigger.status === "error"   ? (colors.accent?.danger  ?? "#FF6B6B") :
+    trigger.status === "loading" ? (colors.accent?.primary ?? "#4A9EFF") :
+                                   (colors.text?.muted     ?? "#888");
+  const statusLabel =
+    trigger.status === "loading" ? "Triggering…" :
+    trigger.status === "success" ? `Triggered${trigger.lastTriggeredTs ? " · " + new Date(trigger.lastTriggeredTs).toLocaleTimeString() : ""}` :
+    trigger.status === "error"   ? "Error" :
+                                   "Not triggered";
+
+  return (
+    <View style={[styles.card, { marginBottom: 10 }]}>
+      <Text style={styles.cardTitle}>{trigger.label}</Text>
+      <Text style={[styles.mutedText, { color: statusColor, marginTop: 2 }]}>{statusLabel}</Text>
+      {trigger.status === "error" && trigger.error && (
+        <Text style={[styles.dangerText, { marginTop: 2 }]} numberOfLines={3}>{trigger.error}</Text>
+      )}
+
+      {config?.fields.map((field) => (
+        <View key={field.key} style={localStyles.fieldRow}>
+          <Text style={[styles.keyText, { flex: 1 }]}>{field.label}</Text>
+          {field.type === "toggle" ? (
+            <Switch
+              value={draft[field.key] === "true"}
+              onValueChange={(v) => onFieldChange(field.key, v ? "true" : "false")}
+              trackColor={{ true: colors.accent?.primary ?? "#4A9EFF" }}
+            />
+          ) : (
+            <TextInput
+              style={[
+                localStyles.fieldInput,
+                {
+                  color: colors.text.primary,
+                  borderColor: colors.border?.subtle ?? "#333",
+                  backgroundColor: colors.surface?.screen ?? "#111",
+                },
+              ]}
+              value={draft[field.key] ?? ""}
+              onChangeText={(v) => onFieldChange(field.key, v)}
+              placeholder={field.placeholder}
+              placeholderTextColor={colors.text?.muted ?? "#888"}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          )}
+        </View>
+      ))}
+
+      <Pressable
+        style={[styles.toolButton, { marginTop: 10 }, isLoading && { opacity: 0.5 }]}
+        disabled={isLoading}
+        onPress={onRun}
+      >
+        <Text style={styles.toolTitle}>{isLoading ? "Triggering…" : "▶ Run Backfill"}</Text>
+      </Pressable>
+
+      <Text style={[styles.mutedText, { fontSize: 10, marginTop: 6 }]}>{trigger.id}</Text>
+    </View>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   Stored procedure trigger row
+───────────────────────────────────────────── */
+function SpRow({
+  sp, styles, colors, onPress,
+}: {
+  sp: { id: string; label: string; call: string; status: string; lastTriggeredTs?: number; jobId?: string; error?: string };
+  styles: any; colors: any; onPress: () => void;
+}) {
+  const isLoading = sp.status === "loading";
+  const statusColor =
+    sp.status === "success" ? (colors.accent?.success ?? "#4CAF50") :
+    sp.status === "error"   ? (colors.accent?.danger  ?? "#FF6B6B") :
+    sp.status === "loading" ? (colors.accent?.primary ?? "#4A9EFF") :
+                               (colors.text?.muted    ?? "#888");
+  const statusLabel =
+    sp.status === "loading" ? "Starting…" :
+    sp.status === "success" ? `Started${sp.lastTriggeredTs ? " · " + new Date(sp.lastTriggeredTs).toLocaleTimeString() : ""}` :
+    sp.status === "error"   ? "Error" :
+                               "Not run";
+
+  return (
+    <View style={[styles.card, { marginBottom: 6 }]}>
+      <View style={localStyles.triggerRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.cardTitle}>{sp.label}</Text>
+          <Text style={[styles.mutedText, { color: statusColor, marginTop: 2 }]}>{statusLabel}</Text>
+          {sp.status === "success" && sp.jobId && (
+            <Text style={[styles.mutedText, { fontSize: 10, marginTop: 2 }]} numberOfLines={1}>
+              job: {sp.jobId}
+            </Text>
+          )}
+          {sp.status === "error" && sp.error && (
+            <Text style={[styles.dangerText, { marginTop: 2 }]} numberOfLines={2}>{sp.error}</Text>
+          )}
+        </View>
+        <Pressable
+          style={[styles.toolButton, localStyles.runBtn, isLoading && { opacity: 0.5 }]}
+          disabled={isLoading}
+          onPress={onPress}
+        >
+          <Text style={styles.toolTitle}>{isLoading ? "…" : "▶ Run"}</Text>
+        </Pressable>
+      </View>
+      <Text style={[styles.mutedText, { fontSize: 10, marginTop: 4 }]}>{sp.call}</Text>
+    </View>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   PAT input with masked display
+───────────────────────────────────────────── */
+function PATInput({
+  pat, colors, styles, onSave, onClear,
+}: {
+  pat: string; colors: any; styles: any;
+  onSave: (val: string) => Promise<void>;
+  onClear: () => Promise<void>;
+}) {
+  const [editing, setEditing] = React.useState(false);
+  const [draft, setDraft] = React.useState("");
+
+  const masked = pat
+    ? `${pat.slice(0, 4)}${"•".repeat(Math.max(0, pat.length - 8))}${pat.slice(-4)}`
+    : "(not set)";
+
+  if (!editing) {
+    return (
+      <View style={localStyles.patRow}>
+        <Text style={[styles.valueText, { flex: 1 }]}>{masked}</Text>
+        <Pressable
+          style={[styles.toolButton, localStyles.smallBtn]}
+          onPress={() => { setDraft(""); setEditing(true); }}
+        >
+          <Text style={styles.toolTitle}>{pat ? "Update" : "Set PAT"}</Text>
+        </Pressable>
+        {!!pat && (
+          <Pressable
+            style={[styles.toolButton, localStyles.smallBtn]}
+            onPress={onClear}
+          >
+            <Text style={[styles.toolTitle, { color: colors.accent?.danger ?? "#FF6B6B" }]}>
+              Clear
+            </Text>
+          </Pressable>
+        )}
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ gap: 8 }}>
+      <TextInput
+        style={[
+          styles.codeBlock,
+          {
+            color: colors.text.primary,
+            borderColor: colors.accent.primary,
+            borderWidth: 1,
+            borderRadius: 8,
+            padding: 10,
+            fontSize: 13,
+          },
+        ]}
+        value={draft}
+        onChangeText={setDraft}
+        placeholder="ghp_..."
+        placeholderTextColor={colors.text.muted}
+        autoCapitalize="none"
+        autoCorrect={false}
+        secureTextEntry
+      />
+      <View style={localStyles.patRow}>
+        <Pressable
+          style={[styles.toolButton, localStyles.smallBtn]}
+          onPress={async () => { await onSave(draft.trim()); setEditing(false); }}
+        >
+          <Text style={styles.toolTitle}>Save</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.toolButton, localStyles.smallBtn]}
+          onPress={() => setEditing(false)}
+        >
+          <Text style={styles.toolTitle}>Cancel</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   Collapsible section
+───────────────────────────────────────────── */
+function Section({
+  title, children, styles, defaultOpen = true,
+}: {
+  title: string; children: React.ReactNode; styles: any; defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = React.useState(defaultOpen);
+  return (
     <View style={styles.section}>
-      <Pressable style={styles.sectionHeader} onPress={() => setOpen(!open)}>
+      <Pressable style={styles.sectionHeader} onPress={() => setOpen((v) => !v)}>
         <Text style={styles.sectionTitle}>{title}</Text>
         <Text style={styles.sectionChevron}>{open ? "▾" : "▸"}</Text>
       </Pressable>
-
       {open && <View style={styles.sectionBody}>{children}</View>}
     </View>
   );
 }
 
-function KV({
-  label,
-  value,
-  styles,
-}: {
-  label: string;
-  value: string;
-  styles: any;
-}) {
-  return (
-    <View style={styles.kvRow}>
-      <Text style={styles.keyText}>{label}</Text>
-      <Text style={styles.valueText} numberOfLines={2}>
-        {value}
-      </Text>
-    </View>
-  );
-}
-
-function ToolButton({
-  label,
-  subtitle,
-  onPress,
-  styles,
-}: {
-  label: string;
-  subtitle?: string;
-  onPress: () => void;
-  styles: any;
-}) {
-  return (
-    <Pressable style={styles.toolButton} onPress={onPress}>
-      <Text style={styles.toolTitle}>{label}</Text>
-      {subtitle && <Text style={styles.toolSubtitle}>{subtitle}</Text>}
-    </Pressable>
-  );
-}
+/* ─────────────────────────────────────────────
+   Local styles
+───────────────────────────────────────────── */
+const localStyles = StyleSheet.create({
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  headerBtns: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  smallBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    minWidth: 0,
+  },
+  patRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  triggerRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  runBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minWidth: 60,
+    alignItems: "center",
+  },
+  fieldRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 10,
+    gap: 10,
+  },
+  fieldInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    fontSize: 13,
+    maxWidth: 160,
+  },
+});

@@ -1,0 +1,56 @@
+name: EPL Daily Loader
+
+on:
+  # 07:00 UTC = ~2:00 AM ET — after all previous-day EPL fixtures have finished
+  schedule:
+    - cron: "0 7 * * *"
+
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Date to ingest (YYYY-MM-DD). Defaults to yesterday UTC."
+        required: false
+        default: ""
+      dry_run:
+        description: "Dry run — fetch data but do NOT write to BigQuery"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  daily-ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      EPL_DATASET: "epl_data"
+      EPL_BQ_LOCATION: "US"
+      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r mobile_api/requirements.txt
+
+      - name: Configure GCP credentials
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
+
+      - name: Apply EPL BigQuery DDL
+        run: python -m mobile_api.ingest.epl.apply_ddl
+
+      - name: Run EPL daily ingest
+        run: |
+          python -m mobile_api.ingest.epl.epl_daily \
+            ${{ inputs.date != '' && format('--date {0}', inputs.date) || '' }} \
+            ${{ inputs.dry_run == 'true' && '--dry-run' || '' }}

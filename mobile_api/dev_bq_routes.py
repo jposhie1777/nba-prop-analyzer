@@ -170,6 +170,29 @@ def list_routines(dataset: str):
 
     return {"dataset": dataset, "routines": routines}
 # ======================================================
+# Run a BigQuery stored procedure (DEV ONLY)
+# ======================================================
+@router.post("/run-sp")
+def run_stored_procedure(body: dict):
+    call_stmt = (body.get("call") or "").strip()
+    if not call_stmt.upper().startswith("CALL "):
+        return {"status": "error", "error": "Only CALL statements are accepted"}
+
+    bq = get_bq_client()
+    try:
+        job = bq.query(call_stmt)
+        # Submit and return immediately — SPs can be long-running
+        return {
+            "status": "started",
+            "call": call_stmt,
+            "job_id": job.job_id,
+            "started_at": datetime.utcnow().isoformat(),
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+# ======================================================
 # 🔴 Manual ESPN player headshot refresh (DEV ONLY)
 # ======================================================
 @router.post("/refresh-player-headshots")

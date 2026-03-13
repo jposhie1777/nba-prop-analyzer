@@ -263,9 +263,13 @@ class OddspediaClient:
                     "Accept": "application/json, text/plain, */*",
                     "Accept-Language": "en-US,en;q=0.9",
                     "X-Requested-With": "XMLHttpRequest",
+                    "Origin": "https://www.oddspedia.com",
+                    "Referer": f"https://www.oddspedia.com/us/tennis/odds",
                 },
                 timeout=15_000,
             )
+            print("API STATUS:", resp.status)
+            
             if resp.status != 200:
                 LOGGER.debug(
                     "getMatchOdds matchId=%s ot=%s → HTTP %s", match_id, ot, resp.status

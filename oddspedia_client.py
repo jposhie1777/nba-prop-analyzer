@@ -138,12 +138,11 @@ class OddspediaClient:
             records = self._build_records_from_nuxt(nuxt_data)
 
             if fetch_set_markets and records:
-                api_ctx = context.request
                 for record in records:
                     match_id = record.get("match_id")
                     if not match_id:
                         continue
-                    set_markets = self._fetch_api_markets(api_ctx, match_id)
+                    set_markets = self._fetch_api_markets(page, match_id)
                     record["markets"].update(set_markets)
 
             browser.close()
@@ -163,7 +162,7 @@ class OddspediaClient:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _fetch_api_markets(self, api_ctx: Any, match_id: int) -> Dict[str, Any]:
+    def _fetch_api_markets(self, page: Any, match_id: int) -> Dict[str, Any]:
         """Fetch Moneyline (set periods), Spread, Correct Score, and Total via getMatchOdds.
 
         Makes four separate API calls — one per market type — using the same
@@ -186,7 +185,7 @@ class OddspediaClient:
             (401,   False, "total"),
         ]
         for ot, skip_final, label in calls:
-            body = self._call_match_odds_api(api_ctx, match_id, ot=ot)
+            body = self._call_match_odds_api(page, match_id, ot=ot)
             parsed = self._parse_match_odds_response(body, skip_final=skip_final)
             if parsed:
                 LOGGER.info(
@@ -205,12 +204,12 @@ class OddspediaClient:
 
     def _call_match_odds_api(
         self,
-        api_ctx: Any,
+        page: Any,
         match_id: int,
         *,
         ot: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """GET /api/v1/getMatchOdds and return the parsed JSON body (or {})."""
+        """GET /api/v1/getMatchOdds via the browser page's fetch() (carries CF cookies)."""
         qs = (
             f"matchId={match_id}&language=us&geoCode=US"
             "&bookmakerGeoCode=US&bookmakerGeoState=VA"
@@ -219,21 +218,27 @@ class OddspediaClient:
             qs += f"&ot={ot}"
         url = f"https://www.oddspedia.com/api/v1/getMatchOdds?{qs}"
         try:
-            resp = api_ctx.get(
+            result = page.evaluate(
+                """async (url) => {
+                    const r = await fetch(url, {
+                        headers: {
+                            'Accept': 'application/json, text/plain, */*',
+                            'Accept-Language': 'en-US,en;q=0.9',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        credentials: 'include',
+                    });
+                    if (!r.ok) return { __http_status: r.status };
+                    return r.json();
+                }""",
                 url,
-                headers={
-                    "Accept": "application/json, text/plain, */*",
-                    "Accept-Language": "en-US,en;q=0.9",
-                    "X-Requested-With": "XMLHttpRequest",
-                },
-                timeout=15_000,
             )
-            if resp.status != 200:
+            if isinstance(result, dict) and "__http_status" in result:
                 LOGGER.warning(
-                    "getMatchOdds matchId=%s ot=%s → HTTP %s", match_id, ot, resp.status
+                    "getMatchOdds matchId=%s ot=%s → HTTP %s", match_id, ot, result["__http_status"]
                 )
                 return {}
-            return resp.json()
+            return result or {}
         except Exception as exc:
             LOGGER.warning("getMatchOdds matchId=%s ot=%s error: %s", match_id, ot, exc)
             return {}

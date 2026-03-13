@@ -137,6 +137,15 @@ class OddspediaClient:
 
             records = self._build_records_from_nuxt(nuxt_data)
 
+            # Log a summary of market IDs present in the SSR payload so we can
+            # see if there are additional markets beyond 201/301 already there.
+            if records:
+                market_id_counts: Dict[str, int] = {}
+                for r in records:
+                    for mk in r.get("markets", {}):
+                        market_id_counts[mk] = market_id_counts.get(mk, 0) + 1
+                LOGGER.info("SSR markets (key → match count): %s", dict(sorted(market_id_counts.items())))
+
             if fetch_set_markets and records:
                 # Wait for the full page load so Cloudflare's clearance JS
                 # has time to run and set cookies before we make API calls.
@@ -233,24 +242,40 @@ class OddspediaClient:
         try:
             result = page.evaluate(
                 """async (url) => {
-                    const r = await fetch(url, {
-                        headers: {
-                            'Accept': 'application/json, text/plain, */*',
-                            'Accept-Language': 'en-US,en;q=0.9',
-                            'X-Requested-With': 'XMLHttpRequest',
-                        },
-                        credentials: 'include',
+                    return new Promise((resolve) => {
+                        const xhr = new XMLHttpRequest();
+                        xhr.open('GET', url, true);
+                        xhr.setRequestHeader('Accept', 'application/json, text/plain, */*');
+                        xhr.setRequestHeader('Accept-Language', 'en-US,en;q=0.9');
+                        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                        xhr.withCredentials = true;
+                        xhr.onload = () => {
+                            if (xhr.status === 200) {
+                                try { resolve(JSON.parse(xhr.responseText)); }
+                                catch(e) { resolve({ __parse_error: String(e) }); }
+                            } else {
+                                resolve({ __http_status: xhr.status });
+                            }
+                        };
+                        xhr.onerror = () => resolve({ __xhr_error: xhr.statusText || 'network error' });
+                        xhr.ontimeout = () => resolve({ __xhr_error: 'timeout' });
+                        xhr.timeout = 12000;
+                        xhr.send();
                     });
-                    if (!r.ok) return { __http_status: r.status };
-                    return r.json();
                 }""",
                 url,
             )
-            if isinstance(result, dict) and "__http_status" in result:
-                LOGGER.warning(
-                    "getMatchOdds matchId=%s ot=%s → HTTP %s", match_id, ot, result["__http_status"]
-                )
-                return {}
+            if isinstance(result, dict):
+                if "__http_status" in result:
+                    LOGGER.warning(
+                        "getMatchOdds matchId=%s ot=%s → HTTP %s", match_id, ot, result["__http_status"]
+                    )
+                    return {}
+                if "__xhr_error" in result:
+                    LOGGER.warning(
+                        "getMatchOdds matchId=%s ot=%s → XHR error: %s", match_id, ot, result["__xhr_error"]
+                    )
+                    return {}
             return result or {}
         except Exception as exc:
             LOGGER.warning("getMatchOdds matchId=%s ot=%s error: %s", match_id, ot, exc)

@@ -661,8 +661,8 @@ def _to_bq_rows(
                     "away_odds_decimal": market_row.get("away_odds_decimal"),
                     "home_odds_american": market_row.get("home_odds_american"),
                     "away_odds_american": market_row.get("away_odds_american"),
-                    "market_json": _jsonable(market_row.get("market_json")),
-                    "outcome_json": _jsonable(market_row.get("outcome_json")),
+                    "market_json": json.dumps(_jsonable(market_row.get("market_json"))) if market_row.get("market_json") else None,
+                    "outcome_json": json.dumps(_jsonable(market_row.get("outcome_json"))) if market_row.get("outcome_json") else None,
                 }
             )
 

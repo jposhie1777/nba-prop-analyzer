@@ -143,7 +143,7 @@ class OddspediaClient:
             records = self._build_records_from_nuxt(nuxt_data)
 
             if fetch_set_markets and records:
-                api_ctx = context.request
+                api_ctx = page
                 for record in records:
                     match_id = record.get("match_id")
                     if not match_id:
@@ -257,7 +257,7 @@ class OddspediaClient:
             qs += f"&ot={ot}"
         url = f"https://www.oddspedia.com/api/v1/getMatchOdds?{qs}"
         try:
-            resp = api_ctx.get(
+            resp = api_ctx.request.get(
                 url,
                 headers={
                     "Accept": "application/json, text/plain, */*",

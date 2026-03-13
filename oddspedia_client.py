@@ -148,7 +148,19 @@ class OddspediaClient:
                     match_id = record.get("match_id")
                     if not match_id:
                         continue
+
                     set_markets = self._fetch_api_markets(api_ctx, match_id)
+
+                    print(
+                        "API MARKET GROUPS:",
+                        match_id,
+                        type(set_markets),
+                        len(set_markets) if isinstance(set_markets, list) else "not-list"
+                    )
+
+                    if isinstance(set_markets, list) and set_markets:
+                        print("FIRST GROUP KEYS:", set_markets[0].keys())
+
                     record["market_groups"] = set_markets
 
             browser.close()

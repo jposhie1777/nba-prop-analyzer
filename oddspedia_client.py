@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -130,10 +131,15 @@ class OddspediaClient:
             if _stealth_sync is not None:
                 _stealth_sync(page)
             page.goto(url, wait_until="domcontentloaded", timeout=self._page_timeout_ms)
-            # __NUXT__ is injected by SSR into the initial HTML, so it's
-            # available immediately after the DOM is parsed.
-            page.wait_for_function("() => !!window.__NUXT__", timeout=15_000)
-            nuxt_data = page.evaluate("() => window.__NUXT__")
+            nuxt_data = self._read_nuxt_from_page(page)
+            if not nuxt_data:
+                html = page.content()
+                nuxt_data = self._extract_nuxt_from_html(html)
+            if not nuxt_data:
+                raise RuntimeError(
+                    "Oddspedia page loaded but no Nuxt state was found "
+                    "(window.__NUXT__/__NUXT_DATA__/inline script)."
+                )
 
             records = self._build_records_from_nuxt(nuxt_data)
 
@@ -170,6 +176,76 @@ class OddspediaClient:
             browser.close()
 
         return records
+
+    def _read_nuxt_from_page(self, page: Any) -> Optional[Dict[str, Any]]:
+        """Read Nuxt SSR payload from common window/script locations."""
+        for _ in range(3):
+            try:
+                payload = page.evaluate(
+                    """() => {
+                        const fromWindow =
+                            window.__NUXT__ ||
+                            window.__NUXT_DATA__ ||
+                            window.__NUXT_PAYLOAD__ ||
+                            window.__nuxt_payload ||
+                            null;
+                        if (fromWindow && typeof fromWindow === 'object') {
+                            return fromWindow;
+                        }
+
+                        const nuxtDataTag = document.getElementById('__NUXT_DATA__');
+                        if (nuxtDataTag && nuxtDataTag.textContent) {
+                            try {
+                                return JSON.parse(nuxtDataTag.textContent);
+                            } catch (_) {}
+                        }
+                        return null;
+                    }"""
+                )
+                if isinstance(payload, dict) and payload:
+                    return payload
+            except Exception:
+                pass
+            page.wait_for_timeout(2_000)
+        return None
+
+    def _extract_nuxt_from_html(self, html: str) -> Optional[Dict[str, Any]]:
+        """Fallback extractor for inline ``window.__NUXT__ = ...`` payloads."""
+        m = re.search(r"window\.__NUXT__\s*=\s*([\s\S]*?)</script>", html)
+        if not m:
+            return None
+        raw_expr = m.group(1).strip().rstrip(";")
+        with tempfile.NamedTemporaryFile(suffix=".txt", mode="w", encoding="utf-8", delete=False) as expr_tmp:
+            expr_tmp.write(raw_expr)
+            expr_path = expr_tmp.name
+
+        with tempfile.NamedTemporaryFile(suffix=".js", mode="w", encoding="utf-8", delete=False) as js_tmp:
+            js_tmp.write(
+                "const vm = require('vm');\n"
+                "const fs = require('fs');\n"
+                "const src = fs.readFileSync(process.argv[2], 'utf8');\n"
+                "const val = vm.runInContext(src, vm.createContext({}));\n"
+                "process.stdout.write(JSON.stringify(val));\n"
+            )
+            js_path = js_tmp.name
+        try:
+            result = subprocess.run(
+                ["node", js_path, expr_path],
+                capture_output=True,
+                text=True,
+                timeout=20,
+            )
+        finally:
+            Path(js_path).unlink(missing_ok=True)
+            Path(expr_path).unlink(missing_ok=True)
+        if result.returncode != 0:
+            LOGGER.warning("Inline __NUXT__ parse failed: %s", result.stderr.strip())
+            return None
+        try:
+            parsed = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            return None
+        return parsed if isinstance(parsed, dict) else None
 
     def scrape_file(self, path: str | Path) -> List[Dict[str, Any]]:
         """Parse a saved HTML file via Node.js and return a list of match-odds dicts.
@@ -231,55 +307,56 @@ class OddspediaClient:
         *,
         ot: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """GET /api/v1/getMatchOdds via the browser page's fetch() (carries CF cookies)."""
+        """GET /api/v1/getMatchOdds via Playwright's APIRequestContext.
+
+        We intentionally avoid in-page XHR/fetch here because the listing page can
+        land on ``oddspedia.com`` while API calls were hardcoded to ``www``,
+        causing cross-origin "network error" responses in browser JS.  Using
+        ``context.request`` keeps the browser TLS/cookies but bypasses CORS.
+        """
+        from urllib.parse import urlsplit
+
         qs = (
             f"matchId={match_id}&language=us&geoCode=US"
             "&bookmakerGeoCode=US&bookmakerGeoState=VA"
         )
         if ot is not None:
             qs += f"&ot={ot}"
-        url = f"https://www.oddspedia.com/api/v1/getMatchOdds?{qs}"
-        try:
-            result = page.evaluate(
-                """async (url) => {
-                    return new Promise((resolve) => {
-                        const xhr = new XMLHttpRequest();
-                        xhr.open('GET', url, true);
-                        xhr.setRequestHeader('Accept', 'application/json, text/plain, */*');
-                        xhr.setRequestHeader('Accept-Language', 'en-US,en;q=0.9');
-                        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-                        xhr.withCredentials = true;
-                        xhr.onload = () => {
-                            if (xhr.status === 200) {
-                                try { resolve(JSON.parse(xhr.responseText)); }
-                                catch(e) { resolve({ __parse_error: String(e) }); }
-                            } else {
-                                resolve({ __http_status: xhr.status });
-                            }
-                        };
-                        xhr.onerror = () => resolve({ __xhr_error: xhr.statusText || 'network error' });
-                        xhr.ontimeout = () => resolve({ __xhr_error: 'timeout' });
-                        xhr.timeout = 12000;
-                        xhr.send();
-                    });
-                }""",
-                url,
-            )
-            if isinstance(result, dict):
-                if "__http_status" in result:
-                    LOGGER.warning(
-                        "getMatchOdds matchId=%s ot=%s → HTTP %s", match_id, ot, result["__http_status"]
-                    )
-                    return {}
-                if "__xhr_error" in result:
-                    LOGGER.warning(
-                        "getMatchOdds matchId=%s ot=%s → XHR error: %s", match_id, ot, result["__xhr_error"]
-                    )
-                    return {}
-            return result or {}
-        except Exception as exc:
-            LOGGER.warning("getMatchOdds matchId=%s ot=%s error: %s", match_id, ot, exc)
-            return {}
+
+        page_origin = f"{urlsplit(page.url).scheme}://{urlsplit(page.url).netloc}" if page.url else "https://www.oddspedia.com"
+        candidate_urls = [
+            f"{page_origin}/api/v1/getMatchOdds?{qs}",
+            f"https://www.oddspedia.com/api/v1/getMatchOdds?{qs}",
+            f"https://oddspedia.com/api/v1/getMatchOdds?{qs}",
+        ]
+        # preserve order while de-duplicating
+        seen = set()
+        candidate_urls = [u for u in candidate_urls if not (u in seen or seen.add(u))]
+
+        api_ctx = page.context.request
+        headers = {
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": page.url or "https://www.oddspedia.com/us/tennis/odds",
+            "X-Requested-With": "XMLHttpRequest",
+        }
+
+        last_error: Optional[str] = None
+        for url in candidate_urls:
+            try:
+                response = api_ctx.get(url, headers=headers, timeout=12_000)
+                if response.status != 200:
+                    last_error = f"HTTP {response.status} @ {url}"
+                    continue
+                body = response.json()
+                if isinstance(body, dict):
+                    return body
+                last_error = f"non-dict JSON @ {url}"
+            except Exception as exc:
+                last_error = f"{type(exc).__name__} @ {url}: {exc}"
+
+        LOGGER.warning("getMatchOdds matchId=%s ot=%s failed: %s", match_id, ot, last_error or "unknown error")
+        return {}
 
     def _parse_match_odds_response(
         self,

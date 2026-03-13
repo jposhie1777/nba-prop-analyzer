@@ -138,6 +138,19 @@ class OddspediaClient:
             records = self._build_records_from_nuxt(nuxt_data)
 
             if fetch_set_markets and records:
+                # Wait for the full page load so Cloudflare's clearance JS
+                # has time to run and set cookies before we make API calls.
+                # "load" (not "networkidle") is used: networkidle never fires
+                # because CF challenge scripts keep the network busy forever.
+                try:
+                    page.wait_for_load_state("load", timeout=25_000)
+                except Exception as exc:
+                    LOGGER.warning("wait_for_load_state('load') timed out: %s — proceeding", exc)
+                LOGGER.info(
+                    "Page settled at %s — CF cookies: %s",
+                    page.url,
+                    [c["name"] for c in context.cookies() if "cf" in c["name"].lower()],
+                )
                 for record in records:
                     match_id = record.get("match_id")
                     if not match_id:

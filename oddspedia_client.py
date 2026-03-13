@@ -322,24 +322,34 @@ class OddspediaClient:
                         "winning_side":       main.get("winning_odd"),
                     }
 
-                # Correct Score (and any alternative spread lines)
+                # Correct Score + alternative Spread lines
                 for alt in alternatives:
                     alt_label = (alt.get("name_en") or alt.get("name") or "").strip()
                     inner = alt.get("odds") or {}
                     o1 = inner.get("o1") or {}
+                    o2 = inner.get("o2") or {}
                     if not o1 or not alt_label:
                         continue
-                    odds_val = _parse_float(o1.get("odds_value"))
-                    # "0 : 2" → "correct_score_0_2"
+                    home_dec = _parse_float(o1.get("odds_value"))
+                    away_dec = _parse_float(o2.get("odds_value"))  # None for CS
+                    # Spread alt: derive handicap labels from full name
+                    # "-1.5/+1.5 Sets" → home="-1.5 Sets", away="+1.5 Sets"
+                    # Correct Score: home_handicap = score label ("0 : 2")
+                    full_name = (alt.get("name") or "").strip()
+                    hcp_parts = full_name.split("/")
+                    home_hcp = hcp_parts[0].strip() if hcp_parts else alt_label
+                    away_hcp = hcp_parts[1].strip() if len(hcp_parts) > 1 else None
                     market_key = f"{market_slug}_{_safe_key_suffix(alt_label)}"
                     markets[market_key] = {
                         "bookie":             o1.get("bookie_name"),
                         "bookie_slug":        o1.get("bookie_slug"),
-                        "home_odds_decimal":  odds_val,
-                        "away_odds_decimal":  None,
-                        "home_odds_american": _decimal_to_american(odds_val),
-                        "away_odds_american": None,
-                        "home_handicap":      alt_label,
+                        "home_odds_decimal":  home_dec,
+                        "away_odds_decimal":  away_dec,
+                        "home_odds_american": _decimal_to_american(home_dec),
+                        "away_odds_american": _decimal_to_american(away_dec),
+                        "home_handicap":      home_hcp,
+                        "away_handicap":      away_hcp,
+                        "handicap_label":     full_name or None,
                         "status":             o1.get("odds_status"),
                         "bet_link":           o1.get("odds_link"),
                         "winning_side":       alt.get("winning_odd"),

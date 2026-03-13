@@ -132,7 +132,8 @@ class OddspediaClient:
             page.goto(url, wait_until="domcontentloaded", timeout=self._page_timeout_ms)
             # __NUXT__ is injected by SSR into the initial HTML, so it's
             # available immediately after the DOM is parsed.
-            page.wait_for_function("() => !!window.__NUXT__", timeout=15_000)
+            page.wait_for_load_state("networkidle")
+            page.wait_for_timeout(3000)
             nuxt_data = page.evaluate("() => window.__NUXT__")
 
             records = self._build_records_from_nuxt(nuxt_data)

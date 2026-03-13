@@ -321,6 +321,8 @@ def ingest_atp_odds(
 
 if __name__ == "__main__":
     import argparse
+    import logging as _logging
+    _logging.basicConfig(level=_logging.INFO, format="%(levelname)s %(name)s %(message)s")
 
     parser = argparse.ArgumentParser(
         description="Scrape Oddspedia tennis odds and load into BigQuery (oddspedia.atp_odds)."

@@ -177,22 +177,35 @@ class OddspediaClient:
         """
         markets: Dict[str, Any] = {}
 
-        # Moneyline (default endpoint): includes Final + all set periods.
-        # skip_final=True because the listing-page SSR already has Final moneyline.
-        body = self._call_match_odds_api(api_ctx, match_id, ot=None)
-        markets.update(self._parse_match_odds_response(body, skip_final=True))
+        MARKET_TYPES = [
+            None,   # default moneyline endpoint
+            201,    # match winner alt endpoint
 
-        # Spread main line (ot=301)
-        body = self._call_match_odds_api(api_ctx, match_id, ot=301)
-        markets.update(self._parse_match_odds_response(body, skip_final=False))
+            301,    # spread
+            401,    # total
+            800,    # correct score
 
-        # Correct Score (ot=800)
-        body = self._call_match_odds_api(api_ctx, match_id, ot=800)
-        markets.update(self._parse_match_odds_response(body, skip_final=False))
+            202,    # set handicap
+            203,    # set total
 
-        # Total / Over-Under (ot=401)
-        body = self._call_match_odds_api(api_ctx, match_id, ot=401)
-        markets.update(self._parse_match_odds_response(body, skip_final=False))
+            601,    # game handicap
+            602,    # game total
+        ]
+
+        for ot in MARKET_TYPES:
+
+            body = self._call_match_odds_api(api_ctx, match_id, ot=ot)
+
+            if not body:
+                continue
+
+            skip_final = ot is None
+
+            parsed = self._parse_match_odds_response(body, skip_final=skip_final)
+
+            for k, v in parsed.items():
+                if k not in markets:
+                    markets[k] = v
 
         return markets
 

@@ -82,7 +82,12 @@ class OddspediaClient:
     # Public API
     # ------------------------------------------------------------------
 
-    def scrape(self, url: str) -> List[Dict[str, Any]]:
+    def scrape(
+        self,
+        url: str,
+        *,
+        fetch_set_markets: bool = True,
+    ) -> List[Dict[str, Any]]:
         """Fetch *url* using Playwright and return a list of match-odds dicts.
 
         Uses headless Chromium with playwright-stealth to mask automation
@@ -92,6 +97,14 @@ class OddspediaClient:
         in the SSR HTML — no JS execution is needed.  "networkidle" is
         intentionally avoided: Cloudflare's challenge scripts keep the
         network busy indefinitely and cause a 60 s timeout.
+
+        Parameters
+        ----------
+        fetch_set_markets:
+            When True (default), makes a ``getMatchOdds`` API call for every
+            match via the same browser context (same TLS fingerprint + cookies)
+            and adds per-period markets — ``moneyline_1st_set``,
+            ``moneyline_2nd_set``, etc. — to each record's ``markets`` dict.
         """
         from playwright.sync_api import sync_playwright
 
@@ -117,9 +130,21 @@ class OddspediaClient:
             # available immediately after the DOM is parsed.
             page.wait_for_function("() => !!window.__NUXT__", timeout=15_000)
             nuxt_data = page.evaluate("() => window.__NUXT__")
+
+            records = self._build_records_from_nuxt(nuxt_data)
+
+            if fetch_set_markets and records:
+                api_ctx = context.request
+                for record in records:
+                    match_id = record.get("match_id")
+                    if not match_id:
+                        continue
+                    set_markets = self._fetch_set_markets(api_ctx, match_id)
+                    record["markets"].update(set_markets)
+
             browser.close()
 
-        return self._build_records_from_nuxt(nuxt_data)
+        return records
 
     def scrape_file(self, path: str | Path) -> List[Dict[str, Any]]:
         """Parse a saved HTML file via Node.js and return a list of match-odds dicts.
@@ -133,6 +158,108 @@ class OddspediaClient:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    def _fetch_set_markets(self, api_ctx: Any, match_id: int) -> Dict[str, Any]:
+        """Call getMatchOdds for *match_id* and return parsed per-period markets.
+
+        Uses *api_ctx* (a Playwright APIRequestContext) so the request shares
+        the same browser TLS fingerprint and session cookies as the listing
+        page load, bypassing Cloudflare fingerprint checks.
+
+        Returns a dict keyed by market name (e.g. ``moneyline_1st_set``).
+        "Final" period is intentionally skipped because the listing-page SSR
+        already provides full-match moneyline odds.
+        """
+        url = (
+            "https://www.oddspedia.com/api/v1/getMatchOdds"
+            f"?matchId={match_id}&language=us&geoCode=US"
+            "&bookmakerGeoCode=US&bookmakerGeoState=VA"
+        )
+        try:
+            resp = api_ctx.get(
+                url,
+                headers={
+                    "Accept": "application/json, text/plain, */*",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                timeout=15_000,
+            )
+            if resp.status != 200:
+                LOGGER.debug("getMatchOdds matchId=%s → HTTP %s", match_id, resp.status)
+                return {}
+            body = resp.json()
+        except Exception as exc:
+            LOGGER.debug("getMatchOdds matchId=%s error: %s", match_id, exc)
+            return {}
+
+        return self._parse_match_odds_periods(body)
+
+    def _parse_match_odds_periods(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        """Parse a ``getMatchOdds`` response into per-period market records.
+
+        The response looks like::
+
+            {
+              "data": {
+                "market_name": "Moneyline",
+                "odds": {
+                  "201": {"winning_odd": null, "odds": {"o1": {...}, "o2": {...}}},
+                  "204": {"winning_odd": null, "odds": {"o1": {...}, "o2": {...}}},
+                  ...
+                },
+                "periods": [
+                  {"name": "Final",   "id": 201},
+                  {"name": "1st Set", "id": 204},
+                  {"name": "2nd Set", "id": 205}
+                ]
+              }
+            }
+
+        Returns a dict of ``{market_key: market_record}`` where *market_key*
+        is e.g. ``moneyline_1st_set``.  The "Final" period is skipped.
+        """
+        data = body.get("data") if isinstance(body, dict) else None
+        if not isinstance(data, dict):
+            return {}
+
+        periods: List[Dict[str, Any]] = data.get("periods") or []
+        odds_by_period: Dict[str, Any] = data.get("odds") or {}
+
+        markets: Dict[str, Any] = {}
+        for period in periods:
+            pname: str = period.get("name") or ""
+            pid: str = str(period.get("id", ""))
+            if not pname or not pid or pname.lower() == "final":
+                continue
+
+            period_data = odds_by_period.get(pid)
+            if not isinstance(period_data, dict):
+                continue
+
+            inner_odds = period_data.get("odds") or {}
+            o1 = inner_odds.get("o1") or {}
+            o2 = inner_odds.get("o2") or {}
+
+            home_dec = _parse_float(o1.get("odds_value"))
+            away_dec = _parse_float(o2.get("odds_value"))
+
+            # "1st Set" → "moneyline_1st_set"
+            market_key = "moneyline_" + pname.lower().replace(" ", "_")
+
+            markets[market_key] = {
+                "bookie":             o1.get("bookie_name"),
+                "bookie_slug":        o1.get("bookie_slug"),
+                "home_odds_decimal":  home_dec,
+                "away_odds_decimal":  away_dec,
+                "home_odds_american": _decimal_to_american(home_dec),
+                "away_odds_american": _decimal_to_american(away_dec),
+                "status":             o1.get("odds_status"),
+                "bet_link":           o1.get("odds_link"),
+                "winning_side":       period_data.get("winning_odd"),
+            }
+
+        return markets
 
     def _build_records_from_nuxt(self, nuxt_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Build records from an already-resolved __NUXT__ dict (Playwright path)."""

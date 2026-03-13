@@ -161,7 +161,7 @@ class OddspediaClient:
                     if isinstance(set_markets, list) and set_markets:
                         print("FIRST GROUP KEYS:", set_markets[0].keys())
 
-                    record["market_groups"] = set_markets
+                    record["market_rows"] = list(set_markets.values())
 
             browser.close()
 

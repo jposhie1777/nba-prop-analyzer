@@ -167,26 +167,29 @@ class OddspediaClient:
                     [c["name"] for c in context.cookies() if "cf" in c["name"].lower()],
                 )
 
-                # Probe API availability first; some runs are SSR-only because
-                # getMatchOdds is blocked/challenged for the current session.
-                probe_ids = [r.get("match_id") for r in records if r.get("match_id")][:3]
-                api_available = False
-                for probe_id in probe_ids:
-                    if self._call_match_odds_api(page, probe_id, ot=None):
-                        api_available = True
-                        break
-                if not api_available:
-                    LOGGER.warning(
-                        "getMatchOdds appears unavailable for this session; "
-                        "skipping per-match set-market enrichment."
-                    )
-                else:
-                    for record in records:
-                        match_id = record.get("match_id")
-                        if not match_id:
-                            continue
-                        set_markets = self._fetch_api_markets(page, match_id)
+                # Enrich per match and only short-circuit after sustained failures
+                # so partially-available sessions still collect set/correct-score
+                # markets from matches that *do* respond.
+                consecutive_failures = 0
+                success_count = 0
+                for record in records:
+                    match_id = record.get("match_id")
+                    if not match_id:
+                        continue
+                    set_markets = self._fetch_api_markets(page, match_id)
+                    if set_markets:
+                        success_count += 1
+                        consecutive_failures = 0
                         record["markets"].update(set_markets)
+                    else:
+                        consecutive_failures += 1
+                        if consecutive_failures >= 10 and success_count == 0:
+                            LOGGER.warning(
+                                "getMatchOdds appears unavailable for this session; "
+                                "stopping set-market enrichment after %s consecutive failures.",
+                                consecutive_failures,
+                            )
+                            break
 
             browser.close()
 
@@ -370,7 +373,7 @@ class OddspediaClient:
             except Exception as exc:
                 last_error = f"{type(exc).__name__} @ {url}: {exc}"
 
-        LOGGER.warning("getMatchOdds matchId=%s ot=%s failed: %s", match_id, ot, last_error or "unknown error")
+        LOGGER.info("getMatchOdds matchId=%s ot=%s unavailable: %s", match_id, ot, last_error or "unknown error")
         return {}
 
     def _parse_match_odds_response(

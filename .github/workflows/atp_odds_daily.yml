@@ -29,8 +29,6 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-        with:
-          ref: claude/oddspedia-introspection-d4ZmB
 
       - name: Set up Python
         uses: actions/setup-python@v5

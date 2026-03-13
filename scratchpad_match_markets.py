@@ -259,11 +259,40 @@ with sync_playwright() as pw:
         except Exception:
             pass
 
-    try:
-        page.wait_for_function("() => !!window.__NUXT__", timeout=10000)
-        match_nuxt = page.evaluate("() => window.__NUXT__")
-    except Exception:
-        match_nuxt = {}
+    # ── Extract Nuxt 3 SSR payload from <script> tags in page HTML ───────────
+    # Nuxt 3 embeds payload as <script type="application/json" id="__NUXT_DATA__">
+    # or <script id="__NUXT__" type="application/json">.  window.__NUXT__ is
+    # often an empty shim in Nuxt 3.
+    nuxt_payloads = page.evaluate("""() => {
+        const results = {};
+        // Check window globals
+        for (const key of ['__NUXT__', '__NUXT_DATA__', '__NUXT_PAYLOAD__',
+                           '__nuxt_payload', '__initial_state__']) {
+            if (window[key] && typeof window[key] === 'object') {
+                results[key] = window[key];
+            }
+        }
+        // Check <script type="application/json"> tags
+        document.querySelectorAll('script[type="application/json"]').forEach((s, i) => {
+            try { results['script_json_' + (s.id || i)] = JSON.parse(s.textContent); }
+            catch(e) {}
+        });
+        // Check <script id="__NUXT_DATA__"> regardless of type
+        const nd = document.getElementById('__NUXT_DATA__') ||
+                   document.getElementById('__nuxt_data__');
+        if (nd) {
+            try { results['NUXT_DATA_tag'] = JSON.parse(nd.textContent); }
+            catch(e) { results['NUXT_DATA_tag_raw'] = nd.textContent.slice(0, 500); }
+        }
+        // Scan all window keys for large objects that might hold odds data
+        const oddsKeys = Object.keys(window).filter(k =>
+            !['__NUXT__','location','document','history','performance'].includes(k) &&
+            window[k] && typeof window[k] === 'object' &&
+            JSON.stringify(window[k]).includes('moneyline')
+        ).slice(0, 5);
+        oddsKeys.forEach(k => { results['window_' + k] = window[k]; });
+        return results;
+    }""")
 
     json_hits = {url: r for url, r in all_responses.items() if r["json_body"] is not None}
     api_hits  = {url: r for url, r in json_hits.items() if "/api/" in url}
@@ -286,30 +315,26 @@ with sync_playwright() as pw:
             if extra:
                 print(f"    extra keys: {extra[:10]}")
 
-    # Extract market info from __NUXT__
+    # Report what we found in SSR payload sources
+    print(f"\n  SSR payload sources found: {list(nuxt_payloads.keys())}")
     NUXT_TARGETS = {
         "markets", "odds", "matchOdds", "oddsTypes", "marketTypes", "oddsData",
         "oddsMarkets", "betTypes", "betOffers", "marketGroups",
     }
-    nuxt_found = _walk_for_keys(match_nuxt, NUXT_TARGETS)
-    if nuxt_found:
-        print(f"\n  __NUXT__ market-related keys found: {list(nuxt_found.keys())}")
-        for k, v in nuxt_found.items():
-            if isinstance(v, dict):
-                print(f"    nuxt['{k}']: dict keys={list(v.keys())[:20]}")
-                all_match_market_ids.update(str(x) for x in v.keys() if str(x).isdigit())
-            elif isinstance(v, list) and v:
-                sample = v[0]
-                print(f"    nuxt['{k}']: list len={len(v)}, first keys={list(sample.keys())[:10] if isinstance(sample, dict) else type(sample).__name__}")
-    else:
-        print("  __NUXT__: no market-related keys found at depth ≤8")
-        # Dump top-level __NUXT__ keys for debugging
-        if isinstance(match_nuxt, dict):
-            print(f"  __NUXT__ top-level keys: {list(match_nuxt.keys())[:20]}")
-            for k, v in match_nuxt.items():
-                if isinstance(v, (dict, list)):
-                    sz = len(v)
-                    print(f"    [{k}]: {'dict' if isinstance(v, dict) else 'list'} len={sz}")
+    for src_key, src_val in nuxt_payloads.items():
+        nuxt_found = _walk_for_keys(src_val, NUXT_TARGETS)
+        if nuxt_found:
+            print(f"  [{src_key}] market keys: {list(nuxt_found.keys())}")
+            for k, v in nuxt_found.items():
+                if isinstance(v, dict):
+                    print(f"    [{k}]: dict keys={list(v.keys())[:20]}")
+                    all_match_market_ids.update(str(x) for x in v.keys() if str(x).isdigit())
+                elif isinstance(v, list) and v:
+                    sample = v[0]
+                    print(f"    [{k}]: list len={len(v)}, first={'keys:'+str(list(sample.keys())[:8]) if isinstance(sample, dict) else type(sample).__name__}")
+        else:
+            if isinstance(src_val, dict):
+                print(f"  [{src_key}]: no market keys — top keys: {list(src_val.keys())[:10]}")
 
     # ── Open a dedicated stable probe page (same origin: www.oddspedia.com) ─────
     # Using the match page for probes risks "execution context destroyed" if any
@@ -338,14 +363,49 @@ with sync_playwright() as pw:
 
     discovered_markets: dict[str, str] = dict(KNOWN_MARKETS)
 
-    # Sweep strategy:
-    #  1. Full fine sweep 100-999 (covers 1st/2nd set ML ~202/203, correct score, games)
-    #  2. Coarse sweep 1000-3000
-    #  3. No-filter probe
+    # ── Diagnostic: show what ot=None (no filter) returns first ──────────────
+    _diag_url = f"{BASE_URL}?{BASE_PARAMS}"
+    _diag_body, _diag_err = _fetch_json_in_page(probe_page, _diag_url)
+    if _diag_body is None:
+        print(f"  DIAGNOSTIC fetch failed: {_diag_err}")
+    else:
+        _d = _diag_body.get("data", _diag_body) if isinstance(_diag_body, dict) else {}
+        print(f"  DIAGNOSTIC ot=None response keys: {list(_diag_body.keys())[:10]}")
+        if isinstance(_d, dict):
+            print(f"  DIAGNOSTIC data keys: {list(_d.keys())[:15]}")
+            _mkts = _d.get("markets", {})
+            print(f"  DIAGNOSTIC markets type={type(_mkts).__name__} keys/len={list(_mkts.keys())[:10] if isinstance(_mkts, dict) else len(_mkts) if isinstance(_mkts, list) else '?'}")
+            _matches = _d.get("matches", {})
+            if isinstance(_matches, dict):
+                first_mid = next(iter(_matches), None)
+                if first_mid:
+                    print(f"  DIAGNOSTIC first match keys: {list(_matches[first_mid].keys())[:15]}")
+
+    # ── Also probe getAmericanMaxOddsWithPagination WITH matchId ─────────────
+    print(f"\n  Probing getAmericanMaxOddsWithPagination with matchId...")
+    for probe_mid in (match_ids[:3] if match_ids else []):
+        _mu = f"{BASE_URL}?matchId={probe_mid}&geoCode=US&bookmakerGeoCode=US&language=us"
+        _mb, _me = _fetch_json_in_page(probe_page, _mu)
+        if _mb is None:
+            print(f"    matchId={probe_mid}  error: {_me}")
+            continue
+        _d2 = _mb.get("data", _mb) if isinstance(_mb, dict) else {}
+        _mids2 = _extract_market_ids(_mb)
+        print(f"    matchId={probe_mid}  markets: {sorted(_mids2)}  data keys: {list(_d2.keys())[:10] if isinstance(_d2, dict) else type(_d2).__name__}")
+        new_mids2 = _mids2 - set(discovered_markets)
+        if new_mids2:
+            _mkts2 = _d2.get("markets", {}) if isinstance(_d2, dict) else {}
+            for nmid in sorted(new_mids2):
+                _mdef = _mkts2.get(nmid, {}) if isinstance(_mkts2, dict) else {}
+                _name = _mdef.get("name", "?") if isinstance(_mdef, dict) else "?"
+                discovered_markets[nmid] = _name
+                print(f"    NEW market {nmid}: {_name}")
+
+    # Sweep ot= values
     candidate_ots = (
         list(range(100, 1000))         # fine sweep – finds all 3-digit market IDs
         + list(range(1000, 3001, 100)) # coarse sweep for 4-digit IDs
-        + [None]                       # no ot filter
+        + [None]
     )
 
     for ot in candidate_ots:
@@ -390,37 +450,41 @@ with sync_playwright() as pw:
     )
 
     for endpoint in MATCH_ENDPOINTS:
-        for mid in (probe_ids if probe_ids else ["0"]):
+        ep_name = endpoint.split("/")[-1]
+        for mid in (probe_ids[:3] if probe_ids else ["0"]):
             for params in [
-                f"matchId={mid}&language=us&geoCode=US&bookmakerGeoCode=US",
+                f"matchId={mid}&language=us&geoCode=US&bookmakerGeoCode=US&bookmakerGeoState=VA",
                 f"id={mid}&language=us&geoCode=US",
                 f"match_id={mid}&language=us&geoCode=US",
             ]:
                 url = f"{endpoint}?{params}"
                 body, err = _fetch_json_in_page(probe_page, url)
                 if body is None:
+                    print(f"  {ep_name} matchId={mid}: fetch failed — {err}")
                     continue
-                if isinstance(body, dict) and body.get("error"):
-                    continue
-                mids = _extract_market_ids(body)
-                new_mids = mids - set(discovered_markets)
-                print(f"\n  {endpoint.split('/')[-1]}  matchId={mid}")
-                print(f"    markets found: {sorted(mids)}")
-                if new_mids:
-                    d = body.get("data", body) if isinstance(body, dict) else {}
-                    mkt_defs = d.get("markets", {}) if isinstance(d, dict) else {}
-                    for nmid in sorted(new_mids):
-                        mdef = mkt_defs.get(nmid, {}) if isinstance(mkt_defs, dict) else {}
-                        name = mdef.get("name", "?") if isinstance(mdef, dict) else "?"
-                        discovered_markets[nmid] = name
-                        print(f"    NEW market {nmid}: {name}")
-                # Print response shape for debugging
+                # Always print what we got (even errors — they reveal structure)
+                print(f"\n  {ep_name}  matchId={mid}")
                 if isinstance(body, dict):
                     print(f"    response keys: {list(body.keys())[:10]}")
-                    d = body.get("data", {})
+                    if body.get("error") or body.get("status") == "error":
+                        print(f"    API error: {body.get('error') or body.get('message','?')}")
+                        continue  # try next param format
+                    d = body.get("data", body)
                     if isinstance(d, dict):
                         print(f"    data keys: {list(d.keys())[:15]}")
-                break  # found a working params format
+                    mids = _extract_market_ids(body)
+                    print(f"    markets found: {sorted(mids)}")
+                    new_mids = mids - set(discovered_markets)
+                    if new_mids:
+                        mkt_defs = d.get("markets", {}) if isinstance(d, dict) else {}
+                        for nmid in sorted(new_mids):
+                            mdef = mkt_defs.get(nmid, {}) if isinstance(mkt_defs, dict) else {}
+                            name = mdef.get("name", "?") if isinstance(mdef, dict) else "?"
+                            discovered_markets[nmid] = name
+                            print(f"    NEW market {nmid}: {name}")
+                else:
+                    print(f"    non-dict response type: {type(body).__name__}")
+                break  # stop trying param formats once we get a non-None body
 
     browser.close()
 

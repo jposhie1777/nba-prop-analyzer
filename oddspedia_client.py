@@ -226,6 +226,7 @@ class OddspediaClient:
         for ot in MARKET_TYPES:
 
             body = self._call_match_odds_api(api_ctx, match_id, ot=ot)
+            print("RAW API KEYS:", match_id, body.keys() if body else None)
 
             if not body:
                 continue

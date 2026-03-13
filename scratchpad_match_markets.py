@@ -285,11 +285,13 @@ with sync_playwright() as pw:
             catch(e) { results['NUXT_DATA_tag_raw'] = nd.textContent.slice(0, 500); }
         }
         // Scan all window keys for large objects that might hold odds data
-        const oddsKeys = Object.keys(window).filter(k =>
-            !['__NUXT__','location','document','history','performance'].includes(k) &&
-            window[k] && typeof window[k] === 'object' &&
-            JSON.stringify(window[k]).includes('moneyline')
-        ).slice(0, 5);
+        const oddsKeys = Object.keys(window).filter(k => {
+            if (['__NUXT__','location','document','history','performance',
+                 'window','self','top','parent','frames'].includes(k)) return false;
+            if (!window[k] || typeof window[k] !== 'object') return false;
+            try { return JSON.stringify(window[k]).includes('moneyline'); }
+            catch(e) { return false; }
+        }).slice(0, 5);
         oddsKeys.forEach(k => { results['window_' + k] = window[k]; });
         return results;
     }""")

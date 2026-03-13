@@ -108,6 +108,7 @@ class OddspediaClient:
             - ``moneyline_1st_set``, ``moneyline_2nd_set``, … (set-period odds)
             - ``spread`` (main handicap line, e.g. "+4.5/-4.5 Games")
             - ``correct_score_0_2``, ``correct_score_2_0``, … (set-score lines)
+            - ``total``, ``total_1st_set``, … (Over/Under lines per period)
         """
         from playwright.sync_api import sync_playwright
 
@@ -163,15 +164,16 @@ class OddspediaClient:
     # ------------------------------------------------------------------
 
     def _fetch_api_markets(self, api_ctx: Any, match_id: int) -> Dict[str, Any]:
-        """Fetch Moneyline (set periods), Spread, and Correct Score via getMatchOdds.
+        """Fetch Moneyline (set periods), Spread, Correct Score, and Total via getMatchOdds.
 
-        Makes three separate API calls — one per market type — using the same
+        Makes four separate API calls — one per market type — using the same
         Playwright APIRequestContext (browser TLS fingerprint + session cookies).
 
         Returns a merged dict of all parsed market records:
         - Moneyline set periods: ``moneyline_1st_set``, ``moneyline_2nd_set``, …
         - Spread main line:      ``spread``
         - Correct score lines:   ``correct_score_2_0``, ``correct_score_0_2``, …
+        - Total lines:           ``total``, ``total_1st_set``, …
         """
         markets: Dict[str, Any] = {}
 
@@ -186,6 +188,10 @@ class OddspediaClient:
 
         # Correct Score (ot=800)
         body = self._call_match_odds_api(api_ctx, match_id, ot=800)
+        markets.update(self._parse_match_odds_response(body, skip_final=False))
+
+        # Total / Over-Under (ot=401)
+        body = self._call_match_odds_api(api_ctx, match_id, ot=401)
         markets.update(self._parse_match_odds_response(body, skip_final=False))
 
         return markets
@@ -289,13 +295,22 @@ class OddspediaClient:
                 continue
 
             # ----------------------------------------------------------
-            # Spread / Correct Score: main + alternative structure
+            # Spread / Total / Correct Score: main + alternative structure
             # ----------------------------------------------------------
             if "main" in period_data or "alternative" in period_data:
                 main = period_data.get("main")
                 alternatives: List[Dict[str, Any]] = period_data.get("alternative") or []
 
-                # Spread — parse the primary (main) line
+                # Period suffix: non-Final periods get appended to the key so
+                # e.g. Total Final → "total", Total 1st Set → "total_1st_set".
+                period_suffix = (
+                    ""
+                    if pname.lower() == "final"
+                    else f"_{pname.lower().replace(' ', '_')}"
+                )
+                base_key = f"{market_slug}{period_suffix}"
+
+                # Spread / Total — parse the primary (main) line
                 if isinstance(main, dict) and main.get("odds"):
                     inner = main.get("odds") or {}
                     o1 = inner.get("o1") or {}
@@ -303,11 +318,12 @@ class OddspediaClient:
                     home_dec = _parse_float(o1.get("odds_value"))
                     away_dec = _parse_float(o2.get("odds_value"))
                     # "+4.5/-4.5 Games" → home="+4.5 Games", away="-4.5 Games"
+                    # "19.5 Games" (total) → no "/" → home_hcp = full name
                     hcp_full = main.get("name") or ""
                     parts = hcp_full.split("/")
                     home_hcp = parts[0].strip() if parts else None
                     away_hcp = parts[1].strip() if len(parts) > 1 else None
-                    markets[market_slug] = {
+                    markets[base_key] = {
                         "bookie":             o1.get("bookie_name"),
                         "bookie_slug":        o1.get("bookie_slug"),
                         "home_odds_decimal":  home_dec,
@@ -322,7 +338,7 @@ class OddspediaClient:
                         "winning_side":       main.get("winning_odd"),
                     }
 
-                # Correct Score + alternative Spread lines
+                # Correct Score + alternative Spread/Total lines
                 for alt in alternatives:
                     alt_label = (alt.get("name_en") or alt.get("name") or "").strip()
                     inner = alt.get("odds") or {}
@@ -332,14 +348,14 @@ class OddspediaClient:
                         continue
                     home_dec = _parse_float(o1.get("odds_value"))
                     away_dec = _parse_float(o2.get("odds_value"))  # None for CS
-                    # Spread alt: derive handicap labels from full name
+                    # Spread/Total alt: derive handicap labels from full name
                     # "-1.5/+1.5 Sets" → home="-1.5 Sets", away="+1.5 Sets"
                     # Correct Score: home_handicap = score label ("0 : 2")
                     full_name = (alt.get("name") or "").strip()
                     hcp_parts = full_name.split("/")
                     home_hcp = hcp_parts[0].strip() if hcp_parts else alt_label
                     away_hcp = hcp_parts[1].strip() if len(hcp_parts) > 1 else None
-                    market_key = f"{market_slug}_{_safe_key_suffix(alt_label)}"
+                    market_key = f"{base_key}_{_safe_key_suffix(alt_label)}"
                     markets[market_key] = {
                         "bookie":             o1.get("bookie_name"),
                         "bookie_slug":        o1.get("bookie_slug"),

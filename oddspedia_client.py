@@ -143,7 +143,7 @@ class OddspediaClient:
             records = self._build_records_from_nuxt(nuxt_data)
 
             if fetch_set_markets and records:
-                api_ctx = page
+                api_ctx = context.request
                 for record in records:
                     match_id = record.get("match_id")
                     if not match_id:
@@ -241,7 +241,7 @@ class OddspediaClient:
 
         return markets
 
-    def _call_match_odds_api(self, page, match_id: int, *, ot=None):
+    def _call_match_odds_api(self, api_ctx, match_id: int, *, ot=None):
 
       qs = (
           f"matchId={match_id}&language=us&geoCode=US"
@@ -255,29 +255,28 @@ class OddspediaClient:
   
       try:
   
-          data = page.evaluate(
-              """async (url) => {
-                  const r = await fetch(url, {
-                      method: "GET",
-                      credentials: "include",
-                      headers: {
-                          "accept": "application/json, text/plain, */*"
-                      }
-                  });
-                  return {
-                      status: r.status,
-                      body: await r.json()
-                  };
-              }""",
-              url
+          resp = api_ctx.get(
+              url,
+              headers={
+                  "accept": "application/json, text/plain, */*",
+                  "accept-language": "en-US,en;q=0.9",
+                  "origin": "https://www.oddspedia.com",
+                  "referer": "https://www.oddspedia.com/us/tennis/odds",
+                  "x-requested-with": "XMLHttpRequest",
+                  "sec-fetch-site": "same-origin",
+                  "sec-fetch-mode": "cors",
+                  "sec-fetch-dest": "empty",
+                  "user-agent": self._user_agent
+              },
+              timeout=15000
           )
   
-          print("API STATUS:", data["status"])
+          print("API STATUS:", resp.status)
   
-          if data["status"] != 200:
+          if resp.status != 200:
               return {}
   
-          return data["body"]
+          return resp.json()
   
       except Exception as e:
           print("API ERROR:", e)

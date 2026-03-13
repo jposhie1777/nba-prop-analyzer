@@ -580,7 +580,7 @@ def _normalized_market_rows(match: Dict[str, Any]) -> List[Dict[str, Any]]:
 
     return _normalize_legacy_markets(match)
 
-print(matches[0].keys())
+
 def _to_bq_rows(
     matches: List[Dict[str, Any]],
     ingested_at: str,
@@ -706,6 +706,10 @@ def ingest_atp_odds(
     client_scraper = OddspediaClient()
     print(f"[atp_odds] Fetching {target_url} …")
     matches = client_scraper.scrape(target_url)
+
+    if matches:
+        print("DEBUG FIRST MATCH KEYS:", matches[0].keys())
+
     print(f"[atp_odds] Scraped {len(matches)} matches")
 
     # ── Optional filters ──────────────────────────────────────────────────────

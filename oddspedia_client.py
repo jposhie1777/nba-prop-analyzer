@@ -166,12 +166,27 @@ class OddspediaClient:
                     page.url,
                     [c["name"] for c in context.cookies() if "cf" in c["name"].lower()],
                 )
-                for record in records:
-                    match_id = record.get("match_id")
-                    if not match_id:
-                        continue
-                    set_markets = self._fetch_api_markets(page, match_id)
-                    record["markets"].update(set_markets)
+
+                # Probe API availability first; some runs are SSR-only because
+                # getMatchOdds is blocked/challenged for the current session.
+                probe_ids = [r.get("match_id") for r in records if r.get("match_id")][:3]
+                api_available = False
+                for probe_id in probe_ids:
+                    if self._call_match_odds_api(page, probe_id, ot=None):
+                        api_available = True
+                        break
+                if not api_available:
+                    LOGGER.warning(
+                        "getMatchOdds appears unavailable for this session; "
+                        "skipping per-match set-market enrichment."
+                    )
+                else:
+                    for record in records:
+                        match_id = record.get("match_id")
+                        if not match_id:
+                            continue
+                        set_markets = self._fetch_api_markets(page, match_id)
+                        record["markets"].update(set_markets)
 
             browser.close()
 
@@ -291,7 +306,7 @@ class OddspediaClient:
                     match_id, label, len(parsed), list(parsed.keys()),
                 )
             else:
-                LOGGER.warning(
+                LOGGER.info(
                     "  match %s / %-14s → no data (ot=%s)",
                     match_id, label, ot,
                 )

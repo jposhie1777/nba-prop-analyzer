@@ -143,7 +143,7 @@ class OddspediaClient:
             records = self._build_records_from_nuxt(nuxt_data)
 
             if fetch_set_markets and records:
-                api_ctx = page
+                api_ctx = context.request
                 for record in records:
                     match_id = record.get("match_id")
                     if not match_id:
@@ -241,7 +241,7 @@ class OddspediaClient:
 
         return markets
 
-    def _call_match_odds_api(self, page, match_id: int, *, ot: Optional[int] = None):
+    def _call_match_odds_api(self, api_ctx, match_id: int, *, ot=None):
 
       qs = (
           f"matchId={match_id}&language=us&geoCode=US"
@@ -255,30 +255,27 @@ class OddspediaClient:
   
       try:
   
-          result = page.evaluate(
-              """async (url) => {
-                  const r = await fetch(url, {
-                      headers: {
-                          "accept": "application/json, text/plain, */*",
-                          "x-requested-with": "XMLHttpRequest"
-                      },
-                      credentials: "include"
-                  });
-                  if (!r.ok) {
-                      return {status: r.status};
-                  }
-                  const j = await r.json();
-                  return {status: r.status, data: j};
-              }""",
-              url
+          resp = api_ctx.get(
+              url,
+              headers={
+                  "accept": "application/json, text/plain, */*",
+                  "accept-language": "en-US,en;q=0.9",
+                  "origin": "https://www.oddspedia.com",
+                  "referer": "https://www.oddspedia.com/us/tennis/odds",
+                  "x-requested-with": "XMLHttpRequest",
+                  "sec-fetch-site": "same-origin",
+                  "sec-fetch-mode": "cors",
+                  "sec-fetch-dest": "empty",
+              },
+              timeout=15000
           )
   
-          print("API STATUS:", result.get("status"))
+          print("API STATUS:", resp.status)
   
-          if result.get("status") != 200:
+          if resp.status != 200:
               return {}
   
-          return result.get("data")
+          return resp.json()
   
       except Exception as e:
           print("API ERROR:", e)

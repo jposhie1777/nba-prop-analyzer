@@ -19,6 +19,8 @@ ODDSPEDIA_TABLE
     BigQuery table name.  Default: atp_odds
 GCP_PROJECT / GOOGLE_CLOUD_PROJECT
     GCP project (used by the BigQuery client).
+GOOGLE_APPLICATION_CREDENTIALS_JSON
+    Service account key as a JSON string (takes priority over GOOGLE_APPLICATION_CREDENTIALS).
 
 Usage
 -----
@@ -42,6 +44,7 @@ from typing import Any, Dict, List, Optional
 
 from google.api_core.exceptions import Conflict, NotFound
 from google.cloud import bigquery
+from google.oauth2 import service_account
 
 # ── Path setup ────────────────────────────────────────────────────────────────
 # oddspedia_client.py lives at the repo root; add it to sys.path if needed.
@@ -93,6 +96,11 @@ SCHEMA: List[bigquery.SchemaField] = [
 
 def _bq_client() -> bigquery.Client:
     project = os.getenv("GCP_PROJECT") or os.getenv("GOOGLE_CLOUD_PROJECT")
+    creds_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+    if creds_json:
+        info = json.loads(creds_json)
+        creds = service_account.Credentials.from_service_account_info(info)
+        return bigquery.Client(project=project or info.get("project_id"), credentials=creds)
     return bigquery.Client(project=project) if project else bigquery.Client()
 
 

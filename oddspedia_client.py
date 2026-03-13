@@ -161,7 +161,21 @@ class OddspediaClient:
                     if isinstance(set_markets, list) and set_markets:
                         print("FIRST GROUP KEYS:", set_markets[0].keys())
 
-                    record["market_rows"] = list(set_markets.values())
+                    rows = []
+
+                    for market_name, market in set_markets.items():
+                        if not market:
+                            continue
+
+                        if isinstance(market, list):
+                            rows.extend(market)
+                        else:
+                            rows.append(market)
+
+                    print("PARSED MARKETS:", match_id, len(set_markets))
+                    print("ROWS EXPANDED:", match_id, len(rows))
+
+                    record["market_rows"] = rows
 
             browser.close()
 

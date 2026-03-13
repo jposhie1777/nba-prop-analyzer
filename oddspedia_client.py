@@ -137,6 +137,17 @@ class OddspediaClient:
 
             page.goto(url, wait_until="domcontentloaded", timeout=self._page_timeout_ms)
 
+            # Expand matches so the API loads odds markets
+            try:
+                page.evaluate("""
+                    () => {
+                        const rows = document.querySelectorAll('[data-match-id]');
+                        rows.forEach(r => r.click());
+                    }
+                """)
+            except:
+                pass
+    
             page.wait_for_function(
                 "() => window.__NUXT__ && window.__NUXT__.data",
                 timeout=15000,
@@ -145,7 +156,7 @@ class OddspediaClient:
             nuxt_data = page.evaluate("() => window.__NUXT__")
 
             # give page time to fire API calls
-            page.wait_for_timeout(3000)
+            page.wait_for_timeout(6000)
 
             records = self._build_records_from_nuxt(nuxt_data)
 

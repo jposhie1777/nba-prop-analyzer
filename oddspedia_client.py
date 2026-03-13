@@ -175,24 +175,31 @@ class OddspediaClient:
         - Correct score lines:   ``correct_score_2_0``, ``correct_score_0_2``, …
         - Total lines:           ``total``, ``total_1st_set``, …
         """
+        import time as _time
+
         markets: Dict[str, Any] = {}
 
-        # Moneyline (default endpoint): includes Final + all set periods.
-        # skip_final=True because the listing-page SSR already has Final moneyline.
-        body = self._call_match_odds_api(api_ctx, match_id, ot=None)
-        markets.update(self._parse_match_odds_response(body, skip_final=True))
-
-        # Spread main line (ot=301)
-        body = self._call_match_odds_api(api_ctx, match_id, ot=301)
-        markets.update(self._parse_match_odds_response(body, skip_final=False))
-
-        # Correct Score (ot=800)
-        body = self._call_match_odds_api(api_ctx, match_id, ot=800)
-        markets.update(self._parse_match_odds_response(body, skip_final=False))
-
-        # Total / Over-Under (ot=401)
-        body = self._call_match_odds_api(api_ctx, match_id, ot=401)
-        markets.update(self._parse_match_odds_response(body, skip_final=False))
+        calls = [
+            (None,  True,  "moneyline"),
+            (301,   False, "spread"),
+            (800,   False, "correct_score"),
+            (401,   False, "total"),
+        ]
+        for ot, skip_final, label in calls:
+            body = self._call_match_odds_api(api_ctx, match_id, ot=ot)
+            parsed = self._parse_match_odds_response(body, skip_final=skip_final)
+            if parsed:
+                LOGGER.info(
+                    "  match %s / %-14s → %d market key(s): %s",
+                    match_id, label, len(parsed), list(parsed.keys()),
+                )
+            else:
+                LOGGER.warning(
+                    "  match %s / %-14s → no data (ot=%s)",
+                    match_id, label, ot,
+                )
+            markets.update(parsed)
+            _time.sleep(0.3)  # brief pause to avoid rate-limiting
 
         return markets
 
@@ -222,13 +229,13 @@ class OddspediaClient:
                 timeout=15_000,
             )
             if resp.status != 200:
-                LOGGER.debug(
+                LOGGER.warning(
                     "getMatchOdds matchId=%s ot=%s → HTTP %s", match_id, ot, resp.status
                 )
                 return {}
             return resp.json()
         except Exception as exc:
-            LOGGER.debug("getMatchOdds matchId=%s ot=%s error: %s", match_id, ot, exc)
+            LOGGER.warning("getMatchOdds matchId=%s ot=%s error: %s", match_id, ot, exc)
             return {}
 
     def _parse_match_odds_response(

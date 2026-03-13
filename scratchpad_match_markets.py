@@ -245,13 +245,17 @@ with sync_playwright() as pw:
             }
 
     page.on("response", on_response)
-    page.goto(match_url, wait_until="networkidle", timeout=60000)
+    # Use domcontentloaded — networkidle times out on Nuxt pages (background
+    # keep-alives / analytics keep the network "busy" indefinitely).
+    page.goto(match_url, wait_until="domcontentloaded", timeout=60000)
+    page.wait_for_timeout(8000)  # let lazy XHR / hydration finish
 
     # Try clicking tabs / "More markets"
-    for click_text in ("More markets", "All markets", "Set betting", "Sets", "Games"):
+    for click_text in ("More markets", "All markets", "Set betting", "Sets", "Games",
+                       "1st Set", "2nd Set", "Correct Score"):
         try:
             page.click(f"text={click_text}", timeout=2000)
-            page.wait_for_load_state("networkidle", timeout=5000)
+            page.wait_for_timeout(2000)
         except Exception:
             pass
 
@@ -327,13 +331,13 @@ with sync_playwright() as pw:
 
     discovered_markets: dict[str, str] = dict(KNOWN_MARKETS)
 
-    # Sweep ot= 100..2000 in steps of 100, then fine-sweep promising ranges
+    # Sweep strategy:
+    #  1. Full fine sweep 100-999 (covers 1st/2nd set ML ~202/203, correct score, games)
+    #  2. Coarse sweep 1000-3000
+    #  3. No-filter probe
     candidate_ots = (
-        list(range(100, 2001, 100))   # coarse sweep
-        + list(range(101, 200))        # fine-sweep first decade
-        + list(range(201, 300))
-        + list(range(301, 400))
-        + list(range(401, 500))
+        list(range(100, 1000))         # fine sweep – finds all 3-digit market IDs
+        + list(range(1000, 3001, 100)) # coarse sweep for 4-digit IDs
         + [None]                       # no ot filter
     )
 
@@ -421,7 +425,9 @@ for mid, name in sorted(discovered_markets.items(), key=lambda x: int(x[0]) if x
     print(f"  {mid:>5}  {name}{tag}")
 
 print(f"\nAll match-page market IDs: {sorted(all_match_market_ids)}")
-print(f"\nSet-betting candidates (look for 'Set', 'set', '1st', '2nd', '3rd', 'game'):")
+print(f"\nSet/game-betting candidates:")
+SET_KEYWORDS = ("set", "1st", "2nd", "3rd", "first", "second", "third", "game",
+                "correct", "score", "total games", "handicap")
 for mid, name in sorted(discovered_markets.items(), key=lambda x: int(x[0]) if x[0].isdigit() else 9999):
-    if any(kw in name.lower() for kw in ("set", "1st", "2nd", "3rd", "first", "second", "third", "game")):
+    if any(kw in name.lower() for kw in SET_KEYWORDS):
         print(f"  {mid}: {name}")

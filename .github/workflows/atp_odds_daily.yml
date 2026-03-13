@@ -23,6 +23,7 @@ jobs:
       ODDSPEDIA_DATASET_LOCATION: "US"
       ODDSPEDIA_TABLE: "atp_odds"
       GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+      GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
       PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/mobile_api
 
     steps:
@@ -41,11 +42,6 @@ jobs:
 
       - name: Install Playwright Chromium
         run: playwright install chromium --with-deps
-
-      - name: Configure GCP credentials
-        run: |
-          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
-          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
 
       - name: Ingest ATP odds → oddspedia.atp_odds
         run: |

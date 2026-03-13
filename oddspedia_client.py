@@ -241,44 +241,48 @@ class OddspediaClient:
 
         return markets
 
-    def _call_match_odds_api(
-        self,
-        api_ctx: Any,
-        match_id: int,
-        *,
-        ot: Optional[int] = None,
-    ) -> Dict[str, Any]:
-        """GET /api/v1/getMatchOdds and return the parsed JSON body (or {})."""
-        qs = (
-            f"matchId={match_id}&language=us&geoCode=US"
-            "&bookmakerGeoCode=US&bookmakerGeoState=VA"
-        )
-        if ot is not None:
-            qs += f"&ot={ot}"
-        url = f"https://www.oddspedia.com/api/v1/getMatchOdds?{qs}"
-        try:
-            resp = api_ctx.request.get(
-                url,
-                headers={
-                    "Accept": "application/json, text/plain, */*",
-                    "Accept-Language": "en-US,en;q=0.9",
-                    "X-Requested-With": "XMLHttpRequest",
-                    "Origin": "https://www.oddspedia.com",
-                    "Referer": f"https://www.oddspedia.com/us/tennis/odds",
-                },
-                timeout=15_000,
-            )
-            print("API STATUS:", resp.status)
-            
-            if resp.status != 200:
-                LOGGER.debug(
-                    "getMatchOdds matchId=%s ot=%s → HTTP %s", match_id, ot, resp.status
-                )
-                return {}
-            return resp.json()
-        except Exception as exc:
-            LOGGER.debug("getMatchOdds matchId=%s ot=%s error: %s", match_id, ot, exc)
-            return {}
+    def _call_match_odds_api(self, page, match_id: int, *, ot: Optional[int] = None):
+
+      qs = (
+          f"matchId={match_id}&language=us&geoCode=US"
+          "&bookmakerGeoCode=US&bookmakerGeoState=VA"
+      )
+  
+      if ot is not None:
+          qs += f"&ot={ot}"
+  
+      url = f"https://www.oddspedia.com/api/v1/getMatchOdds?{qs}"
+  
+      try:
+  
+          result = page.evaluate(
+              """async (url) => {
+                  const r = await fetch(url, {
+                      headers: {
+                          "accept": "application/json, text/plain, */*",
+                          "x-requested-with": "XMLHttpRequest"
+                      },
+                      credentials: "include"
+                  });
+                  if (!r.ok) {
+                      return {status: r.status};
+                  }
+                  const j = await r.json();
+                  return {status: r.status, data: j};
+              }""",
+              url
+          )
+  
+          print("API STATUS:", result.get("status"))
+  
+          if result.get("status") != 200:
+              return {}
+  
+          return result.get("data")
+  
+      except Exception as e:
+          print("API ERROR:", e)
+          return {}
 
     def _parse_match_odds_response(
         self,

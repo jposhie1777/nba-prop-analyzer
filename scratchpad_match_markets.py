@@ -1,26 +1,29 @@
 """
 Discover all Oddspedia tennis odds endpoints and market IDs, including set betting.
 
-Four-phase approach:
-  Phase 1 – Listing page: get match URLs + match IDs from __NUXT__.
-  Phase 2 – Match page:   extract data from __NUXT__ (Nuxt SSR serves data
-                          server-side, so there are no client XHR calls to
-                          intercept).  Also attach a response handler as a
-                          fallback in case any lazy-loaded XHR fires.
-  Phase 3 – Direct API:  use page.evaluate(fetch) from within the browser
-                          page context (same-origin → no CORS) to call
-                          getAmericanMaxOddsWithPagination with ot= values
-                          100-2000 and map every available market ID.
-  Phase 4 – Match API:   probe match-specific endpoints (getMatchOdds,
-                          getMatchMarkets, etc.) using the match ID from
-                          Phase 1, looking for set-betting markets.
+Three-phase approach:
+  Phase 1 – Listing page:  load https://www.oddspedia.com/us/tennis/odds,
+                            extract match list + IDs from __NUXT__.
+  Phase 2 – Match page:    navigate to a real match page, capture all XHR
+                            via on_response, extract SSR payload from
+                            <script type="application/json"> tags, collect
+                            cookies for Phase 3.
+  Phase 3 – Python requests: use the browser's cookies (harvested in Phase 2)
+                            in a Python requests.Session so we have the full
+                            auth context without CORS/browser-context issues.
+                            a) Diagnostic: print what ot=None returns.
+                            b) Sweep ot=100..2000 on getAmericanMaxOddsWithPagination.
+                            c) Probe getAmericanMaxOddsWithPagination WITH matchId.
+                            d) Probe match-specific endpoints.
 
-Run this from a Codespace/machine that can reach oddspedia.com.
+Run from a Codespace/machine that can reach oddspedia.com.
 """
 import json
 import re
-from urllib.parse import urlparse, parse_qs
+import time
+from urllib.parse import urlparse
 
+import requests as req_lib
 from playwright.sync_api import sync_playwright
 
 try:
@@ -86,7 +89,6 @@ def build_match_candidates_from_data(match_list):
 
 
 def _walk_for_keys(obj, targets, depth=0, max_depth=8):
-    """Recursively collect values whose key is in *targets*."""
     if depth > max_depth or not isinstance(obj, (dict, list)):
         return {}
     found = {}
@@ -102,7 +104,6 @@ def _walk_for_keys(obj, targets, depth=0, max_depth=8):
 
 
 def _extract_market_ids(body):
-    """Return set of market ID strings from an API response body."""
     mids = set()
     if not isinstance(body, dict):
         return mids
@@ -124,34 +125,23 @@ def _extract_market_ids(body):
     return mids
 
 
-def _fetch_json_in_page(page, url, timeout_ms=15000):
-    """Use page.evaluate to fetch a URL as JSON from within the browser context."""
-    try:
-        result = page.evaluate(
-            """async (url) => {
-                try {
-                    const r = await fetch(url, {
-                        headers: {
-                            'Accept': 'application/json',
-                            'X-Requested-With': 'XMLHttpRequest'
-                        },
-                        credentials: 'include'
-                    });
-                    if (!r.ok) return {error: r.status};
-                    const text = await r.text();
-                    try { return JSON.parse(text); }
-                    catch(e) { return {error: 'json_parse', text: text.slice(0, 200)}; }
-                } catch(e) {
-                    return {error: String(e)};
-                }
-            }""",
-            url,
-        )
-        if isinstance(result, dict) and "error" in result:
-            return None, result["error"]
-        return result, None
-    except Exception as exc:
-        return None, str(exc)
+def _req_json(session, url, retries=2):
+    """GET url with the requests session, return (body_dict_or_None, error_str)."""
+    for attempt in range(retries + 1):
+        try:
+            r = session.get(url, timeout=15)
+            if r.status_code == 429:
+                time.sleep(5 * (attempt + 1))
+                continue
+            if r.status_code != 200:
+                return None, str(r.status_code)
+            return r.json(), None
+        except Exception as e:
+            if attempt < retries:
+                time.sleep(2)
+            else:
+                return None, str(e)
+    return None, "max_retries"
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
@@ -177,7 +167,6 @@ with sync_playwright() as pw:
     match_list = data0.get("matchList", [])
     print(f"  matchList entries: {len(match_list)}")
 
-    # Extract match IDs for later API probing
     match_ids = []
     for m in match_list:
         mid = m.get("id") or m.get("match_id") or m.get("matchId")
@@ -211,7 +200,6 @@ with sync_playwright() as pw:
         raise RuntimeError("Could not find a match URL.")
     print(f"  selected match: {match_url}")
 
-    # Try to extract match ID from the URL (trailing digits)
     url_match_id = None
     id_match = re.search(r"-(\d{5,})$", urlparse(match_url).path)
     if id_match:
@@ -220,11 +208,10 @@ with sync_playwright() as pw:
             match_ids.insert(0, url_match_id)
     print(f"  match ID from URL: {url_match_id}")
 
-    # ── Phase 2: match page — __NUXT__ extraction + XHR fallback ─────────────
+    # ── Phase 2: match page ───────────────────────────────────────────────────
     print(f"\n{'='*70}")
-    print("Phase 2 — match page (__NUXT__ extraction + XHR fallback)")
+    print("Phase 2 — match page (XHR capture + SSR payload extraction)")
 
-    # Attach response handler BEFORE navigation (catches any client-side XHR)
     all_responses: dict[str, dict] = {}
 
     def on_response(response):
@@ -245,84 +232,63 @@ with sync_playwright() as pw:
             }
 
     page.on("response", on_response)
-    # Use domcontentloaded — networkidle times out on Nuxt pages (background
-    # keep-alives / analytics keep the network "busy" indefinitely).
     page.goto(match_url, wait_until="domcontentloaded", timeout=60000)
-    page.wait_for_timeout(8000)  # let lazy XHR / hydration finish
+    page.wait_for_timeout(8000)
 
-    # Try clicking tabs / "More markets"
-    for click_text in ("More markets", "All markets", "Set betting", "Sets", "Games",
-                       "1st Set", "2nd Set", "Correct Score"):
+    # Click market tabs to trigger lazy loads
+    for click_text in ("More markets", "All markets", "Set betting", "Sets",
+                       "1st Set", "2nd Set", "Correct Score", "Games"):
         try:
             page.click(f"text={click_text}", timeout=2000)
-            page.wait_for_timeout(2000)
+            page.wait_for_timeout(1500)
         except Exception:
             pass
 
-    # ── Extract Nuxt 3 SSR payload from <script> tags in page HTML ───────────
-    # Nuxt 3 embeds payload as <script type="application/json" id="__NUXT_DATA__">
-    # or <script id="__NUXT__" type="application/json">.  window.__NUXT__ is
-    # often an empty shim in Nuxt 3.
+    # Extract SSR payload (Nuxt 3 stores data in <script type="application/json">)
     nuxt_payloads = page.evaluate("""() => {
         const results = {};
-        // Check window globals
         for (const key of ['__NUXT__', '__NUXT_DATA__', '__NUXT_PAYLOAD__',
                            '__nuxt_payload', '__initial_state__']) {
             if (window[key] && typeof window[key] === 'object') {
                 results[key] = window[key];
             }
         }
-        // Check <script type="application/json"> tags
         document.querySelectorAll('script[type="application/json"]').forEach((s, i) => {
             try { results['script_json_' + (s.id || i)] = JSON.parse(s.textContent); }
             catch(e) {}
         });
-        // Check <script id="__NUXT_DATA__"> regardless of type
         const nd = document.getElementById('__NUXT_DATA__') ||
                    document.getElementById('__nuxt_data__');
         if (nd) {
             try { results['NUXT_DATA_tag'] = JSON.parse(nd.textContent); }
             catch(e) { results['NUXT_DATA_tag_raw'] = nd.textContent.slice(0, 500); }
         }
-        // Scan all window keys for large objects that might hold odds data
-        const oddsKeys = Object.keys(window).filter(k => {
-            if (['__NUXT__','location','document','history','performance',
-                 'window','self','top','parent','frames'].includes(k)) return false;
-            if (!window[k] || typeof window[k] !== 'object') return false;
-            try { return JSON.stringify(window[k]).includes('moneyline'); }
-            catch(e) { return false; }
-        }).slice(0, 5);
-        oddsKeys.forEach(k => { results['window_' + k] = window[k]; });
         return results;
     }""")
 
-    json_hits = {url: r for url, r in all_responses.items() if r["json_body"] is not None}
-    api_hits  = {url: r for url, r in json_hits.items() if "/api/" in url}
+    # Harvest cookies AFTER match page is loaded (has full auth state)
+    raw_cookies = ctx.cookies(urls=["https://www.oddspedia.com"])
+    print(f"  cookies harvested: {len(raw_cookies)}")
 
-    print(f"  total JSON responses captured: {len(json_hits)}")
-    print(f"  API (/api/) responses: {len(api_hits)}")
+    json_hits = {u: r for u, r in all_responses.items() if r["json_body"] is not None}
+    api_hits  = {u: r for u, r in json_hits.items() if "/api/" in u}
+    print(f"  JSON responses captured: {len(json_hits)}  API: {len(api_hits)}")
 
     all_match_market_ids: set[str] = set()
     for url, r in api_hits.items():
         parsed = urlparse(url)
         mids = _extract_market_ids(r["json_body"])
         all_match_market_ids.update(mids)
-        body = r["json_body"]
-        d = body.get("data", body) if isinstance(body, dict) else {}
+        d = r["json_body"].get("data", r["json_body"]) if isinstance(r["json_body"], dict) else {}
         print(f"\n  {parsed.path}")
         print(f"    query : {parsed.query[:120]}")
         print(f"    status: {r['status']}  markets: {sorted(mids)}")
-        if isinstance(d, dict):
-            extra = [k for k in d if k not in ("matches", "markets")]
-            if extra:
-                print(f"    extra keys: {extra[:10]}")
 
-    # Report what we found in SSR payload sources
-    print(f"\n  SSR payload sources found: {list(nuxt_payloads.keys())}")
     NUXT_TARGETS = {
         "markets", "odds", "matchOdds", "oddsTypes", "marketTypes", "oddsData",
         "oddsMarkets", "betTypes", "betOffers", "marketGroups",
     }
+    print(f"\n  SSR sources: {list(nuxt_payloads.keys())}")
     for src_key, src_val in nuxt_payloads.items():
         nuxt_found = _walk_for_keys(src_val, NUXT_TARGETS)
         if nuxt_found:
@@ -331,164 +297,150 @@ with sync_playwright() as pw:
                 if isinstance(v, dict):
                     print(f"    [{k}]: dict keys={list(v.keys())[:20]}")
                     all_match_market_ids.update(str(x) for x in v.keys() if str(x).isdigit())
-                elif isinstance(v, list) and v:
-                    sample = v[0]
-                    print(f"    [{k}]: list len={len(v)}, first={'keys:'+str(list(sample.keys())[:8]) if isinstance(sample, dict) else type(sample).__name__}")
         else:
             if isinstance(src_val, dict):
-                print(f"  [{src_key}]: no market keys — top keys: {list(src_val.keys())[:10]}")
-
-    # ── Open a dedicated stable probe page (same origin: www.oddspedia.com) ─────
-    # Using the match page for probes risks "execution context destroyed" if any
-    # tab-click causes navigation.  A separate page that we never navigate away
-    # from is safe.
-    probe_page = ctx.new_page()
-    probe_page.goto("https://www.oddspedia.com/", wait_until="domcontentloaded", timeout=30000)
-
-    # ── Phase 3: probe ot= values via in-page fetch ───────────────────────────
-    print(f"\n{'='*70}")
-    print("Phase 3 — probing ot= values via in-page fetch()")
-
-    from datetime import datetime, timezone, timedelta
-    today = datetime.now(timezone.utc).replace(hour=4, minute=0, second=0, microsecond=0)
-    tomorrow = today + timedelta(days=1) - timedelta(seconds=1)
-    date_start = today.strftime("%Y-%m-%dT%H:%M:%SZ")
-    date_end   = tomorrow.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    BASE_PARAMS = (
-        f"geoCode=US&bookmakerGeoCode=US&bookmakerGeoState=VA&wettsteuer=0"
-        f"&startDate={date_start}&endDate={date_end}&sport=tennis"
-        f"&excludeSpecialStatus=0&popularLeaguesOnly=0&sortBy=default"
-        f"&status=all&page=1&perPage=10&language=us"
-    )
-    BASE_URL = "https://www.oddspedia.com/api/v1/getAmericanMaxOddsWithPagination"
-
-    discovered_markets: dict[str, str] = dict(KNOWN_MARKETS)
-
-    # ── Diagnostic: show what ot=None (no filter) returns first ──────────────
-    _diag_url = f"{BASE_URL}?{BASE_PARAMS}"
-    _diag_body, _diag_err = _fetch_json_in_page(probe_page, _diag_url)
-    if _diag_body is None:
-        print(f"  DIAGNOSTIC fetch failed: {_diag_err}")
-    else:
-        _d = _diag_body.get("data", _diag_body) if isinstance(_diag_body, dict) else {}
-        print(f"  DIAGNOSTIC ot=None response keys: {list(_diag_body.keys())[:10]}")
-        if isinstance(_d, dict):
-            print(f"  DIAGNOSTIC data keys: {list(_d.keys())[:15]}")
-            _mkts = _d.get("markets", {})
-            print(f"  DIAGNOSTIC markets type={type(_mkts).__name__} keys/len={list(_mkts.keys())[:10] if isinstance(_mkts, dict) else len(_mkts) if isinstance(_mkts, list) else '?'}")
-            _matches = _d.get("matches", {})
-            if isinstance(_matches, dict):
-                first_mid = next(iter(_matches), None)
-                if first_mid:
-                    print(f"  DIAGNOSTIC first match keys: {list(_matches[first_mid].keys())[:15]}")
-
-    # ── Also probe getAmericanMaxOddsWithPagination WITH matchId ─────────────
-    print(f"\n  Probing getAmericanMaxOddsWithPagination with matchId...")
-    for probe_mid in (match_ids[:3] if match_ids else []):
-        _mu = f"{BASE_URL}?matchId={probe_mid}&geoCode=US&bookmakerGeoCode=US&language=us"
-        _mb, _me = _fetch_json_in_page(probe_page, _mu)
-        if _mb is None:
-            print(f"    matchId={probe_mid}  error: {_me}")
-            continue
-        _d2 = _mb.get("data", _mb) if isinstance(_mb, dict) else {}
-        _mids2 = _extract_market_ids(_mb)
-        print(f"    matchId={probe_mid}  markets: {sorted(_mids2)}  data keys: {list(_d2.keys())[:10] if isinstance(_d2, dict) else type(_d2).__name__}")
-        new_mids2 = _mids2 - set(discovered_markets)
-        if new_mids2:
-            _mkts2 = _d2.get("markets", {}) if isinstance(_d2, dict) else {}
-            for nmid in sorted(new_mids2):
-                _mdef = _mkts2.get(nmid, {}) if isinstance(_mkts2, dict) else {}
-                _name = _mdef.get("name", "?") if isinstance(_mdef, dict) else "?"
-                discovered_markets[nmid] = _name
-                print(f"    NEW market {nmid}: {_name}")
-
-    # Sweep ot= values
-    candidate_ots = (
-        list(range(100, 1000))         # fine sweep – finds all 3-digit market IDs
-        + list(range(1000, 3001, 100)) # coarse sweep for 4-digit IDs
-        + [None]
-    )
-
-    for ot in candidate_ots:
-        qs = BASE_PARAMS + (f"&ot={ot}" if ot is not None else "")
-        url = f"{BASE_URL}?{qs}"
-        body, err = _fetch_json_in_page(probe_page, url)
-        if body is None:
-            if err and "403" not in str(err) and "429" not in str(err):
-                print(f"  ot={str(ot):>5}  fetch error: {err}")
-            continue
-
-        mids = _extract_market_ids(body)
-        new_mids = mids - set(discovered_markets)
-        if new_mids:
-            d = body.get("data", body) if isinstance(body, dict) else {}
-            mkt_defs = d.get("markets", {}) if isinstance(d, dict) else {}
-            for mid in sorted(new_mids):
-                if isinstance(mkt_defs, dict):
-                    mdef = mkt_defs.get(mid, mkt_defs.get(int(mid) if mid.isdigit() else mid, {}))
-                    name = mdef.get("name", "?") if isinstance(mdef, dict) else "?"
-                else:
-                    name = "?"
-                discovered_markets[mid] = name
-                print(f"  ot={str(ot):>5}  NEW market {mid}: {name}")
-
-    # ── Phase 4: probe match-specific API endpoints ───────────────────────────
-    print(f"\n{'='*70}")
-    print("Phase 4 — probing match-specific API endpoints")
-
-    MATCH_ENDPOINTS = [
-        "https://www.oddspedia.com/api/v1/getMatchOdds",
-        "https://www.oddspedia.com/api/v1/getMatchMarkets",
-        "https://www.oddspedia.com/api/v1/getMatchBettingOdds",
-        "https://www.oddspedia.com/api/v1/getMatchStats",
-        "https://www.oddspedia.com/api/v1/getMatchInfo",
-        "https://www.oddspedia.com/api/v1/getOdds",
-        "https://www.oddspedia.com/api/v1/getAmericanOdds",
-    ]
-
-    probe_ids = (match_ids[:5] if match_ids else []) + (
-        [url_match_id] if url_match_id and url_match_id not in match_ids else []
-    )
-
-    for endpoint in MATCH_ENDPOINTS:
-        ep_name = endpoint.split("/")[-1]
-        for mid in (probe_ids[:3] if probe_ids else ["0"]):
-            for params in [
-                f"matchId={mid}&language=us&geoCode=US&bookmakerGeoCode=US&bookmakerGeoState=VA",
-                f"id={mid}&language=us&geoCode=US",
-                f"match_id={mid}&language=us&geoCode=US",
-            ]:
-                url = f"{endpoint}?{params}"
-                body, err = _fetch_json_in_page(probe_page, url)
-                if body is None:
-                    print(f"  {ep_name} matchId={mid}: fetch failed — {err}")
-                    continue
-                # Always print what we got (even errors — they reveal structure)
-                print(f"\n  {ep_name}  matchId={mid}")
-                if isinstance(body, dict):
-                    print(f"    response keys: {list(body.keys())[:10]}")
-                    if body.get("error") or body.get("status") == "error":
-                        print(f"    API error: {body.get('error') or body.get('message','?')}")
-                        continue  # try next param format
-                    d = body.get("data", body)
-                    if isinstance(d, dict):
-                        print(f"    data keys: {list(d.keys())[:15]}")
-                    mids = _extract_market_ids(body)
-                    print(f"    markets found: {sorted(mids)}")
-                    new_mids = mids - set(discovered_markets)
-                    if new_mids:
-                        mkt_defs = d.get("markets", {}) if isinstance(d, dict) else {}
-                        for nmid in sorted(new_mids):
-                            mdef = mkt_defs.get(nmid, {}) if isinstance(mkt_defs, dict) else {}
-                            name = mdef.get("name", "?") if isinstance(mdef, dict) else "?"
-                            discovered_markets[nmid] = name
-                            print(f"    NEW market {nmid}: {name}")
-                else:
-                    print(f"    non-dict response type: {type(body).__name__}")
-                break  # stop trying param formats once we get a non-None body
+                print(f"  [{src_key}]: top keys={list(src_val.keys())[:10]}")
 
     browser.close()
+
+# ── Phase 3: Python requests with harvested cookies ───────────────────────────
+print(f"\n{'='*70}")
+print("Phase 3 — Python requests session with match-page cookies")
+
+session = req_lib.Session()
+session.headers.update({
+    "User-Agent": UA,
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": match_url,
+    "X-Requested-With": "XMLHttpRequest",
+})
+for c in raw_cookies:
+    session.cookies.set(c["name"], c["value"])
+
+from datetime import datetime, timezone, timedelta
+today = datetime.now(timezone.utc).replace(hour=4, minute=0, second=0, microsecond=0)
+tomorrow = today + timedelta(days=1) - timedelta(seconds=1)
+date_start = today.strftime("%Y-%m-%dT%H:%M:%SZ")
+date_end   = tomorrow.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+BASE_PARAMS = (
+    f"geoCode=US&bookmakerGeoCode=US&bookmakerGeoState=VA&wettsteuer=0"
+    f"&startDate={date_start}&endDate={date_end}&sport=tennis"
+    f"&excludeSpecialStatus=0&popularLeaguesOnly=0&sortBy=default"
+    f"&status=all&page=1&perPage=10&language=us"
+)
+BASE_URL = "https://www.oddspedia.com/api/v1/getAmericanMaxOddsWithPagination"
+
+discovered_markets: dict[str, str] = dict(KNOWN_MARKETS)
+
+# ── 3a: diagnostic no-filter call ─────────────────────────────────────────────
+diag_body, diag_err = _req_json(session, f"{BASE_URL}?{BASE_PARAMS}")
+if diag_body is None:
+    print(f"  DIAGNOSTIC failed: {diag_err}")
+else:
+    d = diag_body.get("data", diag_body) if isinstance(diag_body, dict) else {}
+    print(f"  DIAGNOSTIC response keys: {list(diag_body.keys())[:10]}")
+    if isinstance(d, dict):
+        print(f"  DIAGNOSTIC data keys: {list(d.keys())[:15]}")
+        mkts = d.get("markets", {})
+        print(f"  DIAGNOSTIC markets: type={type(mkts).__name__}  entries={list(mkts.keys())[:10] if isinstance(mkts, dict) else len(mkts) if isinstance(mkts, list) else '?'}")
+        matches_ = d.get("matches", {})
+        if isinstance(matches_, dict):
+            first_m = next(iter(matches_), None)
+            if first_m:
+                print(f"  DIAGNOSTIC first match sub-keys: {list(matches_[first_m].keys())[:15]}")
+
+# ── 3b: probe getAmericanMaxOddsWithPagination with matchId ───────────────────
+print(f"\n  Probing with matchId...")
+for probe_mid in (match_ids[:3] if match_ids else []):
+    url = f"{BASE_URL}?matchId={probe_mid}&geoCode=US&bookmakerGeoCode=US&language=us"
+    body, err = _req_json(session, url)
+    if body is None:
+        print(f"    matchId={probe_mid}  error: {err}")
+        continue
+    d = body.get("data", body) if isinstance(body, dict) else {}
+    mids = _extract_market_ids(body)
+    print(f"    matchId={probe_mid}  markets: {sorted(mids)}  data keys: {list(d.keys())[:10] if isinstance(d, dict) else type(d).__name__}")
+    new_mids = mids - set(discovered_markets)
+    if new_mids:
+        mkts = d.get("markets", {}) if isinstance(d, dict) else {}
+        for nmid in sorted(new_mids):
+            mdef = mkts.get(nmid, {}) if isinstance(mkts, dict) else {}
+            name = mdef.get("name", "?") if isinstance(mdef, dict) else "?"
+            discovered_markets[nmid] = name
+            print(f"    NEW market {nmid}: {name}")
+
+# ── 3c: sweep ot= values ───────────────────────────────────────────────────────
+print(f"\n  Sweeping ot= values...")
+candidate_ots = list(range(100, 1000)) + list(range(1000, 3001, 100)) + [None]
+
+for ot in candidate_ots:
+    qs = BASE_PARAMS + (f"&ot={ot}" if ot is not None else "")
+    body, err = _req_json(session, f"{BASE_URL}?{qs}")
+    if body is None:
+        if err and err not in ("403", "404", "429"):
+            print(f"  ot={str(ot):>5}  error: {err}")
+        continue
+    mids = _extract_market_ids(body)
+    new_mids = mids - set(discovered_markets)
+    if new_mids:
+        d = body.get("data", body) if isinstance(body, dict) else {}
+        mkts = d.get("markets", {}) if isinstance(d, dict) else {}
+        for mid in sorted(new_mids):
+            mdef = mkts.get(mid, {}) if isinstance(mkts, dict) else {}
+            name = mdef.get("name", "?") if isinstance(mdef, dict) else "?"
+            discovered_markets[mid] = name
+            print(f"  ot={str(ot):>5}  NEW market {mid}: {name}")
+
+# ── Phase 4: match-specific endpoints ────────────────────────────────────────
+print(f"\n{'='*70}")
+print("Phase 4 — match-specific endpoints")
+
+MATCH_ENDPOINTS = [
+    "https://www.oddspedia.com/api/v1/getMatchOdds",
+    "https://www.oddspedia.com/api/v1/getMatchMarkets",
+    "https://www.oddspedia.com/api/v1/getMatchBettingOdds",
+    "https://www.oddspedia.com/api/v1/getMatchInfo",
+    "https://www.oddspedia.com/api/v1/getOdds",
+    "https://www.oddspedia.com/api/v1/getAmericanOdds",
+]
+
+probe_ids = list(dict.fromkeys(
+    ([url_match_id] if url_match_id else []) + (match_ids[:4] if match_ids else [])
+))
+
+for endpoint in MATCH_ENDPOINTS:
+    ep_name = endpoint.split("/")[-1]
+    for mid in probe_ids[:3]:
+        for params in [
+            f"matchId={mid}&language=us&geoCode=US&bookmakerGeoCode=US&bookmakerGeoState=VA",
+            f"id={mid}&language=us&geoCode=US",
+        ]:
+            body, err = _req_json(session, f"{endpoint}?{params}")
+            if body is None:
+                print(f"  {ep_name} matchId={mid}: {err}")
+                continue
+            print(f"\n  {ep_name}  matchId={mid}")
+            if isinstance(body, dict):
+                print(f"    response keys: {list(body.keys())[:10]}")
+                if body.get("error") or body.get("status") == "error":
+                    print(f"    API error: {body.get('error') or body.get('message', '?')}")
+                    continue
+                d = body.get("data", body)
+                if isinstance(d, dict):
+                    print(f"    data keys: {list(d.keys())[:15]}")
+                mids_ = _extract_market_ids(body)
+                print(f"    markets found: {sorted(mids_)}")
+                new_mids = mids_ - set(discovered_markets)
+                if new_mids:
+                    mkts = d.get("markets", {}) if isinstance(d, dict) else {}
+                    for nmid in sorted(new_mids):
+                        mdef = mkts.get(nmid, {}) if isinstance(mkts, dict) else {}
+                        name = mdef.get("name", "?") if isinstance(mdef, dict) else "?"
+                        discovered_markets[nmid] = name
+                        print(f"    NEW market {nmid}: {name}")
+            break  # stop on first non-None response
 
 # ── Final summary ─────────────────────────────────────────────────────────────
 print(f"\n{'='*70}")

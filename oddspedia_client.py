@@ -578,11 +578,23 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
+    import datetime
+
     parser = argparse.ArgumentParser(description="Scrape odds from Oddspedia")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--url", help="Live Oddspedia URL to fetch")
     group.add_argument("--file", help="Saved HTML file to parse")
     parser.add_argument("--out", help="Write JSON output to this file")
+    parser.add_argument(
+        "--today",
+        action="store_true",
+        help="Only include matches scheduled for today (UTC)",
+    )
+    parser.add_argument(
+        "--has-total",
+        action="store_true",
+        help="Only include matches that have a 'total' market",
+    )
     args = parser.parse_args()
 
     client = OddspediaClient()
@@ -591,6 +603,13 @@ if __name__ == "__main__":
         results = client.scrape_file(args.file)
     else:
         results = client.scrape(args.url)
+
+    if args.today:
+        today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+        results = [r for r in results if (r.get("date_utc") or "").startswith(today)]
+
+    if args.has_total:
+        results = [r for r in results if "total" in r.get("markets", {})]
 
     output = json.dumps(results, indent=2)
 

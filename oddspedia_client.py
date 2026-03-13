@@ -343,5 +343,5 @@ def _decimal_to_american(decimal_odds: Optional[float]) -> Optional[int]:
     if decimal_odds >= 2:
         return round((decimal_odds - 1) * 100)
 
-    return round(-100 / (decimal_odds - 1))    else:
-        print(output)
+    else:
+        return round(-100 / (decimal_odds - 1))

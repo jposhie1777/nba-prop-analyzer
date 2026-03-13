@@ -144,7 +144,7 @@ class OddspediaClient:
                     if not match_id:
                         continue
                     set_markets = self._fetch_api_markets(api_ctx, match_id)
-                    record["markets"].update(set_markets)
+                    record["market_groups"] = set_markets
 
             browser.close()
 

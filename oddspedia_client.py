@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -130,10 +131,15 @@ class OddspediaClient:
             if _stealth_sync is not None:
                 _stealth_sync(page)
             page.goto(url, wait_until="domcontentloaded", timeout=self._page_timeout_ms)
-            # __NUXT__ is injected by SSR into the initial HTML, so it's
-            # available immediately after the DOM is parsed.
-            page.wait_for_function("() => !!window.__NUXT__", timeout=15_000)
-            nuxt_data = page.evaluate("() => window.__NUXT__")
+            nuxt_data = self._read_nuxt_from_page(page)
+            if not nuxt_data:
+                html = page.content()
+                nuxt_data = self._extract_nuxt_from_html(html)
+            if not nuxt_data:
+                raise RuntimeError(
+                    "Oddspedia page loaded but no Nuxt state was found "
+                    "(window.__NUXT__/__NUXT_DATA__/inline script)."
+                )
 
             records = self._build_records_from_nuxt(nuxt_data)
 
@@ -160,16 +166,104 @@ class OddspediaClient:
                     page.url,
                     [c["name"] for c in context.cookies() if "cf" in c["name"].lower()],
                 )
+
+                # Enrich per match and only short-circuit after sustained failures
+                # so partially-available sessions still collect set/correct-score
+                # markets from matches that *do* respond.
+                consecutive_failures = 0
+                success_count = 0
                 for record in records:
                     match_id = record.get("match_id")
                     if not match_id:
                         continue
                     set_markets = self._fetch_api_markets(page, match_id)
-                    record["markets"].update(set_markets)
+                    if set_markets:
+                        success_count += 1
+                        consecutive_failures = 0
+                        record["markets"].update(set_markets)
+                    else:
+                        consecutive_failures += 1
+                        if consecutive_failures >= 10 and success_count == 0:
+                            LOGGER.warning(
+                                "getMatchOdds appears unavailable for this session; "
+                                "stopping set-market enrichment after %s consecutive failures.",
+                                consecutive_failures,
+                            )
+                            break
 
             browser.close()
 
         return records
+
+    def _read_nuxt_from_page(self, page: Any) -> Optional[Dict[str, Any]]:
+        """Read Nuxt SSR payload from common window/script locations."""
+        for _ in range(3):
+            try:
+                payload = page.evaluate(
+                    """() => {
+                        const fromWindow =
+                            window.__NUXT__ ||
+                            window.__NUXT_DATA__ ||
+                            window.__NUXT_PAYLOAD__ ||
+                            window.__nuxt_payload ||
+                            null;
+                        if (fromWindow && typeof fromWindow === 'object') {
+                            return fromWindow;
+                        }
+
+                        const nuxtDataTag = document.getElementById('__NUXT_DATA__');
+                        if (nuxtDataTag && nuxtDataTag.textContent) {
+                            try {
+                                return JSON.parse(nuxtDataTag.textContent);
+                            } catch (_) {}
+                        }
+                        return null;
+                    }"""
+                )
+                if isinstance(payload, dict) and payload:
+                    return payload
+            except Exception:
+                pass
+            page.wait_for_timeout(2_000)
+        return None
+
+    def _extract_nuxt_from_html(self, html: str) -> Optional[Dict[str, Any]]:
+        """Fallback extractor for inline ``window.__NUXT__ = ...`` payloads."""
+        m = re.search(r"window\.__NUXT__\s*=\s*([\s\S]*?)</script>", html)
+        if not m:
+            return None
+        raw_expr = m.group(1).strip().rstrip(";")
+        with tempfile.NamedTemporaryFile(suffix=".txt", mode="w", encoding="utf-8", delete=False) as expr_tmp:
+            expr_tmp.write(raw_expr)
+            expr_path = expr_tmp.name
+
+        with tempfile.NamedTemporaryFile(suffix=".js", mode="w", encoding="utf-8", delete=False) as js_tmp:
+            js_tmp.write(
+                "const vm = require('vm');\n"
+                "const fs = require('fs');\n"
+                "const src = fs.readFileSync(process.argv[2], 'utf8');\n"
+                "const val = vm.runInContext(src, vm.createContext({}));\n"
+                "process.stdout.write(JSON.stringify(val));\n"
+            )
+            js_path = js_tmp.name
+        try:
+            result = subprocess.run(
+                ["node", js_path, expr_path],
+                capture_output=True,
+                text=True,
+                timeout=20,
+            )
+        finally:
+            Path(js_path).unlink(missing_ok=True)
+            Path(expr_path).unlink(missing_ok=True)
+        if result.returncode != 0:
+            LOGGER.warning("Inline __NUXT__ parse failed: %s", result.stderr.strip())
+            return None
+        try:
+            parsed = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            return None
+        return parsed if isinstance(parsed, dict) else None
 
     def scrape_file(self, path: str | Path) -> List[Dict[str, Any]]:
         """Parse a saved HTML file via Node.js and return a list of match-odds dicts.
@@ -215,7 +309,7 @@ class OddspediaClient:
                     match_id, label, len(parsed), list(parsed.keys()),
                 )
             else:
-                LOGGER.warning(
+                LOGGER.info(
                     "  match %s / %-14s → no data (ot=%s)",
                     match_id, label, ot,
                 )
@@ -231,20 +325,32 @@ class OddspediaClient:
         *,
         ot: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """GET /api/v1/getMatchOdds via the browser page's fetch() (carries CF cookies)."""
+        """GET /api/v1/getMatchOdds, preferring in-page same-origin XHR.
+
+        Oddspedia's anti-bot controls can return HTTP 403 to Playwright
+        APIRequestContext calls even when the interactive page has valid CF
+        clearance cookies. We therefore attempt same-origin XHR from inside the
+        page first (relative URL), then fall back to APIRequestContext.
+        """
+        from urllib.parse import urlsplit
+
         qs = (
             f"matchId={match_id}&language=us&geoCode=US"
             "&bookmakerGeoCode=US&bookmakerGeoState=VA"
         )
         if ot is not None:
             qs += f"&ot={ot}"
-        url = f"https://www.oddspedia.com/api/v1/getMatchOdds?{qs}"
+
+        relative_path = f"/api/v1/getMatchOdds?{qs}"
+
+        # First attempt: in-page same-origin XHR (inherits browser/runtime
+        # request metadata and current page origin, avoiding cross-origin issues).
         try:
-            result = page.evaluate(
-                """async (url) => {
+            in_page_result = page.evaluate(
+                """async (relativePath) => {
                     return new Promise((resolve) => {
                         const xhr = new XMLHttpRequest();
-                        xhr.open('GET', url, true);
+                        xhr.open('GET', relativePath, true);
                         xhr.setRequestHeader('Accept', 'application/json, text/plain, */*');
                         xhr.setRequestHeader('Accept-Language', 'en-US,en;q=0.9');
                         xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
@@ -254,32 +360,63 @@ class OddspediaClient:
                                 try { resolve(JSON.parse(xhr.responseText)); }
                                 catch(e) { resolve({ __parse_error: String(e) }); }
                             } else {
-                                resolve({ __http_status: xhr.status });
+                                resolve({ __http_status: xhr.status, __via: 'page_xhr' });
                             }
                         };
-                        xhr.onerror = () => resolve({ __xhr_error: xhr.statusText || 'network error' });
-                        xhr.ontimeout = () => resolve({ __xhr_error: 'timeout' });
+                        xhr.onerror = () => resolve({ __xhr_error: xhr.statusText || 'network error', __via: 'page_xhr' });
+                        xhr.ontimeout = () => resolve({ __xhr_error: 'timeout', __via: 'page_xhr' });
                         xhr.timeout = 12000;
                         xhr.send();
                     });
                 }""",
-                url,
+                relative_path,
             )
-            if isinstance(result, dict):
-                if "__http_status" in result:
-                    LOGGER.warning(
-                        "getMatchOdds matchId=%s ot=%s → HTTP %s", match_id, ot, result["__http_status"]
-                    )
-                    return {}
-                if "__xhr_error" in result:
-                    LOGGER.warning(
-                        "getMatchOdds matchId=%s ot=%s → XHR error: %s", match_id, ot, result["__xhr_error"]
-                    )
-                    return {}
-            return result or {}
-        except Exception as exc:
-            LOGGER.warning("getMatchOdds matchId=%s ot=%s error: %s", match_id, ot, exc)
-            return {}
+            if isinstance(in_page_result, dict) and in_page_result.get("data"):
+                return in_page_result
+        except Exception:
+            # fall through to APIRequestContext fallback
+            in_page_result = None
+
+        page_origin = f"{urlsplit(page.url).scheme}://{urlsplit(page.url).netloc}" if page.url else "https://www.oddspedia.com"
+        candidate_urls = [
+            f"{page_origin}/api/v1/getMatchOdds?{qs}",
+            f"https://www.oddspedia.com/api/v1/getMatchOdds?{qs}",
+            f"https://oddspedia.com/api/v1/getMatchOdds?{qs}",
+        ]
+        # preserve order while de-duplicating
+        seen = set()
+        candidate_urls = [u for u in candidate_urls if not (u in seen or seen.add(u))]
+
+        api_ctx = page.context.request
+        headers = {
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": page.url or "https://www.oddspedia.com/us/tennis/odds",
+            "X-Requested-With": "XMLHttpRequest",
+        }
+
+        last_error: Optional[str] = None
+        if isinstance(in_page_result, dict):
+            if "__http_status" in in_page_result:
+                last_error = f"XHR HTTP {in_page_result['__http_status']}"
+            elif "__xhr_error" in in_page_result:
+                last_error = f"XHR error: {in_page_result['__xhr_error']}"
+
+        for url in candidate_urls:
+            try:
+                response = api_ctx.get(url, headers=headers, timeout=12_000)
+                if response.status != 200:
+                    last_error = f"HTTP {response.status} @ {url}"
+                    continue
+                body = response.json()
+                if isinstance(body, dict):
+                    return body
+                last_error = f"non-dict JSON @ {url}"
+            except Exception as exc:
+                last_error = f"{type(exc).__name__} @ {url}: {exc}"
+
+        LOGGER.info("getMatchOdds matchId=%s ot=%s unavailable: %s", match_id, ot, last_error or "unknown error")
+        return {}
 
     def _parse_match_odds_response(
         self,

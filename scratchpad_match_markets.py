@@ -311,6 +311,13 @@ with sync_playwright() as pw:
                     sz = len(v)
                     print(f"    [{k}]: {'dict' if isinstance(v, dict) else 'list'} len={sz}")
 
+    # ── Open a dedicated stable probe page (same origin: www.oddspedia.com) ─────
+    # Using the match page for probes risks "execution context destroyed" if any
+    # tab-click causes navigation.  A separate page that we never navigate away
+    # from is safe.
+    probe_page = ctx.new_page()
+    probe_page.goto("https://www.oddspedia.com/", wait_until="domcontentloaded", timeout=30000)
+
     # ── Phase 3: probe ot= values via in-page fetch ───────────────────────────
     print(f"\n{'='*70}")
     print("Phase 3 — probing ot= values via in-page fetch()")
@@ -327,7 +334,7 @@ with sync_playwright() as pw:
         f"&excludeSpecialStatus=0&popularLeaguesOnly=0&sortBy=default"
         f"&status=all&page=1&perPage=10&language=us"
     )
-    BASE_URL = "https://oddspedia.com/api/v1/getAmericanMaxOddsWithPagination"
+    BASE_URL = "https://www.oddspedia.com/api/v1/getAmericanMaxOddsWithPagination"
 
     discovered_markets: dict[str, str] = dict(KNOWN_MARKETS)
 
@@ -344,7 +351,7 @@ with sync_playwright() as pw:
     for ot in candidate_ots:
         qs = BASE_PARAMS + (f"&ot={ot}" if ot is not None else "")
         url = f"{BASE_URL}?{qs}"
-        body, err = _fetch_json_in_page(page, url)
+        body, err = _fetch_json_in_page(probe_page, url)
         if body is None:
             if err and "403" not in str(err) and "429" not in str(err):
                 print(f"  ot={str(ot):>5}  fetch error: {err}")
@@ -369,13 +376,13 @@ with sync_playwright() as pw:
     print("Phase 4 — probing match-specific API endpoints")
 
     MATCH_ENDPOINTS = [
-        "https://oddspedia.com/api/v1/getMatchOdds",
-        "https://oddspedia.com/api/v1/getMatchMarkets",
-        "https://oddspedia.com/api/v1/getMatchBettingOdds",
-        "https://oddspedia.com/api/v1/getMatchStats",
-        "https://oddspedia.com/api/v1/getMatchInfo",
-        "https://oddspedia.com/api/v1/getOdds",
-        "https://oddspedia.com/api/v1/getAmericanOdds",
+        "https://www.oddspedia.com/api/v1/getMatchOdds",
+        "https://www.oddspedia.com/api/v1/getMatchMarkets",
+        "https://www.oddspedia.com/api/v1/getMatchBettingOdds",
+        "https://www.oddspedia.com/api/v1/getMatchStats",
+        "https://www.oddspedia.com/api/v1/getMatchInfo",
+        "https://www.oddspedia.com/api/v1/getOdds",
+        "https://www.oddspedia.com/api/v1/getAmericanOdds",
     ]
 
     probe_ids = (match_ids[:5] if match_ids else []) + (
@@ -390,7 +397,7 @@ with sync_playwright() as pw:
                 f"match_id={mid}&language=us&geoCode=US",
             ]:
                 url = f"{endpoint}?{params}"
-                body, err = _fetch_json_in_page(page, url)
+                body, err = _fetch_json_in_page(probe_page, url)
                 if body is None:
                     continue
                 if isinstance(body, dict) and body.get("error"):

@@ -214,7 +214,13 @@ def _to_bq_rows(
 
 # ── Main ingest ───────────────────────────────────────────────────────────────
 
-def ingest_atp_odds(url: Optional[str] = None) -> Dict[str, Any]:
+def ingest_atp_odds(
+    url: Optional[str] = None,
+    *,
+    dry_run: bool = False,
+    today_only: bool = False,
+    has_total: bool = False,
+) -> Dict[str, Any]:
     """Scrape Oddspedia and load ATP odds into BigQuery (oddspedia.atp_odds).
 
     The table is truncated before writing so only the latest snapshot remains.
@@ -224,6 +230,12 @@ def ingest_atp_odds(url: Optional[str] = None) -> Dict[str, Any]:
     url:
         Oddspedia page URL.  Defaults to ODDSPEDIA_URL env var or the tennis
         odds page (https://www.oddspedia.com/us/tennis/odds).
+    dry_run:
+        When True, skip BigQuery entirely and just print scraped matches as JSON.
+    today_only:
+        When True, only include matches scheduled for today (UTC).
+    has_total:
+        When True, only include matches that have a ``total`` market.
 
     Returns
     -------
@@ -238,7 +250,10 @@ def ingest_atp_odds(url: Optional[str] = None) -> Dict[str, Any]:
     print("[atp_odds] Starting Oddspedia ATP odds ingest")
     print(f"[atp_odds] URL          : {target_url}")
     print(f"[atp_odds] Ingested at  : {ingested_at}")
-    print(f"[atp_odds] Destination  : {DATASET}.{TABLE}")
+    if dry_run:
+        print("[atp_odds] Mode         : DRY RUN (no BigQuery write)")
+    else:
+        print(f"[atp_odds] Destination  : {DATASET}.{TABLE}")
     print("=" * 60)
 
     # ── Scrape ────────────────────────────────────────────────────────────────
@@ -246,6 +261,26 @@ def ingest_atp_odds(url: Optional[str] = None) -> Dict[str, Any]:
     print(f"[atp_odds] Fetching {target_url} …")
     matches = client_scraper.scrape(target_url)
     print(f"[atp_odds] Scraped {len(matches)} matches")
+
+    # ── Optional filters ──────────────────────────────────────────────────────
+    if today_only:
+        matches = [m for m in matches if (m.get("date_utc") or "").startswith(scraped_date)]
+        print(f"[atp_odds] After --today filter : {len(matches)} matches")
+    if has_total:
+        matches = [m for m in matches if "total" in m.get("markets", {})]
+        print(f"[atp_odds] After --has-total filter : {len(matches)} matches")
+
+    # ── Dry-run: print and exit ───────────────────────────────────────────────
+    if dry_run:
+        print(json.dumps(matches, indent=2))
+        return {
+            "url":           target_url,
+            "ingested_at":   ingested_at,
+            "matches_found": len(matches),
+            "rows_written":  0,
+            "dry_run":       True,
+            "errors":        [],
+        }
 
     # ── BigQuery setup ────────────────────────────────────────────────────────
     bq = _bq_client()
@@ -290,7 +325,27 @@ if __name__ == "__main__":
             f"Defaults to ODDSPEDIA_URL env var or {DEFAULT_URL}."
         ),
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print scraped matches as JSON without writing to BigQuery.",
+    )
+    parser.add_argument(
+        "--today",
+        action="store_true",
+        help="Only include matches scheduled for today (UTC).",
+    )
+    parser.add_argument(
+        "--has-total",
+        action="store_true",
+        help="Only include matches that have a 'total' market.",
+    )
     args = parser.parse_args()
 
-    result = ingest_atp_odds(url=args.url)
+    result = ingest_atp_odds(
+        url=args.url,
+        dry_run=args.dry_run,
+        today_only=args.today,
+        has_total=args.has_total,
+    )
     print(json.dumps(result, indent=2, default=str))

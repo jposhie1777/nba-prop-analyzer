@@ -580,7 +580,7 @@ def _normalized_market_rows(match: Dict[str, Any]) -> List[Dict[str, Any]]:
 
     return _normalize_legacy_markets(match)
 
-
+print(matches[0].keys())
 def _to_bq_rows(
     matches: List[Dict[str, Any]],
     ingested_at: str,

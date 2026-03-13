@@ -1,3 +1,4 @@
+# mobile_api/ingest/atp/introspect_oddspedia_schema.py
 """
 Introspect the Oddspedia REST API to discover available endpoints,
 their parameters, and the field schemas of their responses.

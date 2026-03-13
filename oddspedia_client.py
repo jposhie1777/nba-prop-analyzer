@@ -1,3 +1,4 @@
+#oddspedia_client.py
 """
 Oddspedia odds scraper.
 
@@ -130,10 +131,13 @@ class OddspediaClient:
             if _stealth_sync is not None:
                 _stealth_sync(page)
             page.goto(url, wait_until="domcontentloaded", timeout=self._page_timeout_ms)
-            # __NUXT__ is injected by SSR into the initial HTML, so it's
-            # available immediately after the DOM is parsed.
-            page.wait_for_load_state("networkidle")
-            page.wait_for_timeout(3000)
+
+            # __NUXT__ is injected server-side by Nuxt SSR
+            page.wait_for_function(
+                "() => window.__NUXT__ && window.__NUXT__.data",
+                timeout=15000
+            )
+
             nuxt_data = page.evaluate("() => window.__NUXT__")
 
             records = self._build_records_from_nuxt(nuxt_data)

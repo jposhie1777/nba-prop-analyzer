@@ -139,30 +139,58 @@ class OddspediaClient:
             # Intercept ALL Oddspedia API responses on the listing page so we can
             # fall back to them when the SSR match list is empty.
             listing_api_responses: List[Dict[str, Any]] = []
+            listing_intercept_stats: Dict[str, int] = defaultdict(int)
+            listing_intercept_examples: Dict[str, List[str]] = defaultdict(list)
+
+            def _add_example(key: str, value: str) -> None:
+                arr = listing_intercept_examples[key]
+                if len(arr) < 4:
+                    arr.append(value)
 
             def _on_listing_api(response: Any) -> None:
-                if not self._is_listing_api_endpoint(response.url):
+                url = response.url
+                if "oddspedia" not in url.lower():
+                    return
+
+                listing_intercept_stats["oddspedia_seen"] += 1
+
+                if not self._is_listing_api_endpoint(url):
+                    listing_intercept_stats["filtered_non_listing"] += 1
+                    _add_example("filtered_non_listing", url)
                     return
                 # Skip per-match endpoints — those are handled later
-                if "getMatchMaxOddsByGroup" in response.url:
+                if "getMatchMaxOddsByGroup" in url:
+                    listing_intercept_stats["filtered_per_match"] += 1
                     return
+
+                if not response.ok:
+                    listing_intercept_stats["non_ok_status"] += 1
+                    _add_example("non_ok_status", f"{response.status} {url}")
+                    return
+
+                listing_intercept_stats["listing_candidate"] += 1
 
                 body: Any = None
                 try:
-                    if response.ok:
-                        ct = response.headers.get("content-type", "")
-                        if "json" in ct or "javascript" in ct:
-                            body = response.json()
-                        else:
-                            # Some listing endpoints return JSON with generic content-types.
-                            raw = response.text()
-                            if raw and raw.strip().startswith(("{", "[")):
-                                body = json.loads(raw)
-                except Exception:
+                    ct = response.headers.get("content-type", "")
+                    if "json" in ct or "javascript" in ct:
+                        body = response.json()
+                    else:
+                        # Some listing endpoints return JSON with generic content-types.
+                        raw = response.text()
+                        if raw and raw.strip().startswith(("{", "[")):
+                            body = json.loads(raw)
+                except Exception as exc:
+                    listing_intercept_stats["json_parse_error"] += 1
+                    _add_example("json_parse_error", f"{type(exc).__name__}: {url}")
                     body = None
 
-                if isinstance(body, dict):
-                    listing_api_responses.append({"url": response.url, "body": body})
+                if isinstance(body, (dict, list)):
+                    listing_intercept_stats["captured"] += 1
+                    listing_api_responses.append({"url": url, "body": body})
+                else:
+                    listing_intercept_stats["non_json_body"] += 1
+                    _add_example("non_json_body", url)
 
             page.on("response", _on_listing_api)
 
@@ -181,6 +209,14 @@ class OddspediaClient:
                 page.wait_for_load_state("networkidle", timeout=12000)
             except Exception:
                 pass
+
+            if listing_intercept_stats:
+                stats_line = ", ".join(f"{k}={v}" for k, v in sorted(listing_intercept_stats.items()))
+                print(f"[scraper] Listing intercept stats: {stats_line}")
+                for key in ("filtered_non_listing", "json_parse_error", "non_ok_status", "non_json_body"):
+                    samples = listing_intercept_examples.get(key) or []
+                    if samples:
+                        print(f"[scraper]   {key} samples: {samples}")
 
             nuxt_data = page.evaluate("() => window.__NUXT__ || {}")
             # Only raise if __NUXT__ is entirely missing (Cloudflare challenge).
@@ -596,25 +632,36 @@ class OddspediaClient:
                 continue
 
             body = resp.get("body", {})
-            if not isinstance(body, dict):
+            if not isinstance(body, (dict, list)):
                 continue
 
             # Unwrap common envelope shapes
-            data = body.get("data") or body
+            data: Any = body
+            if isinstance(body, dict):
+                data = body.get("data") or body
 
             # Some endpoints nest under a second "data" key
             if isinstance(data, dict) and "data" in data and isinstance(data["data"], dict):
                 data = data["data"]
 
             # Look for a list of match-like objects
-            candidates = [
-                data.get("matchList"),
-                data.get("matches"),
-                data.get("items"),
-                data.get("results"),
-                body.get("matchList"),
-                body.get("matches"),
-            ]
+            candidates = []
+            if isinstance(data, dict):
+                candidates.extend([
+                    data.get("matchList"),
+                    data.get("matches"),
+                    data.get("items"),
+                    data.get("results"),
+                ])
+            if isinstance(body, dict):
+                candidates.extend([
+                    body.get("matchList"),
+                    body.get("matches"),
+                ])
+            if isinstance(data, list):
+                candidates.append(data)
+            if isinstance(body, list):
+                candidates.append(body)
 
             for candidate in candidates:
                 if not (isinstance(candidate, list) and candidate):
@@ -633,7 +680,11 @@ class OddspediaClient:
                     f"[scraper] Listing API match list found — "
                     f"{len(normalized)} items from {endpoint[:80]}"
                 )
-                odds_data = data.get("odds") or body.get("odds") or {}
+                odds_data = {}
+                if isinstance(data, dict):
+                    odds_data = data.get("odds") or {}
+                if not odds_data and isinstance(body, dict):
+                    odds_data = body.get("odds") or {}
                 raw = {"matchList": normalized, "odds": odds_data, "sport": "soccer"}
                 built = self._build_records(raw)
                 if built:
@@ -655,7 +706,8 @@ class OddspediaClient:
                     f"[scraper] Listing API recursive scan found — "
                     f"{len(normalized)} items from {endpoint[:80]}"
                 )
-                raw = {"matchList": normalized, "odds": data.get("odds") or {}, "sport": "soccer"}
+                raw_odds = data.get("odds") if isinstance(data, dict) else {}
+                raw = {"matchList": normalized, "odds": raw_odds or {}, "sport": "soccer"}
                 built = self._build_records(raw)
                 if built:
                     return built

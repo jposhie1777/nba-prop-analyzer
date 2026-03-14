@@ -387,59 +387,85 @@ class OddspediaClient:
             total_market_rows = 0
             api_working: Optional[bool] = None  # None=untested, True=working, False=blocked
 
-            for record in records:
+           for record in records:
+
                 mid = str(record.get("match_id") or "")
-                # Use URL from NUXT-built map first; fall back to URL stored in record
+
                 match_url = match_urls.get(mid) or record.get("url")
                 if not match_url:
                     continue
 
-                # After probing the first match, stop if the API is blocked
-                if api_working is False:
-                    break
-
                 try:
                     page.goto(match_url, wait_until="domcontentloaded", timeout=12000)
-                    # Allow time for the page's XHR calls to fire and resolve
                     page.wait_for_timeout(2000)
                 except Exception as exc:
                     print(f"[scraper] match page {mid} nav error: {exc}")
                     continue
 
-                # After first match: probe whether interception is working
+                # Probe interception once
                 if api_working is None:
+
                     if captured.get(mid):
                         api_working = True
                         print(
                             f"[scraper] Response interception working — "
                             f"captured {len(captured[mid])} market groups for match {mid}"
                         )
+
                     else:
                         api_working = False
                         print(
-                            "[scraper] No API responses captured on first match page — "
-                            "Cloudflare is blocking XHR too; falling back to listing-page data"
+                            "[scraper] Cloudflare blocked page XHR — switching to direct API mode"
                         )
-                        break
 
-                # Enrich record with team details from match-page __NUXT__ or
-                # intercepted non-odds API response (needed when records came from DOM)
+                # Fill missing team info if needed
                 if not record.get("home_team"):
                     self._enrich_record_from_match_page(record, mid, page, match_info_captured)
 
                 match_data = captured.get(mid, {})
+
+                all_rows: List[Dict[str, Any]] = []
+
+                # ── Case 1: Intercepted API worked ─────────────────────────
                 if match_data:
-                    all_rows: List[Dict[str, Any]] = []
+
                     for body in match_data.values():
                         all_rows.extend(self._parse_per_match_to_market_rows(body, mid))
-                    if all_rows:
-                        record["market_rows"] = all_rows
-                        total_market_rows += len(all_rows)
 
-            print(
-                f"[scraper] Per-match fetch complete: "
-                f"{total_market_rows} outcome rows across {len(records)} matches"
-            )
+                # ── Case 2: Cloudflare blocked XHR → direct API fallback ───
+                else:
+
+                    for mg in _PER_MATCH_MARKET_GROUPS:
+
+                        api_url = (
+                            f"{_PER_MATCH_API}"
+                            f"?matchId={mid}"
+                            f"&marketGroupId={mg}"
+                            f"&{_PER_MATCH_PARAMS}"
+                        )
+
+                        try:
+
+                            resp = context.request.get(api_url)
+
+                            if resp.ok:
+
+                                body = resp.json()
+
+                                rows = self._parse_per_match_to_market_rows(body, mid)
+
+                                all_rows.extend(rows)
+
+                        except Exception as exc:
+
+                            print(f"[scraper] direct API failed for {mid}: {exc}")
+
+                if all_rows:
+
+                    record["market_rows"] = all_rows
+
+                    total_market_rows += len(all_rows)
+
 
             # ── Summary ───────────────────────────────────────────────────────
             total_markets = sum(len(r.get("markets", {})) for r in records)

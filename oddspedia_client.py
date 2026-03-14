@@ -237,15 +237,8 @@ class OddspediaClient:
                     print(f"[scraper] Extra load ot={ot_val} failed: {exc}")
 
             # ── Per-match odds via getMatchMaxOddsByGroup API ─────────────────
-            # Navigate back to the main listing URL so the browser session is
-            # in a clean, authenticated state before making API calls.
-            # (The ot= navigation loop above may have left the page on a URL
-            # that has no valid Cloudflare cookies for the API.)
-            try:
-                page.goto(url, wait_until="domcontentloaded", timeout=30000)
-            except Exception as nav_exc:
-                print(f"[scraper] WARNING: could not navigate back to listing page: {nav_exc}")
-
+            # page.request uses the browser context's cookie jar directly,
+            # so no navigation back to the listing URL is needed.
             print(
                 f"[scraper] Fetching per-match odds for {len(records)} matches "
                 f"× {len(_PER_MATCH_MARKET_GROUPS)} market groups …"
@@ -293,36 +286,30 @@ class OddspediaClient:
         self, page: Any, match_id: str, market_group_id: int
     ) -> Optional[Dict[str, Any]]:
         """
-        Call getMatchMaxOddsByGroup from within the live Playwright browser
-        session.  Because the request originates from a real browser context
-        with valid Cloudflare cookies it is not blocked by the WAF.
+        Call getMatchMaxOddsByGroup using Playwright's APIRequestContext
+        (page.request), which shares the browser session's cookies but makes
+        the HTTP request from the Python layer — bypassing both CORS
+        restrictions and the Cloudflare WAF that blocks in-page JS fetch().
         """
         url = (
             f"{_PER_MATCH_API}"
             f"?matchId={match_id}&marketGroupId={market_group_id}&{_PER_MATCH_PARAMS}"
         )
         try:
-            result = page.evaluate(
-                """async (url) => {
-                    try {
-                        const r = await fetch(url, {
-                            headers: {'Accept': 'application/json'}
-                        });
-                        if (!r.ok) return {_error: `HTTP ${r.status} ${r.statusText}`};
-                        return await r.json();
-                    } catch (e) {
-                        return {_error: e.toString()};
-                    }
-                }""",
+            response = page.request.get(
                 url,
+                headers={
+                    "Accept": "application/json, text/plain, */*",
+                    "Referer": "https://www.oddspedia.com/us/tennis/odds",
+                },
             )
-            if not isinstance(result, dict):
-                print(f"[scraper] per-match API unexpected response type={type(result)} matchId={match_id} mgId={market_group_id}")
+            if not response.ok:
+                print(
+                    f"[scraper] per-match API HTTP {response.status} "
+                    f"matchId={match_id} mgId={market_group_id}"
+                )
                 return None
-            if "_error" in result:
-                print(f"[scraper] per-match API error matchId={match_id} mgId={market_group_id}: {result['_error']}")
-                return None
-            return result
+            return response.json()
         except Exception as exc:
             print(
                 f"[scraper] per-match API failed "

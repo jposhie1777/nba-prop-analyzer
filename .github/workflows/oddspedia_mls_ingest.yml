@@ -1,0 +1,56 @@
+name: Oddspedia MLS Ingest
+
+on:
+  workflow_dispatch:
+    inputs:
+      input_dir:
+        description: "Path to capture files (default: website_responses/mls)"
+        required: false
+        default: "website_responses/mls"
+      dry_run:
+        description: "Dry run (parse + counts only, no BigQuery writes)"
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    # Daily at 09:00 UTC; primarily useful if capture files are refreshed in-repo.
+    - cron: "0 9 * * *"
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+      ODDSPEDIA_DATASET: "oddspedia"
+      ODDSPEDIA_BQ_LOCATION: "US"
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r mobile_api/requirements.txt
+
+      - name: Configure GCP credentials
+        if: ${{ inputs.dry_run != true }}
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
+
+      - name: Run Oddspedia MLS ingest
+        run: |
+          INPUT_DIR="${{ inputs.input_dir || 'website_responses/mls' }}"
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            python -m mobile_api.ingest.mls.oddspedia_mls_bq_workflow --input-dir "$INPUT_DIR" --dry-run
+          else
+            python -m mobile_api.ingest.mls.oddspedia_mls_bq_workflow --input-dir "$INPUT_DIR"
+          fi

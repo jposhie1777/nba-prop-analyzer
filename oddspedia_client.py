@@ -38,14 +38,33 @@ from typing import Any, Dict, List, Optional
 
 LOGGER = logging.getLogger(__name__)
 
-# Market IDs found in Oddspedia's Nuxt state
 MARKET_NAMES: Dict[str, str] = {
     "201": "moneyline",
-    "301": "spread",
+    "204": "moneyline_1st_set",
+    "205": "moneyline_2nd_set",
+    "301": "handicap",
+    "401": "total_sets",
+    "501": "market_501",
+    "502": "market_502",
+    "503": "market_503",
+    "601": "market_601",
+    "602": "market_602",
 }
 
-# Node.js snippet that evaluates the __NUXT__ IIFE and prints the JSON we need.
-# Used only by scrape_file(); live scraping reads __NUXT__ directly via Playwright.
+_MATCH_ODDS_URL = "https://www.oddspedia.com/api/v1/getMatchOdds"
+_MATCH_ODDS_PARAMS = "language=us&geoCode=US&bookmakerGeoCode=US&bookmakerGeoState=VA"
+_API_HEADERS = {
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://www.oddspedia.com/us/tennis/odds",
+}
+
+# Per-match API – fetched via the live Playwright session (bypasses Cloudflare WAF)
+_PER_MATCH_API = "https://www.oddspedia.com/api/v1/getMatchMaxOddsByGroup"
+_PER_MATCH_PARAMS = "inplay=0&geoCode=US&geoState=NY&language=us"
+# Market group IDs to fetch for every match (201=Moneyline, 301=Spread, 401=Total Sets)
+_PER_MATCH_MARKET_GROUPS = [201, 301, 401]
+
 _NODE_EXTRACTOR = r"""
 const fs   = require('fs');
 const vm   = require('vm');
@@ -66,7 +85,6 @@ process.stdout.write(JSON.stringify({
 
 
 class OddspediaClient:
-    """Scrapes odds from Oddspedia pages."""
 
     def __init__(
         self,
@@ -74,43 +92,18 @@ class OddspediaClient:
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
             "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         ),
-        page_timeout_ms: int = 60_000,
+        page_timeout_ms: int = 60000,
     ) -> None:
         self._user_agent = user_agent
         self._page_timeout_ms = page_timeout_ms
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
 
-    def scrape(
-        self,
-        url: str,
-        *,
-        fetch_set_markets: bool = True,
-    ) -> List[Dict[str, Any]]:
-        """Fetch *url* using Playwright and return a list of match-odds dicts.
+    # ============================================================
+    # MAIN SCRAPER
+    # ============================================================
 
-        Uses headless Chromium with playwright-stealth to mask automation
-        signals (navigator.webdriver, etc.) that trigger Cloudflare blocks.
+    def scrape(self, url: str) -> List[Dict[str, Any]]:
 
-        Waits only for DOMContentLoaded because window.__NUXT__ is embedded
-        in the SSR HTML — no JS execution is needed.  "networkidle" is
-        intentionally avoided: Cloudflare's challenge scripts keep the
-        network busy indefinitely and cause a 60 s timeout.
-
-        Parameters
-        ----------
-        fetch_set_markets:
-            When True (default), makes ``getMatchOdds`` API calls for every
-            match via the same browser context (same TLS fingerprint + cookies)
-            and enriches each record's ``markets`` dict with:
-
-            - ``moneyline_1st_set``, ``moneyline_2nd_set``, … (set-period odds)
-            - ``spread`` (main handicap line, e.g. "+4.5/-4.5 Games")
-            - ``correct_score_0_2``, ``correct_score_2_0``, … (set-score lines)
-            - ``total``, ``total_1st_set``, … (Over/Under lines per period)
-        """
         from playwright.sync_api import sync_playwright
 
         try:
@@ -119,392 +112,509 @@ class OddspediaClient:
             _stealth_sync = None
 
         LOGGER.info("Fetching %s via Playwright", url)
+
         with sync_playwright() as pw:
+
             browser = pw.chromium.launch(headless=True)
+
             context = browser.new_context(
                 user_agent=self._user_agent,
                 locale="en-US",
                 viewport={"width": 1920, "height": 1080},
                 extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
             )
-            page = context.new_page()
-            if _stealth_sync is not None:
-                _stealth_sync(page)
-            page.goto(url, wait_until="domcontentloaded", timeout=self._page_timeout_ms)
 
-            # __NUXT__ is injected server-side by Nuxt SSR
+            page = context.new_page()
+
+            if _stealth_sync:
+                _stealth_sync(page)
+
+            # ── Load listing page (default view) ─────────────────────────────────
+            # The server-side-rendered __NUXT__ already contains moneyline (201),
+            # handicap (301), and total_sets (401) for all matches.
+            # Client-side API calls are blocked by Cloudflare WAF in CI, so we
+            # rely entirely on SSR data.
+
+            print(f"[scraper] Loading default listing page: {url}")
+            page.goto(url, wait_until="domcontentloaded", timeout=self._page_timeout_ms)
             page.wait_for_function(
                 "() => window.__NUXT__ && window.__NUXT__.data",
-                timeout=15000
+                timeout=15000,
             )
-
             nuxt_data = page.evaluate("() => window.__NUXT__")
 
             records = self._build_records_from_nuxt(nuxt_data)
+            print(f"[scraper] Default page: {len(records)} matches")
+            if records:
+                m0 = records[0]
+                print(f"[scraper]   First match markets: {list(m0.get('markets', {}).keys())}")
 
-            if fetch_set_markets and records:
-                api_ctx = context.request
-                for record in records:
-                    match_id = record.get("match_id")
-                    if not match_id:
+            # ── Load listing page with extra ot= values ────────────────────────
+            # Oddspedia's listing page accepts an ?ot= query parameter that
+            # changes which market the server-side rendering populates in __NUXT__.
+            # We try several candidate values to discover 1st/2nd set winner and
+            # any other alternate markets.
+            #
+            # Known ot= values (from getAmericanMaxOddsWithPagination sweeps):
+            #   201  moneyline / match winner   ← default
+            #   301  handicap
+            #   401  total sets O/U
+            # Candidates for set-specific markets (to be confirmed by log output):
+            #   204  possibly 1st Set winner
+            #   205  possibly 2nd Set winner
+            #   501, 502, 503, 601 … unknown
+
+            EXTRA_OT_CANDIDATES = [204, 205, 501, 502, 503, 601, 602]
+
+            records_by_id = {str(r["match_id"]): r for r in records if r.get("match_id")}
+
+            for ot_val in EXTRA_OT_CANDIDATES:
+                sep = "&" if "?" in url else "?"
+                extra_url = f"{url}{sep}ot={ot_val}"
+                try:
+                    page.goto(extra_url, wait_until="domcontentloaded", timeout=30000)
+                    # Wait for any __NUXT__ to appear — listing pages may not populate .data
+                    # for unknown ot= values, so we don't require .data here.
+                    try:
+                        page.wait_for_function("() => !!window.__NUXT__", timeout=10000)
+                    except Exception:
+                        pass  # evaluate anyway; log what we got
+
+                    extra_nuxt = page.evaluate("() => window.__NUXT__ || null")
+                    if not extra_nuxt:
+                        print(f"[scraper] ot={ot_val}: no __NUXT__ on page")
                         continue
 
-                    set_markets = self._fetch_api_markets(api_ctx, match_id)
-
+                    # Log the top-level NUXT keys and data[0] keys so we can
+                    # understand the structure for unknown ot= values.
+                    nuxt_keys = list(extra_nuxt.keys())
+                    data0_x = (extra_nuxt.get("data") or [{}])[0]
+                    data0_keys = list(data0_x.keys()) if isinstance(data0_x, dict) else []
                     print(
-                        "API MARKET GROUPS:",
-                        match_id,
-                        type(set_markets),
-                        len(set_markets) if isinstance(set_markets, list) else "not-list"
+                        f"[scraper] ot={ot_val}: __NUXT__ keys={nuxt_keys}, "
+                        f"data[0] keys={data0_keys[:15]}"
                     )
 
-                    if isinstance(set_markets, list) and set_markets:
-                        print("FIRST GROUP KEYS:", set_markets[0].keys())
+                    extra_odds = self._extract_odds_from_nuxt(extra_nuxt)
 
-                    rows = []
+                    new_market_ids: set = set()
+                    for mid_str, market_map in extra_odds.items():
+                        for mkt_id in market_map:
+                            new_market_ids.add(str(mkt_id))
 
-                    for market_name, market in set_markets.items():
-                        if not market:
+                    print(
+                        f"[scraper] ot={ot_val}: {len(extra_odds)} matches, "
+                        f"market IDs seen: {sorted(new_market_ids)}"
+                    )
+
+                    # Merge any genuinely new market IDs into existing records
+                    merged = 0
+                    for mid_str, market_map in extra_odds.items():
+                        rec = records_by_id.get(mid_str)
+                        if not rec:
                             continue
+                        for mkt_id, mkt_data in market_map.items():
+                            mkt_name = MARKET_NAMES.get(str(mkt_id), f"market_{mkt_id}")
+                            if mkt_name not in rec["markets"]:
+                                rec["markets"][mkt_name] = self._listing_market_entry(
+                                    mkt_name, mkt_id, mkt_data
+                                )
+                                merged += 1
+                    if merged:
+                        print(f"[scraper]   → merged {merged} new market entries from ot={ot_val}")
 
-                        if isinstance(market, list):
-                            rows.extend(market)
-                        else:
-                            rows.append(market)
+                except Exception as exc:
+                    print(f"[scraper] Extra load ot={ot_val} failed: {exc}")
 
-                    print("PARSED MARKETS:", match_id, len(set_markets))
-                    print("ROWS EXPANDED:", match_id, len(rows))
+            # ── Per-match odds via getMatchMaxOddsByGroup API ─────────────────
+            # Use the live Playwright session (which has valid Cloudflare
+            # cookies) to call the per-match API for each match.  This gives
+            # all bookmakers and all lines (main + alternative) for every
+            # market group — far richer than the single best-odd from the
+            # listing-page SSR.
 
-                    record["market_rows"] = rows
+            print(
+                f"[scraper] Fetching per-match odds for {len(records)} matches "
+                f"× {len(_PER_MATCH_MARKET_GROUPS)} market groups …"
+            )
+            total_market_rows = 0
+            for record in records:
+                mid = str(record.get("match_id") or "")
+                if not mid:
+                    continue
+                all_market_rows: List[Dict[str, Any]] = []
+                for mg_id in _PER_MATCH_MARKET_GROUPS:
+                    body = self._fetch_per_match_api(page, mid, mg_id)
+                    if body:
+                        mrows = self._parse_per_match_to_market_rows(body, mid)
+                        all_market_rows.extend(mrows)
+                if all_market_rows:
+                    record["market_rows"] = all_market_rows
+                    total_market_rows += len(all_market_rows)
+            print(
+                f"[scraper] Per-match fetch complete: "
+                f"{total_market_rows} outcome rows across {len(records)} matches"
+            )
+
+            # ── Summary ───────────────────────────────────────────────────────
+            total_markets = sum(len(r.get("markets", {})) for r in records)
+            print(
+                f"[scraper] Final: {len(records)} matches, "
+                f"{total_markets} total market entries "
+                f"(avg {total_markets/max(len(records),1):.1f}/match)"
+            )
+            if records:
+                all_mkt_names = sorted({k for r in records for k in r.get("markets", {}).keys()})
+                print(f"[scraper] All market names seen: {all_mkt_names}")
 
             browser.close()
 
         return records
 
-    def scrape_file(self, path: str | Path) -> List[Dict[str, Any]]:
-        """Parse a saved HTML file via Node.js and return a list of match-odds dicts.
 
-        Does not require Playwright — useful for local testing against saved
-        responses without a browser.
+    # ============================================================
+    # PER-MATCH API FETCHING
+    # ============================================================
+
+    def _fetch_per_match_api(
+        self, page: Any, match_id: str, market_group_id: int
+    ) -> Optional[Dict[str, Any]]:
         """
-        html = Path(path).read_text(encoding="utf-8", errors="replace")
-        return self._parse_html_via_node(html)
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
-    def _fetch_api_markets(self, api_ctx: Any, match_id: int) -> Dict[str, Any]:
-        """Fetch Moneyline (set periods), Spread, Correct Score, and Total via getMatchOdds.
-
-        Makes four separate API calls — one per market type — using the same
-        Playwright APIRequestContext (browser TLS fingerprint + session cookies).
-
-        Returns a merged dict of all parsed market records:
-        - Moneyline set periods: ``moneyline_1st_set``, ``moneyline_2nd_set``, …
-        - Spread main line:      ``spread``
-        - Correct score lines:   ``correct_score_2_0``, ``correct_score_0_2``, …
-        - Total lines:           ``total``, ``total_1st_set``, …
+        Call getMatchMaxOddsByGroup from within the live Playwright browser
+        session.  Because the request originates from a real browser context
+        with valid Cloudflare cookies it is not blocked by the WAF.
         """
-        markets: Dict[str, Any] = {}
+        url = (
+            f"{_PER_MATCH_API}"
+            f"?matchId={match_id}&marketGroupId={market_group_id}&{_PER_MATCH_PARAMS}"
+        )
+        try:
+            result = page.evaluate(
+                """async (url) => {
+                    try {
+                        const r = await fetch(url, {
+                            headers: {'Accept': 'application/json'}
+                        });
+                        if (!r.ok) return null;
+                        return await r.json();
+                    } catch (e) {
+                        return null;
+                    }
+                }""",
+                url,
+            )
+            return result if isinstance(result, dict) else None
+        except Exception as exc:
+            print(
+                f"[scraper] per-match API failed "
+                f"matchId={match_id} mgId={market_group_id}: {exc}"
+            )
+            return None
 
-        MARKET_TYPES = [
-            None,   # default moneyline endpoint
-            201,    # match winner alt endpoint
+    def _parse_per_match_to_market_rows(
+        self, body: Dict[str, Any], match_id: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Convert a getMatchMaxOddsByGroup response body into the market_rows
+        format expected by oddspedia_odds_ingest._normalize_rich_market_rows().
 
-            301,    # spread
-            401,    # total
-            800,    # correct score
+        Handles both shapes that the API can return per period:
+          • flat   {"odds": {"o1": ..., "o2": ...}, "winning_odd": ...}
+          • tiered {"main": {...}, "alternative": [{...}, ...]}
+        """
+        data = body.get("data") or {}
+        periods_list = body.get("periods") or []
+        periods_by_id = {
+            str(p["id"]): p.get("name")
+            for p in periods_list
+            if isinstance(p, dict) and "id" in p
+        }
 
-            202,    # set handicap
-            203,    # set total
+        outcome_names: List[str] = data.get("outcome_names") or []
+        market_group_id = data.get("market_group_id")
+        market_name_full: str = data.get("market_name") or "market"
+        market_slug = market_name_full.lower().replace(" ", "_")
 
-            601,    # game handicap
-            602,    # game total
-        ]
+        rows: List[Dict[str, Any]] = []
 
-        for ot in MARKET_TYPES:
-
-            body = self._call_match_odds_api(api_ctx, match_id, ot=ot)
-
-            if not body:
+        for period_key, period_obj in (data.get("odds") or {}).items():
+            if not isinstance(period_obj, dict):
                 continue
 
-            skip_final = ot is None
+            period_id = _safe_int_local(period_key)
+            period_name = periods_by_id.get(str(period_key))
 
-            parsed = self._parse_match_odds_response(body, skip_final=skip_final)
+            # Determine entry list (main line + any alternative lines)
+            if "main" in period_obj:
+                entries: List[tuple] = []
+                main = period_obj.get("main")
+                if isinstance(main, dict):
+                    entries.append((None, main))   # main line: line_value=None
+                for alt in (period_obj.get("alternative") or []):
+                    if isinstance(alt, dict):
+                        entries.append(("alternative", alt))
+            else:
+                entries = [(None, period_obj)]
 
-            for k, v in parsed.items():
-                if k not in markets:
-                    markets[k] = v
+            for _line_type, entry in entries:
+                if not isinstance(entry, dict):
+                    continue
 
-        return markets
+                line_value = entry.get("name")   # e.g. "-3.5 Games" or None
+                odds_dict = entry.get("odds") or {}
 
-    def _call_match_odds_api(
-        self,
-        api_ctx: Any,
-        match_id: int,
-        *,
-        ot: Optional[int] = None,
-    ) -> Dict[str, Any]:
-        """GET /api/v1/getMatchOdds and return the parsed JSON body (or {})."""
-        qs = (
-            f"matchId={match_id}&language=us&geoCode=US"
-            "&bookmakerGeoCode=US&bookmakerGeoState=VA"
-        )
-        if ot is not None:
-            qs += f"&ot={ot}"
-        url = f"https://www.oddspedia.com/api/v1/getMatchOdds?{qs}"
+                # Convenience: grab o1/o2 decimals for the whole entry row
+                o1_obj = odds_dict.get("o1") or {}
+                o2_obj = odds_dict.get("o2") or {}
+                home_dec = _parse_float(o1_obj.get("odds_value"))
+                away_dec = _parse_float(o2_obj.get("odds_value"))
+
+                for idx, (outcome_key, odd_obj) in enumerate(odds_dict.items(), start=1):
+                    if not isinstance(odd_obj, dict):
+                        continue
+
+                    # Resolve outcome name from the outcome_names array
+                    try:
+                        key_num = int(outcome_key.lstrip("o")) - 1
+                        outcome_name = (
+                            outcome_names[key_num]
+                            if 0 <= key_num < len(outcome_names)
+                            else outcome_key
+                        )
+                    except (ValueError, AttributeError):
+                        outcome_name = outcome_key
+
+                    # Map o1→home, o2→away, anything else→None
+                    if outcome_key == "o1":
+                        outcome_side = "home"
+                    elif outcome_key == "o2":
+                        outcome_side = "away"
+                    else:
+                        outcome_side = None
+
+                    odds_dec = _parse_float(odd_obj.get("odds_value"))
+
+                    rows.append(
+                        {
+                            "market_group_id": market_group_id,
+                            "market_group_name": market_name_full,
+                            "market": market_slug,
+                            "period_id": period_id,
+                            "period_name": period_name,
+                            "bookie_id": odd_obj.get("bid"),
+                            "bookie": odd_obj.get("bookie_name"),
+                            "bookie_slug": odd_obj.get("bookie_slug"),
+                            "outcome_key": outcome_key,
+                            "outcome_name": outcome_name,
+                            "outcome_side": outcome_side,
+                            "outcome_order": idx,
+                            "odds_decimal": odds_dec,
+                            "odds_american": _decimal_to_american(odds_dec),
+                            "odds_status": odd_obj.get("odds_status"),
+                            "odds_direction": odd_obj.get("odds_direction"),
+                            "line_value": line_value,
+                            "home_handicap": None,
+                            "away_handicap": None,
+                            "handicap_label": None,
+                            "winning_side": entry.get("winning_odd"),
+                            "bet_link": odd_obj.get("odds_link"),
+                            # Convenience columns: both sides' decimals on every row
+                            "home_odds_decimal": home_dec,
+                            "away_odds_decimal": away_dec,
+                            "home_odds_american": _decimal_to_american(home_dec),
+                            "away_odds_american": _decimal_to_american(away_dec),
+                            "market_json": data,
+                            "outcome_json": odd_obj,
+                        }
+                    )
+
+        return rows
+
+    # ============================================================
+    # HELPERS
+    # ============================================================
+
+    def _extract_odds_from_nuxt(self, nuxt_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract {match_id: {market_id: market_data}} from any NUXT listing page."""
         try:
-            resp = api_ctx.get(
-                url,
-                headers={
-                    "Accept": "application/json, text/plain, */*",
-                    "Accept-Language": "en-US,en;q=0.9",
-                    "X-Requested-With": "XMLHttpRequest",
-                },
-                timeout=15_000,
-            )
-            if resp.status != 200:
-                LOGGER.debug(
-                    "getMatchOdds matchId=%s ot=%s → HTTP %s", match_id, ot, resp.status
-                )
-                return {}
-            return resp.json()
-        except Exception as exc:
-            LOGGER.debug("getMatchOdds matchId=%s ot=%s error: %s", match_id, ot, exc)
+            data0 = (nuxt_data.get("data") or [{}])[0]
+            return (data0.get("odds") or {}).get("matches") or {}
+        except Exception:
             return {}
 
-    def _parse_match_odds_response(
-        self,
-        body: Dict[str, Any],
-        *,
-        skip_final: bool = False,
+    def _listing_market_entry(
+        self, market_name: str, market_id: Any, market_data: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Parse any ``getMatchOdds`` response into market records.
+        """Build a market dict from listing API (getAmericanMaxOddsWithPagination) data."""
+        odds_entries = market_data.get("odds", {}) if isinstance(market_data, dict) else {}
+        home_entry = odds_entries.get("1", {})
+        away_entry = odds_entries.get("2", {})
+        home_dec = _parse_float(home_entry.get("value"))
+        away_dec = _parse_float(away_entry.get("value"))
+        return {
+            "market": market_name,
+            "period_id": _safe_int_local(market_id),
+            "home_odds_decimal": home_dec,
+            "away_odds_decimal": away_dec,
+            "home_odds_american": _decimal_to_american(home_dec),
+            "away_odds_american": _decimal_to_american(away_dec),
+            "bookie_id": home_entry.get("bid"),
+            "bookie": home_entry.get("bookie"),
+            "bookie_slug": home_entry.get("slug"),
+            "bet_link": home_entry.get("link"),
+            "odds_status": home_entry.get("status"),
+            "home_handicap": home_entry.get("handicap_name_en") or home_entry.get("handicap_name"),
+            "away_handicap": away_entry.get("handicap_name_en") or away_entry.get("handicap_name"),
+            "handicap_label": home_entry.get("handicap_name_en"),
+            "winning_side": market_data.get("winning_odd"),
+        }
 
-        Handles three response shapes returned by the endpoint:
+    def _first_match_url(self, nuxt_data: Dict[str, Any]) -> Optional[str]:
+        """Return the URL of the first upcoming match from the NUXT matchList."""
+        try:
+            data0 = (nuxt_data.get("data") or [{}])[0]
+            match_list = data0.get("matchList") or []
+            for m in match_list:
+                ht_slug = m.get("ht_slug") or m.get("htSlug")
+                at_slug = m.get("at_slug") or m.get("atSlug")
+                mid = m.get("id") or m.get("match_id") or m.get("matchId")
+                raw_url = m.get("url")
+                if raw_url and isinstance(raw_url, str) and "/tennis/" in raw_url:
+                    base = "https://www.oddspedia.com"
+                    return raw_url if raw_url.startswith("http") else base + raw_url
+                if ht_slug and at_slug:
+                    slug = f"{ht_slug}-{at_slug}"
+                    if mid:
+                        slug += f"-{mid}"
+                    return f"https://www.oddspedia.com/us/tennis/{slug}"
+        except Exception as exc:
+            print(f"[scraper] _first_match_url error: {exc}")
+        return None
 
-        **Moneyline** (``waytype=2``, no handicap) — each period entry has a
-        direct ``odds: {o1, o2}`` structure::
+    # ============================================================
+    # PARSE MATCH ODDS API RESPONSE
+    # ============================================================
 
-            "204": {"winning_odd": null, "odds": {"o1": {...}, "o2": {...}}}
+    def _parse_match_odds_response(self, body: Dict[str, Any]) -> Dict[str, Any]:
 
-        **Spread** (``waytype=2``, ``has_handicap=1``) — each period entry has
-        a ``main`` object (primary line) plus an ``alternative`` list::
+        data = body.get("data")
 
-            "301": {
-              "main": {"name": "+4.5/-4.5 Games", "name_en": "+4.5 Games",
-                       "odds": {"o1": {...}, "o2": {...}}},
-              "alternative": [...]
-            }
-
-        **Correct Score** (``waytype=1``) — each period entry has only an
-        ``alternative`` list (``main`` is null), with one ``o1`` outcome per
-        score line::
-
-            "800": {
-              "main": null,
-              "alternative": [
-                {"name": "0 : 2", "name_en": "0 : 2", "odds": {"o1": {...}}},
-                ...
-              ]
-            }
-
-        Parameters
-        ----------
-        skip_final:
-            When True, periods named "Final" are skipped.  Used for Moneyline
-            calls so we don't overwrite the richer SSR-derived Final odds.
-        """
-        data = body.get("data") if isinstance(body, dict) else None
         if not isinstance(data, dict):
             return {}
 
-        periods: List[Dict[str, Any]] = data.get("periods") or []
-        odds_by_period: Dict[str, Any] = data.get("odds") or {}
-        market_slug = (data.get("market_name") or "market").lower().replace(" ", "_")
+        periods = data.get("periods") or []
+        odds_by_period = data.get("odds") or {}
+        outcome_names = data.get("outcome_names") or []
+        market_group_id = data.get("market_group_id")
+        raw_market_name = data.get("market_name") or "market"
+
+        market_slug = raw_market_name.lower().replace(" ", "_")
 
         markets: Dict[str, Any] = {}
+
         for period in periods:
-            pname: str = period.get("name") or ""
-            pid: str = str(period.get("id", ""))
+
+            pname = period.get("name")
+            pid = str(period.get("id"))
+
             if not pname or not pid:
-                continue
-            if skip_final and pname.lower() == "final":
                 continue
 
             period_data = odds_by_period.get(pid)
+
             if not isinstance(period_data, dict):
                 continue
 
-            # ----------------------------------------------------------
-            # Spread / Total / Correct Score: main + alternative structure
-            # ----------------------------------------------------------
-            if "main" in period_data or "alternative" in period_data:
-                main = period_data.get("main")
-                alternatives: List[Dict[str, Any]] = period_data.get("alternative") or []
+            inner = period_data.get("odds") or {}
 
-                # Period suffix: non-Final periods get appended to the key so
-                # e.g. Total Final → "total", Total 1st Set → "total_1st_set".
-                period_suffix = (
-                    ""
-                    if pname.lower() == "final"
-                    else f"_{pname.lower().replace(' ', '_')}"
-                )
-                base_key = f"{market_slug}{period_suffix}"
+            o1 = inner.get("o1") or {}
+            o2 = inner.get("o2") or {}
 
-                # Spread / Total — parse the primary (main) line
-                if isinstance(main, dict) and main.get("odds"):
-                    inner = main.get("odds") or {}
-                    o1 = inner.get("o1") or {}
-                    o2 = inner.get("o2") or {}
-                    home_dec = _parse_float(o1.get("odds_value"))
-                    away_dec = _parse_float(o2.get("odds_value"))
-                    # "+4.5/-4.5 Games" → home="+4.5 Games", away="-4.5 Games"
-                    # "19.5 Games" (total) → no "/" → home_hcp = full name
-                    hcp_full = main.get("name") or ""
-                    parts = hcp_full.split("/")
-                    home_hcp = parts[0].strip() if parts else None
-                    away_hcp = parts[1].strip() if len(parts) > 1 else None
-                    markets[base_key] = {
-                        "bookie":             o1.get("bookie_name"),
-                        "bookie_slug":        o1.get("bookie_slug"),
-                        "home_odds_decimal":  home_dec,
-                        "away_odds_decimal":  away_dec,
-                        "home_odds_american": _decimal_to_american(home_dec),
-                        "away_odds_american": _decimal_to_american(away_dec),
-                        "home_handicap":      home_hcp,
-                        "away_handicap":      away_hcp,
-                        "handicap_label":     hcp_full,
-                        "status":             o1.get("odds_status"),
-                        "bet_link":           o1.get("odds_link"),
-                        "winning_side":       main.get("winning_odd"),
-                    }
+            home_dec = _parse_float(o1.get("odds_value"))
+            away_dec = _parse_float(o2.get("odds_value"))
 
-                # Correct Score + alternative Spread/Total lines
-                for alt in alternatives:
-                    alt_label = (alt.get("name_en") or alt.get("name") or "").strip()
-                    inner = alt.get("odds") or {}
-                    o1 = inner.get("o1") or {}
-                    o2 = inner.get("o2") or {}
-                    if not o1 or not alt_label:
-                        continue
-                    home_dec = _parse_float(o1.get("odds_value"))
-                    away_dec = _parse_float(o2.get("odds_value"))  # None for CS
-                    # Spread/Total alt: derive handicap labels from full name
-                    # "-1.5/+1.5 Sets" → home="-1.5 Sets", away="+1.5 Sets"
-                    # Correct Score: home_handicap = score label ("0 : 2")
-                    full_name = (alt.get("name") or "").strip()
-                    hcp_parts = full_name.split("/")
-                    home_hcp = hcp_parts[0].strip() if hcp_parts else alt_label
-                    away_hcp = hcp_parts[1].strip() if len(hcp_parts) > 1 else None
-                    market_key = f"{base_key}_{_safe_key_suffix(alt_label)}"
-                    markets[market_key] = {
-                        "bookie":             o1.get("bookie_name"),
-                        "bookie_slug":        o1.get("bookie_slug"),
-                        "home_odds_decimal":  home_dec,
-                        "away_odds_decimal":  away_dec,
-                        "home_odds_american": _decimal_to_american(home_dec),
-                        "away_odds_american": _decimal_to_american(away_dec),
-                        "home_handicap":      home_hcp,
-                        "away_handicap":      away_hcp,
-                        "handicap_label":     full_name or None,
-                        "status":             o1.get("odds_status"),
-                        "bet_link":           o1.get("odds_link"),
-                        "winning_side":       alt.get("winning_odd"),
-                    }
-
-            # ----------------------------------------------------------
-            # Moneyline: direct odds.{o1, o2} structure
-            # ----------------------------------------------------------
+            # Derive a clean market key:
+            # "Final" period keeps the parent market slug (e.g. "moneyline"),
+            # other periods get it appended (e.g. "moneyline_1st_set").
+            if pname.lower() == "final":
+                key = market_slug
             else:
-                inner = period_data.get("odds") or {}
-                o1 = inner.get("o1") or {}
-                o2 = inner.get("o2") or {}
-                home_dec = _parse_float(o1.get("odds_value"))
-                away_dec = _parse_float(o2.get("odds_value"))
-                # "Final" → "moneyline";  "1st Set" → "moneyline_1st_set"
-                if pname.lower() == "final":
-                    market_key = market_slug
-                else:
-                    market_key = f"{market_slug}_{pname.lower().replace(' ', '_')}"
-                markets[market_key] = {
-                    "bookie":             o1.get("bookie_name"),
-                    "bookie_slug":        o1.get("bookie_slug"),
-                    "home_odds_decimal":  home_dec,
-                    "away_odds_decimal":  away_dec,
-                    "home_odds_american": _decimal_to_american(home_dec),
-                    "away_odds_american": _decimal_to_american(away_dec),
-                    "status":             o1.get("odds_status"),
-                    "bet_link":           o1.get("odds_link"),
-                    "winning_side":       period_data.get("winning_odd"),
-                }
+                key = f"{market_slug}_{pname.lower().replace(' ', '_')}"
+
+            # Resolve outcome names from the outcome_names array when present
+            home_name = (
+                outcome_names[0]
+                if outcome_names and len(outcome_names) >= 1
+                else o1.get("outcome_name", "Home")
+            )
+            away_name = (
+                outcome_names[1]
+                if outcome_names and len(outcome_names) >= 2
+                else o2.get("outcome_name", "Away")
+            )
+
+            markets[key] = {
+                # Market / period metadata
+                "market": key,
+                "market_group_id": market_group_id,
+                "market_group_name": raw_market_name,
+                "period_id": _safe_int_local(pid),
+                "period_name": pname,
+                # Bookie info (from the home-side outcome as the representative)
+                "bookie_id": o1.get("bid"),
+                "bookie": o1.get("bookie_name"),
+                "bookie_slug": o1.get("bookie_slug"),
+                # 2-way convenience odds
+                "home_odds_decimal": home_dec,
+                "away_odds_decimal": away_dec,
+                "home_odds_american": _decimal_to_american(home_dec),
+                "away_odds_american": _decimal_to_american(away_dec),
+                # Extra per-outcome metadata
+                "home_outcome_name": home_name,
+                "away_outcome_name": away_name,
+                "odds_status": o1.get("odds_status"),
+                "odds_direction": o1.get("odds_direction"),
+                "bet_link": o1.get("odds_link"),
+                "winning_side": period_data.get("winning_odd"),
+                # Raw payload for debugging
+                "market_json": data,
+                "outcome_json": inner,
+            }
 
         return markets
 
+
+    # ============================================================
+    # NUXT PARSING
+    # ============================================================
+
     def _build_records_from_nuxt(self, nuxt_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Build records from an already-resolved __NUXT__ dict (Playwright path)."""
+
         data0 = (nuxt_data.get("data") or [{}])[0]
+
         raw = {
             "matchList": data0.get("matchList", []),
-            "odds":      data0.get("odds", {}),
-            "sport":     (data0.get("currentSport") or {}).get("slug"),
+            "odds": data0.get("odds", {}),
+            "sport": (data0.get("currentSport") or {}).get("slug"),
         }
-        return self._build_records(raw)
-
-    def _parse_html_via_node(self, html: str) -> List[Dict[str, Any]]:
-        """Write html to a temp file, evaluate via Node.js, return clean records."""
-        with tempfile.NamedTemporaryFile(
-            suffix=".html", mode="w", encoding="utf-8", delete=False
-        ) as tmp:
-            tmp.write(html)
-            tmp_path = tmp.name
-
-        try:
-            raw = self._evaluate_nuxt_via_node(tmp_path)
-        finally:
-            Path(tmp_path).unlink(missing_ok=True)
 
         return self._build_records(raw)
 
-    def _evaluate_nuxt_via_node(self, html_path: str) -> Dict[str, Any]:
-        """Run the Node.js extractor against *html_path* and return parsed JSON."""
-        with tempfile.NamedTemporaryFile(
-            suffix=".js", mode="w", encoding="utf-8", delete=False
-        ) as js_tmp:
-            js_tmp.write(_NODE_EXTRACTOR)
-            js_path = js_tmp.name
-
-        try:
-            result = subprocess.run(
-                ["node", js_path, html_path],
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-        finally:
-            Path(js_path).unlink(missing_ok=True)
-
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"Node.js extractor failed (exit {result.returncode}): {result.stderr.strip()}"
-            )
-
-        return json.loads(result.stdout)
 
     def _build_records(self, raw: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Combine matchList and odds into clean per-match records."""
-        match_list: List[Dict[str, Any]] = raw.get("matchList", [])
-        odds_by_match: Dict[str, Any] = raw.get("odds", {}).get("matches", {})
-        sport: Optional[str] = raw.get("sport")
+
+        match_list = raw.get("matchList", [])
+        odds_by_match = raw.get("odds", {}).get("matches", {})
+        sport = raw.get("sport")
 
         records: List[Dict[str, Any]] = []
+
         for match in match_list:
+
             match_id = match.get("id")
             match_odds = odds_by_match.get(str(match_id), {})
 
-            record: Dict[str, Any] = {
+            record = {
                 "match_id": match_id,
                 "sport": sport,
                 "date_utc": _normalise_ts(match.get("md")),
@@ -518,85 +628,65 @@ class OddspediaClient:
             }
 
             for market_id, market_data in match_odds.items():
-                market_name = MARKET_NAMES.get(market_id, f"market_{market_id}")
+
+                market_name = MARKET_NAMES.get(
+                    market_id,
+                    f"market_{market_id}"
+                )
+
                 odds_entries = market_data.get("odds", {})
-                winning_odd = market_data.get("winning_odd")
 
                 home_entry = odds_entries.get("1", {})
                 away_entry = odds_entries.get("2", {})
 
-                market_record: Dict[str, Any] = {
+                home_dec = _parse_float(home_entry.get("value"))
+                away_dec = _parse_float(away_entry.get("value"))
+
+                record["markets"][market_name] = {
+                    "market": market_name,
+                    "period_id": _safe_int_local(market_id),
+                    "home_odds_decimal": home_dec,
+                    "away_odds_decimal": away_dec,
+                    "home_odds_american": _decimal_to_american(home_dec),
+                    "away_odds_american": _decimal_to_american(away_dec),
+                    "bookie_id": home_entry.get("bid"),
                     "bookie": home_entry.get("bookie"),
                     "bookie_slug": home_entry.get("slug"),
-                    "home_odds": _parse_float(home_entry.get("value")),
-                    "away_odds": _parse_float(away_entry.get("value")),
-                    "home_odds_decimal": _parse_float(home_entry.get("value")),
-                    "away_odds_decimal": _parse_float(away_entry.get("value")),
-                    "home_odds_american": _decimal_to_american(
-                        _parse_float(home_entry.get("value"))
-                    ),
-                    "away_odds_american": _decimal_to_american(
-                        _parse_float(away_entry.get("value"))
-                    ),
-                    "status": home_entry.get("status"),
                     "bet_link": home_entry.get("link"),
-                    "winning_side": winning_odd,
+                    "odds_status": home_entry.get("status"),
+                    "home_handicap": home_entry.get("handicap_name_en") or home_entry.get("handicap_name"),
+                    "away_handicap": away_entry.get("handicap_name_en") or away_entry.get("handicap_name"),
+                    "handicap_label": home_entry.get("handicap_name_en"),
+                    "winning_side": market_data.get("winning_odd"),
                 }
-
-                # Spread-specific fields
-                if home_entry.get("handicap_name") is not None:
-                    market_record["home_handicap"] = home_entry.get("handicap_name")
-                    market_record["away_handicap"] = away_entry.get("handicap_name")
-                    market_record["handicap_label"] = home_entry.get("handicap_name_en")
-
-                record["markets"][market_name] = market_record
 
             records.append(record)
 
         return records
 
 
-# ------------------------------------------------------------------
-# Utility functions
-# ------------------------------------------------------------------
+# ============================================================
+# UTILITY FUNCTIONS
+# ============================================================
 
-def _safe_key_suffix(text: str) -> str:
-    """Convert an outcome label into a safe market-key suffix.
 
-    Examples::
-
-        "0 : 2"        → "0_2"
-        "2 : 1"        → "2_1"
-        "+4.5 Games"   → "p4_5_games"
-        "-1.5 Sets"    → "m1_5_sets"
-    """
-    return (
-        text.lower()
-        .replace(" : ", "_")
-        .replace("+", "p")
-        .replace("-", "m")
-        .replace(".", "_")
-        .replace("/", "_")
-        .replace(" ", "_")
-        .strip("_")
-    )
+def _safe_int_local(value: Any) -> Optional[int]:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _normalise_ts(value: Optional[str]) -> Optional[str]:
-    """Normalise an Oddspedia timestamp for BigQuery.
 
-    Oddspedia returns e.g. "2026-03-08 18:00:00+00" with a bare two-digit
-    offset.  BigQuery's TIMESTAMP parser requires either no offset or the
-    full "+HH:MM" form.  Since the column is date_utc we simply strip the
-    offset so the value is unambiguously UTC.
-    """
     if not value:
         return value
-    # Drop everything from the first "+" onward ("… 18:00:00+00" → "… 18:00:00")
+
     return value.split("+")[0].rstrip()
 
 
 def _parse_float(value: Any) -> Optional[float]:
+
     try:
         return float(value)
     except (TypeError, ValueError):
@@ -604,61 +694,12 @@ def _parse_float(value: Any) -> Optional[float]:
 
 
 def _decimal_to_american(decimal_odds: Optional[float]) -> Optional[int]:
-    """Convert decimal odds to American (moneyline) format."""
-    if decimal_odds is None or decimal_odds <= 1.0:
+
+    if decimal_odds is None or decimal_odds <= 1:
         return None
-    if decimal_odds >= 2.0:
+
+    if decimal_odds >= 2:
         return round((decimal_odds - 1) * 100)
-    return round(-100 / (decimal_odds - 1))
 
-
-# ------------------------------------------------------------------
-# CLI entry point (for quick testing)
-# ------------------------------------------------------------------
-
-if __name__ == "__main__":
-    import argparse
-    import sys
-
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-
-    import datetime
-
-    parser = argparse.ArgumentParser(description="Scrape odds from Oddspedia")
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--url", help="Live Oddspedia URL to fetch")
-    group.add_argument("--file", help="Saved HTML file to parse")
-    parser.add_argument("--out", help="Write JSON output to this file")
-    parser.add_argument(
-        "--today",
-        action="store_true",
-        help="Only include matches scheduled for today (UTC)",
-    )
-    parser.add_argument(
-        "--has-total",
-        action="store_true",
-        help="Only include matches that have a 'total' market",
-    )
-    args = parser.parse_args()
-
-    client = OddspediaClient()
-
-    if args.file:
-        results = client.scrape_file(args.file)
     else:
-        results = client.scrape(args.url)
-
-    if args.today:
-        today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
-        results = [r for r in results if (r.get("date_utc") or "").startswith(today)]
-
-    if args.has_total:
-        results = [r for r in results if "total" in r.get("markets", {})]
-
-    output = json.dumps(results, indent=2)
-
-    if args.out:
-        Path(args.out).write_text(output, encoding="utf-8")
-        print(f"Wrote {len(results)} matches to {args.out}", file=sys.stderr)
-    else:
-        print(output)
+        return round(-100 / (decimal_odds - 1))

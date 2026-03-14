@@ -130,10 +130,29 @@ class OddspediaClient:
                 _stealth_sync(page)
 
             # ── Load listing page (default view) ─────────────────────────────────
-            # The server-side-rendered __NUXT__ already contains moneyline (201),
-            # handicap (301), and total_sets (401) for all matches.
-            # Client-side API calls are blocked by Cloudflare WAF in CI, so we
-            # rely entirely on SSR data.
+            # For SSR-heavy pages (e.g. tennis), window.__NUXT__.data[0].matchList
+            # is populated by the server.  For client-side pages (e.g. MLS soccer),
+            # data is [] but the page fires API calls after hydration — we intercept
+            # those to discover match IDs.
+
+            # Intercept ALL Oddspedia API responses on the listing page so we can
+            # fall back to them when the SSR match list is empty.
+            listing_api_responses: List[Dict[str, Any]] = []
+
+            def _on_listing_api(response: Any) -> None:
+                if "oddspedia.com/api/" not in response.url:
+                    return
+                # Skip per-match endpoints — those are handled later
+                if "getMatchMaxOddsByGroup" in response.url:
+                    return
+                try:
+                    if response.ok:
+                        body = response.json()
+                        listing_api_responses.append({"url": response.url, "body": body})
+                except Exception:
+                    pass
+
+            page.on("response", _on_listing_api)
 
             print(f"[scraper] Loading default listing page: {url}")
             page.goto(url, wait_until="domcontentloaded", timeout=self._page_timeout_ms)
@@ -145,16 +164,34 @@ class OddspediaClient:
             except Exception as wait_exc:
                 print(f"[scraper] wait_for_function timed out ({wait_exc}); evaluating __NUXT__ as-is")
 
+            # Wait for networkidle so client-side API calls can complete
+            try:
+                page.wait_for_load_state("networkidle", timeout=12000)
+            except Exception:
+                pass
+
             nuxt_data = page.evaluate("() => window.__NUXT__ || {}")
-            if not (nuxt_data or {}).get("data"):
+            # Only raise if __NUXT__ is entirely missing (Cloudflare challenge).
+            # data: [] means client-side page — handled below via API interception.
+            if "data" not in (nuxt_data or {}):
                 raise RuntimeError(
-                    "window.__NUXT__.data not found after page load – "
-                    "page may be a Cloudflare challenge or the site structure changed. "
+                    "window.__NUXT__ has no 'data' key – page may be a Cloudflare "
+                    "challenge or the site structure changed. "
                     f"Top-level __NUXT__ keys: {list((nuxt_data or {}).keys())}"
                 )
 
             records = self._build_records_from_nuxt(nuxt_data)
-            print(f"[scraper] Default page: {len(records)} matches")
+            print(f"[scraper] Default page: {len(records)} matches (SSR)")
+
+            # If SSR gave no match list, fall back to intercepted API responses
+            if not records:
+                print(
+                    f"[scraper] SSR matchList empty — trying "
+                    f"{len(listing_api_responses)} intercepted listing-page API responses"
+                )
+                records = self._build_records_from_api_responses(listing_api_responses)
+                print(f"[scraper] Built {len(records)} matches from intercepted API responses")
+
             if records:
                 m0 = records[0]
                 print(f"[scraper]   First match markets: {list(m0.get('markets', {}).keys())}")
@@ -283,7 +320,8 @@ class OddspediaClient:
 
             for record in records:
                 mid = str(record.get("match_id") or "")
-                match_url = match_urls.get(mid)
+                # Use URL from NUXT-built map first; fall back to URL stored in record
+                match_url = match_urls.get(mid) or record.get("url")
                 if not match_url:
                     continue
 
@@ -500,6 +538,69 @@ class OddspediaClient:
         return rows
 
     # ============================================================
+    # LISTING-PAGE API FALLBACK
+    # ============================================================
+
+    def _build_records_from_api_responses(
+        self,
+        api_responses: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """
+        Build match records from intercepted listing-page API responses.
+        Used when the page does not SSR the match list into __NUXT__.data
+        (e.g. Oddspedia MLS soccer page loads matches client-side).
+
+        Tries several common response shapes to find a match list.
+        """
+        for resp in api_responses:
+            endpoint = resp.get("url", "")
+            body = resp.get("body", {})
+            if not isinstance(body, dict):
+                continue
+
+            # Unwrap common envelope shapes
+            data = body.get("data") or body
+
+            # Some endpoints nest under a second "data" key
+            if isinstance(data, dict) and "data" in data and isinstance(data["data"], dict):
+                data = data["data"]
+
+            # Look for a list of match-like objects
+            candidates = [
+                data.get("matchList"),
+                data.get("matches"),
+                data.get("items"),
+                data.get("results"),
+                body.get("matchList"),
+                body.get("matches"),
+            ]
+
+            for candidate in candidates:
+                if not (isinstance(candidate, list) and candidate):
+                    continue
+                # Confirm it looks like a match list (has id + team slugs)
+                sample = candidate[0] if candidate else {}
+                if not isinstance(sample, dict):
+                    continue
+                has_id = sample.get("id") or sample.get("match_id") or sample.get("matchId")
+                has_teams = sample.get("ht") or sample.get("home_team") or sample.get("homeTeam")
+                if not (has_id and has_teams):
+                    continue
+
+                print(
+                    f"[scraper] Listing API match list found — "
+                    f"{len(candidate)} items from {endpoint[:80]}"
+                )
+                odds_data = data.get("odds") or body.get("odds") or {}
+                raw = {"matchList": candidate, "odds": odds_data, "sport": "soccer"}
+                built = self._build_records(raw)
+                if built:
+                    return built
+
+        print("[scraper] No match list found in intercepted listing-page API responses")
+        return []
+
+    # ============================================================
     # HELPERS
     # ============================================================
 
@@ -683,6 +784,12 @@ class OddspediaClient:
             match_id = match.get("id")
             match_odds = odds_by_match.get(str(match_id), {})
 
+            raw_url = match.get("url")
+            base = "https://www.oddspedia.com"
+            record_url: Optional[str] = None
+            if raw_url and isinstance(raw_url, str):
+                record_url = raw_url if raw_url.startswith("http") else base + raw_url
+
             record = {
                 "match_id": match_id,
                 "sport": sport,
@@ -693,6 +800,7 @@ class OddspediaClient:
                 "away_team_id": match.get("at_id"),
                 "inplay": match.get("inplay", False),
                 "league_id": match.get("league_id"),
+                "url": record_url,
                 "markets": {},
             }
 

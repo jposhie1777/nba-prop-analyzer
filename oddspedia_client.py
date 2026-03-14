@@ -609,26 +609,107 @@ class OddspediaClient:
                 if not (isinstance(candidate, list) and candidate):
                     continue
                 # Confirm it looks like a match list (has id + team slugs)
-                sample = candidate[0] if candidate else {}
-                if not isinstance(sample, dict):
-                    continue
-                has_id = sample.get("id") or sample.get("match_id") or sample.get("matchId")
-                has_teams = sample.get("ht") or sample.get("home_team") or sample.get("homeTeam")
-                if not (has_id and has_teams):
+                normalized = [
+                    self._normalise_listing_match(item)
+                    for item in candidate
+                    if isinstance(item, dict)
+                ]
+                normalized = [item for item in normalized if item and item.get("id")]
+                if not normalized:
                     continue
 
                 print(
                     f"[scraper] Listing API match list found — "
-                    f"{len(candidate)} items from {endpoint[:80]}"
+                    f"{len(normalized)} items from {endpoint[:80]}"
                 )
                 odds_data = data.get("odds") or body.get("odds") or {}
-                raw = {"matchList": candidate, "odds": odds_data, "sport": "soccer"}
+                raw = {"matchList": normalized, "odds": odds_data, "sport": "soccer"}
+                built = self._build_records(raw)
+                if built:
+                    return built
+
+            # Broader fallback: recursively scan payload for match-like objects
+            # in case Oddspedia changes envelope keys for listing endpoints.
+            scanned: List[Dict[str, Any]] = []
+            for item in self._extract_match_candidates(data):
+                normalized_item = self._normalise_listing_match(item)
+                if normalized_item and normalized_item.get("id"):
+                    scanned.append(normalized_item)
+            if scanned:
+                deduped: Dict[str, Dict[str, Any]] = {}
+                for item in scanned:
+                    deduped[str(item["id"])] = item
+                normalized = list(deduped.values())
+                print(
+                    f"[scraper] Listing API recursive scan found — "
+                    f"{len(normalized)} items from {endpoint[:80]}"
+                )
+                raw = {"matchList": normalized, "odds": data.get("odds") or {}, "sport": "soccer"}
                 built = self._build_records(raw)
                 if built:
                     return built
 
         print("[scraper] No match list found in intercepted listing-page API responses")
         return []
+
+    def _extract_match_candidates(self, node: Any) -> List[Dict[str, Any]]:
+        """Recursively collect dicts that look like match rows from API JSON."""
+        out: List[Dict[str, Any]] = []
+        stack: List[Any] = [node]
+        while stack:
+            cur = stack.pop()
+            if isinstance(cur, dict):
+                if any(k in cur for k in ("id", "match_id", "matchId", "event_id", "game_id")):
+                    out.append(cur)
+                for value in cur.values():
+                    if isinstance(value, (dict, list)):
+                        stack.append(value)
+            elif isinstance(cur, list):
+                for value in cur:
+                    if isinstance(value, (dict, list)):
+                        stack.append(value)
+        return out
+
+    def _normalise_listing_match(self, match: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Normalize variable listing-API match keys to Oddspedia `matchList` shape."""
+        match_id = (
+            match.get("id")
+            or match.get("match_id")
+            or match.get("matchId")
+            or match.get("event_id")
+            or match.get("game_id")
+        )
+        if match_id is None:
+            return None
+
+        home_team = (
+            match.get("ht")
+            or match.get("home_team")
+            or match.get("homeTeam")
+            or match.get("home")
+            or match.get("home_name")
+        )
+        away_team = (
+            match.get("at")
+            or match.get("away_team")
+            or match.get("awayTeam")
+            or match.get("away")
+            or match.get("away_name")
+        )
+
+        return {
+            "id": match_id,
+            "md": match.get("md") or match.get("starttime") or match.get("start_time") or match.get("date"),
+            "ht": home_team,
+            "at": away_team,
+            "ht_id": match.get("ht_id") or match.get("home_team_id") or match.get("homeTeamId"),
+            "at_id": match.get("at_id") or match.get("away_team_id") or match.get("awayTeamId"),
+            "inplay": match.get("inplay") or match.get("is_live") or False,
+            "league_id": match.get("league_id") or match.get("leagueId"),
+            "url": match.get("url") or match.get("match_url") or match.get("path"),
+            "ht_slug": match.get("ht_slug") or match.get("htSlug") or match.get("home_slug"),
+            "at_slug": match.get("at_slug") or match.get("atSlug") or match.get("away_slug"),
+        }
 
     def _build_records_from_dom(self, page: Any) -> List[Dict[str, Any]]:
         """

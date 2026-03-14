@@ -68,3 +68,18 @@ Tables created and loaded:
 Behavior:
 - Automatically creates dataset/table if missing.
 - Truncates each target table before loading the latest snapshot.
+
+## GitHub Actions access
+
+A workflow is available in GitHub Actions as **Oddspedia MLS Ingest** (`.github/workflows/oddspedia_mls_ingest.yml`).
+
+It supports:
+- Manual run via **Actions → Oddspedia MLS Ingest → Run workflow**
+- Optional daily schedule
+- Inputs:
+  - `input_dir` (defaults to `website_responses/mls`)
+  - `dry_run` (parse only, no BigQuery writes)
+
+Required secrets:
+- `PROJECT_ID`
+- `GOOGLE_APPLICATION_CREDENTIALS_JSON` (needed for non-dry-run writes)

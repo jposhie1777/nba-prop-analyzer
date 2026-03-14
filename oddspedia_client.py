@@ -123,16 +123,29 @@ class OddspediaClient:
             api_cache: Dict[str, Any] = {}
 
             def handle_response(resp):
+                """Cache any getMatchOdds XHR fired by the page.
 
+                The response body does NOT include match_id, so we extract it
+                from the URL query parameter instead.
+                """
                 if "getMatchOdds" not in resp.url:
                     return
 
                 if resp.status != 200:
                     return
 
+                # Extract matchId from the URL (reliable) before reading body
+                try:
+                    from urllib.parse import urlparse, parse_qs
+                    qs = parse_qs(urlparse(resp.url).query)
+                    url_mid = (qs.get("matchId") or qs.get("id") or [None])[0]
+                except Exception:
+                    url_mid = None
+
                 try:
                     data = resp.json()
-                    mid = data.get("data", {}).get("match_id")
+                    body_mid = (data.get("data") or {}).get("match_id")
+                    mid = body_mid or url_mid
 
                     if mid:
                         api_cache[str(mid)] = data
@@ -146,7 +159,7 @@ class OddspediaClient:
 
             page.goto(url, wait_until="domcontentloaded", timeout=self._page_timeout_ms)
 
-            # Expand matches so the API loads odds markets
+            # Attempt to expand match rows so the page fires getMatchOdds XHRs
             try:
                 page.evaluate("""
                     () => {
@@ -154,9 +167,9 @@ class OddspediaClient:
                         rows.forEach(r => r.click());
                     }
                 """)
-            except:
+            except Exception:
                 pass
-    
+
             page.wait_for_function(
                 "() => window.__NUXT__ && window.__NUXT__.data",
                 timeout=15000,
@@ -164,41 +177,72 @@ class OddspediaClient:
 
             nuxt_data = page.evaluate("() => window.__NUXT__")
 
-            # give page time to fire API calls
-            page.wait_for_timeout(6000)
+            # Give the page a moment to fire any background XHRs from click sim
+            page.wait_for_timeout(3000)
 
             records = self._build_records_from_nuxt(nuxt_data)
 
             # ---------------------------------------------------
-            # Fill api_cache for any matches missed by XHR interception.
-            # The listing-page click simulation is unreliable; calling
-            # getMatchOdds directly (without ot=) returns ALL periods,
-            # including 1st Set (204) and 2nd Set (205).
+            # For every match not captured by XHR interception, call
+            # getMatchOdds via in-page fetch().  Running in the browser
+            # context means Cloudflare cookies/TLS fingerprint are used
+            # automatically — context.request.get() is blocked by CF WAF.
+            #
+            # A single page.evaluate() sends all requests concurrently
+            # (batched to avoid rate-limiting) and returns the full map.
             # ---------------------------------------------------
 
-            for record in records:
+            missing_ids = [
+                str(r["match_id"])
+                for r in records
+                if r.get("match_id") and str(r["match_id"]) not in api_cache
+            ]
 
-                match_id = record.get("match_id")
+            print(
+                f"[scraper] XHR captured {len(api_cache)} matches; "
+                f"fetching {len(missing_ids)} via in-page fetch"
+            )
 
-                if not match_id or str(match_id) in api_cache:
-                    continue
-
+            if missing_ids:
                 try:
-                    resp = context.request.get(
-                        f"{_MATCH_ODDS_URL}?matchId={match_id}&{_MATCH_ODDS_PARAMS}",
-                        headers=_API_HEADERS,
-                        timeout=12000,
+                    fetched = page.evaluate(
+                        """
+                        async (matchIds) => {
+                            const BASE = 'https://www.oddspedia.com/api/v1/getMatchOdds';
+                            const PARAMS = 'language=us&geoCode=US&bookmakerGeoCode=US&bookmakerGeoState=VA';
+                            const BATCH = 8;
+                            const out = {};
+                            for (let i = 0; i < matchIds.length; i += BATCH) {
+                                const batch = matchIds.slice(i, i + BATCH);
+                                const results = await Promise.allSettled(
+                                    batch.map(mid =>
+                                        fetch(`${BASE}?matchId=${mid}&${PARAMS}`, {
+                                            headers: { 'Accept': 'application/json' }
+                                        })
+                                        .then(r => r.ok ? r.json() : null)
+                                        .then(data => data ? [mid, data] : null)
+                                        .catch(() => null)
+                                    )
+                                );
+                                for (const r of results) {
+                                    if (r.status === 'fulfilled' && r.value) {
+                                        out[r.value[0]] = r.value[1];
+                                    }
+                                }
+                            }
+                            return out;
+                        }
+                        """,
+                        missing_ids,
                     )
-                    if resp.status == 200:
-                        data = resp.json()
-                        mid = (data.get("data") or {}).get("match_id")
-                        if mid:
-                            api_cache[str(mid)] = data
-                        else:
-                            # store under the record's match_id as fallback
-                            api_cache[str(match_id)] = data
+
+                    if isinstance(fetched, dict):
+                        api_cache.update(fetched)
+                        print(f"[scraper] In-page fetch returned {len(fetched)} matches")
+
                 except Exception as exc:
-                    LOGGER.debug("getMatchOdds direct call failed for %s: %s", match_id, exc)
+                    LOGGER.warning("In-page fetch block failed: %s", exc)
+                    print(f"[scraper] In-page fetch error: {exc}")
 
             # ---------------------------------------------------
             # attach API market data
@@ -231,6 +275,12 @@ class OddspediaClient:
                         rows.append(market)
 
                 record["market_rows"] = rows
+
+            with_market_rows = sum(1 for r in records if r.get("market_rows"))
+            print(
+                f"[scraper] {with_market_rows}/{len(records)} records have market_rows "
+                f"(api_cache size={len(api_cache)})"
+            )
 
             browser.close()
 

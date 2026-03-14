@@ -1,0 +1,93 @@
+headers
+Request URL
+https://oddspedia.com/api/v1/getMatchMaxOddsByGroup?matchId=9780929&inplay=0&marketGroupId=6&geoCode=US&geoState=NY&language=us
+Request Method
+GET
+Status Code
+200 OK
+Remote Address
+104.18.34.121:443
+Referrer Policy
+strict-origin-when-cross-origin
+access-control-allow-headers
+Authorization, UserAgent, Origin, X-Auth-Token, Content-Type, X-User-Agent, sentry-trace
+access-control-allow-methods
+GET, POST, OPTIONS, PUT, PATCH, DELETE
+access-control-allow-origin
+*
+access-control-expose-headers
+Content-Security-Policy, Location, Cache-Control, Content-Language, Content-Type, Expires, Last-Modified, Pragma
+access-control-max-age
+600
+age
+0
+alt-svc
+h3=":443"; ma=86400
+cache-control
+private, no-cache
+cf-cache-status
+DYNAMIC
+cf-ray
+9dbfe9a678809a1a-EWR
+content-encoding
+br
+content-type
+text/html; charset=UTF-8
+date
+Sat, 14 Mar 2026 02:40:16 GMT
+priority
+u=1,i
+server
+cloudflare
+server-timing
+cfExtPri
+vary
+Accept-Encoding
+x-cache
+PASS
+x-cacheable
+NO
+x-varnish
+441870127
+:authority
+oddspedia.com
+:method
+GET
+:path
+/api/v1/getMatchMaxOddsByGroup?matchId=9780929&inplay=0&marketGroupId=6&geoCode=US&geoState=NY&language=us
+:scheme
+https
+accept
+application/json, text/plain, */*
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+en-US,en;q=0.9
+baggage
+sentry-environment=production,sentry-release=1.429.5,sentry-public_key=1bd38a2c35e12f90425da15c31a6f3e1,sentry-trace_id=f60731e5f30d424d960b8271d9a8ca6e
+cookie
+kndctr_9CE579FD5DCD8B590A495E09_AdobeOrg_identity=CiY3MjUwNTk1MzE5NTA1NjM0NDUzMTc4MjM5MjQ5MzgyNjQyNTkwN1ISCNybm7fOMxABGAEqA1ZBNjAA8AHcm5u3zjM=; SSSC=2.G7616926484288067348.1|226.101755; first_visit=no; HAOSSID=4df0f4154b220; __cflb=02DiuGPeMivJ1EyNVputTEMhoXkggnU9oCemhuUBvRGkU; adcloud={%22_les_v%22:%22c%2Cy%2Coddspedia.com%2C1773455700%22}; kndctr_9CE579FD5DCD8B590A495E09_AdobeOrg_cluster=va6; AMCV_9CE579FD5DCD8B590A495E09%40AdobeOrg=MCMID|72505953195056344531782392493826425907; _hjSessionUser_2725666=eyJpZCI6ImVlYjNhMzkwLTVkYjMtNTFkNC05NTRjLWUwZmQ3OWJkNGI3NCIsImNyZWF0ZWQiOjE3NzM0NTM5ODQ4NjcsImV4aXN0aW5nIjp0cnVlfQ==; _hjSession_2725666=eyJpZCI6IjJkZDkwYzU0LTc3MzktNGQ5OC04MzAzLWZiYTM2ZmViODVjNiIsImMiOjE3NzM0NTM5ODQ4NjksInMiOjEsInIiOjAsInNiIjowLCJzciI6MCwic2UiOjAsImZzIjoxLCJzcCI6MH0=; SSID=CQBFbR0AAAAAAABIwrRpFFdBAEjCtGkBAAAAAAAAAAAASMK0aQATkw; cf_clearance=xAzmDzsHu4SwnoIMRMrQixDDjudFUw6TzmIQs1g1JyA-1773454731-1.2.1.1-lI2rMCwkOH66F6AThTFSqrzG5C9llNGPG.fBjjJpRKxzSTPLXjHMU2kgJHRHy7qaF_Ey4dLUz1b6QL3SMQt1Nw_T_a5ItZEX_y4Sktm6dHjPDtvJEZ2BONyCGfryqKEZf9PJB4r3rVw0L50.EZIhWqe4BavyNqulFhrpoRlsrSAZir.XYtv3FmULiDoI_CipBBeaP4VYGGMsWmatYkRQQn4aNDnw22sNv.vO9ePY6AY; SSRT=1se0aQQBAA; __cf_bm=72RacJATPLA6J7wkkx3AQXKwLvcMvl0iwwMcMH0gYs8-1773455636.9226239-1.0.1.1-ZI8u9AarRoWUc6PtJAM0iUBGefBo4N3XnVNlTENBBHNowdCY1Llgt3lwF7ibhjlWf7j_qQAlQ8OwPh7evm5lJA6nxpWvoT8FEQLXOfRK7vVB8dKUeSvZCZdK.xyuWaf1; _v_id_l={%22_v_id%22:%2261659455657824581773453900245%22%2C%22_la%22:1773455919446}
+priority
+u=1, i
+referer
+https://oddspedia.com/us/soccer/new-york-red-bulls-toronto-fc-5566
+sec-ch-ua
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"macOS"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+sentry-trace
+f60731e5f30d424d960b8271d9a8ca6e-88caa1f703aec894
+user-agent
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+
+Response
+{"generated_at":"2026-03-14 02:40:16","data":{"market_name":"European Handicap","market_group_id":6,"waytype":3,"has_handicap":1,"outcome_names":["Home","Tie","Away"],"odds":{"600":{"main":{"winning_odd":null,"name":"-2\/+2","name_en":"-2","odds":{"o1":{"bid":495,"bookie_name":"FanDuel","bookie_slug":"fanduel","offer_id":332844359,"odds_value":"11","odds_direction":-1,"odds_link":"https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44784b_15c_&affid=16174&siteid=44784&adid=15&c=","odds_status":3,"bookie_color":"#0078FF"},"o2":{"bid":495,"bookie_name":"FanDuel","bookie_slug":"fanduel","offer_id":332844359,"odds_value":"7.5","odds_direction":1,"odds_link":"https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44784b_15c_&affid=16174&siteid=44784&adid=15&c=","odds_status":3,"bookie_color":"#0078FF"},"o3":{"bid":495,"bookie_name":"FanDuel","bookie_slug":"fanduel","offer_id":332844359,"odds_value":"1.11","odds_direction":-1,"odds_link":"https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44784b_15c_&affid=16174&siteid=44784&adid=15&c=","odds_status":3,"bookie_color":"#0078FF"}}},"alternative":[]}},"periods":[{"name":"Final","id":600}]}}

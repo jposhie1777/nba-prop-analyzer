@@ -1,0 +1,407 @@
+Header
+Request URL
+https://oddspedia.com/api/v1/getMatchInfo?geoCode=US&wettsteuer=0&r=wv&matchKey=5566&language=us
+Request Method
+GET
+Status Code
+200 OK
+Remote Address
+172.64.153.135:443
+Referrer Policy
+strict-origin-when-cross-origin
+access-control-allow-headers
+Authorization, UserAgent, Origin, X-Auth-Token, Content-Type, X-User-Agent, sentry-trace
+access-control-allow-methods
+GET, POST, OPTIONS, PUT, PATCH, DELETE
+access-control-allow-origin
+*
+access-control-expose-headers
+Content-Security-Policy, Location, Cache-Control, Content-Language, Content-Type, Expires, Last-Modified, Pragma
+access-control-max-age
+600
+age
+0
+alt-svc
+h3=":443"; ma=86400
+cache-control
+private, no-cache
+cf-cache-status
+DYNAMIC
+cf-ray
+9dbff2aa4e93b544-EWR
+content-encoding
+br
+content-type
+application/json
+date
+Sat, 14 Mar 2026 02:46:25 GMT
+priority
+u=1,i
+server
+cloudflare
+server-timing
+cfExtPri
+x-cache
+PASS
+x-cacheable
+NO
+x-varnish
+443003363
+:authority
+oddspedia.com
+:method
+GET
+:path
+/api/v1/getMatchInfo?geoCode=US&wettsteuer=0&r=wv&matchKey=5566&language=us
+:scheme
+https
+accept
+application/json, text/plain, */*
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+en-US,en;q=0.9
+baggage
+sentry-environment=production,sentry-release=1.429.5,sentry-public_key=1bd38a2c35e12f90425da15c31a6f3e1,sentry-trace_id=f60731e5f30d424d960b8271d9a8ca6e
+cookie
+kndctr_9CE579FD5DCD8B590A495E09_AdobeOrg_identity=CiY3MjUwNTk1MzE5NTA1NjM0NDUzMTc4MjM5MjQ5MzgyNjQyNTkwN1ISCNybm7fOMxABGAEqA1ZBNjAA8AHcm5u3zjM=; SSSC=2.G7616926484288067348.1|226.101755; first_visit=no; HAOSSID=4df0f4154b220; __cflb=02DiuGPeMivJ1EyNVputTEMhoXkggnU9oCemhuUBvRGkU; adcloud={%22_les_v%22:%22c%2Cy%2Coddspedia.com%2C1773455700%22}; kndctr_9CE579FD5DCD8B590A495E09_AdobeOrg_cluster=va6; AMCV_9CE579FD5DCD8B590A495E09%40AdobeOrg=MCMID|72505953195056344531782392493826425907; _hjSessionUser_2725666=eyJpZCI6ImVlYjNhMzkwLTVkYjMtNTFkNC05NTRjLWUwZmQ3OWJkNGI3NCIsImNyZWF0ZWQiOjE3NzM0NTM5ODQ4NjcsImV4aXN0aW5nIjp0cnVlfQ==; _hjSession_2725666=eyJpZCI6IjJkZDkwYzU0LTc3MzktNGQ5OC04MzAzLWZiYTM2ZmViODVjNiIsImMiOjE3NzM0NTM5ODQ4NjksInMiOjEsInIiOjAsInNiIjowLCJzciI6MCwic2UiOjAsImZzIjoxLCJzcCI6MH0=; SSID=CQBFbR0AAAAAAABIwrRpFFdBAEjCtGkBAAAAAAAAAAAASMK0aQATkw; cf_clearance=xAzmDzsHu4SwnoIMRMrQixDDjudFUw6TzmIQs1g1JyA-1773454731-1.2.1.1-lI2rMCwkOH66F6AThTFSqrzG5C9llNGPG.fBjjJpRKxzSTPLXjHMU2kgJHRHy7qaF_Ey4dLUz1b6QL3SMQt1Nw_T_a5ItZEX_y4Sktm6dHjPDtvJEZ2BONyCGfryqKEZf9PJB4r3rVw0L50.EZIhWqe4BavyNqulFhrpoRlsrSAZir.XYtv3FmULiDoI_CipBBeaP4VYGGMsWmatYkRQQn4aNDnw22sNv.vO9ePY6AY; SSRT=1se0aQQBAA; __cf_bm=72RacJATPLA6J7wkkx3AQXKwLvcMvl0iwwMcMH0gYs8-1773455636.9226239-1.0.1.1-ZI8u9AarRoWUc6PtJAM0iUBGefBo4N3XnVNlTENBBHNowdCY1Llgt3lwF7ibhjlWf7j_qQAlQ8OwPh7evm5lJA6nxpWvoT8FEQLXOfRK7vVB8dKUeSvZCZdK.xyuWaf1; _v_id_l={%22_v_id%22:%2261659455657824581773453900245%22%2C%22_la%22:1773456334526}
+priority
+u=1, i
+referer
+https://oddspedia.com/us/soccer/new-york-red-bulls-toronto-fc-5566
+sec-ch-ua
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"macOS"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+sentry-trace
+f60731e5f30d424d960b8271d9a8ca6e-88caa1f703aec894
+user-agent
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+Response
+{
+    "generated_at": "2026-03-14 02:42:59",
+    "data": {
+        "id": "9780929",
+        "def_ot": 100,
+        "sr_id": 66000430,
+        "starttime": "2026-03-14 17:00:00+00",
+        "md": "2026-03-14 17:00:00+00",
+        "sport_id": 1,
+        "sport_name": "Soccer",
+        "sport_name_en": "Football",
+        "sport_slug": "soccer",
+        "sport_slug_en": "football",
+        "country_id": 459,
+        "ccode": "US",
+        "category_name": "USA",
+        "category_slug": "usa",
+        "category_slug_en": "usa",
+        "is_summer_olympics": 0,
+        "is_winter_olympics": 0,
+        "league_id": 25,
+        "league_name": "MLS",
+        "league_name_en": "MLS",
+        "league_slug": "mls",
+        "league_slug_en": "mls",
+        "league_abbr": "MLS",
+        "league_primary_color": "#002868",
+        "league_accent_color": "#a5acaf",
+        "ht_id": 299,
+        "ht_form": "DLLLW?",
+        "ht_abbr": "TOR",
+        "ht": "Toronto FC",
+        "ht_slug": "toronto-fc",
+        "ht_slug_en": "toronto-fc",
+        "hscore": null,
+        "at_id": 116,
+        "at_form": "LLWWL?",
+        "at_abbr": "NYRB",
+        "at": "New York Red Bulls",
+        "at_slug": "new-york-red-bulls",
+        "at_slug_en": "new-york-red-bulls",
+        "ascore": null,
+        "ht_playoff_series": null,
+        "at_playoff_series": null,
+        "scorers": null,
+        "inplay_status": null,
+        "show_inplay_status": false,
+        "current_time": 0,
+        "additional_time": "",
+        "game_score": null,
+        "season_id": 137218,
+        "season_name": "MLS 2026",
+        "season_start_date": "2026-02-21 00:00:00+00",
+        "season_end_date": "2026-12-18 00:00:00+00",
+        "stage_id": 39745,
+        "stage_type": "league",
+        "stage_phase": "conference",
+        "stage_order": 1,
+        "stage_start_date": "2026-02-21 00:00:00+00",
+        "stage_end_date": "2026-11-08 00:00:00+00",
+        "group_id": 102468,
+        "stage_group_name": "MLS 2026",
+        "stage_group_max_rounds": 34,
+        "stage_group_group_name": null,
+        "referee_id": 314522,
+        "referee_type": "main_referee",
+        "referee_name": "Penso, Christopher",
+        "referee_country_code": "USA",
+        "referee_nationality": "USA",
+        "venue_id": 2294,
+        "venue_name": "BMO Field",
+        "venue_country_code": "CAN",
+        "venue_country": "Canada",
+        "venue_city": "Toronto, ON",
+        "venue_capacity": "30991",
+        "venue_lat": "43.633209",
+        "venue_lon": "-79.418564",
+        "surface": null,
+        "weather_conditions": {
+            "icon": "wind",
+            "temperature": -0.24
+        },
+        "matchstatus": 1,
+        "special_status": null,
+        "status": null,
+        "has_standings": 1,
+        "round_name": "Conference",
+        "to_show_standings": 0,
+        "short_periods_names": null,
+        "postmatch_status": null,
+        "prize_money": null,
+        "prize_currency": null,
+        "halftime": null,
+        "template": {
+            "title": "Toronto FC vs New York Red Bulls Betting Odds & Lines",
+            "description": "Toronto FC vs New York Red Bulls \u2771 14.03.2026 \u2771 Soccer \u2771 MLS \u2714\ufe0fOdds Comparison \u26a1 Livescore  \ud83c\udfc6 Best Betting Odds \u2b50 Stats",
+            "template": "Toronto FC plays against New York Red Bulls in a MLS game, and Soccer fans are looking forward to it. The event takes place on 14\/03\/2026 at 17:00 UTC.<\/p><p>&nbsp;<\/p><p>Oddspedia provides Toronto FC New York Red Bulls &nbsp;betting odds from 4 betting sites on 29 markets. Sportsbooks place Toronto FC as favorites to win the game at @ 2.45. Check the Toronto FC and New York Red Bulls team form, standings and head-to-head statistics here on the page. Additionally to the comprehensive pre-match and live betting odds, <a href='https:\/\/oddspedia.com\/us\/soccer'>Soccer<\/a> fast live scores, team lineups and commentary.&nbsp;<\/p><p>Will Toronto FC as the home team, take advantage and win the game?<\/p><h3>Find the best lines on Toronto FC vs New York Red Bulls!<\/h3><p>Compare the Toronto FC - New York Red Bulls betting odds and win more with today's best <a href='https:\/\/oddspedia.com\/us\/soccer\/odds'>Soccer Odds<\/a>.<\/p><p>Oddspedia provides <a href='https:\/\/oddspedia.com\/us\/soccer\/usa\/mls\/odds'>MLS Odds<\/a> and betting lines from 4 sportsbooks in 29 betting markets. The search for which site is offering top sports betting odds has come to an end!<\/p><h3>Toronto FC vs New York Red Bulls Tip and Winning Probabilities<\/h3><p>The betting tip for the winner in the game between Toronto FC v New York Red Bulls is:&nbsp;Toronto FC. The winner probabilities are:&nbsp;<b>40.82<\/b>% (Toronto FC), <b>28.57<\/b>% (X), <b>37.04<\/b>% (New York Red Bulls).<br><br>Also, for your analysis, we have the recent form of Toronto FC and New York Red Bulls, their standings and head-to-head statistics. In addition to this, we will also lavish the following information on you:<\/p><ul><li><strong>Comprehensive Pre-Match Odds<\/strong><\/li><li><strong>Team Lineups<\/strong><\/li><li><strong>In-Play (live) Betting Odds<\/strong><\/li><li><strong>Live Scores - as They Happen<\/strong><\/li><li><strong>Commentary - Match Event Viewer with Momentum<\/strong><\/li><\/ul><p>If you are wondering which betting site to choose for your Toronto FC vs New York Red Bulls bets, then explore <a href=\"https:\/\/oddspedia.com\/us\/sportsbooks\">the best sportsbooks<\/a> and<a href=\"https:\/\/oddspedia.com\/us\/sportsbooks\/betting-apps \"> betting apps for your state<\/a>. Don't forget to check the latest <a href=\"https:\/\/oddspedia.com\/us\/sportsbooks\/draftkings\/bonus\">DraftKings Promo Code<\/a>, <a href=\"https:\/\/oddspedia.com\/us\/sportsbooks\/betrivers\/bonus\">BetRivers Promo Code<\/a>, and other <a href=\"https:\/\/oddspedia.com\/us\/sportsbooks\/betting-offers\">sportsbook promos<\/a> currently available for you. &nbsp;<\/p><h3>Match details<\/h3><ul><li>Toronto FC vs&nbsp;New York Red Bulls<\/li><li><a href='https:\/\/oddspedia.com\/us\/soccer\/usa\/mls'>MLS<\/a>&nbsp;USA<\/li><li>Date -&nbsp;14\/03\/2026<\/li><li>Starting time -&nbsp;17:00 UTC<\/li><li>Venue:&nbsp;BMO Field,&nbsp;Toronto, ON, Canada<\/li><\/ul>",
+            "hasNextGame": 0,
+            "hasNextThreeGames": 0,
+            "created_at": "2025-07-23 10:10:55",
+            "updated_at": "2026-03-07 22:15:49",
+            "published_on": "2025-07-23 10:10:55",
+            "heading": null,
+            "expert_prediction": null
+        },
+        "match_keys": [
+            {
+                "statement": "The most common result of matches between Toronto FC and New York Red Bulls when Toronto FC is playing at home is 1-1. 6 matches have ended with this result.",
+                "teams": [
+                    299,
+                    116
+                ]
+            },
+            {
+                "statement": "During the last 23 meetings with Toronto FC playing at home, Toronto FC have won 7 times, there have been 9 draws while New York Red Bulls have won 7 times. The goal difference is 33-31 in favour of New York Red Bulls.",
+                "teams": [
+                    299,
+                    116
+                ]
+            },
+            {
+                "statement": "During the last 48 meetings, Toronto FC have won 10 times, there have been 12 draws while New York Red Bulls have won 26 times. The goal difference is 89-45 in favour of New York Red Bulls.",
+                "teams": [
+                    299,
+                    116
+                ]
+            },
+            {
+                "statement": "Toronto FC's last home win against New York Red Bulls was in 2019.",
+                "teams": [
+                    299,
+                    116
+                ]
+            },
+            {
+                "statement": "Last season's matches: 1-1 (Toronto FC at home) and 2-1 (New York Red Bulls at home).",
+                "teams": [
+                    299,
+                    116
+                ]
+            },
+            {
+                "statement": "Toronto FC have lost 3 matches in a row.",
+                "teams": [
+                    299
+                ]
+            },
+            {
+                "statement": "Toronto FC haven't won in their last 4 games.",
+                "teams": [
+                    299
+                ]
+            },
+            {
+                "statement": "Toronto FC haven't lost in any of their last 8 home matches.",
+                "teams": [
+                    299
+                ]
+            },
+            {
+                "statement": "Toronto FC wins 1st half in 15% of their matches, New York Red Bulls in 24% of their matches.",
+                "teams": [
+                    299,
+                    116
+                ]
+            },
+            {
+                "statement": "Toronto FC wins 15% of halftimes, New York Red Bulls wins 24%.",
+                "teams": [
+                    299,
+                    116
+                ]
+            },
+            {
+                "statement": "Their last meeting was a draw. (1-1)",
+                "teams": [
+                    299,
+                    116
+                ]
+            },
+            {
+                "statement": "When Toronto FC leads 1-0 at home, they win in 42% of their matches.",
+                "teams": [
+                    299
+                ]
+            },
+            {
+                "statement": "When New York Red Bulls leads 0-1 away, they win in 50% of their matches.",
+                "teams": [
+                    116
+                ]
+            },
+            {
+                "statement": "When Toronto FC is down 0-1 home, they win 0% of their matches.",
+                "teams": [
+                    299
+                ]
+            },
+            {
+                "statement": "When New York Red Bulls is down 1-0 away, they win 0% of their matches.",
+                "teams": [
+                    116
+                ]
+            },
+            {
+                "statement": "In MLS, New York Red Bulls has better performance than Toronto FC.",
+                "teams": [
+                    299,
+                    116
+                ]
+            },
+            {
+                "statement": "New York Red Bulls's performance of the last 5 matches is better than Toronto FC's.",
+                "teams": [
+                    299,
+                    116
+                ]
+            },
+            {
+                "statement": "New York Red Bulls have lost just 1 of their last 5 games against Toronto FC (in all competitions).",
+                "teams": [
+                    299,
+                    116
+                ]
+            },
+            {
+                "statement": "In the last 5 meetings Toronto FC won 1, New York Red Bulls won 3, 1 draws.",
+                "teams": [
+                    299,
+                    116
+                ]
+            },
+            {
+                "statement": "New York Red Bulls have lost just 0 of their last 5 MLS games against Toronto FC.",
+                "teams": [
+                    299,
+                    116
+                ]
+            },
+            {
+                "statement": "Toronto FC have won just 0 of their last 5 MLS games against New York Red Bulls.",
+                "teams": [
+                    299,
+                    116
+                ]
+            },
+            {
+                "statement": "Toronto FC scores 0.6 goals in a match against New York Red Bulls and New York Red Bulls scores 2 goals against Toronto FC (on average).",
+                "teams": [
+                    299,
+                    116
+                ]
+            },
+            {
+                "statement": "Average number of goals in meetings between Toronto FC and New York Red Bulls is 2.6.",
+                "teams": [
+                    299,
+                    116
+                ]
+            },
+            {
+                "statement": "Average number of goals in the first half in meetings between Toronto FC and New York Red Bulls is 0.8.",
+                "teams": [
+                    299,
+                    116
+                ]
+            },
+            {
+                "statement": "Toronto FC scores 1.05 goals when playing at home and New York Red Bulls scores 1.17 goals when playing away (on average).",
+                "teams": [
+                    299,
+                    116
+                ]
+            },
+            {
+                "statement": "Both teams haven't won their last match in MLS.",
+                "teams": [
+                    299,
+                    116
+                ]
+            },
+            {
+                "statement": "Both teams lost their last match.",
+                "teams": [
+                    299,
+                    116
+                ]
+            },
+            {
+                "statement": "Both teams didn't score on their last match.",
+                "teams": [
+                    299,
+                    116
+                ]
+            }
+        ],
+        "video": null,
+        "winner": null,
+        "btip_allowed": true,
+        "tips_allowed": true,
+        "match_key": 5566,
+        "is_match_archived": false,
+        "is_league_archived": false,
+        "is_match_tips_archived": false,
+        "is_match_current": true,
+        "has_sr_coverage": true,
+        "has_live_streaming": true,
+        "ht_shirt_color": "#ea121d",
+        "at_shirt_color": "#f2efe4",
+        "ht_red_cards": 0,
+        "at_red_cards": 0,
+        "aggregate_home_score": null,
+        "aggregate_away_score": null
+    },
+    "ch": [
+        "c-3c8dbc2994feaf82f1e38ffd5ac8fd8d4b879750"
+    ]
+}

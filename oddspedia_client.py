@@ -387,7 +387,7 @@ class OddspediaClient:
             total_market_rows = 0
             api_working: Optional[bool] = None  # None=untested, True=working, False=blocked
 
-           for record in records:
+            for record in records:
 
                 mid = str(record.get("match_id") or "")
 

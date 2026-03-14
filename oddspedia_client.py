@@ -59,6 +59,12 @@ _API_HEADERS = {
     "Referer": "https://www.oddspedia.com/us/tennis/odds",
 }
 
+# Per-match API – fetched via the live Playwright session (bypasses Cloudflare WAF)
+_PER_MATCH_API = "https://www.oddspedia.com/api/v1/getMatchMaxOddsByGroup"
+_PER_MATCH_PARAMS = "inplay=0&geoCode=US&geoState=NY&language=us"
+# Market group IDs to fetch for every match (201=Moneyline, 301=Spread, 401=Total Sets)
+_PER_MATCH_MARKET_GROUPS = [201, 301, 401]
+
 _NODE_EXTRACTOR = r"""
 const fs   = require('fs');
 const vm   = require('vm');
@@ -220,50 +226,35 @@ class OddspediaClient:
                 except Exception as exc:
                     print(f"[scraper] Extra load ot={ot_val} failed: {exc}")
 
-            # ── Navigate to first match page; read its __NUXT__ ───────────────
-            # The match page's SSR __NUXT__ contains the full per-match market
-            # data (all market groups, all periods).  Log its structure so we
-            # can implement proper per-match extraction in a follow-up commit.
+            # ── Per-match odds via getMatchMaxOddsByGroup API ─────────────────
+            # Use the live Playwright session (which has valid Cloudflare
+            # cookies) to call the per-match API for each match.  This gives
+            # all bookmakers and all lines (main + alternative) for every
+            # market group — far richer than the single best-odd from the
+            # listing-page SSR.
 
-            first_match_url = self._first_match_url(nuxt_data)
-            print(f"[scraper] First match URL: {first_match_url}")
-
-            if first_match_url:
-                try:
-                    page.goto(
-                        first_match_url,
-                        wait_until="domcontentloaded",
-                        timeout=30000,
-                    )
-                    # Match pages use a different NUXT layout — just wait for
-                    # any __NUXT__ to exist, don't require .data specifically.
-                    try:
-                        page.wait_for_function("() => !!window.__NUXT__", timeout=15000)
-                    except Exception:
-                        pass
-
-                    match_nuxt = page.evaluate("() => window.__NUXT__ || null")
-                    if not match_nuxt:
-                        print("[scraper] Match page: no __NUXT__ found")
-                    else:
-                        print(f"[scraper] Match page __NUXT__ top keys: {list(match_nuxt.keys())}")
-                        # Drill into every top-level key to find market/odds data
-                        for tk, tv in match_nuxt.items():
-                            if isinstance(tv, dict):
-                                print(f"[scraper]   .{tk} (dict) keys: {list(tv.keys())[:15]}")
-                                # One more level for promising keys
-                                for sk in ("data", "odds", "match", "markets", "matchOdds"):
-                                    sv = tv.get(sk)
-                                    if sv is not None:
-                                        if isinstance(sv, (dict, list)):
-                                            inner_keys = list(sv.keys())[:10] if isinstance(sv, dict) else f"list[{len(sv)}]"
-                                            print(f"[scraper]     .{tk}.{sk}: {inner_keys}")
-                            elif isinstance(tv, list):
-                                print(f"[scraper]   .{tk} (list[{len(tv)}])")
-                                if tv and isinstance(tv[0], dict):
-                                    print(f"[scraper]     [0] keys: {list(tv[0].keys())[:15]}")
-                except Exception as exc:
-                    print(f"[scraper] Match page load failed: {exc}")
+            print(
+                f"[scraper] Fetching per-match odds for {len(records)} matches "
+                f"× {len(_PER_MATCH_MARKET_GROUPS)} market groups …"
+            )
+            total_market_rows = 0
+            for record in records:
+                mid = str(record.get("match_id") or "")
+                if not mid:
+                    continue
+                all_market_rows: List[Dict[str, Any]] = []
+                for mg_id in _PER_MATCH_MARKET_GROUPS:
+                    body = self._fetch_per_match_api(page, mid, mg_id)
+                    if body:
+                        mrows = self._parse_per_match_to_market_rows(body, mid)
+                        all_market_rows.extend(mrows)
+                if all_market_rows:
+                    record["market_rows"] = all_market_rows
+                    total_market_rows += len(all_market_rows)
+            print(
+                f"[scraper] Per-match fetch complete: "
+                f"{total_market_rows} outcome rows across {len(records)} matches"
+            )
 
             # ── Summary ───────────────────────────────────────────────────────
             total_markets = sum(len(r.get("markets", {})) for r in records)
@@ -280,6 +271,164 @@ class OddspediaClient:
 
         return records
 
+
+    # ============================================================
+    # PER-MATCH API FETCHING
+    # ============================================================
+
+    def _fetch_per_match_api(
+        self, page: Any, match_id: str, market_group_id: int
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Call getMatchMaxOddsByGroup from within the live Playwright browser
+        session.  Because the request originates from a real browser context
+        with valid Cloudflare cookies it is not blocked by the WAF.
+        """
+        url = (
+            f"{_PER_MATCH_API}"
+            f"?matchId={match_id}&marketGroupId={market_group_id}&{_PER_MATCH_PARAMS}"
+        )
+        try:
+            result = page.evaluate(
+                """async (url) => {
+                    try {
+                        const r = await fetch(url, {
+                            headers: {'Accept': 'application/json'}
+                        });
+                        if (!r.ok) return null;
+                        return await r.json();
+                    } catch (e) {
+                        return null;
+                    }
+                }""",
+                url,
+            )
+            return result if isinstance(result, dict) else None
+        except Exception as exc:
+            print(
+                f"[scraper] per-match API failed "
+                f"matchId={match_id} mgId={market_group_id}: {exc}"
+            )
+            return None
+
+    def _parse_per_match_to_market_rows(
+        self, body: Dict[str, Any], match_id: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Convert a getMatchMaxOddsByGroup response body into the market_rows
+        format expected by oddspedia_odds_ingest._normalize_rich_market_rows().
+
+        Handles both shapes that the API can return per period:
+          • flat   {"odds": {"o1": ..., "o2": ...}, "winning_odd": ...}
+          • tiered {"main": {...}, "alternative": [{...}, ...]}
+        """
+        data = body.get("data") or {}
+        periods_list = body.get("periods") or []
+        periods_by_id = {
+            str(p["id"]): p.get("name")
+            for p in periods_list
+            if isinstance(p, dict) and "id" in p
+        }
+
+        outcome_names: List[str] = data.get("outcome_names") or []
+        market_group_id = data.get("market_group_id")
+        market_name_full: str = data.get("market_name") or "market"
+        market_slug = market_name_full.lower().replace(" ", "_")
+
+        rows: List[Dict[str, Any]] = []
+
+        for period_key, period_obj in (data.get("odds") or {}).items():
+            if not isinstance(period_obj, dict):
+                continue
+
+            period_id = _safe_int_local(period_key)
+            period_name = periods_by_id.get(str(period_key))
+
+            # Determine entry list (main line + any alternative lines)
+            if "main" in period_obj:
+                entries: List[tuple] = []
+                main = period_obj.get("main")
+                if isinstance(main, dict):
+                    entries.append((None, main))   # main line: line_value=None
+                for alt in (period_obj.get("alternative") or []):
+                    if isinstance(alt, dict):
+                        entries.append(("alternative", alt))
+            else:
+                entries = [(None, period_obj)]
+
+            for _line_type, entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+
+                line_value = entry.get("name")   # e.g. "-3.5 Games" or None
+                odds_dict = entry.get("odds") or {}
+
+                # Convenience: grab o1/o2 decimals for the whole entry row
+                o1_obj = odds_dict.get("o1") or {}
+                o2_obj = odds_dict.get("o2") or {}
+                home_dec = _parse_float(o1_obj.get("odds_value"))
+                away_dec = _parse_float(o2_obj.get("odds_value"))
+
+                for idx, (outcome_key, odd_obj) in enumerate(odds_dict.items(), start=1):
+                    if not isinstance(odd_obj, dict):
+                        continue
+
+                    # Resolve outcome name from the outcome_names array
+                    try:
+                        key_num = int(outcome_key.lstrip("o")) - 1
+                        outcome_name = (
+                            outcome_names[key_num]
+                            if 0 <= key_num < len(outcome_names)
+                            else outcome_key
+                        )
+                    except (ValueError, AttributeError):
+                        outcome_name = outcome_key
+
+                    # Map o1→home, o2→away, anything else→None
+                    if outcome_key == "o1":
+                        outcome_side = "home"
+                    elif outcome_key == "o2":
+                        outcome_side = "away"
+                    else:
+                        outcome_side = None
+
+                    odds_dec = _parse_float(odd_obj.get("odds_value"))
+
+                    rows.append(
+                        {
+                            "market_group_id": market_group_id,
+                            "market_group_name": market_name_full,
+                            "market": market_slug,
+                            "period_id": period_id,
+                            "period_name": period_name,
+                            "bookie_id": odd_obj.get("bid"),
+                            "bookie": odd_obj.get("bookie_name"),
+                            "bookie_slug": odd_obj.get("bookie_slug"),
+                            "outcome_key": outcome_key,
+                            "outcome_name": outcome_name,
+                            "outcome_side": outcome_side,
+                            "outcome_order": idx,
+                            "odds_decimal": odds_dec,
+                            "odds_american": _decimal_to_american(odds_dec),
+                            "odds_status": odd_obj.get("odds_status"),
+                            "odds_direction": odd_obj.get("odds_direction"),
+                            "line_value": line_value,
+                            "home_handicap": None,
+                            "away_handicap": None,
+                            "handicap_label": None,
+                            "winning_side": entry.get("winning_odd"),
+                            "bet_link": odd_obj.get("odds_link"),
+                            # Convenience columns: both sides' decimals on every row
+                            "home_odds_decimal": home_dec,
+                            "away_odds_decimal": away_dec,
+                            "home_odds_american": _decimal_to_american(home_dec),
+                            "away_odds_american": _decimal_to_american(away_dec),
+                            "market_json": data,
+                            "outcome_json": odd_obj,
+                        }
+                    )
+
+        return rows
 
     # ============================================================
     # HELPERS

@@ -90,6 +90,7 @@ from ingest.laliga.ingest import ingest_yesterday_refresh as ingest_laliga_yeste
 from ingest.mls.ingest import ingest_yesterday_refresh as ingest_mls_yesterday_refresh
 from ingest.mls.mls_website_ingest import run_website_ingestion as ingest_mls_website_daily
 from ingest.sheets.sync_soccer_odds_to_bq import sync_soccer_odds_to_bq
+from ingest.atp.oddspedia_odds_ingest import ingest_atp_odds
 
 # ==================================================
 # Game Advanced Stats V2 imports
@@ -632,6 +633,55 @@ async def startup():
 
         asyncio.create_task(mls_website_daily_refresh_loop())
         print("[STARTUP] -> MLS website daily refresh loop started")
+
+        # -----------------------------
+        # DAILY: ATP odds ingest (runs at 7:30 AM ET)
+        # -----------------------------
+        async def atp_odds_daily_loop():
+            """
+            Daily loop that scrapes Oddspedia ATP odds (all bookmakers, all
+            lines) via the automated Playwright pipeline and loads them into
+            BigQuery (oddspedia.atp_odds).  Runs at 7:30 AM ET.
+            """
+            INGEST_HOUR = 7
+            INGEST_MINUTE = 30
+
+            print("[ATP_ODDS] Daily ingest loop started")
+            print(f"[ATP_ODDS] Scheduled to run at {INGEST_HOUR}:{INGEST_MINUTE:02d} AM ET")
+
+            while True:
+                try:
+                    now = datetime.now(NY_TZ)
+                    next_run = now.replace(
+                        hour=INGEST_HOUR,
+                        minute=INGEST_MINUTE,
+                        second=0,
+                        microsecond=0,
+                    )
+                    if now >= next_run:
+                        next_run = next_run + timedelta(days=1)
+
+                    wait_seconds = (next_run - now).total_seconds()
+                    print(
+                        f"[ATP_ODDS] Next run: {next_run.strftime('%Y-%m-%d %I:%M %p ET')}"
+                        f" ({wait_seconds/3600:.1f} hours)"
+                    )
+                    await asyncio.sleep(wait_seconds)
+
+                    print(
+                        f"\n[ATP_ODDS] ======== DAILY INGEST @"
+                        f" {datetime.now(NY_TZ).strftime('%I:%M %p ET')} ========"
+                    )
+                    result = await asyncio.to_thread(ingest_atp_odds)
+                    print(f"[ATP_ODDS] Result: {result}")
+                    print("[ATP_ODDS] Daily ingest complete\n")
+
+                except Exception as e:
+                    print(f"[ATP_ODDS] ERROR in daily loop: {e}")
+                    await asyncio.sleep(3600)
+
+        asyncio.create_task(atp_odds_daily_loop())
+        print("[STARTUP] -> ATP odds daily ingest loop started")
 
         # -----------------------------
         # HOURLY: Pre-game Game Odds ingest (runs every hour until games start)

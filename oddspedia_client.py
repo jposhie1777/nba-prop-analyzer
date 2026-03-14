@@ -30,6 +30,7 @@ Usage:
 from __future__ import annotations
 
 import json
+from collections import defaultdict
 import logging
 import subprocess
 import tempfile
@@ -340,7 +341,6 @@ class OddspediaClient:
             # 50 pages that won't produce data.
 
             import re
-            from collections import defaultdict
 
             match_urls = self._build_all_match_urls(nuxt_data)
             print(

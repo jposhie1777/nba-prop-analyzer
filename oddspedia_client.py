@@ -364,7 +364,7 @@ class OddspediaClient:
                 if not mid:
                     continue
                 raw_url = m.get("url")
-                if raw_url and isinstance(raw_url, str) and "/tennis/" in raw_url:
+                if raw_url and isinstance(raw_url, str):
                     base = "https://www.oddspedia.com"
                     urls[mid] = (
                         raw_url if raw_url.startswith("http") else base + raw_url
@@ -374,7 +374,7 @@ class OddspediaClient:
                 at_slug = m.get("at_slug") or m.get("atSlug")
                 if ht_slug and at_slug:
                     urls[mid] = (
-                        f"https://www.oddspedia.com/us/tennis/{ht_slug}-{at_slug}-{mid}"
+                        f"https://www.oddspedia.com/us/soccer/mls/{ht_slug}-{at_slug}-{mid}"
                     )
         except Exception as exc:
             print(f"[scraper] _build_all_match_urls error: {exc}")
@@ -548,7 +548,7 @@ class OddspediaClient:
                 at_slug = m.get("at_slug") or m.get("atSlug")
                 mid = m.get("id") or m.get("match_id") or m.get("matchId")
                 raw_url = m.get("url")
-                if raw_url and isinstance(raw_url, str) and "/tennis/" in raw_url:
+                if raw_url and isinstance(raw_url, str):
                     base = "https://www.oddspedia.com"
                     return raw_url if raw_url.startswith("http") else base + raw_url
                 if ht_slug and at_slug:

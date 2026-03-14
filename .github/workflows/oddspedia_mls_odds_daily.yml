@@ -1,0 +1,74 @@
+name: Oddspedia MLS Live Odds Ingest
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (scrape + print rows, no BigQuery writes)"
+        required: false
+        type: boolean
+        default: false
+      all_dates:
+        description: "Include all dates on page (default: today only)"
+        required: false
+        type: boolean
+        default: false
+      url:
+        description: "Override Oddspedia MLS URL (leave blank for default)"
+        required: false
+        default: ""
+  schedule:
+    # Daily at 14:00 UTC (10 AM ET) — after morning lineup locks
+    - cron: "0 14 * * *"
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+      ODDSPEDIA_DATASET: "oddspedia"
+      ODDSPEDIA_BQ_LOCATION: "US"
+      ODDSPEDIA_MLS_TABLE: "mls_odds"
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r mobile_api/requirements.txt
+
+      - name: Install Playwright + Chromium
+        run: |
+          pip install playwright
+          playwright install chromium
+          playwright install-deps chromium
+
+      - name: Configure GCP credentials
+        if: ${{ inputs.dry_run != true }}
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
+
+      - name: Set URL override (if provided)
+        if: ${{ inputs.url != '' }}
+        run: echo "ODDSPEDIA_MLS_URL=${{ inputs.url }}" >> $GITHUB_ENV
+
+      - name: Run Oddspedia MLS live odds ingest
+        run: |
+          ARGS=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          if [ "${{ inputs.all_dates }}" = "true" ]; then
+            ARGS="$ARGS --all-dates"
+          fi
+          python -m mobile_api.ingest.mls.oddspedia_mls_odds_ingest $ARGS

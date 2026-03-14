@@ -1,0 +1,322 @@
+Headers
+Request URL
+https://oddspedia.com/api/v1/getMatchMaxOddsByGroup?r=si&inplay=0&matchId=9982320&marketGroupId=4&geoCode=US&geoState=VA&language=us
+Request Method
+GET
+Status Code
+200 OK
+Remote Address
+172.64.153.135:443
+Referrer Policy
+strict-origin-when-cross-origin
+access-control-allow-headers
+Authorization, UserAgent, Origin, X-Auth-Token, Content-Type, X-User-Agent, sentry-trace
+access-control-allow-methods
+GET, POST, OPTIONS, PUT, PATCH, DELETE
+access-control-allow-origin
+*
+access-control-expose-headers
+Content-Security-Policy, Location, Cache-Control, Content-Language, Content-Type, Expires, Last-Modified, Pragma
+access-control-max-age
+600
+age
+0
+alt-svc
+h3=":443"; ma=86400
+cache-control
+private, no-cache
+cf-cache-status
+DYNAMIC
+cf-ray
+9dc3532138b0d93c-EWR
+content-encoding
+br
+content-type
+application/json
+date
+Sat, 14 Mar 2026 12:36:34 GMT
+server
+cloudflare
+x-cache
+PASS
+x-cacheable
+NO
+x-varnish
+701697899
+:authority
+oddspedia.com
+:method
+GET
+:path
+/api/v1/getMatchMaxOddsByGroup?r=si&inplay=0&matchId=9982320&marketGroupId=4&geoCode=US&geoState=VA&language=us
+:scheme
+https
+accept
+application/json, text/plain, */*
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+en-US,en;q=0.9
+baggage
+sentry-environment=production,sentry-release=1.429.5,sentry-public_key=1bd38a2c35e12f90425da15c31a6f3e1,sentry-trace_id=0f62748852bc4e469c1488bea996ac8b
+cookie
+first_visit=no; AMCV_9CE579FD5DCD8B590A495E09%40AdobeOrg=MCMID|13437522215837061981434173506207755149; _hjSessionUser_2725666=eyJpZCI6IjA3NjVmODk5LWFiNDctNTI0ZS04YTdmLWRhMzAxNmVlYTExNCIsImNyZWF0ZWQiOjE3NzMxNzEwNjAxMDYsImV4aXN0aW5nIjp0cnVlfQ==; accept-cookies=true; accept-tracking-cookies=true; __cflb=02DiuGPeMivJ1EyNVputTEMhoXkggnU9oxVfms6dvXnqJ; kndctr_9CE579FD5DCD8B590A495E09_AdobeOrg_identity=CiYxMzQzNzUyMjIxNTgzNzA2MTk4MTQzNDE3MzUwNjIwNzc1NTE0OVIQCP%5Fb7MnNMxgBKgNWQTYwAfAB4KSfx84z; SSID=CQCP0B0AAAAAAABwcbBpXpZAAHBxsGkFAAAAAAAAAAAANla1aQATkw; SSSC=2.G7615711695738017374.5|0.0; SSRT=Nla1aQQBAA; HAOSSID=27d55f15b40ff; cf_clearance=uEj2VXr_lnoBi08vDUIBCalY4Bo.QoguSJSvdWdQuKM-1773491768-1.2.1.1-enSnLcs.KCs1aKa1_AuMPmooJoWW2a9Zy0Bwa9hEz_OPfwL0HJ5EA9b4V4fBSmjg26_Rb30OZwRLZFY1S.YqQOfGI7PnKs_zvxJMDphnMqn9qzn3GYzJyRTP5ID0YIG43DZC6kkAcrouUuy0zMvBS5gGEdBqleCMTXereIciO1VCdKj67B9nt.sThluvxcH1zcG4Juxjt4F2buNKuEQykMRvnTdr840WR.ExKidG4cA; __cf_bm=5DFmmL.X5Fp385tHt.3VXn9Q85hADqPWqLglchuQ7GE-1773491768.8271875-1.0.1.1-Z4MmxQAV989YnHtbNC9F6gE3yl9c2KJlWvzuqDT.Mra3ZSo.i63579pQOQMOJcdaShwIkp0nYK5gvOeULucTLlVLs4ppQTFQ79CADo9ZEhpBIW37Kob3fjxlDZ63fCER; adcloud={%22_les_v%22:%22c%2Cy%2Coddspedia.com%2C1773493569%22}; kndctr_9CE579FD5DCD8B590A495E09_AdobeOrg_cluster=va6; _hjSession_2725666=eyJpZCI6IjRkYjZlNWNlLTFjNzctNDU2Mi04YTMwLTExOTVjMGY1MjRlYSIsImMiOjE3NzM0OTE3ODQ3MDgsInMiOjAsInIiOjAsInNiIjowLCJzciI6MCwic2UiOjAsImZzIjowLCJzcCI6MH0=; _v_id_l={%22_v_id%22:%2280890895515017661773491769338%22%2C%22_la%22:1773491789214}
+priority
+u=1, i
+referer
+https://oddspedia.com/us/a/tennis/alexander-zverev-jannik-sinner-390332
+sec-ch-ua
+"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+sentry-trace
+0f62748852bc4e469c1488bea996ac8b-88e1b2d49d31572c
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36
+
+
+
+Response
+{
+    "generated_at": "2026-03-14 12:36:34",
+    "data": {
+        "market_name": "Total",
+        "market_group_id": 4,
+        "waytype": 2,
+        "has_handicap": 1,
+        "outcome_names": [
+            "Over",
+            "Under"
+        ],
+        "odds": {
+            "401": {
+                "main": {
+                    "winning_odd": null,
+                    "name": "21.5 Games",
+                    "name_en": "21.5 Games",
+                    "odds": {
+                        "o1": {
+                            "bid": 126,
+                            "bookie_name": "bet365",
+                            "bookie_slug": "bet365",
+                            "offer_id": 1913107805,
+                            "odds_value": "1.8",
+                            "odds_direction": 1,
+                            "odds_link": "https:\/\/www.bet365.com\/dl\/sportsbookredirect?affiliatecode=365_00917427&affiliate=365_00917427&bs=191210771-823885242~1.800~10&bet=1",
+                            "odds_status": 3,
+                            "bookie_color": "#126d50"
+                        },
+                        "o2": {
+                            "bid": 126,
+                            "bookie_name": "bet365",
+                            "bookie_slug": "bet365",
+                            "offer_id": 1913107805,
+                            "odds_value": "1.909",
+                            "odds_direction": -1,
+                            "odds_link": "https:\/\/www.bet365.com\/dl\/sportsbookredirect?affiliatecode=365_00917427&affiliate=365_00917427&bs=191210771-823884947~1.909~10&bet=1",
+                            "odds_status": 3,
+                            "bookie_color": "#126d50"
+                        }
+                    }
+                },
+                "alternative": []
+            },
+            "407": {
+                "main": {
+                    "winning_odd": null,
+                    "name": "9.5 Games",
+                    "name_en": "9.5 Games",
+                    "odds": {
+                        "o1": {
+                            "bid": 126,
+                            "bookie_name": "bet365",
+                            "bookie_slug": "bet365",
+                            "offer_id": 1913107809,
+                            "odds_value": "1.833",
+                            "odds_direction": 1,
+                            "odds_link": "https:\/\/www.bet365.com\/dl\/sportsbookredirect?affiliatecode=365_00917427&affiliate=365_00917427&bs=191210771-823898372~1.833~10&bet=1",
+                            "odds_status": 3,
+                            "bookie_color": "#126d50"
+                        },
+                        "o2": {
+                            "bid": 126,
+                            "bookie_name": "bet365",
+                            "bookie_slug": "bet365",
+                            "offer_id": 1913107809,
+                            "odds_value": "1.833",
+                            "odds_direction": -1,
+                            "odds_link": "https:\/\/www.bet365.com\/dl\/sportsbookredirect?affiliatecode=365_00917427&affiliate=365_00917427&bs=191210771-823898096~1.833~10&bet=1",
+                            "odds_status": 3,
+                            "bookie_color": "#126d50"
+                        }
+                    }
+                },
+                "alternative": [
+                    {
+                        "winning_odd": null,
+                        "name": "6.5 Games",
+                        "name_en": "6.5 Games",
+                        "odds": {
+                            "o1": {
+                                "bid": 126,
+                                "bookie_name": "bet365",
+                                "bookie_slug": "bet365",
+                                "offer_id": 1913107806,
+                                "odds_value": "1.01",
+                                "odds_direction": 0,
+                                "odds_link": "https:\/\/www.bet365.com\/dl\/sportsbookredirect?affiliatecode=365_00917427&affiliate=365_00917427&bs=191210771-823886529~1.010~10&bet=1",
+                                "odds_status": 3,
+                                "bookie_color": "#126d50"
+                            },
+                            "o2": {
+                                "bid": 126,
+                                "bookie_name": "bet365",
+                                "bookie_slug": "bet365",
+                                "offer_id": 1913107806,
+                                "odds_value": "29",
+                                "odds_direction": -1,
+                                "odds_link": "https:\/\/www.bet365.com\/dl\/sportsbookredirect?affiliatecode=365_00917427&affiliate=365_00917427&bs=191210771-823886274~29.000~10&bet=1",
+                                "odds_status": 3,
+                                "bookie_color": "#126d50"
+                            }
+                        }
+                    },
+                    {
+                        "winning_odd": null,
+                        "name": "7.5 Games",
+                        "name_en": "7.5 Games",
+                        "odds": {
+                            "o1": {
+                                "bid": 126,
+                                "bookie_name": "bet365",
+                                "bookie_slug": "bet365",
+                                "offer_id": 1913107807,
+                                "odds_value": "1.083",
+                                "odds_direction": 1,
+                                "odds_link": "https:\/\/www.bet365.com\/dl\/sportsbookredirect?affiliatecode=365_00917427&affiliate=365_00917427&bs=191210771-823896764~1.083~10&bet=1",
+                                "odds_status": 3,
+                                "bookie_color": "#126d50"
+                            },
+                            "o2": {
+                                "bid": 126,
+                                "bookie_name": "bet365",
+                                "bookie_slug": "bet365",
+                                "offer_id": 1913107807,
+                                "odds_value": "8",
+                                "odds_direction": -1,
+                                "odds_link": "https:\/\/www.bet365.com\/dl\/sportsbookredirect?affiliatecode=365_00917427&affiliate=365_00917427&bs=191210771-823896541~8.000~10&bet=1",
+                                "odds_status": 3,
+                                "bookie_color": "#126d50"
+                            }
+                        }
+                    },
+                    {
+                        "winning_odd": null,
+                        "name": "8.5 Games",
+                        "name_en": "8.5 Games",
+                        "odds": {
+                            "o1": {
+                                "bid": 126,
+                                "bookie_name": "bet365",
+                                "bookie_slug": "bet365",
+                                "offer_id": 1913107808,
+                                "odds_value": "1.222",
+                                "odds_direction": 1,
+                                "odds_link": "https:\/\/www.bet365.com\/dl\/sportsbookredirect?affiliatecode=365_00917427&affiliate=365_00917427&bs=191210771-823897759~1.222~10&bet=1",
+                                "odds_status": 3,
+                                "bookie_color": "#126d50"
+                            },
+                            "o2": {
+                                "bid": 126,
+                                "bookie_name": "bet365",
+                                "bookie_slug": "bet365",
+                                "offer_id": 1913107808,
+                                "odds_value": "4",
+                                "odds_direction": -1,
+                                "odds_link": "https:\/\/www.bet365.com\/dl\/sportsbookredirect?affiliatecode=365_00917427&affiliate=365_00917427&bs=191210771-823897174~4.000~10&bet=1",
+                                "odds_status": 3,
+                                "bookie_color": "#126d50"
+                            }
+                        }
+                    },
+                    {
+                        "winning_odd": null,
+                        "name": "10.5 Games",
+                        "name_en": "10.5 Games",
+                        "odds": {
+                            "o1": {
+                                "bid": 126,
+                                "bookie_name": "bet365",
+                                "bookie_slug": "bet365",
+                                "offer_id": 1913107810,
+                                "odds_value": "3.25",
+                                "odds_direction": 1,
+                                "odds_link": "https:\/\/www.bet365.com\/dl\/sportsbookredirect?affiliatecode=365_00917427&affiliate=365_00917427&bs=191210771-823899291~3.250~10&bet=1",
+                                "odds_status": 3,
+                                "bookie_color": "#126d50"
+                            },
+                            "o2": {
+                                "bid": 126,
+                                "bookie_name": "bet365",
+                                "bookie_slug": "bet365",
+                                "offer_id": 1913107810,
+                                "odds_value": "1.333",
+                                "odds_direction": -1,
+                                "odds_link": "https:\/\/www.bet365.com\/dl\/sportsbookredirect?affiliatecode=365_00917427&affiliate=365_00917427&bs=191210771-823898624~1.333~10&bet=1",
+                                "odds_status": 3,
+                                "bookie_color": "#126d50"
+                            }
+                        }
+                    },
+                    {
+                        "winning_odd": null,
+                        "name": "12.5 Games",
+                        "name_en": "12.5 Games",
+                        "odds": {
+                            "o1": {
+                                "bid": 126,
+                                "bookie_name": "bet365",
+                                "bookie_slug": "bet365",
+                                "offer_id": 1913107811,
+                                "odds_value": "4.333",
+                                "odds_direction": 1,
+                                "odds_link": "https:\/\/www.bet365.com\/dl\/sportsbookredirect?affiliatecode=365_00917427&affiliate=365_00917427&bs=191210771-823900067~4.333~10&bet=1",
+                                "odds_status": 3,
+                                "bookie_color": "#126d50"
+                            },
+                            "o2": {
+                                "bid": 126,
+                                "bookie_name": "bet365",
+                                "bookie_slug": "bet365",
+                                "offer_id": 1913107811,
+                                "odds_value": "1.2",
+                                "odds_direction": -1,
+                                "odds_link": "https:\/\/www.bet365.com\/dl\/sportsbookredirect?affiliatecode=365_00917427&affiliate=365_00917427&bs=191210771-823899736~1.200~10&bet=1",
+                                "odds_status": 3,
+                                "bookie_color": "#126d50"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        "periods": [
+            {
+                "name": "Final",
+                "id": 401
+            },
+            {
+                "name": "1st Set",
+                "id": 407
+            }
+        ]
+    }
+}

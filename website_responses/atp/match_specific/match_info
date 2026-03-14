@@ -1,0 +1,219 @@
+URL
+https://oddspedia.com/us/a/tennis/alexander-zverev-jannik-sinner-390332
+
+Headers
+Request URL
+https://oddspedia.com/api/v1/getMatchInfo?geoCode=US&wettsteuer=0&r=wv&matchKey=390332&language=us
+Request Method
+GET
+Status Code
+200 OK
+Remote Address
+172.64.153.135:443
+Referrer Policy
+strict-origin-when-cross-origin
+access-control-allow-headers
+Authorization, UserAgent, Origin, X-Auth-Token, Content-Type, X-User-Agent, sentry-trace
+access-control-allow-methods
+GET, POST, OPTIONS, PUT, PATCH, DELETE
+access-control-allow-origin
+*
+access-control-expose-headers
+Content-Security-Policy, Location, Cache-Control, Content-Language, Content-Type, Expires, Last-Modified, Pragma
+access-control-max-age
+600
+age
+0
+alt-svc
+h3=":443"; ma=86400
+cache-control
+private, no-cache
+cf-cache-status
+DYNAMIC
+cf-ray
+9dc353c2fff2d93c-EWR
+content-encoding
+br
+content-type
+application/json
+date
+Sat, 14 Mar 2026 12:37:00 GMT
+server
+cloudflare
+x-cache
+PASS
+x-cacheable
+NO
+x-varnish
+455660561
+:authority
+oddspedia.com
+:method
+GET
+:path
+/api/v1/getMatchInfo?geoCode=US&wettsteuer=0&r=wv&matchKey=390332&language=us
+:scheme
+https
+accept
+application/json, text/plain, */*
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+en-US,en;q=0.9
+baggage
+sentry-environment=production,sentry-release=1.429.5,sentry-public_key=1bd38a2c35e12f90425da15c31a6f3e1,sentry-trace_id=0f62748852bc4e469c1488bea996ac8b
+cookie
+first_visit=no; AMCV_9CE579FD5DCD8B590A495E09%40AdobeOrg=MCMID|13437522215837061981434173506207755149; _hjSessionUser_2725666=eyJpZCI6IjA3NjVmODk5LWFiNDctNTI0ZS04YTdmLWRhMzAxNmVlYTExNCIsImNyZWF0ZWQiOjE3NzMxNzEwNjAxMDYsImV4aXN0aW5nIjp0cnVlfQ==; accept-cookies=true; accept-tracking-cookies=true; __cflb=02DiuGPeMivJ1EyNVputTEMhoXkggnU9oxVfms6dvXnqJ; kndctr_9CE579FD5DCD8B590A495E09_AdobeOrg_identity=CiYxMzQzNzUyMjIxNTgzNzA2MTk4MTQzNDE3MzUwNjIwNzc1NTE0OVIQCP%5Fb7MnNMxgBKgNWQTYwAfAB4KSfx84z; SSID=CQCP0B0AAAAAAABwcbBpXpZAAHBxsGkFAAAAAAAAAAAANla1aQATkw; SSSC=2.G7615711695738017374.5|0.0; SSRT=Nla1aQQBAA; HAOSSID=27d55f15b40ff; cf_clearance=uEj2VXr_lnoBi08vDUIBCalY4Bo.QoguSJSvdWdQuKM-1773491768-1.2.1.1-enSnLcs.KCs1aKa1_AuMPmooJoWW2a9Zy0Bwa9hEz_OPfwL0HJ5EA9b4V4fBSmjg26_Rb30OZwRLZFY1S.YqQOfGI7PnKs_zvxJMDphnMqn9qzn3GYzJyRTP5ID0YIG43DZC6kkAcrouUuy0zMvBS5gGEdBqleCMTXereIciO1VCdKj67B9nt.sThluvxcH1zcG4Juxjt4F2buNKuEQykMRvnTdr840WR.ExKidG4cA; __cf_bm=5DFmmL.X5Fp385tHt.3VXn9Q85hADqPWqLglchuQ7GE-1773491768.8271875-1.0.1.1-Z4MmxQAV989YnHtbNC9F6gE3yl9c2KJlWvzuqDT.Mra3ZSo.i63579pQOQMOJcdaShwIkp0nYK5gvOeULucTLlVLs4ppQTFQ79CADo9ZEhpBIW37Kob3fjxlDZ63fCER; adcloud={%22_les_v%22:%22c%2Cy%2Coddspedia.com%2C1773493569%22}; kndctr_9CE579FD5DCD8B590A495E09_AdobeOrg_cluster=va6; _hjSession_2725666=eyJpZCI6IjRkYjZlNWNlLTFjNzctNDU2Mi04YTMwLTExOTVjMGY1MjRlYSIsImMiOjE3NzM0OTE3ODQ3MDgsInMiOjAsInIiOjAsInNiIjowLCJzciI6MCwic2UiOjAsImZzIjowLCJzcCI6MH0=; _v_id_l={%22_v_id%22:%2280890895515017661773491769338%22%2C%22_la%22:1773491814645}
+priority
+u=1, i
+referer
+https://oddspedia.com/us/a/tennis/alexander-zverev-jannik-sinner-390332
+sec-ch-ua
+"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+sentry-trace
+0f62748852bc4e469c1488bea996ac8b-88e1b2d49d31572c
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36
+
+
+Response
+{
+    "generated_at": "2026-03-14 12:36:14",
+    "data": {
+        "id": "9982320",
+        "def_ot": 201,
+        "sr_id": 69293460,
+        "starttime": "2026-03-14 20:30:00+00",
+        "md": "2026-03-14 20:30:00+00",
+        "sport_id": 5,
+        "sport_name": "Tennis",
+        "sport_name_en": "Tennis",
+        "sport_slug": "tennis",
+        "sport_slug_en": "tennis",
+        "country_id": 459,
+        "ccode": "US",
+        "category_name": "USA",
+        "category_slug": "usa",
+        "category_slug_en": "usa",
+        "is_summer_olympics": 0,
+        "is_winter_olympics": 0,
+        "league_id": 2136,
+        "league_name": "ATP Indian Wells ",
+        "league_name_en": "ATP Indian Wells ",
+        "league_slug": "atp-indian-wells",
+        "league_slug_en": "atp-indian-wells",
+        "league_abbr": "Ind. Wells",
+        "league_primary_color": "#1A3150",
+        "league_accent_color": "#00B1FF",
+        "ht_id": 9839,
+        "ht_form": "LWWWW?",
+        "ht_abbr": "ZVE",
+        "ht": "Alexander Zverev",
+        "ht_slug": "alexander-zverev",
+        "ht_slug_en": "alexander-zverev",
+        "hscore": null,
+        "at_id": 77594,
+        "at_form": "LWWWW?",
+        "at_abbr": "SIN",
+        "at": "Jannik Sinner",
+        "at_slug": "jannik-sinner",
+        "at_slug_en": "jannik-sinner",
+        "ascore": null,
+        "ht_playoff_series": null,
+        "at_playoff_series": null,
+        "scorers": null,
+        "inplay_status": null,
+        "show_inplay_status": false,
+        "current_time": 0,
+        "additional_time": "",
+        "game_score": null,
+        "season_id": 134087,
+        "season_name": "ATP Indian Wells, USA Men Singles 2026",
+        "season_start_date": "2026-03-02 00:00:00+00",
+        "season_end_date": "2026-03-15 00:00:00+00",
+        "stage_id": null,
+        "stage_type": null,
+        "stage_phase": null,
+        "stage_order": null,
+        "stage_start_date": null,
+        "stage_end_date": null,
+        "group_id": 186103,
+        "stage_group_name": "2026 Indian Wells, USA",
+        "stage_group_max_rounds": null,
+        "stage_group_group_name": null,
+        "referee_id": null,
+        "referee_type": null,
+        "referee_name": null,
+        "referee_country_code": null,
+        "referee_nationality": null,
+        "venue_id": 1708,
+        "venue_name": "Stadium 1",
+        "venue_country_code": "USA",
+        "venue_country": "USA",
+        "venue_city": "Indian Wells",
+        "venue_capacity": null,
+        "venue_lat": "33.7036",
+        "venue_lon": "-116.3396",
+        "surface": "hard",
+        "weather_conditions": {
+            "icon": "partly-cloudy-day",
+            "temperature": 32.45
+        },
+        "matchstatus": 1,
+        "special_status": null,
+        "status": null,
+        "has_standings": 0,
+        "round_name": "Semifinal",
+        "to_show_standings": 0,
+        "short_periods_names": "[null]",
+        "postmatch_status": null,
+        "prize_money": "9495555",
+        "prize_currency": "$",
+        "halftime": null,
+        "template": {
+            "title": "Alexander Zverev vs Jannik Sinner Betting Odds & Picks | Oddspedia",
+            "description": "Alexander Zverev vs Jannik Sinner \u2771 14.03.2026 \u2771 Tennis \u2771 ATP Indian Wells , USA \u2771 \u26a1 Best Odds & Picks \u2b50 Accurate Predictions \u2714\ufe0f Live Score & Stats \u270c Match Preview",
+            "template": "Alexander Zverev plays against Jannik Sinner in a ATP Indian Wells  game, and Tennis fans are looking forward to it. The event takes place on 14\/03\/2026 at 20:30 UTC.<\/p><p>&nbsp;<\/p><p>Oddspedia provides Alexander Zverev Jannik Sinner &nbsp;betting odds from 4 betting sites on 8 markets. Sportsbooks place Jannik Sinner as favorites to win the game at @ 1.14. Check the Alexander Zverev and Jannik Sinner team form, standings and head-to-head statistics here on the page. Additionally to the comprehensive pre-match and live betting odds, fast live scores, team lineups and commentary.<\/p><p>Will Alexander Zverev, as the home team, take advantage and win the game?<\/p><h3>Find the best lines on Alexander Zverev vs Jannik Sinner!<\/h3><p>Compare the Alexander Zverev - Jannik Sinner betting odds and win more with today's best <a href='https:\/\/oddspedia.com\/us\/tennis\/odds'>Tennis Odds<\/a>.<\/p><p>Oddspedia provides <span data-sport-slug=\"tennis\"\n                    data-category-slug=\"usa\"\n                    data-league-slug=\"atp-indian-wells\"\n                    class=\"masked-link\"\n                    data-page-type=\"league-odds\"\n                >ATP Indian Wells <\/span> and betting lines from 4 sportsbooks in 8 betting markets. The search for which site is offering top sports betting odds has come to an end!<br><br><div class=\"match-details__odds\"><table><thead><tr><th>Match Outcome<\/th><th>Best Odds<\/th><th>Bookie<\/th><\/tr><\/thead>\n                                <tbody><tr><td>Alexander Zverev To win<\/td><td> 5.50<\/td>\n                                <td><a  href=\"https:\/\/oddspedia.com\/us\/sportsbooks\/fanduel\"><img src=\"https:\/\/cdn.oddspedia.com\/images\/bookmakers\/light-back\/120x48\/fanduel.png\" alt=\"FanDuel\"><\/a>\n                                <span>FanDuel<\/span><\/td><\/tr><tr><td>Jannik Sinner To win<\/td><td>1.15<\/td>\n                                <td><a  href=\"https:\/\/oddspedia.com\/us\/sportsbooks\/fanduel\"><img src=\"https:\/\/cdn.oddspedia.com\/images\/bookmakers\/light-back\/120x48\/fanduel.png\" alt=\"FanDuel\"><\/a>\n                                <span>FanDuel<\/span><\/td><\/tr><\/tbody><\/table><\/div><h3>Alexander Zverev vs Jannik Sinner Tip and Winning Probabilities<\/h3><p>The betting tip for the winner in the game between Alexander Zverev v Jannik Sinner is:&nbsp;Jannik Sinner. The winner probabilities are:&nbsp;<b>18.18<\/b>% (Alexander Zverev), <b>86.96<\/b>% (Jannik Sinner).<br><br>Also, for your analysis, we have the recent form of Alexander Zverev and Jannik Sinner, their standings and head-to-head statistics. In addition to this, we will also lavish the following information on you:<\/p><ul><li><strong>Comprehensive Pre-Match Odds<\/strong><\/li><li><strong>Team Lineups<\/strong><\/li><li><strong>In-Play (live) Betting Odds<\/strong><\/li><li><strong>Live Scores - as They Happen<\/strong><\/li><li><strong>Commentary - Match Event Viewer with Momentum<\/strong><\/li><\/ul><p>If you are wondering which betting site to choose for your Alexander Zverev vs Jannik Sinner bets, then explore <a href=\"https:\/\/oddspedia.com\/us\/sportsbooks\">the best sportsbooks<\/a> and<a href=\"https:\/\/oddspedia.com\/us\/sportsbooks\/betting-apps \"> betting apps for your state<\/a>. Don't forget to check the latest <a href=\"https:\/\/oddspedia.com\/us\/sportsbooks\/draftkings\/bonus\">DraftKings Promo Code<\/a>, <a href=\"https:\/\/oddspedia.com\/us\/sportsbooks\/betrivers\/bonus\">BetRivers Promo Code<\/a>, and other <a href=\"https:\/\/oddspedia.com\/us\/sportsbooks\/betting-offers\">sportsbook promos<\/a> currently available for you. &nbsp;<\/p><h3>Match details<\/h3><ul><li>Alexander Zverev vs&nbsp;Jannik Sinner<\/li><li><span data-sport-slug=\"tennis\"\n                    data-category-slug=\"usa\"\n                    data-league-slug=\"atp-indian-wells\"\n                    class=\"masked-link\"\n                    data-page-type=\"league\"\n                >ATP Indian Wells <\/span>&nbsp;USA<\/li><li>Date -&nbsp;14\/03\/2026<\/li><li>Starting time -&nbsp;20:30 UTC<\/li><li>Venue:&nbsp;Stadium 1,&nbsp;Indian Wells, USA<\/li><\/ul>",
+            "hasNextGame": 0,
+            "hasNextThreeGames": 0,
+            "created_at": "2021-05-13 11:47:09",
+            "updated_at": "2026-03-13 01:03:34.310271+00",
+            "published_on": "2021-05-13 11:47:09",
+            "heading": null,
+            "expert_prediction": null
+        },
+        "match_keys": null,
+        "video": null,
+        "winner": null,
+        "btip_allowed": true,
+        "tips_allowed": true,
+        "match_key": 390332,
+        "is_match_archived": true,
+        "is_league_archived": true,
+        "is_match_tips_archived": true,
+        "is_match_current": true,
+        "has_sr_coverage": true,
+        "has_live_streaming": true,
+        "ht_shirt_color": null,
+        "at_shirt_color": null,
+        "ht_rank": "ATP 4",
+        "at_rank": "ATP 2",
+        "ht_red_cards": 0,
+        "at_red_cards": 0,
+        "aggregate_home_score": null,
+        "aggregate_away_score": null
+    },
+    "ch": [
+        "c-d2b41d68f85bf766528d3456a2b6579ce0f2640b"
+    ]
+}

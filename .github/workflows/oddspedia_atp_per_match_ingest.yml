@@ -4,16 +4,16 @@ on:
   workflow_dispatch:
     inputs:
       input_dir:
-        description: "Path to capture files (default: website_responses/atp)"
+        description: "Path to match_specific capture files"
         required: false
-        default: "website_responses/atp"
+        default: "website_responses/atp/match_specific"
       dry_run:
-        description: "Dry run (parse + counts only, no BigQuery writes)"
+        description: "Dry run (parse + row counts only, no BigQuery writes)"
         required: false
         type: boolean
         default: false
   schedule:
-    # Daily at 09:00 UTC; useful when per-match capture files are refreshed in-repo.
+    # Daily at 09:00 UTC
     - cron: "0 9 * * *"
 
 jobs:
@@ -24,6 +24,7 @@ jobs:
     env:
       GCP_PROJECT: ${{ secrets.PROJECT_ID }}
       ODDSPEDIA_DATASET: "oddspedia"
+      ODDSPEDIA_TABLE: "atp_odds"
       ODDSPEDIA_BQ_LOCATION: "US"
 
     steps:
@@ -46,11 +47,13 @@ jobs:
           echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
           echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
 
-      - name: Run Oddspedia ATP per-match ingest
+      - name: Run ATP per-match ingest
         run: |
-          INPUT_DIR="${{ inputs.input_dir || 'website_responses/atp' }}"
+          INPUT_DIR="${{ inputs.input_dir || 'website_responses/atp/match_specific' }}"
           if [ "${{ inputs.dry_run }}" = "true" ]; then
-            python -m mobile_api.ingest.atp.oddspedia_atp_per_match_workflow --input-dir "$INPUT_DIR" --dry-run
+            python -m mobile_api.ingest.atp.oddspedia_atp_per_match_workflow \
+              --input-dir "$INPUT_DIR" --dry-run
           else
-            python -m mobile_api.ingest.atp.oddspedia_atp_per_match_workflow --input-dir "$INPUT_DIR"
+            python -m mobile_api.ingest.atp.oddspedia_atp_per_match_workflow \
+              --input-dir "$INPUT_DIR"
           fi

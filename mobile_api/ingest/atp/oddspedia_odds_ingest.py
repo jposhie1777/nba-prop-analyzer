@@ -331,12 +331,12 @@ def _normalize_legacy_markets(match: Dict[str, Any]) -> List[Dict[str, Any]]:
 
         normalized.append(
             {
-                "market_group_id": None,
-                "market_group_name": None,
-                "market": market_name,
-                "period_id": None,
-                "period_name": None,
-                "bookie_id": None,
+                "market_group_id": _safe_int(market_payload.get("market_group_id")),
+                "market_group_name": market_payload.get("market_group_name"),
+                "market": market_payload.get("market") or market_name,
+                "period_id": _safe_int(market_payload.get("period_id")),
+                "period_name": market_payload.get("period_name"),
+                "bookie_id": _safe_int(market_payload.get("bookie_id")),
                 "bookie": market_payload.get("bookie"),
                 "bookie_slug": market_payload.get("bookie_slug"),
                 "outcome_key": None,
@@ -345,9 +345,11 @@ def _normalize_legacy_markets(match: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "outcome_order": None,
                 "odds_decimal": None,
                 "odds_american": None,
-                "odds_status": market_payload.get("status"),
-                "odds_direction": None,
-                "line_value": None,
+                "odds_status": _safe_int(
+                    market_payload.get("odds_status") or market_payload.get("status")
+                ),
+                "odds_direction": _safe_int(market_payload.get("odds_direction")),
+                "line_value": market_payload.get("line_value"),
                 "home_handicap": market_payload.get("home_handicap"),
                 "away_handicap": market_payload.get("away_handicap"),
                 "handicap_label": market_payload.get("handicap_label"),
@@ -569,17 +571,31 @@ def _normalize_outcomes_from_group_payload(match: Dict[str, Any]) -> List[Dict[s
 
 def _normalized_market_rows(match: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
-    Try richer structures first, fall back to legacy format.
+    Collect rows from all available sources and merge them.
+
+    Priority order for rich data:
+      1. market_rows (from getMatchOdds XHR / direct API call) — richest
+      2. market_groups payload
+      3. legacy markets dict (from __NUXT__ listing-page data)
+
+    Sources 1/2 are COMBINED with source 3 so that markets only present in
+    the listing-page odds (e.g. total_sets / market_401 from
+    getAmericanMaxOddsWithPagination) are never silently dropped when richer
+    per-match data is also available.
     """
-    rows = _normalize_rich_market_rows(match)
-    if rows:
-        return rows
+    rich_rows = _normalize_rich_market_rows(match)
+    group_rows = _normalize_outcomes_from_group_payload(match)
+    legacy_rows = _normalize_legacy_markets(match)
 
-    rows = _normalize_outcomes_from_group_payload(match)
-    if rows:
-        return rows
+    base_rows = rich_rows or group_rows
 
-    return _normalize_legacy_markets(match)
+    if base_rows:
+        # Add legacy rows whose market is not already covered by the richer source.
+        covered_markets = {r.get("market") for r in base_rows if r.get("market")}
+        extra = [r for r in legacy_rows if r.get("market") not in covered_markets]
+        return base_rows + extra
+
+    return legacy_rows
 
 
 def _to_bq_rows(

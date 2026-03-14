@@ -236,27 +236,94 @@ class OddspediaClient:
                 except Exception as exc:
                     print(f"[scraper] Extra load ot={ot_val} failed: {exc}")
 
-            # ── Per-match odds via getMatchMaxOddsByGroup API ─────────────────
-            # page.request uses the browser context's cookie jar directly,
-            # so no navigation back to the listing URL is needed.
+            # ── Per-match odds via match-page navigation + response interception ──
+            # Navigate to each individual match URL.  The page's own JavaScript
+            # fires getMatchMaxOddsByGroup XHR calls using Chrome's real network
+            # stack (proper TLS fingerprint, Sec-Fetch-* headers, valid session
+            # cookies).  We intercept those responses before they reach the JS.
+            # This bypasses the Cloudflare WAF that blocks Python-level HTTP
+            # requests (page.request.get / fetch from page context).
+            #
+            # Probe strategy: after the first match page, check if any API
+            # responses were captured.  If not, stop early rather than loading
+            # 50 pages that won't produce data.
+
+            import re
+            from collections import defaultdict
+
+            match_urls = self._build_all_match_urls(nuxt_data)
             print(
-                f"[scraper] Fetching per-match odds for {len(records)} matches "
-                f"× {len(_PER_MATCH_MARKET_GROUPS)} market groups …"
+                f"[scraper] Built match URLs for {len(match_urls)}/{len(records)} matches"
             )
+
+            captured: Dict[str, Dict] = defaultdict(dict)
+
+            def _on_api_response(response: Any) -> None:
+                if "getMatchMaxOddsByGroup" not in response.url:
+                    return
+                try:
+                    mid_m = re.search(r"matchId=(\d+)", response.url)
+                    mg_m  = re.search(r"marketGroupId=(\d+)", response.url)
+                    if not (mid_m and mg_m):
+                        return
+                    if response.ok:
+                        captured[mid_m.group(1)][mg_m.group(1)] = response.json()
+                    else:
+                        print(
+                            f"[scraper] intercept HTTP {response.status} "
+                            f"matchId={mid_m.group(1)} mgId={mg_m.group(1)}"
+                        )
+                except Exception:
+                    pass
+
+            page.on("response", _on_api_response)
+
             total_market_rows = 0
+            api_working: Optional[bool] = None  # None=untested, True=working, False=blocked
+
             for record in records:
                 mid = str(record.get("match_id") or "")
-                if not mid:
+                match_url = match_urls.get(mid)
+                if not match_url:
                     continue
-                all_market_rows: List[Dict[str, Any]] = []
-                for mg_id in _PER_MATCH_MARKET_GROUPS:
-                    body = self._fetch_per_match_api(page, mid, mg_id)
-                    if body:
-                        mrows = self._parse_per_match_to_market_rows(body, mid)
-                        all_market_rows.extend(mrows)
-                if all_market_rows:
-                    record["market_rows"] = all_market_rows
-                    total_market_rows += len(all_market_rows)
+
+                # After probing the first match, stop if the API is blocked
+                if api_working is False:
+                    break
+
+                try:
+                    page.goto(match_url, wait_until="domcontentloaded", timeout=12000)
+                    # Allow time for the page's XHR calls to fire and resolve
+                    page.wait_for_timeout(2000)
+                except Exception as exc:
+                    print(f"[scraper] match page {mid} nav error: {exc}")
+                    continue
+
+                # After first match: probe whether interception is working
+                if api_working is None:
+                    if captured.get(mid):
+                        api_working = True
+                        print(
+                            f"[scraper] Response interception working — "
+                            f"captured {len(captured[mid])} market groups for match {mid}"
+                        )
+                    else:
+                        api_working = False
+                        print(
+                            "[scraper] No API responses captured on first match page — "
+                            "Cloudflare is blocking XHR too; falling back to listing-page data"
+                        )
+                        break
+
+                match_data = captured.get(mid, {})
+                if match_data:
+                    all_rows: List[Dict[str, Any]] = []
+                    for body in match_data.values():
+                        all_rows.extend(self._parse_per_match_to_market_rows(body, mid))
+                    if all_rows:
+                        record["market_rows"] = all_rows
+                        total_market_rows += len(all_rows)
+
             print(
                 f"[scraper] Per-match fetch complete: "
                 f"{total_market_rows} outcome rows across {len(records)} matches"
@@ -279,43 +346,39 @@ class OddspediaClient:
 
 
     # ============================================================
-    # PER-MATCH API FETCHING
+    # PER-MATCH HELPERS
     # ============================================================
 
-    def _fetch_per_match_api(
-        self, page: Any, match_id: str, market_group_id: int
-    ) -> Optional[Dict[str, Any]]:
+    def _build_all_match_urls(self, nuxt_data: Dict[str, Any]) -> Dict[str, str]:
         """
-        Call getMatchMaxOddsByGroup using Playwright's APIRequestContext
-        (page.request), which shares the browser session's cookies but makes
-        the HTTP request from the Python layer — bypassing both CORS
-        restrictions and the Cloudflare WAF that blocks in-page JS fetch().
+        Build {str(match_id): url} for every match in the listing-page NUXT.
+        Falls back to constructing the slug URL when the raw url field is absent.
         """
-        url = (
-            f"{_PER_MATCH_API}"
-            f"?matchId={match_id}&marketGroupId={market_group_id}&{_PER_MATCH_PARAMS}"
-        )
+        urls: Dict[str, str] = {}
         try:
-            response = page.request.get(
-                url,
-                headers={
-                    "Accept": "application/json, text/plain, */*",
-                    "Referer": "https://www.oddspedia.com/us/tennis/odds",
-                },
-            )
-            if not response.ok:
-                print(
-                    f"[scraper] per-match API HTTP {response.status} "
-                    f"matchId={match_id} mgId={market_group_id}"
+            data0 = (nuxt_data.get("data") or [{}])[0]
+            for m in (data0.get("matchList") or []):
+                mid = str(
+                    m.get("id") or m.get("match_id") or m.get("matchId") or ""
                 )
-                return None
-            return response.json()
+                if not mid:
+                    continue
+                raw_url = m.get("url")
+                if raw_url and isinstance(raw_url, str) and "/tennis/" in raw_url:
+                    base = "https://www.oddspedia.com"
+                    urls[mid] = (
+                        raw_url if raw_url.startswith("http") else base + raw_url
+                    )
+                    continue
+                ht_slug = m.get("ht_slug") or m.get("htSlug")
+                at_slug = m.get("at_slug") or m.get("atSlug")
+                if ht_slug and at_slug:
+                    urls[mid] = (
+                        f"https://www.oddspedia.com/us/tennis/{ht_slug}-{at_slug}-{mid}"
+                    )
         except Exception as exc:
-            print(
-                f"[scraper] per-match API failed "
-                f"matchId={match_id} mgId={market_group_id}: {exc}"
-            )
-            return None
+            print(f"[scraper] _build_all_match_urls error: {exc}")
+        return urls
 
     def _parse_per_match_to_market_rows(
         self, body: Dict[str, Any], match_id: str

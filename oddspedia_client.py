@@ -146,16 +146,23 @@ class OddspediaClient:
                 # Skip per-match endpoints — those are handled later
                 if "getMatchMaxOddsByGroup" in response.url:
                     return
-                # Only capture JSON responses
-                ct = response.headers.get("content-type", "")
-                if "json" not in ct and "javascript" not in ct:
-                    return
+
+                body: Any = None
                 try:
                     if response.ok:
-                        body = response.json()
-                        listing_api_responses.append({"url": response.url, "body": body})
+                        ct = response.headers.get("content-type", "")
+                        if "json" in ct or "javascript" in ct:
+                            body = response.json()
+                        else:
+                            # Some listing endpoints return JSON with generic content-types.
+                            raw = response.text()
+                            if raw and raw.strip().startswith(("{", "[")):
+                                body = json.loads(raw)
                 except Exception:
-                    pass
+                    body = None
+
+                if isinstance(body, dict):
+                    listing_api_responses.append({"url": response.url, "body": body})
 
             page.on("response", _on_listing_api)
 
@@ -658,23 +665,50 @@ class OddspediaClient:
 
 
     def _is_listing_api_endpoint(self, endpoint: str) -> bool:
-        """Return True for Oddspedia listing APIs; ignore analytics/non-match hosts."""
+        """Return True for likely listing endpoints and reject telemetry/ads hosts."""
         try:
             parsed = urlparse(endpoint)
             host = (parsed.hostname or "").lower()
             path = parsed.path or ""
+            query = parsed.query or ""
         except Exception:
             return False
 
         if not host:
             return False
-        if host not in {"www.oddspedia.com", "oddspedia.com"}:
+
+        # Keep this permissive: Oddspedia sometimes serves APIs from different
+        # oddspedia.com subdomains in CI/runners.
+        if not host.endswith("oddspedia.com"):
             return False
-        if not path.startswith("/api/"):
+
+        # Explicitly reject known telemetry/identity hosts.
+        blocked_prefixes = (
+            "smetrics.",
+            "metrics.",
+            "analytics.",
+            "pixel.",
+            "tags.",
+        )
+        if host.startswith(blocked_prefixes):
             return False
+
         if "getMatchMaxOddsByGroup" in endpoint:
             return False
-        return True
+
+        # Accept common listing routes, but don't hard-require /api/.
+        endpoint_l = endpoint.lower()
+        if "/api/" in path:
+            # Ignore per-match API calls in listing capture stage.
+            if "matchid=" in query.lower() and "getmatchodds" in endpoint_l:
+                return False
+            return True
+        if "getamericanmaxoddswithpagination" in endpoint_l:
+            return True
+        if "getmatchodds" in endpoint_l and "matchid=" not in query.lower():
+            return True
+
+        return False
 
     def _extract_match_candidates(self, node: Any) -> List[Dict[str, Any]]:
         """Recursively collect dicts that look like match rows from API JSON."""

@@ -140,10 +140,14 @@ class OddspediaClient:
             listing_api_responses: List[Dict[str, Any]] = []
 
             def _on_listing_api(response: Any) -> None:
-                if "oddspedia.com/api/" not in response.url:
+                if "oddspedia.com" not in response.url:
                     return
                 # Skip per-match endpoints — those are handled later
                 if "getMatchMaxOddsByGroup" in response.url:
+                    return
+                # Only capture JSON responses
+                ct = response.headers.get("content-type", "")
+                if "json" not in ct and "javascript" not in ct:
                     return
                 try:
                     if response.ok:
@@ -191,6 +195,12 @@ class OddspediaClient:
                 )
                 records = self._build_records_from_api_responses(listing_api_responses)
                 print(f"[scraper] Built {len(records)} matches from intercepted API responses")
+
+            # Final fallback: scrape rendered match links from the DOM
+            if not records:
+                print("[scraper] API fallback empty — trying DOM link extraction")
+                records = self._build_records_from_dom(page)
+                print(f"[scraper] Built {len(records)} matches from DOM links")
 
             if records:
                 m0 = records[0]
@@ -294,22 +304,37 @@ class OddspediaClient:
             )
 
             captured: Dict[str, Dict] = defaultdict(dict)
+            # Non-odds match-page responses (match info, stats, etc.) keyed by match_id
+            match_info_captured: Dict[str, Dict] = {}
 
             def _on_api_response(response: Any) -> None:
-                if "getMatchMaxOddsByGroup" not in response.url:
+                if "oddspedia.com" not in response.url:
                     return
                 try:
                     mid_m = re.search(r"matchId=(\d+)", response.url)
-                    mg_m  = re.search(r"marketGroupId=(\d+)", response.url)
-                    if not (mid_m and mg_m):
+                    if not mid_m:
                         return
-                    if response.ok:
-                        captured[mid_m.group(1)][mg_m.group(1)] = response.json()
-                    else:
-                        print(
-                            f"[scraper] intercept HTTP {response.status} "
-                            f"matchId={mid_m.group(1)} mgId={mg_m.group(1)}"
-                        )
+                    mid_str = mid_m.group(1)
+
+                    if "getMatchMaxOddsByGroup" in response.url:
+                        mg_m = re.search(r"marketGroupId=(\d+)", response.url)
+                        if not mg_m:
+                            return
+                        if response.ok:
+                            captured[mid_str][mg_m.group(1)] = response.json()
+                        else:
+                            print(
+                                f"[scraper] intercept HTTP {response.status} "
+                                f"matchId={mid_str} mgId={mg_m.group(1)}"
+                            )
+                    elif response.ok and mid_str not in match_info_captured:
+                        # Capture the first non-odds response per match for team enrichment
+                        ct = response.headers.get("content-type", "")
+                        if "json" in ct or "javascript" in ct:
+                            try:
+                                match_info_captured[mid_str] = response.json()
+                            except Exception:
+                                pass
                 except Exception:
                     pass
 
@@ -352,6 +377,11 @@ class OddspediaClient:
                             "Cloudflare is blocking XHR too; falling back to listing-page data"
                         )
                         break
+
+                # Enrich record with team details from match-page __NUXT__ or
+                # intercepted non-odds API response (needed when records came from DOM)
+                if not record.get("home_team"):
+                    self._enrich_record_from_match_page(record, mid, page, match_info_captured)
 
                 match_data = captured.get(mid, {})
                 if match_data:
@@ -599,6 +629,117 @@ class OddspediaClient:
 
         print("[scraper] No match list found in intercepted listing-page API responses")
         return []
+
+    def _build_records_from_dom(self, page: Any) -> List[Dict[str, Any]]:
+        """
+        Last-resort match discovery: find rendered match links in the DOM.
+        Works for client-side pages (like MLS) where neither SSR nor API
+        interception yields a match list.
+        """
+        import re as _re
+        try:
+            # Give Vue/React a moment to finish rendering cards
+            try:
+                page.wait_for_timeout(3000)
+            except Exception:
+                pass
+
+            # Evaluate in browser context: collect all hrefs that look like
+            # match pages (contain /soccer/ and end with a long numeric ID)
+            links: List[str] = page.evaluate(
+                """() => Array.from(document.querySelectorAll('a[href]'))
+                        .map(a => a.href)
+                        .filter(h => /\\/soccer\\//.test(h) && /\\/\\d{6,}(\\?.*)?$/.test(h))"""
+            ) or []
+
+            seen: set = set()
+            records: List[Dict[str, Any]] = []
+            for href in links:
+                m = _re.search(r"/(\d{6,})(?:[/?]|$)", href)
+                if not m:
+                    continue
+                match_id = int(m.group(1))
+                if match_id in seen:
+                    continue
+                seen.add(match_id)
+                full_url = href.split("?")[0].rstrip("/")
+                records.append(
+                    {
+                        "match_id": match_id,
+                        "sport": "soccer",
+                        "date_utc": None,
+                        "home_team": None,
+                        "away_team": None,
+                        "home_team_id": None,
+                        "away_team_id": None,
+                        "inplay": False,
+                        "league_id": None,
+                        "url": full_url,
+                        "markets": {},
+                    }
+                )
+
+            print(
+                f"[scraper] DOM link scan: {len(links)} links → "
+                f"{len(records)} unique match IDs"
+            )
+            return records
+        except Exception as exc:
+            print(f"[scraper] DOM link extraction failed: {exc}")
+            return []
+
+    def _enrich_record_from_match_page(
+        self,
+        record: Dict[str, Any],
+        mid: str,
+        page: Any,
+        match_info_captured: Dict[str, Any],
+    ) -> None:
+        """
+        Fill in home_team / away_team / date_utc on a record that was built
+        from a DOM link (and therefore has no team info yet).
+
+        Tries two sources in order:
+          1. Intercepted non-odds API response for this match
+          2. window.__NUXT__ on the current (match) page
+        """
+        import re as _re
+
+        def _apply(data: Dict[str, Any]) -> bool:
+            ht = data.get("ht") or data.get("home_team") or data.get("homeTeam")
+            at = data.get("at") or data.get("away_team") or data.get("awayTeam")
+            md = data.get("md") or data.get("starttime") or data.get("start_time")
+            lid = data.get("league_id") or data.get("leagueId")
+            if ht or at:
+                record["home_team"] = record.get("home_team") or ht
+                record["away_team"] = record.get("away_team") or at
+                if md:
+                    record["date_utc"] = record.get("date_utc") or _normalise_ts(str(md))
+                if lid:
+                    record["league_id"] = record.get("league_id") or lid
+                return True
+            return False
+
+        # Source 1: intercepted API response
+        info = match_info_captured.get(mid, {})
+        if isinstance(info, dict):
+            inner = info.get("data") or info
+            if isinstance(inner, dict) and _apply(inner):
+                return
+
+        # Source 2: __NUXT__ on the match page
+        try:
+            nuxt = page.evaluate("() => window.__NUXT__ || {}") or {}
+            data0 = (nuxt.get("data") or [{}])[0]
+            for key in ("matchData", "match", "matchInfo", "currentMatch"):
+                candidate = data0.get(key)
+                if isinstance(candidate, dict) and _apply(candidate):
+                    return
+            # Some pages put match info directly in data[0]
+            if isinstance(data0, dict) and _apply(data0):
+                return
+        except Exception:
+            pass
 
     # ============================================================
     # HELPERS

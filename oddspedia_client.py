@@ -34,6 +34,7 @@ import logging
 import subprocess
 import tempfile
 from pathlib import Path
+from urllib.parse import urlparse
 from typing import Any, Dict, List, Optional
 
 LOGGER = logging.getLogger(__name__)
@@ -140,7 +141,7 @@ class OddspediaClient:
             listing_api_responses: List[Dict[str, Any]] = []
 
             def _on_listing_api(response: Any) -> None:
-                if "oddspedia.com" not in response.url:
+                if not self._is_listing_api_endpoint(response.url):
                     return
                 # Skip per-match endpoints — those are handled later
                 if "getMatchMaxOddsByGroup" in response.url:
@@ -584,6 +585,9 @@ class OddspediaClient:
         """
         for resp in api_responses:
             endpoint = resp.get("url", "")
+            if not self._is_listing_api_endpoint(endpoint):
+                continue
+
             body = resp.get("body", {})
             if not isinstance(body, dict):
                 continue
@@ -652,6 +656,26 @@ class OddspediaClient:
         print("[scraper] No match list found in intercepted listing-page API responses")
         return []
 
+
+    def _is_listing_api_endpoint(self, endpoint: str) -> bool:
+        """Return True for Oddspedia listing APIs; ignore analytics/non-match hosts."""
+        try:
+            parsed = urlparse(endpoint)
+            host = (parsed.hostname or "").lower()
+            path = parsed.path or ""
+        except Exception:
+            return False
+
+        if not host:
+            return False
+        if host not in {"www.oddspedia.com", "oddspedia.com"}:
+            return False
+        if not path.startswith("/api/"):
+            return False
+        if "getMatchMaxOddsByGroup" in endpoint:
+            return False
+        return True
+
     def _extract_match_candidates(self, node: Any) -> List[Dict[str, Any]]:
         """Recursively collect dicts that look like match rows from API JSON."""
         out: List[Dict[str, Any]] = []
@@ -659,7 +683,7 @@ class OddspediaClient:
         while stack:
             cur = stack.pop()
             if isinstance(cur, dict):
-                if any(k in cur for k in ("id", "match_id", "matchId", "event_id", "game_id")):
+                if self._looks_like_match_row(cur):
                     out.append(cur)
                 for value in cur.values():
                     if isinstance(value, (dict, list)):
@@ -670,6 +694,48 @@ class OddspediaClient:
                         stack.append(value)
         return out
 
+    def _looks_like_match_row(self, row: Dict[str, Any]) -> bool:
+        """Guard against false positives from analytics/identity payloads."""
+        match_id = (
+            row.get("id")
+            or row.get("match_id")
+            or row.get("matchId")
+            or row.get("event_id")
+            or row.get("game_id")
+        )
+        if not self._as_int(match_id):
+            return False
+
+        has_teams = any(
+            row.get(k)
+            for k in (
+                "ht",
+                "at",
+                "home_team",
+                "away_team",
+                "homeTeam",
+                "awayTeam",
+                "home_name",
+                "away_name",
+                "home",
+                "away",
+            )
+        )
+        if has_teams:
+            return True
+
+        has_match_url = any(
+            isinstance(row.get(k), str) and "/soccer/" in row.get(k)
+            for k in ("url", "match_url", "path")
+        )
+        return has_match_url
+
+    def _as_int(self, value: Any) -> Optional[int]:
+        try:
+            return int(str(value))
+        except (TypeError, ValueError):
+            return None
+
     def _normalise_listing_match(self, match: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Normalize variable listing-API match keys to Oddspedia `matchList` shape."""
         match_id = (
@@ -679,7 +745,8 @@ class OddspediaClient:
             or match.get("event_id")
             or match.get("game_id")
         )
-        if match_id is None:
+        match_id_int = self._as_int(match_id)
+        if match_id_int is None:
             return None
 
         home_team = (
@@ -698,7 +765,7 @@ class OddspediaClient:
         )
 
         return {
-            "id": match_id,
+            "id": match_id_int,
             "md": match.get("md") or match.get("starttime") or match.get("start_time") or match.get("date"),
             "ht": home_team,
             "at": away_team,

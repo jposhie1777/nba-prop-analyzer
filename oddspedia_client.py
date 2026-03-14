@@ -757,8 +757,15 @@ class OddspediaClient:
             return True
         if "getamericanmaxoddswithpagination" in endpoint_l:
             return True
+
+        # MLS / soccer listing endpoint
+        if "getmatchlist" in endpoint_l:
+            return True
+
+        # generic odds listing endpoints
         if "getmatchodds" in endpoint_l and "matchid=" not in query.lower():
             return True
+
 
         return False
 

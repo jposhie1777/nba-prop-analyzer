@@ -60,7 +60,8 @@ from oddspedia_client import OddspediaClient  # noqa: E402
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-DEFAULT_URL = "https://www.oddspedia.com/us/soccer/mls"
+DEFAULT_URL = "https://www.oddspedia.com/us/soccer/usa/mls"
+
 
 ODDSPEDIA_URL = os.getenv("ODDSPEDIA_MLS_URL", DEFAULT_URL)
 DATASET = os.getenv("ODDSPEDIA_DATASET", "oddspedia")

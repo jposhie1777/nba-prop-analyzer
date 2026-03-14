@@ -40,8 +40,15 @@ LOGGER = logging.getLogger(__name__)
 
 MARKET_NAMES: Dict[str, str] = {
     "201": "moneyline",
+    "204": "moneyline_1st_set",
+    "205": "moneyline_2nd_set",
     "301": "handicap",
     "401": "total_sets",
+    "501": "market_501",
+    "502": "market_502",
+    "503": "market_503",
+    "601": "market_601",
+    "602": "market_602",
 }
 
 _MATCH_ODDS_URL = "https://www.oddspedia.com/api/v1/getMatchOdds"
@@ -116,262 +123,132 @@ class OddspediaClient:
             if _stealth_sync:
                 _stealth_sync(page)
 
-            # ---------------------------------------------------
-            # API RESPONSE CACHE
-            # ---------------------------------------------------
+            # ── Load listing page (default view) ─────────────────────────────────
+            # The server-side-rendered __NUXT__ already contains moneyline (201),
+            # handicap (301), and total_sets (401) for all matches.
+            # Client-side API calls are blocked by Cloudflare WAF in CI, so we
+            # rely entirely on SSR data.
 
-            from urllib.parse import urlparse, parse_qs
-
-            api_cache: Dict[str, Any] = {}
-            all_api_urls: List[str] = []  # debug: every /api/ call the page makes
-
-            def handle_response(resp):
-                """Cache getMatchOdds XHR fired by the page.
-
-                Match ID is extracted from the URL query string because the
-                response body does NOT include it.
-                """
-                path = urlparse(resp.url).path
-                if "/api/" in path:
-                    all_api_urls.append(f"[{resp.status}] {resp.url[:120]}")
-
-                if "getMatchOdds" not in resp.url:
-                    return
-
-                qs = parse_qs(urlparse(resp.url).query)
-                url_mid = (qs.get("matchId") or qs.get("id") or [None])[0]
-
-                if resp.status != 200:
-                    print(f"[scraper] getMatchOdds XHR status={resp.status} mid={url_mid}")
-                    return
-
-                try:
-                    data = resp.json()
-                    body_mid = (data.get("data") or {}).get("match_id")
-                    mid = body_mid or url_mid
-
-                    if mid:
-                        api_cache[str(mid)] = data
-                        print(f"[scraper] XHR cached matchId={mid}")
-
-                except Exception as exc:
-                    print(f"[scraper] XHR parse error for {resp.url[:80]}: {exc}")
-
-            page.on("response", handle_response)
-
-            # ---------------------------------------------------
-
-            print(f"[scraper] Navigating to {url}")
+            print(f"[scraper] Loading default listing page: {url}")
             page.goto(url, wait_until="domcontentloaded", timeout=self._page_timeout_ms)
-            print("[scraper] domcontentloaded fired")
-
-            # Attempt to expand match rows so the page fires getMatchOdds XHRs
-            try:
-                n_rows = page.evaluate("""
-                    () => {
-                        const rows = document.querySelectorAll('[data-match-id]');
-                        rows.forEach(r => r.click());
-                        return rows.length;
-                    }
-                """)
-                print(f"[scraper] Clicked {n_rows} [data-match-id] rows")
-            except Exception as exc:
-                print(f"[scraper] Row-click failed: {exc}")
-
             page.wait_for_function(
                 "() => window.__NUXT__ && window.__NUXT__.data",
                 timeout=15000,
             )
-            print("[scraper] __NUXT__ ready")
-
             nuxt_data = page.evaluate("() => window.__NUXT__")
 
-            # Give the page a moment to fire any background XHRs from click sim
-            page.wait_for_timeout(3000)
-
-            print(f"[scraper] API URLs fired so far ({len(all_api_urls)} total):")
-            for u in all_api_urls[:20]:
-                print(f"  {u}")
-            if len(all_api_urls) > 20:
-                print(f"  … (+{len(all_api_urls) - 20} more)")
-
             records = self._build_records_from_nuxt(nuxt_data)
-            print(f"[scraper] Built {len(records)} records from NUXT")
-
-            # Debug: inspect first match structure
+            print(f"[scraper] Default page: {len(records)} matches")
             if records:
                 m0 = records[0]
-                print(f"[scraper] First match: id={m0.get('match_id')} "
-                      f"home={m0.get('home_team')} away={m0.get('away_team')}")
-                print(f"[scraper] First match markets: {list(m0.get('markets', {}).keys())}")
+                print(f"[scraper]   First match markets: {list(m0.get('markets', {}).keys())}")
 
-            # ---------------------------------------------------
-            # Try a single diagnostic fetch to understand why in-page
-            # fetch might be blocked.
-            # ---------------------------------------------------
-            if records:
-                first_mid = str(records[0].get("match_id", ""))
-                if first_mid:
-                    diag = page.evaluate(
-                        """
-                        async (mid) => {
-                            const url = `https://www.oddspedia.com/api/v1/getMatchOdds` +
-                                `?matchId=${mid}&language=us&geoCode=US` +
-                                `&bookmakerGeoCode=US&bookmakerGeoState=VA`;
-                            try {
-                                const r = await fetch(url, {
-                                    headers: { 'Accept': 'application/json' }
-                                });
-                                let body = '';
-                                try { body = await r.text(); } catch(_) {}
-                                return {
-                                    status: r.status,
-                                    ok: r.ok,
-                                    bodyPreview: body.substring(0, 300),
-                                    url: url
-                                };
-                            } catch (e) {
-                                return { error: String(e), url: url };
-                            }
-                        }
-                        """,
-                        first_mid,
+            # ── Load listing page with extra ot= values ────────────────────────
+            # Oddspedia's listing page accepts an ?ot= query parameter that
+            # changes which market the server-side rendering populates in __NUXT__.
+            # We try several candidate values to discover 1st/2nd set winner and
+            # any other alternate markets.
+            #
+            # Known ot= values (from getAmericanMaxOddsWithPagination sweeps):
+            #   201  moneyline / match winner   ← default
+            #   301  handicap
+            #   401  total sets O/U
+            # Candidates for set-specific markets (to be confirmed by log output):
+            #   204  possibly 1st Set winner
+            #   205  possibly 2nd Set winner
+            #   501, 502, 503, 601 … unknown
+
+            EXTRA_OT_CANDIDATES = [204, 205, 501, 502, 503, 601, 602]
+
+            records_by_id = {str(r["match_id"]): r for r in records if r.get("match_id")}
+
+            for ot_val in EXTRA_OT_CANDIDATES:
+                sep = "&" if "?" in url else "?"
+                extra_url = f"{url}{sep}ot={ot_val}"
+                try:
+                    page.goto(extra_url, wait_until="domcontentloaded", timeout=30000)
+                    page.wait_for_function(
+                        "() => window.__NUXT__ && window.__NUXT__.data",
+                        timeout=10000,
                     )
-                    print(f"[scraper] DIAG fetch for matchId={first_mid}: {diag}")
+                    extra_nuxt = page.evaluate("() => window.__NUXT__")
+                    extra_odds = self._extract_odds_from_nuxt(extra_nuxt)
 
-            # ---------------------------------------------------
-            # Navigate to first match page to get Cloudflare match-page
-            # cookies, then retry in-page fetch from that context.
-            # ---------------------------------------------------
-            match_page_loaded = False
-            match_page = context.new_page()
-            try:
-                # Build first match URL from slugs in the NUXT matchList
-                first_match_url = self._first_match_url(nuxt_data)
-                print(f"[scraper] First match URL: {first_match_url}")
+                    new_market_ids: set = set()
+                    for mid_str, market_map in extra_odds.items():
+                        for mkt_id in market_map:
+                            new_market_ids.add(str(mkt_id))
 
-                if first_match_url:
-                    print(f"[scraper] Navigating to match page for cookie/context setup…")
-                    match_page.on("response", handle_response)  # capture XHR here too
-                    match_page.goto(
+                    print(
+                        f"[scraper] ot={ot_val}: {len(extra_odds)} matches, "
+                        f"market IDs seen: {sorted(new_market_ids)}"
+                    )
+
+                    # Merge any genuinely new market IDs into existing records
+                    merged = 0
+                    for mid_str, market_map in extra_odds.items():
+                        rec = records_by_id.get(mid_str)
+                        if not rec:
+                            continue
+                        for mkt_id, mkt_data in market_map.items():
+                            mkt_name = MARKET_NAMES.get(str(mkt_id), f"market_{mkt_id}")
+                            if mkt_name not in rec["markets"]:
+                                rec["markets"][mkt_name] = self._listing_market_entry(
+                                    mkt_name, mkt_id, mkt_data
+                                )
+                                merged += 1
+                    if merged:
+                        print(f"[scraper]   → merged {merged} new market entries from ot={ot_val}")
+
+                except Exception as exc:
+                    print(f"[scraper] Extra load ot={ot_val} failed: {exc}")
+
+            # ── Navigate to first match page; read its __NUXT__ ───────────────
+            # The match page's SSR __NUXT__ contains the full per-match market
+            # data (all market groups, all periods).  Log its structure so we
+            # can implement proper per-match extraction in a follow-up commit.
+
+            first_match_url = self._first_match_url(nuxt_data)
+            print(f"[scraper] First match URL: {first_match_url}")
+
+            if first_match_url:
+                try:
+                    page.goto(
                         first_match_url,
                         wait_until="domcontentloaded",
                         timeout=30000,
                     )
-                    match_page.wait_for_timeout(4000)  # let getMatchOdds XHR fire
-                    match_page_loaded = True
-                    print(f"[scraper] Match page loaded; api_cache now has {len(api_cache)} entries")
-
-            except Exception as exc:
-                print(f"[scraper] Match page navigation failed: {exc}")
-            finally:
-                try:
-                    match_page.close()
-                except Exception:
-                    pass
-
-            # ---------------------------------------------------
-            # For remaining matches not yet in api_cache, fire
-            # in-page fetch from the listing page context.
-            # ---------------------------------------------------
-            missing_ids = [
-                str(r["match_id"])
-                for r in records
-                if r.get("match_id") and str(r["match_id"]) not in api_cache
-            ]
-
-            print(
-                f"[scraper] XHR captured {len(api_cache)} matches; "
-                f"fetching {len(missing_ids)} via in-page fetch"
-            )
-
-            if missing_ids:
-                try:
-                    fetched = page.evaluate(
-                        """
-                        async (matchIds) => {
-                            const BASE = 'https://www.oddspedia.com/api/v1/getMatchOdds';
-                            const PARAMS = 'language=us&geoCode=US&bookmakerGeoCode=US' +
-                                           '&bookmakerGeoState=VA';
-                            const BATCH = 8;
-                            const out = {};
-                            const errors = [];
-                            for (let i = 0; i < matchIds.length; i += BATCH) {
-                                const batch = matchIds.slice(i, i + BATCH);
-                                const results = await Promise.allSettled(
-                                    batch.map(mid =>
-                                        fetch(`${BASE}?matchId=${mid}&${PARAMS}`, {
-                                            headers: { 'Accept': 'application/json' }
-                                        })
-                                        .then(r => {
-                                            if (!r.ok) {
-                                                errors.push(`${mid}:${r.status}`);
-                                                return null;
-                                            }
-                                            return r.json().then(d => [mid, d]);
-                                        })
-                                        .catch(e => { errors.push(`${mid}:${String(e)}`); return null; })
-                                    )
-                                );
-                                for (const r of results) {
-                                    if (r.status === 'fulfilled' && r.value) {
-                                        out[r.value[0]] = r.value[1];
-                                    }
-                                }
-                            }
-                            return { data: out, errors: errors.slice(0, 10) };
-                        }
-                        """,
-                        missing_ids,
+                    page.wait_for_function(
+                        "() => window.__NUXT__ && window.__NUXT__.data",
+                        timeout=15000,
                     )
-
-                    if isinstance(fetched, dict):
-                        errors = fetched.get("errors", [])
-                        data = fetched.get("data", {})
-                        api_cache.update(data)
-                        print(f"[scraper] In-page fetch: got {len(data)} matches, "
-                              f"errors={errors[:5]}")
-
+                    match_nuxt = page.evaluate("() => window.__NUXT__")
+                    data0 = (match_nuxt.get("data") or [{}])[0]
+                    print(f"[scraper] Match page NUXT data[0] keys: {list(data0.keys())[:20]}")
+                    # Log the odds/market structure for introspection
+                    for key in ("odds", "markets", "match", "matchOdds", "oddsData",
+                                "marketGroups", "oddsMarkets"):
+                        val = data0.get(key)
+                        if val is not None:
+                            if isinstance(val, dict):
+                                print(f"[scraper]   data0.{key} keys: {list(val.keys())[:10]}")
+                            elif isinstance(val, list):
+                                print(f"[scraper]   data0.{key}: list[{len(val)}]")
+                            else:
+                                print(f"[scraper]   data0.{key}: {type(val).__name__}")
                 except Exception as exc:
-                    print(f"[scraper] In-page fetch block error: {exc}")
+                    print(f"[scraper] Match page load failed: {exc}")
 
-            # ---------------------------------------------------
-            # attach API market data
-            # ---------------------------------------------------
-
-            for record in records:
-
-                match_id = record.get("match_id")
-
-                if not match_id:
-                    continue
-
-                api_body = api_cache.get(str(match_id))
-
-                if not api_body:
-                    continue
-
-                markets = self._parse_match_odds_response(api_body)
-
-                rows = []
-
-                for market_key, market in markets.items():
-
-                    if not market:
-                        continue
-
-                    if isinstance(market, list):
-                        rows.extend(market)
-                    else:
-                        rows.append(market)
-
-                record["market_rows"] = rows
-
-            with_market_rows = sum(1 for r in records if r.get("market_rows"))
+            # ── Summary ───────────────────────────────────────────────────────
+            total_markets = sum(len(r.get("markets", {})) for r in records)
             print(
-                f"[scraper] {with_market_rows}/{len(records)} records have market_rows "
-                f"(api_cache size={len(api_cache)})"
+                f"[scraper] Final: {len(records)} matches, "
+                f"{total_markets} total market entries "
+                f"(avg {total_markets/max(len(records),1):.1f}/match)"
             )
+            if records:
+                all_mkt_names = sorted({k for r in records for k in r.get("markets", {}).keys()})
+                print(f"[scraper] All market names seen: {all_mkt_names}")
 
             browser.close()
 
@@ -381,6 +258,41 @@ class OddspediaClient:
     # ============================================================
     # HELPERS
     # ============================================================
+
+    def _extract_odds_from_nuxt(self, nuxt_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract {match_id: {market_id: market_data}} from any NUXT listing page."""
+        try:
+            data0 = (nuxt_data.get("data") or [{}])[0]
+            return (data0.get("odds") or {}).get("matches") or {}
+        except Exception:
+            return {}
+
+    def _listing_market_entry(
+        self, market_name: str, market_id: Any, market_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Build a market dict from listing API (getAmericanMaxOddsWithPagination) data."""
+        odds_entries = market_data.get("odds", {}) if isinstance(market_data, dict) else {}
+        home_entry = odds_entries.get("1", {})
+        away_entry = odds_entries.get("2", {})
+        home_dec = _parse_float(home_entry.get("value"))
+        away_dec = _parse_float(away_entry.get("value"))
+        return {
+            "market": market_name,
+            "period_id": _safe_int_local(market_id),
+            "home_odds_decimal": home_dec,
+            "away_odds_decimal": away_dec,
+            "home_odds_american": _decimal_to_american(home_dec),
+            "away_odds_american": _decimal_to_american(away_dec),
+            "bookie_id": home_entry.get("bid"),
+            "bookie": home_entry.get("bookie"),
+            "bookie_slug": home_entry.get("slug"),
+            "bet_link": home_entry.get("link"),
+            "odds_status": home_entry.get("status"),
+            "home_handicap": home_entry.get("handicap_name_en") or home_entry.get("handicap_name"),
+            "away_handicap": away_entry.get("handicap_name_en") or away_entry.get("handicap_name"),
+            "handicap_label": home_entry.get("handicap_name_en"),
+            "winning_side": market_data.get("winning_odd"),
+        }
 
     def _first_match_url(self, nuxt_data: Dict[str, Any]) -> Optional[str]:
         """Return the URL of the first upcoming match from the NUXT matchList."""

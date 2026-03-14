@@ -40,7 +40,16 @@ LOGGER = logging.getLogger(__name__)
 
 MARKET_NAMES: Dict[str, str] = {
     "201": "moneyline",
-    "301": "spread",
+    "301": "handicap",
+    "401": "total_sets",
+}
+
+_MATCH_ODDS_URL = "https://www.oddspedia.com/api/v1/getMatchOdds"
+_MATCH_ODDS_PARAMS = "language=us&geoCode=US&bookmakerGeoCode=US&bookmakerGeoState=VA"
+_API_HEADERS = {
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://www.oddspedia.com/us/tennis/odds",
 }
 
 _NODE_EXTRACTOR = r"""
@@ -161,6 +170,37 @@ class OddspediaClient:
             records = self._build_records_from_nuxt(nuxt_data)
 
             # ---------------------------------------------------
+            # Fill api_cache for any matches missed by XHR interception.
+            # The listing-page click simulation is unreliable; calling
+            # getMatchOdds directly (without ot=) returns ALL periods,
+            # including 1st Set (204) and 2nd Set (205).
+            # ---------------------------------------------------
+
+            for record in records:
+
+                match_id = record.get("match_id")
+
+                if not match_id or str(match_id) in api_cache:
+                    continue
+
+                try:
+                    resp = context.request.get(
+                        f"{_MATCH_ODDS_URL}?matchId={match_id}&{_MATCH_ODDS_PARAMS}",
+                        headers=_API_HEADERS,
+                        timeout=12000,
+                    )
+                    if resp.status == 200:
+                        data = resp.json()
+                        mid = (data.get("data") or {}).get("match_id")
+                        if mid:
+                            api_cache[str(mid)] = data
+                        else:
+                            # store under the record's match_id as fallback
+                            api_cache[str(match_id)] = data
+                except Exception as exc:
+                    LOGGER.debug("getMatchOdds direct call failed for %s: %s", match_id, exc)
+
+            # ---------------------------------------------------
             # attach API market data
             # ---------------------------------------------------
 
@@ -180,7 +220,7 @@ class OddspediaClient:
 
                 rows = []
 
-                for _, market in markets.items():
+                for market_key, market in markets.items():
 
                     if not market:
                         continue
@@ -210,12 +250,11 @@ class OddspediaClient:
 
         periods = data.get("periods") or []
         odds_by_period = data.get("odds") or {}
+        outcome_names = data.get("outcome_names") or []
+        market_group_id = data.get("market_group_id")
+        raw_market_name = data.get("market_name") or "market"
 
-        market_slug = (
-            (data.get("market_name") or "market")
-            .lower()
-            .replace(" ", "_")
-        )
+        market_slug = raw_market_name.lower().replace(" ", "_")
 
         markets: Dict[str, Any] = {}
 
@@ -240,21 +279,52 @@ class OddspediaClient:
             home_dec = _parse_float(o1.get("odds_value"))
             away_dec = _parse_float(o2.get("odds_value"))
 
+            # Derive a clean market key:
+            # "Final" period keeps the parent market slug (e.g. "moneyline"),
+            # other periods get it appended (e.g. "moneyline_1st_set").
             if pname.lower() == "final":
                 key = market_slug
             else:
-                key = f"{market_slug}_{pname.lower().replace(' ','_')}"
+                key = f"{market_slug}_{pname.lower().replace(' ', '_')}"
+
+            # Resolve outcome names from the outcome_names array when present
+            home_name = (
+                outcome_names[0]
+                if outcome_names and len(outcome_names) >= 1
+                else o1.get("outcome_name", "Home")
+            )
+            away_name = (
+                outcome_names[1]
+                if outcome_names and len(outcome_names) >= 2
+                else o2.get("outcome_name", "Away")
+            )
 
             markets[key] = {
+                # Market / period metadata
+                "market": key,
+                "market_group_id": market_group_id,
+                "market_group_name": raw_market_name,
+                "period_id": _safe_int_local(pid),
+                "period_name": pname,
+                # Bookie info (from the home-side outcome as the representative)
+                "bookie_id": o1.get("bid"),
                 "bookie": o1.get("bookie_name"),
                 "bookie_slug": o1.get("bookie_slug"),
+                # 2-way convenience odds
                 "home_odds_decimal": home_dec,
                 "away_odds_decimal": away_dec,
                 "home_odds_american": _decimal_to_american(home_dec),
                 "away_odds_american": _decimal_to_american(away_dec),
-                "status": o1.get("odds_status"),
+                # Extra per-outcome metadata
+                "home_outcome_name": home_name,
+                "away_outcome_name": away_name,
+                "odds_status": o1.get("odds_status"),
+                "odds_direction": o1.get("odds_direction"),
                 "bet_link": o1.get("odds_link"),
                 "winning_side": period_data.get("winning_odd"),
+                # Raw payload for debugging
+                "market_json": data,
+                "outcome_json": inner,
             }
 
         return markets
@@ -315,9 +385,25 @@ class OddspediaClient:
                 home_entry = odds_entries.get("1", {})
                 away_entry = odds_entries.get("2", {})
 
+                home_dec = _parse_float(home_entry.get("value"))
+                away_dec = _parse_float(away_entry.get("value"))
+
                 record["markets"][market_name] = {
-                    "home_odds_decimal": _parse_float(home_entry.get("value")),
-                    "away_odds_decimal": _parse_float(away_entry.get("value")),
+                    "market": market_name,
+                    "period_id": _safe_int_local(market_id),
+                    "home_odds_decimal": home_dec,
+                    "away_odds_decimal": away_dec,
+                    "home_odds_american": _decimal_to_american(home_dec),
+                    "away_odds_american": _decimal_to_american(away_dec),
+                    "bookie_id": home_entry.get("bid"),
+                    "bookie": home_entry.get("bookie"),
+                    "bookie_slug": home_entry.get("slug"),
+                    "bet_link": home_entry.get("link"),
+                    "odds_status": home_entry.get("status"),
+                    "home_handicap": home_entry.get("handicap_name_en") or home_entry.get("handicap_name"),
+                    "away_handicap": away_entry.get("handicap_name_en") or away_entry.get("handicap_name"),
+                    "handicap_label": home_entry.get("handicap_name_en"),
+                    "winning_side": market_data.get("winning_odd"),
                 }
 
             records.append(record)
@@ -328,6 +414,13 @@ class OddspediaClient:
 # ============================================================
 # UTILITY FUNCTIONS
 # ============================================================
+
+
+def _safe_int_local(value: Any) -> Optional[int]:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _normalise_ts(value: Optional[str]) -> Optional[str]:

@@ -446,7 +446,17 @@ class OddspediaClient:
 
                         try:
 
-                            resp = context.request.get(api_url)
+                            resp = context.request.get(
+                                api_url,
+                                headers={
+                                    "referer": match_url,
+                                    "accept": "application/json, text/plain, */*",
+                                    "sec-fetch-site": "same-origin",
+                                    "sec-fetch-mode": "cors",
+                                    "sec-fetch-dest": "empty",
+                                },
+                            )
+
 
                             if resp.ok:
 

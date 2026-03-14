@@ -63,7 +63,7 @@ _API_HEADERS = {
 
 # Per-match API – fetched via the live Playwright session (bypasses Cloudflare WAF)
 _PER_MATCH_API = "https://www.oddspedia.com/api/v1/getMatchMaxOddsByGroup"
-_PER_MATCH_PARAMS = "inplay=0&geoCode=US&geoState=NY&language=us"
+_PER_MATCH_PARAMS = "geoCode=US&geoState=&language=us"
 # Market group IDs to fetch for every match (201=Moneyline, 301=Spread, 401=Total Sets)
 _PER_MATCH_MARKET_GROUPS = [201, 301, 401]
 
@@ -457,6 +457,9 @@ class OddspediaClient:
                                 },
                             )
 
+                            # DEBUG
+                            print("[scraper] API URL:", api_url)
+                            print("[scraper] STATUS:", resp.status)
 
                             if resp.ok:
 

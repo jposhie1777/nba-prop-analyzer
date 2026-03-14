@@ -137,11 +137,21 @@ class OddspediaClient:
 
             print(f"[scraper] Loading default listing page: {url}")
             page.goto(url, wait_until="domcontentloaded", timeout=self._page_timeout_ms)
-            page.wait_for_function(
-                "() => window.__NUXT__ && window.__NUXT__.data",
-                timeout=15000,
-            )
-            nuxt_data = page.evaluate("() => window.__NUXT__")
+            try:
+                page.wait_for_function(
+                    "() => window.__NUXT__ && window.__NUXT__.data",
+                    timeout=30000,
+                )
+            except Exception as wait_exc:
+                print(f"[scraper] wait_for_function timed out ({wait_exc}); evaluating __NUXT__ as-is")
+
+            nuxt_data = page.evaluate("() => window.__NUXT__ || {}")
+            if not (nuxt_data or {}).get("data"):
+                raise RuntimeError(
+                    "window.__NUXT__.data not found after page load – "
+                    "page may be a Cloudflare challenge or the site structure changed. "
+                    f"Top-level __NUXT__ keys: {list((nuxt_data or {}).keys())}"
+                )
 
             records = self._build_records_from_nuxt(nuxt_data)
             print(f"[scraper] Default page: {len(records)} matches")

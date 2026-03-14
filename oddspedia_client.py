@@ -167,11 +167,28 @@ class OddspediaClient:
                 extra_url = f"{url}{sep}ot={ot_val}"
                 try:
                     page.goto(extra_url, wait_until="domcontentloaded", timeout=30000)
-                    page.wait_for_function(
-                        "() => window.__NUXT__ && window.__NUXT__.data",
-                        timeout=10000,
+                    # Wait for any __NUXT__ to appear — listing pages may not populate .data
+                    # for unknown ot= values, so we don't require .data here.
+                    try:
+                        page.wait_for_function("() => !!window.__NUXT__", timeout=10000)
+                    except Exception:
+                        pass  # evaluate anyway; log what we got
+
+                    extra_nuxt = page.evaluate("() => window.__NUXT__ || null")
+                    if not extra_nuxt:
+                        print(f"[scraper] ot={ot_val}: no __NUXT__ on page")
+                        continue
+
+                    # Log the top-level NUXT keys and data[0] keys so we can
+                    # understand the structure for unknown ot= values.
+                    nuxt_keys = list(extra_nuxt.keys())
+                    data0_x = (extra_nuxt.get("data") or [{}])[0]
+                    data0_keys = list(data0_x.keys()) if isinstance(data0_x, dict) else []
+                    print(
+                        f"[scraper] ot={ot_val}: __NUXT__ keys={nuxt_keys}, "
+                        f"data[0] keys={data0_keys[:15]}"
                     )
-                    extra_nuxt = page.evaluate("() => window.__NUXT__")
+
                     extra_odds = self._extract_odds_from_nuxt(extra_nuxt)
 
                     new_market_ids: set = set()
@@ -218,24 +235,33 @@ class OddspediaClient:
                         wait_until="domcontentloaded",
                         timeout=30000,
                     )
-                    page.wait_for_function(
-                        "() => window.__NUXT__ && window.__NUXT__.data",
-                        timeout=15000,
-                    )
-                    match_nuxt = page.evaluate("() => window.__NUXT__")
-                    data0 = (match_nuxt.get("data") or [{}])[0]
-                    print(f"[scraper] Match page NUXT data[0] keys: {list(data0.keys())[:20]}")
-                    # Log the odds/market structure for introspection
-                    for key in ("odds", "markets", "match", "matchOdds", "oddsData",
-                                "marketGroups", "oddsMarkets"):
-                        val = data0.get(key)
-                        if val is not None:
-                            if isinstance(val, dict):
-                                print(f"[scraper]   data0.{key} keys: {list(val.keys())[:10]}")
-                            elif isinstance(val, list):
-                                print(f"[scraper]   data0.{key}: list[{len(val)}]")
-                            else:
-                                print(f"[scraper]   data0.{key}: {type(val).__name__}")
+                    # Match pages use a different NUXT layout — just wait for
+                    # any __NUXT__ to exist, don't require .data specifically.
+                    try:
+                        page.wait_for_function("() => !!window.__NUXT__", timeout=15000)
+                    except Exception:
+                        pass
+
+                    match_nuxt = page.evaluate("() => window.__NUXT__ || null")
+                    if not match_nuxt:
+                        print("[scraper] Match page: no __NUXT__ found")
+                    else:
+                        print(f"[scraper] Match page __NUXT__ top keys: {list(match_nuxt.keys())}")
+                        # Drill into every top-level key to find market/odds data
+                        for tk, tv in match_nuxt.items():
+                            if isinstance(tv, dict):
+                                print(f"[scraper]   .{tk} (dict) keys: {list(tv.keys())[:15]}")
+                                # One more level for promising keys
+                                for sk in ("data", "odds", "match", "markets", "matchOdds"):
+                                    sv = tv.get(sk)
+                                    if sv is not None:
+                                        if isinstance(sv, (dict, list)):
+                                            inner_keys = list(sv.keys())[:10] if isinstance(sv, dict) else f"list[{len(sv)}]"
+                                            print(f"[scraper]     .{tk}.{sk}: {inner_keys}")
+                            elif isinstance(tv, list):
+                                print(f"[scraper]   .{tk} (list[{len(tv)}])")
+                                if tv and isinstance(tv[0], dict):
+                                    print(f"[scraper]     [0] keys: {list(tv[0].keys())[:15]}")
                 except Exception as exc:
                     print(f"[scraper] Match page load failed: {exc}")
 

@@ -65,7 +65,19 @@ _API_HEADERS = {
 _PER_MATCH_API = "https://www.oddspedia.com/api/v1/getMatchMaxOddsByGroup"
 _PER_MATCH_PARAMS = "geoCode=US&geoState=&language=us"
 # Market group IDs to fetch for every match (201=Moneyline, 301=Spread, 401=Total Sets)
-_PER_MATCH_MARKET_GROUPS = [201, 301, 401]
+_PER_MATCH_MARKET_GROUPS = [
+    1,   # Match Winner
+    2,   # Handicap
+    3,   # Totals
+    4,   # Both teams score
+    5,   # Double chance
+    6,   # Draw no bet
+    7,   # Team totals
+    8,
+    9,
+    10
+]
+
 
 _NODE_EXTRACTOR = r"""
 const fs   = require('fs');
@@ -446,32 +458,38 @@ class OddspediaClient:
 
                         try:
 
-                            resp = context.request.get(
-                                api_url,
-                                headers={
-                                    "referer": match_url,
-                                    "accept": "application/json, text/plain, */*",
-                                    "sec-fetch-site": "same-origin",
-                                    "sec-fetch-mode": "cors",
-                                    "sec-fetch-dest": "empty",
-                                },
+                            body = page.evaluate(
+                                """async (url) => {
+                                    const res = await fetch(url, {
+                                        method: "GET",
+                                        credentials: "include",
+                                        headers: {
+                                            "accept": "application/json, text/plain, */*"
+                                        }
+                                    });
+
+                                    if (!res.ok) {
+                                        return {status: res.status};
+                                    }
+
+                                    const data = await res.json();
+                                    return {status: res.status, data: data};
+                                }""",
+                                api_url
                             )
 
-                            # DEBUG
                             print("[scraper] API URL:", api_url)
-                            print("[scraper] STATUS:", resp.status)
+                            print("[scraper] STATUS:", body.get("status"))
 
-                            if resp.ok:
+                            if body and body.get("status") == 200 and body.get("data"):
 
-                                body = resp.json()
-
-                                rows = self._parse_per_match_to_market_rows(body, mid)
+                                rows = self._parse_per_match_to_market_rows(body["data"], mid)
 
                                 all_rows.extend(rows)
 
                         except Exception as exc:
 
-                            print(f"[scraper] direct API failed for {mid}: {exc}")
+        print(f"[scraper] direct API failed match={mid} mg={mg}: {exc}")
 
                 if all_rows:
 

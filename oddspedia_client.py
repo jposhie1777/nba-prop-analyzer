@@ -237,11 +237,14 @@ class OddspediaClient:
                     print(f"[scraper] Extra load ot={ot_val} failed: {exc}")
 
             # ── Per-match odds via getMatchMaxOddsByGroup API ─────────────────
-            # Use the live Playwright session (which has valid Cloudflare
-            # cookies) to call the per-match API for each match.  This gives
-            # all bookmakers and all lines (main + alternative) for every
-            # market group — far richer than the single best-odd from the
-            # listing-page SSR.
+            # Navigate back to the main listing URL so the browser session is
+            # in a clean, authenticated state before making API calls.
+            # (The ot= navigation loop above may have left the page on a URL
+            # that has no valid Cloudflare cookies for the API.)
+            try:
+                page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            except Exception as nav_exc:
+                print(f"[scraper] WARNING: could not navigate back to listing page: {nav_exc}")
 
             print(
                 f"[scraper] Fetching per-match odds for {len(records)} matches "
@@ -305,15 +308,21 @@ class OddspediaClient:
                         const r = await fetch(url, {
                             headers: {'Accept': 'application/json'}
                         });
-                        if (!r.ok) return null;
+                        if (!r.ok) return {_error: `HTTP ${r.status} ${r.statusText}`};
                         return await r.json();
                     } catch (e) {
-                        return null;
+                        return {_error: e.toString()};
                     }
                 }""",
                 url,
             )
-            return result if isinstance(result, dict) else None
+            if not isinstance(result, dict):
+                print(f"[scraper] per-match API unexpected response type={type(result)} matchId={match_id} mgId={market_group_id}")
+                return None
+            if "_error" in result:
+                print(f"[scraper] per-match API error matchId={match_id} mgId={market_group_id}: {result['_error']}")
+                return None
+            return result
         except Exception as exc:
             print(
                 f"[scraper] per-match API failed "

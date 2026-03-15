@@ -647,6 +647,18 @@ class OddspediaClient:
         # DEBUG — remove after diagnosis
         for resp in api_responses:
             print(f"[scraper] captured endpoint: {resp.get('url', '')[:120]}")
+            # DEBUG body shape
+            body = resp.get("body", {})
+            print(f"[scraper]   raw body type: {type(body)}")
+            if isinstance(body, dict):
+                print(f"[scraper]   body top-level keys: {list(body.keys())[:15]}")
+                data = body.get("data") or {}
+                if isinstance(data, dict):
+                    print(f"[scraper]   body.data keys: {list(data.keys())[:15]}")
+                elif isinstance(data, list):
+                    print(f"[scraper]   body.data is a list, len={len(data)}, first item keys: {list(data[0].keys())[:10] if data else 'empty'}")
+            elif isinstance(body, list):
+                print(f"[scraper]   body is a list, len={len(body)}, first item keys: {list(body[0].keys())[:10] if body else 'empty'}")
 
         for resp in api_responses:
             endpoint = resp.get("url", "")

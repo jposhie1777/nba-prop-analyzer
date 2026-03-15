@@ -406,18 +406,24 @@ class OddspediaClient:
                     try:
                         result = page.evaluate(
                             """async (url) => {
-                                const res = await fetch(url, {
-                                    credentials: 'include',
-                                    headers: { 'accept': 'application/json, text/plain, */*' }
-                                });
-                                if (!res.ok) return { status: res.status };
-                                return { status: 200, data: await res.json() };
+                                try {
+                                    const res = await fetch(url, {
+                                        credentials: 'include',
+                                        redirect: 'follow',
+                                        headers: { 'accept': 'application/json, text/plain, */*' }
+                                    });
+                                    if (!res.ok) return { status: res.status };
+                                    return { status: 200, data: await res.json() };
+                                } catch (e) {
+                                    return { status: 0, error: e.toString() };
+                                }
                             }""",
                             api_url
                         )
 
                         status = result.get("status") if isinstance(result, dict) else None
-                        print(f"[scraper] match={mid} mg={mg} status={status}")
+                        error = result.get("error") if isinstance(result, dict) else None
+                        print(f"[scraper] match={mid} mg={mg} status={status}" + (f" error={error}" if error else ""))
 
                         if status == 200 and result.get("data"):
                             rows = self._parse_per_match_to_market_rows(result["data"], mid)
@@ -617,6 +623,10 @@ class OddspediaClient:
 
         Tries several common response shapes to find a match list.
         """
+        # DEBUG — remove after diagnosis
+        for resp in api_responses:
+            print(f"[scraper] captured endpoint: {resp.get('url', '')[:120]}")
+
         for resp in api_responses:
             endpoint = resp.get("url", "")
             if not self._is_listing_api_endpoint(endpoint):
@@ -739,8 +749,20 @@ class OddspediaClient:
         if "getMatchMaxOddsByGroup" in endpoint:
             return False
 
-        # Accept common listing routes, but don't hard-require /api/.
+        # Reject non-match-list endpoints that return league/bookie metadata
         endpoint_l = endpoint.lower()
+        if "getleagues" in endpoint_l:
+            return False
+        if "getoutrights" in endpoint_l:
+            return False
+        if "getbookmakers" in endpoint_l:
+            return False
+        if "getleaguelivestream" in endpoint_l:
+            return False
+        if "getcategories" in endpoint_l:
+            return False
+
+        # Accept common listing routes, but don't hard-require /api/.
         if "/api/" in path:
             # Ignore per-match API calls in listing capture stage.
             if "matchid=" in query.lower() and "getmatchodds" in endpoint_l:
@@ -756,7 +778,6 @@ class OddspediaClient:
         # generic odds listing endpoints
         if "getmatchodds" in endpoint_l and "matchid=" not in query.lower():
             return True
-
 
         return False
 

@@ -159,6 +159,9 @@ class OddspediaClient:
                 if not self._is_listing_api_endpoint(url):
                     listing_intercept_stats["filtered_non_listing"] += 1
                     _add_example("filtered_non_listing", url)
+                    # DEBUG
+                    if "getMatch" in url or "getAmerican" in url:
+                        print(f"[scraper] DEBUG filtered match endpoint: {url[:150]}")
                     return
                 # Skip per-match endpoints — those are handled later
                 if "getMatchMaxOddsByGroup" in url:

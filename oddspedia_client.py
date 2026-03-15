@@ -62,7 +62,7 @@ _API_HEADERS = {
 }
 
 # Per-match API – fetched via the live Playwright session (bypasses Cloudflare WAF)
-_PER_MATCH_API = "https://www.oddspedia.com/api/v1/getMatchMaxOddsByGroup"
+_PER_MATCH_API = "https://oddspedia.com/api/v1/getMatchMaxOddsByGroup"
 _PER_MATCH_PARAMS = "geoCode=US&geoState=&language=us"
 # Market group IDs to fetch for every match (201=Moneyline, 301=Spread, 401=Total Sets)
 _PER_MATCH_MARKET_GROUPS = [
@@ -659,7 +659,10 @@ class OddspediaClient:
                     print(f"[scraper]   body.data is a list, len={len(data)}, first item keys: {list(data[0].keys())[:10] if data else 'empty'}")
             elif isinstance(body, list):
                 print(f"[scraper]   body is a list, len={len(body)}, first item keys: {list(body[0].keys())[:10] if body else 'empty'}")
-
+            # DEBUG match value shape
+            if isinstance(data, dict) and all(str(k).isdigit() for k in list(data.keys())[:3]):
+                first_val = list(data.values())[0]
+                print(f"[scraper]   first match value keys: {list(first_val.keys())[:15] if isinstance(first_val, dict) else first_val}")
         for resp in api_responses:
             endpoint = resp.get("url", "")
             if not self._is_listing_api_endpoint(endpoint):

@@ -522,12 +522,14 @@ def ingest_mls_odds(
     print(f"[mls_odds] Scraped {len(matches)} matches")
 
     # ── Filter to today ───────────────────────────────────────────────────────
-    if today_only:
+    if today_only and any(m.get("date_utc") for m in matches):
         matches = [
             m for m in matches
             if (m.get("date_utc") or "").startswith(scraped_date)
         ]
         print(f"[mls_odds] After today filter : {len(matches)} matches")
+    else:
+        print(f"[mls_odds] Today filter skipped (no date_utc available) : {len(matches)} matches")
 
     # ── Prepare rows ──────────────────────────────────────────────────────────
     rows = _to_bq_rows(matches, ingested_at, scraped_date)

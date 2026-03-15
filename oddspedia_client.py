@@ -242,10 +242,11 @@ class OddspediaClient:
                 end = (now + timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
                 match_list_url = (
                     f"https://oddspedia.com/api/v1/getMatchList"
-                    f"?excludeSpecialStatus=0&sortBy=default&perPageDefault=100"
+                    f"?excludeSpecialStatus=0&sortBy=default&perPage=100"
                     f"&startDate={urllib.parse.quote(start)}&endDate={urllib.parse.quote(end)}"
                     f"&geoCode=US&status=all&sport=soccer&popularLeaguesOnly=0"
-                    f"&category=usa&league=mls&seasonId=137218&language=us"
+                    f"&category=usa&league=mls&seasonId=137218&round=&wv=1&page=1"
+                    f"&perPage=100&language=us"
                 )
                 ml_result = page.evaluate(
                     """async (url) => {

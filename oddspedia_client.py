@@ -206,9 +206,18 @@ class OddspediaClient:
             except Exception as wait_exc:
                 print(f"[scraper] wait_for_function timed out ({wait_exc}); evaluating __NUXT__ as-is")
 
-            # Wait for networkidle so client-side API calls can complete
+            # Wait specifically for the match list API call to complete
             try:
-                page.wait_for_load_state("networkidle", timeout=12000)
+                page.wait_for_response(
+                    lambda r: "getMatchList" in r.url and "SmartBets" not in r.url,
+                    timeout=30000,
+                )
+            except Exception as e:
+                print(f"[scraper] getMatchList wait timed out: {e}")
+
+            # Also wait for networkidle as a secondary settle
+            try:
+                page.wait_for_load_state("networkidle", timeout=8000)
             except Exception:
                 pass
 

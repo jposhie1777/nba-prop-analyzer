@@ -443,14 +443,6 @@ class OddspediaClient:
                     record["market_rows"] = all_rows
                     total_market_rows += len(all_rows)
 
-        print(f"[scraper] direct API failed match={mid} mg={mg}: {exc}")
-
-                if all_rows:
-
-                    record["market_rows"] = all_rows
-
-                    total_market_rows += len(all_rows)
-
 
             # ── Summary ───────────────────────────────────────────────────────
             total_markets = sum(len(r.get("markets", {})) for r in records)

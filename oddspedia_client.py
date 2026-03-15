@@ -63,7 +63,7 @@ _API_HEADERS = {
 
 # Per-match API – fetched via the live Playwright session (bypasses Cloudflare WAF)
 _PER_MATCH_API = "https://oddspedia.com/api/v1/getMatchMaxOddsByGroup"
-_PER_MATCH_PARAMS = "geoCode=US&geoState=&language=us"
+_PER_MATCH_PARAMS = "inplay=0&geoCode=US&geoState=NY&language=us"
 # Market group IDs to fetch for every match (201=Moneyline, 301=Spread, 401=Total Sets)
 _PER_MATCH_MARKET_GROUPS = [
     1,   # Match Winner
@@ -232,6 +232,41 @@ class OddspediaClient:
                 page.wait_for_load_state("networkidle", timeout=8000)
             except Exception:
                 pass
+
+            # Explicitly fetch full match list since camoufox doesn't capture it via SSR
+            try:
+                import urllib.parse
+                from datetime import datetime, timezone, timedelta
+                now = datetime.now(timezone.utc)
+                start = (now - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                end = (now + timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                match_list_url = (
+                    f"https://oddspedia.com/api/v1/getMatchList"
+                    f"?excludeSpecialStatus=0&sortBy=default&perPageDefault=100"
+                    f"&startDate={urllib.parse.quote(start)}&endDate={urllib.parse.quote(end)}"
+                    f"&geoCode=US&status=all&sport=soccer&popularLeaguesOnly=0"
+                    f"&category=usa&league=mls&seasonId=137218&language=us"
+                )
+                ml_result = page.evaluate(
+                    """async (url) => {
+                        const res = await fetch(url, {
+                            credentials: 'include',
+                            redirect: 'follow',
+                            headers: { 'accept': 'application/json, text/plain, */*' }
+                        });
+                        if (!res.ok) return { status: res.status };
+                        return { status: 200, data: await res.json() };
+                    }""",
+                    match_list_url
+                )
+                print(f"[scraper] getMatchList direct fetch status: {ml_result.get('status')}")
+                if ml_result.get("status") == 200 and ml_result.get("data"):
+                    listing_api_responses.append({
+                        "url": match_list_url,
+                        "body": ml_result["data"]
+                    })
+            except Exception as exc:
+                print(f"[scraper] getMatchList direct fetch error: {exc}")
 
             if listing_intercept_stats:
                 stats_line = ", ".join(f"{k}={v}" for k, v in sorted(listing_intercept_stats.items()))

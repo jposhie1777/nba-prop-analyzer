@@ -127,6 +127,7 @@ class OddspediaClient:
             context = browser.new_context(
                 locale="en-US",
                 viewport={"width": 1920, "height": 1080},
+                extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
             )
 
             page = context.new_page()
@@ -223,10 +224,9 @@ class OddspediaClient:
             # Only raise if __NUXT__ is entirely missing (Cloudflare challenge).
             # data: [] means client-side page — handled below via API interception.
             if "data" not in (nuxt_data or {}):
-                raise RuntimeError(
-                    "window.__NUXT__ has no 'data' key – page may be a Cloudflare "
-                    "challenge or the site structure changed. "
-                    f"Top-level __NUXT__ keys: {list((nuxt_data or {}).keys())}"
+                print(
+                    f"[scraper] window.__NUXT__ has no 'data' key — falling back to "
+                    f"intercepted API responses. Top-level __NUXT__ keys: {list((nuxt_data or {}).keys())}"
                 )
 
             records = self._build_records_from_nuxt(nuxt_data)

@@ -66,7 +66,7 @@ _PER_MATCH_API = "https://oddspedia.com/api/v1/getMatchMaxOddsByGroup"
 _PER_MATCH_PARAMS = "inplay=0&geoCode=US&geoState=NY&language=us"
 # Market group IDs to fetch for every match (201=Moneyline, 301=Spread, 401=Total Sets)
 _PER_MATCH_MARKET_GROUPS = [
-    1,   # Match Winner
+    1,   # Match Winner (1x2)
     2,   # Handicap
     3,   # Totals
     4,   # Both teams score
@@ -75,7 +75,8 @@ _PER_MATCH_MARKET_GROUPS = [
     7,   # Team totals
     8,
     9,
-    10
+    10,
+    63,  # Total Corners
 ]
 
 

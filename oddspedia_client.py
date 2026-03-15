@@ -471,6 +471,7 @@ class OddspediaClient:
                         record["away_team_id"] = d.get("at_id")
                         record["league_id"] = d.get("league_id")
                         record["date_utc"] = _normalise_ts(d.get("starttime") or d.get("md"))
+                        record["match_info"] = d  # store full payload for downstream ingest
                         print(f"[scraper] match={mid} enriched: {d.get('ht')} vs {d.get('at')} @ {record['date_utc']}")
                     else:
                         print(f"[scraper] getMatchInfo match={mid} status={info_result.get('status')}")

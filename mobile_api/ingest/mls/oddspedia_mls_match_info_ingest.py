@@ -217,34 +217,13 @@ def ingest_match_info(
         mid = match.get("match_id")
         if not mid:
             continue
-
-        # Re-use the page session from the scraper isn't available here,
-        # so we make a direct HTTP fetch using requests (session cookies not
-        # needed — getMatchInfo doesn't require Cloudflare auth)
-        import urllib.request
-        info_url = (
-            f"https://oddspedia.com/api/v1/getMatchInfo"
-            f"?matchId={mid}&language=us&geoCode=US"
-        )
-        try:
-            req = urllib.request.Request(
-                info_url,
-                headers={
-                    "Accept": "application/json",
-                    "User-Agent": (
-                        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-                    ),
-                },
-            )
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                body = json.loads(resp.read().decode())
-            data = body.get("data") or {}
-            print(f"[match_info] match={mid} fetched: {data.get('ht')} vs {data.get('at')}")
-            weather_rows.append(_build_weather_row(mid, data, ingested_at, scraped_date))
-            key_rows.extend(_build_key_rows(mid, data, ingested_at, scraped_date))
-        except Exception as exc:
-            print(f"[match_info] match={mid} fetch error: {exc}")
+        data = match.get("match_info") or {}
+        if not data:
+            print(f"[match_info] match={mid} no match_info on record — skipping")
+            continue
+        print(f"[match_info] match={mid} processing: {data.get('ht')} vs {data.get('at')}")
+        weather_rows.append(_build_weather_row(mid, data, ingested_at, scraped_date))
+        key_rows.extend(_build_key_rows(mid, data, ingested_at, scraped_date))
 
     print(f"[match_info] Weather rows : {len(weather_rows)}")
     print(f"[match_info] Key rows     : {len(key_rows)}")

@@ -226,29 +226,9 @@ class OddspediaClient:
                 print("[scraper] Dispatched visibility change events")
             except Exception as exc:
                 print(f"[scraper] Visibility change failed: {exc}")
-            # Wait specifically for the match list API call to complete
-            try:
-                page.wait_for_response(
-                    lambda r: "getMatchList" in r.url and "SmartBets" not in r.url,
-                    timeout=30000,
-                )
-            except Exception as e:
-                print(f"[scraper] getMatchList wait timed out: {e}")
-
-            # Wait specifically for the match list API call to complete
-            try:
-                page.wait_for_response(
-                    lambda r: "getMatchList" in r.url and "SmartBets" not in r.url,
-                    timeout=30000,
-                )
-            except Exception as e:
-                print(f"[scraper] getMatchList wait timed out: {e}")
-
-            # Also wait for networkidle as a secondary settle
-            try:
-                page.wait_for_load_state("networkidle", timeout=8000)
-            except Exception:
-                pass
+            
+            # Allow time for deferred API calls to fire after visibility change
+            page.wait_for_timeout(3000)
 
             # Explicitly fetch full match list since camoufox doesn't capture it via SSR
             try:
@@ -460,6 +440,42 @@ class OddspediaClient:
 
             total_market_rows = 0
             api_working: Optional[bool] = None  # None=untested, True=working, False=blocked
+
+            # Enrich match records with team names/dates via getMatchInfo
+            for record in records:
+                mid = str(record.get("match_id") or "")
+                if not mid:
+                    continue
+                try:
+                    info_url = (
+                        f"https://oddspedia.com/api/v1/getMatchInfo"
+                        f"?matchId={mid}&language=us&geoCode=US"
+                    )
+                    info_result = page.evaluate(
+                        """async (url) => {
+                            const res = await fetch(url, {
+                                credentials: 'include',
+                                redirect: 'follow',
+                                headers: { 'accept': 'application/json, text/plain, */*' }
+                            });
+                            if (!res.ok) return { status: res.status };
+                            return { status: 200, data: await res.json() };
+                        }""",
+                        info_url
+                    )
+                    if info_result.get("status") == 200:
+                        d = (info_result.get("data") or {}).get("data") or {}
+                        record["home_team"] = d.get("ht")
+                        record["away_team"] = d.get("at")
+                        record["home_team_id"] = d.get("ht_id")
+                        record["away_team_id"] = d.get("at_id")
+                        record["league_id"] = d.get("league_id")
+                        record["date_utc"] = _normalise_ts(d.get("starttime") or d.get("md"))
+                        print(f"[scraper] match={mid} enriched: {d.get('ht')} vs {d.get('at')} @ {record['date_utc']}")
+                    else:
+                        print(f"[scraper] getMatchInfo match={mid} status={info_result.get('status')}")
+                except Exception as exc:
+                    print(f"[scraper] getMatchInfo match={mid} error: {exc}")
 
             print(f"[scraper] Firing per-match API calls from listing page context ({len(records)} matches)")
 

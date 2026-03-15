@@ -8,12 +8,16 @@ with Camoufox(headless=True, geoip=True) as browser:
     page = context.new_page()
     page.goto(url, wait_until="networkidle")
     
-    html = page.content()
-    print("Status: page loaded")
-    print("headToHead in response:", "headToHead" in html)
-    print("ht_wins in response:", "ht_wins" in html)
+    # Try to get the resolved data via JavaScript execution
+    h2h = page.evaluate("""() => {
+        try {
+            const store = window.__nuxt__?._vueInstance?.$store 
+                       || window.__nuxt__?.context?.store
+                       || Object.values(window.__nuxt__?._vueInstance?.$children || {})
+                             .find(c => c.$store)?.$store;
+            if (store) return store.state.event.headToHead;
+        } catch(e) {}
+        return null;
+    }""")
     
-    # Try to find and print a snippet around headToHead
-    idx = html.find("headToHead")
-    if idx != -1:
-        print("Snippet:", html[idx:idx+500])
+    print("H2H via store:", h2h)

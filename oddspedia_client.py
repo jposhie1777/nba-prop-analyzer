@@ -474,6 +474,30 @@ class OddspediaClient:
                         record["date_utc"] = _normalise_ts(d.get("starttime") or d.get("md"))
                         record["match_info"] = d  # store full payload for downstream ingest
                         print(f"[scraper] match={mid} enriched: {d.get('ht')} vs {d.get('at')} @ {record['date_utc']}")
+
+                        # Extract betting stats from Vue store via match page
+                        try:
+                            match_url = f"https://oddspedia.com/us/soccer/usa/mls/{d.get('ht_slug')}-{d.get('at_slug')}-{d.get('match_key')}"
+                            page.goto(match_url, wait_until="domcontentloaded", timeout=30000)
+                            page.wait_for_timeout(3000)
+                            betting_stats = page.evaluate("""
+                                () => {
+                                    try {
+                                        const store = document.querySelector('#__nuxt').__vue__?.$store?.state?.event?.bettingStats;
+                                        return store ? JSON.parse(JSON.stringify(store)) : null;
+                                    } catch(e) {
+                                        return null;
+                                    }
+                                }
+                            """)
+                            if betting_stats:
+                                record["betting_stats"] = betting_stats
+                                print(f"[scraper] match={mid} betting stats captured")
+                            else:
+                                print(f"[scraper] match={mid} betting stats empty")
+                        except Exception as exc_bs:
+                            print(f"[scraper] match={mid} betting stats error: {exc_bs}")
+
                     else:
                         print(f"[scraper] getMatchInfo match={mid} status={info_result.get('status')}")
                 except Exception as exc:

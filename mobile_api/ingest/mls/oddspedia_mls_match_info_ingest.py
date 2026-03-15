@@ -5,6 +5,7 @@ Ingests match info and match keys from Oddspedia getMatchInfo API into BigQuery.
 Tables:
   oddspedia.mls_match_weather  — matchup + weather + team form
   oddspedia.mls_match_keys     — matchup + ranked statistical statements
+  oddspedia.mls_betting_stats  — matchup + goals/btts/corners/cards betting stats
 
 Usage:
     python -m mobile_api.ingest.mls.oddspedia_mls_match_info_ingest
@@ -38,6 +39,7 @@ DATASET = os.getenv("ODDSPEDIA_DATASET", "oddspedia")
 DATASET_LOCATION = os.getenv("ODDSPEDIA_BQ_LOCATION", "US")
 WEATHER_TABLE = "mls_match_weather"
 KEYS_TABLE = "mls_match_keys"
+BETTING_STATS_TABLE = "mls_betting_stats"
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -64,6 +66,23 @@ KEYS_SCHEMA: List[bigquery.SchemaField] = [
     bigquery.SchemaField("rank", "INT64"),
     bigquery.SchemaField("statement", "STRING"),
     bigquery.SchemaField("teams_json", "JSON"),
+]
+
+BETTING_STATS_SCHEMA: List[bigquery.SchemaField] = [
+    bigquery.SchemaField("ingested_at", "TIMESTAMP", mode="REQUIRED"),
+    bigquery.SchemaField("scraped_date", "DATE", mode="REQUIRED"),
+    bigquery.SchemaField("match_id", "INT64", mode="REQUIRED"),
+    bigquery.SchemaField("home_team", "STRING"),
+    bigquery.SchemaField("away_team", "STRING"),
+    bigquery.SchemaField("date_utc", "TIMESTAMP"),
+    bigquery.SchemaField("category", "STRING"),
+    bigquery.SchemaField("sub_tab", "STRING"),
+    bigquery.SchemaField("label", "STRING"),
+    bigquery.SchemaField("value", "STRING"),
+    bigquery.SchemaField("home", "FLOAT64"),
+    bigquery.SchemaField("away", "FLOAT64"),
+    bigquery.SchemaField("total_matches_home", "INT64"),
+    bigquery.SchemaField("total_matches_away", "INT64"),
 ]
 
 # ── BigQuery helpers ──────────────────────────────────────────────────────────
@@ -180,6 +199,50 @@ def _build_key_rows(
     return rows
 
 
+def _build_betting_stats_rows(
+    match_id: int,
+    match_info: Dict[str, Any],
+    betting_stats: Dict[str, Any],
+    ingested_at: str,
+    scraped_date: str,
+) -> List[Dict[str, Any]]:
+    rows = []
+    home_team = match_info.get("ht")
+    away_team = match_info.get("at")
+    date_utc = (match_info.get("starttime") or "").split("+")[0].strip() or None
+
+    for category in (betting_stats.get("data") or []):
+        category_label = category.get("label")
+
+        for sub_tab in (category.get("data") or []):
+            sub_tab_label = sub_tab.get("label")
+            total_matches = sub_tab.get("total_matches") or {}
+
+            for stat in (sub_tab.get("data") or []):
+                if not isinstance(stat, dict):
+                    continue
+                # Skip scoring_minutes — it's a nested structure not a simple home/away
+                if stat.get("label") == "scoring_minutes":
+                    continue
+                rows.append({
+                    "ingested_at": ingested_at,
+                    "scraped_date": scraped_date,
+                    "match_id": match_id,
+                    "home_team": home_team,
+                    "away_team": away_team,
+                    "date_utc": date_utc,
+                    "category": category_label,
+                    "sub_tab": sub_tab_label,
+                    "label": stat.get("label"),
+                    "value": str(stat["value"]) if stat.get("value") is not None else None,
+                    "home": float(stat["home"]) if stat.get("home") is not None else None,
+                    "away": float(stat["away"]) if stat.get("away") is not None else None,
+                    "total_matches_home": total_matches.get("home"),
+                    "total_matches_away": total_matches.get("away"),
+                })
+    return rows
+
+
 # ── Main ingest ───────────────────────────────────────────────────────────────
 
 
@@ -201,7 +264,6 @@ def ingest_match_info(
         print("[match_info] Mode        : DRY RUN")
     print("=" * 60)
 
-    # Scrape match list to get today's match IDs + team names
     scraper = OddspediaClient()
     matches = scraper.scrape(target_url)
     today_matches = [
@@ -212,6 +274,7 @@ def ingest_match_info(
 
     weather_rows: List[Dict[str, Any]] = []
     key_rows: List[Dict[str, Any]] = []
+    betting_stats_rows: List[Dict[str, Any]] = []
 
     for match in today_matches:
         mid = match.get("match_id")
@@ -225,17 +288,29 @@ def ingest_match_info(
         weather_rows.append(_build_weather_row(mid, data, ingested_at, scraped_date))
         key_rows.extend(_build_key_rows(mid, data, ingested_at, scraped_date))
 
-    print(f"[match_info] Weather rows : {len(weather_rows)}")
-    print(f"[match_info] Key rows     : {len(key_rows)}")
+        betting_stats = match.get("betting_stats") or {}
+        if betting_stats:
+            rows = _build_betting_stats_rows(mid, data, betting_stats, ingested_at, scraped_date)
+            betting_stats_rows.extend(rows)
+            print(f"[match_info] match={mid} betting stats rows: {len(rows)}")
+        else:
+            print(f"[match_info] match={mid} no betting stats on record")
+
+    print(f"[match_info] Weather rows      : {len(weather_rows)}")
+    print(f"[match_info] Key rows          : {len(key_rows)}")
+    print(f"[match_info] Betting stat rows : {len(betting_stats_rows)}")
 
     if dry_run:
         print("\n--- WEATHER SAMPLE ---")
         print(json.dumps(weather_rows[:2], indent=2, default=str))
         print("\n--- KEYS SAMPLE ---")
         print(json.dumps(key_rows[:5], indent=2, default=str))
+        print("\n--- BETTING STATS SAMPLE ---")
+        print(json.dumps(betting_stats_rows[:5], indent=2, default=str))
         return {
             "weather_rows": len(weather_rows),
             "key_rows": len(key_rows),
+            "betting_stats_rows": len(betting_stats_rows),
             "dry_run": True,
         }
 
@@ -243,16 +318,19 @@ def ingest_match_info(
     _ensure_dataset(bq)
     _ensure_table(bq, WEATHER_TABLE, WEATHER_SCHEMA)
     _ensure_table(bq, KEYS_TABLE, KEYS_SCHEMA)
+    _ensure_table(bq, BETTING_STATS_TABLE, BETTING_STATS_SCHEMA)
 
     w_written = _truncate_and_insert(bq, WEATHER_TABLE, weather_rows, WEATHER_SCHEMA)
     k_written = _truncate_and_insert(bq, KEYS_TABLE, key_rows, KEYS_SCHEMA)
+    b_written = _truncate_and_insert(bq, BETTING_STATS_TABLE, betting_stats_rows, BETTING_STATS_SCHEMA)
 
-    print(f"[match_info] Written — weather: {w_written}, keys: {k_written}")
+    print(f"[match_info] Written — weather: {w_written}, keys: {k_written}, betting stats: {b_written}")
     print("=" * 60)
 
     return {
         "weather_rows_written": w_written,
         "key_rows_written": k_written,
+        "betting_stats_rows_written": b_written,
         "errors": [],
     }
 

@@ -46,11 +46,10 @@ jobs:
           pip install --upgrade pip
           pip install -r mobile_api/requirements.txt
 
-      - name: Install Playwright + Chromium
+      - name: Install Camoufox + Firefox
         run: |
-          pip install playwright
-          playwright install chromium
-          playwright install-deps chromium
+          pip install camoufox[geoip]
+          python -m camoufox fetch
 
       - name: Configure GCP credentials
         if: ${{ inputs.dry_run != true }}

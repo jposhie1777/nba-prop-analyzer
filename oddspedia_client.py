@@ -118,30 +118,18 @@ class OddspediaClient:
 
     def scrape(self, url: str) -> List[Dict[str, Any]]:
 
-        from playwright.sync_api import sync_playwright
+        from camoufox.sync_api import Camoufox
 
-        try:
-            from playwright_stealth import stealth_sync as _stealth_sync
-        except ImportError:
-            _stealth_sync = None
+        LOGGER.info("Fetching %s via Camoufox", url)
 
-        LOGGER.info("Fetching %s via Playwright", url)
-
-        with sync_playwright() as pw:
-
-            browser = pw.chromium.launch(headless=True)
+        with Camoufox(headless=True, geoip=True) as browser:
 
             context = browser.new_context(
-                user_agent=self._user_agent,
                 locale="en-US",
                 viewport={"width": 1920, "height": 1080},
-                extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
             )
 
             page = context.new_page()
-
-            if _stealth_sync:
-                _stealth_sync(page)
 
             # ── Load listing page (default view) ─────────────────────────────────
             # For SSR-heavy pages (e.g. tennis), window.__NUXT__.data[0].matchList

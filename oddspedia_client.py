@@ -209,6 +209,23 @@ class OddspediaClient:
             except Exception as wait_exc:
                 print(f"[scraper] wait_for_function timed out ({wait_exc}); evaluating __NUXT__ as-is")
 
+            # Simulate tab visibility change to trigger deferred API calls
+            try:
+                page.evaluate("""() => {
+                    Object.defineProperty(document, 'visibilityState', {
+                        value: 'hidden', writable: true
+                    });
+                    document.dispatchEvent(new Event('visibilitychange'));
+                    setTimeout(() => {
+                        Object.defineProperty(document, 'visibilityState', {
+                            value: 'visible', writable: true
+                        });
+                        document.dispatchEvent(new Event('visibilitychange'));
+                    }, 500);
+                }""")
+                print("[scraper] Dispatched visibility change events")
+            except Exception as exc:
+                print(f"[scraper] Visibility change failed: {exc}")
             # Wait specifically for the match list API call to complete
             try:
                 page.wait_for_response(

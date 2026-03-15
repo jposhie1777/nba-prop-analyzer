@@ -71,3 +71,11 @@ jobs:
             ARGS="$ARGS --all-dates"
           fi
           python -m mobile_api.ingest.mls.oddspedia_mls_odds_ingest $ARGS
+
+      - name: Run Oddspedia MLS match info ingest
+        run: |
+          ARGS=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          python -m mobile_api.ingest.mls.oddspedia_mls_match_info_ingest $ARGS

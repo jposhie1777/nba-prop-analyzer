@@ -674,6 +674,8 @@ class OddspediaClient:
                     data.get("matches"),
                     data.get("items"),
                     data.get("results"),
+                    data.get("smartBets"),
+                    data.get("list"),
                 ])
             if isinstance(body, dict):
                 candidates.extend([
@@ -782,8 +784,7 @@ class OddspediaClient:
             return False
         if "getcategories" in endpoint_l:
             return False
-        if "getmatchlistsmartbets" in endpoint_l:
-            return False
+        
 
         # Accept common listing routes, but don't hard-require /api/.
         if "/api/" in path:

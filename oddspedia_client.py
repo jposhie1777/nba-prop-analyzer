@@ -399,95 +399,49 @@ class OddspediaClient:
             total_market_rows = 0
             api_working: Optional[bool] = None  # None=untested, True=working, False=blocked
 
+            print(f"[scraper] Firing per-match API calls from listing page context ({len(records)} matches)")
+
             for record in records:
-
                 mid = str(record.get("match_id") or "")
-
-                match_url = match_urls.get(mid) or record.get("url")
-                if not match_url:
+                if not mid:
                     continue
-
-                try:
-                    page.goto(match_url, wait_until="domcontentloaded", timeout=12000)
-                    page.wait_for_timeout(2000)
-                except Exception as exc:
-                    print(f"[scraper] match page {mid} nav error: {exc}")
-                    continue
-
-                # Probe interception once
-                if api_working is None:
-
-                    if captured.get(mid):
-                        api_working = True
-                        print(
-                            f"[scraper] Response interception working — "
-                            f"captured {len(captured[mid])} market groups for match {mid}"
-                        )
-
-                    else:
-                        api_working = False
-                        print(
-                            "[scraper] Cloudflare blocked page XHR — switching to direct API mode"
-                        )
-
-                # Fill missing team info if needed
-                if not record.get("home_team"):
-                    self._enrich_record_from_match_page(record, mid, page, match_info_captured)
-
-                match_data = captured.get(mid, {})
 
                 all_rows: List[Dict[str, Any]] = []
 
-                # ── Case 1: Intercepted API worked ─────────────────────────
-                if match_data:
-
-                    for body in match_data.values():
-                        all_rows.extend(self._parse_per_match_to_market_rows(body, mid))
-
-                # ── Case 2: Cloudflare blocked XHR → direct API fallback ───
-                else:
-
-                    for mg in _PER_MATCH_MARKET_GROUPS:
-
-                        api_url = (
-                            f"{_PER_MATCH_API}"
-                            f"?matchId={mid}"
-                            f"&marketGroupId={mg}"
-                            f"&{_PER_MATCH_PARAMS}"
+                for mg in _PER_MATCH_MARKET_GROUPS:
+                    api_url = (
+                        f"{_PER_MATCH_API}"
+                        f"?matchId={mid}"
+                        f"&marketGroupId={mg}"
+                        f"&{_PER_MATCH_PARAMS}"
+                    )
+                    try:
+                        result = page.evaluate(
+                            """async (url) => {
+                                const res = await fetch(url, {
+                                    credentials: 'include',
+                                    headers: { 'accept': 'application/json, text/plain, */*' }
+                                });
+                                if (!res.ok) return { status: res.status };
+                                return { status: 200, data: await res.json() };
+                            }""",
+                            api_url
                         )
 
-                        try:
+                        status = result.get("status") if isinstance(result, dict) else None
+                        print(f"[scraper] match={mid} mg={mg} status={status}")
 
-                            body = page.evaluate(
-                                """async (url) => {
-                                    const res = await fetch(url, {
-                                        method: "GET",
-                                        credentials: "include",
-                                        headers: {
-                                            "accept": "application/json, text/plain, */*"
-                                        }
-                                    });
+                        if status == 200 and result.get("data"):
+                            rows = self._parse_per_match_to_market_rows(result["data"], mid)
+                            all_rows.extend(rows)
+                            print(f"[scraper]   → {len(rows)} rows")
 
-                                    if (!res.ok) {
-                                        return {status: res.status};
-                                    }
+                    except Exception as exc:
+                        print(f"[scraper] match={mid} mg={mg} error: {exc}")
 
-                                    const data = await res.json();
-                                    return {status: res.status, data: data};
-                                }""",
-                                api_url
-                            )
-
-                            print("[scraper] API URL:", api_url)
-                            print("[scraper] STATUS:", body.get("status"))
-
-                            if body and body.get("status") == 200 and body.get("data"):
-
-                                rows = self._parse_per_match_to_market_rows(body["data"], mid)
-
-                                all_rows.extend(rows)
-
-                        except Exception as exc:
+                if all_rows:
+                    record["market_rows"] = all_rows
+                    total_market_rows += len(all_rows)
 
         print(f"[scraper] direct API failed match={mid} mg={mg}: {exc}")
 

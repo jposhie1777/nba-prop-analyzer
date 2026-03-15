@@ -215,6 +215,15 @@ class OddspediaClient:
             except Exception as e:
                 print(f"[scraper] getMatchList wait timed out: {e}")
 
+            # Wait specifically for the match list API call to complete
+            try:
+                page.wait_for_response(
+                    lambda r: "getMatchList" in r.url and "SmartBets" not in r.url,
+                    timeout=30000,
+                )
+            except Exception as e:
+                print(f"[scraper] getMatchList wait timed out: {e}")
+
             # Also wait for networkidle as a secondary settle
             try:
                 page.wait_for_load_state("networkidle", timeout=8000)
@@ -769,6 +778,8 @@ class OddspediaClient:
         if "getleaguelivestream" in endpoint_l:
             return False
         if "getcategories" in endpoint_l:
+            return False
+        if "getmatchlistsmartbets" in endpoint_l:
             return False
 
         # Accept common listing routes, but don't hard-require /api/.

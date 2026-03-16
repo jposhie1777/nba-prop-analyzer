@@ -1,5 +1,5 @@
 from camoufox.sync_api import Camoufox
-import re
+import re, json
 
 url = "https://oddspedia.com/us/soccer/seattle-sounders-fc-san-jose-earthquakes-8076?tab=insights"
 
@@ -11,12 +11,31 @@ with Camoufox(headless=True, geoip=True) as browser:
     
     html = page.content()
     
-    # Print the full __NUXT__ script content so we can see its format
-    match = re.search(r'<script>(window\.__NUXT__.*?)</script>', html, re.DOTALL)
-    if match:
-        script = match.group(1)
-        print("First 1000 chars of __NUXT__ script:")
-        print(script[:1000])
-        print("\n...\n")
-        print("Last 500 chars:")
-        print(script[-500:])
+    # The __NUXT__ script has already executed on the page
+    # but window.__NUXT__ showed as undefined earlier
+    # Let's wait longer and try again
+    result = page.evaluate("""() => {
+        // Try all possible global locations
+        const checks = {
+            '__NUXT__': typeof window.__NUXT__,
+            '__nuxt__': typeof window.__nuxt__,
+            'nuxt': typeof window.nuxt,
+            '__nuxtState__': typeof window.__nuxtState__,
+        };
+        console.log(JSON.stringify(checks));
+        
+        // Try re-executing the script
+        for (const s of document.scripts) {
+            if (s.text && s.text.includes('window.__NUXT__')) {
+                try {
+                    eval(s.text);
+                    return 'executed, __NUXT__ type: ' + typeof window.__NUXT__;
+                } catch(e) {
+                    return 'exec error: ' + e.message;
+                }
+            }
+        }
+        return checks;
+    }""")
+    
+    print("Result:", result)

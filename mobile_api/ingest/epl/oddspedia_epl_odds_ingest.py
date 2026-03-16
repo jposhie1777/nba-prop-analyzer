@@ -528,28 +528,57 @@ def ingest_epl_odds(
             "errors": [],
         }
 
-    bq = _bq_client()
-    _ensure_dataset(bq)
-    _ensure_table(bq)
-    _add_missing_columns(bq)
+    # Run BQ insert in a subprocess to avoid SSL context corruption
+    # from the Camoufox/Firefox process that ran earlier in this process
+    import tempfile, pathlib, subprocess
+    rows_tmp = pathlib.Path(tempfile.mktemp(suffix="_rows.json"))
+    rows_tmp.write_text(json.dumps(rows, default=str))
+    print(f"[epl_odds] Wrote {len(rows)} rows to {rows_tmp}, inserting via subprocess...")
 
-    print("[epl_odds] Truncating table …")
-    _truncate_table(bq)
+    insert_script = f"""
+import json, os, sys, time
+from pathlib import Path
+from google.cloud import bigquery
+from google.api_core.exceptions import NotFound, Conflict
 
-    print(f"[epl_odds] Inserting {len(rows)} rows …")
-    written = _insert_rows(bq, rows)
+rows = json.loads(Path('{rows_tmp}').read_text())
+project = os.getenv('GCP_PROJECT') or os.getenv('GOOGLE_CLOUD_PROJECT')
+bq = bigquery.Client(project=project) if project else bigquery.Client()
+table_id = f"{{bq.project}}.{DATASET}.{TABLE}"
+bq.query(f"TRUNCATE TABLE `{{table_id}}`").result()
+print("[epl_odds] Truncated table", flush=True)
+written = 0
+for i in range(0, len(rows), 500):
+    chunk = rows[i:i+500]
+    errors = bq.insert_rows_json(table_id, chunk)
+    if errors:
+        print(f"Insert errors: {{errors[:3]}}", file=sys.stderr)
+        sys.exit(1)
+    written += len(chunk)
+    time.sleep(0.05)
+print(written)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", insert_script],
+        capture_output=True, text=True
+    )
+    rows_tmp.unlink()
 
-    summary: Dict[str, Any] = {
-        "url":            target_url,
-        "ingested_at":    ingested_at,
-        "matches_found":  len(matches),
-        "rows_prepared":  len(rows),
-        "rows_written":   written,
-        "errors":         [],
-    }
+    if result.returncode != 0:
+        print(f"[epl_odds] Subprocess insert failed:\n{result.stderr}")
+        raise RuntimeError(f"BQ insert subprocess failed: {result.stderr[-500:]}")
+
+    written = int(result.stdout.strip())
     print(f"[epl_odds] Done — {written} rows written ({len(matches)} matches)")
     print("=" * 60)
-    return summary
+    return {
+        "url": target_url,
+        "ingested_at": ingested_at,
+        "matches_found": len(matches),
+        "rows_prepared": len(rows),
+        "rows_written": written,
+        "errors": [],
+    }
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────

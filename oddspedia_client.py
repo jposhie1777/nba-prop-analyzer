@@ -908,13 +908,13 @@ class OddspediaClient:
                 candidates.append(body)
 
             # Handle getMatchListSmartBets shape: body.data = {'9780963': {...}, ...}
-            if not any(isinstance(c, list) and c for c in candidates):
-                if isinstance(data, dict) and all(str(k).isdigit() for k in list(data.keys())[:3]):
-                    print(f"[scraper] Detected match-keyed dict shape, {len(data)} entries")
-                    candidates.append([
-                        {**v, "id": k} if isinstance(v, dict) else {"id": k}
-                        for k, v in data.items()
-                    ])
+            if isinstance(data, dict) and data and all(str(k).isdigit() for k in list(data.keys())[:3]):
+                print(f"[scraper] Detected match-keyed dict shape, {len(data)} entries")
+                candidates.append([
+                    {**v, "id": k} if isinstance(v, dict) else {"id": k}
+                    for k, v in data.items()
+                ])
+
 
             for candidate in candidates:
                 if not (isinstance(candidate, list) and candidate):

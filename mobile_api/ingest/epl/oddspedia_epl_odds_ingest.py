@@ -192,13 +192,25 @@ def _insert_rows(
     table_id = _full_table_id(client)
     written = 0
     for i in range(0, len(rows), chunk_size):
-        chunk = rows[i : i + chunk_size]
-        errors = client.insert_rows_json(table_id, chunk)
-        if errors:
-            raise RuntimeError(f"BigQuery insert errors: {errors[:3]}")
-        written += len(chunk)
-        time.sleep(0.05)
+        chunk = rows[i: i + chunk_size]
+        # Retry up to 3 times on transient SSL/network errors
+        for attempt in range(3):
+            try:
+                errors = client.insert_rows_json(table_id, chunk)
+                if errors:
+                    raise RuntimeError(f"BigQuery insert errors: {errors[:3]}")
+                written += len(chunk)
+                time.sleep(0.05)
+                break
+            except RuntimeError:
+                raise
+            except Exception as exc:
+                if attempt == 2:
+                    raise
+                print(f"[epl_odds] Insert attempt {attempt+1} failed: {exc} — retrying in 5s")
+                time.sleep(5)
     return written
+
 
 
 # ── Normalisation helpers ─────────────────────────────────────────────────────

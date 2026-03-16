@@ -1,5 +1,4 @@
 from camoufox.sync_api import Camoufox
-import re, json
 
 url = "https://oddspedia.com/us/soccer/seattle-sounders-fc-san-jose-earthquakes-8076?tab=insights"
 
@@ -8,16 +7,23 @@ with Camoufox(headless=True, geoip=True) as browser:
     page = context.new_page()
     page.goto(url, wait_until="networkidle")
     
-    # Try to get the resolved data via JavaScript execution
     h2h = page.evaluate("""() => {
-        try {
-            const store = window.__nuxt__?._vueInstance?.$store 
-                       || window.__nuxt__?.context?.store
-                       || Object.values(window.__nuxt__?._vueInstance?.$children || {})
-                             .find(c => c.$store)?.$store;
-            if (store) return store.state.event.headToHead;
-        } catch(e) {}
+        // Try different ways to access Nuxt/Vue
+        const attempts = [
+            () => document.querySelector('#__nuxt').__vue__.$store.state.event.headToHead,
+            () => document.querySelector('#__layout').__vue__.$store.state.event.headToHead,
+            () => document.querySelector('body').__vue__.$store.state.event.headToHead,
+            () => Object.values(document.querySelector('#__nuxt').__vue__.$children)
+                    .find(c => c.$store)?.$store.state.event.headToHead,
+        ];
+        
+        for (const attempt of attempts) {
+            try {
+                const result = attempt();
+                if (result) return result;
+            } catch(e) {}
+        }
         return null;
     }""")
     
-    print("H2H via store:", h2h)
+    print("H2H:", h2h)

@@ -1,0 +1,85 @@
+name: Oddspedia EPL Live Odds Ingest
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (scrape + print rows, no BigQuery writes)"
+        required: false
+        type: boolean
+        default: false
+      today_only:
+        description: "Restrict to today's UTC date (default: full gameweek)"
+        required: false
+        type: boolean
+        default: false
+      url:
+        description: "Override Oddspedia EPL URL (leave blank for default)"
+        required: false
+        default: ""
+  schedule:
+    # Sat 12:00 UTC — before typical 12:30 kickoffs
+    - cron: "0 12 * * 6"
+    # Sun 11:00 UTC — before typical 14:00 kickoffs
+    - cron: "0 11 * * 0"
+    # Mon 19:00 UTC — before typical 20:00 Monday Night Football
+    - cron: "0 19 * * 1"
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+      ODDSPEDIA_DATASET: "oddspedia"
+      ODDSPEDIA_BQ_LOCATION: "US"
+      ODDSPEDIA_EPL_TABLE: "epl_odds"
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r mobile_api/requirements.txt
+
+      - name: Install Camoufox + Firefox
+        run: |
+          pip install camoufox[geoip]
+          python -m camoufox fetch
+
+      - name: Configure GCP credentials
+        if: ${{ inputs.dry_run != true }}
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
+
+      - name: Set URL override (if provided)
+        if: ${{ inputs.url != '' }}
+        run: echo "ODDSPEDIA_EPL_URL=${{ inputs.url }}" >> $GITHUB_ENV
+
+      - name: Run EPL odds ingest
+        run: |
+          ARGS=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          if [ "${{ inputs.today_only }}" = "true" ]; then
+            ARGS="$ARGS --today"
+          fi
+          python -m mobile_api.ingest.epl.oddspedia_epl_odds_ingest $ARGS
+
+      - name: Run EPL match info ingest
+        run: |
+          ARGS=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          python -m mobile_api.ingest.epl.oddspedia_epl_match_info_ingest $ARGS

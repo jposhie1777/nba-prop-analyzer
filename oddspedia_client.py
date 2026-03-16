@@ -117,7 +117,15 @@ class OddspediaClient:
     # MAIN SCRAPER
     # ============================================================
     
-    def scrape(self, url: str) -> List[Dict[str, Any]]:
+    def scrape(
+        self,
+        url: str,
+        *,
+        league_category: str = "usa",
+        league_slug: str = "mls",
+        season_id: int = 137218,
+        sport: str = "soccer",
+    ) -> List[Dict[str, Any]]:
 
         from camoufox.sync_api import Camoufox
 
@@ -242,8 +250,8 @@ class OddspediaClient:
                     f"https://oddspedia.com/api/v1/getMatchList"
                     f"?excludeSpecialStatus=0&sortBy=default&perPage=100"
                     f"&startDate={urllib.parse.quote(start)}&endDate={urllib.parse.quote(end)}"
-                    f"&geoCode=US&status=all&sport=soccer&popularLeaguesOnly=0"
-                    f"&category=usa&league=mls&seasonId=137218&round=&wv=1&page=1"
+                    f"&geoCode=US&status=all&sport={sport}&popularLeaguesOnly=0"
+                    f"&category={league_category}&league={league_slug}&seasonId={season_id}&round=&r=wv&page=1"
                     f"&perPage=100&language=us"
                 )
                 ml_result = page.evaluate(
@@ -253,12 +261,18 @@ class OddspediaClient:
                             redirect: 'follow',
                             headers: { 'accept': 'application/json, text/plain, */*' }
                         });
-                        if (!res.ok) return { status: res.status };
-                        return { status: 200, data: await res.json() };
+                        const text = await res.text();
+                        return { status: res.status, body: text.slice(0, 500), data: res.ok ? JSON.parse(text) : null };
                     }""",
                     match_list_url
                 )
                 print(f"[scraper] getMatchList direct fetch status: {ml_result.get('status')}")
+                print(f"[scraper] getMatchList response body: {ml_result.get('body')}")
+                if ml_result.get("status") == 200 and ml_result.get("data"):
+                    listing_api_responses.append({
+                        "url": match_list_url,
+                        "body": ml_result["data"]
+                    })
                 if ml_result.get("status") == 200 and ml_result.get("data"):
                     listing_api_responses.append({
                         "url": match_list_url,
@@ -477,7 +491,7 @@ class OddspediaClient:
 
                         # Extract betting stats from Vue store via match page
                         try:
-                            match_url = f"https://oddspedia.com/us/soccer/usa/mls/{d.get('ht_slug')}-{d.get('at_slug')}-{d.get('match_key')}"
+                            match_url = f"https://oddspedia.com/us/soccer/{d.get('ht_slug')}-{d.get('at_slug')}-{d.get('match_key')}"
                             page.goto(match_url, wait_until="domcontentloaded", timeout=30000)
                             page.wait_for_timeout(3000)
                             betting_stats = page.evaluate("""

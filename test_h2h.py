@@ -11,27 +11,12 @@ with Camoufox(headless=True, geoip=True) as browser:
     
     html = page.content()
     
-    # Find the __NUXT__ script and evaluate it in the page context
-    # to get the resolved data
-    result = page.evaluate("""() => {
-        // Find script tag containing __NUXT__
-        for (const s of document.scripts) {
-            if (s.text.includes('window.__NUXT__')) {
-                // Execute a modified version that returns the value
-                const match = s.text.match(/window\.__NUXT__=(.+)/);
-                if (match) {
-                    try {
-                        const nuxt = eval('(' + match[1] + ')');
-                        // Nuxt stores data in nuxt.data or nuxt.state
-                        console.log('nuxt keys:', Object.keys(nuxt).join(','));
-                        return JSON.stringify(Object.keys(nuxt));
-                    } catch(e) {
-                        return 'eval error: ' + e.message;
-                    }
-                }
-            }
-        }
-        return 'not found';
-    }""")
-    
-    print("Result:", result)
+    # Print the full __NUXT__ script content so we can see its format
+    match = re.search(r'<script>(window\.__NUXT__.*?)</script>', html, re.DOTALL)
+    if match:
+        script = match.group(1)
+        print("First 1000 chars of __NUXT__ script:")
+        print(script[:1000])
+        print("\n...\n")
+        print("Last 500 chars:")
+        print(script[-500:])

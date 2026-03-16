@@ -18,11 +18,8 @@ on:
         required: false
         default: ""
   schedule:
-    # Sat 12:00 UTC — before typical 12:30 kickoffs
     - cron: "0 12 * * 6"
-    # Sun 11:00 UTC — before typical 14:00 kickoffs
     - cron: "0 11 * * 0"
-    # Mon 19:00 UTC — before typical 20:00 Monday Night Football
     - cron: "0 19 * * 1"
 
 jobs:
@@ -49,6 +46,15 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r mobile_api/requirements.txt
+
+      - name: Install system dependencies for Camoufox/Firefox
+        run: |
+          sudo apt-get update && sudo apt-get install -y \
+            libgtk-3-0t64 libdbus-glib-1-2 libxt6t64 libx11-xcb1 \
+            libxcomposite1 libxcursor1 libxdamage1 libxfixes3 \
+            libxi6 libxrandr2 libxrender1 libxss1 libxtst6 \
+            libasound2t64 libpangocairo-1.0-0 libatk1.0-0t64 \
+            libcairo-gobject2 libgdk-pixbuf2.0-0
 
       - name: Install Camoufox + Firefox
         run: |

@@ -1,32 +1,28 @@
 from camoufox.sync_api import Camoufox
-import json
 
 url = "https://oddspedia.com/us/soccer/seattle-sounders-fc-san-jose-earthquakes-8076?tab=insights"
-
-captured = {}
-
-def handle_response(response):
-    try:
-        if "oddspedia.com/api" in response.url:
-            print("API call:", response.url)
-    except:
-        pass
 
 with Camoufox(headless=True, geoip=True) as browser:
     context = browser.new_context(locale="en-US")
     page = context.new_page()
-    page.on("response", handle_response)
     page.goto(url, wait_until="domcontentloaded", timeout=60000)
     page.wait_for_timeout(3000)
     
-    html = page.content()
-    print("\nheadToHead in HTML:", "headToHead" in html)
-    print("ht_wins in HTML:", "ht_wins" in html)
+    h2h = page.evaluate("""() => {
+        // Walk the Vue component tree to find the store
+        function findStore(el) {
+            if (!el) return null;
+            if (el.__vue__ && el.__vue__.$store) return el.__vue__.$store;
+            for (const child of el.children || []) {
+                const found = findStore(child);
+                if (found) return found;
+            }
+            return null;
+        }
+        
+        const store = findStore(document.body);
+        if (store) return store.state.event.headToHead;
+        return null;
+    }""")
     
-    # Find the __NUXT__ script tag
-    import re
-    match = re.search(r'<script>window\.__NUXT__=(.*?)</script>', html, re.DOTALL)
-    if match:
-        print("Found __NUXT__ script tag, length:", len(match.group(1)))
-    else:
-        print("No __NUXT__ script tag found")
+    print("H2H data:", h2h)

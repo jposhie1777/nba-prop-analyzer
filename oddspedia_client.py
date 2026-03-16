@@ -865,9 +865,10 @@ class OddspediaClient:
             elif isinstance(body, list):
                 print(f"[scraper]   body is a list, len={len(body)}, first item keys: {list(body[0].keys())[:10] if body else 'empty'}")
             # DEBUG match value shape
-            if isinstance(data, dict) and all(str(k).isdigit() for k in list(data.keys())[:3]):
+            if isinstance(data, dict) and data and all(str(k).isdigit() for k in list(data.keys())[:3]):
                 first_val = list(data.values())[0]
                 print(f"[scraper]   first match value keys: {list(first_val.keys())[:15] if isinstance(first_val, dict) else first_val}")
+
         for resp in api_responses:
             endpoint = resp.get("url", "")
             if not self._is_listing_api_endpoint(endpoint):

@@ -1,36 +1,37 @@
 from camoufox.sync_api import Camoufox
+import re
 
 url = "https://oddspedia.com/us/soccer/seattle-sounders-fc-san-jose-earthquakes-8076?tab=insights"
 
 with Camoufox(headless=True, geoip=True) as browser:
     context = browser.new_context(locale="en-US")
     page = context.new_page()
-    
-    # Set up console listener BEFORE goto
-    console_messages = []
-    page.on("console", lambda msg: console_messages.append(msg.text))
-    
     page.goto(url, wait_until="domcontentloaded", timeout=60000)
-    page.wait_for_timeout(5000)
+    page.wait_for_timeout(3000)
     
+    html = page.content()
+    
+    # Find the __NUXT__ script and evaluate it in the page context
+    # to get the resolved data
     result = page.evaluate("""() => {
-        const info = {
-            nuxt_type: typeof window.__NUXT__,
-            nuxt_keys: window.__NUXT__ ? Object.keys(window.__NUXT__) : [],
-            has_vue: typeof window.Vue !== 'undefined',
-        };
-        
-        // Try finding vue instance on app element
-        const app = document.getElementById('__nuxt') || document.getElementById('app');
-        if (app) {
-            info.app_found = true;
-            info.app_vue_keys = app.__vue__ ? Object.keys(app.__vue__) : [];
+        // Find script tag containing __NUXT__
+        for (const s of document.scripts) {
+            if (s.text.includes('window.__NUXT__')) {
+                // Execute a modified version that returns the value
+                const match = s.text.match(/window\.__NUXT__=(.+)/);
+                if (match) {
+                    try {
+                        const nuxt = eval('(' + match[1] + ')');
+                        // Nuxt stores data in nuxt.data or nuxt.state
+                        console.log('nuxt keys:', Object.keys(nuxt).join(','));
+                        return JSON.stringify(Object.keys(nuxt));
+                    } catch(e) {
+                        return 'eval error: ' + e.message;
+                    }
+                }
+            }
         }
-        
-        return info;
+        return 'not found';
     }""")
     
     print("Result:", result)
-    print("\nConsole messages:")
-    for msg in console_messages:
-        print(" -", msg)

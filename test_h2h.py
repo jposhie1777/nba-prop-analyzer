@@ -7,10 +7,6 @@ captured = {}
 
 def handle_response(response):
     try:
-        if "getMatchH2H" in response.url or "headToHead" in response.url or "h2h" in response.url.lower():
-            print("Found H2H endpoint:", response.url)
-            captured["h2h"] = response.json()
-        # Cast a wide net - print all XHR/fetch calls
         if "oddspedia.com/api" in response.url:
             print("API call:", response.url)
     except:
@@ -20,6 +16,17 @@ with Camoufox(headless=True, geoip=True) as browser:
     context = browser.new_context(locale="en-US")
     page = context.new_page()
     page.on("response", handle_response)
-    page.goto(url, wait_until="networkidle")
+    page.goto(url, wait_until="domcontentloaded", timeout=60000)
+    page.wait_for_timeout(3000)
     
-    print("\nCaptured H2H:", captured.get("h2h"))
+    html = page.content()
+    print("\nheadToHead in HTML:", "headToHead" in html)
+    print("ht_wins in HTML:", "ht_wins" in html)
+    
+    # Find the __NUXT__ script tag
+    import re
+    match = re.search(r'<script>window\.__NUXT__=(.*?)</script>', html, re.DOTALL)
+    if match:
+        print("Found __NUXT__ script tag, length:", len(match.group(1)))
+    else:
+        print("No __NUXT__ script tag found")

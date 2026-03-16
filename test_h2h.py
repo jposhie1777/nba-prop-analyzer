@@ -1,5 +1,5 @@
 from camoufox.sync_api import Camoufox
-import re, json
+import json
 
 url = "https://oddspedia.com/us/soccer/seattle-sounders-fc-san-jose-earthquakes-8076?tab=insights"
 
@@ -9,33 +9,37 @@ with Camoufox(headless=True, geoip=True) as browser:
     page.goto(url, wait_until="domcontentloaded", timeout=60000)
     page.wait_for_timeout(3000)
     
-    html = page.content()
-    
-    # The __NUXT__ script has already executed on the page
-    # but window.__NUXT__ showed as undefined earlier
-    # Let's wait longer and try again
     result = page.evaluate("""() => {
-        // Try all possible global locations
-        const checks = {
-            '__NUXT__': typeof window.__NUXT__,
-            '__nuxt__': typeof window.__nuxt__,
-            'nuxt': typeof window.nuxt,
-            '__nuxtState__': typeof window.__nuxtState__,
-        };
-        console.log(JSON.stringify(checks));
-        
-        // Try re-executing the script
+        // Re-execute the __NUXT__ script
         for (const s of document.scripts) {
             if (s.text && s.text.includes('window.__NUXT__')) {
-                try {
-                    eval(s.text);
-                    return 'executed, __NUXT__ type: ' + typeof window.__NUXT__;
-                } catch(e) {
-                    return 'exec error: ' + e.message;
-                }
+                eval(s.text);
+                break;
             }
         }
-        return checks;
+        
+        if (!window.__NUXT__) return 'no __NUXT__';
+        
+        // Print top level keys
+        console.log('__NUXT__ keys:', Object.keys(window.__NUXT__).join(','));
+        
+        // Try to find headToHead
+        const nuxt = window.__NUXT__;
+        
+        // Recursively search for headToHead
+        function findKey(obj, key, depth=0) {
+            if (depth > 5) return null;
+            if (!obj || typeof obj !== 'object') return null;
+            if (obj[key] !== undefined) return obj[key];
+            for (const k of Object.keys(obj)) {
+                const found = findKey(obj[k], key, depth+1);
+                if (found) return found;
+            }
+            return null;
+        }
+        
+        const h2h = findKey(nuxt, 'headToHead');
+        return h2h;
     }""")
     
-    print("Result:", result)
+    print("H2H data:", json.dumps(result, indent=2))

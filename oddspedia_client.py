@@ -208,8 +208,16 @@ class OddspediaClient:
 
             page.on("response", _on_listing_api)
 
+            # Prime session cookies via homepage before loading the target league page.
+            # Cloudflare blocks direct cold loads on some league pages (e.g. EPL) —
+            # hitting the homepage first establishes cf_clearance cookies.
+            print(f"[scraper] Priming session via homepage...")
+            page.goto("https://oddspedia.com", wait_until="domcontentloaded", timeout=self._page_timeout_ms)
+            page.wait_for_timeout(3000)
+            
             print(f"[scraper] Loading default listing page: {url}")
             page.goto(url, wait_until="domcontentloaded", timeout=self._page_timeout_ms)
+            page.wait_for_timeout(5000)  # Extra wait for EPL page JS hydration
             try:
                 page.wait_for_function(
                     "() => window.__NUXT__ && window.__NUXT__.data",
@@ -217,6 +225,7 @@ class OddspediaClient:
                 )
             except Exception as wait_exc:
                 print(f"[scraper] wait_for_function timed out ({wait_exc}); evaluating __NUXT__ as-is")
+
 
             # Simulate tab visibility change to trigger deferred API calls
             try:

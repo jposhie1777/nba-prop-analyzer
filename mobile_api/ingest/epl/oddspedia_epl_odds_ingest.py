@@ -545,6 +545,20 @@ rows = json.loads(Path('{rows_tmp}').read_text())
 project = os.getenv('GCP_PROJECT') or os.getenv('GOOGLE_CLOUD_PROJECT')
 bq = bigquery.Client(project=project) if project else bigquery.Client()
 table_id = f"{{bq.project}}.{DATASET}.{TABLE}"
+
+try:
+    bq.get_dataset(f"{{bq.project}}.{DATASET}")
+except Exception:
+    ds = bigquery.Dataset(f"{{bq.project}}.{DATASET}")
+    ds.location = "{DATASET_LOCATION}"
+    bq.create_dataset(ds)
+
+try:
+    bq.get_table(table_id)
+except Exception:
+    print("Table not found — please create it first via dry-run", file=sys.stderr)
+    sys.exit(1)
+
 bq.query(f"TRUNCATE TABLE `{{table_id}}`").result()
 print("[epl_odds] Truncated table", flush=True)
 written = 0
@@ -558,6 +572,7 @@ for i in range(0, len(rows), 500):
     time.sleep(0.05)
 print(written)
 """
+
     result = subprocess.run(
         [sys.executable, "-c", insert_script],
         capture_output=True, text=True
@@ -579,6 +594,7 @@ print(written)
         "rows_written": written,
         "errors": [],
     }
+
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────

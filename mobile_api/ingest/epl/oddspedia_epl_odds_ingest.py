@@ -484,9 +484,9 @@ def ingest_epl_odds(
         print(f"[epl_odds] Destination : {DATASET}.{TABLE}")
     print("=" * 60)
 
-    scraper = OddspediaClient()
+    client_scraper = OddspediaClient()
     print(f"[epl_odds] Fetching {target_url} …")
-    matches = scraper.scrape(
+    matches = client_scraper.scrape(
         target_url,
         league_category="england",
         league_slug="premier-league",
@@ -494,9 +494,17 @@ def ingest_epl_odds(
         sport="soccer",
     )
 
+    # Save to disk and reload to ensure browser process is fully closed
+    # before any BigQuery SSL connections are made
+    import tempfile, pathlib
+    tmp = pathlib.Path(tempfile.mktemp(suffix=".json"))
+    tmp.write_text(json.dumps(matches, default=str))
+    print(f"[epl_odds] Browser closed. Saved {len(matches)} matches to {tmp}")
+    matches = json.loads(tmp.read_text())
+    tmp.unlink()
+
     if matches:
         print(f"[epl_odds] DEBUG first match keys: {list(matches[0].keys())}")
-
     print(f"[epl_odds] Scraped {len(matches)} matches")
 
     if today_only and any(m.get("date_utc") for m in matches):

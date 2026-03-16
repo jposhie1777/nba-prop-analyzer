@@ -116,7 +116,7 @@ class OddspediaClient:
     # ============================================================
     # MAIN SCRAPER
     # ============================================================
-
+    
     def scrape(self, url: str) -> List[Dict[str, Any]]:
 
         from camoufox.sync_api import Camoufox
@@ -569,114 +569,115 @@ class OddspediaClient:
 
         return records
 
-def fetch_h2h(
-    self,
-    match_ids: List[int],
-) -> Dict[int, Any]:
-    """
-    Fetch head-to-head data for a list of match IDs.
+    def fetch_h2h(
+        self,
+        match_ids: List[int],
+    ) -> Dict[int, Any]:
+        """
+        Fetch head-to-head data for a list of match IDs.
+        
+        For each match ID:
+          1. Calls getMatchInfo to get ht_slug, at_slug, match_key
+          2. Loads the match insights page via camoufox
+          3. Extracts headToHead from the __NUXT__ SSR blob
+        
+        Returns {match_id: headToHead_dict}
+        """
+        from camoufox.sync_api import Camoufox
     
-    For each match ID:
-      1. Calls getMatchInfo to get ht_slug, at_slug, match_key
-      2. Loads the match insights page via camoufox
-      3. Extracts headToHead from the __NUXT__ SSR blob
+        results: Dict[int, Any] = {}
     
-    Returns {match_id: headToHead_dict}
-    """
-    from camoufox.sync_api import Camoufox
-
-    results: Dict[int, Any] = {}
-
-    with Camoufox(headless=True, geoip=True) as browser:
-        context = browser.new_context(
-            locale="en-US",
-            viewport={"width": 1920, "height": 1080},
-            extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
-        )
-        page = context.new_page()
-
-        # Use a dummy page load to establish session cookies
-        page.goto("https://oddspedia.com", wait_until="domcontentloaded", timeout=self._page_timeout_ms)
-        page.wait_for_timeout(2000)
-
-        for match_id in match_ids:
-            try:
-                # Step 1: get slugs from getMatchInfo
-                info_url = (
-                    f"https://oddspedia.com/api/v1/getMatchInfo"
-                    f"?matchId={match_id}&language=us&geoCode=US"
-                )
-                info_result = page.evaluate(
-                    """async (url) => {
-                        const res = await fetch(url, {
-                            credentials: 'include',
-                            headers: { 'accept': 'application/json, text/plain, */*' }
-                        });
-                        if (!res.ok) return { status: res.status };
-                        return { status: 200, data: await res.json() };
-                    }""",
-                    info_url
-                )
-
-                if info_result.get("status") != 200:
-                    print(f"[h2h] match={match_id} getMatchInfo status={info_result.get('status')} — skipping")
-                    continue
-
-                d = (info_result.get("data") or {}).get("data") or {}
-                ht_slug = d.get("ht_slug")
-                at_slug = d.get("at_slug")
-                match_key = d.get("match_key")
-                ht = d.get("ht")
-                at = d.get("at")
-
-                if not ht_slug or not at_slug or not match_key:
-                    print(f"[h2h] match={match_id} missing slugs/match_key — skipping")
-                    continue
-
-                print(f"[h2h] match={match_id} fetching H2H: {ht} vs {at}")
-
-                # Step 2: load insights page
-                insights_url = (
-                    f"https://oddspedia.com/football/"
-                    f"{ht_slug}-{at_slug}-{match_key}?tab=insights"
-                )
-                page.goto(insights_url, wait_until="domcontentloaded", timeout=self._page_timeout_ms)
-                page.wait_for_timeout(3000)
-
-                # Step 3: extract headToHead from __NUXT__
-                h2h = page.evaluate("""() => {
-                    for (const s of document.scripts) {
-                        if (s.text && s.text.includes('window.__NUXT__')) {
-                            try { eval(s.text); } catch(e) {}
-                            break;
+        with Camoufox(headless=True, geoip=True) as browser:
+            context = browser.new_context(
+                locale="en-US",
+                viewport={"width": 1920, "height": 1080},
+                extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
+            )
+            page = context.new_page()
+    
+            # Use a dummy page load to establish session cookies
+            page.goto("https://oddspedia.com", wait_until="domcontentloaded", timeout=self._page_timeout_ms)
+            page.wait_for_timeout(2000)
+    
+            for match_id in match_ids:
+                try:
+                    # Step 1: get slugs from getMatchInfo
+                    info_url = (
+                        f"https://oddspedia.com/api/v1/getMatchInfo"
+                        f"?matchId={match_id}&language=us&geoCode=US"
+                    )
+                    info_result = page.evaluate(
+                        """async (url) => {
+                            const res = await fetch(url, {
+                                credentials: 'include',
+                                headers: { 'accept': 'application/json, text/plain, */*' }
+                            });
+                            if (!res.ok) return { status: res.status };
+                            return { status: 200, data: await res.json() };
+                        }""",
+                        info_url
+                    )
+    
+                    if info_result.get("status") != 200:
+                        print(f"[h2h] match={match_id} getMatchInfo status={info_result.get('status')} — skipping")
+                        continue
+    
+                    d = (info_result.get("data") or {}).get("data") or {}
+                    ht_slug = d.get("ht_slug")
+                    at_slug = d.get("at_slug")
+                    match_key = d.get("match_key")
+                    ht = d.get("ht")
+                    at = d.get("at")
+    
+                    if not ht_slug or not at_slug or not match_key:
+                        print(f"[h2h] match={match_id} missing slugs/match_key — skipping")
+                        continue
+    
+                    print(f"[h2h] match={match_id} fetching H2H: {ht} vs {at}")
+    
+                    # Step 2: load insights page
+                    insights_url = (
+                        f"https://oddspedia.com/football/"
+                        f"{ht_slug}-{at_slug}-{match_key}?tab=insights"
+                    )
+                    page.goto(insights_url, wait_until="domcontentloaded", timeout=self._page_timeout_ms)
+                    page.wait_for_timeout(3000)
+    
+                    # Step 3: extract headToHead from __NUXT__
+                    h2h = page.evaluate("""() => {
+                        for (const s of document.scripts) {
+                            if (s.text && s.text.includes('window.__NUXT__')) {
+                                try { eval(s.text); } catch(e) {}
+                                break;
+                            }
                         }
-                    }
-                    if (!window.__NUXT__) return null;
-                    
-                    function findKey(obj, key, depth) {
-                        if (depth > 5 || !obj || typeof obj !== 'object') return null;
-                        if (obj[key] !== undefined) return obj[key];
-                        for (const k of Object.keys(obj)) {
-                            const found = findKey(obj[k], key, depth + 1);
-                            if (found) return found;
+                        if (!window.__NUXT__) return null;
+                        
+                        function findKey(obj, key, depth) {
+                            if (depth > 5 || !obj || typeof obj !== 'object') return null;
+                            if (obj[key] !== undefined) return obj[key];
+                            for (const k of Object.keys(obj)) {
+                                const found = findKey(obj[k], key, depth + 1);
+                                if (found) return found;
+                            }
+                            return null;
                         }
-                        return null;
-                    }
-                    return findKey(window.__NUXT__, 'headToHead', 0);
-                }""")
+                        return findKey(window.__NUXT__, 'headToHead', 0);
+                    }""")
+    
+                    if h2h:
+                        results[match_id] = h2h
+                        print(f"[h2h] match={match_id} got H2H: {h2h.get('played_matches')} matches played")
+                    else:
+                        print(f"[h2h] match={match_id} no headToHead found in __NUXT__")
+    
+                except Exception as exc:
+                    print(f"[h2h] match={match_id} error: {exc}")
+    
+            browser.close()
+    
+        return results
 
-                if h2h:
-                    results[match_id] = h2h
-                    print(f"[h2h] match={match_id} got H2H: {h2h.get('played_matches')} matches played")
-                else:
-                    print(f"[h2h] match={match_id} no headToHead found in __NUXT__")
-
-            except Exception as exc:
-                print(f"[h2h] match={match_id} error: {exc}")
-
-        browser.close()
-
-    return results
 
 
     # ============================================================

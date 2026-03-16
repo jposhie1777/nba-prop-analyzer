@@ -8,5 +8,5 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      - run: pip install camoufox[geoip] && python -m camoufox fetch --token ${{ secrets.GITHUB_TOKEN }}
+      - run: pip install camoufox[geoip] && GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} python -m camoufox fetch
       - run: python3 test_h2h.py

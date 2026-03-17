@@ -264,6 +264,7 @@ def run_workflow(input_dir: Path, dry_run: bool = False) -> dict[str, int]:
     ]
     match_keys_schema = [
         bigquery.SchemaField("ingested_at", "TIMESTAMP"),
+        bigquery.SchemaField("scraped_date", "DATE"),
         bigquery.SchemaField("generated_at", "TIMESTAMP"),
         bigquery.SchemaField("match_id", "STRING"),
         bigquery.SchemaField("insight_rank", "INT64"),

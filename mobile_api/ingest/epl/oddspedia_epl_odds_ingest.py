@@ -31,7 +31,8 @@ Usage
 -----
     python -m mobile_api.ingest.epl.oddspedia_epl_odds_ingest
     python -m mobile_api.ingest.epl.oddspedia_epl_odds_ingest --dry-run
-    python -m mobile_api.ingest.epl.oddspedia_epl_odds_ingest --all-dates
+    python -m mobile_api.ingest.epl.oddspedia_epl_odds_ingest --scrape-only
+    python -m mobile_api.ingest.epl.oddspedia_epl_odds_ingest --insert-only
 """
 
 from __future__ import annotations
@@ -58,23 +59,23 @@ from oddspedia_client import OddspediaClient  # noqa: E402
 
 DEFAULT_URL = "https://www.oddspedia.com/us/soccer/england/premier-league"
 
-ODDSPEDIA_URL   = os.getenv("ODDSPEDIA_EPL_URL", DEFAULT_URL)
-DATASET         = os.getenv("ODDSPEDIA_DATASET", "oddspedia")
+ODDSPEDIA_URL    = os.getenv("ODDSPEDIA_EPL_URL", DEFAULT_URL)
+DATASET          = os.getenv("ODDSPEDIA_DATASET", "oddspedia")
 DATASET_LOCATION = os.getenv("ODDSPEDIA_BQ_LOCATION", "US")
-TABLE           = os.getenv("ODDSPEDIA_EPL_TABLE", "epl_odds")
+TABLE            = os.getenv("ODDSPEDIA_EPL_TABLE", "epl_odds")
 
-# EPL-specific league identifiers (used when building getMatchList directly)
 EPL_LEAGUE_ID   = 627
 EPL_SEASON_ID   = 130281
 EPL_CATEGORY    = "england"
 EPL_LEAGUE_SLUG = "premier-league"
+
+ROWS_TMP_PATH = "/tmp/epl_rows.json"
 
 # ── BigQuery schema ───────────────────────────────────────────────────────────
 
 SCHEMA: List[bigquery.SchemaField] = [
     bigquery.SchemaField("ingested_at",       "TIMESTAMP", mode="REQUIRED"),
     bigquery.SchemaField("scraped_date",       "DATE",      mode="REQUIRED"),
-
     bigquery.SchemaField("match_id",           "INT64",     mode="REQUIRED"),
     bigquery.SchemaField("match_key",          "INT64"),
     bigquery.SchemaField("sport",              "STRING"),
@@ -86,41 +87,32 @@ SCHEMA: List[bigquery.SchemaField] = [
     bigquery.SchemaField("inplay",             "BOOL"),
     bigquery.SchemaField("league_id",          "INT64"),
     bigquery.SchemaField("round_name",         "STRING"),
-
     bigquery.SchemaField("market_group_id",    "INT64"),
     bigquery.SchemaField("market_group_name",  "STRING"),
     bigquery.SchemaField("market",             "STRING"),
-
     bigquery.SchemaField("period_id",          "INT64"),
     bigquery.SchemaField("period_name",        "STRING"),
-
     bigquery.SchemaField("bookie_id",          "INT64"),
     bigquery.SchemaField("bookie",             "STRING"),
     bigquery.SchemaField("bookie_slug",        "STRING"),
-
     bigquery.SchemaField("outcome_key",        "STRING"),
     bigquery.SchemaField("outcome_name",       "STRING"),
     bigquery.SchemaField("outcome_side",       "STRING"),
     bigquery.SchemaField("outcome_order",      "INT64"),
-
     bigquery.SchemaField("odds_decimal",       "FLOAT64"),
     bigquery.SchemaField("odds_american",      "INT64"),
     bigquery.SchemaField("odds_status",        "INT64"),
     bigquery.SchemaField("odds_direction",     "INT64"),
-
     bigquery.SchemaField("line_value",         "STRING"),
     bigquery.SchemaField("home_handicap",      "STRING"),
     bigquery.SchemaField("away_handicap",      "STRING"),
     bigquery.SchemaField("handicap_label",     "STRING"),
-
     bigquery.SchemaField("winning_side",       "STRING"),
     bigquery.SchemaField("bet_link",           "STRING"),
-
     bigquery.SchemaField("home_odds_decimal",  "FLOAT64"),
     bigquery.SchemaField("away_odds_decimal",  "FLOAT64"),
     bigquery.SchemaField("home_odds_american", "INT64"),
     bigquery.SchemaField("away_odds_american", "INT64"),
-
     bigquery.SchemaField("market_json",        "JSON"),
     bigquery.SchemaField("outcome_json",       "JSON"),
 ]
@@ -193,24 +185,12 @@ def _insert_rows(
     written = 0
     for i in range(0, len(rows), chunk_size):
         chunk = rows[i: i + chunk_size]
-        # Retry up to 3 times on transient SSL/network errors
-        for attempt in range(3):
-            try:
-                errors = client.insert_rows_json(table_id, chunk)
-                if errors:
-                    raise RuntimeError(f"BigQuery insert errors: {errors[:3]}")
-                written += len(chunk)
-                time.sleep(0.05)
-                break
-            except RuntimeError:
-                raise
-            except Exception as exc:
-                if attempt == 2:
-                    raise
-                print(f"[epl_odds] Insert attempt {attempt+1} failed: {exc} — retrying in 5s")
-                time.sleep(5)
+        errors = client.insert_rows_json(table_id, chunk)
+        if errors:
+            raise RuntimeError(f"BigQuery insert errors: {errors[:3]}")
+        written += len(chunk)
+        time.sleep(0.05)
     return written
-
 
 
 # ── Normalisation helpers ─────────────────────────────────────────────────────
@@ -256,17 +236,14 @@ def _infer_outcome_side(
     home = (home_team    or "").strip().lower()
     away = (away_team    or "").strip().lower()
 
-    if key in {"o1", "1", "home"}:   return "home"
-    if key in {"o2", "2", "away"}:   return "away"
+    if key in {"o1", "1", "home"}:      return "home"
+    if key in {"o2", "2", "away"}:      return "away"
     if key in {"o3", "3", "draw", "x"}: return "draw"
-
-    if name in {"home", "1"}:        return "home"
-    if name in {"away", "2"}:        return "away"
-    if name in {"draw", "x", "tie"}: return "draw"
-
-    if home and name == home:        return "home"
-    if away and name == away:        return "away"
-
+    if name in {"home", "1"}:           return "home"
+    if name in {"away", "2"}:           return "away"
+    if name in {"draw", "x", "tie"}:    return "draw"
+    if home and name == home:           return "home"
+    if away and name == away:           return "away"
     return None
 
 
@@ -276,19 +253,19 @@ def _match_base_row(
     scraped_date: str,
 ) -> Dict[str, Any]:
     return {
-        "ingested_at":   ingested_at,
-        "scraped_date":  scraped_date,
-        "match_id":      _safe_int(match.get("match_id")),
-        "match_key":     _safe_int(match.get("match_key")),
-        "sport":         match.get("sport"),
-        "date_utc":      match.get("date_utc"),
-        "home_team":     match.get("home_team"),
-        "away_team":     match.get("away_team"),
-        "home_team_id":  _safe_int(match.get("home_team_id")),
-        "away_team_id":  _safe_int(match.get("away_team_id")),
-        "inplay":        bool(match.get("inplay", False)),
-        "league_id":     _safe_int(match.get("league_id")),
-        "round_name":    match.get("round_name"),
+        "ingested_at":  ingested_at,
+        "scraped_date": scraped_date,
+        "match_id":     _safe_int(match.get("match_id")),
+        "match_key":    _safe_int(match.get("match_key")),
+        "sport":        match.get("sport"),
+        "date_utc":     match.get("date_utc"),
+        "home_team":    match.get("home_team"),
+        "away_team":    match.get("away_team"),
+        "home_team_id": _safe_int(match.get("home_team_id")),
+        "away_team_id": _safe_int(match.get("away_team_id")),
+        "inplay":       bool(match.get("inplay", False)),
+        "league_id":    _safe_int(match.get("league_id")),
+        "round_name":   match.get("round_name"),
     }
 
 
@@ -313,7 +290,7 @@ def _normalize_rich_market_rows(match: Dict[str, Any]) -> List[Dict[str, Any]]:
             "outcome_name":       row.get("outcome_name"),
             "outcome_side":       row.get("outcome_side") or _infer_outcome_side(
                                       row.get("outcome_key"), row.get("outcome_name"),
-                                      match.get("home_team"),  match.get("away_team")),
+                                      match.get("home_team"), match.get("away_team")),
             "outcome_order":      _safe_int(row.get("outcome_order")),
             "odds_decimal":       _safe_float(row.get("odds_decimal")),
             "odds_american":      _safe_int(row.get("odds_american")),
@@ -406,7 +383,6 @@ def _to_bq_rows(
     }
 
     for match in matches:
-        # Skip postponed matches (matchstatus=4 / special_status="Postponed")
         if match.get("matchstatus") == 4 or match.get("special_status") == "Postponed":
             print(f"[epl_odds] Skipping postponed match {match.get('match_id')}")
             continue
@@ -461,16 +437,11 @@ def ingest_epl_odds(
     url: Optional[str] = None,
     *,
     dry_run: bool = False,
-    today_only: bool = False,   # EPL: gameweek window, not just today
+    today_only: bool = False,
+    scrape_only: bool = False,
 ) -> Dict[str, Any]:
-    """
-    Scrape Oddspedia EPL odds and load into BigQuery (oddspedia.epl_odds).
-
-    today_only defaults to False for EPL because gameweeks span Fri–Mon.
-    Pass --today to restrict to today's UTC date.
-    """
-    target_url = url or ODDSPEDIA_URL
-    now = datetime.now(timezone.utc)
+    target_url   = url or ODDSPEDIA_URL
+    now          = datetime.now(timezone.utc)
     ingested_at  = now.strftime("%Y-%m-%dT%H:%M:%SZ")
     scraped_date = now.strftime("%Y-%m-%d")
 
@@ -480,6 +451,8 @@ def ingest_epl_odds(
     print(f"[epl_odds] Ingested at : {ingested_at}")
     if dry_run:
         print("[epl_odds] Mode        : DRY RUN (no BigQuery write)")
+    elif scrape_only:
+        print("[epl_odds] Mode        : SCRAPE ONLY (rows saved to file)")
     else:
         print(f"[epl_odds] Destination : {DATASET}.{TABLE}")
     print("=" * 60)
@@ -494,8 +467,6 @@ def ingest_epl_odds(
         sport="soccer",
     )
 
-    # Save to disk and reload to ensure browser process is fully closed
-    # before any BigQuery SSL connections are made
     import tempfile, pathlib
     tmp = pathlib.Path(tempfile.mktemp(suffix=".json"))
     tmp.write_text(json.dumps(matches, default=str))
@@ -516,85 +487,30 @@ def ingest_epl_odds(
     rows = _to_bq_rows(matches, ingested_at, scraped_date)
     print(f"[epl_odds] Prepared {len(rows)} rows from {len(matches)} matches")
 
-    if dry_run:
-        print(json.dumps(rows[:25], indent=2, default=str))
+    if dry_run or scrape_only:
+        pathlib.Path(ROWS_TMP_PATH).write_text(json.dumps(rows, default=str))
+        print(f"[epl_odds] Saved {len(rows)} rows to {ROWS_TMP_PATH}")
+        if dry_run:
+            print(json.dumps(rows[:25], indent=2, default=str))
         return {
             "url": target_url,
             "ingested_at": ingested_at,
             "matches_found": len(matches),
             "rows_prepared": len(rows),
             "rows_written": 0,
-            "dry_run": True,
+            "scrape_only": scrape_only,
+            "dry_run": dry_run,
             "errors": [],
         }
 
-    # Run BQ insert in a subprocess to avoid SSL context corruption
-    # from the Camoufox/Firefox process that ran earlier in this process
-    import tempfile, pathlib, subprocess
-    rows_tmp = pathlib.Path(tempfile.mktemp(suffix="_rows.json"))
-    rows_tmp.write_text(json.dumps(rows, default=str))
-    print(f"[epl_odds] Wrote {len(rows)} rows to {rows_tmp}, inserting via subprocess...")
-
-    insert_script = f"""
-import json, os, sys, time
-from pathlib import Path
-from google.cloud import bigquery
-from google.api_core.exceptions import NotFound, Conflict
-
-rows = json.loads(Path('{rows_tmp}').read_text())
-project = os.getenv('GCP_PROJECT') or os.getenv('GOOGLE_CLOUD_PROJECT')
-bq = bigquery.Client(project=project) if project else bigquery.Client()
-table_id = f"{{bq.project}}.{DATASET}.{TABLE}"
-
-try:
-    bq.get_dataset(f"{{bq.project}}.{DATASET}")
-except Exception:
-    ds = bigquery.Dataset(f"{{bq.project}}.{DATASET}")
-    ds.location = "{DATASET_LOCATION}"
-    bq.create_dataset(ds)
-
-try:
-    bq.get_table(table_id)
-except Exception:
-    print("Table not found — please create it first via dry-run", file=sys.stderr)
-    sys.exit(1)
-
-bq.query(f"TRUNCATE TABLE `{{table_id}}`").result()
-print("[epl_odds] Truncated table", flush=True)
-written = 0
-for i in range(0, len(rows), 500):
-    chunk = rows[i:i+500]
-    errors = bq.insert_rows_json(table_id, chunk)
-    if errors:
-        print(f"Insert errors: {{errors[:3]}}", file=sys.stderr)
-        sys.exit(1)
-    written += len(chunk)
-    time.sleep(0.05)
-print(written)
-"""
-
-    result = subprocess.run(
-        [sys.executable, "-c", insert_script],
-        capture_output=True, text=True
-    )
-    rows_tmp.unlink()
-
-    if result.returncode != 0:
-        print(f"[epl_odds] Subprocess insert failed:\n{result.stderr}")
-        raise RuntimeError(f"BQ insert subprocess failed: {result.stderr[-500:]}")
-
-    written = int(result.stdout.strip())
-    print(f"[epl_odds] Done — {written} rows written ({len(matches)} matches)")
-    print("=" * 60)
     return {
         "url": target_url,
         "ingested_at": ingested_at,
         "matches_found": len(matches),
         "rows_prepared": len(rows),
-        "rows_written": written,
+        "rows_written": 0,
         "errors": [],
     }
-
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -613,9 +529,30 @@ if __name__ == "__main__":
         help="Restrict to today's UTC date only (default: full gameweek).")
     parser.add_argument("--all-dates", action="store_true",
         help="Alias for default gameweek behaviour (kept for parity with MLS script).")
+    parser.add_argument("--scrape-only", action="store_true",
+        help=f"Scrape and save rows to {ROWS_TMP_PATH}, skip BQ insert.")
+    parser.add_argument("--insert-only", action="store_true",
+        help=f"Read rows from {ROWS_TMP_PATH} and insert into BigQuery.")
 
     args = parser.parse_args()
-    today_only = args.today and not args.all_dates
 
-    result = ingest_epl_odds(url=args.url, dry_run=args.dry_run, today_only=today_only)
-    print(json.dumps(result, indent=2, default=str))
+    if args.insert_only:
+        rows = json.loads(Path(ROWS_TMP_PATH).read_text())
+        print(f"[epl_odds] Loaded {len(rows)} rows from {ROWS_TMP_PATH}")
+        bq = _bq_client()
+        _ensure_dataset(bq)
+        _ensure_table(bq)
+        _add_missing_columns(bq)
+        _truncate_table(bq)
+        written = _insert_rows(bq, rows)
+        print(f"[epl_odds] Done — {written} rows written")
+        print(json.dumps({"rows_written": written}, indent=2))
+    else:
+        today_only = args.today and not args.all_dates
+        result = ingest_epl_odds(
+            url=args.url,
+            dry_run=args.dry_run,
+            today_only=today_only,
+            scrape_only=args.scrape_only,
+        )
+        print(json.dumps(result, indent=2, default=str))

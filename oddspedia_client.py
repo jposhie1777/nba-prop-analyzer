@@ -498,28 +498,56 @@ class OddspediaClient:
                         record["match_info"] = d  # store full payload for downstream ingest
                         print(f"[scraper] match={mid} enriched: {d.get('ht')} vs {d.get('at')} @ {record['date_utc']}")
 
-                        # Extract betting stats from Vue store via match page
+                        # Extract full Vuex store data from match page
                         try:
                             match_url = f"https://oddspedia.com/us/soccer/{d.get('ht_slug')}-{d.get('at_slug')}-{d.get('match_key')}"
                             page.goto(match_url, wait_until="domcontentloaded", timeout=30000)
-                            page.wait_for_timeout(3000)
-                            betting_stats = page.evaluate("""
-                                () => {
+                            page.wait_for_timeout(4000)
+                            store_data = page.evaluate("""
+                                async () => {
                                     try {
-                                        const store = document.querySelector('#__nuxt').__vue__?.$store?.state?.event?.bettingStats;
-                                        return store ? JSON.parse(JSON.stringify(store)) : null;
+                                        const store = document.querySelector('#__nuxt')?.__vue__?.$store;
+                                        if (!store) return null;
+                                        const axios = document.querySelector('#__nuxt').__vue__.$axios;
+                                        const cancelToken = axios.CancelToken.source().token;
+                                        await Promise.allSettled([
+                                            store.dispatch('event/fetchPerMatchStats'),
+                                            store.dispatch('event/fetchEventHeadToHead'),
+                                            store.dispatch('event/fetchLastMatchesHome'),
+                                            store.dispatch('event/fetchLastMatchesAway'),
+                                            store.dispatch('event/fetchStandings'),
+                                            store.dispatch('event/fetchLineups'),
+                                            store.dispatch('event/fetchBettingStats', { cancelToken }),
+                                        ]);
+                                        const s = store.state.event;
+                                        return {
+                                            bettingStats:    JSON.parse(JSON.stringify(s.bettingStats    || null)),
+                                            perMatchStats:   JSON.parse(JSON.stringify(s.perMatchStats   || null)),
+                                            headToHead:      JSON.parse(JSON.stringify(s.headToHead      || null)),
+                                            lastMatchesHome: JSON.parse(JSON.stringify(s.lastMatchesHome || {})),
+                                            lastMatchesAway: JSON.parse(JSON.stringify(s.lastMatchesAway || {})),
+                                            standingsData:   JSON.parse(JSON.stringify(s.standingsData   || null)),
+                                            lineups:         JSON.parse(JSON.stringify(s.lineups         || null)),
+                                        };
                                     } catch(e) {
-                                        return null;
+                                        return { error: e.toString() };
                                     }
                                 }
                             """)
-                            if betting_stats:
-                                record["betting_stats"] = betting_stats
-                                print(f"[scraper] match={mid} betting stats captured")
+                            if store_data and not store_data.get("error"):
+                                record["betting_stats"]    = store_data.get("bettingStats")
+                                record["per_match_stats"]  = store_data.get("perMatchStats")
+                                record["head_to_head"]     = store_data.get("headToHead")
+                                record["last_matches_home"]= store_data.get("lastMatchesHome")
+                                record["last_matches_away"]= store_data.get("lastMatchesAway")
+                                record["standings_data"]   = store_data.get("standingsData")
+                                record["lineups"]          = store_data.get("lineups")
+                                print(f"[scraper] match={mid} store data captured")
                             else:
-                                print(f"[scraper] match={mid} betting stats empty")
+                                print(f"[scraper] match={mid} store data empty: {store_data}")
                         except Exception as exc_bs:
-                            print(f"[scraper] match={mid} betting stats error: {exc_bs}")
+                            print(f"[scraper] match={mid} store capture error: {exc_bs}")
+
 
                     else:
                         print(f"[scraper] getMatchInfo match={mid} status={info_result.get('status')}")

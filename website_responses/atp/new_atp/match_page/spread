@@ -1,0 +1,91 @@
+Headers
+Request URL
+https://oddspedia.com/api/v1/getMatchMaxOddsByGroup?r=wv&inplay=0&matchId=9990108&marketGroupId=3&geoCode=US&geoState=NY&language=us
+Request Method
+GET
+Status Code
+200 OK
+Remote Address
+104.18.34.121:443
+Referrer Policy
+strict-origin-when-cross-origin
+access-control-allow-headers
+Authorization, UserAgent, Origin, X-Auth-Token, Content-Type, X-User-Agent, sentry-trace
+access-control-allow-methods
+GET, POST, OPTIONS, PUT, PATCH, DELETE
+access-control-allow-origin
+*
+access-control-expose-headers
+Content-Security-Policy, Location, Cache-Control, Content-Language, Content-Type, Expires, Last-Modified, Pragma
+access-control-max-age
+600
+age
+0
+alt-svc
+h3=":443"; ma=86400
+cache-control
+private, no-cache
+cf-cache-status
+DYNAMIC
+cf-ray
+9dde07cf58c2421d-EWR
+content-encoding
+gzip
+content-length
+523
+content-type
+text/html; charset=UTF-8
+date
+Tue, 17 Mar 2026 18:23:44 GMT
+server
+cloudflare
+vary
+Accept-Encoding
+x-cache
+PASS
+x-cacheable
+NO
+x-varnish
+385128600
+:authority
+oddspedia.com
+:method
+GET
+:path
+/api/v1/getMatchMaxOddsByGroup?r=wv&inplay=0&matchId=9990108&marketGroupId=3&geoCode=US&geoState=NY&language=us
+:scheme
+https
+accept
+application/json, text/plain, */*
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+en-US,en;q=0.9
+baggage
+sentry-environment=production,sentry-release=1.429.5,sentry-public_key=1bd38a2c35e12f90425da15c31a6f3e1,sentry-trace_id=2e3d858711fd418abc86beda8725fcbf
+cookie
+first_visit=no; AMCV_9CE579FD5DCD8B590A495E09%40AdobeOrg=MCMID|13437522215837061981434173506207755149; _hjSessionUser_2725666=eyJpZCI6IjA3NjVmODk5LWFiNDctNTI0ZS04YTdmLWRhMzAxNmVlYTExNCIsImNyZWF0ZWQiOjE3NzMxNzEwNjAxMDYsImV4aXN0aW5nIjp0cnVlfQ==; accept-cookies=true; accept-tracking-cookies=true; SSID=CQAefx0AAAAAAABwcbBpXpZAAHBxsGkHAAAAAAAAAAAAF5q5aQATkw; SSSC=2.G7615711695738017374.7|0.0; HAOSSID=2cc1b72382528; __cflb=02DiuGPeMivJ1EyNVputTEMhoXkggnU9nacfaBgghZMW4; cf_clearance=Ycn0CHvaS_nGzcrzvcUA.LewwpGWEgXMctyGJDlPavI-1773771289-1.2.1.1-fGygI6tbxpCtBIIEBHBqBju5iTq1SCtYuMQYGP4mOzpgeGf6PogxDjVVuimqIp8AZgPP.dPW7X4V5xiSHl3gw8nlSEkPPUm25SmyEj6GAoP8voZZvPPvQAEYMvvQbUy8L1IhiI6d6EzZ17QUcUoz5YYMWk2pkNv66UswU5wUo0gWgRHWXMM4IjZtNIjK.dBhVZrquUjcUQ4XoVrySAeXfgA4aCZxrptBfB4qwu4Jyac0XTgjASbtAR0rcVODfAaYfZg33X5ijp8QDarVrvNYBXfVvJqgInU0L3pOlTEetVwkC6.JMDS9vnG0JETL.1PHP2JgzlJGKRWOSDO9Q2S2kg; adcloud={%22_les_v%22:%22c%2Cy%2Coddspedia.com%2C1773773090%22}; kndctr_9CE579FD5DCD8B590A495E09_AdobeOrg_identity=CiYxMzQzNzUyMjIxNTgzNzA2MTk4MTQzNDE3MzUwNjIwNzc1NTE0OVIQCP%5Fb7MnNMxgBKgNWQTYwAfAB%2DuyH6M8z; kndctr_9CE579FD5DCD8B590A495E09_AdobeOrg_cluster=va6; __cf_bm=8pjObq1kLIVcaGwLChjalksCtjTcaPrC6ep0AUi5Duc-1773771312.9609187-1.0.1.1-kdBccH8UWoK6iJC708WzMhIhVMd5RJey.iUqjcjyf2GLZoPdWe79Deb9Tmcmh1lskajIsuMCYitjCRZxCRKTZX55ZVXMIZryOENU_VuegWxd0APm5BR2ZAWprkQ09u7Q; SSRT=cJu5aQQBAA; _v_id_l={%22_v_id%22:%2243921584832227861773771290092%22%2C%22_la%22:1773771815515}
+priority
+u=1, i
+referer
+https://oddspedia.com/us/a/tennis/alejandro-tabilo-francisco-comesana-1131703
+sec-ch-ua
+"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+sentry-trace
+2e3d858711fd418abc86beda8725fcbf-a061327d8a29a815
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36
+
+
+Response
+{"generated_at":"2026-03-17 18:23:24","data":{"market_name":"Spread","market_group_id":3,"waytype":2,"has_handicap":1,"outcome_names":["Home","Away"],"odds":{"301":{"main":{"winning_odd":null,"name":"-3.5\/+3.5 Games","name_en":"-3.5 Games","odds":{"o1":{"bid":133,"bookie_name":"BetMGM","bookie_slug":"betmgm","offer_id":1915868828,"odds_value":"2","odds_direction":0,"odds_link":"https:\/\/sports.nj.betmgm.com\/en\/sports\/events\/19223006?zoneId=1686291&options=19223006-1480804820--138667721?wm=7063831","odds_status":3,"bookie_color":"#1e1e1e"},"o2":{"bid":133,"bookie_name":"BetMGM","bookie_slug":"betmgm","offer_id":1915868828,"odds_value":"1.7","odds_direction":0,"odds_link":"https:\/\/sports.nj.betmgm.com\/en\/sports\/events\/19223006?zoneId=1686291&options=19223006-1480804820--138667720?wm=7063831","odds_status":3,"bookie_color":"#1e1e1e"}}},"alternative":[{"winning_odd":null,"name":"-1.5\/+1.5 Sets","name_en":"-1.5 Sets","odds":{"o1":{"bid":133,"bookie_name":"BetMGM","bookie_slug":"betmgm","offer_id":1915868827,"odds_value":"1.98","odds_direction":0,"odds_link":"https:\/\/sports.nj.betmgm.com\/en\/sports\/events\/19223006?zoneId=1686291&options=19223006-1480271086--140060789?wm=7063831","odds_status":3,"bookie_color":"#1e1e1e"},"o2":{"bid":133,"bookie_name":"BetMGM","bookie_slug":"betmgm","offer_id":1915868827,"odds_value":"1.7","odds_direction":0,"odds_link":"https:\/\/sports.nj.betmgm.com\/en\/sports\/events\/19223006?zoneId=1686291&options=19223006-1480271086--140060788?wm=7063831","odds_status":3,"bookie_color":"#1e1e1e"}}},{"winning_odd":null,"name":"+1.5\/-1.5 Sets","name_en":"+1.5 Sets","odds":{"o1":{"bid":133,"bookie_name":"BetMGM","bookie_slug":"betmgm","offer_id":1915868826,"odds_value":"1.14","odds_direction":0,"odds_link":"https:\/\/sports.nj.betmgm.com\/en\/sports\/events\/19223006?zoneId=1686291&options=19223006-1480271085--140060791?wm=7063831","odds_status":3,"bookie_color":"#1e1e1e"},"o2":{"bid":133,"bookie_name":"BetMGM","bookie_slug":"betmgm","offer_id":1915868826,"odds_value":"4.6","odds_direction":0,"odds_link":"https:\/\/sports.nj.betmgm.com\/en\/sports\/events\/19223006?zoneId=1686291&options=19223006-1480271085--140060790?wm=7063831","odds_status":3,"bookie_color":"#1e1e1e"}}}]}},"periods":[{"name":"Final","id":301}]}}

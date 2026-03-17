@@ -1,0 +1,2114 @@
+Headers
+Request URL
+https://oddspedia.com/api/v1/getAmericanMaxOddsWithPagination?geoCode=US&bookmakerGeoCode=US&bookmakerGeoState=NY&wettsteuer=0&startDate=2026-03-18T04%3A00%3A00Z&endDate=2026-03-19T03%3A59%3A59Z&sport=tennis&ot=201&excludeSpecialStatus=0&popularLeaguesOnly=0&sortBy=default&status=all&page=1&perPage=50&r=si&inplay=0&language=us
+Request Method
+GET
+Status Code
+200 OK
+Remote Address
+172.64.153.135:443
+Referrer Policy
+strict-origin-when-cross-origin
+access-control-allow-headers
+Authorization, UserAgent, Origin, X-Auth-Token, Content-Type, X-User-Agent, sentry-trace
+access-control-allow-methods
+GET, POST, OPTIONS, PUT, PATCH, DELETE
+access-control-allow-origin
+*
+access-control-expose-headers
+Content-Security-Policy, Location, Cache-Control, Content-Language, Content-Type, Expires, Last-Modified, Pragma
+access-control-max-age
+600
+age
+0
+alt-svc
+h3=":443"; ma=86400
+cache-control
+private, no-cache
+cf-cache-status
+DYNAMIC
+cf-ray
+9dddff841e114314-EWR
+content-encoding
+br
+content-type
+application/json
+date
+Tue, 17 Mar 2026 18:18:05 GMT
+server
+cloudflare
+x-cache
+PASS
+x-cacheable
+NO
+x-varnish
+383013369
+:authority
+oddspedia.com
+:method
+GET
+:path
+/api/v1/getAmericanMaxOddsWithPagination?geoCode=US&bookmakerGeoCode=US&bookmakerGeoState=NY&wettsteuer=0&startDate=2026-03-18T04%3A00%3A00Z&endDate=2026-03-19T03%3A59%3A59Z&sport=tennis&ot=201&excludeSpecialStatus=0&popularLeaguesOnly=0&sortBy=default&status=all&page=1&perPage=50&r=si&inplay=0&language=us
+:scheme
+https
+accept
+application/json, text/plain, */*
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+en-US,en;q=0.9
+baggage
+sentry-environment=production,sentry-release=1.429.5,sentry-public_key=1bd38a2c35e12f90425da15c31a6f3e1,sentry-trace_id=f84d5d499a4f4df7b7d6e0feb6f1343d
+cookie
+first_visit=no; AMCV_9CE579FD5DCD8B590A495E09%40AdobeOrg=MCMID|13437522215837061981434173506207755149; _hjSessionUser_2725666=eyJpZCI6IjA3NjVmODk5LWFiNDctNTI0ZS04YTdmLWRhMzAxNmVlYTExNCIsImNyZWF0ZWQiOjE3NzMxNzEwNjAxMDYsImV4aXN0aW5nIjp0cnVlfQ==; accept-cookies=true; accept-tracking-cookies=true; SSID=CQAefx0AAAAAAABwcbBpXpZAAHBxsGkHAAAAAAAAAAAAF5q5aQATkw; SSSC=2.G7615711695738017374.7|0.0; SSRT=F5q5aQQBAA; HAOSSID=2cc1b72382528; __cflb=02DiuGPeMivJ1EyNVputTEMhoXkggnU9nacfaBgghZMW4; cf_clearance=Ycn0CHvaS_nGzcrzvcUA.LewwpGWEgXMctyGJDlPavI-1773771289-1.2.1.1-fGygI6tbxpCtBIIEBHBqBju5iTq1SCtYuMQYGP4mOzpgeGf6PogxDjVVuimqIp8AZgPP.dPW7X4V5xiSHl3gw8nlSEkPPUm25SmyEj6GAoP8voZZvPPvQAEYMvvQbUy8L1IhiI6d6EzZ17QUcUoz5YYMWk2pkNv66UswU5wUo0gWgRHWXMM4IjZtNIjK.dBhVZrquUjcUQ4XoVrySAeXfgA4aCZxrptBfB4qwu4Jyac0XTgjASbtAR0rcVODfAaYfZg33X5ijp8QDarVrvNYBXfVvJqgInU0L3pOlTEetVwkC6.JMDS9vnG0JETL.1PHP2JgzlJGKRWOSDO9Q2S2kg; adcloud={%22_les_v%22:%22c%2Cy%2Coddspedia.com%2C1773773090%22}; kndctr_9CE579FD5DCD8B590A495E09_AdobeOrg_identity=CiYxMzQzNzUyMjIxNTgzNzA2MTk4MTQzNDE3MzUwNjIwNzc1NTE0OVIQCP%5Fb7MnNMxgBKgNWQTYwAfAB%2DuyH6M8z; kndctr_9CE579FD5DCD8B590A495E09_AdobeOrg_cluster=va6; __cf_bm=8pjObq1kLIVcaGwLChjalksCtjTcaPrC6ep0AUi5Duc-1773771312.9609187-1.0.1.1-kdBccH8UWoK6iJC708WzMhIhVMd5RJey.iUqjcjyf2GLZoPdWe79Deb9Tmcmh1lskajIsuMCYitjCRZxCRKTZX55ZVXMIZryOENU_VuegWxd0APm5BR2ZAWprkQ09u7Q; _v_id_l={%22_v_id%22:%2243921584832227861773771290092%22%2C%22_la%22:1773771425182}
+priority
+u=1, i
+referer
+https://oddspedia.com/us/tennis
+sec-ch-ua
+"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+sentry-trace
+f84d5d499a4f4df7b7d6e0feb6f1343d-bc7ced9acc0302dd
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36
+
+
+Response
+{
+    "generated_at": "2026-03-17 18:18:05",
+    "data": {
+        "matches": {
+            "9987738": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "1.52",
+                            "bid": 495,
+                            "offerId": 1915681801,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "2.58",
+                            "bid": 495,
+                            "offerId": 1915681801,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                },
+                "301": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "handicap_name": "-3.5",
+                            "handicap_name_en": "-3.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915450467,
+                            "value": "1.91",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "handicap_name": "+3.5",
+                            "handicap_name_en": "-3.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915450467,
+                            "value": "1.75",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9987739": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "3.1",
+                            "bid": 495,
+                            "offerId": 1915688450,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "1.38",
+                            "bid": 495,
+                            "offerId": 1915688450,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                },
+                "301": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "handicap_name": "+3.5",
+                            "handicap_name_en": "+3.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915448989,
+                            "value": "2",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "handicap_name": "-3.5",
+                            "handicap_name_en": "+3.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915448989,
+                            "value": "1.7",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9987741": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "2.64",
+                            "bid": 495,
+                            "offerId": 1915615236,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "1.5",
+                            "bid": 495,
+                            "offerId": 1915615236,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                },
+                "301": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "handicap_name": "+3.5",
+                            "handicap_name_en": "+3.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915487920,
+                            "value": "1.87",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "handicap_name": "-3.5",
+                            "handicap_name_en": "+3.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915487920,
+                            "value": "1.8",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9987742": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "1.81",
+                            "bid": 495,
+                            "offerId": 1915688446,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "2.02",
+                            "bid": 495,
+                            "offerId": 1915688446,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                },
+                "301": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "handicap_name": "-0.5",
+                            "handicap_name_en": "-0.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915471681,
+                            "value": "1.83",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "handicap_name": "+0.5",
+                            "handicap_name_en": "-0.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915471681,
+                            "value": "1.85",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9987743": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "2.06",
+                            "bid": 495,
+                            "offerId": 1915688451,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "1.78",
+                            "bid": 495,
+                            "offerId": 1915688451,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                },
+                "301": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "handicap_name": "+1.5",
+                            "handicap_name_en": "+1.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915446714,
+                            "value": "1.8",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "handicap_name": "-1.5",
+                            "handicap_name_en": "+1.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915446714,
+                            "value": "1.87",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9987744": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "1.21",
+                            "bid": 495,
+                            "offerId": 1915679770,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "4.5",
+                            "bid": 495,
+                            "offerId": 1915679770,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                },
+                "301": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "handicap_name": "-4.5",
+                            "handicap_name_en": "-4.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915460341,
+                            "value": "1.67",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "handicap_name": "+4.5",
+                            "handicap_name_en": "-4.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915460341,
+                            "value": "2.05",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9987745": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "1.74",
+                            "bid": 495,
+                            "offerId": 1915688448,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "2.12",
+                            "bid": 495,
+                            "offerId": 1915688448,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9987746": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "1.43",
+                            "bid": 495,
+                            "offerId": 1915639046,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "2.88",
+                            "bid": 495,
+                            "offerId": 1915639046,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                },
+                "301": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "handicap_name": "-1.5 Set",
+                            "handicap_name_en": "-1.5 Sets",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915447427,
+                            "value": "2",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "handicap_name": "+1.5 Set",
+                            "handicap_name_en": "-1.5 Sets",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915447427,
+                            "value": "1.7",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9990107": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "2.95",
+                            "bid": 495,
+                            "offerId": 1915784787,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "1.41",
+                            "bid": 495,
+                            "offerId": 1915784787,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                },
+                "301": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "handicap_name": "+2.5",
+                            "handicap_name_en": "+2.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915853012,
+                            "value": "2",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "handicap_name": "-2.5",
+                            "handicap_name_en": "+2.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915853012,
+                            "value": "1.7",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9990108": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "1.4",
+                            "bid": 495,
+                            "offerId": 1915784762,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "3.02",
+                            "bid": 495,
+                            "offerId": 1915784762,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                },
+                "301": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "handicap_name": "-3.5",
+                            "handicap_name_en": "-3.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915868828,
+                            "value": "2",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "handicap_name": "+3.5",
+                            "handicap_name_en": "-3.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915868828,
+                            "value": "1.7",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9990109": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "1.52",
+                            "bid": 495,
+                            "offerId": 1915784775,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "2.58",
+                            "bid": 495,
+                            "offerId": 1915784775,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                },
+                "301": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "handicap_name": "-2.5",
+                            "handicap_name_en": "-2.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915873753,
+                            "value": "1.78",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "handicap_name": "+2.5",
+                            "handicap_name_en": "-2.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915873753,
+                            "value": "1.9",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9990110": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "2.04",
+                            "bid": 495,
+                            "offerId": 1915863502,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "1.81",
+                            "bid": 495,
+                            "offerId": 1915863502,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                },
+                "301": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "handicap_name": "+0.5",
+                            "handicap_name_en": "+0.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915872393,
+                            "value": "1.8",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "handicap_name": "-0.5",
+                            "handicap_name_en": "+0.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915872393,
+                            "value": "1.87",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9990111": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "1.56",
+                            "bid": 495,
+                            "offerId": 1915784769,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "2.46",
+                            "bid": 495,
+                            "offerId": 1915784769,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                },
+                "301": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "handicap_name": "-2.5",
+                            "handicap_name_en": "-2.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915871189,
+                            "value": "2",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "handicap_name": "+2.5",
+                            "handicap_name_en": "-2.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915871189,
+                            "value": "1.7",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9990112": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "2.52",
+                            "bid": 495,
+                            "offerId": 1915784771,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "1.54",
+                            "bid": 495,
+                            "offerId": 1915784771,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                },
+                "301": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "handicap_name": "+2.5",
+                            "handicap_name_en": "+2.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915867621,
+                            "value": "1.87",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "handicap_name": "-2.5",
+                            "handicap_name_en": "+2.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915867621,
+                            "value": "1.8",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9990113": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "1.68",
+                            "bid": 495,
+                            "offerId": 1915784790,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "2.22",
+                            "bid": 495,
+                            "offerId": 1915784790,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                },
+                "301": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "handicap_name": "-1.5",
+                            "handicap_name_en": "-1.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915869628,
+                            "value": "1.78",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "handicap_name": "+1.5",
+                            "handicap_name_en": "-1.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915869628,
+                            "value": "1.9",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9990114": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "2.08",
+                            "bid": 495,
+                            "offerId": 1915784763,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "1.76",
+                            "bid": 495,
+                            "offerId": 1915784763,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                },
+                "301": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "handicap_name": "+0.5",
+                            "handicap_name_en": "+0.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915869633,
+                            "value": "1.83",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "handicap_name": "-0.5",
+                            "handicap_name_en": "+0.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915869633,
+                            "value": "1.85",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9990115": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "1.8",
+                            "bid": 495,
+                            "offerId": 1915784778,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "2.04",
+                            "bid": 495,
+                            "offerId": 1915784778,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                },
+                "301": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "handicap_name": "-0.5",
+                            "handicap_name_en": "-0.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915868235,
+                            "value": "1.87",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "handicap_name": "+0.5",
+                            "handicap_name_en": "-0.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915868235,
+                            "value": "1.8",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9990117": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "4.15",
+                            "bid": 495,
+                            "offerId": 1915784781,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "1.24",
+                            "bid": 495,
+                            "offerId": 1915784781,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                },
+                "301": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "handicap_name": "+3.5",
+                            "handicap_name_en": "+3.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915877285,
+                            "value": "1.98",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "handicap_name": "-3.5",
+                            "handicap_name_en": "+3.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915877285,
+                            "value": "1.72",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9990118": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "2.16",
+                            "bid": 495,
+                            "offerId": 1915784767,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "1.7",
+                            "bid": 495,
+                            "offerId": 1915784767,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                },
+                "301": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "handicap_name": "+1.5",
+                            "handicap_name_en": "+1.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915861588,
+                            "value": "1.78",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "handicap_name": "-1.5",
+                            "handicap_name_en": "+1.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915861588,
+                            "value": "1.9",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9990119": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "1.78",
+                            "bid": 495,
+                            "offerId": 1915784795,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "2.06",
+                            "bid": 495,
+                            "offerId": 1915784795,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                },
+                "301": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "handicap_name": "-1.5",
+                            "handicap_name_en": "-1.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915867626,
+                            "value": "1.87",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "handicap_name": "+1.5",
+                            "handicap_name_en": "-1.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915867626,
+                            "value": "1.8",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9990120": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "2.16",
+                            "bid": 495,
+                            "offerId": 1915784766,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "1.71",
+                            "bid": 495,
+                            "offerId": 1915784766,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                },
+                "301": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "handicap_name": "+1.5",
+                            "handicap_name_en": "+1.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915865818,
+                            "value": "1.9",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "handicap_name": "-1.5",
+                            "handicap_name_en": "+1.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915865818,
+                            "value": "1.78",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9990121": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "1.45",
+                            "bid": 495,
+                            "offerId": 1915784793,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "2.8",
+                            "bid": 495,
+                            "offerId": 1915784793,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                },
+                "301": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "handicap_name": "-2.5",
+                            "handicap_name_en": "-2.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915864408,
+                            "value": "1.75",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "handicap_name": "+2.5",
+                            "handicap_name_en": "-2.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915864408,
+                            "value": "1.91",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9990122": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "1.9",
+                            "bid": 495,
+                            "offerId": 1915784783,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "1.9",
+                            "bid": 495,
+                            "offerId": 1915784783,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                },
+                "301": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "handicap_name": "-0.5",
+                            "handicap_name_en": "-0.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915861593,
+                            "value": "1.91",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "handicap_name": "+0.5",
+                            "handicap_name_en": "-0.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915861593,
+                            "value": "1.75",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9990123": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "2.1",
+                            "bid": 495,
+                            "offerId": 1915784780,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "1.75",
+                            "bid": 495,
+                            "offerId": 1915784780,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                },
+                "301": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "handicap_name": "+1.5",
+                            "handicap_name_en": "+1.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915866266,
+                            "value": "1.83",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "handicap_name": "-1.5",
+                            "handicap_name_en": "+1.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915866266,
+                            "value": "1.83",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9990124": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "2.26",
+                            "bid": 495,
+                            "offerId": 1915784785,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "1.64",
+                            "bid": 495,
+                            "offerId": 1915784785,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9990125": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "1.51",
+                            "bid": 495,
+                            "offerId": 1915784774,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "2.62",
+                            "bid": 495,
+                            "offerId": 1915784774,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                },
+                "301": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "handicap_name": "-2.5",
+                            "handicap_name_en": "-2.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915865277,
+                            "value": "2",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "handicap_name": "+2.5",
+                            "handicap_name_en": "-2.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915865277,
+                            "value": "1.7",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9990126": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "3.5",
+                            "bid": 495,
+                            "offerId": 1915784792,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "1.31",
+                            "bid": 495,
+                            "offerId": 1915784792,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                },
+                "301": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "handicap_name": "+3.5",
+                            "handicap_name_en": "+3.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915863152,
+                            "value": "1.83",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "handicap_name": "-3.5",
+                            "handicap_name_en": "+3.5 Games",
+                            "bid": 133,
+                            "bookie": "BetMGM",
+                            "slug": "betmgm",
+                            "offerId": 1915863152,
+                            "value": "1.85",
+                            "link": "https:\/\/mediaserver.betmgmpartners.com\/renderBanner.do?zoneId=1686291",
+                            "status": 3,
+                            "primary_color": "#1e1e1e",
+                            "secondary_color": "#c0a971"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9990242": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "4.2",
+                            "bid": 495,
+                            "offerId": 1915872522,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "1.2",
+                            "bid": 495,
+                            "offerId": 1915872522,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9990243": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "1.01",
+                            "bid": 495,
+                            "offerId": 1915872524,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "15",
+                            "bid": 495,
+                            "offerId": 1915872524,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9990244": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "4",
+                            "bid": 495,
+                            "offerId": 1915878717,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "1.22",
+                            "bid": 495,
+                            "offerId": 1915878717,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9991074": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "4.2",
+                            "bid": 495,
+                            "offerId": 1915780132,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "1.2",
+                            "bid": 495,
+                            "offerId": 1915780132,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9991217": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "1.56",
+                            "bid": 495,
+                            "offerId": 1915780129,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "2.3",
+                            "bid": 495,
+                            "offerId": 1915780129,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9991218": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "2.52",
+                            "bid": 495,
+                            "offerId": 1915780127,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "1.48",
+                            "bid": 495,
+                            "offerId": 1915780127,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9991404": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "1.18",
+                            "bid": 495,
+                            "offerId": 1915878719,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "4.5",
+                            "bid": 495,
+                            "offerId": 1915878719,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9991497": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "3.1",
+                            "bid": 495,
+                            "offerId": 1915877249,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "1.33",
+                            "bid": 495,
+                            "offerId": 1915877249,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9991630": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "1.68",
+                            "bid": 495,
+                            "offerId": 1915878003,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "2.1",
+                            "bid": 495,
+                            "offerId": 1915878003,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9991646": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "1.47",
+                            "bid": 495,
+                            "offerId": 1915864760,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "2.54",
+                            "bid": 495,
+                            "offerId": 1915864760,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            },
+            "9991647": {
+                "201": {
+                    "odds": {
+                        "1": {
+                            "odd_name": "Home",
+                            "value": "1.27",
+                            "bid": 495,
+                            "offerId": 1915864762,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        },
+                        "2": {
+                            "odd_name": "Away",
+                            "value": "3.5",
+                            "bid": 495,
+                            "offerId": 1915864762,
+                            "link": "https:\/\/wlfanduelus.adsrv.eacdn.com\/C.ashx?btag=a_44763b_15c_&affid=16174&siteid=44763&adid=15&c=",
+                            "bookie": "FanDuel",
+                            "slug": "fanduel",
+                            "status": 3,
+                            "primary_color": "#0078FF",
+                            "secondary_color": "#F3D301"
+                        }
+                    },
+                    "winning_odd": null
+                }
+            }
+        },
+        "markets": {
+            "201": {
+                "name": "Moneyline",
+                "waytype": 2
+            },
+            "301": {
+                "name": "Spread",
+                "waytype": 2
+            }
+        },
+        "matches_count": 202,
+        "total_pages": 5,
+        "current_page": 1,
+        "prev_page": null,
+        "next_page": 2
+    },
+    "ch": [
+        "9c9ef1b65b067d5942efcec272eb04a65dee9430"
+    ]
+}

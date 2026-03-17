@@ -1,0 +1,216 @@
+URL
+https://oddspedia.com/us/a/tennis/alejandro-tabilo-francisco-comesana-1131703
+
+
+Headers
+Request URL
+https://oddspedia.com/api/v1/getMatchInfo?geoCode=US&wettsteuer=0&r=wv&matchKey=1131703&language=us
+Request Method
+GET
+Status Code
+200 OK
+Remote Address
+104.18.34.121:443
+Referrer Policy
+strict-origin-when-cross-origin
+access-control-allow-headers
+Authorization, UserAgent, Origin, X-Auth-Token, Content-Type, X-User-Agent, sentry-trace
+access-control-allow-methods
+GET, POST, OPTIONS, PUT, PATCH, DELETE
+access-control-allow-origin
+*
+access-control-expose-headers
+Content-Security-Policy, Location, Cache-Control, Content-Language, Content-Type, Expires, Last-Modified, Pragma
+access-control-max-age
+600
+age
+0
+alt-svc
+h3=":443"; ma=86400
+cache-control
+private, no-cache
+cf-cache-status
+DYNAMIC
+cf-ray
+9dde04722f34421d-EWR
+content-encoding
+br
+content-type
+application/json
+date
+Tue, 17 Mar 2026 18:21:27 GMT
+server
+cloudflare
+x-cache
+PASS
+x-cacheable
+NO
+x-varnish
+803618524
+:authority
+oddspedia.com
+:method
+GET
+:path
+/api/v1/getMatchInfo?geoCode=US&wettsteuer=0&r=wv&matchKey=1131703&language=us
+:scheme
+https
+accept
+application/json, text/plain, */*
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+en-US,en;q=0.9
+baggage
+sentry-environment=production,sentry-release=1.429.5,sentry-public_key=1bd38a2c35e12f90425da15c31a6f3e1,sentry-trace_id=2e3d858711fd418abc86beda8725fcbf
+cookie
+first_visit=no; AMCV_9CE579FD5DCD8B590A495E09%40AdobeOrg=MCMID|13437522215837061981434173506207755149; _hjSessionUser_2725666=eyJpZCI6IjA3NjVmODk5LWFiNDctNTI0ZS04YTdmLWRhMzAxNmVlYTExNCIsImNyZWF0ZWQiOjE3NzMxNzEwNjAxMDYsImV4aXN0aW5nIjp0cnVlfQ==; accept-cookies=true; accept-tracking-cookies=true; SSID=CQAefx0AAAAAAABwcbBpXpZAAHBxsGkHAAAAAAAAAAAAF5q5aQATkw; SSSC=2.G7615711695738017374.7|0.0; HAOSSID=2cc1b72382528; __cflb=02DiuGPeMivJ1EyNVputTEMhoXkggnU9nacfaBgghZMW4; cf_clearance=Ycn0CHvaS_nGzcrzvcUA.LewwpGWEgXMctyGJDlPavI-1773771289-1.2.1.1-fGygI6tbxpCtBIIEBHBqBju5iTq1SCtYuMQYGP4mOzpgeGf6PogxDjVVuimqIp8AZgPP.dPW7X4V5xiSHl3gw8nlSEkPPUm25SmyEj6GAoP8voZZvPPvQAEYMvvQbUy8L1IhiI6d6EzZ17QUcUoz5YYMWk2pkNv66UswU5wUo0gWgRHWXMM4IjZtNIjK.dBhVZrquUjcUQ4XoVrySAeXfgA4aCZxrptBfB4qwu4Jyac0XTgjASbtAR0rcVODfAaYfZg33X5ijp8QDarVrvNYBXfVvJqgInU0L3pOlTEetVwkC6.JMDS9vnG0JETL.1PHP2JgzlJGKRWOSDO9Q2S2kg; adcloud={%22_les_v%22:%22c%2Cy%2Coddspedia.com%2C1773773090%22}; kndctr_9CE579FD5DCD8B590A495E09_AdobeOrg_identity=CiYxMzQzNzUyMjIxNTgzNzA2MTk4MTQzNDE3MzUwNjIwNzc1NTE0OVIQCP%5Fb7MnNMxgBKgNWQTYwAfAB%2DuyH6M8z; kndctr_9CE579FD5DCD8B590A495E09_AdobeOrg_cluster=va6; __cf_bm=8pjObq1kLIVcaGwLChjalksCtjTcaPrC6ep0AUi5Duc-1773771312.9609187-1.0.1.1-kdBccH8UWoK6iJC708WzMhIhVMd5RJey.iUqjcjyf2GLZoPdWe79Deb9Tmcmh1lskajIsuMCYitjCRZxCRKTZX55ZVXMIZryOENU_VuegWxd0APm5BR2ZAWprkQ09u7Q; SSRT=cJu5aQQBAA; _v_id_l={%22_v_id%22:%2243921584832227861773771290092%22%2C%22_la%22:1773771681188}
+priority
+u=1, i
+referer
+https://oddspedia.com/us/a/tennis/alejandro-tabilo-francisco-comesana-1131703
+sec-ch-ua
+"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+sentry-trace
+2e3d858711fd418abc86beda8725fcbf-a061327d8a29a815
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36
+
+Response
+{
+    "generated_at": "2026-03-17 18:20:32",
+    "data": {
+        "id": "9990108",
+        "def_ot": 201,
+        "sr_id": 69979326,
+        "starttime": "2026-03-18 15:00:00+00",
+        "md": "2026-03-18 15:00:00+00",
+        "sport_id": 5,
+        "sport_name": "Tennis",
+        "sport_name_en": "Tennis",
+        "sport_slug": "tennis",
+        "sport_slug_en": "tennis",
+        "country_id": 459,
+        "ccode": "US",
+        "category_name": "USA",
+        "category_slug": "usa",
+        "category_slug_en": "usa",
+        "is_summer_olympics": 0,
+        "is_winter_olympics": 0,
+        "league_id": 2490,
+        "league_name": "ATP Miami",
+        "league_name_en": "ATP Miami",
+        "league_slug": "atp-miami",
+        "league_slug_en": "atp-miami",
+        "league_abbr": "Miami",
+        "league_primary_color": "#1A3150",
+        "league_accent_color": "#00B1FF",
+        "ht_id": 24622,
+        "ht_form": "WWLWL?",
+        "ht_abbr": "TAB",
+        "ht": "Alejandro Tabilo",
+        "ht_slug": "alejandro-tabilo",
+        "ht_slug_en": "alejandro-tabilo",
+        "hscore": null,
+        "at_id": 67659,
+        "at_form": "LLWLL?",
+        "at_abbr": "COM",
+        "at": "Francisco Comesana",
+        "at_slug": "francisco-comesana",
+        "at_slug_en": "francisco-comesana",
+        "ascore": null,
+        "ht_playoff_series": null,
+        "at_playoff_series": null,
+        "scorers": null,
+        "inplay_status": null,
+        "show_inplay_status": false,
+        "current_time": 0,
+        "additional_time": "",
+        "game_score": null,
+        "season_id": 134091,
+        "season_name": "ATP Miami, USA Men Singles 2026",
+        "season_start_date": "2026-03-16 00:00:00+00",
+        "season_end_date": "2026-03-29 00:00:00+00",
+        "stage_id": null,
+        "stage_type": null,
+        "stage_phase": null,
+        "stage_order": null,
+        "stage_start_date": null,
+        "stage_end_date": null,
+        "group_id": 186109,
+        "stage_group_name": "2026 Miami, USA",
+        "stage_group_max_rounds": null,
+        "stage_group_group_name": null,
+        "referee_id": null,
+        "referee_type": null,
+        "referee_name": null,
+        "referee_country_code": null,
+        "referee_nationality": null,
+        "venue_id": null,
+        "venue_name": null,
+        "venue_country_code": null,
+        "venue_country": null,
+        "venue_city": null,
+        "venue_capacity": null,
+        "venue_lat": null,
+        "venue_lon": null,
+        "surface": "hard",
+        "weather_conditions": null,
+        "matchstatus": 1,
+        "special_status": null,
+        "status": null,
+        "has_standings": 0,
+        "round_name": "Round Of 128",
+        "to_show_standings": 0,
+        "short_periods_names": "[null]",
+        "postmatch_status": null,
+        "prize_money": "8995555",
+        "prize_currency": "$",
+        "halftime": null,
+        "template": {
+            "title": "Alejandro Tabilo vs Francisco Comesana Betting Odds & Picks | Oddspedia",
+            "description": "Alejandro Tabilo vs Francisco Comesana \u2771 18.03.2026 \u2771 Tennis \u2771 ATP Miami, USA \u2771 \u26a1 Best Odds & Picks \u2b50 Accurate Predictions \u2714\ufe0f Live Score & Stats \u270c Match Preview",
+            "template": "Alejandro Tabilo plays against Francisco Comesana in a ATP Miami game, and Tennis fans are looking forward to it. The event takes place on 18\/03\/2026 at 15:00 UTC.<\/p><p>&nbsp;<\/p><p>Oddspedia provides Alejandro Tabilo Francisco Comesana &nbsp;betting odds from 4 betting sites on 8 markets. Sportsbooks place Alejandro Tabilo as favorites to win the game at @ 1.4. Check the Alejandro Tabilo and Francisco Comesana team form, standings and head-to-head statistics here on the page. Additionally to the comprehensive pre-match and live betting odds, fast live scores, team lineups and commentary.<\/p><p>Will Alejandro Tabilo, as the home team, take advantage and win the game?<\/p><h3>Find the best lines on Alejandro Tabilo vs Francisco Comesana!<\/h3><p>Compare the Alejandro Tabilo - Francisco Comesana betting odds and win more with today's best <a href='https:\/\/oddspedia.com\/us\/tennis\/odds'>Tennis Odds<\/a>.<\/p><p>Oddspedia provides <span data-sport-slug=\"tennis\"\n                    data-category-slug=\"usa\"\n                    data-league-slug=\"atp-miami\"\n                    class=\"masked-link\"\n                    data-page-type=\"league-odds\"\n                >ATP Miami<\/span> and betting lines from 4 sportsbooks in 8 betting markets. The search for which site is offering top sports betting odds has come to an end!<br><br><div class=\"match-details__odds\"><table><thead><tr><th>Match Outcome<\/th><th>Best Odds<\/th><th>Bookie<\/th><\/tr><\/thead>\n                                <tbody><tr><td>Alejandro Tabilo To win<\/td><td> 1.40<\/td>\n                                <td><a  href=\"https:\/\/oddspedia.com\/us\/sportsbooks\/fanduel\"><img src=\"https:\/\/cdn.oddspedia.com\/images\/bookmakers\/light-back\/120x48\/fanduel.png\" alt=\"FanDuel\"><\/a>\n                                <span>FanDuel<\/span><\/td><\/tr><tr><td>Francisco Comesana To win<\/td><td>3.02<\/td>\n                                <td><a  href=\"https:\/\/oddspedia.com\/us\/sportsbooks\/fanduel\"><img src=\"https:\/\/cdn.oddspedia.com\/images\/bookmakers\/light-back\/120x48\/fanduel.png\" alt=\"FanDuel\"><\/a>\n                                <span>FanDuel<\/span><\/td><\/tr><\/tbody><\/table><\/div><h3>Alejandro Tabilo vs Francisco Comesana Tip and Winning Probabilities<\/h3><p>The betting tip for the winner in the game between Alejandro Tabilo v Francisco Comesana is:&nbsp;Alejandro Tabilo. The winner probabilities are:&nbsp;<b>71.43<\/b>% (Alejandro Tabilo), <b>33.11<\/b>% (Francisco Comesana).<br><br>Also, for your analysis, we have the recent form of Alejandro Tabilo and Francisco Comesana, their standings and head-to-head statistics. In addition to this, we will also lavish the following information on you:<\/p><ul><li><strong>Comprehensive Pre-Match Odds<\/strong><\/li><li><strong>Team Lineups<\/strong><\/li><li><strong>In-Play (live) Betting Odds<\/strong><\/li><li><strong>Live Scores - as They Happen<\/strong><\/li><li><strong>Commentary - Match Event Viewer with Momentum<\/strong><\/li><\/ul><p>If you are wondering which betting site to choose for your Alejandro Tabilo vs Francisco Comesana bets, then explore <a href=\"https:\/\/oddspedia.com\/us\/sportsbooks\">the best sportsbooks<\/a> and<a href=\"https:\/\/oddspedia.com\/us\/sportsbooks\/betting-apps \"> betting apps for your state<\/a>. Don't forget to check the latest <a href=\"https:\/\/oddspedia.com\/us\/sportsbooks\/draftkings\/bonus\">DraftKings Promo Code<\/a>, <a href=\"https:\/\/oddspedia.com\/us\/sportsbooks\/betrivers\/bonus\">BetRivers Promo Code<\/a>, and other <a href=\"https:\/\/oddspedia.com\/us\/sportsbooks\/betting-offers\">sportsbook promos<\/a> currently available for you. &nbsp;<\/p><h3>Match details<\/h3><ul><li>Alejandro Tabilo vs&nbsp;Francisco Comesana<\/li><li><span data-sport-slug=\"tennis\"\n                    data-category-slug=\"usa\"\n                    data-league-slug=\"atp-miami\"\n                    class=\"masked-link\"\n                    data-page-type=\"league\"\n                >ATP Miami<\/span>&nbsp;USA<\/li><li>Date -&nbsp;18\/03\/2026<\/li><li>Starting time -&nbsp;15:00 UTC<\/li><li>Venue:&nbsp;-,&nbsp;-, -<\/li><\/ul>",
+            "hasNextGame": 0,
+            "hasNextThreeGames": 0,
+            "created_at": "2021-05-13 11:47:09",
+            "updated_at": "2026-03-16 21:46:34.352666+00",
+            "published_on": "2021-05-13 11:47:09",
+            "heading": null,
+            "expert_prediction": null
+        },
+        "match_keys": null,
+        "video": null,
+        "winner": null,
+        "btip_allowed": true,
+        "tips_allowed": true,
+        "match_key": 1131703,
+        "is_match_archived": true,
+        "is_league_archived": true,
+        "is_match_tips_archived": true,
+        "is_match_current": true,
+        "has_sr_coverage": true,
+        "has_live_streaming": true,
+        "ht_shirt_color": null,
+        "at_shirt_color": null,
+        "ht_rank": "ATP 41",
+        "at_rank": "ATP 82",
+        "ht_red_cards": 0,
+        "at_red_cards": 0,
+        "aggregate_home_score": null,
+        "aggregate_away_score": null
+    },
+    "ch": [
+        "c-4f8a432e3036cb687b5f888694675ff5027efb56"
+    ]
+}

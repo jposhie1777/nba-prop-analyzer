@@ -706,77 +706,56 @@ def ingest_epl_match_info(
         page.wait_for_timeout(3000)
 
         for match in active_matches:
-            mid = match.get("match_id")
-            if not mid:
-                continue
+          mid = match.get("match_id")
+          if not mid:
+              continue
+  
+          print(f"[epl_info] Processing match={mid}: {match.get('home_team')} vs {match.get('away_team')}")
+  
+          event_data = match.get("match_info") or {}
+          mk = _safe_int(event_data.get("match_key"))
+  
+          if not mk:
+              print(f"[epl_info] match={mid} no match_key — skipping")
+              continue
+  
+          print(f"[epl_info] match={mid} match_key={mk}")
+  
+          weather_rows.append(_build_weather_row(mid, mk, event_data, ingested_at, scraped_date))
+          key_rows.extend(_build_key_rows(mid, mk, event_data, ingested_at, scraped_date))
+  
+          bs = match.get("betting_stats")
+          if bs:
+              rows = _build_betting_stats_rows(mid, mk, event_data, bs, ingested_at, scraped_date)
+              betting_stat_rows.extend(rows)
+              print(f"[epl_info] match={mid} betting_stats rows: {len(rows)}")
+  
+          pms = match.get("per_match_stats")
+          if pms:
+              rows = _build_per_match_stat_rows(mid, mk, event_data, pms, ingested_at, scraped_date)
+              per_match_rows.extend(rows)
+  
+          h2h = match.get("head_to_head")
+          if h2h:
+              rows = _build_h2h_rows(mid, mk, event_data, h2h, ingested_at, scraped_date)
+              h2h_rows.extend(rows)
+  
+          lmh = match.get("last_matches_home") or {}
+          lma = match.get("last_matches_away") or {}
+          if lmh or lma:
+              rows = _build_last_match_rows(mid, mk, event_data, lmh, lma, ingested_at, scraped_date)
+              last_match_rows.extend(rows)
+  
+          sd = match.get("standings_data")
+          if sd:
+              rows = _build_standings_rows(mid, mk, sd, ingested_at, scraped_date)
+              standings_rows.extend(rows)
+  
+          lu = match.get("lineups")
+          if lu:
+              rows = _build_lineup_rows(mid, mk, event_data, lu, ingested_at, scraped_date)
+              lineup_rows.extend(rows)
 
-            print(f"[epl_info] Processing match={mid}: {match.get('home_team')} vs {match.get('away_team')}")
-
-            store_data = _fetch_epl_match_data(page, match)
-            if not store_data:
-                print(f"[epl_info] match={mid} no store data — skipping")
-                continue
-
-            # The event object from the store has the richest match info
-            event_data = store_data.get("event") or match.get("match_info") or {}
-            mk         = _safe_int(event_data.get("match_key") or match.get("match_key"))
-
-            print(f"[epl_info] match={mid} match_key={mk}")
-
-            # Weather / venue / form
-            weather_rows.append(
-                _build_weather_row(mid, mk, event_data, ingested_at, scraped_date)
-            )
-
-            # Match keys (betting trend statements)
-            key_rows.extend(
-                _build_key_rows(mid, mk, event_data, ingested_at, scraped_date)
-            )
-
-            # Betting stats
-            bs = store_data.get("bettingStats")
-            if bs:
-                rows = _build_betting_stats_rows(mid, mk, event_data, bs, ingested_at, scraped_date)
-                betting_stat_rows.extend(rows)
-                print(f"[epl_info] match={mid} betting_stats rows: {len(rows)}")
-            else:
-                print(f"[epl_info] match={mid} no bettingStats")
-
-            # Per-match stats (season averages)
-            pms = store_data.get("perMatchStats")
-            if pms:
-                rows = _build_per_match_stat_rows(mid, mk, event_data, pms, ingested_at, scraped_date)
-                per_match_rows.extend(rows)
-                print(f"[epl_info] match={mid} per_match_stats rows: {len(rows)}")
-
-            # Head-to-head
-            h2h = store_data.get("headToHead")
-            if h2h:
-                rows = _build_h2h_rows(mid, mk, event_data, h2h, ingested_at, scraped_date)
-                h2h_rows.extend(rows)
-                print(f"[epl_info] match={mid} h2h rows: {len(rows)}")
-
-            # Last matches (home + away recent form)
-            lmh = store_data.get("lastMatchesHome") or {}
-            lma = store_data.get("lastMatchesAway") or {}
-            if lmh or lma:
-                rows = _build_last_match_rows(mid, mk, event_data, lmh, lma, ingested_at, scraped_date)
-                last_match_rows.extend(rows)
-                print(f"[epl_info] match={mid} last_matches rows: {len(rows)}")
-
-            # Standings
-            sd = store_data.get("standingsData")
-            if sd:
-                rows = _build_standings_rows(mid, mk, sd, ingested_at, scraped_date)
-                standings_rows.extend(rows)
-                print(f"[epl_info] match={mid} standings rows: {len(rows)}")
-
-            # Lineups
-            lu = store_data.get("lineups")
-            if lu:
-                rows = _build_lineup_rows(mid, mk, event_data, lu, ingested_at, scraped_date)
-                lineup_rows.extend(rows)
-                print(f"[epl_info] match={mid} lineup rows: {len(rows)}")
 
     # ── Summary ───────────────────────────────────────────────────────────
     counts = {

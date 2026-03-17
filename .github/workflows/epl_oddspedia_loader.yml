@@ -23,15 +23,11 @@ on:
     - cron: "0 19 * * 1"
 
 jobs:
-  ingest:
+  scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-
-    env:
-      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
-      ODDSPEDIA_DATASET: "oddspedia"
-      ODDSPEDIA_BQ_LOCATION: "US"
-      ODDSPEDIA_EPL_TABLE: "epl_odds"
+    timeout-minutes: 45
+    outputs:
+      rows_file: rows.json
 
     steps:
       - name: Checkout repo
@@ -61,19 +57,13 @@ jobs:
           pip install camoufox[geoip]
           python -m camoufox fetch
 
-      - name: Configure GCP credentials
-        if: ${{ inputs.dry_run != true }}
-        run: |
-          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
-          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
-
       - name: Set URL override (if provided)
         if: ${{ inputs.url != '' }}
         run: echo "ODDSPEDIA_EPL_URL=${{ inputs.url }}" >> $GITHUB_ENV
 
-      - name: Run EPL odds ingest
+      - name: Scrape EPL odds and save rows to file
         run: |
-          ARGS=""
+          ARGS="--scrape-only"
           if [ "${{ inputs.dry_run }}" = "true" ]; then
             ARGS="$ARGS --dry-run"
           fi
@@ -82,10 +72,56 @@ jobs:
           fi
           python -m mobile_api.ingest.epl.oddspedia_epl_odds_ingest $ARGS
 
-      - name: Run EPL match info ingest
+      - name: Upload rows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: epl-rows
+          path: /tmp/epl_rows.json
+          retention-days: 1
+
+  insert:
+    runs-on: ubuntu-latest
+    needs: scrape
+    if: ${{ inputs.dry_run != true }}
+    timeout-minutes: 15
+
+    env:
+      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+      ODDSPEDIA_DATASET: "oddspedia"
+      ODDSPEDIA_BQ_LOCATION: "US"
+      ODDSPEDIA_EPL_TABLE: "epl_odds"
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
         run: |
-          ARGS=""
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
-            ARGS="$ARGS --dry-run"
-          fi
-          python -m mobile_api.ingest.epl.oddspedia_epl_match_info_ingest $ARGS
+          pip install --upgrade pip
+          pip install -r mobile_api/requirements.txt
+
+      - name: Configure GCP credentials
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
+
+      - name: Download rows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: epl-rows
+          path: /tmp
+
+      - name: Insert rows into BigQuery
+        run: |
+          python -m mobile_api.ingest.epl.oddspedia_epl_odds_ingest --insert-only
+
+  match_info:
+    runs-on: ubuntu-latest
+    needs: insert
+    timeout-minutes: 45
+    # ... match info job here if needed

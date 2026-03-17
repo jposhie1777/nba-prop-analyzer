@@ -18,7 +18,7 @@ on:
         required: false
         default: ""
   schedule:
-    - cron: "0 14 * * *"
+    - cron: "0 10 * * *"
 
 jobs:
   ingest:

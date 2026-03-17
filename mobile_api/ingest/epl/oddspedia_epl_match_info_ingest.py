@@ -1,4 +1,4 @@
-#mobile_api/ingest/epl/oddspedia
+#mobile_api/ingest/epl/oddspedia_epl_match_info_ingest.py
 
 """
 Ingests match info, stats, and H2H data from Oddspedia EPL match pages into BigQuery.

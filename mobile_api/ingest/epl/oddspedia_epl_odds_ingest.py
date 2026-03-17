@@ -181,16 +181,34 @@ def _insert_rows(
 ) -> int:
     if not rows:
         return 0
+    import tempfile, pathlib, json as _json
     table_id = _full_table_id(client)
-    written = 0
-    for i in range(0, len(rows), chunk_size):
-        chunk = rows[i: i + chunk_size]
-        errors = client.insert_rows_json(table_id, chunk)
-        if errors:
-            raise RuntimeError(f"BigQuery insert errors: {errors[:3]}")
-        written += len(chunk)
-        time.sleep(0.05)
-    return written
+
+    # Write rows as newline-delimited JSON and load via load_table_from_file
+    # This avoids the streaming insert HTTPS endpoint that hits SSL errors
+    tmp = pathlib.Path(tempfile.mktemp(suffix=".ndjson"))
+    try:
+        with tmp.open("w") as f:
+            for row in rows:
+                f.write(_json.dumps(row, default=str) + "\n")
+
+        job_config = bigquery.LoadJobConfig(
+            source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
+            schema=SCHEMA,
+            write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
+        )
+        with tmp.open("rb") as f:
+            job = client.load_table_from_file(f, table_id, job_config=job_config)
+        job.result()  # wait for completion
+
+        if job.errors:
+            raise RuntimeError(f"Load job errors: {job.errors[:3]}")
+
+        print(f"[epl_odds] Load job complete: {job.output_rows} rows loaded")
+        return job.output_rows
+    finally:
+        tmp.unlink(missing_ok=True)
+
 
 
 # ── Normalisation helpers ─────────────────────────────────────────────────────

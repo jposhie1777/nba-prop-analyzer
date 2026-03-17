@@ -262,28 +262,8 @@ class OddspediaClient:
                 start = (now - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
                 end = (now + timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-                def _build_match_list_url(*, filtered: bool) -> str:
-                    base = (
-                        f"https://oddspedia.com/api/v1/getMatchList"
-                        f"?excludeSpecialStatus=0&sortBy=default&perPage=100"
-                        f"&startDate={urllib.parse.quote(start)}&endDate={urllib.parse.quote(end)}"
-                        f"&geoCode=US&status=all&sport={sport}&popularLeaguesOnly=0"
-                    )
-                    if filtered:
-                        base += (
-                            f"&category={league_category}&league={league_slug}"
-                            f"&seasonId={season_id}&round="
-                        )
-                    return f"{base}&r=wv&page=1&perPage=100&language=us"
-
-                request_plan = [
-                    ("filtered", _build_match_list_url(filtered=True)),
-                ]
-                if sport == "tennis":
-                    request_plan.append(("sport_only", _build_match_list_url(filtered=False)))
-
-                for label, match_list_url in request_plan:
-                    ml_result = page.evaluate(
+                def _fetch_listing(url: str) -> Dict[str, Any]:
+                    return page.evaluate(
                         """async (url) => {
                             const res = await fetch(url, {
                                 credentials: 'include',
@@ -297,17 +277,44 @@ class OddspediaClient:
                             }
                             return { status: res.status, body: text.slice(0, 500), data };
                         }""",
-                        match_list_url
+                        url,
                     )
 
-                    print(f"[scraper] getMatchList direct fetch ({label}) status: {ml_result.get('status')}")
-                    print(f"[scraper] getMatchList ({label}) response body: {ml_result.get('body')}")
+                def _build_match_list_url(*, filtered: bool) -> str:
+                    base = (
+                        f"https://oddspedia.com/api/v1/getMatchList"
+                        f"?excludeSpecialStatus=0&sortBy=default&perPageDefault=50"
+                        f"&startDate={urllib.parse.quote(start)}&endDate={urllib.parse.quote(end)}"
+                        f"&geoCode=US&status=all&sport={sport}&popularLeaguesOnly=0"
+                    )
+                    if filtered:
+                        base += (
+                            f"&category={league_category}&league={league_slug}"
+                            f"&seasonId={season_id}&round="
+                        )
+                    return f"{base}&r=wv&page=1&perPage=50&language=us"
+
+                def _build_american_odds_url() -> str:
+                    return (
+                        f"https://oddspedia.com/api/v1/getAmericanMaxOddsWithPagination"
+                        f"?geoCode=US&bookmakerGeoCode=US&bookmakerGeoState=NY&wettsteuer=0"
+                        f"&startDate={urllib.parse.quote(start)}&endDate={urllib.parse.quote(end)}"
+                        f"&sport={sport}&ot=201&excludeSpecialStatus=0&popularLeaguesOnly=0"
+                        f"&sortBy=default&status=all&page=1&perPage=50&r=si&inplay=0&language=us"
+                    )
+
+                request_plan = [("filtered", _build_match_list_url(filtered=True))]
+                if sport == "tennis":
+                    request_plan.append(("sport_only", _build_match_list_url(filtered=False)))
+                    request_plan.append(("american_odds", _build_american_odds_url()))
+
+                for label, url in request_plan:
+                    ml_result = _fetch_listing(url)
+                    print(f"[scraper] direct fetch ({label}) status: {ml_result.get('status')}")
+                    print(f"[scraper] direct fetch ({label}) response body: {ml_result.get('body')}")
 
                     if ml_result.get("status") == 200 and ml_result.get("data"):
-                        listing_api_responses.append({
-                            "url": match_list_url,
-                            "body": ml_result["data"],
-                        })
+                        listing_api_responses.append({"url": url, "body": ml_result["data"]})
                         break
             except Exception as exc:
                 print(f"[scraper] getMatchList direct fetch error: {exc}")

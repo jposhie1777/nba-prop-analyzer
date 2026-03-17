@@ -560,15 +560,13 @@ def _fetch_epl_match_data(
         return {}
 
 
-    match_url = (
-        f"https://oddspedia.com/us/soccer/{EPL_CATEGORY}/{EPL_LEAGUE_SLUG}"
-        f"/{ht_slug}-{at_slug}-{mk}"
-    )
+    match_url = f"https://oddspedia.com/us/soccer/{ht_slug}-{at_slug}-{mk}"
+
     print(f"[epl_info] Loading match page: {match_url}")
 
     try:
         page.goto(match_url, wait_until="domcontentloaded", timeout=30_000)
-        page.wait_for_timeout(4000)  # let Vuex hydrate all store keys
+        page.wait_for_timeout(6000)  # let Vuex hydrate all store keys
     except Exception as exc:
         print(f"[epl_info] match={mid} page load error: {exc}")
         return {}

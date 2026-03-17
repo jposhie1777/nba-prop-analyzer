@@ -498,55 +498,43 @@ class OddspediaClient:
                         record["match_info"] = d  # store full payload for downstream ingest
                         print(f"[scraper] match={mid} enriched: {d.get('ht')} vs {d.get('at')} @ {record['date_utc']}")
 
-                        # Extract full Vuex store data from match page
+                        # Capture stats via direct API calls
                         try:
-                            match_url = f"https://oddspedia.com/us/soccer/{d.get('ht_slug')}-{d.get('at_slug')}-{d.get('match_key')}"
-                            page.goto(match_url, wait_until="domcontentloaded", timeout=30000)
-                            page.wait_for_timeout(4000)
-                            store_data = page.evaluate("""
-                                async () => {
+                            mk = d.get("match_key")
+                            stats_result = page.evaluate(
+                                """async (matchKey) => {
                                     try {
-                                        const store = document.querySelector('#__nuxt')?.__vue__?.$store;
-                                        if (!store) return null;
-                                        const axios = document.querySelector('#__nuxt').__vue__.$axios;
-                                        const cancelToken = axios.CancelToken.source().token;
-                                        await Promise.allSettled([
-                                            store.dispatch('event/fetchPerMatchStats'),
-                                            store.dispatch('event/fetchEventHeadToHead'),
-                                            store.dispatch('event/fetchLastMatchesHome'),
-                                            store.dispatch('event/fetchLastMatchesAway'),
-                                            store.dispatch('event/fetchStandings'),
-                                            store.dispatch('event/fetchLineups'),
-                                            store.dispatch('event/fetchBettingStats', { cancelToken }),
+                                        const base = 'https://oddspedia.com/api/v1';
+                                        const lang = 'language=us';
+                                        const [bs, pms, h2h, lmh, lma, st, lu] = await Promise.all([
+                                            fetch(`${base}/getMatchBettingStats?matchKey=${matchKey}&${lang}`).then(r=>r.json()),
+                                            fetch(`${base}/getPerMatchStats?matchKey=${matchKey}&${lang}`).then(r=>r.json()),
+                                            fetch(`${base}/getHeadToHead?matchKey=${matchKey}&all=1&${lang}`).then(r=>r.json()),
+                                            fetch(`${base}/getTeamLastMatches?matchKey=${matchKey}&type=home&teamId=0&upcomingMatchesLimit=2&finishedMatchesLimit=5&geoCode=US&${lang}`).then(r=>r.json()),
+                                            fetch(`${base}/getTeamLastMatches?matchKey=${matchKey}&type=away&teamId=0&upcomingMatchesLimit=2&finishedMatchesLimit=5&geoCode=US&${lang}`).then(r=>r.json()),
+                                            fetch(`${base}/getLeagueStandings?matchKey=${matchKey}&${lang}`).then(r=>r.json()),
+                                            fetch(`${base}/getMatchLineUps?matchKey=${matchKey}&${lang}`).then(r=>r.json()),
                                         ]);
-                                        const s = store.state.event;
-                                        return {
-                                            bettingStats:    JSON.parse(JSON.stringify(s.bettingStats    || null)),
-                                            perMatchStats:   JSON.parse(JSON.stringify(s.perMatchStats   || null)),
-                                            headToHead:      JSON.parse(JSON.stringify(s.headToHead      || null)),
-                                            lastMatchesHome: JSON.parse(JSON.stringify(s.lastMatchesHome || {})),
-                                            lastMatchesAway: JSON.parse(JSON.stringify(s.lastMatchesAway || {})),
-                                            standingsData:   JSON.parse(JSON.stringify(s.standingsData   || null)),
-                                            lineups:         JSON.parse(JSON.stringify(s.lineups         || null)),
-                                        };
+                                        return { bs, pms, h2h, lmh, lma, st, lu };
                                     } catch(e) {
                                         return { error: e.toString() };
                                     }
-                                }
-                            """)
-                            if store_data and not store_data.get("error"):
-                                record["betting_stats"]    = store_data.get("bettingStats")
-                                record["per_match_stats"]  = store_data.get("perMatchStats")
-                                record["head_to_head"]     = store_data.get("headToHead")
-                                record["last_matches_home"]= store_data.get("lastMatchesHome")
-                                record["last_matches_away"]= store_data.get("lastMatchesAway")
-                                record["standings_data"]   = store_data.get("standingsData")
-                                record["lineups"]          = store_data.get("lineups")
-                                print(f"[scraper] match={mid} store data captured")
+                                }""",
+                                mk
+                            )
+                            if stats_result and not stats_result.get("error"):
+                                record["betting_stats"]     = stats_result.get("bs", {}).get("data")
+                                record["per_match_stats"]   = stats_result.get("pms", {}).get("data")
+                                record["head_to_head"]      = stats_result.get("h2h", {}).get("data")
+                                record["last_matches_home"] = stats_result.get("lmh", {}).get("data")
+                                record["last_matches_away"] = stats_result.get("lma", {}).get("data")
+                                record["standings_data"]    = stats_result.get("st", {}).get("data")
+                                record["lineups"]           = stats_result.get("lu", {}).get("data")
+                                print(f"[scraper] match={mid} stats captured via API")
                             else:
-                                print(f"[scraper] match={mid} store data empty: {store_data}")
+                                print(f"[scraper] match={mid} stats API error: {stats_result}")
                         except Exception as exc_bs:
-                            print(f"[scraper] match={mid} store capture error: {exc_bs}")
+                            print(f"[scraper] match={mid} stats capture error: {exc_bs}")
 
 
                     else:

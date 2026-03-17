@@ -248,45 +248,67 @@ class OddspediaClient:
             # Allow time for deferred API calls to fire after visibility change
             page.wait_for_timeout(3000)
 
-            # Explicitly fetch full match list since camoufox doesn't capture it via SSR
+            # Explicitly fetch full match list since camoufox doesn't always capture
+            # listing data via SSR/intercepts.
+            #
+            # For soccer league pages, category/league/season filters are usually valid.
+            # For tennis tournament pages, Oddspedia can return HTTP 400 when those
+            # filters are included (e.g. stale season ids). In that case we retry with
+            # a sport-wide query and rely on downstream enrichment/filtering.
             try:
                 import urllib.parse
                 from datetime import datetime, timezone, timedelta
                 now = datetime.now(timezone.utc)
                 start = (now - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
                 end = (now + timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
-                match_list_url = (
-                    f"https://oddspedia.com/api/v1/getMatchList"
-                    f"?excludeSpecialStatus=0&sortBy=default&perPage=100"
-                    f"&startDate={urllib.parse.quote(start)}&endDate={urllib.parse.quote(end)}"
-                    f"&geoCode=US&status=all&sport={sport}&popularLeaguesOnly=0"
-                    f"&category={league_category}&league={league_slug}&seasonId={season_id}&round=&r=wv&page=1"
-                    f"&perPage=100&language=us"
-                )
-                ml_result = page.evaluate(
-                    """async (url) => {
-                        const res = await fetch(url, {
-                            credentials: 'include',
-                            redirect: 'follow',
-                            headers: { 'accept': 'application/json, text/plain, */*' }
-                        });
-                        const text = await res.text();
-                        return { status: res.status, body: text.slice(0, 500), data: res.ok ? JSON.parse(text) : null };
-                    }""",
-                    match_list_url
-                )
-                print(f"[scraper] getMatchList direct fetch status: {ml_result.get('status')}")
-                print(f"[scraper] getMatchList response body: {ml_result.get('body')}")
-                if ml_result.get("status") == 200 and ml_result.get("data"):
-                    listing_api_responses.append({
-                        "url": match_list_url,
-                        "body": ml_result["data"]
-                    })
-                if ml_result.get("status") == 200 and ml_result.get("data"):
-                    listing_api_responses.append({
-                        "url": match_list_url,
-                        "body": ml_result["data"]
-                    })
+
+                def _build_match_list_url(*, filtered: bool) -> str:
+                    base = (
+                        f"https://oddspedia.com/api/v1/getMatchList"
+                        f"?excludeSpecialStatus=0&sortBy=default&perPage=100"
+                        f"&startDate={urllib.parse.quote(start)}&endDate={urllib.parse.quote(end)}"
+                        f"&geoCode=US&status=all&sport={sport}&popularLeaguesOnly=0"
+                    )
+                    if filtered:
+                        base += (
+                            f"&category={league_category}&league={league_slug}"
+                            f"&seasonId={season_id}&round="
+                        )
+                    return f"{base}&r=wv&page=1&perPage=100&language=us"
+
+                request_plan = [
+                    ("filtered", _build_match_list_url(filtered=True)),
+                ]
+                if sport == "tennis":
+                    request_plan.append(("sport_only", _build_match_list_url(filtered=False)))
+
+                for label, match_list_url in request_plan:
+                    ml_result = page.evaluate(
+                        """async (url) => {
+                            const res = await fetch(url, {
+                                credentials: 'include',
+                                redirect: 'follow',
+                                headers: { 'accept': 'application/json, text/plain, */*' }
+                            });
+                            const text = await res.text();
+                            let data = null;
+                            if (res.ok) {
+                                try { data = JSON.parse(text); } catch (e) { data = null; }
+                            }
+                            return { status: res.status, body: text.slice(0, 500), data };
+                        }""",
+                        match_list_url
+                    )
+
+                    print(f"[scraper] getMatchList direct fetch ({label}) status: {ml_result.get('status')}")
+                    print(f"[scraper] getMatchList ({label}) response body: {ml_result.get('body')}")
+
+                    if ml_result.get("status") == 200 and ml_result.get("data"):
+                        listing_api_responses.append({
+                            "url": match_list_url,
+                            "body": ml_result["data"],
+                        })
+                        break
             except Exception as exc:
                 print(f"[scraper] getMatchList direct fetch error: {exc}")
 

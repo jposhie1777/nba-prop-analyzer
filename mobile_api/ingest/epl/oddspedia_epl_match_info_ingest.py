@@ -566,31 +566,48 @@ def _fetch_epl_match_data(
 
     try:
         page.goto(match_url, wait_until="domcontentloaded", timeout=30_000)
-        page.wait_for_timeout(6000)  # let Vuex hydrate all store keys
+        page.wait_for_timeout(6000)
     except Exception as exc:
         print(f"[epl_info] match={mid} page load error: {exc}")
         return {}
 
+    # Actively dispatch all store actions rather than passively reading
     result = page.evaluate("""
-        () => {
+        async () => {
             try {
-                const store = document.querySelector('#__nuxt')?.__vue__?.$store?.state?.event;
-                if (!store) return null;
+                const store = document.querySelector('#__nuxt')?.__vue__?.$store;
+                if (!store) return { error: 'no store' };
+
+                const axios = document.querySelector('#__nuxt').__vue__.$axios;
+                const cancelToken = axios.CancelToken.source().token;
+
+                await Promise.allSettled([
+                    store.dispatch('event/fetchPerMatchStats'),
+                    store.dispatch('event/fetchEventHeadToHead'),
+                    store.dispatch('event/fetchLastMatchesHome'),
+                    store.dispatch('event/fetchLastMatchesAway'),
+                    store.dispatch('event/fetchStandings'),
+                    store.dispatch('event/fetchLineups'),
+                    store.dispatch('event/fetchBettingStats', { cancelToken }),
+                ]);
+
+                const s = store.state.event;
                 return {
-                    event:            JSON.parse(JSON.stringify(store.event           || {})),
-                    bettingStats:     JSON.parse(JSON.stringify(store.bettingStats    || null)),
-                    perMatchStats:    JSON.parse(JSON.stringify(store.perMatchStats   || null)),
-                    headToHead:       JSON.parse(JSON.stringify(store.headToHead      || null)),
-                    lastMatchesHome:  JSON.parse(JSON.stringify(store.lastMatchesHome || {})),
-                    lastMatchesAway:  JSON.parse(JSON.stringify(store.lastMatchesAway || {})),
-                    standingsData:    JSON.parse(JSON.stringify(store.standingsData   || null)),
-                    lineups:          JSON.parse(JSON.stringify(store.lineups         || null)),
+                    event:            JSON.parse(JSON.stringify(s.event           || {})),
+                    bettingStats:     JSON.parse(JSON.stringify(s.bettingStats    || null)),
+                    perMatchStats:    JSON.parse(JSON.stringify(s.perMatchStats   || null)),
+                    headToHead:       JSON.parse(JSON.stringify(s.headToHead      || null)),
+                    lastMatchesHome:  JSON.parse(JSON.stringify(s.lastMatchesHome || {})),
+                    lastMatchesAway:  JSON.parse(JSON.stringify(s.lastMatchesAway || {})),
+                    standingsData:    JSON.parse(JSON.stringify(s.standingsData   || null)),
+                    lineups:          JSON.parse(JSON.stringify(s.lineups         || null)),
                 };
             } catch(e) {
                 return { error: e.toString() };
             }
         }
     """)
+
 
     if not result or result.get("error"):
         print(f"[epl_info] match={mid} Vuex extraction failed: {result}")

@@ -1,0 +1,176 @@
+name: Oddspedia ATP Live Odds Ingest
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (scrape + print rows, no BigQuery writes)"
+        required: false
+        type: boolean
+        default: false
+      today_only:
+        description: "Restrict to today's UTC date (default: full tournament page)"
+        required: false
+        type: boolean
+        default: false
+      url:
+        description: "Override Oddspedia ATP URL (leave blank for default)"
+        required: false
+        default: ""
+  schedule:
+    - cron: "0 13 * * *"
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r mobile_api/requirements.txt
+
+      - name: Install system dependencies for Camoufox/Firefox
+        run: |
+          sudo apt-get update && sudo apt-get install -y \
+            libgtk-3-0t64 libdbus-glib-1-2 libxt6t64 libx11-xcb1 \
+            libxcomposite1 libxcursor1 libxdamage1 libxfixes3 \
+            libxi6 libxrandr2 libxrender1 libxss1 libxtst6 \
+            libasound2t64 libpangocairo-1.0-0 libatk1.0-0t64 \
+            libcairo-gobject2 libgdk-pixbuf2.0-0
+
+      - name: Install Camoufox + Firefox
+        run: |
+          pip install camoufox[geoip]
+          GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} python -m camoufox fetch
+
+      - name: Set URL override (if provided)
+        if: ${{ inputs.url != '' }}
+        run: echo "ODDSPEDIA_ATP_URL=${{ inputs.url }}" >> $GITHUB_ENV
+
+      - name: Scrape ATP odds and save rows to file
+        run: |
+          ARGS="--scrape-only"
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          if [ "${{ inputs.today_only }}" = "true" ]; then
+            ARGS="$ARGS"
+          else
+            ARGS="$ARGS --all-dates"
+          fi
+          python -m mobile_api.ingest.atp.oddspedia_atp_odds_ingest $ARGS
+
+      - name: Upload rows artifact
+        if: ${{ inputs.dry_run != true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: atp-rows
+          path: /tmp/atp_rows.json
+          retention-days: 1
+
+  insert:
+    runs-on: ubuntu-latest
+    needs: scrape
+    if: ${{ inputs.dry_run != true }}
+    timeout-minutes: 15
+
+    env:
+      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+      ODDSPEDIA_DATASET: "oddspedia"
+      ODDSPEDIA_BQ_LOCATION: "US"
+      ODDSPEDIA_ATP_TABLE: "atp_odds"
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r mobile_api/requirements.txt
+
+      - name: Configure GCP credentials
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
+
+      - name: Download rows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: atp-rows
+          path: /tmp
+
+      - name: Insert rows into BigQuery
+        run: |
+          python -m mobile_api.ingest.atp.oddspedia_atp_odds_ingest --insert-only
+
+  match_info:
+    runs-on: ubuntu-latest
+    needs: insert
+    if: ${{ inputs.dry_run != true }}
+    timeout-minutes: 60
+
+    env:
+      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+      ODDSPEDIA_DATASET: "oddspedia"
+      ODDSPEDIA_BQ_LOCATION: "US"
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r mobile_api/requirements.txt
+
+      - name: Install system dependencies for Camoufox/Firefox
+        run: |
+          sudo apt-get update && sudo apt-get install -y \
+            libgtk-3-0t64 libdbus-glib-1-2 libxt6t64 libx11-xcb1 \
+            libxcomposite1 libxcursor1 libxdamage1 libxfixes3 \
+            libxi6 libxrandr2 libxrender1 libxss1 libxtst6 \
+            libasound2t64 libpangocairo-1.0-0 libatk1.0-0t64 \
+            libcairo-gobject2 libgdk-pixbuf2.0-0
+
+      - name: Install Camoufox + Firefox
+        run: |
+          pip install camoufox[geoip]
+          GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} python -m camoufox fetch
+
+      - name: Configure GCP credentials
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
+
+      - name: Set URL override (if provided)
+        if: ${{ inputs.url != '' }}
+        run: echo "ODDSPEDIA_ATP_URL=${{ inputs.url }}" >> $GITHUB_ENV
+
+      - name: Run ATP match info ingest
+        run: |
+          ARGS=""
+          if [ "${{ inputs.today_only }}" != "true" ]; then
+            ARGS="$ARGS --all-dates"
+          fi
+          python -m mobile_api.ingest.atp.oddspedia_atp_match_info_ingest $ARGS

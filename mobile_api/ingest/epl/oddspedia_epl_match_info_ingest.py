@@ -546,21 +546,19 @@ def _fetch_epl_match_data(
     page: Any,
     match: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """
-    Navigate to an EPL match page and extract all stats from the Vuex store.
+    mid = match.get("match_id")
 
-    Returns a dict with keys:
-      match_info, betting_stats, per_match_stats, head_to_head,
-      last_matches_home, last_matches_away, standings_data, lineups
-    """
-    mid      = match.get("match_id")
-    mk       = match.get("match_key")
-    ht_slug  = match.get("ht_slug") or ""
-    at_slug  = match.get("at_slug") or ""
+    # slugs and match_key live in match_info, not the top-level record
+    match_info = match.get("match_info") or {}
+    mk       = match_info.get("match_key") or match.get("match_key")
+    ht_slug  = match_info.get("ht_slug") or match.get("ht_slug") or ""
+    at_slug  = match_info.get("at_slug") or match.get("at_slug") or ""
 
-    if not mk and not (ht_slug and at_slug):
-        print(f"[epl_info] match={mid} missing match_key and slugs — skipping stats")
+    if not mk or not ht_slug or not at_slug:
+        print(f"[epl_info] match={mid} missing match_key/slugs "
+              f"(mk={mk}, ht_slug={ht_slug}, at_slug={at_slug}) — skipping")
         return {}
+
 
     match_url = (
         f"https://oddspedia.com/us/soccer/{EPL_CATEGORY}/{EPL_LEAGUE_SLUG}"

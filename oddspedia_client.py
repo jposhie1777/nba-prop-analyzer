@@ -353,7 +353,7 @@ class OddspediaClient:
                     f"[scraper] SSR matchList empty — trying "
                     f"{len(listing_api_responses)} intercepted listing-page API responses"
                 )
-                records = self._build_records_from_api_responses(listing_api_responses)
+                records = self._build_records_from_api_responses(listing_api_responses, sport)
                 print(f"[scraper] Built {len(records)} matches from intercepted API responses")
 
             # Final fallback: scrape rendered match links from the DOM
@@ -918,6 +918,7 @@ class OddspediaClient:
     def _build_records_from_api_responses(
         self,
         api_responses: List[Dict[str, Any]],
+        sport: str,
     ) -> List[Dict[str, Any]]:
         """
         Build match records from intercepted listing-page API responses.
@@ -1016,7 +1017,11 @@ class OddspediaClient:
                     odds_data = data.get("odds") or {}
                 if not odds_data and isinstance(body, dict):
                     odds_data = body.get("odds") or {}
-                raw = {"matchList": normalized, "odds": odds_data, "sport": "soccer"}
+                raw = {
+                    "matchList": normalized,
+                    "odds": odds_data,
+                    "sport": sport,   # ← pass through actual sport
+                }
                 built = self._build_records(raw)
                 if built:
                     return built

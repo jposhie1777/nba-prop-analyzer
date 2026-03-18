@@ -38,11 +38,6 @@ function buildUrl(base: string, path: string, params?: Params): string {
   return `${normalizedBase}${normalizedPath}${qs}`;
 }
 
-function networkFetchFailed(err: unknown): boolean {
-  const message = err instanceof Error ? err.message : String(err ?? "");
-  return message.toLowerCase().includes("failed to fetch");
-}
-
 function getFallbackBases(base: string): string[] {
   const candidates = [base];
 
@@ -106,7 +101,7 @@ export function useEplQuery<T>(
       setError(null);
     }
     try {
-      let lastNetworkError: unknown = null;
+      let lastError: unknown = null;
 
       for (const url of urls) {
         try {
@@ -116,11 +111,12 @@ export function useEplQuery<T>(
           });
           if (!res.ok) {
             const text = await res.text();
-            throw new Error(text || `HTTP ${res.status}`);
+            lastError = new Error(text || `HTTP ${res.status}`);
+            continue;
           }
           const contentType = res.headers.get("content-type") ?? "";
           if (!contentType.includes("application/json")) {
-            lastNetworkError = new Error(`Non-JSON response from ${url}`);
+            lastError = new Error(`Non-JSON response from ${url}`);
             continue;
           }
           const json = await res.json();
@@ -133,17 +129,15 @@ export function useEplQuery<T>(
             throw err;
           }
 
-          if (networkFetchFailed(err)) {
-            lastNetworkError = err;
-            continue;
-          }
-
-          throw err;
+          lastError = err;
+          continue;
         }
       }
 
-      if (lastNetworkError) {
-        throw new Error(`Failed to fetch (tried: ${urls.join(", ")})`);
+      if (lastError) {
+        const message =
+          lastError instanceof Error ? lastError.message : String(lastError);
+        throw new Error(`Failed to fetch: ${message} (tried: ${urls.join(", ")})`);
       }
     } catch (err: any) {
       if (!mountedRef.current) return;

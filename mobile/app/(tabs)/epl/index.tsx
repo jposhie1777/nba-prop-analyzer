@@ -1,104 +1,89 @@
-import { ScrollView, Text, View, Pressable, StyleSheet } from "react-native";
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+
+import { useEplOddspediaMatches } from "@/hooks/epl/useEplOddspedia";
 import { useTheme } from "@/store/useTheme";
 
-type TileProps = {
-  title: string;
-  subtitle: string;
-  route: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  accent: string;
-};
+function formatDate(value?: string | null) {
+  if (!value) return "TBD";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "TBD";
+  return date.toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 
-function Tile({ title, subtitle, route, icon, accent }: TileProps) {
-  const { colors } = useTheme();
-  const router = useRouter();
+function formatAmerican(price?: number | null) {
+  if (price == null) return "–";
+  return price > 0 ? `+${price}` : `${price}`;
+}
 
+function OddsRow({ label, odds }: { label: string; odds: Array<{ outcome_name: string; odds_american?: number | null; line_value?: string | null }> }) {
   return (
-    <Pressable
-      onPress={() => router.push(route)}
-      style={[styles.tile, { borderColor: colors.border.subtle }]}
-    >
-      <View style={[styles.iconBubble, { backgroundColor: `${accent}20` }]}> 
-        <Ionicons name={icon} size={16} color={accent} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.tileTitle, { color: colors.text.primary }]}>{title}</Text>
-        <Text style={[styles.tileSub, { color: colors.text.muted }]}>{subtitle}</Text>
-      </View>
-      <Ionicons name="chevron-forward" size={16} color={colors.text.muted} />
-    </Pressable>
+    <View style={styles.marketRow}>
+      <Text style={styles.marketLabel}>{label}</Text>
+      <Text style={styles.marketValue} numberOfLines={1}>
+        {odds.length
+          ? odds
+              .map((o) => `${o.outcome_name}${o.line_value ? ` ${o.line_value}` : ""} ${formatAmerican(o.odds_american)}`)
+              .join("  •  ")
+          : "Not available"}
+      </Text>
+    </View>
   );
 }
 
 export default function EplHome() {
+  const router = useRouter();
   const { colors } = useTheme();
+  const { data, loading, error, refetch } = useEplOddspediaMatches(120);
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={[styles.hero, { borderColor: colors.border.subtle }]}> 
-        <Text style={styles.eyebrow}>EPL ANALYTICS</Text>
-        <Text style={styles.h1}>Match Markets Dashboard</Text>
-        <Text style={styles.sub}>
-          Ingested from BALLDONTLIE (ALL-STAR) with current + previous season scope.
-          Moneylines, BTTS, totals, and cards all share one EPL data foundation.
-        </Text>
+        <Text style={styles.eyebrow}>EPL</Text>
+        <Text style={styles.h1}>Matches</Text>
+        <Text style={styles.sub}>Ordered by date and start time (most recent first).</Text>
       </View>
 
+      {loading ? <ActivityIndicator color="#A78BFA" /> : null}
+      {error ? (
+        <Pressable onPress={refetch} style={[styles.errorBox, { borderColor: colors.border.subtle }]}>
+          <Text style={styles.errorTitle}>Failed to load matches.</Text>
+          <Text style={styles.errorText}>{error}</Text>
+          <Text style={styles.errorRetry}>Tap to retry</Text>
+        </Pressable>
+      ) : null}
 
-      <Tile
-        title="Standings"
-        subtitle="Rankings table with points, record, and goal differential."
-        route="/(tabs)/epl/standings"
-        icon="trophy-outline"
-        accent="#A78BFA"
-      />
-      <Tile
-        title="Team Master Metrics"
-        subtitle="Full team metrics table with season + rolling splits and card logs."
-        route="/(tabs)/epl/team-master-metrics"
-        icon="grid-outline"
-        accent="#22D3EE"
-      />
+      {(data ?? []).map((match) => (
+        <Pressable
+          key={match.match_id}
+          onPress={() => router.push(`/(tabs)/epl/match/${match.match_id}`)}
+          style={[styles.card, { borderColor: colors.border.subtle }]}
+        >
+          <View style={styles.teamsRow}>
+            <View style={styles.teamWrap}>
+              <Image source={{ uri: match.home_logo || undefined }} style={styles.logo} />
+              <Text style={styles.teamName}>{match.home_team}</Text>
+            </View>
+            <Text style={styles.vs}>vs</Text>
+            <View style={[styles.teamWrap, { alignItems: "flex-end" }]}>
+              <Image source={{ uri: match.away_logo || undefined }} style={styles.logo} />
+              <Text style={[styles.teamName, { textAlign: "right" }]}>{match.away_team}</Text>
+            </View>
+          </View>
 
-      <Tile
-        title="Moneylines"
-        subtitle="Model-driven fair prices and win percentages."
-        route="/(tabs)/epl/moneylines"
-        icon="cash-outline"
-        accent="#60A5FA"
-      />
-      <Tile
-        title="Betting Analytics"
-        subtitle="NEW: Compare FD/DK lines, filter by market, and send picks to your Gambly betslip."
-        route="/(tabs)/epl/betting-analytics"
-        icon="stats-chart-outline"
-        accent="#38BDF8"
-      />
+          <Text style={styles.timeText}>{formatDate(match.date_utc)}</Text>
 
-      <Tile
-        title="Both Teams To Score"
-        subtitle="BTTS probability from team scoring + concession rates."
-        route="/(tabs)/epl/btts"
-        icon="football-outline"
-        accent="#34D399"
-      />
-      <Tile
-        title="Total Goals"
-        subtitle="Projected totals, over 2.5 rate, and volatility metrics."
-        route="/(tabs)/epl/total-goals"
-        icon="analytics-outline"
-        accent="#FBBF24"
-      />
-      <Tile
-        title="Cards"
-        subtitle="Yellow/red card rates and team card-points profile."
-        route="/(tabs)/epl/cards"
-        icon="warning-outline"
-        accent="#F87171"
-      />
-
+          <OddsRow label="ML" odds={match.main_odds.h2h} />
+          <OddsRow label="Spread" odds={match.main_odds.spreads} />
+          <OddsRow label="Totals" odds={match.main_odds.totals} />
+        </Pressable>
+      ))}
     </ScrollView>
   );
 }
@@ -106,26 +91,22 @@ export default function EplHome() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#050A18" },
   content: { padding: 16, gap: 10, paddingBottom: 40 },
-  hero: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 16,
-    backgroundColor: "#071731",
-    padding: 16,
-    marginBottom: 8,
-  },
+  hero: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 16, backgroundColor: "#071731", padding: 16, marginBottom: 8 },
   eyebrow: { color: "#90B3E9", fontSize: 11, fontWeight: "700" },
   h1: { color: "#E9F2FF", fontSize: 24, fontWeight: "800", marginTop: 8 },
-  sub: { color: "#A7C0E8", marginTop: 8, lineHeight: 18, fontSize: 13 },
-  tile: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
-    backgroundColor: "#0B1529",
-    padding: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  iconBubble: { width: 30, height: 30, borderRadius: 999, alignItems: "center", justifyContent: "center" },
-  tileTitle: { fontSize: 15, fontWeight: "700" },
-  tileSub: { fontSize: 12, marginTop: 4 },
+  sub: { color: "#A7C0E8", marginTop: 6, lineHeight: 18, fontSize: 13 },
+  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, backgroundColor: "#0B1529", padding: 12, gap: 8 },
+  teamsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  teamWrap: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8 },
+  logo: { width: 26, height: 26, borderRadius: 13, backgroundColor: "#111827" },
+  teamName: { color: "#E5E7EB", fontSize: 13, fontWeight: "700", flexShrink: 1 },
+  vs: { color: "#A7C0E8", fontWeight: "700" },
+  timeText: { color: "#CBD5E1", fontSize: 12 },
+  marketRow: { flexDirection: "row", gap: 8 },
+  marketLabel: { color: "#93C5FD", width: 52, fontWeight: "700", fontSize: 12 },
+  marketValue: { color: "#E5E7EB", flex: 1, fontSize: 12 },
+  errorBox: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, backgroundColor: "#1F2937", padding: 12 },
+  errorTitle: { color: "#FCA5A5", fontWeight: "700" },
+  errorText: { color: "#FECACA", marginTop: 4, fontSize: 12 },
+  errorRetry: { color: "#E5E7EB", marginTop: 8, fontSize: 12 },
 });

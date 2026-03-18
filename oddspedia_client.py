@@ -303,10 +303,18 @@ class OddspediaClient:
                         f"&sortBy=default&status=all&page=1&perPage=50&r=si&inplay=0&language=us"
                     )
 
-                request_plan = [("filtered", _build_match_list_url(filtered=True))]
                 if sport == "tennis":
-                    request_plan.append(("sport_only", _build_match_list_url(filtered=False)))
-                    request_plan.append(("american_odds", _build_american_odds_url()))
+                    request_plan = [
+                        ("sport_only", _build_match_list_url(filtered=False)),
+                        ("american_odds", _build_american_odds_url()),
+                    ]
+                else:
+                    request_plan = [
+                        ("filtered", _build_match_list_url(filtered=True))
+                    ]
+                # ✅ ADD THESE 2 LINES RIGHT HERE
+                print(f"[scraper] USING SPORT MODE: {sport}")
+                print(f"[scraper] REQUEST PLAN: {[x[0] for x in request_plan]}")
 
                 for label, url in request_plan:
                     ml_result = _fetch_listing(url)
@@ -776,9 +784,10 @@ class OddspediaClient:
                 ht_slug = m.get("ht_slug") or m.get("htSlug")
                 at_slug = m.get("at_slug") or m.get("atSlug")
                 if ht_slug and at_slug:
-                    urls[mid] = (
-                        f"https://www.oddspedia.com/us/soccer/mls/{ht_slug}-{at_slug}-{mid}"
-                    )
+                    if "tennis" in (nuxt_data.get("data", [{}])[0].get("currentSport", {}) or {}).get("slug", ""):
+                        urls[mid] = f"https://www.oddspedia.com/us/a/tennis/{ht_slug}-{at_slug}-{mid}"
+                    else:
+                        urls[mid] = f"https://www.oddspedia.com/us/soccer/mls/{ht_slug}-{at_slug}-{mid}"
         except Exception as exc:
             print(f"[scraper] _build_all_match_urls error: {exc}")
         return urls

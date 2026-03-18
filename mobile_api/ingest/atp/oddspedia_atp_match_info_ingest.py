@@ -32,7 +32,7 @@ if str(_repo_root) not in sys.path:
 
 from oddspedia_client import OddspediaClient  # noqa: E402
 
-DEFAULT_URL = "https://www.oddspedia.com/us/tennis/usa/atp-miami"
+DEFAULT_URL = "https://www.oddspedia.com/us/tennis"
 ODDSPEDIA_URL = os.getenv("ODDSPEDIA_ATP_URL", DEFAULT_URL)
 DATASET = os.getenv("ODDSPEDIA_DATASET", "oddspedia")
 DATASET_LOCATION = os.getenv("ODDSPEDIA_BQ_LOCATION", "US")

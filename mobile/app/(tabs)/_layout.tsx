@@ -16,23 +16,20 @@ type TabConfig = {
 };
 
 const STATIC_TABS: TabConfig[] = [
-  { name: "atp-bracket", title: "ATP Bracket", icon: "tennisball-outline" },
-  { name: "pga-pairings", title: "PGA Pairings", icon: "golf-outline" },
-  { name: "pga-compare", title: "PGA Compare", icon: "swap-horizontal" },
-  { name: "home", title: "Home Screen", icon: "home" },
-  { name: "soccer", title: "Soccer Analyzer", icon: "football-outline" },
+  { name: "pga", title: "PGA", icon: "golf-outline" },
+  { name: "mls", title: "MLS", icon: "football-outline" },
+  { name: "epl", title: "EPL", icon: "trophy-outline" },
+  { name: "atp", title: "ATP", icon: "tennisball-outline" },
 ];
 
 const HIDDEN_SCREENS = [
-  "atp",
   "atp-compare",
   "atp-head-to-head",
   "atp-surface-splits",
   "atp-tournament-performance",
   "bad-lines",
-  "epl",
+  "home",
   "laliga",
-  "mls",
   "epl/btts",
   "epl/cards",
   "epl/betting-analytics",
@@ -40,6 +37,7 @@ const HIDDEN_SCREENS = [
   "epl/standings",
   "epl/team-master-metrics",
   "epl/total-goals",
+  "epl/match/[matchId]",
   "epl/index",
   "laliga/btts",
   "laliga/cards",
@@ -63,7 +61,6 @@ const HIDDEN_SCREENS = [
   "live-props-dev",
   "nba",
   "nba/index",
-  "pga",
   "pga-matchups",
   "pga-placement-probabilities",
   "pga-simulated-finishes",

@@ -23,6 +23,11 @@ EPL_TEAM_MASTER_METRICS_TABLE = os.getenv("EPL_TEAM_MASTER_METRICS_TABLE", "epl_
 SOCCER_EPL_BETTING_ANALYTICS_TABLE = os.getenv(
     "SOCCER_EPL_BETTING_ANALYTICS_TABLE", "soccer_data.epl_betting_analytics"
 )
+ODDSPEDIA_EPL_ODDS_TABLE = os.getenv("ODDSPEDIA_EPL_ODDS_TABLE", "oddspedia.epl_odds")
+ODDSPEDIA_EPL_HEAD_TO_HEAD_TABLE = os.getenv("ODDSPEDIA_EPL_HEAD_TO_HEAD_TABLE", "oddspedia.epl_head_to_head")
+ODDSPEDIA_EPL_LAST_MATCHES_TABLE = os.getenv("ODDSPEDIA_EPL_LAST_MATCHES_TABLE", "oddspedia.epl_last_matches")
+ODDSPEDIA_EPL_BETTING_STATS_TABLE = os.getenv("ODDSPEDIA_EPL_BETTING_STATS_TABLE", "oddspedia.epl_betting_stats")
+ODDSPEDIA_EPL_MATCH_KEYS_TABLE = os.getenv("ODDSPEDIA_EPL_MATCH_KEYS_TABLE", "oddspedia.epl_match_keys")
 
 
 def _split_table_ref(table_ref: str) -> tuple[str | None, str, str]:
@@ -75,6 +80,315 @@ def _query(sql: str, params: List[bigquery.ScalarQueryParameter]) -> List[Dict[s
         job_config=bigquery.QueryJobConfig(query_parameters=params),
     )
     return [dict(r) for r in job.result()]
+
+
+def _empty_epl_match_card() -> Dict[str, Any]:
+    return {
+        "match_id": None,
+        "match_key": None,
+        "date_utc": None,
+        "home_team": None,
+        "away_team": None,
+        "home_logo": None,
+        "away_logo": None,
+        "main_odds": {"h2h": [], "spreads": [], "totals": []},
+    }
+
+
+@router.get("/epl/oddspedia/matches")
+def epl_oddspedia_matches(
+    limit: int = Query(default=50, ge=1, le=500),
+    lookahead_days: int = Query(default=7, ge=1, le=30),
+):
+    try:
+        odds_columns = _table_columns(ODDSPEDIA_EPL_ODDS_TABLE)
+    except NotFound:
+        return []
+    period_key = "period_name" if "period_name" in odds_columns else "''"
+    outcome_key = (
+        "outcome_name"
+        if "outcome_name" in odds_columns
+        else ("outcome_key" if "outcome_key" in odds_columns else "outcome_side")
+    )
+    if outcome_key not in odds_columns:
+        outcome_key = "'Unknown'"
+
+    line_key = "line_value" if "line_value" in odds_columns else "CAST(NULL AS STRING)"
+    bookie_key = "bookie" if "bookie" in odds_columns else "CAST(NULL AS STRING)"
+    odds_american_key = (
+        "odds_american" if "odds_american" in odds_columns else "CAST(NULL AS INT64)"
+    )
+    odds_decimal_key = (
+        "odds_decimal" if "odds_decimal" in odds_columns else "CAST(NULL AS FLOAT64)"
+    )
+    date_ts = "SAFE_CAST(date_utc AS TIMESTAMP)"
+
+    sql = f"""
+    WITH latest AS (
+      SELECT *
+      FROM `{ODDSPEDIA_EPL_ODDS_TABLE}`
+      WHERE {date_ts} IS NOT NULL
+        AND DATE({date_ts}, 'America/New_York')
+          BETWEEN CURRENT_DATE('America/New_York')
+          AND DATE_ADD(CURRENT_DATE('America/New_York'), INTERVAL @lookahead_days DAY)
+      QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY match_id, market, {period_key}, {outcome_key}, COALESCE({line_key}, ''), COALESCE({bookie_key}, '')
+        ORDER BY ingested_at DESC
+      ) = 1
+    ),
+    match_base AS (
+      SELECT
+        match_id,
+        ANY_VALUE(match_key) AS match_key,
+        ANY_VALUE(home_team) AS home_team,
+        ANY_VALUE(away_team) AS away_team,
+        ANY_VALUE({date_ts}) AS date_utc
+      FROM latest
+      GROUP BY match_id
+    ),
+    market_rows AS (
+      SELECT
+        match_id,
+        LOWER(COALESCE(market, '')) AS market,
+        COALESCE({outcome_key}, 'Unknown') AS outcome_name,
+        {line_key} AS line_value,
+        {odds_american_key} AS odds_american,
+        {odds_decimal_key} AS odds_decimal,
+        ROW_NUMBER() OVER (
+          PARTITION BY match_id, LOWER(COALESCE(market, '')), COALESCE({outcome_key}, 'Unknown'), COALESCE({line_key}, '')
+          ORDER BY odds_decimal DESC NULLS LAST, ingested_at DESC
+        ) AS rn
+      FROM latest
+      WHERE LOWER(COALESCE(market, '')) IN ('h2h', 'spreads', 'totals')
+    )
+    SELECT
+      mb.match_id,
+      mb.match_key,
+      mb.home_team,
+      mb.away_team,
+      mb.date_utc,
+      ARRAY(
+        SELECT AS STRUCT
+          mr.market,
+          mr.outcome_name,
+          mr.line_value,
+          mr.odds_american,
+          mr.odds_decimal
+        FROM market_rows mr
+        WHERE mr.match_id = mb.match_id
+          AND mr.rn = 1
+          AND mr.market = 'h2h'
+        ORDER BY mr.outcome_name
+      ) AS h2h,
+      ARRAY(
+        SELECT AS STRUCT
+          mr.market,
+          mr.outcome_name,
+          mr.line_value,
+          mr.odds_american,
+          mr.odds_decimal
+        FROM market_rows mr
+        WHERE mr.match_id = mb.match_id
+          AND mr.rn = 1
+          AND mr.market = 'spreads'
+        ORDER BY mr.outcome_name
+      ) AS spreads,
+      ARRAY(
+        SELECT AS STRUCT
+          mr.market,
+          mr.outcome_name,
+          mr.line_value,
+          mr.odds_american,
+          mr.odds_decimal
+        FROM market_rows mr
+        WHERE mr.match_id = mb.match_id
+          AND mr.rn = 1
+          AND mr.market = 'totals'
+        ORDER BY mr.outcome_name
+      ) AS totals
+    FROM match_base mb
+    ORDER BY mb.date_utc DESC
+    LIMIT @limit
+    """
+    try:
+        rows = _query(
+            sql,
+            [
+                bigquery.ScalarQueryParameter("limit", "INT64", limit),
+                bigquery.ScalarQueryParameter("lookahead_days", "INT64", lookahead_days),
+            ],
+        )
+    except NotFound:
+        return []
+
+    for row in rows:
+        row["home_logo"] = _logo_url(row.get("home_team") or "")
+        row["away_logo"] = _logo_url(row.get("away_team") or "")
+        row["main_odds"] = {
+            "h2h": row.pop("h2h", []),
+            "spreads": row.pop("spreads", []),
+            "totals": row.pop("totals", []),
+        }
+    return rows
+
+
+@router.get("/epl/oddspedia/matches/{match_id}")
+def epl_oddspedia_match_detail(match_id: int):
+    card_sql = f"""
+    WITH latest AS (
+      SELECT *
+      FROM `{ODDSPEDIA_EPL_ODDS_TABLE}`
+      WHERE match_id = @match_id
+      QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY match_id, market, period_name, outcome_name, COALESCE(line_value, ''), COALESCE(bookie, '')
+        ORDER BY ingested_at DESC
+      ) = 1
+    ),
+    grouped AS (
+      SELECT
+        match_id,
+        ANY_VALUE(match_key) AS match_key,
+        ANY_VALUE(home_team) AS home_team,
+        ANY_VALUE(away_team) AS away_team,
+        ANY_VALUE(date_utc) AS date_utc,
+        LOWER(COALESCE(market, '')) AS market,
+        COALESCE(outcome_name, outcome_key, outcome_side, 'Unknown') AS outcome_name,
+        line_value,
+        odds_american,
+        odds_decimal,
+        ROW_NUMBER() OVER (
+          PARTITION BY LOWER(COALESCE(market, '')), COALESCE(outcome_name, outcome_key, outcome_side, 'Unknown'), COALESCE(line_value, '')
+          ORDER BY odds_decimal DESC NULLS LAST, ingested_at DESC
+        ) AS rn
+      FROM latest
+    )
+    SELECT AS STRUCT
+      ANY_VALUE(match_id) AS match_id,
+      ANY_VALUE(match_key) AS match_key,
+      ANY_VALUE(home_team) AS home_team,
+      ANY_VALUE(away_team) AS away_team,
+      ANY_VALUE(date_utc) AS date_utc,
+      ARRAY(
+        SELECT AS STRUCT market, outcome_name, line_value, odds_american, odds_decimal
+        FROM grouped
+        WHERE rn = 1 AND market = 'h2h'
+        ORDER BY outcome_name
+      ) AS h2h,
+      ARRAY(
+        SELECT AS STRUCT market, outcome_name, line_value, odds_american, odds_decimal
+        FROM grouped
+        WHERE rn = 1 AND market = 'spreads'
+        ORDER BY outcome_name
+      ) AS spreads,
+      ARRAY(
+        SELECT AS STRUCT market, outcome_name, line_value, odds_american, odds_decimal
+        FROM grouped
+        WHERE rn = 1 AND market = 'totals'
+        ORDER BY outcome_name
+      ) AS totals,
+      ARRAY(
+        SELECT AS STRUCT
+          market,
+          ARRAY_AGG(STRUCT(outcome_name, line_value, odds_american, odds_decimal) ORDER BY outcome_name LIMIT 4) AS outcomes
+        FROM grouped
+        WHERE rn = 1 AND market NOT IN ('h2h', 'spreads', 'totals')
+        GROUP BY market
+        ORDER BY market
+      ) AS additional_odds
+    FROM grouped
+    """
+
+    h2h_sql = f"""
+    SELECT
+      ht_wins,
+      at_wins,
+      draws,
+      played_matches,
+      h2h_starttime,
+      h2h_ht,
+      h2h_at,
+      h2h_hscore,
+      h2h_ascore,
+      h2h_league
+    FROM `{ODDSPEDIA_EPL_HEAD_TO_HEAD_TABLE}`
+    WHERE match_id = @match_id
+    ORDER BY h2h_starttime DESC
+    LIMIT 20
+    """
+
+    last_matches_sql = f"""
+    SELECT
+      side,
+      lm_date,
+      lm_ht,
+      lm_at,
+      lm_hscore,
+      lm_ascore,
+      lm_outcome,
+      lm_home,
+      lm_league_id,
+      lm_matchstatus
+    FROM `{ODDSPEDIA_EPL_LAST_MATCHES_TABLE}`
+    WHERE match_id = @match_id
+    ORDER BY lm_date DESC
+    LIMIT 30
+    """
+
+    betting_stats_sql = f"""
+    SELECT
+      category,
+      sub_tab,
+      label,
+      value,
+      home,
+      away,
+      total_matches_home,
+      total_matches_away
+    FROM `{ODDSPEDIA_EPL_BETTING_STATS_TABLE}`
+    WHERE match_id = @match_id
+    ORDER BY category, sub_tab, label
+    """
+
+    trends_sql = f"""
+    SELECT
+      rank,
+      statement,
+      teams_json
+    FROM `{ODDSPEDIA_EPL_MATCH_KEYS_TABLE}`
+    WHERE match_id = @match_id
+    ORDER BY rank ASC
+    LIMIT 20
+    """
+
+    params = [bigquery.ScalarQueryParameter("match_id", "INT64", match_id)]
+
+    try:
+      card_rows = _query(card_sql, params)
+    except NotFound:
+      card_rows = []
+    match_card = dict(card_rows[0]) if card_rows else _empty_epl_match_card()
+    match_card["home_logo"] = _logo_url(match_card.get("home_team") or "")
+    match_card["away_logo"] = _logo_url(match_card.get("away_team") or "")
+    match_card["main_odds"] = {
+      "h2h": match_card.pop("h2h", []),
+      "spreads": match_card.pop("spreads", []),
+      "totals": match_card.pop("totals", []),
+    }
+    match_card["additional_odds"] = match_card.get("additional_odds") or []
+
+    def safe_query(sql: str) -> List[Dict[str, Any]]:
+        try:
+            return _query(sql, params)
+        except NotFound:
+            return []
+
+    return {
+      "match": match_card,
+      "head_to_head": safe_query(h2h_sql),
+      "last_matches": safe_query(last_matches_sql),
+      "betting_stats": safe_query(betting_stats_sql),
+      "betting_trends": safe_query(trends_sql),
+    }
 
 
 @router.post("/ingest/epl/full")

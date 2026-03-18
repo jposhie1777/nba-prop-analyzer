@@ -96,13 +96,43 @@ def _empty_epl_match_card() -> Dict[str, Any]:
 
 
 @router.get("/epl/oddspedia/matches")
-def epl_oddspedia_matches(limit: int = Query(default=100, ge=1, le=500)):
+def epl_oddspedia_matches(
+    limit: int = Query(default=50, ge=1, le=500),
+    lookahead_days: int = Query(default=7, ge=1, le=30),
+):
+    try:
+        odds_columns = _table_columns(ODDSPEDIA_EPL_ODDS_TABLE)
+    except NotFound:
+        return []
+    period_key = "period_name" if "period_name" in odds_columns else "''"
+    outcome_key = (
+        "outcome_name"
+        if "outcome_name" in odds_columns
+        else ("outcome_key" if "outcome_key" in odds_columns else "outcome_side")
+    )
+    if outcome_key not in odds_columns:
+        outcome_key = "'Unknown'"
+
+    line_key = "line_value" if "line_value" in odds_columns else "CAST(NULL AS STRING)"
+    bookie_key = "bookie" if "bookie" in odds_columns else "CAST(NULL AS STRING)"
+    odds_american_key = (
+        "odds_american" if "odds_american" in odds_columns else "CAST(NULL AS INT64)"
+    )
+    odds_decimal_key = (
+        "odds_decimal" if "odds_decimal" in odds_columns else "CAST(NULL AS FLOAT64)"
+    )
+    date_ts = "SAFE_CAST(date_utc AS TIMESTAMP)"
+
     sql = f"""
     WITH latest AS (
       SELECT *
       FROM `{ODDSPEDIA_EPL_ODDS_TABLE}`
+      WHERE {date_ts} IS NOT NULL
+        AND DATE({date_ts}, 'America/New_York')
+          BETWEEN CURRENT_DATE('America/New_York')
+          AND DATE_ADD(CURRENT_DATE('America/New_York'), INTERVAL @lookahead_days DAY)
       QUALIFY ROW_NUMBER() OVER (
-        PARTITION BY match_id, market, period_name, outcome_name, COALESCE(line_value, ''), COALESCE(bookie, '')
+        PARTITION BY match_id, market, {period_key}, {outcome_key}, COALESCE({line_key}, ''), COALESCE({bookie_key}, '')
         ORDER BY ingested_at DESC
       ) = 1
     ),
@@ -112,7 +142,7 @@ def epl_oddspedia_matches(limit: int = Query(default=100, ge=1, le=500)):
         ANY_VALUE(match_key) AS match_key,
         ANY_VALUE(home_team) AS home_team,
         ANY_VALUE(away_team) AS away_team,
-        ANY_VALUE(date_utc) AS date_utc
+        ANY_VALUE({date_ts}) AS date_utc
       FROM latest
       GROUP BY match_id
     ),
@@ -120,12 +150,12 @@ def epl_oddspedia_matches(limit: int = Query(default=100, ge=1, le=500)):
       SELECT
         match_id,
         LOWER(COALESCE(market, '')) AS market,
-        COALESCE(outcome_name, outcome_key, outcome_side, 'Unknown') AS outcome_name,
-        line_value,
-        odds_american,
-        odds_decimal,
+        COALESCE({outcome_key}, 'Unknown') AS outcome_name,
+        {line_key} AS line_value,
+        {odds_american_key} AS odds_american,
+        {odds_decimal_key} AS odds_decimal,
         ROW_NUMBER() OVER (
-          PARTITION BY match_id, LOWER(COALESCE(market, '')), COALESCE(outcome_name, outcome_key, outcome_side, 'Unknown'), COALESCE(line_value, '')
+          PARTITION BY match_id, LOWER(COALESCE(market, '')), COALESCE({outcome_key}, 'Unknown'), COALESCE({line_key}, '')
           ORDER BY odds_decimal DESC NULLS LAST, ingested_at DESC
         ) AS rn
       FROM latest
@@ -181,7 +211,13 @@ def epl_oddspedia_matches(limit: int = Query(default=100, ge=1, le=500)):
     LIMIT @limit
     """
     try:
-        rows = _query(sql, [bigquery.ScalarQueryParameter("limit", "INT64", limit)])
+        rows = _query(
+            sql,
+            [
+                bigquery.ScalarQueryParameter("limit", "INT64", limit),
+                bigquery.ScalarQueryParameter("lookahead_days", "INT64", lookahead_days),
+            ],
+        )
     except NotFound:
         return []
 

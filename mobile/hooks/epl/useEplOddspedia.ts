@@ -80,8 +80,11 @@ export type EplOddsMatchDetail = {
   }>;
 };
 
-export function useEplOddspediaMatches(limit = 100) {
-  const params = useMemo(() => ({ limit }), [limit]);
+export function useEplOddspediaMatches(limit = 50, lookaheadDays = 7) {
+  const params = useMemo(
+    () => ({ limit, lookahead_days: lookaheadDays }),
+    [limit, lookaheadDays]
+  );
   return useEplQuery<EplOddsMatch[]>("/epl/oddspedia/matches", params);
 }
 

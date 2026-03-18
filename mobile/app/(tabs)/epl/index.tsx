@@ -40,7 +40,7 @@ function OddsRow({ label, odds }: { label: string; odds: Array<{ outcome_name: s
 export default function EplHome() {
   const router = useRouter();
   const { colors } = useTheme();
-  const { data, loading, error, refetch } = useEplOddspediaMatches(120);
+  const { data, loading, error, refetch } = useEplOddspediaMatches();
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>

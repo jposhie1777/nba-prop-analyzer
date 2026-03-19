@@ -35,7 +35,7 @@ import logging
 import subprocess
 import tempfile
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from typing import Any, Dict, List, Optional
 
 LOGGER = logging.getLogger(__name__)
@@ -334,6 +334,16 @@ class OddspediaClient:
                     samples = listing_intercept_examples.get(key) or []
                     if samples:
                         print(f"[scraper]   {key} samples: {samples}")
+
+            # If captured listing payload indicates pagination, fetch remaining pages
+            # through the same browser session to avoid undercounting matches.
+            if listing_api_responses:
+                try:
+                    listing_api_responses = self._expand_paginated_listing_responses(
+                        page, listing_api_responses
+                    )
+                except Exception as exc:
+                    print(f"[scraper] listing pagination expansion error: {exc}")
 
             nuxt_data = page.evaluate("() => window.__NUXT__ || {}")
             # Only raise if __NUXT__ is entirely missing (Cloudflare challenge).
@@ -1003,6 +1013,112 @@ class OddspediaClient:
     # LISTING-PAGE API FALLBACK
     # ============================================================
 
+    def _replace_query_param(self, url: str, key: str, value: Any) -> str:
+        """Return URL with a single query param replaced/inserted."""
+        parsed = urlparse(url)
+        pairs = parse_qsl(parsed.query, keep_blank_values=True)
+        out: List[tuple] = []
+        replaced = False
+        for k, v in pairs:
+            if k == key:
+                if not replaced:
+                    out.append((k, str(value)))
+                    replaced = True
+                continue
+            out.append((k, v))
+        if not replaced:
+            out.append((key, str(value)))
+        return urlunparse((
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            urlencode(out, doseq=True),
+            parsed.fragment,
+        ))
+
+    def _expand_paginated_listing_responses(
+        self,
+        page: Any,
+        api_responses: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """
+        Expand captured listing responses by requesting missing pages when the
+        payload advertises total_pages/current_page metadata.
+        """
+        expanded = list(api_responses)
+        seen_urls = {str(resp.get("url") or "") for resp in expanded}
+        fetched_pages = 0
+
+        for resp in list(api_responses):
+            endpoint = str(resp.get("url") or "")
+            if not endpoint or not self._is_listing_api_endpoint(endpoint):
+                continue
+
+            body = resp.get("body")
+            if not isinstance(body, dict):
+                continue
+            data = body.get("data")
+            if not isinstance(data, dict):
+                continue
+
+            total_pages = self._as_int(data.get("total_pages"))
+            if not total_pages or total_pages <= 1:
+                continue
+            current_page = self._as_int(data.get("current_page")) or 1
+
+            # Hard cap for safety in case of malformed metadata.
+            max_page = min(total_pages, 12)
+            if current_page >= max_page:
+                continue
+
+            for page_num in range(current_page + 1, max_page + 1):
+                page_url = self._replace_query_param(endpoint, "page", page_num)
+                if page_url in seen_urls:
+                    continue
+
+                result = page.evaluate(
+                    """async (url) => {
+                        try {
+                            const res = await fetch(url, {
+                                credentials: 'include',
+                                redirect: 'follow',
+                                headers: { 'accept': 'application/json, text/plain, */*' }
+                            });
+                            const text = await res.text();
+                            let data = null;
+                            if (res.ok && text && text.trim()) {
+                                try { data = JSON.parse(text); } catch (e) { data = null; }
+                            }
+                            return { status: res.status, data };
+                        } catch (e) {
+                            return { status: 0, error: String(e), data: null };
+                        }
+                    }""",
+                    page_url,
+                )
+
+                status = result.get("status") if isinstance(result, dict) else None
+                payload = result.get("data") if isinstance(result, dict) else None
+                if status == 200 and isinstance(payload, (dict, list)):
+                    expanded.append({"url": page_url, "body": payload})
+                    seen_urls.add(page_url)
+                    fetched_pages += 1
+                    print(f"[scraper] listing pagination fetched page={page_num} from {endpoint[:80]}")
+                else:
+                    err = result.get("error") if isinstance(result, dict) else None
+                    print(
+                        f"[scraper] listing pagination fetch failed page={page_num} "
+                        f"status={status} endpoint={endpoint[:80]}"
+                        + (f" error={err}" if err else "")
+                    )
+                    # Stop trying higher pages for this endpoint when one page fails.
+                    break
+
+        if fetched_pages:
+            print(f"[scraper] Added {fetched_pages} paginated listing API responses")
+        return expanded
+
     def _build_records_from_api_responses(
         self,
         api_responses: List[Dict[str, Any]],
@@ -1015,8 +1131,44 @@ class OddspediaClient:
 
         Tries several common response shapes to find a match list.
         """
-        best_records: List[Dict[str, Any]] = []
-        best_source: str = ""
+        merged_records: Dict[str, Dict[str, Any]] = {}
+        source_record_counts: Dict[str, int] = defaultdict(int)
+
+        def _merge_built_records(built: List[Dict[str, Any]], source_endpoint: str) -> None:
+            new_for_source = 0
+            for rec in built:
+                mid = str(rec.get("match_id") or "")
+                if not mid:
+                    continue
+                existing = merged_records.get(mid)
+                if existing is None:
+                    merged_records[mid] = rec
+                    new_for_source += 1
+                    continue
+
+                # Fill sparse base fields from richer duplicates.
+                for key in (
+                    "date_utc",
+                    "home_team",
+                    "away_team",
+                    "home_team_id",
+                    "away_team_id",
+                    "league_id",
+                    "url",
+                ):
+                    if not existing.get(key) and rec.get(key):
+                        existing[key] = rec.get(key)
+
+                # Merge markets by market key.
+                existing_markets = existing.get("markets") if isinstance(existing.get("markets"), dict) else {}
+                rec_markets = rec.get("markets") if isinstance(rec.get("markets"), dict) else {}
+                for market_key, market_val in rec_markets.items():
+                    if market_key not in existing_markets:
+                        existing_markets[market_key] = market_val
+                existing["markets"] = existing_markets
+
+            if new_for_source:
+                source_record_counts[source_endpoint] += new_for_source
 
         # DEBUG — remove after diagnosis
         for resp in api_responses:
@@ -1122,9 +1274,8 @@ class OddspediaClient:
                     "sport": sport,   # ← pass through actual sport
                 }
                 built = self._build_records(raw)
-                if built and len(built) > len(best_records):
-                    best_records = built
-                    best_source = endpoint
+                if built:
+                    _merge_built_records(built, endpoint)
 
             # Broader fallback: recursively scan payload for match-like objects
             # in case Oddspedia changes envelope keys for listing endpoints.
@@ -1145,16 +1296,28 @@ class OddspediaClient:
                 raw_odds = data.get("odds") if isinstance(data, dict) else {}
                 raw = {"matchList": normalized, "odds": raw_odds or {}, "sport": sport}
                 built = self._build_records(raw)
-                if built and len(built) > len(best_records):
-                    best_records = built
-                    best_source = endpoint
+                if built:
+                    _merge_built_records(built, endpoint)
 
-        if best_records:
-            print(
-                f"[scraper] Using best listing API payload: "
-                f"{len(best_records)} matches from {best_source[:80]}"
+        if merged_records:
+            merged_list = sorted(
+                merged_records.values(),
+                key=lambda r: int(r.get("match_id") or 0),
             )
-            return best_records
+            source_bits = ", ".join(
+                f"{src[:70]}={count}"
+                for src, count in sorted(
+                    source_record_counts.items(),
+                    key=lambda kv: kv[1],
+                    reverse=True,
+                )[:4]
+            )
+            print(
+                f"[scraper] Using merged listing API payloads: "
+                f"{len(merged_list)} unique matches"
+                + (f" ({source_bits})" if source_bits else "")
+            )
+            return merged_list
         print("[scraper] No match list found in intercepted listing-page API responses")
         return []
 

@@ -1068,6 +1068,13 @@ class OddspediaClient:
                     data.get("smartBets"),
                     data.get("list"),
                 ])
+                # Some listing endpoints return `matches` as an ID-keyed map.
+                matches_block = data.get("matches")
+                if isinstance(matches_block, dict):
+                    candidates.append([
+                        {**v, "id": k} if isinstance(v, dict) else {"id": k}
+                        for k, v in matches_block.items()
+                    ])
             if isinstance(body, dict):
                 candidates.extend([
                     body.get("matchList"),
@@ -1196,11 +1203,6 @@ class OddspediaClient:
             return False
         if "getcategories" in endpoint_l:
             return False
-        # Poll endpoint returns a small sample and can undercount match discovery.
-        if "getmatchpoll" in endpoint_l:
-            return False
-        
-
         # Accept common listing routes, but don't hard-require /api/.
         if "/api/" in path:
             # Ignore per-match API calls in listing capture stage.
@@ -1240,6 +1242,9 @@ class OddspediaClient:
 
     def _looks_like_match_row(self, row: Dict[str, Any]) -> bool:
         """Guard against false positives from analytics/identity payloads."""
+        if isinstance(row.get("match"), dict):
+            row = row.get("match") or row
+
         match_id = (
             row.get("id")
             or row.get("match_id")
@@ -1282,44 +1287,50 @@ class OddspediaClient:
 
     def _normalise_listing_match(self, match: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Normalize variable listing-API match keys to Oddspedia `matchList` shape."""
+        if not isinstance(match, dict):
+            return None
+
+        # Some endpoints wrap match attributes inside a `match` object.
+        source = match.get("match") if isinstance(match.get("match"), dict) else match
+
         match_id = (
-            match.get("id")
-            or match.get("match_id")
-            or match.get("matchId")
-            or match.get("event_id")
-            or match.get("game_id")
+            source.get("id")
+            or source.get("match_id")
+            or source.get("matchId")
+            or source.get("event_id")
+            or source.get("game_id")
         )
         match_id_int = self._as_int(match_id)
         if match_id_int is None:
             return None
 
         home_team = (
-            match.get("ht")
-            or match.get("home_team")
-            or match.get("homeTeam")
-            or match.get("home")
-            or match.get("home_name")
+            source.get("ht")
+            or source.get("home_team")
+            or source.get("homeTeam")
+            or source.get("home")
+            or source.get("home_name")
         )
         away_team = (
-            match.get("at")
-            or match.get("away_team")
-            or match.get("awayTeam")
-            or match.get("away")
-            or match.get("away_name")
+            source.get("at")
+            or source.get("away_team")
+            or source.get("awayTeam")
+            or source.get("away")
+            or source.get("away_name")
         )
 
         return {
             "id": match_id_int,
-            "md": match.get("md") or match.get("starttime") or match.get("start_time") or match.get("date"),
+            "md": source.get("md") or source.get("starttime") or source.get("start_time") or source.get("date"),
             "ht": home_team,
             "at": away_team,
-            "ht_id": match.get("ht_id") or match.get("home_team_id") or match.get("homeTeamId"),
-            "at_id": match.get("at_id") or match.get("away_team_id") or match.get("awayTeamId"),
-            "inplay": match.get("inplay") or match.get("is_live") or False,
-            "league_id": match.get("league_id") or match.get("leagueId"),
-            "url": match.get("url") or match.get("match_url") or match.get("path"),
-            "ht_slug": match.get("ht_slug") or match.get("htSlug") or match.get("home_slug"),
-            "at_slug": match.get("at_slug") or match.get("atSlug") or match.get("away_slug"),
+            "ht_id": source.get("ht_id") or source.get("home_team_id") or source.get("homeTeamId"),
+            "at_id": source.get("at_id") or source.get("away_team_id") or source.get("awayTeamId"),
+            "inplay": source.get("inplay") or source.get("is_live") or False,
+            "league_id": source.get("league_id") or source.get("leagueId"),
+            "url": source.get("url") or source.get("match_url") or source.get("path"),
+            "ht_slug": source.get("ht_slug") or source.get("htSlug") or source.get("home_slug"),
+            "at_slug": source.get("at_slug") or source.get("atSlug") or source.get("away_slug"),
         }
 
     def _build_records_from_dom(self, page: Any) -> List[Dict[str, Any]]:

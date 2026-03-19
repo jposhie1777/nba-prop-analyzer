@@ -544,36 +544,80 @@ class OddspediaClient:
                                 continue
                             stats_result = page.evaluate(
                                 """async (matchKey) => {
-                                    try {
-                                        const base = 'https://oddspedia.com/api/v1';
-                                        const lang = 'language=us';
-                                        const [bs, pms, h2h, lmh, lma, st, lu] = await Promise.all([
-                                            fetch(`${base}/getMatchBettingStats?matchKey=${matchKey}&${lang}`).then(r=>r.json()),
-                                            fetch(`${base}/getPerMatchStats?matchKey=${matchKey}&${lang}`).then(r=>r.json()),
-                                            fetch(`${base}/getHeadToHead?matchKey=${matchKey}&all=1&${lang}`).then(r=>r.json()),
-                                            fetch(`${base}/getTeamLastMatches?matchKey=${matchKey}&type=home&teamId=0&upcomingMatchesLimit=2&finishedMatchesLimit=5&geoCode=US&${lang}`).then(r=>r.json()),
-                                            fetch(`${base}/getTeamLastMatches?matchKey=${matchKey}&type=away&teamId=0&upcomingMatchesLimit=2&finishedMatchesLimit=5&geoCode=US&${lang}`).then(r=>r.json()),
-                                            fetch(`${base}/getLeagueStandings?matchKey=${matchKey}&${lang}`).then(r=>r.json()),
-                                            fetch(`${base}/getMatchLineUps?matchKey=${matchKey}&${lang}`).then(r=>r.json()),
-                                        ]);
-                                        return { bs, pms, h2h, lmh, lma, st, lu };
-                                    } catch(e) {
-                                        return { error: e.toString() };
+                                    const base = 'https://oddspedia.com/api/v1';
+                                    const lang = 'language=us';
+                                    const headers = { 'accept': 'application/json, text/plain, */*' };
+
+                                    const safeFetchJson = async (url) => {
+                                        try {
+                                            const res = await fetch(url, {
+                                                credentials: 'include',
+                                                redirect: 'follow',
+                                                headers,
+                                            });
+                                            const bodyText = await res.text();
+                                            if (!res.ok) {
+                                                return { ok: false, status: res.status, error: `http_${res.status}` };
+                                            }
+                                            if (!bodyText || !bodyText.trim()) {
+                                                return { ok: false, status: res.status, error: 'empty_body' };
+                                            }
+                                            try {
+                                                return { ok: true, status: res.status, json: JSON.parse(bodyText) };
+                                            } catch (parseErr) {
+                                                return { ok: false, status: res.status, error: 'invalid_json' };
+                                            }
+                                        } catch (err) {
+                                            return { ok: false, status: 0, error: String(err) };
+                                        }
+                                    };
+
+                                    const endpoints = {
+                                        bs: `${base}/getMatchBettingStats?matchKey=${matchKey}&${lang}`,
+                                        pms: `${base}/getPerMatchStats?matchKey=${matchKey}&${lang}`,
+                                        h2h: `${base}/getHeadToHead?matchKey=${matchKey}&all=1&${lang}`,
+                                        lmh: `${base}/getTeamLastMatches?matchKey=${matchKey}&type=home&teamId=0&upcomingMatchesLimit=2&finishedMatchesLimit=5&geoCode=US&${lang}`,
+                                        lma: `${base}/getTeamLastMatches?matchKey=${matchKey}&type=away&teamId=0&upcomingMatchesLimit=2&finishedMatchesLimit=5&geoCode=US&${lang}`,
+                                        st: `${base}/getLeagueStandings?matchKey=${matchKey}&${lang}`,
+                                        lu: `${base}/getMatchLineUps?matchKey=${matchKey}&${lang}`,
+                                    };
+
+                                    const data = {};
+                                    const errors = {};
+                                    for (const [key, endpoint] of Object.entries(endpoints)) {
+                                        const result = await safeFetchJson(endpoint);
+                                        if (result.ok) {
+                                            data[key] = result.json;
+                                        } else {
+                                            errors[key] = { error: result.error, status: result.status };
+                                        }
                                     }
+
+                                    return { data, errors };
                                 }""",
                                 mk
                             )
-                            if stats_result and not stats_result.get("error"):
-                                record["betting_stats"]     = stats_result.get("bs", {}).get("data")
-                                record["per_match_stats"]   = stats_result.get("pms", {}).get("data")
-                                record["head_to_head"]      = stats_result.get("h2h", {}).get("data")
-                                record["last_matches_home"] = stats_result.get("lmh", {}).get("data")
-                                record["last_matches_away"] = stats_result.get("lma", {}).get("data")
-                                record["standings_data"]    = stats_result.get("st", {}).get("data")
-                                record["lineups"]           = stats_result.get("lu", {}).get("data")
-                                print(f"[scraper] match={mid} stats captured via API")
-                            else:
-                                print(f"[scraper] match={mid} stats API error: {stats_result}")
+                            payload = stats_result.get("data") if isinstance(stats_result, dict) else {}
+                            errors = stats_result.get("errors") if isinstance(stats_result, dict) else {}
+
+                            if isinstance(payload, dict):
+                                record["betting_stats"] = (payload.get("bs") or {}).get("data")
+                                record["per_match_stats"] = (payload.get("pms") or {}).get("data")
+                                record["head_to_head"] = (payload.get("h2h") or {}).get("data")
+                                record["last_matches_home"] = (payload.get("lmh") or {}).get("data")
+                                record["last_matches_away"] = (payload.get("lma") or {}).get("data")
+                                record["standings_data"] = (payload.get("st") or {}).get("data")
+                                record["lineups"] = (payload.get("lu") or {}).get("data")
+
+                            stats_loaded = sum(
+                                1
+                                for key in ("bs", "pms", "h2h", "lmh", "lma", "st", "lu")
+                                if isinstance((payload or {}).get(key), dict)
+                            )
+                            if stats_loaded:
+                                print(f"[scraper] match={mid} stats captured via API ({stats_loaded}/7 blocks)")
+                            if errors:
+                                print(f"[scraper] match={mid} stats partial errors: {errors}")
                         except Exception as exc_bs:
                             print(f"[scraper] match={mid} stats capture error: {exc_bs}")
 

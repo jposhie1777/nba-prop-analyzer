@@ -31,6 +31,7 @@ if str(_repo_root) not in sys.path:
     sys.path.insert(0, str(_repo_root))
 
 from oddspedia_client import OddspediaClient  # noqa: E402
+from mobile_api.ingest.atp.oddspedia_tour_filter import filter_atp_matches  # noqa: E402
 
 DEFAULT_URL = "https://www.oddspedia.com/us/tennis"
 ODDSPEDIA_URL = os.getenv("ODDSPEDIA_ATP_URL", DEFAULT_URL)
@@ -46,6 +47,8 @@ H2H_MATCHES_TABLE = "atp_h2h_matches"
 LAST_MATCHES_TABLE = "atp_last_matches"
 STANDINGS_TABLE = "atp_standings"
 LINEUPS_TABLE = "atp_lineups"
+ATP_LEAGUE_SLUG = "atp-miami"
+ATP_SEASON_ID = 134091
 
 _MATCH_BASE = [
     bigquery.SchemaField("ingested_at", "TIMESTAMP", mode="REQUIRED"),
@@ -309,9 +312,15 @@ def ingest_match_info(url: Optional[str] = None, *, dry_run: bool = False, today
     matches = scraper.scrape(
         target_url,
         league_category="usa",
-        league_slug="atp-miami",
-        season_id=134091,
+        league_slug=ATP_LEAGUE_SLUG,
+        season_id=ATP_SEASON_ID,
         sport="tennis",
+    )
+    matches = filter_atp_matches(
+        matches,
+        target_league_slug=ATP_LEAGUE_SLUG,
+        target_season_id=ATP_SEASON_ID,
+        log_prefix="[atp_match_info]",
     )
     if today_only:
         matches = [m for m in matches if (m.get("date_utc") or "").startswith(scraped_date)]

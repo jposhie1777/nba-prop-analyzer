@@ -27,6 +27,7 @@ if str(_repo_root) not in sys.path:
 
 from oddspedia_client import OddspediaClient  # noqa: E402
 from mobile_api.ingest.atp.oddspedia_odds_ingest import SCHEMA, _to_bq_rows  # noqa: E402
+from mobile_api.ingest.atp.oddspedia_tour_filter import filter_atp_matches  # noqa: E402
 
 DEFAULT_URL = "https://www.oddspedia.com/us/tennis"
 ODDSPEDIA_URL = os.getenv("ODDSPEDIA_ATP_URL", DEFAULT_URL)
@@ -34,6 +35,8 @@ DATASET = os.getenv("ODDSPEDIA_DATASET", "oddspedia")
 DATASET_LOCATION = os.getenv("ODDSPEDIA_BQ_LOCATION", "US")
 TABLE = os.getenv("ODDSPEDIA_ATP_TABLE", "atp_odds")
 ROWS_TMP_PATH = "/tmp/atp_rows.json"
+ATP_LEAGUE_SLUG = "atp-miami"
+ATP_SEASON_ID = 134091
 
 
 def _bq_client() -> bigquery.Client:
@@ -96,9 +99,15 @@ def ingest_atp_odds(
         matches = scraper.scrape(
             target_url,
             league_category="usa",
-            league_slug="atp-miami",
-            season_id=134091,
+            league_slug=ATP_LEAGUE_SLUG,
+            season_id=ATP_SEASON_ID,
             sport="tennis",
+        )
+        matches = filter_atp_matches(
+            matches,
+            target_league_slug=ATP_LEAGUE_SLUG,
+            target_season_id=ATP_SEASON_ID,
+            log_prefix="[atp_odds]",
         )
         if today_only and any(m.get("date_utc") for m in matches):
             matches = [m for m in matches if (m.get("date_utc") or "").startswith(scraped_date)]

@@ -538,6 +538,10 @@ class OddspediaClient:
                         # Capture stats via direct API calls
                         try:
                             mk = d.get("match_key")
+
+                            if not mk:
+                                print(f"[scraper] match={mid} no match_key — skipping stats")
+                                continue
                             stats_result = page.evaluate(
                                 """async (matchKey) => {
                                     try {
@@ -783,11 +787,16 @@ class OddspediaClient:
                     continue
                 ht_slug = m.get("ht_slug") or m.get("htSlug")
                 at_slug = m.get("at_slug") or m.get("atSlug")
+                
+                # ✅ TENNIS FIX — fallback to ID-only URL
+                if sport := (nuxt_data.get("data", [{}])[0].get("currentSport", {}) or {}).get("slug", ""):
+                    if sport == "tennis":
+                        urls[mid] = f"https://www.oddspedia.com/us/a/tennis/{mid}"
+                        continue
+                
+                # Soccer / other sports (slug-based)
                 if ht_slug and at_slug:
-                    if "tennis" in (nuxt_data.get("data", [{}])[0].get("currentSport", {}) or {}).get("slug", ""):
-                        urls[mid] = f"https://www.oddspedia.com/us/a/tennis/{ht_slug}-{at_slug}-{mid}"
-                    else:
-                        urls[mid] = f"https://www.oddspedia.com/us/soccer/mls/{ht_slug}-{at_slug}-{mid}"
+                    urls[mid] = f"https://www.oddspedia.com/us/soccer/mls/{ht_slug}-{at_slug}-{mid}"
         except Exception as exc:
             print(f"[scraper] _build_all_match_urls error: {exc}")
         return urls

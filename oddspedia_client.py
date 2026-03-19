@@ -427,8 +427,20 @@ class OddspediaClient:
             # Final fallback: scrape rendered match links from the DOM
             if not records:
                 print("[scraper] API fallback empty — trying DOM link extraction")
-                records = self._build_records_from_dom(page)
+                records = self._build_records_from_dom(page, sport=sport)
                 print(f"[scraper] Built {len(records)} matches from DOM links")
+            elif sport == "tennis":
+                # Tennis listings can omit some schedule matches from listing APIs
+                # depending on bookmaker/geo filters. Merge in DOM-visible match IDs.
+                dom_records = self._build_records_from_dom(page, sport=sport)
+                if dom_records:
+                    before = len(records)
+                    records = self._merge_records_by_match_id(records, dom_records)
+                    added = len(records) - before
+                    print(
+                        f"[scraper] DOM augmentation: +{added} matches "
+                        f"({before} -> {len(records)})"
+                    )
 
             if records:
                 m0 = records[0]
@@ -1578,7 +1590,56 @@ class OddspediaClient:
             "at_slug": source.get("at_slug") or source.get("atSlug") or source.get("away_slug"),
         }
 
-    def _build_records_from_dom(self, page: Any) -> List[Dict[str, Any]]:
+    def _merge_records_by_match_id(
+        self,
+        base_records: List[Dict[str, Any]],
+        extra_records: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """Merge two record lists by match_id, preserving richer fields."""
+        merged: Dict[str, Dict[str, Any]] = {}
+        for rec in base_records:
+            mid = str(rec.get("match_id") or "")
+            if mid:
+                merged[mid] = rec
+
+        for rec in extra_records:
+            mid = str(rec.get("match_id") or "")
+            if not mid:
+                continue
+            existing = merged.get(mid)
+            if existing is None:
+                merged[mid] = rec
+                continue
+
+            for key in (
+                "date_utc",
+                "home_team",
+                "away_team",
+                "home_team_id",
+                "away_team_id",
+                "league_id",
+                "url",
+            ):
+                if not existing.get(key) and rec.get(key):
+                    existing[key] = rec.get(key)
+
+            existing_markets = (
+                existing.get("markets")
+                if isinstance(existing.get("markets"), dict)
+                else {}
+            )
+            rec_markets = rec.get("markets") if isinstance(rec.get("markets"), dict) else {}
+            for market_key, market_val in rec_markets.items():
+                if market_key not in existing_markets:
+                    existing_markets[market_key] = market_val
+            existing["markets"] = existing_markets
+
+        return sorted(
+            merged.values(),
+            key=lambda r: int(r.get("match_id") or 0),
+        )
+
+    def _build_records_from_dom(self, page: Any, sport: str = "soccer") -> List[Dict[str, Any]]:
         """
         Last-resort match discovery: find rendered match links in the DOM.
         Works for client-side pages (like MLS) where neither SSR nor API
@@ -1592,12 +1653,22 @@ class OddspediaClient:
             except Exception:
                 pass
 
+            # Some Oddspedia pages lazy-render additional cards on scroll.
+            for _ in range(4):
+                try:
+                    page.evaluate("() => window.scrollTo(0, document.body.scrollHeight)")
+                    page.wait_for_timeout(700)
+                except Exception:
+                    break
+
             # Evaluate in browser context: collect all hrefs that look like
-            # match pages (contain /soccer/ and end with a long numeric ID)
+            # match pages (contain sport slug and end with a long numeric ID)
+            sport_slug = "tennis" if sport == "tennis" else "soccer"
             links: List[str] = page.evaluate(
-                """() => Array.from(document.querySelectorAll('a[href]'))
+                """(sportSlug) => Array.from(document.querySelectorAll('a[href]'))
                         .map(a => a.href)
-                        .filter(h => /\\/soccer\\//.test(h) && /\\/\\d{6,}(\\?.*)?$/.test(h))"""
+                        .filter(h => h.includes(`/${sportSlug}/`) && /\\/\\d{6,}(\\?.*)?$/.test(h))""",
+                sport_slug,
             ) or []
 
             seen: set = set()
@@ -1614,7 +1685,7 @@ class OddspediaClient:
                 records.append(
                     {
                         "match_id": match_id,
-                        "sport": "soccer",
+                        "sport": sport,
                         "date_utc": None,
                         "home_team": None,
                         "away_team": None,
@@ -1628,7 +1699,7 @@ class OddspediaClient:
                 )
 
             print(
-                f"[scraper] DOM link scan: {len(links)} links → "
+                f"[scraper] DOM link scan ({sport_slug}): {len(links)} links → "
                 f"{len(records)} unique match IDs"
             )
             return records

@@ -54,7 +54,11 @@ MARKET_NAMES: Dict[str, str] = {
 }
 
 _MATCH_ODDS_URL = "https://www.oddspedia.com/api/v1/getMatchOdds"
-_MATCH_ODDS_PARAMS = "language=us&geoCode=US&bookmakerGeoCode=US&bookmakerGeoState=VA"
+_DEFAULT_BOOKMAKER_GEO_STATE = "VA"
+_MATCH_ODDS_PARAMS = (
+    f"language=us&geoCode=US&bookmakerGeoCode=US"
+    f"&bookmakerGeoState={_DEFAULT_BOOKMAKER_GEO_STATE}"
+)
 _API_HEADERS = {
     "Accept": "application/json, text/plain, */*",
     "Accept-Language": "en-US,en;q=0.9",
@@ -280,13 +284,22 @@ class OddspediaClient:
                         url,
                     )
 
-                def _build_match_list_url(*, filtered: bool) -> str:
+                def _build_match_list_url(
+                    *,
+                    filtered: bool,
+                    bookmaker_geo_state: Optional[str] = None,
+                ) -> str:
                     base = (
                         f"https://oddspedia.com/api/v1/getMatchList"
                         f"?excludeSpecialStatus=0&sortBy=default&perPageDefault=50"
                         f"&startDate={urllib.parse.quote(start)}&endDate={urllib.parse.quote(end)}"
                         f"&geoCode=US&status=all&sport={sport}&popularLeaguesOnly=0"
                     )
+                    if bookmaker_geo_state:
+                        base += (
+                            f"&bookmakerGeoCode=US"
+                            f"&bookmakerGeoState={bookmaker_geo_state}"
+                        )
                     if filtered:
                         base += (
                             f"&category={league_category}&league={league_slug}"
@@ -294,20 +307,62 @@ class OddspediaClient:
                         )
                     return f"{base}&r=wv&page=1&perPage=50&language=us"
 
-                def _build_american_odds_url() -> str:
+                def _build_american_odds_url(*, bookmaker_geo_state: str, ot: int) -> str:
                     return (
                         f"https://oddspedia.com/api/v1/getAmericanMaxOddsWithPagination"
-                        f"?geoCode=US&bookmakerGeoCode=US&bookmakerGeoState=NY&wettsteuer=0"
+                        f"?geoCode=US&bookmakerGeoCode=US&bookmakerGeoState={bookmaker_geo_state}"
+                        f"&wettsteuer=0"
                         f"&startDate={urllib.parse.quote(start)}&endDate={urllib.parse.quote(end)}"
-                        f"&sport={sport}&ot=201&excludeSpecialStatus=0&popularLeaguesOnly=0"
+                        f"&sport={sport}&ot={ot}&excludeSpecialStatus=0&popularLeaguesOnly=0"
                         f"&sortBy=default&status=all&page=1&perPage=50&r=si&inplay=0&language=us"
                     )
 
                 if sport == "tennis":
-                    request_plan = [
+                    detected_geo_states: List[str] = []
+                    for resp in listing_api_responses:
+                        resp_url = str(resp.get("url") or "")
+                        if "bookmakergeostate=" not in resp_url.lower():
+                            continue
+                        q = urllib.parse.parse_qs(urllib.parse.urlparse(resp_url).query)
+                        state_vals = q.get("bookmakerGeoState") or q.get("bookmakergeostate") or []
+                        for state in state_vals:
+                            s = str(state).strip().upper()
+                            if s and s not in detected_geo_states:
+                                detected_geo_states.append(s)
+
+                    tennis_geo_states: List[str] = []
+                    for candidate in (
+                        detected_geo_states
+                        + [_DEFAULT_BOOKMAKER_GEO_STATE, "NY"]
+                    ):
+                        c = str(candidate).strip().upper()
+                        if c and c not in tennis_geo_states:
+                            tennis_geo_states.append(c)
+                    tennis_geo_states = tennis_geo_states[:3]
+
+                    request_plan: List[tuple[str, str]] = [
                         ("sport_only", _build_match_list_url(filtered=False)),
-                        ("american_odds", _build_american_odds_url()),
                     ]
+                    for geo_state in tennis_geo_states:
+                        request_plan.append(
+                            (
+                                f"sport_only_{geo_state.lower()}",
+                                _build_match_list_url(
+                                    filtered=False,
+                                    bookmaker_geo_state=geo_state,
+                                ),
+                            )
+                        )
+                        for ot in (201, 301, 401):
+                            request_plan.append(
+                                (
+                                    f"american_odds_{geo_state.lower()}_ot{ot}",
+                                    _build_american_odds_url(
+                                        bookmaker_geo_state=geo_state,
+                                        ot=ot,
+                                    ),
+                                )
+                            )
                 else:
                     request_plan = [
                         ("filtered", _build_match_list_url(filtered=True))
@@ -316,14 +371,17 @@ class OddspediaClient:
                 print(f"[scraper] USING SPORT MODE: {sport}")
                 print(f"[scraper] REQUEST PLAN: {[x[0] for x in request_plan]}")
 
+                seen_direct_listing_urls: set[str] = set()
                 for label, url in request_plan:
+                    if url in seen_direct_listing_urls:
+                        continue
+                    seen_direct_listing_urls.add(url)
                     ml_result = _fetch_listing(url)
                     print(f"[scraper] direct fetch ({label}) status: {ml_result.get('status')}")
                     print(f"[scraper] direct fetch ({label}) response body: {ml_result.get('body')}")
 
                     if ml_result.get("status") == 200 and ml_result.get("data"):
                         listing_api_responses.append({"url": url, "body": ml_result["data"]})
-                        break
             except Exception as exc:
                 print(f"[scraper] getMatchList direct fetch error: {exc}")
 
@@ -1065,14 +1123,38 @@ class OddspediaClient:
             total_pages = self._as_int(data.get("total_pages"))
             if not total_pages or total_pages <= 1:
                 continue
-            current_page = self._as_int(data.get("current_page")) or 1
+            current_page = self._as_int(data.get("current_page"))
 
             # Hard cap for safety in case of malformed metadata.
-            max_page = min(total_pages, 12)
-            if current_page >= max_page:
-                continue
+            max_page_count = min(total_pages, 12)
+            candidate_pages: set[int] = set()
 
-            for page_num in range(current_page + 1, max_page + 1):
+            # Oddspedia responses are inconsistent about page numbering:
+            # some payloads report 0-based current_page, others 1-based.
+            # Build both candidate ranges and fetch missing pages defensively.
+            if current_page is not None:
+                if 0 <= current_page < total_pages:
+                    candidate_pages.update(range(0, max_page_count))
+                if 1 <= current_page <= total_pages:
+                    candidate_pages.update(range(1, max_page_count + 1))
+
+            # Parse endpoint page separately to infer index style from URL.
+            endpoint_query_pairs = parse_qsl(urlparse(endpoint).query, keep_blank_values=True)
+            endpoint_page = None
+            for k, v in endpoint_query_pairs:
+                if k == "page":
+                    endpoint_page = self._as_int(v)
+                    break
+            if endpoint_page is not None:
+                if 0 <= endpoint_page < total_pages:
+                    candidate_pages.update(range(0, max_page_count))
+                if 1 <= endpoint_page <= total_pages:
+                    candidate_pages.update(range(1, max_page_count + 1))
+
+            if not candidate_pages:
+                candidate_pages.update(range(1, max_page_count + 1))
+
+            for page_num in sorted(candidate_pages):
                 page_url = self._replace_query_param(endpoint, "page", page_num)
                 if page_url in seen_urls:
                     continue
@@ -1112,8 +1194,8 @@ class OddspediaClient:
                         f"status={status} endpoint={endpoint[:80]}"
                         + (f" error={err}" if err else "")
                     )
-                    # Stop trying higher pages for this endpoint when one page fails.
-                    break
+                    # Do not break: endpoint may use a different page indexing style.
+                    continue
 
         if fetched_pages:
             print(f"[scraper] Added {fetched_pages} paginated listing API responses")

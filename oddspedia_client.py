@@ -1015,11 +1015,15 @@ class OddspediaClient:
 
         Tries several common response shapes to find a match list.
         """
+        best_records: List[Dict[str, Any]] = []
+        best_source: str = ""
+
         # DEBUG — remove after diagnosis
         for resp in api_responses:
             print(f"[scraper] captured endpoint: {resp.get('url', '')[:120]}")
             # DEBUG body shape
             body = resp.get("body", {})
+            data: Any = None
             print(f"[scraper]   raw body type: {type(body)}")
             if isinstance(body, dict):
                 print(f"[scraper]   body top-level keys: {list(body.keys())[:15]}")
@@ -1111,8 +1115,9 @@ class OddspediaClient:
                     "sport": sport,   # ← pass through actual sport
                 }
                 built = self._build_records(raw)
-                if built:
-                    return built
+                if built and len(built) > len(best_records):
+                    best_records = built
+                    best_source = endpoint
 
             # Broader fallback: recursively scan payload for match-like objects
             # in case Oddspedia changes envelope keys for listing endpoints.
@@ -1131,11 +1136,18 @@ class OddspediaClient:
                     f"{len(normalized)} items from {endpoint[:80]}"
                 )
                 raw_odds = data.get("odds") if isinstance(data, dict) else {}
-                raw = {"matchList": normalized, "odds": raw_odds or {}, "sport": "soccer"}
+                raw = {"matchList": normalized, "odds": raw_odds or {}, "sport": sport}
                 built = self._build_records(raw)
-                if built:
-                    return built
+                if built and len(built) > len(best_records):
+                    best_records = built
+                    best_source = endpoint
 
+        if best_records:
+            print(
+                f"[scraper] Using best listing API payload: "
+                f"{len(best_records)} matches from {best_source[:80]}"
+            )
+            return best_records
         print("[scraper] No match list found in intercepted listing-page API responses")
         return []
 
@@ -1183,6 +1195,9 @@ class OddspediaClient:
         if "getleaguelivestream" in endpoint_l:
             return False
         if "getcategories" in endpoint_l:
+            return False
+        # Poll endpoint returns a small sample and can undercount match discovery.
+        if "getmatchpoll" in endpoint_l:
             return False
         
 

@@ -457,7 +457,7 @@ class OddspediaClient:
 
             import re
 
-            match_urls = self._build_all_match_urls(nuxt_data)
+            match_urls = self._build_all_match_urls(nuxt_data, sport)
             print(
                 f"[scraper] Built match URLs for {len(match_urls)}/{len(records)} matches"
             )
@@ -764,41 +764,49 @@ class OddspediaClient:
     # PER-MATCH HELPERS
     # ============================================================
 
-    def _build_all_match_urls(self, nuxt_data: Dict[str, Any]) -> Dict[str, str]:
+    def _build_all_match_urls(self, nuxt_data: Dict[str, Any], sport: str) -> Dict[str, str]:
         """
-        Build {str(match_id): url} for every match in the listing-page NUXT.
-        Falls back to constructing the slug URL when the raw url field is absent.
+        Build {match_id: url} for all matches.
+        
+        Tennis → ID-based URLs
+        Soccer → slug-based URLs
         """
+    
         urls: Dict[str, str] = {}
+    
         try:
             data0 = (nuxt_data.get("data") or [{}])[0]
-            for m in (data0.get("matchList") or []):
+            matches = data0.get("matchList") or []
+    
+            for m in matches:
                 mid = str(
                     m.get("id") or m.get("match_id") or m.get("matchId") or ""
                 )
                 if not mid:
                     continue
+    
+                # ✅ TENNIS FIX (THIS IS THE KEY)
+                if sport == "tennis":
+                    urls[mid] = f"https://www.oddspedia.com/us/a/tennis/{mid}"
+                    continue
+    
+                # ✅ fallback: use raw URL if available
                 raw_url = m.get("url")
                 if raw_url and isinstance(raw_url, str):
                     base = "https://www.oddspedia.com"
-                    urls[mid] = (
-                        raw_url if raw_url.startswith("http") else base + raw_url
-                    )
+                    urls[mid] = raw_url if raw_url.startswith("http") else base + raw_url
                     continue
+    
+                # ✅ SOCCER fallback
                 ht_slug = m.get("ht_slug") or m.get("htSlug")
                 at_slug = m.get("at_slug") or m.get("atSlug")
-                
-                # ✅ TENNIS FIX — fallback to ID-only URL
-                if sport := (nuxt_data.get("data", [{}])[0].get("currentSport", {}) or {}).get("slug", ""):
-                    if sport == "tennis":
-                        urls[mid] = f"https://www.oddspedia.com/us/a/tennis/{mid}"
-                        continue
-                
-                # Soccer / other sports (slug-based)
+    
                 if ht_slug and at_slug:
                     urls[mid] = f"https://www.oddspedia.com/us/soccer/mls/{ht_slug}-{at_slug}-{mid}"
+    
         except Exception as exc:
             print(f"[scraper] _build_all_match_urls error: {exc}")
+    
         return urls
 
     def _parse_per_match_to_market_rows(

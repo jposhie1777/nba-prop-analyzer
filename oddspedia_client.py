@@ -457,7 +457,7 @@ class OddspediaClient:
 
             import re
 
-            match_urls = self._build_all_match_urls(nuxt_data, sport)
+            match_urls = self._build_all_match_urls_from_records(records, sport)
             print(
                 f"[scraper] Built match URLs for {len(match_urls)}/{len(records)} matches"
             )
@@ -806,6 +806,33 @@ class OddspediaClient:
     
         except Exception as exc:
             print(f"[scraper] _build_all_match_urls error: {exc}")
+    
+        return urls
+
+    def _build_all_match_urls_from_records(self, records: List[Dict[str, Any]], sport: str) -> Dict[str, str]:
+        urls: Dict[str, str] = {}
+    
+        for r in records:
+            mid = str(r.get("match_id") or "")
+            if not mid:
+                continue
+    
+            # ✅ TENNIS (PRIMARY FIX)
+            if sport == "tennis":
+                urls[mid] = f"https://www.oddspedia.com/us/a/tennis/{mid}"
+                continue
+    
+            # ✅ SOCCER (existing logic)
+            raw_url = r.get("url")
+            if raw_url:
+                urls[mid] = raw_url
+                continue
+    
+            ht = (r.get("home_team") or "").lower().replace(" ", "-")
+            at = (r.get("away_team") or "").lower().replace(" ", "-")
+    
+            if ht and at:
+                urls[mid] = f"https://www.oddspedia.com/us/soccer/{ht}-{at}-{mid}"
     
         return urls
 

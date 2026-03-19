@@ -7,7 +7,6 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 _WTA_MARKERS = (
     "wta",
     "women",
-    "woman",
     "girls",
     "itf-women",
 )
@@ -15,7 +14,6 @@ _WTA_MARKERS = (
 _ATP_MARKERS = (
     "atp",
     "men",
-    "man",
     "boys",
     "challenger",
     "itf-men",

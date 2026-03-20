@@ -583,6 +583,14 @@ class OddspediaClient:
             api_working: Optional[bool] = None  # None=untested, True=working, False=blocked
 
             # Enrich match records with team names/dates via getMatchInfo
+            tennis_filtered_out: Dict[str, int] = defaultdict(int)
+            enriched_records: List[Dict[str, Any]] = []
+            tennis_filter_active = bool(
+                sport == "tennis"
+                and league_slug
+                and season_id is not None
+            )
+
             for record in records:
                 mid = str(record.get("match_id") or "")
                 if not mid:
@@ -606,6 +614,16 @@ class OddspediaClient:
                     )
                     if info_result.get("status") == 200:
                         d = (info_result.get("data") or {}).get("data") or {}
+                        if tennis_filter_active:
+                            allowed, reason = self._passes_tennis_tour_filter(
+                                d,
+                                target_league_slug=league_slug,
+                                target_season_id=season_id,
+                            )
+                            if not allowed:
+                                tennis_filtered_out[reason] += 1
+                                continue
+
                         record["home_team"] = d.get("ht")
                         record["away_team"] = d.get("at")
                         record["home_team_id"] = d.get("ht_id")
@@ -613,6 +631,7 @@ class OddspediaClient:
                         record["league_id"] = d.get("league_id")
                         record["date_utc"] = _normalise_ts(d.get("starttime") or d.get("md"))
                         record["match_info"] = d  # store full payload for downstream ingest
+                        enriched_records.append(record)
                         print(f"[scraper] match={mid} enriched: {d.get('ht')} vs {d.get('at')} @ {record['date_utc']}")
 
                         # Capture stats via direct API calls
@@ -703,9 +722,25 @@ class OddspediaClient:
 
 
                     else:
+                        if tennis_filter_active:
+                            tennis_filtered_out["match_info_unavailable"] += 1
                         print(f"[scraper] getMatchInfo match={mid} status={info_result.get('status')}")
                 except Exception as exc:
+                    if tennis_filter_active:
+                        tennis_filtered_out["match_info_error"] += 1
                     print(f"[scraper] getMatchInfo match={mid} error: {exc}")
+
+            if tennis_filter_active:
+                if tennis_filtered_out:
+                    bits = ", ".join(
+                        f"{k}={v}" for k, v in sorted(tennis_filtered_out.items(), key=lambda kv: kv[1], reverse=True)
+                    )
+                    print(
+                        f"[scraper] Tennis tour filter removed {sum(tennis_filtered_out.values())} matches "
+                        f"({bits})"
+                    )
+                print(f"[scraper] Tennis tour filter kept {len(enriched_records)}/{len(records)} matches")
+                records = enriched_records
 
             print(f"[scraper] Firing per-match API calls from listing page context ({len(records)} matches)")
 
@@ -1541,6 +1576,206 @@ class OddspediaClient:
             return int(str(value))
         except (TypeError, ValueError):
             return None
+
+    def _normalise_meta_text(self, value: Any) -> str:
+        import re as _re
+        return _re.sub(r"[^a-z0-9]+", " ", str(value).lower()).strip()
+
+    def _collect_tennis_meta_strings(
+        self,
+        node: Any,
+        *,
+        depth: int = 0,
+        max_depth: int = 4,
+    ) -> List[str]:
+        if depth > max_depth:
+            return []
+
+        out: List[str] = []
+        if isinstance(node, str):
+            text = self._normalise_meta_text(node)
+            if text:
+                out.append(text)
+            return out
+
+        if isinstance(node, dict):
+            for key, value in node.items():
+                lk = str(key).lower()
+                is_meta_key = any(
+                    token in lk
+                    for token in (
+                        "league",
+                        "tour",
+                        "tournament",
+                        "category",
+                        "competition",
+                        "season",
+                        "gender",
+                        "sex",
+                        "slug",
+                        "name",
+                        "title",
+                        "url",
+                        "path",
+                    )
+                )
+                if is_meta_key:
+                    out.extend(
+                        self._collect_tennis_meta_strings(
+                            value,
+                            depth=depth + 1,
+                            max_depth=max_depth,
+                        )
+                    )
+                elif isinstance(value, (dict, list)):
+                    out.extend(
+                        self._collect_tennis_meta_strings(
+                            value,
+                            depth=depth + 1,
+                            max_depth=max_depth,
+                        )
+                    )
+            return out
+
+        if isinstance(node, list):
+            for item in node:
+                out.extend(
+                    self._collect_tennis_meta_strings(
+                        item,
+                        depth=depth + 1,
+                        max_depth=max_depth,
+                    )
+                )
+        return out
+
+    def _collect_tennis_meta_slugs(
+        self,
+        node: Any,
+        *,
+        depth: int = 0,
+        max_depth: int = 4,
+    ) -> set[str]:
+        if depth > max_depth:
+            return set()
+        out: set[str] = set()
+
+        if isinstance(node, dict):
+            for key, value in node.items():
+                lk = str(key).lower()
+                if lk in {"slug", "league_slug", "tournament_slug", "category_slug"} and isinstance(value, str):
+                    txt = self._normalise_meta_text(value)
+                    if txt:
+                        out.add(txt)
+                if isinstance(value, (dict, list)):
+                    out.update(
+                        self._collect_tennis_meta_slugs(
+                            value,
+                            depth=depth + 1,
+                            max_depth=max_depth,
+                        )
+                    )
+        elif isinstance(node, list):
+            for item in node:
+                out.update(
+                    self._collect_tennis_meta_slugs(
+                        item,
+                        depth=depth + 1,
+                        max_depth=max_depth,
+                    )
+                )
+        return out
+
+    def _collect_tennis_season_ids(
+        self,
+        node: Any,
+        *,
+        depth: int = 0,
+        max_depth: int = 4,
+    ) -> set[int]:
+        if depth > max_depth:
+            return set()
+        out: set[int] = set()
+
+        if isinstance(node, dict):
+            for key, value in node.items():
+                lk = str(key).lower()
+                if lk in {"season_id", "seasonid"}:
+                    sid = self._as_int(value)
+                    if sid is not None:
+                        out.add(sid)
+                if isinstance(value, (dict, list)):
+                    out.update(
+                        self._collect_tennis_season_ids(
+                            value,
+                            depth=depth + 1,
+                            max_depth=max_depth,
+                        )
+                    )
+        elif isinstance(node, list):
+            for item in node:
+                out.update(
+                    self._collect_tennis_season_ids(
+                        item,
+                        depth=depth + 1,
+                        max_depth=max_depth,
+                    )
+                )
+        return out
+
+    def _passes_tennis_tour_filter(
+        self,
+        match_info: Dict[str, Any],
+        *,
+        target_league_slug: str,
+        target_season_id: int,
+    ) -> tuple[bool, str]:
+        """Return (allowed, reason) for tennis tour filtering."""
+        if not isinstance(match_info, dict) or not match_info:
+            return False, "empty_match_info"
+
+        target_slug = self._normalise_meta_text(target_league_slug)
+        merged_text = " ".join(self._collect_tennis_meta_strings(match_info))
+        slugs = self._collect_tennis_meta_slugs(match_info)
+        season_ids = self._collect_tennis_season_ids(match_info)
+
+        # Infer target tour family from requested slug.
+        target_is_wta = "wta" in target_slug or "women" in target_slug
+        target_markers = ("wta", "women", "girls", "itf women") if target_is_wta else (
+            "atp",
+            "men",
+            "challenger",
+            "itf men",
+            "davis cup",
+            "laver cup",
+        )
+        opposite_markers = (
+            ("atp", "men", "challenger", "itf men", "davis cup", "laver cup")
+            if target_is_wta
+            else ("wta", "women", "girls", "itf women")
+        )
+
+        if any(marker in merged_text for marker in opposite_markers):
+            return False, "opposite_tour_marker"
+
+        slug_matches = bool(
+            target_slug
+            and slugs
+            and any(target_slug == slug or target_slug in slug for slug in slugs)
+        )
+        if slugs and target_slug and not slug_matches:
+            return False, "league_slug_mismatch"
+
+        target_season = self._as_int(target_season_id)
+        season_matches = bool(target_season is not None and target_season in season_ids)
+        if season_ids and target_season is not None and not season_matches:
+            return False, "season_id_mismatch"
+
+        has_target_marker = any(marker in merged_text for marker in target_markers)
+        has_positive_signal = slug_matches or season_matches or has_target_marker
+        if not has_positive_signal:
+            return False, "no_target_signal"
+
+        return True, "ok"
 
     def _normalise_listing_match(self, match: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Normalize variable listing-API match keys to Oddspedia `matchList` shape."""

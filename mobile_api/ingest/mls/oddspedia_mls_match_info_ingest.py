@@ -40,6 +40,7 @@ DATASET_LOCATION = os.getenv("ODDSPEDIA_BQ_LOCATION", "US")
 WEATHER_TABLE = "mls_match_weather"
 KEYS_TABLE = "mls_match_keys"
 BETTING_STATS_TABLE = "mls_betting_stats"
+UPCOMING_MATCHES_TABLE = "mls_upcoming_matches"
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -83,6 +84,16 @@ BETTING_STATS_SCHEMA: List[bigquery.SchemaField] = [
     bigquery.SchemaField("away", "FLOAT64"),
     bigquery.SchemaField("total_matches_home", "INT64"),
     bigquery.SchemaField("total_matches_away", "INT64"),
+]
+
+UPCOMING_MATCHES_SCHEMA: List[bigquery.SchemaField] = [
+    bigquery.SchemaField("ingested_at", "TIMESTAMP", mode="REQUIRED"),
+    bigquery.SchemaField("scraped_date", "DATE", mode="REQUIRED"),
+    bigquery.SchemaField("match_id", "INT64", mode="REQUIRED"),
+    bigquery.SchemaField("home_team", "STRING"),
+    bigquery.SchemaField("away_team", "STRING"),
+    bigquery.SchemaField("matchup", "STRING"),
+    bigquery.SchemaField("start_time_utc", "TIMESTAMP"),
 ]
 
 # ── BigQuery helpers ──────────────────────────────────────────────────────────
@@ -148,6 +159,82 @@ def _truncate_and_insert(
 
 
 # ── Row builders ──────────────────────────────────────────────────────────────
+
+
+def _safe_int(value: Any) -> Optional[int]:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_start_time_utc(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    candidate = raw.replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(candidate)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _format_start_time_utc(value: datetime) -> str:
+    return value.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _build_upcoming_match_rows(
+    matches: List[Dict[str, Any]],
+    *,
+    ingested_at: str,
+    scraped_date: str,
+    now_utc: datetime,
+) -> List[Dict[str, Any]]:
+    by_match_id: Dict[int, tuple[datetime, Dict[str, Any]]] = {}
+
+    for match in matches:
+        match_id = _safe_int(match.get("match_id"))
+        if match_id is None:
+            continue
+
+        info = match.get("match_info") or {}
+        home_team = (match.get("home_team") or info.get("ht") or "").strip()
+        away_team = (match.get("away_team") or info.get("at") or "").strip()
+        if not home_team or not away_team:
+            continue
+
+        start_raw = match.get("date_utc") or info.get("starttime") or info.get("md")
+        start_dt = _parse_start_time_utc(start_raw)
+        if start_dt is None or start_dt < now_utc:
+            continue
+
+        row = {
+            "ingested_at": ingested_at,
+            "scraped_date": scraped_date,
+            "match_id": match_id,
+            "home_team": home_team,
+            "away_team": away_team,
+            "matchup": f"{home_team} vs {away_team}",
+            "start_time_utc": _format_start_time_utc(start_dt),
+        }
+        existing = by_match_id.get(match_id)
+        if existing is None or start_dt < existing[0]:
+            by_match_id[match_id] = (start_dt, row)
+
+    return [
+        row
+        for _, row in sorted(
+            by_match_id.values(),
+            key=lambda item: (item[0], item[1]["matchup"]),
+        )
+    ]
 
 
 def _build_weather_row(
@@ -266,6 +353,12 @@ def ingest_match_info(
 
     scraper = OddspediaClient()
     matches = scraper.scrape(target_url)
+    upcoming_match_rows = _build_upcoming_match_rows(
+        matches,
+        ingested_at=ingested_at,
+        scraped_date=scraped_date,
+        now_utc=now,
+    )
     today_matches = [
         m for m in matches
         if (m.get("date_utc") or "").startswith(scraped_date)
@@ -299,6 +392,7 @@ def ingest_match_info(
     print(f"[match_info] Weather rows      : {len(weather_rows)}")
     print(f"[match_info] Key rows          : {len(key_rows)}")
     print(f"[match_info] Betting stat rows : {len(betting_stats_rows)}")
+    print(f"[match_info] Upcoming rows     : {len(upcoming_match_rows)}")
 
     if dry_run:
         print("\n--- WEATHER SAMPLE ---")
@@ -307,10 +401,13 @@ def ingest_match_info(
         print(json.dumps(key_rows[:5], indent=2, default=str))
         print("\n--- BETTING STATS SAMPLE ---")
         print(json.dumps(betting_stats_rows[:5], indent=2, default=str))
+        print("\n--- UPCOMING MATCHES SAMPLE ---")
+        print(json.dumps(upcoming_match_rows[:10], indent=2, default=str))
         return {
             "weather_rows": len(weather_rows),
             "key_rows": len(key_rows),
             "betting_stats_rows": len(betting_stats_rows),
+            "upcoming_match_rows": len(upcoming_match_rows),
             "dry_run": True,
         }
 
@@ -319,18 +416,21 @@ def ingest_match_info(
     _ensure_table(bq, WEATHER_TABLE, WEATHER_SCHEMA)
     _ensure_table(bq, KEYS_TABLE, KEYS_SCHEMA)
     _ensure_table(bq, BETTING_STATS_TABLE, BETTING_STATS_SCHEMA)
+    _ensure_table(bq, UPCOMING_MATCHES_TABLE, UPCOMING_MATCHES_SCHEMA)
 
     w_written = _truncate_and_insert(bq, WEATHER_TABLE, weather_rows, WEATHER_SCHEMA)
     k_written = _truncate_and_insert(bq, KEYS_TABLE, key_rows, KEYS_SCHEMA)
     b_written = _truncate_and_insert(bq, BETTING_STATS_TABLE, betting_stats_rows, BETTING_STATS_SCHEMA)
+    u_written = _truncate_and_insert(bq, UPCOMING_MATCHES_TABLE, upcoming_match_rows, UPCOMING_MATCHES_SCHEMA)
 
-    print(f"[match_info] Written — weather: {w_written}, keys: {k_written}, betting stats: {b_written}")
+    print(f"[match_info] Written — weather: {w_written}, keys: {k_written}, betting stats: {b_written}, upcoming: {u_written}")
     print("=" * 60)
 
     return {
         "weather_rows_written": w_written,
         "key_rows_written": k_written,
         "betting_stats_rows_written": b_written,
+        "upcoming_match_rows_written": u_written,
         "errors": [],
     }
 

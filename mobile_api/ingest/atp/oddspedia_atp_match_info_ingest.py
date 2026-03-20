@@ -47,6 +47,7 @@ H2H_MATCHES_TABLE = "atp_h2h_matches"
 LAST_MATCHES_TABLE = "atp_last_matches"
 STANDINGS_TABLE = "atp_standings"
 LINEUPS_TABLE = "atp_lineups"
+UPCOMING_MATCHES_TABLE = "atp_upcoming_matches"
 ATP_LEAGUE_SLUG = "atp-miami"
 ATP_SEASON_ID = 134091
 
@@ -165,6 +166,16 @@ LINEUPS_SCHEMA = _MATCH_BASE + [
     bigquery.SchemaField("meta_json", "JSON"),
 ]
 
+UPCOMING_MATCHES_SCHEMA = [
+    bigquery.SchemaField("ingested_at", "TIMESTAMP", mode="REQUIRED"),
+    bigquery.SchemaField("scraped_date", "DATE", mode="REQUIRED"),
+    bigquery.SchemaField("match_id", "INT64", mode="REQUIRED"),
+    bigquery.SchemaField("home_team", "STRING"),
+    bigquery.SchemaField("away_team", "STRING"),
+    bigquery.SchemaField("matchup", "STRING"),
+    bigquery.SchemaField("start_time_utc", "TIMESTAMP"),
+]
+
 
 def _safe_int(v: Any) -> Optional[int]:
     try:
@@ -178,6 +189,73 @@ def _safe_float(v: Any) -> Optional[float]:
         return float(v) if v is not None and v != "" else None
     except Exception:
         return None
+
+
+def _parse_start_time_utc(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    candidate = raw.replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(candidate)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _format_start_time_utc(value: datetime) -> str:
+    return value.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _build_upcoming_match_rows(
+    matches: List[Dict[str, Any]],
+    *,
+    ingested_at: str,
+    scraped_date: str,
+    now_utc: datetime,
+) -> List[Dict[str, Any]]:
+    by_match_id: Dict[int, tuple[datetime, Dict[str, Any]]] = {}
+
+    for match in matches:
+        match_id = _safe_int(match.get("match_id"))
+        if match_id is None:
+            continue
+
+        info = match.get("match_info") or {}
+        home_team = (match.get("home_team") or info.get("ht") or "").strip()
+        away_team = (match.get("away_team") or info.get("at") or "").strip()
+        if not home_team or not away_team:
+            continue
+
+        start_raw = match.get("date_utc") or info.get("starttime")
+        start_dt = _parse_start_time_utc(start_raw)
+        if start_dt is None or start_dt < now_utc:
+            continue
+
+        row = {
+            "ingested_at": ingested_at,
+            "scraped_date": scraped_date,
+            "match_id": match_id,
+            "home_team": home_team,
+            "away_team": away_team,
+            "matchup": f"{home_team} vs {away_team}",
+            "start_time_utc": _format_start_time_utc(start_dt),
+        }
+        existing = by_match_id.get(match_id)
+        if existing is None or start_dt < existing[0]:
+            by_match_id[match_id] = (start_dt, row)
+
+    return [
+        record
+        for _, record in sorted(
+            by_match_id.values(),
+            key=lambda item: (item[0], item[1]["matchup"]),
+        )
+    ]
 
 
 def _base_row(match_id: int, match_key: Optional[int], data: Dict[str, Any], ingested_at: str, scraped_date: str) -> Dict[str, Any]:
@@ -321,6 +399,12 @@ def ingest_match_info(url: Optional[str] = None, *, dry_run: bool = False, today
         target_league_slug=ATP_LEAGUE_SLUG,
         target_season_id=ATP_SEASON_ID,
         log_prefix="[atp_match_info]",
+    )
+    upcoming_match_rows = _build_upcoming_match_rows(
+        matches,
+        ingested_at=ingested_at,
+        scraped_date=scraped_date,
+        now_utc=now,
     )
     if today_only:
         matches = [m for m in matches if (m.get("date_utc") or "").startswith(scraped_date)]
@@ -485,6 +569,7 @@ def ingest_match_info(url: Optional[str] = None, *, dry_run: bool = False, today
         "last_match_rows": len(last_match_rows),
         "standings_rows": len(standings_rows),
         "lineup_rows": len(lineup_rows),
+        "upcoming_match_rows": len(upcoming_match_rows),
     }
 
     if dry_run:
@@ -503,6 +588,7 @@ def ingest_match_info(url: Optional[str] = None, *, dry_run: bool = False, today
         (LAST_MATCHES_TABLE, LAST_MATCHES_SCHEMA, last_match_rows),
         (STANDINGS_TABLE, STANDINGS_SCHEMA, standings_rows),
         (LINEUPS_TABLE, LINEUPS_SCHEMA, lineup_rows),
+        (UPCOMING_MATCHES_TABLE, UPCOMING_MATCHES_SCHEMA, upcoming_match_rows),
     ]
     written: Dict[str, int] = {}
     for table, schema, rows in table_defs:

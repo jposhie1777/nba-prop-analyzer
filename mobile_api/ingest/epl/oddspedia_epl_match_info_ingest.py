@@ -60,6 +60,7 @@ H2H_TABLE            = "epl_head_to_head"
 LAST_MATCHES_TABLE   = "epl_last_matches"
 STANDINGS_TABLE      = "epl_standings"
 LINEUPS_TABLE        = "epl_lineups"
+UPCOMING_MATCHES_TABLE = "epl_upcoming_matches"
 
 # EPL-specific league identifiers
 EPL_LEAGUE_ID    = 627
@@ -191,6 +192,16 @@ LINEUPS_SCHEMA: List[bigquery.SchemaField] = _MATCH_BASE + [
     bigquery.SchemaField("is_bench",            "BOOL"),
 ]
 
+UPCOMING_MATCHES_SCHEMA: List[bigquery.SchemaField] = [
+    bigquery.SchemaField("ingested_at", "TIMESTAMP", mode="REQUIRED"),
+    bigquery.SchemaField("scraped_date", "DATE", mode="REQUIRED"),
+    bigquery.SchemaField("match_id", "INT64", mode="REQUIRED"),
+    bigquery.SchemaField("home_team", "STRING"),
+    bigquery.SchemaField("away_team", "STRING"),
+    bigquery.SchemaField("matchup", "STRING"),
+    bigquery.SchemaField("start_time_utc", "TIMESTAMP"),
+]
+
 # ── BigQuery helpers ──────────────────────────────────────────────────────────
 
 
@@ -269,6 +280,72 @@ def _safe_int(value: Any) -> Optional[int]:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _parse_start_time_utc(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    candidate = raw.replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(candidate)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _format_start_time_utc(value: datetime) -> str:
+    return value.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _build_upcoming_match_rows(
+    matches: List[Dict[str, Any]],
+    *,
+    ingested_at: str,
+    scraped_date: str,
+    now_utc: datetime,
+) -> List[Dict[str, Any]]:
+    by_match_id: Dict[int, tuple[datetime, Dict[str, Any]]] = {}
+
+    for match in matches:
+        match_id = _safe_int(match.get("match_id"))
+        if match_id is None:
+            continue
+        info = match.get("match_info") or {}
+        home_team = (match.get("home_team") or info.get("ht") or "").strip()
+        away_team = (match.get("away_team") or info.get("at") or "").strip()
+        if not home_team or not away_team:
+            continue
+
+        start_raw = match.get("date_utc") or info.get("starttime") or info.get("md")
+        start_dt = _parse_start_time_utc(start_raw)
+        if start_dt is None or start_dt < now_utc:
+            continue
+
+        row = {
+            "ingested_at": ingested_at,
+            "scraped_date": scraped_date,
+            "match_id": match_id,
+            "home_team": home_team,
+            "away_team": away_team,
+            "matchup": f"{home_team} vs {away_team}",
+            "start_time_utc": _format_start_time_utc(start_dt),
+        }
+        existing = by_match_id.get(match_id)
+        if existing is None or start_dt < existing[0]:
+            by_match_id[match_id] = (start_dt, row)
+
+    return [
+        row
+        for _, row in sorted(
+            by_match_id.values(),
+            key=lambda item: (item[0], item[1]["matchup"]),
+        )
+    ]
 
 
 def _match_base(
@@ -678,6 +755,12 @@ def ingest_epl_match_info(
         if m.get("matchstatus") != 4 and m.get("special_status") != "Postponed"
     ]
     print(f"[epl_info] {len(active_matches)} active (non-postponed) matches")
+    upcoming_match_rows = _build_upcoming_match_rows(
+        active_matches,
+        ingested_at=ingested_at,
+        scraped_date=scraped_date,
+        now_utc=now,
+    )
 
     # ── Accumulate rows across all match pages ─────────────────────────────
     weather_rows      : List[Dict] = []
@@ -767,6 +850,7 @@ def ingest_epl_match_info(
         "last_match_rows":    len(last_match_rows),
         "standings_rows":     len(standings_rows),
         "lineup_rows":        len(lineup_rows),
+        "upcoming_match_rows": len(upcoming_match_rows),
     }
     for name, count in counts.items():
         print(f"[epl_info] {name:<25}: {count}")
@@ -786,6 +870,8 @@ def ingest_epl_match_info(
         print(json.dumps(standings_rows[:3],    indent=2, default=str))
         print("\n--- LINEUPS SAMPLE ---")
         print(json.dumps(lineup_rows[:5],       indent=2, default=str))
+        print("\n--- UPCOMING MATCHES SAMPLE ---")
+        print(json.dumps(upcoming_match_rows[:10], indent=2, default=str))
         return {**counts, "dry_run": True}
 
     bq = _bq_client()
@@ -800,6 +886,7 @@ def ingest_epl_match_info(
         (LAST_MATCHES_TABLE,  LAST_MATCHES_SCHEMA,   last_match_rows),
         (STANDINGS_TABLE,     STANDINGS_SCHEMA,      standings_rows),
         (LINEUPS_TABLE,       LINEUPS_SCHEMA,        lineup_rows),
+        (UPCOMING_MATCHES_TABLE, UPCOMING_MATCHES_SCHEMA, upcoming_match_rows),
     ]
 
     written: Dict[str, int] = {}

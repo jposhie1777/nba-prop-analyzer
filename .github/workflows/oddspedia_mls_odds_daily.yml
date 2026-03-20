@@ -21,9 +21,9 @@ on:
     - cron: "0 10 * * *"
 
 jobs:
-  ingest:
+  scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 40
 
     env:
       GCP_PROJECT: ${{ secrets.PROJECT_ID }}
@@ -59,39 +59,71 @@ jobs:
           pip install camoufox[geoip]
           GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} python -m camoufox fetch
 
-      - name: Configure GCP credentials
-        if: ${{ inputs.dry_run != true }}
-        run: |
-          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
-          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
-
       - name: Set URL override (if provided)
         if: ${{ inputs.url != '' }}
         run: echo "ODDSPEDIA_MLS_URL=${{ inputs.url }}" >> $GITHUB_ENV
 
-      - name: Run Oddspedia MLS live odds ingest
+      - name: Run scrape — odds
         run: |
-          ARGS=""
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
-            ARGS="$ARGS --dry-run"
-          fi
+          ARGS="--scrape-only"
           if [ "${{ inputs.all_dates }}" = "true" ]; then
             ARGS="$ARGS --all-dates"
           fi
           python -m mobile_api.ingest.mls.oddspedia_mls_odds_ingest $ARGS
 
-      - name: Run Oddspedia MLS match info ingest
+      - name: Run scrape — match info
         run: |
-          ARGS=""
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
-            ARGS="$ARGS --dry-run"
-          fi
-          python -m mobile_api.ingest.mls.oddspedia_mls_match_info_ingest $ARGS
+          python -m mobile_api.ingest.mls.oddspedia_mls_match_info_ingest --scrape-only
 
-      - name: Run Oddspedia MLS H2H ingest
+      - name: Upload scrape artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mls-scrape-output
+          path: /tmp/mls_scrape_*.ndjson
+          retention-days: 1
+
+  load:
+    runs-on: ubuntu-latest
+    needs: scrape
+    if: ${{ inputs.dry_run != true }}
+    timeout-minutes: 10
+
+    env:
+      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+      ODDSPEDIA_DATASET: "oddspedia"
+      ODDSPEDIA_BQ_LOCATION: "US"
+      ODDSPEDIA_MLS_TABLE: "mls_odds"
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
         run: |
-          ARGS=""
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
-            ARGS="$ARGS --dry-run"
-          fi
-          python -m mobile_api.ingest.mls.oddspedia_mls_h2h_ingest $ARGS
+          pip install --upgrade pip
+          pip install -r mobile_api/requirements.txt
+
+      - name: Configure GCP credentials
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
+
+      - name: Download scrape artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: mls-scrape-output
+          path: /tmp/
+
+      - name: Load odds → BigQuery
+        run: python -m mobile_api.ingest.mls.oddspedia_mls_odds_ingest --load-only
+
+      - name: Load match info → BigQuery
+        run: python -m mobile_api.ingest.mls.oddspedia_mls_match_info_ingest --load-only
+
+      - name: Run H2H ingest
+        run: python -m mobile_api.ingest.mls.oddspedia_mls_h2h_ingest

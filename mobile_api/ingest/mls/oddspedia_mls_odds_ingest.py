@@ -521,15 +521,18 @@ def ingest_mls_odds(
 
     print(f"[mls_odds] Scraped {len(matches)} matches")
 
-    # ── Filter to today ───────────────────────────────────────────────────────
+    # NEW
+    from datetime import timedelta
+
     if today_only and any(m.get("date_utc") for m in matches):
+        cutoff = (now + timedelta(days=7)).strftime("%Y-%m-%d")
         matches = [
             m for m in matches
-            if (m.get("date_utc") or "").startswith(scraped_date)
+            if scraped_date <= (m.get("date_utc") or "")[:10] <= cutoff
         ]
-        print(f"[mls_odds] After today filter : {len(matches)} matches")
+        print(f"[mls_odds] After 7-day window filter : {len(matches)} matches")
     else:
-        print(f"[mls_odds] Today filter skipped (no date_utc available) : {len(matches)} matches")
+        print(f"[mls_odds] Date filter skipped (no date_utc available) : {len(matches)} matches")
 
     # ── Prepare rows ──────────────────────────────────────────────────────────
     rows = _to_bq_rows(matches, ingested_at, scraped_date)

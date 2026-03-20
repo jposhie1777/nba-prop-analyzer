@@ -84,6 +84,7 @@ from routes.game_environment import router as game_environment_router
 from routes.epl_analytics import router as epl_analytics_router
 from routes.laliga_analytics import router as laliga_analytics_router
 from routes.mls_analytics import router as mls_analytics_router
+from routes.soccer_matchups import router as soccer_matchups_router
 from routes.soccer_analytics import router as soccer_analytics_router
 from ingest.epl.ingest import ingest_yesterday_refresh as ingest_epl_yesterday_refresh
 from ingest.laliga.ingest import ingest_yesterday_refresh as ingest_laliga_yesterday_refresh
@@ -189,6 +190,7 @@ app.include_router(game_environment_router)
 app.include_router(epl_analytics_router)
 app.include_router(laliga_analytics_router)
 app.include_router(mls_analytics_router)
+app.include_router(soccer_matchups_router)
 app.include_router(soccer_analytics_router)
 
 # ==================================================

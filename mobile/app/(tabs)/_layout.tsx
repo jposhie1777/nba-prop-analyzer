@@ -49,6 +49,7 @@ const HIDDEN_SCREENS = [
   "mls/btts",
   "mls/cards",
   "mls/index",
+  "mls/match/[matchId]",
   "mls/moneylines",
   "mls/standings",
   "mls/team-master-metrics",

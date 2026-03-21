@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
 
-import type { SoccerLeague } from "@/hooks/soccer/useSoccerMatchups";
+import type { SoccerLeague, SoccerOddsSummary } from "@/hooks/soccer/useSoccerMatchups";
 
 type Props = {
   league: SoccerLeague;
@@ -12,6 +12,7 @@ type Props = {
   awayRecord?: string;
   homeLogoUri?: string | null;
   awayLogoUri?: string | null;
+  oddsSummary?: SoccerOddsSummary;
 };
 
 function formatDay(value?: string | null) {
@@ -40,6 +41,21 @@ function initials(value: string): string {
   if (!parts.length) return "?";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return `${parts[0][0] ?? ""}${parts[parts.length - 1][0] ?? ""}`.toUpperCase();
+}
+
+function formatOddsCell(value?: { odds_decimal?: number | null; odds_american?: number | null } | null): string {
+  if (!value) return "—";
+  const decimal = value.odds_decimal != null ? value.odds_decimal.toFixed(2) : null;
+  const american =
+    value.odds_american != null
+      ? value.odds_american > 0
+        ? `+${value.odds_american}`
+        : `${value.odds_american}`
+      : null;
+  if (decimal && american) return `${decimal} (${american})`;
+  if (decimal) return decimal;
+  if (american) return american;
+  return "—";
 }
 
 function TeamBadge({
@@ -82,7 +98,10 @@ export function MatchupSlugCard({
   awayRecord = "-",
   homeLogoUri,
   awayLogoUri,
+  oddsSummary,
 }: Props) {
+  const hasOdds = Boolean(oddsSummary?.home || oddsSummary?.draw || oddsSummary?.away);
+
   return (
     <View style={styles.root}>
       <View style={styles.topRow}>
@@ -95,6 +114,20 @@ export function MatchupSlugCard({
         <Text style={styles.recordText}>{awayRecord}</Text>
         <TeamBadge teamName={awayTeam} align="right" logoUri={awayLogoUri} />
       </View>
+      {hasOdds ? (
+        <View style={styles.oddsWrap}>
+          <View style={styles.oddsHeaderRow}>
+            <Text style={styles.oddsHeader}>Home</Text>
+            <Text style={styles.oddsHeader}>Draw</Text>
+            <Text style={styles.oddsHeader}>Away</Text>
+          </View>
+          <View style={styles.oddsValueRow}>
+            <Text style={styles.oddsValue}>{formatOddsCell(oddsSummary?.home)}</Text>
+            <Text style={styles.oddsValue}>{formatOddsCell(oddsSummary?.draw)}</Text>
+            <Text style={styles.oddsValue}>{formatOddsCell(oddsSummary?.away)}</Text>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -125,4 +158,23 @@ const styles = StyleSheet.create({
   center: { flex: 1.4, alignItems: "center", gap: 2 },
   dayText: { color: "#B7C5DD", fontSize: 12, fontWeight: "600" },
   timeText: { color: "#F8FAFC", fontSize: 18, fontWeight: "800" },
+  oddsWrap: {
+    marginTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#1E293B",
+    paddingTop: 8,
+    gap: 4,
+  },
+  oddsHeaderRow: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
+  oddsHeader: {
+    flex: 1,
+    textAlign: "center",
+    color: "#94A3B8",
+    fontSize: 10,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.2,
+  },
+  oddsValueRow: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
+  oddsValue: { flex: 1, textAlign: "center", color: "#E2E8F0", fontSize: 12, fontWeight: "700" },
 });

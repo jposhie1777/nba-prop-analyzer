@@ -20,6 +20,7 @@ LEAGUE_TABLES: Dict[str, Dict[str, str]] = {
         "match_keys": os.getenv("ODDSPEDIA_EPL_MATCH_KEYS_TABLE", "oddspedia.epl_match_keys"),
         "betting_stats": os.getenv("ODDSPEDIA_EPL_BETTING_STATS_TABLE", "oddspedia.epl_betting_stats"),
         "last_matches": os.getenv("ODDSPEDIA_EPL_LAST_MATCHES_TABLE", "oddspedia.epl_last_matches"),
+        "odds": os.getenv("ODDSPEDIA_EPL_ODDS_TABLE", "oddspedia.epl_odds"),
     },
     "mls": {
         "upcoming": os.getenv("ODDSPEDIA_MLS_UPCOMING_MATCHES_TABLE", "oddspedia.mls_upcoming_matches"),
@@ -28,6 +29,7 @@ LEAGUE_TABLES: Dict[str, Dict[str, str]] = {
         "match_keys": os.getenv("ODDSPEDIA_MLS_MATCH_KEYS_TABLE", "oddspedia.mls_match_keys"),
         "betting_stats": os.getenv("ODDSPEDIA_MLS_BETTING_STATS_TABLE", "oddspedia.mls_betting_stats"),
         "last_matches": os.getenv("ODDSPEDIA_MLS_LAST_MATCHES_TABLE", "oddspedia.mls_last_matches"),
+        "odds": os.getenv("ODDSPEDIA_MLS_ODDS_TABLE", "oddspedia.mls_odds"),
     },
 }
 
@@ -199,6 +201,293 @@ def _order_sql_for_columns(columns: set[str]) -> str:
     if "lm_date" in columns:
         order_parts.append("SAFE_CAST(lm_date AS TIMESTAMP) DESC")
     return ", ".join(order_parts) if order_parts else "match_id DESC"
+
+
+def _normalize_outcome_key(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    normalized = str(value).strip().lower()
+    if not normalized:
+        return None
+    if normalized in {"home", "o1", "1"}:
+        return "home"
+    if normalized in {"draw", "tie", "x", "o2"}:
+        return "draw"
+    if normalized in {"away", "o3", "2"}:
+        return "away"
+    return None
+
+
+def _fetch_odds_summary_for_matches(table_ref: str, match_ids: Sequence[int]) -> Dict[int, Dict[str, Any]]:
+    if not match_ids:
+        return {}
+
+    columns = _table_columns(table_ref)
+    if "match_id" not in columns:
+        return {}
+
+    outcome_parts: List[str] = []
+    for field in ("outcome_name", "outcome_key", "outcome_side"):
+        if field in columns:
+            outcome_parts.append(f"NULLIF(TRIM(CAST({field} AS STRING)), '')")
+    if not outcome_parts:
+        return {}
+
+    market_parts: List[str] = []
+    for field in ("market_group_name", "market"):
+        if field in columns:
+            market_parts.append(f"NULLIF(TRIM(CAST({field} AS STRING)), '')")
+    if not market_parts:
+        return {}
+
+    outcome_expr = f"COALESCE({', '.join(outcome_parts)})"
+    market_expr = f"LOWER(COALESCE({', '.join(market_parts)}))"
+    bookie_expr = "NULLIF(TRIM(CAST(bookie AS STRING)), '')" if "bookie" in columns else "CAST(NULL AS STRING)"
+    odds_decimal_expr = (
+        "SAFE_CAST(odds_decimal AS FLOAT64)" if "odds_decimal" in columns else "CAST(NULL AS FLOAT64)"
+    )
+    odds_american_expr = (
+        "SAFE_CAST(odds_american AS INT64)" if "odds_american" in columns else "CAST(NULL AS INT64)"
+    )
+    ingested_expr = (
+        "SAFE_CAST(ingested_at AS TIMESTAMP)"
+        if "ingested_at" in columns
+        else "SAFE_CAST(date_utc AS TIMESTAMP)"
+        if "date_utc" in columns
+        else "CAST(NULL AS TIMESTAMP)"
+    )
+    period_filter = "TRUE"
+    if "period_id" in columns:
+        period_filter = "SAFE_CAST(period_id AS INT64) = 100"
+    elif "period_name" in columns:
+        period_filter = "LOWER(NULLIF(TRIM(CAST(period_name AS STRING)), '')) IN ('final', 'full time', 'fulltime')"
+
+    sql = f"""
+    WITH latest AS (
+      SELECT
+        CAST(match_id AS INT64) AS match_id,
+        {outcome_expr} AS outcome_name,
+        {bookie_expr} AS bookie,
+        {odds_decimal_expr} AS odds_decimal,
+        {odds_american_expr} AS odds_american,
+        {ingested_expr} AS ingested_at,
+        ROW_NUMBER() OVER (
+          PARTITION BY
+            CAST(match_id AS INT64),
+            {outcome_expr},
+            COALESCE({bookie_expr}, '')
+          ORDER BY {ingested_expr} DESC NULLS LAST
+        ) AS rn
+      FROM `{table_ref}`
+      WHERE CAST(match_id AS INT64) IN UNNEST(@match_ids)
+        AND {market_expr} IN ('1x2', 'h2h', 'moneyline', 'match_winner', 'winner', 'outright_winner')
+        AND {period_filter}
+        AND {outcome_expr} IS NOT NULL
+    ),
+    deduped AS (
+      SELECT *
+      FROM latest
+      WHERE rn = 1
+    ),
+    ranked AS (
+      SELECT
+        *,
+        ROW_NUMBER() OVER (
+          PARTITION BY match_id, LOWER(outcome_name)
+          ORDER BY odds_decimal DESC NULLS LAST, ingested_at DESC NULLS LAST
+        ) AS best_rank
+      FROM deduped
+    )
+    SELECT
+      match_id,
+      outcome_name,
+      bookie,
+      odds_decimal,
+      odds_american,
+      ingested_at
+    FROM ranked
+    WHERE best_rank = 1
+    """
+
+    rows = _safe_query(
+        sql,
+        [bigquery.ArrayQueryParameter("match_ids", "INT64", list(match_ids))],
+    )
+
+    out: Dict[int, Dict[str, Any]] = {}
+    for row in rows:
+        match_id = row.get("match_id")
+        if match_id is None:
+            continue
+        key = _normalize_outcome_key(row.get("outcome_name"))
+        if key is None:
+            continue
+        if int(match_id) not in out:
+            out[int(match_id)] = {"home": None, "draw": None, "away": None, "updated_at": None}
+        out[int(match_id)][key] = {
+            "bookie": row.get("bookie"),
+            "odds_decimal": row.get("odds_decimal"),
+            "odds_american": row.get("odds_american"),
+        }
+        updated_at = row.get("ingested_at")
+        current = out[int(match_id)].get("updated_at")
+        if updated_at is not None and (current is None or updated_at > current):
+            out[int(match_id)]["updated_at"] = updated_at
+    return out
+
+
+def _fetch_match_odds_board(
+    table_ref: str,
+    match_id: int,
+    *,
+    max_rows: int = 300,
+    top_books_per_outcome: int = 2,
+) -> Tuple[List[Dict[str, Any]], Optional[Any]]:
+    columns = _table_columns(table_ref)
+    if "match_id" not in columns:
+        return [], None
+
+    market_group_expr = (
+        "NULLIF(TRIM(CAST(market_group_name AS STRING)), '')"
+        if "market_group_name" in columns
+        else "CAST(NULL AS STRING)"
+    )
+    market_expr = (
+        "NULLIF(TRIM(CAST(market AS STRING)), '')"
+        if "market" in columns
+        else "CAST(NULL AS STRING)"
+    )
+    outcome_parts: List[str] = []
+    for field in ("outcome_name", "outcome_key", "outcome_side"):
+        if field in columns:
+            outcome_parts.append(f"NULLIF(TRIM(CAST({field} AS STRING)), '')")
+    if not outcome_parts:
+        return [], None
+    outcome_expr = f"COALESCE({', '.join(outcome_parts)})"
+
+    period_id_expr = (
+        "SAFE_CAST(period_id AS INT64)" if "period_id" in columns else "CAST(NULL AS INT64)"
+    )
+    period_name_expr = (
+        "NULLIF(TRIM(CAST(period_name AS STRING)), '')"
+        if "period_name" in columns
+        else "CAST(NULL AS STRING)"
+    )
+    line_expr = (
+        "NULLIF(TRIM(CAST(line_value AS STRING)), '')"
+        if "line_value" in columns
+        else "CAST(NULL AS STRING)"
+    )
+    bookie_expr = (
+        "NULLIF(TRIM(CAST(bookie AS STRING)), '')"
+        if "bookie" in columns
+        else "CAST(NULL AS STRING)"
+    )
+    odds_decimal_expr = (
+        "SAFE_CAST(odds_decimal AS FLOAT64)" if "odds_decimal" in columns else "CAST(NULL AS FLOAT64)"
+    )
+    odds_american_expr = (
+        "SAFE_CAST(odds_american AS INT64)" if "odds_american" in columns else "CAST(NULL AS INT64)"
+    )
+    ingested_expr = (
+        "SAFE_CAST(ingested_at AS TIMESTAMP)"
+        if "ingested_at" in columns
+        else "SAFE_CAST(date_utc AS TIMESTAMP)"
+        if "date_utc" in columns
+        else "CAST(NULL AS TIMESTAMP)"
+    )
+
+    sql = f"""
+    WITH latest AS (
+      SELECT
+        CAST(match_id AS INT64) AS match_id,
+        COALESCE({market_group_expr}, {market_expr}, 'Other') AS market_group,
+        COALESCE({market_expr}, {market_group_expr}, 'other') AS market,
+        {period_id_expr} AS period_id,
+        {period_name_expr} AS period_name,
+        {line_expr} AS line_value,
+        {outcome_expr} AS outcome_name,
+        {bookie_expr} AS bookie,
+        {odds_decimal_expr} AS odds_decimal,
+        {odds_american_expr} AS odds_american,
+        {ingested_expr} AS ingested_at,
+        ROW_NUMBER() OVER (
+          PARTITION BY
+            CAST(match_id AS INT64),
+            COALESCE({market_group_expr}, {market_expr}, 'Other'),
+            COALESCE({market_expr}, {market_group_expr}, 'other'),
+            COALESCE(CAST({period_id_expr} AS STRING), ''),
+            COALESCE({period_name_expr}, ''),
+            COALESCE({line_expr}, ''),
+            {outcome_expr},
+            COALESCE({bookie_expr}, '')
+          ORDER BY {ingested_expr} DESC NULLS LAST
+        ) AS rn
+      FROM `{table_ref}`
+      WHERE CAST(match_id AS INT64) = @match_id
+        AND {outcome_expr} IS NOT NULL
+        AND LOWER(COALESCE({market_expr}, {market_group_expr}, '')) NOT IN ('correct_score')
+        AND LOWER(COALESCE({market_group_expr}, {market_expr}, '')) NOT IN ('correct score')
+    ),
+    deduped AS (
+      SELECT *
+      FROM latest
+      WHERE rn = 1
+    ),
+    ranked AS (
+      SELECT
+        *,
+        ROW_NUMBER() OVER (
+          PARTITION BY
+            match_id,
+            market_group,
+            market,
+            COALESCE(CAST(period_id AS STRING), ''),
+            COALESCE(period_name, ''),
+            COALESCE(line_value, ''),
+            LOWER(outcome_name)
+          ORDER BY odds_decimal DESC NULLS LAST, ingested_at DESC NULLS LAST
+        ) AS best_rank
+      FROM deduped
+    )
+    SELECT
+      market_group,
+      market,
+      period_id,
+      period_name,
+      line_value,
+      outcome_name,
+      bookie,
+      odds_decimal,
+      odds_american,
+      ingested_at
+    FROM ranked
+    WHERE best_rank <= @top_books_per_outcome
+    ORDER BY
+      market_group ASC,
+      market ASC,
+      period_id ASC NULLS FIRST,
+      period_name ASC NULLS FIRST,
+      line_value ASC NULLS FIRST,
+      outcome_name ASC,
+      best_rank ASC
+    LIMIT @max_rows
+    """
+
+    rows = _safe_query(
+        sql,
+        [
+            bigquery.ScalarQueryParameter("match_id", "INT64", match_id),
+            bigquery.ScalarQueryParameter("top_books_per_outcome", "INT64", top_books_per_outcome),
+            bigquery.ScalarQueryParameter("max_rows", "INT64", max_rows),
+        ],
+    )
+    latest_ingested = None
+    for row in rows:
+        ingested = row.get("ingested_at")
+        if ingested is not None and (latest_ingested is None or ingested > latest_ingested):
+            latest_ingested = ingested
+    return rows, latest_ingested
 
 
 def _fetch_match_info_row(table_ref: str, match_id: int) -> Optional[Dict[str, Any]]:
@@ -396,11 +685,19 @@ def soccer_matchups_upcoming(
                 if match_id is None:
                     row["home_recent_form"] = None
                     row["away_recent_form"] = None
+                    row["odds_summary"] = None
                     continue
                 current = primary_form_map.get(int(match_id)) or {}
                 fallback = fallback_form_map.get(int(match_id)) or {}
                 row["home_recent_form"] = current.get("home_recent_form") or fallback.get("home_recent_form")
                 row["away_recent_form"] = current.get("away_recent_form") or fallback.get("away_recent_form")
+            odds_summary_map = _fetch_odds_summary_for_matches(tables["odds"], match_ids)
+            for row in rows:
+                row_match_id = row.get("match_id")
+                if row_match_id is None:
+                    row["odds_summary"] = None
+                    continue
+                row["odds_summary"] = odds_summary_map.get(int(row_match_id))
             return rows
 
     return []
@@ -417,12 +714,17 @@ def soccer_matchup_detail(league: str, match_id: int):
             "match_keys": [],
             "betting_stats": [],
             "last_matches": [],
+            "odds_summary": None,
+            "odds_board": [],
+            "odds_updated_at": None,
         }
 
     tables = LEAGUE_TABLES[league_key]
     match_info = _fetch_match_info_row(tables["match_info"], match_id)
     if match_info is None:
         match_info = _fetch_match_info_row(tables["match_info_fallback"], match_id)
+    odds_summary = _fetch_odds_summary_for_matches(tables["odds"], [match_id]).get(match_id)
+    odds_board, odds_updated_at = _fetch_match_odds_board(tables["odds"], match_id)
 
     return {
         "league": league_key,
@@ -431,4 +733,7 @@ def soccer_matchup_detail(league: str, match_id: int):
         "match_keys": _fetch_match_keys_rows(tables["match_keys"], match_id),
         "betting_stats": _fetch_betting_stats_rows(tables["betting_stats"], match_id),
         "last_matches": _fetch_last_matches_rows(tables["last_matches"], match_id),
+        "odds_summary": odds_summary,
+        "odds_board": odds_board,
+        "odds_updated_at": odds_updated_at,
     }

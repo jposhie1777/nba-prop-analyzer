@@ -4,7 +4,7 @@ import os
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from fastapi import APIRouter, Query
-from google.api_core.exceptions import NotFound
+from google.api_core.exceptions import BadRequest, NotFound
 from google.cloud import bigquery
 
 from bq import get_bq_client
@@ -53,7 +53,7 @@ def _query(sql: str, params: Sequence[bigquery.ScalarQueryParameter]) -> List[Di
 def _safe_query(sql: str, params: Sequence[bigquery.ScalarQueryParameter]) -> List[Dict[str, Any]]:
     try:
         return _query(sql, params)
-    except NotFound:
+    except (NotFound, BadRequest):
         return []
 
 
@@ -241,11 +241,26 @@ def _fetch_betting_stats_rows(table_ref: str, match_id: int) -> List[Dict[str, A
     if not fields:
         return []
     select_sql = ", ".join(fields)
+    if "category" in columns:
+        order_sql = "category ASC"
+        if "sub_tab" in columns:
+            order_sql += ", sub_tab ASC"
+        if "label" in columns:
+            order_sql += ", label ASC"
+    elif "sub_tab" in columns:
+        order_sql = "sub_tab ASC"
+        if "label" in columns:
+            order_sql += ", label ASC"
+    elif "label" in columns:
+        order_sql = "label ASC"
+    else:
+        order_sql = _order_sql_for_columns(columns)
+
     sql = f"""
     SELECT {select_sql}
     FROM `{table_ref}`
     WHERE match_id = @match_id
-    ORDER BY category ASC, sub_tab ASC, label ASC
+    ORDER BY {order_sql}
     LIMIT 300
     """
     return _safe_query(sql, [bigquery.ScalarQueryParameter("match_id", "INT64", match_id)])

@@ -75,6 +75,9 @@ jobs:
         run: |
           python -m mobile_api.ingest.mls.oddspedia_mls_match_info_ingest --scrape-only
 
+      - name: Run H2H ingest scrape
+        run: python -m mobile_api.ingest.mls.oddspedia_mls_h2h_ingest --scrape-only
+
       - name: Upload scrape artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -125,5 +128,6 @@ jobs:
       - name: Load match info → BigQuery
         run: python -m mobile_api.ingest.mls.oddspedia_mls_match_info_ingest --load-only
 
-      - name: Run H2H ingest
-        run: python -m mobile_api.ingest.mls.oddspedia_mls_h2h_ingest
+      - name: Run H2H load
+        run: python -m mobile_api.ingest.mls.oddspedia_mls_h2h_ingest --load-only
+

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import os
 import json
-from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from google.cloud import bigquery
  
@@ -12,13 +12,7 @@ bq = bigquery.Client(project=PROJECT_ID)
 app = FastAPI()
  
  
-# ---------------------------
-# AUTH
-# ---------------------------
-def verify_token(request: Request):
-    auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer ") or auth[7:] != API_TOKEN:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+ 
  
  
 # ---------------------------
@@ -107,7 +101,7 @@ def execute_tool(tool: str, args: dict) -> dict:
 # ---------------------------
 # MCP ENDPOINT
 # ---------------------------
-@app.post("/mcp", dependencies=[Depends(verify_token)])
+@app.post("/mcp")
 async def mcp_handler(request: Request):
     try:
         req = await request.json()
@@ -172,3 +166,4 @@ async def mcp_handler(request: Request):
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+ 

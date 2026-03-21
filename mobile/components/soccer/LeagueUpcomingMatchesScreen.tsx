@@ -1,17 +1,13 @@
-import { useMemo } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 
 import {
   SoccerLeague,
-  useSoccerStandings,
   useSoccerUpcomingMatches,
 } from "@/hooks/soccer/useSoccerMatchups";
 import { useTheme } from "@/store/useTheme";
-import {
-  buildRecordMap,
-  resolveRecordForTeam,
-} from "@/utils/soccerDisplay";
+import { useSoccerLeagueBadges } from "@/hooks/soccer/useSoccerLeagueBadges";
+import { resolveBadgeForTeam } from "@/utils/soccerDisplay";
 import { MatchupSlugCard } from "@/components/soccer/MatchupSlugCard";
 
 type Props = {
@@ -23,8 +19,7 @@ export function LeagueUpcomingMatchesScreen({ league, title }: Props) {
   const { colors } = useTheme();
   const router = useRouter();
   const { data, loading, error, refetch } = useSoccerUpcomingMatches(league);
-  const { data: standingsRows } = useSoccerStandings(league);
-  const recordMap = useMemo(() => buildRecordMap(standingsRows ?? []), [standingsRows]);
+  const { data: badgeMap } = useSoccerLeagueBadges(league);
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -48,8 +43,10 @@ export function LeagueUpcomingMatchesScreen({ league, title }: Props) {
         (() => {
           const homeTeam = match.home_team ?? "Home";
           const awayTeam = match.away_team ?? "Away";
-          const homeRecord = resolveRecordForTeam(league, homeTeam, recordMap);
-          const awayRecord = resolveRecordForTeam(league, awayTeam, recordMap);
+          const homeRecord = match.home_recent_form ?? "-";
+          const awayRecord = match.away_recent_form ?? "-";
+          const homeLogoUri = match.home_logo ?? resolveBadgeForTeam(league, homeTeam, badgeMap);
+          const awayLogoUri = match.away_logo ?? resolveBadgeForTeam(league, awayTeam, badgeMap);
 
           return (
             <Pressable
@@ -62,8 +59,10 @@ export function LeagueUpcomingMatchesScreen({ league, title }: Props) {
                     homeTeam,
                     awayTeam,
                     startTimeUtc: match.start_time_utc ?? "",
-                    homeRecord,
-                    awayRecord,
+                    homeRecord: String(homeRecord),
+                    awayRecord: String(awayRecord),
+                    homeLogoUri: homeLogoUri ?? "",
+                    awayLogoUri: awayLogoUri ?? "",
                   },
                 })
               }
@@ -76,6 +75,8 @@ export function LeagueUpcomingMatchesScreen({ league, title }: Props) {
                 startTimeUtc={match.start_time_utc}
                 homeRecord={homeRecord}
                 awayRecord={awayRecord}
+                homeLogoUri={homeLogoUri}
+                awayLogoUri={awayLogoUri}
               />
             </Pressable>
           );

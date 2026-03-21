@@ -5,13 +5,10 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   SoccerLeague,
   useSoccerMatchupDetail,
-  useSoccerStandings,
 } from "@/hooks/soccer/useSoccerMatchups";
 import { useTheme } from "@/store/useTheme";
-import {
-  buildRecordMap,
-  resolveRecordForTeam,
-} from "@/utils/soccerDisplay";
+import { useSoccerLeagueBadges } from "@/hooks/soccer/useSoccerLeagueBadges";
+import { resolveBadgeForTeam } from "@/utils/soccerDisplay";
 import { MatchupSlugCard } from "@/components/soccer/MatchupSlugCard";
 
 type Props = {
@@ -77,18 +74,27 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
     startTimeUtc?: string;
     homeRecord?: string;
     awayRecord?: string;
+    homeLogoUri?: string;
+    awayLogoUri?: string;
   }>();
   const matchId = Number(params.matchId);
   const { data, loading, error, refetch } = useSoccerMatchupDetail(league, Number.isFinite(matchId) ? matchId : null);
-  const { data: standingsRows } = useSoccerStandings(league);
+  const { data: badgeMap } = useSoccerLeagueBadges(league);
 
   const matchInfo = (data?.match_info ?? {}) as Record<string, unknown>;
-  const recordMap = useMemo(() => buildRecordMap(standingsRows ?? []), [standingsRows]);
   const homeTeam = params.homeTeam ?? (matchInfo.home_team as string | undefined) ?? "Home";
   const awayTeam = params.awayTeam ?? (matchInfo.away_team as string | undefined) ?? "Away";
   const startTimeUtc = params.startTimeUtc ?? (matchInfo.date_utc as string | undefined) ?? null;
-  const homeRecord = params.homeRecord ?? resolveRecordForTeam(league, homeTeam, recordMap);
-  const awayRecord = params.awayRecord ?? resolveRecordForTeam(league, awayTeam, recordMap);
+  const homeRecentForm = (matchInfo.home_form as string | undefined) ?? "-";
+  const awayRecentForm = (matchInfo.away_form as string | undefined) ?? "-";
+  const homeRecord = params.homeRecord ?? homeRecentForm;
+  const awayRecord = params.awayRecord ?? awayRecentForm;
+  const homeLogoUri =
+    params.homeLogoUri ??
+    resolveBadgeForTeam(league, homeTeam, badgeMap);
+  const awayLogoUri =
+    params.awayLogoUri ??
+    resolveBadgeForTeam(league, awayTeam, badgeMap);
   const [expanded, setExpanded] = useState<Record<SectionKey, boolean>>({
     matchInfo: false,
     matchKeys: false,
@@ -149,6 +155,8 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
           startTimeUtc={startTimeUtc}
           homeRecord={homeRecord}
           awayRecord={awayRecord}
+          homeLogoUri={homeLogoUri}
+          awayLogoUri={awayLogoUri}
         />
       </View>
 

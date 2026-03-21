@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
 
 import type { SoccerLeague } from "@/hooks/soccer/useSoccerMatchups";
-import { getSoccerTeamLogoUrl } from "@/utils/soccerDisplay";
 
 type Props = {
   league: SoccerLeague;
@@ -11,6 +10,8 @@ type Props = {
   startTimeUtc?: string | null;
   homeRecord?: string;
   awayRecord?: string;
+  homeLogoUri?: string | null;
+  awayLogoUri?: string | null;
 };
 
 function formatDay(value?: string | null) {
@@ -42,16 +43,16 @@ function initials(value: string): string {
 }
 
 function TeamBadge({
-  league,
   teamName,
   align,
+  logoUri,
 }: {
-  league: SoccerLeague;
   teamName: string;
   align: "left" | "right";
+  logoUri?: string | null;
 }) {
   const [loadFailed, setLoadFailed] = useState(false);
-  const uri = useMemo(() => getSoccerTeamLogoUrl(league, teamName), [league, teamName]);
+  const uri = useMemo(() => logoUri ?? null, [logoUri]);
 
   return (
     <View style={[styles.teamBadge, align === "right" ? { alignItems: "flex-end" } : null]}>
@@ -74,24 +75,25 @@ function TeamBadge({
 }
 
 export function MatchupSlugCard({
-  league,
   homeTeam,
   awayTeam,
   startTimeUtc,
   homeRecord = "-",
   awayRecord = "-",
+  homeLogoUri,
+  awayLogoUri,
 }: Props) {
   return (
     <View style={styles.root}>
       <View style={styles.topRow}>
-        <TeamBadge league={league} teamName={homeTeam} align="left" />
+        <TeamBadge teamName={homeTeam} align="left" logoUri={homeLogoUri} />
         <Text style={styles.recordText}>{homeRecord}</Text>
         <View style={styles.center}>
           <Text style={styles.dayText}>{formatDay(startTimeUtc)}</Text>
           <Text style={styles.timeText}>{formatTime(startTimeUtc)}</Text>
         </View>
         <Text style={styles.recordText}>{awayRecord}</Text>
-        <TeamBadge league={league} teamName={awayTeam} align="right" />
+        <TeamBadge teamName={awayTeam} align="right" logoUri={awayLogoUri} />
       </View>
     </View>
   );

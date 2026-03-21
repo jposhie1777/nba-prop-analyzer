@@ -1,47 +1,83 @@
 import type { SoccerLeague, SoccerStandingRow } from "@/hooks/soccer/useSoccerMatchups";
 
-const LEAGUE_LOGO_FOLDER: Record<SoccerLeague, string> = {
-  epl: "England - Premier League",
-  mls: "USA - MLS",
-};
-
-const TEAM_ALIASES: Record<SoccerLeague, Record<string, string>> = {
+export const TEAM_ALIASES: Record<SoccerLeague, Record<string, string>> = {
   epl: {
+    "afc bournemouth": "Bournemouth",
+    "arsenal fc": "Arsenal",
+    "brentford fc": "Brentford",
+    "brighton hove albion": "Brighton and Hove Albion",
+    "brighton and hove albion": "Brighton and Hove Albion",
+    "burnley fc": "Burnley",
+    "chelsea fc": "Chelsea",
+    "everton fc": "Everton",
+    "fulham fc": "Fulham",
+    "liverpool fc": "Liverpool",
     "man utd": "Manchester United",
     "man city": "Manchester City",
+    "manchester united fc": "Manchester United",
+    "manchester city fc": "Manchester City",
     "spurs": "Tottenham Hotspur",
+    "tottenham hotspur fc": "Tottenham Hotspur",
+    "sunderland afc": "Sunderland",
     "wolves": "Wolverhampton Wanderers",
     "newcastle": "Newcastle United",
     "nottm forest": "Nottingham Forest",
-    "brighton": "Brighton & Hove Albion",
+    "brighton": "Brighton and Hove Albion",
     "west ham": "West Ham United",
     "ipswich": "Ipswich Town",
     "leicester": "Leicester City",
   },
   mls: {
-    "st. louis": "Saint Louis City",
-    "st louis": "Saint Louis City",
+    "cf montreal": "CF Montréal",
+    "montreal impact": "CF Montréal",
+    "st. louis": "St. Louis City SC",
+    "st louis": "St. Louis City SC",
+    "saint louis city": "St. Louis City SC",
+    "saint louis city sc": "St. Louis City SC",
+    "new york city": "New York City FC",
+    "new york city fc": "New York City FC",
+    "new york red bulls": "New York Red Bulls",
+    "sporting kansas city": "Sporting Kansas City",
+    "la galaxy": "LA Galaxy",
+    "los angeles galaxy": "LA Galaxy",
+    "los angeles fc": "Los Angeles FC",
+    "fc dallas": "FC Dallas",
+    "fc cincinnati": "FC Cincinnati",
+    "inter miami": "Inter Miami CF",
+    "inter miami cf": "Inter Miami CF",
+    "san jose earthquakes": "San Jose Earthquakes",
+    "new england revolution": "New England Revolution",
     "d.c.": "DC United",
+    "dc united": "DC United",
+    "toronto fc": "Toronto FC",
+    "columbus crew": "Columbus Crew",
+    "philadelphia union": "Philadelphia Union",
+    "chicago fire": "Chicago Fire",
+    "orlando city": "Orlando City",
+    "atlanta united": "Atlanta United",
+    "charlotte fc": "Charlotte FC",
+    "nashville fc": "Nashville SC",
+    "nashville sc": "Nashville SC",
+    "houston dynamo": "Houston Dynamo",
+    "colorado rapids": "Colorado Rapids",
+    "austin fc": "Austin FC",
+    "vancouver whitecaps": "Vancouver Whitecaps FC",
+    "vancouver whitecaps fc": "Vancouver Whitecaps FC",
+    "real salt lake": "Real Salt Lake",
+    "seattle sounders": "Seattle Sounders FC",
+    "seattle sounders fc": "Seattle Sounders FC",
+    "portland timbers": "Portland Timbers",
     "new york": "New York Red Bulls",
   },
 };
 
-function normalizeTeamName(value?: string | null): string {
+export function normalizeTeamName(value?: string | null): string {
   return (value ?? "")
     .toLowerCase()
     .replace(/&/g, " and ")
+    .replace(/[éèêë]/g, "e")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
-}
-
-export function getSoccerTeamLogoUrl(league: SoccerLeague, teamName?: string | null): string | null {
-  if (!teamName) return null;
-  const normalized = normalizeTeamName(teamName);
-  const alias = TEAM_ALIASES[league][normalized];
-  const canonicalTeam = alias ?? teamName;
-  const leaguePath = encodeURIComponent(LEAGUE_LOGO_FOLDER[league]);
-  const teamPath = encodeURIComponent(canonicalTeam);
-  return `https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/${leaguePath}/${teamPath}.png`;
 }
 
 function rowRecordValue(row: SoccerStandingRow): string | null {
@@ -91,4 +127,49 @@ export function resolveRecordForTeam(
     }
   }
   return "-";
+}
+
+export type SportsDbTeam = {
+  strTeam?: string | null;
+  strTeamShort?: string | null;
+  strBadge?: string | null;
+};
+
+export function buildBadgeMapFromSportsDbRows(rows: SportsDbTeam[]): Map<string, string> {
+  const map = new Map<string, string>();
+
+  rows.forEach((row) => {
+    const badge = row.strBadge ?? null;
+    if (!badge) return;
+
+    const candidates = [row.strTeam, row.strTeamShort]
+      .map((value) => normalizeTeamName(value))
+      .filter(Boolean);
+
+    candidates.forEach((key) => map.set(key, badge));
+  });
+
+  return map;
+}
+
+export function resolveBadgeForTeam(
+  league: SoccerLeague,
+  teamName: string | null | undefined,
+  badgeMap: Map<string, string>
+): string | null {
+  if (!teamName) return null;
+
+  const normalized = normalizeTeamName(teamName);
+  const aliased = TEAM_ALIASES[league][normalized];
+  const key = normalizeTeamName(aliased ?? teamName);
+
+  if (badgeMap.has(key)) return badgeMap.get(key) ?? null;
+
+  for (const [candidate, badge] of badgeMap.entries()) {
+    if (candidate.includes(key) || key.includes(candidate)) {
+      return badge;
+    }
+  }
+
+  return null;
 }

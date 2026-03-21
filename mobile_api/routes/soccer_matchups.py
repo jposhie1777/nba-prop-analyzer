@@ -139,6 +139,53 @@ def _query_upcoming_from_table(
     )
 
 
+def _fetch_recent_form_map(table_ref: str, match_ids: Sequence[int]) -> Dict[int, Dict[str, Optional[str]]]:
+    if not match_ids:
+        return {}
+
+    columns = _table_columns(table_ref)
+    if "match_id" not in columns:
+        return {}
+    if "home_form" not in columns and "away_form" not in columns:
+        return {}
+
+    home_form_select = "home_form" if "home_form" in columns else "CAST(NULL AS STRING) AS home_form"
+    away_form_select = "away_form" if "away_form" in columns else "CAST(NULL AS STRING) AS away_form"
+    order_sql = _order_sql_for_columns(columns)
+
+    sql = f"""
+    WITH latest AS (
+      SELECT
+        CAST(match_id AS INT64) AS match_id,
+        {home_form_select},
+        {away_form_select},
+        ROW_NUMBER() OVER (
+          PARTITION BY match_id
+          ORDER BY {order_sql}
+        ) AS rn
+      FROM `{table_ref}`
+      WHERE CAST(match_id AS INT64) IN UNNEST(@match_ids)
+    )
+    SELECT match_id, home_form, away_form
+    FROM latest
+    WHERE rn = 1
+    """
+    rows = _safe_query(
+        sql,
+        [bigquery.ArrayQueryParameter("match_ids", "INT64", list(match_ids))],
+    )
+    out: Dict[int, Dict[str, Optional[str]]] = {}
+    for row in rows:
+        match_id = row.get("match_id")
+        if match_id is None:
+            continue
+        out[int(match_id)] = {
+            "home_recent_form": row.get("home_form"),
+            "away_recent_form": row.get("away_form"),
+        }
+    return out
+
+
 def _order_sql_for_columns(columns: set[str]) -> str:
     order_parts: List[str] = []
     if "ingested_at" in columns:
@@ -340,6 +387,20 @@ def soccer_matchups_upcoming(
             limit=limit,
         )
         if rows:
+            match_ids = [int(r["match_id"]) for r in rows if r.get("match_id") is not None]
+            primary_form_map = _fetch_recent_form_map(tables["match_info"], match_ids)
+            fallback_form_map = _fetch_recent_form_map(tables["match_info_fallback"], match_ids)
+
+            for row in rows:
+                match_id = row.get("match_id")
+                if match_id is None:
+                    row["home_recent_form"] = None
+                    row["away_recent_form"] = None
+                    continue
+                current = primary_form_map.get(int(match_id)) or {}
+                fallback = fallback_form_map.get(int(match_id)) or {}
+                row["home_recent_form"] = current.get("home_recent_form") or fallback.get("home_recent_form")
+                row["away_recent_form"] = current.get("away_recent_form") or fallback.get("away_recent_form")
             return rows
 
     return []

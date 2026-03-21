@@ -10,6 +10,10 @@ export type SoccerUpcomingMatch = {
   away_team?: string | null;
   matchup?: string | null;
   start_time_utc?: string | null;
+  home_recent_form?: string | null;
+  away_recent_form?: string | null;
+  home_logo?: string | null;
+  away_logo?: string | null;
 };
 
 export type SoccerStandingRow = {

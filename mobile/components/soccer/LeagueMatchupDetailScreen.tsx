@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
@@ -57,14 +57,34 @@ function toTimestamp(value?: string | null) {
   return Number.isNaN(time) ? 0 : time;
 }
 
-function formatOddsDecimal(value?: number | null): string {
-  if (value == null) return "—";
-  return value.toFixed(2);
-}
-
 function formatOddsAmerican(value?: number | null): string {
   if (value == null) return "—";
   return value > 0 ? `+${value}` : String(value);
+}
+
+function decimalToAmerican(value?: number | null): number | null {
+  if (value == null || Number.isNaN(value) || value <= 1) return null;
+  if (value >= 2) return Math.round((value - 1) * 100);
+  return Math.round(-100 / (value - 1));
+}
+
+function formatAmericanOnly(
+  row: Pick<SoccerOddsBoardRow, "odds_american" | "odds_decimal">
+): string {
+  if (row.odds_american != null) return formatOddsAmerican(row.odds_american);
+  const converted = decimalToAmerican(row.odds_decimal);
+  if (converted == null) return "—";
+  return formatOddsAmerican(converted);
+}
+
+function marketLabelForRow(row: SoccerOddsBoardRow): string {
+  const raw = row.market_group ?? row.market;
+  const cleaned = raw?.trim();
+  return cleaned || "Other";
+}
+
+function marketKey(label: string): string {
+  return label.trim().toLowerCase();
 }
 
 function periodLabel(row: SoccerOddsBoardRow): string {
@@ -74,13 +94,9 @@ function periodLabel(row: SoccerOddsBoardRow): string {
 }
 
 function formatOddsBoardLine(row: SoccerOddsBoardRow): string {
-  const market = row.market_group ?? row.market ?? "market";
   const outcome = row.outcome_name ?? "outcome";
-  const line = row.line_value ?? "—";
-  const book = row.bookie ?? "book";
-  const dec = formatOddsDecimal(row.odds_decimal);
-  const am = formatOddsAmerican(row.odds_american);
-  return `${market} | ${periodLabel(row)} | ${outcome} | Line ${line} | ${book} | ${dec} (${am})`;
+  const line = row.line_value ? ` | Line ${row.line_value}` : "";
+  return `${periodLabel(row)} | ${outcome}${line} | ${formatAmericanOnly(row)}`;
 }
 
 function buildOddsExport(rows: SoccerOddsBoardRow[]): string {
@@ -92,7 +108,6 @@ function buildOddsExport(rows: SoccerOddsBoardRow[]): string {
     "line_value",
     "outcome_name",
     "bookie",
-    "odds_decimal",
     "odds_american",
   ].join("\t");
   const lines = rows.map((row) =>
@@ -104,8 +119,7 @@ function buildOddsExport(rows: SoccerOddsBoardRow[]): string {
       row.line_value ?? "",
       row.outcome_name ?? "",
       row.bookie ?? "",
-      row.odds_decimal ?? "",
-      row.odds_american ?? "",
+      formatAmericanOnly(row),
     ].join("\t")
   );
   return [header, ...lines].join("\n");
@@ -159,6 +173,7 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
     lastMatches: false,
   });
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied">("idle");
+  const [selectedMarket, setSelectedMarket] = useState<string>("all");
 
   const matchInfoRows = Object.entries(matchInfo).filter(([key]) => !["match_id", "home_team", "away_team"].includes(key));
   const groupedLastMatches = useMemo(() => {
@@ -184,6 +199,64 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
 
     return { home, away, other };
   }, [data?.last_matches]);
+  const marketOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    (data?.odds_board ?? []).forEach((row) => {
+      const label = marketLabelForRow(row);
+      const key = marketKey(label);
+      if (!seen.has(key)) {
+        seen.set(key, label);
+      }
+    });
+    return Array.from(seen.entries()).map(([key, label]) => ({ key, label }));
+  }, [data?.odds_board]);
+  const filteredOddsRows = useMemo(() => {
+    const rows = data?.odds_board ?? [];
+    if (selectedMarket === "all") return rows;
+    return rows.filter((row) => marketKey(marketLabelForRow(row)) === selectedMarket);
+  }, [data?.odds_board, selectedMarket]);
+  const groupedOddsRows = useMemo(() => {
+    const marketMap = new Map<string, Map<string, SoccerOddsBoardRow[]>>();
+
+    filteredOddsRows.forEach((row) => {
+      const market = marketLabelForRow(row);
+      const book = row.bookie?.trim() || "Unknown Book";
+      if (!marketMap.has(market)) {
+        marketMap.set(market, new Map());
+      }
+      const bookMap = marketMap.get(market)!;
+      if (!bookMap.has(book)) {
+        bookMap.set(book, []);
+      }
+      bookMap.get(book)!.push(row);
+    });
+
+    return Array.from(marketMap.entries()).map(([market, bookMap]) => ({
+      market,
+      books: Array.from(bookMap.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([book, rows]) => ({
+          book,
+          rows: [...rows].sort((a, b) => {
+            const periodA = a.period_id ?? Number.MAX_SAFE_INTEGER;
+            const periodB = b.period_id ?? Number.MAX_SAFE_INTEGER;
+            if (periodA !== periodB) return periodA - periodB;
+            const lineA = a.line_value ?? "";
+            const lineB = b.line_value ?? "";
+            if (lineA !== lineB) return lineA.localeCompare(lineB);
+            return (a.outcome_name ?? "").localeCompare(b.outcome_name ?? "");
+          }),
+        })),
+    }));
+  }, [filteredOddsRows]);
+
+  useEffect(() => {
+    if (selectedMarket === "all") return;
+    const stillExists = marketOptions.some((option) => option.key === selectedMarket);
+    if (!stillExists) {
+      setSelectedMarket("all");
+    }
+  }, [marketOptions, selectedMarket]);
 
   function toggleSection(section: SectionKey) {
     setExpanded((prev) => ({ ...prev, [section]: !prev[section] }));
@@ -237,7 +310,7 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
               <Text style={styles.sectionToggle}>{sectionChevron("odds")}</Text>
             </Pressable>
             {expanded.odds ? (
-              data.odds_board.length ? (
+              filteredOddsRows.length ? (
                 <>
                   <View style={styles.oddsMetaRow}>
                     <Text style={styles.oddsMetaText}>
@@ -249,7 +322,7 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
                     <Pressable
                       style={[styles.copyButton, { borderColor: colors.border.subtle }]}
                       onPress={async () => {
-                        await Clipboard.setStringAsync(buildOddsExport(data.odds_board));
+                        await Clipboard.setStringAsync(buildOddsExport(filteredOddsRows));
                         setCopyStatus("copied");
                         setTimeout(() => setCopyStatus("idle"), 1500);
                       }}
@@ -259,10 +332,55 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
                       </Text>
                     </Pressable>
                   </View>
-                  {data.odds_board.map((row, idx) => (
-                    <Text key={`odds-${idx}`} style={styles.valueText}>
-                      {formatOddsBoardLine(row)}
-                    </Text>
+                  <View style={styles.toggleRow}>
+                    <Pressable
+                      style={[
+                        styles.togglePill,
+                        selectedMarket === "all" ? styles.togglePillActive : null,
+                        { borderColor: colors.border.subtle },
+                      ]}
+                      onPress={() => setSelectedMarket("all")}
+                    >
+                      <Text style={[styles.toggleText, selectedMarket === "all" ? styles.toggleTextActive : null]}>
+                        All
+                      </Text>
+                    </Pressable>
+                    {marketOptions.map((option) => (
+                      <Pressable
+                        key={option.key}
+                        style={[
+                          styles.togglePill,
+                          selectedMarket === option.key ? styles.togglePillActive : null,
+                          { borderColor: colors.border.subtle },
+                        ]}
+                        onPress={() => setSelectedMarket(option.key)}
+                      >
+                        <Text
+                          style={[
+                            styles.toggleText,
+                            selectedMarket === option.key ? styles.toggleTextActive : null,
+                          ]}
+                        >
+                          {option.label}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  {groupedOddsRows.map((marketGroup) => (
+                    <View key={marketGroup.market} style={styles.marketGroup}>
+                      <Text style={styles.marketTitle}>{marketGroup.market}</Text>
+                      {marketGroup.books.map((bookGroup) => (
+                        <View key={`${marketGroup.market}-${bookGroup.book}`} style={styles.bookGroup}>
+                          <Text style={styles.bookTitle}>{bookGroup.book}</Text>
+                          {bookGroup.rows.map((row, idx) => (
+                            <Text key={`${marketGroup.market}-${bookGroup.book}-${idx}`} style={styles.valueText}>
+                              {formatOddsBoardLine(row)}
+                            </Text>
+                          ))}
+                        </View>
+                      ))}
+                    </View>
                   ))}
                 </>
               ) : (
@@ -394,6 +512,30 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   copyButtonText: { color: "#BFDBFE", fontSize: 11, fontWeight: "700" },
+  toggleRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  togglePill: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
+    backgroundColor: "#0F172A",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  togglePillActive: {
+    backgroundColor: "#1D4ED8",
+    borderColor: "#1D4ED8",
+  },
+  toggleText: { color: "#BFDBFE", fontSize: 11, fontWeight: "700" },
+  toggleTextActive: { color: "#EFF6FF" },
+  marketGroup: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#1E293B",
+    paddingTop: 8,
+    marginTop: 2,
+    gap: 6,
+  },
+  marketTitle: { color: "#E2E8F0", fontSize: 13, fontWeight: "800" },
+  bookGroup: { gap: 4 },
+  bookTitle: { color: "#93C5FD", fontSize: 12, fontWeight: "700" },
   row: { gap: 2 },
   keyText: { color: "#C4B5FD", fontSize: 11, fontWeight: "700" },
   valueText: { color: "#E5E7EB", fontSize: 12, lineHeight: 18 },

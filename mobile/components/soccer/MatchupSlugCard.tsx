@@ -43,19 +43,19 @@ function initials(value: string): string {
   return `${parts[0][0] ?? ""}${parts[parts.length - 1][0] ?? ""}`.toUpperCase();
 }
 
+function decimalToAmerican(value?: number | null): number | null {
+  if (value == null || Number.isNaN(value) || value <= 1) return null;
+  if (value >= 2) return Math.round((value - 1) * 100);
+  return Math.round(-100 / (value - 1));
+}
+
 function formatOddsCell(value?: { odds_decimal?: number | null; odds_american?: number | null } | null): string {
   if (!value) return "—";
-  const decimal = value.odds_decimal != null ? value.odds_decimal.toFixed(2) : null;
-  const american =
-    value.odds_american != null
-      ? value.odds_american > 0
-        ? `+${value.odds_american}`
-        : `${value.odds_american}`
-      : null;
-  if (decimal && american) return `${decimal} (${american})`;
-  if (decimal) return decimal;
-  if (american) return american;
-  return "—";
+  const american = value.odds_american ?? decimalToAmerican(value.odds_decimal);
+  if (american == null) return "—";
+  if (american > 0) return `+${american}`;
+  if (american < 0) return `${american}`;
+  return "EVEN";
 }
 
 function TeamBadge({
@@ -117,9 +117,9 @@ export function MatchupSlugCard({
       {hasOdds ? (
         <View style={styles.oddsWrap}>
           <View style={styles.oddsHeaderRow}>
-            <Text style={styles.oddsHeader}>Home</Text>
-            <Text style={styles.oddsHeader}>Draw</Text>
-            <Text style={styles.oddsHeader}>Away</Text>
+            <Text style={styles.oddsHeader}>HOME</Text>
+            <Text style={styles.oddsHeader}>DRAW</Text>
+            <Text style={styles.oddsHeader}>AWAY</Text>
           </View>
           <View style={styles.oddsValueRow}>
             <Text style={styles.oddsValue}>{formatOddsCell(oddsSummary?.home)}</Text>

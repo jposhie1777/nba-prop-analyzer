@@ -77,8 +77,11 @@ jobs:
             --min-instances "${{ inputs.min_instances }}" \
             --max-instances "${{ inputs.max_instances }}"
 
-      - name: Deploy to Vercel (Production)
+            - name: Deploy to Vercel (Production)
         working-directory: mobile
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           npm install -g vercel
-          vercel --prod --yes
+          vercel --prod --token "$VERCEL_TOKEN" --yes
+

@@ -55,7 +55,7 @@ jobs:
         id: image
         run: |
           SHA=$(echo $GITHUB_SHA | cut -c1-7)
-          URI="us-central1-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/cloud-run-source-deploy/${{ env.IMAGE_NAME }}:$SHA"
+          URI="us-central1-docker.pkg.dev/${{ secrets.PROJECT_ID }}/cloud-run-source-deploy/bq-mcp-server:$SHA"
           echo "uri=$URI" >> $GITHUB_OUTPUT
           echo "Image URI: $URI"
  
@@ -63,10 +63,10 @@ jobs:
         run: |
           docker build \
             -t ${{ steps.image.outputs.uri }} \
-            -t us-central1-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/cloud-run-source-deploy/${{ env.IMAGE_NAME }}:latest \
+            -t us-central1-docker.pkg.dev/${{ secrets.PROJECT_ID }}/cloud-run-source-deploy/bq-mcp-server:latest \
             ./mobile/bigquery_mcp_http
           docker push ${{ steps.image.outputs.uri }}
-          docker push us-central1-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/cloud-run-source-deploy/${{ env.IMAGE_NAME }}:latest
+          docker push us-central1-docker.pkg.dev/${{ secrets.PROJECT_ID }}/cloud-run-source-deploy/bq-mcp-server:latest
  
   # ---------------------------
   # DEPLOY

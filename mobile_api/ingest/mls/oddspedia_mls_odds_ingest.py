@@ -489,13 +489,9 @@ def ingest_mls_odds(
     *,
     dry_run: bool = False,
     today_only: bool = True,
+    scrape_only: bool = False,
+    load_only: bool = False,
 ) -> Dict[str, Any]:
-    """
-    Scrape Oddspedia MLS odds and load into BigQuery (oddspedia.mls_odds).
-
-    Supports both the rich per-match market_rows format and the legacy
-    listing-page markets dict returned by OddspediaClient.
-    """
     target_url = url or ODDSPEDIA_URL
     now = datetime.now(timezone.utc)
     ingested_at = now.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -507,9 +503,39 @@ def ingest_mls_odds(
     print(f"[mls_odds] Ingested at : {ingested_at}")
     if dry_run:
         print("[mls_odds] Mode        : DRY RUN (no BigQuery write)")
+    elif scrape_only:
+        print("[mls_odds] Mode        : SCRAPE ONLY (save to file)")
+    elif load_only:
+        print("[mls_odds] Mode        : LOAD ONLY (read from file)")
     else:
         print(f"[mls_odds] Destination : {DATASET}.{TABLE}")
     print("=" * 60)
+
+    # ── Load-only path ────────────────────────────────────────────────────────
+    if load_only:
+        rows = []
+        with open("/tmp/mls_scrape_odds.ndjson") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    rows.append(json.loads(line))
+        print(f"[mls_odds] Loaded {len(rows)} rows from file")
+
+        bq = _bq_client()
+        _ensure_dataset(bq)
+        _ensure_table(bq)
+        _add_missing_columns(bq)
+        print("[mls_odds] Truncating table …")
+        _truncate_table(bq)
+        print(f"[mls_odds] Inserting {len(rows)} rows …")
+        written = _insert_rows(bq, rows)
+        print(f"[mls_odds] Done — {written} rows written")
+        print("=" * 60)
+        return {
+            "ingested_at": ingested_at,
+            "rows_written": written,
+            "errors": [],
+        }
 
     # ── Scrape ────────────────────────────────────────────────────────────────
     client_scraper = OddspediaClient()
@@ -521,9 +547,8 @@ def ingest_mls_odds(
 
     print(f"[mls_odds] Scraped {len(matches)} matches")
 
-    # NEW
+    # ── Filter to 7-day window ────────────────────────────────────────────────
     from datetime import timedelta
-
     if today_only and any(m.get("date_utc") for m in matches):
         cutoff = (now + timedelta(days=7)).strftime("%Y-%m-%d")
         matches = [
@@ -551,13 +576,28 @@ def ingest_mls_odds(
             "errors": [],
         }
 
-    # ── BigQuery setup ────────────────────────────────────────────────────────
+    # ── Scrape-only: save to file and exit ────────────────────────────────────
+    if scrape_only:
+        with open("/tmp/mls_scrape_odds.ndjson", "w") as f:
+            for row in rows:
+                f.write(json.dumps(row, default=str) + "\n")
+        print(f"[mls_odds] Saved {len(rows)} rows to /tmp/mls_scrape_odds.ndjson")
+        print("=" * 60)
+        return {
+            "url": target_url,
+            "ingested_at": ingested_at,
+            "matches_found": len(matches),
+            "rows_prepared": len(rows),
+            "rows_written": 0,
+            "errors": [],
+        }
+
+    # ── BigQuery setup + load (normal full run) ───────────────────────────────
     bq = _bq_client()
     _ensure_dataset(bq)
     _ensure_table(bq)
     _add_missing_columns(bq)
 
-    # ── Load ──────────────────────────────────────────────────────────────────
     print("[mls_odds] Truncating table …")
     _truncate_table(bq)
 
@@ -603,12 +643,22 @@ if __name__ == "__main__":
         "--today",
         action="store_true",
         default=True,
-        help="Only include matches scheduled for today (UTC). Default: true.",
+        help="Only include matches within 7 days (UTC). Default: true.",
     )
     parser.add_argument(
         "--all-dates",
         action="store_true",
-        help="Include all matches on the page, not just today.",
+        help="Include all matches on the page, not just the 7-day window.",
+    )
+    parser.add_argument(
+        "--scrape-only",
+        action="store_true",
+        help="Scrape and save rows to /tmp/mls_scrape_odds.ndjson. No BQ write.",
+    )
+    parser.add_argument(
+        "--load-only",
+        action="store_true",
+        help="Load rows from /tmp/mls_scrape_odds.ndjson into BigQuery. No scraping.",
     )
 
     args = parser.parse_args()
@@ -618,5 +668,8 @@ if __name__ == "__main__":
         url=args.url,
         dry_run=args.dry_run,
         today_only=today_only,
+        scrape_only=args.scrape_only,
+        load_only=args.load_only,
     )
     print(json.dumps(result, indent=2, default=str))
+

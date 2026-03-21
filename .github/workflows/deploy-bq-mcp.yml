@@ -42,7 +42,9 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
  
       - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+        run: |
+          gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+          gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin us-central1-docker.pkg.dev
  
       - name: Set image URI
         id: image

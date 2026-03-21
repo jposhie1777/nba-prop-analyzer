@@ -39,6 +39,9 @@ jobs:
         with:
           credentials_json: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
           token_format: access_token
+          access_token_scopes: >-
+            https://www.googleapis.com/auth/cloud-platform
+            https://www.googleapis.com/auth/devstorage.read_write
  
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -58,15 +61,12 @@ jobs:
           echo "uri=$URI" >> $GITHUB_OUTPUT
           echo "Image URI: $URI"
  
-      - name: Build Docker image
+      - name: Build and push Docker image
         run: |
           docker build \
             -t ${{ steps.image.outputs.uri }} \
             -t us-central1-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/cloud-run-source-deploy/${{ env.IMAGE_NAME }}:latest \
             ./mobile/bigquery_mcp_http
- 
-      - name: Push Docker image
-        run: |
           docker push ${{ steps.image.outputs.uri }}
           docker push us-central1-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/cloud-run-source-deploy/${{ env.IMAGE_NAME }}:latest
  

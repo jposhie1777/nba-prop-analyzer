@@ -187,16 +187,28 @@ def _insert_rows(
 ) -> int:
     if not rows:
         return 0
+
+    import tempfile, os
     table_id = _full_table_id(client)
-    written = 0
-    for i in range(0, len(rows), chunk_size):
-        chunk = rows[i : i + chunk_size]
-        errors = client.insert_rows_json(table_id, chunk)
-        if errors:
-            raise RuntimeError(f"BigQuery insert errors: {errors[:3]}")
-        written += len(chunk)
-        time.sleep(0.05)
-    return written
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".ndjson", delete=False) as f:
+        for row in rows:
+            f.write(json.dumps(row, default=str) + "\n")
+        tmp_path = f.name
+
+    job_config = bigquery.LoadJobConfig(
+        source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
+        write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
+        schema=SCHEMA,
+    )
+
+    with open(tmp_path, "rb") as f:
+        job = client.load_table_from_file(f, table_id, job_config=job_config)
+
+    job.result()
+    os.unlink(tmp_path)
+    return len(rows)
+
 
 
 # ── Normalization helpers ─────────────────────────────────────────────────────
@@ -525,8 +537,6 @@ def ingest_mls_odds(
         _ensure_dataset(bq)
         _ensure_table(bq)
         _add_missing_columns(bq)
-        print("[mls_odds] Truncating table …")
-        _truncate_table(bq)
         print(f"[mls_odds] Inserting {len(rows)} rows …")
         written = _insert_rows(bq, rows)
         print(f"[mls_odds] Done — {written} rows written")
@@ -597,9 +607,6 @@ def ingest_mls_odds(
     _ensure_dataset(bq)
     _ensure_table(bq)
     _add_missing_columns(bq)
-
-    print("[mls_odds] Truncating table …")
-    _truncate_table(bq)
 
     print(f"[mls_odds] Inserting {len(rows)} rows …")
     written = _insert_rows(bq, rows)

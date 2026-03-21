@@ -43,8 +43,8 @@ jobs:
  
       - name: Configure Docker for Artifact Registry
         run: |
-          gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
-          gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin us-central1-docker.pkg.dev
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' | \
+          docker login -u _json_key --password-stdin us-central1-docker.pkg.dev
  
       - name: Set image URI
         id: image

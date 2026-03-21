@@ -4,6 +4,32 @@ import { useEplQuery } from "@/hooks/epl/useEplQuery";
 
 export type SoccerLeague = "epl" | "mls";
 
+export type SoccerOddsPick = {
+  bookie?: string | null;
+  odds_decimal?: number | null;
+  odds_american?: number | null;
+};
+
+export type SoccerOddsSummary = {
+  home?: SoccerOddsPick | null;
+  draw?: SoccerOddsPick | null;
+  away?: SoccerOddsPick | null;
+  updated_at?: string | null;
+} | null;
+
+export type SoccerOddsBoardRow = {
+  market_group?: string | null;
+  market?: string | null;
+  period_id?: number | null;
+  period_name?: string | null;
+  line_value?: string | null;
+  outcome_name?: string | null;
+  bookie?: string | null;
+  odds_decimal?: number | null;
+  odds_american?: number | null;
+  ingested_at?: string | null;
+};
+
 export type SoccerUpcomingMatch = {
   match_id: number;
   home_team?: string | null;
@@ -14,6 +40,7 @@ export type SoccerUpcomingMatch = {
   away_recent_form?: string | null;
   home_logo?: string | null;
   away_logo?: string | null;
+  odds_summary?: SoccerOddsSummary;
 };
 
 export type SoccerStandingRow = {
@@ -53,6 +80,9 @@ export type SoccerMatchDetail = {
     lm_ascore?: number | null;
     lm_outcome?: string | null;
   }[];
+  odds_summary?: SoccerOddsSummary;
+  odds_board: SoccerOddsBoardRow[];
+  odds_updated_at?: string | null;
 };
 
 export function useSoccerUpcomingMatches(league: SoccerLeague, limit = 100, lookaheadDays = 14) {

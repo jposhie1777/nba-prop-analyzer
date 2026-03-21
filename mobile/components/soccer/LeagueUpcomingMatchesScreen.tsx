@@ -77,6 +77,7 @@ export function LeagueUpcomingMatchesScreen({ league, title }: Props) {
                 awayRecord={awayRecord}
                 homeLogoUri={homeLogoUri}
                 awayLogoUri={awayLogoUri}
+                oddsSummary={match.odds_summary}
               />
             </Pressable>
           );

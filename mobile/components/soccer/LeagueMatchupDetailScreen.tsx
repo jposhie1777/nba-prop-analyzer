@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import * as Clipboard from "expo-clipboard";
 
 import {
   SoccerLeague,
+  SoccerOddsBoardRow,
   useSoccerMatchupDetail,
 } from "@/hooks/soccer/useSoccerMatchups";
 import { useTheme } from "@/store/useTheme";
@@ -16,7 +18,7 @@ type Props = {
   leagueTitle: string;
 };
 
-type SectionKey = "matchInfo" | "matchKeys" | "bettingStats" | "lastMatches";
+type SectionKey = "odds" | "matchInfo" | "matchKeys" | "bettingStats" | "lastMatches";
 
 type LastMatchRow = {
   side?: string | null;
@@ -53,6 +55,60 @@ function toTimestamp(value?: string | null) {
   if (!value) return 0;
   const time = new Date(value).getTime();
   return Number.isNaN(time) ? 0 : time;
+}
+
+function formatOddsDecimal(value?: number | null): string {
+  if (value == null) return "—";
+  return value.toFixed(2);
+}
+
+function formatOddsAmerican(value?: number | null): string {
+  if (value == null) return "—";
+  return value > 0 ? `+${value}` : String(value);
+}
+
+function periodLabel(row: SoccerOddsBoardRow): string {
+  if (row.period_name) return row.period_name;
+  if (row.period_id != null) return `Period ${row.period_id}`;
+  return "All";
+}
+
+function formatOddsBoardLine(row: SoccerOddsBoardRow): string {
+  const market = row.market_group ?? row.market ?? "market";
+  const outcome = row.outcome_name ?? "outcome";
+  const line = row.line_value ?? "—";
+  const book = row.bookie ?? "book";
+  const dec = formatOddsDecimal(row.odds_decimal);
+  const am = formatOddsAmerican(row.odds_american);
+  return `${market} | ${periodLabel(row)} | ${outcome} | Line ${line} | ${book} | ${dec} (${am})`;
+}
+
+function buildOddsExport(rows: SoccerOddsBoardRow[]): string {
+  const header = [
+    "market_group",
+    "market",
+    "period_id",
+    "period_name",
+    "line_value",
+    "outcome_name",
+    "bookie",
+    "odds_decimal",
+    "odds_american",
+  ].join("\t");
+  const lines = rows.map((row) =>
+    [
+      row.market_group ?? "",
+      row.market ?? "",
+      row.period_id ?? "",
+      row.period_name ?? "",
+      row.line_value ?? "",
+      row.outcome_name ?? "",
+      row.bookie ?? "",
+      row.odds_decimal ?? "",
+      row.odds_american ?? "",
+    ].join("\t")
+  );
+  return [header, ...lines].join("\n");
 }
 
 function LastMatchLine({ row }: { row: LastMatchRow }) {
@@ -96,11 +152,13 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
     params.awayLogoUri ??
     resolveBadgeForTeam(league, awayTeam, badgeMap);
   const [expanded, setExpanded] = useState<Record<SectionKey, boolean>>({
+    odds: true,
     matchInfo: false,
     matchKeys: false,
     bettingStats: false,
     lastMatches: false,
   });
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied">("idle");
 
   const matchInfoRows = Object.entries(matchInfo).filter(([key]) => !["match_id", "home_team", "away_team"].includes(key));
   const groupedLastMatches = useMemo(() => {
@@ -157,6 +215,7 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
           awayRecord={awayRecord}
           homeLogoUri={homeLogoUri}
           awayLogoUri={awayLogoUri}
+          oddsSummary={data?.odds_summary}
         />
       </View>
 
@@ -172,6 +231,46 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
 
       {data ? (
         <>
+          <View style={[styles.panel, { borderColor: colors.border.subtle }]}>
+            <Pressable onPress={() => toggleSection("odds")} style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Odds Board</Text>
+              <Text style={styles.sectionToggle}>{sectionChevron("odds")}</Text>
+            </Pressable>
+            {expanded.odds ? (
+              data.odds_board.length ? (
+                <>
+                  <View style={styles.oddsMetaRow}>
+                    <Text style={styles.oddsMetaText}>
+                      Updated:{" "}
+                      {data.odds_updated_at
+                        ? new Date(data.odds_updated_at).toLocaleString()
+                        : "Unknown"}
+                    </Text>
+                    <Pressable
+                      style={[styles.copyButton, { borderColor: colors.border.subtle }]}
+                      onPress={async () => {
+                        await Clipboard.setStringAsync(buildOddsExport(data.odds_board));
+                        setCopyStatus("copied");
+                        setTimeout(() => setCopyStatus("idle"), 1500);
+                      }}
+                    >
+                      <Text style={styles.copyButtonText}>
+                        {copyStatus === "copied" ? "Copied" : "Copy TSV"}
+                      </Text>
+                    </Pressable>
+                  </View>
+                  {data.odds_board.map((row, idx) => (
+                    <Text key={`odds-${idx}`} style={styles.valueText}>
+                      {formatOddsBoardLine(row)}
+                    </Text>
+                  ))}
+                </>
+              ) : (
+                <Text style={styles.emptyText}>No odds found for this matchup yet.</Text>
+              )
+            ) : null}
+          </View>
+
           <View style={[styles.panel, { borderColor: colors.border.subtle }]}>
             <Pressable onPress={() => toggleSection("matchInfo")} style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Match Info</Text>
@@ -285,6 +384,16 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   sectionToggle: { color: "#C4B5FD", fontWeight: "800", fontSize: 14 },
   groupTitle: { color: "#A7C0E8", fontSize: 12, fontWeight: "800", marginTop: 6 },
+  oddsMetaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  oddsMetaText: { color: "#94A3B8", fontSize: 11 },
+  copyButton: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 8,
+    backgroundColor: "#0F172A",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  copyButtonText: { color: "#BFDBFE", fontSize: 11, fontWeight: "700" },
   row: { gap: 2 },
   keyText: { color: "#C4B5FD", fontSize: 11, fontWeight: "700" },
   valueText: { color: "#E5E7EB", fontSize: 12, lineHeight: 18 },

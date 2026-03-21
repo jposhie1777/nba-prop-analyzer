@@ -337,6 +337,8 @@ def ingest_match_info(
     url: Optional[str] = None,
     *,
     dry_run: bool = False,
+    scrape_only: bool = False,
+    load_only: bool = False,
 ) -> Dict[str, Any]:
     target_url = url or ODDSPEDIA_URL
     now = datetime.now(timezone.utc)
@@ -349,8 +351,59 @@ def ingest_match_info(
     print(f"[match_info] Ingested at : {ingested_at}")
     if dry_run:
         print("[match_info] Mode        : DRY RUN")
+    elif scrape_only:
+        print("[match_info] Mode        : SCRAPE ONLY (save to file)")
+    elif load_only:
+        print("[match_info] Mode        : LOAD ONLY (read from file)")
     print("=" * 60)
 
+    # ── Load-only path ────────────────────────────────────────────────────────
+    if load_only:
+        weather_rows = []
+        key_rows = []
+        betting_stats_rows = []
+        upcoming_match_rows = []
+
+        for table_name, target_list in [
+            ("weather", weather_rows),
+            ("keys", key_rows),
+            ("betting_stats", betting_stats_rows),
+            ("upcoming", upcoming_match_rows),
+        ]:
+            path = f"/tmp/mls_scrape_match_{table_name}.ndjson"
+            try:
+                with open(path) as f:
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            target_list.append(json.loads(line))
+                print(f"[match_info] Loaded {len(target_list)} rows from {path}")
+            except FileNotFoundError:
+                print(f"[match_info] No file at {path} — skipping")
+
+        bq = _bq_client()
+        _ensure_dataset(bq)
+        _ensure_table(bq, WEATHER_TABLE, WEATHER_SCHEMA)
+        _ensure_table(bq, KEYS_TABLE, KEYS_SCHEMA)
+        _ensure_table(bq, BETTING_STATS_TABLE, BETTING_STATS_SCHEMA)
+        _ensure_table(bq, UPCOMING_MATCHES_TABLE, UPCOMING_MATCHES_SCHEMA)
+
+        w_written = _truncate_and_insert(bq, WEATHER_TABLE, weather_rows, WEATHER_SCHEMA)
+        k_written = _truncate_and_insert(bq, KEYS_TABLE, key_rows, KEYS_SCHEMA)
+        b_written = _truncate_and_insert(bq, BETTING_STATS_TABLE, betting_stats_rows, BETTING_STATS_SCHEMA)
+        u_written = _truncate_and_insert(bq, UPCOMING_MATCHES_TABLE, upcoming_match_rows, UPCOMING_MATCHES_SCHEMA)
+
+        print(f"[match_info] Written — weather: {w_written}, keys: {k_written}, betting stats: {b_written}, upcoming: {u_written}")
+        print("=" * 60)
+        return {
+            "weather_rows_written": w_written,
+            "key_rows_written": k_written,
+            "betting_stats_rows_written": b_written,
+            "upcoming_match_rows_written": u_written,
+            "errors": [],
+        }
+
+    # ── Scrape ────────────────────────────────────────────────────────────────
     scraper = OddspediaClient()
     matches = scraper.scrape(target_url)
     upcoming_match_rows = _build_upcoming_match_rows(
@@ -394,6 +447,7 @@ def ingest_match_info(
     print(f"[match_info] Betting stat rows : {len(betting_stats_rows)}")
     print(f"[match_info] Upcoming rows     : {len(upcoming_match_rows)}")
 
+    # ── Dry-run ───────────────────────────────────────────────────────────────
     if dry_run:
         print("\n--- WEATHER SAMPLE ---")
         print(json.dumps(weather_rows[:2], indent=2, default=str))
@@ -411,6 +465,29 @@ def ingest_match_info(
             "dry_run": True,
         }
 
+    # ── Scrape-only: save to files and exit ───────────────────────────────────
+    if scrape_only:
+        for table_name, row_list in [
+            ("weather", weather_rows),
+            ("keys", key_rows),
+            ("betting_stats", betting_stats_rows),
+            ("upcoming", upcoming_match_rows),
+        ]:
+            path = f"/tmp/mls_scrape_match_{table_name}.ndjson"
+            with open(path, "w") as f:
+                for row in row_list:
+                    f.write(json.dumps(row, default=str) + "\n")
+            print(f"[match_info] Saved {len(row_list)} rows to {path}")
+        print("=" * 60)
+        return {
+            "weather_rows": len(weather_rows),
+            "key_rows": len(key_rows),
+            "betting_stats_rows": len(betting_stats_rows),
+            "upcoming_match_rows": len(upcoming_match_rows),
+            "errors": [],
+        }
+
+    # ── BigQuery setup + load (normal full run) ───────────────────────────────
     bq = _bq_client()
     _ensure_dataset(bq)
     _ensure_table(bq, WEATHER_TABLE, WEATHER_SCHEMA)
@@ -443,7 +520,22 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", default=None)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--scrape-only",
+        action="store_true",
+        help="Scrape and save rows to /tmp/mls_scrape_match_*.ndjson. No BQ write.",
+    )
+    parser.add_argument(
+        "--load-only",
+        action="store_true",
+        help="Load rows from /tmp/mls_scrape_match_*.ndjson into BigQuery. No scraping.",
+    )
     args = parser.parse_args()
 
-    result = ingest_match_info(url=args.url, dry_run=args.dry_run)
+    result = ingest_match_info(
+        url=args.url,
+        dry_run=args.dry_run,
+        scrape_only=args.scrape_only,
+        load_only=args.load_only,
+    )
     print(json.dumps(result, indent=2, default=str))

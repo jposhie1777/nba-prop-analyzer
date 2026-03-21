@@ -37,7 +37,6 @@ jobs:
         with:
           project_id: ${{ env.PROJECT_ID }}
 
-
       - name: Preflight Google Cloud IAM checks
         run: |
           set -euo pipefail
@@ -77,3 +76,9 @@ jobs:
             --atp-key "$BDL_ATP_API_KEY" \
             --min-instances "${{ inputs.min_instances }}" \
             --max-instances "${{ inputs.max_instances }}"
+
+      - name: Deploy to Vercel (Production)
+        working-directory: mobile
+        run: |
+          npm install -g vercel
+          vercel --prod --yes

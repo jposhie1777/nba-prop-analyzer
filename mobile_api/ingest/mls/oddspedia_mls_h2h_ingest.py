@@ -124,17 +124,28 @@ def _truncate_and_insert(
 ) -> int:
     if not rows:
         return 0
+
+    import tempfile, os
     table_id = _full_table_id(client, table)
-    client.query(f"TRUNCATE TABLE `{table_id}`").result()
-    written = 0
-    for i in range(0, len(rows), chunk_size):
-        chunk = rows[i: i + chunk_size]
-        errors = client.insert_rows_json(table_id, chunk)
-        if errors:
-            raise RuntimeError(f"BigQuery insert errors: {errors[:3]}")
-        written += len(chunk)
-        time.sleep(0.05)
-    return written
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".ndjson", delete=False) as f:
+        for row in rows:
+            f.write(json.dumps(row, default=str) + "\n")
+        tmp_path = f.name
+
+    job_config = bigquery.LoadJobConfig(
+        source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
+        write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
+        schema=schema,
+    )
+
+    with open(tmp_path, "rb") as f:
+        job = client.load_table_from_file(f, table_id, job_config=job_config)
+
+    job.result()
+    os.unlink(tmp_path)
+    return len(rows)
+
 
 
 # ── Row builders ──────────────────────────────────────────────────────────────
@@ -230,7 +241,7 @@ def _get_todays_match_ids(
 # ── Main ingest ───────────────────────────────────────────────────────────────
 
 
-def ingest_h2h(*, dry_run: bool = False) -> Dict[str, Any]:
+def ingest_h2h(*, dry_run: bool = False, scrape_only: bool = False, load_only: bool = False) -> Dict[str, Any]:
     now = datetime.now(timezone.utc)
     ingested_at = now.strftime("%Y-%m-%dT%H:%M:%SZ")
     scraped_date = now.strftime("%Y-%m-%d")
@@ -240,8 +251,41 @@ def ingest_h2h(*, dry_run: bool = False) -> Dict[str, Any]:
     print(f"[h2h] Ingested at : {ingested_at}")
     if dry_run:
         print("[h2h] Mode        : DRY RUN")
+    elif scrape_only:
+        print("[h2h] Mode        : SCRAPE ONLY (save to file)")
+    elif load_only:
+        print("[h2h] Mode        : LOAD ONLY (read from file)")
     print("=" * 60)
 
+    # ── Load-only path ────────────────────────────────────────────────────────
+    if load_only:
+        summary_rows = []
+        match_rows = []
+        for path, target in [
+            ("/tmp/mls_scrape_h2h_summary.ndjson", summary_rows),
+            ("/tmp/mls_scrape_h2h_matches.ndjson", match_rows),
+        ]:
+            try:
+                with open(path) as f:
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            target.append(json.loads(line))
+                print(f"[h2h] Loaded {len(target)} rows from {path}")
+            except FileNotFoundError:
+                print(f"[h2h] No file at {path} — skipping")
+
+        bq = _bq_client()
+        _ensure_dataset(bq)
+        _ensure_table(bq, H2H_SUMMARY_TABLE, H2H_SUMMARY_SCHEMA)
+        _ensure_table(bq, H2H_MATCHES_TABLE, H2H_MATCHES_SCHEMA)
+        s_written = _truncate_and_insert(bq, H2H_SUMMARY_TABLE, summary_rows, H2H_SUMMARY_SCHEMA)
+        m_written = _truncate_and_insert(bq, H2H_MATCHES_TABLE, match_rows, H2H_MATCHES_SCHEMA)
+        print(f"[h2h] Written — summary: {s_written}, matches: {m_written}")
+        print("=" * 60)
+        return {"summary_rows_written": s_written, "match_rows_written": m_written, "errors": []}
+
+    # ── Scrape path ───────────────────────────────────────────────────────────
     bq = _bq_client()
     today_matches = _get_todays_match_ids(bq, scraped_date)
 
@@ -253,12 +297,10 @@ def ingest_h2h(*, dry_run: bool = False) -> Dict[str, Any]:
     match_ids = [int(m["match_id"]) for m in today_matches]
     match_meta = {int(m["match_id"]): m for m in today_matches}
 
-    # Fetch H2H data
     client = OddspediaClient()
     h2h_results = client.fetch_h2h(match_ids)
     print(f"[h2h] Got H2H data for {len(h2h_results)}/{len(match_ids)} matches")
 
-    # Build rows
     summary_rows: List[Dict[str, Any]] = []
     match_rows: List[Dict[str, Any]] = []
 
@@ -267,19 +309,8 @@ def ingest_h2h(*, dry_run: bool = False) -> Dict[str, Any]:
         home_team = meta.get("home_team")
         away_team = meta.get("away_team")
         date_utc = (meta.get("date_utc") or "").split("+")[0].strip() or None
-
-        summary_rows.append(
-            _build_summary_row(
-                match_id, home_team, away_team, date_utc,
-                h2h, ingested_at, scraped_date
-            )
-        )
-        match_rows.extend(
-            _build_match_rows(
-                match_id, home_team, away_team, date_utc,
-                h2h, ingested_at, scraped_date
-            )
-        )
+        summary_rows.append(_build_summary_row(match_id, home_team, away_team, date_utc, h2h, ingested_at, scraped_date))
+        match_rows.extend(_build_match_rows(match_id, home_team, away_team, date_utc, h2h, ingested_at, scraped_date))
 
     print(f"[h2h] Summary rows : {len(summary_rows)}")
     print(f"[h2h] Match rows   : {len(match_rows)}")
@@ -289,27 +320,29 @@ def ingest_h2h(*, dry_run: bool = False) -> Dict[str, Any]:
         print(json.dumps(summary_rows[:2], indent=2, default=str))
         print("\n--- MATCH ROWS SAMPLE ---")
         print(json.dumps(match_rows[:3], indent=2, default=str))
-        return {
-            "summary_rows": len(summary_rows),
-            "match_rows": len(match_rows),
-            "dry_run": True,
-        }
+        return {"summary_rows": len(summary_rows), "match_rows": len(match_rows), "dry_run": True}
+
+    if scrape_only:
+        for path, row_list in [
+            ("/tmp/mls_scrape_h2h_summary.ndjson", summary_rows),
+            ("/tmp/mls_scrape_h2h_matches.ndjson", match_rows),
+        ]:
+            with open(path, "w") as f:
+                for row in row_list:
+                    f.write(json.dumps(row, default=str) + "\n")
+            print(f"[h2h] Saved {len(row_list)} rows to {path}")
+        print("=" * 60)
+        return {"summary_rows": len(summary_rows), "match_rows": len(match_rows), "errors": []}
 
     _ensure_dataset(bq)
     _ensure_table(bq, H2H_SUMMARY_TABLE, H2H_SUMMARY_SCHEMA)
     _ensure_table(bq, H2H_MATCHES_TABLE, H2H_MATCHES_SCHEMA)
-
     s_written = _truncate_and_insert(bq, H2H_SUMMARY_TABLE, summary_rows, H2H_SUMMARY_SCHEMA)
     m_written = _truncate_and_insert(bq, H2H_MATCHES_TABLE, match_rows, H2H_MATCHES_SCHEMA)
-
     print(f"[h2h] Written — summary: {s_written}, matches: {m_written}")
     print("=" * 60)
+    return {"summary_rows_written": s_written, "match_rows_written": m_written, "errors": []}
 
-    return {
-        "summary_rows_written": s_written,
-        "match_rows_written": m_written,
-        "errors": [],
-    }
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -319,7 +352,10 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--scrape-only", action="store_true")
+    parser.add_argument("--load-only", action="store_true")
     args = parser.parse_args()
 
-    result = ingest_h2h(dry_run=args.dry_run)
+    result = ingest_h2h(dry_run=args.dry_run, scrape_only=args.scrape_only, load_only=args.load_only)
     print(json.dumps(result, indent=2, default=str))
+

@@ -20,6 +20,7 @@ const STATIC_TABS: TabConfig[] = [
   { name: "mls", title: "MLS", icon: "football-outline" },
   { name: "epl", title: "EPL", icon: "trophy-outline" },
   { name: "atp", title: "ATP", icon: "tennisball-outline" },
+  { name: "home", title: "Home", icon: "home-outline" },
 ];
 
 const HIDDEN_SCREENS = [
@@ -28,7 +29,7 @@ const HIDDEN_SCREENS = [
   "atp-surface-splits",
   "atp-tournament-performance",
   "bad-lines",
-  "home",
+  "atp-bracket",
   "laliga",
   "epl/btts",
   "epl/cards",
@@ -63,10 +64,13 @@ const HIDDEN_SCREENS = [
   "nba",
   "nba/index",
   "pga-matchups",
+  "pga-compare",
+  "pga-pairings",
   "pga-placement-probabilities",
   "pga-simulated-finishes",
   "pga-simulated-leaderboard",
   "props",
+  "more",
   "soccer/index",
   "soccer/today",
   "trend-chart",

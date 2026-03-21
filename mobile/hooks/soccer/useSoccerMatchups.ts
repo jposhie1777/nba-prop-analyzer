@@ -12,6 +12,15 @@ export type SoccerUpcomingMatch = {
   start_time_utc?: string | null;
 };
 
+export type SoccerStandingRow = {
+  team_name?: string | null;
+  win_loss_record?: string | null;
+  standing_note?: string | null;
+  wins?: number | null;
+  losses?: number | null;
+  draws?: number | null;
+};
+
 export type SoccerMatchDetail = {
   league: SoccerLeague;
   match_id: number;
@@ -56,4 +65,8 @@ export function useSoccerMatchupDetail(league: SoccerLeague, matchId?: number | 
     undefined,
     Boolean(matchId)
   );
+}
+
+export function useSoccerStandings(league: SoccerLeague) {
+  return useEplQuery<SoccerStandingRow[]>(`/${league}/standings`);
 }

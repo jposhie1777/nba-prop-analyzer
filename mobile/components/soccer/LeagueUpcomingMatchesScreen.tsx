@@ -1,39 +1,30 @@
+import { useMemo } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 
-import { SoccerLeague, useSoccerUpcomingMatches } from "@/hooks/soccer/useSoccerMatchups";
+import {
+  SoccerLeague,
+  useSoccerStandings,
+  useSoccerUpcomingMatches,
+} from "@/hooks/soccer/useSoccerMatchups";
 import { useTheme } from "@/store/useTheme";
+import {
+  buildRecordMap,
+  resolveRecordForTeam,
+} from "@/utils/soccerDisplay";
+import { MatchupSlugCard } from "@/components/soccer/MatchupSlugCard";
 
 type Props = {
   league: SoccerLeague;
   title: string;
 };
 
-function formatDateOnly(value?: string | null) {
-  if (!value) return "TBD";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "TBD";
-  return date.toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function formatTimeOnly(value?: string | null) {
-  if (!value) return "TBD";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "TBD";
-  return date.toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
 export function LeagueUpcomingMatchesScreen({ league, title }: Props) {
   const { colors } = useTheme();
   const router = useRouter();
   const { data, loading, error, refetch } = useSoccerUpcomingMatches(league);
+  const { data: standingsRows } = useSoccerStandings(league);
+  const recordMap = useMemo(() => buildRecordMap(standingsRows ?? []), [standingsRows]);
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -54,23 +45,41 @@ export function LeagueUpcomingMatchesScreen({ league, title }: Props) {
       ) : null}
 
       {(data ?? []).map((match) => (
-        <Pressable
-          key={match.match_id}
-          onPress={() => router.push(`/(tabs)/${league}/match/${match.match_id}`)}
-          style={[styles.card, { borderColor: colors.border.subtle }]}
-        >
-          <Text style={styles.matchupText}>
-            {match.matchup || `${match.home_team ?? "Home"} vs ${match.away_team ?? "Away"}`}
-          </Text>
-          <View style={styles.metaRow}>
-            <Text style={styles.metaLabel}>Date:</Text>
-            <Text style={styles.metaValue}>{formatDateOnly(match.start_time_utc)}</Text>
-          </View>
-          <View style={styles.metaRow}>
-            <Text style={styles.metaLabel}>Time:</Text>
-            <Text style={styles.metaValue}>{formatTimeOnly(match.start_time_utc)}</Text>
-          </View>
-        </Pressable>
+        (() => {
+          const homeTeam = match.home_team ?? "Home";
+          const awayTeam = match.away_team ?? "Away";
+          const homeRecord = resolveRecordForTeam(league, homeTeam, recordMap);
+          const awayRecord = resolveRecordForTeam(league, awayTeam, recordMap);
+
+          return (
+            <Pressable
+              key={match.match_id}
+              onPress={() =>
+                router.push({
+                  pathname: `/(tabs)/${league}/match/[matchId]`,
+                  params: {
+                    matchId: String(match.match_id),
+                    homeTeam,
+                    awayTeam,
+                    startTimeUtc: match.start_time_utc ?? "",
+                    homeRecord,
+                    awayRecord,
+                  },
+                })
+              }
+              style={[styles.card, { borderColor: colors.border.subtle }]}
+            >
+              <MatchupSlugCard
+                league={league}
+                homeTeam={homeTeam}
+                awayTeam={awayTeam}
+                startTimeUtc={match.start_time_utc}
+                homeRecord={homeRecord}
+                awayRecord={awayRecord}
+              />
+            </Pressable>
+          );
+        })()
       ))}
 
       {!loading && !error && (data ?? []).length === 0 ? (
@@ -90,11 +99,7 @@ const styles = StyleSheet.create({
   eyebrow: { color: "#90B3E9", fontSize: 11, fontWeight: "700" },
   h1: { color: "#E9F2FF", fontSize: 24, fontWeight: "800", marginTop: 8 },
   sub: { color: "#A7C0E8", marginTop: 6, lineHeight: 18, fontSize: 13 },
-  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, backgroundColor: "#0B1529", padding: 12, gap: 8 },
-  matchupText: { color: "#E9F2FF", fontWeight: "800", fontSize: 15 },
-  metaRow: { flexDirection: "row", gap: 8 },
-  metaLabel: { color: "#93C5FD", width: 42, fontWeight: "700", fontSize: 12 },
-  metaValue: { color: "#E5E7EB", fontSize: 12, flex: 1 },
+  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, backgroundColor: "#0B1529", padding: 12 },
   errorBox: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, backgroundColor: "#1F2937", padding: 12 },
   errorTitle: { color: "#FCA5A5", fontWeight: "700" },
   errorText: { color: "#FECACA", marginTop: 4, fontSize: 12 },

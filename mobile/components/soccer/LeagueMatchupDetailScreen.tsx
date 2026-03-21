@@ -2,8 +2,17 @@ import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
-import { SoccerLeague, useSoccerMatchupDetail } from "@/hooks/soccer/useSoccerMatchups";
+import {
+  SoccerLeague,
+  useSoccerMatchupDetail,
+  useSoccerStandings,
+} from "@/hooks/soccer/useSoccerMatchups";
 import { useTheme } from "@/store/useTheme";
+import {
+  buildRecordMap,
+  resolveRecordForTeam,
+} from "@/utils/soccerDisplay";
+import { MatchupSlugCard } from "@/components/soccer/MatchupSlugCard";
 
 type Props = {
   league: SoccerLeague;
@@ -21,19 +30,6 @@ type LastMatchRow = {
   lm_ascore?: number | null;
   lm_outcome?: string | null;
 };
-
-function formatDateTime(value?: string | null) {
-  if (!value) return "TBD";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "TBD";
-  return date.toLocaleString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
 
 function stringifyValue(value: unknown): string {
   if (value == null) return "–";
@@ -74,14 +70,25 @@ function LastMatchLine({ row }: { row: LastMatchRow }) {
 export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
   const router = useRouter();
   const { colors } = useTheme();
-  const params = useLocalSearchParams<{ matchId?: string }>();
+  const params = useLocalSearchParams<{
+    matchId?: string;
+    homeTeam?: string;
+    awayTeam?: string;
+    startTimeUtc?: string;
+    homeRecord?: string;
+    awayRecord?: string;
+  }>();
   const matchId = Number(params.matchId);
   const { data, loading, error, refetch } = useSoccerMatchupDetail(league, Number.isFinite(matchId) ? matchId : null);
+  const { data: standingsRows } = useSoccerStandings(league);
 
   const matchInfo = (data?.match_info ?? {}) as Record<string, unknown>;
-  const homeTeam = (matchInfo.home_team as string | undefined) || "Home";
-  const awayTeam = (matchInfo.away_team as string | undefined) || "Away";
-  const dateUtc = matchInfo.date_utc as string | undefined;
+  const recordMap = useMemo(() => buildRecordMap(standingsRows ?? []), [standingsRows]);
+  const homeTeam = params.homeTeam ?? (matchInfo.home_team as string | undefined) ?? "Home";
+  const awayTeam = params.awayTeam ?? (matchInfo.away_team as string | undefined) ?? "Away";
+  const startTimeUtc = params.startTimeUtc ?? (matchInfo.date_utc as string | undefined) ?? null;
+  const homeRecord = params.homeRecord ?? resolveRecordForTeam(league, homeTeam, recordMap);
+  const awayRecord = params.awayRecord ?? resolveRecordForTeam(league, awayTeam, recordMap);
   const [expanded, setExpanded] = useState<Record<SectionKey, boolean>>({
     matchInfo: false,
     matchKeys: false,
@@ -135,8 +142,14 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
 
       <View style={[styles.panel, { borderColor: colors.border.subtle }]}>
         <Text style={styles.eyebrow}>{leagueTitle}</Text>
-        <Text style={styles.title}>{homeTeam} vs {awayTeam}</Text>
-        <Text style={styles.subtitle}>{formatDateTime(dateUtc ?? null)}</Text>
+        <MatchupSlugCard
+          league={league}
+          homeTeam={homeTeam}
+          awayTeam={awayTeam}
+          startTimeUtc={startTimeUtc}
+          homeRecord={homeRecord}
+          awayRecord={awayRecord}
+        />
       </View>
 
       {loading ? <ActivityIndicator color="#A78BFA" /> : null}
@@ -260,8 +273,6 @@ const styles = StyleSheet.create({
   actionText: { color: "#E9F2FF", fontWeight: "700", fontSize: 12 },
   panel: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, backgroundColor: "#0B1529", padding: 12, gap: 8 },
   eyebrow: { color: "#90B3E9", fontSize: 11, fontWeight: "700" },
-  title: { color: "#E9F2FF", fontSize: 18, fontWeight: "800" },
-  subtitle: { color: "#A7C0E8", fontSize: 12 },
   sectionTitle: { color: "#93C5FD", fontSize: 14, fontWeight: "700" },
   sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   sectionToggle: { color: "#C4B5FD", fontWeight: "800", fontSize: 14 },

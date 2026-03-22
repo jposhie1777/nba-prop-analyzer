@@ -18,6 +18,8 @@ type Props = {
   onCardPress?: () => void;
   onOddsPress?: (side: OddsSide) => void;
   selectedOddsSide?: OddsSide | null;
+  oddsHomeLabel?: string;
+  oddsAwayLabel?: string;
 };
 
 function formatDay(value?: string | null) {
@@ -107,6 +109,8 @@ export function MatchupSlugCard({
   onCardPress,
   onOddsPress,
   selectedOddsSide,
+  oddsHomeLabel = "HOME",
+  oddsAwayLabel = "AWAY",
 }: Props) {
   const hasOdds = Boolean(oddsSummary?.home || oddsSummary?.draw || oddsSummary?.away);
   const interactiveOdds = typeof onOddsPress === "function";
@@ -139,9 +143,9 @@ export function MatchupSlugCard({
       {hasOdds ? (
         <View style={styles.oddsWrap}>
           <View style={styles.oddsHeaderRow}>
-            <Text style={styles.oddsHeader}>HOME</Text>
+            <Text style={styles.oddsHeader}>{oddsHomeLabel}</Text>
             <Text style={styles.oddsHeader}>DRAW</Text>
-            <Text style={styles.oddsHeader}>AWAY</Text>
+            <Text style={styles.oddsHeader}>{oddsAwayLabel}</Text>
           </View>
           {interactiveOdds ? (
             <View style={styles.oddsValueRow}>

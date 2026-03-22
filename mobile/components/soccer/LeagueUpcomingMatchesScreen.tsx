@@ -7,7 +7,7 @@ import {
 } from "@/hooks/soccer/useSoccerMatchups";
 import { useTheme } from "@/store/useTheme";
 import { useSoccerLeagueBadges } from "@/hooks/soccer/useSoccerLeagueBadges";
-import { resolveBadgeForTeam } from "@/utils/soccerDisplay";
+import { buildTeamOddsCode, resolveBadgeForTeam } from "@/utils/soccerDisplay";
 import { MatchupSlugCard } from "@/components/soccer/MatchupSlugCard";
 import { useSoccerBetslip } from "@/store/useSoccerBetslip";
 import { useSoccerBetslipDrawer } from "@/store/useSoccerBetslipDrawer";
@@ -66,6 +66,8 @@ export function LeagueUpcomingMatchesScreen({ league, title }: Props) {
           const awayRecord = match.away_recent_form ?? "-";
           const homeLogoUri = match.home_logo ?? resolveBadgeForTeam(league, homeTeam, badgeMap);
           const awayLogoUri = match.away_logo ?? resolveBadgeForTeam(league, awayTeam, badgeMap);
+          const homeOddsLabel = buildTeamOddsCode(homeTeam);
+          const awayOddsLabel = buildTeamOddsCode(awayTeam);
           const gameLabel = `${awayTeam} @ ${homeTeam}`;
           const getBetId = (side: OddsSide, price: number) =>
             `${league}-${match.match_id}-1x2-${side}-${price}-${match.start_time_utc ?? ""}`;
@@ -97,6 +99,8 @@ export function LeagueUpcomingMatchesScreen({ league, title }: Props) {
                 homeLogoUri={homeLogoUri}
                 awayLogoUri={awayLogoUri}
                 oddsSummary={match.odds_summary}
+                oddsHomeLabel={homeOddsLabel}
+                oddsAwayLabel={awayOddsLabel}
                 selectedOddsSide={selectedOddsSide}
                 onCardPress={() =>
                   router.push({

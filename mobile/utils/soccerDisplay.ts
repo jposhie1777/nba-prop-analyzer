@@ -173,3 +173,51 @@ export function resolveBadgeForTeam(
 
   return null;
 }
+
+const ODDS_TEAM_CODE_OVERRIDES: Record<string, string> = {
+  "manchester united": "MUN",
+  "manchester city": "MCI",
+  "new york red bulls": "NYR",
+  "new york city fc": "NYC",
+  "los angeles fc": "LAFC",
+  "la galaxy": "LAG",
+  "tottenham hotspur": "TOT",
+  "west ham united": "WHU",
+  "newcastle united": "NEW",
+  "nottingham forest": "NFO",
+  "wolverhampton wanderers": "WOL",
+  "brighton and hove albion": "BHA",
+  "st louis city sc": "STL",
+  "sporting kansas city": "SKC",
+  "real salt lake": "RSL",
+  "san jose earthquakes": "SJ",
+  "new england revolution": "NE",
+  "inter miami cf": "MIA",
+  "columbus crew": "CLB",
+};
+
+export function buildTeamOddsCode(teamName?: string | null): string {
+  const normalized = normalizeTeamName(teamName);
+  if (!normalized) return "TEAM";
+  if (ODDS_TEAM_CODE_OVERRIDES[normalized]) return ODDS_TEAM_CODE_OVERRIDES[normalized];
+
+  const tokens = normalized.split(" ").filter(Boolean);
+  const filtered = tokens.filter((token) => !["fc", "cf", "sc", "afc"].includes(token));
+  const base = filtered.length ? filtered : tokens;
+  if (!base.length) return "TEAM";
+
+  const [first, second, third] = base;
+  if (first === "new" && second) return `N${second[0]}`.toUpperCase();
+  if ((first === "los" || first === "la") && second) return `LA${second[0]}`.toUpperCase();
+
+  if (first.length >= 3) return first.slice(0, 3).toUpperCase();
+
+  const initials = [first, second, third]
+    .filter(Boolean)
+    .map((token) => token[0])
+    .join("")
+    .toUpperCase();
+
+  if (initials.length >= 2) return initials;
+  return first.toUpperCase();
+}

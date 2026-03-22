@@ -10,7 +10,7 @@ import {
 } from "@/hooks/soccer/useSoccerMatchups";
 import { useTheme } from "@/store/useTheme";
 import { useSoccerLeagueBadges } from "@/hooks/soccer/useSoccerLeagueBadges";
-import { resolveBadgeForTeam } from "@/utils/soccerDisplay";
+import { buildTeamOddsCode, resolveBadgeForTeam } from "@/utils/soccerDisplay";
 import { MatchupSlugCard } from "@/components/soccer/MatchupSlugCard";
 import { useSoccerBetslip } from "@/store/useSoccerBetslip";
 import { useSoccerBetslipDrawer } from "@/store/useSoccerBetslipDrawer";
@@ -96,28 +96,28 @@ function marketKey(label: string): string {
   return label.trim().toLowerCase();
 }
 
-function periodLabel(row: SoccerOddsBoardRow): string {
+function periodKey(row: SoccerOddsBoardRow): string {
   if (row.period_name) return row.period_name;
-  if (row.period_id != null) return `Period ${row.period_id}`;
-  return "All";
+  if (row.period_id != null) return String(row.period_id);
+  return "all";
 }
 
-function outcomeLabel(row: SoccerOddsBoardRow): string {
+function rawOutcomeLabel(row: SoccerOddsBoardRow): string {
   const raw = row.outcome_name?.trim();
   if (!raw) return "Outcome";
-  if (/^o1$/i.test(raw)) return "Home";
-  if (/^o2$/i.test(raw)) return "Draw";
-  if (/^o3$/i.test(raw)) return "Away";
+  if (/^o1$/i.test(raw)) return "home";
+  if (/^o2$/i.test(raw)) return "draw";
+  if (/^o3$/i.test(raw)) return "away";
   return raw;
 }
 
 function isOverOutcome(row: SoccerOddsBoardRow): boolean {
-  const label = outcomeLabel(row).toLowerCase();
+  const label = rawOutcomeLabel(row).toLowerCase();
   return label.startsWith("over");
 }
 
 function isUnderOutcome(row: SoccerOddsBoardRow): boolean {
-  const label = outcomeLabel(row).toLowerCase();
+  const label = rawOutcomeLabel(row).toLowerCase();
   return label.startsWith("under");
 }
 
@@ -125,7 +125,31 @@ function hasTotalWord(value: string): boolean {
   return value.toLowerCase().includes("total");
 }
 
-function buildOddsExport(rows: SoccerOddsBoardRow[]): string {
+function displayOutcomeLabel(
+  row: SoccerOddsBoardRow,
+  homeOddsLabel: string,
+  awayOddsLabel: string
+): string {
+  const raw = rawOutcomeLabel(row).toLowerCase();
+  if (raw === "home") return homeOddsLabel;
+  if (raw === "away") return awayOddsLabel;
+  if (raw === "draw") return "Draw";
+  return rawOutcomeLabel(row);
+}
+
+function sortableLineValue(value?: string | null): number | null {
+  if (!value) return null;
+  const match = String(value).match(/-?\d+(?:\.\d+)?/);
+  if (!match) return null;
+  const parsed = Number(match[0]);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function buildOddsExport(
+  rows: SoccerOddsBoardRow[],
+  homeOddsLabel: string,
+  awayOddsLabel: string
+): string {
   const header = [
     "market_group",
     "market",
@@ -143,7 +167,7 @@ function buildOddsExport(rows: SoccerOddsBoardRow[]): string {
       row.period_id ?? "",
       row.period_name ?? "",
       row.line_value ?? "",
-      outcomeLabel(row),
+      displayOutcomeLabel(row, homeOddsLabel, awayOddsLabel),
       row.bookie ?? "",
       formatAmericanOnly(row),
     ].join("\t")
@@ -188,6 +212,8 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
   const awayRecentForm = (matchInfo.away_form as string | undefined) ?? "-";
   const homeRecord = params.homeRecord ?? homeRecentForm;
   const awayRecord = params.awayRecord ?? awayRecentForm;
+  const homeOddsLabel = buildTeamOddsCode(homeTeam);
+  const awayOddsLabel = buildTeamOddsCode(awayTeam);
   const homeLogoUri =
     params.homeLogoUri ??
     resolveBadgeForTeam(league, homeTeam, badgeMap);
@@ -270,22 +296,31 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
             const periodA = a.period_id ?? Number.MAX_SAFE_INTEGER;
             const periodB = b.period_id ?? Number.MAX_SAFE_INTEGER;
             if (periodA !== periodB) return periodA - periodB;
-            const lineA = a.line_value ?? "";
-            const lineB = b.line_value ?? "";
-            if (lineA !== lineB) return lineA.localeCompare(lineB);
-            return outcomeLabel(a).localeCompare(outcomeLabel(b));
+            const lineA = sortableLineValue(a.line_value);
+            const lineB = sortableLineValue(b.line_value);
+            if (lineA != null && lineB != null && lineA !== lineB) return lineA - lineB;
+            const lineTextA = a.line_value ?? "";
+            const lineTextB = b.line_value ?? "";
+            if (lineTextA !== lineTextB) return lineTextA.localeCompare(lineTextB);
+            return displayOutcomeLabel(a, homeOddsLabel, awayOddsLabel).localeCompare(
+              displayOutcomeLabel(b, homeOddsLabel, awayOddsLabel)
+            );
           }),
         })),
     })).map((marketGroup) => ({
       market: marketGroup.market,
       books: marketGroup.books.map((bookGroup) => {
-        const overRows = bookGroup.rows.filter(isOverOutcome);
-        const underRows = bookGroup.rows.filter(isUnderOutcome);
-        const otherRows = bookGroup.rows.filter((row) => !isOverOutcome(row) && !isUnderOutcome(row));
+        // If a full-time period exists (100), prefer it over 1H/2H fragments.
+        const scopedRows = bookGroup.rows.some((row) => row.period_id === 100)
+          ? bookGroup.rows.filter((row) => row.period_id === 100)
+          : bookGroup.rows;
+        const overRows = scopedRows.filter(isOverOutcome);
+        const underRows = scopedRows.filter(isUnderOutcome);
+        const otherRows = scopedRows.filter((row) => !isOverOutcome(row) && !isUnderOutcome(row));
         const splitOverUnder = hasTotalWord(marketGroup.market) || overRows.length > 0 || underRows.length > 0;
         return {
           book: bookGroup.book,
-          rows: bookGroup.rows,
+          rows: scopedRows,
           overRows,
           underRows,
           otherRows,
@@ -293,7 +328,7 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
         };
       }),
     }));
-  }, [filteredOddsRows]);
+  }, [awayOddsLabel, filteredOddsRows, homeOddsLabel]);
 
   useEffect(() => {
     if (selectedMarket === "all") return;
@@ -311,8 +346,8 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
 
   function betIdForRow(row: SoccerOddsBoardRow, price: number): string {
     const market = marketLabelForRow(row);
-    const period = periodLabel(row);
-    const outcome = outcomeLabel(row);
+    const period = periodKey(row);
+    const outcome = displayOutcomeLabel(row, homeOddsLabel, awayOddsLabel);
     const line = row.line_value ?? "n/a";
     const book = row.bookie ?? "book";
     return `${league}-${matchId}-${market}-${period}-${book}-${outcome}-${line}-${price}`;
@@ -327,7 +362,7 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
       game: `${awayTeam} @ ${homeTeam}`,
       start_time_et: startTimeUtc ?? undefined,
       market: marketLabelForRow(row),
-      outcome: outcomeLabel(row),
+      outcome: displayOutcomeLabel(row, homeOddsLabel, awayOddsLabel),
       line: lineNumber(row.line_value),
       price,
       bookmaker: row.bookie ?? "Unknown Book",
@@ -374,6 +409,8 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
           homeLogoUri={homeLogoUri}
           awayLogoUri={awayLogoUri}
           oddsSummary={data?.odds_summary}
+          oddsHomeLabel={homeOddsLabel}
+          oddsAwayLabel={awayOddsLabel}
         />
       </View>
 
@@ -407,7 +444,7 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
                     <Pressable
                       style={[styles.copyButton, { borderColor: colors.border.subtle }]}
                       onPress={async () => {
-                        await Clipboard.setStringAsync(buildOddsExport(filteredOddsRows));
+                        await Clipboard.setStringAsync(buildOddsExport(filteredOddsRows, homeOddsLabel, awayOddsLabel));
                         setCopyStatus("copied");
                         setTimeout(() => setCopyStatus("idle"), 1500);
                       }}
@@ -482,10 +519,12 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
                                             disabled ? styles.oddsCellDisabled : null,
                                           ]}
                                         >
-                                          <Text style={styles.oddsCellOutcome}>{outcomeLabel(row)}</Text>
-                                          <Text style={styles.oddsCellLine}>
-                                            {row.line_value ? `Line ${row.line_value}` : periodLabel(row)}
+                                          <Text style={styles.oddsCellOutcome}>
+                                            {displayOutcomeLabel(row, homeOddsLabel, awayOddsLabel)}
                                           </Text>
+                                          {row.line_value ? (
+                                            <Text style={styles.oddsCellLine}>Line {row.line_value}</Text>
+                                          ) : null}
                                           <Text style={styles.oddsCellPrice}>{formatAmericanOnly(row)}</Text>
                                         </Pressable>
                                       );
@@ -516,10 +555,12 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
                                             disabled ? styles.oddsCellDisabled : null,
                                           ]}
                                         >
-                                          <Text style={styles.oddsCellOutcome}>{outcomeLabel(row)}</Text>
-                                          <Text style={styles.oddsCellLine}>
-                                            {row.line_value ? `Line ${row.line_value}` : periodLabel(row)}
+                                          <Text style={styles.oddsCellOutcome}>
+                                            {displayOutcomeLabel(row, homeOddsLabel, awayOddsLabel)}
                                           </Text>
+                                          {row.line_value ? (
+                                            <Text style={styles.oddsCellLine}>Line {row.line_value}</Text>
+                                          ) : null}
                                           <Text style={styles.oddsCellPrice}>{formatAmericanOnly(row)}</Text>
                                         </Pressable>
                                       );
@@ -550,10 +591,12 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
                                             disabled ? styles.oddsCellDisabled : null,
                                           ]}
                                         >
-                                          <Text style={styles.oddsCellOutcome}>{outcomeLabel(row)}</Text>
-                                          <Text style={styles.oddsCellLine}>
-                                            {row.line_value ? `Line ${row.line_value}` : periodLabel(row)}
+                                          <Text style={styles.oddsCellOutcome}>
+                                            {displayOutcomeLabel(row, homeOddsLabel, awayOddsLabel)}
                                           </Text>
+                                          {row.line_value ? (
+                                            <Text style={styles.oddsCellLine}>Line {row.line_value}</Text>
+                                          ) : null}
                                           <Text style={styles.oddsCellPrice}>{formatAmericanOnly(row)}</Text>
                                         </Pressable>
                                       );
@@ -582,10 +625,12 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
                                       disabled ? styles.oddsCellDisabled : null,
                                     ]}
                                   >
-                                    <Text style={styles.oddsCellOutcome}>{outcomeLabel(row)}</Text>
-                                    <Text style={styles.oddsCellLine}>
-                                      {row.line_value ? `Line ${row.line_value}` : periodLabel(row)}
+                                    <Text style={styles.oddsCellOutcome}>
+                                      {displayOutcomeLabel(row, homeOddsLabel, awayOddsLabel)}
                                     </Text>
+                                    {row.line_value ? (
+                                      <Text style={styles.oddsCellLine}>Line {row.line_value}</Text>
+                                    ) : null}
                                     <Text style={styles.oddsCellPrice}>{formatAmericanOnly(row)}</Text>
                                   </Pressable>
                                 );
@@ -647,11 +692,24 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
             </Pressable>
             {expanded.bettingStats ? (
               data.betting_stats.length ? (
-                data.betting_stats.map((row, idx) => (
-                  <Text key={`bs-${idx}`} style={styles.valueText}>
-                    {row.category ?? "category"} • {row.sub_tab ?? "sub_tab"} • {row.label ?? "label"}: {row.value ?? "–"}
-                  </Text>
-                ))
+                data.betting_stats.map((row, idx) => {
+                  const valuePart = row.value != null && `${row.value}`.trim() ? `${row.value}` : null;
+                  const homePart = row.home != null ? `${homeOddsLabel}: ${row.home}` : null;
+                  const awayPart = row.away != null ? `${awayOddsLabel}: ${row.away}` : null;
+                  const sampleParts = [
+                    row.total_matches_home != null ? `${homeOddsLabel} n=${row.total_matches_home}` : null,
+                    row.total_matches_away != null ? `${awayOddsLabel} n=${row.total_matches_away}` : null,
+                  ].filter(Boolean);
+                  const detail = [valuePart, homePart, awayPart, ...sampleParts]
+                    .filter(Boolean)
+                    .join(" • ");
+
+                  return (
+                    <Text key={`bs-${idx}`} style={styles.valueText}>
+                      {row.category ?? "category"} • {row.sub_tab ?? "sub_tab"} • {row.label ?? "label"}: {detail || "–"}
+                    </Text>
+                  );
+                })
               ) : (
                 <Text style={styles.emptyText}>No betting stats available.</Text>
               )

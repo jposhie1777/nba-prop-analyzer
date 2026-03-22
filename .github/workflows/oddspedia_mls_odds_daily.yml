@@ -128,6 +128,9 @@ jobs:
       - name: Load match info → BigQuery
         run: python -m mobile_api.ingest.mls.oddspedia_mls_match_info_ingest --load-only
 
+      - name: Snapshot moneyline odds → BigQuery
+        run: python -m mobile_api.ingest.oddspedia_moneyline_snapshot_ingest --sport mls
+
       - name: Run H2H load
         run: python -m mobile_api.ingest.mls.oddspedia_mls_h2h_ingest --load-only
 

@@ -657,6 +657,11 @@ def _player_label(player: Any) -> str:
     return "TBD"
 
 
+def _is_placeholder_midnight_time(value: Any) -> bool:
+    """Return True when sheet placeholder time encodes unknown start as 00:00:00."""
+    return bool(value and value.hour == 0 and value.minute == 0 and value.second == 0)
+
+
 def _player_id(player: Any) -> Optional[int]:
     if isinstance(player, dict):
         pid = player.get("id")
@@ -803,6 +808,36 @@ def _read_today_sheet_matches(
 ) -> List[Dict[str, Any]]:
     client = get_bq_client()
     sql = f"""
+    WITH latest AS (
+      SELECT
+        match_id,
+        match_date,
+        round,
+        match_status,
+        is_live,
+        scheduled_time,
+        not_before_text,
+        player1_id,
+        player1_full_name,
+        player2_id,
+        player2_full_name,
+        winner_id,
+        winner_full_name,
+        score,
+        sync_ts,
+        ROW_NUMBER() OVER (PARTITION BY match_id ORDER BY sync_ts DESC) AS rn
+      FROM `{_ATP_SHEET_DAILY_MATCHES_TABLE}`
+      WHERE match_date = CURRENT_DATE('America/New_York')
+        AND (@tournament_id IS NULL OR tournament_id = @tournament_id)
+    )
+    SELECT
+      match_id,
+      match_date,
+      round,
+      match_status,
+      is_live,
+      scheduled_time,
+      not_before_text,
     SELECT
       match_id,
       round,
@@ -817,6 +852,9 @@ def _read_today_sheet_matches(
       winner_id,
       winner_full_name,
       score
+    FROM latest
+    WHERE rn = 1
+    ORDER BY scheduled_time ASC, match_id ASC
     FROM `{_ATP_SHEET_DAILY_MATCHES_TABLE}`
     WHERE (
       -- The Google sheet's "today" slate is keyed by UTC date, including
@@ -842,12 +880,24 @@ def _read_today_sheet_matches(
     out: List[Dict[str, Any]] = []
     for row in job.result():
         scheduled = row.get("scheduled_time")
+        match_date = row.get("match_date")
+        not_before_text = (row.get("not_before_text") or "").strip()
+
+        # "Followed By" rows often come through as midnight placeholders.
+        # Leave scheduled_at empty for these so clients don't render prior-day dates by timezone shift.
+        scheduled_iso: Optional[str]
+        if scheduled and not (_is_placeholder_midnight_time(scheduled) and match_date is not None):
+            scheduled_iso = scheduled.isoformat()
+        else:
+            scheduled_iso = None
+
         out.append(
             {
                 "id": row.get("match_id"),
                 "round": normalize_round_name(str(row.get("round") or "Round")),
                 "round_order": _round_rank(str(row.get("round") or "Round")),
                 "status": row.get("match_status"),
+                "scheduled_at": scheduled_iso,
                 "scheduled_at": scheduled.isoformat() if scheduled else None,
                 "match_date": row.get("match_date").isoformat() if row.get("match_date") else None,
                 "not_before_text": row.get("not_before_text"),
@@ -857,6 +907,7 @@ def _read_today_sheet_matches(
                 "player2_id": int(row.get("player2_id")) if row.get("player2_id") is not None else None,
                 "winner": row.get("winner_full_name") or "TBD",
                 "score": row.get("score"),
+                "not_before_text": not_before_text or None,
             }
         )
 

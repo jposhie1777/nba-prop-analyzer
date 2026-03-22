@@ -41,8 +41,14 @@ ROUND_ORDER = {
 # Map abbreviated round names to their canonical display form.
 _ROUND_ALIASES: Dict[str, str] = {
     "f": "Final",
+    "final": "Final",
+    "finals": "Final",
     "sf": "Semifinals",
+    "semifinal": "Semifinals",
+    "semi final": "Semifinals",
     "qf": "Quarterfinals",
+    "quarterfinal": "Quarterfinals",
+    "quarter final": "Quarterfinals",
     "r16": "Round of 16",
     "r32": "Round of 32",
     "r64": "Round of 64",

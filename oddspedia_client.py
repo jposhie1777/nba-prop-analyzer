@@ -264,7 +264,7 @@ class OddspediaClient:
                 from datetime import datetime, timezone, timedelta
                 now = datetime.now(timezone.utc)
                 start = (now - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
-                end = (now + timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                end = (now + timedelta(days=21)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
                 def _fetch_listing(url: str) -> Dict[str, Any]:
                     return page.evaluate(

@@ -1,4 +1,5 @@
-“”“ATP tournament configuration for Oddspedia scraping.
+“”“
+ATP tournament configuration for Oddspedia scraping.
 
 Provides the active ATP tournament URL, league slug, and season ID.
 These are used by both the odds and match-info ingests.

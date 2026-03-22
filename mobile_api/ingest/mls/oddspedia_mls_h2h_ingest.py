@@ -1,4 +1,4 @@
-#mobile_api/ingest/mls/oddspedia_mls_h2h_ingest.py
+# mobile_api/ingest/mls/oddspedia_mls_h2h_ingest.py
 """
 Ingests head-to-head data from Oddspedia match insights pages into BigQuery.
 
@@ -9,6 +9,8 @@ Tables:
 Usage:
     python -m mobile_api.ingest.mls.oddspedia_mls_h2h_ingest
     python -m mobile_api.ingest.mls.oddspedia_mls_h2h_ingest --dry-run
+    python -m mobile_api.ingest.mls.oddspedia_mls_h2h_ingest --scrape-only
+    python -m mobile_api.ingest.mls.oddspedia_mls_h2h_ingest --load-only
 """
 
 from __future__ import annotations
@@ -120,12 +122,12 @@ def _truncate_and_insert(
     table: str,
     rows: List[Dict[str, Any]],
     schema: List[bigquery.SchemaField],
-    chunk_size: int = 500,
 ) -> int:
     if not rows:
         return 0
 
-    import tempfile, os
+    import tempfile
+
     table_id = _full_table_id(client, table)
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".ndjson", delete=False) as f:
@@ -145,7 +147,6 @@ def _truncate_and_insert(
     job.result()
     os.unlink(tmp_path)
     return len(rows)
-
 
 
 # ── Row builders ──────────────────────────────────────────────────────────────
@@ -213,7 +214,7 @@ def _build_match_rows(
     return rows
 
 
-# ── Fetch today's matches from BQ ────────────────────────────────────────────
+# ── Fetch today's matches from BQ ─────────────────────────────────────────────
 
 
 def _get_todays_match_ids(
@@ -241,7 +242,9 @@ def _get_todays_match_ids(
 # ── Main ingest ───────────────────────────────────────────────────────────────
 
 
-def ingest_h2h(*, dry_run: bool = False, scrape_only: bool = False, load_only: bool = False) -> Dict[str, Any]:
+def ingest_h2h(
+    *, dry_run: bool = False, scrape_only: bool = False, load_only: bool = False
+) -> Dict[str, Any]:
     now = datetime.now(timezone.utc)
     ingested_at = now.strftime("%Y-%m-%dT%H:%M:%SZ")
     scraped_date = now.strftime("%Y-%m-%d")
@@ -259,8 +262,8 @@ def ingest_h2h(*, dry_run: bool = False, scrape_only: bool = False, load_only: b
 
     # ── Load-only path ────────────────────────────────────────────────────────
     if load_only:
-        summary_rows = []
-        match_rows = []
+        summary_rows: List[Dict[str, Any]] = []
+        match_rows: List[Dict[str, Any]] = []
         for path, target in [
             ("/tmp/mls_scrape_h2h_summary.ndjson", summary_rows),
             ("/tmp/mls_scrape_h2h_matches.ndjson", match_rows),
@@ -285,76 +288,79 @@ def ingest_h2h(*, dry_run: bool = False, scrape_only: bool = False, load_only: b
         print("=" * 60)
         return {"summary_rows_written": s_written, "match_rows_written": m_written, "errors": []}
 
-        # ── Scrape path ───────────────────────────────────────────────────────────
-        today_matches = []
-        try:
-            with open("/tmp/mls_scrape_match_weather.ndjson") as f:
-                for line in f:
-                    line = line.strip()
-                    if line:
-                        today_matches.append(json.loads(line))
-            print(f"[h2h] Loaded {len(today_matches)} matches from weather scrape file")
-        except FileNotFoundError:
-            # Fallback to BQ if file not present (e.g. running standalone)
-            bq = _bq_client()
-            today_matches = _get_todays_match_ids(bq, scraped_date)
-    
-        if not today_matches:
-            print("[h2h] No matches found — exiting")
-            return {"summary_rows_written": 0, "match_rows_written": 0}
-    
-        print(f"[h2h] Found {len(today_matches)} matches for {scraped_date}")
-        match_ids = [int(m["match_id"]) for m in today_matches]
-        match_meta = {int(m["match_id"]): m for m in today_matches}
-    
-        client = OddspediaClient()
-        h2h_results = client.fetch_h2h(match_ids)
-        print(f"[h2h] Got H2H data for {len(h2h_results)}/{len(match_ids)} matches")
-    
-        summary_rows: List[Dict[str, Any]] = []
-        match_rows: List[Dict[str, Any]] = []
-    
-        for match_id, h2h in h2h_results.items():
-            meta = match_meta.get(match_id, {})
-            home_team = meta.get("home_team")
-            away_team = meta.get("away_team")
-            date_utc = (meta.get("date_utc") or "").split("+")[0].strip() or None
-            summary_rows.append(_build_summary_row(match_id, home_team, away_team, date_utc, h2h, ingested_at, scraped_date))
-            match_rows.extend(_build_match_rows(match_id, home_team, away_team, date_utc, h2h, ingested_at, scraped_date))
-    
-        print(f"[h2h] Summary rows : {len(summary_rows)}")
-        print(f"[h2h] Match rows   : {len(match_rows)}")
-    
-        if dry_run:
-            print("\n--- SUMMARY SAMPLE ---")
-            print(json.dumps(summary_rows[:2], indent=2, default=str))
-            print("\n--- MATCH ROWS SAMPLE ---")
-            print(json.dumps(match_rows[:3], indent=2, default=str))
-            return {"summary_rows": len(summary_rows), "match_rows": len(match_rows), "dry_run": True}
-    
-        if scrape_only:
-            for path, row_list in [
-                ("/tmp/mls_scrape_h2h_summary.ndjson", summary_rows),
-                ("/tmp/mls_scrape_h2h_matches.ndjson", match_rows),
-            ]:
-                with open(path, "w") as f:
-                    for row in row_list:
-                        f.write(json.dumps(row, default=str) + "\n")
-                print(f"[h2h] Saved {len(row_list)} rows to {path}")
-            print("=" * 60)
-            return {"summary_rows": len(summary_rows), "match_rows": len(match_rows), "errors": []}
-    
+    # ── Scrape path ───────────────────────────────────────────────────────────
+    today_matches: List[Dict[str, Any]] = []
+    try:
+        with open("/tmp/mls_scrape_match_weather.ndjson") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    today_matches.append(json.loads(line))
+        print(f"[h2h] Loaded {len(today_matches)} matches from weather scrape file")
+    except FileNotFoundError:
+        # Fallback to BQ if file not present (e.g. running standalone)
         bq = _bq_client()
-        _ensure_dataset(bq)
-        _ensure_table(bq, H2H_SUMMARY_TABLE, H2H_SUMMARY_SCHEMA)
-        _ensure_table(bq, H2H_MATCHES_TABLE, H2H_MATCHES_SCHEMA)
-        s_written = _truncate_and_insert(bq, H2H_SUMMARY_TABLE, summary_rows, H2H_SUMMARY_SCHEMA)
-        m_written = _truncate_and_insert(bq, H2H_MATCHES_TABLE, match_rows, H2H_MATCHES_SCHEMA)
-        print(f"[h2h] Written — summary: {s_written}, matches: {m_written}")
+        today_matches = _get_todays_match_ids(bq, scraped_date)
+
+    if not today_matches:
+        print("[h2h] No matches found — exiting")
+        return {"summary_rows_written": 0, "match_rows_written": 0}
+
+    print(f"[h2h] Found {len(today_matches)} matches for {scraped_date}")
+    match_ids = [int(m["match_id"]) for m in today_matches]
+    match_meta = {int(m["match_id"]): m for m in today_matches}
+
+    client = OddspediaClient()
+    h2h_results = client.fetch_h2h(match_ids)
+    print(f"[h2h] Got H2H data for {len(h2h_results)}/{len(match_ids)} matches")
+
+    summary_rows_out: List[Dict[str, Any]] = []
+    match_rows_out: List[Dict[str, Any]] = []
+
+    for match_id, h2h in h2h_results.items():
+        meta = match_meta.get(match_id, {})
+        home_team = meta.get("home_team")
+        away_team = meta.get("away_team")
+        date_utc = (meta.get("date_utc") or "").split("+")[0].strip() or None
+        summary_rows_out.append(
+            _build_summary_row(match_id, home_team, away_team, date_utc, h2h, ingested_at, scraped_date)
+        )
+        match_rows_out.extend(
+            _build_match_rows(match_id, home_team, away_team, date_utc, h2h, ingested_at, scraped_date)
+        )
+
+    print(f"[h2h] Summary rows : {len(summary_rows_out)}")
+    print(f"[h2h] Match rows   : {len(match_rows_out)}")
+
+    if dry_run:
+        print("\n--- SUMMARY SAMPLE ---")
+        print(json.dumps(summary_rows_out[:2], indent=2, default=str))
+        print("\n--- MATCH ROWS SAMPLE ---")
+        print(json.dumps(match_rows_out[:3], indent=2, default=str))
+        return {"summary_rows": len(summary_rows_out), "match_rows": len(match_rows_out), "dry_run": True}
+
+    if scrape_only:
+        for path, row_list in [
+            ("/tmp/mls_scrape_h2h_summary.ndjson", summary_rows_out),
+            ("/tmp/mls_scrape_h2h_matches.ndjson", match_rows_out),
+        ]:
+            with open(path, "w") as f:
+                for row in row_list:
+                    f.write(json.dumps(row, default=str) + "\n")
+            print(f"[h2h] Saved {len(row_list)} rows to {path}")
         print("=" * 60)
-        return {"summary_rows_written": s_written, "match_rows_written": m_written, "errors": []}
+        return {"summary_rows": len(summary_rows_out), "match_rows": len(match_rows_out), "errors": []}
 
-
+    # ── Full run: write directly to BQ ────────────────────────────────────────
+    bq = _bq_client()
+    _ensure_dataset(bq)
+    _ensure_table(bq, H2H_SUMMARY_TABLE, H2H_SUMMARY_SCHEMA)
+    _ensure_table(bq, H2H_MATCHES_TABLE, H2H_MATCHES_SCHEMA)
+    s_written = _truncate_and_insert(bq, H2H_SUMMARY_TABLE, summary_rows_out, H2H_SUMMARY_SCHEMA)
+    m_written = _truncate_and_insert(bq, H2H_MATCHES_TABLE, match_rows_out, H2H_MATCHES_SCHEMA)
+    print(f"[h2h] Written — summary: {s_written}, matches: {m_written}")
+    print("=" * 60)
+    return {"summary_rows_written": s_written, "match_rows_written": m_written, "errors": []}
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -368,6 +374,9 @@ if __name__ == "__main__":
     parser.add_argument("--load-only", action="store_true")
     args = parser.parse_args()
 
-    result = ingest_h2h(dry_run=args.dry_run, scrape_only=args.scrape_only, load_only=args.load_only)
+    result = ingest_h2h(
+        dry_run=args.dry_run,
+        scrape_only=args.scrape_only,
+        load_only=args.load_only,
+    )
     print(json.dumps(result, indent=2, default=str))
-

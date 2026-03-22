@@ -311,6 +311,20 @@ def _ensure_table(
         client.create_table(bigquery.Table(table_id, schema=schema))
 
 
+def _add_missing_columns(
+    client: bigquery.Client, table: str, schema: List[bigquery.SchemaField]
+) -> None:
+    table_id = _full_table_id(client, table)
+    bq_table = client.get_table(table_id)
+    existing = {field.name for field in bq_table.schema}
+    new_fields = [field for field in schema if field.name not in existing]
+    if not new_fields:
+        return
+    bq_table.schema = list(bq_table.schema) + new_fields
+    client.update_table(bq_table, ["schema"])
+    print(f"[atp_match_info] Added {len(new_fields)} column(s) to {table}: {[f.name for f in new_fields]}")
+
+
 def _truncate_and_insert(
     client: bigquery.Client, table: str, rows: List[Dict[str, Any]]
 ) -> int:
@@ -665,6 +679,7 @@ def ingest_match_info(
     written: Dict[str, int] = {}
     for table, schema, rows in table_defs:
         _ensure_table(bq, table, schema)
+        _add_missing_columns(bq, table, schema)
         written[table] = _truncate_and_insert(bq, table, rows)
 
     return {**counts, "written": written, "errors": []}

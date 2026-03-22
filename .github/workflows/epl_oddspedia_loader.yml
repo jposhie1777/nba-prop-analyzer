@@ -122,6 +122,9 @@ jobs:
         run: |
           python -m mobile_api.ingest.epl.oddspedia_epl_odds_ingest --insert-only
 
+      - name: Snapshot moneyline odds → BigQuery
+        run: python -m mobile_api.ingest.oddspedia_moneyline_snapshot_ingest --sport epl
+
   match_info:
     runs-on: ubuntu-latest
     needs: insert

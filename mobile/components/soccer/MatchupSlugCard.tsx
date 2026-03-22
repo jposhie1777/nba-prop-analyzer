@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
-import { Image, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { SoccerLeague, SoccerOddsSummary } from "@/hooks/soccer/useSoccerMatchups";
+
+type OddsSide = "home" | "draw" | "away";
 
 type Props = {
   league: SoccerLeague;
@@ -13,6 +15,9 @@ type Props = {
   homeLogoUri?: string | null;
   awayLogoUri?: string | null;
   oddsSummary?: SoccerOddsSummary;
+  onCardPress?: () => void;
+  onOddsPress?: (side: OddsSide) => void;
+  selectedOddsSide?: OddsSide | null;
 };
 
 function formatDay(value?: string | null) {
@@ -99,21 +104,38 @@ export function MatchupSlugCard({
   homeLogoUri,
   awayLogoUri,
   oddsSummary,
+  onCardPress,
+  onOddsPress,
+  selectedOddsSide,
 }: Props) {
   const hasOdds = Boolean(oddsSummary?.home || oddsSummary?.draw || oddsSummary?.away);
+  const interactiveOdds = typeof onOddsPress === "function";
 
   return (
     <View style={styles.root}>
-      <View style={styles.topRow}>
-        <TeamBadge teamName={homeTeam} align="left" logoUri={homeLogoUri} />
-        <Text style={styles.recordText}>{homeRecord}</Text>
-        <View style={styles.center}>
-          <Text style={styles.dayText}>{formatDay(startTimeUtc)}</Text>
-          <Text style={styles.timeText}>{formatTime(startTimeUtc)}</Text>
+      {onCardPress ? (
+        <Pressable style={styles.topRow} onPress={onCardPress}>
+          <TeamBadge teamName={homeTeam} align="left" logoUri={homeLogoUri} />
+          <Text style={styles.recordText}>{homeRecord}</Text>
+          <View style={styles.center}>
+            <Text style={styles.dayText}>{formatDay(startTimeUtc)}</Text>
+            <Text style={styles.timeText}>{formatTime(startTimeUtc)}</Text>
+          </View>
+          <Text style={styles.recordText}>{awayRecord}</Text>
+          <TeamBadge teamName={awayTeam} align="right" logoUri={awayLogoUri} />
+        </Pressable>
+      ) : (
+        <View style={styles.topRow}>
+          <TeamBadge teamName={homeTeam} align="left" logoUri={homeLogoUri} />
+          <Text style={styles.recordText}>{homeRecord}</Text>
+          <View style={styles.center}>
+            <Text style={styles.dayText}>{formatDay(startTimeUtc)}</Text>
+            <Text style={styles.timeText}>{formatTime(startTimeUtc)}</Text>
+          </View>
+          <Text style={styles.recordText}>{awayRecord}</Text>
+          <TeamBadge teamName={awayTeam} align="right" logoUri={awayLogoUri} />
         </View>
-        <Text style={styles.recordText}>{awayRecord}</Text>
-        <TeamBadge teamName={awayTeam} align="right" logoUri={awayLogoUri} />
-      </View>
+      )}
       {hasOdds ? (
         <View style={styles.oddsWrap}>
           <View style={styles.oddsHeaderRow}>
@@ -121,11 +143,42 @@ export function MatchupSlugCard({
             <Text style={styles.oddsHeader}>DRAW</Text>
             <Text style={styles.oddsHeader}>AWAY</Text>
           </View>
-          <View style={styles.oddsValueRow}>
-            <Text style={styles.oddsValue}>{formatOddsCell(oddsSummary?.home)}</Text>
-            <Text style={styles.oddsValue}>{formatOddsCell(oddsSummary?.draw)}</Text>
-            <Text style={styles.oddsValue}>{formatOddsCell(oddsSummary?.away)}</Text>
-          </View>
+          {interactiveOdds ? (
+            <View style={styles.oddsValueRow}>
+              {(
+                [
+                  { side: "home", value: oddsSummary?.home },
+                  { side: "draw", value: oddsSummary?.draw },
+                  { side: "away", value: oddsSummary?.away },
+                ] as const
+              ).map(({ side, value }) => {
+                const oddsLabel = formatOddsCell(value);
+                const disabled = oddsLabel === "—";
+                return (
+                  <Pressable
+                    key={side}
+                    disabled={disabled}
+                    onPress={() => onOddsPress?.(side)}
+                    style={[
+                      styles.oddsButton,
+                      selectedOddsSide === side ? styles.oddsButtonSelected : null,
+                      disabled ? styles.oddsButtonDisabled : null,
+                    ]}
+                  >
+                    <Text style={[styles.oddsButtonText, selectedOddsSide === side ? styles.oddsButtonTextSelected : null]}>
+                      {oddsLabel}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : (
+            <View style={styles.oddsValueRow}>
+              <Text style={styles.oddsValue}>{formatOddsCell(oddsSummary?.home)}</Text>
+              <Text style={styles.oddsValue}>{formatOddsCell(oddsSummary?.draw)}</Text>
+              <Text style={styles.oddsValue}>{formatOddsCell(oddsSummary?.away)}</Text>
+            </View>
+          )}
         </View>
       ) : null}
     </View>
@@ -177,4 +230,23 @@ const styles = StyleSheet.create({
   },
   oddsValueRow: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
   oddsValue: { flex: 1, textAlign: "center", color: "#E2E8F0", fontSize: 12, fontWeight: "700" },
+  oddsButton: {
+    flex: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#334155",
+    borderRadius: 8,
+    backgroundColor: "#0F172A",
+    paddingVertical: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  oddsButtonSelected: {
+    borderColor: "#3B82F6",
+    backgroundColor: "rgba(59,130,246,0.2)",
+  },
+  oddsButtonDisabled: {
+    opacity: 0.5,
+  },
+  oddsButtonText: { color: "#BFDBFE", fontSize: 12, fontWeight: "800" },
+  oddsButtonTextSelected: { color: "#DBEAFE" },
 });

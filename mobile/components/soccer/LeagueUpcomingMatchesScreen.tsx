@@ -9,15 +9,34 @@ import { useTheme } from "@/store/useTheme";
 import { useSoccerLeagueBadges } from "@/hooks/soccer/useSoccerLeagueBadges";
 import { resolveBadgeForTeam } from "@/utils/soccerDisplay";
 import { MatchupSlugCard } from "@/components/soccer/MatchupSlugCard";
+import { useSoccerBetslip } from "@/store/useSoccerBetslip";
+import { useSoccerBetslipDrawer } from "@/store/useSoccerBetslipDrawer";
 
 type Props = {
   league: SoccerLeague;
   title: string;
 };
 
+type OddsSide = "home" | "draw" | "away";
+
+function decimalToAmerican(value?: number | null): number | null {
+  if (value == null || Number.isNaN(value) || value <= 1) return null;
+  if (value >= 2) return Math.round((value - 1) * 100);
+  return Math.round(-100 / (value - 1));
+}
+
+function sideLabel(side: OddsSide): string {
+  if (side === "home") return "Home";
+  if (side === "draw") return "Draw";
+  return "Away";
+}
+
 export function LeagueUpcomingMatchesScreen({ league, title }: Props) {
   const { colors } = useTheme();
   const router = useRouter();
+  const betslipItems = useSoccerBetslip((s) => s.items);
+  const addToBetslip = useSoccerBetslip((s) => s.add);
+  const openDrawer = useSoccerBetslipDrawer((s) => s.open);
   const { data, loading, error, refetch } = useSoccerUpcomingMatches(league);
   const { data: badgeMap } = useSoccerLeagueBadges(league);
 
@@ -47,27 +66,27 @@ export function LeagueUpcomingMatchesScreen({ league, title }: Props) {
           const awayRecord = match.away_recent_form ?? "-";
           const homeLogoUri = match.home_logo ?? resolveBadgeForTeam(league, homeTeam, badgeMap);
           const awayLogoUri = match.away_logo ?? resolveBadgeForTeam(league, awayTeam, badgeMap);
+          const gameLabel = `${awayTeam} @ ${homeTeam}`;
+          const getBetId = (side: OddsSide, price: number) =>
+            `${league}-${match.match_id}-1x2-${side}-${price}-${match.start_time_utc ?? ""}`;
+          const isSaved = (side: OddsSide, price: number) => betslipItems.some((item) => item.id === getBetId(side, price));
+          const selectedOddsSide =
+            (() => {
+              const entries = [
+                { side: "home" as const, pick: match.odds_summary?.home },
+                { side: "draw" as const, pick: match.odds_summary?.draw },
+                { side: "away" as const, pick: match.odds_summary?.away },
+              ];
+              for (const entry of entries) {
+                const price = entry.pick?.odds_american ?? decimalToAmerican(entry.pick?.odds_decimal);
+                if (price == null) continue;
+                if (isSaved(entry.side, price)) return entry.side;
+              }
+              return null;
+            })();
 
           return (
-            <Pressable
-              key={match.match_id}
-              onPress={() =>
-                router.push({
-                  pathname: `/(tabs)/${league}/match/[matchId]`,
-                  params: {
-                    matchId: String(match.match_id),
-                    homeTeam,
-                    awayTeam,
-                    startTimeUtc: match.start_time_utc ?? "",
-                    homeRecord: String(homeRecord),
-                    awayRecord: String(awayRecord),
-                    homeLogoUri: homeLogoUri ?? "",
-                    awayLogoUri: awayLogoUri ?? "",
-                  },
-                })
-              }
-              style={[styles.card, { borderColor: colors.border.subtle }]}
-            >
+            <View key={match.match_id} style={[styles.card, { borderColor: colors.border.subtle }]}>
               <MatchupSlugCard
                 league={league}
                 homeTeam={homeTeam}
@@ -78,8 +97,46 @@ export function LeagueUpcomingMatchesScreen({ league, title }: Props) {
                 homeLogoUri={homeLogoUri}
                 awayLogoUri={awayLogoUri}
                 oddsSummary={match.odds_summary}
+                selectedOddsSide={selectedOddsSide}
+                onCardPress={() =>
+                  router.push({
+                    pathname: `/(tabs)/${league}/match/[matchId]`,
+                    params: {
+                      matchId: String(match.match_id),
+                      homeTeam,
+                      awayTeam,
+                      startTimeUtc: match.start_time_utc ?? "",
+                      homeRecord: String(homeRecord),
+                      awayRecord: String(awayRecord),
+                      homeLogoUri: homeLogoUri ?? "",
+                      awayLogoUri: awayLogoUri ?? "",
+                    },
+                  })
+                }
+                onOddsPress={(side) => {
+                  const pick =
+                    side === "home"
+                      ? match.odds_summary?.home
+                      : side === "draw"
+                      ? match.odds_summary?.draw
+                      : match.odds_summary?.away;
+                  const price = pick?.odds_american ?? decimalToAmerican(pick?.odds_decimal);
+                  if (price == null) return;
+                  addToBetslip({
+                    id: getBetId(side, price),
+                    league: league.toUpperCase(),
+                    game: gameLabel,
+                    start_time_et: match.start_time_utc ?? undefined,
+                    market: "1x2",
+                    outcome: sideLabel(side),
+                    line: null,
+                    price,
+                    bookmaker: pick?.bookie ?? "Best Book",
+                  });
+                  openDrawer();
+                }}
               />
-            </Pressable>
+            </View>
           );
         })()
       ))}

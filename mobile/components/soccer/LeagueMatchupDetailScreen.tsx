@@ -12,6 +12,8 @@ import { useTheme } from "@/store/useTheme";
 import { useSoccerLeagueBadges } from "@/hooks/soccer/useSoccerLeagueBadges";
 import { resolveBadgeForTeam } from "@/utils/soccerDisplay";
 import { MatchupSlugCard } from "@/components/soccer/MatchupSlugCard";
+import { useSoccerBetslip } from "@/store/useSoccerBetslip";
+import { useSoccerBetslipDrawer } from "@/store/useSoccerBetslipDrawer";
 
 type Props = {
   league: SoccerLeague;
@@ -77,6 +79,13 @@ function formatAmericanOnly(
   return formatOddsAmerican(converted);
 }
 
+function toAmericanNumber(
+  row: Pick<SoccerOddsBoardRow, "odds_american" | "odds_decimal">
+): number | null {
+  if (row.odds_american != null) return row.odds_american;
+  return decimalToAmerican(row.odds_decimal);
+}
+
 function marketLabelForRow(row: SoccerOddsBoardRow): string {
   const raw = row.market_group ?? row.market;
   const cleaned = raw?.trim();
@@ -93,10 +102,27 @@ function periodLabel(row: SoccerOddsBoardRow): string {
   return "All";
 }
 
-function formatOddsBoardLine(row: SoccerOddsBoardRow): string {
-  const outcome = row.outcome_name ?? "outcome";
-  const line = row.line_value ? ` | Line ${row.line_value}` : "";
-  return `${periodLabel(row)} | ${outcome}${line} | ${formatAmericanOnly(row)}`;
+function outcomeLabel(row: SoccerOddsBoardRow): string {
+  const raw = row.outcome_name?.trim();
+  if (!raw) return "Outcome";
+  if (/^o1$/i.test(raw)) return "Home";
+  if (/^o2$/i.test(raw)) return "Draw";
+  if (/^o3$/i.test(raw)) return "Away";
+  return raw;
+}
+
+function isOverOutcome(row: SoccerOddsBoardRow): boolean {
+  const label = outcomeLabel(row).toLowerCase();
+  return label.startsWith("over");
+}
+
+function isUnderOutcome(row: SoccerOddsBoardRow): boolean {
+  const label = outcomeLabel(row).toLowerCase();
+  return label.startsWith("under");
+}
+
+function hasTotalWord(value: string): boolean {
+  return value.toLowerCase().includes("total");
 }
 
 function buildOddsExport(rows: SoccerOddsBoardRow[]): string {
@@ -117,7 +143,7 @@ function buildOddsExport(rows: SoccerOddsBoardRow[]): string {
       row.period_id ?? "",
       row.period_name ?? "",
       row.line_value ?? "",
-      row.outcome_name ?? "",
+      outcomeLabel(row),
       row.bookie ?? "",
       formatAmericanOnly(row),
     ].join("\t")
@@ -137,6 +163,9 @@ function LastMatchLine({ row }: { row: LastMatchRow }) {
 export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
   const router = useRouter();
   const { colors } = useTheme();
+  const betslipItems = useSoccerBetslip((s) => s.items);
+  const addToBetslip = useSoccerBetslip((s) => s.add);
+  const openDrawer = useSoccerBetslipDrawer((s) => s.open);
   const params = useLocalSearchParams<{
     matchId?: string;
     homeTeam?: string;
@@ -244,9 +273,25 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
             const lineA = a.line_value ?? "";
             const lineB = b.line_value ?? "";
             if (lineA !== lineB) return lineA.localeCompare(lineB);
-            return (a.outcome_name ?? "").localeCompare(b.outcome_name ?? "");
+            return outcomeLabel(a).localeCompare(outcomeLabel(b));
           }),
         })),
+    })).map((marketGroup) => ({
+      market: marketGroup.market,
+      books: marketGroup.books.map((bookGroup) => {
+        const overRows = bookGroup.rows.filter(isOverOutcome);
+        const underRows = bookGroup.rows.filter(isUnderOutcome);
+        const otherRows = bookGroup.rows.filter((row) => !isOverOutcome(row) && !isUnderOutcome(row));
+        const splitOverUnder = hasTotalWord(marketGroup.market) || overRows.length > 0 || underRows.length > 0;
+        return {
+          book: bookGroup.book,
+          rows: bookGroup.rows,
+          overRows,
+          underRows,
+          otherRows,
+          splitOverUnder,
+        };
+      }),
     }));
   }, [filteredOddsRows]);
 
@@ -257,6 +302,46 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
       setSelectedMarket("all");
     }
   }, [marketOptions, selectedMarket]);
+
+  function lineNumber(value?: string | null): number | null {
+    if (!value) return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  function betIdForRow(row: SoccerOddsBoardRow, price: number): string {
+    const market = marketLabelForRow(row);
+    const period = periodLabel(row);
+    const outcome = outcomeLabel(row);
+    const line = row.line_value ?? "n/a";
+    const book = row.bookie ?? "book";
+    return `${league}-${matchId}-${market}-${period}-${book}-${outcome}-${line}-${price}`;
+  }
+
+  function saveOddsRow(row: SoccerOddsBoardRow) {
+    const price = toAmericanNumber(row);
+    if (price == null) return;
+    addToBetslip({
+      id: betIdForRow(row, price),
+      league: league.toUpperCase(),
+      game: `${awayTeam} @ ${homeTeam}`,
+      start_time_et: startTimeUtc ?? undefined,
+      market: marketLabelForRow(row),
+      outcome: outcomeLabel(row),
+      line: lineNumber(row.line_value),
+      price,
+      bookmaker: row.bookie ?? "Unknown Book",
+      rationale: `Saved from ${marketLabelForRow(row)} odds board`,
+    });
+    openDrawer();
+  }
+
+  function isSavedOddsRow(row: SoccerOddsBoardRow): boolean {
+    const price = toAmericanNumber(row);
+    if (price == null) return false;
+    const id = betIdForRow(row, price);
+    return betslipItems.some((item) => item.id === id);
+  }
 
   function toggleSection(section: SectionKey) {
     setExpanded((prev) => ({ ...prev, [section]: !prev[section] }));
@@ -373,11 +458,140 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
                       {marketGroup.books.map((bookGroup) => (
                         <View key={`${marketGroup.market}-${bookGroup.book}`} style={styles.bookGroup}>
                           <Text style={styles.bookTitle}>{bookGroup.book}</Text>
-                          {bookGroup.rows.map((row, idx) => (
-                            <Text key={`${marketGroup.market}-${bookGroup.book}-${idx}`} style={styles.valueText}>
-                              {formatOddsBoardLine(row)}
-                            </Text>
-                          ))}
+                          {bookGroup.splitOverUnder ? (
+                            <>
+                              {bookGroup.overRows.length ? (
+                                <View style={styles.windowBlock}>
+                                  <Text style={styles.windowTitle}>Overs</Text>
+                                  <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={styles.oddsWindowRow}
+                                  >
+                                    {bookGroup.overRows.map((row, idx) => {
+                                      const disabled = toAmericanNumber(row) == null;
+                                      const selected = isSavedOddsRow(row);
+                                      return (
+                                        <Pressable
+                                          key={`${marketGroup.market}-${bookGroup.book}-over-${idx}`}
+                                          disabled={disabled}
+                                          onPress={() => saveOddsRow(row)}
+                                          style={[
+                                            styles.oddsCell,
+                                            selected ? styles.oddsCellSelected : null,
+                                            disabled ? styles.oddsCellDisabled : null,
+                                          ]}
+                                        >
+                                          <Text style={styles.oddsCellOutcome}>{outcomeLabel(row)}</Text>
+                                          <Text style={styles.oddsCellLine}>
+                                            {row.line_value ? `Line ${row.line_value}` : periodLabel(row)}
+                                          </Text>
+                                          <Text style={styles.oddsCellPrice}>{formatAmericanOnly(row)}</Text>
+                                        </Pressable>
+                                      );
+                                    })}
+                                  </ScrollView>
+                                </View>
+                              ) : null}
+
+                              {bookGroup.underRows.length ? (
+                                <View style={styles.windowBlock}>
+                                  <Text style={styles.windowTitle}>Unders</Text>
+                                  <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={styles.oddsWindowRow}
+                                  >
+                                    {bookGroup.underRows.map((row, idx) => {
+                                      const disabled = toAmericanNumber(row) == null;
+                                      const selected = isSavedOddsRow(row);
+                                      return (
+                                        <Pressable
+                                          key={`${marketGroup.market}-${bookGroup.book}-under-${idx}`}
+                                          disabled={disabled}
+                                          onPress={() => saveOddsRow(row)}
+                                          style={[
+                                            styles.oddsCell,
+                                            selected ? styles.oddsCellSelected : null,
+                                            disabled ? styles.oddsCellDisabled : null,
+                                          ]}
+                                        >
+                                          <Text style={styles.oddsCellOutcome}>{outcomeLabel(row)}</Text>
+                                          <Text style={styles.oddsCellLine}>
+                                            {row.line_value ? `Line ${row.line_value}` : periodLabel(row)}
+                                          </Text>
+                                          <Text style={styles.oddsCellPrice}>{formatAmericanOnly(row)}</Text>
+                                        </Pressable>
+                                      );
+                                    })}
+                                  </ScrollView>
+                                </View>
+                              ) : null}
+
+                              {bookGroup.otherRows.length ? (
+                                <View style={styles.windowBlock}>
+                                  <Text style={styles.windowTitle}>Other</Text>
+                                  <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={styles.oddsWindowRow}
+                                  >
+                                    {bookGroup.otherRows.map((row, idx) => {
+                                      const disabled = toAmericanNumber(row) == null;
+                                      const selected = isSavedOddsRow(row);
+                                      return (
+                                        <Pressable
+                                          key={`${marketGroup.market}-${bookGroup.book}-other-${idx}`}
+                                          disabled={disabled}
+                                          onPress={() => saveOddsRow(row)}
+                                          style={[
+                                            styles.oddsCell,
+                                            selected ? styles.oddsCellSelected : null,
+                                            disabled ? styles.oddsCellDisabled : null,
+                                          ]}
+                                        >
+                                          <Text style={styles.oddsCellOutcome}>{outcomeLabel(row)}</Text>
+                                          <Text style={styles.oddsCellLine}>
+                                            {row.line_value ? `Line ${row.line_value}` : periodLabel(row)}
+                                          </Text>
+                                          <Text style={styles.oddsCellPrice}>{formatAmericanOnly(row)}</Text>
+                                        </Pressable>
+                                      );
+                                    })}
+                                  </ScrollView>
+                                </View>
+                              ) : null}
+                            </>
+                          ) : (
+                            <ScrollView
+                              horizontal
+                              showsHorizontalScrollIndicator={false}
+                              contentContainerStyle={styles.oddsWindowRow}
+                            >
+                              {bookGroup.rows.map((row, idx) => {
+                                const disabled = toAmericanNumber(row) == null;
+                                const selected = isSavedOddsRow(row);
+                                return (
+                                  <Pressable
+                                    key={`${marketGroup.market}-${bookGroup.book}-${idx}`}
+                                    disabled={disabled}
+                                    onPress={() => saveOddsRow(row)}
+                                    style={[
+                                      styles.oddsCell,
+                                      selected ? styles.oddsCellSelected : null,
+                                      disabled ? styles.oddsCellDisabled : null,
+                                    ]}
+                                  >
+                                    <Text style={styles.oddsCellOutcome}>{outcomeLabel(row)}</Text>
+                                    <Text style={styles.oddsCellLine}>
+                                      {row.line_value ? `Line ${row.line_value}` : periodLabel(row)}
+                                    </Text>
+                                    <Text style={styles.oddsCellPrice}>{formatAmericanOnly(row)}</Text>
+                                  </Pressable>
+                                );
+                              })}
+                            </ScrollView>
+                          )}
                         </View>
                       ))}
                     </View>
@@ -536,6 +750,29 @@ const styles = StyleSheet.create({
   marketTitle: { color: "#E2E8F0", fontSize: 13, fontWeight: "800" },
   bookGroup: { gap: 4 },
   bookTitle: { color: "#93C5FD", fontSize: 12, fontWeight: "700" },
+  windowBlock: { gap: 4 },
+  windowTitle: { color: "#A7C0E8", fontSize: 11, fontWeight: "700" },
+  oddsWindowRow: { flexDirection: "row", gap: 8, paddingRight: 4 },
+  oddsCell: {
+    width: 106,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#334155",
+    borderRadius: 10,
+    backgroundColor: "#0F172A",
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    gap: 2,
+  },
+  oddsCellSelected: {
+    borderColor: "#3B82F6",
+    backgroundColor: "rgba(59,130,246,0.2)",
+  },
+  oddsCellDisabled: {
+    opacity: 0.5,
+  },
+  oddsCellOutcome: { color: "#E2E8F0", fontSize: 12, fontWeight: "700" },
+  oddsCellLine: { color: "#94A3B8", fontSize: 10, fontWeight: "600" },
+  oddsCellPrice: { color: "#86EFAC", fontSize: 15, fontWeight: "800" },
   row: { gap: 2 },
   keyText: { color: "#C4B5FD", fontSize: 11, fontWeight: "700" },
   valueText: { color: "#E5E7EB", fontSize: 12, lineHeight: 18 },

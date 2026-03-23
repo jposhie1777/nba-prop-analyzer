@@ -282,28 +282,6 @@ def _extract_player_ids_from_html(html: str) -> Set[str]:
     return ids
 
 
-def _past_tournament_results_urls(tournament_dates_json: Dict[str, Any]) -> List[Tuple[str, str, str]]:
-    """Return (slug, tournament_id, full_results_url) for each past event in tournament_dates JSON.
-
-    URLs are built from the ScoresUrl field (archive URL) already present in the JSON.
-    Team-event suffixes like 'country-results' are normalised to 'results'.
-    """
-    out: List[Tuple[str, str, str]] = []
-    for month in tournament_dates_json.get("TournamentDates", []):
-        for t in month.get("Tournaments", []):
-            if not t.get("IsPastEvent"):
-                continue
-            scores_url = (t.get("ScoresUrl") or "").replace("country-results", "results")
-            if not scores_url:
-                continue
-            # Extract slug and id: /en/scores/archive/{slug}/{id}/{year}/results
-            m = re.search(r"/scores/(?:archive|current)/([^/]+)/([^/]+)/", scores_url)
-            if not m:
-                continue
-            slug, tid = m.group(1), m.group(2)
-            out.append((slug, tid, f"https://www.atptour.com{scores_url}"))
-    return out
-
 
 def _safe_json_str(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False)
@@ -383,6 +361,28 @@ def _extract_daily_schedule_time_fields(payload_html: Optional[str]) -> Tuple[Li
 
     return start_times[:500], not_before_times[:500], schedule_time_items[:500]
 
+def _fetch_tournament_results_urls_for_year(year: int) -> List[Tuple[str, str, str]]:
+    """Fetch the ATP calendar API for a given year and return
+    (slug, tournament_id, results_url) for every completed event."""
+    url = f"https://www.atptour.com/en/-/www/tournaments/dates/{year}"
+    data = _fetch_json_url(url)
+    if not data:
+        return []
+    out: List[Tuple[str, str, str]] = []
+    for month in data.get("TournamentDates", []):
+        for t in month.get("Tournaments", []):
+            if not t.get("IsPastEvent"):
+                continue
+            scores_url = (t.get("ScoresUrl") or "").replace("country-results", "results")
+            if not scores_url:
+                continue
+            m = re.search(r"/scores/(?:archive|current)/([^/]+)/([^/]+)/", scores_url)
+            if not m:
+                continue
+            slug, tid = m.group(1), m.group(2)
+            out.append((slug, tid, f"https://www.atptour.com{scores_url}"))
+    return out
+
 def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule: bool, sleep_seconds: float) -> Dict[str, Any]:
     del sleep_seconds
 
@@ -409,8 +409,6 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
     if truncate_schedule:
         _truncate_table(client, "website_daily_schedule")
         _truncate_table(client, "website_upcoming_matches")
-        # Also clear match results and H2H so the live re-fetches don't create
-        # duplicate rows on each daily run.
         _truncate_table(client, "website_match_results")
         _truncate_table(client, "website_match_results_rows")
         _truncate_table(client, "website_head_to_head")
@@ -434,6 +432,9 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
     who_is_playing_rows: List[Dict[str, Any]] = []
     who_is_playing_players_rows: List[Dict[str, Any]] = []
 
+    # ------------------------------------------------------------------ #
+    # Tournament calendar                                                  #
+    # ------------------------------------------------------------------ #
     tournament_dates = captures["tournament_dates"]
     if isinstance(tournament_dates["payload_json"], dict):
         month_models, tournament_models = normalize_calendar(tournament_dates["payload_json"], snapshot_ts_utc=snapshot_ts)
@@ -446,9 +447,10 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
                 if any(str(y) in (row.get("formatted_date") or "") for y in range(start_year, end_year + 1))
             ]
 
+    # ------------------------------------------------------------------ #
+    # Daily schedule                                                       #
+    # ------------------------------------------------------------------ #
     daily_schedule_capture = captures["daily_schedule"]
-    # Try to refresh the daily schedule from ATP Tour so we always show today's matches.
-    # The slug/id come from the capture file URL, which identifies the active tournament.
     _ds_slug, _ds_tid = _extract_slug_and_tournament_id(daily_schedule_capture.get("request_url"))
     if _ds_slug and _ds_tid:
         _live_schedule_url = f"https://www.atptour.com/en/scores/current/{_ds_slug}/{_ds_tid}/daily-schedule"
@@ -459,6 +461,7 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
                 "payload_text": _live_schedule_html,
                 "request_url": _live_schedule_url,
             }
+
     daily_text_chunks, daily_links = _flatten_html_payload(daily_schedule_capture.get("payload_text"))
     daily_start_times, daily_not_before_times, daily_time_items = _extract_daily_schedule_time_fields(
         daily_schedule_capture.get("payload_text")
@@ -476,10 +479,8 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
             "schedule_time_items": daily_time_items,
         }
     )
+
     sched_slug, sched_tid = _extract_slug_and_tournament_id(daily_schedule_capture.get("request_url"))
-    # All schedule rows (including past matches) — used to build H2H pairs and player IDs.
-    # The date filter is intentionally skipped here so that a schedule file captured on a
-    # previous day still produces valid player pairs for H2H and stats lookups.
     all_schedule_rows: List[Dict[str, Any]] = []
     if sched_slug and sched_tid and daily_schedule_capture.get("payload_text"):
         all_schedule_rows = [
@@ -492,7 +493,6 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
                 include_past=True,
             )
         ]
-        # Only truly upcoming matches go into website_upcoming_matches.
         upcoming_match_rows.extend(
             [
                 row.to_dict()
@@ -505,6 +505,9 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
             ]
         )
 
+    # ------------------------------------------------------------------ #
+    # Draws / bracket                                                      #
+    # ------------------------------------------------------------------ #
     draws_capture = captures["draws"]
     draws_text_chunks, draws_links = _flatten_html_payload(draws_capture.get("payload_text"))
     draws_rows.append(
@@ -527,8 +530,10 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
         }
     )
 
+    # ------------------------------------------------------------------ #
+    # Head-to-head                                                         #
+    # ------------------------------------------------------------------ #
     h2h_capture = captures["head_to_head"]
-    # Use all_schedule_rows (includes past matches) so a stale schedule file still produces pairs.
     h2h_pairs = _build_h2h_pairs_from_schedule_rows(all_schedule_rows)
 
     fallback_left_id, fallback_right_id = _extract_h2h_ids(h2h_capture.get("request_url"))
@@ -550,7 +555,6 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
                 "payload_json": _safe_json_str(payload_json),
             }
         )
-
         if isinstance(payload_json, dict):
             h2h_match_rows.extend(
                 [
@@ -559,11 +563,11 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
                 ]
             )
 
+    # ------------------------------------------------------------------ #
+    # Match results — current tournament (live fetch)                     #
+    # ------------------------------------------------------------------ #
     results_capture = captures["match_results"]
     result_slug, result_tid = _extract_slug_and_tournament_id(results_capture.get("request_url"))
-    # Try to fetch the current tournament's results page live.  The results page on ATP Tour
-    # always shows ALL completed matches for the current tournament (not just one day), so
-    # fetching it fresh gives us the complete running history for the active event.
     if result_slug and result_tid:
         _live_results_url = f"https://www.atptour.com/en/scores/current/{result_slug}/{result_tid}/results"
         _live_results_html = _fetch_html_url(_live_results_url)
@@ -574,39 +578,42 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
                 "request_url": _live_results_url,
             }
     if result_slug and result_tid and results_capture.get("payload_text"):
-        # website_match_results is the historical per-match results table (one row per match).
-        # The raw HTML payload is already stored in website_raw_responses (endpoint_key="match_results").
         parsed_match_results_rows.extend(
-            [
-                row.to_dict()
-                for row in normalize_match_results_html(
-                    result_slug,
-                    result_tid,
-                    results_capture["payload_text"],
-                    snapshot_ts_utc=snapshot_ts,
-                )
-            ]
+            row.to_dict()
+            for row in normalize_match_results_html(
+                result_slug,
+                result_tid,
+                results_capture["payload_text"],
+                snapshot_ts_utc=snapshot_ts,
+            )
         )
 
-    # Backfill: in multi-year mode fetch results from every past tournament in the calendar.
-    # The tournament_dates JSON lists all events for the current year with their archive URLs.
-    if start_year < end_year and isinstance(tournament_dates["payload_json"], dict):
-        for past_slug, past_tid, past_url in _past_tournament_results_urls(tournament_dates["payload_json"]):
-            if past_slug == result_slug and past_tid == result_tid:
-                continue  # current tournament already parsed above
-            past_html = _fetch_html_url(past_url)
-            if past_html:
-                parsed_match_results_rows.extend(
-                    [
+    # ------------------------------------------------------------------ #
+    # Match results — backfill across all requested years                 #
+    # ------------------------------------------------------------------ #
+    if start_year and end_year:
+        already_fetched: Set[Tuple[str, str]] = set()
+        if result_slug and result_tid:
+            already_fetched.add((result_slug, result_tid))
+
+        for year in range(start_year, end_year + 1):
+            for past_slug, past_tid, past_url in _fetch_tournament_results_urls_for_year(year):
+                if (past_slug, past_tid) in already_fetched:
+                    continue
+                already_fetched.add((past_slug, past_tid))
+                past_html = _fetch_html_url(past_url)
+                if past_html:
+                    parsed_match_results_rows.extend(
                         row.to_dict()
                         for row in normalize_match_results_html(
                             past_slug, past_tid, past_html, snapshot_ts_utc=snapshot_ts
                         )
-                    ]
-                )
+                    )
 
+    # ------------------------------------------------------------------ #
+    # Player IDs — harvested from all sources                             #
+    # ------------------------------------------------------------------ #
     player_ids: Set[str] = set()
-    # Use all_schedule_rows (includes past matches) so a stale schedule file still yields player IDs.
     for row in all_schedule_rows:
         p1 = _extract_player_id_from_profile_url(row.get("player_1_profile_url"))
         p2 = _extract_player_id_from_profile_url(row.get("player_2_profile_url"))
@@ -614,15 +621,15 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
             player_ids.add(p1)
         if p2:
             player_ids.add(p2)
-    # Also mine draws HTML — the full bracket contains every player in the tournament draw.
+
     draws_html = draws_capture.get("payload_text") or ""
     if draws_html:
         player_ids |= _extract_player_ids_from_html(draws_html)
-    # Also extract from the results HTML — every player in a completed match has a profile link.
+
     results_html_text = results_capture.get("payload_text") or ""
     if results_html_text:
         player_ids |= _extract_player_ids_from_html(results_html_text)
-    # Also include seeded players from who_is_playing.
+
     who_payload_for_ids = captures["who_is_playing"].get("payload_json")
     if isinstance(who_payload_for_ids, dict):
         for player in who_payload_for_ids.get("PlayersList", []) or []:
@@ -630,18 +637,16 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
             if pid:
                 player_ids.add(pid)
 
+    # ------------------------------------------------------------------ #
+    # Player stats                                                         #
+    # ------------------------------------------------------------------ #
     default_stats_captures = {
         "all": captures["player_stats_all"],
         "clay": captures["player_stats_clay"],
         "grass": captures["player_stats_grass"],
         "hard": captures["player_stats_hard"],
     }
-    surface_path = {
-        "all": "all",
-        "clay": "Clay",
-        "grass": "Grass",
-        "hard": "Hard",
-    }
+    surface_path = {"all": "all", "clay": "Clay", "grass": "Grass", "hard": "Hard"}
 
     if not player_ids:
         fallback_payload = default_stats_captures["all"].get("payload_json")
@@ -673,7 +678,6 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
                     "payload_json": _safe_json_str(payload_json),
                 }
             )
-
             if isinstance(payload_json, dict):
                 stats_block = payload_json.get("Stats") or {}
                 for stat_name, stat_value in stats_block.items():
@@ -687,6 +691,9 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
                         }
                     )
 
+    # ------------------------------------------------------------------ #
+    # Who is playing                                                       #
+    # ------------------------------------------------------------------ #
     who_capture = captures["who_is_playing"]
     who_payload = who_capture.get("payload_json")
     who_is_playing_rows.append(
@@ -710,6 +717,9 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
                 }
             )
 
+    # ------------------------------------------------------------------ #
+    # Write to BigQuery                                                    #
+    # ------------------------------------------------------------------ #
     written = {
         "raw": _insert_rows(client, "website_raw_responses", raw_rows),
         "tournament_months": _insert_rows(client, "website_tournament_months", tournament_month_rows),
@@ -718,9 +728,6 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
         "upcoming_matches": _insert_rows(client, "website_upcoming_matches", upcoming_match_rows),
         "draws": _insert_rows(client, "website_draws", draws_rows),
         "tournament_bracket": _insert_rows(client, "website_tournament_bracket", bracket_rows),
-        # website_head_to_head now stores individual historical H2H match rows (one per match),
-        # mirroring the pattern used for website_match_results.
-        # The raw JSON blobs (h2h_rows) are already in website_raw_responses.
         "head_to_head": _insert_rows(
             client,
             "website_head_to_head",
@@ -749,7 +756,6 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
         "responses_root": str(responses_root),
         "written": written,
     }
-
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="ATP website ingestion for BigQuery (file-driven)")

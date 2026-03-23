@@ -304,6 +304,77 @@ def _past_tournament_results_urls(tournament_dates_json: Dict[str, Any]) -> List
     return out
 
 
+def _all_tournament_results_urls(tournament_dates_json: Dict[str, Any]) -> List[Tuple[str, str, str]]:
+    """Return (slug, tournament_id, full_results_url) for all events in tournament_dates JSON."""
+    out: List[Tuple[str, str, str]] = []
+    for month in tournament_dates_json.get("TournamentDates", []):
+        for t in month.get("Tournaments", []):
+            scores_url = (t.get("ScoresUrl") or "").replace("country-results", "results")
+            if not scores_url:
+                continue
+            m = re.search(r"/scores/(?:archive|current)/([^/]+)/([^/]+)/", scores_url)
+            if not m:
+                continue
+            slug, tid = m.group(1), m.group(2)
+            out.append((slug, tid, f"https://www.atptour.com{scores_url}"))
+    deduped: Dict[Tuple[str, str], Tuple[str, str, str]] = {}
+    for slug, tid, url in out:
+        deduped[(slug, tid)] = (slug, tid, url)
+    return list(deduped.values())
+
+
+def _year_from_results_url(url: str) -> Optional[int]:
+    m = re.search(r"/(?:archive|current)/[^/]+/[^/]+/(\d{4})/", url)
+    if not m:
+        return None
+    try:
+        return int(m.group(1))
+    except ValueError:
+        return None
+
+
+def _results_urls_for_year_range(
+    tournament_dates_json: Dict[str, Any],
+    start_year: int,
+    end_year: int,
+) -> List[Tuple[str, str, str]]:
+    urls = _all_tournament_results_urls(tournament_dates_json)
+    if not urls:
+        return []
+    filtered: List[Tuple[str, str, str]] = []
+    for slug, tid, url in urls:
+        year = _year_from_results_url(url)
+        if year is None:
+            filtered.append((slug, tid, url))
+            continue
+        if start_year <= year <= end_year:
+            filtered.append((slug, tid, url))
+    return filtered
+
+
+def _dedupe_match_results_rows(rows: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """De-duplicate normalized match result rows before BigQuery insert."""
+    deduped: List[Dict[str, Any]] = []
+    seen: Set[Tuple[Any, ...]] = set()
+    for row in rows:
+        key = (
+            row.get("tournament_id"),
+            row.get("tournament_slug"),
+            str(row.get("match_date")),
+            row.get("round_and_court"),
+            row.get("player_1_name"),
+            row.get("player_2_name"),
+            row.get("player_1_scores"),
+            row.get("player_2_scores"),
+            row.get("match_duration"),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(row)
+    return deduped
+
+
 def _safe_json_str(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False)
 
@@ -587,22 +658,34 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
             ]
         )
 
-    # Backfill: in multi-year mode fetch results from every past tournament in the calendar.
-    # The tournament_dates JSON lists all events for the current year with their archive URLs.
-    if start_year < end_year and isinstance(tournament_dates["payload_json"], dict):
-        for past_slug, past_tid, past_url in _past_tournament_results_urls(tournament_dates["payload_json"]):
+    # Re-fetch results across tournament calendar URLs so website_match_results_rows
+    # stays season-complete rather than containing only the active event.
+    if isinstance(tournament_dates["payload_json"], dict):
+        results_urls = _results_urls_for_year_range(
+            tournament_dates["payload_json"],
+            start_year=start_year,
+            end_year=end_year,
+        )
+
+        for past_slug, past_tid, past_url in results_urls:
             if past_slug == result_slug and past_tid == result_tid:
                 continue  # current tournament already parsed above
             past_html = _fetch_html_url(past_url)
-            if past_html:
-                parsed_match_results_rows.extend(
-                    [
-                        row.to_dict()
-                        for row in normalize_match_results_html(
-                            past_slug, past_tid, past_html, snapshot_ts_utc=snapshot_ts
-                        )
-                    ]
-                )
+            if not past_html:
+                continue
+            parsed_match_results_rows.extend(
+                [
+                    row.to_dict()
+                    for row in normalize_match_results_html(
+                        past_slug,
+                        past_tid,
+                        past_html,
+                        snapshot_ts_utc=snapshot_ts,
+                    )
+                ]
+            )
+
+    parsed_match_results_rows = _dedupe_match_results_rows(parsed_match_results_rows)
 
     player_ids: Set[str] = set()
     # Use all_schedule_rows (includes past matches) so a stale schedule file still yields player IDs.

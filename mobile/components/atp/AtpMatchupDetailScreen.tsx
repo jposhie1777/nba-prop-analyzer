@@ -78,6 +78,44 @@ function parseLineNumber(value?: string | null): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function outcomeSideForRow(row: AtpOddsBoardRow): "home" | "away" | null {
+  const side = row.outcome_side?.trim().toLowerCase();
+  if (side === "home" || side === "away") return side;
+  const raw = row.outcome_name?.trim().toLowerCase();
+  if (raw === "home" || raw === "o1" || raw === "1") return "home";
+  if (raw === "away" || raw === "o2" || raw === "2") return "away";
+  return null;
+}
+
+function splitDualLineValue(value: string): { home: string; away: string } | null {
+  const parts = value.split("/");
+  if (parts.length !== 2) return null;
+  const homeRaw = parts[0].trim();
+  const awayRaw = parts[1].trim();
+
+  const numberRegex = /^[+-]?\d+(?:\.\d+)?/;
+  const homeNum = homeRaw.match(numberRegex)?.[0] ?? homeRaw;
+  const awayNum = awayRaw.match(numberRegex)?.[0] ?? awayRaw;
+  const homeSuffix = homeRaw.replace(numberRegex, "").trim();
+  const awaySuffix = awayRaw.replace(numberRegex, "").trim();
+  const suffix = awaySuffix || homeSuffix;
+
+  const home = suffix && homeRaw === homeNum ? `${homeNum} ${suffix}` : homeRaw;
+  const away = suffix && awayRaw === awayNum ? `${awayNum} ${suffix}` : awayRaw;
+  return { home: home.trim(), away: away.trim() };
+}
+
+function lineValueForOutcome(row: AtpOddsBoardRow): string | null {
+  const raw = row.line_value?.trim();
+  if (!raw) return null;
+  const split = splitDualLineValue(raw);
+  if (!split) return raw;
+  const side = outcomeSideForRow(row);
+  if (side === "home") return split.home;
+  if (side === "away") return split.away;
+  return raw;
+}
+
 function rawOutcomeLabel(row: AtpOddsBoardRow): string {
   const fromName = row.outcome_name?.trim();
   if (fromName) return fromName;
@@ -134,7 +172,7 @@ function buildOddsExport(rows: AtpOddsBoardRow[], homePlayer: string, awayPlayer
       row.market ?? "",
       row.period_id ?? "",
       row.period_name ?? "",
-      row.line_value ?? "",
+      lineValueForOutcome(row) ?? "",
       displayOutcomeLabel(row, homePlayer, awayPlayer),
       row.bookie ?? "",
       formatAmericanOnly(row),
@@ -148,6 +186,22 @@ function formatMatchTime(value?: string | null): string | undefined {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return undefined;
   return date.toLocaleString();
+}
+
+function titleCaseWords(value?: string | null): string {
+  if (!value) return "";
+  return value
+    .split("_")
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .map((token) => token[0].toUpperCase() + token.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function formatBettingMetric(value: number | null | undefined, label?: string | null): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  if ((label ?? "").toLowerCase().includes("percentage")) return `${value}%`;
+  return `${value}`;
 }
 
 export function AtpMatchupDetailScreen() {
@@ -301,7 +355,7 @@ export function AtpMatchupDetailScreen() {
   function betIdForBoardRow(row: AtpOddsBoardRow, price: number): string {
     const market = marketLabelForRow(row);
     const outcome = displayOutcomeLabel(row, homePlayer, awayPlayer);
-    const line = row.line_value ?? "n/a";
+    const line = lineValueForOutcome(row) ?? "n/a";
     const book = row.bookie ?? "book";
     const period = row.period_name ?? (row.period_id != null ? String(row.period_id) : "all");
     return `atp-${matchId}-${market}-${period}-${book}-${outcome}-${line}-${price}`;
@@ -363,7 +417,7 @@ export function AtpMatchupDetailScreen() {
       createdAt: new Date().toISOString(),
       market: marketLabelForRow(row),
       outcome,
-      line: parseLineNumber(row.line_value),
+      line: parseLineNumber(lineValueForOutcome(row)),
       price,
       bookmaker: row.bookie ?? "Unknown Book",
       matchId: matchId || null,
@@ -500,7 +554,9 @@ export function AtpMatchupDetailScreen() {
                                           ]}
                                         >
                                           <Text style={styles.oddsCellOutcome}>{displayOutcomeLabel(row, homePlayer, awayPlayer)}</Text>
-                                          {row.line_value ? <Text style={styles.oddsCellLine}>Line {row.line_value}</Text> : null}
+                                          {lineValueForOutcome(row) ? (
+                                            <Text style={styles.oddsCellLine}>Line {lineValueForOutcome(row)}</Text>
+                                          ) : null}
                                           <Text style={styles.oddsCellPrice}>{formatAmericanOnly(row)}</Text>
                                         </Pressable>
                                       );
@@ -528,7 +584,9 @@ export function AtpMatchupDetailScreen() {
                                           ]}
                                         >
                                           <Text style={styles.oddsCellOutcome}>{displayOutcomeLabel(row, homePlayer, awayPlayer)}</Text>
-                                          {row.line_value ? <Text style={styles.oddsCellLine}>Line {row.line_value}</Text> : null}
+                                          {lineValueForOutcome(row) ? (
+                                            <Text style={styles.oddsCellLine}>Line {lineValueForOutcome(row)}</Text>
+                                          ) : null}
                                           <Text style={styles.oddsCellPrice}>{formatAmericanOnly(row)}</Text>
                                         </Pressable>
                                       );
@@ -556,7 +614,9 @@ export function AtpMatchupDetailScreen() {
                                           ]}
                                         >
                                           <Text style={styles.oddsCellOutcome}>{displayOutcomeLabel(row, homePlayer, awayPlayer)}</Text>
-                                          {row.line_value ? <Text style={styles.oddsCellLine}>Line {row.line_value}</Text> : null}
+                                          {lineValueForOutcome(row) ? (
+                                            <Text style={styles.oddsCellLine}>Line {lineValueForOutcome(row)}</Text>
+                                          ) : null}
                                           <Text style={styles.oddsCellPrice}>{formatAmericanOnly(row)}</Text>
                                         </Pressable>
                                       );
@@ -582,7 +642,9 @@ export function AtpMatchupDetailScreen() {
                                     ]}
                                   >
                                     <Text style={styles.oddsCellOutcome}>{displayOutcomeLabel(row, homePlayer, awayPlayer)}</Text>
-                                    {row.line_value ? <Text style={styles.oddsCellLine}>Line {row.line_value}</Text> : null}
+                                    {lineValueForOutcome(row) ? (
+                                      <Text style={styles.oddsCellLine}>Line {lineValueForOutcome(row)}</Text>
+                                    ) : null}
                                     <Text style={styles.oddsCellPrice}>{formatAmericanOnly(row)}</Text>
                                   </Pressable>
                                 );
@@ -705,18 +767,40 @@ export function AtpMatchupDetailScreen() {
             {expanded.bettingInfo ? (
               data.betting_info.length ? (
                 data.betting_info.map((row, idx) => {
-                  const valuePart = row.value != null && `${row.value}`.trim() ? `${row.value}` : null;
-                  const homePart = row.home != null ? `${homePlayer}: ${row.home}` : null;
-                  const awayPart = row.away != null ? `${awayPlayer}: ${row.away}` : null;
-                  const sampleParts = [
-                    row.total_matches_home != null ? `${homePlayer} n=${row.total_matches_home}` : null,
-                    row.total_matches_away != null ? `${awayPlayer} n=${row.total_matches_away}` : null,
-                  ].filter(Boolean);
-                  const detail = [valuePart, homePart, awayPart, ...sampleParts].filter(Boolean).join(" • ");
+                  const categoryLabel = titleCaseWords(row.category);
+                  const subTabLabel = titleCaseWords(row.sub_tab);
+                  const statLabel = titleCaseWords(row.label) || "Stat";
+                  const lineLabel = row.value != null && `${row.value}`.trim() ? `${row.value}` : null;
                   return (
-                    <Text key={`bet-${idx}`} style={styles.valueText}>
-                      {row.category ?? "category"} • {row.sub_tab ?? "sub_tab"} • {row.label ?? "label"}: {detail || "–"}
-                    </Text>
+                    <View key={`bet-${idx}`} style={styles.bettingStatCard}>
+                      <Text style={styles.bettingStatTitle}>{statLabel}</Text>
+                      {(categoryLabel || subTabLabel) && (
+                        <Text style={styles.bettingStatMeta}>
+                          {[categoryLabel, subTabLabel].filter(Boolean).join(" • ")}
+                        </Text>
+                      )}
+                      {lineLabel ? <Text style={styles.bettingStatLine}>Line {lineLabel}</Text> : null}
+                      <View style={styles.bettingStatValuesRow}>
+                        <View style={styles.bettingStatValueCol}>
+                          <Text style={styles.bettingStatTeam}>{homePlayer}</Text>
+                          <Text style={styles.bettingStatValue}>{formatBettingMetric(row.home, row.label)}</Text>
+                          {row.total_matches_home != null ? (
+                            <Text style={styles.bettingStatSample}>n={row.total_matches_home}</Text>
+                          ) : null}
+                        </View>
+                        <View style={styles.bettingStatValueCol}>
+                          <Text style={[styles.bettingStatTeam, styles.bettingStatTeamRight]}>{awayPlayer}</Text>
+                          <Text style={[styles.bettingStatValue, styles.bettingStatValueRight]}>
+                            {formatBettingMetric(row.away, row.label)}
+                          </Text>
+                          {row.total_matches_away != null ? (
+                            <Text style={[styles.bettingStatSample, styles.bettingStatValueRight]}>
+                              n={row.total_matches_away}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </View>
+                    </View>
                   );
                 })
               ) : (
@@ -830,6 +914,24 @@ const styles = StyleSheet.create({
   oddsCellOutcome: { color: "#E2E8F0", fontSize: 12, fontWeight: "700" },
   oddsCellLine: { color: "#94A3B8", fontSize: 10, fontWeight: "600" },
   oddsCellPrice: { color: "#86EFAC", fontSize: 15, fontWeight: "800" },
+  bettingStatCard: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#1E293B",
+    borderRadius: 10,
+    backgroundColor: "#0F172A",
+    padding: 10,
+    gap: 4,
+  },
+  bettingStatTitle: { color: "#E2E8F0", fontSize: 12, fontWeight: "800" },
+  bettingStatMeta: { color: "#93C5FD", fontSize: 10, fontWeight: "700" },
+  bettingStatLine: { color: "#94A3B8", fontSize: 11, fontWeight: "600" },
+  bettingStatValuesRow: { flexDirection: "row", justifyContent: "space-between", gap: 12, marginTop: 4 },
+  bettingStatValueCol: { flex: 1, gap: 2 },
+  bettingStatTeam: { color: "#A7C0E8", fontSize: 10, fontWeight: "700" },
+  bettingStatTeamRight: { textAlign: "right" },
+  bettingStatValue: { color: "#E5E7EB", fontSize: 13, fontWeight: "800" },
+  bettingStatValueRight: { textAlign: "right" },
+  bettingStatSample: { color: "#94A3B8", fontSize: 10, fontWeight: "600" },
   row: { gap: 2 },
   keyText: { color: "#C4B5FD", fontSize: 11, fontWeight: "700" },
   valueText: { color: "#E5E7EB", fontSize: 12, lineHeight: 18 },

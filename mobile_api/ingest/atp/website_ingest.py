@@ -443,6 +443,18 @@ def _extract_archive_event_date_ranges(archive_html: str) -> Dict[Tuple[str, str
     return ranges
 
 
+def _extract_event_date_range_from_results_html(results_html: str) -> Tuple[Optional[date], Optional[date]]:
+    m = re.search(
+        r'<div class="date-location">[\s\S]*?<span>[\s\S]*?</span>\s*\|\s*<span>([\s\S]*?)</span>',
+        results_html,
+        flags=re.IGNORECASE,
+    )
+    if not m:
+        return None, None
+    date_text = re.sub(r"<[^>]+>", " ", m.group(1))
+    return _parse_archive_event_date_range(date_text)
+
+
 def _infer_match_date_from_round_label(
     *,
     round_label: Optional[str],
@@ -934,16 +946,24 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
     if result_slug and result_tid and results_capture.get("payload_text"):
         # website_match_results is the historical per-match results table (one row per match).
         # The raw HTML payload is already stored in website_raw_responses (endpoint_key="match_results").
+        current_event_rows = [
+            row.to_dict()
+            for row in normalize_match_results_html(
+                result_slug,
+                result_tid,
+                results_capture["payload_text"],
+                snapshot_ts_utc=snapshot_ts,
+            )
+        ]
+        current_start, current_end = _extract_event_date_range_from_results_html(
+            results_capture["payload_text"]
+        )
         parsed_match_results_rows.extend(
-            [
-                row.to_dict()
-                for row in normalize_match_results_html(
-                    result_slug,
-                    result_tid,
-                    results_capture["payload_text"],
-                    snapshot_ts_utc=snapshot_ts,
-                )
-            ]
+            _fill_missing_match_dates_for_event(
+                current_event_rows,
+                start_date=current_start,
+                end_date=current_end,
+            )
         )
 
     # Re-fetch results across tournament calendar URLs so website_match_results_rows
@@ -978,6 +998,10 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
                 )
             ]
             event_start, event_end = archive_event_ranges.get((past_slug, past_tid), (None, None))
+            if event_start is None or event_end is None:
+                html_start, html_end = _extract_event_date_range_from_results_html(past_html)
+                event_start = event_start or html_start
+                event_end = event_end or html_end
             event_rows = _fill_missing_match_dates_for_event(
                 event_rows,
                 start_date=event_start,

@@ -13,7 +13,10 @@ import requests
 from google.api_core.exceptions import NotFound
 from google.cloud import bigquery
 
-from bq import get_bq_client
+try:
+    from bq import get_bq_client
+except ModuleNotFoundError:
+    from mobile_api.bq import get_bq_client
 
 
 DEFAULT_DATASET = os.getenv("ATP_DATASET", "atp_data")

@@ -4,7 +4,12 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 
 import { AtpMatchupCard } from "@/components/atp/AtpMatchupCard";
-import { AtpOddsBoardRow, useAtpMatchupDetail } from "@/hooks/atp/useAtpMatchups";
+import {
+  AtpOddsBoardRow,
+  AtpSackmannH2hStats,
+  AtpSackmannPlayerStats,
+  useAtpMatchupDetail,
+} from "@/hooks/atp/useAtpMatchups";
 import { useAtpBetslip } from "@/store/useAtpBetslip";
 import { useAtpBetslipDrawer } from "@/store/useAtpBetslipDrawer";
 import { useTheme } from "@/store/useTheme";
@@ -13,6 +18,7 @@ type SectionKey =
   | "oddsBoard"
   | "h2hStats"
   | "h2hSummary"
+  | "sackmannStats"
   | "recentMatches"
   | "bettingInfo"
   | "matchInfo";
@@ -204,6 +210,50 @@ function formatBettingMetric(value: number | null | undefined, label?: string | 
   return `${value}`;
 }
 
+function formatDecimal(value?: number | null, digits = 2): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  return value.toFixed(digits);
+}
+
+function formatWinRate(value?: number | null): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  return `${(value * 100).toFixed(1)}%`;
+}
+
+function formatSurfaceLabel(value?: string | null): string {
+  const raw = (value ?? "").toLowerCase();
+  if (raw === "hard") return "Hard";
+  if (raw === "clay") return "Clay";
+  if (raw === "grass") return "Grass";
+  if (!raw) return "Surface";
+  return raw[0].toUpperCase() + raw.slice(1);
+}
+
+function formatRecentPoints(
+  points: { match_date?: string | null; aces?: number | null; double_faults?: number | null }[] | undefined,
+  key: "aces" | "double_faults"
+): string {
+  if (!points?.length) return "—";
+  return points
+    .slice(0, 3)
+    .map((point) => `${formatShortDate(point.match_date)}: ${point[key] ?? "—"}`)
+    .join(" • ");
+}
+
+function h2hSummaryText(row: AtpSackmannH2hStats | null | undefined, homePlayer: string, awayPlayer: string): string {
+  if (!row) return "No Sackmann head-to-head data yet.";
+  const wins = row.wins ?? 0;
+  const losses = row.losses ?? 0;
+  const matches = row.matches_played ?? 0;
+  const winRate = formatWinRate(row.win_rate);
+  return `${homePlayer} vs ${awayPlayer}: ${wins}-${losses} in ${matches} matches (${winRate})`;
+}
+
+function playerLabel(stats: AtpSackmannPlayerStats | null | undefined, fallback: string): string {
+  const value = stats?.player_name?.trim();
+  return value || fallback;
+}
+
 export function AtpMatchupDetailScreen() {
   const router = useRouter();
   const { colors } = useTheme();
@@ -230,6 +280,7 @@ export function AtpMatchupDetailScreen() {
     oddsBoard: true,
     h2hStats: true,
     h2hSummary: true,
+    sackmannStats: true,
     recentMatches: false,
     bettingInfo: false,
     matchInfo: false,
@@ -247,6 +298,12 @@ export function AtpMatchupDetailScreen() {
   const awayRank = params.awayRank ?? matchup.away_rank ?? null;
   const homeHeadshotUrl = params.homeHeadshotUrl ?? matchup.home_headshot_url ?? null;
   const awayHeadshotUrl = params.awayHeadshotUrl ?? matchup.away_headshot_url ?? null;
+  const sackmannStats = data?.sackmann_stats;
+  const sackmannHome = sackmannStats?.players?.home ?? null;
+  const sackmannAway = sackmannStats?.players?.away ?? null;
+  const sackmannH2hAll = sackmannStats?.head_to_head?.all ?? null;
+  const sackmannH2hSurface = sackmannStats?.head_to_head?.surface ?? null;
+  const sackmannSurfaceLabel = formatSurfaceLabel(sackmannStats?.surface_key);
 
   const marketOptions = useMemo(() => {
     const seen = new Map<string, string>();
@@ -710,6 +767,75 @@ export function AtpMatchupDetailScreen() {
           </View>
 
           <View style={[styles.panel, { borderColor: colors.border.subtle }]}>
+            <Pressable onPress={() => toggleSection("sackmannStats")} style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Sackmann Matchup Data</Text>
+              <Text style={styles.sectionToggle}>{sectionChevron("sackmannStats")}</Text>
+            </Pressable>
+            {expanded.sackmannStats ? (
+              sackmannHome || sackmannAway || sackmannH2hAll || sackmannH2hSurface ? (
+                <>
+                  <Text style={styles.valueText}>
+                    Source: {sackmannStats?.source_repo ?? "JeffSackmann/tennis_atp"}
+                  </Text>
+                  <View style={styles.sackmannH2hCard}>
+                    <Text style={styles.sackmannCardTitle}>Head-to-Head (All Surfaces)</Text>
+                    <Text style={styles.valueText}>{h2hSummaryText(sackmannH2hAll, homePlayer, awayPlayer)}</Text>
+                    {sackmannH2hSurface ? (
+                      <>
+                        <Text style={[styles.sackmannCardTitle, styles.sackmannSubhead]}>
+                          Head-to-Head ({sackmannSurfaceLabel})
+                        </Text>
+                        <Text style={styles.valueText}>{h2hSummaryText(sackmannH2hSurface, homePlayer, awayPlayer)}</Text>
+                      </>
+                    ) : null}
+                  </View>
+
+                  <View style={styles.sackmannPlayerGrid}>
+                    {[sackmannHome, sackmannAway].map((playerStats, idx) => {
+                      const fallback = idx === 0 ? homePlayer : awayPlayer;
+                      return (
+                        <View key={`sackmann-player-${idx}`} style={styles.sackmannPlayerCard}>
+                          <Text style={styles.sackmannCardTitle}>{playerLabel(playerStats, fallback)}</Text>
+                          <Text style={styles.valueText}>
+                            {sackmannSurfaceLabel}: {playerStats?.wins ?? 0}-{playerStats?.losses ?? 0} in{" "}
+                            {playerStats?.matches_played ?? 0} matches ({formatWinRate(playerStats?.win_rate)})
+                          </Text>
+                          <Text style={styles.valueText}>
+                            Aces/match: {formatDecimal(playerStats?.aces_per_match)}{" "}
+                            (L5 {formatDecimal(playerStats?.recent_aces_l5_avg)})
+                          </Text>
+                          <Text style={styles.valueText}>
+                            DFs/match: {formatDecimal(playerStats?.double_faults_per_match)}{" "}
+                            (L5 {formatDecimal(playerStats?.recent_double_faults_l5_avg)})
+                          </Text>
+                          <Text style={styles.valueText}>
+                            Avg games: {formatDecimal(playerStats?.avg_games_per_match)}{" "}
+                            (L5 {formatDecimal(playerStats?.recent_avg_games_l5)})
+                          </Text>
+                          <Text style={styles.valueText}>
+                            Avg sets: {formatDecimal(playerStats?.avg_sets_per_match)}{" "}
+                            (L5 {formatDecimal(playerStats?.recent_avg_sets_l5)})
+                          </Text>
+                          <Text style={styles.valueText}>Recent form: {playerStats?.recent_form_last10 ?? "—"}</Text>
+                          <Text style={styles.valueText}>
+                            Recent aces: {formatRecentPoints(playerStats?.recent_aces_by_match, "aces")}
+                          </Text>
+                          <Text style={styles.valueText}>
+                            Recent DFs:{" "}
+                            {formatRecentPoints(playerStats?.recent_double_faults_by_match, "double_faults")}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </>
+              ) : (
+                <Text style={styles.emptyText}>No Sackmann matchup stats are available for these players yet.</Text>
+              )
+            ) : null}
+          </View>
+
+          <View style={[styles.panel, { borderColor: colors.border.subtle }]}>
             <Pressable onPress={() => toggleSection("recentMatches")} style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Recent Matches</Text>
               <Text style={styles.sectionToggle}>{sectionChevron("recentMatches")}</Text>
@@ -914,6 +1040,25 @@ const styles = StyleSheet.create({
   oddsCellOutcome: { color: "#E2E8F0", fontSize: 12, fontWeight: "700" },
   oddsCellLine: { color: "#94A3B8", fontSize: 10, fontWeight: "600" },
   oddsCellPrice: { color: "#86EFAC", fontSize: 15, fontWeight: "800" },
+  sackmannH2hCard: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#1E293B",
+    borderRadius: 10,
+    backgroundColor: "#0F172A",
+    padding: 10,
+    gap: 4,
+  },
+  sackmannCardTitle: { color: "#E2E8F0", fontSize: 12, fontWeight: "800" },
+  sackmannSubhead: { marginTop: 4 },
+  sackmannPlayerGrid: { gap: 8 },
+  sackmannPlayerCard: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#1E293B",
+    borderRadius: 10,
+    backgroundColor: "#0F172A",
+    padding: 10,
+    gap: 4,
+  },
   bettingStatCard: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#1E293B",

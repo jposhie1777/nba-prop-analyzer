@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import os
+import re
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from fastapi import APIRouter, Query
@@ -23,6 +25,15 @@ ATP_TABLES: Dict[str, str] = {
     "odds": os.getenv("ODDSPEDIA_ATP_ODDS_TABLE", "oddspedia.atp_odds"),
 }
 PLAYER_LOOKUP_TABLE = os.getenv("ATP_PLAYER_LOOKUP_TABLE", "atp_data.player_lookup")
+SACKMANN_PLAYER_SURFACE_FEATURES_TABLE = os.getenv(
+    "ATP_SACKMANN_PLAYER_SURFACE_FEATURES_TABLE",
+    "atp_data.sackmann_player_surface_features",
+)
+SACKMANN_H2H_FEATURES_TABLE = os.getenv(
+    "ATP_SACKMANN_H2H_FEATURES_TABLE",
+    "atp_data.sackmann_h2h_features",
+)
+SACKMANN_SOURCE_REPO = os.getenv("SACKMANN_SOURCE_REPO", "JeffSackmann/tennis_atp")
 
 
 def _split_table_ref(table_ref: str) -> tuple[str | None, str, str]:
@@ -88,6 +99,44 @@ def _normalize_name_key(value: Optional[str]) -> str:
     if not value:
         return ""
     return "".join(ch for ch in value.lower().strip() if ch.isalnum() or ch == " ")
+
+
+def _normalize_name_norm(value: Optional[str]) -> str:
+    if not value:
+        return ""
+    return "".join(ch for ch in value.lower().strip() if ch.isalnum())
+
+
+def _normalize_surface_key(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    cleaned = str(value).strip().lower()
+    if not cleaned:
+        return None
+    if "hard" in cleaned:
+        return "hard"
+    if "clay" in cleaned:
+        return "clay"
+    if "grass" in cleaned:
+        return "grass"
+    token = re.sub(r"[^a-z]", "", cleaned.split(" ")[0])
+    return token or None
+
+
+def _safe_json_load(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, (dict, list)):
+        return value
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return None
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+    return None
 
 
 def _fetch_player_headshots(player_names: Sequence[str]) -> Dict[str, str]:
@@ -688,6 +737,226 @@ def _fetch_recent_match_rows(match_id: int) -> List[Dict[str, Any]]:
     )
 
 
+def _fetch_sackmann_player_surface_rows(
+    player_norms: Sequence[str],
+    *,
+    surface_key: Optional[str],
+) -> List[Dict[str, Any]]:
+    norms = sorted({norm for norm in player_norms if norm})
+    if not norms:
+        return []
+
+    columns = _table_columns(SACKMANN_PLAYER_SURFACE_FEATURES_TABLE)
+    required = {"player_name_norm", "surface_key"}
+    if not required.issubset(columns):
+        return []
+
+    selected_fields = [
+        field
+        for field in [
+            "player_name_norm",
+            "player_name",
+            "surface_key",
+            "matches_played",
+            "wins",
+            "losses",
+            "win_rate",
+            "aces_per_match",
+            "double_faults_per_match",
+            "avg_games_per_match",
+            "avg_sets_per_match",
+            "recent_aces_l5_avg",
+            "recent_double_faults_l5_avg",
+            "recent_avg_games_l5",
+            "recent_avg_sets_l5",
+            "recent_aces_by_match",
+            "recent_double_faults_by_match",
+            "recent_form_last10",
+            "updated_at",
+        ]
+        if field in columns
+    ]
+    if not selected_fields:
+        return []
+
+    where_surface = "TRUE"
+    params: List[bigquery.ScalarQueryParameter | bigquery.ArrayQueryParameter] = [
+        bigquery.ArrayQueryParameter("player_norms", "STRING", norms)
+    ]
+    if surface_key and "surface_key" in columns:
+        where_surface = "surface_key = @surface_key"
+        params.append(bigquery.ScalarQueryParameter("surface_key", "STRING", surface_key))
+
+    sql = f"""
+    SELECT {", ".join(selected_fields)}
+    FROM `{SACKMANN_PLAYER_SURFACE_FEATURES_TABLE}`
+    WHERE player_name_norm IN UNNEST(@player_norms)
+      AND {where_surface}
+    """
+    return _safe_query(sql, params)
+
+
+def _fetch_sackmann_h2h_rows(
+    *,
+    home_norm: str,
+    away_norm: str,
+    surface_key: Optional[str],
+) -> List[Dict[str, Any]]:
+    if not home_norm or not away_norm:
+        return []
+
+    columns = _table_columns(SACKMANN_H2H_FEATURES_TABLE)
+    required = {"player_name_norm", "opponent_name_norm", "surface_key"}
+    if not required.issubset(columns):
+        return []
+
+    selected_fields = [
+        field
+        for field in [
+            "player_name_norm",
+            "player_name",
+            "opponent_name_norm",
+            "opponent_name",
+            "surface_key",
+            "matches_played",
+            "wins",
+            "losses",
+            "win_rate",
+            "aces_per_match",
+            "double_faults_per_match",
+            "avg_games_per_match",
+            "avg_sets_per_match",
+            "recent_h2h_matches",
+            "updated_at",
+        ]
+        if field in columns
+    ]
+    if not selected_fields:
+        return []
+
+    surface_keys = ["all"]
+    if surface_key:
+        surface_keys.append(surface_key)
+
+    sql = f"""
+    SELECT {", ".join(selected_fields)}
+    FROM `{SACKMANN_H2H_FEATURES_TABLE}`
+    WHERE (
+      (player_name_norm = @home_norm AND opponent_name_norm = @away_norm)
+      OR (player_name_norm = @away_norm AND opponent_name_norm = @home_norm)
+    )
+      AND surface_key IN UNNEST(@surface_keys)
+    """
+    return _safe_query(
+        sql,
+        [
+            bigquery.ScalarQueryParameter("home_norm", "STRING", home_norm),
+            bigquery.ScalarQueryParameter("away_norm", "STRING", away_norm),
+            bigquery.ArrayQueryParameter("surface_keys", "STRING", surface_keys),
+        ],
+    )
+
+
+def _shape_sackmann_player_row(row: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not row:
+        return None
+    return {
+        "player_name": row.get("player_name"),
+        "surface_key": row.get("surface_key"),
+        "matches_played": row.get("matches_played"),
+        "wins": row.get("wins"),
+        "losses": row.get("losses"),
+        "win_rate": row.get("win_rate"),
+        "aces_per_match": row.get("aces_per_match"),
+        "double_faults_per_match": row.get("double_faults_per_match"),
+        "avg_games_per_match": row.get("avg_games_per_match"),
+        "avg_sets_per_match": row.get("avg_sets_per_match"),
+        "recent_aces_l5_avg": row.get("recent_aces_l5_avg"),
+        "recent_double_faults_l5_avg": row.get("recent_double_faults_l5_avg"),
+        "recent_avg_games_l5": row.get("recent_avg_games_l5"),
+        "recent_avg_sets_l5": row.get("recent_avg_sets_l5"),
+        "recent_aces_by_match": _safe_json_load(row.get("recent_aces_by_match")) or [],
+        "recent_double_faults_by_match": _safe_json_load(row.get("recent_double_faults_by_match")) or [],
+        "recent_form_last10": row.get("recent_form_last10"),
+        "updated_at": row.get("updated_at"),
+    }
+
+
+def _shape_sackmann_h2h_row(row: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not row:
+        return None
+    return {
+        "surface_key": row.get("surface_key"),
+        "matches_played": row.get("matches_played"),
+        "wins": row.get("wins"),
+        "losses": row.get("losses"),
+        "win_rate": row.get("win_rate"),
+        "aces_per_match": row.get("aces_per_match"),
+        "double_faults_per_match": row.get("double_faults_per_match"),
+        "avg_games_per_match": row.get("avg_games_per_match"),
+        "avg_sets_per_match": row.get("avg_sets_per_match"),
+        "recent_h2h_matches": _safe_json_load(row.get("recent_h2h_matches")) or [],
+        "updated_at": row.get("updated_at"),
+    }
+
+
+def _build_sackmann_payload(
+    *,
+    home_team: Optional[str],
+    away_team: Optional[str],
+    surface: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    home_norm = _normalize_name_norm(home_team)
+    away_norm = _normalize_name_norm(away_team)
+    if not home_norm or not away_norm:
+        return None
+
+    surface_key = _normalize_surface_key(surface)
+    player_rows = _fetch_sackmann_player_surface_rows(
+        [home_norm, away_norm],
+        surface_key=surface_key,
+    )
+    by_norm: Dict[str, Dict[str, Any]] = {}
+    for row in player_rows:
+        norm = str(row.get("player_name_norm") or "")
+        if norm and norm not in by_norm:
+            by_norm[norm] = row
+
+    h2h_rows = _fetch_sackmann_h2h_rows(
+        home_norm=home_norm,
+        away_norm=away_norm,
+        surface_key=surface_key,
+    )
+    h2h_lookup: Dict[tuple[str, str, str], Dict[str, Any]] = {}
+    for row in h2h_rows:
+        key = (
+            str(row.get("player_name_norm") or ""),
+            str(row.get("opponent_name_norm") or ""),
+            str(row.get("surface_key") or ""),
+        )
+        h2h_lookup[key] = row
+
+    home_h2h_all = h2h_lookup.get((home_norm, away_norm, "all"))
+    home_h2h_surface = h2h_lookup.get((home_norm, away_norm, surface_key or ""))
+
+    payload = {
+        "source_repo": SACKMANN_SOURCE_REPO,
+        "surface_key": surface_key,
+        "players": {
+            "home": _shape_sackmann_player_row(by_norm.get(home_norm)),
+            "away": _shape_sackmann_player_row(by_norm.get(away_norm)),
+        },
+        "head_to_head": {
+            "all": _shape_sackmann_h2h_row(home_h2h_all),
+            "surface": _shape_sackmann_h2h_row(home_h2h_surface),
+        },
+    }
+
+    if not payload["players"]["home"] and not payload["players"]["away"] and not payload["head_to_head"]["all"]:
+        return None
+    return payload
+
+
 def _build_matchup_payload(
     *,
     upcoming_row: Optional[Dict[str, Any]],
@@ -775,6 +1044,11 @@ def atp_matchup_detail(match_id: int):
     odds_board, odds_updated_at = _fetch_match_odds_board(match_id)
     h2h_summary = _fetch_head_to_head_summary_row(match_id)
     h2h_matches = _fetch_head_to_head_match_rows(match_id)
+    sackmann_stats = _build_sackmann_payload(
+        home_team=matchup.get("home_team"),
+        away_team=matchup.get("away_team"),
+        surface=(weather_row or {}).get("surface"),
+    )
 
     return {
         "match_id": match_id,
@@ -789,4 +1063,5 @@ def atp_matchup_detail(match_id: int):
         "odds_summary": odds_summary,
         "odds_board": odds_board,
         "odds_updated_at": odds_updated_at,
+        "sackmann_stats": sackmann_stats,
     }

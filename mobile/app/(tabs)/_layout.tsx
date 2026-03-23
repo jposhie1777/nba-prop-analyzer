@@ -24,6 +24,7 @@ const STATIC_TABS: TabConfig[] = [
 ];
 
 const HIDDEN_SCREENS = [
+  "atp/match/[matchId]",
   "atp-compare",
   "atp-head-to-head",
   "atp-surface-splits",

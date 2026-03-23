@@ -8,6 +8,11 @@ import { useAtpBetslipDrawer } from "@/store/useAtpBetslipDrawer";
 
 const GAMBLY_URL = "https://www.gambly.com/gambly-bot";
 
+function formatPrice(value?: number | null): string | null {
+  if (value == null) return null;
+  return value > 0 ? `+${value}` : String(value);
+}
+
 export function AtpBetslipDrawer() {
   const { colors } = useTheme();
   const { items, remove, clear } = useAtpBetslip();
@@ -18,9 +23,19 @@ export function AtpBetslipDrawer() {
     () =>
       items
         .map((item, idx) => {
-          const details = [item.round, item.matchTime].filter(Boolean).join(" • ");
+          const details = [
+            item.market ?? "Match Winner",
+            item.line != null ? `Line ${item.line}` : null,
+            formatPrice(item.price),
+            item.bookmaker,
+            item.round,
+            item.matchTime,
+          ]
+            .filter(Boolean)
+            .join(" • ");
           const suffix = details ? ` (${details})` : "";
-          return `${idx + 1}. ${item.player} to win vs ${item.opponent}${suffix}`;
+          const pickLabel = item.outcome ?? item.player;
+          return `${idx + 1}. ${pickLabel} vs ${item.opponent}${suffix}`;
         })
         .join("\n"),
     [items]
@@ -51,10 +66,19 @@ export function AtpBetslipDrawer() {
               <View key={item.id} style={[styles.row, { borderBottomColor: colors.border.subtle }]}>
                 <View style={styles.rowTextWrap}>
                   <Text style={[styles.rowTitle, { color: colors.text.primary }]} numberOfLines={2}>
-                    {item.player} to win vs {item.opponent}
+                    {item.outcome ?? item.player} vs {item.opponent}
                   </Text>
                   <Text style={[styles.rowMeta, { color: colors.text.muted }]} numberOfLines={1}>
-                    {[item.round, item.matchTime].filter(Boolean).join(" • ") || "ATP Match Winner"}
+                    {[
+                      item.market ?? "ATP Match Winner",
+                      item.line != null ? `Line ${item.line}` : null,
+                      formatPrice(item.price),
+                      item.bookmaker,
+                      item.round,
+                      item.matchTime,
+                    ]
+                      .filter(Boolean)
+                      .join(" • ") || "ATP Match Winner"}
                   </Text>
                 </View>
                 <Pressable onPress={() => remove(item.id)}>

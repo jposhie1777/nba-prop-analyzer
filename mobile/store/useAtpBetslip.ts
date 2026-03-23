@@ -8,9 +8,16 @@ export type AtpSlipItem = {
   playerId: number | null;
   player: string;
   opponent: string;
+  game?: string;
+  matchId?: number | null;
   tournamentName?: string;
   round?: string;
   matchTime?: string;
+  market?: string;
+  outcome?: string;
+  line?: number | null;
+  price?: number | null;
+  bookmaker?: string;
   createdAt: string;
 };
 

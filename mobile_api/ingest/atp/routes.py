@@ -15,6 +15,12 @@ from .ingest import (
     ingest_tournaments,
     ingest_upcoming_scheduled_matches,
 )
+from .sackmann_ingest import (
+    ingest_sackmann_backfill,
+    ingest_sackmann_daily,
+    ingest_sackmann_years,
+    rebuild_sackmann_features,
+)
 
 
 router = APIRouter(
@@ -51,6 +57,23 @@ class AtpUpcomingScheduledIngestRequest(BaseModel):
     per_page: int = 100
     max_pages: Optional[int] = None
     create_tables: bool = True
+
+
+class AtpSackmannBackfillRequest(BaseModel):
+    start_year: int = 1968
+    end_year: int = datetime.utcnow().year
+    years: Optional[list[int]] = None
+    include_challenger: bool = True
+    include_futures: bool = False
+    truncate_raw: bool = True
+    rebuild_features: bool = True
+
+
+class AtpSackmannDailyRequest(BaseModel):
+    include_challenger: bool = True
+    include_futures: bool = False
+    years_back: int = 2
+    rebuild_features: bool = True
 
 
 @router.post("/historical")
@@ -135,5 +158,50 @@ def run_rankings(ranking_date: Optional[str] = None):
 def run_race(ranking_date: Optional[str] = None):
     try:
         return ingest_atp_race(ranking_date=ranking_date)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/sackmann/backfill")
+def run_sackmann_backfill(req: AtpSackmannBackfillRequest):
+    try:
+        if req.years:
+            return ingest_sackmann_years(
+                years=req.years,
+                include_challenger=req.include_challenger,
+                include_futures=req.include_futures,
+                truncate_raw=req.truncate_raw,
+                rebuild_features=req.rebuild_features,
+            )
+        return ingest_sackmann_backfill(
+            start_year=req.start_year,
+            end_year=req.end_year,
+            include_challenger=req.include_challenger,
+            include_futures=req.include_futures,
+            truncate_raw=req.truncate_raw,
+            rebuild_features=req.rebuild_features,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/sackmann/daily")
+def run_sackmann_daily(req: AtpSackmannDailyRequest):
+    try:
+        return ingest_sackmann_daily(
+            include_challenger=req.include_challenger,
+            include_futures=req.include_futures,
+            years_back=req.years_back,
+            rebuild_features=req.rebuild_features,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/sackmann/rebuild-features")
+def run_sackmann_rebuild_features():
+    try:
+        rebuild_sackmann_features()
+        return {"ok": True}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

@@ -51,3 +51,11 @@ jobs:
             ARGS="$ARGS --start-year ${{ inputs.year }} --end-year ${{ inputs.year }}"
           fi
           python -m mobile_api.ingest.atp.website_ingest $ARGS
+
+      - name: Run ATP Sackmann daily refresh
+        run: |
+          ARGS="--mode daily --include-challenger --years-back 2"
+          if [ -n "${{ inputs.year }}" ]; then
+            ARGS="$ARGS --years ${{ inputs.year }}"
+          fi
+          python -m mobile_api.ingest.atp.sackmann_ingest $ARGS

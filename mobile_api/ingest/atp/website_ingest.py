@@ -317,9 +317,9 @@ def _all_tournament_results_urls(tournament_dates_json: Dict[str, Any]) -> List[
                 continue
             slug, tid = m.group(1), m.group(2)
             out.append((slug, tid, f"https://www.atptour.com{scores_url}"))
-    deduped: Dict[Tuple[str, str], Tuple[str, str, str]] = {}
+    deduped: Dict[str, Tuple[str, str, str]] = {}
     for slug, tid, url in out:
-        deduped[(slug, tid)] = (slug, tid, url)
+        deduped[url] = (slug, tid, url)
     return list(deduped.values())
 
 
@@ -350,6 +350,41 @@ def _results_urls_for_year_range(
         if start_year <= year <= end_year:
             filtered.append((slug, tid, url))
     return filtered
+
+
+def _extract_results_urls_from_archive_html(archive_html: str) -> List[Tuple[str, str, str]]:
+    out: List[Tuple[str, str, str]] = []
+    for m in re.finditer(
+        r'href="(/en/scores/archive/([^/]+)/([^/]+)/(\d{4})/(?:country-results|results))"',
+        archive_html,
+        flags=re.IGNORECASE,
+    ):
+        href = m.group(1).replace("country-results", "results")
+        slug = m.group(2)
+        tid = m.group(3)
+        out.append((slug, tid, f"https://www.atptour.com{href}"))
+    deduped: Dict[str, Tuple[str, str, str]] = {}
+    for slug, tid, url in out:
+        deduped[url] = (slug, tid, url)
+    return list(deduped.values())
+
+
+def _results_archive_urls_for_year(year: int) -> List[Tuple[str, str, str]]:
+    archive_url = f"https://www.atptour.com/en/scores/results-archive?year={year}"
+    archive_html = _fetch_html_url(archive_url)
+    if not archive_html:
+        return []
+    return _extract_results_urls_from_archive_html(archive_html)
+
+
+def _merge_results_url_sets(
+    *url_sets: Sequence[Tuple[str, str, str]],
+) -> List[Tuple[str, str, str]]:
+    merged: Dict[str, Tuple[str, str, str]] = {}
+    for url_set in url_sets:
+        for slug, tid, url in url_set:
+            merged[url] = (slug, tid, url)
+    return list(merged.values())
 
 
 def _dedupe_match_results_rows(rows: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -661,11 +696,15 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
     # Re-fetch results across tournament calendar URLs so website_match_results_rows
     # stays season-complete rather than containing only the active event.
     if isinstance(tournament_dates["payload_json"], dict):
-        results_urls = _results_urls_for_year_range(
+        calendar_results_urls = _results_urls_for_year_range(
             tournament_dates["payload_json"],
             start_year=start_year,
             end_year=end_year,
         )
+        archive_results_urls: List[Tuple[str, str, str]] = []
+        for year in range(start_year, end_year + 1):
+            archive_results_urls.extend(_results_archive_urls_for_year(year))
+        results_urls = _merge_results_url_sets(calendar_results_urls, archive_results_urls)
 
         for past_slug, past_tid, past_url in results_urls:
             if past_slug == result_slug and past_tid == result_tid:

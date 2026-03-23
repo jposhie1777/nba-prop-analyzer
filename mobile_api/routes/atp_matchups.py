@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import unicodedata
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from fastapi import APIRouter, Query
@@ -104,7 +105,37 @@ def _normalize_name_key(value: Optional[str]) -> str:
 def _normalize_name_norm(value: Optional[str]) -> str:
     if not value:
         return ""
-    return "".join(ch for ch in value.lower().strip() if ch.isalnum())
+    ascii_value = (
+        unicodedata.normalize("NFKD", str(value))
+        .encode("ascii", "ignore")
+        .decode("ascii")
+    )
+    return "".join(ch for ch in ascii_value.lower().strip() if ch.isalnum())
+
+
+def _legacy_buggy_name_norm(value: Optional[str]) -> str:
+    """
+    Compatibility with previously built Sackmann features where uppercase
+    letters were accidentally dropped during regex normalization.
+    """
+    if not value:
+        return ""
+    ascii_value = (
+        unicodedata.normalize("NFKD", str(value))
+        .encode("ascii", "ignore")
+        .decode("ascii")
+    )
+    return "".join(ch for ch in ascii_value.strip() if ch.isdigit() or ("a" <= ch <= "z"))
+
+
+def _name_norm_candidates(value: Optional[str]) -> List[str]:
+    candidates: List[str] = []
+    primary = _normalize_name_norm(value)
+    legacy = _legacy_buggy_name_norm(value)
+    for norm in [primary, legacy]:
+        if norm and norm not in candidates:
+            candidates.append(norm)
+    return candidates
 
 
 def _normalize_surface_key(value: Optional[str]) -> Optional[str]:
@@ -798,11 +829,13 @@ def _fetch_sackmann_player_surface_rows(
 
 def _fetch_sackmann_h2h_rows(
     *,
-    home_norm: str,
-    away_norm: str,
+    home_norms: Sequence[str],
+    away_norms: Sequence[str],
     surface_key: Optional[str],
 ) -> List[Dict[str, Any]]:
-    if not home_norm or not away_norm:
+    home_list = sorted({norm for norm in home_norms if norm})
+    away_list = sorted({norm for norm in away_norms if norm})
+    if not home_list or not away_list:
         return []
 
     columns = _table_columns(SACKMANN_H2H_FEATURES_TABLE)
@@ -842,16 +875,16 @@ def _fetch_sackmann_h2h_rows(
     SELECT {", ".join(selected_fields)}
     FROM `{SACKMANN_H2H_FEATURES_TABLE}`
     WHERE (
-      (player_name_norm = @home_norm AND opponent_name_norm = @away_norm)
-      OR (player_name_norm = @away_norm AND opponent_name_norm = @home_norm)
+      (player_name_norm IN UNNEST(@home_norms) AND opponent_name_norm IN UNNEST(@away_norms))
+      OR (player_name_norm IN UNNEST(@away_norms) AND opponent_name_norm IN UNNEST(@home_norms))
     )
       AND surface_key IN UNNEST(@surface_keys)
     """
     return _safe_query(
         sql,
         [
-            bigquery.ScalarQueryParameter("home_norm", "STRING", home_norm),
-            bigquery.ScalarQueryParameter("away_norm", "STRING", away_norm),
+            bigquery.ArrayQueryParameter("home_norms", "STRING", home_list),
+            bigquery.ArrayQueryParameter("away_norms", "STRING", away_list),
             bigquery.ArrayQueryParameter("surface_keys", "STRING", surface_keys),
         ],
     )
@@ -900,20 +933,50 @@ def _shape_sackmann_h2h_row(row: Optional[Dict[str, Any]]) -> Optional[Dict[str,
     }
 
 
+def _pick_first_norm_row(
+    by_norm: Dict[str, Dict[str, Any]],
+    norm_candidates: Sequence[str],
+) -> Optional[Dict[str, Any]]:
+    for norm in norm_candidates:
+        if norm in by_norm:
+            return by_norm[norm]
+    return None
+
+
+def _select_h2h_row(
+    rows: Sequence[Dict[str, Any]],
+    *,
+    player_norms: Sequence[str],
+    opponent_norms: Sequence[str],
+    surface_key: str,
+) -> Optional[Dict[str, Any]]:
+    player_set = {norm for norm in player_norms if norm}
+    opponent_set = {norm for norm in opponent_norms if norm}
+    for row in rows:
+        row_player = str(row.get("player_name_norm") or "")
+        row_opponent = str(row.get("opponent_name_norm") or "")
+        row_surface = str(row.get("surface_key") or "")
+        if row_surface != surface_key:
+            continue
+        if row_player in player_set and row_opponent in opponent_set:
+            return row
+    return None
+
+
 def _build_sackmann_payload(
     *,
     home_team: Optional[str],
     away_team: Optional[str],
     surface: Optional[str],
 ) -> Optional[Dict[str, Any]]:
-    home_norm = _normalize_name_norm(home_team)
-    away_norm = _normalize_name_norm(away_team)
-    if not home_norm or not away_norm:
+    home_norms = _name_norm_candidates(home_team)
+    away_norms = _name_norm_candidates(away_team)
+    if not home_norms or not away_norms:
         return None
 
     surface_key = _normalize_surface_key(surface)
     player_rows = _fetch_sackmann_player_surface_rows(
-        [home_norm, away_norm],
+        [*home_norms, *away_norms],
         surface_key=surface_key,
     )
     by_norm: Dict[str, Dict[str, Any]] = {}
@@ -923,28 +986,33 @@ def _build_sackmann_payload(
             by_norm[norm] = row
 
     h2h_rows = _fetch_sackmann_h2h_rows(
-        home_norm=home_norm,
-        away_norm=away_norm,
+        home_norms=home_norms,
+        away_norms=away_norms,
         surface_key=surface_key,
     )
-    h2h_lookup: Dict[tuple[str, str, str], Dict[str, Any]] = {}
-    for row in h2h_rows:
-        key = (
-            str(row.get("player_name_norm") or ""),
-            str(row.get("opponent_name_norm") or ""),
-            str(row.get("surface_key") or ""),
+    home_h2h_all = _select_h2h_row(
+        h2h_rows,
+        player_norms=home_norms,
+        opponent_norms=away_norms,
+        surface_key="all",
+    )
+    home_h2h_surface = (
+        _select_h2h_row(
+            h2h_rows,
+            player_norms=home_norms,
+            opponent_norms=away_norms,
+            surface_key=surface_key,
         )
-        h2h_lookup[key] = row
-
-    home_h2h_all = h2h_lookup.get((home_norm, away_norm, "all"))
-    home_h2h_surface = h2h_lookup.get((home_norm, away_norm, surface_key or ""))
+        if surface_key
+        else None
+    )
 
     payload = {
         "source_repo": SACKMANN_SOURCE_REPO,
         "surface_key": surface_key,
         "players": {
-            "home": _shape_sackmann_player_row(by_norm.get(home_norm)),
-            "away": _shape_sackmann_player_row(by_norm.get(away_norm)),
+            "home": _shape_sackmann_player_row(_pick_first_norm_row(by_norm, home_norms)),
+            "away": _shape_sackmann_player_row(_pick_first_norm_row(by_norm, away_norms)),
         },
         "head_to_head": {
             "all": _shape_sackmann_h2h_row(home_h2h_all),

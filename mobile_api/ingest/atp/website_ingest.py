@@ -496,7 +496,47 @@ def _fetch_tournament_end_dates(client: bigquery.Client, dataset: str, start_yea
     print(f"[backfill] tournament end dates resolved: {len(result)}", flush=True)
     return result
 
+def _build_tournament_end_dates_from_captures(
+    historical: List[Tuple[str, str, Path, int]],
+) -> Dict[Tuple[str, int], str]:
+    """
+    Build a (tournament_id, year) -> end_date_iso map by scanning each
+    historical capture file for dated tournament-day section headers.
+    Takes the latest date found as the tournament end date for that year.
+    """
+    months = {m: i + 1 for i, m in enumerate([
+        "january", "february", "march", "april", "may", "june",
+        "july", "august", "september", "october", "november", "december",
+    ])}
+    date_re = re.compile(
+        r'(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,?\s+(\d+)\s+'
+        r'(January|February|March|April|May|June|July|August'
+        r'|September|October|November|December)'
+        r',?\s+(\d{4})',
+        re.IGNORECASE,
+    )
+    result: Dict[Tuple[str, int], str] = {}
 
+    for slug, tid, file_path, year in historical:
+        if (tid, year) in result:
+            continue
+        try:
+            text = file_path.read_text(encoding="utf-8", errors="ignore")
+            all_dates = []
+            for m in date_re.finditer(text):
+                try:
+                    from datetime import date as dt
+                    d = dt(int(m.group(3)), months[m.group(2).lower()], int(m.group(1)))
+                    all_dates.append(d)
+                except Exception:
+                    pass
+            if all_dates:
+                result[(tid, year)] = max(all_dates).isoformat()
+        except Exception:
+            pass
+
+    print(f"[ingest] year-specific end dates from captures: {len(result)}", flush=True)
+    return result
 
 
 def _load_historical_captures(
@@ -568,6 +608,24 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
         if (start_year and end_year)
         else {}
     )
+
+    historical_root_pre = Path(os.getenv("ATP_HISTORICAL_DIR", "website_responses/atp/historical"))
+    historical_pre = (
+        _load_historical_captures(historical_root_pre, start_year, end_year)
+        if (start_year and end_year)
+        else []
+    )
+    tournament_end_dates_by_year: Dict[Tuple[str, int], str] = (
+        _build_tournament_end_dates_from_captures(historical_pre)
+    )
+    for tid, end_date_iso in tournament_end_dates.items():
+        try:
+            from datetime import date as dt
+            candidate = dt.fromisoformat(end_date_iso)
+            if (tid, candidate.year) not in tournament_end_dates_by_year:
+                tournament_end_dates_by_year[(tid, candidate.year)] = end_date_iso
+        except Exception:
+            pass
 
     responses_root = Path(os.getenv("ATP_WEBSITE_RESPONSES_DIR", "website_responses/atp"))
     endpoint_files = {
@@ -775,16 +833,14 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
 
         def _process_match_html(slug: str, tid: str, html: str, year: Optional[int] = None) -> None:
             end_date = None
-            end_date_iso = tournament_end_dates.get(tid)
-            if end_date_iso:
-                try:
-                    from datetime import date as date_type
-                    candidate = date_type.fromisoformat(end_date_iso)
-                    # Only use this end date if it's in the correct year
-                    if year is None or candidate.year == year:
-                        end_date = candidate
-                except Exception:
-                    pass
+            if year is not None:
+                end_date_iso = tournament_end_dates_by_year.get((tid, year))
+                if end_date_iso:
+                    try:
+                        from datetime import date as date_type
+                        end_date = date_type.fromisoformat(end_date_iso)
+                    except Exception:
+                        pass
             parsed_match_results_rows.extend(
                 row.to_dict()
                 for row in normalize_match_results_html(

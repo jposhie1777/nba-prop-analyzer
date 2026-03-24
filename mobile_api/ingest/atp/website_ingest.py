@@ -395,17 +395,20 @@ def _parse_tournament_end_date(context_html: str, year: int) -> Optional[str]:
 
 def _fetch_tournament_end_dates(client: bigquery.Client, dataset: str, start_year: int, end_year: int) -> Dict[str, str]:
     """Build a tournament_id -> end_date_iso map from two sources:
-    1. website_tournaments BQ table (current year, already ingested)
-    2. ATP calendar HTML pages for each backfill year (scraped live)
+    1. website_tournaments BQ table (already ingested, any year)
+    2. ATP calendar JSON API for each backfill year (live fetch)
     """
     months = {m: i + 1 for i, m in enumerate([
-        "january","february","march","april","may","june",
-        "july","august","september","october","november","december",
-        "jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec",
+        "january", "february", "march", "april", "may", "june",
+        "july", "august", "september", "october", "november", "december",
+        "jan", "feb", "mar", "apr", "may", "jun",
+        "jul", "aug", "sep", "oct", "nov", "dec",
     ])}
 
     def _parse_end_date(fmt: str) -> Optional[str]:
-        # Same-month: "7 - 13 February, 2022"
+        if not fmt:
+            return None
+        # Same-month: "7 - 13 February, 2022" or "2 - 11 January, 2026"
         m1 = re.search(
             r'\d+\s*[-–]\s*(\d+)\s+'
             r'(January|February|March|April|May|June|July|August|September|October|November|December'
@@ -443,44 +446,56 @@ def _fetch_tournament_end_dates(client: bigquery.Client, dataset: str, start_yea
 
     result: Dict[str, str] = {}
 
-    # Source 1: BQ website_tournaments (has current year)
+    # ------------------------------------------------------------------ #
+    # Source 1: BQ website_tournaments (fast, already ingested)           #
+    # ------------------------------------------------------------------ #
     try:
         rows = list(client.query(
-            f"SELECT tournament_id, formatted_date FROM `{dataset}.website_tournaments` WHERE formatted_date IS NOT NULL"
+            f"SELECT tournament_id, formatted_date "
+            f"FROM `{dataset}.website_tournaments` "
+            f"WHERE formatted_date IS NOT NULL"
         ).result())
         for row in rows:
             d = _parse_end_date(row["formatted_date"] or "")
             if d:
-                result[row["tournament_id"]] = d
+                result[str(row["tournament_id"])] = d
     except Exception:
         pass
 
-    # Source 2: scrape ATP results-archive page for each year to find tournament links,
-    # then fetch the tournament JSON overview to get the date range
+    # ------------------------------------------------------------------ #
+    # Source 2: ATP calendar JSON API — one call per backfill year.       #
+    # Fills in tournament IDs not covered by the BQ table (prior years). #
+    # ------------------------------------------------------------------ #
     for year in range(start_year, end_year + 1):
-        archive_url = f"https://www.atptour.com/en/scores/results-archive?year={year}"
-        html = _fetch_html_url(archive_url)
-        if not html:
-            continue
-        # Extract tournament IDs from archive links: /en/scores/archive/{slug}/{tid}/{year}/results
-        for m in re.finditer(
-            r'href="/en/scores/archive/[^/]+/([^/]+)/' + str(year) + r'/results"',
-            html, re.IGNORECASE,
-        ):
-            tid = m.group(1)
-            if tid in result:
-                continue
-            # Fetch tournament dates JSON for this tid+year
-            overview_url = f"https://www.atptour.com/en/-/www/tournament/card/{tid}/{year}"
-            data = _fetch_json_url(overview_url)
+        # Try two known ATP calendar endpoint patterns
+        data: Optional[Dict[str, Any]] = None
+        for cal_url in [
+            f"https://www.atptour.com/en/-/www/calendar/tournaments/{year}",
+            f"https://www.atptour.com/en/-/www/tournaments/dates/{year}",
+        ]:
+            data = _fetch_json_url(cal_url)
             if isinstance(data, dict):
-                fmt = data.get("FormattedDate") or data.get("Dates") or ""
+                break
+
+        if not isinstance(data, dict):
+            print(f"[backfill] WARNING: no calendar data for year={year}", flush=True)
+            continue
+
+        for month in data.get("TournamentDates", []) or []:
+            for t in month.get("Tournaments", []) or []:
+                tid = str(t.get("Id") or "")
+                if not tid or tid in result:
+                    continue
+                fmt = t.get("FormattedDate") or ""
                 d = _parse_end_date(fmt)
                 if d:
                     result[tid] = d
 
+        print(f"[backfill] calendar year={year}: {len(result)} end dates total", flush=True)
+
     print(f"[backfill] tournament end dates resolved: {len(result)}", flush=True)
     return result
+
 
 
 

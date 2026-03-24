@@ -77,13 +77,20 @@ _HEADERS = {
 
 def _fetch_match_stats(year: int, tournament_id: str, match_id: str, timeout: int = 15) -> Optional[Dict]:
     url = f"https://www.atptour.com/-/Hawkeye/MatchStats/Complete/{year}/{tournament_id}/{match_id}"
-    try:
-        r = requests.get(url, headers=_HEADERS, timeout=timeout)
-        if r.status_code == 200:
-            return r.json()
-        return None
-    except Exception:
-        return None
+    for attempt in range(3):
+        try:
+            r = requests.get(url, headers=_HEADERS, timeout=timeout)
+            if r.status_code == 200:
+                return r.json()
+            if r.status_code == 429:
+                time.sleep(10 * (attempt + 1))
+                continue
+            return None
+        except Exception:
+            if attempt < 2:
+                time.sleep(5)
+    return None
+
 
 
 # ------------------------------------------------------------------ #

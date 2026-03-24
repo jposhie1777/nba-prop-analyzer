@@ -362,13 +362,13 @@ def _extract_daily_schedule_time_fields(payload_html: Optional[str]) -> Tuple[Li
     return start_times[:500], not_before_times[:500], schedule_time_items[:500]
 
 def _fetch_tournament_results_urls_for_year(year: int) -> List[Tuple[str, str, str]]:
-    """Fetch the ATP calendar API for a given year and return
-    (slug, tournament_id, results_url) for every completed event."""
     url = f"https://www.atptour.com/en/-/www/tournaments/dates/{year}"
     data = _fetch_json_url(url)
     if not data:
+        print(f"[backfill] WARNING: no calendar data returned for year={year} url={url}", flush=True)
         return []
-    out: List[Tuple[str, str, str]] = []
+    tournaments_found = sum(len(m.get("Tournaments", [])) for m in data.get("TournamentDates", []))
+    past_events = []
     for month in data.get("TournamentDates", []):
         for t in month.get("Tournaments", []):
             if not t.get("IsPastEvent"):
@@ -380,8 +380,10 @@ def _fetch_tournament_results_urls_for_year(year: int) -> List[Tuple[str, str, s
             if not m:
                 continue
             slug, tid = m.group(1), m.group(2)
-            out.append((slug, tid, f"https://www.atptour.com{scores_url}"))
-    return out
+            past_events.append((slug, tid, f"https://www.atptour.com{scores_url}"))
+    print(f"[backfill] year={year}: {tournaments_found} total tournaments, {len(past_events)} past events", flush=True)
+    return past_events
+
 
 def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule: bool, sleep_seconds: float) -> Dict[str, Any]:
     del sleep_seconds

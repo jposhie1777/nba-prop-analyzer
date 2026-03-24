@@ -644,18 +644,28 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
             already_fetched.add((result_slug, result_tid))
 
         for year in range(start_year, end_year + 1):
-            for past_slug, past_tid, past_url in _fetch_tournament_results_urls_for_year(year):
+            for past_slug, past_tid, past_url, end_date_iso in _fetch_tournament_results_urls_for_year(year):
                 if (past_slug, past_tid) in already_fetched:
                     continue
                 already_fetched.add((past_slug, past_tid))
                 past_html = _fetch_html_url(past_url)
                 if past_html:
+                    end_date = None
+                    if end_date_iso:
+                        try:
+                            from datetime import date as date_type
+                            end_date = date_type.fromisoformat(end_date_iso)
+                        except Exception:
+                            pass
                     parsed_match_results_rows.extend(
                         row.to_dict()
                         for row in normalize_match_results_html(
-                            past_slug, past_tid, past_html, snapshot_ts_utc=snapshot_ts
+                            past_slug, past_tid, past_html,
+                            snapshot_ts_utc=snapshot_ts,
+                            tournament_end_date=end_date,
                         )
                     )
+
 
     # ------------------------------------------------------------------ #
     # Player IDs — harvested from all sources                             #

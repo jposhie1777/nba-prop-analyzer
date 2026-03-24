@@ -771,9 +771,7 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
     # Match results — backfill across all requested years                 #
     # ------------------------------------------------------------------ #
     if start_year and end_year:
-        already_fetched: Set[Tuple[str, str]] = set()
-        if result_slug and result_tid:
-            already_fetched.add((result_slug, result_tid))
+        already_fetched: Set[Tuple[str, str, int]] = set()
 
         def _process_match_html(slug: str, tid: str, html: str) -> None:
             end_date = None
@@ -799,9 +797,9 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
         print(f"[ingest] historical capture files found: {len(historical)}", flush=True)
 
         for slug, tid, file_path, year in historical:
-            if (slug, tid) in already_fetched:
+            if (slug, tid, year) in already_fetched:
                 continue
-            already_fetched.add((slug, tid))
+            already_fetched.add((slug, tid, year))
             try:
                 capture = _load_capture_file(file_path)
                 html = capture.get("payload_text")
@@ -814,13 +812,12 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
         # Path 2: live fetch for anything not covered by historical captures
         for year in range(start_year, end_year + 1):
             for past_slug, past_tid, past_url in _fetch_tournament_results_urls_for_year(year):
-                if (past_slug, past_tid) in already_fetched:
+                if (past_slug, past_tid, year) in already_fetched:
                     continue
-                already_fetched.add((past_slug, past_tid))
+                already_fetched.add((past_slug, past_tid, year))
                 past_html = _fetch_html_url(past_url)
                 if past_html:
                     _process_match_html(past_slug, past_tid, past_html)
-
     # ------------------------------------------------------------------ #
     # Player IDs — harvested from all sources                             #
     # ------------------------------------------------------------------ #

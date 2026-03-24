@@ -360,5 +360,5 @@ CREATE TABLE IF NOT EXISTS `atp_data.website_hawkeye_match_stats` (
   total_pts_won INT64,
   total_pts_played INT64
 )
-PARTITION BY DATE(match_date)
+PARTITION BY match_date
 CLUSTER BY player_id, year, surface;

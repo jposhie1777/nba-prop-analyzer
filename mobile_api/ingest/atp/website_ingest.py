@@ -393,41 +393,90 @@ def _parse_tournament_end_date(context_html: str, year: int) -> Optional[str]:
             pass
     return None
 
+def _fetch_tournament_end_dates(client: bigquery.Client, dataset: str) -> Dict[str, str]:
+    """Return a dict of tournament_id -> end_date_iso from website_tournaments.
+    Parses the formatted_date field (e.g. '7 - 13 February, 2022' or 
+    'January 18 - February 1, 2026') to extract the end date."""
+    query = f"""
+        SELECT tournament_id, formatted_date
+        FROM `{dataset}.website_tournaments`
+        WHERE formatted_date IS NOT NULL
+    """
+    months = {m: i + 1 for i, m in enumerate([
+        "january","february","march","april","may","june",
+        "july","august","september","october","november","december",
+    ])}
+    result: Dict[str, str] = {}
+    try:
+        rows = list(client.query(query).result())
+    except Exception:
+        return result
 
-def _fetch_tournament_results_urls_for_year(year: int) -> List[Tuple[str, str, str, Optional[str]]]:
-    """Scrape the ATP results-archive page for a given year and return
-    (slug, tournament_id, results_url, end_date_iso) for every tournament listed."""
+    for row in rows:
+        tid = row["tournament_id"]
+        fmt = row["formatted_date"] or ""
+
+        # Same-month: "7 - 13 February, 2022"
+        m1 = re.search(
+            r'\d+\s*[-–]\s*(\d+)\s+'
+            r'(January|February|March|April|May|June|July|August|September|October|November|December)'
+            r',?\s*(\d{4})',
+            fmt, re.IGNORECASE,
+        )
+        if m1:
+            try:
+                from datetime import date as date_type
+                result[tid] = date_type(
+                    int(m1.group(3)), months[m1.group(2).lower()], int(m1.group(1))
+                ).isoformat()
+                continue
+            except Exception:
+                pass
+
+        # Cross-month: "January 18 - February 1, 2026" or "30 Jun - 13 Jul, 2025"
+        m2 = re.search(
+            r'(?:January|February|March|April|May|June|July|August|September|October|November|December'
+            r'|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)'
+            r'\s+\d+\s*[-–]\s*'
+            r'((?:January|February|March|April|May|June|July|August|September|October|November|December'
+            r'|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d+)'
+            r',?\s*(\d{4})',
+            fmt, re.IGNORECASE,
+        )
+        if m2:
+            for fmt_str in ["%B %d, %Y", "%b %d, %Y"]:
+                try:
+                    result[tid] = datetime.strptime(
+                        f"{m2.group(1)}, {m2.group(2)}", fmt_str
+                    ).date().isoformat()
+                    break
+                except Exception:
+                    continue
+
+    return result
+
+
+def _fetch_tournament_results_urls_for_year(year: int) -> List[Tuple[str, str, str]]:
     url = f"https://www.atptour.com/en/scores/results-archive?year={year}"
     html = _fetch_html_url(url)
     if not html:
-        print(f"[backfill] WARNING: no archive page returned for year={year} url={url}", flush=True)
+        print(f"[backfill] WARNING: no archive page for year={year}", flush=True)
         return []
 
-    out: List[Tuple[str, str, str, Optional[str]]] = []
+    out: List[Tuple[str, str, str]] = []
     seen: Set[Tuple[str, str]] = set()
-
     for m in re.finditer(
         r'href="(/en/scores/archive/([^/]+)/([^/]+)/' + str(year) + r'/results)"',
-        html,
-        flags=re.IGNORECASE,
+        html, flags=re.IGNORECASE,
     ):
         path, slug, tid = m.group(1), m.group(2), m.group(3)
-        key = (slug, tid)
-        if key in seen:
+        if (slug, tid) in seen:
             continue
-        seen.add(key)
-
-        # Extract end date from the HTML context preceding this link
-        start = max(0, m.start() - 800)
-        context = html[start:m.start()]
-        end_date_iso = _parse_tournament_end_date(context, year)
-
-        out.append((slug, tid, f"https://www.atptour.com{path}", end_date_iso))
+        seen.add((slug, tid))
+        out.append((slug, tid, f"https://www.atptour.com{path}"))
 
     print(f"[backfill] year={year}: {len(out)} tournaments found", flush=True)
     return out
-
-
 
 
 def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule: bool, sleep_seconds: float) -> Dict[str, Any]:
@@ -639,18 +688,22 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
     # Match results — backfill across all requested years                 #
     # ------------------------------------------------------------------ #
     if start_year and end_year:
+        # Load tournament end dates from BQ for round-based date inference
+        tournament_end_dates = _fetch_tournament_end_dates(client, _dataset())
+
         already_fetched: Set[Tuple[str, str]] = set()
         if result_slug and result_tid:
             already_fetched.add((result_slug, result_tid))
 
         for year in range(start_year, end_year + 1):
-            for past_slug, past_tid, past_url, end_date_iso in _fetch_tournament_results_urls_for_year(year):
+            for past_slug, past_tid, past_url in _fetch_tournament_results_urls_for_year(year):
                 if (past_slug, past_tid) in already_fetched:
                     continue
                 already_fetched.add((past_slug, past_tid))
                 past_html = _fetch_html_url(past_url)
                 if past_html:
                     end_date = None
+                    end_date_iso = tournament_end_dates.get(past_tid)
                     if end_date_iso:
                         try:
                             from datetime import date as date_type
@@ -665,7 +718,6 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
                             tournament_end_date=end_date,
                         )
                     )
-
 
     # ------------------------------------------------------------------ #
     # Player IDs — harvested from all sources                             #
@@ -813,6 +865,7 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
         "responses_root": str(responses_root),
         "written": written,
     }
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="ATP website ingestion for BigQuery (file-driven)")

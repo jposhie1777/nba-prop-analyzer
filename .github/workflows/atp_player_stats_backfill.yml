@@ -50,9 +50,12 @@ jobs:
               print(f"Truncated {table}")
           PYEOF
 
-      - name: Run ATP daily loader (stats only via daily mode)
+      - name: Run ATP player stats backfill
         run: |
           python -m mobile_api.ingest.atp.website_ingest \
-            --mode daily \
+            --mode backfill \
+            --start-year 2019 \
+            --end-year 2026 \
+            --no-truncate \
             --no-truncate-schedule \
             --sleep 0.2

@@ -281,13 +281,16 @@ def _parse_response(
         set_num = set_data.get("SetNumber", 0)
         p2_set = p2_sets.get(set_num, {})
 
-        service = set_data.get("Stats", {}).get("ServiceStats") or {}
-        ret = set_data.get("Stats", {}).get("ReturnStats") or {}
-        pts = set_data.get("Stats", {}).get("PointStats") or {}
+        stats_block = set_data.get("Stats") or {}
+        service = stats_block.get("ServiceStats") or {}
+        ret = stats_block.get("ReturnStats") or {}
+        pts = stats_block.get("PointStats") or {}
 
-        p2_service = p2_set.get("Stats", {}).get("ServiceStats") or {}
-        p2_ret = p2_set.get("Stats", {}).get("ReturnStats") or {}
-        p2_pts = p2_set.get("Stats", {}).get("PointStats") or {}
+        p2_stats_block = p2_set.get("Stats") or {}
+        p2_service = p2_stats_block.get("ServiceStats") or {}
+        p2_ret = p2_stats_block.get("ReturnStats") or {}
+        p2_pts = p2_stats_block.get("PointStats") or {}
+
 
         # Skip sets with no stats
         if not service and not ret and not pts:

@@ -499,7 +499,37 @@ def _fetch_tournament_end_dates(client: bigquery.Client, dataset: str, start_yea
 
 
 
+def _load_historical_captures(
+    output_root: Path,
+    start_year: int,
+    end_year: int,
+) -> List[Tuple[str, str, Path, int]]:
+    """
+    Scan the historical capture directory and return
+    (slug, tid, path, year) for every saved capture file.
+    Filename format: {slug}_{tid}
+    """
+    results: List[Tuple[str, str, Path, int]] = []
+    for year in range(start_year, end_year + 1):
+        year_dir = output_root / str(year)
+        if not year_dir.exists():
+            continue
+        for path in sorted(year_dir.iterdir()):
+            if not path.is_file():
+                continue
+            parts = path.name.rsplit("_", 1)
+            if len(parts) != 2:
+                continue
+            slug, tid = parts[0], parts[1]
+            results.append((slug, tid, path, year))
+    return results
+
+
 def _fetch_tournament_results_urls_for_year(year: int) -> List[Tuple[str, str, str]]:
+    """
+    Scrape the ATP results-archive page for a given year and return
+    (slug, tournament_id, results_url) for every tournament listed.
+    """
     url = f"https://www.atptour.com/en/scores/results-archive?year={year}"
     html = _fetch_html_url(url)
     if not html:
@@ -532,7 +562,6 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
     # ------------------------------------------------------------------ #
     # Load tournament end dates BEFORE any truncation — the truncate step #
     # wipes website_tournaments, so we must read it first.                #
-    # Used for round-label -> date inference during backfill.             #
     # ------------------------------------------------------------------ #
     tournament_end_dates: Dict[str, str] = (
         _fetch_tournament_end_dates(client, _dataset(), start_year, end_year)
@@ -746,6 +775,43 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
         if result_slug and result_tid:
             already_fetched.add((result_slug, result_tid))
 
+        def _process_match_html(slug: str, tid: str, html: str) -> None:
+            end_date = None
+            end_date_iso = tournament_end_dates.get(tid)
+            if end_date_iso:
+                try:
+                    from datetime import date as date_type
+                    end_date = date_type.fromisoformat(end_date_iso)
+                except Exception:
+                    pass
+            parsed_match_results_rows.extend(
+                row.to_dict()
+                for row in normalize_match_results_html(
+                    slug, tid, html,
+                    snapshot_ts_utc=snapshot_ts,
+                    tournament_end_date=end_date,
+                )
+            )
+
+        # Path 1: historical capture files (Camoufox-captured, always preferred)
+        historical_root = Path(os.getenv("ATP_HISTORICAL_DIR", "website_responses/atp/historical"))
+        historical = _load_historical_captures(historical_root, start_year, end_year)
+        print(f"[ingest] historical capture files found: {len(historical)}", flush=True)
+
+        for slug, tid, file_path, year in historical:
+            if (slug, tid) in already_fetched:
+                continue
+            already_fetched.add((slug, tid))
+            try:
+                capture = _load_capture_file(file_path)
+                html = capture.get("payload_text")
+            except Exception as exc:
+                print(f"[ingest] WARNING: failed to load {file_path}: {exc}", flush=True)
+                html = None
+            if html:
+                _process_match_html(slug, tid, html)
+
+        # Path 2: live fetch for anything not covered by historical captures
         for year in range(start_year, end_year + 1):
             for past_slug, past_tid, past_url in _fetch_tournament_results_urls_for_year(year):
                 if (past_slug, past_tid) in already_fetched:
@@ -753,22 +819,7 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
                 already_fetched.add((past_slug, past_tid))
                 past_html = _fetch_html_url(past_url)
                 if past_html:
-                    end_date = None
-                    end_date_iso = tournament_end_dates.get(past_tid)
-                    if end_date_iso:
-                        try:
-                            from datetime import date as date_type
-                            end_date = date_type.fromisoformat(end_date_iso)
-                        except Exception:
-                            pass
-                    parsed_match_results_rows.extend(
-                        row.to_dict()
-                        for row in normalize_match_results_html(
-                            past_slug, past_tid, past_html,
-                            snapshot_ts_utc=snapshot_ts,
-                            tournament_end_date=end_date,
-                        )
-                    )
+                    _process_match_html(past_slug, past_tid, past_html)
 
     # ------------------------------------------------------------------ #
     # Player IDs — harvested from all sources                             #
@@ -916,6 +967,7 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
         "responses_root": str(responses_root),
         "written": written,
     }
+
 
 
 

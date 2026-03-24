@@ -339,6 +339,7 @@ def normalize_match_results_html(
     tournament_id: str,
     results_html: str,
     snapshot_ts_utc: str | None = None,
+    tournament_end_date: date | None = None,   # <-- new
 ) -> List[MatchResultRow]:
     ts = snapshot_ts_utc or utc_now_iso()
 
@@ -409,8 +410,10 @@ def normalize_match_results_html(
         section_html = results_html[section_start:section_end]
 
         match_date = _parse_match_date(day_label)
-        # day_label that doesn't parse as a date (e.g. "Final", "Quarterfinal")
-        # is kept as-is in day_label; match_date stays None for those rounds.
+        # If no parseable date, try to infer from round label + tournament end date
+        if match_date is None and tournament_end_date:
+            match_date = _infer_date_from_round(day_label, tournament_end_date)
+
 
         chunks = section_html.split('<div class="match">')
         for chunk in chunks[1:]:

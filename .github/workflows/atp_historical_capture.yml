@@ -1,0 +1,61 @@
+name: ATP Historical Capture
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_year:
+        description: "Start year (e.g. 2019)"
+        required: true
+        default: "2019"
+      end_year:
+        description: "End year (e.g. 2025)"
+        required: true
+        default: "2025"
+      sleep:
+        description: "Seconds between requests (default 2.0)"
+        required: false
+        default: "2.0"
+      dry_run:
+        description: "Dry run only (true/false)"
+        required: false
+        default: "false"
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    env:
+      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/mobile_api
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r mobile_api/requirements.txt
+          pip install camoufox[geoip]
+          python -m camoufox fetch
+
+      - name: Run ATP historical capture
+        run: |
+          ARGS="--start-year ${{ inputs.start_year }} --end-year ${{ inputs.end_year }} --sleep ${{ inputs.sleep }}"
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          python -m mobile_api.ingest.atp.capture_atp_historical $ARGS
+
+      - name: Upload captured files as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: atp-historical-${{ inputs.start_year }}-${{ inputs.end_year }}
+          path: website_responses/atp/historical/
+          retention-days: 30

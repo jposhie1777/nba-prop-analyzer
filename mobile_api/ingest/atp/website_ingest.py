@@ -514,6 +514,17 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
     ingest_run_id = str(uuid.uuid4())
     client = _bq_client()
 
+    # ------------------------------------------------------------------ #
+    # Load tournament end dates BEFORE any truncation — the truncate step #
+    # wipes website_tournaments, so we must read it first.                #
+    # Used for round-label -> date inference during backfill.             #
+    # ------------------------------------------------------------------ #
+    tournament_end_dates: Dict[str, str] = (
+        _fetch_tournament_end_dates(client, _dataset(), start_year, end_year)
+        if (start_year and end_year)
+        else {}
+    )
+
     responses_root = Path(os.getenv("ATP_WEBSITE_RESPONSES_DIR", "website_responses/atp"))
     endpoint_files = {
         "daily_schedule": responses_root / "daily_schedule",
@@ -716,10 +727,6 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
     # Match results — backfill across all requested years                 #
     # ------------------------------------------------------------------ #
     if start_year and end_year:
-        # Load tournament end dates from BQ for round-based date inference
-        tournament_end_dates = _fetch_tournament_end_dates(client, _dataset(), start_year, end_year)
-
-
         already_fetched: Set[Tuple[str, str]] = set()
         if result_slug and result_tid:
             already_fetched.add((result_slug, result_tid))
@@ -894,6 +901,7 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
         "responses_root": str(responses_root),
         "written": written,
     }
+
 
 
 def main() -> None:

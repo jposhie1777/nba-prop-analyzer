@@ -393,67 +393,95 @@ def _parse_tournament_end_date(context_html: str, year: int) -> Optional[str]:
             pass
     return None
 
-def _fetch_tournament_end_dates(client: bigquery.Client, dataset: str) -> Dict[str, str]:
-    """Return a dict of tournament_id -> end_date_iso from website_tournaments.
-    Parses the formatted_date field (e.g. '7 - 13 February, 2022' or 
-    'January 18 - February 1, 2026') to extract the end date."""
-    query = f"""
-        SELECT tournament_id, formatted_date
-        FROM `{dataset}.website_tournaments`
-        WHERE formatted_date IS NOT NULL
+def _fetch_tournament_end_dates(client: bigquery.Client, dataset: str, start_year: int, end_year: int) -> Dict[str, str]:
+    """Build a tournament_id -> end_date_iso map from two sources:
+    1. website_tournaments BQ table (current year, already ingested)
+    2. ATP calendar HTML pages for each backfill year (scraped live)
     """
     months = {m: i + 1 for i, m in enumerate([
         "january","february","march","april","may","june",
         "july","august","september","october","november","december",
+        "jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec",
     ])}
-    result: Dict[str, str] = {}
-    try:
-        rows = list(client.query(query).result())
-    except Exception:
-        return result
 
-    for row in rows:
-        tid = row["tournament_id"]
-        fmt = row["formatted_date"] or ""
-
+    def _parse_end_date(fmt: str) -> Optional[str]:
         # Same-month: "7 - 13 February, 2022"
         m1 = re.search(
             r'\d+\s*[-–]\s*(\d+)\s+'
-            r'(January|February|March|April|May|June|July|August|September|October|November|December)'
+            r'(January|February|March|April|May|June|July|August|September|October|November|December'
+            r'|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)'
             r',?\s*(\d{4})',
             fmt, re.IGNORECASE,
         )
         if m1:
             try:
-                from datetime import date as date_type
-                result[tid] = date_type(
-                    int(m1.group(3)), months[m1.group(2).lower()], int(m1.group(1))
-                ).isoformat()
-                continue
+                from datetime import date as dt
+                mon = months[m1.group(2).lower()]
+                return dt(int(m1.group(3)), mon, int(m1.group(1))).isoformat()
             except Exception:
                 pass
-
-        # Cross-month: "January 18 - February 1, 2026" or "30 Jun - 13 Jul, 2025"
+        # Cross-month: "18 January - 1 February, 2026" or "30 Jun - 13 Jul, 2025"
         m2 = re.search(
+            r'\d+\s+'
             r'(?:January|February|March|April|May|June|July|August|September|October|November|December'
             r'|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)'
-            r'\s+\d+\s*[-–]\s*'
-            r'((?:January|February|March|April|May|June|July|August|September|October|November|December'
-            r'|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d+)'
+            r'\s*[-–]\s*'
+            r'(\d+)\s+'
+            r'(January|February|March|April|May|June|July|August|September|October|November|December'
+            r'|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)'
             r',?\s*(\d{4})',
             fmt, re.IGNORECASE,
         )
         if m2:
-            for fmt_str in ["%B %d, %Y", "%b %d, %Y"]:
-                try:
-                    result[tid] = datetime.strptime(
-                        f"{m2.group(1)}, {m2.group(2)}", fmt_str
-                    ).date().isoformat()
-                    break
-                except Exception:
-                    continue
+            try:
+                from datetime import date as dt
+                mon = months[m2.group(2).lower()]
+                return dt(int(m2.group(3)), mon, int(m2.group(1))).isoformat()
+            except Exception:
+                pass
+        return None
 
+    result: Dict[str, str] = {}
+
+    # Source 1: BQ website_tournaments (has current year)
+    try:
+        rows = list(client.query(
+            f"SELECT tournament_id, formatted_date FROM `{dataset}.website_tournaments` WHERE formatted_date IS NOT NULL"
+        ).result())
+        for row in rows:
+            d = _parse_end_date(row["formatted_date"] or "")
+            if d:
+                result[row["tournament_id"]] = d
+    except Exception:
+        pass
+
+    # Source 2: scrape ATP results-archive page for each year to find tournament links,
+    # then fetch the tournament JSON overview to get the date range
+    for year in range(start_year, end_year + 1):
+        archive_url = f"https://www.atptour.com/en/scores/results-archive?year={year}"
+        html = _fetch_html_url(archive_url)
+        if not html:
+            continue
+        # Extract tournament IDs from archive links: /en/scores/archive/{slug}/{tid}/{year}/results
+        for m in re.finditer(
+            r'href="/en/scores/archive/[^/]+/([^/]+)/' + str(year) + r'/results"',
+            html, re.IGNORECASE,
+        ):
+            tid = m.group(1)
+            if tid in result:
+                continue
+            # Fetch tournament dates JSON for this tid+year
+            overview_url = f"https://www.atptour.com/en/-/www/tournament/card/{tid}/{year}"
+            data = _fetch_json_url(overview_url)
+            if isinstance(data, dict):
+                fmt = data.get("FormattedDate") or data.get("Dates") or ""
+                d = _parse_end_date(fmt)
+                if d:
+                    result[tid] = d
+
+    print(f"[backfill] tournament end dates resolved: {len(result)}", flush=True)
     return result
+
 
 
 def _fetch_tournament_results_urls_for_year(year: int) -> List[Tuple[str, str, str]]:
@@ -689,7 +717,8 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
     # ------------------------------------------------------------------ #
     if start_year and end_year:
         # Load tournament end dates from BQ for round-based date inference
-        tournament_end_dates = _fetch_tournament_end_dates(client, _dataset())
+        tournament_end_dates = _fetch_tournament_end_dates(client, _dataset(), start_year, end_year)
+
 
         already_fetched: Set[Tuple[str, str]] = set()
         if result_slug and result_tid:

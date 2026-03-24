@@ -16,6 +16,33 @@ from atp_models import (
     TournamentRow,
 )
 
+# Number of days before the tournament final that each round typically occurs.
+# These are approximate but consistent for ATP draw structures.
+_ROUND_DAY_OFFSETS: Dict[str, int] = {
+    "final": 0,
+    "semifinal": 1,
+    "semifinals": 1,
+    "quarterfinal": 2,
+    "quarterfinals": 2,
+    "round of 16": 3,
+    "round of 32": 4,
+    "round of 64": 5,
+    "round of 128": 6,
+    "1st round qualifying": -3,
+    "2nd round qualifying": -2,
+    "3rd round qualifying": -1,
+    "round robin": 3,
+}
+
+def _infer_date_from_round(round_label: str, tournament_end_date: date | None) -> str | None:
+    if not tournament_end_date or not round_label:
+        return None
+    offset = _ROUND_DAY_OFFSETS.get(round_label.strip().lower())
+    if offset is None:
+        return None
+    from datetime import timedelta
+    return (tournament_end_date - timedelta(days=offset)).isoformat()
+
 
 def utc_now_iso() -> str:
     return datetime.now(tz=timezone.utc).replace(microsecond=0).isoformat()

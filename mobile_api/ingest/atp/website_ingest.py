@@ -509,7 +509,7 @@ def _build_tournament_end_dates_from_captures(
         "july", "august", "september", "october", "november", "december",
     ])}
     date_re = re.compile(
-        r'(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,?\s+(\d+)\s+'
+        r'(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,\s+(\d+)\s+'
         r'(January|February|March|April|May|June|July|August'
         r'|September|October|November|December)'
         r',?\s+(\d{4})',

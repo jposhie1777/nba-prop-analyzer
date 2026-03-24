@@ -274,12 +274,15 @@ CLUSTER BY court_type;
 CREATE TABLE IF NOT EXISTS `atp_data.website_player_stats_records` (
   snapshot_ts_utc TIMESTAMP NOT NULL,
   ingest_run_id STRING NOT NULL,
+  player_id STRING,
   court_type STRING,
   stat_name STRING,
   stat_value STRING
 )
 PARTITION BY DATE(snapshot_ts_utc)
-CLUSTER BY court_type, stat_name;
+CLUSTER BY player_id, court_type, stat_name;
+
+ALTER TABLE `atp_data.website_player_stats_records` ADD COLUMN IF NOT EXISTS player_id STRING;
 
 CREATE TABLE IF NOT EXISTS `atp_data.website_who_is_playing` (
   snapshot_ts_utc TIMESTAMP NOT NULL,

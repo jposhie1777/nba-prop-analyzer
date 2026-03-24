@@ -1166,11 +1166,13 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
             )
             if isinstance(payload_json, dict):
                 stats_block = payload_json.get("Stats") or {}
+                pid = str((stats_block.get("PlayerId") or player_id) or "")
                 for stat_name, stat_value in stats_block.items():
                     player_stats_records_rows.append(
                         {
                             "snapshot_ts_utc": snapshot_ts,
                             "ingest_run_id": ingest_run_id,
+                            "player_id": pid,
                             "court_type": court_type,
                             "stat_name": str(stat_name),
                             "stat_value": json.dumps(stat_value, ensure_ascii=False) if isinstance(stat_value, (dict, list)) else str(stat_value),

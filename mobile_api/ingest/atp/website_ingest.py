@@ -773,13 +773,16 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
     if start_year and end_year:
         already_fetched: Set[Tuple[str, str, int]] = set()
 
-        def _process_match_html(slug: str, tid: str, html: str) -> None:
+        def _process_match_html(slug: str, tid: str, html: str, year: Optional[int] = None) -> None:
             end_date = None
             end_date_iso = tournament_end_dates.get(tid)
             if end_date_iso:
                 try:
                     from datetime import date as date_type
-                    end_date = date_type.fromisoformat(end_date_iso)
+                    candidate = date_type.fromisoformat(end_date_iso)
+                    # Only use this end date if it's in the correct year
+                    if year is None or candidate.year == year:
+                        end_date = candidate
                 except Exception:
                     pass
             parsed_match_results_rows.extend(
@@ -807,9 +810,8 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
                 print(f"[ingest] WARNING: failed to load {file_path}: {exc}", flush=True)
                 html = None
             if html:
-                _process_match_html(slug, tid, html)
+                _process_match_html(slug, tid, html, year)
 
-        # Path 2: live fetch for anything not covered by historical captures
         for year in range(start_year, end_year + 1):
             for past_slug, past_tid, past_url in _fetch_tournament_results_urls_for_year(year):
                 if (past_slug, past_tid, year) in already_fetched:
@@ -817,7 +819,7 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
                 already_fetched.add((past_slug, past_tid, year))
                 past_html = _fetch_html_url(past_url)
                 if past_html:
-                    _process_match_html(past_slug, past_tid, past_html)
+                    _process_match_html(past_slug, past_tid, past_html, year)
     # ------------------------------------------------------------------ #
     # Player IDs — harvested from all sources                             #
     # ------------------------------------------------------------------ #

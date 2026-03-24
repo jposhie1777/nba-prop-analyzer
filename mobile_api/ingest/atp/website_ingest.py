@@ -361,37 +361,72 @@ def _extract_daily_schedule_time_fields(payload_html: Optional[str]) -> Tuple[Li
 
     return start_times[:500], not_before_times[:500], schedule_time_items[:500]
 
-def _fetch_tournament_results_urls_for_year(year: int) -> List[Tuple[str, str, str]]:
+def _parse_tournament_end_date(context_html: str, year: int) -> Optional[str]:
+    """Extract the tournament end date from the HTML context surrounding an archive link."""
+    months = {m: i + 1 for i, m in enumerate([
+        "january", "february", "march", "april", "may", "june",
+        "july", "august", "september", "october", "november", "december",
+    ])}
+    # Same-month range: "7 - 13 February, 2022"
+    m1 = re.search(
+        r'\d+\s*[-–]\s*(\d+)\s+(January|February|March|April|May|June|July|August'
+        r'|September|October|November|December),?\s*(\d{4})',
+        context_html, re.IGNORECASE,
+    )
+    if m1:
+        try:
+            from datetime import date as date_type
+            return date_type(int(m1.group(3)), months[m1.group(2).lower()], int(m1.group(1))).isoformat()
+        except Exception:
+            pass
+    # Cross-month range: "January 18 - February 1, 2026"
+    m2 = re.search(
+        r'(?:January|February|March|April|May|June|July|August|September|October|November|December)'
+        r'\s+\d+\s*[-–]\s*((?:January|February|March|April|May|June|July|August'
+        r'|September|October|November|December)\s+\d+),?\s*(\d{4})',
+        context_html, re.IGNORECASE,
+    )
+    if m2:
+        try:
+            return datetime.strptime(f"{m2.group(1)}, {m2.group(2)}", "%B %d, %Y").date().isoformat()
+        except Exception:
+            pass
+    return None
+
+
+def _fetch_tournament_results_urls_for_year(year: int) -> List[Tuple[str, str, str, Optional[str]]]:
     """Scrape the ATP results-archive page for a given year and return
-    (slug, tournament_id, results_url) for every tournament listed."""
+    (slug, tournament_id, results_url, end_date_iso) for every tournament listed."""
     url = f"https://www.atptour.com/en/scores/results-archive?year={year}"
     html = _fetch_html_url(url)
     if not html:
         print(f"[backfill] WARNING: no archive page returned for year={year} url={url}", flush=True)
         return []
 
-    out: List[Tuple[str, str, str]] = []
-    # The archive page lists links like:
-    # /en/scores/archive/{slug}/{tournament_id}/{year}/results
+    out: List[Tuple[str, str, str, Optional[str]]] = []
+    seen: Set[Tuple[str, str]] = set()
+
     for m in re.finditer(
         r'href="(/en/scores/archive/([^/]+)/([^/]+)/' + str(year) + r'/results)"',
         html,
         flags=re.IGNORECASE,
     ):
         path, slug, tid = m.group(1), m.group(2), m.group(3)
-        out.append((slug, tid, f"https://www.atptour.com{path}"))
+        key = (slug, tid)
+        if key in seen:
+            continue
+        seen.add(key)
 
-    # Deduplicate while preserving order
-    seen: Set[Tuple[str, str]] = set()
-    deduped: List[Tuple[str, str, str]] = []
-    for item in out:
-        key = (item[0], item[1])
-        if key not in seen:
-            seen.add(key)
-            deduped.append(item)
+        # Extract end date from the HTML context preceding this link
+        start = max(0, m.start() - 800)
+        context = html[start:m.start()]
+        end_date_iso = _parse_tournament_end_date(context, year)
 
-    print(f"[backfill] year={year}: {len(deduped)} tournaments found", flush=True)
-    return deduped
+        out.append((slug, tid, f"https://www.atptour.com{path}", end_date_iso))
+
+    print(f"[backfill] year={year}: {len(out)} tournaments found", flush=True)
+    return out
+
 
 
 

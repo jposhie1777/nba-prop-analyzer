@@ -51,7 +51,7 @@ jobs:
 
       - name: Run Hawkeye match stats ingest
         run: |
-          ARGS="--start-year ${{ inputs.start_year }} --end-year ${{ inputs.end_year }} --sleep 0.2"
+          ARGS="--start-year ${{ inputs.start_year }} --end-year ${{ inputs.end_year }} --sleep 0.5"
           if [ "${{ inputs.truncate }}" = "true" ]; then
             ARGS="$ARGS --truncate"
           fi

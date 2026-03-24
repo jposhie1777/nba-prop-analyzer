@@ -58,71 +58,30 @@ export type AtpMatchupHeader = {
   away_headshot_url?: string | null;
 };
 
-export type AtpSackmannRecentValuePoint = {
-  match_date?: string | null;
-  aces?: number | null;
-  double_faults?: number | null;
+export type AtpRecentForm = {
+  matches?: number;
+  wins?: number;
+  losses?: number;
+  record?: string;
+  sequence?: string;
 };
 
-export type AtpSackmannRecentH2hMatch = {
-  match_date?: string | null;
-  is_win?: boolean | null;
-  tourney_name?: string | null;
-  round?: string | null;
-  score?: string | null;
-  aces?: number | null;
-  double_faults?: number | null;
-  total_games?: number | null;
-  sets_played?: number | null;
+export type AtpRecentAverages = {
+  avg_sets?: number | null;
+  avg_total_games?: number | null;
 };
 
-export type AtpSackmannPlayerStats = {
+export type AtpPlayerHistory = {
   player_name?: string | null;
-  surface_key?: string | null;
-  matches_played?: number | null;
-  wins?: number | null;
-  losses?: number | null;
-  win_rate?: number | null;
-  aces_per_match?: number | null;
-  double_faults_per_match?: number | null;
-  avg_games_per_match?: number | null;
-  avg_sets_per_match?: number | null;
-  recent_aces_l5_avg?: number | null;
-  recent_double_faults_l5_avg?: number | null;
-  recent_avg_games_l5?: number | null;
-  recent_avg_sets_l5?: number | null;
-  recent_aces_by_match?: AtpSackmannRecentValuePoint[];
-  recent_double_faults_by_match?: AtpSackmannRecentValuePoint[];
-  recent_form_last10?: string | null;
-  updated_at?: string | null;
-};
-
-export type AtpSackmannH2hStats = {
-  surface_key?: string | null;
-  matches_played?: number | null;
-  wins?: number | null;
-  losses?: number | null;
-  win_rate?: number | null;
-  aces_per_match?: number | null;
-  double_faults_per_match?: number | null;
-  avg_games_per_match?: number | null;
-  avg_sets_per_match?: number | null;
-  recent_h2h_matches?: AtpSackmannRecentH2hMatch[];
-  updated_at?: string | null;
-};
-
-export type AtpSackmannStats = {
-  source_repo?: string | null;
-  surface_key?: string | null;
-  players?: {
-    home?: AtpSackmannPlayerStats | null;
-    away?: AtpSackmannPlayerStats | null;
+  recent_form?: {
+    l5?: AtpRecentForm;
+    l10?: AtpRecentForm;
   } | null;
-  head_to_head?: {
-    all?: AtpSackmannH2hStats | null;
-    surface?: AtpSackmannH2hStats | null;
+  averages?: {
+    l5?: AtpRecentAverages;
+    l10?: AtpRecentAverages;
   } | null;
-} | null;
+};
 
 export type AtpMatchupDetail = {
   match_id: number;
@@ -180,7 +139,10 @@ export type AtpMatchupDetail = {
   odds_summary?: AtpOddsSummary;
   odds_board: AtpOddsBoardRow[];
   odds_updated_at?: string | null;
-  sackmann_stats?: AtpSackmannStats;
+  player_match_history?: {
+    home?: AtpPlayerHistory | null;
+    away?: AtpPlayerHistory | null;
+  } | null;
 };
 
 export function useAtpUpcomingMatches(limit = 100, lookaheadDays = 14) {

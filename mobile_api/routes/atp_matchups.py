@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import re
 import unicodedata
@@ -26,15 +25,10 @@ ATP_TABLES: Dict[str, str] = {
     "odds": os.getenv("ODDSPEDIA_ATP_ODDS_TABLE", "oddspedia.atp_odds"),
 }
 PLAYER_LOOKUP_TABLE = os.getenv("ATP_PLAYER_LOOKUP_TABLE", "atp_data.player_lookup")
-SACKMANN_PLAYER_SURFACE_FEATURES_TABLE = os.getenv(
-    "ATP_SACKMANN_PLAYER_SURFACE_FEATURES_TABLE",
-    "atp_data.sackmann_player_surface_features",
+WEBSITE_MATCH_RESULTS_TABLE = os.getenv(
+    "ATP_WEBSITE_MATCH_RESULTS_TABLE",
+    "atp_data.website_match_results",
 )
-SACKMANN_H2H_FEATURES_TABLE = os.getenv(
-    "ATP_SACKMANN_H2H_FEATURES_TABLE",
-    "atp_data.sackmann_h2h_features",
-)
-SACKMANN_SOURCE_REPO = os.getenv("SACKMANN_SOURCE_REPO", "JeffSackmann/tennis_atp")
 
 
 def _split_table_ref(table_ref: str) -> tuple[str | None, str, str]:
@@ -113,61 +107,14 @@ def _normalize_name_norm(value: Optional[str]) -> str:
     return "".join(ch for ch in ascii_value.lower().strip() if ch.isalnum())
 
 
-def _legacy_buggy_name_norm(value: Optional[str]) -> str:
-    """
-    Compatibility with previously built Sackmann features where uppercase
-    letters were accidentally dropped during regex normalization.
-    """
+def _strip_rank_annotations(value: Optional[str]) -> str:
     if not value:
         return ""
-    ascii_value = (
-        unicodedata.normalize("NFKD", str(value))
-        .encode("ascii", "ignore")
-        .decode("ascii")
-    )
-    return "".join(ch for ch in ascii_value.strip() if ch.isdigit() or ("a" <= ch <= "z"))
+    return re.sub(r"\s+", " ", re.sub(r"\s*\([^)]*\)", "", str(value))).strip()
 
 
-def _name_norm_candidates(value: Optional[str]) -> List[str]:
-    candidates: List[str] = []
-    primary = _normalize_name_norm(value)
-    legacy = _legacy_buggy_name_norm(value)
-    for norm in [primary, legacy]:
-        if norm and norm not in candidates:
-            candidates.append(norm)
-    return candidates
-
-
-def _normalize_surface_key(value: Optional[str]) -> Optional[str]:
-    if not value:
-        return None
-    cleaned = str(value).strip().lower()
-    if not cleaned:
-        return None
-    if "hard" in cleaned:
-        return "hard"
-    if "clay" in cleaned:
-        return "clay"
-    if "grass" in cleaned:
-        return "grass"
-    token = re.sub(r"[^a-z]", "", cleaned.split(" ")[0])
-    return token or None
-
-
-def _safe_json_load(value: Any) -> Any:
-    if value is None:
-        return None
-    if isinstance(value, (dict, list)):
-        return value
-    if isinstance(value, str):
-        raw = value.strip()
-        if not raw:
-            return None
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            return None
-    return None
+def _canonical_player_norm(value: Optional[str]) -> str:
+    return _normalize_name_norm(_strip_rank_annotations(value))
 
 
 def _fetch_player_headshots(player_names: Sequence[str]) -> Dict[str, str]:
@@ -768,261 +715,483 @@ def _fetch_recent_match_rows(match_id: int) -> List[Dict[str, Any]]:
     )
 
 
-def _fetch_sackmann_player_surface_rows(
-    player_norms: Sequence[str],
-    *,
-    surface_key: Optional[str],
-) -> List[Dict[str, Any]]:
-    norms = sorted({norm for norm in player_norms if norm})
-    if not norms:
+def _score_set_values(score_text: Optional[str]) -> List[int]:
+    if not score_text:
         return []
+    values: List[int] = []
+    for token in str(score_text).split():
+        match = re.match(r"^(\d+)", token.strip())
+        if not match:
+            continue
+        values.append(int(match.group(1)))
+    return values
 
-    columns = _table_columns(SACKMANN_PLAYER_SURFACE_FEATURES_TABLE)
-    required = {"player_name_norm", "surface_key"}
-    if not required.issubset(columns):
+
+def _set_and_game_metrics(
+    player_1_scores: Optional[str],
+    player_2_scores: Optional[str],
+) -> Dict[str, Optional[int]]:
+    p1_values = _score_set_values(player_1_scores)
+    p2_values = _score_set_values(player_2_scores)
+    paired = min(len(p1_values), len(p2_values))
+    if paired <= 0:
+        return {
+            "sets_played": None,
+            "total_games": None,
+            "player_1_sets_won": None,
+            "player_2_sets_won": None,
+        }
+
+    p1_sets_won = 0
+    p2_sets_won = 0
+    for idx in range(paired):
+        if p1_values[idx] > p2_values[idx]:
+            p1_sets_won += 1
+        elif p2_values[idx] > p1_values[idx]:
+            p2_sets_won += 1
+
+    return {
+        "sets_played": paired,
+        "total_games": sum(p1_values[:paired]) + sum(p2_values[:paired]),
+        "player_1_sets_won": p1_sets_won,
+        "player_2_sets_won": p2_sets_won,
+    }
+
+
+def _fetch_website_h2h_rows(home_norm: str, away_norm: str, *, limit: int) -> List[Dict[str, Any]]:
+    if not home_norm or not away_norm:
         return []
-
-    selected_fields = [
-        field
-        for field in [
-            "player_name_norm",
-            "player_name",
-            "surface_key",
-            "matches_played",
-            "wins",
-            "losses",
-            "win_rate",
-            "aces_per_match",
-            "double_faults_per_match",
-            "avg_games_per_match",
-            "avg_sets_per_match",
-            "recent_aces_l5_avg",
-            "recent_double_faults_l5_avg",
-            "recent_avg_games_l5",
-            "recent_avg_sets_l5",
-            "recent_aces_by_match",
-            "recent_double_faults_by_match",
-            "recent_form_last10",
-            "updated_at",
-        ]
-        if field in columns
-    ]
-    if not selected_fields:
-        return []
-
-    where_surface = "TRUE"
-    params: List[bigquery.ScalarQueryParameter | bigquery.ArrayQueryParameter] = [
-        bigquery.ArrayQueryParameter("player_norms", "STRING", norms)
-    ]
-    if surface_key and "surface_key" in columns:
-        where_surface = "surface_key = @surface_key"
-        params.append(bigquery.ScalarQueryParameter("surface_key", "STRING", surface_key))
-
     sql = f"""
-    SELECT {", ".join(selected_fields)}
-    FROM `{SACKMANN_PLAYER_SURFACE_FEATURES_TABLE}`
-    WHERE player_name_norm IN UNNEST(@player_norms)
-      AND {where_surface}
-    """
-    return _safe_query(sql, params)
-
-
-def _fetch_sackmann_h2h_rows(
-    *,
-    home_norms: Sequence[str],
-    away_norms: Sequence[str],
-    surface_key: Optional[str],
-) -> List[Dict[str, Any]]:
-    home_list = sorted({norm for norm in home_norms if norm})
-    away_list = sorted({norm for norm in away_norms if norm})
-    if not home_list or not away_list:
-        return []
-
-    columns = _table_columns(SACKMANN_H2H_FEATURES_TABLE)
-    required = {"player_name_norm", "opponent_name_norm", "surface_key"}
-    if not required.issubset(columns):
-        return []
-
-    selected_fields = [
-        field
-        for field in [
-            "player_name_norm",
-            "player_name",
-            "opponent_name_norm",
-            "opponent_name",
-            "surface_key",
-            "matches_played",
-            "wins",
-            "losses",
-            "win_rate",
-            "aces_per_match",
-            "double_faults_per_match",
-            "avg_games_per_match",
-            "avg_sets_per_match",
-            "recent_h2h_matches",
-            "updated_at",
-        ]
-        if field in columns
-    ]
-    if not selected_fields:
-        return []
-
-    surface_keys = ["all"]
-    if surface_key:
-        surface_keys.append(surface_key)
-
-    sql = f"""
-    SELECT {", ".join(selected_fields)}
-    FROM `{SACKMANN_H2H_FEATURES_TABLE}`
-    WHERE (
-      (player_name_norm IN UNNEST(@home_norms) AND opponent_name_norm IN UNNEST(@away_norms))
-      OR (player_name_norm IN UNNEST(@away_norms) AND opponent_name_norm IN UNNEST(@home_norms))
+    WITH base AS (
+      SELECT
+        match_date,
+        tournament_slug,
+        round_and_court,
+        player_1_name,
+        player_2_name,
+        player_1_profile_url,
+        player_2_profile_url,
+        player_1_scores,
+        player_2_scores,
+        player_1_is_winner,
+        player_2_is_winner,
+        snapshot_ts_utc,
+        REGEXP_REPLACE(LOWER(REGEXP_REPLACE(COALESCE(player_1_name, ''), r'\\s*\\([^)]*\\)', '')), r'[^a-z0-9]', '') AS player_1_norm,
+        REGEXP_REPLACE(LOWER(REGEXP_REPLACE(COALESCE(player_2_name, ''), r'\\s*\\([^)]*\\)', '')), r'[^a-z0-9]', '') AS player_2_norm
+      FROM `{WEBSITE_MATCH_RESULTS_TABLE}`
+      WHERE match_date IS NOT NULL
+    ),
+    deduped AS (
+      SELECT * EXCEPT (rn)
+      FROM (
+        SELECT
+          *,
+          ROW_NUMBER() OVER (
+            PARTITION BY
+              match_date,
+              COALESCE(tournament_slug, ''),
+              COALESCE(round_and_court, ''),
+              COALESCE(player_1_profile_url, player_1_name, ''),
+              COALESCE(player_2_profile_url, player_2_name, ''),
+              COALESCE(player_1_scores, ''),
+              COALESCE(player_2_scores, '')
+            ORDER BY snapshot_ts_utc DESC
+          ) AS rn
+        FROM base
+        WHERE (player_1_norm = @home_norm AND player_2_norm = @away_norm)
+           OR (player_1_norm = @away_norm AND player_2_norm = @home_norm)
+      )
+      WHERE rn = 1
     )
-      AND surface_key IN UNNEST(@surface_keys)
+    SELECT
+      match_date,
+      tournament_slug,
+      round_and_court,
+      player_1_name,
+      player_2_name,
+      player_1_scores,
+      player_2_scores,
+      player_1_is_winner,
+      player_2_is_winner,
+      player_1_norm,
+      player_2_norm
+    FROM deduped
+    ORDER BY match_date DESC
+    LIMIT @limit
     """
     return _safe_query(
         sql,
         [
-            bigquery.ArrayQueryParameter("home_norms", "STRING", home_list),
-            bigquery.ArrayQueryParameter("away_norms", "STRING", away_list),
-            bigquery.ArrayQueryParameter("surface_keys", "STRING", surface_keys),
+            bigquery.ScalarQueryParameter("home_norm", "STRING", home_norm),
+            bigquery.ScalarQueryParameter("away_norm", "STRING", away_norm),
+            bigquery.ScalarQueryParameter("limit", "INT64", limit),
         ],
     )
 
 
-def _shape_sackmann_player_row(row: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    if not row:
+def _fetch_website_h2h_summary(home_norm: str, away_norm: str) -> Optional[Dict[str, Any]]:
+    if not home_norm or not away_norm:
         return None
+    sql = f"""
+    WITH base AS (
+      SELECT
+        match_date,
+        tournament_slug,
+        round_and_court,
+        player_1_name,
+        player_2_name,
+        player_1_profile_url,
+        player_2_profile_url,
+        player_1_scores,
+        player_2_scores,
+        player_1_is_winner,
+        player_2_is_winner,
+        snapshot_ts_utc,
+        REGEXP_REPLACE(LOWER(REGEXP_REPLACE(COALESCE(player_1_name, ''), r'\\s*\\([^)]*\\)', '')), r'[^a-z0-9]', '') AS player_1_norm,
+        REGEXP_REPLACE(LOWER(REGEXP_REPLACE(COALESCE(player_2_name, ''), r'\\s*\\([^)]*\\)', '')), r'[^a-z0-9]', '') AS player_2_norm
+      FROM `{WEBSITE_MATCH_RESULTS_TABLE}`
+      WHERE match_date IS NOT NULL
+    ),
+    deduped AS (
+      SELECT * EXCEPT (rn)
+      FROM (
+        SELECT
+          *,
+          ROW_NUMBER() OVER (
+            PARTITION BY
+              match_date,
+              COALESCE(tournament_slug, ''),
+              COALESCE(round_and_court, ''),
+              COALESCE(player_1_profile_url, player_1_name, ''),
+              COALESCE(player_2_profile_url, player_2_name, ''),
+              COALESCE(player_1_scores, ''),
+              COALESCE(player_2_scores, '')
+            ORDER BY snapshot_ts_utc DESC
+          ) AS rn
+        FROM base
+        WHERE (player_1_norm = @home_norm AND player_2_norm = @away_norm)
+           OR (player_1_norm = @away_norm AND player_2_norm = @home_norm)
+      )
+      WHERE rn = 1
+    )
+    SELECT
+      COUNT(1) AS matches_played,
+      SUM(
+        CASE
+          WHEN (player_1_norm = @home_norm AND player_1_is_winner)
+            OR (player_2_norm = @home_norm AND player_2_is_winner)
+          THEN 1 ELSE 0
+        END
+      ) AS home_wins,
+      SUM(
+        CASE
+          WHEN (player_1_norm = @away_norm AND player_1_is_winner)
+            OR (player_2_norm = @away_norm AND player_2_is_winner)
+          THEN 1 ELSE 0
+        END
+      ) AS away_wins,
+      MIN(EXTRACT(YEAR FROM match_date)) AS first_year,
+      MAX(EXTRACT(YEAR FROM match_date)) AS last_year
+    FROM deduped
+    """
+    rows = _safe_query(
+        sql,
+        [
+            bigquery.ScalarQueryParameter("home_norm", "STRING", home_norm),
+            bigquery.ScalarQueryParameter("away_norm", "STRING", away_norm),
+        ],
+    )
+    if not rows:
+        return None
+    row = rows[0]
+    played = int(row.get("matches_played") or 0)
+    if played <= 0:
+        return None
+    first_year = row.get("first_year")
+    last_year = row.get("last_year")
+    period_years = None
+    if first_year and last_year:
+        period_years = str(first_year) if first_year == last_year else f"{first_year}-{last_year}"
     return {
-        "player_name": row.get("player_name"),
-        "surface_key": row.get("surface_key"),
-        "matches_played": row.get("matches_played"),
-        "wins": row.get("wins"),
-        "losses": row.get("losses"),
-        "win_rate": row.get("win_rate"),
-        "aces_per_match": row.get("aces_per_match"),
-        "double_faults_per_match": row.get("double_faults_per_match"),
-        "avg_games_per_match": row.get("avg_games_per_match"),
-        "avg_sets_per_match": row.get("avg_sets_per_match"),
-        "recent_aces_l5_avg": row.get("recent_aces_l5_avg"),
-        "recent_double_faults_l5_avg": row.get("recent_double_faults_l5_avg"),
-        "recent_avg_games_l5": row.get("recent_avg_games_l5"),
-        "recent_avg_sets_l5": row.get("recent_avg_sets_l5"),
-        "recent_aces_by_match": _safe_json_load(row.get("recent_aces_by_match")) or [],
-        "recent_double_faults_by_match": _safe_json_load(row.get("recent_double_faults_by_match")) or [],
-        "recent_form_last10": row.get("recent_form_last10"),
-        "updated_at": row.get("updated_at"),
+        "ht_wins": int(row.get("home_wins") or 0),
+        "at_wins": int(row.get("away_wins") or 0),
+        "draws": 0,
+        "played_matches": played,
+        "period_years": period_years,
     }
 
 
-def _shape_sackmann_h2h_row(row: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    if not row:
-        return None
-    return {
-        "surface_key": row.get("surface_key"),
-        "matches_played": row.get("matches_played"),
-        "wins": row.get("wins"),
-        "losses": row.get("losses"),
-        "win_rate": row.get("win_rate"),
-        "aces_per_match": row.get("aces_per_match"),
-        "double_faults_per_match": row.get("double_faults_per_match"),
-        "avg_games_per_match": row.get("avg_games_per_match"),
-        "avg_sets_per_match": row.get("avg_sets_per_match"),
-        "recent_h2h_matches": _safe_json_load(row.get("recent_h2h_matches")) or [],
-        "updated_at": row.get("updated_at"),
-    }
+def _fetch_website_player_rows(player_norm: str, *, limit: int) -> List[Dict[str, Any]]:
+    if not player_norm:
+        return []
+    sql = f"""
+    WITH base AS (
+      SELECT
+        match_date,
+        tournament_slug,
+        round_and_court,
+        player_1_name,
+        player_2_name,
+        player_1_profile_url,
+        player_2_profile_url,
+        player_1_scores,
+        player_2_scores,
+        player_1_is_winner,
+        player_2_is_winner,
+        snapshot_ts_utc,
+        REGEXP_REPLACE(LOWER(REGEXP_REPLACE(COALESCE(player_1_name, ''), r'\\s*\\([^)]*\\)', '')), r'[^a-z0-9]', '') AS player_1_norm,
+        REGEXP_REPLACE(LOWER(REGEXP_REPLACE(COALESCE(player_2_name, ''), r'\\s*\\([^)]*\\)', '')), r'[^a-z0-9]', '') AS player_2_norm
+      FROM `{WEBSITE_MATCH_RESULTS_TABLE}`
+      WHERE match_date IS NOT NULL
+    ),
+    deduped AS (
+      SELECT * EXCEPT (rn)
+      FROM (
+        SELECT
+          *,
+          ROW_NUMBER() OVER (
+            PARTITION BY
+              match_date,
+              COALESCE(tournament_slug, ''),
+              COALESCE(round_and_court, ''),
+              COALESCE(player_1_profile_url, player_1_name, ''),
+              COALESCE(player_2_profile_url, player_2_name, ''),
+              COALESCE(player_1_scores, ''),
+              COALESCE(player_2_scores, '')
+            ORDER BY snapshot_ts_utc DESC
+          ) AS rn
+        FROM base
+        WHERE player_1_norm = @player_norm
+           OR player_2_norm = @player_norm
+      )
+      WHERE rn = 1
+    )
+    SELECT
+      match_date,
+      tournament_slug,
+      round_and_court,
+      player_1_name,
+      player_2_name,
+      player_1_scores,
+      player_2_scores,
+      player_1_is_winner,
+      player_2_is_winner,
+      player_1_norm,
+      player_2_norm
+    FROM deduped
+    ORDER BY match_date DESC
+    LIMIT @limit
+    """
+    return _safe_query(
+        sql,
+        [
+            bigquery.ScalarQueryParameter("player_norm", "STRING", player_norm),
+            bigquery.ScalarQueryParameter("limit", "INT64", limit),
+        ],
+    )
 
 
-def _pick_first_norm_row(
-    by_norm: Dict[str, Dict[str, Any]],
-    norm_candidates: Sequence[str],
-) -> Optional[Dict[str, Any]]:
-    for norm in norm_candidates:
-        if norm in by_norm:
-            return by_norm[norm]
+def _result_for_player(row: Dict[str, Any], player_norm: str) -> Optional[bool]:
+    if str(row.get("player_1_norm") or "") == player_norm:
+        value = row.get("player_1_is_winner")
+        return bool(value) if value is not None else None
+    if str(row.get("player_2_norm") or "") == player_norm:
+        value = row.get("player_2_is_winner")
+        return bool(value) if value is not None else None
     return None
 
 
-def _select_h2h_row(
+def _name_for_player(row: Dict[str, Any], player_norm: str) -> Optional[str]:
+    if str(row.get("player_1_norm") or "") == player_norm:
+        return _strip_rank_annotations(row.get("player_1_name"))
+    if str(row.get("player_2_norm") or "") == player_norm:
+        return _strip_rank_annotations(row.get("player_2_name"))
+    return None
+
+
+def _opponent_name_for_player(row: Dict[str, Any], player_norm: str) -> Optional[str]:
+    if str(row.get("player_1_norm") or "") == player_norm:
+        return _strip_rank_annotations(row.get("player_2_name"))
+    if str(row.get("player_2_norm") or "") == player_norm:
+        return _strip_rank_annotations(row.get("player_1_name"))
+    return None
+
+
+def _recent_record(rows: Sequence[Dict[str, Any]], player_norm: str, count: int) -> Dict[str, Any]:
+    sample = list(rows[:count])
+    sequence: List[str] = []
+    wins = 0
+    losses = 0
+    resolved = 0
+    for row in sample:
+        won = _result_for_player(row, player_norm)
+        if won is None:
+            continue
+        resolved += 1
+        if won:
+            wins += 1
+            sequence.append("W")
+        else:
+            losses += 1
+            sequence.append("L")
+    return {
+        "matches": resolved,
+        "wins": wins,
+        "losses": losses,
+        "record": f"{wins}-{losses}",
+        "sequence": "".join(sequence),
+    }
+
+
+def _recent_averages(rows: Sequence[Dict[str, Any]], count: int) -> Dict[str, Optional[float]]:
+    sample = list(rows[:count])
+    total_sets = 0
+    total_games = 0
+    valid_count = 0
+    for row in sample:
+        metrics = _set_and_game_metrics(row.get("player_1_scores"), row.get("player_2_scores"))
+        sets_played = metrics.get("sets_played")
+        games = metrics.get("total_games")
+        if sets_played is None or games is None:
+            continue
+        total_sets += int(sets_played)
+        total_games += int(games)
+        valid_count += 1
+    if valid_count <= 0:
+        return {"avg_sets": None, "avg_total_games": None}
+    return {
+        "avg_sets": round(total_sets / valid_count, 2),
+        "avg_total_games": round(total_games / valid_count, 2),
+    }
+
+
+def _shape_h2h_rows(rows: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    payload: List[Dict[str, Any]] = []
+    for row in rows:
+        metrics = _set_and_game_metrics(row.get("player_1_scores"), row.get("player_2_scores"))
+        winner_name = None
+        if row.get("player_1_is_winner"):
+            winner_name = _strip_rank_annotations(row.get("player_1_name"))
+        elif row.get("player_2_is_winner"):
+            winner_name = _strip_rank_annotations(row.get("player_2_name"))
+        payload.append(
+            {
+                "h2h_starttime": row.get("match_date"),
+                "h2h_ht": _strip_rank_annotations(row.get("player_1_name")),
+                "h2h_at": _strip_rank_annotations(row.get("player_2_name")),
+                "h2h_hscore": metrics.get("player_1_sets_won"),
+                "h2h_ascore": metrics.get("player_2_sets_won"),
+                "h2h_winner": winner_name,
+                "h2h_league_name": row.get("tournament_slug"),
+                "h2h_round": row.get("round_and_court"),
+                "h2h_total_games": metrics.get("total_games"),
+                "h2h_sets_played": metrics.get("sets_played"),
+            }
+        )
+    return payload
+
+
+def _shape_recent_rows_for_player(
     rows: Sequence[Dict[str, Any]],
     *,
-    player_norms: Sequence[str],
-    opponent_norms: Sequence[str],
-    surface_key: str,
-) -> Optional[Dict[str, Any]]:
-    player_set = {norm for norm in player_norms if norm}
-    opponent_set = {norm for norm in opponent_norms if norm}
+    side: str,
+    player_norm: str,
+) -> List[Dict[str, Any]]:
+    payload: List[Dict[str, Any]] = []
     for row in rows:
-        row_player = str(row.get("player_name_norm") or "")
-        row_opponent = str(row.get("opponent_name_norm") or "")
-        row_surface = str(row.get("surface_key") or "")
-        if row_surface != surface_key:
-            continue
-        if row_player in player_set and row_opponent in opponent_set:
-            return row
-    return None
+        self_name = _name_for_player(row, player_norm)
+        opponent = _opponent_name_for_player(row, player_norm)
+        won = _result_for_player(row, player_norm)
+        metrics = _set_and_game_metrics(row.get("player_1_scores"), row.get("player_2_scores"))
+        if str(row.get("player_1_norm") or "") == player_norm:
+            sets_for = metrics.get("player_1_sets_won")
+            sets_against = metrics.get("player_2_sets_won")
+        elif str(row.get("player_2_norm") or "") == player_norm:
+            sets_for = metrics.get("player_2_sets_won")
+            sets_against = metrics.get("player_1_sets_won")
+        else:
+            sets_for = None
+            sets_against = None
+        payload.append(
+            {
+                "side": side,
+                "last_starttime": row.get("match_date"),
+                "last_ht": self_name,
+                "last_at": opponent,
+                "last_hscore": sets_for,
+                "last_ascore": sets_against,
+                "last_outcome": "W" if won else ("L" if won is not None else None),
+                "tournament_name": row.get("tournament_slug"),
+                "round_name": row.get("round_and_court"),
+                "total_games": metrics.get("total_games"),
+                "sets_played": metrics.get("sets_played"),
+            }
+        )
+    return payload
 
 
-def _build_sackmann_payload(
+def _build_player_history_payload(
+    *,
+    player_name: Optional[str],
+    player_norm: str,
+    rows: Sequence[Dict[str, Any]],
+) -> Dict[str, Any]:
+    display_name = _strip_rank_annotations(player_name) or None
+    if not display_name and rows:
+        display_name = _name_for_player(rows[0], player_norm)
+    return {
+        "player_name": display_name,
+        "recent_form": {
+            "l5": _recent_record(rows, player_norm, 5),
+            "l10": _recent_record(rows, player_norm, 10),
+        },
+        "averages": {
+            "l5": _recent_averages(rows, 5),
+            "l10": _recent_averages(rows, 10),
+        },
+    }
+
+
+def _build_website_match_history_payload(
     *,
     home_team: Optional[str],
     away_team: Optional[str],
-    surface: Optional[str],
-) -> Optional[Dict[str, Any]]:
-    home_norms = _name_norm_candidates(home_team)
-    away_norms = _name_norm_candidates(away_team)
-    if not home_norms or not away_norms:
-        return None
+) -> Dict[str, Any]:
+    home_norm = _canonical_player_norm(home_team)
+    away_norm = _canonical_player_norm(away_team)
+    if not home_norm or not away_norm:
+        return {
+            "head_to_head_summary": None,
+            "head_to_head_rows": [],
+            "player_match_history": None,
+            "recent_matches": [],
+        }
 
-    surface_key = _normalize_surface_key(surface)
-    player_rows = _fetch_sackmann_player_surface_rows(
-        [*home_norms, *away_norms],
-        surface_key=surface_key,
-    )
-    by_norm: Dict[str, Dict[str, Any]] = {}
-    for row in player_rows:
-        norm = str(row.get("player_name_norm") or "")
-        if norm and norm not in by_norm:
-            by_norm[norm] = row
+    h2h_rows = _fetch_website_h2h_rows(home_norm, away_norm, limit=30)
+    h2h_summary = _fetch_website_h2h_summary(home_norm, away_norm)
+    home_rows = _fetch_website_player_rows(home_norm, limit=12)
+    away_rows = _fetch_website_player_rows(away_norm, limit=12)
 
-    h2h_rows = _fetch_sackmann_h2h_rows(
-        home_norms=home_norms,
-        away_norms=away_norms,
-        surface_key=surface_key,
-    )
-    home_h2h_all = _select_h2h_row(
-        h2h_rows,
-        player_norms=home_norms,
-        opponent_norms=away_norms,
-        surface_key="all",
-    )
-    home_h2h_surface = (
-        _select_h2h_row(
-            h2h_rows,
-            player_norms=home_norms,
-            opponent_norms=away_norms,
-            surface_key=surface_key,
-        )
-        if surface_key
-        else None
-    )
-
-    payload = {
-        "source_repo": SACKMANN_SOURCE_REPO,
-        "surface_key": surface_key,
-        "players": {
-            "home": _shape_sackmann_player_row(_pick_first_norm_row(by_norm, home_norms)),
-            "away": _shape_sackmann_player_row(_pick_first_norm_row(by_norm, away_norms)),
+    return {
+        "head_to_head_summary": h2h_summary,
+        "head_to_head_rows": _shape_h2h_rows(h2h_rows),
+        "player_match_history": {
+            "home": _build_player_history_payload(
+                player_name=home_team,
+                player_norm=home_norm,
+                rows=home_rows,
+            ),
+            "away": _build_player_history_payload(
+                player_name=away_team,
+                player_norm=away_norm,
+                rows=away_rows,
+            ),
         },
-        "head_to_head": {
-            "all": _shape_sackmann_h2h_row(home_h2h_all),
-            "surface": _shape_sackmann_h2h_row(home_h2h_surface),
-        },
+        "recent_matches": [
+            *_shape_recent_rows_for_player(home_rows[:10], side="home", player_norm=home_norm),
+            *_shape_recent_rows_for_player(away_rows[:10], side="away", player_norm=away_norm),
+        ],
     }
-
-    if not payload["players"]["home"] and not payload["players"]["away"] and not payload["head_to_head"]["all"]:
-        return None
-    return payload
 
 
 def _build_matchup_payload(
@@ -1110,13 +1279,22 @@ def atp_matchup_detail(match_id: int):
 
     odds_summary = _fetch_odds_summary_for_matches([match_id]).get(match_id)
     odds_board, odds_updated_at = _fetch_match_odds_board(match_id)
-    h2h_summary = _fetch_head_to_head_summary_row(match_id)
-    h2h_matches = _fetch_head_to_head_match_rows(match_id)
-    sackmann_stats = _build_sackmann_payload(
+    website_payload = _build_website_match_history_payload(
         home_team=matchup.get("home_team"),
         away_team=matchup.get("away_team"),
-        surface=(weather_row or {}).get("surface"),
     )
+    has_matchup_players = bool(
+        _canonical_player_norm(matchup.get("home_team")) and _canonical_player_norm(matchup.get("away_team"))
+    )
+    if has_matchup_players:
+        h2h_summary = website_payload.get("head_to_head_summary")
+        h2h_matches = website_payload.get("head_to_head_rows") or []
+        recent_matches = website_payload.get("recent_matches") or []
+    else:
+        # Fallback only when matchup names are missing and website lookups cannot be performed.
+        h2h_summary = _fetch_head_to_head_summary_row(match_id)
+        h2h_matches = _fetch_head_to_head_match_rows(match_id)
+        recent_matches = _fetch_recent_match_rows(match_id)
 
     return {
         "match_id": match_id,
@@ -1127,9 +1305,9 @@ def atp_matchup_detail(match_id: int):
         "head_to_head_summary": h2h_summary,
         "head_to_head_stats": h2h_matches,
         "head_to_head_matches": h2h_matches,
-        "recent_matches": _fetch_recent_match_rows(match_id),
+        "recent_matches": recent_matches,
+        "player_match_history": website_payload.get("player_match_history"),
         "odds_summary": odds_summary,
         "odds_board": odds_board,
         "odds_updated_at": odds_updated_at,
-        "sackmann_stats": sackmann_stats,
     }

@@ -40,6 +40,10 @@ jobs:
           pip install --upgrade pip
           pip install -r mobile_api/requirements.txt
 
+      - name: Fix apt sources
+        run: |
+          sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
+
       - name: Install system dependencies for Camoufox/Firefox
         run: |
           sudo apt-get update && sudo apt-get install -y \
@@ -142,6 +146,10 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r mobile_api/requirements.txt
+
+      - name: Fix apt sources
+        run: |
+          sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
 
       - name: Install system dependencies for Camoufox/Firefox
         run: |

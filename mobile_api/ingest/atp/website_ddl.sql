@@ -274,12 +274,15 @@ CLUSTER BY court_type;
 CREATE TABLE IF NOT EXISTS `atp_data.website_player_stats_records` (
   snapshot_ts_utc TIMESTAMP NOT NULL,
   ingest_run_id STRING NOT NULL,
+  player_id STRING,
   court_type STRING,
   stat_name STRING,
   stat_value STRING
 )
 PARTITION BY DATE(snapshot_ts_utc)
-CLUSTER BY court_type, stat_name;
+CLUSTER BY player_id, court_type, stat_name;
+
+ALTER TABLE `atp_data.website_player_stats_records` ADD COLUMN IF NOT EXISTS player_id STRING;
 
 CREATE TABLE IF NOT EXISTS `atp_data.website_who_is_playing` (
   snapshot_ts_utc TIMESTAMP NOT NULL,
@@ -299,3 +302,63 @@ CREATE TABLE IF NOT EXISTS `atp_data.website_who_is_playing_players` (
 )
 PARTITION BY DATE(snapshot_ts_utc)
 CLUSTER BY last_name, first_name;
+
+CREATE TABLE IF NOT EXISTS `atp_data.website_hawkeye_match_stats` (
+  snapshot_ts_utc TIMESTAMP NOT NULL,
+  ingest_run_id STRING NOT NULL,
+  stats_url STRING,
+  year INT64,
+  tournament_id STRING,
+  match_id STRING,
+  match_date DATE,
+  tournament_name STRING,
+  surface STRING,
+  round_name STRING,
+  match_duration STRING,
+  player_id STRING,
+  player_name STRING,
+  opponent_id STRING,
+  opponent_name STRING,
+  is_winner BOOL,
+  set_number INT64,
+  set_score INT64,
+  opponent_set_score INT64,
+  aces INT64,
+  double_faults INT64,
+  serve_rating INT64,
+  first_serve_pct FLOAT64,
+  first_serve_made INT64,
+  first_serve_attempted INT64,
+  first_serve_pts_won_pct FLOAT64,
+  first_serve_pts_won INT64,
+  first_serve_pts_played INT64,
+  second_serve_pts_won_pct FLOAT64,
+  second_serve_pts_won INT64,
+  second_serve_pts_played INT64,
+  break_points_saved_pct FLOAT64,
+  break_points_saved INT64,
+  break_points_faced INT64,
+  service_games_played INT64,
+  return_rating INT64,
+  first_serve_return_pts_won_pct FLOAT64,
+  first_serve_return_pts_won INT64,
+  first_serve_return_pts_played INT64,
+  second_serve_return_pts_won_pct FLOAT64,
+  second_serve_return_pts_won INT64,
+  second_serve_return_pts_played INT64,
+  break_points_converted_pct FLOAT64,
+  break_points_converted INT64,
+  break_points_opportunities INT64,
+  return_games_played INT64,
+  total_service_pts_won_pct FLOAT64,
+  total_service_pts_won INT64,
+  total_service_pts_played INT64,
+  total_return_pts_won_pct FLOAT64,
+  total_return_pts_won INT64,
+  total_return_pts_played INT64,
+  total_pts_won_pct FLOAT64,
+  total_pts_won INT64,
+  total_pts_played INT64
+)
+PARTITION BY match_date
+CLUSTER BY player_id, year, surface;

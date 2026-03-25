@@ -46,7 +46,7 @@ jobs:
 
       - name: Run ATP daily website loader (append-only)
         run: |
-          ARGS="--mode daily --sleep 0.2"
+          ARGS="--mode daily --sleep 0.2 --no-truncate-schedule"
           if [ -n "${{ inputs.year }}" ]; then
             ARGS="$ARGS --start-year ${{ inputs.year }} --end-year ${{ inputs.year }}"
           fi

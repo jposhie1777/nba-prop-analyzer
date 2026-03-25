@@ -1,0 +1,58 @@
+name: ATP Hawkeye Match Stats
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_year:
+        description: "Start year"
+        required: false
+        default: "2025"
+      end_year:
+        description: "End year"
+        required: false
+        default: "2026"
+      truncate:
+        description: "Truncate before loading (true/false)"
+        required: false
+        default: "false"
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    env:
+      ATP_DATASET: "atp_data"
+      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/mobile_api
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r mobile_api/requirements.txt
+
+      - name: Configure GCP credentials
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
+
+      - name: Apply ATP website DDL
+        run: |
+          python -m mobile_api.ingest.atp.apply_website_ddl
+
+      - name: Run Hawkeye match stats ingest
+        run: |
+          ARGS="--start-year ${{ inputs.start_year }} --end-year ${{ inputs.end_year }} --sleep 1.0"
+          if [ "${{ inputs.truncate }}" = "true" ]; then
+            ARGS="$ARGS --truncate"
+          fi
+          python -m mobile_api.ingest.atp.hawkeye_match_stats_ingest $ARGS

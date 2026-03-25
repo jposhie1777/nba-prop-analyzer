@@ -1,0 +1,61 @@
+name: ATP Player Stats Backfill
+
+on:
+  workflow_dispatch:
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      ATP_DATASET: "atp_data"
+      ATP_BQ_LOCATION: "US"
+      GCP_PROJECT: ${{ secrets.PROJECT_ID }}
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/mobile_api
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r mobile_api/requirements.txt
+
+      - name: Configure GCP credentials
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
+
+      - name: Apply ATP website DDL
+        run: |
+          python -m mobile_api.ingest.atp.apply_website_ddl
+
+      - name: Truncate and rebuild player stats tables
+        run: |
+          python3 - <<'PYEOF'
+          import os
+          from google.cloud import bigquery
+          project = os.getenv("GCP_PROJECT")
+          dataset = os.getenv("ATP_DATASET", "atp_data")
+          client = bigquery.Client(project=project)
+          for table in ["website_player_stats", "website_player_stats_records"]:
+              client.query(f"TRUNCATE TABLE `{dataset}.{table}`").result()
+              print(f"Truncated {table}")
+          PYEOF
+
+      - name: Run ATP player stats backfill
+        run: |
+          python -m mobile_api.ingest.atp.website_ingest \
+            --mode backfill \
+            --start-year 2019 \
+            --end-year 2026 \
+            --no-truncate \
+            --no-truncate-schedule \
+            --sleep 0.2

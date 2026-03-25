@@ -1,3 +1,4 @@
+#/workspaces/nba-prop-analyzer/mobile_api/ingest/atp/website_ingest.py
 from __future__ import annotations
 
 import argparse
@@ -24,6 +25,221 @@ from atp_normalize import (
     utc_now_iso,
 )
 
+# Static end-date lookup keyed by (tournament_id, year).
+# Used for round-only archive pages that contain no date information in HTML.
+# Dates represent the final day of each tournament.
+_STATIC_TOURNAMENT_END_DATES: Dict[Tuple[str, int], str] = {
+    # Australian Open (580)
+    ("580", 2020): "2020-02-02", ("580", 2021): "2021-02-21", ("580", 2022): "2022-01-30",
+    ("580", 2023): "2023-01-29", ("580", 2024): "2024-01-28", ("580", 2025): "2025-01-26",
+    # Roland Garros (520)
+    ("520", 2020): "2020-10-11", ("520", 2021): "2021-06-13", ("520", 2022): "2022-06-05",
+    ("520", 2023): "2023-06-11", ("520", 2024): "2024-06-09", ("520", 2025): "2025-06-08",
+    # Wimbledon (540)
+    ("540", 2021): "2021-07-11", ("540", 2022): "2022-07-10",
+    ("540", 2023): "2023-07-16", ("540", 2024): "2024-07-14", ("540", 2025): "2025-07-13",
+    # US Open (560)
+    ("560", 2020): "2020-09-13", ("560", 2021): "2021-09-12", ("560", 2022): "2022-09-11",
+    ("560", 2023): "2023-09-10", ("560", 2024): "2024-09-08", ("560", 2025): "2025-09-07",
+    # Indian Wells (404)
+    ("404", 2021): "2021-10-17", ("404", 2022): "2022-03-20", ("404", 2023): "2023-03-19",
+    ("404", 2024): "2024-03-17", ("404", 2025): "2025-03-16",
+    # Miami (403)
+    ("403", 2021): "2021-04-04", ("403", 2022): "2022-04-03", ("403", 2023): "2023-04-02",
+    ("403", 2024): "2024-03-31", ("403", 2025): "2025-03-30",
+    # Monte Carlo (410)
+    ("410", 2021): "2021-04-18", ("410", 2022): "2022-04-17", ("410", 2023): "2023-04-16",
+    ("410", 2024): "2024-04-14", ("410", 2025): "2025-04-13",
+    # Madrid (1536)
+    ("1536", 2021): "2021-05-09", ("1536", 2022): "2022-05-08", ("1536", 2023): "2023-05-07",
+    ("1536", 2024): "2024-05-05", ("1536", 2025): "2025-05-04",
+    # Rome (416)
+    ("416", 2020): "2020-09-21", ("416", 2021): "2021-05-16", ("416", 2022): "2022-05-15",
+    ("416", 2023): "2023-05-21", ("416", 2024): "2024-05-19", ("416", 2025): "2025-05-18",
+    # Barcelona (425)
+    ("425", 2021): "2021-04-25", ("425", 2022): "2022-04-24", ("425", 2023): "2023-04-23",
+    ("425", 2024): "2024-04-21", ("425", 2025): "2025-04-20",
+    # Hamburg (414)
+    ("414", 2020): "2020-09-27", ("414", 2021): "2021-07-25", ("414", 2022): "2022-07-24",
+    ("414", 2023): "2023-07-23", ("414", 2024): "2024-07-21", ("414", 2025): "2025-07-20",
+    # Washington (418)
+    ("418", 2021): "2021-08-08", ("418", 2022): "2022-08-07", ("418", 2023): "2023-08-06",
+    ("418", 2024): "2024-08-04", ("418", 2025): "2025-08-03",
+    # Montreal/Toronto (421)
+    ("421", 2021): "2021-08-15", ("421", 2022): "2022-08-14", ("421", 2023): "2023-08-13",
+    ("421", 2024): "2024-08-11", ("421", 2025): "2025-08-10",
+    # Cincinnati (422)
+    ("422", 2020): "2020-08-29", ("422", 2021): "2021-08-22", ("422", 2022): "2022-08-21",
+    ("422", 2023): "2023-08-20", ("422", 2024): "2024-08-18", ("422", 2025): "2025-08-17",
+    # Shanghai (5014)
+    ("5014", 2023): "2023-10-15", ("5014", 2024): "2024-10-13", ("5014", 2025): "2025-10-12",
+    # Paris Bercy (352)
+    ("352", 2020): "2020-11-08", ("352", 2021): "2021-11-07", ("352", 2022): "2022-11-06",
+    ("352", 2023): "2023-11-05", ("352", 2024): "2024-11-03", ("352", 2025): "2025-11-02",
+    # Vienna (337)
+    ("337", 2020): "2020-11-01", ("337", 2021): "2021-10-31", ("337", 2022): "2022-10-30",
+    ("337", 2023): "2023-10-29", ("337", 2024): "2024-10-27", ("337", 2025): "2025-10-26",
+    # Basel (328)
+    ("328", 2021): "2021-10-31", ("328", 2022): "2022-10-30", ("328", 2023): "2023-10-29",
+    ("328", 2024): "2024-10-27", ("328", 2025): "2025-10-26",
+    # Nitto ATP Finals (605)
+    ("605", 2020): "2020-11-22", ("605", 2021): "2021-11-21", ("605", 2022): "2022-11-20",
+    ("605", 2023): "2023-11-19", ("605", 2024): "2024-11-17", ("605", 2025): "2025-11-16",
+    # Dubai (495)
+    ("495", 2020): "2020-02-29", ("495", 2021): "2021-03-06", ("495", 2022): "2022-02-26",
+    ("495", 2023): "2023-03-04", ("495", 2024): "2024-03-02", ("495", 2025): "2025-03-01",
+    # Acapulco (807)
+    ("807", 2020): "2020-02-29", ("807", 2021): "2021-03-06", ("807", 2022): "2022-02-26",
+    ("807", 2023): "2023-03-04", ("807", 2024): "2024-03-02", ("807", 2025): "2025-03-01",
+    # Doha (451)
+    ("451", 2020): "2020-01-11", ("451", 2021): "2021-03-13", ("451", 2022): "2022-02-19",
+    ("451", 2023): "2023-02-18", ("451", 2024): "2024-02-17", ("451", 2025): "2025-02-22",
+    # Rotterdam (407)
+    ("407", 2020): "2020-02-16", ("407", 2021): "2021-03-07", ("407", 2022): "2022-02-13",
+    ("407", 2023): "2023-02-12", ("407", 2024): "2024-02-11", ("407", 2025): "2025-02-09",
+    # Dallas (424)
+    ("424", 2022): "2022-02-13", ("424", 2023): "2023-02-12", ("424", 2024): "2024-02-11",
+    ("424", 2025): "2025-02-09",
+    # Montpellier (375)
+    ("375", 2020): "2020-02-09", ("375", 2021): "2021-02-07", ("375", 2022): "2022-02-06",
+    ("375", 2023): "2023-02-05", ("375", 2024): "2024-02-04", ("375", 2025): "2025-02-02",
+    # Buenos Aires (506)
+    ("506", 2020): "2020-02-16", ("506", 2021): "2021-04-11", ("506", 2022): "2022-02-13",
+    ("506", 2023): "2023-02-19", ("506", 2024): "2024-02-18", ("506", 2025): "2025-02-16",
+    # Rio (6932)
+    ("6932", 2020): "2020-02-23", ("6932", 2021): "2021-04-18", ("6932", 2022): "2022-02-20",
+    ("6932", 2023): "2023-02-26", ("6932", 2024): "2024-02-25", ("6932", 2025): "2025-02-23",
+    # Delray Beach (499)
+    ("499", 2020): "2020-02-23", ("499", 2021): "2021-04-11", ("499", 2022): "2022-02-20",
+    ("499", 2023): "2023-02-19", ("499", 2024): "2024-02-18", ("499", 2025): "2025-02-16",
+    # Halle (500)
+    ("500", 2021): "2021-06-20", ("500", 2022): "2022-06-19", ("500", 2023): "2023-06-18",
+    ("500", 2024): "2024-06-23", ("500", 2025): "2025-06-22",
+    # Stuttgart (321)
+    ("321", 2021): "2021-06-13", ("321", 2022): "2022-06-12", ("321", 2023): "2023-06-11",
+    ("321", 2024): "2024-06-16", ("321", 2025): "2025-06-15",
+    # London Queens (311)
+    ("311", 2021): "2021-06-20", ("311", 2022): "2022-06-19", ("311", 2023): "2023-06-18",
+    ("311", 2024): "2024-06-23", ("311", 2025): "2025-06-22",
+    # Eastbourne (741)
+    ("741", 2021): "2021-06-26", ("741", 2022): "2022-06-25", ("741", 2023): "2023-06-24",
+    ("741", 2024): "2024-06-29", ("741", 2025): "2025-06-28",
+    # Mallorca (8994)
+    ("8994", 2021): "2021-06-26", ("8994", 2022): "2022-06-25", ("8994", 2023): "2023-06-24",
+    ("8994", 2024): "2024-06-29", ("8994", 2025): "2025-06-28",
+    # S-Hertogenbosch (440)
+    ("440", 2021): "2021-06-13", ("440", 2022): "2022-06-12", ("440", 2023): "2023-06-11",
+    ("440", 2024): "2024-06-16", ("440", 2025): "2025-06-15",
+    # Bastad (316)
+    ("316", 2021): "2021-07-25", ("316", 2022): "2022-07-24", ("316", 2023): "2023-07-23",
+    ("316", 2024): "2024-07-21", ("316", 2025): "2025-07-20",
+    # Gstaad (314)
+    ("314", 2021): "2021-07-25", ("314", 2022): "2022-07-24", ("314", 2023): "2023-07-23",
+    ("314", 2024): "2024-07-21", ("314", 2025): "2025-07-20",
+    # Umag (439)
+    ("439", 2021): "2021-07-25", ("439", 2022): "2022-07-24", ("439", 2023): "2023-07-23",
+    ("439", 2024): "2024-07-21", ("439", 2025): "2025-07-20",
+    # Kitzbuhel (319)
+    ("319", 2021): "2021-08-01", ("319", 2022): "2022-07-31", ("319", 2023): "2023-07-30",
+    ("319", 2024): "2024-07-28", ("319", 2025): "2025-07-27",
+    # Los Cabos (7480)
+    ("7480", 2021): "2021-08-01", ("7480", 2022): "2022-07-31", ("7480", 2023): "2023-07-30",
+    ("7480", 2024): "2024-07-28", ("7480", 2025): "2025-08-03",
+    # Winston-Salem (6242)
+    ("6242", 2021): "2021-08-28", ("6242", 2022): "2022-08-27", ("6242", 2023): "2023-08-26",
+    ("6242", 2024): "2024-08-24", ("6242", 2025): "2025-08-23",
+    # Stockholm (429)
+    ("429", 2021): "2021-11-14", ("429", 2022): "2022-10-23", ("429", 2023): "2023-10-22",
+    ("429", 2024): "2024-10-20", ("429", 2025): "2025-10-19",
+    # Moscow/St Pete (568)
+    ("568", 2021): "2021-10-24",
+    # Metz (341)
+    ("341", 2021): "2021-09-26", ("341", 2022): "2022-09-25", ("341", 2023): "2023-09-24",
+    ("341", 2024): "2024-09-22", ("341", 2025): "2025-09-21",
+    # Tokyo (329)
+    ("329", 2021): "2021-10-10", ("329", 2022): "2022-10-09", ("329", 2023): "2023-10-08",
+    ("329", 2024): "2024-10-06", ("329", 2025): "2025-10-05",
+    # Beijing (747)
+    ("747", 2023): "2023-10-08", ("747", 2024): "2024-10-06", ("747", 2025): "2025-10-05",
+    # Chengdu (7581)
+    ("7581", 2023): "2023-10-01", ("7581", 2024): "2024-09-29", ("7581", 2025): "2025-09-28",
+    # Hangzhou (4713)
+    ("4713", 2024): "2024-10-06", ("4713", 2025): "2025-10-05",
+    # Geneva (322)
+    ("322", 2021): "2021-05-22", ("322", 2022): "2022-05-21", ("322", 2023): "2023-05-20",
+    ("322", 2024): "2024-05-25", ("322", 2025): "2025-05-24",
+    # Lyon (496)
+    ("496", 2021): "2021-05-23", ("496", 2022): "2022-05-22", ("496", 2023): "2023-05-28",
+    ("496", 2024): "2024-05-26", ("496", 2025): "2025-05-25",
+    # Munich (308)
+    ("308", 2021): "2021-05-02", ("308", 2022): "2022-05-01", ("308", 2023): "2023-04-30",
+    ("308", 2024): "2024-04-28", ("308", 2025): "2025-04-27",
+    # Marrakech (360)
+    ("360", 2021): "2021-04-11", ("360", 2022): "2022-04-10", ("360", 2023): "2023-04-09",
+    ("360", 2024): "2024-04-14", ("360", 2025): "2025-04-13",
+    # Estoril (7290)
+    ("7290", 2021): "2021-05-02", ("7290", 2022): "2022-05-01", ("7290", 2023): "2023-04-30",
+    ("7290", 2024): "2024-04-28", ("7290", 2025): "2025-04-27",
+    # Houston (717)
+    ("717", 2021): "2021-04-11", ("717", 2022): "2022-04-10", ("717", 2023): "2023-04-09",
+    ("717", 2024): "2024-04-14", ("717", 2025): "2025-04-13",
+    # Newport (315)
+    ("315", 2021): "2021-07-18", ("315", 2022): "2022-07-17", ("315", 2023): "2023-07-16",
+    ("315", 2024): "2024-07-21", ("315", 2025): "2025-07-20",
+    # Auckland (301)
+    ("301", 2020): "2020-01-11", ("301", 2022): "2022-01-08", ("301", 2023): "2023-01-07",
+    ("301", 2024): "2024-01-13", ("301", 2025): "2025-01-11",
+    # Adelaide (8998)
+    ("8998", 2020): "2020-01-11", ("8998", 2021): "2021-02-13", ("8998", 2022): "2022-01-08",
+    ("8998", 2023): "2023-01-07", ("8998", 2024): "2024-01-12", ("8998", 2025): "2025-01-11",
+    # Santiago (8996)
+    ("8996", 2020): "2020-03-01", ("8996", 2021): "2021-04-04", ("8996", 2022): "2022-03-06",
+    ("8996", 2023): "2023-03-05", ("8996", 2024): "2024-03-03", ("8996", 2025): "2025-03-02",
+    # Almaty (9410)
+    ("9410", 2020): "2020-11-01", ("9410", 2021): "2021-10-10", ("9410", 2022): "2022-10-02",
+    ("9410", 2023): "2023-10-01", ("9410", 2024): "2024-09-29", ("9410", 2025): "2025-09-28",
+    # ATP Cup (8888)
+    ("8888", 2020): "2020-01-12", ("8888", 2021): "2021-02-07", ("8888", 2022): "2022-01-09",
+    # Brussels (7485)
+    ("7485", 2021): "2021-11-21", ("7485", 2022): "2022-10-23", ("7485", 2023): "2023-10-22",
+    ("7485", 2024): "2024-10-20", ("7485", 2025): "2025-10-19",
+    # Brisbrane (339)
+    ("339", 2020): "2020-01-05", ("339", 2022): "2022-01-08", ("339", 2023): "2023-01-07",
+    ("339", 2024): "2024-01-07", ("339", 2025): "2025-01-05",
+    # Hong Kong (336)
+    ("336", 2024): "2024-01-13", ("336", 2025): "2025-01-11",
+    # Next Gen ATP Finals (7696)
+    ("7696", 2021): "2021-12-04", ("7696", 2022): "2022-11-12", ("7696", 2023): "2023-11-11",
+    ("7696", 2024): "2024-11-09", ("7696", 2025): "2025-11-08",
+    # Pune (891)
+    ("891", 2020): "2020-01-05", ("891", 2022): "2022-01-08", ("891", 2023): "2023-01-07",
+    # Cordoba (9158)
+    ("9158", 2020): "2020-02-09", ("9158", 2021): "2021-04-04", ("9158", 2022): "2022-02-06",
+    ("9158", 2023): "2023-02-05", ("9158", 2024): "2024-02-04", ("9158", 2025): "2025-02-02",
+    # Zhuhai (9164)
+    ("9164", 2023): "2023-10-01",
+    # Paris Olympics (96)
+    ("96", 2020): "2020-08-02", ("96", 2021): "2021-08-01", ("96", 2024): "2024-08-04",
+    # San Diego (9569)
+    ("9569", 2022): "2022-10-09",
+    # Belgrade (5053)
+    ("5053", 2022): "2022-04-24",
+    # Belgrade (4787)
+    ("4787", 2024): "2024-04-21",
+    # Gijon (2807)
+    ("2807", 2022): "2022-10-16",
+    # Tel Aviv (4138)
+    ("4138", 2022): "2022-10-02",
+    # Sofia (7434)
+    ("7434", 2022): "2022-02-06", ("7434", 2023): "2023-02-05",
+    # Bucharest (4462)
+    ("4462", 2024): "2024-04-21",
+    # Athens (5100)
+    ("5100", 2025): "2025-11-09",
+    # Metz/Lyon (7694)
+    ("7694", 2021): "2021-05-23", ("7694", 2022): "2022-05-22", ("7694", 2023): "2023-05-28",
+    ("7694", 2024): "2024-05-26", ("7694", 2025): "2025-05-25",
+}
 
 def _bq_client() -> bigquery.Client:
     project = os.getenv("GCP_PROJECT") or os.getenv("GOOGLE_CLOUD_PROJECT")
@@ -280,28 +496,6 @@ def _extract_player_ids_from_html(html: str) -> Set[str]:
         ids.add(m.group(1).upper())
     return ids
 
-
-def _past_tournament_results_urls(tournament_dates_json: Dict[str, Any]) -> List[Tuple[str, str, str]]:
-    """Return (slug, tournament_id, full_results_url) for each past event in tournament_dates JSON.
-
-    URLs are built from the ScoresUrl field (archive URL) already present in the JSON.
-    Team-event suffixes like 'country-results' are normalised to 'results'.
-    """
-    out: List[Tuple[str, str, str]] = []
-    for month in tournament_dates_json.get("TournamentDates", []):
-        for t in month.get("Tournaments", []):
-            if not t.get("IsPastEvent"):
-                continue
-            scores_url = (t.get("ScoresUrl") or "").replace("country-results", "results")
-            if not scores_url:
-                continue
-            # Extract slug and id: /en/scores/archive/{slug}/{id}/{year}/results
-            m = re.search(r"/scores/(?:archive|current)/([^/]+)/([^/]+)/", scores_url)
-            if not m:
-                continue
-            slug, tid = m.group(1), m.group(2)
-            out.append((slug, tid, f"https://www.atptour.com{scores_url}"))
-    return out
 
 
 def _all_tournament_results_urls(tournament_dates_json: Dict[str, Any]) -> List[Tuple[str, str, str]]:
@@ -753,12 +947,276 @@ def _extract_daily_schedule_time_fields(payload_html: Optional[str]) -> Tuple[Li
 
     return start_times[:500], not_before_times[:500], schedule_time_items[:500]
 
+def _parse_tournament_end_date(context_html: str, year: int) -> Optional[str]:
+    """Extract the tournament end date from the HTML context surrounding an archive link."""
+    months = {m: i + 1 for i, m in enumerate([
+        "january", "february", "march", "april", "may", "june",
+        "july", "august", "september", "october", "november", "december",
+    ])}
+    # Same-month range: "7 - 13 February, 2022"
+    m1 = re.search(
+        r'\d+\s*[-–]\s*(\d+)\s+(January|February|March|April|May|June|July|August'
+        r'|September|October|November|December),?\s*(\d{4})',
+        context_html, re.IGNORECASE,
+    )
+    if m1:
+        try:
+            from datetime import date as date_type
+            return date_type(int(m1.group(3)), months[m1.group(2).lower()], int(m1.group(1))).isoformat()
+        except Exception:
+            pass
+    # Cross-month range: "January 18 - February 1, 2026"
+    m2 = re.search(
+        r'(?:January|February|March|April|May|June|July|August|September|October|November|December)'
+        r'\s+\d+\s*[-–]\s*((?:January|February|March|April|May|June|July|August'
+        r'|September|October|November|December)\s+\d+),?\s*(\d{4})',
+        context_html, re.IGNORECASE,
+    )
+    if m2:
+        try:
+            return datetime.strptime(f"{m2.group(1)}, {m2.group(2)}", "%B %d, %Y").date().isoformat()
+        except Exception:
+            pass
+    return None
+
+def _fetch_tournament_end_dates(client: bigquery.Client, dataset: str, start_year: int, end_year: int) -> Dict[str, str]:
+    """Build a tournament_id -> end_date_iso map from two sources:
+    1. website_tournaments BQ table (already ingested, any year)
+    2. ATP calendar JSON API for each backfill year (live fetch)
+    """
+    months = {m: i + 1 for i, m in enumerate([
+        "january", "february", "march", "april", "may", "june",
+        "july", "august", "september", "october", "november", "december",
+        "jan", "feb", "mar", "apr", "may", "jun",
+        "jul", "aug", "sep", "oct", "nov", "dec",
+    ])}
+
+    def _parse_end_date(fmt: str) -> Optional[str]:
+        if not fmt:
+            return None
+        # Same-month: "7 - 13 February, 2022" or "2 - 11 January, 2026"
+        m1 = re.search(
+            r'\d+\s*[-–]\s*(\d+)\s+'
+            r'(January|February|March|April|May|June|July|August|September|October|November|December'
+            r'|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)'
+            r',?\s*(\d{4})',
+            fmt, re.IGNORECASE,
+        )
+        if m1:
+            try:
+                from datetime import date as dt
+                mon = months[m1.group(2).lower()]
+                return dt(int(m1.group(3)), mon, int(m1.group(1))).isoformat()
+            except Exception:
+                pass
+        # Cross-month: "18 January - 1 February, 2026" or "30 Jun - 13 Jul, 2025"
+        m2 = re.search(
+            r'\d+\s+'
+            r'(?:January|February|March|April|May|June|July|August|September|October|November|December'
+            r'|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)'
+            r'\s*[-–]\s*'
+            r'(\d+)\s+'
+            r'(January|February|March|April|May|June|July|August|September|October|November|December'
+            r'|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)'
+            r',?\s*(\d{4})',
+            fmt, re.IGNORECASE,
+        )
+        if m2:
+            try:
+                from datetime import date as dt
+                mon = months[m2.group(2).lower()]
+                return dt(int(m2.group(3)), mon, int(m2.group(1))).isoformat()
+            except Exception:
+                pass
+        return None
+
+    result: Dict[str, str] = {}
+
+    # ------------------------------------------------------------------ #
+    # Source 1: BQ website_tournaments (fast, already ingested)           #
+    # ------------------------------------------------------------------ #
+    try:
+        rows = list(client.query(
+            f"SELECT tournament_id, formatted_date "
+            f"FROM `{dataset}.website_tournaments` "
+            f"WHERE formatted_date IS NOT NULL"
+        ).result())
+        for row in rows:
+            d = _parse_end_date(row["formatted_date"] or "")
+            if d:
+                result[str(row["tournament_id"])] = d
+    except Exception:
+        pass
+
+    # ------------------------------------------------------------------ #
+    # Source 2: ATP calendar JSON API — one call per backfill year.       #
+    # Fills in tournament IDs not covered by the BQ table (prior years). #
+    # ------------------------------------------------------------------ #
+    for year in range(start_year, end_year + 1):
+        # Try two known ATP calendar endpoint patterns
+        data: Optional[Dict[str, Any]] = None
+        for cal_url in [
+            f"https://www.atptour.com/en/-/www/calendar/tournaments/{year}",
+            f"https://www.atptour.com/en/-/www/tournaments/dates/{year}",
+        ]:
+            data = _fetch_json_url(cal_url)
+            if isinstance(data, dict):
+                break
+
+        if not isinstance(data, dict):
+            print(f"[backfill] WARNING: no calendar data for year={year}", flush=True)
+            continue
+
+        for month in data.get("TournamentDates", []) or []:
+            for t in month.get("Tournaments", []) or []:
+                tid = str(t.get("Id") or "")
+                if not tid or tid in result:
+                    continue
+                fmt = t.get("FormattedDate") or ""
+                d = _parse_end_date(fmt)
+                if d:
+                    result[tid] = d
+
+        print(f"[backfill] calendar year={year}: {len(result)} end dates total", flush=True)
+
+    print(f"[backfill] tournament end dates resolved: {len(result)}", flush=True)
+    return result
+
+def _build_tournament_end_dates_from_captures(
+    historical: List[Tuple[str, str, Path, int]],
+) -> Dict[Tuple[str, int], str]:
+    """
+    Build a (tournament_id, year) -> end_date_iso map by scanning each
+    historical capture file for dated tournament-day section headers.
+    Takes the latest date found as the tournament end date for that year.
+    Falls back to the static lookup table for round-only tournaments.
+    """
+    months = {m: i + 1 for i, m in enumerate([
+        "january", "february", "march", "april", "may", "june",
+        "july", "august", "september", "october", "november", "december",
+    ])}
+    date_re = re.compile(
+        r'(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,\s+(\d+)\s+'
+        r'(January|February|March|April|May|June|July|August'
+        r'|September|October|November|December)'
+        r',?\s+(\d{4})',
+        re.IGNORECASE,
+    )
+    result: Dict[Tuple[str, int], str] = {}
+
+    for slug, tid, file_path, year in historical:
+        if (tid, year) in result:
+            continue
+        try:
+            text = file_path.read_text(encoding="utf-8", errors="ignore")
+            all_dates = []
+            for m in date_re.finditer(text):
+                try:
+                    from datetime import date as dt
+                    d = dt(int(m.group(3)), months[m.group(2).lower()], int(m.group(1)))
+                    all_dates.append(d)
+                except Exception:
+                    pass
+            if all_dates:
+                result[(tid, year)] = max(all_dates).isoformat()
+        except Exception:
+            pass
+
+    # Merge static lookup for round-only tournaments that have no dates in HTML
+    for (tid, year), end_date_iso in _STATIC_TOURNAMENT_END_DATES.items():
+        if (tid, year) not in result:
+            result[(tid, year)] = end_date_iso
+
+    print(f"[ingest] year-specific end dates from captures: {len(result)}", flush=True)
+    return result
+
+def _load_historical_captures(
+    output_root: Path,
+    start_year: int,
+    end_year: int,
+) -> List[Tuple[str, str, Path, int]]:
+    """
+    Scan the historical capture directory and return
+    (slug, tid, path, year) for every saved capture file.
+    Filename format: {slug}_{tid}
+    """
+    results: List[Tuple[str, str, Path, int]] = []
+    for year in range(start_year, end_year + 1):
+        year_dir = output_root / str(year)
+        if not year_dir.exists():
+            continue
+        for path in sorted(year_dir.iterdir()):
+            if not path.is_file():
+                continue
+            parts = path.name.rsplit("_", 1)
+            if len(parts) != 2:
+                continue
+            slug, tid = parts[0], parts[1]
+            results.append((slug, tid, path, year))
+    return results
+
+
+def _fetch_tournament_results_urls_for_year(year: int) -> List[Tuple[str, str, str]]:
+    """
+    Scrape the ATP results-archive page for a given year and return
+    (slug, tournament_id, results_url) for every tournament listed.
+    """
+    url = f"https://www.atptour.com/en/scores/results-archive?year={year}"
+    html = _fetch_html_url(url)
+    if not html:
+        print(f"[backfill] WARNING: no archive page for year={year}", flush=True)
+        return []
+
+    out: List[Tuple[str, str, str]] = []
+    seen: Set[Tuple[str, str]] = set()
+    for m in re.finditer(
+        r'href="(/en/scores/archive/([^/]+)/([^/]+)/' + str(year) + r'/results)"',
+        html, flags=re.IGNORECASE,
+    ):
+        path, slug, tid = m.group(1), m.group(2), m.group(3)
+        if (slug, tid) in seen:
+            continue
+        seen.add((slug, tid))
+        out.append((slug, tid, f"https://www.atptour.com{path}"))
+
+    print(f"[backfill] year={year}: {len(out)} tournaments found", flush=True)
+    return out
+
+
 def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule: bool, sleep_seconds: float) -> Dict[str, Any]:
     del sleep_seconds
 
     snapshot_ts = utc_now_iso()
     ingest_run_id = str(uuid.uuid4())
     client = _bq_client()
+
+    # ------------------------------------------------------------------ #
+    # Load tournament end dates BEFORE any truncation — the truncate step #
+    # wipes website_tournaments, so we must read it first.                #
+    # ------------------------------------------------------------------ #
+    tournament_end_dates: Dict[str, str] = (
+        _fetch_tournament_end_dates(client, _dataset(), start_year, end_year)
+        if (start_year and end_year)
+        else {}
+    )
+
+    historical_root_pre = Path(os.getenv("ATP_HISTORICAL_DIR", "website_responses/atp/historical"))
+    historical_pre = (
+        _load_historical_captures(historical_root_pre, start_year, end_year)
+        if (start_year and end_year)
+        else []
+    )
+    tournament_end_dates_by_year: Dict[Tuple[str, int], str] = (
+        _build_tournament_end_dates_from_captures(historical_pre)
+    )
+    for tid, end_date_iso in tournament_end_dates.items():
+        try:
+            from datetime import date as dt
+            candidate = dt.fromisoformat(end_date_iso)
+            if (tid, candidate.year) not in tournament_end_dates_by_year:
+                tournament_end_dates_by_year[(tid, candidate.year)] = end_date_iso
+        except Exception:
+            pass
 
     responses_root = Path(os.getenv("ATP_WEBSITE_RESPONSES_DIR", "website_responses/atp"))
     endpoint_files = {
@@ -779,8 +1237,6 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
     if truncate_schedule:
         _truncate_table(client, "website_daily_schedule")
         _truncate_table(client, "website_upcoming_matches")
-        # Also clear match results and H2H so the live re-fetches don't create
-        # duplicate rows on each daily run.
         _truncate_table(client, "website_match_results")
         _truncate_table(client, "website_match_results_rows")
         _truncate_table(client, "website_head_to_head")
@@ -804,6 +1260,9 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
     who_is_playing_rows: List[Dict[str, Any]] = []
     who_is_playing_players_rows: List[Dict[str, Any]] = []
 
+    # ------------------------------------------------------------------ #
+    # Tournament calendar                                                  #
+    # ------------------------------------------------------------------ #
     tournament_dates = captures["tournament_dates"]
     if isinstance(tournament_dates["payload_json"], dict):
         month_models, tournament_models = normalize_calendar(tournament_dates["payload_json"], snapshot_ts_utc=snapshot_ts)
@@ -816,9 +1275,10 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
                 if any(str(y) in (row.get("formatted_date") or "") for y in range(start_year, end_year + 1))
             ]
 
+    # ------------------------------------------------------------------ #
+    # Daily schedule                                                       #
+    # ------------------------------------------------------------------ #
     daily_schedule_capture = captures["daily_schedule"]
-    # Try to refresh the daily schedule from ATP Tour so we always show today's matches.
-    # The slug/id come from the capture file URL, which identifies the active tournament.
     _ds_slug, _ds_tid = _extract_slug_and_tournament_id(daily_schedule_capture.get("request_url"))
     if _ds_slug and _ds_tid:
         _live_schedule_url = f"https://www.atptour.com/en/scores/current/{_ds_slug}/{_ds_tid}/daily-schedule"
@@ -829,6 +1289,7 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
                 "payload_text": _live_schedule_html,
                 "request_url": _live_schedule_url,
             }
+
     daily_text_chunks, daily_links = _flatten_html_payload(daily_schedule_capture.get("payload_text"))
     daily_start_times, daily_not_before_times, daily_time_items = _extract_daily_schedule_time_fields(
         daily_schedule_capture.get("payload_text")
@@ -846,10 +1307,8 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
             "schedule_time_items": daily_time_items,
         }
     )
+
     sched_slug, sched_tid = _extract_slug_and_tournament_id(daily_schedule_capture.get("request_url"))
-    # All schedule rows (including past matches) — used to build H2H pairs and player IDs.
-    # The date filter is intentionally skipped here so that a schedule file captured on a
-    # previous day still produces valid player pairs for H2H and stats lookups.
     all_schedule_rows: List[Dict[str, Any]] = []
     if sched_slug and sched_tid and daily_schedule_capture.get("payload_text"):
         all_schedule_rows = [
@@ -862,7 +1321,6 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
                 include_past=True,
             )
         ]
-        # Only truly upcoming matches go into website_upcoming_matches.
         upcoming_match_rows.extend(
             [
                 row.to_dict()
@@ -875,6 +1333,9 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
             ]
         )
 
+    # ------------------------------------------------------------------ #
+    # Draws / bracket                                                      #
+    # ------------------------------------------------------------------ #
     draws_capture = captures["draws"]
     draws_text_chunks, draws_links = _flatten_html_payload(draws_capture.get("payload_text"))
     draws_rows.append(
@@ -897,8 +1358,10 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
         }
     )
 
+    # ------------------------------------------------------------------ #
+    # Head-to-head                                                         #
+    # ------------------------------------------------------------------ #
     h2h_capture = captures["head_to_head"]
-    # Use all_schedule_rows (includes past matches) so a stale schedule file still produces pairs.
     h2h_pairs = _build_h2h_pairs_from_schedule_rows(all_schedule_rows)
 
     fallback_left_id, fallback_right_id = _extract_h2h_ids(h2h_capture.get("request_url"))
@@ -920,7 +1383,6 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
                 "payload_json": _safe_json_str(payload_json),
             }
         )
-
         if isinstance(payload_json, dict):
             h2h_match_rows.extend(
                 [
@@ -929,11 +1391,11 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
                 ]
             )
 
+    # ------------------------------------------------------------------ #
+    # Match results — current tournament (live fetch)                     #
+    # ------------------------------------------------------------------ #
     results_capture = captures["match_results"]
     result_slug, result_tid = _extract_slug_and_tournament_id(results_capture.get("request_url"))
-    # Try to fetch the current tournament's results page live.  The results page on ATP Tour
-    # always shows ALL completed matches for the current tournament (not just one day), so
-    # fetching it fresh gives us the complete running history for the active event.
     if result_slug and result_tid:
         _live_results_url = f"https://www.atptour.com/en/scores/current/{result_slug}/{result_tid}/results"
         _live_results_html = _fetch_html_url(_live_results_url)
@@ -1011,8 +1473,31 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
 
     parsed_match_results_rows = _dedupe_match_results_rows(parsed_match_results_rows)
 
+        for slug, tid, file_path, year in historical:
+            if (slug, tid, year) in already_fetched:
+                continue
+            already_fetched.add((slug, tid, year))
+            try:
+                capture = _load_capture_file(file_path)
+                html = capture.get("payload_text")
+            except Exception as exc:
+                print(f"[ingest] WARNING: failed to load {file_path}: {exc}", flush=True)
+                html = None
+            if html:
+                _process_match_html(slug, tid, html, year)
+
+        for year in range(start_year, end_year + 1):
+            for past_slug, past_tid, past_url in _fetch_tournament_results_urls_for_year(year):
+                if (past_slug, past_tid, year) in already_fetched:
+                    continue
+                already_fetched.add((past_slug, past_tid, year))
+                past_html = _fetch_html_url(past_url)
+                if past_html:
+                    _process_match_html(past_slug, past_tid, past_html, year)
+    # ------------------------------------------------------------------ #
+    # Player IDs — harvested from all sources                             #
+    # ------------------------------------------------------------------ #
     player_ids: Set[str] = set()
-    # Use all_schedule_rows (includes past matches) so a stale schedule file still yields player IDs.
     for row in all_schedule_rows:
         p1 = _extract_player_id_from_profile_url(row.get("player_1_profile_url"))
         p2 = _extract_player_id_from_profile_url(row.get("player_2_profile_url"))
@@ -1020,15 +1505,15 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
             player_ids.add(p1)
         if p2:
             player_ids.add(p2)
-    # Also mine draws HTML — the full bracket contains every player in the tournament draw.
+
     draws_html = draws_capture.get("payload_text") or ""
     if draws_html:
         player_ids |= _extract_player_ids_from_html(draws_html)
-    # Also extract from the results HTML — every player in a completed match has a profile link.
+
     results_html_text = results_capture.get("payload_text") or ""
     if results_html_text:
         player_ids |= _extract_player_ids_from_html(results_html_text)
-    # Also include seeded players from who_is_playing.
+
     who_payload_for_ids = captures["who_is_playing"].get("payload_json")
     if isinstance(who_payload_for_ids, dict):
         for player in who_payload_for_ids.get("PlayersList", []) or []:
@@ -1036,18 +1521,16 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
             if pid:
                 player_ids.add(pid)
 
+    # ------------------------------------------------------------------ #
+    # Player stats                                                         #
+    # ------------------------------------------------------------------ #
     default_stats_captures = {
         "all": captures["player_stats_all"],
         "clay": captures["player_stats_clay"],
         "grass": captures["player_stats_grass"],
         "hard": captures["player_stats_hard"],
     }
-    surface_path = {
-        "all": "all",
-        "clay": "Clay",
-        "grass": "Grass",
-        "hard": "Hard",
-    }
+    surface_path = {"all": "all", "clay": "Clay", "grass": "Grass", "hard": "Hard"}
 
     if not player_ids:
         fallback_payload = default_stats_captures["all"].get("payload_json")
@@ -1079,20 +1562,24 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
                     "payload_json": _safe_json_str(payload_json),
                 }
             )
-
             if isinstance(payload_json, dict):
                 stats_block = payload_json.get("Stats") or {}
+                pid = str((stats_block.get("PlayerId") or player_id) or "")
                 for stat_name, stat_value in stats_block.items():
                     player_stats_records_rows.append(
                         {
                             "snapshot_ts_utc": snapshot_ts,
                             "ingest_run_id": ingest_run_id,
+                            "player_id": pid,
                             "court_type": court_type,
                             "stat_name": str(stat_name),
                             "stat_value": json.dumps(stat_value, ensure_ascii=False) if isinstance(stat_value, (dict, list)) else str(stat_value),
                         }
                     )
 
+    # ------------------------------------------------------------------ #
+    # Who is playing                                                       #
+    # ------------------------------------------------------------------ #
     who_capture = captures["who_is_playing"]
     who_payload = who_capture.get("payload_json")
     who_is_playing_rows.append(
@@ -1116,6 +1603,9 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
                 }
             )
 
+    # ------------------------------------------------------------------ #
+    # Write to BigQuery                                                    #
+    # ------------------------------------------------------------------ #
     written = {
         "raw": _insert_rows(client, "website_raw_responses", raw_rows),
         "tournament_months": _insert_rows(client, "website_tournament_months", tournament_month_rows),
@@ -1124,9 +1614,6 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
         "upcoming_matches": _insert_rows(client, "website_upcoming_matches", upcoming_match_rows),
         "draws": _insert_rows(client, "website_draws", draws_rows),
         "tournament_bracket": _insert_rows(client, "website_tournament_bracket", bracket_rows),
-        # website_head_to_head now stores individual historical H2H match rows (one per match),
-        # mirroring the pattern used for website_match_results.
-        # The raw JSON blobs (h2h_rows) are already in website_raw_responses.
         "head_to_head": _insert_rows(
             client,
             "website_head_to_head",
@@ -1155,6 +1642,8 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
         "responses_root": str(responses_root),
         "written": written,
     }
+
+
 
 
 def main() -> None:

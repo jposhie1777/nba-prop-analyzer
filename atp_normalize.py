@@ -1,3 +1,4 @@
+#atp_normalize.py
 from __future__ import annotations
 
 import html
@@ -14,6 +15,33 @@ from atp_models import (
     TournamentOverviewRow,
     TournamentRow,
 )
+
+# Number of days before the tournament final that each round typically occurs.
+# These are approximate but consistent for ATP draw structures.
+_ROUND_DAY_OFFSETS: Dict[str, int] = {
+    "final": 0,
+    "semifinal": 1,
+    "semifinals": 1,
+    "quarterfinal": 2,
+    "quarterfinals": 2,
+    "round of 16": 3,
+    "round of 32": 4,
+    "round of 64": 5,
+    "round of 128": 6,
+    "1st round qualifying": -3,
+    "2nd round qualifying": -2,
+    "3rd round qualifying": -1,
+    "round robin": 3,
+}
+
+def _infer_date_from_round(round_label: str, tournament_end_date: date | None) -> str | None:
+    if not tournament_end_date or not round_label:
+        return None
+    offset = _ROUND_DAY_OFFSETS.get(round_label.strip().lower())
+    if offset is None:
+        return None
+    from datetime import timedelta
+    return (tournament_end_date - timedelta(days=offset)).isoformat()
 
 
 def utc_now_iso() -> str:
@@ -306,11 +334,14 @@ def normalize_match_schedule_html(tournament_slug: str, tournament_id: str, sche
     return rows
 
 
-def normalize_match_results_html(tournament_slug: str, tournament_id: str, results_html: str, snapshot_ts_utc: str | None = None) -> List[MatchResultRow]:
+def normalize_match_results_html(
+    tournament_slug: str,
+    tournament_id: str,
+    results_html: str,
+    snapshot_ts_utc: str | None = None,
+    tournament_end_date: date | None = None,   # <-- new
+) -> List[MatchResultRow]:
     ts = snapshot_ts_utc or utc_now_iso()
-    day_label = _find(r"<div class=['\"]tournament-day['\"]>\s*<h4>\s*(.*?)\s*</h4>", results_html)
-    if not day_label:
-        day_label = _find(r"<div class=['\"]tournament-day['\"]>\s*<h4>\s*([^<].*?)\s*<", results_html)
 
     def _parse_match_date(label: str | None) -> str | None:
         if not label:
@@ -322,9 +353,6 @@ def normalize_match_results_html(tournament_slug: str, tournament_id: str, resul
             except ValueError:
                 continue
         return None
-
-    match_date = _parse_match_date(day_label)
-    rows: List[MatchResultRow] = []
 
     def _extract_stats_items(match_html: str) -> List[str]:
         return [
@@ -339,7 +367,7 @@ def normalize_match_results_html(tournament_slug: str, tournament_id: str, resul
     def _extract_player(item_html: str) -> Tuple[str | None, str | None, bool, str | None]:
         name = _find(r'<div class="name">\s*(.*?)\s*</div>', item_html)
         profile_url = _find_href(r'<div class="name">\s*<a href="([^"]+)"', item_html)
-        is_winner = "class=\"winner\"" in item_html
+        is_winner = 'class="winner"' in item_html
 
         score_text = None
         score_items = re.findall(r'<div class="score-item">(.*?)</div>', item_html, flags=re.IGNORECASE | re.DOTALL)
@@ -349,66 +377,102 @@ def normalize_match_results_html(tournament_slug: str, tournament_id: str, resul
                 vals = re.findall(r"<span>(\d+)</span>", score_item)
                 if not vals:
                     continue
-                if len(vals) >= 2:
-                    parts.append(f"{vals[0]}({vals[1]})")
-                else:
-                    parts.append(vals[0])
+                parts.append(f"{vals[0]}({vals[1]})" if len(vals) >= 2 else vals[0])
             score_text = " ".join(parts) if parts else None
 
         return name, profile_url, is_winner, score_text
 
-    chunks = results_html.split('<div class="match">')
-    for chunk in chunks[1:]:
-        row_html = chunk
-        round_and_court = _find(r"<span><strong>(.*?)</strong></span>", row_html)
-        duration = _find(r"<div class=\"match-header\">.*?<span><strong>.*?</strong></span>\s*<span>(.*?)</span>", row_html)
-        umpire = _find(r"<div class=\"match-umpire\">\s*(.*?)\s*</div>", row_html)
-        notes = _find(r"<div class=\"match-notes\">\s*(.*?)\s*</div>", row_html)
+    rows: List[MatchResultRow] = []
 
-        stats_items = _extract_stats_items(row_html)
-        p1_html = stats_items[0] if len(stats_items) > 0 else ""
-        p2_html = stats_items[1] if len(stats_items) > 1 else ""
-        p1_name, p1_url, p1_is_winner, p1_scores = _extract_player(p1_html)
-        p2_name, p2_url, p2_is_winner, p2_scores = _extract_player(p2_html)
+    # Split the page into sections on each tournament-day header.
+    # Each section begins with a day/round label and contains 0-N match divs.
+    # We walk them in order, carrying the current label forward.
+    day_section_pattern = re.compile(
+        r"<div class=['\"]tournament-day['\"]>\s*<h4>\s*(.*?)\s*</h4>",
+        flags=re.IGNORECASE | re.DOTALL,
+    )
 
-        if not p1_name or not p2_name:
-            # fallback for alternate layouts
-            names = re.findall(r'<div class="name">\s*(.*?)\s*</div>', row_html, flags=re.IGNORECASE | re.DOTALL)
-            hrefs = re.findall(r'<div class="name">\s*<a href="([^"]+)"', row_html, flags=re.IGNORECASE | re.DOTALL)
-            if not p1_name and len(names) > 0:
-                p1_name = _strip_tags(names[0])
-            if not p2_name and len(names) > 1:
-                p2_name = _strip_tags(names[1])
-            if not p1_url and len(hrefs) > 0:
-                p1_url = hrefs[0]
-            if not p2_url and len(hrefs) > 1:
-                p2_url = hrefs[1]
+    # Build a list of (label, start_pos) for every day-section header
+    section_boundaries: List[Tuple[str, int]] = []
+    for m in day_section_pattern.finditer(results_html):
+        raw_label = _strip_tags(m.group(1))
+        section_boundaries.append((raw_label, m.end()))
 
-        h2h_url = _find_href(r'<a href="([^"]+)">H2H</a>', row_html)
-        stats_url = _find_href(r'<a href="([^"]+)">Stats</a>', row_html)
+    if not section_boundaries:
+        # No day-section headers at all — fall back to original single-pass behaviour
+        section_boundaries = [("", 0)]
 
-        rows.append(
-            MatchResultRow(
-                ts,
-                tournament_slug,
-                tournament_id,
-                day_label,
-                match_date,
-                round_and_court,
-                duration,
-                p1_name,
-                p1_url,
-                p1_is_winner,
-                p1_scores,
-                p2_name,
-                p2_url,
-                p2_is_winner,
-                p2_scores,
-                h2h_url,
-                stats_url,
-                umpire,
-                notes,
+    # Add a sentinel so we can slice to the next section's start
+    section_boundaries.append(("__END__", len(results_html)))
+
+    for i, (day_label, section_start) in enumerate(section_boundaries[:-1]):
+        section_end = section_boundaries[i + 1][1]
+        section_html = results_html[section_start:section_end]
+
+        match_date = _parse_match_date(day_label)
+        # If no parseable date, try to infer from round label + tournament end date
+        if match_date is None and tournament_end_date:
+            match_date = _infer_date_from_round(day_label, tournament_end_date)
+
+
+        chunks = section_html.split('<div class="match">')
+        for chunk in chunks[1:]:
+            row_html = chunk
+            round_and_court = _find(r"<span><strong>(.*?)</strong></span>", row_html)
+            duration = _find(
+                r'<div class="match-header">.*?<span><strong>.*?</strong></span>\s*<span>(.*?)</span>',
+                row_html,
             )
-        )
+            umpire = _find(r'<div class="match-umpire">\s*(.*?)\s*</div>', row_html)
+            notes = _find(r'<div class="match-notes">\s*(.*?)\s*</div>', row_html)
+
+            stats_items = _extract_stats_items(row_html)
+            p1_html = stats_items[0] if len(stats_items) > 0 else ""
+            p2_html = stats_items[1] if len(stats_items) > 1 else ""
+            p1_name, p1_url, p1_is_winner, p1_scores = _extract_player(p1_html)
+            p2_name, p2_url, p2_is_winner, p2_scores = _extract_player(p2_html)
+
+            if not p1_name or not p2_name:
+                names = re.findall(
+                    r'<div class="name">\s*(.*?)\s*</div>', row_html, flags=re.IGNORECASE | re.DOTALL
+                )
+                hrefs = re.findall(
+                    r'<div class="name">\s*<a href="([^"]+)"', row_html, flags=re.IGNORECASE | re.DOTALL
+                )
+                if not p1_name and names:
+                    p1_name = _strip_tags(names[0])
+                if not p2_name and len(names) > 1:
+                    p2_name = _strip_tags(names[1])
+                if not p1_url and hrefs:
+                    p1_url = hrefs[0]
+                if not p2_url and len(hrefs) > 1:
+                    p2_url = hrefs[1]
+
+            h2h_url = _find_href(r'<a href="([^"]+)">H2H</a>', row_html)
+            stats_url = _find_href(r'<a href="([^"]+)">Stats</a>', row_html)
+
+            rows.append(
+                MatchResultRow(
+                    ts,
+                    tournament_slug,
+                    tournament_id,
+                    day_label,
+                    match_date,
+                    round_and_court,
+                    duration,
+                    p1_name,
+                    p1_url,
+                    p1_is_winner,
+                    p1_scores,
+                    p2_name,
+                    p2_url,
+                    p2_is_winner,
+                    p2_scores,
+                    h2h_url,
+                    stats_url,
+                    umpire,
+                    notes,
+                )
+            )
 
     return rows

@@ -89,8 +89,8 @@ export type AtpWindowMetric = {
 };
 
 export type AtpPlayerStatsWindow = {
-  aces_per_game?: AtpWindowMetric;
-  double_faults_per_game?: AtpWindowMetric;
+  aces_per_match?: AtpWindowMetric;
+  double_faults_per_match?: AtpWindowMetric;
   first_serve_won_pct?: AtpWindowMetric;
   second_serve_won_pct?: AtpWindowMetric;
   first_serve_return_won_pct?: AtpWindowMetric;

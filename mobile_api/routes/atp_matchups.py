@@ -1343,8 +1343,8 @@ def _build_player_stats_analysis_payload(
     analysis: Dict[str, Any] = {}
     for window in windows:
         analysis[f"l{window}"] = {
-            "aces_per_game": _window_per_game_avg(rows, "aces", "service_games_played", window),
-            "double_faults_per_game": _window_per_game_avg(rows, "double_faults", "service_games_played", window),
+            "aces_per_match": _window_metric_avg(rows, "aces", window),
+            "double_faults_per_match": _window_metric_avg(rows, "double_faults", window),
             "first_serve_won_pct": _window_metric_avg(rows, "first_serve_pts_won_pct", window),
             "second_serve_won_pct": _window_metric_avg(rows, "second_serve_pts_won_pct", window),
             "first_serve_return_won_pct": _window_metric_avg(rows, "first_serve_return_pts_won_pct", window),

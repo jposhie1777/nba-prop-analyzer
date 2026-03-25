@@ -791,10 +791,10 @@ export function AtpMatchupDetailScreen() {
                           <View key={`${label}-${windowKey}`} style={styles.analysisWindowCard}>
                             <Text style={styles.groupTitle}>{windowKey.toUpperCase()}</Text>
                             <Text style={styles.valueText}>
-                              Aces/game: {formatDecimal(windowStats?.aces_per_game?.value, 3)}
+                              Aces/match: {formatDecimal(windowStats?.aces_per_match?.value, 2)}
                             </Text>
                             <Text style={styles.valueText}>
-                              DFs/game: {formatDecimal(windowStats?.double_faults_per_game?.value, 3)}
+                              DFs/match: {formatDecimal(windowStats?.double_faults_per_match?.value, 2)}
                             </Text>
                             <Text style={styles.valueText}>
                               First serve won: {formatPercent(windowStats?.first_serve_won_pct?.value)}

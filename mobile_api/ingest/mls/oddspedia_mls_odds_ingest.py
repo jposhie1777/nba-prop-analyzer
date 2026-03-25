@@ -61,6 +61,7 @@ from oddspedia_client import OddspediaClient  # noqa: E402
 # ── Configuration ─────────────────────────────────────────────────────────────
 
 DEFAULT_URL = "https://www.oddspedia.com/us/soccer/usa/mls"
+MLS_ALLOWED_LEAGUE_IDS = {25}
 
 
 ODDSPEDIA_URL = os.getenv("ODDSPEDIA_MLS_URL", DEFAULT_URL)
@@ -493,6 +494,22 @@ def _to_bq_rows(
     return [row for row in rows if row.get("match_id") is not None]
 
 
+def _is_mls_match(match: Dict[str, Any]) -> bool:
+    league_id = _safe_int(match.get("league_id"))
+    if league_id in MLS_ALLOWED_LEAGUE_IDS:
+        return True
+    info = match.get("match_info") or {}
+    if not isinstance(info, dict):
+        return False
+    info_league_id = _safe_int(info.get("league_id"))
+    if info_league_id in MLS_ALLOWED_LEAGUE_IDS:
+        return True
+    league_slug = str(info.get("league_slug") or "").strip().lower()
+    category_slug = str(info.get("category_slug") or "").strip().lower()
+    sport_slug = str(info.get("sport_slug") or "").strip().lower()
+    return league_slug == "mls" and category_slug == "usa" and sport_slug == "soccer"
+
+
 # ── Main ingest ───────────────────────────────────────────────────────────────
 
 
@@ -550,7 +567,21 @@ def ingest_mls_odds(
     # ── Scrape ────────────────────────────────────────────────────────────────
     client_scraper = OddspediaClient()
     print(f"[mls_odds] Fetching {target_url} …")
-    matches = client_scraper.scrape(target_url)
+    matches = client_scraper.scrape(
+        target_url,
+        league_category="usa",
+        league_slug="mls",
+        season_id=137218,
+        sport="soccer",
+    )
+
+    before_mls_filter = len(matches)
+    matches = [m for m in matches if _is_mls_match(m)]
+    if len(matches) != before_mls_filter:
+        print(
+            f"[mls_odds] MLS league filter removed "
+            f"{before_mls_filter - len(matches)} non-MLS matches"
+        )
 
     if matches:
         print(f"DEBUG first match keys: {list(matches[0].keys())}")

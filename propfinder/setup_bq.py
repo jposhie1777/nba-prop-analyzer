@@ -25,6 +25,7 @@ client.create_table(bigquery.Table(
         bigquery.SchemaField("run_date",       "DATE"),
         bigquery.SchemaField("game_pk",        "INTEGER"),
         bigquery.SchemaField("batter_id",      "INTEGER"),
+        bigquery.SchemaField("batter_team_id", "INTEGER"),
         bigquery.SchemaField("batter_name",    "STRING"),
         bigquery.SchemaField("bat_side",       "STRING"),
         bigquery.SchemaField("pitcher_id",     "INTEGER"),
@@ -150,9 +151,11 @@ client.create_table(bigquery.Table(
         bigquery.SchemaField("p_hr_fb_pct",          "FLOAT"),
         bigquery.SchemaField("p_hr_vs_hand",         "INTEGER"),
         bigquery.SchemaField("p_fb_pct",             "FLOAT"),
+        bigquery.SchemaField("p_hard_hit_pct",       "FLOAT"),
+        bigquery.SchemaField("p_iso_allowed",        "FLOAT"),
         # Score + grade
         bigquery.SchemaField("score",                "FLOAT"),
-        bigquery.SchemaField("grade",                "STRING"),   # IDEAL/FAVORABLE/FLIER/SKIP
+        bigquery.SchemaField("grade",                "STRING"),   # IDEAL/FAVORABLE/AVERAGE/AVOID
         bigquery.SchemaField("why",                  "STRING"),
         bigquery.SchemaField("flags",                "STRING"),   # JSON array of flag strings
     ]

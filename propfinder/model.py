@@ -35,10 +35,10 @@ def tbl(name):
 P_HR9_IDEAL = 1.8
 P_HR9_FAV = 1.5
 P_HR9_AVG = 1.2
-P_HR9_AVOID = 1.0
+P_HR9_AVOID = 0.9
 P_HRFB_IDEAL = 20.0
 P_HRFB_FAV = 15.0
-P_HRFB_AVG = 10.0
+P_HRFB_AVG = 9.0
 P_FB_IDEAL = 40.0
 P_FB_FAV = 35.0
 P_BARREL_ELITE = 10.0
@@ -58,9 +58,9 @@ B_BAR_ELITE = 20.0
 B_BAR_FAV = 12.0
 B_BAR_AVG = 7.0
 
-PULSE_IDEAL = 75
-PULSE_FAV = 55
-PULSE_AVG = 35
+PULSE_IDEAL = 72
+PULSE_FAV = 52
+PULSE_AVG = 33
 RAW_MAX = 125.0
 
 
@@ -343,7 +343,7 @@ def compute_pulse_score(bm, pm, bat_side, pitcher_hand_raw):
         raw += 5
         flags_good.append(f"HR/FB% vs {hitter_hand}: {hrfb:.1f}% (average)")
     else:
-        raw -= 3
+        raw -= 2
         flags_bad.append(f"HR/FB% vs {hitter_hand}: {hrfb:.1f}% (avoid)")
 
     fb = pm["p_fb_pct"]
@@ -387,7 +387,7 @@ def compute_pulse_score(bm, pm, bat_side, pitcher_hand_raw):
     raw += points[iso_tier] + points[slg_tier] + points[ev_tier] + points[barrel_tier]
 
     if iso_tier == "below":
-        raw -= 2
+        raw -= 1
         flags_bad.append(f"ISO {bm['iso']:.3f} (weak)")
     else:
         flags_good.append(f"ISO {bm['iso']:.3f} ({iso_tier})")
@@ -405,7 +405,8 @@ def compute_pulse_score(bm, pm, bat_side, pitcher_hand_raw):
 
     pulse = round(max(0.0, min(100.0, (raw / RAW_MAX) * 100)), 1)
 
-    pitcher_avoid = hr9 < P_HR9_AVOID and hrfb < P_HRFB_AVG
+    # Keep the avoid guardrail, but only when both metrics are clearly low.
+    pitcher_avoid = hr9 < P_HR9_AVOID and hrfb < (P_HRFB_AVG - 1.0)
     if pitcher_avoid or pulse < PULSE_AVG:
         label = "AVOID"
     elif pulse >= PULSE_IDEAL:

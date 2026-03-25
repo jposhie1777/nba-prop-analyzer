@@ -16,6 +16,7 @@ type SectionKey =
   | "oddsBoard"
   | "h2hStats"
   | "h2hSummary"
+  | "playerStatsAnalysis"
   | "playerHistory"
   | "recentMatches"
   | "bettingInfo"
@@ -213,6 +214,11 @@ function formatDecimal(value?: number | null, digits = 2): string {
   return value.toFixed(digits);
 }
 
+function formatPercent(value?: number | null): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  return `${value.toFixed(1)}%`;
+}
+
 export function AtpMatchupDetailScreen() {
   const router = useRouter();
   const { colors } = useTheme();
@@ -239,6 +245,7 @@ export function AtpMatchupDetailScreen() {
     oddsBoard: true,
     h2hStats: true,
     h2hSummary: true,
+    playerStatsAnalysis: true,
     playerHistory: true,
     recentMatches: false,
     bettingInfo: false,
@@ -260,6 +267,9 @@ export function AtpMatchupDetailScreen() {
   const playerHistory = data?.player_match_history;
   const homeHistory = playerHistory?.home ?? null;
   const awayHistory = playerHistory?.away ?? null;
+  const playerStatsAnalysis = data?.player_stats_analysis;
+  const homeStatsAnalysis = playerStatsAnalysis?.home ?? null;
+  const awayStatsAnalysis = playerStatsAnalysis?.away ?? null;
 
   const marketOptions = useMemo(() => {
     const seen = new Map<string, string>();
@@ -762,6 +772,55 @@ export function AtpMatchupDetailScreen() {
           </View>
 
           <View style={[styles.panel, { borderColor: colors.border.subtle }]}>
+            <Pressable onPress={() => toggleSection("playerStatsAnalysis")} style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Player Stats Analysis (L5/L10/L20)</Text>
+              <Text style={styles.sectionToggle}>{sectionChevron("playerStatsAnalysis")}</Text>
+            </Pressable>
+            {expanded.playerStatsAnalysis ? (
+              homeStatsAnalysis || awayStatsAnalysis ? (
+                <View style={styles.historyGrid}>
+                  {[
+                    { label: homePlayer, analysis: homeStatsAnalysis },
+                    { label: awayPlayer, analysis: awayStatsAnalysis },
+                  ].map(({ label, analysis }) => (
+                    <View key={`analysis-${label}`} style={styles.historyCard}>
+                      <Text style={styles.historyCardTitle}>{analysis?.player_name ?? label}</Text>
+                      {(["l5", "l10", "l20"] as const).map((windowKey) => {
+                        const windowStats = analysis?.windows?.[windowKey];
+                        return (
+                          <View key={`${label}-${windowKey}`} style={styles.analysisWindowCard}>
+                            <Text style={styles.groupTitle}>{windowKey.toUpperCase()}</Text>
+                            <Text style={styles.valueText}>
+                              Aces/game: {formatDecimal(windowStats?.aces_per_game?.value, 3)}
+                            </Text>
+                            <Text style={styles.valueText}>
+                              DFs/game: {formatDecimal(windowStats?.double_faults_per_game?.value, 3)}
+                            </Text>
+                            <Text style={styles.valueText}>
+                              First serve won: {formatPercent(windowStats?.first_serve_won_pct?.value)}
+                            </Text>
+                            <Text style={styles.valueText}>
+                              Second serve won: {formatPercent(windowStats?.second_serve_won_pct?.value)}
+                            </Text>
+                            <Text style={styles.valueText}>
+                              First serve return won: {formatPercent(windowStats?.first_serve_return_won_pct?.value)}
+                            </Text>
+                            <Text style={styles.valueText}>
+                              Second serve return won: {formatPercent(windowStats?.second_serve_return_won_pct?.value)}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.emptyText}>No Hawkeye player stats analysis is available for these players yet.</Text>
+              )
+            ) : null}
+          </View>
+
+          <View style={[styles.panel, { borderColor: colors.border.subtle }]}>
             <Pressable onPress={() => toggleSection("recentMatches")} style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Recent Matches</Text>
               <Text style={styles.sectionToggle}>{sectionChevron("recentMatches")}</Text>
@@ -976,6 +1035,15 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   historyCardTitle: { color: "#E2E8F0", fontSize: 12, fontWeight: "800" },
+  analysisWindowCard: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#1E293B",
+    borderRadius: 10,
+    backgroundColor: "#0F172A",
+    padding: 8,
+    gap: 2,
+    marginTop: 6,
+  },
   bettingStatCard: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#1E293B",

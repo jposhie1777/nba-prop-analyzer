@@ -83,6 +83,42 @@ export type AtpPlayerHistory = {
   } | null;
 };
 
+export type AtpWindowMetric = {
+  matches?: number;
+  value?: number | null;
+};
+
+export type AtpPlayerStatsWindow = {
+  aces_per_game?: AtpWindowMetric;
+  double_faults_per_game?: AtpWindowMetric;
+  first_serve_won_pct?: AtpWindowMetric;
+  second_serve_won_pct?: AtpWindowMetric;
+  first_serve_return_won_pct?: AtpWindowMetric;
+  second_serve_return_won_pct?: AtpWindowMetric;
+};
+
+export type AtpPlayerStatsAnalysis = {
+  player_name?: string | null;
+  windows?: {
+    l5?: AtpPlayerStatsWindow;
+    l10?: AtpPlayerStatsWindow;
+    l20?: AtpPlayerStatsWindow;
+  } | null;
+  recent_matches?: {
+    match_date?: string | null;
+    tournament_name?: string | null;
+    round_name?: string | null;
+    opponent_name?: string | null;
+    service_games_played?: number | null;
+    aces?: number | null;
+    double_faults?: number | null;
+    first_serve_won_pct?: number | null;
+    second_serve_won_pct?: number | null;
+    first_serve_return_won_pct?: number | null;
+    second_serve_return_won_pct?: number | null;
+  }[];
+};
+
 export type AtpMatchupDetail = {
   match_id: number;
   matchup: AtpMatchupHeader;
@@ -142,6 +178,10 @@ export type AtpMatchupDetail = {
   player_match_history?: {
     home?: AtpPlayerHistory | null;
     away?: AtpPlayerHistory | null;
+  } | null;
+  player_stats_analysis?: {
+    home?: AtpPlayerStatsAnalysis | null;
+    away?: AtpPlayerStatsAnalysis | null;
   } | null;
 };
 

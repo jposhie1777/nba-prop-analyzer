@@ -29,6 +29,10 @@ WEBSITE_MATCH_RESULTS_TABLE = os.getenv(
     "ATP_WEBSITE_MATCH_RESULTS_TABLE",
     "atp_data.website_match_results",
 )
+WEBSITE_HAWKEYE_MATCH_STATS_TABLE = os.getenv(
+    "ATP_WEBSITE_HAWKEYE_MATCH_STATS_TABLE",
+    "atp_data.website_hawkeye_match_stats",
+)
 
 
 def _split_table_ref(table_ref: str) -> tuple[str | None, str, str]:
@@ -1194,6 +1198,205 @@ def _build_website_match_history_payload(
     }
 
 
+def _fetch_hawkeye_player_match_rows(
+    player_name: Optional[str],
+    player_norm: str,
+    *,
+    limit: int,
+) -> List[Dict[str, Any]]:
+    if not player_name and not player_norm:
+        return []
+
+    sql = f"""
+    WITH base AS (
+      SELECT
+        match_date,
+        tournament_name,
+        round_name,
+        player_name,
+        opponent_name,
+        stats_url,
+        snapshot_ts_utc,
+        service_games_played,
+        aces,
+        double_faults,
+        first_serve_pts_won_pct,
+        second_serve_pts_won_pct,
+        first_serve_return_pts_won_pct,
+        second_serve_return_pts_won_pct,
+        REGEXP_REPLACE(LOWER(REGEXP_REPLACE(COALESCE(player_name, ''), r'\\s*\\([^)]*\\)', '')), r'[^a-z0-9]', '') AS player_norm
+      FROM `{WEBSITE_HAWKEYE_MATCH_STATS_TABLE}`
+      WHERE match_date IS NOT NULL
+        AND set_number = 0
+    ),
+    filtered AS (
+      SELECT *
+      FROM base
+      WHERE (
+        @player_norm != ''
+        AND player_norm = @player_norm
+      )
+      OR (
+        @player_name != ''
+        AND LOWER(TRIM(player_name)) = LOWER(TRIM(@player_name))
+      )
+    ),
+    deduped AS (
+      SELECT * EXCEPT (rn)
+      FROM (
+        SELECT
+          *,
+          ROW_NUMBER() OVER (
+            PARTITION BY
+              match_date,
+              COALESCE(stats_url, ''),
+              COALESCE(player_name, ''),
+              COALESCE(opponent_name, '')
+            ORDER BY snapshot_ts_utc DESC
+          ) AS rn
+        FROM filtered
+      )
+      WHERE rn = 1
+    )
+    SELECT
+      match_date,
+      tournament_name,
+      round_name,
+      player_name,
+      opponent_name,
+      service_games_played,
+      aces,
+      double_faults,
+      first_serve_pts_won_pct,
+      second_serve_pts_won_pct,
+      first_serve_return_pts_won_pct,
+      second_serve_return_pts_won_pct
+    FROM deduped
+    ORDER BY match_date DESC
+    LIMIT @limit
+    """
+    return _safe_query(
+        sql,
+        [
+            bigquery.ScalarQueryParameter("player_norm", "STRING", player_norm),
+            bigquery.ScalarQueryParameter("player_name", "STRING", _strip_rank_annotations(player_name)),
+            bigquery.ScalarQueryParameter("limit", "INT64", limit),
+        ],
+    )
+
+
+def _window_metric_avg(rows: Sequence[Dict[str, Any]], key: str, count: int) -> Dict[str, Optional[float]]:
+    sample = list(rows[:count])
+    values: List[float] = []
+    for row in sample:
+        value = row.get(key)
+        if value is None:
+            continue
+        try:
+            values.append(float(value))
+        except (TypeError, ValueError):
+            continue
+    if not values:
+        return {"matches": 0, "value": None}
+    return {"matches": len(values), "value": round(sum(values) / len(values), 2)}
+
+
+def _window_per_game_avg(
+    rows: Sequence[Dict[str, Any]],
+    numerator_key: str,
+    denominator_key: str,
+    count: int,
+) -> Dict[str, Optional[float]]:
+    sample = list(rows[:count])
+    numer_sum = 0.0
+    denom_sum = 0.0
+    used = 0
+    for row in sample:
+        numer = row.get(numerator_key)
+        denom = row.get(denominator_key)
+        if numer is None or denom is None:
+            continue
+        try:
+            numer_value = float(numer)
+            denom_value = float(denom)
+        except (TypeError, ValueError):
+            continue
+        if denom_value <= 0:
+            continue
+        numer_sum += numer_value
+        denom_sum += denom_value
+        used += 1
+    if used <= 0 or denom_sum <= 0:
+        return {"matches": 0, "value": None}
+    return {"matches": used, "value": round(numer_sum / denom_sum, 3)}
+
+
+def _build_player_stats_analysis_payload(
+    *,
+    player_name: Optional[str],
+    rows: Sequence[Dict[str, Any]],
+) -> Dict[str, Any]:
+    display_name = _strip_rank_annotations(player_name) or None
+    if not display_name and rows:
+        display_name = _strip_rank_annotations(rows[0].get("player_name"))
+    windows = [5, 10, 20]
+    analysis: Dict[str, Any] = {}
+    for window in windows:
+        analysis[f"l{window}"] = {
+            "aces_per_game": _window_per_game_avg(rows, "aces", "service_games_played", window),
+            "double_faults_per_game": _window_per_game_avg(rows, "double_faults", "service_games_played", window),
+            "first_serve_won_pct": _window_metric_avg(rows, "first_serve_pts_won_pct", window),
+            "second_serve_won_pct": _window_metric_avg(rows, "second_serve_pts_won_pct", window),
+            "first_serve_return_won_pct": _window_metric_avg(rows, "first_serve_return_pts_won_pct", window),
+            "second_serve_return_won_pct": _window_metric_avg(rows, "second_serve_return_pts_won_pct", window),
+        }
+    return {
+        "player_name": display_name,
+        "windows": analysis,
+        "recent_matches": [
+            {
+                "match_date": row.get("match_date"),
+                "tournament_name": row.get("tournament_name"),
+                "round_name": row.get("round_name"),
+                "opponent_name": row.get("opponent_name"),
+                "service_games_played": row.get("service_games_played"),
+                "aces": row.get("aces"),
+                "double_faults": row.get("double_faults"),
+                "first_serve_won_pct": row.get("first_serve_pts_won_pct"),
+                "second_serve_won_pct": row.get("second_serve_pts_won_pct"),
+                "first_serve_return_won_pct": row.get("first_serve_return_pts_won_pct"),
+                "second_serve_return_won_pct": row.get("second_serve_return_pts_won_pct"),
+            }
+            for row in rows[:20]
+        ],
+    }
+
+
+def _build_hawkeye_player_analysis_payload(
+    *,
+    home_team: Optional[str],
+    away_team: Optional[str],
+) -> Dict[str, Any]:
+    home_norm = _canonical_player_norm(home_team)
+    away_norm = _canonical_player_norm(away_team)
+    if not home_norm or not away_norm:
+        return {"home": None, "away": None}
+
+    home_rows = _fetch_hawkeye_player_match_rows(home_team, home_norm, limit=25)
+    away_rows = _fetch_hawkeye_player_match_rows(away_team, away_norm, limit=25)
+
+    return {
+        "home": _build_player_stats_analysis_payload(
+            player_name=home_team,
+            rows=home_rows,
+        ),
+        "away": _build_player_stats_analysis_payload(
+            player_name=away_team,
+            rows=away_rows,
+        ),
+    }
+
+
 def _build_matchup_payload(
     *,
     upcoming_row: Optional[Dict[str, Any]],
@@ -1307,6 +1510,10 @@ def atp_matchup_detail(match_id: int):
         "head_to_head_matches": h2h_matches,
         "recent_matches": recent_matches,
         "player_match_history": website_payload.get("player_match_history"),
+        "player_stats_analysis": _build_hawkeye_player_analysis_payload(
+            home_team=matchup.get("home_team"),
+            away_team=matchup.get("away_team"),
+        ),
         "odds_summary": odds_summary,
         "odds_board": odds_board,
         "odds_updated_at": odds_updated_at,

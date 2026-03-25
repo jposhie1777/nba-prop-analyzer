@@ -12,3 +12,4 @@ __pycache__/
 *.pyo
 *.json
 secrets/
+goat-streamlit-key.json

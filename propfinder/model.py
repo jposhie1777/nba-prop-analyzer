@@ -1,502 +1,429 @@
 """
-model.py — PropFinder HR scoring model
-Reads raw BigQuery tables for today, computes metrics, scores each
-batter/pitcher matchup, and writes results to hr_picks_daily.
+model.py — PropFinder HR Pulse Score
+Scale: 0-100. Labels: Ideal (75+) | Favorable (55-74) | Average (35-54) | Avoid (<35)
+
+Fixes v2:
+- pitcher_hand normalized from LHP/RHP to L/R for hit_data filter
+- pitch log deduped by pitch name (keep highest pct), 2025 only
+- batter matched to their actual pitcher via batter_team_id = opp_team_id
+- splits lookup uses normalized hand char
 """
 
 import datetime
 import json
 import logging
-import math
 from collections import defaultdict
 from statistics import mean
-from typing import Optional
 
 from google.cloud import bigquery
 
-# ── Config ────────────────────────────────────────────────────────────────────
 PROJECT = "graphite-flare-477419-h7"
 DATASET = "propfinder"
 TODAY   = datetime.date.today()
-NOW     = datetime.datetime.utcnow()
+NOW     = datetime.datetime.now(datetime.timezone.utc)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
+bq  = bigquery.Client(project=PROJECT)
 
-bq = bigquery.Client(project=PROJECT)
+def tbl(name): return f"`{PROJECT}.{DATASET}.{name}`"
 
-def tbl(name: str) -> str:
-    return f"`{PROJECT}.{DATASET}.{name}`"
+# ── Thresholds ────────────────────────────────────────────────────────────────
+P_HR9_IDEAL=1.8;   P_HR9_FAV=1.5;   P_HR9_AVG=1.2;   P_HR9_AVOID=1.0
+P_HRFB_IDEAL=20.0; P_HRFB_FAV=15.0; P_HRFB_AVG=10.0
+P_FB_IDEAL=40.0;   P_FB_FAV=35.0
+P_BARREL_ELITE=10.0; P_HARDHIT_ATTACK=40.0; P_ISO_EXPLOIT=0.200
 
-# ── Thresholds (your criteria) ────────────────────────────────────────────────
-# Batter
-L15_BARREL_THRESHOLD     = 20.0   # %
-ISO_THRESHOLD            = 0.200
-HR_FB_THRESHOLD          = 10.0   # %
-L15_EV_GOOD              = 90.0   # mph — Favorable
-L15_EV_ELITE             = 95.0   # mph — Elite
-SEASON_BARREL_THRESHOLD  = 10.0   # %
+B_ISO_ELITE=0.300; B_ISO_FAV=0.200; B_ISO_AVG=0.150
+B_SLG_ELITE=0.500; B_SLG_FAV=0.450; B_SLG_AVG=0.400
+B_EV_ELITE=92.0;   B_EV_FAV=89.0;   B_EV_AVG=85.0
+B_BAR_ELITE=20.0;  B_BAR_FAV=12.0;  B_BAR_AVG=7.0
 
-# Pitcher
-P_HR9_THRESHOLD          = 1.2
-P_BARREL_THRESHOLD       = 10.0   # %
-P_HR_FB_THRESHOLD        = 12.0   # %
+PULSE_IDEAL=75; PULSE_FAV=55; PULSE_AVG=35
+RAW_MAX = 125.0
 
-# Grade cutoffs (out of 10)
-IDEAL_MIN     = 7.0
-FAVORABLE_MIN = 4.5
-FLIER_MIN     = 2.5
+# ── Helpers ───────────────────────────────────────────────────────────────────
+def query(sql):
+    return [dict(r) for r in bq.query(sql).result()]
 
-# ── Query helpers ─────────────────────────────────────────────────────────────
-def query(sql: str) -> list[dict]:
-    rows = bq.query(sql).result()
-    return [dict(r) for r in rows]
+def safe_float(v, default=0.0):
+    try:
+        s = str(v or "0")
+        return float("0" + s if s.startswith(".") else s)
+    except (ValueError, TypeError):
+        return default
 
-# ── Load today's raw data ─────────────────────────────────────────────────────
-def load_hit_data() -> dict[int, list[dict]]:
-    """Returns {batter_id: [events sorted newest→oldest]}"""
-    rows = query(f"""
-        SELECT *
-        FROM {tbl('raw_hit_data')}
-        WHERE run_date = '{TODAY}'
-        ORDER BY batter_id, event_date DESC
-    """)
-    out: dict[int, list[dict]] = defaultdict(list)
-    for r in rows:
-        out[r["batter_id"]].append(r)
+def tier(val, elite, fav, avg):
+    if val is None: return "below"
+    if val >= elite: return "elite"
+    if val >= fav:   return "favorable"
+    if val >= avg:   return "average"
+    return "below"
+
+def hc(pitcher_hand):
+    """Normalize LHP/RHP or L/R to single char."""
+    return "L" if str(pitcher_hand or "").upper() in ("L", "LHP") else "R"
+
+# ── Load BQ data ──────────────────────────────────────────────────────────────
+def load_hit_data():
+    rows = query(f"SELECT * FROM {tbl('raw_hit_data')} WHERE run_date='{TODAY}' ORDER BY batter_id, event_date DESC")
+    out = defaultdict(list)
+    for r in rows: out[r["batter_id"]].append(r)
     return out
 
-def load_splits() -> dict[int, dict[str, dict]]:
-    """Returns {batter_id: {split_code: row}}"""
-    rows = query(f"""
-        SELECT *
-        FROM {tbl('raw_splits')}
-        WHERE run_date = '{TODAY}'
-    """)
-    out: dict[int, dict] = defaultdict(dict)
-    for r in rows:
-        out[r["batter_id"]][r["split_code"]] = r
+def load_splits():
+    rows = query(f"SELECT * FROM {tbl('raw_splits')} WHERE run_date='{TODAY}'")
+    out = defaultdict(dict)
+    for r in rows: out[r["batter_id"]][r["split_code"]] = r
     return out
 
-def load_pitcher_matchup() -> dict[int, dict[str, dict]]:
-    """Returns {pitcher_id: {split: row}} — Season/vsLHB/vsRHB"""
-    rows = query(f"""
-        SELECT *
-        FROM {tbl('raw_pitcher_matchup')}
-        WHERE run_date = '{TODAY}'
-    """)
-    out: dict[int, dict] = defaultdict(dict)
-    for r in rows:
-        out[r["pitcher_id"]][r["split"]] = r
+def load_pitcher_matchup():
+    rows = query(f"SELECT * FROM {tbl('raw_pitcher_matchup')} WHERE run_date='{TODAY}'")
+    out = defaultdict(dict)
+    for r in rows: out[r["pitcher_id"]][r["split"]] = r
     return out
 
-def load_pitch_log() -> dict[int, list[dict]]:
-    """Returns {pitcher_id: [pitch log rows for 2025]}"""
-    rows = query(f"""
-        SELECT *
-        FROM {tbl('raw_pitch_log')}
-        WHERE run_date = '{TODAY}' AND season = 2025
-        ORDER BY pitcher_id, percentage DESC
-    """)
-    out: dict[int, list[dict]] = defaultdict(list)
-    for r in rows:
-        out[r["pitcher_id"]].append(r)
+def load_pitch_log():
+    rows = query(f"SELECT * FROM {tbl('raw_pitch_log')} WHERE run_date='{TODAY}' AND season=2025 ORDER BY pitcher_id, percentage DESC")
+    out = defaultdict(list)
+    for r in rows: out[r["pitcher_id"]].append(r)
     return out
 
-def load_games() -> list[dict]:
-    """Get today's game/pitcher/batter assignments from raw_hit_data + raw_pitcher_matchup."""
-    rows = query(f"""
-        SELECT DISTINCT
-            h.game_pk,
-            h.batter_id,
-            h.batter_name,
-            h.bat_side,
-            pm.pitcher_id,
-            pm.pitcher_name,
-            pm.pitcher_hand,
-            pm.opp_team_id
-        FROM {tbl('raw_hit_data')} h
-        JOIN {tbl('raw_pitcher_matchup')} pm
-            ON h.game_pk = pm.game_pk
-            AND pm.run_date = '{TODAY}'
-        WHERE h.run_date = '{TODAY}'
-    """)
-    return rows
-
-def load_game_meta() -> dict[int, dict]:
-    """Load home/away team names from MLB API cached in pitcher matchup."""
-    rows = query(f"""
-        SELECT DISTINCT game_pk, pitcher_id, pitcher_name, opp_team_id
-        FROM {tbl('raw_pitcher_matchup')}
-        WHERE run_date = '{TODAY}'
-    """)
-    # We'll derive home/away from the ingest data
-    meta: dict[int, dict] = {}
-    for r in rows:
-        gp = r["game_pk"]
-        if gp not in meta:
-            meta[gp] = {"pitchers": []}
-        meta[gp]["pitchers"].append(r)
-    return meta
-
-# ── Batter metric computations ────────────────────────────────────────────────
-def compute_batter_metrics(
-    batter_id: int,
-    bat_side: str,
-    pitcher_hand: str,
-    hit_events: list[dict],
-    splits: dict[str, dict],
-    pitcher_pitch_log: list[dict],
-) -> dict:
-    """Compute all batter-side metrics for the HR model."""
-
-    # Pitcher's primary pitch types (top by usage, current season, vs batter hand)
-    batter_hand_code = "LHB" if bat_side == "L" else "RHB"
-    primary_pitches = {
-        p["pitch_name"]
-        for p in pitcher_pitch_log
-        if p["batter_hand"] == batter_hand_code
-        and (p.get("percentage") or 0) > 0.05
-    }
-
-    # Filter hit events by pitcher handedness + pitch mix
-    filtered = [
-        ev for ev in hit_events
-        if ev["pitch_hand"] == pitcher_hand
-        and (not primary_pitches or ev["pitch_type"] in primary_pitches)
-    ]
-
-    # L15 metrics (filtered)
-    l15 = filtered[:15]
-    l15_count = len(l15)
-    l15_barrel_pct = 0.0
-    l15_ev         = 0.0
-    l15_hh_pct     = 0.0
-    if l15_count > 0:
-        l15_barrel_pct = sum(1 for e in l15 if e.get("is_barrel")) / l15_count * 100
-        l15_ev         = mean(e["launch_speed"] for e in l15)
-        l15_hh_pct     = sum(1 for e in l15 if e.get("launch_speed", 0) >= 95) / l15_count * 100
-
-    # Season metrics (2025, all events)
-    season_events = [e for e in hit_events if e.get("season") == 2025]
-    season_count  = len(season_events)
-    season_barrel_pct = 0.0
-    season_ev         = 0.0
-    if season_count > 0:
-        season_barrel_pct = sum(1 for e in season_events if e.get("is_barrel")) / season_count * 100
-        season_ev         = mean(e["launch_speed"] for e in season_events)
-
-    # HR/FB% from hit events
-    flyballs = [e for e in hit_events if e.get("trajectory") == "fly_ball"]
-    hr_fb_pct = 0.0
-    if flyballs:
-        hr_fb_pct = sum(1 for e in flyballs if e["result"] == "home_run") / len(flyballs) * 100
-
-    # ISO + SLG from splits (vs LHP or vs RHP)
-    split_key = "vl" if pitcher_hand == "L" else "vr"
-    split = splits.get(split_key, splits.get("r", {}))
-    iso  = 0.0
-    slg  = 0.0
-    if split:
-        ab  = split.get("at_bats") or 0
-        hr  = split.get("home_runs") or 0
-        dbl = split.get("doubles") or 0
-        tri = split.get("triples") or 0
-        if ab > 0:
-            iso = (dbl + 2 * tri + 3 * hr) / ab
-            slg = split.get("slg") or 0.0
-
-    return {
-        "iso":               round(iso, 3),
-        "slg":               round(float(slg), 3),
-        "l15_ev":            round(l15_ev, 1),
-        "l15_barrel_pct":    round(l15_barrel_pct, 1),
-        "season_ev":         round(season_ev, 1),
-        "season_barrel_pct": round(season_barrel_pct, 1),
-        "l15_hard_hit_pct":  round(l15_hh_pct, 1),
-        "hr_fb_pct":         round(hr_fb_pct, 1),
-    }
-
-# ── Pitcher metric computations ───────────────────────────────────────────────
-def compute_pitcher_metrics(
-    pitcher_id: int,
-    bat_side: str,
-    matchup_splits: dict[str, dict],
-    pitch_log: list[dict],
-) -> dict:
-    """Compute pitcher-side metrics for the HR model."""
-    batter_hand_str = "vsLHB" if bat_side == "L" else "vsRHB"
-
-    season_split = matchup_splits.get("Season", {})
-    hand_split   = matchup_splits.get(batter_hand_str, {})
-
-    p_hr9_season  = float(season_split.get("hr_per_9") or 0)
-    p_hr9_vs_hand = float(hand_split.get("hr_per_9") or 0)
-    p_barrel_pct  = float(season_split.get("barrel_pct") or 0) * 100 if (season_split.get("barrel_pct") or 0) < 1 else float(season_split.get("barrel_pct") or 0)
-    p_fb_pct      = float(season_split.get("fb_pct") or 0) * 100 if (season_split.get("fb_pct") or 0) < 1 else float(season_split.get("fb_pct") or 0)
-    p_hr_vs_hand  = int(hand_split.get("home_runs") or 0)
-
-    # HR/FB% — computed from HR and FB%
-    # HR/FB = HR / (IP * FB_per_inning) — approximate from HR/9 and FB%
-    p_hr_fb_pct = 0.0
-    if p_fb_pct > 0 and p_hr9_season > 0:
-        # rough: HR/9 / (FB% * ~3.5 FB per inning per 9) 
-        p_hr_fb_pct = (p_hr9_season / (p_fb_pct / 100 * 3.5)) * 100
-        p_hr_fb_pct = min(p_hr_fb_pct, 50.0)  # cap at 50
-
-    # Pitcher's L25 barrel pct — from pitch_log events allowed
-    batter_hand_code = "LHB" if bat_side == "L" else "RHB"
-    hand_pitches = [p for p in pitch_log if p["batter_hand"] == batter_hand_code]
-    # Use season barrel from splits as primary, pitch_log as secondary signal
-
-    return {
-        "p_hr9_season":    round(p_hr9_season, 2),
-        "p_hr9_vs_hand":   round(p_hr9_vs_hand, 2),
-        "p_barrel_pct":    round(p_barrel_pct, 1),
-        "p_hr_fb_pct":     round(p_hr_fb_pct, 1),
-        "p_hr_vs_hand":    p_hr_vs_hand,
-        "p_fb_pct":        round(p_fb_pct, 1),
-    }
-
-# ── Scoring model ─────────────────────────────────────────────────────────────
-def score_matchup(bm: dict, pm: dict) -> tuple[float, list[str], list[str]]:
+def load_today_matchups():
     """
-    Returns (score 0-10, flags_good, flags_bad)
-    Score is weighted sum of criteria checks.
+    Join on batter_team_id = opp_team_id so each batter only faces
+    the pitcher whose team they are NOT on.
     """
-    score = 0.0
-    flags_good: list[str] = []
-    flags_bad:  list[str] = []
-
-    # ── Batter checks (max 5 points) ─────────────────────────────────────────
-    # 1. L15 Barrel% vs pitcher handedness + pitch mix (weight: 1.5)
-    if bm["l15_barrel_pct"] >= L15_BARREL_THRESHOLD:
-        score += 1.5
-        flags_good.append(f"L15 Barrel {bm['l15_barrel_pct']:.1f}%")
-    elif bm["l15_barrel_pct"] >= 12.0:
-        score += 0.75
-        flags_good.append(f"L15 Barrel {bm['l15_barrel_pct']:.1f}% (Avg)")
-
-    # 2. ISO (weight: 1.5)
-    if bm["iso"] >= ISO_THRESHOLD:
-        score += 1.5
-        flags_good.append(f"ISO {bm['iso']:.3f}")
-    elif bm["iso"] >= 0.150:
-        score += 0.75
-
-    # 3. HR/FB% (weight: 1.0)
-    if bm["hr_fb_pct"] >= HR_FB_THRESHOLD:
-        score += 1.0
-        flags_good.append(f"HR/FB {bm['hr_fb_pct']:.1f}%")
-
-    # 4. L15 EV (weight: 0.5 / 1.0)
-    if bm["l15_ev"] >= L15_EV_ELITE:
-        score += 1.0
-        flags_good.append(f"L15 EV {bm['l15_ev']:.1f} (Elite)")
-    elif bm["l15_ev"] >= L15_EV_GOOD:
-        score += 0.5
-        flags_good.append(f"L15 EV {bm['l15_ev']:.1f}")
-
-    # 5. Season Barrel% (weight: 0.5)
-    if bm["season_barrel_pct"] >= SEASON_BARREL_THRESHOLD:
-        score += 0.5
-        flags_good.append(f"'25 Barrel {bm['season_barrel_pct']:.1f}%")
-
-    # ── Pitcher checks (max 5 points) ────────────────────────────────────────
-    # 6. Pitcher HR/9 vs batter handedness (weight: 2.0)
-    if pm["p_hr9_vs_hand"] >= P_HR9_THRESHOLD:
-        score += 2.0
-        flags_good.append(f"HR/9 vs hand {pm['p_hr9_vs_hand']:.2f}")
-    elif pm["p_hr9_vs_hand"] >= 0.8:
-        score += 1.0
-        flags_good.append(f"HR/9 vs hand {pm['p_hr9_vs_hand']:.2f} (Mod)")
-    elif pm["p_hr9_vs_hand"] > 0 and pm["p_hr9_vs_hand"] < 0.5:
-        flags_bad.append(f"HR/9 vs hand {pm['p_hr9_vs_hand']:.2f} (Low)")
-
-    # 7. Pitcher Barrel% allowed (weight: 1.5)
-    if pm["p_barrel_pct"] >= P_BARREL_THRESHOLD:
-        score += 1.5
-        flags_good.append(f"P Barrel% {pm['p_barrel_pct']:.1f}%")
-    elif pm["p_barrel_pct"] >= 7.0:
-        score += 0.75
-
-    # 8. Pitcher HR/FB% (weight: 1.0)
-    if pm["p_hr_fb_pct"] >= P_HR_FB_THRESHOLD:
-        score += 1.0
-        flags_good.append(f"P HR/FB {pm['p_hr_fb_pct']:.1f}%")
-
-    # 9. HR allowed vs this handedness (weight: 0.5)
-    if pm["p_hr_vs_hand"] >= 8:
-        score += 0.5
-        flags_good.append(f"{pm['p_hr_vs_hand']} HR vs this hand")
-    elif pm["p_hr_vs_hand"] == 0 and pm["p_hr9_vs_hand"] < 0.5:
-        flags_bad.append("0 HR vs this hand")
-
-    return round(score, 2), flags_good, flags_bad
-
-def grade_matchup(score: float, flags_bad: list[str]) -> str:
-    if score >= IDEAL_MIN and not flags_bad:
-        return "IDEAL"
-    elif score >= IDEAL_MIN:
-        return "FAVORABLE"
-    elif score >= FAVORABLE_MIN:
-        return "FAVORABLE"
-    elif score >= FLIER_MIN:
-        return "FLIER"
-    else:
-        return "SKIP"
-
-def build_why(batter_name: str, bat_side: str, pitcher_name: str, pitcher_hand: str,
-              bm: dict, pm: dict, grade: str, flags_good: list, flags_bad: list) -> str:
-    parts = []
-    hand_str = "LHB" if bat_side == "L" else "RHB"
-    p_hand_str = "LHP" if pitcher_hand == "L" else "RHP"
-
-    if grade in ("IDEAL", "FAVORABLE"):
-        if bat_side != pitcher_hand:
-            parts.append(f"{hand_str} platoon advantage vs {p_hand_str} {pitcher_name}")
-        if bm["l15_barrel_pct"] >= L15_BARREL_THRESHOLD:
-            parts.append(f"Elite L15 Barrel% of {bm['l15_barrel_pct']:.1f}%")
-        if bm["iso"] >= ISO_THRESHOLD:
-            parts.append(f"Strong ISO of {bm['iso']:.3f}")
-        if pm["p_hr9_vs_hand"] >= P_HR9_THRESHOLD:
-            parts.append(f"{pitcher_name} gives up HR/9 of {pm['p_hr9_vs_hand']:.2f} vs {hand_str}s")
-        if pm["p_hr_fb_pct"] >= P_HR_FB_THRESHOLD:
-            parts.append(f"Pitcher HR/FB% of {pm['p_hr_fb_pct']:.1f}% is exploitable")
-    elif grade == "FLIER":
-        if flags_bad:
-            parts.append(f"Caution: {', '.join(flags_bad)}")
-        if bm["l15_ev"] >= L15_EV_ELITE:
-            parts.append(f"Elite contact quality (L15 EV {bm['l15_ev']:.1f})")
-        parts.append("Boom-or-bust profile — use sparingly")
-    else:
-        parts.append("Matchup does not meet HR criteria")
-        if flags_bad:
-            parts.append(f"Issues: {', '.join(flags_bad)}")
-
-    return ". ".join(parts) + "." if parts else ""
-
-# ── Main ──────────────────────────────────────────────────────────────────────
-def main():
-    log.info(f"Starting PropFinder model for {TODAY}")
-
-    hit_data_map    = load_hit_data()
-    splits_map      = load_splits()
-    pitcher_map     = load_pitcher_matchup()
-    pitch_log_map   = load_pitch_log()
-
-    # Get today's matchup assignments
-    rows = query(f"""
+    return query(f"""
         SELECT DISTINCT
             hd.game_pk,
             hd.batter_id,
             hd.batter_name,
             hd.bat_side,
+            hd.batter_team_id,
             pm.pitcher_id,
             pm.pitcher_name,
             pm.pitcher_hand,
-            pm.opp_team_id,
-            COALESCE(pm2.home_team, '') as home_team,
-            COALESCE(pm2.away_team, '') as away_team
+            pm.opp_team_id
         FROM {tbl('raw_hit_data')} hd
         JOIN {tbl('raw_pitcher_matchup')} pm
-            ON hd.game_pk = pm.game_pk
-            AND pm.run_date = '{TODAY}'
-            AND pm.split = 'Season'
-        LEFT JOIN (
-            SELECT DISTINCT game_pk,
-                MAX(CASE WHEN pitcher_hand = 'R' THEN pitcher_name END) as home_team,
-                MAX(CASE WHEN pitcher_hand = 'L' THEN pitcher_name END) as away_team
-            FROM {tbl('raw_pitcher_matchup')}
-            WHERE run_date = '{TODAY}'
-            GROUP BY game_pk
-        ) pm2 ON hd.game_pk = pm2.game_pk
+            ON  hd.game_pk        = pm.game_pk
+            AND pm.run_date       = '{TODAY}'
+            AND pm.split          = 'Season'
+            AND hd.batter_team_id = pm.opp_team_id
         WHERE hd.run_date = '{TODAY}'
     """)
 
-    if not rows:
-        log.warning("No matchup data found for today — did ingest run?")
+def load_game_names():
+    """Returns {game_pk: {home_team_name, away_team_name}} from pitcher matchup."""
+    rows = query(f"""
+        SELECT DISTINCT game_pk, pitcher_name, pitcher_hand, opp_team_id
+        FROM {tbl('raw_pitcher_matchup')}
+        WHERE run_date='{TODAY}' AND split='Season'
+    """)
+    # We'll derive names from pitcher data — home pitcher faces away team
+    # For display we just use pitcher names as team proxies for now
+    games = {}
+    for r in rows:
+        gp = r["game_pk"]
+        if gp not in games:
+            games[gp] = {"pitchers": []}
+        games[gp]["pitchers"].append(r["pitcher_name"])
+    return games
+
+# ── Batter metrics ────────────────────────────────────────────────────────────
+def compute_batter_metrics(batter_id, bat_side, pitcher_hand_raw, hit_events, splits, pitch_log):
+    hand_char   = hc(pitcher_hand_raw)
+    hand_code   = "LHB" if bat_side == "L" else "RHB"
+
+    # Dedupe pitch log: keep highest pct per pitch name, 2025 only
+    seen: dict = {}
+    for p in pitch_log:
+        if p["batter_hand"] != hand_code: continue
+        name = p["pitch_name"]
+        pct  = p.get("percentage") or 0
+        if name not in seen or pct > seen[name]:
+            seen[name] = pct
+    primary = {name for name, pct in seen.items() if pct > 0.05}
+
+    # Filter hit events: pitcher handedness + primary pitch types
+    filtered = [
+        e for e in hit_events
+        if e["pitch_hand"] == hand_char
+        and (not primary or e["pitch_type"] in primary)
+    ]
+
+    l15 = filtered[:15]
+    n   = len(l15)
+    l15_barrel = sum(1 for e in l15 if e.get("is_barrel")) / n * 100 if n else 0.0
+    l15_ev     = mean(e["launch_speed"] for e in l15) if n else 0.0
+    l15_hh     = sum(1 for e in l15 if (e.get("launch_speed") or 0) >= 95) / n * 100 if n else 0.0
+
+    log.debug(f"  Batter {batter_id}: {len(filtered)} filtered events, {n} in L15, pitches={primary}")
+
+    # Season 2025 (no pitch filter)
+    s25    = [e for e in hit_events if e.get("season") == 2025]
+    n25    = len(s25)
+    s25_barrel = sum(1 for e in s25 if e.get("is_barrel")) / n25 * 100 if n25 else 0.0
+    s25_ev     = mean(e["launch_speed"] for e in s25) if n25 else 0.0
+
+    # HR/FB%
+    fb    = [e for e in hit_events if e.get("trajectory") == "fly_ball"]
+    hr_fb = sum(1 for e in fb if e["result"] == "home_run") / len(fb) * 100 if fb else 0.0
+
+    # ISO + SLG from splits vs pitcher hand
+    sp  = splits.get("vl" if hand_char == "L" else "vr", {})
+    ab  = int(sp.get("at_bats") or 0)
+    hr  = int(sp.get("home_runs") or 0)
+    dbl = int(sp.get("doubles") or 0)
+    tri = int(sp.get("triples") or 0)
+    iso = (dbl + 2*tri + 3*hr) / ab if ab > 0 else 0.0
+    slg = safe_float(sp.get("slg"))
+
+    return {
+        "iso":               round(iso, 3),
+        "slg":               round(slg, 3),
+        "l15_ev":            round(l15_ev, 1),
+        "l15_barrel_pct":    round(l15_barrel, 1),
+        "season_ev":         round(s25_ev, 1),
+        "season_barrel_pct": round(s25_barrel, 1),
+        "l15_hard_hit_pct":  round(l15_hh, 1),
+        "hr_fb_pct":         round(hr_fb, 1),
+    }
+
+# ── Pitcher metrics ───────────────────────────────────────────────────────────
+def compute_pitcher_metrics(pitcher_id, bat_side, matchup_splits):
+    hs = matchup_splits.get("vsLHB" if bat_side == "L" else "vsRHB", {})
+    ss = matchup_splits.get("Season", {})
+
+    p_hr9   = safe_float(hs.get("hr_per_9"))
+    p_hr9_s = safe_float(ss.get("hr_per_9"))
+    p_hr_n  = int(hs.get("home_runs") or 0)
+    p_ip    = safe_float(hs.get("ip"))
+
+    raw_bar  = hs.get("barrel_pct") or ss.get("barrel_pct") or 0
+    p_barrel = safe_float(raw_bar) * 100 if safe_float(raw_bar) < 1 else safe_float(raw_bar)
+
+    raw_hh = ss.get("hard_hit_pct") or 0
+    p_hh   = safe_float(raw_hh) * 100 if safe_float(raw_hh) < 1 else safe_float(raw_hh)
+
+    raw_fb = hs.get("fb_pct") or ss.get("fb_pct") or 0
+    p_fb   = safe_float(raw_fb) * 100 if safe_float(raw_fb) < 1 else safe_float(raw_fb)
+
+    p_hrfb = 0.0
+    if p_ip > 0 and p_fb > 0:
+        est_fb = p_ip * (p_fb / 100) * 1.2
+        if est_fb > 0:
+            p_hrfb = min((p_hr_n / est_fb) * 100, 60.0)
+
+    woba  = safe_float(hs.get("woba"))
+    p_iso = 0.230 if woba >= 0.340 else (0.175 if woba >= 0.310 else 0.125)
+
+    return {
+        "p_hr9_season":   round(p_hr9_s, 2),
+        "p_hr9_vs_hand":  round(p_hr9, 2),
+        "p_barrel_pct":   round(p_barrel, 1),
+        "p_hr_fb_pct":    round(p_hrfb, 1),
+        "p_hr_vs_hand":   p_hr_n,
+        "p_fb_pct":       round(p_fb, 1),
+        "p_hard_hit_pct": round(p_hh, 1),
+        "p_iso_allowed":  round(p_iso, 3),
+    }
+
+# ── Pulse Score ───────────────────────────────────────────────────────────────
+def compute_pulse_score(bm, pm, bat_side, pitcher_hand_raw):
+    raw = 0.0
+    flags_good, flags_bad = [], []
+    hand_char_val = hc(pitcher_hand_raw)
+    hb = "LHB" if bat_side == "L" else "RHB"
+    hp = "LHP" if hand_char_val == "L" else "RHP"
+
+    hr9  = pm["p_hr9_vs_hand"]
+    hrfb = pm["p_hr_fb_pct"]
+
+    # PITCHER (max 65 pts)
+    if   hr9 >= P_HR9_IDEAL: raw += 20; flags_good.append(f"HR/9 vs {hb}: {hr9:.2f} 🎯")
+    elif hr9 >= P_HR9_FAV:   raw += 15; flags_good.append(f"HR/9 vs {hb}: {hr9:.2f} ✅")
+    elif hr9 >= P_HR9_AVG:   raw += 8;  flags_good.append(f"HR/9 vs {hb}: {hr9:.2f} ☑️")
+    elif hr9 < P_HR9_AVOID:  raw -= 5;  flags_bad.append(f"HR/9 vs {hb}: {hr9:.2f} ❌")
+
+    if   hrfb >= P_HRFB_IDEAL: raw += 18; flags_good.append(f"HR/FB% vs {hb}: {hrfb:.1f}% 🎯")
+    elif hrfb >= P_HRFB_FAV:   raw += 12; flags_good.append(f"HR/FB% vs {hb}: {hrfb:.1f}% ✅")
+    elif hrfb >= P_HRFB_AVG:   raw += 5;  flags_good.append(f"HR/FB% vs {hb}: {hrfb:.1f}% ☑️")
+    else:                       raw -= 3;  flags_bad.append(f"HR/FB% vs {hb}: {hrfb:.1f}% ❌")
+
+    fb = pm["p_fb_pct"]
+    if   fb > P_FB_IDEAL: raw += 8; flags_good.append(f"FB%: {fb:.1f}% 🎯")
+    elif fb >= P_FB_FAV:  raw += 4; flags_good.append(f"FB%: {fb:.1f}% ✅")
+
+    if   pm["p_barrel_pct"] > P_BARREL_ELITE: raw += 7; flags_good.append(f"Barrel% allowed: {pm['p_barrel_pct']:.1f}% 🎯")
+    elif pm["p_barrel_pct"] >= 7:              raw += 3; flags_good.append(f"Barrel% allowed: {pm['p_barrel_pct']:.1f}% ✅")
+
+    if   pm["p_hard_hit_pct"] >= P_HARDHIT_ATTACK: raw += 5; flags_good.append(f"HardHit% allowed: {pm['p_hard_hit_pct']:.1f}% ✅")
+    elif pm["p_hard_hit_pct"] >= 35:                raw += 2
+
+    if   pm["p_iso_allowed"] >= P_ISO_EXPLOIT: raw += 4; flags_good.append(f"ISO allowed: {pm['p_iso_allowed']:.3f} ✅")
+    elif pm["p_iso_allowed"] >= 0.160:         raw += 2
+
+    if bat_side == hand_char_val:
+        raw += 3; flags_good.append(f"{hb} platoon edge ✅")
+
+    # BATTER (max 60 pts)
+    iso_t = tier(bm["iso"],            B_ISO_ELITE, B_ISO_FAV, B_ISO_AVG)
+    slg_t = tier(bm["slg"],            B_SLG_ELITE, B_SLG_FAV, B_SLG_AVG)
+    ev_t  = tier(bm["l15_ev"],         B_EV_ELITE,  B_EV_FAV,  B_EV_AVG)
+    bar_t = tier(bm["l15_barrel_pct"], B_BAR_ELITE, B_BAR_FAV, B_BAR_AVG)
+
+    pts = {"elite": 15, "favorable": 10, "average": 5, "below": 0}
+    raw += pts[iso_t] + pts[slg_t] + pts[ev_t] + pts[bar_t]
+    if iso_t == "below": raw -= 2; flags_bad.append(f"ISO {bm['iso']:.3f} (weak)")
+
+    em = {"elite": "🎯", "favorable": "✅", "average": "☑️", "below": ""}
+    if iso_t != "below": flags_good.append(f"ISO {bm['iso']:.3f} {em[iso_t]}")
+    if slg_t != "below": flags_good.append(f"SLG {bm['slg']:.3f} {em[slg_t]}")
+    if ev_t  != "below": flags_good.append(f"L15 EV {bm['l15_ev']} mph {em[ev_t]}")
+    if bar_t != "below": flags_good.append(f"L15 Barrel {bm['l15_barrel_pct']:.1f}% {em[bar_t]}")
+
+    if   bm["season_barrel_pct"] >= B_BAR_ELITE: flags_good.append(f"'25 Barrel {bm['season_barrel_pct']:.1f}% 🎯")
+    elif bm["season_barrel_pct"] >= B_BAR_FAV:   flags_good.append(f"'25 Barrel {bm['season_barrel_pct']:.1f}% ✅")
+
+    pulse = round(max(0.0, min(100.0, (raw / RAW_MAX) * 100)), 1)
+
+    pitcher_avoid = hr9 < P_HR9_AVOID and hrfb < P_HRFB_AVG
+    if   pitcher_avoid or pulse < PULSE_AVG: label = "AVOID"
+    elif pulse >= PULSE_IDEAL:               label = "IDEAL"
+    elif pulse >= PULSE_FAV:                 label = "FAVORABLE"
+    else:                                    label = "AVERAGE"
+
+    return pulse, label, flags_good, flags_bad
+
+# ── Why text ──────────────────────────────────────────────────────────────────
+def build_why(batter_name, bat_side, pitcher_name, pitcher_hand_raw, bm, pm, label, flags_good, flags_bad):
+    hb = "LHB" if bat_side == "L" else "RHB"
+    hp = "LHP" if hc(pitcher_hand_raw) == "L" else "RHP"
+    parts = []
+    if label == "IDEAL":
+        if pm["p_hr9_vs_hand"] >= P_HR9_FAV:
+            parts.append(f"{hp} {pitcher_name} highly exploitable vs {hb}s (HR/9: {pm['p_hr9_vs_hand']:.2f})")
+        if pm["p_hr_fb_pct"] >= P_HRFB_FAV:
+            parts.append(f"HR/FB% of {pm['p_hr_fb_pct']:.1f}% reveals power vulnerability")
+        if bm["l15_barrel_pct"] >= B_BAR_ELITE:
+            parts.append(f"Elite L15 Barrel% of {bm['l15_barrel_pct']:.1f}%")
+        if bm["iso"] >= B_ISO_ELITE:
+            parts.append(f"Elite ISO {bm['iso']:.3f} vs {hp}s")
+    elif label == "FAVORABLE":
+        if pm["p_hr9_vs_hand"] >= P_HR9_AVG:
+            parts.append(f"{pitcher_name} ({hp}) HR/9 vs {hb}: {pm['p_hr9_vs_hand']:.2f}")
+        if bm["l15_barrel_pct"] >= B_BAR_FAV:
+            parts.append(f"Strong Barrel% trend ({bm['l15_barrel_pct']:.1f}%)")
+        if bm["iso"] >= B_ISO_FAV:
+            parts.append(f"Favorable ISO {bm['iso']:.3f}")
+        if bm["l15_ev"] >= B_EV_FAV:
+            parts.append(f"L15 EV {bm['l15_ev']:.1f} mph")
+    elif label == "AVERAGE":
+        parts.append("Some signals present but not fully confirmed")
+        if bm["l15_ev"] >= B_EV_ELITE:
+            parts.append(f"Elite contact quality (L15 EV {bm['l15_ev']:.1f}) — worth watching")
+        parts.append("Use sparingly")
+    else:
+        parts.append("Pitcher not exploitable vs this handedness")
+        if flags_bad:
+            parts.append(f"Issues: {', '.join(f.replace(' ❌','') for f in flags_bad)}")
+    return ". ".join(parts) + "." if parts else ""
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+def main():
+    log.info(f"Starting PropFinder Pulse Score model for {TODAY}")
+
+    hit_data_map  = load_hit_data()
+    splits_map    = load_splits()
+    pitcher_map   = load_pitcher_matchup()
+    pitch_log_map = load_pitch_log()
+    matchups      = load_today_matchups()
+
+    if not matchups:
+        log.warning("No matchup data — did ingest run with the updated ingest.py?")
         return
 
-    output_rows: list[dict] = []
-    seen: set = set()
+    log.info(f"Processing {len(matchups)} batter/pitcher matchups")
 
-    for r in rows:
+    output_rows = []
+    seen = set()
+
+    for r in matchups:
         key = (r["batter_id"], r["pitcher_id"], r["game_pk"])
-        if key in seen:
-            continue
+        if key in seen: continue
         seen.add(key)
 
-        batter_id   = r["batter_id"]
-        pitcher_id  = r["pitcher_id"]
-        bat_side    = r.get("bat_side") or "R"
-        pitcher_hand = r.get("pitcher_hand") or "R"
-
-        hit_events   = hit_data_map.get(batter_id, [])
-        splits       = splits_map.get(batter_id, {})
-        p_splits     = pitcher_map.get(pitcher_id, {})
-        p_pitch_log  = pitch_log_map.get(pitcher_id, [])
+        hit_events = hit_data_map.get(r["batter_id"], [])
+        if not hit_events: continue
 
         bm = compute_batter_metrics(
-            batter_id, bat_side, pitcher_hand,
-            hit_events, splits, p_pitch_log
+            r["batter_id"], r["bat_side"], r["pitcher_hand"],
+            hit_events, splits_map.get(r["batter_id"], {}),
+            pitch_log_map.get(r["pitcher_id"], [])
         )
         pm = compute_pitcher_metrics(
-            pitcher_id, bat_side, p_splits, p_pitch_log
+            r["pitcher_id"], r["bat_side"],
+            pitcher_map.get(r["pitcher_id"], {})
         )
-
-        score, flags_good, flags_bad = score_matchup(bm, pm)
-        grade = grade_matchup(score, flags_bad)
-        why   = build_why(
-            r["batter_name"], bat_side,
-            r["pitcher_name"], pitcher_hand,
-            bm, pm, grade, flags_good, flags_bad
+        pulse, label, flags_good, flags_bad = compute_pulse_score(
+            bm, pm, r["bat_side"], r["pitcher_hand"]
+        )
+        why = build_why(
+            r["batter_name"], r["bat_side"],
+            r["pitcher_name"], r["pitcher_hand"],
+            bm, pm, label, flags_good, flags_bad
         )
 
         output_rows.append({
-            "run_date":          TODAY.isoformat(),
-            "run_timestamp":     NOW.isoformat(),
-            "game_pk":           r["game_pk"],
-            "home_team":         r.get("home_team", ""),
-            "away_team":         r.get("away_team", ""),
-            "batter_id":         batter_id,
-            "batter_name":       r["batter_name"],
-            "bat_side":          bat_side,
-            "pitcher_id":        pitcher_id,
-            "pitcher_name":      r["pitcher_name"],
-            "pitcher_hand":      pitcher_hand,
+            "run_date":       TODAY.isoformat(),
+            "run_timestamp":  NOW.isoformat(),
+            "game_pk":        r["game_pk"],
+            "home_team":      "",
+            "away_team":      "",
+            "batter_id":      r["batter_id"],
+            "batter_name":    r["batter_name"],
+            "bat_side":       r["bat_side"],
+            "pitcher_id":     r["pitcher_id"],
+            "pitcher_name":   r["pitcher_name"],
+            "pitcher_hand":   r["pitcher_hand"],
             **bm,
             **pm,
-            "score":             score,
-            "grade":             grade,
-            "why":               why,
-            "flags":             json.dumps(flags_good + [f"⚠ {f}" for f in flags_bad]),
+            "score":          pulse,
+            "grade":          label,
+            "why":            why,
+            "flags":          json.dumps(flags_good + flags_bad),
         })
 
-    # Sort by score descending
     output_rows.sort(key=lambda x: x["score"], reverse=True)
-    log.info(f"Scored {len(output_rows)} batter/pitcher matchups")
+    log.info(f"Scored {len(output_rows)} matchups")
 
-    # Write to BigQuery
     if output_rows:
-        errors = bq.insert_rows_json(
-            f"{PROJECT}.{DATASET}.hr_picks_daily",
-            output_rows
-        )
+        errors = bq.insert_rows_json(f"{PROJECT}.{DATASET}.hr_picks_daily", output_rows)
         if errors:
             log.error(f"BQ insert errors: {errors[:3]}")
         else:
             log.info(f"Wrote {len(output_rows)} picks to hr_picks_daily")
 
-    # Print top picks to stdout for GitHub Actions log
-    print(f"\n{'='*60}")
-    print(f"TOP HR PICKS — {TODAY}")
-    print(f"{'='*60}")
-    for i, r in enumerate(output_rows[:10], 1):
-        if r["grade"] == "SKIP":
-            continue
-        print(f"{i:2}. {r['batter_name']:<22} vs {r['pitcher_name']:<18} "
-              f"[{r['grade']}] score={r['score']:.1f}")
+    print(f"\n{'='*70}")
+    print(f"PULSE SCORE — HR PICKS — {TODAY}")
+    print(f"{'='*70}")
+    for label in ["IDEAL", "FAVORABLE", "AVERAGE", "AVOID"]:
+        group = [r for r in output_rows if r["grade"] == label]
+        if not group: continue
+        print(f"\n── {label} ──")
+        for r in group:
+            hb = "LHB" if r["bat_side"] == "L" else "RHB"
+            hp = "LHP" if hc(r["pitcher_hand"]) == "L" else "RHP"
+            print(f"  {r['batter_name']:<22} ({hb}) vs {r['pitcher_name']:<18} ({hp})  Pulse: {r['score']}")
+            print(f"    ISO:{r['iso']:.3f}  SLG:{r['slg']:.3f}  "
+                  f"L15EV:{r['l15_ev']}  L15Barrel:{r['l15_barrel_pct']:.1f}%  "
+                  f"| P HR/9:{r['p_hr9_vs_hand']:.2f}  HR/FB:{r['p_hr_fb_pct']:.1f}%")
+            if r["why"]:
+                print(f"    {r['why']}")
+    skipped = sum(1 for r in output_rows if r["grade"] == "AVOID")
+    print(f"\n── AVOID: {skipped} matchups did not meet criteria ──")
 
 if __name__ == "__main__":
     main()

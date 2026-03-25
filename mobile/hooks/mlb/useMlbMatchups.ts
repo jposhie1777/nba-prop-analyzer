@@ -1,0 +1,96 @@
+import { useMemo } from "react";
+
+import { useEplQuery } from "@/hooks/epl/useEplQuery";
+
+export type MlbUpcomingGame = {
+  game_pk: number;
+  home_team?: string | null;
+  away_team?: string | null;
+  start_time_utc?: string | null;
+  venue_name?: string | null;
+  home_pitcher_name?: string | null;
+  away_pitcher_name?: string | null;
+  has_model_data?: boolean;
+  picks_count?: number;
+  top_score?: number | null;
+  top_grade?: "IDEAL" | "FAVORABLE" | "AVERAGE" | "AVOID" | null;
+};
+
+export type MlbPitcherSplit = {
+  ip?: number | null;
+  home_runs?: number | null;
+  hr_per_9?: number | null;
+  barrel_pct?: number | null;
+  hard_hit_pct?: number | null;
+  fb_pct?: number | null;
+  hr_fb_pct?: number | null;
+  whip?: number | null;
+  woba?: number | null;
+};
+
+export type MlbBatterPick = {
+  batter_id?: number | null;
+  batter_name?: string | null;
+  bat_side?: string | null;
+  score?: number | null;
+  grade?: string | null;
+  why?: string | null;
+  flags?: string[];
+  iso?: number | null;
+  slg?: number | null;
+  l15_ev?: number | null;
+  l15_barrel_pct?: number | null;
+  season_ev?: number | null;
+  season_barrel_pct?: number | null;
+  l15_hard_hit_pct?: number | null;
+  hr_fb_pct?: number | null;
+  p_hr9_vs_hand?: number | null;
+  p_hr_fb_pct?: number | null;
+  p_barrel_pct?: number | null;
+  p_fb_pct?: number | null;
+  p_hard_hit_pct?: number | null;
+  p_iso_allowed?: number | null;
+};
+
+export type MlbPitcherGroup = {
+  pitcher_id: number;
+  pitcher_name?: string | null;
+  pitcher_hand?: string | null;
+  opp_team_id?: number | null;
+  offense_team?: string | null;
+  splits: Record<string, MlbPitcherSplit>;
+  batters: MlbBatterPick[];
+};
+
+export type MlbMatchupDetail = {
+  game_pk: number;
+  run_date: string;
+  game: {
+    home_team?: string | null;
+    away_team?: string | null;
+    start_time_utc?: string | null;
+    venue_name?: string | null;
+    home_pitcher_name?: string | null;
+    away_pitcher_name?: string | null;
+  };
+  grade_counts: {
+    IDEAL: number;
+    FAVORABLE: number;
+    AVERAGE: number;
+    AVOID: number;
+  };
+  pitchers: MlbPitcherGroup[];
+};
+
+export function useMlbUpcomingGames(limit = 30) {
+  const params = useMemo(() => ({ limit }), [limit]);
+  return useEplQuery<MlbUpcomingGame[]>("/mlb/matchups/upcoming", params);
+}
+
+export function useMlbMatchupDetail(gamePk?: number | null) {
+  return useEplQuery<MlbMatchupDetail>(
+    `/mlb/matchups/${gamePk ?? 0}`,
+    undefined,
+    Boolean(gamePk)
+  );
+}

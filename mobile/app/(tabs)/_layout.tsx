@@ -17,6 +17,7 @@ type TabConfig = {
 
 const STATIC_TABS: TabConfig[] = [
   { name: "pga", title: "PGA", icon: "golf-outline" },
+  { name: "mlb", title: "MLB", icon: "baseball-outline" },
   { name: "mls", title: "MLS", icon: "football-outline" },
   { name: "epl", title: "EPL", icon: "trophy-outline" },
   { name: "atp", title: "ATP", icon: "tennisball-outline" },
@@ -56,6 +57,8 @@ const HIDDEN_SCREENS = [
   "mls/standings",
   "mls/team-master-metrics",
   "mls/total-goals",
+  "mlb/index",
+  "mlb/match/[gamePk]",
   "first-basket",
   "game-betting",
   "injuries",

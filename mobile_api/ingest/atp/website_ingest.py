@@ -8,7 +8,7 @@ import os
 import re
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
@@ -496,6 +496,377 @@ def _extract_player_ids_from_html(html: str) -> Set[str]:
         ids.add(m.group(1).upper())
     return ids
 
+
+
+def _all_tournament_results_urls(tournament_dates_json: Dict[str, Any]) -> List[Tuple[str, str, str]]:
+    """Return (slug, tournament_id, full_results_url) for all events in tournament_dates JSON."""
+    out: List[Tuple[str, str, str]] = []
+    for month in tournament_dates_json.get("TournamentDates", []):
+        for t in month.get("Tournaments", []):
+            scores_url = (t.get("ScoresUrl") or "").replace("country-results", "results")
+            if not scores_url:
+                continue
+            m = re.search(r"/scores/(?:archive|current)/([^/]+)/([^/]+)/", scores_url)
+            if not m:
+                continue
+            slug, tid = m.group(1), m.group(2)
+            out.append((slug, tid, f"https://www.atptour.com{scores_url}"))
+    deduped: Dict[str, Tuple[str, str, str]] = {}
+    for slug, tid, url in out:
+        deduped[url] = (slug, tid, url)
+    return list(deduped.values())
+
+
+def _year_from_results_url(url: str) -> Optional[int]:
+    m = re.search(r"/(?:archive|current)/[^/]+/[^/]+/(\d{4})/", url)
+    if not m:
+        return None
+    try:
+        return int(m.group(1))
+    except ValueError:
+        return None
+
+
+def _results_urls_for_year_range(
+    tournament_dates_json: Dict[str, Any],
+    start_year: int,
+    end_year: int,
+) -> List[Tuple[str, str, str]]:
+    urls = _all_tournament_results_urls(tournament_dates_json)
+    if not urls:
+        return []
+    filtered: List[Tuple[str, str, str]] = []
+    for slug, tid, url in urls:
+        year = _year_from_results_url(url)
+        if year is None:
+            filtered.append((slug, tid, url))
+            continue
+        if start_year <= year <= end_year:
+            filtered.append((slug, tid, url))
+    return filtered
+
+
+def _extract_results_urls_from_archive_html(archive_html: str) -> List[Tuple[str, str, str]]:
+    out: List[Tuple[str, str, str]] = []
+    for m in re.finditer(
+        r'href="(/en/scores/archive/([^/]+)/([^/]+)/(\d{4})/(?:country-results|results))"',
+        archive_html,
+        flags=re.IGNORECASE,
+    ):
+        href = m.group(1).replace("country-results", "results")
+        slug = m.group(2)
+        tid = m.group(3)
+        out.append((slug, tid, f"https://www.atptour.com{href}"))
+    deduped: Dict[str, Tuple[str, str, str]] = {}
+    for slug, tid, url in out:
+        deduped[url] = (slug, tid, url)
+    return list(deduped.values())
+
+
+def _month_to_number(month_name: str) -> Optional[int]:
+    lookup = {
+        "january": 1,
+        "february": 2,
+        "march": 3,
+        "april": 4,
+        "may": 5,
+        "june": 6,
+        "july": 7,
+        "august": 8,
+        "september": 9,
+        "october": 10,
+        "november": 11,
+        "december": 12,
+    }
+    return lookup.get(month_name.strip().lower())
+
+
+def _parse_archive_event_date_range(date_text: str) -> Tuple[Optional[date], Optional[date]]:
+    text = re.sub(r"\s+", " ", (date_text or "")).strip()
+    if not text:
+        return None, None
+
+    patterns = [
+        re.compile(
+            r"^(\d{1,2})\s+([A-Za-z]+),\s*(\d{4})\s*-\s*(\d{1,2})\s+([A-Za-z]+),\s*(\d{4})$",
+            flags=re.IGNORECASE,
+        ),
+        re.compile(
+            r"^(\d{1,2})\s+([A-Za-z]+)\s*-\s*(\d{1,2})\s+([A-Za-z]+),\s*(\d{4})$",
+            flags=re.IGNORECASE,
+        ),
+    ]
+
+    m1 = patterns[0].match(text)
+    if m1:
+        d1, m1_name, y1, d2, m2_name, y2 = m1.groups()
+        m1_num = _month_to_number(m1_name)
+        m2_num = _month_to_number(m2_name)
+        if m1_num and m2_num:
+            try:
+                return date(int(y1), m1_num, int(d1)), date(int(y2), m2_num, int(d2))
+            except ValueError:
+                return None, None
+
+    m2 = patterns[1].match(text)
+    if m2:
+        d1, m1_name, d2, m2_name, y = m2.groups()
+        m1_num = _month_to_number(m1_name)
+        m2_num = _month_to_number(m2_name)
+        if m1_num and m2_num:
+            try:
+                return date(int(y), m1_num, int(d1)), date(int(y), m2_num, int(d2))
+            except ValueError:
+                return None, None
+
+    return None, None
+
+
+def _extract_archive_event_date_ranges(archive_html: str) -> Dict[Tuple[str, str], Tuple[Optional[date], Optional[date]]]:
+    ranges: Dict[Tuple[str, str], Tuple[Optional[date], Optional[date]]] = {}
+    for m in re.finditer(
+        r'<a href="/en/scores/archive/([^/]+)/([^/]+)/(\d{4})/results"[^>]*>[\s\S]*?<span class="Date">([\s\S]*?)</span>',
+        archive_html,
+        flags=re.IGNORECASE,
+    ):
+        slug = m.group(1).strip()
+        tid = m.group(2).strip()
+        date_text = re.sub(r"<[^>]+>", " ", m.group(4))
+        start_date, end_date = _parse_archive_event_date_range(date_text)
+        ranges[(slug, tid)] = (start_date, end_date)
+    return ranges
+
+
+def _extract_event_date_range_from_results_html(results_html: str) -> Tuple[Optional[date], Optional[date]]:
+    m = re.search(
+        r'<div class="date-location">[\s\S]*?<span>[\s\S]*?</span>\s*\|\s*<span>([\s\S]*?)</span>',
+        results_html,
+        flags=re.IGNORECASE,
+    )
+    if not m:
+        return None, None
+    date_text = re.sub(r"<[^>]+>", " ", m.group(1))
+    return _parse_archive_event_date_range(date_text)
+
+
+def _infer_match_date_from_round_label(
+    *,
+    round_label: Optional[str],
+    day_label: Optional[str],
+    start_date: date,
+    end_date: date,
+) -> Optional[date]:
+    span_days = max(0, (end_date - start_date).days)
+    text = f"{round_label or ''} {day_label or ''}".strip().lower()
+    text = re.sub(r"[^a-z0-9 ]", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    if not text:
+        return start_date
+
+    if "qualifying" in text or re.search(r"\bq[1-3]\b", text):
+        if "3rd" in text or "q3" in text:
+            return min(end_date, start_date + timedelta(days=2))
+        if "2nd" in text or "q2" in text:
+            return min(end_date, start_date + timedelta(days=1))
+        return start_date
+
+    if "round robin" in text or text == "rr":
+        return min(end_date, start_date + timedelta(days=max(1, span_days // 2)))
+
+    round_from_end: Optional[int] = None
+    if "final" in text and "semi" not in text and "quarter" not in text and "round of" not in text:
+        round_from_end = 0
+    elif "semifinal" in text:
+        round_from_end = 1
+    elif "quarterfinal" in text:
+        round_from_end = 2
+    elif "round of 16" in text:
+        round_from_end = 3
+    elif "round of 32" in text:
+        round_from_end = 4
+    elif "round of 64" in text:
+        round_from_end = 5
+    elif "round of 128" in text:
+        round_from_end = 6
+    elif "4th round" in text:
+        round_from_end = 3
+    elif "3rd round" in text:
+        round_from_end = 4
+    elif "2nd round" in text:
+        round_from_end = 5 if span_days >= 12 else 3
+    elif "1st round" in text:
+        round_from_end = 6 if span_days >= 12 else 4
+
+    if round_from_end is None:
+        return start_date
+
+    inferred = end_date - timedelta(days=round_from_end)
+    if inferred < start_date:
+        return start_date
+    if inferred > end_date:
+        return end_date
+    return inferred
+
+
+def _fill_missing_match_dates_for_event(
+    rows: Sequence[Dict[str, Any]],
+    *,
+    start_date: Optional[date],
+    end_date: Optional[date],
+) -> List[Dict[str, Any]]:
+    if not rows or not start_date or not end_date:
+        return list(rows)
+
+    filled: List[Dict[str, Any]] = []
+    for row in rows:
+        current_date = row.get("match_date")
+        if current_date:
+            filled.append(row)
+            continue
+        inferred = _infer_match_date_from_round_label(
+            round_label=row.get("round_and_court"),
+            day_label=row.get("day_label"),
+            start_date=start_date,
+            end_date=end_date,
+        )
+        if inferred is not None:
+            row = {**row, "match_date": inferred.isoformat()}
+        filled.append(row)
+    return filled
+
+
+def _results_archive_data_for_year(
+    year: int,
+) -> Tuple[List[Tuple[str, str, str]], Dict[Tuple[str, str], Tuple[Optional[date], Optional[date]]]]:
+    archive_url = f"https://www.atptour.com/en/scores/results-archive?year={year}"
+    archive_html = _fetch_html_url(archive_url)
+    if not archive_html:
+        return [], {}
+    return (
+        _extract_results_urls_from_archive_html(archive_html),
+        _extract_archive_event_date_ranges(archive_html),
+    )
+
+
+def _results_archive_urls_for_year(year: int) -> List[Tuple[str, str, str]]:
+    urls, _ = _results_archive_data_for_year(year)
+    return urls
+
+
+def _merge_results_url_sets(
+    *url_sets: Sequence[Tuple[str, str, str]],
+) -> List[Tuple[str, str, str]]:
+    merged: Dict[str, Tuple[str, str, str]] = {}
+    for url_set in url_sets:
+        for slug, tid, url in url_set:
+            merged[url] = (slug, tid, url)
+    return list(merged.values())
+
+
+def _event_window_lookup_for_urls(
+    archive_ranges_by_year: Dict[int, Dict[Tuple[str, str], Tuple[Optional[date], Optional[date]]]],
+    results_urls: Sequence[Tuple[str, str, str]],
+) -> Dict[Tuple[str, str], Tuple[Optional[date], Optional[date]]]:
+    lookup: Dict[Tuple[str, str], Tuple[Optional[date], Optional[date]]] = {}
+    for slug, tid, url in results_urls:
+        year = _year_from_results_url(url)
+        if year is None:
+            continue
+        year_ranges = archive_ranges_by_year.get(year) or {}
+        event_window = year_ranges.get((slug, tid))
+        if event_window:
+            lookup[(slug, tid)] = event_window
+    return lookup
+
+
+def _round_sort_rank(round_and_court: Optional[str]) -> int:
+    text = (round_and_court or "").lower()
+    if not text:
+        return 999
+    mapping = [
+        ("final", 1),
+        ("semi", 2),
+        ("quarter", 3),
+        ("round of 16", 4),
+        ("round of 32", 5),
+        ("round of 64", 6),
+        ("round of 128", 7),
+        ("2nd round qualifying", 8),
+        ("1st round qualifying", 9),
+        ("qualifying", 10),
+    ]
+    for token, rank in mapping:
+        if token in text:
+            return rank
+    return 50
+
+
+def _populate_missing_match_dates_from_event_windows(
+    rows: Sequence[Dict[str, Any]],
+    *,
+    event_windows: Dict[Tuple[str, str], Tuple[Optional[date], Optional[date]]],
+) -> List[Dict[str, Any]]:
+    grouped: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+    output: List[Dict[str, Any]] = []
+    for row in rows:
+        cloned = dict(row)
+        output.append(cloned)
+        if cloned.get("match_date"):
+            continue
+        key = (str(cloned.get("tournament_slug") or ""), str(cloned.get("tournament_id") or ""))
+        grouped.setdefault(key, []).append(cloned)
+
+    for key, group_rows in grouped.items():
+        start_date, end_date = event_windows.get(key, (None, None))
+        if not start_date or not end_date or end_date < start_date:
+            continue
+
+        total_days = (end_date - start_date).days + 1
+        if total_days <= 0:
+            continue
+
+        by_round: Dict[str, List[Dict[str, Any]]] = {}
+        for row in group_rows:
+            round_key = (row.get("round_and_court") or "").strip() or "Unknown"
+            by_round.setdefault(round_key, []).append(row)
+
+        round_order = sorted(
+            by_round.keys(),
+            key=lambda round_name: (_round_sort_rank(round_name), round_name),
+        )
+
+        denominator = max(1, len(round_order) - 1)
+        for index, round_name in enumerate(round_order):
+            offset = round((index / denominator) * (total_days - 1))
+            assigned = start_date + timedelta(days=offset)
+            assigned_iso = assigned.isoformat()
+            for row in by_round[round_name]:
+                row["match_date"] = assigned_iso
+
+    return output
+
+
+def _dedupe_match_results_rows(rows: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """De-duplicate normalized match result rows before BigQuery insert."""
+    deduped: List[Dict[str, Any]] = []
+    seen: Set[Tuple[Any, ...]] = set()
+    for row in rows:
+        key = (
+            row.get("tournament_id"),
+            row.get("tournament_slug"),
+            str(row.get("match_date")),
+            row.get("round_and_court"),
+            row.get("player_1_name"),
+            row.get("player_2_name"),
+            row.get("player_1_scores"),
+            row.get("player_2_scores"),
+            row.get("match_duration"),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(row)
+    return deduped
 
 
 def _safe_json_str(value: Any) -> str:
@@ -1035,7 +1406,9 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
                 "request_url": _live_results_url,
             }
     if result_slug and result_tid and results_capture.get("payload_text"):
-        parsed_match_results_rows.extend(
+        # website_match_results is the historical per-match results table (one row per match).
+        # The raw HTML payload is already stored in website_raw_responses (endpoint_key="match_results").
+        current_event_rows = [
             row.to_dict()
             for row in normalize_match_results_html(
                 result_slug,
@@ -1043,37 +1416,62 @@ def run_ingest(start_year: int, end_year: int, truncate: bool, truncate_schedule
                 results_capture["payload_text"],
                 snapshot_ts_utc=snapshot_ts,
             )
+        ]
+        current_start, current_end = _extract_event_date_range_from_results_html(
+            results_capture["payload_text"]
+        )
+        parsed_match_results_rows.extend(
+            _fill_missing_match_dates_for_event(
+                current_event_rows,
+                start_date=current_start,
+                end_date=current_end,
+            )
         )
 
-    # ------------------------------------------------------------------ #
-    # Match results — backfill across all requested years                 #
-    # ------------------------------------------------------------------ #
-    if start_year and end_year:
-        already_fetched: Set[Tuple[str, str, int]] = set()
+    # Re-fetch results across tournament calendar URLs so website_match_results_rows
+    # stays season-complete rather than containing only the active event.
+    if isinstance(tournament_dates["payload_json"], dict):
+        calendar_results_urls = _results_urls_for_year_range(
+            tournament_dates["payload_json"],
+            start_year=start_year,
+            end_year=end_year,
+        )
+        archive_results_urls: List[Tuple[str, str, str]] = []
+        archive_event_ranges: Dict[Tuple[str, str], Tuple[Optional[date], Optional[date]]] = {}
+        for year in range(start_year, end_year + 1):
+            year_urls, year_ranges = _results_archive_data_for_year(year)
+            archive_results_urls.extend(year_urls)
+            archive_event_ranges.update(year_ranges)
+        results_urls = _merge_results_url_sets(calendar_results_urls, archive_results_urls)
 
-        def _process_match_html(slug: str, tid: str, html: str, year: Optional[int] = None) -> None:
-            end_date = None
-            if year is not None:
-                end_date_iso = tournament_end_dates_by_year.get((tid, year))
-                if end_date_iso:
-                    try:
-                        from datetime import date as date_type
-                        end_date = date_type.fromisoformat(end_date_iso)
-                    except Exception:
-                        pass
-            parsed_match_results_rows.extend(
+        for past_slug, past_tid, past_url in results_urls:
+            if past_slug == result_slug and past_tid == result_tid:
+                continue  # current tournament already parsed above
+            past_html = _fetch_html_url(past_url)
+            if not past_html:
+                continue
+            event_rows = [
                 row.to_dict()
                 for row in normalize_match_results_html(
-                    slug, tid, html,
+                    past_slug,
+                    past_tid,
+                    past_html,
                     snapshot_ts_utc=snapshot_ts,
-                    tournament_end_date=end_date,
                 )
+            ]
+            event_start, event_end = archive_event_ranges.get((past_slug, past_tid), (None, None))
+            if event_start is None or event_end is None:
+                html_start, html_end = _extract_event_date_range_from_results_html(past_html)
+                event_start = event_start or html_start
+                event_end = event_end or html_end
+            event_rows = _fill_missing_match_dates_for_event(
+                event_rows,
+                start_date=event_start,
+                end_date=event_end,
             )
+            parsed_match_results_rows.extend(event_rows)
 
-        # Path 1: historical capture files (Camoufox-captured, always preferred)
-        historical_root = Path(os.getenv("ATP_HISTORICAL_DIR", "website_responses/atp/historical"))
-        historical = _load_historical_captures(historical_root, start_year, end_year)
-        print(f"[ingest] historical capture files found: {len(historical)}", flush=True)
+    parsed_match_results_rows = _dedupe_match_results_rows(parsed_match_results_rows)
 
         for slug, tid, file_path, year in historical:
             if (slug, tid, year) in already_fetched:

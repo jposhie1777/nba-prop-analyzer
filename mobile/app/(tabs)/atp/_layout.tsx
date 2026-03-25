@@ -5,7 +5,7 @@ export default function AtpLayout() {
   return (
     <Stack
       screenOptions={{
-        headerShown: true,
+        headerShown: false,
         presentation: "card",
       }}
     />

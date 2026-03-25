@@ -51,3 +51,4 @@ jobs:
             ARGS="$ARGS --start-year ${{ inputs.year }} --end-year ${{ inputs.year }}"
           fi
           python -m mobile_api.ingest.atp.website_ingest $ARGS
+

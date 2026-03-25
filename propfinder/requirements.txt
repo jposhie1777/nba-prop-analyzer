@@ -1,0 +1,3 @@
+aiohttp==3.9.5
+google-cloud-bigquery==3.20.1
+db-dtypes==1.2.0

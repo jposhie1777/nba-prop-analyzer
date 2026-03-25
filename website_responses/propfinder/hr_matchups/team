@@ -1,0 +1,2321 @@
+URL - main
+https://propfinder.app/mlb/cheatsheets
+
+Headers
+Request URL
+https://api.propfinder.app/MLB/teams
+Request Method
+GET
+Status Code
+200 OK
+Remote Address
+174.138.117.121:443
+Referrer Policy
+strict-origin-when-cross-origin
+access-control-allow-credentials
+true
+access-control-allow-origin
+https://propfinder.app
+cache-control
+no-cache, private
+connection
+keep-alive
+content-encoding
+br
+content-type
+application/json; charset=utf-8
+date
+Wed, 25 Mar 2026 12:24:31 GMT
+server
+nginx/1.24.0 (Ubuntu)
+transfer-encoding
+chunked
+vary
+Accept-Encoding
+vary
+Origin
+accept
+application/json, text/plain, */*
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+en-US,en;q=0.9
+connection
+keep-alive
+cookie
+_twpid=tw.1772658401620.801666034677599077; accessToken=eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJJZCI6IjViODMzY2VlLTI4MDctNGUzZS1iYjdiLWFjMzJhYzdhNDYzZiIsInN1YiI6ImJlbnZyYW5hQGJvdHRsZWtpbmcuY29tIiwiZW1haWwiOiJiZW52cmFuYUBib3R0bGVraW5nLmNvbSIsImp0aSI6IjA1M2JjNGIyLTY2ZmMtNGRjMC1hMmY0LTA0YjBhOWE3YmU5YyIsInJvbGUiOiJVc2VyIiwic3ViX3N0YXR1cyI6ImFjdGl2ZSIsInN1Yl9lbmQiOiIyMDI2LTA0LTA5VDIwOjE5OjIyLjAwMDAwMDBaIiwic3ViX3BsYW4iOiJwcm9kX1NBZzhzMWNrN3lVMU1hIiwiaXNfYWN0aXZlIjoiVHJ1ZSIsIm5iZiI6MTc3NDQ0MTQwNywiZXhwIjoxNzc0NzAwNjA3LCJpYXQiOjE3NzQ0NDE0MDcsImlzcyI6Imh0dHBzOi8vcHJvcGZpbmRlci5hcHAvYXBpIiwiYXVkIjoiaHR0cHM6Ly9wcm9wZmluZGVyLmFwcC8ifQ.3-MI5qOQh5uSIEKUCe9Gih4eTZ5YWlIxMYOKKp9sdeithT_2p8HGS_IYHxIEOnpoSqNZSm_cXr6cJNIWaV4zuQ; refreshToken=Yjsk%2F5EZa1xCVFG13L0mDS%2BzriOOy5kYqHKVZbWCGkQ%3D; ph_phc_dc4vNdlAxTBKoLNWanDLdgELGiVDtb02sTJHSfTfvC_posthog=%7B%22%24device_id%22%3A%22019a3fe8-2918-70b0-a46c-7a6909f877d5%22%2C%22distinct_id%22%3A%22019a3fe8-2918-70b0-a46c-7a6909f877d5%22%2C%22%24sesid%22%3A%5B1774441471584%2C%22019d24f2-f73e-78ae-9829-edb63c0d925b%22%2C1774441396019%5D%2C%22%24initial_person_info%22%3A%7B%22r%22%3A%22%24direct%22%2C%22u%22%3A%22https%3A%2F%2Fpropfinder.app%2FNBA%22%7D%2C%22%24user_state%22%3A%22anonymous%22%7D
+host
+api.propfinder.app
+origin
+https://propfinder.app
+referer
+https://propfinder.app/
+sec-ch-ua
+"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-site
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36
+
+
+Response
+[
+    {
+        "id": 108,
+        "code": "LAA",
+        "location": "Anaheim",
+        "firstYearOfPlay": 1961,
+        "leagueId": 103,
+        "leagueName": "American League",
+        "divisionId": 200,
+        "divisionName": "American League West",
+        "shortName": "LA Angels",
+        "fullName": "Los Angeles Angels",
+        "clubName": "Angels",
+        "sgO_TeamId": "LOS_ANGELES_ANGELS_MLB",
+        "unabatedId": 45,
+        "opticId": "7BB3C6DB321C",
+        "opticBaseId": 30,
+        "rankings": [
+            {
+                "id": 1084,
+                "teamId": 108,
+                "category": "strikeouts",
+                "rank": 18,
+                "value": 9,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1112,
+                "teamId": 108,
+                "category": "strikeouts",
+                "rank": 1,
+                "value": 165,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1164,
+                "teamId": 108,
+                "category": "strikeouts",
+                "rank": 27,
+                "value": 309,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1171,
+                "teamId": 108,
+                "category": "strikeouts",
+                "rank": 1,
+                "value": 1318,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1052,
+                "teamId": 108,
+                "category": "strikeouts",
+                "rank": 1,
+                "value": 1627,
+                "split": "Season"
+            },
+            {
+                "id": 1201,
+                "teamId": 108,
+                "category": "strikeouts",
+                "rank": 1,
+                "value": 783,
+                "split": "Home"
+            },
+            {
+                "id": 1232,
+                "teamId": 108,
+                "category": "strikeouts",
+                "rank": 1,
+                "value": 844,
+                "split": "Away"
+            }
+        ]
+    },
+    {
+        "id": 109,
+        "code": "ARI",
+        "location": "Phoenix",
+        "firstYearOfPlay": 1996,
+        "leagueId": 104,
+        "leagueName": "National League",
+        "divisionId": 203,
+        "divisionName": "National League West",
+        "shortName": "Arizona",
+        "fullName": "Arizona Diamondbacks",
+        "clubName": "Diamondbacks",
+        "sgO_TeamId": "ARIZONA_DIAMONDBACKS_MLB",
+        "unabatedId": 33,
+        "opticId": "9CAFB55230E8",
+        "opticBaseId": 18,
+        "rankings": [
+            {
+                "id": 1082,
+                "teamId": 109,
+                "category": "strikeouts",
+                "rank": 13,
+                "value": 10,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1116,
+                "teamId": 109,
+                "category": "strikeouts",
+                "rank": 23,
+                "value": 120,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1166,
+                "teamId": 109,
+                "category": "strikeouts",
+                "rank": 23,
+                "value": 351,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1188,
+                "teamId": 109,
+                "category": "strikeouts",
+                "rank": 17,
+                "value": 965,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1070,
+                "teamId": 109,
+                "category": "strikeouts",
+                "rank": 23,
+                "value": 1316,
+                "split": "Season"
+            },
+            {
+                "id": 1223,
+                "teamId": 109,
+                "category": "strikeouts",
+                "rank": 26,
+                "value": 600,
+                "split": "Home"
+            },
+            {
+                "id": 1246,
+                "teamId": 109,
+                "category": "strikeouts",
+                "rank": 16,
+                "value": 716,
+                "split": "Away"
+            }
+        ]
+    },
+    {
+        "id": 110,
+        "code": "BAL",
+        "location": "Baltimore",
+        "firstYearOfPlay": 1901,
+        "leagueId": 103,
+        "leagueName": "American League",
+        "divisionId": 201,
+        "divisionName": "American League East",
+        "shortName": "Baltimore",
+        "fullName": "Baltimore Orioles",
+        "clubName": "Orioles",
+        "sgO_TeamId": "BALTIMORE_ORIOLES_MLB",
+        "unabatedId": 35,
+        "opticId": "F146F7B07E72",
+        "opticBaseId": 20,
+        "rankings": [
+            {
+                "id": 1100,
+                "teamId": 110,
+                "category": "strikeouts",
+                "rank": 28,
+                "value": 6,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1118,
+                "teamId": 110,
+                "category": "strikeouts",
+                "rank": 4,
+                "value": 150,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1146,
+                "teamId": 110,
+                "category": "strikeouts",
+                "rank": 6,
+                "value": 418,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1183,
+                "teamId": 110,
+                "category": "strikeouts",
+                "rank": 7,
+                "value": 1039,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1060,
+                "teamId": 110,
+                "category": "strikeouts",
+                "rank": 4,
+                "value": 1457,
+                "split": "Season"
+            },
+            {
+                "id": 1211,
+                "teamId": 110,
+                "category": "strikeouts",
+                "rank": 3,
+                "value": 716,
+                "split": "Home"
+            },
+            {
+                "id": 1241,
+                "teamId": 110,
+                "category": "strikeouts",
+                "rank": 9,
+                "value": 741,
+                "split": "Away"
+            }
+        ]
+    },
+    {
+        "id": 111,
+        "code": "BOS",
+        "location": "Boston",
+        "firstYearOfPlay": 1901,
+        "leagueId": 103,
+        "leagueName": "American League",
+        "divisionId": 201,
+        "divisionName": "American League East",
+        "shortName": "Boston",
+        "fullName": "Boston Red Sox",
+        "clubName": "Red Sox",
+        "sgO_TeamId": "BOSTON_RED_SOX_MLB",
+        "unabatedId": 36,
+        "opticId": "1232720C5D66",
+        "opticBaseId": 21,
+        "rankings": [
+            {
+                "id": 1131,
+                "teamId": 111,
+                "category": "strikeouts",
+                "rank": 25,
+                "value": 116,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1108,
+                "teamId": 111,
+                "category": "strikeouts",
+                "rank": 23,
+                "value": 8,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1143,
+                "teamId": 111,
+                "category": "strikeouts",
+                "rank": 7,
+                "value": 411,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1176,
+                "teamId": 111,
+                "category": "strikeouts",
+                "rank": 10,
+                "value": 1008,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1053,
+                "teamId": 111,
+                "category": "strikeouts",
+                "rank": 8,
+                "value": 1419,
+                "split": "Season"
+            },
+            {
+                "id": 1206,
+                "teamId": 111,
+                "category": "strikeouts",
+                "rank": 19,
+                "value": 637,
+                "split": "Home"
+            },
+            {
+                "id": 1233,
+                "teamId": 111,
+                "category": "strikeouts",
+                "rank": 4,
+                "value": 782,
+                "split": "Away"
+            }
+        ]
+    },
+    {
+        "id": 112,
+        "code": "CHC",
+        "location": "Chicago",
+        "firstYearOfPlay": 1874,
+        "leagueId": 104,
+        "leagueName": "National League",
+        "divisionId": 205,
+        "divisionName": "National League Central",
+        "shortName": "Chi Cubs",
+        "fullName": "Chicago Cubs",
+        "clubName": "Cubs",
+        "sgO_TeamId": "CHICAGO_CUBS_MLB",
+        "unabatedId": 37,
+        "opticId": "5045D954DFF8",
+        "opticBaseId": 22,
+        "rankings": [
+            {
+                "id": 1110,
+                "teamId": 112,
+                "category": "strikeouts",
+                "rank": 18,
+                "value": 9,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1138,
+                "teamId": 112,
+                "category": "strikeouts",
+                "rank": 19,
+                "value": 125,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1161,
+                "teamId": 112,
+                "category": "strikeouts",
+                "rank": 26,
+                "value": 340,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1192,
+                "teamId": 112,
+                "category": "strikeouts",
+                "rank": 20,
+                "value": 937,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1076,
+                "teamId": 112,
+                "category": "strikeouts",
+                "rank": 25,
+                "value": 1277,
+                "split": "Season"
+            },
+            {
+                "id": 1224,
+                "teamId": 112,
+                "category": "strikeouts",
+                "rank": 22,
+                "value": 625,
+                "split": "Home"
+            },
+            {
+                "id": 1253,
+                "teamId": 112,
+                "category": "strikeouts",
+                "rank": 25,
+                "value": 652,
+                "split": "Away"
+            }
+        ]
+    },
+    {
+        "id": 113,
+        "code": "CIN",
+        "location": "Cincinnati",
+        "firstYearOfPlay": 1882,
+        "leagueId": 104,
+        "leagueName": "National League",
+        "divisionId": 205,
+        "divisionName": "National League Central",
+        "shortName": "Cincinnati",
+        "fullName": "Cincinnati Reds",
+        "clubName": "Reds",
+        "sgO_TeamId": "CINCINNATI_REDS_MLB",
+        "unabatedId": 39,
+        "opticId": "F30D0B9894E1",
+        "opticBaseId": 24,
+        "rankings": [
+            {
+                "id": 1090,
+                "teamId": 113,
+                "category": "strikeouts",
+                "rank": 13,
+                "value": 10,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1128,
+                "teamId": 113,
+                "category": "strikeouts",
+                "rank": 17,
+                "value": 126,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1159,
+                "teamId": 113,
+                "category": "strikeouts",
+                "rank": 24,
+                "value": 345,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1175,
+                "teamId": 113,
+                "category": "strikeouts",
+                "rank": 4,
+                "value": 1070,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1057,
+                "teamId": 113,
+                "category": "strikeouts",
+                "rank": 9,
+                "value": 1415,
+                "split": "Season"
+            },
+            {
+                "id": 1207,
+                "teamId": 113,
+                "category": "strikeouts",
+                "rank": 6,
+                "value": 682,
+                "split": "Home"
+            },
+            {
+                "id": 1242,
+                "teamId": 113,
+                "category": "strikeouts",
+                "rank": 10,
+                "value": 733,
+                "split": "Away"
+            }
+        ]
+    },
+    {
+        "id": 114,
+        "code": "CLE",
+        "location": "Cleveland",
+        "firstYearOfPlay": 1901,
+        "leagueId": 103,
+        "leagueName": "American League",
+        "divisionId": 202,
+        "divisionName": "American League Central",
+        "shortName": "Cleveland",
+        "fullName": "Cleveland Guardians",
+        "clubName": "Guardians",
+        "sgO_TeamId": "CLEVELAND_GUARDIANS_MLB",
+        "unabatedId": 40,
+        "opticId": "D4F7181B2181",
+        "opticBaseId": 25,
+        "rankings": [
+            {
+                "id": 1125,
+                "teamId": 114,
+                "category": "strikeouts",
+                "rank": 12,
+                "value": 132,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1141,
+                "teamId": 114,
+                "category": "strikeouts",
+                "rank": 5,
+                "value": 426,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1092,
+                "teamId": 114,
+                "category": "strikeouts",
+                "rank": 18,
+                "value": 9,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1195,
+                "teamId": 114,
+                "category": "strikeouts",
+                "rank": 24,
+                "value": 918,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1068,
+                "teamId": 114,
+                "category": "strikeouts",
+                "rank": 18,
+                "value": 1344,
+                "split": "Season"
+            },
+            {
+                "id": 1219,
+                "teamId": 114,
+                "category": "strikeouts",
+                "rank": 11,
+                "value": 670,
+                "split": "Home"
+            },
+            {
+                "id": 1247,
+                "teamId": 114,
+                "category": "strikeouts",
+                "rank": 22,
+                "value": 674,
+                "split": "Away"
+            }
+        ]
+    },
+    {
+        "id": 115,
+        "code": "COL",
+        "location": "Denver",
+        "firstYearOfPlay": 1992,
+        "leagueId": 104,
+        "leagueName": "National League",
+        "divisionId": 203,
+        "divisionName": "National League West",
+        "shortName": "Colorado",
+        "fullName": "Colorado Rockies",
+        "clubName": "Rockies",
+        "sgO_TeamId": "COLORADO_ROCKIES_MLB",
+        "unabatedId": 41,
+        "opticId": "E89B6AABD4C6",
+        "opticBaseId": 26,
+        "rankings": [
+            {
+                "id": 1111,
+                "teamId": 115,
+                "category": "strikeouts",
+                "rank": 8,
+                "value": 138,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1091,
+                "teamId": 115,
+                "category": "strikeouts",
+                "rank": 5,
+                "value": 13,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1151,
+                "teamId": 115,
+                "category": "strikeouts",
+                "rank": 21,
+                "value": 354,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1172,
+                "teamId": 115,
+                "category": "strikeouts",
+                "rank": 2,
+                "value": 1177,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1051,
+                "teamId": 115,
+                "category": "strikeouts",
+                "rank": 2,
+                "value": 1531,
+                "split": "Season"
+            },
+            {
+                "id": 1205,
+                "teamId": 115,
+                "category": "strikeouts",
+                "rank": 4,
+                "value": 705,
+                "split": "Home"
+            },
+            {
+                "id": 1231,
+                "teamId": 115,
+                "category": "strikeouts",
+                "rank": 2,
+                "value": 826,
+                "split": "Away"
+            }
+        ]
+    },
+    {
+        "id": 116,
+        "code": "DET",
+        "location": "Detroit",
+        "firstYearOfPlay": 1901,
+        "leagueId": 103,
+        "leagueName": "American League",
+        "divisionId": 202,
+        "divisionName": "American League Central",
+        "shortName": "Detroit",
+        "fullName": "Detroit Tigers",
+        "clubName": "Tigers",
+        "sgO_TeamId": "DETROIT_TIGERS_MLB",
+        "unabatedId": 42,
+        "opticId": "BF57CF7C7E07",
+        "opticBaseId": 27,
+        "rankings": [
+            {
+                "id": 1088,
+                "teamId": 116,
+                "category": "strikeouts",
+                "rank": 13,
+                "value": 10,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1129,
+                "teamId": 116,
+                "category": "strikeouts",
+                "rank": 6,
+                "value": 148,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1162,
+                "teamId": 116,
+                "category": "strikeouts",
+                "rank": 14,
+                "value": 380,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1174,
+                "teamId": 116,
+                "category": "strikeouts",
+                "rank": 3,
+                "value": 1074,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1054,
+                "teamId": 116,
+                "category": "strikeouts",
+                "rank": 5,
+                "value": 1454,
+                "split": "Season"
+            },
+            {
+                "id": 1203,
+                "teamId": 116,
+                "category": "strikeouts",
+                "rank": 5,
+                "value": 704,
+                "split": "Home"
+            },
+            {
+                "id": 1243,
+                "teamId": 116,
+                "category": "strikeouts",
+                "rank": 6,
+                "value": 750,
+                "split": "Away"
+            }
+        ]
+    },
+    {
+        "id": 117,
+        "code": "HOU",
+        "location": "Houston",
+        "firstYearOfPlay": 1962,
+        "leagueId": 103,
+        "leagueName": "American League",
+        "divisionId": 200,
+        "divisionName": "American League West",
+        "shortName": "Houston",
+        "fullName": "Houston Astros",
+        "clubName": "Astros",
+        "sgO_TeamId": "HOUSTON_ASTROS_MLB",
+        "unabatedId": 43,
+        "opticId": "4F11A5896C24",
+        "opticBaseId": 28,
+        "rankings": [
+            {
+                "id": 1098,
+                "teamId": 117,
+                "category": "strikeouts",
+                "rank": 18,
+                "value": 9,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1126,
+                "teamId": 117,
+                "category": "strikeouts",
+                "rank": 21,
+                "value": 123,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1258,
+                "teamId": 117,
+                "category": "strikeouts",
+                "rank": 23,
+                "value": 662,
+                "split": "Away"
+            },
+            {
+                "id": 1170,
+                "teamId": 117,
+                "category": "strikeouts",
+                "rank": 30,
+                "value": 286,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1177,
+                "teamId": 117,
+                "category": "strikeouts",
+                "rank": 9,
+                "value": 1015,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1075,
+                "teamId": 117,
+                "category": "strikeouts",
+                "rank": 24,
+                "value": 1301,
+                "split": "Season"
+            },
+            {
+                "id": 1209,
+                "teamId": 117,
+                "category": "strikeouts",
+                "rank": 18,
+                "value": 639,
+                "split": "Home"
+            }
+        ]
+    },
+    {
+        "id": 118,
+        "code": "KC",
+        "location": "Kansas City",
+        "firstYearOfPlay": 1968,
+        "leagueId": 103,
+        "leagueName": "American League",
+        "divisionId": 202,
+        "divisionName": "American League Central",
+        "shortName": "Kansas City",
+        "fullName": "Kansas City Royals",
+        "clubName": "Royals",
+        "sgO_TeamId": "KANSAS_CITY_ROYALS_MLB",
+        "unabatedId": 44,
+        "opticId": "E970E2EDDCAE",
+        "opticBaseId": 29,
+        "rankings": [
+            {
+                "id": 1102,
+                "teamId": 118,
+                "category": "strikeouts",
+                "rank": 23,
+                "value": 8,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1079,
+                "teamId": 118,
+                "category": "strikeouts",
+                "rank": 30,
+                "value": 1096,
+                "split": "Season"
+            },
+            {
+                "id": 1137,
+                "teamId": 118,
+                "category": "strikeouts",
+                "rank": 30,
+                "value": 94,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1198,
+                "teamId": 118,
+                "category": "strikeouts",
+                "rank": 30,
+                "value": 796,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1259,
+                "teamId": 118,
+                "category": "strikeouts",
+                "rank": 30,
+                "value": 570,
+                "split": "Away"
+            },
+            {
+                "id": 1168,
+                "teamId": 118,
+                "category": "strikeouts",
+                "rank": 29,
+                "value": 300,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1228,
+                "teamId": 118,
+                "category": "strikeouts",
+                "rank": 29,
+                "value": 526,
+                "split": "Home"
+            }
+        ]
+    },
+    {
+        "id": 119,
+        "code": "LAD",
+        "location": "Los Angeles",
+        "firstYearOfPlay": 1884,
+        "leagueId": 104,
+        "leagueName": "National League",
+        "divisionId": 203,
+        "divisionName": "National League West",
+        "shortName": "LA Dodgers",
+        "fullName": "Los Angeles Dodgers",
+        "clubName": "Dodgers",
+        "sgO_TeamId": "LOS_ANGELES_DODGERS_MLB",
+        "unabatedId": 46,
+        "opticId": "8E80F9DD4C5E",
+        "opticBaseId": 31,
+        "rankings": [
+            {
+                "id": 1089,
+                "teamId": 119,
+                "category": "strikeouts",
+                "rank": 13,
+                "value": 10,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1123,
+                "teamId": 119,
+                "category": "strikeouts",
+                "rank": 17,
+                "value": 126,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1158,
+                "teamId": 119,
+                "category": "strikeouts",
+                "rank": 16,
+                "value": 378,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1184,
+                "teamId": 119,
+                "category": "strikeouts",
+                "rank": 16,
+                "value": 975,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1064,
+                "teamId": 119,
+                "category": "strikeouts",
+                "rank": 16,
+                "value": 1353,
+                "split": "Season"
+            },
+            {
+                "id": 1218,
+                "teamId": 119,
+                "category": "strikeouts",
+                "rank": 25,
+                "value": 608,
+                "split": "Home"
+            },
+            {
+                "id": 1239,
+                "teamId": 119,
+                "category": "strikeouts",
+                "rank": 8,
+                "value": 745,
+                "split": "Away"
+            }
+        ]
+    },
+    {
+        "id": 120,
+        "code": "WSH",
+        "location": "Washington",
+        "firstYearOfPlay": 1968,
+        "leagueId": 104,
+        "leagueName": "National League",
+        "divisionId": 204,
+        "divisionName": "National League East",
+        "shortName": "Washington",
+        "fullName": "Washington Nationals",
+        "clubName": "Nationals",
+        "sgO_TeamId": "WASHINGTON_NATIONALS_MLB",
+        "unabatedId": 62,
+        "opticId": "99DF68AB44BE",
+        "opticBaseId": 48,
+        "rankings": [
+            {
+                "id": 1103,
+                "teamId": 120,
+                "category": "strikeouts",
+                "rank": 5,
+                "value": 13,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1135,
+                "teamId": 120,
+                "category": "strikeouts",
+                "rank": 2,
+                "value": 161,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1196,
+                "teamId": 120,
+                "category": "strikeouts",
+                "rank": 23,
+                "value": 920,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1163,
+                "teamId": 120,
+                "category": "strikeouts",
+                "rank": 4,
+                "value": 431,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1077,
+                "teamId": 120,
+                "category": "strikeouts",
+                "rank": 17,
+                "value": 1351,
+                "split": "Season"
+            },
+            {
+                "id": 1227,
+                "teamId": 120,
+                "category": "strikeouts",
+                "rank": 14,
+                "value": 657,
+                "split": "Home"
+            },
+            {
+                "id": 1252,
+                "teamId": 120,
+                "category": "strikeouts",
+                "rank": 18,
+                "value": 694,
+                "split": "Away"
+            }
+        ]
+    },
+    {
+        "id": 121,
+        "code": "NYM",
+        "location": "Flushing",
+        "firstYearOfPlay": 1962,
+        "leagueId": 104,
+        "leagueName": "National League",
+        "divisionId": 204,
+        "divisionName": "National League East",
+        "shortName": "NY Mets",
+        "fullName": "New York Mets",
+        "clubName": "Mets",
+        "sgO_TeamId": "NEW_YORK_METS_MLB",
+        "unabatedId": 50,
+        "opticId": "925A76350359",
+        "opticBaseId": 35,
+        "rankings": [
+            {
+                "id": 1099,
+                "teamId": 121,
+                "category": "strikeouts",
+                "rank": 10,
+                "value": 11,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1124,
+                "teamId": 121,
+                "category": "strikeouts",
+                "rank": 14,
+                "value": 128,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1165,
+                "teamId": 121,
+                "category": "strikeouts",
+                "rank": 8,
+                "value": 402,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1187,
+                "teamId": 121,
+                "category": "strikeouts",
+                "rank": 22,
+                "value": 923,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1069,
+                "teamId": 121,
+                "category": "strikeouts",
+                "rank": 21,
+                "value": 1325,
+                "split": "Season"
+            },
+            {
+                "id": 1222,
+                "teamId": 121,
+                "category": "strikeouts",
+                "rank": 17,
+                "value": 640,
+                "split": "Home"
+            },
+            {
+                "id": 1249,
+                "teamId": 121,
+                "category": "strikeouts",
+                "rank": 21,
+                "value": 685,
+                "split": "Away"
+            }
+        ]
+    },
+    {
+        "id": 133,
+        "code": "ATH",
+        "location": "Oakland",
+        "firstYearOfPlay": 1901,
+        "leagueId": 103,
+        "leagueName": "American League",
+        "divisionId": 200,
+        "divisionName": "American League West",
+        "shortName": "Athletics",
+        "fullName": "Athletics",
+        "clubName": "Athletics",
+        "sgO_TeamId": "OAKLAND_ATHLETICS_MLB",
+        "unabatedId": 52,
+        "opticId": "C4B26B4FAD20",
+        "opticBaseId": 38,
+        "rankings": [
+            {
+                "id": 1113,
+                "teamId": 133,
+                "category": "strikeouts",
+                "rank": 11,
+                "value": 133,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1081,
+                "teamId": 133,
+                "category": "strikeouts",
+                "rank": 2,
+                "value": 14,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1167,
+                "teamId": 133,
+                "category": "strikeouts",
+                "rank": 19,
+                "value": 367,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1173,
+                "teamId": 133,
+                "category": "strikeouts",
+                "rank": 7,
+                "value": 1039,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1059,
+                "teamId": 133,
+                "category": "strikeouts",
+                "rank": 10,
+                "value": 1406,
+                "split": "Season"
+            },
+            {
+                "id": 1202,
+                "teamId": 133,
+                "category": "strikeouts",
+                "rank": 7,
+                "value": 681,
+                "split": "Home"
+            },
+            {
+                "id": 1250,
+                "teamId": 133,
+                "category": "strikeouts",
+                "rank": 14,
+                "value": 725,
+                "split": "Away"
+            }
+        ]
+    },
+    {
+        "id": 134,
+        "code": "PIT",
+        "location": "Pittsburgh",
+        "firstYearOfPlay": 1882,
+        "leagueId": 104,
+        "leagueName": "National League",
+        "divisionId": 205,
+        "divisionName": "National League Central",
+        "shortName": "Pittsburgh",
+        "fullName": "Pittsburgh Pirates",
+        "clubName": "Pirates",
+        "sgO_TeamId": "PITTSBURGH_PIRATES_MLB",
+        "unabatedId": 54,
+        "opticId": "98CE61698342",
+        "opticBaseId": 40,
+        "rankings": [
+            {
+                "id": 1095,
+                "teamId": 134,
+                "category": "strikeouts",
+                "rank": 10,
+                "value": 11,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1127,
+                "teamId": 134,
+                "category": "strikeouts",
+                "rank": 19,
+                "value": 125,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1148,
+                "teamId": 134,
+                "category": "strikeouts",
+                "rank": 15,
+                "value": 379,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1178,
+                "teamId": 134,
+                "category": "strikeouts",
+                "rank": 6,
+                "value": 1043,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1056,
+                "teamId": 134,
+                "category": "strikeouts",
+                "rank": 7,
+                "value": 1422,
+                "split": "Season"
+            },
+            {
+                "id": 1215,
+                "teamId": 134,
+                "category": "strikeouts",
+                "rank": 10,
+                "value": 672,
+                "split": "Home"
+            },
+            {
+                "id": 1234,
+                "teamId": 134,
+                "category": "strikeouts",
+                "rank": 6,
+                "value": 750,
+                "split": "Away"
+            }
+        ]
+    },
+    {
+        "id": 135,
+        "code": "SD",
+        "location": "San Diego",
+        "firstYearOfPlay": 1968,
+        "leagueId": 104,
+        "leagueName": "National League",
+        "divisionId": 203,
+        "divisionName": "National League West",
+        "shortName": "San Diego",
+        "fullName": "San Diego Padres",
+        "clubName": "Padres",
+        "sgO_TeamId": "SAN_DIEGO_PADRES_MLB",
+        "unabatedId": 55,
+        "opticId": "51EF9899A7F5",
+        "opticBaseId": 41,
+        "rankings": [
+            {
+                "id": 1105,
+                "teamId": 135,
+                "category": "strikeouts",
+                "rank": 18,
+                "value": 9,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1136,
+                "teamId": 135,
+                "category": "strikeouts",
+                "rank": 28,
+                "value": 103,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1157,
+                "teamId": 135,
+                "category": "strikeouts",
+                "rank": 25,
+                "value": 343,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1078,
+                "teamId": 135,
+                "category": "strikeouts",
+                "rank": 28,
+                "value": 1161,
+                "split": "Season"
+            },
+            {
+                "id": 1200,
+                "teamId": 135,
+                "category": "strikeouts",
+                "rank": 28,
+                "value": 818,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1230,
+                "teamId": 135,
+                "category": "strikeouts",
+                "rank": 28,
+                "value": 534,
+                "split": "Home"
+            },
+            {
+                "id": 1256,
+                "teamId": 135,
+                "category": "strikeouts",
+                "rank": 28,
+                "value": 627,
+                "split": "Away"
+            }
+        ]
+    },
+    {
+        "id": 136,
+        "code": "SEA",
+        "location": "Seattle",
+        "firstYearOfPlay": 1977,
+        "leagueId": 103,
+        "leagueName": "American League",
+        "divisionId": 200,
+        "divisionName": "American League West",
+        "shortName": "Seattle",
+        "fullName": "Seattle Mariners",
+        "clubName": "Mariners",
+        "sgO_TeamId": "SEATTLE_MARINERS_MLB",
+        "unabatedId": 57,
+        "opticId": "F0FA2004385D",
+        "opticBaseId": 43,
+        "rankings": [
+            {
+                "id": 1086,
+                "teamId": 136,
+                "category": "strikeouts",
+                "rank": 2,
+                "value": 14,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1115,
+                "teamId": 136,
+                "category": "strikeouts",
+                "rank": 10,
+                "value": 136,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1145,
+                "teamId": 136,
+                "category": "strikeouts",
+                "rank": 2,
+                "value": 459,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1179,
+                "teamId": 136,
+                "category": "strikeouts",
+                "rank": 13,
+                "value": 987,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1055,
+                "teamId": 136,
+                "category": "strikeouts",
+                "rank": 6,
+                "value": 1446,
+                "split": "Season"
+            },
+            {
+                "id": 1208,
+                "teamId": 136,
+                "category": "strikeouts",
+                "rank": 2,
+                "value": 730,
+                "split": "Home"
+            },
+            {
+                "id": 1237,
+                "teamId": 136,
+                "category": "strikeouts",
+                "rank": 16,
+                "value": 716,
+                "split": "Away"
+            }
+        ]
+    },
+    {
+        "id": 137,
+        "code": "SF",
+        "location": "San Francisco",
+        "firstYearOfPlay": 1883,
+        "leagueId": 104,
+        "leagueName": "National League",
+        "divisionId": 203,
+        "divisionName": "National League West",
+        "shortName": "San Francisco",
+        "fullName": "San Francisco Giants",
+        "clubName": "Giants",
+        "sgO_TeamId": "SAN_FRANCISCO_GIANTS_MLB",
+        "unabatedId": 56,
+        "opticId": "806CF8213D38",
+        "opticBaseId": 42,
+        "rankings": [
+            {
+                "id": 1083,
+                "teamId": 137,
+                "category": "strikeouts",
+                "rank": 28,
+                "value": 6,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1120,
+                "teamId": 137,
+                "category": "strikeouts",
+                "rank": 13,
+                "value": 131,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1144,
+                "teamId": 137,
+                "category": "strikeouts",
+                "rank": 9,
+                "value": 400,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1185,
+                "teamId": 137,
+                "category": "strikeouts",
+                "rank": 14,
+                "value": 980,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1062,
+                "teamId": 137,
+                "category": "strikeouts",
+                "rank": 12,
+                "value": 1380,
+                "split": "Season"
+            },
+            {
+                "id": 1220,
+                "teamId": 137,
+                "category": "strikeouts",
+                "rank": 21,
+                "value": 628,
+                "split": "Home"
+            },
+            {
+                "id": 1235,
+                "teamId": 137,
+                "category": "strikeouts",
+                "rank": 5,
+                "value": 752,
+                "split": "Away"
+            }
+        ]
+    },
+    {
+        "id": 138,
+        "code": "STL",
+        "location": "St. Louis",
+        "firstYearOfPlay": 1892,
+        "leagueId": 104,
+        "leagueName": "National League",
+        "divisionId": 205,
+        "divisionName": "National League Central",
+        "shortName": "St. Louis",
+        "fullName": "St. Louis Cardinals",
+        "clubName": "Cardinals",
+        "sgO_TeamId": "STLOUIS_CARDINALS_MLB",
+        "unabatedId": 58,
+        "opticId": "90D0F7C9AEC1",
+        "opticBaseId": 44,
+        "rankings": [
+            {
+                "id": 1101,
+                "teamId": 138,
+                "category": "strikeouts",
+                "rank": 13,
+                "value": 10,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1134,
+                "teamId": 138,
+                "category": "strikeouts",
+                "rank": 16,
+                "value": 127,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1142,
+                "teamId": 138,
+                "category": "strikeouts",
+                "rank": 17,
+                "value": 373,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1197,
+                "teamId": 138,
+                "category": "strikeouts",
+                "rank": 18,
+                "value": 948,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1074,
+                "teamId": 138,
+                "category": "strikeouts",
+                "rank": 22,
+                "value": 1321,
+                "split": "Season"
+            },
+            {
+                "id": 1225,
+                "teamId": 138,
+                "category": "strikeouts",
+                "rank": 27,
+                "value": 597,
+                "split": "Home"
+            },
+            {
+                "id": 1251,
+                "teamId": 138,
+                "category": "strikeouts",
+                "rank": 15,
+                "value": 724,
+                "split": "Away"
+            }
+        ]
+    },
+    {
+        "id": 139,
+        "code": "TB",
+        "location": "St. Petersburg",
+        "firstYearOfPlay": 1996,
+        "leagueId": 103,
+        "leagueName": "American League",
+        "divisionId": 201,
+        "divisionName": "American League East",
+        "shortName": "Tampa Bay",
+        "fullName": "Tampa Bay Rays",
+        "clubName": "Rays",
+        "sgO_TeamId": "TAMPA_BAY_RAYS_MLB",
+        "unabatedId": 59,
+        "opticId": "FE07CF8C473A",
+        "opticBaseId": 45,
+        "rankings": [
+            {
+                "id": 1096,
+                "teamId": 139,
+                "category": "strikeouts",
+                "rank": 2,
+                "value": 14,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1130,
+                "teamId": 139,
+                "category": "strikeouts",
+                "rank": 7,
+                "value": 145,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1152,
+                "teamId": 139,
+                "category": "strikeouts",
+                "rank": 3,
+                "value": 456,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1190,
+                "teamId": 139,
+                "category": "strikeouts",
+                "rank": 19,
+                "value": 941,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1065,
+                "teamId": 139,
+                "category": "strikeouts",
+                "rank": 11,
+                "value": 1397,
+                "split": "Season"
+            },
+            {
+                "id": 1204,
+                "teamId": 139,
+                "category": "strikeouts",
+                "rank": 12,
+                "value": 666,
+                "split": "Home"
+            },
+            {
+                "id": 1255,
+                "teamId": 139,
+                "category": "strikeouts",
+                "rank": 11,
+                "value": 731,
+                "split": "Away"
+            }
+        ]
+    },
+    {
+        "id": 140,
+        "code": "TEX",
+        "location": "Arlington",
+        "firstYearOfPlay": 1961,
+        "leagueId": 103,
+        "leagueName": "American League",
+        "divisionId": 200,
+        "divisionName": "American League West",
+        "shortName": "Texas",
+        "fullName": "Texas Rangers",
+        "clubName": "Rangers",
+        "sgO_TeamId": "TEXAS_RANGERS_MLB",
+        "unabatedId": 60,
+        "opticId": "B85216061897",
+        "opticBaseId": 46,
+        "rankings": [
+            {
+                "id": 1085,
+                "teamId": 140,
+                "category": "strikeouts",
+                "rank": 23,
+                "value": 8,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1117,
+                "teamId": 140,
+                "category": "strikeouts",
+                "rank": 21,
+                "value": 123,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1154,
+                "teamId": 140,
+                "category": "strikeouts",
+                "rank": 11,
+                "value": 394,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1186,
+                "teamId": 140,
+                "category": "strikeouts",
+                "rank": 21,
+                "value": 933,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1066,
+                "teamId": 140,
+                "category": "strikeouts",
+                "rank": 20,
+                "value": 1327,
+                "split": "Season"
+            },
+            {
+                "id": 1221,
+                "teamId": 140,
+                "category": "strikeouts",
+                "rank": 13,
+                "value": 665,
+                "split": "Home"
+            },
+            {
+                "id": 1240,
+                "teamId": 140,
+                "category": "strikeouts",
+                "rank": 23,
+                "value": 662,
+                "split": "Away"
+            }
+        ]
+    },
+    {
+        "id": 141,
+        "code": "TOR",
+        "location": "Toronto",
+        "firstYearOfPlay": 1977,
+        "leagueId": 103,
+        "leagueName": "American League",
+        "divisionId": 201,
+        "divisionName": "American League East",
+        "shortName": "Toronto",
+        "fullName": "Toronto Blue Jays",
+        "clubName": "Blue Jays",
+        "sgO_TeamId": "TORONTO_BLUE_JAYS_MLB",
+        "unabatedId": 61,
+        "opticId": "118E9A57A501",
+        "opticBaseId": 47,
+        "rankings": [
+            {
+                "id": 1140,
+                "teamId": 141,
+                "category": "strikeouts",
+                "rank": 27,
+                "value": 104,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1080,
+                "teamId": 141,
+                "category": "strikeouts",
+                "rank": 29,
+                "value": 1099,
+                "split": "Season"
+            },
+            {
+                "id": 1107,
+                "teamId": 141,
+                "category": "strikeouts",
+                "rank": 7,
+                "value": 12,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1260,
+                "teamId": 141,
+                "category": "strikeouts",
+                "rank": 29,
+                "value": 576,
+                "split": "Away"
+            },
+            {
+                "id": 1169,
+                "teamId": 141,
+                "category": "strikeouts",
+                "rank": 28,
+                "value": 301,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1199,
+                "teamId": 141,
+                "category": "strikeouts",
+                "rank": 29,
+                "value": 798,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1229,
+                "teamId": 141,
+                "category": "strikeouts",
+                "rank": 30,
+                "value": 523,
+                "split": "Home"
+            }
+        ]
+    },
+    {
+        "id": 142,
+        "code": "MIN",
+        "location": "Minneapolis",
+        "firstYearOfPlay": 1901,
+        "leagueId": 103,
+        "leagueName": "American League",
+        "divisionId": 202,
+        "divisionName": "American League Central",
+        "shortName": "Minnesota",
+        "fullName": "Minnesota Twins",
+        "clubName": "Twins",
+        "sgO_TeamId": "MINNESOTA_TWINS_MLB",
+        "unabatedId": 49,
+        "opticId": "E8C4E6927B2D",
+        "opticBaseId": 34,
+        "rankings": [
+            {
+                "id": 1093,
+                "teamId": 142,
+                "category": "strikeouts",
+                "rank": 1,
+                "value": 16,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1119,
+                "teamId": 142,
+                "category": "strikeouts",
+                "rank": 4,
+                "value": 150,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1156,
+                "teamId": 142,
+                "category": "strikeouts",
+                "rank": 12,
+                "value": 392,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1189,
+                "teamId": 142,
+                "category": "strikeouts",
+                "rank": 14,
+                "value": 980,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1067,
+                "teamId": 142,
+                "category": "strikeouts",
+                "rank": 13,
+                "value": 1372,
+                "split": "Season"
+            },
+            {
+                "id": 1216,
+                "teamId": 142,
+                "category": "strikeouts",
+                "rank": 16,
+                "value": 644,
+                "split": "Home"
+            },
+            {
+                "id": 1248,
+                "teamId": 142,
+                "category": "strikeouts",
+                "rank": 13,
+                "value": 728,
+                "split": "Away"
+            }
+        ]
+    },
+    {
+        "id": 143,
+        "code": "PHI",
+        "location": "Philadelphia",
+        "firstYearOfPlay": 1883,
+        "leagueId": 104,
+        "leagueName": "National League",
+        "divisionId": 204,
+        "divisionName": "National League East",
+        "shortName": "Philadelphia",
+        "fullName": "Philadelphia Phillies",
+        "clubName": "Phillies",
+        "sgO_TeamId": "PHILADELPHIA_PHILLIES_MLB",
+        "unabatedId": 53,
+        "opticId": "AFBFE3E36032",
+        "opticBaseId": 39,
+        "rankings": [
+            {
+                "id": 1132,
+                "teamId": 143,
+                "category": "strikeouts",
+                "rank": 9,
+                "value": 137,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1104,
+                "teamId": 143,
+                "category": "strikeouts",
+                "rank": 10,
+                "value": 11,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1147,
+                "teamId": 143,
+                "category": "strikeouts",
+                "rank": 1,
+                "value": 464,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1194,
+                "teamId": 143,
+                "category": "strikeouts",
+                "rank": 26,
+                "value": 873,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1071,
+                "teamId": 143,
+                "category": "strikeouts",
+                "rank": 19,
+                "value": 1337,
+                "split": "Season"
+            },
+            {
+                "id": 1226,
+                "teamId": 143,
+                "category": "strikeouts",
+                "rank": 15,
+                "value": 648,
+                "split": "Home"
+            },
+            {
+                "id": 1244,
+                "teamId": 143,
+                "category": "strikeouts",
+                "rank": 20,
+                "value": 689,
+                "split": "Away"
+            }
+        ]
+    },
+    {
+        "id": 144,
+        "code": "ATL",
+        "location": "Atlanta",
+        "firstYearOfPlay": 1871,
+        "leagueId": 104,
+        "leagueName": "National League",
+        "divisionId": 204,
+        "divisionName": "National League East",
+        "shortName": "Atlanta",
+        "fullName": "Atlanta Braves",
+        "clubName": "Braves",
+        "sgO_TeamId": "ATLANTA_BRAVES_MLB",
+        "unabatedId": 34,
+        "opticId": "EDE73BDA9E4F",
+        "opticBaseId": 19,
+        "rankings": [
+            {
+                "id": 1087,
+                "teamId": 144,
+                "category": "strikeouts",
+                "rank": 27,
+                "value": 7,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1121,
+                "teamId": 144,
+                "category": "strikeouts",
+                "rank": 26,
+                "value": 112,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1155,
+                "teamId": 144,
+                "category": "strikeouts",
+                "rank": 18,
+                "value": 368,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1181,
+                "teamId": 144,
+                "category": "strikeouts",
+                "rank": 12,
+                "value": 1003,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1063,
+                "teamId": 144,
+                "category": "strikeouts",
+                "rank": 14,
+                "value": 1371,
+                "split": "Season"
+            },
+            {
+                "id": 1210,
+                "teamId": 144,
+                "category": "strikeouts",
+                "rank": 8,
+                "value": 680,
+                "split": "Home"
+            },
+            {
+                "id": 1245,
+                "teamId": 144,
+                "category": "strikeouts",
+                "rank": 19,
+                "value": 691,
+                "split": "Away"
+            }
+        ]
+    },
+    {
+        "id": 145,
+        "code": "CWS",
+        "location": "Chicago",
+        "firstYearOfPlay": 1901,
+        "leagueId": 103,
+        "leagueName": "American League",
+        "divisionId": 202,
+        "divisionName": "American League Central",
+        "shortName": "Chi White Sox",
+        "fullName": "Chicago White Sox",
+        "clubName": "White Sox",
+        "sgO_TeamId": "CHICAGO_WHITE_SOX_MLB",
+        "unabatedId": 38,
+        "opticId": "97700EF0AC9B",
+        "opticBaseId": 23,
+        "rankings": [
+            {
+                "id": 1122,
+                "teamId": 145,
+                "category": "strikeouts",
+                "rank": 14,
+                "value": 128,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1097,
+                "teamId": 145,
+                "category": "strikeouts",
+                "rank": 23,
+                "value": 8,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1150,
+                "teamId": 145,
+                "category": "strikeouts",
+                "rank": 20,
+                "value": 358,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1182,
+                "teamId": 145,
+                "category": "strikeouts",
+                "rank": 11,
+                "value": 1006,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1061,
+                "teamId": 145,
+                "category": "strikeouts",
+                "rank": 15,
+                "value": 1364,
+                "split": "Season"
+            },
+            {
+                "id": 1212,
+                "teamId": 145,
+                "category": "strikeouts",
+                "rank": 20,
+                "value": 635,
+                "split": "Home"
+            },
+            {
+                "id": 1238,
+                "teamId": 145,
+                "category": "strikeouts",
+                "rank": 12,
+                "value": 729,
+                "split": "Away"
+            }
+        ]
+    },
+    {
+        "id": 146,
+        "code": "MIA",
+        "location": "Miami",
+        "firstYearOfPlay": 1991,
+        "leagueId": 104,
+        "leagueName": "National League",
+        "divisionId": 204,
+        "divisionName": "National League East",
+        "shortName": "Miami",
+        "fullName": "Miami Marlins",
+        "clubName": "Marlins",
+        "sgO_TeamId": "MIAMI_MARLINS_MLB",
+        "unabatedId": 47,
+        "opticId": "DDBDBB162990",
+        "opticBaseId": 32,
+        "rankings": [
+            {
+                "id": 1133,
+                "teamId": 146,
+                "category": "strikeouts",
+                "rank": 29,
+                "value": 96,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1106,
+                "teamId": 146,
+                "category": "strikeouts",
+                "rank": 28,
+                "value": 6,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1160,
+                "teamId": 146,
+                "category": "strikeouts",
+                "rank": 13,
+                "value": 383,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1191,
+                "teamId": 146,
+                "category": "strikeouts",
+                "rank": 27,
+                "value": 864,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1073,
+                "teamId": 146,
+                "category": "strikeouts",
+                "rank": 27,
+                "value": 1247,
+                "split": "Season"
+            },
+            {
+                "id": 1217,
+                "teamId": 146,
+                "category": "strikeouts",
+                "rank": 24,
+                "value": 612,
+                "split": "Home"
+            },
+            {
+                "id": 1254,
+                "teamId": 146,
+                "category": "strikeouts",
+                "rank": 27,
+                "value": 635,
+                "split": "Away"
+            }
+        ]
+    },
+    {
+        "id": 147,
+        "code": "NYY",
+        "location": "Bronx",
+        "firstYearOfPlay": 1903,
+        "leagueId": 103,
+        "leagueName": "American League",
+        "divisionId": 201,
+        "divisionName": "American League East",
+        "shortName": "NY Yankees",
+        "fullName": "New York Yankees",
+        "clubName": "Yankees",
+        "sgO_TeamId": "NEW_YORK_YANKEES_MLB",
+        "unabatedId": 51,
+        "opticId": "121EBAED4535",
+        "opticBaseId": 36,
+        "rankings": [
+            {
+                "id": 1114,
+                "teamId": 147,
+                "category": "strikeouts",
+                "rank": 3,
+                "value": 153,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1094,
+                "teamId": 147,
+                "category": "strikeouts",
+                "rank": 7,
+                "value": 12,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1149,
+                "teamId": 147,
+                "category": "strikeouts",
+                "rank": 9,
+                "value": 400,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1180,
+                "teamId": 147,
+                "category": "strikeouts",
+                "rank": 5,
+                "value": 1063,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1058,
+                "teamId": 147,
+                "category": "strikeouts",
+                "rank": 3,
+                "value": 1463,
+                "split": "Season"
+            },
+            {
+                "id": 1214,
+                "teamId": 147,
+                "category": "strikeouts",
+                "rank": 9,
+                "value": 676,
+                "split": "Home"
+            },
+            {
+                "id": 1236,
+                "teamId": 147,
+                "category": "strikeouts",
+                "rank": 3,
+                "value": 787,
+                "split": "Away"
+            }
+        ]
+    },
+    {
+        "id": 158,
+        "code": "MIL",
+        "location": "Milwaukee",
+        "firstYearOfPlay": 1968,
+        "leagueId": 104,
+        "leagueName": "National League",
+        "divisionId": 205,
+        "divisionName": "National League Central",
+        "shortName": "Milwaukee",
+        "fullName": "Milwaukee Brewers",
+        "clubName": "Brewers",
+        "sgO_TeamId": "MILWAUKEE_BREWERS_MLB",
+        "unabatedId": 48,
+        "opticId": "2B194AFDDF3B",
+        "opticBaseId": 33,
+        "rankings": [
+            {
+                "id": 1139,
+                "teamId": 158,
+                "category": "strikeouts",
+                "rank": 24,
+                "value": 117,
+                "split": "L30 Days"
+            },
+            {
+                "id": 1109,
+                "teamId": 158,
+                "category": "strikeouts",
+                "rank": 7,
+                "value": 12,
+                "split": "L15 Days"
+            },
+            {
+                "id": 1257,
+                "teamId": 158,
+                "category": "strikeouts",
+                "rank": 26,
+                "value": 646,
+                "split": "Away"
+            },
+            {
+                "id": 1153,
+                "teamId": 158,
+                "category": "strikeouts",
+                "rank": 21,
+                "value": 354,
+                "split": "vs LHP"
+            },
+            {
+                "id": 1193,
+                "teamId": 158,
+                "category": "strikeouts",
+                "rank": 25,
+                "value": 912,
+                "split": "vs RHP"
+            },
+            {
+                "id": 1072,
+                "teamId": 158,
+                "category": "strikeouts",
+                "rank": 26,
+                "value": 1266,
+                "split": "Season"
+            },
+            {
+                "id": 1213,
+                "teamId": 158,
+                "category": "strikeouts",
+                "rank": 23,
+                "value": 620,
+                "split": "Home"
+            }
+        ]
+    }
+]

@@ -1,0 +1,68 @@
+
+Headers
+Request URL
+https://api.propfinder.app/mlb/lineups?gameIds=823244,823649,823812,824704,824865,823325,824218,824541,823081,823486,823974,823163
+Request Method
+GET
+Status Code
+200 OK
+Remote Address
+174.138.117.121:443
+Referrer Policy
+strict-origin-when-cross-origin
+access-control-allow-credentials
+true
+access-control-allow-origin
+https://propfinder.app
+cache-control
+no-cache, private
+connection
+keep-alive
+content-encoding
+br
+content-type
+text/plain; charset=utf-8
+date
+Wed, 25 Mar 2026 12:34:22 GMT
+server
+nginx/1.24.0 (Ubuntu)
+transfer-encoding
+chunked
+vary
+Accept-Encoding
+vary
+Origin
+accept
+application/json, text/plain, */*
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+en-US,en;q=0.9
+connection
+keep-alive
+cookie
+_twpid=tw.1772658401620.801666034677599077; accessToken=eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJJZCI6IjViODMzY2VlLTI4MDctNGUzZS1iYjdiLWFjMzJhYzdhNDYzZiIsInN1YiI6ImJlbnZyYW5hQGJvdHRsZWtpbmcuY29tIiwiZW1haWwiOiJiZW52cmFuYUBib3R0bGVraW5nLmNvbSIsImp0aSI6IjA1M2JjNGIyLTY2ZmMtNGRjMC1hMmY0LTA0YjBhOWE3YmU5YyIsInJvbGUiOiJVc2VyIiwic3ViX3N0YXR1cyI6ImFjdGl2ZSIsInN1Yl9lbmQiOiIyMDI2LTA0LTA5VDIwOjE5OjIyLjAwMDAwMDBaIiwic3ViX3BsYW4iOiJwcm9kX1NBZzhzMWNrN3lVMU1hIiwiaXNfYWN0aXZlIjoiVHJ1ZSIsIm5iZiI6MTc3NDQ0MTQwNywiZXhwIjoxNzc0NzAwNjA3LCJpYXQiOjE3NzQ0NDE0MDcsImlzcyI6Imh0dHBzOi8vcHJvcGZpbmRlci5hcHAvYXBpIiwiYXVkIjoiaHR0cHM6Ly9wcm9wZmluZGVyLmFwcC8ifQ.3-MI5qOQh5uSIEKUCe9Gih4eTZ5YWlIxMYOKKp9sdeithT_2p8HGS_IYHxIEOnpoSqNZSm_cXr6cJNIWaV4zuQ; refreshToken=Yjsk%2F5EZa1xCVFG13L0mDS%2BzriOOy5kYqHKVZbWCGkQ%3D; ph_phc_dc4vNdlAxTBKoLNWanDLdgELGiVDtb02sTJHSfTfvC_posthog=%7B%22%24device_id%22%3A%22019a3fe8-2918-70b0-a46c-7a6909f877d5%22%2C%22distinct_id%22%3A%22019a3fe8-2918-70b0-a46c-7a6909f877d5%22%2C%22%24sesid%22%3A%5B1774442058364%2C%22019d24f2-f73e-78ae-9829-edb63c0d925b%22%2C1774441396019%5D%2C%22%24initial_person_info%22%3A%7B%22r%22%3A%22%24direct%22%2C%22u%22%3A%22https%3A%2F%2Fpropfinder.app%2FNBA%22%7D%2C%22%24user_state%22%3A%22anonymous%22%7D
+host
+api.propfinder.app
+origin
+https://propfinder.app
+referer
+https://propfinder.app/
+sec-ch-ua
+"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-site
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36
+
+
+Response
+[{"gamePk":823244,"lineups":{}},{"gamePk":823649},{"gamePk":823812},{"gamePk":824704},{"gamePk":824865,"lineups":{}},{"gamePk":824541},{"gamePk":824218},{"gamePk":823325,"lineups":{}},{"gamePk":823081},{"gamePk":823486},{"gamePk":823974},{"gamePk":823163}]

@@ -38,6 +38,71 @@ def table(name):
     return f"{PROJECT}.{DATASET}.{name}"
 
 
+RAW_GAME_WEATHER_SCHEMA = [
+    bigquery.SchemaField("run_date",          "DATE"),
+    bigquery.SchemaField("game_pk",           "INTEGER"),
+    bigquery.SchemaField("game_date",         "TIMESTAMP"),
+    bigquery.SchemaField("home_team_id",      "INTEGER"),
+    bigquery.SchemaField("home_team_name",    "STRING"),
+    bigquery.SchemaField("away_team_id",      "INTEGER"),
+    bigquery.SchemaField("away_team_name",    "STRING"),
+    bigquery.SchemaField("weather_indicator", "STRING"),
+    bigquery.SchemaField("game_temp",         "FLOAT"),
+    bigquery.SchemaField("wind_speed",        "FLOAT"),
+    bigquery.SchemaField("wind_dir",          "INTEGER"),
+    bigquery.SchemaField("wind_gust",         "FLOAT"),
+    bigquery.SchemaField("precip_prob",       "FLOAT"),
+    bigquery.SchemaField("conditions",        "STRING"),
+    bigquery.SchemaField("ballpark_name",     "STRING"),
+    bigquery.SchemaField("roof_type",         "STRING"),
+    bigquery.SchemaField("home_moneyline",    "INTEGER"),
+    bigquery.SchemaField("away_moneyline",    "INTEGER"),
+    bigquery.SchemaField("over_under",        "FLOAT"),
+    bigquery.SchemaField("weather_note",      "STRING"),
+    bigquery.SchemaField("ingested_at",       "TIMESTAMP"),
+]
+
+NEW_HR_PICKS_FIELDS = [
+    bigquery.SchemaField("weather_indicator", "STRING"),
+    bigquery.SchemaField("game_temp",         "FLOAT"),
+    bigquery.SchemaField("wind_speed",        "FLOAT"),
+    bigquery.SchemaField("wind_dir",          "INTEGER"),
+    bigquery.SchemaField("precip_prob",       "FLOAT"),
+    bigquery.SchemaField("ballpark_name",     "STRING"),
+    bigquery.SchemaField("roof_type",         "STRING"),
+    bigquery.SchemaField("weather_note",      "STRING"),
+    bigquery.SchemaField("home_moneyline",    "INTEGER"),
+    bigquery.SchemaField("away_moneyline",    "INTEGER"),
+    bigquery.SchemaField("over_under",        "FLOAT"),
+]
+
+
+def ensure_tables():
+    """Create raw_game_weather if missing; add new columns to hr_picks_daily if needed."""
+    # raw_game_weather
+    try:
+        bq.create_table(
+            bigquery.Table(table("raw_game_weather"), schema=RAW_GAME_WEATHER_SCHEMA),
+            exists_ok=True,
+        )
+        log.info("raw_game_weather table ready")
+    except Exception as exc:
+        log.error("Failed to create raw_game_weather: %s", exc)
+        raise
+
+    # hr_picks_daily — add new columns idempotently
+    try:
+        hr_table = bq.get_table(table("hr_picks_daily"))
+        existing = {f.name for f in hr_table.schema}
+        to_add = [f for f in NEW_HR_PICKS_FIELDS if f.name not in existing]
+        if to_add:
+            hr_table.schema = list(hr_table.schema) + to_add
+            bq.update_table(hr_table, ["schema"])
+            log.info("Added %s columns to hr_picks_daily: %s", len(to_add), [f.name for f in to_add])
+    except Exception as exc:
+        log.warning("Could not update hr_picks_daily schema: %s", exc)
+
+
 async def get(session, url, params=None):
     try:
         timeout = aiohttp.ClientTimeout(total=15)
@@ -542,6 +607,7 @@ def rank_roster_players(team_id, roster_players, ranked_history):
 
 async def main():
     log.info("Starting PropFinder ingest for %s", TODAY)
+    ensure_tables()
 
     connector = aiohttp.TCPConnector(limit=20)
     async with aiohttp.ClientSession(connector=connector) as session:

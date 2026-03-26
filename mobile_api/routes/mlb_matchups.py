@@ -236,6 +236,27 @@ def _parse_flags(value: Any) -> List[str]:
         return [text]
 
 
+def _resolve_latest_run_date_for_game(
+    client: bigquery.Client,
+    table_ref_qualified: str,
+    game_pk: int,
+    preferred_date: str,
+) -> str:
+    row = _safe_query(
+        client,
+        f"""
+        SELECT CAST(MAX(run_date) AS STRING) AS run_date
+        FROM {table_ref_qualified}
+        WHERE CAST(game_pk AS INT64) = @game_pk
+        """,
+        [bigquery.ScalarQueryParameter("game_pk", "INT64", game_pk)],
+    )
+    latest = row[0].get("run_date") if row else None
+    if isinstance(latest, str) and latest:
+        return latest
+    return preferred_date
+
+
 @router.get("/mlb/matchups/upcoming")
 def mlb_matchups_upcoming(
     limit: int = Query(default=20, ge=1, le=100),
@@ -337,6 +358,7 @@ def mlb_matchup_detail(game_pk: int):
     today = _today_et_iso()
     hr_table = _qualified_table(client, HR_PICKS_TABLE)
     pitcher_table = _qualified_table(client, PITCHER_MATCHUP_TABLE)
+    run_date = _resolve_latest_run_date_for_game(client, hr_table, game_pk, today)
 
     picks = _safe_query(
         client,
@@ -373,7 +395,7 @@ def mlb_matchup_detail(game_pk: int):
         ORDER BY score DESC, batter_name ASC
         """,
         [
-            bigquery.ScalarQueryParameter("run_date", "DATE", today),
+            bigquery.ScalarQueryParameter("run_date", "DATE", run_date),
             bigquery.ScalarQueryParameter("game_pk", "INT64", game_pk),
         ],
     )
@@ -408,7 +430,7 @@ def mlb_matchup_detail(game_pk: int):
         ORDER BY pitcher_name ASC, split ASC
         """,
         [
-            bigquery.ScalarQueryParameter("run_date", "DATE", today),
+            bigquery.ScalarQueryParameter("run_date", "DATE", run_date),
             bigquery.ScalarQueryParameter("game_pk", "INT64", game_pk),
         ],
     )
@@ -519,7 +541,7 @@ def mlb_matchup_detail(game_pk: int):
 
     return {
         "game_pk": game_pk,
-        "run_date": today,
+        "run_date": run_date,
         "game": {
             "home_team": home_team,
             "away_team": away_team,

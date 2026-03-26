@@ -63,6 +63,34 @@ def si(value):
         return None
 
 
+def unique_ints(values):
+    out = []
+    seen = set()
+    for value in values:
+        parsed = si(value)
+        if parsed is None or parsed in seen:
+            continue
+        seen.add(parsed)
+        out.append(parsed)
+    return out
+
+
+def extract_player_id(player):
+    if isinstance(player, dict):
+        return si(player.get("id") or player.get("playerId"))
+    return si(player)
+
+
+def extract_position_abbr(player):
+    if not isinstance(player, dict):
+        return ""
+    pos = player.get("position") or {}
+    person = player.get("person") or {}
+    primary = person.get("primaryPosition") or {}
+    abbr = pos.get("abbreviation") or primary.get("abbreviation") or ""
+    return str(abbr).upper()
+
+
 def bq_insert(table_name, rows):
     if not rows:
         log.info("No rows for %s", table_name)
@@ -120,13 +148,40 @@ async def fetch_lineup(session, game_pk):
         return {"home_players": [], "away_players": []}
 
     for item in data:
-        if item.get("gamePk") == game_pk:
+        if si(item.get("gamePk")) == si(game_pk):
             lineups = item.get("lineups", {})
             return {
-                "home_players": [p["id"] for p in lineups.get("homePlayers", [])],
-                "away_players": [p["id"] for p in lineups.get("awayPlayers", [])],
+                "home_players": unique_ints(
+                    extract_player_id(player)
+                    for player in lineups.get("homePlayers", [])
+                ),
+                "away_players": unique_ints(
+                    extract_player_id(player)
+                    for player in lineups.get("awayPlayers", [])
+                ),
             }
     return {"home_players": [], "away_players": []}
+
+
+async def fetch_team_roster(session, team_id):
+    data = await get(
+        session,
+        f"{MLB_API}/teams/{team_id}/roster",
+        params={"rosterType": "active", "hydrate": "person"},
+    )
+    if not data or not isinstance(data, dict):
+        return []
+
+    roster = data.get("roster", [])
+    hitter_ids = []
+    for player in roster:
+        player_id = extract_player_id((player or {}).get("person") or player)
+        position = extract_position_abbr(player or {})
+        # Exclude pitcher-only entries for roster fallback hitter scraping.
+        if player_id is None or position == "P":
+            continue
+        hitter_ids.append(player_id)
+    return unique_ints(hitter_ids)
 
 
 async def fetch_hit_data(session, batter_id, game_pk, batter_team_id):
@@ -312,6 +367,71 @@ async def fetch_pitcher_matchup(session, pitcher_id, opp_team_id, game_pk, pitch
     return {"splits": split_rows, "pitch_log": pitch_log_rows}
 
 
+def load_recent_team_batter_rank(team_ids, lookback_days=365):
+    team_ids = unique_ints(team_ids)
+    if not team_ids:
+        return {}
+
+    try:
+        sql = f"""
+        SELECT
+          batter_team_id,
+          batter_id,
+          COUNT(*) AS events,
+          MAX(event_date) AS last_event_date
+        FROM `{PROJECT}.{DATASET}.raw_hit_data`
+        WHERE batter_team_id IN UNNEST(@team_ids)
+          AND run_date >= DATE_SUB(@run_date, INTERVAL @lookback_days DAY)
+        GROUP BY batter_team_id, batter_id
+        ORDER BY batter_team_id, events DESC, last_event_date DESC, batter_id DESC
+        """
+        params = [
+            bigquery.ArrayQueryParameter("team_ids", "INT64", team_ids),
+            bigquery.ScalarQueryParameter("run_date", "DATE", TODAY.isoformat()),
+            bigquery.ScalarQueryParameter("lookback_days", "INT64", lookback_days),
+        ]
+        rows = bq.query(
+            sql, job_config=bigquery.QueryJobConfig(query_parameters=params)
+        ).result()
+    except Exception as exc:
+        log.warning("Fallback recent-team batter rank lookup failed: %s", exc)
+        return {}
+
+    by_team = {}
+    for row in rows:
+        team_id = si(row["batter_team_id"])
+        batter_id = si(row["batter_id"])
+        if team_id is None or batter_id is None:
+            continue
+        by_team.setdefault(team_id, []).append(batter_id)
+
+    total = sum(len(v) for v in by_team.values())
+    log.info(
+        "Loaded ranking for %s fallback batters across %s teams",
+        total,
+        len(by_team),
+    )
+    return by_team
+
+
+def rank_roster_players(team_id, roster_players, ranked_history):
+    roster_ordered = unique_ints(roster_players)
+    if not roster_ordered:
+        return []
+
+    history_rank = {
+        batter_id: idx for idx, batter_id in enumerate(ranked_history.get(team_id, []))
+    }
+    roster_index = {batter_id: idx for idx, batter_id in enumerate(roster_ordered)}
+    return sorted(
+        roster_ordered,
+        key=lambda batter_id: (
+            history_rank.get(batter_id, 10**9),
+            roster_index[batter_id],
+        )
+    )
+
+
 async def main():
     log.info("Starting PropFinder ingest for %s", TODAY)
 
@@ -326,29 +446,84 @@ async def main():
             *[fetch_lineup(session, game["game_pk"]) for game in games]
         )
         lineups = {game["game_pk"]: result for game, result in zip(games, lineup_results)}
+        team_ids = unique_ints(
+            [game["home_team_id"] for game in games]
+            + [game["away_team_id"] for game in games]
+        )
+        roster_results = await asyncio.gather(
+            *[fetch_team_roster(session, team_id) for team_id in team_ids]
+        )
+        roster_by_team = {team_id: players for team_id, players in zip(team_ids, roster_results)}
+        ranked_history_by_team = load_recent_team_batter_rank(team_ids)
 
         batter_jobs = []
+        batter_seen = set()
         pitcher_jobs = []
 
         for game in games:
             game_pk = game["game_pk"]
             lineup = lineups.get(game_pk, {"home_players": [], "away_players": []})
+            home_players = lineup.get("home_players", [])
+            away_players = lineup.get("away_players", [])
+            home_source = "lineup"
+            away_source = "lineup"
 
-            for batter_id in lineup["home_players"]:
-                batter_jobs.append(
-                    {
-                        "batter_id": batter_id,
-                        "game_pk": game_pk,
-                        "batter_team_id": game["home_team_id"],
-                    }
+            if not home_players:
+                home_players = rank_roster_players(
+                    game["home_team_id"],
+                    roster_by_team.get(game["home_team_id"], []),
+                    ranked_history_by_team,
                 )
-            for batter_id in lineup["away_players"]:
+                if home_players:
+                    home_source = "roster-ranked"
+                else:
+                    home_players = ranked_history_by_team.get(game["home_team_id"], [])
+                    if home_players:
+                        home_source = "recent-history"
+            if not away_players:
+                away_players = rank_roster_players(
+                    game["away_team_id"],
+                    roster_by_team.get(game["away_team_id"], []),
+                    ranked_history_by_team,
+                )
+                if away_players:
+                    away_source = "roster-ranked"
+                else:
+                    away_players = ranked_history_by_team.get(game["away_team_id"], [])
+                    if away_players:
+                        away_source = "recent-history"
+
+            if home_source != "lineup" or away_source != "lineup":
+                log.info(
+                    "Lineup fallback game=%s home=%s(%s) away=%s(%s)",
+                    game_pk,
+                    len(home_players),
+                    home_source,
+                    len(away_players),
+                    away_source,
+                )
+
+            for batter_id in home_players:
+                batter_id_int = si(batter_id)
+                if batter_id_int is None:
+                    continue
+                key = (batter_id_int, game_pk, game["home_team_id"])
+                if key in batter_seen:
+                    continue
+                batter_seen.add(key)
                 batter_jobs.append(
-                    {
-                        "batter_id": batter_id,
-                        "game_pk": game_pk,
-                        "batter_team_id": game["away_team_id"],
-                    }
+                    {"batter_id": batter_id_int, "game_pk": game_pk, "batter_team_id": game["home_team_id"]}
+                )
+            for batter_id in away_players:
+                batter_id_int = si(batter_id)
+                if batter_id_int is None:
+                    continue
+                key = (batter_id_int, game_pk, game["away_team_id"])
+                if key in batter_seen:
+                    continue
+                batter_seen.add(key)
+                batter_jobs.append(
+                    {"batter_id": batter_id_int, "game_pk": game_pk, "batter_team_id": game["away_team_id"]}
                 )
 
             if game["home_pitcher_id"]:

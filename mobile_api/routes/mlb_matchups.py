@@ -236,6 +236,22 @@ def _parse_flags(value: Any) -> List[str]:
         return [text]
 
 
+def _normalized_name(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    return text or None
+
+
+def _pitcher_group_key(pitcher_id: Optional[int], pitcher_name: Any) -> Optional[str]:
+    if pitcher_id is not None:
+        return f"id:{pitcher_id}"
+    name = _normalized_name(pitcher_name)
+    if name:
+        return f"name:{name}"
+    return None
+
+
 def _resolve_latest_run_date_for_game(
     client: bigquery.Client,
     table_ref_qualified: str,
@@ -254,6 +270,25 @@ def _resolve_latest_run_date_for_game(
     latest = row[0].get("run_date") if row else None
     if isinstance(latest, str) and latest:
         return latest
+    return _resolve_latest_run_date(client, table_ref_qualified, preferred_date)
+
+
+def _resolve_latest_run_date(
+    client: bigquery.Client,
+    table_ref_qualified: str,
+    preferred_date: str,
+) -> str:
+    row = _safe_query(
+        client,
+        f"""
+        SELECT CAST(MAX(run_date) AS STRING) AS run_date
+        FROM {table_ref_qualified}
+        """,
+        [],
+    )
+    latest = row[0].get("run_date") if row else None
+    if isinstance(latest, str) and latest:
+        return latest
     return preferred_date
 
 
@@ -268,6 +303,7 @@ def mlb_matchups_upcoming(
     client = get_bq_client()
     today = _today_et_iso()
     hr_table = _qualified_table(client, HR_PICKS_TABLE)
+    run_date = _resolve_latest_run_date(client, hr_table, today)
 
     summary_rows = _safe_query(
         client,
@@ -281,7 +317,7 @@ def mlb_matchups_upcoming(
         WHERE run_date = @run_date
         GROUP BY game_pk
         """,
-        [bigquery.ScalarQueryParameter("run_date", "DATE", today)],
+        [bigquery.ScalarQueryParameter("run_date", "DATE", run_date)],
     )
     summary_map = {int(row["game_pk"]): row for row in summary_rows if row.get("game_pk") is not None}
 
@@ -358,7 +394,47 @@ def mlb_matchup_detail(game_pk: int):
     today = _today_et_iso()
     hr_table = _qualified_table(client, HR_PICKS_TABLE)
     pitcher_table = _qualified_table(client, PITCHER_MATCHUP_TABLE)
+    schedule = _fetch_schedule_for_game(game_pk)
+    home_team = schedule.get("home_team") if schedule else None
+    away_team = schedule.get("away_team") if schedule else None
+    home_team_id = _safe_int(schedule.get("home_team_id")) if schedule else None
+    away_team_id = _safe_int(schedule.get("away_team_id")) if schedule else None
     run_date = _resolve_latest_run_date_for_game(client, hr_table, game_pk, today)
+
+    pitcher_splits = _safe_query(
+        client,
+        f"""
+        SELECT
+          CAST(game_pk AS INT64) AS game_pk,
+          pitcher_id,
+          pitcher_name,
+          pitcher_hand,
+          opp_team_id,
+          split,
+          ip,
+          home_runs,
+          hr_per_9,
+          barrel_pct,
+          hard_hit_pct,
+          fb_pct,
+          hr_fb_pct,
+          whip,
+          woba
+        FROM {pitcher_table}
+        WHERE run_date = @run_date
+          AND CAST(game_pk AS INT64) = @game_pk
+          AND split IN ('Season', 'vsLHB', 'vsRHB')
+        QUALIFY ROW_NUMBER() OVER (
+          PARTITION BY pitcher_id, split
+          ORDER BY ingested_at DESC NULLS LAST
+        ) = 1
+        ORDER BY pitcher_name ASC, split ASC
+        """,
+        [
+            bigquery.ScalarQueryParameter("run_date", "DATE", run_date),
+            bigquery.ScalarQueryParameter("game_pk", "INT64", game_pk),
+        ],
+    )
 
     picks = _safe_query(
         client,
@@ -400,50 +476,72 @@ def mlb_matchup_detail(game_pk: int):
         ],
     )
 
-    pitcher_splits = _safe_query(
-        client,
-        f"""
-        SELECT
-          CAST(game_pk AS INT64) AS game_pk,
-          pitcher_id,
-          pitcher_name,
-          pitcher_hand,
-          opp_team_id,
-          split,
-          ip,
-          home_runs,
-          hr_per_9,
-          barrel_pct,
-          hard_hit_pct,
-          fb_pct,
-          hr_fb_pct,
-          whip,
-          woba
-        FROM {pitcher_table}
-        WHERE run_date = @run_date
-          AND CAST(game_pk AS INT64) = @game_pk
-          AND split IN ('Season', 'vsLHB', 'vsRHB')
-        QUALIFY ROW_NUMBER() OVER (
-          PARTITION BY pitcher_id, split
-          ORDER BY ingested_at DESC NULLS LAST
-        ) = 1
-        ORDER BY pitcher_name ASC, split ASC
-        """,
-        [
-            bigquery.ScalarQueryParameter("run_date", "DATE", run_date),
-            bigquery.ScalarQueryParameter("game_pk", "INT64", game_pk),
-        ],
-    )
+    if not picks:
+        pitcher_ids = sorted({_safe_int(row.get("pitcher_id")) for row in pitcher_splits if _safe_int(row.get("pitcher_id")) is not None})
+        pitcher_names = sorted({_normalized_name(row.get("pitcher_name")) for row in pitcher_splits if _normalized_name(row.get("pitcher_name"))})
+        team_names = sorted({_normalized_name(name) for name in [home_team, away_team] if _normalized_name(name)})
+
+        if pitcher_ids or pitcher_names:
+            picks = _safe_query(
+                client,
+                f"""
+                SELECT
+                  CAST(game_pk AS INT64) AS game_pk,
+                  batter_id,
+                  batter_name,
+                  bat_side,
+                  pitcher_id,
+                  pitcher_name,
+                  pitcher_hand,
+                  score,
+                  grade,
+                  why,
+                  flags,
+                  iso,
+                  slg,
+                  l15_ev,
+                  l15_barrel_pct,
+                  season_ev,
+                  season_barrel_pct,
+                  l15_hard_hit_pct,
+                  hr_fb_pct,
+                  p_hr9_vs_hand,
+                  p_hr_fb_pct,
+                  p_barrel_pct,
+                  p_fb_pct,
+                  p_hard_hit_pct,
+                  p_iso_allowed
+                FROM {hr_table}
+                WHERE run_date = @run_date
+                  AND (
+                    (ARRAY_LENGTH(@pitcher_ids) > 0 AND CAST(pitcher_id AS INT64) IN UNNEST(@pitcher_ids))
+                    OR (ARRAY_LENGTH(@pitcher_names) > 0 AND LOWER(CAST(pitcher_name AS STRING)) IN UNNEST(@pitcher_names))
+                  )
+                  AND (
+                    ARRAY_LENGTH(@team_names) = 0
+                    OR LOWER(CAST(home_team AS STRING)) IN UNNEST(@team_names)
+                    OR LOWER(CAST(away_team AS STRING)) IN UNNEST(@team_names)
+                  )
+                ORDER BY score DESC, batter_name ASC
+                """,
+                [
+                    bigquery.ScalarQueryParameter("run_date", "DATE", run_date),
+                    bigquery.ArrayQueryParameter("pitcher_ids", "INT64", pitcher_ids),
+                    bigquery.ArrayQueryParameter("pitcher_names", "STRING", pitcher_names),
+                    bigquery.ArrayQueryParameter("team_names", "STRING", team_names),
+                ],
+            )
 
     grade_counts = {"IDEAL": 0, "FAVORABLE": 0, "AVERAGE": 0, "AVOID": 0}
-    pitcher_groups: Dict[int, Dict[str, Any]] = {}
+    pitcher_groups: Dict[str, Dict[str, Any]] = {}
 
     for split_row in pitcher_splits:
         pitcher_id = _safe_int(split_row.get("pitcher_id"))
-        if pitcher_id is None:
+        group_key = _pitcher_group_key(pitcher_id, split_row.get("pitcher_name"))
+        if group_key is None:
             continue
         group = pitcher_groups.setdefault(
-            pitcher_id,
+            group_key,
             {
                 "pitcher_id": pitcher_id,
                 "pitcher_name": split_row.get("pitcher_name"),
@@ -453,6 +551,14 @@ def mlb_matchup_detail(game_pk: int):
                 "batters": [],
             },
         )
+        if group.get("pitcher_id") is None and pitcher_id is not None:
+            group["pitcher_id"] = pitcher_id
+        if not group.get("pitcher_name") and split_row.get("pitcher_name"):
+            group["pitcher_name"] = split_row.get("pitcher_name")
+        if not group.get("pitcher_hand") and split_row.get("pitcher_hand"):
+            group["pitcher_hand"] = split_row.get("pitcher_hand")
+        if group.get("opp_team_id") is None and _safe_int(split_row.get("opp_team_id")) is not None:
+            group["opp_team_id"] = _safe_int(split_row.get("opp_team_id"))
         split_name = split_row.get("split") or "Season"
         group["splits"][split_name] = {
             "ip": _safe_float(split_row.get("ip")),
@@ -468,10 +574,11 @@ def mlb_matchup_detail(game_pk: int):
 
     for pick in picks:
         pitcher_id = _safe_int(pick.get("pitcher_id"))
-        if pitcher_id is None:
+        group_key = _pitcher_group_key(pitcher_id, pick.get("pitcher_name"))
+        if group_key is None:
             continue
         group = pitcher_groups.setdefault(
-            pitcher_id,
+            group_key,
             {
                 "pitcher_id": pitcher_id,
                 "pitcher_name": pick.get("pitcher_name"),
@@ -481,6 +588,12 @@ def mlb_matchup_detail(game_pk: int):
                 "batters": [],
             },
         )
+        if group.get("pitcher_id") is None and pitcher_id is not None:
+            group["pitcher_id"] = pitcher_id
+        if not group.get("pitcher_name") and pick.get("pitcher_name"):
+            group["pitcher_name"] = pick.get("pitcher_name")
+        if not group.get("pitcher_hand") and pick.get("pitcher_hand"):
+            group["pitcher_hand"] = pick.get("pitcher_hand")
         grade = (pick.get("grade") or "").upper()
         if grade in grade_counts:
             grade_counts[grade] += 1
@@ -509,12 +622,6 @@ def mlb_matchup_detail(game_pk: int):
                 "p_iso_allowed": _safe_float(pick.get("p_iso_allowed")),
             }
         )
-
-    schedule = _fetch_schedule_for_game(game_pk)
-    home_team = schedule.get("home_team") if schedule else None
-    away_team = schedule.get("away_team") if schedule else None
-    home_team_id = _safe_int(schedule.get("home_team_id")) if schedule else None
-    away_team_id = _safe_int(schedule.get("away_team_id")) if schedule else None
 
     pitchers_out: List[Dict[str, Any]] = []
     for pitcher in pitcher_groups.values():

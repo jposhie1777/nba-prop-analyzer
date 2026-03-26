@@ -12,13 +12,17 @@ Fixes v2:
 import datetime
 import json
 import logging
+import re
 from collections import defaultdict
 from statistics import mean
+from urllib.parse import parse_qs, urlsplit
+from urllib.request import Request, urlopen
 
 from google.cloud import bigquery
 
 PROJECT = "graphite-flare-477419-h7"
 DATASET = "propfinder"
+BASE_URL = "https://api.propfinder.app"
 TODAY = datetime.date.today()
 NOW = datetime.datetime.now(datetime.timezone.utc)
 
@@ -74,6 +78,189 @@ def safe_float(value, default=0.0):
         return float("0" + s if s.startswith(".") else s)
     except (ValueError, TypeError):
         return default
+
+
+def safe_int(value, default=0):
+    try:
+        if value is None:
+            return default
+        return int(value)
+    except (ValueError, TypeError):
+        return default
+
+
+def clean_str(value):
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def normalize_book(book_name):
+    book = str(book_name or "").strip().lower().replace(" ", "")
+    if not book:
+        return ""
+    if book in ("dk", "draftkings"):
+        return "draftkings"
+    if book in ("fd", "fanduel"):
+        return "fanduel"
+    return book
+
+
+def parse_draftkings_link(url):
+    text = clean_str(url)
+    if not text:
+        return None, None
+    split = urlsplit(text)
+    if "draftkings.com" not in split.netloc.lower():
+        return None, None
+    match = re.search(r"/event/([^/?#]+)", split.path)
+    event_id = match.group(1) if match else None
+
+    outcome_code = None
+    for part in (split.query or "").split("&"):
+        if part.startswith("outcomes="):
+            # Keep raw query payload (including %23) for app-link compatibility.
+            outcome_code = part.split("=", 1)[1].strip() or None
+            break
+    return event_id, outcome_code
+
+
+def parse_fanduel_link(url):
+    text = clean_str(url)
+    if not text:
+        return None, None
+    split = urlsplit(text)
+    if "fanduel.com" not in split.netloc.lower():
+        return None, None
+    query = parse_qs(split.query, keep_blank_values=False)
+    market_id = (query.get("marketId") or query.get("marketId[]") or [None])[0]
+    selection_id = (query.get("selectionId") or query.get("selectionId[]") or [None])[0]
+    return clean_str(market_id), clean_str(selection_id)
+
+
+def load_hr_prop_context():
+    """
+    Load today's 1+ HR over props and parse sportsbook deep links.
+    """
+    url = f"{BASE_URL}/mlb/props?date={TODAY.isoformat()}"
+    request = Request(
+        url,
+        headers={
+            "User-Agent": "PulseSports/1.0",
+            "Accept": "application/json",
+        },
+    )
+    try:
+        with urlopen(request, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except Exception as exc:
+        log.warning("Failed to load /mlb/props context: %s", exc)
+        return {}
+
+    if not isinstance(payload, list):
+        return {}
+
+    context = {}
+    for row in payload:
+        if not isinstance(row, dict):
+            continue
+
+        category = str(row.get("category") or "").lower()
+        category_key = category.replace("_", "")
+        if "homerun" not in category_key:
+            continue
+        if str(row.get("overUnder") or "").lower() != "over":
+            continue
+        line = safe_float(row.get("line"), default=None)
+        if line is not None and abs(line - 0.5) > 1e-6:
+            continue
+
+        game_pk = safe_int(row.get("gameId"), default=None)
+        batter_id = safe_int(row.get("playerId"), default=None)
+        if game_pk is None or batter_id is None:
+            continue
+
+        markets = row.get("markets") if isinstance(row.get("markets"), list) else []
+        best_market = row.get("bestMarket") if isinstance(row.get("bestMarket"), dict) else None
+        all_markets = [m for m in markets if isinstance(m, dict)]
+        if best_market:
+            all_markets.append(best_market)
+
+        best_price = None
+        best_book = None
+        best_desktop = None
+        best_ios = None
+
+        dk_event_id = None
+        dk_outcome_code = None
+        fd_market_id = None
+        fd_selection_id = None
+
+        for market in all_markets:
+            sportsbook = clean_str(market.get("sportsbook"))
+            desktop_link = clean_str(market.get("deepLinkDesktop"))
+            ios_link = (
+                clean_str(market.get("deepLinkIos"))
+                or clean_str(market.get("deepLinkIOS"))
+                or clean_str(market.get("deepLinkAndroid"))
+            )
+            price = safe_int(market.get("price"), default=None)
+
+            if price is not None and (best_price is None or price > best_price):
+                best_price = price
+                best_book = sportsbook
+                best_desktop = desktop_link
+                best_ios = ios_link
+
+            book_key = normalize_book(sportsbook)
+            if book_key == "draftkings" and desktop_link:
+                event_id, outcome_code = parse_draftkings_link(desktop_link)
+                dk_event_id = dk_event_id or event_id
+                dk_outcome_code = dk_outcome_code or outcome_code
+            if book_key == "fanduel" and desktop_link:
+                market_id, selection_id = parse_fanduel_link(desktop_link)
+                fd_market_id = fd_market_id or market_id
+                fd_selection_id = fd_selection_id or selection_id
+
+        key = (game_pk, batter_id)
+        existing = context.get(key, {})
+
+        def _pick(*values):
+            for value in values:
+                if isinstance(value, str):
+                    text = value.strip()
+                    if text:
+                        return text
+                elif value is not None:
+                    return value
+            return None
+
+        context[key] = {
+            "home_team": _pick(existing.get("home_team"), row.get("homeTeam"), row.get("homeTeamCode")),
+            "away_team": _pick(existing.get("away_team"), row.get("awayTeam"), row.get("opposingTeamCode")),
+            "weather_indicator": _pick(existing.get("weather_indicator"), row.get("weatherIndicator"), row.get("weather_indicator")),
+            "game_temp": _pick(existing.get("game_temp"), safe_float(row.get("gameTemp"), default=None), safe_float(row.get("temperature"), default=None), safe_float(row.get("game_temp"), default=None)),
+            "wind_speed": _pick(existing.get("wind_speed"), safe_float(row.get("windSpeed"), default=None), safe_float(row.get("wind_speed"), default=None)),
+            "wind_dir": _pick(existing.get("wind_dir"), safe_int(row.get("windDir"), default=None), safe_int(row.get("windDirection"), default=None), safe_int(row.get("wind_dir"), default=None)),
+            "precip_prob": _pick(existing.get("precip_prob"), safe_float(row.get("precipProb"), default=None), safe_float(row.get("precip_prob"), default=None)),
+            "ballpark_name": _pick(existing.get("ballpark_name"), row.get("ballparkName"), row.get("stadium"), row.get("venueName")),
+            "roof_type": _pick(existing.get("roof_type"), row.get("roofType"), row.get("roof_type")),
+            "weather_note": _pick(existing.get("weather_note"), row.get("weatherNote"), row.get("weather_note")),
+            "home_moneyline": _pick(existing.get("home_moneyline"), safe_int(row.get("homeMoneyline"), default=None), safe_int(row.get("home_moneyline"), default=None)),
+            "away_moneyline": _pick(existing.get("away_moneyline"), safe_int(row.get("awayMoneyline"), default=None), safe_int(row.get("away_moneyline"), default=None)),
+            "over_under": _pick(existing.get("over_under"), safe_float(row.get("gameTotal"), default=None), safe_float(row.get("over_under"), default=None)),
+            "hr_odds_best_price": _pick(best_price, existing.get("hr_odds_best_price")),
+            "hr_odds_best_book": _pick(best_book, existing.get("hr_odds_best_book")),
+            "deep_link_desktop": _pick(best_desktop, existing.get("deep_link_desktop")),
+            "deep_link_ios": _pick(best_ios, existing.get("deep_link_ios")),
+            "dk_event_id": _pick(dk_event_id, existing.get("dk_event_id")),
+            "dk_outcome_code": _pick(dk_outcome_code, existing.get("dk_outcome_code")),
+            "fd_market_id": _pick(fd_market_id, existing.get("fd_market_id")),
+            "fd_selection_id": _pick(fd_selection_id, existing.get("fd_selection_id")),
+        }
+
+    return context
 
 
 def tier(value, elite, fav, avg):
@@ -544,8 +731,8 @@ def main():
     pitcher_map = load_pitcher_matchup()
     pitch_log_map = load_pitch_log()
     matchups = load_today_matchups()
-    weather_map = load_game_weather()
-    props_map = load_hr_props()
+    hr_prop_context = load_hr_prop_context()
+    log.info("Loaded HR prop context for %s batter/game rows", len(hr_prop_context))
 
     if not matchups:
         log.warning("No matchup data - did ingest run with the updated ingest.py?")
@@ -596,6 +783,7 @@ def main():
             flags_good,
             flags_bad,
         )
+        prop_ctx = hr_prop_context.get((matchup["game_pk"], matchup["batter_id"]), {})
 
         gw = weather_map.get(matchup["game_pk"], {})
         pr = props_map.get((matchup["game_pk"], matchup["batter_id"]), {})
@@ -604,8 +792,8 @@ def main():
                 "run_date": TODAY.isoformat(),
                 "run_timestamp": NOW.isoformat(),
                 "game_pk": matchup["game_pk"],
-                "home_team": "",
-                "away_team": "",
+                "home_team": prop_ctx.get("home_team") or "",
+                "away_team": prop_ctx.get("away_team") or "",
                 "batter_id": matchup["batter_id"],
                 "batter_name": matchup["batter_name"],
                 "bat_side": matchup["bat_side"],
@@ -618,27 +806,25 @@ def main():
                 "grade": grade,
                 "why": why,
                 "flags": json.dumps(flags_good + flags_bad),
-                # Weather + odds fields (null-safe)
-                "weather_indicator": gw.get("weather_indicator"),
-                "game_temp": gw.get("game_temp"),
-                "wind_speed": gw.get("wind_speed"),
-                "wind_dir": gw.get("wind_dir"),
-                "precip_prob": gw.get("precip_prob"),
-                "ballpark_name": gw.get("ballpark_name"),
-                "roof_type": gw.get("roof_type"),
-                "weather_note": gw.get("weather_note"),
-                "home_moneyline": gw.get("home_moneyline"),
-                "away_moneyline": gw.get("away_moneyline"),
-                "over_under": gw.get("over_under"),
-                # HR prop odds + deep links (null-safe)
-                "hr_odds_best_price": pr.get("hr_odds_best_price"),
-                "hr_odds_best_book": pr.get("hr_odds_best_book"),
-                "deep_link_desktop": pr.get("deep_link_desktop"),
-                "deep_link_ios": pr.get("deep_link_ios"),
-                "dk_outcome_code": pr.get("dk_outcome_code"),
-                "dk_event_id": pr.get("dk_event_id"),
-                "fd_market_id": pr.get("fd_market_id"),
-                "fd_selection_id": pr.get("fd_selection_id"),
+                "weather_indicator": prop_ctx.get("weather_indicator"),
+                "game_temp": prop_ctx.get("game_temp"),
+                "wind_speed": prop_ctx.get("wind_speed"),
+                "wind_dir": prop_ctx.get("wind_dir"),
+                "precip_prob": prop_ctx.get("precip_prob"),
+                "ballpark_name": prop_ctx.get("ballpark_name"),
+                "roof_type": prop_ctx.get("roof_type"),
+                "weather_note": prop_ctx.get("weather_note"),
+                "home_moneyline": prop_ctx.get("home_moneyline"),
+                "away_moneyline": prop_ctx.get("away_moneyline"),
+                "over_under": prop_ctx.get("over_under"),
+                "hr_odds_best_price": prop_ctx.get("hr_odds_best_price"),
+                "hr_odds_best_book": prop_ctx.get("hr_odds_best_book"),
+                "deep_link_desktop": prop_ctx.get("deep_link_desktop"),
+                "deep_link_ios": prop_ctx.get("deep_link_ios"),
+                "dk_outcome_code": prop_ctx.get("dk_outcome_code"),
+                "dk_event_id": prop_ctx.get("dk_event_id"),
+                "fd_market_id": prop_ctx.get("fd_market_id"),
+                "fd_selection_id": prop_ctx.get("fd_selection_id"),
             }
         )
 

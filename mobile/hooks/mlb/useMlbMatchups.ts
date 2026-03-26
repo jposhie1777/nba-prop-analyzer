@@ -66,11 +66,18 @@ export type MlbBatterPick = {
   p_fb_pct?: number | null;
   p_hard_hit_pct?: number | null;
   p_iso_allowed?: number | null;
-  // Game odds (carried from game-level)
+  weather_indicator?: string | null;
+  game_temp?: number | null;
+  wind_speed?: number | null;
+  wind_dir?: number | null;
+  wind_direction_label?: string | null;
+  precip_prob?: number | null;
+  ballpark_name?: string | null;
+  roof_type?: string | null;
+  weather_note?: string | null;
   home_moneyline?: number | null;
   away_moneyline?: number | null;
   over_under?: number | null;
-  // HR prop odds + deep links
   hr_odds_best_price?: number | null;
   hr_odds_best_book?: string | null;
   deep_link_desktop?: string | null;
@@ -114,7 +121,23 @@ export type MlbMatchupDetail = {
     venue_name?: string | null;
     home_pitcher_name?: string | null;
     away_pitcher_name?: string | null;
-  } & MlbGameWeather;
+    weather?: {
+      weather_indicator?: string | null;
+      game_temp?: number | null;
+      wind_speed?: number | null;
+      wind_dir?: number | null;
+      wind_direction_label?: string | null;
+      precip_prob?: number | null;
+      ballpark_name?: string | null;
+      roof_type?: string | null;
+      weather_note?: string | null;
+    };
+    odds?: {
+      home_moneyline?: number | null;
+      away_moneyline?: number | null;
+      over_under?: number | null;
+    };
+  };
   grade_counts: {
     IDEAL: number;
     FAVORABLE: number;

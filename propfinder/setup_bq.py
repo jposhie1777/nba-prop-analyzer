@@ -158,6 +158,28 @@ client.create_table(bigquery.Table(
         bigquery.SchemaField("grade",                "STRING"),   # IDEAL/FAVORABLE/AVERAGE/AVOID
         bigquery.SchemaField("why",                  "STRING"),
         bigquery.SchemaField("flags",                "STRING"),   # JSON array of flag strings
+        # Game context (weather/park/lines)
+        bigquery.SchemaField("weather_indicator",    "STRING"),
+        bigquery.SchemaField("game_temp",            "FLOAT"),
+        bigquery.SchemaField("wind_speed",           "FLOAT"),
+        bigquery.SchemaField("wind_dir",             "INTEGER"),
+        bigquery.SchemaField("precip_prob",          "FLOAT"),
+        bigquery.SchemaField("ballpark_name",        "STRING"),
+        bigquery.SchemaField("roof_type",            "STRING"),
+        bigquery.SchemaField("weather_note",         "STRING"),
+        bigquery.SchemaField("home_moneyline",       "INTEGER"),
+        bigquery.SchemaField("away_moneyline",       "INTEGER"),
+        bigquery.SchemaField("over_under",           "FLOAT"),
+        # HR 1+ odds + links
+        bigquery.SchemaField("hr_odds_best_price",   "INTEGER"),
+        bigquery.SchemaField("hr_odds_best_book",    "STRING"),
+        bigquery.SchemaField("deep_link_desktop",    "STRING"),
+        bigquery.SchemaField("deep_link_ios",        "STRING"),
+        # Sportsbook deep-link parsed fields (HR 1+)
+        bigquery.SchemaField("dk_outcome_code",      "STRING"),
+        bigquery.SchemaField("dk_event_id",          "STRING"),
+        bigquery.SchemaField("fd_market_id",         "STRING"),
+        bigquery.SchemaField("fd_selection_id",      "STRING"),
     ]
 ), exists_ok=True)
 print("Created hr_picks_daily")

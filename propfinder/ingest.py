@@ -55,6 +55,7 @@ RAW_GAME_WEATHER_SCHEMA = [
     bigquery.SchemaField("conditions",        "STRING"),
     bigquery.SchemaField("ballpark_name",     "STRING"),
     bigquery.SchemaField("roof_type",         "STRING"),
+    bigquery.SchemaField("ballpark_azimuth",  "INTEGER"),
     bigquery.SchemaField("home_moneyline",    "INTEGER"),
     bigquery.SchemaField("away_moneyline",    "INTEGER"),
     bigquery.SchemaField("over_under",        "FLOAT"),
@@ -62,23 +63,47 @@ RAW_GAME_WEATHER_SCHEMA = [
     bigquery.SchemaField("ingested_at",       "TIMESTAMP"),
 ]
 
+RAW_HR_PROPS_SCHEMA = [
+    bigquery.SchemaField("run_date",           "DATE"),
+    bigquery.SchemaField("game_pk",            "INTEGER"),
+    bigquery.SchemaField("player_id",          "INTEGER"),
+    bigquery.SchemaField("player_name",        "STRING"),
+    bigquery.SchemaField("hr_odds_best_price", "INTEGER"),
+    bigquery.SchemaField("hr_odds_best_book",  "STRING"),
+    bigquery.SchemaField("deep_link_desktop",  "STRING"),
+    bigquery.SchemaField("deep_link_ios",      "STRING"),
+    bigquery.SchemaField("dk_outcome_code",    "STRING"),
+    bigquery.SchemaField("dk_event_id",        "STRING"),
+    bigquery.SchemaField("fd_market_id",       "STRING"),
+    bigquery.SchemaField("fd_selection_id",    "STRING"),
+    bigquery.SchemaField("ingested_at",        "TIMESTAMP"),
+]
+
 NEW_HR_PICKS_FIELDS = [
-    bigquery.SchemaField("weather_indicator", "STRING"),
-    bigquery.SchemaField("game_temp",         "FLOAT"),
-    bigquery.SchemaField("wind_speed",        "FLOAT"),
-    bigquery.SchemaField("wind_dir",          "INTEGER"),
-    bigquery.SchemaField("precip_prob",       "FLOAT"),
-    bigquery.SchemaField("ballpark_name",     "STRING"),
-    bigquery.SchemaField("roof_type",         "STRING"),
-    bigquery.SchemaField("weather_note",      "STRING"),
-    bigquery.SchemaField("home_moneyline",    "INTEGER"),
-    bigquery.SchemaField("away_moneyline",    "INTEGER"),
-    bigquery.SchemaField("over_under",        "FLOAT"),
+    bigquery.SchemaField("weather_indicator",  "STRING"),
+    bigquery.SchemaField("game_temp",          "FLOAT"),
+    bigquery.SchemaField("wind_speed",         "FLOAT"),
+    bigquery.SchemaField("wind_dir",           "INTEGER"),
+    bigquery.SchemaField("precip_prob",        "FLOAT"),
+    bigquery.SchemaField("ballpark_name",      "STRING"),
+    bigquery.SchemaField("roof_type",          "STRING"),
+    bigquery.SchemaField("weather_note",       "STRING"),
+    bigquery.SchemaField("home_moneyline",     "INTEGER"),
+    bigquery.SchemaField("away_moneyline",     "INTEGER"),
+    bigquery.SchemaField("over_under",         "FLOAT"),
+    bigquery.SchemaField("hr_odds_best_price", "INTEGER"),
+    bigquery.SchemaField("hr_odds_best_book",  "STRING"),
+    bigquery.SchemaField("deep_link_desktop",  "STRING"),
+    bigquery.SchemaField("deep_link_ios",      "STRING"),
+    bigquery.SchemaField("dk_outcome_code",    "STRING"),
+    bigquery.SchemaField("dk_event_id",        "STRING"),
+    bigquery.SchemaField("fd_market_id",       "STRING"),
+    bigquery.SchemaField("fd_selection_id",    "STRING"),
 ]
 
 
 def ensure_tables():
-    """Create raw_game_weather if missing; add new columns to hr_picks_daily if needed."""
+    """Create tables if missing; add new columns idempotently."""
     # raw_game_weather
     try:
         bq.create_table(
@@ -89,6 +114,28 @@ def ensure_tables():
     except Exception as exc:
         log.error("Failed to create raw_game_weather: %s", exc)
         raise
+
+    # raw_game_weather — add ballpark_azimuth if missing
+    try:
+        gw_table = bq.get_table(table("raw_game_weather"))
+        existing = {f.name for f in gw_table.schema}
+        gw_new = [f for f in RAW_GAME_WEATHER_SCHEMA if f.name not in existing]
+        if gw_new:
+            gw_table.schema = list(gw_table.schema) + gw_new
+            bq.update_table(gw_table, ["schema"])
+            log.info("Added columns to raw_game_weather: %s", [f.name for f in gw_new])
+    except Exception as exc:
+        log.warning("Could not update raw_game_weather schema: %s", exc)
+
+    # raw_hr_props — create if missing
+    try:
+        bq.create_table(
+            bigquery.Table(table("raw_hr_props"), schema=RAW_HR_PROPS_SCHEMA),
+            exists_ok=True,
+        )
+        log.info("raw_hr_props table ready")
+    except Exception as exc:
+        log.warning("Could not create raw_hr_props: %s", exc)
 
     # hr_picks_daily — add new columns idempotently
     try:
@@ -301,6 +348,7 @@ async def fetch_upcoming_games(session):
                 "over_under": sf(item.get("gameRunLine")),
                 "ballpark_name": ballpark.get("name", ""),
                 "roof_type": ballpark.get("roofType", ""),
+                "ballpark_azimuth": si(ballpark.get("azimuthAngle")),
                 # Game-hour weather snapshot
                 "game_temp": sf(game_weather.get("temp")),
                 "wind_speed": sf(game_weather.get("windSpeed")),
@@ -334,6 +382,79 @@ async def fetch_weather_notes(session):
         }
     log.info("Fetched %s weather notes", len(notes))
     return notes
+
+
+def _parse_dk_link(url):
+    """Extract (dk_event_id, dk_outcome_code) from a DraftKings desktop URL."""
+    import re
+    m = re.search(r"/event/(\d+)\?outcomes=([^&\s]+)", url or "")
+    if m:
+        return m.group(1), m.group(2)
+    return None, None
+
+
+def _parse_fd_link(url):
+    """Extract (fd_market_id, fd_selection_id) from a FanDuel desktop URL."""
+    from urllib.parse import urlparse, parse_qs
+    parsed = urlparse(url or "")
+    qs = parse_qs(parsed.query)
+    return qs.get("marketId", [None])[0], qs.get("selectionId", [None])[0]
+
+
+async def fetch_player_names(session, player_ids):
+    """Batch-fetch player fullNames from MLB Stats API by ID list."""
+    if not player_ids:
+        return {}
+    ids_str = ",".join(str(i) for i in player_ids)
+    data = await get(
+        session,
+        f"{MLB_API}/people",
+        params={"personIds": ids_str, "fields": "people,id,fullName"},
+    )
+    if not data or not isinstance(data, dict):
+        return {}
+    return {
+        int(p["id"]): p.get("fullName", "")
+        for p in data.get("people", [])
+        if p.get("id")
+    }
+
+
+async def fetch_props(session, game_pk):
+    """
+    Fetch HR prop odds for a game from /mlb/props.
+    Returns dict keyed by player_id with odds + deep link fields.
+    """
+    data = await get(session, f"{BASE_URL}/mlb/props", params={"gameId": game_pk})
+    if not data or not isinstance(data, list):
+        return {}
+
+    props = {}
+    for item in data:
+        player_id = si(item.get("playerId"))
+        if player_id is None:
+            continue
+        best = item.get("bestMarket") or {}
+        desktop_link = best.get("deepLinkDesktop") or ""
+        ios_link = best.get("deepLinkIos") or best.get("deepLinkMobile") or ""
+
+        dk_event_id, dk_outcome_code = _parse_dk_link(desktop_link)
+        fd_market_id, fd_selection_id = _parse_fd_link(desktop_link)
+
+        props[player_id] = {
+            "player_name": item.get("playerName") or "",
+            "hr_odds_best_price": si(best.get("price")),
+            "hr_odds_best_book": best.get("bookmaker") or best.get("book") or "",
+            "deep_link_desktop": desktop_link,
+            "deep_link_ios": ios_link,
+            "dk_outcome_code": dk_outcome_code or "",
+            "dk_event_id": dk_event_id or "",
+            "fd_market_id": fd_market_id or "",
+            "fd_selection_id": fd_selection_id or "",
+        }
+
+    log.info("Fetched HR props for %s players in game %s", len(props), game_pk)
+    return props
 
 
 async def fetch_team_roster(session, team_id):
@@ -620,6 +741,21 @@ async def main():
         # ── Step 2: fetch expert weather notes ────────────────────────────────
         weather_notes = await fetch_weather_notes(session)
 
+        # ── Step 2b: look up real pitcher names from MLB Stats API ────────────
+        all_pitcher_ids = unique_ints(
+            [game["home_pitcher_id"] for game in games if game.get("home_pitcher_id")]
+            + [game["away_pitcher_id"] for game in games if game.get("away_pitcher_id")]
+        )
+        pitcher_name_map = await fetch_player_names(session, all_pitcher_ids)
+        log.info("Fetched names for %s pitchers", len(pitcher_name_map))
+
+        # ── Step 2c: fetch HR prop odds for each game ──────────────────────────
+        props_results = await asyncio.gather(
+            *[fetch_props(session, game["game_pk"]) for game in games]
+        )
+        # props_by_game: dict[game_pk, dict[player_id, {...}]]
+        props_by_game = {game["game_pk"]: result for game, result in zip(games, props_results)}
+
         # ── Step 3: build raw_game_weather rows ───────────────────────────────
         game_weather_rows = []
         for game in games:
@@ -642,6 +778,7 @@ async def main():
                     "conditions": game["conditions"],
                     "ballpark_name": game["ballpark_name"],
                     "roof_type": game["roof_type"],
+                    "ballpark_azimuth": game.get("ballpark_azimuth"),
                     "home_moneyline": game["home_moneyline"],
                     "away_moneyline": game["away_moneyline"],
                     "over_under": game["over_under"],
@@ -740,7 +877,7 @@ async def main():
                 pitcher_jobs.append(
                     {
                         "pitcher_id": game["home_pitcher_id"],
-                        "pitcher_name": f"Pitcher {game['home_pitcher_id']}",
+                        "pitcher_name": pitcher_name_map.get(game["home_pitcher_id"], f"Pitcher {game['home_pitcher_id']}"),
                         "opp_team_id": game["away_team_id"],
                         "game_pk": game_pk,
                     }
@@ -749,7 +886,7 @@ async def main():
                 pitcher_jobs.append(
                     {
                         "pitcher_id": game["away_pitcher_id"],
-                        "pitcher_name": f"Pitcher {game['away_pitcher_id']}",
+                        "pitcher_name": pitcher_name_map.get(game["away_pitcher_id"], f"Pitcher {game['away_pitcher_id']}"),
                         "opp_team_id": game["home_team_id"],
                         "game_pk": game_pk,
                     }
@@ -798,6 +935,29 @@ async def main():
         bq_insert("raw_splits", all_split_rows)
         bq_insert("raw_pitcher_matchup", all_pitcher_rows)
         bq_insert("raw_pitch_log", all_pitch_log_rows)
+
+        # ── Step 7: insert HR prop odds ────────────────────────────────────────
+        all_props_rows = []
+        for game_pk_key, player_props in props_by_game.items():
+            for player_id, p in player_props.items():
+                all_props_rows.append(
+                    {
+                        "run_date": TODAY.isoformat(),
+                        "game_pk": game_pk_key,
+                        "player_id": player_id,
+                        "player_name": p["player_name"],
+                        "hr_odds_best_price": p["hr_odds_best_price"],
+                        "hr_odds_best_book": p["hr_odds_best_book"],
+                        "deep_link_desktop": p["deep_link_desktop"],
+                        "deep_link_ios": p["deep_link_ios"],
+                        "dk_outcome_code": p["dk_outcome_code"],
+                        "dk_event_id": p["dk_event_id"],
+                        "fd_market_id": p["fd_market_id"],
+                        "fd_selection_id": p["fd_selection_id"],
+                        "ingested_at": NOW.isoformat(),
+                    }
+                )
+        bq_insert("raw_hr_props", all_props_rows)
 
         log.info("Ingest complete.")
 

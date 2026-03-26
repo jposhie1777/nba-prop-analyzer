@@ -279,6 +279,7 @@ def _fetch_game_weather_map(
                   conditions,
                   ballpark_name,
                   roof_type,
+                  ballpark_azimuth,
                   home_moneyline,
                   away_moneyline,
                   over_under,
@@ -308,6 +309,7 @@ def _fetch_game_weather_map(
                   conditions,
                   ballpark_name,
                   roof_type,
+                  ballpark_azimuth,
                   home_moneyline,
                   away_moneyline,
                   over_under,
@@ -428,6 +430,7 @@ def mlb_matchups_upcoming(
                 "away_moneyline": _safe_int(gw.get("away_moneyline")) if gw else None,
                 "over_under": _safe_float(gw.get("over_under")) if gw else None,
                 "weather_note": gw.get("weather_note") if gw else None,
+                "ballpark_azimuth": _safe_int(gw.get("ballpark_azimuth")) if gw else None,
             }
         )
     return rows
@@ -560,7 +563,15 @@ def mlb_matchup_detail(game_pk: int):
           p_iso_allowed,
           IF(home_moneyline IS NOT NULL, home_moneyline, NULL) AS home_moneyline,
           IF(away_moneyline IS NOT NULL, away_moneyline, NULL) AS away_moneyline,
-          over_under
+          over_under,
+          hr_odds_best_price,
+          hr_odds_best_book,
+          deep_link_desktop,
+          deep_link_ios,
+          dk_outcome_code,
+          dk_event_id,
+          fd_market_id,
+          fd_selection_id
         FROM {hr_table}
         WHERE run_date = @run_date
           AND CAST(game_pk AS INT64) = @game_pk
@@ -609,7 +620,15 @@ def mlb_matchup_detail(game_pk: int):
                   p_iso_allowed,
                   IF(home_moneyline IS NOT NULL, home_moneyline, NULL) AS home_moneyline,
                   IF(away_moneyline IS NOT NULL, away_moneyline, NULL) AS away_moneyline,
-                  over_under
+                  over_under,
+                  hr_odds_best_price,
+                  hr_odds_best_book,
+                  deep_link_desktop,
+                  deep_link_ios,
+                  dk_outcome_code,
+                  dk_event_id,
+                  fd_market_id,
+                  fd_selection_id
                 FROM {hr_table}
                 WHERE run_date = @run_date
                   AND (
@@ -722,6 +741,10 @@ def mlb_matchup_detail(game_pk: int):
                 "home_moneyline": _safe_int(pick.get("home_moneyline")),
                 "away_moneyline": _safe_int(pick.get("away_moneyline")),
                 "over_under": _safe_float(pick.get("over_under")),
+                "hr_odds_best_price": _safe_int(pick.get("hr_odds_best_price")),
+                "hr_odds_best_book": pick.get("hr_odds_best_book"),
+                "deep_link_desktop": pick.get("deep_link_desktop"),
+                "deep_link_ios": pick.get("deep_link_ios"),
             }
         )
 
@@ -768,6 +791,7 @@ def mlb_matchup_detail(game_pk: int):
             "conditions": gw.get("conditions") if gw else None,
             "ballpark_name": gw.get("ballpark_name") if gw else None,
             "roof_type": gw.get("roof_type") if gw else None,
+            "ballpark_azimuth": _safe_int(gw.get("ballpark_azimuth")) if gw else None,
             "weather_note": gw.get("weather_note") if gw else None,
             # Odds
             "home_moneyline": _safe_int(gw.get("home_moneyline")) if gw else None,

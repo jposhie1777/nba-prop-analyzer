@@ -167,6 +167,7 @@ def load_game_weather():
                 conditions,
                 ballpark_name,
                 roof_type,
+                ballpark_azimuth,
                 home_moneyline,
                 away_moneyline,
                 over_under,
@@ -179,6 +180,33 @@ def load_game_weather():
         return {row["game_pk"]: row for row in rows}
     except Exception as exc:
         log.warning("load_game_weather failed (table may not exist yet): %s", exc)
+        return {}
+
+
+def load_hr_props():
+    """Load HR prop odds from raw_hr_props for today, keyed by (game_pk, player_id)."""
+    try:
+        rows = query(
+            f"""
+            SELECT
+                game_pk,
+                player_id,
+                hr_odds_best_price,
+                hr_odds_best_book,
+                deep_link_desktop,
+                deep_link_ios,
+                dk_outcome_code,
+                dk_event_id,
+                fd_market_id,
+                fd_selection_id
+            FROM {tbl('raw_hr_props')}
+            WHERE run_date = '{TODAY}'
+            QUALIFY ROW_NUMBER() OVER (PARTITION BY game_pk, player_id ORDER BY ingested_at DESC) = 1
+            """
+        )
+        return {(int(row["game_pk"]), int(row["player_id"])): row for row in rows}
+    except Exception as exc:
+        log.warning("load_hr_props failed (table may not exist yet): %s", exc)
         return {}
 
 
@@ -517,6 +545,7 @@ def main():
     pitch_log_map = load_pitch_log()
     matchups = load_today_matchups()
     weather_map = load_game_weather()
+    props_map = load_hr_props()
 
     if not matchups:
         log.warning("No matchup data - did ingest run with the updated ingest.py?")
@@ -569,6 +598,7 @@ def main():
         )
 
         gw = weather_map.get(matchup["game_pk"], {})
+        pr = props_map.get((matchup["game_pk"], matchup["batter_id"]), {})
         output_rows.append(
             {
                 "run_date": TODAY.isoformat(),
@@ -600,6 +630,15 @@ def main():
                 "home_moneyline": gw.get("home_moneyline"),
                 "away_moneyline": gw.get("away_moneyline"),
                 "over_under": gw.get("over_under"),
+                # HR prop odds + deep links (null-safe)
+                "hr_odds_best_price": pr.get("hr_odds_best_price"),
+                "hr_odds_best_book": pr.get("hr_odds_best_book"),
+                "deep_link_desktop": pr.get("deep_link_desktop"),
+                "deep_link_ios": pr.get("deep_link_ios"),
+                "dk_outcome_code": pr.get("dk_outcome_code"),
+                "dk_event_id": pr.get("dk_event_id"),
+                "fd_market_id": pr.get("fd_market_id"),
+                "fd_selection_id": pr.get("fd_selection_id"),
             }
         )
 

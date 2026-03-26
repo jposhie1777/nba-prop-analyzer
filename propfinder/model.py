@@ -330,7 +330,7 @@ def compute_pulse_score(bm, pm, bat_side, pitcher_hand_raw):
         raw += 8
         flags_good.append(f"HR/9 vs {hitter_hand}: {hr9:.2f} (average)")
     elif hr9 < P_HR9_AVOID:
-        raw -= 5
+        raw -= 3
         flags_bad.append(f"HR/9 vs {hitter_hand}: {hr9:.2f} (avoid)")
 
     if hrfb >= P_HRFB_IDEAL:
@@ -343,7 +343,7 @@ def compute_pulse_score(bm, pm, bat_side, pitcher_hand_raw):
         raw += 5
         flags_good.append(f"HR/FB% vs {hitter_hand}: {hrfb:.1f}% (average)")
     else:
-        raw -= 2
+        raw -= 1
         flags_bad.append(f"HR/FB% vs {hitter_hand}: {hrfb:.1f}% (avoid)")
 
     fb = pm["p_fb_pct"]
@@ -403,11 +403,24 @@ def compute_pulse_score(bm, pm, bat_side, pitcher_hand_raw):
     elif bm["season_barrel_pct"] >= B_BAR_FAV:
         flags_good.append(f"2025 Barrel {bm['season_barrel_pct']:.1f}% (favorable)")
 
+    # Keep elite recent form from being overly suppressed by strong pitcher baselines.
+    hot_form_bonus = 0
+    if bm["l15_ev"] >= B_EV_ELITE:
+        hot_form_bonus += 4
+    if bm["l15_barrel_pct"] >= B_BAR_ELITE:
+        hot_form_bonus += 4
+    if bm["l15_hard_hit_pct"] >= 50:
+        hot_form_bonus += 3
+    if hot_form_bonus > 0:
+        raw += hot_form_bonus
+        flags_good.append(f"Hot-form bonus +{hot_form_bonus}")
+
     pulse = round(max(0.0, min(100.0, (raw / RAW_MAX) * 100)), 1)
 
-    # Keep the avoid guardrail, but only when both metrics are clearly low.
+    # Keep the avoid guardrail, but don't force AVOID on clear elite recent hitter form.
     pitcher_avoid = hr9 < P_HR9_AVOID and hrfb < (P_HRFB_AVG - 1.0)
-    if pitcher_avoid or pulse < PULSE_AVG:
+    hitter_on_fire = bm["l15_ev"] >= B_EV_ELITE and bm["l15_barrel_pct"] >= B_BAR_ELITE
+    if (pitcher_avoid and not hitter_on_fire) or pulse < PULSE_AVG:
         label = "AVOID"
     elif pulse >= PULSE_IDEAL:
         label = "IDEAL"

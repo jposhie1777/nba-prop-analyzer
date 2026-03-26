@@ -61,29 +61,17 @@ function metricTone(metric: "iso" | "slg" | "l15_ev" | "l15_barrel" | "l25_ev" |
   return metricTier(metric, value) === "elite" ? styles.metricElite : styles.metricDefault;
 }
 
-function windDirectionLabel(windDir?: number | null, azimuth?: number | null): { label: string; color: string } | null {
+function windArrow(windDir?: number | null, azimuth?: number | null): { rotation: number; color: string } | null {
   if (windDir == null || azimuth == null) return null;
   const rel = ((windDir - azimuth) + 360) % 360;
-  let label: string;
-  let color: string;
-  if (rel >= 337.5 || rel < 22.5) {
-    label = "Blowing In"; color = "#FCA5A5"; // red
-  } else if (rel < 67.5) {
-    label = "Blowing In-Left"; color = "#FCA5A5";
-  } else if (rel < 112.5) {
-    label = "Blowing Left"; color = "#FDE68A"; // yellow
-  } else if (rel < 157.5) {
-    label = "Blowing In-Right"; color = "#FCA5A5";
-  } else if (rel < 202.5) {
-    label = "Blowing Out"; color = "#86EFAC"; // green
-  } else if (rel < 247.5) {
-    label = "Blowing Out-Right"; color = "#86EFAC";
-  } else if (rel < 292.5) {
-    label = "Blowing Right"; color = "#FDE68A";
-  } else {
-    label = "Blowing Out-Left"; color = "#86EFAC";
-  }
-  return { label, color };
+  // Arrow points in the direction wind is blowing TO (rel+180), clockwise from "toward CF"
+  const rotation = (rel + 180) % 360;
+  // Color by whether wind is helping (blowing out) or hurting (blowing in)
+  const color =
+    (rel >= 135 && rel <= 225) ? "#86EFAC" :  // blowing out → green
+    (rel <= 45 || rel >= 315)  ? "#FCA5A5" :  // blowing in  → red
+    "#FDE68A";                                  // crosswind   → yellow
+  return { rotation, color };
 }
 
 function weatherColor(indicator?: string | null) {
@@ -179,9 +167,10 @@ function BatterCard({
   offenseTeam?: string | null;
 }) {
   const tone = gradeTone(batter.grade);
-  const hasHrOdds = batter.hr_odds_best_price != null && batter.hr_odds_best_book;
+  const hasHrOdds = batter.hr_odds_best_price != null;
+  const book = (batter.hr_odds_best_book ?? "").trim();
   const oddsLabel = hasHrOdds
-    ? `${formatOdds(batter.hr_odds_best_price)} ${(batter.hr_odds_best_book ?? "").slice(0, 12)}`
+    ? (book ? `${formatOdds(batter.hr_odds_best_price)} ${book.slice(0, 10)}` : formatOdds(batter.hr_odds_best_price))
     : null;
   const oddsColor = (batter.hr_odds_best_price ?? 0) >= 0 ? "#86EFAC" : "#FCA5A5";
 
@@ -366,13 +355,13 @@ export function MlbMatchupDetailScreen() {
                   </View>
                 ) : null}
                 {game?.wind_speed != null ? (() => {
-                  const wdl = windDirectionLabel(game.wind_dir, game.ballpark_azimuth);
+                  const wa = windArrow(game.wind_dir, game.ballpark_azimuth);
                   return (
                     <View style={styles.weatherPill}>
                       <Text style={styles.weatherPillText}>
                         💨 {game.wind_speed.toFixed(1)} mph{" "}
-                        {wdl
-                          ? <Text style={{ color: wdl.color }}>{wdl.label}</Text>
+                        {wa
+                          ? <Text style={{ color: wa.color, transform: [{ rotate: `${wa.rotation}deg` }] }}>{"↑"}</Text>
                           : game.wind_dir != null ? `@ ${game.wind_dir}°` : ""}
                       </Text>
                     </View>

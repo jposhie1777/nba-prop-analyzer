@@ -1,10 +1,16 @@
+import { useState } from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 
-import { useMlbMatchupDetail } from "@/hooks/mlb/useMlbMatchups";
+import { useMlbMatchupDetail, MlbBatterPick, MlbPitcherGroup } from "@/hooks/mlb/useMlbMatchups";
 import { useTheme } from "@/store/useTheme";
 import { getMlbTeamLogo } from "@/utils/mlbLogos";
 import { BackToHomeButton } from "@/components/navigation/BackToHomeButton";
+import { useSavedBets } from "@/store/useSavedBets";
+import { BetslipDrawer } from "@/components/live/BetslipDrawer";
+import { BetslipToggle } from "@/components/live/BetslipToggle";
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 type StatValue = number | string | null | undefined;
 
@@ -18,6 +24,11 @@ function formatMetric(value: StatValue, digits = 1): string {
   if (typeof value === "string") return value;
   if (!Number.isFinite(value)) return "—";
   return Number.isInteger(value) ? `${value}` : value.toFixed(digits);
+}
+
+function formatOdds(ml?: number | null): string {
+  if (ml == null) return "—";
+  return ml > 0 ? `+${ml}` : `${ml}`;
 }
 
 function normalizeGrade(grade?: string | null): "IDEAL" | "FAVORABLE" | "AVERAGE" | "AVOID" {
@@ -51,57 +62,15 @@ function metricTone(metric: "iso" | "slg" | "l15_ev" | "l15_barrel" | "l25_ev" |
   return metricTier(metric, value) === "elite" ? styles.metricElite : styles.metricDefault;
 }
 
-function StickyPitcherCard({
-  pitcher,
-}: {
-  pitcher: {
-    pitcher_name?: string | null;
-    pitcher_hand?: string | null;
-    offense_team?: string | null;
-    splits: Record<string, any>;
-  };
-}) {
-  const season = pitcher.splits?.Season;
-  const vsL = pitcher.splits?.vsLHB;
-  const vsR = pitcher.splits?.vsRHB;
-  return (
-    <View style={styles.stickyPitcherWrap}>
-      <Text style={styles.stickyTitle}>
-        {pitcher.pitcher_name ?? "Pitcher"} ({pitcher.pitcher_hand ?? "RHP"}) - {pitcher.offense_team ?? "Offense"}
-      </Text>
-      <View style={styles.tableWrap}>
-        <View style={[styles.tableRow, styles.tableHeaderRow]}>
-          <Text style={[styles.headerCell, styles.cellSplit]}>SPLIT</Text>
-          <Text style={styles.headerCell}>IP</Text>
-          <Text style={styles.headerCell}>HR</Text>
-          <Text style={styles.headerCell}>HR/9</Text>
-          <Text style={styles.headerCell}>BARREL%</Text>
-          <Text style={styles.headerCell}>HARDHIT%</Text>
-          <Text style={styles.headerCell}>FB%</Text>
-          <Text style={styles.headerCell}>HR/FB%</Text>
-          <Text style={styles.headerCell}>WHIP</Text>
-        </View>
-        <SplitRow label="SEASON" split={season} />
-        <SplitRow label="VS LHB" split={vsL} />
-        <SplitRow label="VS RHB" split={vsR} />
-      </View>
-    </View>
-  );
+function weatherColor(indicator?: string | null) {
+  const w = (indicator || "").toLowerCase();
+  if (w === "green") return { border: "#22C55E55", text: "#86EFAC", bg: "rgba(34,197,94,0.08)" };
+  if (w === "yellow") return { border: "#F59E0B55", text: "#FDE68A", bg: "rgba(245,158,11,0.08)" };
+  if (w === "red") return { border: "#EF444455", text: "#FCA5A5", bg: "rgba(239,68,68,0.08)" };
+  return { border: "#33415555", text: "#94A3B8", bg: "transparent" };
 }
 
-function dedupeBatters<T extends { batter_id?: number | null; batter_name?: string | null; score?: number | null }>(
-  batters: T[]
-): T[] {
-  const byKey = new Map<string, T>();
-  for (const batter of batters) {
-    const key = batter.batter_id != null ? `id:${batter.batter_id}` : `name:${(batter.batter_name ?? "").toLowerCase()}`;
-    const existing = byKey.get(key);
-    if (!existing || (batter.score ?? 0) > (existing.score ?? 0)) {
-      byKey.set(key, batter);
-    }
-  }
-  return Array.from(byKey.values()).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-}
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function SplitRow({
   label,
@@ -134,8 +103,213 @@ function SplitRow({
   );
 }
 
+function PitcherSplitsTable({ pitcher }: { pitcher: MlbPitcherGroup }) {
+  const season = pitcher.splits?.Season;
+  const vsL = pitcher.splits?.vsLHB;
+  const vsR = pitcher.splits?.vsRHB;
+  return (
+    <View style={styles.tableWrap}>
+      <View style={[styles.tableRow, styles.tableHeaderRow]}>
+        <Text style={[styles.headerCell, styles.cellSplit]}>SPLIT</Text>
+        <Text style={styles.headerCell}>IP</Text>
+        <Text style={styles.headerCell}>HR</Text>
+        <Text style={styles.headerCell}>HR/9</Text>
+        <Text style={styles.headerCell}>BARREL%</Text>
+        <Text style={styles.headerCell}>HARDHIT%</Text>
+        <Text style={styles.headerCell}>FB%</Text>
+        <Text style={styles.headerCell}>HR/FB%</Text>
+        <Text style={styles.headerCell}>WHIP</Text>
+      </View>
+      <SplitRow label="SEASON" split={season} />
+      <SplitRow label="VS LHB" split={vsL} />
+      <SplitRow label="VS RHB" split={vsR} />
+    </View>
+  );
+}
+
+function dedupeBatters<T extends { batter_id?: number | null; batter_name?: string | null; score?: number | null }>(
+  batters: T[]
+): T[] {
+  const byKey = new Map<string, T>();
+  for (const batter of batters) {
+    const key = batter.batter_id != null ? `id:${batter.batter_id}` : `name:${(batter.batter_name ?? "").toLowerCase()}`;
+    const existing = byKey.get(key);
+    if (!existing || (batter.score ?? 0) > (existing.score ?? 0)) {
+      byKey.set(key, batter);
+    }
+  }
+  return Array.from(byKey.values()).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+}
+
+// ─── BatterCard ───────────────────────────────────────────────────────────────
+
+function BatterCard({
+  batter,
+  gamePk,
+  pitcherName,
+  offenseTeam,
+}: {
+  batter: MlbBatterPick;
+  gamePk: number;
+  pitcherName?: string | null;
+  offenseTeam?: string | null;
+}) {
+  const { savedIds, toggleSave } = useSavedBets();
+  const tone = gradeTone(batter.grade);
+  const betId = `mlb-hr-${gamePk}-${batter.batter_id ?? batter.batter_name}`;
+  const isSaved = savedIds.has(betId);
+
+  function handleSave() {
+    toggleSave({
+      id: betId,
+      betType: "player",
+      gameId: gamePk,
+      playerId: batter.batter_id ?? undefined,
+      player: batter.batter_name ?? "Unknown",
+      market: `HR Prop vs ${pitcherName ?? "Pitcher"} (${normalizeGrade(batter.grade)} ${formatScore(batter.score)})`,
+      line: 0.5,
+      side: "over",
+      bookmaker: "PropFinder",
+    });
+  }
+
+  return (
+    <View style={[styles.batterCard, { borderColor: tone.border, backgroundColor: tone.bg }]}>
+      {/* ── Header row: name + grade pill + save button ── */}
+      <View style={styles.batterHead}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.batterName}>{batter.batter_name ?? "Batter"}</Text>
+          <Text style={styles.batterSub}>{offenseTeam ?? ""}{batter.bat_side ? ` · ${batter.bat_side === "L" ? "LHB" : "RHB"}` : ""}</Text>
+        </View>
+        <View style={styles.batterHeadRight}>
+          <View style={[styles.gradePill, { borderColor: tone.border }]}>
+            <Text style={[styles.gradeText, { color: tone.text }]}>{normalizeGrade(batter.grade)} • {formatScore(batter.score)}</Text>
+          </View>
+          <Pressable
+            onPress={handleSave}
+            style={[
+              styles.saveButton,
+              isSaved
+                ? { backgroundColor: "#10B981", borderColor: "#10B981" }
+                : { backgroundColor: "transparent", borderColor: "#475569" },
+            ]}
+          >
+            <Text style={[styles.saveButtonText, { color: isSaved ? "#fff" : "#94A3B8" }]}>
+              {isSaved ? "✓ Saved" : "+ Save"}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* ── Game odds context ── */}
+      {(batter.home_moneyline != null || batter.away_moneyline != null || batter.over_under != null) ? (
+        <View style={styles.oddsRow}>
+          {batter.away_moneyline != null ? (
+            <View style={styles.oddsPill}>
+              <Text style={styles.oddsPillLabel}>Away</Text>
+              <Text style={styles.oddsPillValue}>{formatOdds(batter.away_moneyline)}</Text>
+            </View>
+          ) : null}
+          {batter.home_moneyline != null ? (
+            <View style={styles.oddsPill}>
+              <Text style={styles.oddsPillLabel}>Home</Text>
+              <Text style={styles.oddsPillValue}>{formatOdds(batter.home_moneyline)}</Text>
+            </View>
+          ) : null}
+          {batter.over_under != null ? (
+            <View style={styles.oddsPill}>
+              <Text style={styles.oddsPillLabel}>O/U</Text>
+              <Text style={styles.oddsPillValue}>{batter.over_under}</Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      {/* ── Metrics table ── */}
+      <View style={styles.metricsTable}>
+        <View style={styles.metricsHeaderRow}>
+          <Text style={styles.metricsHeaderCell}>ISO</Text>
+          <Text style={styles.metricsHeaderCell}>SLG</Text>
+          <Text style={styles.metricsHeaderCell}>L15 EV</Text>
+          <Text style={styles.metricsHeaderCell}>L15 Barrel%</Text>
+          <Text style={styles.metricsHeaderCell}>L25 EV</Text>
+          <Text style={styles.metricsHeaderCell}>L25 Barrel%</Text>
+        </View>
+        <View style={styles.metricsValueRow}>
+          <Text style={[styles.metricsValueCell, metricTone("iso", batter.iso)]}>{formatMetric(batter.iso, 3)}</Text>
+          <Text style={[styles.metricsValueCell, metricTone("slg", batter.slg)]}>{formatMetric(batter.slg, 3)}</Text>
+          <Text style={[styles.metricsValueCell, metricTone("l15_ev", batter.l15_ev)]}>{formatMetric(batter.l15_ev, 1)}</Text>
+          <Text style={[styles.metricsValueCell, metricTone("l15_barrel", batter.l15_barrel_pct)]}>{formatMetric(batter.l15_barrel_pct, 1)}</Text>
+          <Text style={[styles.metricsValueCell, metricTone("l25_ev", batter.season_ev)]}>{formatMetric(batter.season_ev, 1)}</Text>
+          <Text style={[styles.metricsValueCell, metricTone("l25_barrel", batter.season_barrel_pct)]}>{formatMetric(batter.season_barrel_pct, 1)}</Text>
+        </View>
+      </View>
+
+      {batter.why ? <Text style={styles.whyText}>Why: {batter.why}</Text> : null}
+      {(batter.flags ?? []).length ? <Text style={styles.flagsText}>Signals: {(batter.flags ?? []).slice(0, 4).join(" • ")}</Text> : null}
+    </View>
+  );
+}
+
+// ─── PitcherSection ───────────────────────────────────────────────────────────
+// Each pitcher section has its OWN sticky header, so the correct pitcher sticks
+// at the top as you scroll through that team's batters.
+
+function PitcherSection({
+  pitcher,
+  gamePk,
+  sectionIndex,
+}: {
+  pitcher: MlbPitcherGroup;
+  gamePk: number;
+  sectionIndex: number;
+}) {
+  const batters = dedupeBatters(pitcher.batters ?? []).slice(0, 12);
+  const season = pitcher.splits?.Season;
+
+  return (
+    <View style={styles.panel}>
+      {/* ── Sticky pitcher header – sticks within this section ── */}
+      <View style={styles.stickyPitcherInSection}>
+        <View style={styles.stickyPitcherTitleRow}>
+          <Text style={styles.stickyTitle}>
+            {pitcher.pitcher_name ?? "Pitcher"} ({pitcher.pitcher_hand ?? "RHP"})
+          </Text>
+          <Text style={styles.stickyOffense}>{pitcher.offense_team ?? "Offense"} batting</Text>
+        </View>
+        <PitcherSplitsTable pitcher={pitcher} />
+      </View>
+
+      {/* ── Section label ── */}
+      <Text style={styles.sectionEyebrow}>
+        SIDE {sectionIndex + 1} — {pitcher.offense_team ?? "OFFENSE"}
+      </Text>
+      <Text style={styles.sectionSub}>
+        {pitcher.pitcher_hand ?? "RHP"} • Season HR/9 {formatMetric(season?.hr_per_9, 2)} • Barrel% {formatMetric(season?.barrel_pct)} • HR/FB% {formatMetric(season?.hr_fb_pct)}
+      </Text>
+
+      {/* ── Batters ── */}
+      {!batters.length ? (
+        <Text style={styles.emptySub}>No hitter rows returned for this pitcher.</Text>
+      ) : null}
+      {batters.map((batter) => (
+        <BatterCard
+          key={`${pitcher.pitcher_id}-${batter.batter_id ?? batter.batter_name}`}
+          batter={batter}
+          gamePk={gamePk}
+          pitcherName={pitcher.pitcher_name}
+          offenseTeam={pitcher.offense_team}
+        />
+      ))}
+    </View>
+  );
+}
+
+// ─── Main screen ─────────────────────────────────────────────────────────────
+
 export function MlbMatchupDetailScreen() {
   const { colors } = useTheme();
+  const [betslipOpen, setBetslipOpen] = useState(false);
   const params = useLocalSearchParams<{ gamePk?: string; awayTeam?: string; homeTeam?: string }>();
   const gamePk = Number(params.gamePk);
   const { data, loading, error, refetch } = useMlbMatchupDetail(Number.isFinite(gamePk) ? gamePk : null);
@@ -146,185 +320,174 @@ export function MlbMatchupDetailScreen() {
   const topCount = (data?.grade_counts?.IDEAL ?? 0) + (data?.grade_counts?.FAVORABLE ?? 0);
   const awayLogo = getMlbTeamLogo(awayTeam);
   const homeLogo = getMlbTeamLogo(homeTeam);
+  const wc = weatherColor(game?.weather_indicator);
+
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.actionRow}>
-        <BackToHomeButton />
-      </View>
-
-      <View style={[styles.hero, { borderColor: colors.border.subtle }]}>
-        <Text style={styles.eyebrow}>MLB MATCHUP ANALYTICS</Text>
-        <View style={styles.slugRow}>
-          <View style={styles.heroTeamCol}>
-            {awayLogo ? <Image source={{ uri: awayLogo }} style={styles.heroLogo} /> : <View style={styles.heroLogo} />}
-            <Text style={styles.heroTeamName} numberOfLines={2}>{awayTeam}</Text>
-          </View>
-          <View style={styles.heroCenterCol}>
-            <Text style={styles.slugTime}>{game?.start_time_utc ? new Date(game.start_time_utc).toLocaleTimeString() : "TBD"}</Text>
-            <Text style={styles.slugMeta}>{game?.venue_name ?? "Venue TBD"}</Text>
-            <Text style={styles.slugTop}>Top Rated Batter • {topCount} Favorable+</Text>
-          </View>
-          <View style={styles.heroTeamCol}>
-            {homeLogo ? <Image source={{ uri: homeLogo }} style={styles.heroLogo} /> : <View style={styles.heroLogo} />}
-            <Text style={styles.heroTeamName} numberOfLines={2}>{homeTeam}</Text>
-          </View>
+    <View style={{ flex: 1, backgroundColor: "#050A18" }}>
+      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+        <View style={styles.actionRow}>
+          <BackToHomeButton />
         </View>
-        <View style={styles.tagRow}>
-          <View style={styles.pill}><Text style={styles.pillText}>☁ Weather: soon</Text></View>
-          <View style={styles.pill}><Text style={styles.pillText}>🏟 Park: soon</Text></View>
-          <View style={styles.pill}><Text style={styles.pillText}>💰 Odds: soon</Text></View>
-        </View>
-      </View>
 
-      {(data?.pitchers ?? []).map((pitcher) => {
-        const season = pitcher.splits?.Season;
-        const vsL = pitcher.splits?.vsLHB;
-        const vsR = pitcher.splits?.vsRHB;
-        return (
-          <View key={`sticky-${String(pitcher.pitcher_id)}`} style={styles.stickyPitcherWrap}>
-            <Text style={styles.stickyTitle}>
-              {pitcher.pitcher_name ?? "Pitcher"} ({pitcher.pitcher_hand ?? "RHP"}) • {pitcher.offense_team ?? "Offense"}
-            </Text>
-            <View style={styles.tableWrap}>
-              <View style={[styles.tableRow, styles.tableHeaderRow]}>
-                <Text style={[styles.headerCell, styles.cellSplit]}>SPLIT</Text>
-                <Text style={styles.headerCell}>IP</Text>
-                <Text style={styles.headerCell}>HR</Text>
-                <Text style={styles.headerCell}>HR/9</Text>
-                <Text style={styles.headerCell}>BARREL%</Text>
-                <Text style={styles.headerCell}>HARDHIT%</Text>
-                <Text style={styles.headerCell}>FB%</Text>
-                <Text style={styles.headerCell}>HR/FB%</Text>
-                <Text style={styles.headerCell}>WHIP</Text>
-              </View>
-              <SplitRow label="SEASON" split={season} />
-              <SplitRow label="VS LHB" split={vsL} />
-              <SplitRow label="VS RHB" split={vsR} />
+        {/* ── Hero card ── */}
+        <View style={[styles.hero, { borderColor: colors.border.subtle }]}>
+          <Text style={styles.eyebrow}>MLB MATCHUP ANALYTICS</Text>
+          <View style={styles.slugRow}>
+            <View style={styles.heroTeamCol}>
+              {awayLogo ? <Image source={{ uri: awayLogo }} style={styles.heroLogo} /> : <View style={styles.heroLogo} />}
+              <Text style={styles.heroTeamName} numberOfLines={2}>{awayTeam}</Text>
+              {game?.away_moneyline != null ? (
+                <Text style={styles.heroOdds}>{formatOdds(game.away_moneyline)}</Text>
+              ) : null}
+            </View>
+            <View style={styles.heroCenterCol}>
+              <Text style={styles.slugTime}>
+                {game?.start_time_utc ? new Date(game.start_time_utc).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "TBD"}
+              </Text>
+              <Text style={styles.slugMeta}>{game?.venue_name ?? game?.ballpark_name ?? "Venue TBD"}</Text>
+              {game?.over_under != null ? (
+                <Text style={styles.slugOU}>O/U {game.over_under}</Text>
+              ) : null}
+              <Text style={styles.slugTop}>Top Rated • {topCount} Favorable+</Text>
+            </View>
+            <View style={styles.heroTeamCol}>
+              {homeLogo ? <Image source={{ uri: homeLogo }} style={styles.heroLogo} /> : <View style={styles.heroLogo} />}
+              <Text style={styles.heroTeamName} numberOfLines={2}>{homeTeam}</Text>
+              {game?.home_moneyline != null ? (
+                <Text style={styles.heroOdds}>{formatOdds(game.home_moneyline)}</Text>
+              ) : null}
             </View>
           </View>
-        );
-      })}
 
-      {loading ? <ActivityIndicator color="#93C5FD" /> : null}
-
-      {error ? (
-        <Pressable onPress={refetch} style={[styles.errorBox, { borderColor: colors.border.subtle }]}>
-          <Text style={styles.errorTitle}>Failed to load MLB matchup.</Text>
-          <Text style={styles.errorText}>{error}</Text>
-          <Text style={styles.errorRetry}>Tap to retry</Text>
-        </Pressable>
-      ) : null}
-
-      {(data?.pitchers ?? []).map((pitcher, pitcherIdx) => (
-        <View key={`sticky-web-${String(pitcher.pitcher_id)}`} style={styles.stickySlot}>
-          <StickyPitcherCard pitcher={pitcher as any} />
-        </View>
-      ))}
-
-      {(data?.pitchers ?? []).map((pitcher, pitcherIdx) => {
-        const season = pitcher.splits?.Season;
-        const vsL = pitcher.splits?.vsLHB;
-        const vsR = pitcher.splits?.vsRHB;
-        const batters = dedupeBatters(pitcher.batters ?? []).slice(0, 12);
-        return (
-          <View key={String(pitcher.pitcher_id)} style={[styles.panel, { borderColor: colors.border.subtle }]}>
-            <Text style={styles.sectionEyebrow}>SIDE 1 - {pitcher.offense_team ?? "OFFENSE"}</Text>
-            <Text style={styles.sectionTitle}>
-              {(pitcher.offense_team ?? "Batters")} vs {pitcher.pitcher_name ?? "Pitcher"}
-            </Text>
-            <Text style={styles.sectionSub}>
-              {pitcher.pitcher_hand ?? "RHP"} • Season HR/9 {formatMetric(season?.hr_per_9, 2)} • Barrel% {formatMetric(season?.barrel_pct)} • HR/FB% {formatMetric(season?.hr_fb_pct)}
-            </Text>
-
-            <View style={styles.pitcherCard}>
-              <Text style={styles.pitcherName}>{pitcher.pitcher_name ?? "Pitcher"}</Text>
-              <View style={styles.tableWrap}>
-                <View style={[styles.tableRow, styles.tableHeaderRow]}>
-                  <Text style={[styles.headerCell, styles.cellSplit]}>SPLIT</Text>
-                  <Text style={styles.headerCell}>IP</Text>
-                  <Text style={styles.headerCell}>HR</Text>
-                  <Text style={styles.headerCell}>HR/9</Text>
-                  <Text style={styles.headerCell}>BARREL%</Text>
-                  <Text style={styles.headerCell}>HARDHIT%</Text>
-                  <Text style={styles.headerCell}>FB%</Text>
-                  <Text style={styles.headerCell}>HR/FB%</Text>
-                  <Text style={styles.headerCell}>WHIP</Text>
-                </View>
-                <SplitRow label="SEASON" split={season} />
-                <SplitRow label="VS LHB" split={vsL} />
-                <SplitRow label="VS RHB" split={vsR} />
+          {/* ── Weather strip ── */}
+          {(game?.weather_indicator || game?.game_temp != null || game?.wind_speed != null) ? (
+            <View style={[styles.weatherStrip, { borderColor: wc.border, backgroundColor: wc.bg }]}>
+              <View style={styles.weatherPills}>
+                {game?.weather_indicator ? (
+                  <View style={[styles.weatherPill, { borderColor: wc.border }]}>
+                    <Text style={[styles.weatherPillText, { color: wc.text }]}>
+                      {game.weather_indicator.toLowerCase() === "green" ? "☀" : game.weather_indicator.toLowerCase() === "yellow" ? "⛅" : "🌧"} {game.weather_indicator}
+                    </Text>
+                  </View>
+                ) : null}
+                {game?.game_temp != null ? (
+                  <View style={styles.weatherPill}>
+                    <Text style={styles.weatherPillText}>🌡 {Math.round(game.game_temp)}°F</Text>
+                  </View>
+                ) : null}
+                {game?.wind_speed != null ? (
+                  <View style={styles.weatherPill}>
+                    <Text style={styles.weatherPillText}>
+                      💨 {game.wind_speed.toFixed(1)} mph{game.wind_dir != null ? ` @ ${game.wind_dir}°` : ""}
+                    </Text>
+                  </View>
+                ) : null}
+                {game?.precip_prob != null && game.precip_prob > 0 ? (
+                  <View style={styles.weatherPill}>
+                    <Text style={styles.weatherPillText}>☔ {Math.round(game.precip_prob)}% precip</Text>
+                  </View>
+                ) : null}
+                {game?.roof_type ? (
+                  <View style={styles.weatherPill}>
+                    <Text style={styles.weatherPillText}>🏟 {game.roof_type}</Text>
+                  </View>
+                ) : null}
               </View>
+              {game?.conditions ? (
+                <Text style={styles.conditionsText}>{game.conditions}</Text>
+              ) : null}
+              {game?.weather_note ? (
+                <Text style={styles.weatherNote}>{game.weather_note}</Text>
+              ) : null}
             </View>
-
-            {!batters.length ? (
-              <Text style={styles.emptySub}>No hitter rows returned for this pitcher.</Text>
-            ) : null}
-            {batters.map((batter) => {
-              const tone = gradeTone(batter.grade);
-              return (
-                <View
-                  key={`${pitcher.pitcher_id}-${batter.batter_id ?? batter.batter_name}`}
-                  style={[styles.batterCard, { borderColor: tone.border, backgroundColor: tone.bg }]}
-                >
-                  <View style={styles.batterHead}>
-                    <Text style={styles.batterName}>{batter.batter_name ?? "Batter"}</Text>
-                    <View style={[styles.gradePill, { borderColor: tone.border }]}>
-                      <Text style={[styles.gradeText, { color: tone.text }]}>{normalizeGrade(batter.grade)} • {formatScore(batter.score)}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.metricsTable}>
-                    <View style={styles.metricsHeaderRow}>
-                      <Text style={styles.metricsHeaderCell}>ISO</Text>
-                      <Text style={styles.metricsHeaderCell}>SLG</Text>
-                      <Text style={styles.metricsHeaderCell}>L15 EV</Text>
-                      <Text style={styles.metricsHeaderCell}>L15 Barrel%</Text>
-                      <Text style={styles.metricsHeaderCell}>L25 EV</Text>
-                      <Text style={styles.metricsHeaderCell}>L25 Barrel%</Text>
-                    </View>
-                    <View style={styles.metricsValueRow}>
-                      <Text style={[styles.metricsValueCell, metricTone("iso", batter.iso)]}>{formatMetric(batter.iso, 3)}</Text>
-                      <Text style={[styles.metricsValueCell, metricTone("slg", batter.slg)]}>{formatMetric(batter.slg, 3)}</Text>
-                      <Text style={[styles.metricsValueCell, metricTone("l15_ev", batter.l15_ev)]}>{formatMetric(batter.l15_ev, 1)}</Text>
-                      <Text style={[styles.metricsValueCell, metricTone("l15_barrel", batter.l15_barrel_pct)]}>{formatMetric(batter.l15_barrel_pct, 1)}</Text>
-                      <Text style={[styles.metricsValueCell, metricTone("l25_ev", batter.season_ev)]}>{formatMetric(batter.season_ev, 1)}</Text>
-                      <Text style={[styles.metricsValueCell, metricTone("l25_barrel", batter.season_barrel_pct)]}>{formatMetric(batter.season_barrel_pct, 1)}</Text>
-                    </View>
-                  </View>
-
-                  {batter.why ? <Text style={styles.whyText}>Why: {batter.why}</Text> : null}
-                  {(batter.flags ?? []).length ? <Text style={styles.flagsText}>Signals: {(batter.flags ?? []).slice(0, 4).join(" • ")}</Text> : null}
-                </View>
-              );
-            })}
-          </View>
-        );
-      })}
-
-      {!loading && !error && !(data?.pitchers?.length) ? (
-        <View style={[styles.panel, { borderColor: colors.border.subtle }]}>
-          <Text style={styles.emptyTitle}>No MLB model data for this game yet.</Text>
-          <Text style={styles.emptySub}>Once ingest/model writes land in BigQuery, this matchup view will auto-populate.</Text>
+          ) : (
+            <View style={styles.tagRow}>
+              <View style={styles.pill}><Text style={styles.pillText}>Weather data pending</Text></View>
+              {game?.ballpark_name ? <View style={styles.pill}><Text style={styles.pillText}>🏟 {game.ballpark_name}</Text></View> : null}
+            </View>
+          )}
         </View>
-      ) : null}
-    </ScrollView>
+
+        {loading ? <ActivityIndicator color="#93C5FD" /> : null}
+
+        {error ? (
+          <Pressable onPress={refetch} style={[styles.errorBox, { borderColor: colors.border.subtle }]}>
+            <Text style={styles.errorTitle}>Failed to load MLB matchup.</Text>
+            <Text style={styles.errorText}>{error}</Text>
+            <Text style={styles.errorRetry}>Tap to retry</Text>
+          </Pressable>
+        ) : null}
+
+        {/* ── Pitcher sections — each has its own sticky header ── */}
+        {(data?.pitchers ?? []).map((pitcher, idx) => (
+          <PitcherSection
+            key={String(pitcher.pitcher_id)}
+            pitcher={pitcher}
+            gamePk={gamePk}
+            sectionIndex={idx}
+          />
+        ))}
+
+        {!loading && !error && !(data?.pitchers?.length) ? (
+          <View style={[styles.panel, { borderColor: colors.border.subtle }]}>
+            <Text style={styles.emptyTitle}>No MLB model data for this game yet.</Text>
+            <Text style={styles.emptySub}>Once ingest/model writes land in BigQuery, this matchup view will auto-populate.</Text>
+          </View>
+        ) : null}
+
+        <View style={{ height: 80 }} />
+      </ScrollView>
+
+      {/* ── Betslip overlay ── */}
+      <BetslipToggle onPress={() => setBetslipOpen(true)} />
+      <BetslipDrawer open={betslipOpen} onClose={() => setBetslipOpen(false)} />
+    </View>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#050A18" },
   content: { padding: 16, gap: 10, paddingBottom: 40 },
   actionRow: { flexDirection: "row", gap: 8, marginBottom: 2 },
+
+  // Hero
   hero: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 16, backgroundColor: "#071731", padding: 16, gap: 8 },
   eyebrow: { color: "#10B981", fontSize: 11, fontWeight: "700" },
   slugRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
-  heroTeamCol: { flex: 1.25, alignItems: "center", gap: 6 },
+  heroTeamCol: { flex: 1.25, alignItems: "center", gap: 4 },
   heroCenterCol: { flex: 1.8, alignItems: "center", gap: 3 },
   heroLogo: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#111827" },
   heroTeamName: { color: "#E5E7EB", fontSize: 14, fontWeight: "800", textAlign: "center" },
+  heroOdds: { color: "#93C5FD", fontSize: 13, fontWeight: "800" },
   slugTime: { color: "#F8FAFC", fontSize: 18, fontWeight: "800" },
   slugMeta: { color: "#A7C0E8", fontSize: 11 },
+  slugOU: { color: "#A5B4FC", fontSize: 12, fontWeight: "700" },
   slugTop: { color: "#34D399", fontSize: 11, fontWeight: "700" },
+
+  // Weather strip
+  weatherStrip: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    padding: 10,
+    gap: 6,
+    marginTop: 4,
+  },
+  weatherPills: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  weatherPill: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#334155",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: "#0F172A",
+  },
+  weatherPillText: { color: "#CBD5E1", fontSize: 11, fontWeight: "700" },
+  conditionsText: { color: "#94A3B8", fontSize: 11 },
+  weatherNote: { color: "#BFDBFE", fontSize: 11, lineHeight: 16, fontStyle: "italic" },
+
+  // Fallback tag row
   tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
   pill: {
     borderWidth: StyleSheet.hairlineWidth,
@@ -335,34 +498,54 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   pillText: { color: "#BFDBFE", fontSize: 11, fontWeight: "700" },
-  panel: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, backgroundColor: "#0B1529", padding: 12, gap: 8 },
-  stickyPitcherWrap: {
-    position: "sticky" as any,
-    top: 78,
-    zIndex: 50,
+
+  // Panel (one per pitcher, contains sticky header + batters)
+  panel: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#1F2937",
-    borderRadius: 12,
-    backgroundColor: "rgba(5,10,24,0.97)",
+    borderColor: "#1E293B",
+    borderRadius: 14,
+    backgroundColor: "#0B1529",
+    overflow: "hidden",
+    gap: 0,
+  },
+
+  // Sticky pitcher header — sticks within its own panel section
+  stickyPitcherInSection: {
+    position: "sticky" as any,
+    top: 0,
+    zIndex: 30,
+    backgroundColor: "rgba(7,14,30,0.97)",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#1F2937",
     padding: 10,
     gap: 6,
   },
-  stickySlot: { marginBottom: 0 },
-  stickyTitle: { color: "#D1D5DB", fontSize: 12, fontWeight: "800" },
-  sectionEyebrow: { color: "#64748B", fontSize: 11, fontWeight: "700" },
-  sectionTitle: { color: "#E5E7EB", fontSize: 18, fontWeight: "800" },
-  sectionSub: { color: "#94A3B8", fontSize: 12 },
-  pitcherCard: { borderWidth: StyleSheet.hairlineWidth, borderColor: "#374151", borderRadius: 12, backgroundColor: "#111827", padding: 10, gap: 8 },
-  pitcherName: { color: "#E5E7EB", fontSize: 15, fontWeight: "800" },
+  stickyPitcherTitleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8,
+  },
+  stickyTitle: { color: "#E2E8F0", fontSize: 13, fontWeight: "800", flex: 1 },
+  stickyOffense: { color: "#64748B", fontSize: 11, fontWeight: "600" },
+
+  sectionEyebrow: { color: "#64748B", fontSize: 11, fontWeight: "700", paddingHorizontal: 12, paddingTop: 10 },
+  sectionSub: { color: "#94A3B8", fontSize: 11, paddingHorizontal: 12, paddingBottom: 6 },
+
+  // Table
   tableWrap: { gap: 2 },
   tableHeaderRow: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#334155", paddingBottom: 4, marginBottom: 2 },
   tableRow: { flexDirection: "row", alignItems: "center" },
-  headerCell: { color: "#94A3B8", fontSize: 10, fontWeight: "800", flex: 1, textAlign: "center" },
-  cell: { color: "#E5E7EB", fontSize: 11, flex: 1, textAlign: "center", paddingVertical: 3 },
+  headerCell: { color: "#94A3B8", fontSize: 9, fontWeight: "800", flex: 1, textAlign: "center" },
+  cell: { color: "#E5E7EB", fontSize: 10, flex: 1, textAlign: "center", paddingVertical: 2 },
   cellSplit: { flex: 1.5, textAlign: "left", fontWeight: "800", color: "#CBD5E1" },
-  batterCard: { borderWidth: 1, borderRadius: 12, padding: 10, gap: 8 },
-  batterHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  batterName: { color: "#E5E7EB", fontSize: 15, fontWeight: "700", flex: 1 },
+
+  // Batter card
+  batterCard: { borderWidth: 1, borderRadius: 0, padding: 12, gap: 8, borderLeftWidth: 0, borderRightWidth: 0, borderBottomWidth: StyleSheet.hairlineWidth },
+  batterHead: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 8 },
+  batterHeadRight: { flexDirection: "column", alignItems: "flex-end", gap: 6 },
+  batterName: { color: "#E5E7EB", fontSize: 15, fontWeight: "700" },
+  batterSub: { color: "#64748B", fontSize: 11, marginTop: 2 },
   gradePill: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 999,
@@ -371,6 +554,29 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   gradeText: { fontSize: 11, fontWeight: "800" },
+  saveButton: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  saveButtonText: { fontSize: 11, fontWeight: "700" },
+
+  // Odds row
+  oddsRow: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
+  oddsPill: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#334155",
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: "#0F172A",
+    alignItems: "center",
+  },
+  oddsPillLabel: { color: "#64748B", fontSize: 9, fontWeight: "700" },
+  oddsPillValue: { color: "#93C5FD", fontSize: 12, fontWeight: "800" },
+
+  // Metrics table
   metricsTable: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#334155",
@@ -383,12 +589,14 @@ const styles = StyleSheet.create({
   metricsValueCell: { flex: 1, fontSize: 12, fontWeight: "700", textAlign: "center", paddingVertical: 8 },
   metricDefault: { color: "#E2E8F0" },
   metricElite: { color: "#34D399" },
+
   whyText: { color: "#E2E8F0", fontSize: 12, lineHeight: 18 },
   flagsText: { color: "#94A3B8", fontSize: 11, lineHeight: 16 },
+
   errorBox: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, backgroundColor: "#1F2937", padding: 12 },
   errorTitle: { color: "#FCA5A5", fontWeight: "700" },
   errorText: { color: "#FECACA", marginTop: 4, fontSize: 12 },
   errorRetry: { color: "#E5E7EB", marginTop: 8, fontSize: 12 },
   emptyTitle: { color: "#E5E7EB", fontWeight: "700" },
-  emptySub: { color: "#A7C0E8", marginTop: 6, fontSize: 12 },
+  emptySub: { color: "#A7C0E8", marginTop: 6, fontSize: 12, padding: 12 },
 });

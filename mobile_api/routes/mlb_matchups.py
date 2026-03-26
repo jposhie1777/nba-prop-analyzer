@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlencode
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Query
@@ -65,7 +65,14 @@ def _safe_query(
 def _fetch_schedule_raw(params: Dict[str, Any]) -> Dict[str, Any]:
     query = urlencode(params)
     url = f"{MLB_SCHEDULE_URL}?{query}"
-    with urlopen(url, timeout=15) as response:
+    request = Request(
+        url,
+        headers={
+            "User-Agent": "PulseSports/1.0",
+            "Accept": "application/json",
+        },
+    )
+    with urlopen(request, timeout=15) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
@@ -96,11 +103,47 @@ def _parse_schedule_rows(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def _fetch_schedule_for_today() -> List[Dict[str, Any]]:
+    today = datetime.now(NY_TZ).date()
+    target_dates = [today, today + timedelta(days=1)]
+    combined: List[Dict[str, Any]] = []
+    seen_game_pks: set[int] = set()
+
+    for target_date in target_dates:
+        date_iso = target_date.isoformat()
+        try:
+            payload = _fetch_schedule_raw(
+                {
+                    "sportId": 1,
+                    "date": date_iso,
+                    "hydrate": "probablePitcher,team,venue",
+                }
+            )
+        except Exception:
+            continue
+
+        rows = _parse_schedule_rows(payload)
+        for row in rows:
+            game_pk = _safe_int(row.get("game_pk"))
+            if game_pk is not None and game_pk in seen_game_pks:
+                continue
+            if game_pk is not None:
+                seen_game_pks.add(game_pk)
+            combined.append(row)
+
+        # If we found games for today, no need to query farther ahead.
+        if rows and target_date == today:
+            break
+
+    combined.sort(key=lambda row: row.get("start_time_utc") or "")
+    return combined
+
+
+def _fetch_schedule_for_date_iso(date_iso: str) -> List[Dict[str, Any]]:
     try:
         payload = _fetch_schedule_raw(
             {
                 "sportId": 1,
-                "date": _today_et_iso(),
+                "date": date_iso,
                 "hydrate": "probablePitcher,team,venue",
             }
         )

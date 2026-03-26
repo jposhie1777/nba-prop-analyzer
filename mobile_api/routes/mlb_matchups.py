@@ -62,6 +62,10 @@ def _safe_query(
         return []
 
 
+def _exception_message(exc: Exception) -> str:
+    return f"{type(exc).__name__}: {exc}"
+
+
 def _fetch_schedule_raw(params: Dict[str, Any]) -> Dict[str, Any]:
     query = urlencode(params)
     url = f"{MLB_SCHEDULE_URL}?{query}"
@@ -150,6 +154,34 @@ def _fetch_schedule_for_date_iso(date_iso: str) -> List[Dict[str, Any]]:
     except Exception:
         return []
     return _parse_schedule_rows(payload)
+
+
+def _fetch_schedule_for_date_iso_debug(date_iso: str) -> Dict[str, Any]:
+    try:
+        payload = _fetch_schedule_raw(
+            {
+                "sportId": 1,
+                "date": date_iso,
+                "hydrate": "probablePitcher,team,venue",
+            }
+        )
+        rows = _parse_schedule_rows(payload)
+        return {
+            "date": date_iso,
+            "ok": True,
+            "rows_count": len(rows),
+            "total_games": (payload.get("dates") or [{}])[0].get("totalGames", 0),
+            "sample_game_pks": [row.get("game_pk") for row in rows[:5]],
+        }
+    except Exception as exc:
+        return {
+            "date": date_iso,
+            "ok": False,
+            "error": _exception_message(exc),
+            "rows_count": 0,
+            "total_games": 0,
+            "sample_game_pks": [],
+        }
 
 
 def _fetch_schedule_for_game(game_pk: int) -> Optional[Dict[str, Any]]:
@@ -252,6 +284,51 @@ def mlb_matchups_upcoming(
             }
         )
     return rows
+
+
+@router.get("/mlb/matchups/upcoming/debug")
+def mlb_matchups_upcoming_debug():
+    now_et = datetime.now(NY_TZ)
+    today = now_et.date()
+    tomorrow = today + timedelta(days=1)
+    today_iso = today.isoformat()
+    tomorrow_iso = tomorrow.isoformat()
+
+    today_debug = _fetch_schedule_for_date_iso_debug(today_iso)
+    tomorrow_debug = _fetch_schedule_for_date_iso_debug(tomorrow_iso)
+
+    schedule_rows = _fetch_schedule_for_today()
+    game_pks = [row.get("game_pk") for row in schedule_rows]
+
+    bq_status: Dict[str, Any]
+    try:
+        client = get_bq_client()
+        hr_table = _qualified_table(client, HR_PICKS_TABLE)
+        bq_rows = _safe_query(
+            client,
+            f"""
+            SELECT COUNT(*) AS row_count
+            FROM {hr_table}
+            WHERE run_date = @run_date
+            """,
+            [bigquery.ScalarQueryParameter("run_date", "DATE", _today_et_iso())],
+        )
+        row_count = int(bq_rows[0]["row_count"]) if bq_rows else 0
+        bq_status = {"ok": True, "today_row_count": row_count}
+    except Exception as exc:
+        bq_status = {"ok": False, "error": _exception_message(exc), "today_row_count": 0}
+
+    return {
+        "now_et": now_et.isoformat(),
+        "today_et": today_iso,
+        "tomorrow_et": tomorrow_iso,
+        "schedule_today": today_debug,
+        "schedule_tomorrow": tomorrow_debug,
+        "combined_schedule_rows": len(schedule_rows),
+        "combined_game_pks": game_pks[:20],
+        "bq_status": bq_status,
+        "upcoming_endpoint_return_count": len(mlb_matchups_upcoming(limit=20)),
+    }
 
 
 @router.get("/mlb/matchups/{game_pk}")

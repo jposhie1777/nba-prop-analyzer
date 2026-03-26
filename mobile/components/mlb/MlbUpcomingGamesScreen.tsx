@@ -1,7 +1,7 @@
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 
-import { useMlbUpcomingGames } from "@/hooks/mlb/useMlbMatchups";
+import { useMlbDebugInfo, useMlbUpcomingGames } from "@/hooks/mlb/useMlbMatchups";
 import { useTheme } from "@/store/useTheme";
 import { formatET } from "@/lib/time/formatET";
 
@@ -18,6 +18,7 @@ export function MlbUpcomingGamesScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { data, loading, error, refetch } = useMlbUpcomingGames();
+  const { data: debugData, loading: debugLoading, refetch: refetchDebug } = useMlbDebugInfo();
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -93,12 +94,39 @@ export function MlbUpcomingGamesScreen() {
       })}
 
       {!loading && !error && (data ?? []).length === 0 ? (
-        <View style={[styles.card, { borderColor: colors.border.subtle }]}>
-          <Text style={[styles.matchup, { color: colors.text.primary }]}>No MLB games found today.</Text>
-          <Text style={[styles.meta, { color: colors.text.muted }]}>
-            Games will appear here once today&apos;s schedule is available.
-          </Text>
-        </View>
+        <>
+          <View style={[styles.card, { borderColor: colors.border.subtle }]}>
+            <Text style={[styles.matchup, { color: colors.text.primary }]}>No MLB games found today.</Text>
+            <Text style={[styles.meta, { color: colors.text.muted }]}>
+              Games will appear here once today&apos;s schedule is available.
+            </Text>
+          </View>
+
+          <View style={[styles.debugCard, { borderColor: "#334155" }]}>
+            <Text style={styles.debugTitle}>Debug</Text>
+            {debugLoading ? <ActivityIndicator color="#64748B" size="small" /> : null}
+            {!debugLoading ? (
+              <>
+                <Text style={styles.debugLine}>backend_now_et: {debugData?.backend_now_et ?? "—"}</Text>
+                <Text style={styles.debugLine}>today_et: {debugData?.today_et ?? "—"}</Text>
+                <Text style={styles.debugLine}>tomorrow_et: {debugData?.tomorrow_et ?? "—"}</Text>
+                <Text style={styles.debugLine}>schedule_today_count: {debugData?.schedule_today_count ?? 0}</Text>
+                <Text style={styles.debugLine}>schedule_tomorrow_count: {debugData?.schedule_tomorrow_count ?? 0}</Text>
+                <Text style={styles.debugLine}>combined_count: {debugData?.combined_count ?? 0}</Text>
+                <Text style={styles.debugLine}>last_error: {debugData?.last_error ?? "none"}</Text>
+              </>
+            ) : null}
+            <Pressable
+              onPress={() => {
+                refetch();
+                refetchDebug();
+              }}
+              style={styles.debugButton}
+            >
+              <Text style={styles.debugButtonText}>Retry + Refresh Debug</Text>
+            </Pressable>
+          </View>
+        </>
       ) : null}
     </ScrollView>
   );
@@ -141,4 +169,23 @@ const styles = StyleSheet.create({
   errorTitle: { color: "#FCA5A5", fontWeight: "700" },
   errorText: { color: "#FECACA", marginTop: 4, fontSize: 12 },
   errorRetry: { color: "#E5E7EB", marginTop: 8, fontSize: 12 },
+  debugCard: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    backgroundColor: "#0A1224",
+    padding: 12,
+    gap: 4,
+  },
+  debugTitle: { color: "#94A3B8", fontSize: 12, fontWeight: "800" },
+  debugLine: { color: "#64748B", fontSize: 11 },
+  debugButton: {
+    marginTop: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#334155",
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: "center",
+    backgroundColor: "#0F172A",
+  },
+  debugButtonText: { color: "#93C5FD", fontSize: 11, fontWeight: "700" },
 });

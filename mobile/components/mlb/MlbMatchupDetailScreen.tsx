@@ -34,6 +34,20 @@ function gradeTone(grade?: string | null) {
   return { border: "#F59E0B", bg: "rgba(245,158,11,0.12)", text: "#FDE68A" };
 }
 
+function dedupeBatters<T extends { batter_id?: number | null; batter_name?: string | null; score?: number | null }>(
+  batters: T[]
+): T[] {
+  const byKey = new Map<string, T>();
+  for (const batter of batters) {
+    const key = batter.batter_id != null ? `id:${batter.batter_id}` : `name:${(batter.batter_name ?? "").toLowerCase()}`;
+    const existing = byKey.get(key);
+    if (!existing || (batter.score ?? 0) > (existing.score ?? 0)) {
+      byKey.set(key, batter);
+    }
+  }
+  return Array.from(byKey.values()).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+}
+
 function SplitRow({
   label,
   split,
@@ -113,6 +127,7 @@ export function MlbMatchupDetailScreen() {
         const season = pitcher.splits?.Season;
         const vsL = pitcher.splits?.vsLHB;
         const vsR = pitcher.splits?.vsRHB;
+        const batters = dedupeBatters(pitcher.batters ?? []).slice(0, 12);
         return (
           <View key={String(pitcher.pitcher_id)} style={[styles.panel, { borderColor: colors.border.subtle }]}>
             <Text style={styles.sectionEyebrow}>SIDE 1 - {pitcher.offense_team ?? "OFFENSE"}</Text>
@@ -143,7 +158,10 @@ export function MlbMatchupDetailScreen() {
               </View>
             </View>
 
-            {(pitcher.batters ?? []).map((batter) => {
+            {!batters.length ? (
+              <Text style={styles.emptySub}>No hitter rows returned for this pitcher.</Text>
+            ) : null}
+            {batters.map((batter) => {
               const tone = gradeTone(batter.grade);
               return (
                 <View

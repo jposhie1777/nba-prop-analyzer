@@ -16,6 +16,12 @@ export type PropSlipItem = {
   odds: number;
 
   matchup?: string;
+  sport?: string;
+  bookmaker?: string | null;
+  dk_event_id?: string | null;
+  dk_outcome_code?: string | null;
+  fd_market_id?: string | null;
+  fd_selection_id?: string | null;
 };
 
 

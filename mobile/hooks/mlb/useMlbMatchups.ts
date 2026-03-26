@@ -52,6 +52,26 @@ export type MlbBatterPick = {
   p_fb_pct?: number | null;
   p_hard_hit_pct?: number | null;
   p_iso_allowed?: number | null;
+  weather_indicator?: string | null;
+  game_temp?: number | null;
+  wind_speed?: number | null;
+  wind_dir?: number | null;
+  wind_direction_label?: string | null;
+  precip_prob?: number | null;
+  ballpark_name?: string | null;
+  roof_type?: string | null;
+  weather_note?: string | null;
+  home_moneyline?: number | null;
+  away_moneyline?: number | null;
+  over_under?: number | null;
+  hr_odds_best_price?: number | null;
+  hr_odds_best_book?: string | null;
+  deep_link_desktop?: string | null;
+  deep_link_ios?: string | null;
+  dk_outcome_code?: string | null;
+  dk_event_id?: string | null;
+  fd_market_id?: string | null;
+  fd_selection_id?: string | null;
 };
 
 export type MlbPitcherGroup = {
@@ -74,6 +94,22 @@ export type MlbMatchupDetail = {
     venue_name?: string | null;
     home_pitcher_name?: string | null;
     away_pitcher_name?: string | null;
+    weather?: {
+      weather_indicator?: string | null;
+      game_temp?: number | null;
+      wind_speed?: number | null;
+      wind_dir?: number | null;
+      wind_direction_label?: string | null;
+      precip_prob?: number | null;
+      ballpark_name?: string | null;
+      roof_type?: string | null;
+      weather_note?: string | null;
+    };
+    odds?: {
+      home_moneyline?: number | null;
+      away_moneyline?: number | null;
+      over_under?: number | null;
+    };
   };
   grade_counts: {
     IDEAL: number;

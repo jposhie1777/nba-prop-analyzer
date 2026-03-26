@@ -1,10 +1,14 @@
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
+import { useMemo, useState } from "react";
 
 import { useMlbMatchupDetail } from "@/hooks/mlb/useMlbMatchups";
 import { useTheme } from "@/store/useTheme";
 import { getMlbTeamLogo } from "@/utils/mlbLogos";
 import { BackToHomeButton } from "@/components/navigation/BackToHomeButton";
+import { usePropBetslip } from "@/store/usePropBetslip";
+import { useBetslipDrawer } from "@/store/useBetslipDrawer";
+import { buildParlayLinks, getBuildPlatform, type ParlayBatterInput } from "@/utils/parlayBuilder";
 
 type StatValue = number | string | null | undefined;
 
@@ -18,6 +22,11 @@ function formatMetric(value: StatValue, digits = 1): string {
   if (typeof value === "string") return value;
   if (!Number.isFinite(value)) return "—";
   return Number.isInteger(value) ? `${value}` : value.toFixed(digits);
+}
+
+function formatAmericanOdds(value?: number | null): string {
+  if (value == null || Number.isNaN(value) || value === 0) return "—";
+  return value > 0 ? `+${Math.round(value)}` : `${Math.round(value)}`;
 }
 
 function normalizeGrade(grade?: string | null): "IDEAL" | "FAVORABLE" | "AVERAGE" | "AVOID" {
@@ -146,6 +155,101 @@ export function MlbMatchupDetailScreen() {
   const topCount = (data?.grade_counts?.IDEAL ?? 0) + (data?.grade_counts?.FAVORABLE ?? 0);
   const awayLogo = getMlbTeamLogo(awayTeam);
   const homeLogo = getMlbTeamLogo(homeTeam);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const addToBetslip = usePropBetslip((s) => s.add);
+  const openBetslip = useBetslipDrawer((s) => s.open);
+  const platform = getBuildPlatform();
+
+  const allVisibleBatters = useMemo(() => {
+    const out: Array<{
+      key: string;
+      batter: any;
+      pitcher: any;
+      teamName: string;
+    }> = [];
+    for (const pitcher of data?.pitchers ?? []) {
+      const batters = dedupeBatters(pitcher.batters ?? []).slice(0, 12);
+      for (const batter of batters) {
+        const key = `${String(pitcher.pitcher_id)}-${String(batter.batter_id ?? batter.batter_name ?? "")}`;
+        out.push({
+          key,
+          batter,
+          pitcher,
+          teamName: pitcher.offense_team ?? "Team",
+        });
+      }
+    }
+    return out;
+  }, [data?.pitchers]);
+
+  const selectedBatters = useMemo(
+    () => allVisibleBatters.filter((entry) => selectedKeys.has(entry.key)),
+    [allVisibleBatters, selectedKeys]
+  );
+
+  const selectedParlayInput: ParlayBatterInput[] = useMemo(
+    () =>
+      selectedBatters.map(({ batter }) => ({
+        batter_id: batter.batter_id ?? null,
+        batter_name: batter.batter_name ?? null,
+        score: batter.score ?? null,
+        hr_odds_best_price: batter.hr_odds_best_price ?? null,
+        dk_outcome_code: batter.dk_outcome_code ?? null,
+        dk_event_id: batter.dk_event_id ?? null,
+        fd_market_id: batter.fd_market_id ?? null,
+        fd_selection_id: batter.fd_selection_id ?? null,
+      })),
+    [selectedBatters]
+  );
+
+  const parlayLinks = useMemo(
+    () => buildParlayLinks(selectedParlayInput, platform),
+    [selectedParlayInput, platform]
+  );
+
+  function toggleSelected(key: string) {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else if (next.size < 10) {
+        next.add(key);
+      }
+      return next;
+    });
+  }
+
+  function clearSelections() {
+    setSelectedKeys(new Set());
+  }
+
+  function openUrl(url?: string | null) {
+    if (!url) return;
+    if (platform === "desktop" && typeof globalThis.open === "function") {
+      globalThis.open(url, "_blank");
+      return;
+    }
+    Linking.openURL(url).catch(() => {});
+  }
+
+  function singleLegLink(batter: any, book: "draftkings" | "fanduel"): string | null {
+    const single = buildParlayLinks(
+      [
+        {
+          batter_id: batter.batter_id ?? null,
+          batter_name: batter.batter_name ?? null,
+          score: batter.score ?? null,
+          hr_odds_best_price: batter.hr_odds_best_price ?? null,
+          dk_outcome_code: batter.dk_outcome_code ?? null,
+          dk_event_id: batter.dk_event_id ?? null,
+          fd_market_id: batter.fd_market_id ?? null,
+          fd_selection_id: batter.fd_selection_id ?? null,
+        },
+      ],
+      platform
+    );
+    return book === "draftkings" ? single.draftkings : single.fanduel;
+  }
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.actionRow}>
@@ -170,9 +274,24 @@ export function MlbMatchupDetailScreen() {
           </View>
         </View>
         <View style={styles.tagRow}>
-          <View style={styles.pill}><Text style={styles.pillText}>☁ Weather: soon</Text></View>
-          <View style={styles.pill}><Text style={styles.pillText}>🏟 Park: soon</Text></View>
-          <View style={styles.pill}><Text style={styles.pillText}>💰 Odds: soon</Text></View>
+          <View style={styles.pill}>
+            <Text style={styles.pillText}>
+              ☁ {game?.weather?.weather_indicator ?? "Weather"}{" "}
+              {game?.weather?.game_temp != null ? `${Math.round(game.weather.game_temp)}°` : ""}
+              {game?.weather?.wind_speed != null
+                ? ` • ${Math.round(game.weather.wind_speed)} mph ${game?.weather?.wind_direction_label ?? ""}`
+                : ""}
+            </Text>
+          </View>
+          <View style={styles.pill}>
+            <Text style={styles.pillText}>🏟 {game?.weather?.ballpark_name ?? game?.venue_name ?? "Park TBD"}</Text>
+          </View>
+          <View style={styles.pill}>
+            <Text style={styles.pillText}>
+              💰 ML {formatAmericanOdds(game?.odds?.away_moneyline)} / {formatAmericanOdds(game?.odds?.home_moneyline)}{" "}
+              {game?.odds?.over_under != null ? `• O/U ${game.odds.over_under}` : ""}
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -261,10 +380,16 @@ export function MlbMatchupDetailScreen() {
             ) : null}
             {batters.map((batter) => {
               const tone = gradeTone(batter.grade);
+              const batterKey = `${String(pitcher.pitcher_id)}-${String(batter.batter_id ?? batter.batter_name ?? "")}`;
+              const isSelected = selectedKeys.has(batterKey);
               return (
                 <View
                   key={`${pitcher.pitcher_id}-${batter.batter_id ?? batter.batter_name}`}
-                  style={[styles.batterCard, { borderColor: tone.border, backgroundColor: tone.bg }]}
+                  style={[
+                    styles.batterCard,
+                    { borderColor: tone.border, backgroundColor: tone.bg },
+                    isSelected ? styles.batterCardSelected : null,
+                  ]}
                 >
                   <View style={styles.batterHead}>
                     <Text style={styles.batterName}>{batter.batter_name ?? "Batter"}</Text>
@@ -294,6 +419,71 @@ export function MlbMatchupDetailScreen() {
 
                   {batter.why ? <Text style={styles.whyText}>Why: {batter.why}</Text> : null}
                   {(batter.flags ?? []).length ? <Text style={styles.flagsText}>Signals: {(batter.flags ?? []).slice(0, 4).join(" • ")}</Text> : null}
+
+                  <View style={styles.betRow}>
+                    <Pressable style={styles.selectBtn} onPress={() => toggleSelected(batterKey)}>
+                      <Text style={styles.selectBtnText}>{isSelected ? "☑ Selected" : "☐ Select for Parlay"}</Text>
+                    </Pressable>
+                    <Text style={styles.betPriceText}>1+ HR {formatAmericanOdds(batter.hr_odds_best_price)}</Text>
+                  </View>
+                  <View style={styles.betRow}>
+                    <Pressable
+                      style={[styles.bookBtn, !singleLegLink(batter, "draftkings") ? styles.bookBtnDisabled : null]}
+                      disabled={!singleLegLink(batter, "draftkings")}
+                      onPress={() => {
+                        const url = singleLegLink(batter, "draftkings");
+                        if (!url) return;
+                        addToBetslip({
+                          id: `mlb-hr-dk-${String(data?.game_pk ?? 0)}-${String(batter.batter_id ?? batter.batter_name ?? "")}`,
+                          player_id: Number(batter.batter_id ?? 0),
+                          player: batter.batter_name ?? "Batter",
+                          market: "MLB 1+ HR",
+                          side: "over",
+                          line: 0.5,
+                          odds: Number(batter.hr_odds_best_price ?? 100),
+                          matchup: `${pitcher.offense_team ?? ""} vs ${pitcher.pitcher_name ?? ""}`,
+                          sport: "mlb",
+                          bookmaker: "draftkings",
+                          dk_event_id: batter.dk_event_id ?? null,
+                          dk_outcome_code: batter.dk_outcome_code ?? null,
+                          fd_market_id: batter.fd_market_id ?? null,
+                          fd_selection_id: batter.fd_selection_id ?? null,
+                        });
+                        openBetslip();
+                        openUrl(url);
+                      }}
+                    >
+                      <Text style={styles.bookBtnText}>Bet DraftKings</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.bookBtn, !singleLegLink(batter, "fanduel") ? styles.bookBtnDisabled : null]}
+                      disabled={!singleLegLink(batter, "fanduel")}
+                      onPress={() => {
+                        const url = singleLegLink(batter, "fanduel");
+                        if (!url) return;
+                        addToBetslip({
+                          id: `mlb-hr-fd-${String(data?.game_pk ?? 0)}-${String(batter.batter_id ?? batter.batter_name ?? "")}`,
+                          player_id: Number(batter.batter_id ?? 0),
+                          player: batter.batter_name ?? "Batter",
+                          market: "MLB 1+ HR",
+                          side: "over",
+                          line: 0.5,
+                          odds: Number(batter.hr_odds_best_price ?? 100),
+                          matchup: `${pitcher.offense_team ?? ""} vs ${pitcher.pitcher_name ?? ""}`,
+                          sport: "mlb",
+                          bookmaker: "fanduel",
+                          dk_event_id: batter.dk_event_id ?? null,
+                          dk_outcome_code: batter.dk_outcome_code ?? null,
+                          fd_market_id: batter.fd_market_id ?? null,
+                          fd_selection_id: batter.fd_selection_id ?? null,
+                        });
+                        openBetslip();
+                        openUrl(url);
+                      }}
+                    >
+                      <Text style={styles.bookBtnText}>Bet FanDuel</Text>
+                    </Pressable>
+                  </View>
                 </View>
               );
             })}
@@ -305,6 +495,87 @@ export function MlbMatchupDetailScreen() {
         <View style={[styles.panel, { borderColor: colors.border.subtle }]}>
           <Text style={styles.emptyTitle}>No MLB model data for this game yet.</Text>
           <Text style={styles.emptySub}>Once ingest/model writes land in BigQuery, this matchup view will auto-populate.</Text>
+        </View>
+      ) : null}
+
+      {selectedBatters.length >= 2 ? (
+        <View style={styles.parlayBar}>
+          <View style={styles.parlayTopRow}>
+            <Text style={styles.parlayTitle}>{selectedBatters.length} batters selected</Text>
+            <Pressable onPress={clearSelections}>
+              <Text style={styles.parlayClear}>✕</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.parlayOddsText}>
+            Combined Odds: {formatAmericanOdds(parlayLinks.combinedOdds)}
+          </Text>
+          <View style={styles.parlayBtnRow}>
+            <Pressable
+              style={[styles.parlayBtn, !parlayLinks.draftkings ? styles.bookBtnDisabled : null]}
+              disabled={!parlayLinks.draftkings}
+              onPress={() => {
+                selectedBatters.forEach(({ batter, pitcher }) => {
+                  addToBetslip({
+                    id: `mlb-parlay-dk-${String(data?.game_pk ?? 0)}-${String(batter.batter_id ?? batter.batter_name ?? "")}`,
+                    player_id: Number(batter.batter_id ?? 0),
+                    player: batter.batter_name ?? "Batter",
+                    market: "MLB 1+ HR",
+                    side: "over",
+                    line: 0.5,
+                    odds: Number(batter.hr_odds_best_price ?? 100),
+                    matchup: `${pitcher.offense_team ?? ""} vs ${pitcher.pitcher_name ?? ""}`,
+                    sport: "mlb",
+                    bookmaker: "draftkings",
+                    dk_event_id: batter.dk_event_id ?? null,
+                    dk_outcome_code: batter.dk_outcome_code ?? null,
+                    fd_market_id: batter.fd_market_id ?? null,
+                    fd_selection_id: batter.fd_selection_id ?? null,
+                  });
+                });
+                openBetslip();
+                openUrl(parlayLinks.draftkings);
+              }}
+            >
+              <Text style={styles.parlayBtnText}>Bet DraftKings</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.parlayBtn, !parlayLinks.fanduel ? styles.bookBtnDisabled : null]}
+              disabled={!parlayLinks.fanduel}
+              onPress={() => {
+                selectedBatters.forEach(({ batter, pitcher }) => {
+                  addToBetslip({
+                    id: `mlb-parlay-fd-${String(data?.game_pk ?? 0)}-${String(batter.batter_id ?? batter.batter_name ?? "")}`,
+                    player_id: Number(batter.batter_id ?? 0),
+                    player: batter.batter_name ?? "Batter",
+                    market: "MLB 1+ HR",
+                    side: "over",
+                    line: 0.5,
+                    odds: Number(batter.hr_odds_best_price ?? 100),
+                    matchup: `${pitcher.offense_team ?? ""} vs ${pitcher.pitcher_name ?? ""}`,
+                    sport: "mlb",
+                    bookmaker: "fanduel",
+                    dk_event_id: batter.dk_event_id ?? null,
+                    dk_outcome_code: batter.dk_outcome_code ?? null,
+                    fd_market_id: batter.fd_market_id ?? null,
+                    fd_selection_id: batter.fd_selection_id ?? null,
+                  });
+                });
+                openBetslip();
+                openUrl(parlayLinks.fanduel);
+              }}
+            >
+              <Text style={styles.parlayBtnText}>Bet FanDuel</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.parlayNote}>Parlay availability subject to sportsbook approval.</Text>
+          <View style={styles.parlaySummary}>
+            {selectedBatters.map(({ key, batter, teamName }) => (
+              <Text key={key} style={styles.parlayLegText}>
+                • {batter.batter_name ?? "Batter"} ({teamName}) • Pulse {formatScore(batter.score)} •{" "}
+                {formatAmericanOdds(batter.hr_odds_best_price)}
+              </Text>
+            ))}
+          </View>
         </View>
       ) : null}
     </ScrollView>
@@ -361,6 +632,7 @@ const styles = StyleSheet.create({
   cell: { color: "#E5E7EB", fontSize: 11, flex: 1, textAlign: "center", paddingVertical: 3 },
   cellSplit: { flex: 1.5, textAlign: "left", fontWeight: "800", color: "#CBD5E1" },
   batterCard: { borderWidth: 1, borderRadius: 12, padding: 10, gap: 8 },
+  batterCardSelected: { shadowColor: "#22D3EE", shadowOpacity: 0.35, shadowRadius: 8, borderWidth: 1.25 },
   batterHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   batterName: { color: "#E5E7EB", fontSize: 15, fontWeight: "700", flex: 1 },
   gradePill: {
@@ -385,6 +657,56 @@ const styles = StyleSheet.create({
   metricElite: { color: "#34D399" },
   whyText: { color: "#E2E8F0", fontSize: 12, lineHeight: 18 },
   flagsText: { color: "#94A3B8", fontSize: 11, lineHeight: 16 },
+  betRow: { flexDirection: "row", gap: 8, alignItems: "center" },
+  selectBtn: {
+    flex: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#334155",
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    backgroundColor: "#0F172A",
+  },
+  selectBtnText: { color: "#C7D2FE", fontSize: 12, fontWeight: "700", textAlign: "center" },
+  betPriceText: { color: "#86EFAC", fontSize: 12, fontWeight: "800", minWidth: 90, textAlign: "right" },
+  bookBtn: {
+    flex: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#334155",
+    borderRadius: 10,
+    backgroundColor: "#111827",
+    paddingVertical: 9,
+    alignItems: "center",
+  },
+  bookBtnDisabled: { opacity: 0.45 },
+  bookBtnText: { color: "#E5E7EB", fontSize: 12, fontWeight: "800" },
+  parlayBar: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#334155",
+    borderRadius: 14,
+    backgroundColor: "rgba(2,6,23,0.98)",
+    padding: 12,
+    gap: 8,
+    marginTop: 8,
+  },
+  parlayTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  parlayTitle: { color: "#E2E8F0", fontSize: 14, fontWeight: "800" },
+  parlayClear: { color: "#94A3B8", fontSize: 16, fontWeight: "900" },
+  parlayOddsText: { color: "#86EFAC", fontSize: 13, fontWeight: "800" },
+  parlayBtnRow: { flexDirection: "row", gap: 8 },
+  parlayBtn: {
+    flex: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#334155",
+    borderRadius: 10,
+    backgroundColor: "#0F172A",
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  parlayBtnText: { color: "#E5E7EB", fontSize: 12, fontWeight: "800" },
+  parlayNote: { color: "#94A3B8", fontSize: 10 },
+  parlaySummary: { gap: 4 },
+  parlayLegText: { color: "#C7D2FE", fontSize: 11 },
   errorBox: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, backgroundColor: "#1F2937", padding: 12 },
   errorTitle: { color: "#FCA5A5", fontWeight: "700" },
   errorText: { color: "#FECACA", marginTop: 4, fontSize: 12 },

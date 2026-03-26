@@ -217,6 +217,32 @@ def _safe_int(value: Any) -> Optional[int]:
         return None
 
 
+def _clean_str(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _first_present(*values: Any) -> Any:
+    for value in values:
+        if value is None:
+            continue
+        if isinstance(value, str) and not value.strip():
+            continue
+        return value
+    return None
+
+
+def _wind_direction_label(degrees: Optional[int]) -> Optional[str]:
+    if degrees is None:
+        return None
+    labels = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
+    normalized = degrees % 360
+    index = int((normalized + 11.25) // 22.5) % 16
+    return labels[index]
+
+
 def _parse_flags(value: Any) -> List[str]:
     if value is None:
         return []
@@ -464,7 +490,26 @@ def mlb_matchup_detail(game_pk: int):
           p_barrel_pct,
           p_fb_pct,
           p_hard_hit_pct,
-          p_iso_allowed
+          p_iso_allowed,
+          weather_indicator,
+          game_temp,
+          wind_speed,
+          wind_dir,
+          precip_prob,
+          ballpark_name,
+          roof_type,
+          weather_note,
+          home_moneyline,
+          away_moneyline,
+          over_under,
+          hr_odds_best_price,
+          hr_odds_best_book,
+          deep_link_desktop,
+          deep_link_ios,
+          dk_outcome_code,
+          dk_event_id,
+          fd_market_id,
+          fd_selection_id
         FROM {hr_table}
         WHERE run_date = @run_date
           AND CAST(game_pk AS INT64) = @game_pk
@@ -510,7 +555,26 @@ def mlb_matchup_detail(game_pk: int):
                   p_barrel_pct,
                   p_fb_pct,
                   p_hard_hit_pct,
-                  p_iso_allowed
+                  p_iso_allowed,
+                  weather_indicator,
+                  game_temp,
+                  wind_speed,
+                  wind_dir,
+                  precip_prob,
+                  ballpark_name,
+                  roof_type,
+                  weather_note,
+                  home_moneyline,
+                  away_moneyline,
+                  over_under,
+                  hr_odds_best_price,
+                  hr_odds_best_book,
+                  deep_link_desktop,
+                  deep_link_ios,
+                  dk_outcome_code,
+                  dk_event_id,
+                  fd_market_id,
+                  fd_selection_id
                 FROM {hr_table}
                 WHERE run_date = @run_date
                   AND (
@@ -620,6 +684,26 @@ def mlb_matchup_detail(game_pk: int):
                 "p_fb_pct": _safe_float(pick.get("p_fb_pct")),
                 "p_hard_hit_pct": _safe_float(pick.get("p_hard_hit_pct")),
                 "p_iso_allowed": _safe_float(pick.get("p_iso_allowed")),
+                "weather_indicator": _clean_str(pick.get("weather_indicator")),
+                "game_temp": _safe_float(pick.get("game_temp")),
+                "wind_speed": _safe_float(pick.get("wind_speed")),
+                "wind_dir": _safe_int(pick.get("wind_dir")),
+                "wind_direction_label": _wind_direction_label(_safe_int(pick.get("wind_dir"))),
+                "precip_prob": _safe_float(pick.get("precip_prob")),
+                "ballpark_name": _clean_str(pick.get("ballpark_name")),
+                "roof_type": _clean_str(pick.get("roof_type")),
+                "weather_note": _clean_str(pick.get("weather_note")),
+                "home_moneyline": _safe_int(pick.get("home_moneyline")),
+                "away_moneyline": _safe_int(pick.get("away_moneyline")),
+                "over_under": _safe_float(pick.get("over_under")),
+                "hr_odds_best_price": _safe_int(pick.get("hr_odds_best_price")),
+                "hr_odds_best_book": _clean_str(pick.get("hr_odds_best_book")),
+                "deep_link_desktop": _clean_str(pick.get("deep_link_desktop")),
+                "deep_link_ios": _clean_str(pick.get("deep_link_ios")),
+                "dk_outcome_code": _clean_str(pick.get("dk_outcome_code")),
+                "dk_event_id": _clean_str(pick.get("dk_event_id")),
+                "fd_market_id": _clean_str(pick.get("fd_market_id")),
+                "fd_selection_id": _clean_str(pick.get("fd_selection_id")),
             }
         )
 
@@ -646,6 +730,26 @@ def mlb_matchup_detail(game_pk: int):
         reverse=True,
     )
 
+    all_batters = [b for pitcher in pitchers_out for b in pitcher.get("batters", [])]
+    game_weather = {
+        "weather_indicator": _first_present(*(b.get("weather_indicator") for b in all_batters)),
+        "game_temp": _first_present(*(b.get("game_temp") for b in all_batters)),
+        "wind_speed": _first_present(*(b.get("wind_speed") for b in all_batters)),
+        "wind_dir": _first_present(*(b.get("wind_dir") for b in all_batters)),
+        "precip_prob": _first_present(*(b.get("precip_prob") for b in all_batters)),
+        "ballpark_name": _first_present(*(b.get("ballpark_name") for b in all_batters)),
+        "roof_type": _first_present(*(b.get("roof_type") for b in all_batters)),
+        "weather_note": _first_present(*(b.get("weather_note") for b in all_batters)),
+    }
+    game_odds = {
+        "home_moneyline": _first_present(*(b.get("home_moneyline") for b in all_batters)),
+        "away_moneyline": _first_present(*(b.get("away_moneyline") for b in all_batters)),
+        "over_under": _first_present(*(b.get("over_under") for b in all_batters)),
+    }
+    wind_dir = _safe_int(game_weather.get("wind_dir"))
+    game_weather["wind_dir"] = wind_dir
+    game_weather["wind_direction_label"] = _wind_direction_label(wind_dir)
+
     return {
         "game_pk": game_pk,
         "run_date": run_date,
@@ -656,6 +760,8 @@ def mlb_matchup_detail(game_pk: int):
             "venue_name": schedule.get("venue_name") if schedule else None,
             "home_pitcher_name": schedule.get("home_pitcher_name") if schedule else None,
             "away_pitcher_name": schedule.get("away_pitcher_name") if schedule else None,
+            "weather": game_weather,
+            "odds": game_odds,
         },
         "grade_counts": grade_counts,
         "pitchers": pitchers_out,

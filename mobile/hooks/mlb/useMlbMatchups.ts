@@ -82,9 +82,34 @@ export type MlbMatchupDetail = {
   pitchers: MlbPitcherGroup[];
 };
 
+export type MlbUpcomingDebug = {
+  now_utc: string;
+  now_et: string;
+  today_et: string;
+  today_schedule_count: number;
+  tomorrow_et: string;
+  tomorrow_schedule_count: number;
+  combined_schedule_count: number;
+  sample_games: {
+    game_pk?: number | null;
+    away_team?: string | null;
+    home_team?: string | null;
+    start_time_utc?: string | null;
+  }[];
+  bq_project?: string | null;
+  hr_table: string;
+  bq_today_summary_count: number;
+  bq_query_ok: boolean;
+  fetch_error: string | null;
+};
+
 export function useMlbUpcomingGames(limit = 30) {
   const params = useMemo(() => ({ limit }), [limit]);
   return useEplQuery<MlbUpcomingGame[]>("/mlb/matchups/upcoming", params);
+}
+
+export function useMlbUpcomingDebug() {
+  return useEplQuery<MlbUpcomingDebug>("/mlb/matchups/upcoming/debug");
 }
 
 export function useMlbMatchupDetail(gamePk?: number | null) {

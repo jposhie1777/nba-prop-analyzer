@@ -1,12 +1,11 @@
 import { useState } from "react";
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 
 import { useMlbMatchupDetail, MlbBatterPick, MlbPitcherGroup } from "@/hooks/mlb/useMlbMatchups";
 import { useTheme } from "@/store/useTheme";
 import { getMlbTeamLogo } from "@/utils/mlbLogos";
 import { BackToHomeButton } from "@/components/navigation/BackToHomeButton";
-import { useSavedBets } from "@/store/useSavedBets";
 import { BetslipDrawer } from "@/components/live/BetslipDrawer";
 import { BetslipToggle } from "@/components/live/BetslipToggle";
 
@@ -60,6 +59,31 @@ function metricTier(metric: "iso" | "slg" | "l15_ev" | "l15_barrel" | "l25_ev" |
 
 function metricTone(metric: "iso" | "slg" | "l15_ev" | "l15_barrel" | "l25_ev" | "l25_barrel", value?: number | null) {
   return metricTier(metric, value) === "elite" ? styles.metricElite : styles.metricDefault;
+}
+
+function windDirectionLabel(windDir?: number | null, azimuth?: number | null): { label: string; color: string } | null {
+  if (windDir == null || azimuth == null) return null;
+  const rel = ((windDir - azimuth) + 360) % 360;
+  let label: string;
+  let color: string;
+  if (rel >= 337.5 || rel < 22.5) {
+    label = "Blowing In"; color = "#FCA5A5"; // red
+  } else if (rel < 67.5) {
+    label = "Blowing In-Left"; color = "#FCA5A5";
+  } else if (rel < 112.5) {
+    label = "Blowing Left"; color = "#FDE68A"; // yellow
+  } else if (rel < 157.5) {
+    label = "Blowing In-Right"; color = "#FCA5A5";
+  } else if (rel < 202.5) {
+    label = "Blowing Out"; color = "#86EFAC"; // green
+  } else if (rel < 247.5) {
+    label = "Blowing Out-Right"; color = "#86EFAC";
+  } else if (rel < 292.5) {
+    label = "Blowing Right"; color = "#FDE68A";
+  } else {
+    label = "Blowing Out-Left"; color = "#86EFAC";
+  }
+  return { label, color };
 }
 
 function weatherColor(indicator?: string | null) {
@@ -154,28 +178,23 @@ function BatterCard({
   pitcherName?: string | null;
   offenseTeam?: string | null;
 }) {
-  const { savedIds, toggleSave } = useSavedBets();
   const tone = gradeTone(batter.grade);
-  const betId = `mlb-hr-${gamePk}-${batter.batter_id ?? batter.batter_name}`;
-  const isSaved = savedIds.has(betId);
+  const hasHrOdds = batter.hr_odds_best_price != null && batter.hr_odds_best_book;
+  const oddsLabel = hasHrOdds
+    ? `${formatOdds(batter.hr_odds_best_price)} ${(batter.hr_odds_best_book ?? "").slice(0, 12)}`
+    : null;
+  const oddsColor = (batter.hr_odds_best_price ?? 0) >= 0 ? "#86EFAC" : "#FCA5A5";
 
-  function handleSave() {
-    toggleSave({
-      id: betId,
-      betType: "player",
-      gameId: gamePk,
-      playerId: batter.batter_id ?? undefined,
-      player: batter.batter_name ?? "Unknown",
-      market: `HR Prop vs ${pitcherName ?? "Pitcher"} (${normalizeGrade(batter.grade)} ${formatScore(batter.score)})`,
-      line: 0.5,
-      side: "over",
-      bookmaker: "PropFinder",
-    });
+  function handleOddsPress() {
+    const link = Platform.OS === "ios"
+      ? batter.deep_link_ios ?? batter.deep_link_desktop
+      : batter.deep_link_desktop ?? batter.deep_link_ios;
+    if (link) Linking.openURL(link).catch(() => {});
   }
 
   return (
     <View style={[styles.batterCard, { borderColor: tone.border, backgroundColor: tone.bg }]}>
-      {/* ── Header row: name + grade pill + save button ── */}
+      {/* ── Header row: name + grade pill + HR odds button ── */}
       <View style={styles.batterHead}>
         <View style={{ flex: 1 }}>
           <Text style={styles.batterName}>{batter.batter_name ?? "Batter"}</Text>
@@ -185,45 +204,16 @@ function BatterCard({
           <View style={[styles.gradePill, { borderColor: tone.border }]}>
             <Text style={[styles.gradeText, { color: tone.text }]}>{normalizeGrade(batter.grade)} • {formatScore(batter.score)}</Text>
           </View>
-          <Pressable
-            onPress={handleSave}
-            style={[
-              styles.saveButton,
-              isSaved
-                ? { backgroundColor: "#10B981", borderColor: "#10B981" }
-                : { backgroundColor: "transparent", borderColor: "#475569" },
-            ]}
-          >
-            <Text style={[styles.saveButtonText, { color: isSaved ? "#fff" : "#94A3B8" }]}>
-              {isSaved ? "✓ Saved" : "+ Save"}
-            </Text>
-          </Pressable>
+          {oddsLabel ? (
+            <Pressable
+              onPress={handleOddsPress}
+              style={[styles.saveButton, { borderColor: oddsColor, backgroundColor: "transparent" }]}
+            >
+              <Text style={[styles.saveButtonText, { color: oddsColor }]}>{oddsLabel}</Text>
+            </Pressable>
+          ) : null}
         </View>
       </View>
-
-      {/* ── Game odds context ── */}
-      {(batter.home_moneyline != null || batter.away_moneyline != null || batter.over_under != null) ? (
-        <View style={styles.oddsRow}>
-          {batter.away_moneyline != null ? (
-            <View style={styles.oddsPill}>
-              <Text style={styles.oddsPillLabel}>Away</Text>
-              <Text style={styles.oddsPillValue}>{formatOdds(batter.away_moneyline)}</Text>
-            </View>
-          ) : null}
-          {batter.home_moneyline != null ? (
-            <View style={styles.oddsPill}>
-              <Text style={styles.oddsPillLabel}>Home</Text>
-              <Text style={styles.oddsPillValue}>{formatOdds(batter.home_moneyline)}</Text>
-            </View>
-          ) : null}
-          {batter.over_under != null ? (
-            <View style={styles.oddsPill}>
-              <Text style={styles.oddsPillLabel}>O/U</Text>
-              <Text style={styles.oddsPillValue}>{batter.over_under}</Text>
-            </View>
-          ) : null}
-        </View>
-      ) : null}
 
       {/* ── Metrics table ── */}
       <View style={styles.metricsTable}>
@@ -375,13 +365,19 @@ export function MlbMatchupDetailScreen() {
                     <Text style={styles.weatherPillText}>🌡 {Math.round(game.game_temp)}°F</Text>
                   </View>
                 ) : null}
-                {game?.wind_speed != null ? (
-                  <View style={styles.weatherPill}>
-                    <Text style={styles.weatherPillText}>
-                      💨 {game.wind_speed.toFixed(1)} mph{game.wind_dir != null ? ` @ ${game.wind_dir}°` : ""}
-                    </Text>
-                  </View>
-                ) : null}
+                {game?.wind_speed != null ? (() => {
+                  const wdl = windDirectionLabel(game.wind_dir, game.ballpark_azimuth);
+                  return (
+                    <View style={styles.weatherPill}>
+                      <Text style={styles.weatherPillText}>
+                        💨 {game.wind_speed.toFixed(1)} mph{" "}
+                        {wdl
+                          ? <Text style={{ color: wdl.color }}>{wdl.label}</Text>
+                          : game.wind_dir != null ? `@ ${game.wind_dir}°` : ""}
+                      </Text>
+                    </View>
+                  );
+                })() : null}
                 {game?.precip_prob != null && game.precip_prob > 0 ? (
                   <View style={styles.weatherPill}>
                     <Text style={styles.weatherPillText}>☔ {Math.round(game.precip_prob)}% precip</Text>

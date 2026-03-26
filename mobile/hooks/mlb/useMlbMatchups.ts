@@ -66,10 +66,15 @@ export type MlbBatterPick = {
   p_fb_pct?: number | null;
   p_hard_hit_pct?: number | null;
   p_iso_allowed?: number | null;
-  // Odds carried from game-level
+  // Game odds (carried from game-level)
   home_moneyline?: number | null;
   away_moneyline?: number | null;
   over_under?: number | null;
+  // HR prop odds + deep links
+  hr_odds_best_price?: number | null;
+  hr_odds_best_book?: string | null;
+  deep_link_desktop?: string | null;
+  deep_link_ios?: string | null;
 };
 
 export type MlbPitcherGroup = {
@@ -92,6 +97,7 @@ export type MlbGameWeather = {
   conditions?: string | null;
   ballpark_name?: string | null;
   roof_type?: string | null;
+  ballpark_azimuth?: number | null;
   weather_note?: string | null;
   home_moneyline?: number | null;
   away_moneyline?: number | null;

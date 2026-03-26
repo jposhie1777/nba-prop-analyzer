@@ -34,6 +34,37 @@ function gradeTone(grade?: string | null) {
   return { border: "#F59E0B", bg: "rgba(245,158,11,0.12)", text: "#FDE68A" };
 }
 
+function SplitRow({
+  label,
+  split,
+}: {
+  label: string;
+  split?: {
+    ip?: number | null;
+    home_runs?: number | null;
+    hr_per_9?: number | null;
+    barrel_pct?: number | null;
+    hard_hit_pct?: number | null;
+    fb_pct?: number | null;
+    hr_fb_pct?: number | null;
+    whip?: number | null;
+  };
+}) {
+  return (
+    <View style={styles.tableRow}>
+      <Text style={[styles.cell, styles.cellSplit]}>{label}</Text>
+      <Text style={styles.cell}>{formatMetric(split?.ip, 1)}</Text>
+      <Text style={styles.cell}>{formatMetric(split?.home_runs, 0)}</Text>
+      <Text style={styles.cell}>{formatMetric(split?.hr_per_9, 2)}</Text>
+      <Text style={styles.cell}>{formatMetric(split?.barrel_pct, 1)}</Text>
+      <Text style={styles.cell}>{formatMetric(split?.hard_hit_pct, 1)}</Text>
+      <Text style={styles.cell}>{formatMetric(split?.fb_pct, 1)}</Text>
+      <Text style={styles.cell}>{formatMetric(split?.hr_fb_pct, 1)}</Text>
+      <Text style={styles.cell}>{formatMetric(split?.whip, 2)}</Text>
+    </View>
+  );
+}
+
 export function MlbMatchupDetailScreen() {
   const router = useRouter();
   const { colors } = useTheme();
@@ -94,38 +125,21 @@ export function MlbMatchupDetailScreen() {
 
             <View style={styles.pitcherCard}>
               <Text style={styles.pitcherName}>{pitcher.pitcher_name ?? "Pitcher"}</Text>
-              <View style={styles.statTable}>
-                <Text style={styles.headerCell}>SPLIT</Text>
-                <Text style={styles.headerCell}>IP</Text>
-                <Text style={styles.headerCell}>HR/9</Text>
-                <Text style={styles.headerCell}>BARREL%</Text>
-                <Text style={styles.headerCell}>HARDHIT%</Text>
-                <Text style={styles.headerCell}>FB%</Text>
-                <Text style={styles.headerCell}>HR/FB%</Text>
-
-                <Text style={styles.rowLabel}>SEASON</Text>
-                <Text style={styles.rowCell}>{formatMetric(season?.ip)}</Text>
-                <Text style={styles.rowCell}>{formatMetric(season?.hr_per_9, 2)}</Text>
-                <Text style={styles.rowCell}>{formatMetric(season?.barrel_pct)}</Text>
-                <Text style={styles.rowCell}>{formatMetric(season?.hard_hit_pct)}</Text>
-                <Text style={styles.rowCell}>{formatMetric(season?.fb_pct)}</Text>
-                <Text style={styles.rowCell}>{formatMetric(season?.hr_fb_pct)}</Text>
-
-                <Text style={styles.rowLabel}>VS LHB</Text>
-                <Text style={styles.rowCell}>{formatMetric(vsL?.ip)}</Text>
-                <Text style={styles.rowCell}>{formatMetric(vsL?.hr_per_9, 2)}</Text>
-                <Text style={styles.rowCell}>{formatMetric(vsL?.barrel_pct)}</Text>
-                <Text style={styles.rowCell}>{formatMetric(vsL?.hard_hit_pct)}</Text>
-                <Text style={styles.rowCell}>{formatMetric(vsL?.fb_pct)}</Text>
-                <Text style={styles.rowCell}>{formatMetric(vsL?.hr_fb_pct)}</Text>
-
-                <Text style={styles.rowLabel}>VS RHB</Text>
-                <Text style={styles.rowCell}>{formatMetric(vsR?.ip)}</Text>
-                <Text style={styles.rowCell}>{formatMetric(vsR?.hr_per_9, 2)}</Text>
-                <Text style={styles.rowCell}>{formatMetric(vsR?.barrel_pct)}</Text>
-                <Text style={styles.rowCell}>{formatMetric(vsR?.hard_hit_pct)}</Text>
-                <Text style={styles.rowCell}>{formatMetric(vsR?.fb_pct)}</Text>
-                <Text style={styles.rowCell}>{formatMetric(vsR?.hr_fb_pct)}</Text>
+              <View style={styles.tableWrap}>
+                <View style={[styles.tableRow, styles.tableHeaderRow]}>
+                  <Text style={[styles.headerCell, styles.cellSplit]}>SPLIT</Text>
+                  <Text style={styles.headerCell}>IP</Text>
+                  <Text style={styles.headerCell}>HR</Text>
+                  <Text style={styles.headerCell}>HR/9</Text>
+                  <Text style={styles.headerCell}>BARREL%</Text>
+                  <Text style={styles.headerCell}>HARDHIT%</Text>
+                  <Text style={styles.headerCell}>FB%</Text>
+                  <Text style={styles.headerCell}>HR/FB%</Text>
+                  <Text style={styles.headerCell}>WHIP</Text>
+                </View>
+                <SplitRow label="SEASON" split={season} />
+                <SplitRow label="VS LHB" split={vsL} />
+                <SplitRow label="VS RHB" split={vsR} />
               </View>
             </View>
 
@@ -203,10 +217,12 @@ const styles = StyleSheet.create({
   sectionSub: { color: "#94A3B8", fontSize: 12 },
   pitcherCard: { borderWidth: StyleSheet.hairlineWidth, borderColor: "#374151", borderRadius: 12, backgroundColor: "#111827", padding: 10, gap: 8 },
   pitcherName: { color: "#E5E7EB", fontSize: 15, fontWeight: "800" },
-  statTable: { gap: 4 },
-  headerCell: { color: "#94A3B8", fontSize: 10, fontWeight: "700" },
-  rowLabel: { color: "#CBD5E1", fontSize: 11, fontWeight: "800", marginTop: 4 },
-  rowCell: { color: "#E5E7EB", fontSize: 12 },
+  tableWrap: { gap: 2 },
+  tableHeaderRow: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#334155", paddingBottom: 4, marginBottom: 2 },
+  tableRow: { flexDirection: "row", alignItems: "center" },
+  headerCell: { color: "#94A3B8", fontSize: 10, fontWeight: "800", flex: 1, textAlign: "center" },
+  cell: { color: "#E5E7EB", fontSize: 11, flex: 1, textAlign: "center", paddingVertical: 3 },
+  cellSplit: { flex: 1.5, textAlign: "left", fontWeight: "800", color: "#CBD5E1" },
   batterCard: { borderWidth: 1, borderRadius: 12, padding: 10, gap: 8 },
   batterHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   batterName: { color: "#E5E7EB", fontSize: 15, fontWeight: "700", flex: 1 },

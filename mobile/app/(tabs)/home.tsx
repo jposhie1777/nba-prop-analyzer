@@ -42,6 +42,7 @@ export default function Home() {
       <Text style={styles.headline}>Leagues</Text>
 
       <LeagueCard title="PGA" route="/(tabs)/pga" logo={LEAGUE_LOGOS.PGA} />
+      <LeagueCard title="MLB" route="/(tabs)/mlb" logo={LEAGUE_LOGOS.MLB} />
       <LeagueCard title="MLS" route="/(tabs)/mls" logo={LEAGUE_LOGOS.MLS} />
       <LeagueCard title="EPL" route="/(tabs)/epl" logo={LEAGUE_LOGOS.EPL} />
       <LeagueCard title="ATP" route="/(tabs)/atp" logo={LEAGUE_LOGOS.ATP} />

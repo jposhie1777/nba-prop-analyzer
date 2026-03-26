@@ -87,6 +87,7 @@ from routes.mls_analytics import router as mls_analytics_router
 from routes.atp_matchups import router as atp_matchups_router
 from routes.soccer_matchups import router as soccer_matchups_router
 from routes.soccer_analytics import router as soccer_analytics_router
+from routes.mlb_matchups import router as mlb_matchups_router
 from ingest.epl.ingest import ingest_yesterday_refresh as ingest_epl_yesterday_refresh
 from ingest.laliga.ingest import ingest_yesterday_refresh as ingest_laliga_yesterday_refresh
 from ingest.mls.ingest import ingest_yesterday_refresh as ingest_mls_yesterday_refresh
@@ -194,6 +195,7 @@ app.include_router(mls_analytics_router)
 app.include_router(atp_matchups_router)
 app.include_router(soccer_matchups_router)
 app.include_router(soccer_analytics_router)
+app.include_router(mlb_matchups_router)
 
 # ==================================================
 # Startup hook (SMART SCHEDULED BACKGROUND TASKS)

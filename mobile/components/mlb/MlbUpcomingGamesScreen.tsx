@@ -1,7 +1,7 @@
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 
-import { useMlbDebugInfo, useMlbUpcomingGames } from "@/hooks/mlb/useMlbMatchups";
+import { useMlbUpcomingDebug, useMlbUpcomingGames } from "@/hooks/mlb/useMlbMatchups";
 import { useTheme } from "@/store/useTheme";
 import { formatET } from "@/lib/time/formatET";
 
@@ -18,7 +18,7 @@ export function MlbUpcomingGamesScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { data, loading, error, refetch } = useMlbUpcomingGames();
-  const { data: debugData, loading: debugLoading, refetch: refetchDebug } = useMlbDebugInfo();
+  const { data: debugData, loading: debugLoading, refetch: refetchDebug } = useMlbUpcomingDebug();
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -107,13 +107,13 @@ export function MlbUpcomingGamesScreen() {
             {debugLoading ? <ActivityIndicator color="#64748B" size="small" /> : null}
             {!debugLoading ? (
               <>
-                <Text style={styles.debugLine}>backend_now_et: {debugData?.backend_now_et ?? "—"}</Text>
+                <Text style={styles.debugLine}>backend_now_et: {debugData?.now_et ?? "—"}</Text>
                 <Text style={styles.debugLine}>today_et: {debugData?.today_et ?? "—"}</Text>
                 <Text style={styles.debugLine}>tomorrow_et: {debugData?.tomorrow_et ?? "—"}</Text>
-                <Text style={styles.debugLine}>schedule_today_count: {debugData?.schedule_today_count ?? 0}</Text>
-                <Text style={styles.debugLine}>schedule_tomorrow_count: {debugData?.schedule_tomorrow_count ?? 0}</Text>
-                <Text style={styles.debugLine}>combined_count: {debugData?.combined_count ?? 0}</Text>
-                <Text style={styles.debugLine}>last_error: {debugData?.last_error ?? "none"}</Text>
+                <Text style={styles.debugLine}>schedule_today_count: {debugData?.today_schedule_count ?? 0}</Text>
+                <Text style={styles.debugLine}>schedule_tomorrow_count: {debugData?.tomorrow_schedule_count ?? 0}</Text>
+                <Text style={styles.debugLine}>combined_count: {debugData?.combined_schedule_count ?? 0}</Text>
+                <Text style={styles.debugLine}>fetch_error: {debugData?.fetch_error ?? "none"}</Text>
               </>
             ) : null}
             <Pressable

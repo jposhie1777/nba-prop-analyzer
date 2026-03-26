@@ -45,11 +45,12 @@ export default function Home() {
       <LeagueCard title="MLB" route="/(tabs)/mlb" logo={LEAGUE_LOGOS.MLB} />
       <LeagueCard title="MLS" route="/(tabs)/mls" logo={LEAGUE_LOGOS.MLS} />
       <LeagueCard title="EPL" route="/(tabs)/epl" logo={LEAGUE_LOGOS.EPL} />
+      <LeagueCard title="LaLiga" route="/(tabs)/laliga" logo={LEAGUE_LOGOS.LALIGA} />
       <LeagueCard title="ATP" route="/(tabs)/atp" logo={LEAGUE_LOGOS.ATP} />
       <LeagueCard
         title="Soccer analytics"
         subtitle="This section will be going away eventually."
-        route="/(tabs)/soccer"
+        route="/(tabs)/soccer/index"
       />
 
       <View style={[styles.noteBox, { borderColor: colors.border.subtle }]}> 

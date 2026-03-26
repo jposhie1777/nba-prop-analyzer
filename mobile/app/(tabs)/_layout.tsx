@@ -75,6 +75,7 @@ const HIDDEN_SCREENS = [
   "pga-simulated-leaderboard",
   "props",
   "more",
+  "home/index",
   "soccer/index",
   "soccer/today",
   "trend-chart",
@@ -100,6 +101,8 @@ export default function TabLayout() {
           tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
           tabBarButton: HapticTab,
           header: () => <PulseHeader />,
+          tabBarStyle: { display: "flex" },
+          tabBarHideOnKeyboard: false,
         }}
       >
         {STATIC_TABS.map((tab) => (

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 
 import {
@@ -14,6 +14,7 @@ import { buildTeamOddsCode, resolveBadgeForTeam } from "@/utils/soccerDisplay";
 import { MatchupSlugCard } from "@/components/soccer/MatchupSlugCard";
 import { useSoccerBetslip } from "@/store/useSoccerBetslip";
 import { useSoccerBetslipDrawer } from "@/store/useSoccerBetslipDrawer";
+import { BackToHomeButton } from "@/components/navigation/BackToHomeButton";
 
 type Props = {
   league: SoccerLeague;
@@ -185,7 +186,6 @@ function LastMatchLine({ row }: { row: LastMatchRow }) {
 }
 
 export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
-  const router = useRouter();
   const { colors } = useTheme();
   const betslipItems = useSoccerBetslip((s) => s.items);
   const addToBetslip = useSoccerBetslip((s) => s.add);
@@ -389,12 +389,7 @@ export function LeagueMatchupDetailScreen({ league, leagueTitle }: Props) {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.actionRow}>
-        <Pressable onPress={() => router.back()} style={[styles.actionButton, { borderColor: colors.border.subtle }]}>
-          <Text style={styles.actionText}>← Back</Text>
-        </Pressable>
-        <Pressable onPress={() => router.push("/(tabs)/home")} style={[styles.actionButton, { borderColor: colors.border.subtle }]}>
-          <Text style={styles.actionText}>⌂ Home</Text>
-        </Pressable>
+        <BackToHomeButton />
       </View>
 
       <View style={[styles.panel, { borderColor: colors.border.subtle }]}>
@@ -760,14 +755,6 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#050A18" },
   content: { padding: 16, gap: 10, paddingBottom: 40 },
   actionRow: { flexDirection: "row", gap: 8 },
-  actionButton: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    backgroundColor: "#0B1529",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  actionText: { color: "#E9F2FF", fontWeight: "700", fontSize: 12 },
   panel: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, backgroundColor: "#0B1529", padding: 12, gap: 8 },
   eyebrow: { color: "#90B3E9", fontSize: 11, fontWeight: "700" },
   sectionTitle: { color: "#93C5FD", fontSize: 14, fontWeight: "700" },

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 
 import { AtpMatchupCard } from "@/components/atp/AtpMatchupCard";
@@ -11,6 +11,7 @@ import {
 import { useAtpBetslip } from "@/store/useAtpBetslip";
 import { useAtpBetslipDrawer } from "@/store/useAtpBetslipDrawer";
 import { useTheme } from "@/store/useTheme";
+import { BackToHomeButton } from "@/components/navigation/BackToHomeButton";
 
 type SectionKey =
   | "oddsBoard"
@@ -220,7 +221,6 @@ function formatPercent(value?: number | null): string {
 }
 
 export function AtpMatchupDetailScreen() {
-  const router = useRouter();
   const { colors } = useTheme();
   const params = useLocalSearchParams<{
     matchId?: string;
@@ -452,12 +452,7 @@ export function AtpMatchupDetailScreen() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.actionRow}>
-        <Pressable onPress={() => router.back()} style={[styles.actionButton, { borderColor: colors.border.subtle }]}>
-          <Text style={styles.actionText}>← Back</Text>
-        </Pressable>
-        <Pressable onPress={() => router.push("/(tabs)/home")} style={[styles.actionButton, { borderColor: colors.border.subtle }]}>
-          <Text style={styles.actionText}>⌂ Home</Text>
-        </Pressable>
+        <BackToHomeButton />
       </View>
 
       <View style={[styles.panel, { borderColor: colors.border.subtle }]}>
@@ -948,14 +943,6 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#050A18" },
   content: { padding: 16, gap: 10, paddingBottom: 40 },
   actionRow: { flexDirection: "row", gap: 8 },
-  actionButton: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    backgroundColor: "#0B1529",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  actionText: { color: "#E9F2FF", fontWeight: "700", fontSize: 12 },
   panel: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 14,

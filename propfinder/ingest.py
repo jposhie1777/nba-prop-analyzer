@@ -13,8 +13,10 @@ v3 fixes:
 import asyncio
 import datetime
 import logging
+import time
 
 import aiohttp
+from google.api_core.retry import Retry
 from google.cloud import bigquery
 
 PROJECT = "graphite-flare-477419-h7"
@@ -23,6 +25,9 @@ BASE_URL = "https://api.propfinder.app"
 MLB_API = "https://statsapi.mlb.com/api/v1"
 TODAY = datetime.date.today()
 NOW = datetime.datetime.now(datetime.timezone.utc)
+INSERT_CHUNK_SIZE = 250
+INSERT_MAX_ATTEMPTS = 5
+INSERT_TIMEOUT_SECONDS = 45
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -95,11 +100,62 @@ def bq_insert(table_name, rows):
     if not rows:
         log.info("No rows for %s", table_name)
         return
-    errors = bq.insert_rows_json(table(table_name), rows)
-    if errors:
-        log.error("BQ insert errors %s: %s", table_name, errors[:3])
-    else:
-        log.info("Inserted %s rows -> %s", len(rows), table_name)
+    table_ref = table(table_name)
+    total = len(rows)
+    inserted = 0
+    chunks = (total + INSERT_CHUNK_SIZE - 1) // INSERT_CHUNK_SIZE
+    retry_policy = Retry(deadline=INSERT_TIMEOUT_SECONDS)
+
+    for chunk_idx, start in enumerate(range(0, total, INSERT_CHUNK_SIZE), start=1):
+        chunk = rows[start : start + INSERT_CHUNK_SIZE]
+        chunk_ok = False
+        last_error = None
+
+        for attempt in range(1, INSERT_MAX_ATTEMPTS + 1):
+            try:
+                errors = bq.insert_rows_json(
+                    table_ref,
+                    chunk,
+                    retry=retry_policy,
+                    timeout=INSERT_TIMEOUT_SECONDS,
+                )
+                if errors:
+                    log.error(
+                        "BQ insert row errors %s chunk=%s/%s: %s",
+                        table_name,
+                        chunk_idx,
+                        chunks,
+                        errors[:3],
+                    )
+                    raise RuntimeError(
+                        f"BigQuery rejected rows for {table_name} chunk {chunk_idx}/{chunks}"
+                    )
+                inserted += len(chunk)
+                chunk_ok = True
+                break
+            except Exception as exc:  # network/transient retry guard
+                last_error = exc
+                if attempt < INSERT_MAX_ATTEMPTS:
+                    sleep_s = 2 ** (attempt - 1)
+                    log.warning(
+                        "BQ insert retry %s chunk=%s/%s attempt=%s/%s after error: %s",
+                        table_name,
+                        chunk_idx,
+                        chunks,
+                        attempt,
+                        INSERT_MAX_ATTEMPTS,
+                        exc,
+                    )
+                    time.sleep(sleep_s)
+                else:
+                    break
+
+        if not chunk_ok:
+            raise RuntimeError(
+                f"BQ insert failed for {table_name} chunk {chunk_idx}/{chunks}: {last_error}"
+            ) from last_error
+
+    log.info("Inserted %s rows -> %s (%s chunks)", inserted, table_name, chunks)
 
 
 async def fetch_today_games(session):

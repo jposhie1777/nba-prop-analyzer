@@ -193,9 +193,9 @@ app.include_router(epl_analytics_router)
 app.include_router(laliga_analytics_router)
 app.include_router(mls_analytics_router)
 app.include_router(atp_matchups_router)
+app.include_router(mlb_matchups_router)
 app.include_router(soccer_matchups_router)
 app.include_router(soccer_analytics_router)
-app.include_router(mlb_matchups_router)
 
 # ==================================================
 # Startup hook (SMART SCHEDULED BACKGROUND TASKS)

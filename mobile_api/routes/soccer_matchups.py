@@ -646,14 +646,13 @@ def _league_key(league: str) -> Optional[str]:
     return key if key in LEAGUE_TABLES else None
 
 
-@router.get("/{league}/matchups/upcoming")
-def soccer_matchups_upcoming(
-    league: str,
-    limit: int = Query(default=50, ge=1, le=500),
-    lookahead_days: int = Query(default=14, ge=1, le=60),
+def _soccer_matchups_upcoming_for_league(
+    league_key: str,
+    *,
+    limit: int,
+    lookahead_days: int,
 ):
-    league_key = _league_key(league)
-    if not league_key:
+    if league_key not in LEAGUE_TABLES:
         return []
 
     tables = LEAGUE_TABLES[league_key]
@@ -703,12 +702,10 @@ def soccer_matchups_upcoming(
     return []
 
 
-@router.get("/{league}/matchups/{match_id}")
-def soccer_matchup_detail(league: str, match_id: int):
-    league_key = _league_key(league)
-    if not league_key:
+def _soccer_matchup_detail_for_league(league_key: str, match_id: int):
+    if league_key not in LEAGUE_TABLES:
         return {
-            "league": league,
+            "league": league_key,
             "match_id": match_id,
             "match_info": None,
             "match_keys": [],
@@ -737,3 +734,73 @@ def soccer_matchup_detail(league: str, match_id: int):
         "odds_board": odds_board,
         "odds_updated_at": odds_updated_at,
     }
+
+
+@router.get("/epl/matchups/upcoming")
+def epl_matchups_upcoming(
+    limit: int = Query(default=50, ge=1, le=500),
+    lookahead_days: int = Query(default=14, ge=1, le=60),
+):
+    return _soccer_matchups_upcoming_for_league(
+        "epl",
+        limit=limit,
+        lookahead_days=lookahead_days,
+    )
+
+
+@router.get("/mls/matchups/upcoming")
+def mls_matchups_upcoming(
+    limit: int = Query(default=50, ge=1, le=500),
+    lookahead_days: int = Query(default=14, ge=1, le=60),
+):
+    return _soccer_matchups_upcoming_for_league(
+        "mls",
+        limit=limit,
+        lookahead_days=lookahead_days,
+    )
+
+
+@router.get("/epl/matchups/{match_id}")
+def epl_matchup_detail(match_id: int):
+    return _soccer_matchup_detail_for_league("epl", match_id)
+
+
+@router.get("/mls/matchups/{match_id}")
+def mls_matchup_detail(match_id: int):
+    return _soccer_matchup_detail_for_league("mls", match_id)
+
+
+@router.get("/{league}/matchups/upcoming")
+def soccer_matchups_upcoming_legacy(
+    league: str,
+    limit: int = Query(default=50, ge=1, le=500),
+    lookahead_days: int = Query(default=14, ge=1, le=60),
+):
+    league_key = _league_key(league)
+    if not league_key:
+        return []
+
+    return _soccer_matchups_upcoming_for_league(
+        league_key,
+        limit=limit,
+        lookahead_days=lookahead_days,
+    )
+
+
+@router.get("/{league}/matchups/{match_id}")
+def soccer_matchup_detail_legacy(league: str, match_id: int):
+    league_key = _league_key(league)
+    if not league_key:
+        return {
+            "league": league,
+            "match_id": match_id,
+            "match_info": None,
+            "match_keys": [],
+            "betting_stats": [],
+            "last_matches": [],
+            "odds_summary": None,
+            "odds_board": [],
+            "odds_updated_at": None,
+        }
+
+    return _soccer_matchup_detail_for_league(league_key, match_id)

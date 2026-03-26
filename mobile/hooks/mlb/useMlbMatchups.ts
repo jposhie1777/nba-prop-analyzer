@@ -16,6 +16,20 @@ export type MlbUpcomingGame = {
   picks_count?: number;
   top_score?: number | null;
   top_grade?: "IDEAL" | "FAVORABLE" | "AVERAGE" | "AVOID" | null;
+  // Weather
+  weather_indicator?: "Green" | "Yellow" | "Red" | string | null;
+  game_temp?: number | null;
+  wind_speed?: number | null;
+  wind_dir?: number | null;
+  precip_prob?: number | null;
+  conditions?: string | null;
+  ballpark_name?: string | null;
+  roof_type?: string | null;
+  weather_note?: string | null;
+  // Odds
+  home_moneyline?: number | null;
+  away_moneyline?: number | null;
+  over_under?: number | null;
 };
 
 export type MlbPitcherSplit = {
@@ -52,6 +66,10 @@ export type MlbBatterPick = {
   p_fb_pct?: number | null;
   p_hard_hit_pct?: number | null;
   p_iso_allowed?: number | null;
+  // Odds carried from game-level
+  home_moneyline?: number | null;
+  away_moneyline?: number | null;
+  over_under?: number | null;
 };
 
 export type MlbPitcherGroup = {
@@ -64,6 +82,22 @@ export type MlbPitcherGroup = {
   batters: MlbBatterPick[];
 };
 
+export type MlbGameWeather = {
+  weather_indicator?: "Green" | "Yellow" | "Red" | string | null;
+  game_temp?: number | null;
+  wind_speed?: number | null;
+  wind_dir?: number | null;
+  wind_gust?: number | null;
+  precip_prob?: number | null;
+  conditions?: string | null;
+  ballpark_name?: string | null;
+  roof_type?: string | null;
+  weather_note?: string | null;
+  home_moneyline?: number | null;
+  away_moneyline?: number | null;
+  over_under?: number | null;
+};
+
 export type MlbMatchupDetail = {
   game_pk: number;
   run_date: string;
@@ -74,7 +108,7 @@ export type MlbMatchupDetail = {
     venue_name?: string | null;
     home_pitcher_name?: string | null;
     away_pitcher_name?: string | null;
-  };
+  } & MlbGameWeather;
   grade_counts: {
     IDEAL: number;
     FAVORABLE: number;

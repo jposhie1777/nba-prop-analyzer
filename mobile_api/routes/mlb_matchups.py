@@ -24,6 +24,10 @@ PITCHER_MATCHUP_TABLE = os.getenv(
     "PROPFINDER_PITCHER_MATCHUP_TABLE",
     f"{PROPFINDER_DATASET}.raw_pitcher_matchup",
 )
+GAME_WEATHER_TABLE = os.getenv(
+    "PROPFINDER_GAME_WEATHER_TABLE",
+    f"{PROPFINDER_DATASET}.raw_game_weather",
+)
 
 
 def _today_et_iso() -> str:
@@ -252,6 +256,73 @@ def _pitcher_group_key(pitcher_id: Optional[int], pitcher_name: Any) -> Optional
     return None
 
 
+def _fetch_game_weather_map(
+    client: bigquery.Client,
+    weather_table_qualified: str,
+    run_date: str,
+    game_pks: Optional[List[int]] = None,
+) -> Dict[int, Dict[str, Any]]:
+    """Query raw_game_weather and return dict keyed by game_pk."""
+    try:
+        if game_pks:
+            rows = _safe_query(
+                client,
+                f"""
+                SELECT
+                  CAST(game_pk AS INT64) AS game_pk,
+                  weather_indicator,
+                  game_temp,
+                  wind_speed,
+                  wind_dir,
+                  wind_gust,
+                  precip_prob,
+                  conditions,
+                  ballpark_name,
+                  roof_type,
+                  home_moneyline,
+                  away_moneyline,
+                  over_under,
+                  weather_note
+                FROM {weather_table_qualified}
+                WHERE run_date = @run_date
+                  AND CAST(game_pk AS INT64) IN UNNEST(@game_pks)
+                QUALIFY ROW_NUMBER() OVER (PARTITION BY game_pk ORDER BY ingested_at DESC) = 1
+                """,
+                [
+                    bigquery.ScalarQueryParameter("run_date", "DATE", run_date),
+                    bigquery.ArrayQueryParameter("game_pks", "INT64", game_pks),
+                ],
+            )
+        else:
+            rows = _safe_query(
+                client,
+                f"""
+                SELECT
+                  CAST(game_pk AS INT64) AS game_pk,
+                  weather_indicator,
+                  game_temp,
+                  wind_speed,
+                  wind_dir,
+                  wind_gust,
+                  precip_prob,
+                  conditions,
+                  ballpark_name,
+                  roof_type,
+                  home_moneyline,
+                  away_moneyline,
+                  over_under,
+                  weather_note
+                FROM {weather_table_qualified}
+                WHERE run_date = @run_date
+                QUALIFY ROW_NUMBER() OVER (PARTITION BY game_pk ORDER BY ingested_at DESC) = 1
+                """,
+                [bigquery.ScalarQueryParameter("run_date", "DATE", run_date)],
+            )
+        return {int(row["game_pk"]): row for row in rows if row.get("game_pk") is not None}
+    except Exception:
+        return {}
+
+
 def _resolve_latest_run_date_for_game(
     client: bigquery.Client,
     table_ref_qualified: str,
@@ -303,6 +374,7 @@ def mlb_matchups_upcoming(
     client = get_bq_client()
     today = _today_et_iso()
     hr_table = _qualified_table(client, HR_PICKS_TABLE)
+    weather_table = _qualified_table(client, GAME_WEATHER_TABLE)
     run_date = _resolve_latest_run_date(client, hr_table, today)
 
     summary_rows = _safe_query(
@@ -321,23 +393,41 @@ def mlb_matchups_upcoming(
     )
     summary_map = {int(row["game_pk"]): row for row in summary_rows if row.get("game_pk") is not None}
 
+    schedule_game_pks = [_safe_int(g.get("game_pk")) for g in schedule_rows if g.get("game_pk") is not None]
+    weather_map = _fetch_game_weather_map(client, weather_table, run_date, schedule_game_pks)
+
     rows: List[Dict[str, Any]] = []
     for game in schedule_rows[:limit]:
         game_pk = _safe_int(game.get("game_pk"))
         summary = summary_map.get(game_pk) if game_pk is not None else None
+        gw = weather_map.get(game_pk) if game_pk is not None else None
         rows.append(
             {
                 "game_pk": game_pk,
                 "home_team": game.get("home_team"),
                 "away_team": game.get("away_team"),
                 "start_time_utc": game.get("start_time_utc"),
-                "venue_name": game.get("venue_name"),
+                "venue_name": gw.get("ballpark_name") if gw else game.get("venue_name"),
                 "home_pitcher_name": game.get("home_pitcher_name"),
                 "away_pitcher_name": game.get("away_pitcher_name"),
                 "has_model_data": bool(summary),
                 "picks_count": _safe_int(summary.get("picks_count")) if summary else 0,
                 "top_score": _safe_float(summary.get("top_score")) if summary else None,
                 "top_grade": summary.get("top_grade") if summary else None,
+                # Weather fields
+                "weather_indicator": gw.get("weather_indicator") if gw else None,
+                "game_temp": _safe_float(gw.get("game_temp")) if gw else None,
+                "wind_speed": _safe_float(gw.get("wind_speed")) if gw else None,
+                "wind_dir": _safe_int(gw.get("wind_dir")) if gw else None,
+                "precip_prob": _safe_float(gw.get("precip_prob")) if gw else None,
+                "conditions": gw.get("conditions") if gw else None,
+                "ballpark_name": gw.get("ballpark_name") if gw else None,
+                "roof_type": gw.get("roof_type") if gw else None,
+                # Odds fields
+                "home_moneyline": _safe_int(gw.get("home_moneyline")) if gw else None,
+                "away_moneyline": _safe_int(gw.get("away_moneyline")) if gw else None,
+                "over_under": _safe_float(gw.get("over_under")) if gw else None,
+                "weather_note": gw.get("weather_note") if gw else None,
             }
         )
     return rows
@@ -394,12 +484,15 @@ def mlb_matchup_detail(game_pk: int):
     today = _today_et_iso()
     hr_table = _qualified_table(client, HR_PICKS_TABLE)
     pitcher_table = _qualified_table(client, PITCHER_MATCHUP_TABLE)
+    weather_table = _qualified_table(client, GAME_WEATHER_TABLE)
     schedule = _fetch_schedule_for_game(game_pk)
     home_team = schedule.get("home_team") if schedule else None
     away_team = schedule.get("away_team") if schedule else None
     home_team_id = _safe_int(schedule.get("home_team_id")) if schedule else None
     away_team_id = _safe_int(schedule.get("away_team_id")) if schedule else None
     run_date = _resolve_latest_run_date_for_game(client, hr_table, game_pk, today)
+    weather_map = _fetch_game_weather_map(client, weather_table, run_date, [game_pk])
+    gw = weather_map.get(game_pk)
 
     pitcher_splits = _safe_query(
         client,
@@ -464,7 +557,10 @@ def mlb_matchup_detail(game_pk: int):
           p_barrel_pct,
           p_fb_pct,
           p_hard_hit_pct,
-          p_iso_allowed
+          p_iso_allowed,
+          IF(home_moneyline IS NOT NULL, home_moneyline, NULL) AS home_moneyline,
+          IF(away_moneyline IS NOT NULL, away_moneyline, NULL) AS away_moneyline,
+          over_under
         FROM {hr_table}
         WHERE run_date = @run_date
           AND CAST(game_pk AS INT64) = @game_pk
@@ -510,7 +606,10 @@ def mlb_matchup_detail(game_pk: int):
                   p_barrel_pct,
                   p_fb_pct,
                   p_hard_hit_pct,
-                  p_iso_allowed
+                  p_iso_allowed,
+                  IF(home_moneyline IS NOT NULL, home_moneyline, NULL) AS home_moneyline,
+                  IF(away_moneyline IS NOT NULL, away_moneyline, NULL) AS away_moneyline,
+                  over_under
                 FROM {hr_table}
                 WHERE run_date = @run_date
                   AND (
@@ -620,6 +719,9 @@ def mlb_matchup_detail(game_pk: int):
                 "p_fb_pct": _safe_float(pick.get("p_fb_pct")),
                 "p_hard_hit_pct": _safe_float(pick.get("p_hard_hit_pct")),
                 "p_iso_allowed": _safe_float(pick.get("p_iso_allowed")),
+                "home_moneyline": _safe_int(pick.get("home_moneyline")),
+                "away_moneyline": _safe_int(pick.get("away_moneyline")),
+                "over_under": _safe_float(pick.get("over_under")),
             }
         )
 
@@ -653,9 +755,24 @@ def mlb_matchup_detail(game_pk: int):
             "home_team": home_team,
             "away_team": away_team,
             "start_time_utc": schedule.get("start_time_utc") if schedule else None,
-            "venue_name": schedule.get("venue_name") if schedule else None,
+            "venue_name": gw.get("ballpark_name") if gw else (schedule.get("venue_name") if schedule else None),
             "home_pitcher_name": schedule.get("home_pitcher_name") if schedule else None,
             "away_pitcher_name": schedule.get("away_pitcher_name") if schedule else None,
+            # Weather
+            "weather_indicator": gw.get("weather_indicator") if gw else None,
+            "game_temp": _safe_float(gw.get("game_temp")) if gw else None,
+            "wind_speed": _safe_float(gw.get("wind_speed")) if gw else None,
+            "wind_dir": _safe_int(gw.get("wind_dir")) if gw else None,
+            "wind_gust": _safe_float(gw.get("wind_gust")) if gw else None,
+            "precip_prob": _safe_float(gw.get("precip_prob")) if gw else None,
+            "conditions": gw.get("conditions") if gw else None,
+            "ballpark_name": gw.get("ballpark_name") if gw else None,
+            "roof_type": gw.get("roof_type") if gw else None,
+            "weather_note": gw.get("weather_note") if gw else None,
+            # Odds
+            "home_moneyline": _safe_int(gw.get("home_moneyline")) if gw else None,
+            "away_moneyline": _safe_int(gw.get("away_moneyline")) if gw else None,
+            "over_under": _safe_float(gw.get("over_under")) if gw else None,
         },
         "grade_counts": grade_counts,
         "pitchers": pitchers_out,

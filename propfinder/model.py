@@ -151,6 +151,37 @@ def load_pitch_log():
     return out
 
 
+def load_game_weather():
+    """Load weather + odds data from raw_game_weather for today."""
+    try:
+        rows = query(
+            f"""
+            SELECT
+                game_pk,
+                weather_indicator,
+                game_temp,
+                wind_speed,
+                wind_dir,
+                wind_gust,
+                precip_prob,
+                conditions,
+                ballpark_name,
+                roof_type,
+                home_moneyline,
+                away_moneyline,
+                over_under,
+                weather_note
+            FROM {tbl('raw_game_weather')}
+            WHERE run_date = '{TODAY}'
+            QUALIFY ROW_NUMBER() OVER (PARTITION BY game_pk ORDER BY ingested_at DESC) = 1
+            """
+        )
+        return {row["game_pk"]: row for row in rows}
+    except Exception as exc:
+        log.warning("load_game_weather failed (table may not exist yet): %s", exc)
+        return {}
+
+
 def load_today_matchups():
     """
     Join on batter_team_id = opp_team_id so each batter only faces
@@ -485,6 +516,7 @@ def main():
     pitcher_map = load_pitcher_matchup()
     pitch_log_map = load_pitch_log()
     matchups = load_today_matchups()
+    weather_map = load_game_weather()
 
     if not matchups:
         log.warning("No matchup data - did ingest run with the updated ingest.py?")
@@ -536,6 +568,7 @@ def main():
             flags_bad,
         )
 
+        gw = weather_map.get(matchup["game_pk"], {})
         output_rows.append(
             {
                 "run_date": TODAY.isoformat(),
@@ -555,6 +588,18 @@ def main():
                 "grade": grade,
                 "why": why,
                 "flags": json.dumps(flags_good + flags_bad),
+                # Weather + odds fields (null-safe)
+                "weather_indicator": gw.get("weather_indicator"),
+                "game_temp": gw.get("game_temp"),
+                "wind_speed": gw.get("wind_speed"),
+                "wind_dir": gw.get("wind_dir"),
+                "precip_prob": gw.get("precip_prob"),
+                "ballpark_name": gw.get("ballpark_name"),
+                "roof_type": gw.get("roof_type"),
+                "weather_note": gw.get("weather_note"),
+                "home_moneyline": gw.get("home_moneyline"),
+                "away_moneyline": gw.get("away_moneyline"),
+                "over_under": gw.get("over_under"),
             }
         )
 

@@ -46,6 +46,8 @@ KEYS_TABLE = "mls_match_keys"
 BETTING_STATS_TABLE = "mls_betting_stats"
 LAST_MATCHES_TABLE = "mls_last_matches"
 UPCOMING_MATCHES_TABLE = "mls_upcoming_matches"
+MLS_LEAGUE_SLUG = "mls"
+MLS_SPORT_SLUG = "soccer"
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -234,6 +236,30 @@ def _parse_start_time_utc(value: Any) -> Optional[datetime]:
 
 def _format_start_time_utc(value: datetime) -> str:
     return value.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _is_mls_match_payload(match: Dict[str, Any]) -> bool:
+    if not isinstance(match, dict):
+        return False
+
+    info = match.get("match_info") or {}
+    sport_slug = str(
+        info.get("sport_slug")
+        or match.get("sport")
+        or ""
+    ).strip().lower()
+    league_slug = str(
+        info.get("league_slug")
+        or info.get("league_slug_en")
+        or ""
+    ).strip().lower()
+    league_name = str(info.get("league_name") or "").strip().lower()
+
+    if sport_slug and sport_slug != MLS_SPORT_SLUG:
+        return False
+    if league_slug:
+        return league_slug == MLS_LEAGUE_SLUG
+    return league_name == "mls"
 
 
 # ── Row builders ──────────────────────────────────────────────────────────────
@@ -514,7 +540,14 @@ def ingest_match_info(
 
     # ── Scrape ────────────────────────────────────────────────────────────────
     scraper = OddspediaClient()
-    matches = scraper.scrape(target_url)
+    matches = scraper.scrape(
+        target_url,
+        league_category="usa",
+        league_slug=MLS_LEAGUE_SLUG,
+        season_id=137218,
+        sport=MLS_SPORT_SLUG,
+    )
+    matches = [m for m in matches if _is_mls_match_payload(m)]
     upcoming_match_rows = _build_upcoming_match_rows(
         matches,
         ingested_at=ingested_at,

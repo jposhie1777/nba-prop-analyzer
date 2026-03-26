@@ -15,6 +15,30 @@ function scoreColor(grade?: string | null) {
   return "#64748B";
 }
 
+function weatherColor(indicator?: string | null) {
+  const w = (indicator || "").toLowerCase();
+  if (w === "green") return { border: "#22C55E55", text: "#86EFAC" };
+  if (w === "yellow") return { border: "#F59E0B55", text: "#FDE68A" };
+  if (w === "red") return { border: "#EF444455", text: "#FCA5A5" };
+  return { border: "#33415555", text: "#94A3B8" };
+}
+
+function formatOdds(ml?: number | null): string {
+  if (ml == null) return "—";
+  return ml > 0 ? `+${ml}` : `${ml}`;
+}
+
+function WeatherBadge({ indicator }: { indicator?: string | null }) {
+  if (!indicator) return null;
+  const { border, text } = weatherColor(indicator);
+  const icon = indicator.toLowerCase() === "green" ? "☀" : indicator.toLowerCase() === "yellow" ? "⛅" : "🌧";
+  return (
+    <View style={[styles.tag, { borderColor: border }]}>
+      <Text style={[styles.tagText, { color: text }]}>{icon} {indicator}</Text>
+    </View>
+  );
+}
+
 export function MlbUpcomingGamesScreen() {
   const router = useRouter();
   const { colors } = useTheme();
@@ -51,6 +75,7 @@ export function MlbUpcomingGamesScreen() {
         const topColor = scoreColor(topGrade);
         const topScore = game.top_score != null ? game.top_score.toFixed(1) : "—";
         const hasData = Boolean(game.has_model_data);
+        const venueLine = game.ballpark_name ?? game.venue_name;
 
         return (
           <Pressable
@@ -72,21 +97,39 @@ export function MlbUpcomingGamesScreen() {
               <View style={styles.teamCol}>
                 {awayLogo ? <Image source={{ uri: awayLogo }} style={styles.logo} /> : null}
                 <Text style={styles.teamName} numberOfLines={1}>{away}</Text>
+                {game.away_moneyline != null ? (
+                  <Text style={styles.oddsText}>{formatOdds(game.away_moneyline)}</Text>
+                ) : null}
               </View>
               <View style={styles.centerCol}>
                 <Text style={[styles.time, { color: "#C7D2FE" }]}>{formatET(game.start_time_utc ?? null)} ET</Text>
                 <Text style={styles.centerLabel}>at</Text>
+                {game.over_under != null ? (
+                  <Text style={styles.ouText}>O/U {game.over_under}</Text>
+                ) : null}
               </View>
               <View style={styles.teamCol}>
                 {homeLogo ? <Image source={{ uri: homeLogo }} style={styles.logo} /> : null}
                 <Text style={styles.teamName} numberOfLines={1}>{home}</Text>
+                {game.home_moneyline != null ? (
+                  <Text style={styles.oddsText}>{formatOdds(game.home_moneyline)}</Text>
+                ) : null}
               </View>
             </View>
 
             <Text style={[styles.meta, { color: colors.text.muted }]}>
-              {game.venue_name ? `${game.venue_name} • ` : ""}
+              {venueLine ? `${venueLine} • ` : ""}
               {hasData ? `${game.picks_count ?? 0} picks` : "Model data pending"}
             </Text>
+
+            {/* Weather detail line */}
+            {game.game_temp != null || game.wind_speed != null ? (
+              <Text style={styles.weatherLine}>
+                {game.game_temp != null ? `${Math.round(game.game_temp)}°F` : ""}
+                {game.wind_speed != null ? `  💨 ${game.wind_speed.toFixed(1)} mph` : ""}
+                {game.conditions ? `  ${game.conditions}` : ""}
+              </Text>
+            ) : null}
 
             <View style={styles.tagRow}>
               <View style={[styles.tag, { borderColor: hasData ? "#22C55E55" : "#334155" }]}>
@@ -99,6 +142,7 @@ export function MlbUpcomingGamesScreen() {
                   Top {topGrade} • {topScore}
                 </Text>
               </View>
+              <WeatherBadge indicator={game.weather_indicator} />
             </View>
           </Pressable>
         );
@@ -164,14 +208,17 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   slugRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
-  teamCol: { flex: 1, alignItems: "center", gap: 6 },
+  teamCol: { flex: 1, alignItems: "center", gap: 4 },
   centerCol: { alignItems: "center", justifyContent: "center", gap: 2 },
   logo: { width: 30, height: 30, borderRadius: 15, backgroundColor: "#111827" },
   teamName: { color: "#E5E7EB", fontSize: 13, fontWeight: "700" },
+  oddsText: { color: "#93C5FD", fontSize: 11, fontWeight: "700" },
+  ouText: { color: "#A5B4FC", fontSize: 10, fontWeight: "700", marginTop: 2 },
   centerLabel: { color: "#64748B", fontSize: 10, fontWeight: "700", textTransform: "uppercase" },
   matchup: { fontSize: 14, fontWeight: "800", flex: 1 },
   time: { fontSize: 12, fontWeight: "700" },
   meta: { fontSize: 12 },
+  weatherLine: { color: "#94A3B8", fontSize: 11 },
   tagRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
   tag: {
     borderWidth: StyleSheet.hairlineWidth,

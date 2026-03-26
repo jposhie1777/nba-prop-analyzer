@@ -3,10 +3,10 @@ ingest.py - PropFinder data ingestion pipeline
 Fetches today's MLB games, lineups, batter hit-data, splits, and pitcher matchup data.
 Writes raw data to BigQuery propfinder dataset.
 
-v3 fixes:
-- pitcher splits: 2025 only
-- barrel_pct, hard_hit_pct, fb_pct pulled from metricAverages
-- HR/FB% computed from homeRuns / airOuts
+v4 changes:
+- fetch_today_games + fetch_lineup replaced by fetch_upcoming_games (propfinder API)
+- fetch_weather_notes added for expert weather commentary
+- raw_game_weather table populated with per-game weather + odds data
 - batter_team_id stored so model can correctly match batters to pitchers
 """
 
@@ -36,6 +36,118 @@ bq = bigquery.Client(project=PROJECT)
 
 def table(name):
     return f"{PROJECT}.{DATASET}.{name}"
+
+
+RAW_GAME_WEATHER_SCHEMA = [
+    bigquery.SchemaField("run_date",          "DATE"),
+    bigquery.SchemaField("game_pk",           "INTEGER"),
+    bigquery.SchemaField("game_date",         "TIMESTAMP"),
+    bigquery.SchemaField("home_team_id",      "INTEGER"),
+    bigquery.SchemaField("home_team_name",    "STRING"),
+    bigquery.SchemaField("away_team_id",      "INTEGER"),
+    bigquery.SchemaField("away_team_name",    "STRING"),
+    bigquery.SchemaField("weather_indicator", "STRING"),
+    bigquery.SchemaField("game_temp",         "FLOAT"),
+    bigquery.SchemaField("wind_speed",        "FLOAT"),
+    bigquery.SchemaField("wind_dir",          "INTEGER"),
+    bigquery.SchemaField("wind_gust",         "FLOAT"),
+    bigquery.SchemaField("precip_prob",       "FLOAT"),
+    bigquery.SchemaField("conditions",        "STRING"),
+    bigquery.SchemaField("ballpark_name",     "STRING"),
+    bigquery.SchemaField("roof_type",         "STRING"),
+    bigquery.SchemaField("ballpark_azimuth",  "INTEGER"),
+    bigquery.SchemaField("home_moneyline",    "INTEGER"),
+    bigquery.SchemaField("away_moneyline",    "INTEGER"),
+    bigquery.SchemaField("over_under",        "FLOAT"),
+    bigquery.SchemaField("weather_note",      "STRING"),
+    bigquery.SchemaField("ingested_at",       "TIMESTAMP"),
+]
+
+RAW_HR_PROPS_SCHEMA = [
+    bigquery.SchemaField("run_date",           "DATE"),
+    bigquery.SchemaField("game_pk",            "INTEGER"),
+    bigquery.SchemaField("player_id",          "INTEGER"),
+    bigquery.SchemaField("player_name",        "STRING"),
+    bigquery.SchemaField("hr_odds_best_price", "INTEGER"),
+    bigquery.SchemaField("hr_odds_best_book",  "STRING"),
+    bigquery.SchemaField("deep_link_desktop",  "STRING"),
+    bigquery.SchemaField("deep_link_ios",      "STRING"),
+    bigquery.SchemaField("dk_outcome_code",    "STRING"),
+    bigquery.SchemaField("dk_event_id",        "STRING"),
+    bigquery.SchemaField("fd_market_id",       "STRING"),
+    bigquery.SchemaField("fd_selection_id",    "STRING"),
+    bigquery.SchemaField("ingested_at",        "TIMESTAMP"),
+]
+
+NEW_HR_PICKS_FIELDS = [
+    bigquery.SchemaField("weather_indicator",  "STRING"),
+    bigquery.SchemaField("game_temp",          "FLOAT"),
+    bigquery.SchemaField("wind_speed",         "FLOAT"),
+    bigquery.SchemaField("wind_dir",           "INTEGER"),
+    bigquery.SchemaField("precip_prob",        "FLOAT"),
+    bigquery.SchemaField("ballpark_name",      "STRING"),
+    bigquery.SchemaField("roof_type",          "STRING"),
+    bigquery.SchemaField("weather_note",       "STRING"),
+    bigquery.SchemaField("home_moneyline",     "INTEGER"),
+    bigquery.SchemaField("away_moneyline",     "INTEGER"),
+    bigquery.SchemaField("over_under",         "FLOAT"),
+    bigquery.SchemaField("hr_odds_best_price", "INTEGER"),
+    bigquery.SchemaField("hr_odds_best_book",  "STRING"),
+    bigquery.SchemaField("deep_link_desktop",  "STRING"),
+    bigquery.SchemaField("deep_link_ios",      "STRING"),
+    bigquery.SchemaField("dk_outcome_code",    "STRING"),
+    bigquery.SchemaField("dk_event_id",        "STRING"),
+    bigquery.SchemaField("fd_market_id",       "STRING"),
+    bigquery.SchemaField("fd_selection_id",    "STRING"),
+]
+
+
+def ensure_tables():
+    """Create tables if missing; add new columns idempotently."""
+    # raw_game_weather
+    try:
+        bq.create_table(
+            bigquery.Table(table("raw_game_weather"), schema=RAW_GAME_WEATHER_SCHEMA),
+            exists_ok=True,
+        )
+        log.info("raw_game_weather table ready")
+    except Exception as exc:
+        log.error("Failed to create raw_game_weather: %s", exc)
+        raise
+
+    # raw_game_weather — add ballpark_azimuth if missing
+    try:
+        gw_table = bq.get_table(table("raw_game_weather"))
+        existing = {f.name for f in gw_table.schema}
+        gw_new = [f for f in RAW_GAME_WEATHER_SCHEMA if f.name not in existing]
+        if gw_new:
+            gw_table.schema = list(gw_table.schema) + gw_new
+            bq.update_table(gw_table, ["schema"])
+            log.info("Added columns to raw_game_weather: %s", [f.name for f in gw_new])
+    except Exception as exc:
+        log.warning("Could not update raw_game_weather schema: %s", exc)
+
+    # raw_hr_props — create if missing
+    try:
+        bq.create_table(
+            bigquery.Table(table("raw_hr_props"), schema=RAW_HR_PROPS_SCHEMA),
+            exists_ok=True,
+        )
+        log.info("raw_hr_props table ready")
+    except Exception as exc:
+        log.warning("Could not create raw_hr_props: %s", exc)
+
+    # hr_picks_daily — add new columns idempotently
+    try:
+        hr_table = bq.get_table(table("hr_picks_daily"))
+        existing = {f.name for f in hr_table.schema}
+        to_add = [f for f in NEW_HR_PICKS_FIELDS if f.name not in existing]
+        if to_add:
+            hr_table.schema = list(hr_table.schema) + to_add
+            bq.update_table(hr_table, ["schema"])
+            log.info("Added %s columns to hr_picks_daily: %s", len(to_add), [f.name for f in to_add])
+    except Exception as exc:
+        log.warning("Could not update hr_picks_daily schema: %s", exc)
 
 
 async def get(session, url, params=None):
@@ -158,65 +270,191 @@ def bq_insert(table_name, rows):
     log.info("Inserted %s rows -> %s (%s chunks)", inserted, table_name, chunks)
 
 
-async def fetch_today_games(session):
-    data = await get(
-        session,
-        f"{MLB_API}/schedule",
-        params={
-            "sportId": 1,
-            "date": TODAY.isoformat(),
-            "hydrate": "probablePitcher,team",
-        },
-    )
-    if not data:
+def _find_game_weather(weather_data, game_epoch):
+    """Return the weatherData entry whose dateTimeEpoch is closest to game_epoch."""
+    if not weather_data:
+        return {}
+    return min(weather_data, key=lambda w: abs((w.get("dateTimeEpoch") or 0) - game_epoch))
+
+
+async def fetch_upcoming_games(session):
+    """
+    Replaces fetch_today_games + fetch_lineup.
+    Calls /mlb/upcoming-games, filters to TODAY, extracts game info
+    including batting orders, weather, and odds.
+    """
+    data = await get(session, f"{BASE_URL}/mlb/upcoming-games")
+    if not data or not isinstance(data, list):
         return []
 
     games = []
-    for date_block in data.get("dates", []):
-        for game in date_block.get("games", []):
-            home = game["teams"]["home"]
-            away = game["teams"]["away"]
-            games.append(
-                {
-                    "game_pk": game["gamePk"],
-                    "home_team_id": home["team"]["id"],
-                    "away_team_id": away["team"]["id"],
-                    "home_team_name": home["team"]["name"],
-                    "away_team_name": away["team"]["name"],
-                    "home_pitcher_id": home.get("probablePitcher", {}).get("id"),
-                    "home_pitcher_name": home.get("probablePitcher", {}).get(
-                        "fullName", "TBD"
-                    ),
-                    "away_pitcher_id": away.get("probablePitcher", {}).get("id"),
-                    "away_pitcher_name": away.get("probablePitcher", {}).get(
-                        "fullName", "TBD"
-                    ),
-                }
-            )
+    for item in data:
+        game_date_str = item.get("gameDate", "")
+        if not game_date_str:
+            continue
+        try:
+            game_dt = datetime.datetime.fromisoformat(game_date_str.replace("Z", "+00:00"))
+        except ValueError:
+            continue
 
-    log.info("Found %s games for %s", len(games), TODAY)
+        # Filter to today's games (compare date in UTC)
+        if game_dt.date() != TODAY:
+            continue
+
+        game_pk = si(item.get("id"))
+        if game_pk is None:
+            continue
+
+        game_epoch = int(game_dt.timestamp())
+
+        home_team = item.get("homeTeam") or {}
+        visitor_team = item.get("visitorTeam") or {}
+        ballpark = item.get("ballpark") or {}
+        weather_data = item.get("weatherData") or []
+        game_weather = _find_game_weather(weather_data, game_epoch)
+
+        # Parse batting orders from comma-separated player ID strings
+        home_order_str = item.get("homeBattingOrder") or ""
+        visitor_order_str = item.get("visitorBattingOrder") or ""
+        home_batting_order = [
+            int(x) for x in home_order_str.split(",") if x.strip().isdigit()
+        ]
+        away_batting_order = [
+            int(x) for x in visitor_order_str.split(",") if x.strip().isdigit()
+        ]
+
+        # Moneyline odds (string like "-117" or "105")
+        home_ml_str = item.get("homeTeamOdds")
+        away_ml_str = item.get("visitorTeamOdds")
+
+        games.append(
+            {
+                "game_pk": game_pk,
+                "game_date": game_date_str,
+                "game_epoch": game_epoch,
+                "home_team_id": si(home_team.get("id")),
+                "home_team_name": home_team.get("fullName", ""),
+                "home_team_code": home_team.get("code", ""),
+                "away_team_id": si(visitor_team.get("id")),
+                "away_team_name": visitor_team.get("fullName", ""),
+                "away_team_code": visitor_team.get("code", ""),
+                "home_pitcher_id": si(item.get("homePitcherId")),
+                "away_pitcher_id": si(item.get("visitorPitcherId")),
+                "home_batting_order": home_batting_order,
+                "away_batting_order": away_batting_order,
+                "weather_indicator": item.get("weatherIndicator", ""),
+                "home_moneyline": si(home_ml_str) if home_ml_str else None,
+                "away_moneyline": si(away_ml_str) if away_ml_str else None,
+                "over_under": sf(item.get("gameRunLine")),
+                "ballpark_name": ballpark.get("name", ""),
+                "roof_type": ballpark.get("roofType", ""),
+                "ballpark_azimuth": si(ballpark.get("azimuthAngle")),
+                # Game-hour weather snapshot
+                "game_temp": sf(game_weather.get("temp")),
+                "wind_speed": sf(game_weather.get("windSpeed")),
+                "wind_dir": si(game_weather.get("windDir")),
+                "wind_gust": sf(game_weather.get("windGust")),
+                "precip_prob": sf(game_weather.get("precipProb")),
+                "conditions": game_weather.get("conditions", ""),
+            }
+        )
+
+    log.info("Found %s games for %s from upcoming-games endpoint", len(games), TODAY)
     return games
 
 
-async def fetch_lineup(session, game_pk):
-    data = await get(session, f"{BASE_URL}/mlb/lineups", params={"gameIds": game_pk})
+async def fetch_weather_notes(session):
+    """
+    Calls /mlb/weather-notes. Returns dict keyed by gameId.
+    """
+    data = await get(session, f"{BASE_URL}/mlb/weather-notes")
     if not data or not isinstance(data, list):
-        return {"home_players": [], "away_players": []}
+        return {}
 
+    notes = {}
     for item in data:
-        if si(item.get("gamePk")) == si(game_pk):
-            lineups = item.get("lineups", {})
-            return {
-                "home_players": unique_ints(
-                    extract_player_id(player)
-                    for player in lineups.get("homePlayers", [])
-                ),
-                "away_players": unique_ints(
-                    extract_player_id(player)
-                    for player in lineups.get("awayPlayers", [])
-                ),
-            }
-    return {"home_players": [], "away_players": []}
+        game_id = si(item.get("gameId"))
+        if game_id is None:
+            continue
+        notes[game_id] = {
+            "content": item.get("content", ""),
+            "author": item.get("authorName", ""),
+        }
+    log.info("Fetched %s weather notes", len(notes))
+    return notes
+
+
+def _parse_dk_link(url):
+    """Extract (dk_event_id, dk_outcome_code) from a DraftKings desktop URL."""
+    import re
+    m = re.search(r"/event/(\d+)\?outcomes=([^&\s]+)", url or "")
+    if m:
+        return m.group(1), m.group(2)
+    return None, None
+
+
+def _parse_fd_link(url):
+    """Extract (fd_market_id, fd_selection_id) from a FanDuel desktop URL."""
+    from urllib.parse import urlparse, parse_qs
+    parsed = urlparse(url or "")
+    qs = parse_qs(parsed.query)
+    return qs.get("marketId", [None])[0], qs.get("selectionId", [None])[0]
+
+
+async def fetch_player_names(session, player_ids):
+    """Batch-fetch player fullNames from MLB Stats API by ID list."""
+    if not player_ids:
+        return {}
+    ids_str = ",".join(str(i) for i in player_ids)
+    data = await get(
+        session,
+        f"{MLB_API}/people",
+        params={"personIds": ids_str, "fields": "people,id,fullName"},
+    )
+    if not data or not isinstance(data, dict):
+        return {}
+    return {
+        int(p["id"]): p.get("fullName", "")
+        for p in data.get("people", [])
+        if p.get("id")
+    }
+
+
+async def fetch_props(session, game_pk):
+    """
+    Fetch HR prop odds for a game from /mlb/props.
+    Returns dict keyed by player_id with odds + deep link fields.
+    """
+    data = await get(session, f"{BASE_URL}/mlb/props", params={"gameId": game_pk})
+    if not data or not isinstance(data, list):
+        return {}
+
+    props = {}
+    for item in data:
+        player_id = si(item.get("playerId"))
+        if player_id is None:
+            continue
+        best = item.get("bestMarket") or {}
+        desktop_link = best.get("deepLinkDesktop") or ""
+        ios_link = best.get("deepLinkIos") or best.get("deepLinkMobile") or ""
+
+        dk_event_id, dk_outcome_code = _parse_dk_link(desktop_link)
+        fd_market_id, fd_selection_id = _parse_fd_link(desktop_link)
+
+        props[player_id] = {
+            "player_name": item.get("playerName") or "",
+            "hr_odds_best_price": si(best.get("price")),
+            "hr_odds_best_book": best.get("bookmaker") or best.get("book") or "",
+            "deep_link_desktop": desktop_link,
+            "deep_link_ios": ios_link,
+            "dk_outcome_code": dk_outcome_code or "",
+            "dk_event_id": dk_event_id or "",
+            "fd_market_id": fd_market_id or "",
+            "fd_selection_id": fd_selection_id or "",
+        }
+
+    log.info("Fetched HR props for %s players in game %s", len(props), game_pk)
+    return props
 
 
 async def fetch_team_roster(session, team_id):
@@ -490,18 +728,68 @@ def rank_roster_players(team_id, roster_players, ranked_history):
 
 async def main():
     log.info("Starting PropFinder ingest for %s", TODAY)
+    ensure_tables()
 
     connector = aiohttp.TCPConnector(limit=20)
     async with aiohttp.ClientSession(connector=connector) as session:
-        games = await fetch_today_games(session)
+        # ── Step 1: fetch today's games + weather + odds ──────────────────────
+        games = await fetch_upcoming_games(session)
         if not games:
             log.warning("No games found - exiting")
             return
 
-        lineup_results = await asyncio.gather(
-            *[fetch_lineup(session, game["game_pk"]) for game in games]
+        # ── Step 2: fetch expert weather notes ────────────────────────────────
+        weather_notes = await fetch_weather_notes(session)
+
+        # ── Step 2b: look up real pitcher names from MLB Stats API ────────────
+        all_pitcher_ids = unique_ints(
+            [game["home_pitcher_id"] for game in games if game.get("home_pitcher_id")]
+            + [game["away_pitcher_id"] for game in games if game.get("away_pitcher_id")]
         )
-        lineups = {game["game_pk"]: result for game, result in zip(games, lineup_results)}
+        pitcher_name_map = await fetch_player_names(session, all_pitcher_ids)
+        log.info("Fetched names for %s pitchers", len(pitcher_name_map))
+
+        # ── Step 2c: fetch HR prop odds for each game ──────────────────────────
+        props_results = await asyncio.gather(
+            *[fetch_props(session, game["game_pk"]) for game in games]
+        )
+        # props_by_game: dict[game_pk, dict[player_id, {...}]]
+        props_by_game = {game["game_pk"]: result for game, result in zip(games, props_results)}
+
+        # ── Step 3: build raw_game_weather rows ───────────────────────────────
+        game_weather_rows = []
+        for game in games:
+            note = weather_notes.get(game["game_pk"], {})
+            game_weather_rows.append(
+                {
+                    "run_date": TODAY.isoformat(),
+                    "game_pk": game["game_pk"],
+                    "game_date": game["game_date"],
+                    "home_team_id": game["home_team_id"],
+                    "home_team_name": game["home_team_name"],
+                    "away_team_id": game["away_team_id"],
+                    "away_team_name": game["away_team_name"],
+                    "weather_indicator": game["weather_indicator"],
+                    "game_temp": game["game_temp"],
+                    "wind_speed": game["wind_speed"],
+                    "wind_dir": game["wind_dir"],
+                    "wind_gust": game["wind_gust"],
+                    "precip_prob": game["precip_prob"],
+                    "conditions": game["conditions"],
+                    "ballpark_name": game["ballpark_name"],
+                    "roof_type": game["roof_type"],
+                    "ballpark_azimuth": game.get("ballpark_azimuth"),
+                    "home_moneyline": game["home_moneyline"],
+                    "away_moneyline": game["away_moneyline"],
+                    "over_under": game["over_under"],
+                    "weather_note": note.get("content", ""),
+                    "ingested_at": NOW.isoformat(),
+                }
+            )
+
+        bq_insert("raw_game_weather", game_weather_rows)
+
+        # ── Step 4: build batter + pitcher jobs from batting orders ───────────
         team_ids = unique_ints(
             [game["home_team_id"] for game in games]
             + [game["away_team_id"] for game in games]
@@ -518,12 +806,12 @@ async def main():
 
         for game in games:
             game_pk = game["game_pk"]
-            lineup = lineups.get(game_pk, {"home_players": [], "away_players": []})
-            home_players = lineup.get("home_players", [])
-            away_players = lineup.get("away_players", [])
-            home_source = "lineup"
-            away_source = "lineup"
+            home_players = list(unique_ints(game["home_batting_order"]))
+            away_players = list(unique_ints(game["away_batting_order"]))
+            home_source = "lineup" if home_players else "fallback"
+            away_source = "lineup" if away_players else "fallback"
 
+            # Roster/history fallback if batting order is empty
             if not home_players:
                 home_players = rank_roster_players(
                     game["home_team_id"],
@@ -536,6 +824,7 @@ async def main():
                     home_players = ranked_history_by_team.get(game["home_team_id"], [])
                     if home_players:
                         home_source = "recent-history"
+
             if not away_players:
                 away_players = rank_roster_players(
                     game["away_team_id"],
@@ -559,6 +848,7 @@ async def main():
                     away_source,
                 )
 
+            # Home batters face the away pitcher
             for batter_id in home_players:
                 batter_id_int = si(batter_id)
                 if batter_id_int is None:
@@ -570,6 +860,7 @@ async def main():
                 batter_jobs.append(
                     {"batter_id": batter_id_int, "game_pk": game_pk, "batter_team_id": game["home_team_id"]}
                 )
+            # Away batters face the home pitcher
             for batter_id in away_players:
                 batter_id_int = si(batter_id)
                 if batter_id_int is None:
@@ -586,7 +877,7 @@ async def main():
                 pitcher_jobs.append(
                     {
                         "pitcher_id": game["home_pitcher_id"],
-                        "pitcher_name": game["home_pitcher_name"],
+                        "pitcher_name": pitcher_name_map.get(game["home_pitcher_id"], f"Pitcher {game['home_pitcher_id']}"),
                         "opp_team_id": game["away_team_id"],
                         "game_pk": game_pk,
                     }
@@ -595,7 +886,7 @@ async def main():
                 pitcher_jobs.append(
                     {
                         "pitcher_id": game["away_pitcher_id"],
-                        "pitcher_name": game["away_pitcher_name"],
+                        "pitcher_name": pitcher_name_map.get(game["away_pitcher_id"], f"Pitcher {game['away_pitcher_id']}"),
                         "opp_team_id": game["home_team_id"],
                         "game_pk": game_pk,
                     }
@@ -603,6 +894,7 @@ async def main():
 
         log.info("Batter jobs: %s | Pitcher jobs: %s", len(batter_jobs), len(pitcher_jobs))
 
+        # ── Step 5: fetch batter hit-data + splits ────────────────────────────
         all_hit_rows = []
         all_split_rows = []
 
@@ -619,6 +911,7 @@ async def main():
             all_hit_rows.extend(hit_rows)
             all_split_rows.extend(split_rows)
 
+        # ── Step 6: fetch pitcher matchup data ────────────────────────────────
         all_pitcher_rows = []
         all_pitch_log_rows = []
 
@@ -642,6 +935,29 @@ async def main():
         bq_insert("raw_splits", all_split_rows)
         bq_insert("raw_pitcher_matchup", all_pitcher_rows)
         bq_insert("raw_pitch_log", all_pitch_log_rows)
+
+        # ── Step 7: insert HR prop odds ────────────────────────────────────────
+        all_props_rows = []
+        for game_pk_key, player_props in props_by_game.items():
+            for player_id, p in player_props.items():
+                all_props_rows.append(
+                    {
+                        "run_date": TODAY.isoformat(),
+                        "game_pk": game_pk_key,
+                        "player_id": player_id,
+                        "player_name": p["player_name"],
+                        "hr_odds_best_price": p["hr_odds_best_price"],
+                        "hr_odds_best_book": p["hr_odds_best_book"],
+                        "deep_link_desktop": p["deep_link_desktop"],
+                        "deep_link_ios": p["deep_link_ios"],
+                        "dk_outcome_code": p["dk_outcome_code"],
+                        "dk_event_id": p["dk_event_id"],
+                        "fd_market_id": p["fd_market_id"],
+                        "fd_selection_id": p["fd_selection_id"],
+                        "ingested_at": NOW.isoformat(),
+                    }
+                )
+        bq_insert("raw_hr_props", all_props_rows)
 
         log.info("Ingest complete.")
 

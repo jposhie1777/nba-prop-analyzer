@@ -184,4 +184,60 @@ client.create_table(bigquery.Table(
 ), exists_ok=True)
 print("Created hr_picks_daily")
 
+# ── raw_game_weather ──────────────────────────────────────────────────────────
+client.create_table(bigquery.Table(
+    f"{PROJECT}.{DATASET}.raw_game_weather",
+    schema=[
+        bigquery.SchemaField("run_date",          "DATE"),
+        bigquery.SchemaField("game_pk",           "INTEGER"),
+        bigquery.SchemaField("game_date",         "TIMESTAMP"),
+        bigquery.SchemaField("home_team_id",      "INTEGER"),
+        bigquery.SchemaField("home_team_name",    "STRING"),
+        bigquery.SchemaField("away_team_id",      "INTEGER"),
+        bigquery.SchemaField("away_team_name",    "STRING"),
+        bigquery.SchemaField("weather_indicator", "STRING"),   # Green / Yellow / Red
+        bigquery.SchemaField("game_temp",         "FLOAT"),
+        bigquery.SchemaField("wind_speed",        "FLOAT"),
+        bigquery.SchemaField("wind_dir",          "INTEGER"),
+        bigquery.SchemaField("wind_gust",         "FLOAT"),
+        bigquery.SchemaField("precip_prob",       "FLOAT"),
+        bigquery.SchemaField("conditions",        "STRING"),
+        bigquery.SchemaField("ballpark_name",     "STRING"),
+        bigquery.SchemaField("roof_type",         "STRING"),
+        bigquery.SchemaField("home_moneyline",    "INTEGER"),
+        bigquery.SchemaField("away_moneyline",    "INTEGER"),
+        bigquery.SchemaField("over_under",        "FLOAT"),
+        bigquery.SchemaField("weather_note",      "STRING"),
+        bigquery.SchemaField("ingested_at",       "TIMESTAMP"),
+    ]
+), exists_ok=True)
+print("Created raw_game_weather")
+
+# ── Add new weather + odds columns to hr_picks_daily (idempotent) ─────────────
+NEW_HR_PICKS_FIELDS = [
+    bigquery.SchemaField("weather_indicator", "STRING"),
+    bigquery.SchemaField("game_temp",         "FLOAT"),
+    bigquery.SchemaField("wind_speed",        "FLOAT"),
+    bigquery.SchemaField("wind_dir",          "INTEGER"),
+    bigquery.SchemaField("precip_prob",       "FLOAT"),
+    bigquery.SchemaField("ballpark_name",     "STRING"),
+    bigquery.SchemaField("roof_type",         "STRING"),
+    bigquery.SchemaField("weather_note",      "STRING"),
+    bigquery.SchemaField("home_moneyline",    "INTEGER"),
+    bigquery.SchemaField("away_moneyline",    "INTEGER"),
+    bigquery.SchemaField("over_under",        "FLOAT"),
+]
+
+hr_picks_ref = f"{PROJECT}.{DATASET}.hr_picks_daily"
+hr_picks_table = client.get_table(hr_picks_ref)
+existing_names = {field.name for field in hr_picks_table.schema}
+fields_to_add = [f for f in NEW_HR_PICKS_FIELDS if f.name not in existing_names]
+
+if fields_to_add:
+    hr_picks_table.schema = list(hr_picks_table.schema) + fields_to_add
+    client.update_table(hr_picks_table, ["schema"])
+    print(f"Added {len(fields_to_add)} new columns to hr_picks_daily: {[f.name for f in fields_to_add]}")
+else:
+    print("hr_picks_daily already has all weather/odds columns")
+
 print("\nAll tables created successfully.")

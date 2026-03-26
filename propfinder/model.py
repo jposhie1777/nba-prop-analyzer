@@ -338,6 +338,65 @@ def load_pitch_log():
     return out
 
 
+def load_game_weather():
+    """Load weather + odds data from raw_game_weather for today."""
+    try:
+        rows = query(
+            f"""
+            SELECT
+                game_pk,
+                weather_indicator,
+                game_temp,
+                wind_speed,
+                wind_dir,
+                wind_gust,
+                precip_prob,
+                conditions,
+                ballpark_name,
+                roof_type,
+                ballpark_azimuth,
+                home_moneyline,
+                away_moneyline,
+                over_under,
+                weather_note
+            FROM {tbl('raw_game_weather')}
+            WHERE run_date = '{TODAY}'
+            QUALIFY ROW_NUMBER() OVER (PARTITION BY game_pk ORDER BY ingested_at DESC) = 1
+            """
+        )
+        return {row["game_pk"]: row for row in rows}
+    except Exception as exc:
+        log.warning("load_game_weather failed (table may not exist yet): %s", exc)
+        return {}
+
+
+def load_hr_props():
+    """Load HR prop odds from raw_hr_props for today, keyed by (game_pk, player_id)."""
+    try:
+        rows = query(
+            f"""
+            SELECT
+                game_pk,
+                player_id,
+                hr_odds_best_price,
+                hr_odds_best_book,
+                deep_link_desktop,
+                deep_link_ios,
+                dk_outcome_code,
+                dk_event_id,
+                fd_market_id,
+                fd_selection_id
+            FROM {tbl('raw_hr_props')}
+            WHERE run_date = '{TODAY}'
+            QUALIFY ROW_NUMBER() OVER (PARTITION BY game_pk, player_id ORDER BY ingested_at DESC) = 1
+            """
+        )
+        return {(int(row["game_pk"]), int(row["player_id"])): row for row in rows}
+    except Exception as exc:
+        log.warning("load_hr_props failed (table may not exist yet): %s", exc)
+        return {}
+
+
 def load_today_matchups():
     """
     Join on batter_team_id = opp_team_id so each batter only faces
@@ -726,6 +785,8 @@ def main():
         )
         prop_ctx = hr_prop_context.get((matchup["game_pk"], matchup["batter_id"]), {})
 
+        gw = weather_map.get(matchup["game_pk"], {})
+        pr = props_map.get((matchup["game_pk"], matchup["batter_id"]), {})
         output_rows.append(
             {
                 "run_date": TODAY.isoformat(),

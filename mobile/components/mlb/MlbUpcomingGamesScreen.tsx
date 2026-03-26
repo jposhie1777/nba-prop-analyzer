@@ -1,9 +1,10 @@
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 
 import { useMlbUpcomingDebug, useMlbUpcomingGames } from "@/hooks/mlb/useMlbMatchups";
 import { useTheme } from "@/store/useTheme";
 import { formatET } from "@/lib/time/formatET";
+import { getMlbTeamLogo } from "@/utils/mlbLogos";
 
 function scoreColor(grade?: string | null) {
   const normalized = (grade || "").toUpperCase();
@@ -44,6 +45,8 @@ export function MlbUpcomingGamesScreen() {
         const gamePk = game.game_pk;
         const away = game.away_team ?? "Away";
         const home = game.home_team ?? "Home";
+        const awayLogo = getMlbTeamLogo(away) ?? undefined;
+        const homeLogo = getMlbTeamLogo(home) ?? undefined;
         const topGrade = game.top_grade ?? "Pending";
         const topColor = scoreColor(topGrade);
         const topScore = game.top_score != null ? game.top_score.toFixed(1) : "—";
@@ -65,11 +68,19 @@ export function MlbUpcomingGamesScreen() {
             }
             style={[styles.card, { borderColor: colors.border.subtle }]}
           >
-            <View style={styles.cardTop}>
-              <Text style={[styles.matchup, { color: colors.text.primary }]} numberOfLines={1}>
-                {away} @ {home}
-              </Text>
-              <Text style={[styles.time, { color: "#C7D2FE" }]}>{formatET(game.start_time_utc ?? null)} ET</Text>
+            <View style={styles.slugRow}>
+              <View style={styles.teamCol}>
+                {awayLogo ? <Image source={{ uri: awayLogo }} style={styles.logo} /> : null}
+                <Text style={styles.teamName} numberOfLines={1}>{away}</Text>
+              </View>
+              <View style={styles.centerCol}>
+                <Text style={[styles.time, { color: "#C7D2FE" }]}>{formatET(game.start_time_utc ?? null)} ET</Text>
+                <Text style={styles.centerLabel}>at</Text>
+              </View>
+              <View style={styles.teamCol}>
+                {homeLogo ? <Image source={{ uri: homeLogo }} style={styles.logo} /> : null}
+                <Text style={styles.teamName} numberOfLines={1}>{home}</Text>
+              </View>
             </View>
 
             <Text style={[styles.meta, { color: colors.text.muted }]}>
@@ -152,7 +163,12 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 8,
   },
-  cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10 },
+  slugRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  teamCol: { flex: 1, alignItems: "center", gap: 6 },
+  centerCol: { alignItems: "center", justifyContent: "center", gap: 2 },
+  logo: { width: 30, height: 30, borderRadius: 15, backgroundColor: "#111827" },
+  teamName: { color: "#E5E7EB", fontSize: 13, fontWeight: "700" },
+  centerLabel: { color: "#64748B", fontSize: 10, fontWeight: "700", textTransform: "uppercase" },
   matchup: { fontSize: 14, fontWeight: "800", flex: 1 },
   time: { fontSize: 12, fontWeight: "700" },
   meta: { fontSize: 12 },

@@ -57,6 +57,9 @@ def _safe_query(sql: str, params: Sequence[bigquery.ScalarQueryParameter]) -> Li
         return _query(sql, params)
     except (NotFound, BadRequest):
         return []
+    except Exception:
+        # Avoid surfacing transient BQ/network failures as HTTP 500 to clients.
+        return []
 
 
 def _table_columns(table_ref: str) -> set[str]:
@@ -770,7 +773,7 @@ def mls_matchup_detail(match_id: int):
     return _soccer_matchup_detail_for_league("mls", match_id)
 
 
-@router.get("/{league}/matchups/upcoming")
+@router.get("/soccer/{league}/matchups/upcoming")
 def soccer_matchups_upcoming_legacy(
     league: str,
     limit: int = Query(default=50, ge=1, le=500),
@@ -787,7 +790,7 @@ def soccer_matchups_upcoming_legacy(
     )
 
 
-@router.get("/{league}/matchups/{match_id}")
+@router.get("/soccer/{league}/matchups/{match_id}")
 def soccer_matchup_detail_legacy(league: str, match_id: int):
     league_key = _league_key(league)
     if not league_key:

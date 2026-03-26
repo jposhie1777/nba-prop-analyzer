@@ -6,6 +6,8 @@ export type MlbUpcomingGame = {
   game_pk: number;
   home_team?: string | null;
   away_team?: string | null;
+  home_team_id?: number | null;
+  away_team_id?: number | null;
   start_time_utc?: string | null;
   venue_name?: string | null;
   home_pitcher_name?: string | null;

@@ -16,6 +16,11 @@ jobs:
     name: Ingest + Model
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+
+    env:
+      GOOGLE_CLOUD_PROJECT: graphite-flare-477419-h7
 
     steps:
       - name: Checkout repo
@@ -31,20 +36,21 @@ jobs:
       - name: Install dependencies
         run: pip install -r propfinder/requirements.txt
 
+      - name: Validate GCP credential secret
+        run: |
+          if [ -z "${{ secrets.GCP_SA_KEY }}" ] && [ -z "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}" ]; then
+            echo "::error::Missing GCP credentials secret. Set one of: GCP_SA_KEY or GOOGLE_APPLICATION_CREDENTIALS_JSON"
+            exit 1
+          fi
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          credentials_json: ${{ secrets.GCP_SA_KEY || secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
 
-      - name: Run ingest
-        run: python propfinder/ingest.py
-        env:
-          GOOGLE_CLOUD_PROJECT: graphite-flare-477419-h7
-
-      - name: Run model
-        run: python propfinder/model.py
-        env:
-          GOOGLE_CLOUD_PROJECT: graphite-flare-477419-h7
+      - name: Run PropFinder workflow
+        run: |
+          python propfinder/run_workflow.py 2>&1 | tee propfinder/workflow.log
 
       - name: Upload logs on failure
         if: failure()

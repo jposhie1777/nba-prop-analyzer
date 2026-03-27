@@ -29,6 +29,13 @@ function formatAmericanOdds(value?: number | null): string {
   return value > 0 ? `+${Math.round(value)}` : `${Math.round(value)}`;
 }
 
+function formatHitterHand(batSide?: string | null): string {
+  const side = (batSide ?? "").toUpperCase();
+  if (side === "L") return "LHB";
+  if (side === "S") return "SHB";
+  return "RHB";
+}
+
 function normalizeGrade(grade?: string | null): "IDEAL" | "FAVORABLE" | "AVERAGE" | "AVOID" {
   const g = (grade ?? "").toUpperCase();
   if (g === "IDEAL") return "IDEAL";
@@ -58,44 +65,6 @@ function metricTier(metric: "iso" | "slg" | "l15_ev" | "l15_barrel" | "l25_ev" |
 
 function metricTone(metric: "iso" | "slg" | "l15_ev" | "l15_barrel" | "l25_ev" | "l25_barrel", value?: number | null) {
   return metricTier(metric, value) === "elite" ? styles.metricElite : styles.metricDefault;
-}
-
-function StickyPitcherCard({
-  pitcher,
-}: {
-  pitcher: {
-    pitcher_name?: string | null;
-    pitcher_hand?: string | null;
-    offense_team?: string | null;
-    splits: Record<string, any>;
-  };
-}) {
-  const season = pitcher.splits?.Season;
-  const vsL = pitcher.splits?.vsLHB;
-  const vsR = pitcher.splits?.vsRHB;
-  return (
-    <View style={styles.stickyPitcherWrap}>
-      <Text style={styles.stickyTitle}>
-        {pitcher.pitcher_name ?? "Pitcher"} ({pitcher.pitcher_hand ?? "RHP"}) - {pitcher.offense_team ?? "Offense"}
-      </Text>
-      <View style={styles.tableWrap}>
-        <View style={[styles.tableRow, styles.tableHeaderRow]}>
-          <Text style={[styles.headerCell, styles.cellSplit]}>SPLIT</Text>
-          <Text style={styles.headerCell}>IP</Text>
-          <Text style={styles.headerCell}>HR</Text>
-          <Text style={styles.headerCell}>HR/9</Text>
-          <Text style={styles.headerCell}>BARREL%</Text>
-          <Text style={styles.headerCell}>HARDHIT%</Text>
-          <Text style={styles.headerCell}>FB%</Text>
-          <Text style={styles.headerCell}>HR/FB%</Text>
-          <Text style={styles.headerCell}>WHIP</Text>
-        </View>
-        <SplitRow label="SEASON" split={season} />
-        <SplitRow label="VS LHB" split={vsL} />
-        <SplitRow label="VS RHB" split={vsR} />
-      </View>
-    </View>
-  );
 }
 
 function dedupeBatters<T extends { batter_id?: number | null; batter_name?: string | null; score?: number | null }>(
@@ -163,12 +132,12 @@ export function MlbMatchupDetailScreen() {
   const platform = getBuildPlatform();
 
   const allVisibleBatters = useMemo(() => {
-    const out: Array<{
+    const out: {
       key: string;
       batter: any;
       pitcher: any;
       teamName: string;
-    }> = [];
+    }[] = [];
     for (const pitcher of data?.pitchers ?? []) {
       const batters = dedupeBatters(pitcher.batters ?? []).slice(0, 12);
       for (const batter of batters) {
@@ -336,35 +305,6 @@ export function MlbMatchupDetailScreen() {
         </View>
       </View>
 
-      {(data?.pitchers ?? []).map((pitcher) => {
-        const season = pitcher.splits?.Season;
-        const vsL = pitcher.splits?.vsLHB;
-        const vsR = pitcher.splits?.vsRHB;
-        return (
-          <View key={`sticky-${String(pitcher.pitcher_id)}`} style={styles.stickyPitcherWrap}>
-            <Text style={styles.stickyTitle}>
-              {pitcher.pitcher_name ?? "Pitcher"} ({pitcher.pitcher_hand ?? "RHP"}) • {pitcher.offense_team ?? "Offense"}
-            </Text>
-            <View style={styles.tableWrap}>
-              <View style={[styles.tableRow, styles.tableHeaderRow]}>
-                <Text style={[styles.headerCell, styles.cellSplit]}>SPLIT</Text>
-                <Text style={styles.headerCell}>IP</Text>
-                <Text style={styles.headerCell}>HR</Text>
-                <Text style={styles.headerCell}>HR/9</Text>
-                <Text style={styles.headerCell}>BARREL%</Text>
-                <Text style={styles.headerCell}>HARDHIT%</Text>
-                <Text style={styles.headerCell}>FB%</Text>
-                <Text style={styles.headerCell}>HR/FB%</Text>
-                <Text style={styles.headerCell}>WHIP</Text>
-              </View>
-              <SplitRow label="SEASON" split={season} />
-              <SplitRow label="VS LHB" split={vsL} />
-              <SplitRow label="VS RHB" split={vsR} />
-            </View>
-          </View>
-        );
-      })}
-
       {loading ? <ActivityIndicator color="#93C5FD" /> : null}
 
       {error ? (
@@ -374,12 +314,6 @@ export function MlbMatchupDetailScreen() {
           <Text style={styles.errorRetry}>Tap to retry</Text>
         </Pressable>
       ) : null}
-
-      {(data?.pitchers ?? []).map((pitcher, pitcherIdx) => (
-        <View key={`sticky-web-${String(pitcher.pitcher_id)}`} style={styles.stickySlot}>
-          <StickyPitcherCard pitcher={pitcher as any} />
-        </View>
-      ))}
 
       {(data?.pitchers ?? []).map((pitcher, pitcherIdx) => {
         const season = pitcher.splits?.Season;
@@ -433,7 +367,9 @@ export function MlbMatchupDetailScreen() {
                   ]}
                 >
                   <View style={styles.batterHead}>
-                    <Text style={styles.batterName}>{batter.batter_name ?? "Batter"}</Text>
+                    <Text style={styles.batterName}>
+                      {batter.batter_name ?? "Batter"} - {formatHitterHand(batter.bat_side)}
+                    </Text>
                     <View style={[styles.gradePill, { borderColor: tone.border }]}>
                       <Text style={[styles.gradeText, { color: tone.text }]}>{normalizeGrade(batter.grade)} • {formatScore(batter.score)}</Text>
                     </View>
@@ -458,8 +394,16 @@ export function MlbMatchupDetailScreen() {
                     </View>
                   </View>
 
-                  {batter.why ? <Text style={styles.whyText}>Why: {batter.why}</Text> : null}
-                  {(batter.flags ?? []).length ? <Text style={styles.flagsText}>Signals: {(batter.flags ?? []).slice(0, 4).join(" • ")}</Text> : null}
+                  <View style={styles.pitchDataPlaceholder}>
+                    <View style={styles.pitchDataRow}>
+                      <Text style={styles.pitchDataHead}>Pitcher Pitch Mix</Text>
+                      <Text style={styles.pitchDataHead}>Hitter Stats Against Pitches</Text>
+                    </View>
+                    <View style={styles.pitchDataRow}>
+                      <Text style={styles.pitchDataValue}>data</Text>
+                      <Text style={styles.pitchDataValue}>data</Text>
+                    </View>
+                  </View>
 
                   <View style={styles.betRow}>
                     <Pressable style={styles.selectBtn} onPress={() => toggleSelected(batterKey, batter, pitcher)}>
@@ -582,20 +526,6 @@ const styles = StyleSheet.create({
   },
   pillText: { color: "#BFDBFE", fontSize: 11, fontWeight: "700" },
   panel: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, backgroundColor: "#0B1529", padding: 12, gap: 8 },
-  stickyPitcherWrap: {
-    // RN web can crash/blank on unsupported sticky style in some browsers.
-    position: "absolute" as any,
-    top: 78,
-    zIndex: 50,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#1F2937",
-    borderRadius: 12,
-    backgroundColor: "rgba(5,10,24,0.97)",
-    padding: 10,
-    gap: 6,
-  },
-  stickySlot: { marginBottom: 0 },
-  stickyTitle: { color: "#D1D5DB", fontSize: 12, fontWeight: "800" },
   sectionEyebrow: { color: "#64748B", fontSize: 11, fontWeight: "700" },
   sectionTitle: { color: "#E5E7EB", fontSize: 18, fontWeight: "800" },
   sectionSub: { color: "#94A3B8", fontSize: 12 },
@@ -631,6 +561,18 @@ const styles = StyleSheet.create({
   metricsValueCell: { flex: 1, fontSize: 12, fontWeight: "700", textAlign: "center", paddingVertical: 8 },
   metricDefault: { color: "#E2E8F0" },
   metricElite: { color: "#34D399" },
+  pitchDataPlaceholder: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#334155",
+    borderRadius: 8,
+    backgroundColor: "rgba(15,23,42,0.28)",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 6,
+  },
+  pitchDataRow: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
+  pitchDataHead: { flex: 1, color: "#94A3B8", fontSize: 10, fontWeight: "700" },
+  pitchDataValue: { flex: 1, color: "#E2E8F0", fontSize: 11, fontWeight: "700" },
   whyText: { color: "#E2E8F0", fontSize: 12, lineHeight: 18 },
   flagsText: { color: "#94A3B8", fontSize: 11, lineHeight: 16 },
   betRow: { flexDirection: "row", gap: 8, alignItems: "center" },

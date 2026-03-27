@@ -4,7 +4,7 @@ import json
 import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode, urlsplit
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
@@ -17,6 +17,7 @@ router = APIRouter(tags=["MLB Matchups"])
 
 NY_TZ = ZoneInfo("America/New_York")
 MLB_SCHEDULE_URL = "https://statsapi.mlb.com/api/v1/schedule"
+PROPFINDER_MLB_PROPS_URL = os.getenv("PROPFINDER_MLB_PROPS_URL", "https://api.propfinder.app/mlb/props")
 
 PROPFINDER_DATASET = os.getenv("PROPFINDER_DATASET", "propfinder")
 HR_PICKS_TABLE = os.getenv("PROPFINDER_HR_PICKS_TABLE", f"{PROPFINDER_DATASET}.hr_picks_daily")
@@ -226,6 +227,285 @@ def _clean_str(value: Any) -> Optional[str]:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _normalize_book(book_name: Any) -> str:
+    book = str(book_name or "").strip().lower().replace(" ", "")
+    if not book:
+        return ""
+    if book in ("dk", "draftkings"):
+        return "draftkings"
+    if book in ("fd", "fanduel"):
+        return "fanduel"
+    return book
+
+
+def _parse_draftkings_link(url: Any) -> tuple[Optional[str], Optional[str]]:
+    text = _clean_str(url)
+    if not text:
+        return None, None
+    split = urlsplit(text)
+    if "draftkings.com" not in split.netloc.lower():
+        return None, None
+    path_parts = [part for part in split.path.split("/") if part]
+    event_id = None
+    for idx, part in enumerate(path_parts):
+        if part == "event" and idx + 1 < len(path_parts):
+            event_id = path_parts[idx + 1]
+            break
+    outcome_code = None
+    for part in (split.query or "").split("&"):
+        if part.startswith("outcomes="):
+            # Keep the raw encoded value so downstream deep links are valid.
+            outcome_code = part.split("=", 1)[1].strip() or None
+            break
+    return _clean_str(event_id), _clean_str(outcome_code)
+
+
+def _parse_fanduel_link(url: Any) -> tuple[Optional[str], Optional[str]]:
+    text = _clean_str(url)
+    if not text:
+        return None, None
+    split = urlsplit(text)
+    if "fanduel.com" not in split.netloc.lower():
+        return None, None
+    query = parse_qs(split.query, keep_blank_values=False)
+    market_id = (query.get("marketId") or query.get("marketId[]") or [None])[0]
+    selection_id = (query.get("selectionId") or query.get("selectionId[]") or [None])[0]
+    return _clean_str(market_id), _clean_str(selection_id)
+
+
+def _load_live_hr_props_context(game_pk: int) -> Dict[int, Dict[str, Any]]:
+    """
+    Fallback context from live /mlb/props for batters in a game.
+    Keyed by batter_id. Only tracks 1+ HR over rows.
+    """
+    url = f"{PROPFINDER_MLB_PROPS_URL}?date={_today_et_iso()}"
+    request = Request(
+        url,
+        headers={
+            "User-Agent": "PulseSports/1.0",
+            "Accept": "application/json",
+        },
+    )
+    try:
+        with urlopen(request, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except Exception:
+        return {}
+    if not isinstance(payload, list):
+        return {}
+
+    by_batter: Dict[int, Dict[str, Any]] = {}
+    for row in payload:
+        if not isinstance(row, dict):
+            continue
+        if _safe_int(row.get("gameId")) != game_pk:
+            continue
+        category = str(row.get("category") or "").lower().replace("_", "")
+        if "homerun" not in category:
+            continue
+        if str(row.get("overUnder") or "").lower() != "over":
+            continue
+        line = _safe_float(row.get("line"))
+        if line is None or abs(line - 0.5) > 1e-6:
+            continue
+        batter_id = _safe_int(row.get("playerId"))
+        if batter_id is None:
+            continue
+
+        best_price: Optional[int] = None
+        best_book: Optional[str] = None
+        best_desktop: Optional[str] = None
+        best_ios: Optional[str] = None
+        dk_event_id: Optional[str] = None
+        dk_outcome_code: Optional[str] = None
+        fd_market_id: Optional[str] = None
+        fd_selection_id: Optional[str] = None
+
+        markets = row.get("markets") if isinstance(row.get("markets"), list) else []
+        best_market = row.get("bestMarket") if isinstance(row.get("bestMarket"), dict) else None
+        all_markets = [m for m in markets if isinstance(m, dict)]
+        if best_market:
+            all_markets.append(best_market)
+
+        for market in all_markets:
+            sportsbook = _clean_str(market.get("sportsbook"))
+            desktop_link = _clean_str(market.get("deepLinkDesktop"))
+            ios_link = (
+                _clean_str(market.get("deepLinkIos"))
+                or _clean_str(market.get("deepLinkIOS"))
+                or _clean_str(market.get("deepLinkAndroid"))
+            )
+            price = _safe_int(market.get("price"))
+            if price is not None and (best_price is None or price > best_price):
+                best_price = price
+                best_book = sportsbook
+                best_desktop = desktop_link
+                best_ios = ios_link
+
+            book_key = _normalize_book(sportsbook)
+            if book_key == "draftkings" and desktop_link:
+                event_id, outcome_code = _parse_draftkings_link(desktop_link)
+                dk_event_id = dk_event_id or event_id
+                dk_outcome_code = dk_outcome_code or outcome_code
+            if book_key == "fanduel" and desktop_link:
+                market_id, selection_id = _parse_fanduel_link(desktop_link)
+                fd_market_id = fd_market_id or market_id
+                fd_selection_id = fd_selection_id or selection_id
+
+        by_batter[batter_id] = {
+            "hr_odds_best_price": best_price,
+            "hr_odds_best_book": best_book,
+            "deep_link_desktop": best_desktop,
+            "deep_link_ios": best_ios,
+            "dk_event_id": dk_event_id,
+            "dk_outcome_code": dk_outcome_code,
+            "fd_market_id": fd_market_id,
+            "fd_selection_id": fd_selection_id,
+        }
+    return by_batter
+
+
+def _merge_props_fallback_into_picks(picks: List[Dict[str, Any]], game_pk: int) -> List[Dict[str, Any]]:
+    """
+    Fill missing sportsbook fields from live /mlb/props context.
+    """
+    if not picks:
+        return picks
+    live_ctx = _load_live_hr_props_context(game_pk)
+    if not live_ctx:
+        return picks
+
+    out: List[Dict[str, Any]] = []
+    for pick in picks:
+        row = dict(pick)
+        batter_id = _safe_int(row.get("batter_id"))
+        if batter_id is None:
+            out.append(row)
+            continue
+        fallback = live_ctx.get(batter_id)
+        if not fallback:
+            out.append(row)
+            continue
+
+        for key in (
+            "hr_odds_best_price",
+            "hr_odds_best_book",
+            "deep_link_desktop",
+            "deep_link_ios",
+            "dk_event_id",
+            "dk_outcome_code",
+            "fd_market_id",
+            "fd_selection_id",
+        ):
+            current = row.get(key)
+            if current is None or (isinstance(current, str) and not current.strip()):
+                row[key] = fallback.get(key)
+        out.append(row)
+    return out
+
+
+def _fetch_hr_prop_link_map_for_game(game_pk: int, date_iso: str) -> tuple[Dict[int, Dict[str, Any]], Dict[str, Dict[str, Any]]]:
+    """
+    Fetch live HR 1+ prop links as a fallback when hr_picks_daily rows
+    are missing sportsbook link metadata.
+    """
+    request = Request(
+        f"{PROPFINDER_MLB_PROPS_URL}?date={date_iso}",
+        headers={
+            "User-Agent": "PulseSports/1.0",
+            "Accept": "application/json",
+        },
+    )
+    try:
+        with urlopen(request, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except Exception:
+        return {}, {}
+
+    if not isinstance(payload, list):
+        return {}, {}
+
+    by_id: Dict[int, Dict[str, Any]] = {}
+    by_name: Dict[str, Dict[str, Any]] = {}
+
+    for row in payload:
+        if not isinstance(row, dict):
+            continue
+        if _safe_int(row.get("gameId")) != game_pk:
+            continue
+        category = str(row.get("category") or "").lower().replace("_", "")
+        if "homerun" not in category:
+            continue
+        if str(row.get("overUnder") or "").lower() != "over":
+            continue
+        line = _safe_float(row.get("line"))
+        if line is not None and abs(line - 0.5) > 1e-6:
+            continue
+
+        batter_id = _safe_int(row.get("playerId"))
+        batter_name = _clean_str(row.get("name"))
+        if batter_id is None and not batter_name:
+            continue
+
+        markets = row.get("markets") if isinstance(row.get("markets"), list) else []
+        best_market = row.get("bestMarket") if isinstance(row.get("bestMarket"), dict) else None
+        market_rows = [m for m in markets if isinstance(m, dict)]
+        if best_market:
+            market_rows.append(best_market)
+
+        best_price = None
+        best_book = None
+        best_desktop = None
+        best_ios = None
+        dk_event_id = None
+        dk_outcome_code = None
+        fd_market_id = None
+        fd_selection_id = None
+
+        for market in market_rows:
+            sportsbook = _clean_str(market.get("sportsbook"))
+            desktop_link = _clean_str(market.get("deepLinkDesktop"))
+            ios_link = (
+                _clean_str(market.get("deepLinkIos"))
+                or _clean_str(market.get("deepLinkIOS"))
+                or _clean_str(market.get("deepLinkAndroid"))
+            )
+            price = _safe_int(market.get("price"))
+
+            if price is not None and (best_price is None or price > best_price):
+                best_price = price
+                best_book = sportsbook
+                best_desktop = desktop_link
+                best_ios = ios_link
+
+            book_key = _normalize_book(sportsbook)
+            if book_key == "draftkings" and desktop_link:
+                event_id, outcome_code = _parse_draftkings_link(desktop_link)
+                dk_event_id = dk_event_id or event_id
+                dk_outcome_code = dk_outcome_code or outcome_code
+            if book_key == "fanduel" and desktop_link:
+                market_id, selection_id = _parse_fanduel_link(desktop_link)
+                fd_market_id = fd_market_id or market_id
+                fd_selection_id = fd_selection_id or selection_id
+
+        parsed = {
+            "hr_odds_best_price": best_price,
+            "hr_odds_best_book": best_book,
+            "deep_link_desktop": best_desktop,
+            "deep_link_ios": best_ios,
+            "dk_outcome_code": dk_outcome_code,
+            "dk_event_id": dk_event_id,
+            "fd_market_id": fd_market_id,
+            "fd_selection_id": fd_selection_id,
+        }
+        if batter_id is not None:
+            by_id[batter_id] = parsed
+        if batter_name:
+            by_name[batter_name.strip().lower()] = parsed
+
+    return by_id, by_name
 
 
 def _first_present(*values: Any) -> Any:
@@ -691,6 +971,9 @@ def mlb_matchup_detail(game_pk: int):
                     bigquery.ArrayQueryParameter("team_names", "STRING", team_names),
                 ],
             )
+
+    # Backfill sportsbook/deep-link fields from live /mlb/props when BQ rows miss them.
+    picks = _merge_props_fallback_into_picks(picks, game_pk)
 
     grade_counts = {"IDEAL": 0, "FAVORABLE": 0, "AVERAGE": 0, "AVOID": 0}
     pitcher_groups: Dict[str, Dict[str, Any]] = {}

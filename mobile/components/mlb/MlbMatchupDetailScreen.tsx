@@ -11,6 +11,7 @@ import { useBetslipDrawer } from "@/store/useBetslipDrawer";
 import { buildParlayLinks, getBuildPlatform, type ParlayBatterInput } from "@/utils/parlayBuilder";
 
 type StatValue = number | string | null | undefined;
+type HandFilter = "L" | "R";
 
 function formatScore(score?: number | null): string {
   if (score == null || Number.isNaN(score)) return "—";
@@ -34,6 +35,82 @@ function formatHitterHand(batSide?: string | null): string {
   if (side === "L") return "LHB";
   if (side === "S") return "SHB";
   return "RHB";
+}
+
+function formatRate(value?: number | null, digits = 3): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  return Number(value).toFixed(digits);
+}
+
+function formatPercent(value?: number | null, digits = 1): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  return `${Number(value).toFixed(digits)}%`;
+}
+
+function normalizePitchName(value?: string | null): string {
+  const text = (value ?? "").trim();
+  if (!text) return "";
+  return text.toLowerCase();
+}
+
+function pitcherToneByMetric(metric: "ba" | "woba" | "slg" | "iso" | "whiff_pct" | "k_pct", value?: number | null) {
+  if (value == null || Number.isNaN(value)) return styles.pitchStatNeutral;
+  if (metric === "ba") {
+    if (value < 0.23) return styles.pitchStatGood;
+    if (value > 0.28) return styles.pitchStatBad;
+    return styles.pitchStatNeutral;
+  }
+  if (metric === "woba") {
+    if (value < 0.29) return styles.pitchStatGood;
+    if (value > 0.35) return styles.pitchStatBad;
+    return styles.pitchStatNeutral;
+  }
+  if (metric === "slg") {
+    if (value < 0.38) return styles.pitchStatGood;
+    if (value > 0.48) return styles.pitchStatBad;
+    return styles.pitchStatNeutral;
+  }
+  if (metric === "iso") {
+    if (value < 0.14) return styles.pitchStatGood;
+    if (value > 0.2) return styles.pitchStatBad;
+    return styles.pitchStatNeutral;
+  }
+  if (metric === "whiff_pct" || metric === "k_pct") {
+    if (value > 25) return styles.pitchStatGood;
+    if (value < 15) return styles.pitchStatBad;
+    return styles.pitchStatNeutral;
+  }
+  return styles.pitchStatNeutral;
+}
+
+function hitterToneByMetric(metric: "ba" | "slg" | "iso" | "ev" | "barrel_pct", value?: number | null) {
+  if (value == null || Number.isNaN(value)) return styles.pitchStatNeutral;
+  if (metric === "ba") {
+    if (value > 0.28) return styles.pitchStatGood;
+    if (value < 0.23) return styles.pitchStatBad;
+    return styles.pitchStatNeutral;
+  }
+  if (metric === "slg") {
+    if (value > 0.48) return styles.pitchStatGood;
+    if (value < 0.38) return styles.pitchStatBad;
+    return styles.pitchStatNeutral;
+  }
+  if (metric === "iso") {
+    if (value > 0.2) return styles.pitchStatGood;
+    if (value < 0.14) return styles.pitchStatBad;
+    return styles.pitchStatNeutral;
+  }
+  if (metric === "ev") {
+    if (value > 92) return styles.pitchStatGood;
+    if (value < 87) return styles.pitchStatBad;
+    return styles.pitchStatNeutral;
+  }
+  if (metric === "barrel_pct") {
+    if (value > 12) return styles.pitchStatGood;
+    if (value < 6) return styles.pitchStatBad;
+    return styles.pitchStatNeutral;
+  }
+  return styles.pitchStatNeutral;
 }
 
 function normalizeGrade(grade?: string | null): "IDEAL" | "FAVORABLE" | "AVERAGE" | "AVOID" {
@@ -130,6 +207,8 @@ export function MlbMatchupDetailScreen() {
   const removeFromBetslip = usePropBetslip((s) => s.remove);
   const openBetslip = useBetslipDrawer((s) => s.open);
   const platform = getBuildPlatform();
+  const [pitcherMixHandFilter, setPitcherMixHandFilter] = useState<HandFilter>("R");
+  const [hitterStatsHandFilter, setHitterStatsHandFilter] = useState<HandFilter>("R");
 
   const allVisibleBatters = useMemo(() => {
     const out: {
@@ -395,13 +474,138 @@ export function MlbMatchupDetailScreen() {
                   </View>
 
                   <View style={styles.pitchDataPlaceholder}>
+                    <View style={styles.pitchToggleRow}>
+                      <View style={styles.pitchToggle}>
+                        <Pressable
+                          style={[styles.pitchToggleBtn, pitcherMixHandFilter === "L" ? styles.pitchToggleBtnActive : null]}
+                          onPress={() => setPitcherMixHandFilter("L")}
+                        >
+                          <Text style={styles.pitchToggleText}>vs LHB</Text>
+                        </Pressable>
+                        <Pressable
+                          style={[styles.pitchToggleBtn, pitcherMixHandFilter === "R" ? styles.pitchToggleBtnActive : null]}
+                          onPress={() => setPitcherMixHandFilter("R")}
+                        >
+                          <Text style={styles.pitchToggleText}>vs RHB</Text>
+                        </Pressable>
+                      </View>
+                      <View style={styles.pitchToggle}>
+                        <Pressable
+                          style={[styles.pitchToggleBtn, hitterStatsHandFilter === "L" ? styles.pitchToggleBtnActive : null]}
+                          onPress={() => setHitterStatsHandFilter("L")}
+                        >
+                          <Text style={styles.pitchToggleText}>vs LHP</Text>
+                        </Pressable>
+                        <Pressable
+                          style={[styles.pitchToggleBtn, hitterStatsHandFilter === "R" ? styles.pitchToggleBtnActive : null]}
+                          onPress={() => setHitterStatsHandFilter("R")}
+                        >
+                          <Text style={styles.pitchToggleText}>vs RHP</Text>
+                        </Pressable>
+                      </View>
+                    </View>
                     <View style={styles.pitchDataRow}>
                       <Text style={styles.pitchDataHead}>Pitcher Pitch Mix</Text>
                       <Text style={styles.pitchDataHead}>Hitter Stats Against Pitches</Text>
                     </View>
-                    <View style={styles.pitchDataRow}>
-                      <Text style={styles.pitchDataValue}>data</Text>
-                      <Text style={styles.pitchDataValue}>data</Text>
+                    <View style={styles.pitchTablesRow}>
+                      <View style={styles.pitchTableCol}>
+                        {loading ? (
+                          <View style={styles.pitchLoadingBox}>
+                            <ActivityIndicator color="#93C5FD" />
+                          </View>
+                        ) : (
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                            {(() => {
+                              const pitcherRows = pitcherMixByHand[pitcherMixHandFilter].get(String(pitcher.pitcher_id ?? "")) ?? [];
+                              if (!pitcherRows.length) {
+                                return <Text style={styles.pitchEmpty}>No pitch data available</Text>;
+                              }
+                              return (
+                                <View>
+                                  <View style={styles.pitchTableHeader}>
+                                    <Text style={[styles.pitchTableHeadCell, styles.pitchTypeCol]}>TYPE</Text>
+                                    <Text style={styles.pitchTableHeadCell}>#</Text>
+                                    <Text style={styles.pitchTableHeadCell}>%</Text>
+                                    <Text style={styles.pitchTableHeadCell}>BA</Text>
+                                    <Text style={styles.pitchTableHeadCell}>WOBA</Text>
+                                    <Text style={styles.pitchTableHeadCell}>SLG</Text>
+                                    <Text style={styles.pitchTableHeadCell}>ISO</Text>
+                                    <Text style={styles.pitchTableHeadCell}>HR</Text>
+                                    <Text style={styles.pitchTableHeadCell}>K%</Text>
+                                    <Text style={styles.pitchTableHeadCell}>WHIFF%</Text>
+                                  </View>
+                                  {pitcherRows.map((row, idx) => (
+                                    <View key={`${normalizePitchName(row.pitch_name)}-${idx}`} style={styles.pitchTableRow}>
+                                      <Text style={[styles.pitchTableCell, styles.pitchTypeCol]}>{row.pitch_name ?? "—"}</Text>
+                                      <Text style={styles.pitchTableCell}>{formatMetric(row.pitch_count, 0)}</Text>
+                                      <Text style={styles.pitchTableCell}>{formatPercent(row.pitch_pct, 1)}</Text>
+                                      <Text style={[styles.pitchTableCell, pitcherToneByMetric("ba", row.ba)]}>{formatRate(row.ba, 3)}</Text>
+                                      <Text style={[styles.pitchTableCell, pitcherToneByMetric("woba", row.woba)]}>{formatRate(row.woba, 3)}</Text>
+                                      <Text style={[styles.pitchTableCell, pitcherToneByMetric("slg", row.slg)]}>{formatRate(row.slg, 3)}</Text>
+                                      <Text style={[styles.pitchTableCell, pitcherToneByMetric("iso", row.iso)]}>{formatRate(row.iso, 3)}</Text>
+                                      <Text style={styles.pitchTableCell}>{formatMetric(row.hr, 0)}</Text>
+                                      <Text style={[styles.pitchTableCell, pitcherToneByMetric("k_pct", row.k_pct)]}>{formatPercent(row.k_pct, 1)}</Text>
+                                      <Text style={[styles.pitchTableCell, pitcherToneByMetric("whiff_pct", row.whiff_pct)]}>{formatPercent(row.whiff_pct, 1)}</Text>
+                                    </View>
+                                  ))}
+                                </View>
+                              );
+                            })()}
+                          </ScrollView>
+                        )}
+                      </View>
+                      <View style={styles.pitchTableCol}>
+                        {loading ? (
+                          <View style={styles.pitchLoadingBox}>
+                            <ActivityIndicator color="#93C5FD" />
+                          </View>
+                        ) : (
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                            {(() => {
+                              const key = `${String(pitcher.pitcher_id ?? "")}-${String(batter.batter_id ?? "")}`;
+                              const hitterRows = batterVsPitchesByHand[hitterStatsHandFilter].get(key) ?? [];
+                              if (!hitterRows.length) {
+                                return <Text style={styles.pitchEmpty}>No pitch data available</Text>;
+                              }
+                              const totalCount = hitterRows.reduce((acc, row) => acc + (row.count ?? 0), 0);
+                              return (
+                                <View>
+                                  <View style={styles.pitchTableHeader}>
+                                    <Text style={[styles.pitchTableHeadCell, styles.pitchTypeCol]}>TYPE</Text>
+                                    <Text style={styles.pitchTableHeadCell}>#</Text>
+                                    <Text style={styles.pitchTableHeadCell}>%</Text>
+                                    <Text style={styles.pitchTableHeadCell}>BA</Text>
+                                    <Text style={styles.pitchTableHeadCell}>WOBA</Text>
+                                    <Text style={styles.pitchTableHeadCell}>SLG</Text>
+                                    <Text style={styles.pitchTableHeadCell}>ISO</Text>
+                                    <Text style={styles.pitchTableHeadCell}>HR</Text>
+                                    <Text style={styles.pitchTableHeadCell}>EV</Text>
+                                    <Text style={styles.pitchTableHeadCell}>Barrel%</Text>
+                                  </View>
+                                  {hitterRows.map((row, idx) => {
+                                    const pct = totalCount > 0 ? ((row.count ?? 0) / totalCount) * 100 : null;
+                                    return (
+                                      <View key={`${normalizePitchName(row.pitch_name)}-${idx}`} style={styles.pitchTableRow}>
+                                        <Text style={[styles.pitchTableCell, styles.pitchTypeCol]}>{row.pitch_name ?? "—"}</Text>
+                                        <Text style={styles.pitchTableCell}>{formatMetric(row.count, 0)}</Text>
+                                        <Text style={styles.pitchTableCell}>{formatPercent(pct, 1)}</Text>
+                                        <Text style={[styles.pitchTableCell, hitterToneByMetric("ba", row.ba)]}>{formatRate(row.ba, 3)}</Text>
+                                        <Text style={styles.pitchTableCell}>{formatRate(row.woba, 3)}</Text>
+                                        <Text style={[styles.pitchTableCell, hitterToneByMetric("slg", row.slg)]}>{formatRate(row.slg, 3)}</Text>
+                                        <Text style={[styles.pitchTableCell, hitterToneByMetric("iso", row.iso)]}>{formatRate(row.iso, 3)}</Text>
+                                        <Text style={styles.pitchTableCell}>{formatMetric(row.hr, 0)}</Text>
+                                        <Text style={[styles.pitchTableCell, hitterToneByMetric("ev", row.ev)]}>{formatMetric(row.ev, 1)}</Text>
+                                        <Text style={[styles.pitchTableCell, hitterToneByMetric("barrel_pct", row.barrel_pct)]}>{formatPercent(row.barrel_pct, 1)}</Text>
+                                      </View>
+                                    );
+                                  })}
+                                </View>
+                              );
+                            })()}
+                          </ScrollView>
+                        )}
+                      </View>
                     </View>
                   </View>
 
@@ -570,9 +774,65 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     gap: 6,
   },
+  pitchToggleRow: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
+  pitchToggle: {
+    flexDirection: "row",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#334155",
+    borderRadius: 999,
+    overflow: "hidden",
+    backgroundColor: "#0B1220",
+  },
+  pitchToggleBtn: { paddingHorizontal: 10, paddingVertical: 5, backgroundColor: "transparent" },
+  pitchToggleBtnActive: { backgroundColor: "#1E293B" },
+  pitchToggleText: { color: "#CBD5E1", fontSize: 10, fontWeight: "700" },
   pitchDataRow: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
   pitchDataHead: { flex: 1, color: "#94A3B8", fontSize: 10, fontWeight: "700" },
   pitchDataValue: { flex: 1, color: "#E2E8F0", fontSize: 11, fontWeight: "700" },
+  pitchTablesRow: { flexDirection: "row", gap: 10 },
+  pitchTableCol: { flex: 1, minWidth: 0 },
+  pitchLoadingBox: {
+    minHeight: 54,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#334155",
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(15,23,42,0.22)",
+  },
+  pitchEmpty: { color: "#94A3B8", fontSize: 11, paddingVertical: 8 },
+  pitchTableHeader: {
+    flexDirection: "row",
+    backgroundColor: "#0F172A",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#334155",
+  },
+  pitchTableRow: {
+    flexDirection: "row",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(51,65,85,0.65)",
+    backgroundColor: "rgba(15,23,42,0.22)",
+  },
+  pitchTableHeadCell: {
+    width: 56,
+    color: "#94A3B8",
+    fontSize: 9,
+    fontWeight: "800",
+    textAlign: "center",
+    paddingVertical: 6,
+  },
+  pitchTableCell: {
+    width: 56,
+    color: "#E2E8F0",
+    fontSize: 10,
+    fontWeight: "700",
+    textAlign: "center",
+    paddingVertical: 6,
+  },
+  pitchTypeCol: { width: 108, textAlign: "left", paddingLeft: 6 },
+  pitchStatGood: { color: "#34D399" },
+  pitchStatBad: { color: "#F87171" },
+  pitchStatNeutral: { color: "#E2E8F0" },
   whyText: { color: "#E2E8F0", fontSize: 12, lineHeight: 18 },
   flagsText: { color: "#94A3B8", fontSize: 11, lineHeight: 16 },
   betRow: { flexDirection: "row", gap: 8, alignItems: "center" },

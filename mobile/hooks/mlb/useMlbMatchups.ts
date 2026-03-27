@@ -44,6 +44,32 @@ export type MlbPitcherSplit = {
   woba?: number | null;
 };
 
+export type MlbPitchMixRow = {
+  pitch_name?: string | null;
+  pitch_count?: number | null;
+  pitch_pct?: number | null;
+  ba?: number | null;
+  woba?: number | null;
+  slg?: number | null;
+  iso?: number | null;
+  hr?: number | null;
+  k_pct?: number | null;
+  whiff_pct?: number | null;
+};
+
+export type MlbBatterVsPitchRow = {
+  pitch_name?: string | null;
+  count?: number | null;
+  pitch_pct?: number | null;
+  ba?: number | null;
+  woba?: number | null;
+  slg?: number | null;
+  iso?: number | null;
+  hr?: number | null;
+  ev?: number | null;
+  barrel_pct?: number | null;
+};
+
 export type MlbBatterPick = {
   batter_id?: number | null;
   batter_name?: string | null;
@@ -82,6 +108,14 @@ export type MlbBatterPick = {
   hr_odds_best_book?: string | null;
   deep_link_desktop?: string | null;
   deep_link_ios?: string | null;
+  pitcher_pitch_mix?: {
+    vs_lhb: MlbPitchMixRow[];
+    vs_rhb: MlbPitchMixRow[];
+  };
+  hitter_stats_vs_pitches?: {
+    vs_lhp: MlbBatterVsPitchRow[];
+    vs_rhp: MlbBatterVsPitchRow[];
+  };
 };
 
 export type MlbPitcherGroup = {
@@ -90,6 +124,10 @@ export type MlbPitcherGroup = {
   pitcher_hand?: string | null;
   opp_team_id?: number | null;
   offense_team?: string | null;
+  pitch_mix?: {
+    vs_lhb: MlbPitchMixRow[];
+    vs_rhb: MlbPitchMixRow[];
+  };
   splits: Record<string, MlbPitcherSplit>;
   batters: MlbBatterPick[];
 };

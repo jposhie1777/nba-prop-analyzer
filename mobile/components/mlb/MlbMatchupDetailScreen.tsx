@@ -517,7 +517,10 @@ export function MlbMatchupDetailScreen() {
                         ) : (
                           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                             {(() => {
-                              const pitcherRows = pitcherMixByHand[pitcherMixHandFilter].get(String(pitcher.pitcher_id ?? "")) ?? [];
+                              const pitcherRows =
+                                pitcherMixHandFilter === "L"
+                                  ? batter.pitcher_pitch_mix?.vs_lhb ?? []
+                                  : batter.pitcher_pitch_mix?.vs_rhb ?? [];
                               if (!pitcherRows.length) {
                                 return <Text style={styles.pitchEmpty}>No pitch data available</Text>;
                               }
@@ -563,8 +566,10 @@ export function MlbMatchupDetailScreen() {
                         ) : (
                           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                             {(() => {
-                              const key = `${String(pitcher.pitcher_id ?? "")}-${String(batter.batter_id ?? "")}`;
-                              const hitterRows = batterVsPitchesByHand[hitterStatsHandFilter].get(key) ?? [];
+                              const hitterRows =
+                                hitterStatsHandFilter === "L"
+                                  ? batter.hitter_stats_vs_pitches?.vs_lhp ?? []
+                                  : batter.hitter_stats_vs_pitches?.vs_rhp ?? [];
                               if (!hitterRows.length) {
                                 return <Text style={styles.pitchEmpty}>No pitch data available</Text>;
                               }

@@ -25,6 +25,14 @@ PITCHER_MATCHUP_TABLE = os.getenv(
     "PROPFINDER_PITCHER_MATCHUP_TABLE",
     f"{PROPFINDER_DATASET}.raw_pitcher_matchup",
 )
+PITCH_LOG_TABLE = os.getenv(
+    "PROPFINDER_PITCH_LOG_TABLE",
+    f"{PROPFINDER_DATASET}.raw_pitch_log",
+)
+HIT_DATA_TABLE = os.getenv(
+    "PROPFINDER_HIT_DATA_TABLE",
+    f"{PROPFINDER_DATASET}.raw_hit_data",
+)
 GAME_WEATHER_TABLE = os.getenv(
     "PROPFINDER_GAME_WEATHER_TABLE",
     f"{PROPFINDER_DATASET}.raw_game_weather",
@@ -562,6 +570,268 @@ def _pitcher_group_key(pitcher_id: Optional[int], pitcher_name: Any) -> Optional
     return None
 
 
+def _normalize_hand(value: Any) -> Optional[str]:
+    text = str(value or "").strip().upper()
+    if not text:
+        return None
+    if text.startswith("L"):
+        return "L"
+    if text.startswith("R"):
+        return "R"
+    return None
+
+
+def _normalize_pitch_name(value: Any) -> Optional[str]:
+    text = _clean_str(value)
+    if not text:
+        return None
+    return text.strip().lower()
+
+
+def _pct_value(value: Any) -> Optional[float]:
+    parsed = _safe_float(value)
+    if parsed is None:
+        return None
+    return parsed * 100.0 if 0 <= parsed <= 1 else parsed
+
+
+def _fetch_pitcher_pitch_mix_map(
+    client: bigquery.Client,
+    pitch_log_table_qualified: str,
+    hit_data_table_qualified: str,
+    run_date: str,
+    game_pk: int,
+    pitcher_ids: List[int],
+) -> Dict[int, Dict[str, List[Dict[str, Any]]]]:
+    """
+    Build pitcher pitch-mix rows keyed by pitcher_id and batter hand (L/R).
+    """
+    pitcher_ids = sorted({int(pid) for pid in pitcher_ids if pid is not None})
+    if not pitcher_ids:
+        return {}
+
+    pitch_rows = _safe_query(
+        client,
+        f"""
+        SELECT
+          CAST(pitcher_id AS INT64) AS pitcher_id,
+          UPPER(CAST(batter_hand AS STRING)) AS batter_hand,
+          CAST(pitch_name AS STRING) AS pitch_name,
+          CAST(count AS INT64) AS pitch_count,
+          CAST(percentage AS FLOAT64) AS pitch_pct,
+          CAST(woba AS FLOAT64) AS woba,
+          CAST(slg AS FLOAT64) AS slg,
+          CAST(iso AS FLOAT64) AS iso,
+          CAST(home_runs AS INT64) AS hr,
+          CAST(k_percent AS FLOAT64) AS k_pct,
+          CAST(whiff AS FLOAT64) AS whiff_pct
+        FROM {pitch_log_table_qualified}
+        WHERE run_date = @run_date
+          AND CAST(game_pk AS INT64) = @game_pk
+          AND CAST(pitcher_id AS INT64) IN UNNEST(@pitcher_ids)
+          AND COALESCE(CAST(pitch_name AS STRING), '') != ''
+        QUALIFY ROW_NUMBER() OVER (
+          PARTITION BY pitcher_id, batter_hand, pitch_name
+          ORDER BY ingested_at DESC NULLS LAST
+        ) = 1
+        """,
+        [
+            bigquery.ScalarQueryParameter("run_date", "DATE", run_date),
+            bigquery.ScalarQueryParameter("game_pk", "INT64", game_pk),
+            bigquery.ArrayQueryParameter("pitcher_ids", "INT64", pitcher_ids),
+        ],
+    )
+
+    pitcher_ba_rows = _safe_query(
+        client,
+        f"""
+        SELECT
+          CAST(pitcher_id AS INT64) AS pitcher_id,
+          UPPER(CAST(bat_side AS STRING)) AS batter_hand,
+          CAST(pitch_type AS STRING) AS pitch_name,
+          AVG(
+            CASE
+              WHEN LOWER(CAST(result AS STRING)) IN ('single', 'double', 'triple', 'home_run') THEN 1.0
+              ELSE 0.0
+            END
+          ) AS ba
+        FROM {hit_data_table_qualified}
+        WHERE run_date = @run_date
+          AND CAST(game_pk AS INT64) = @game_pk
+          AND CAST(pitcher_id AS INT64) IN UNNEST(@pitcher_ids)
+          AND UPPER(CAST(bat_side AS STRING)) IN ('L', 'R')
+          AND COALESCE(CAST(pitch_type AS STRING), '') != ''
+        GROUP BY pitcher_id, batter_hand, pitch_name
+        """,
+        [
+            bigquery.ScalarQueryParameter("run_date", "DATE", run_date),
+            bigquery.ScalarQueryParameter("game_pk", "INT64", game_pk),
+            bigquery.ArrayQueryParameter("pitcher_ids", "INT64", pitcher_ids),
+        ],
+    )
+
+    ba_map: Dict[tuple[int, str, str], Optional[float]] = {}
+    for row in pitcher_ba_rows:
+        pitcher_id = _safe_int(row.get("pitcher_id"))
+        batter_hand = _normalize_hand(row.get("batter_hand"))
+        pitch_name_norm = _normalize_pitch_name(row.get("pitch_name"))
+        if pitcher_id is None or batter_hand is None or pitch_name_norm is None:
+            continue
+        ba_map[(pitcher_id, batter_hand, pitch_name_norm)] = _safe_float(row.get("ba"))
+
+    out: Dict[int, Dict[str, List[Dict[str, Any]]]] = {pitcher_id: {"L": [], "R": []} for pitcher_id in pitcher_ids}
+    for row in pitch_rows:
+        pitcher_id = _safe_int(row.get("pitcher_id"))
+        batter_hand = _normalize_hand(row.get("batter_hand"))
+        pitch_name = _clean_str(row.get("pitch_name"))
+        if pitcher_id is None or batter_hand is None or pitch_name is None:
+            continue
+        pitch_name_norm = _normalize_pitch_name(pitch_name)
+        if pitch_name_norm is None:
+            continue
+        out.setdefault(pitcher_id, {"L": [], "R": []}).setdefault(batter_hand, [])
+        out[pitcher_id][batter_hand].append(
+            {
+                "pitch_name": pitch_name,
+                "pitch_count": _safe_int(row.get("pitch_count")) or 0,
+                "pitch_pct": _pct_value(row.get("pitch_pct")),
+                "ba": ba_map.get((pitcher_id, batter_hand, pitch_name_norm)),
+                "woba": _safe_float(row.get("woba")),
+                "slg": _safe_float(row.get("slg")),
+                "iso": _safe_float(row.get("iso")),
+                "hr": _safe_int(row.get("hr")) or 0,
+                "k_pct": _pct_value(row.get("k_pct")),
+                "whiff_pct": _pct_value(row.get("whiff_pct")),
+            }
+        )
+
+    for pitcher_id, hand_map in out.items():
+        for hand in ("L", "R"):
+            rows = hand_map.get(hand, [])
+            total_count = sum((_safe_int(item.get("pitch_count")) or 0) for item in rows)
+            for item in rows:
+                if item.get("pitch_pct") is None and total_count > 0:
+                    item["pitch_pct"] = round(((_safe_int(item.get("pitch_count")) or 0) / total_count) * 100.0, 1)
+            rows.sort(key=lambda item: ((item.get("pitch_pct") or 0.0), (_safe_int(item.get("pitch_count")) or 0)), reverse=True)
+            hand_map[hand] = rows
+        out[pitcher_id] = hand_map
+
+    return out
+
+
+def _fetch_batter_vs_pitches_map(
+    client: bigquery.Client,
+    hit_data_table_qualified: str,
+    run_date: str,
+    game_pk: int,
+    batter_ids: List[int],
+) -> Dict[int, Dict[str, List[Dict[str, Any]]]]:
+    """
+    Build hitter-vs-pitch rows keyed by batter_id and pitcher hand (L/R).
+    """
+    batter_ids = sorted({int(bid) for bid in batter_ids if bid is not None})
+    if not batter_ids:
+        return {}
+
+    rows = _safe_query(
+        client,
+        f"""
+        SELECT
+          CAST(batter_id AS INT64) AS batter_id,
+          UPPER(CAST(pitch_hand AS STRING)) AS pitcher_hand,
+          CAST(pitch_type AS STRING) AS pitch_name,
+          COUNT(1) AS pitch_count,
+          AVG(
+            CASE
+              WHEN LOWER(CAST(result AS STRING)) IN ('single', 'double', 'triple', 'home_run') THEN 1.0
+              ELSE 0.0
+            END
+          ) AS ba,
+          AVG(
+            CASE LOWER(CAST(result AS STRING))
+              WHEN 'single' THEN 0.89
+              WHEN 'double' THEN 1.27
+              WHEN 'triple' THEN 1.62
+              WHEN 'home_run' THEN 2.10
+              ELSE 0.0
+            END
+          ) AS woba,
+          AVG(
+            CASE LOWER(CAST(result AS STRING))
+              WHEN 'single' THEN 1.0
+              WHEN 'double' THEN 2.0
+              WHEN 'triple' THEN 3.0
+              WHEN 'home_run' THEN 4.0
+              ELSE 0.0
+            END
+          ) AS slg,
+          AVG(
+            CASE LOWER(CAST(result AS STRING))
+              WHEN 'double' THEN 1.0
+              WHEN 'triple' THEN 2.0
+              WHEN 'home_run' THEN 3.0
+              ELSE 0.0
+            END
+          ) AS iso,
+          SUM(CASE WHEN LOWER(CAST(result AS STRING)) = 'home_run' THEN 1 ELSE 0 END) AS hr,
+          AVG(CASE WHEN is_barrel THEN 1.0 ELSE 0.0 END) * 100.0 AS barrel_pct,
+          AVG(CAST(launch_speed AS FLOAT64)) AS ev
+        FROM {hit_data_table_qualified}
+        WHERE run_date = @run_date
+          AND CAST(game_pk AS INT64) = @game_pk
+          AND CAST(batter_id AS INT64) IN UNNEST(@batter_ids)
+          AND UPPER(CAST(pitch_hand AS STRING)) IN ('L', 'R', 'LHP', 'RHP')
+          AND COALESCE(CAST(pitch_type AS STRING), '') != ''
+        GROUP BY batter_id, pitcher_hand, pitch_name
+        """,
+        [
+            bigquery.ScalarQueryParameter("run_date", "DATE", run_date),
+            bigquery.ScalarQueryParameter("game_pk", "INT64", game_pk),
+            bigquery.ArrayQueryParameter("batter_ids", "INT64", batter_ids),
+        ],
+    )
+
+    out: Dict[int, Dict[str, List[Dict[str, Any]]]] = {batter_id: {"L": [], "R": []} for batter_id in batter_ids}
+    totals: Dict[tuple[int, str], int] = {}
+
+    for row in rows:
+        batter_id = _safe_int(row.get("batter_id"))
+        pitcher_hand = _normalize_hand(row.get("pitcher_hand"))
+        pitch_name = _clean_str(row.get("pitch_name"))
+        if batter_id is None or pitcher_hand is None or pitch_name is None:
+            continue
+        count = _safe_int(row.get("pitch_count")) or 0
+        totals[(batter_id, pitcher_hand)] = totals.get((batter_id, pitcher_hand), 0) + count
+        out.setdefault(batter_id, {"L": [], "R": []}).setdefault(pitcher_hand, [])
+        out[batter_id][pitcher_hand].append(
+            {
+                "pitch_name": pitch_name,
+                "pitch_count": count,
+                "pitch_pct": None,
+                "ba": _safe_float(row.get("ba")),
+                "woba": _safe_float(row.get("woba")),
+                "slg": _safe_float(row.get("slg")),
+                "iso": _safe_float(row.get("iso")),
+                "hr": _safe_int(row.get("hr")) or 0,
+                "ev": _safe_float(row.get("ev")),
+                "barrel_pct": _safe_float(row.get("barrel_pct")),
+            }
+        )
+
+    for batter_id, hand_map in out.items():
+        for hand in ("L", "R"):
+            total = totals.get((batter_id, hand), 0)
+            rows_for_hand = hand_map.get(hand, [])
+            for row in rows_for_hand:
+                if total > 0:
+                    row["pitch_pct"] = round(((_safe_int(row.get("pitch_count")) or 0) / total) * 100.0, 1)
+            rows_for_hand.sort(key=lambda item: (_safe_int(item.get("pitch_count")) or 0), reverse=True)
+            hand_map[hand] = rows_for_hand
+        out[batter_id] = hand_map
+
+    return out
+
+
 def _fetch_game_weather_map(
     client: bigquery.Client,
     weather_table_qualified: str,
@@ -793,6 +1063,8 @@ def mlb_matchup_detail(game_pk: int):
     today = _today_et_iso()
     hr_table = _qualified_table(client, HR_PICKS_TABLE)
     pitcher_table = _qualified_table(client, PITCHER_MATCHUP_TABLE)
+    pitch_log_table = _qualified_table(client, PITCH_LOG_TABLE)
+    hit_data_table = _qualified_table(client, HIT_DATA_TABLE)
     weather_table = _qualified_table(client, GAME_WEATHER_TABLE)
     schedule = _fetch_schedule_for_game(game_pk)
     home_team = schedule.get("home_team") if schedule else None
@@ -975,6 +1247,47 @@ def mlb_matchup_detail(game_pk: int):
     # Backfill sportsbook/deep-link fields from live /mlb/props when BQ rows miss them.
     picks = _merge_props_fallback_into_picks(picks, game_pk)
 
+    pitcher_ids_for_pitch_tables = sorted(
+        {
+            pid
+            for pid in (
+                _safe_int(row.get("pitcher_id")) for row in pitcher_splits
+            )
+            if pid is not None
+        }
+        | {
+            pid
+            for pid in (
+                _safe_int(row.get("pitcher_id")) for row in picks
+            )
+            if pid is not None
+        }
+    )
+    batter_ids_for_pitch_tables = sorted(
+        {
+            bid
+            for bid in (
+                _safe_int(row.get("batter_id")) for row in picks
+            )
+            if bid is not None
+        }
+    )
+    pitcher_pitch_mix_map = _fetch_pitcher_pitch_mix_map(
+        client,
+        pitch_log_table,
+        hit_data_table,
+        run_date,
+        game_pk,
+        pitcher_ids_for_pitch_tables,
+    )
+    batter_vs_pitches_map = _fetch_batter_vs_pitches_map(
+        client,
+        hit_data_table,
+        run_date,
+        game_pk,
+        batter_ids_for_pitch_tables,
+    )
+
     grade_counts = {"IDEAL": 0, "FAVORABLE": 0, "AVERAGE": 0, "AVOID": 0}
     pitcher_groups: Dict[str, Dict[str, Any]] = {}
 
@@ -1017,6 +1330,7 @@ def mlb_matchup_detail(game_pk: int):
 
     for pick in picks:
         pitcher_id = _safe_int(pick.get("pitcher_id"))
+        batter_id = _safe_int(pick.get("batter_id"))
         group_key = _pitcher_group_key(pitcher_id, pick.get("pitcher_name"))
         if group_key is None:
             continue
@@ -1040,9 +1354,11 @@ def mlb_matchup_detail(game_pk: int):
         grade = (pick.get("grade") or "").upper()
         if grade in grade_counts:
             grade_counts[grade] += 1
+        pitcher_mix_rows = pitcher_pitch_mix_map.get(pitcher_id or -1, {"L": [], "R": []})
+        batter_vs_rows = batter_vs_pitches_map.get(batter_id or -1, {"L": [], "R": []})
         group["batters"].append(
             {
-                "batter_id": _safe_int(pick.get("batter_id")),
+                "batter_id": batter_id,
                 "batter_name": pick.get("batter_name"),
                 "bat_side": pick.get("bat_side"),
                 "score": _safe_float(pick.get("score")),
@@ -1083,6 +1399,14 @@ def mlb_matchup_detail(game_pk: int):
                 "dk_event_id": _clean_str(pick.get("dk_event_id")),
                 "fd_market_id": _clean_str(pick.get("fd_market_id")),
                 "fd_selection_id": _clean_str(pick.get("fd_selection_id")),
+                "pitcher_pitch_mix": {
+                    "vs_lhb": list(pitcher_mix_rows.get("L", [])),
+                    "vs_rhb": list(pitcher_mix_rows.get("R", [])),
+                },
+                "hitter_stats_vs_pitches": {
+                    "vs_lhp": list(batter_vs_rows.get("L", [])),
+                    "vs_rhp": list(batter_vs_rows.get("R", [])),
+                },
             }
         )
 

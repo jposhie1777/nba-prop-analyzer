@@ -16,6 +16,7 @@ import { useTheme } from "@/store/useTheme";
 import { usePropBetslip } from "@/store/usePropBetslip";
 import { useParlayTracker } from "@/store/useParlayTracker";
 import { normalizeMarket } from "@/utils/normalizeMarket";
+import { buildParlayLinks, getBuildPlatform } from "@/utils/parlayBuilder";
 
 const GAMBLY_URL = "https://www.gambly.com/gambly-bot";
 const STAKE = 10;
@@ -46,6 +47,7 @@ export function PropBetslipDrawer() {
   const [expanded, setExpanded] = useState(false);
   const { isOpen, close, toggle } = useBetslipDrawer();
   const [shouldTrack, setShouldTrack] = useState(false);
+  const platform = getBuildPlatform();
 
   /* =========================
      AUTO COLLAPSE > 3 ITEMS
@@ -90,6 +92,30 @@ export function PropBetslipDrawer() {
 
     return decimalToAmerican(decimal);
   }, [items]);
+
+  const mlbHrItems = useMemo(
+    () =>
+      items.filter((item) => item.sport === "mlb" && item.market === "MLB 1+ HR"),
+    [items]
+  );
+
+  const mlbParlayLinks = useMemo(() => {
+    if (mlbHrItems.length < 2) {
+      return { draftkings: null, fanduel: null, combinedOdds: null };
+    }
+    return buildParlayLinks(
+      mlbHrItems.map((item) => ({
+        batter_id: item.player_id ?? null,
+        batter_name: item.player ?? null,
+        hr_odds_best_price: item.odds ?? null,
+        dk_event_id: item.dk_event_id ?? null,
+        dk_outcome_code: item.dk_outcome_code ?? null,
+        fd_market_id: item.fd_market_id ?? null,
+        fd_selection_id: item.fd_selection_id ?? null,
+      })),
+      platform
+    );
+  }, [mlbHrItems, platform]);
 
   const { track } = useParlayTracker();
 
@@ -144,6 +170,15 @@ export function PropBetslipDrawer() {
     EARLY EXIT
   ========================= */
   if (!items.length && !isOpen) return null;
+
+  function openLink(url?: string | null) {
+    if (!url) return;
+    if (platform === "desktop" && typeof globalThis.open === "function") {
+      globalThis.open(url, "_blank");
+      return;
+    }
+    Linking.openURL(url).catch(() => {});
+  }
 
 
   return (
@@ -356,6 +391,44 @@ export function PropBetslipDrawer() {
           </Text>
         </Pressable>
       </View>
+
+      {mlbHrItems.length >= 2 ? (
+        <View style={styles.sportsbookWrap}>
+          <Text style={styles.sportsbookTitle}>
+            MLB HR Parlay Links ({mlbHrItems.length} legs)
+          </Text>
+          <Text style={styles.sportsbookSub}>
+            Combined:{" "}
+            {mlbParlayLinks.combinedOdds == null
+              ? "—"
+              : mlbParlayLinks.combinedOdds > 0
+              ? `+${mlbParlayLinks.combinedOdds}`
+              : mlbParlayLinks.combinedOdds}
+          </Text>
+          <View style={styles.sportsbookRow}>
+            <Pressable
+              onPress={() => openLink(mlbParlayLinks.draftkings)}
+              disabled={!mlbParlayLinks.draftkings}
+              style={[
+                styles.sportsbookBtn,
+                !mlbParlayLinks.draftkings && styles.sportsbookBtnDisabled,
+              ]}
+            >
+              <Text style={styles.sportsbookBtnText}>Open DK Parlay</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => openLink(mlbParlayLinks.fanduel)}
+              disabled={!mlbParlayLinks.fanduel}
+              style={[
+                styles.sportsbookBtn,
+                !mlbParlayLinks.fanduel && styles.sportsbookBtnDisabled,
+              ]}
+            >
+              <Text style={styles.sportsbookBtnText}>Open FD Parlay</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -437,5 +510,43 @@ const styles = StyleSheet.create({
 
   btnText: {
     fontWeight: "900",
+  },
+  sportsbookWrap: {
+    marginTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#334155",
+    paddingTop: 10,
+    gap: 6,
+  },
+  sportsbookTitle: {
+    color: "#E2E8F0",
+    fontWeight: "800",
+    fontSize: 12,
+  },
+  sportsbookSub: {
+    color: "#94A3B8",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  sportsbookRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  sportsbookBtn: {
+    flex: 1,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#334155",
+    backgroundColor: "#0F172A",
+    alignItems: "center",
+    paddingVertical: 10,
+  },
+  sportsbookBtnDisabled: {
+    opacity: 0.45,
+  },
+  sportsbookBtnText: {
+    color: "#E2E8F0",
+    fontSize: 12,
+    fontWeight: "800",
   },
 });

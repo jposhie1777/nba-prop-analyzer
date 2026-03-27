@@ -1,6 +1,6 @@
 import { ActivityIndicator, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useMlbMatchupDetail } from "@/hooks/mlb/useMlbMatchups";
 import { useTheme } from "@/store/useTheme";
@@ -156,7 +156,9 @@ export function MlbMatchupDetailScreen() {
   const awayLogo = getMlbTeamLogo(awayTeam);
   const homeLogo = getMlbTeamLogo(homeTeam);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const betslipItems = usePropBetslip((s) => s.items);
   const addToBetslip = usePropBetslip((s) => s.add);
+  const removeFromBetslip = usePropBetslip((s) => s.remove);
   const openBetslip = useBetslipDrawer((s) => s.open);
   const platform = getBuildPlatform();
 
@@ -207,21 +209,60 @@ export function MlbMatchupDetailScreen() {
     [selectedParlayInput, platform]
   );
 
-  function toggleSelected(key: string) {
+  function makeMlbSlipId(batter: any): string {
+    return `mlb-hr-${String(data?.game_pk ?? 0)}-${String(batter.batter_id ?? batter.batter_name ?? "")}`;
+  }
+
+  function addBatterToMlbSlip(batter: any, pitcher: any) {
+    addToBetslip({
+      id: makeMlbSlipId(batter),
+      player_id: Number(batter.batter_id ?? 0),
+      player: batter.batter_name ?? "Batter",
+      market: "MLB 1+ HR",
+      side: "over",
+      line: 0.5,
+      odds: Number(batter.hr_odds_best_price ?? 100),
+      matchup: `${pitcher.offense_team ?? ""} vs ${pitcher.pitcher_name ?? ""}`,
+      sport: "mlb",
+      bookmaker: null,
+      dk_event_id: batter.dk_event_id ?? null,
+      dk_outcome_code: batter.dk_outcome_code ?? null,
+      fd_market_id: batter.fd_market_id ?? null,
+      fd_selection_id: batter.fd_selection_id ?? null,
+    });
+  }
+
+  function toggleSelected(key: string, batter: any, pitcher: any) {
+    const slipId = makeMlbSlipId(batter);
     setSelectedKeys((prev) => {
       const next = new Set(prev);
       if (next.has(key)) {
         next.delete(key);
+        removeFromBetslip(slipId);
       } else if (next.size < 10) {
         next.add(key);
+        addBatterToMlbSlip(batter, pitcher);
+        openBetslip();
       }
       return next;
     });
   }
 
   function clearSelections() {
+    selectedBatters.forEach(({ batter }) => removeFromBetslip(makeMlbSlipId(batter)));
     setSelectedKeys(new Set());
   }
+
+  useEffect(() => {
+    const next = new Set<string>();
+    for (const entry of allVisibleBatters) {
+      if (betslipItems.some((item) => item.id === makeMlbSlipId(entry.batter))) {
+        next.add(entry.key);
+      }
+    }
+    setSelectedKeys(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [betslipItems, allVisibleBatters]);
 
   function openUrl(url?: string | null) {
     if (!url) return;
@@ -421,7 +462,7 @@ export function MlbMatchupDetailScreen() {
                   {(batter.flags ?? []).length ? <Text style={styles.flagsText}>Signals: {(batter.flags ?? []).slice(0, 4).join(" • ")}</Text> : null}
 
                   <View style={styles.betRow}>
-                    <Pressable style={styles.selectBtn} onPress={() => toggleSelected(batterKey)}>
+                    <Pressable style={styles.selectBtn} onPress={() => toggleSelected(batterKey, batter, pitcher)}>
                       <Text style={styles.selectBtnText}>{isSelected ? "☑ Selected" : "☐ Select for Parlay"}</Text>
                     </Pressable>
                     <Text style={styles.betPriceText}>1+ HR {formatAmericanOdds(batter.hr_odds_best_price)}</Text>
@@ -433,22 +474,7 @@ export function MlbMatchupDetailScreen() {
                       onPress={() => {
                         const url = singleLegLink(batter, "draftkings");
                         if (!url) return;
-                        addToBetslip({
-                          id: `mlb-hr-dk-${String(data?.game_pk ?? 0)}-${String(batter.batter_id ?? batter.batter_name ?? "")}`,
-                          player_id: Number(batter.batter_id ?? 0),
-                          player: batter.batter_name ?? "Batter",
-                          market: "MLB 1+ HR",
-                          side: "over",
-                          line: 0.5,
-                          odds: Number(batter.hr_odds_best_price ?? 100),
-                          matchup: `${pitcher.offense_team ?? ""} vs ${pitcher.pitcher_name ?? ""}`,
-                          sport: "mlb",
-                          bookmaker: "draftkings",
-                          dk_event_id: batter.dk_event_id ?? null,
-                          dk_outcome_code: batter.dk_outcome_code ?? null,
-                          fd_market_id: batter.fd_market_id ?? null,
-                          fd_selection_id: batter.fd_selection_id ?? null,
-                        });
+                        addBatterToMlbSlip(batter, pitcher);
                         openBetslip();
                         openUrl(url);
                       }}
@@ -461,22 +487,7 @@ export function MlbMatchupDetailScreen() {
                       onPress={() => {
                         const url = singleLegLink(batter, "fanduel");
                         if (!url) return;
-                        addToBetslip({
-                          id: `mlb-hr-fd-${String(data?.game_pk ?? 0)}-${String(batter.batter_id ?? batter.batter_name ?? "")}`,
-                          player_id: Number(batter.batter_id ?? 0),
-                          player: batter.batter_name ?? "Batter",
-                          market: "MLB 1+ HR",
-                          side: "over",
-                          line: 0.5,
-                          odds: Number(batter.hr_odds_best_price ?? 100),
-                          matchup: `${pitcher.offense_team ?? ""} vs ${pitcher.pitcher_name ?? ""}`,
-                          sport: "mlb",
-                          bookmaker: "fanduel",
-                          dk_event_id: batter.dk_event_id ?? null,
-                          dk_outcome_code: batter.dk_outcome_code ?? null,
-                          fd_market_id: batter.fd_market_id ?? null,
-                          fd_selection_id: batter.fd_selection_id ?? null,
-                        });
+                        addBatterToMlbSlip(batter, pitcher);
                         openBetslip();
                         openUrl(url);
                       }}
@@ -514,24 +525,6 @@ export function MlbMatchupDetailScreen() {
               style={[styles.parlayBtn, !parlayLinks.draftkings ? styles.bookBtnDisabled : null]}
               disabled={!parlayLinks.draftkings}
               onPress={() => {
-                selectedBatters.forEach(({ batter, pitcher }) => {
-                  addToBetslip({
-                    id: `mlb-parlay-dk-${String(data?.game_pk ?? 0)}-${String(batter.batter_id ?? batter.batter_name ?? "")}`,
-                    player_id: Number(batter.batter_id ?? 0),
-                    player: batter.batter_name ?? "Batter",
-                    market: "MLB 1+ HR",
-                    side: "over",
-                    line: 0.5,
-                    odds: Number(batter.hr_odds_best_price ?? 100),
-                    matchup: `${pitcher.offense_team ?? ""} vs ${pitcher.pitcher_name ?? ""}`,
-                    sport: "mlb",
-                    bookmaker: "draftkings",
-                    dk_event_id: batter.dk_event_id ?? null,
-                    dk_outcome_code: batter.dk_outcome_code ?? null,
-                    fd_market_id: batter.fd_market_id ?? null,
-                    fd_selection_id: batter.fd_selection_id ?? null,
-                  });
-                });
                 openBetslip();
                 openUrl(parlayLinks.draftkings);
               }}
@@ -542,24 +535,6 @@ export function MlbMatchupDetailScreen() {
               style={[styles.parlayBtn, !parlayLinks.fanduel ? styles.bookBtnDisabled : null]}
               disabled={!parlayLinks.fanduel}
               onPress={() => {
-                selectedBatters.forEach(({ batter, pitcher }) => {
-                  addToBetslip({
-                    id: `mlb-parlay-fd-${String(data?.game_pk ?? 0)}-${String(batter.batter_id ?? batter.batter_name ?? "")}`,
-                    player_id: Number(batter.batter_id ?? 0),
-                    player: batter.batter_name ?? "Batter",
-                    market: "MLB 1+ HR",
-                    side: "over",
-                    line: 0.5,
-                    odds: Number(batter.hr_odds_best_price ?? 100),
-                    matchup: `${pitcher.offense_team ?? ""} vs ${pitcher.pitcher_name ?? ""}`,
-                    sport: "mlb",
-                    bookmaker: "fanduel",
-                    dk_event_id: batter.dk_event_id ?? null,
-                    dk_outcome_code: batter.dk_outcome_code ?? null,
-                    fd_market_id: batter.fd_market_id ?? null,
-                    fd_selection_id: batter.fd_selection_id ?? null,
-                  });
-                });
                 openBetslip();
                 openUrl(parlayLinks.fanduel);
               }}

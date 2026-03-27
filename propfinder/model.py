@@ -15,6 +15,7 @@ import logging
 import re
 from collections import defaultdict
 from statistics import mean
+from zoneinfo import ZoneInfo
 from urllib.parse import parse_qs, urlsplit
 from urllib.request import Request, urlopen
 
@@ -23,7 +24,8 @@ from google.cloud import bigquery
 PROJECT = "graphite-flare-477419-h7"
 DATASET = "propfinder"
 BASE_URL = "https://api.propfinder.app"
-TODAY = datetime.date.today()
+SLATE_TZ = ZoneInfo("America/New_York")
+TODAY = datetime.datetime.now(SLATE_TZ).date()
 NOW = datetime.datetime.now(datetime.timezone.utc)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -730,9 +732,12 @@ def main():
     splits_map = load_splits()
     pitcher_map = load_pitcher_matchup()
     pitch_log_map = load_pitch_log()
+    weather_map = load_game_weather()
+    props_map = load_hr_props()
     matchups = load_today_matchups()
     hr_prop_context = load_hr_prop_context()
     log.info("Loaded HR prop context for %s batter/game rows", len(hr_prop_context))
+    log.info("Loaded game weather rows: %s | raw HR props rows: %s", len(weather_map), len(props_map))
 
     if not matchups:
         log.warning("No matchup data - did ingest run with the updated ingest.py?")
@@ -792,8 +797,8 @@ def main():
                 "run_date": TODAY.isoformat(),
                 "run_timestamp": NOW.isoformat(),
                 "game_pk": matchup["game_pk"],
-                "home_team": prop_ctx.get("home_team") or "",
-                "away_team": prop_ctx.get("away_team") or "",
+                "home_team": prop_ctx.get("home_team") or gw.get("home_team_name") or "",
+                "away_team": prop_ctx.get("away_team") or gw.get("away_team_name") or "",
                 "batter_id": matchup["batter_id"],
                 "batter_name": matchup["batter_name"],
                 "bat_side": matchup["bat_side"],
@@ -806,25 +811,25 @@ def main():
                 "grade": grade,
                 "why": why,
                 "flags": json.dumps(flags_good + flags_bad),
-                "weather_indicator": prop_ctx.get("weather_indicator"),
-                "game_temp": prop_ctx.get("game_temp"),
-                "wind_speed": prop_ctx.get("wind_speed"),
-                "wind_dir": prop_ctx.get("wind_dir"),
-                "precip_prob": prop_ctx.get("precip_prob"),
-                "ballpark_name": prop_ctx.get("ballpark_name"),
-                "roof_type": prop_ctx.get("roof_type"),
-                "weather_note": prop_ctx.get("weather_note"),
-                "home_moneyline": prop_ctx.get("home_moneyline"),
-                "away_moneyline": prop_ctx.get("away_moneyline"),
-                "over_under": prop_ctx.get("over_under"),
-                "hr_odds_best_price": prop_ctx.get("hr_odds_best_price"),
-                "hr_odds_best_book": prop_ctx.get("hr_odds_best_book"),
-                "deep_link_desktop": prop_ctx.get("deep_link_desktop"),
-                "deep_link_ios": prop_ctx.get("deep_link_ios"),
-                "dk_outcome_code": prop_ctx.get("dk_outcome_code"),
-                "dk_event_id": prop_ctx.get("dk_event_id"),
-                "fd_market_id": prop_ctx.get("fd_market_id"),
-                "fd_selection_id": prop_ctx.get("fd_selection_id"),
+                "weather_indicator": prop_ctx.get("weather_indicator") or gw.get("weather_indicator"),
+                "game_temp": prop_ctx.get("game_temp") if prop_ctx.get("game_temp") is not None else gw.get("game_temp"),
+                "wind_speed": prop_ctx.get("wind_speed") if prop_ctx.get("wind_speed") is not None else gw.get("wind_speed"),
+                "wind_dir": prop_ctx.get("wind_dir") if prop_ctx.get("wind_dir") is not None else gw.get("wind_dir"),
+                "precip_prob": prop_ctx.get("precip_prob") if prop_ctx.get("precip_prob") is not None else gw.get("precip_prob"),
+                "ballpark_name": prop_ctx.get("ballpark_name") or gw.get("ballpark_name"),
+                "roof_type": prop_ctx.get("roof_type") or gw.get("roof_type"),
+                "weather_note": prop_ctx.get("weather_note") or gw.get("weather_note"),
+                "home_moneyline": prop_ctx.get("home_moneyline") if prop_ctx.get("home_moneyline") is not None else gw.get("home_moneyline"),
+                "away_moneyline": prop_ctx.get("away_moneyline") if prop_ctx.get("away_moneyline") is not None else gw.get("away_moneyline"),
+                "over_under": prop_ctx.get("over_under") if prop_ctx.get("over_under") is not None else gw.get("over_under"),
+                "hr_odds_best_price": prop_ctx.get("hr_odds_best_price") if prop_ctx.get("hr_odds_best_price") is not None else pr.get("hr_odds_best_price"),
+                "hr_odds_best_book": prop_ctx.get("hr_odds_best_book") or pr.get("hr_odds_best_book"),
+                "deep_link_desktop": prop_ctx.get("deep_link_desktop") or pr.get("deep_link_desktop"),
+                "deep_link_ios": prop_ctx.get("deep_link_ios") or pr.get("deep_link_ios"),
+                "dk_outcome_code": prop_ctx.get("dk_outcome_code") or pr.get("dk_outcome_code"),
+                "dk_event_id": prop_ctx.get("dk_event_id") or pr.get("dk_event_id"),
+                "fd_market_id": prop_ctx.get("fd_market_id") or pr.get("fd_market_id"),
+                "fd_selection_id": prop_ctx.get("fd_selection_id") or pr.get("fd_selection_id"),
             }
         )
 

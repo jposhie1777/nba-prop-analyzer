@@ -14,6 +14,7 @@ import asyncio
 import datetime
 import logging
 import time
+from zoneinfo import ZoneInfo
 
 import aiohttp
 from google.api_core.retry import Retry
@@ -23,7 +24,8 @@ PROJECT = "graphite-flare-477419-h7"
 DATASET = "propfinder"
 BASE_URL = "https://api.propfinder.app"
 MLB_API = "https://statsapi.mlb.com/api/v1"
-TODAY = datetime.date.today()
+SLATE_TZ = ZoneInfo("America/New_York")
+TODAY = datetime.datetime.now(SLATE_TZ).date()
 NOW = datetime.datetime.now(datetime.timezone.utc)
 INSERT_CHUNK_SIZE = 250
 INSERT_MAX_ATTEMPTS = 5
@@ -297,8 +299,13 @@ async def fetch_upcoming_games(session):
         except ValueError:
             continue
 
-        # Filter to today's games (compare date in UTC)
-        if game_dt.date() != TODAY:
+        # Filter by ET slate date so late-night west-coast starts are included.
+        game_local_date = (
+            game_dt.astimezone(SLATE_TZ).date()
+            if game_dt.tzinfo
+            else game_dt.date()
+        )
+        if game_local_date != TODAY:
             continue
 
         game_pk = si(item.get("id"))

@@ -1,0 +1,178 @@
+name: Deploy Camoufox Proxy Service
+
+# Deploys the Camoufox Browser Proxy to Cloud Run.
+# This service is used by the sportsbook_soccer_markets workflow to bypass
+# TLS fingerprinting on FanDuel and DraftKings sportsbook APIs.
+#
+# After the first successful deploy, add the printed service URL as a
+# GitHub Actions secret named CAMOUFOX_SERVICE_URL.
+
+on:
+  workflow_dispatch:
+    inputs:
+      min_instances:
+        description: "Min instances (1 = always-on, recommended)"
+        required: false
+        default: "1"
+      max_instances:
+        description: "Max instances"
+        required: false
+        default: "2"
+
+env:
+  PROJECT_ID: graphite-flare-477419-h7
+  REGION: us-central1
+  IMAGE_NAME: camoufox-proxy
+  ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
+
+jobs:
+  # -----------------------------------------------------------------------
+  # BUILD & PUSH
+  # -----------------------------------------------------------------------
+  build:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    outputs:
+      image_uri: ${{ steps.image.outputs.uri }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
+          token_format: access_token
+          access_token_scopes: >-
+            https://www.googleapis.com/auth/cloud-platform,
+            https://www.googleapis.com/auth/devstorage.read_write
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Login to Artifact Registry
+        uses: docker/login-action@v3
+        with:
+          registry: us-central1-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
+
+      - name: Set image URI
+        id: image
+        run: |
+          SHA=$(echo $GITHUB_SHA | cut -c1-7)
+          URI="${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/cloud-run-source-deploy/${{ env.IMAGE_NAME }}:${SHA}"
+          echo "uri=$URI" >> $GITHUB_OUTPUT
+          echo "Image URI: $URI"
+
+      - name: Build and push Docker image
+        # Pass GITHUB_TOKEN as a build-arg so Camoufox can download Firefox
+        # binaries from GitHub Releases without hitting rate limits.
+        run: |
+          docker build \
+            --build-arg GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} \
+            -t ${{ steps.image.outputs.uri }} \
+            -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/cloud-run-source-deploy/${{ env.IMAGE_NAME }}:latest \
+            ./camoufox_service
+          docker push ${{ steps.image.outputs.uri }}
+          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/cloud-run-source-deploy/${{ env.IMAGE_NAME }}:latest
+
+  # -----------------------------------------------------------------------
+  # DEPLOY
+  # -----------------------------------------------------------------------
+  deploy:
+    name: Deploy to Cloud Run
+    runs-on: ubuntu-latest
+    needs: build
+    outputs:
+      service_url: ${{ steps.deploy.outputs.url }}
+
+    steps:
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy to Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: camoufox-proxy
+          region: ${{ env.REGION }}
+          image: ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/cloud-run-source-deploy/${{ env.IMAGE_NAME }}:latest
+          # --no-allow-unauthenticated: only callers with an IAM identity token
+          # (GitHub Actions service account) can invoke this service.
+          flags: >-
+            --no-allow-unauthenticated
+            --min-instances=${{ inputs.min_instances }}
+            --max-instances=${{ inputs.max_instances }}
+            --memory=2Gi
+            --cpu=2
+            --timeout=300
+            --concurrency=1
+          env_vars: |
+            GCP_PROJECT=${{ env.PROJECT_ID }}
+
+  # -----------------------------------------------------------------------
+  # SMOKE TEST
+  # -----------------------------------------------------------------------
+  smoke-test:
+    name: Smoke Test
+    runs-on: ubuntu-latest
+    needs: deploy
+
+    steps:
+      - name: Authenticate to GCP
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
+          token_format: id_token
+          id_token_audience: ${{ needs.deploy.outputs.service_url }}
+
+      - name: Health check
+        run: |
+          URL="${{ needs.deploy.outputs.service_url }}"
+          echo "Testing ${URL}/health"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ steps.auth.outputs.id_token }}" \
+            "${URL}/health")
+          if [ "$STATUS" != "200" ]; then
+            echo "Health check failed: HTTP $STATUS"
+            exit 1
+          fi
+          echo "Health check passed (HTTP 200)"
+
+  # -----------------------------------------------------------------------
+  # SUMMARY
+  # -----------------------------------------------------------------------
+  summary:
+    name: Print Service URL
+    runs-on: ubuntu-latest
+    needs: [build, deploy, smoke-test]
+    if: always()
+
+    steps:
+      - name: Summary
+        run: |
+          echo "## Camoufox Proxy Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Step | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Deploy | ${{ needs.deploy.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Smoke Test | ${{ needs.smoke-test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Service URL:** ${{ needs.deploy.outputs.service_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next step" >> $GITHUB_STEP_SUMMARY
+          echo "Add the service URL as a GitHub Actions secret:" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "Secret name:  CAMOUFOX_SERVICE_URL" >> $GITHUB_STEP_SUMMARY
+          echo "Secret value: ${{ needs.deploy.outputs.service_url }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY

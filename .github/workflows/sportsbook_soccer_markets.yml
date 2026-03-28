@@ -20,6 +20,7 @@ name: Sportsbook Soccer Markets (FanDuel + DraftKings)
 #   - EPL break gate: skips EPL scrape jobs before EPL_RESUME_DATE
 #   - Empty artifact guard: writes empty NDJSON on 0 rows so artifact
 #     upload never fails; load step skips gracefully on empty file
+#   - Merged duplicate job-level `if` keys (YAML disallows duplicate keys)
 
 on:
   workflow_dispatch:
@@ -66,6 +67,10 @@ jobs:
     name: Scrape ${{ matrix.sportsbook }} ${{ matrix.league }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Single if: combining sportsbook + league filters (YAML allows only one if: per job)
+    if: >-
+      (github.event.inputs.sportsbook == '' || github.event.inputs.sportsbook == 'ALL' || github.event.inputs.sportsbook == matrix.sportsbook) &&
+      (github.event.inputs.league == '' || github.event.inputs.league == 'ALL' || github.event.inputs.league == matrix.league)
 
     strategy:
       fail-fast: false
@@ -96,11 +101,6 @@ jobs:
             artifact_name: draftkings-mls
             artifact_path: /tmp/draftkings_mls_rows.ndjson
 
-    # Skip individual matrix cells when a specific sportsbook or league is requested
-    if: >-
-      (github.event.inputs.sportsbook == '' || github.event.inputs.sportsbook == 'ALL' || github.event.inputs.sportsbook == matrix.sportsbook) &&
-      (github.event.inputs.league == '' || github.event.inputs.league == 'ALL' || github.event.inputs.league == matrix.league)
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -124,9 +124,9 @@ jobs:
           token_format: id_token
           id_token_audience: ${{ secrets.CAMOUFOX_SERVICE_URL }}
 
-      # Gate EPL jobs during the international break. The scraper is still
-      # invoked (so the artifact is created and the load job doesn't break),
-      # but we short-circuit before hitting the proxy and write an empty file.
+      # Gate EPL jobs during the international break. Short-circuits before
+      # hitting the proxy and writes an empty artifact so the load job
+      # downstream doesn't fail trying to download a missing artifact.
       - name: Check EPL break gate
         if: matrix.league == 'EPL'
         run: |
@@ -181,8 +181,12 @@ jobs:
     name: Load ${{ matrix.sportsbook }} ${{ matrix.league }} → BigQuery
     runs-on: ubuntu-latest
     needs: scrape
-    if: inputs.dry_run != true
     timeout-minutes: 10
+    # Single if: combining dry_run guard + sportsbook + league filters
+    if: >-
+      inputs.dry_run != true &&
+      (github.event.inputs.sportsbook == '' || github.event.inputs.sportsbook == 'ALL' || github.event.inputs.sportsbook == matrix.sportsbook) &&
+      (github.event.inputs.league == '' || github.event.inputs.league == 'ALL' || github.event.inputs.league == matrix.league)
 
     strategy:
       fail-fast: false
@@ -208,10 +212,6 @@ jobs:
             scraper_module: mobile_api.ingest.sportsbook.draftkings_soccer_scraper
             artifact_name: draftkings-mls
             artifact_path: /tmp/draftkings_mls_rows.ndjson
-
-    if: >-
-      (github.event.inputs.sportsbook == '' || github.event.inputs.sportsbook == 'ALL' || github.event.inputs.sportsbook == matrix.sportsbook) &&
-      (github.event.inputs.league == '' || github.event.inputs.league == 'ALL' || github.event.inputs.league == matrix.league)
 
     env:
       GCP_PROJECT: ${{ secrets.PROJECT_ID }}

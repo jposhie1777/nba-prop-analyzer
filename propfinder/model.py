@@ -1,3 +1,5 @@
+#propfinder/model.py
+
 """
 model.py - PropFinder HR Pulse Score
 Scale: 0-100. Labels: IDEAL (75+) | FAVORABLE (55-74) | AVERAGE (35-54) | AVOID (<35)

@@ -14,16 +14,32 @@ Captures all available market types:
   - Head-to-head matchups
   - Stroke props (over/under)
 
-Usage (called by sportsbook_markets.yml workflow):
-
+Usage:
   python -m mobile_api.ingest.sportsbook.draftkings_pga_scraper --scrape-only
   python -m mobile_api.ingest.sportsbook.draftkings_pga_scraper --load-only
+  python -m mobile_api.ingest.sportsbook.draftkings_pga_scraper --dry-run
 
 Environment variables required:
   CAMOUFOX_SERVICE_URL  - Cloud Run URL
   CAMOUFOX_TOKEN        - GCP identity token
   GCP_PROJECT           - GCP project ID
   GOOGLE_APPLICATION_CREDENTIALS - path to service account JSON (load phase)
+
+Fix notes (2026-03-28 v2):
+  - Tightened capture_patterns from "api.draftkings.com" to specific path
+    prefixes. The broad hostname was capturing:
+      api.draftkings.com/eventstreams/v1/sdk/webeventtrackershim.js
+      api.draftkings.com/eventstreams/v1/sdk/webeventtracker.js
+      api.draftkings.com/geolocations/v1/locations.json
+    None of these are odds responses. The actual offers come from:
+      api.draftkings.com/lineups/v1/eventgroups/...
+      api.draftkings.com/leagues/v1/...
+  - Direct requests fallback restored (no proxy). api.draftkings.com does
+    NOT enforce browser TLS fingerprinting — the geo check in the capture
+    log returned successfully via plain requests. The proxy fallback was
+    returning nothing because return_body is not supported by the proxy;
+    a plain requests.get works fine here.
+  - wait_ms increased to 25000 to capture all offer category XHRs.
 """
 
 from __future__ import annotations
@@ -50,11 +66,10 @@ DATASET = "sportsbook"
 TABLE = "raw_draftkings_pga_markets"
 ARTIFACT_PATH = "/tmp/draftkings_pga_rows.ndjson"
 
-# DraftKings golf event group ID for PGA Tour.
-# 88106 = PGA Tour (stable ID used across tournaments).
-# The page URL also works as a fallback discovery mechanism.
+# PGA Tour event group ID on DraftKings (stable across tournaments)
 DK_PGA_EVENT_GROUP_ID = 88106
 
+# Direct API — no browser TLS enforcement on api.draftkings.com
 DK_OFFERS_URL = (
     "https://api.draftkings.com/lineups/v1/eventgroups/{event_group_id}"
     "?format=json"
@@ -63,13 +78,13 @@ DK_OFFERS_URL = (
 SCRAPE_CONFIG = {
     "url": "https://sportsbook.draftkings.com/leagues/golf/pga-tour",
     "prime_url": "https://sportsbook.draftkings.com",
-    # Only api.draftkings.com — avoids capturing JS bundles from sportsbook.draftkings.com
+    # Tightened to path prefixes that only match odds/offers endpoints.
+    # Excludes: eventstreams/ (analytics JS), geolocations/ (geo check)
     "capture_patterns": [
-        "api.draftkings.com",
+        "api.draftkings.com/lineups/",
+        "api.draftkings.com/leagues/",
     ],
-    # Golf loads many offer categories (outrights, props, matchups) sequentially;
-    # 20s gives them all time to fire.
-    "wait_ms": 20000,
+    "wait_ms": 25000,
 }
 
 
@@ -126,7 +141,7 @@ def _build_deep_link(outcome_id: str) -> str:
 # ---------------------------------------------------------------------------
 
 def _is_odds_response(body: Any) -> bool:
-    """Accept only DK odds/offers payloads; reject analytics JS and other blobs."""
+    """Accept only DK odds/offers payloads; reject everything else."""
     if not isinstance(body, dict):
         return False
     return bool(
@@ -141,23 +156,23 @@ def _is_odds_response(body: Any) -> bool:
 # Parsing
 # ---------------------------------------------------------------------------
 
-def _classify_market(market_name: str) -> str:
-    name_lower = market_name.lower()
-    if any(x in name_lower for x in ["winner", "outright", "tournament winner"]):
+def _classify_market(name: str) -> str:
+    n = name.lower()
+    if any(x in n for x in ["winner", "outright", "tournament winner"]):
         return "outright_winner"
-    if "round leader" in name_lower:
+    if "round leader" in n:
         return "round_leader"
-    if any(x in name_lower for x in ["top 5", "top5"]):
+    if any(x in n for x in ["top 5", "top5"]):
         return "top_5"
-    if any(x in name_lower for x in ["top 10", "top10"]):
+    if any(x in n for x in ["top 10", "top10"]):
         return "top_10"
-    if any(x in name_lower for x in ["top 20", "top20"]):
+    if any(x in n for x in ["top 20", "top20"]):
         return "top_20"
-    if "cut" in name_lower:
+    if "cut" in n:
         return "make_cut"
-    if any(x in name_lower for x in ["matchup", "head", "h2h", "vs"]):
+    if any(x in n for x in ["matchup", "head", "h2h", " vs "]):
         return "matchup"
-    if any(x in name_lower for x in ["stroke", "score", "over", "under", "total", "prop"]):
+    if any(x in n for x in ["stroke", "score", "over", "under", "total", "prop"]):
         return "stroke_prop"
     return "other"
 
@@ -196,11 +211,9 @@ def _parse_body(body: Dict[str, Any], scraped_at: str) -> List[Dict[str, Any]]:
             if not isinstance(sub_cat, dict):
                 continue
 
-            # Classify using category + subcategory names
             market_label = f"{cat_name} - {sub_name}".strip(" -")
             market_type = _classify_market(market_label)
 
-            # offers is a list-of-lists: one inner list per event/matchup
             for offer_group in sub_cat.get("offers", []):
                 if not isinstance(offer_group, list):
                     continue
@@ -217,11 +230,8 @@ def _parse_body(body: Dict[str, Any], scraped_at: str) -> List[Dict[str, Any]]:
                     start_raw = ev.get("startDate") or ev.get("startDateTime") or ""
                     try:
                         event_start = (
-                            datetime.fromisoformat(
-                                start_raw.replace("Z", "+00:00")
-                            ).strftime("%Y-%m-%dT%H:%M:%S")
-                            if start_raw
-                            else None
+                            datetime.fromisoformat(start_raw.replace("Z", "+00:00")).strftime("%Y-%m-%dT%H:%M:%S")
+                            if start_raw else None
                         )
                     except Exception:
                         event_start = None
@@ -230,9 +240,7 @@ def _parse_body(body: Dict[str, Any], scraped_at: str) -> List[Dict[str, Any]]:
                         if not isinstance(outcome, dict):
                             continue
 
-                        outcome_id = str(
-                            outcome.get("outcomeId") or outcome.get("id") or ""
-                        )
+                        outcome_id = str(outcome.get("outcomeId") or outcome.get("id") or "")
                         outcome_label = outcome.get("label") or outcome.get("oddsType") or ""
                         line_val = outcome.get("line")
                         try:
@@ -240,9 +248,7 @@ def _parse_body(body: Dict[str, Any], scraped_at: str) -> List[Dict[str, Any]]:
                         except Exception:
                             outcome_line = None
 
-                        odds_am_str = str(
-                            outcome.get("oddsAmerican") or outcome.get("odds") or ""
-                        )
+                        odds_am_str = str(outcome.get("oddsAmerican") or outcome.get("odds") or "")
                         odds_dec: Optional[float] = None
                         try:
                             am_int = int(odds_am_str.replace("+", ""))
@@ -250,37 +256,31 @@ def _parse_body(body: Dict[str, Any], scraped_at: str) -> List[Dict[str, Any]]:
                         except Exception:
                             pass
 
-                        deep_link = _build_deep_link(outcome_id) if outcome_id else None
-
-                        rows.append(
-                            {
-                                "scraped_at": scraped_at,
-                                "event_id": event_id or None,
-                                "event_name": ev_name or offer_label or None,
-                                "event_start": event_start,
-                                "offer_id": offer_id or None,
-                                "offer_label": offer_label or None,
-                                "category_id": cat_id or None,
-                                "category_name": cat_name or None,
-                                "subcategory_id": sub_id or None,
-                                "subcategory_name": sub_name or None,
-                                "market_type": market_type,
-                                "outcome_id": outcome_id or None,
-                                "outcome_label": outcome_label or None,
-                                "outcome_line": outcome_line,
-                                "odds_american": odds_am_str or None,
-                                "odds_decimal": odds_dec,
-                                "deep_link": deep_link,
-                                "raw_response": raw_str,
-                            }
-                        )
+                        rows.append({
+                            "scraped_at": scraped_at,
+                            "event_id": event_id or None,
+                            "event_name": ev_name or offer_label or None,
+                            "event_start": event_start,
+                            "offer_id": offer_id or None,
+                            "offer_label": offer_label or None,
+                            "category_id": cat_id or None,
+                            "category_name": cat_name or None,
+                            "subcategory_id": sub_id or None,
+                            "subcategory_name": sub_name or None,
+                            "market_type": market_type,
+                            "outcome_id": outcome_id or None,
+                            "outcome_label": outcome_label or None,
+                            "outcome_line": outcome_line,
+                            "odds_american": odds_am_str or None,
+                            "odds_decimal": odds_dec,
+                            "deep_link": _build_deep_link(outcome_id) if outcome_id else None,
+                            "raw_response": raw_str,
+                        })
 
     return rows
 
 
-def _parse_captured(
-    captured: List[Dict[str, Any]], scraped_at: str
-) -> List[Dict[str, Any]]:
+def _parse_captured(captured: List[Dict[str, Any]], scraped_at: str) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     odds_hits = 0
     for i, capture in enumerate(captured):
@@ -300,39 +300,42 @@ def _parse_captured(
 
 
 # ---------------------------------------------------------------------------
-# Direct API fallback (routed through Camoufox proxy)
+# Direct API fallback
 # ---------------------------------------------------------------------------
 
-def _fetch_via_proxy() -> Optional[Dict[str, Any]]:
+def _fetch_direct(scraped_at: str) -> List[Dict[str, Any]]:
     """
-    Hit the DraftKings public eventgroup API via Camoufox proxy.
-    api.draftkings.com doesn't enforce browser TLS fingerprinting as strictly
-    as FanDuel, but routing through the proxy keeps the pattern consistent
-    and avoids any future enforcement changes.
+    Hit api.draftkings.com/lineups/v1/eventgroups directly with plain requests.
+    api.draftkings.com does NOT enforce browser TLS fingerprinting — confirmed
+    by the geo check returning successfully via captured requests in prior runs.
+    This is a reliable fallback when the browser capture misses the XHR window.
     """
-    target_url = DK_OFFERS_URL.format(event_group_id=DK_PGA_EVENT_GROUP_ID)
-    logger.info("DraftKings PGA: proxy fallback → %s", target_url)
+    url = DK_OFFERS_URL.format(event_group_id=DK_PGA_EVENT_GROUP_ID)
+    logger.info("DraftKings PGA: direct API fallback → %s", url)
     try:
-        result = _call_proxy(
-            {
-                "url": target_url,
-                "prime_url": SCRAPE_CONFIG["prime_url"],
-                "capture_patterns": [],
-                "wait_ms": 3000,
-                "timeout_ms": 30000,
-                "return_body": True,
-            }
+        resp = requests.get(
+            url,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                ),
+                "Accept": "application/json",
+            },
+            timeout=30,
         )
-        body = result.get("body") or result.get("page_body")
-        if isinstance(body, str):
-            try:
-                body = json.loads(body)
-            except json.JSONDecodeError:
-                return None
-        return body if isinstance(body, dict) else None
+        resp.raise_for_status()
+        body = resp.json()
+        if not _is_odds_response(body):
+            logger.warning("DraftKings PGA: direct API returned non-odds response")
+            return []
+        rows = _parse_body(body, scraped_at=scraped_at)
+        logger.info("DraftKings PGA: direct API fallback returned %d rows", len(rows))
+        return rows
     except Exception as exc:
-        logger.warning("DraftKings PGA: proxy fallback failed: %s", exc)
-        return None
+        logger.warning("DraftKings PGA: direct API fallback failed: %s", exc)
+        return []
 
 
 # ---------------------------------------------------------------------------
@@ -342,15 +345,13 @@ def _fetch_via_proxy() -> Optional[Dict[str, Any]]:
 def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
     cfg = SCRAPE_CONFIG
     logger.info("Calling Camoufox proxy for DraftKings PGA ...")
-    result = _call_proxy(
-        {
-            "url": cfg["url"],
-            "prime_url": cfg["prime_url"],
-            "capture_patterns": cfg["capture_patterns"],
-            "wait_ms": cfg["wait_ms"],
-            "timeout_ms": 60000,
-        }
-    )
+    result = _call_proxy({
+        "url": cfg["url"],
+        "prime_url": cfg["prime_url"],
+        "capture_patterns": cfg["capture_patterns"],
+        "wait_ms": cfg["wait_ms"],
+        "timeout_ms": 90000,
+    })
 
     captured = result.get("captured_requests", [])
     logger.info(
@@ -362,14 +363,10 @@ def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
     scraped_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     rows = _parse_captured(captured, scraped_at=scraped_at)
 
+    # Direct fallback — api.draftkings.com doesn't require browser fingerprinting
     if not rows:
-        logger.info("DraftKings PGA: 0 rows from browser capture — trying proxy fallback")
-        body = _fetch_via_proxy()
-        if body and _is_odds_response(body):
-            rows = _parse_body(body, scraped_at=scraped_at)
-            logger.info("DraftKings PGA: proxy fallback returned %d rows", len(rows))
-        else:
-            logger.warning("DraftKings PGA: proxy fallback returned nothing")
+        logger.info("DraftKings PGA: 0 rows from browser capture — trying direct API fallback")
+        rows = _fetch_direct(scraped_at=scraped_at)
 
     logger.info("Parsed %d total rows for DraftKings PGA", len(rows))
 
@@ -420,9 +417,7 @@ def load() -> None:
         write_disposition="WRITE_APPEND",
         autodetect=False,
     )
-    job = client.load_table_from_file(
-        io.BytesIO(ndjson_bytes), table_id, job_config=job_config
-    )
+    job = client.load_table_from_file(io.BytesIO(ndjson_bytes), table_id, job_config=job_config)
     job.result()
     if job.errors:
         logger.error("BigQuery load errors: %s", job.errors)

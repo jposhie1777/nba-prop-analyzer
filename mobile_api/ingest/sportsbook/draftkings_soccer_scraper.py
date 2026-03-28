@@ -30,6 +30,7 @@ import json
 import logging
 import os
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -50,25 +51,28 @@ DATASET = "oddspedia"
 TABLE = "raw_draftkings_soccer_markets"
 
 # DraftKings soccer league pages and API domains to intercept.
-# DraftKings uses api.draftkings.com for odds data.
+# Target the odds API endpoint specifically — "api.draftkings.com" alone is
+# too broad and captures JS CDN files (event-tracking SDK, etc.).
 LEAGUE_CONFIG: Dict[str, Dict[str, Any]] = {
     "EPL": {
         "url": "https://sportsbook.draftkings.com/leagues/soccer/soccer-premier-league-88808",
         "prime_url": "https://sportsbook.draftkings.com",
         "capture_patterns": [
-            "api.draftkings.com",
-            "sportsbook.draftkings.com/api",
+            "sportsbook.draftkings.com/api/odds",
+            "api.draftkings.com/lineups/v1",
+            "api.draftkings.com/offers/v",
         ],
-        "wait_ms": 8000,
+        "wait_ms": 12000,
     },
     "MLS": {
         "url": "https://sportsbook.draftkings.com/leagues/soccer/soccer-major-league-soccer-88670",
         "prime_url": "https://sportsbook.draftkings.com",
         "capture_patterns": [
-            "api.draftkings.com",
-            "sportsbook.draftkings.com/api",
+            "sportsbook.draftkings.com/api/odds",
+            "api.draftkings.com/lineups/v1",
+            "api.draftkings.com/offers/v",
         ],
-        "wait_ms": 8000,
+        "wait_ms": 12000,
     },
 }
 
@@ -90,22 +94,45 @@ def _get_camoufox_token() -> str:
     return os.environ.get("CAMOUFOX_TOKEN", "")
 
 
-def _call_proxy(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """POST to the Camoufox proxy service and return the parsed JSON response."""
+def _call_proxy(payload: Dict[str, Any], max_retries: int = 3) -> Dict[str, Any]:
+    """POST to the Camoufox proxy service with exponential-backoff retry.
+
+    Retries on 500/503 which can occur when concurrent scrape jobs hit the
+    single-concurrency Cloud Run instance simultaneously.
+    """
     service_url = _get_camoufox_url()
     token = _get_camoufox_token()
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
-    resp = requests.post(
-        f"{service_url}/fetch",
-        json=payload,
-        headers=headers,
-        timeout=120,
-    )
-    resp.raise_for_status()
-    return resp.json()
+    delay = 15  # seconds between retries
+    for attempt in range(1, max_retries + 1):
+        try:
+            resp = requests.post(
+                f"{service_url}/fetch",
+                json=payload,
+                headers=headers,
+                timeout=180,
+            )
+            if resp.status_code in (500, 503) and attempt < max_retries:
+                logger.warning(
+                    "proxy returned %d (attempt %d/%d), retrying in %ds ...",
+                    resp.status_code, attempt, max_retries, delay,
+                )
+                time.sleep(delay)
+                delay *= 2
+                continue
+            resp.raise_for_status()
+            return resp.json()
+        except requests.exceptions.Timeout:
+            if attempt < max_retries:
+                logger.warning("proxy timeout (attempt %d/%d), retrying in %ds ...", attempt, max_retries, delay)
+                time.sleep(delay)
+                delay *= 2
+            else:
+                raise
+    raise RuntimeError("proxy call failed after all retries")
 
 
 def _decimal_from_american(american: Optional[int]) -> Optional[float]:

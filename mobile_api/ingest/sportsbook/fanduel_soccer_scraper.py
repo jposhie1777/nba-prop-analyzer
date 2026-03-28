@@ -30,6 +30,7 @@ import json
 import logging
 import os
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -51,32 +52,35 @@ DATASET = "oddspedia"
 TABLE = "raw_fanduel_soccer_markets"
 
 # FanDuel soccer league URLs and the API domains to intercept.
-# FanDuel uses SBTech / their own sports API; we capture everything from
-# known API domains and pick out market/selection data in the parser.
+# From live captures, FanDuel's event/market data comes from:
+#   sportsbook.fanduel.com/api/content-managed-page (events + markets JSON)
+#   sbapi.sbtech.com  (legacy SBTech odds API, still used for some markets)
+#   sportsbook-nash.fanduel.com (newer Nash API, GraphQL/REST)
+# We wait 15s to ensure all deferred API calls have fired after hydration.
 LEAGUE_CONFIG: Dict[str, Dict[str, Any]] = {
     "EPL": {
         "url": "https://sportsbook.fanduel.com/soccer/premier-league",
         "prime_url": "https://sportsbook.fanduel.com",
         "capture_patterns": [
-            "sbapi.fanduel.com",
+            "sportsbook.fanduel.com/api/content-managed-page",
+            "sportsbook.fanduel.com/api/",
             "sbapi.sbtech.com",
             "sportsbook-nash.fanduel.com",
-            "api.fanduel.com",
-            "sportsbook.fanduel.com/api",
+            "sbapi.fanduel.com",
         ],
-        "wait_ms": 8000,
+        "wait_ms": 15000,
     },
     "MLS": {
         "url": "https://sportsbook.fanduel.com/soccer/mls",
         "prime_url": "https://sportsbook.fanduel.com",
         "capture_patterns": [
-            "sbapi.fanduel.com",
+            "sportsbook.fanduel.com/api/content-managed-page",
+            "sportsbook.fanduel.com/api/",
             "sbapi.sbtech.com",
             "sportsbook-nash.fanduel.com",
-            "api.fanduel.com",
-            "sportsbook.fanduel.com/api",
+            "sbapi.fanduel.com",
         ],
-        "wait_ms": 8000,
+        "wait_ms": 15000,
     },
 }
 
@@ -98,22 +102,45 @@ def _get_camoufox_token() -> str:
     return os.environ.get("CAMOUFOX_TOKEN", "")
 
 
-def _call_proxy(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """POST to the Camoufox proxy service and return the parsed JSON response."""
+def _call_proxy(payload: Dict[str, Any], max_retries: int = 3) -> Dict[str, Any]:
+    """POST to the Camoufox proxy service with exponential-backoff retry.
+
+    Retries on 500/503 which can occur when concurrent scrape jobs hit the
+    single-concurrency Cloud Run instance simultaneously.
+    """
     service_url = _get_camoufox_url()
     token = _get_camoufox_token()
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
-    resp = requests.post(
-        f"{service_url}/fetch",
-        json=payload,
-        headers=headers,
-        timeout=120,
-    )
-    resp.raise_for_status()
-    return resp.json()
+    delay = 15  # seconds between retries
+    for attempt in range(1, max_retries + 1):
+        try:
+            resp = requests.post(
+                f"{service_url}/fetch",
+                json=payload,
+                headers=headers,
+                timeout=180,
+            )
+            if resp.status_code in (500, 503) and attempt < max_retries:
+                logger.warning(
+                    "proxy returned %d (attempt %d/%d), retrying in %ds ...",
+                    resp.status_code, attempt, max_retries, delay,
+                )
+                time.sleep(delay)
+                delay *= 2
+                continue
+            resp.raise_for_status()
+            return resp.json()
+        except requests.exceptions.Timeout:
+            if attempt < max_retries:
+                logger.warning("proxy timeout (attempt %d/%d), retrying in %ds ...", attempt, max_retries, delay)
+                time.sleep(delay)
+                delay *= 2
+            else:
+                raise
+    raise RuntimeError("proxy call failed after all retries")
 
 
 def _american_from_decimal(decimal: float) -> str:

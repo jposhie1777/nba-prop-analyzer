@@ -6,39 +6,14 @@ browser TLS fingerprinting, captures internal API responses, parses
 marketId + selectionId values for FanDuel deep links, and writes rows to
 BigQuery table: sportsbook.raw_fanduel_pga_markets
 
-Captures all available market types:
-  - Tournament winner / outright
-  - Round leader
-  - Top 5 / Top 10 / Top 20 finishes
-  - Make/miss cut
-  - Head-to-head matchups
-  - Stroke props (over/under)
-
 Usage:
+  # Discovery mode — logs ALL XHR URLs fired by the page, no parsing
+  python -m mobile_api.ingest.sportsbook.fanduel_pga_scraper --discover
+
+  # Normal scrape
   python -m mobile_api.ingest.sportsbook.fanduel_pga_scraper --scrape-only
-  python -m mobile_api.ingest.sportsbook.fanduel_pga_scraper --load-only
   python -m mobile_api.ingest.sportsbook.fanduel_pga_scraper --dry-run
-
-Environment variables required:
-  CAMOUFOX_SERVICE_URL  - Cloud Run URL
-  CAMOUFOX_TOKEN        - GCP identity token
-  GCP_PROJECT           - GCP project ID
-  GOOGLE_APPLICATION_CREDENTIALS - path to service account JSON (load phase)
-
-Fix notes (2026-03-28 v2):
-  - Removed proxy fallback entirely. Camoufox proxy returns 500 when asked
-    to fetch bare JSON API URLs — it's built for page rendering, not raw
-    API proxying. The browser capture is the only reliable path for FanDuel
-    since sbapi.fanduel.com enforces browser TLS fingerprinting.
-  - Tightened capture_patterns to specific path prefixes. The previous
-    broad hostname patterns captured JS bundles and analytics endpoints.
-    FanDuel's odds XHRs come from sbapi.fanduel.com/api/content-managed-page
-    and sportsbook-nash.fanduel.com/api/ — these are the only patterns kept.
-  - Increased wait_ms to 25000. FanDuel golf pages load outrights first,
-    then fire separate XHRs for matchups and props. 15s was cutting off
-    the later requests.
-  - Added captured URL logging at INFO so capture_patterns misses are
-    immediately visible in the workflow logs.
+  python -m mobile_api.ingest.sportsbook.fanduel_pga_scraper --load-only
 """
 
 from __future__ import annotations
@@ -69,16 +44,22 @@ ARTIFACT_PATH = "/tmp/fanduel_pga_rows.ndjson"
 SCRAPE_CONFIG = {
     "url": "https://sportsbook.fanduel.com/golf",
     "prime_url": "https://sportsbook.fanduel.com",
-    # Tightened to specific path prefixes — broad hostname patterns capture
-    # JS bundles, analytics, and other non-odds responses.
-    # Adjust these if capture_requests=0 after checking the URL log below.
+    # UPDATE THESE after running --discover and reviewing the URL log.
+    # Current patterns are placeholders — 0 captures confirmed they're wrong.
     "capture_patterns": [
         "sbapi.fanduel.com/api/",
         "sportsbook-nash.fanduel.com/api/",
     ],
-    # Golf loads outrights first, then fires separate XHRs for matchups/props
     "wait_ms": 25000,
 }
+
+# Discovery mode uses a broad pattern to catch everything
+DISCOVER_PATTERNS = [
+    "fanduel.com",
+    "sbapi.",
+    "sportsbook-nash.",
+    "api.",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -113,6 +94,41 @@ def _call_proxy(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Discovery mode
+# ---------------------------------------------------------------------------
+
+def discover() -> None:
+    """
+    Load the FanDuel golf page with broad capture patterns and print every
+    intercepted URL + top-level response keys. Use this output to identify
+    the correct capture_patterns for the scrape config.
+    """
+    logger.info("DISCOVERY MODE — capturing all XHRs from %s", SCRAPE_CONFIG["url"])
+    result = _call_proxy({
+        "url": SCRAPE_CONFIG["url"],
+        "prime_url": SCRAPE_CONFIG["prime_url"],
+        "capture_patterns": DISCOVER_PATTERNS,
+        "wait_ms": SCRAPE_CONFIG["wait_ms"],
+        "timeout_ms": 90000,
+    })
+
+    captured = result.get("captured_requests", [])
+    logger.info("page_status=%d  total_captured=%d", result.get("status", 0), len(captured))
+    print("\n=== DISCOVERED URLs ===")
+    for i, capture in enumerate(captured):
+        url = capture.get("url", "<unknown>")
+        body = capture.get("body")
+        body_type = type(body).__name__
+        top_keys = list(body.keys())[:6] if isinstance(body, dict) else "n/a"
+        body_is_list = isinstance(body, list)
+        print(f"[{i:02d}] {url}")
+        print(f"      body_type={body_type}  top_keys={top_keys}  is_list={body_is_list}")
+    print("=== END DISCOVERED URLs ===\n")
+    print("ACTION: Update capture_patterns in SCRAPE_CONFIG with the paths")
+    print("        of URLs that look like odds/events/markets responses.")
+
+
+# ---------------------------------------------------------------------------
 # Odds helpers
 # ---------------------------------------------------------------------------
 
@@ -136,7 +152,6 @@ def _build_deep_link(market_id: str, selection_id: str) -> str:
 # ---------------------------------------------------------------------------
 
 def _is_fanduel_odds_response(body: Any) -> bool:
-    """Reject empty facets/browse blobs; accept real events/markets payloads."""
     if not isinstance(body, dict):
         return False
     if "facets" in body and not body.get("results"):
@@ -295,7 +310,7 @@ def _parse_captured(captured: List[Dict[str, Any]], scraped_at: str) -> List[Dic
         body = capture.get("body")
         logger.info("  captured[%d]: %s", i, url)
         if not _is_fanduel_odds_response(body):
-            logger.debug("  → skipping (not an odds response)")
+            logger.debug("  → skipping")
             continue
         odds_hits += 1
         rows.extend(_parse_body(body, scraped_at=scraped_at))
@@ -324,8 +339,7 @@ def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
     captured = result.get("captured_requests", [])
     logger.info(
         "FanDuel PGA: page_status=%d  captured_requests=%d",
-        result.get("status", 0),
-        len(captured),
+        result.get("status", 0), len(captured),
     )
 
     scraped_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -333,10 +347,8 @@ def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
 
     if not rows:
         logger.warning(
-            "FanDuel PGA: 0 rows parsed. Check captured URL log above — if "
-            "capture_requests=0, the capture_patterns may not match the actual "
-            "XHR URLs. FanDuel does not allow direct API access without browser "
-            "TLS fingerprinting so there is no fallback available."
+            "FanDuel PGA: 0 rows. Run --discover to see all XHR URLs and "
+            "update capture_patterns in SCRAPE_CONFIG."
         )
 
     logger.info("Parsed %d total rows for FanDuel PGA", len(rows))
@@ -405,11 +417,15 @@ def main() -> None:
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--scrape-only", action="store_true")
     group.add_argument("--load-only", action="store_true")
+    group.add_argument("--discover", action="store_true",
+                       help="Log all XHR URLs to identify correct capture_patterns")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
     if args.load_only:
         load()
+    elif args.discover:
+        discover()
     else:
         rows = scrape(dry_run=args.dry_run)
         if not args.scrape_only and not args.dry_run:

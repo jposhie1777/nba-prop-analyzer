@@ -6,14 +6,35 @@ browser TLS fingerprinting, captures internal API responses, parses
 marketId + selectionId values for FanDuel deep links, and writes rows to
 BigQuery table: sportsbook.raw_fanduel_pga_markets
 
+Captures all available market types:
+  - Tournament winner / outright
+  - Round leader
+  - Top 5 / Top 10 / Top 20 finishes
+  - Make/miss cut
+  - Head-to-head matchups
+  - Stroke props (over/under)
+
 Usage:
-  # Discovery mode — logs ALL XHR URLs fired by the page, no parsing
+  # Discovery mode — logs ALL XHR URLs fired by the page
   python -m mobile_api.ingest.sportsbook.fanduel_pga_scraper --discover
 
-  # Normal scrape
   python -m mobile_api.ingest.sportsbook.fanduel_pga_scraper --scrape-only
   python -m mobile_api.ingest.sportsbook.fanduel_pga_scraper --dry-run
   python -m mobile_api.ingest.sportsbook.fanduel_pga_scraper --load-only
+
+Fix notes (2026-03-28 v3 — post-discovery):
+  Discovery run confirmed Camoufox is working (64 captured requests).
+  Correct API domains identified:
+    [50] api.sportsbook.fanduel.com/sbapi/content-managed-page  — golf layout+attachments
+    [54-63] smp.ia.sportsbook.fanduel.com/.../getMarketPrices  — live odds polling
+  Previous patterns (sbapi.fanduel.com, sportsbook-nash.fanduel.com) were
+  completely wrong domains. Updated to the real ones.
+
+  Parser updated for the actual response shapes:
+    content-managed-page → body["attachments"]["events"] (dict keyed by eventId)
+                         → body["attachments"]["markets"] (dict keyed by marketId)
+                         → body["attachments"]["runners"] (dict keyed by runnerId)
+    getMarketPrices      → list of price objects with marketId, selectionId, price
 """
 
 from __future__ import annotations
@@ -44,21 +65,19 @@ ARTIFACT_PATH = "/tmp/fanduel_pga_rows.ndjson"
 SCRAPE_CONFIG = {
     "url": "https://sportsbook.fanduel.com/golf",
     "prime_url": "https://sportsbook.fanduel.com",
-    # UPDATE THESE after running --discover and reviewing the URL log.
-    # Current patterns are placeholders — 0 captures confirmed they're wrong.
+    # Confirmed from discovery run [50], [54-63]
     "capture_patterns": [
-        "sbapi.fanduel.com/api/",
-        "sportsbook-nash.fanduel.com/api/",
+        "api.sportsbook.fanduel.com/sbapi/content-managed-page",
+        "smp.ia.sportsbook.fanduel.com/api/sports/fixedodds",
     ],
+    # 25s — getMarketPrices polls repeatedly; we want several cycles
     "wait_ms": 25000,
 }
 
-# Discovery mode uses a broad pattern to catch everything
 DISCOVER_PATTERNS = [
     "fanduel.com",
-    "sbapi.",
-    "sportsbook-nash.",
     "api.",
+    "smp.",
 ]
 
 
@@ -98,11 +117,6 @@ def _call_proxy(payload: Dict[str, Any]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 def discover() -> None:
-    """
-    Load the FanDuel golf page with broad capture patterns and print every
-    intercepted URL + top-level response keys. Use this output to identify
-    the correct capture_patterns for the scrape config.
-    """
     logger.info("DISCOVERY MODE — capturing all XHRs from %s", SCRAPE_CONFIG["url"])
     result = _call_proxy({
         "url": SCRAPE_CONFIG["url"],
@@ -111,7 +125,6 @@ def discover() -> None:
         "wait_ms": SCRAPE_CONFIG["wait_ms"],
         "timeout_ms": 90000,
     })
-
     captured = result.get("captured_requests", [])
     logger.info("page_status=%d  total_captured=%d", result.get("status", 0), len(captured))
     print("\n=== DISCOVERED URLs ===")
@@ -120,12 +133,9 @@ def discover() -> None:
         body = capture.get("body")
         body_type = type(body).__name__
         top_keys = list(body.keys())[:6] if isinstance(body, dict) else "n/a"
-        body_is_list = isinstance(body, list)
         print(f"[{i:02d}] {url}")
-        print(f"      body_type={body_type}  top_keys={top_keys}  is_list={body_is_list}")
+        print(f"      body_type={body_type}  top_keys={top_keys}  is_list={isinstance(body, list)}")
     print("=== END DISCOVERED URLs ===\n")
-    print("ACTION: Update capture_patterns in SCRAPE_CONFIG with the paths")
-    print("        of URLs that look like odds/events/markets responses.")
 
 
 # ---------------------------------------------------------------------------
@@ -148,31 +158,7 @@ def _build_deep_link(market_id: str, selection_id: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Response filter
-# ---------------------------------------------------------------------------
-
-def _is_fanduel_odds_response(body: Any) -> bool:
-    if not isinstance(body, dict):
-        return False
-    if "facets" in body and not body.get("results"):
-        return False
-    events = (
-        body.get("events")
-        or body.get("data", {}).get("events")
-        or body.get("result", {}).get("events")
-        or (body.get("attachments") or {}).get("events")
-        or body.get("results")
-        or []
-    )
-    if isinstance(events, dict):
-        return len(events) > 0
-    if isinstance(events, list):
-        return len(events) > 0
-    return False
-
-
-# ---------------------------------------------------------------------------
-# Parsing
+# Parsing — content-managed-page (attachments style)
 # ---------------------------------------------------------------------------
 
 def _classify_market(market_name: str) -> str:
@@ -196,37 +182,51 @@ def _classify_market(market_name: str) -> str:
     return "other"
 
 
-def _parse_body(body: Dict[str, Any], scraped_at: str) -> List[Dict[str, Any]]:
+def _parse_content_managed_page(body: Dict[str, Any], scraped_at: str) -> List[Dict[str, Any]]:
+    """
+    Parse api.sportsbook.fanduel.com/sbapi/content-managed-page response.
+
+    Structure confirmed from discovery [50]:
+      body["attachments"]["events"]  → dict keyed by eventId
+      body["attachments"]["markets"] → dict keyed by marketId
+      body["attachments"]["runners"] → dict keyed by runnerId (selections)
+    """
     rows: List[Dict[str, Any]] = []
     raw_str = json.dumps(body)[:64000]
 
-    if isinstance(body, list):
-        events = body
-    else:
-        events = (
-            body.get("events")
-            or body.get("data", {}).get("events")
-            or body.get("result", {}).get("events")
-            or []
-        )
-        attachments_events = (body.get("attachments") or {}).get("events", {})
-        if not events and isinstance(attachments_events, dict):
-            events = list(attachments_events.values())
-        if not events and body.get("results"):
-            events = body["results"]
-        if not events and isinstance(body.get("data"), list):
-            events = body["data"]
+    attachments = body.get("attachments") or {}
 
-    if not events:
+    # Events dict
+    events_dict: Dict[str, Any] = attachments.get("events") or {}
+    if isinstance(events_dict, list):
+        events_dict = {str(e.get("eventId", i)): e for i, e in enumerate(events_dict)}
+
+    # Markets dict
+    markets_dict: Dict[str, Any] = attachments.get("markets") or {}
+    if isinstance(markets_dict, list):
+        markets_dict = {str(m.get("marketId", i)): m for i, m in enumerate(markets_dict)}
+
+    # Runners dict (selections)
+    runners_dict: Dict[str, Any] = attachments.get("runners") or {}
+    if isinstance(runners_dict, list):
+        runners_dict = {str(r.get("selectionId", i)): r for i, r in enumerate(runners_dict)}
+
+    if not markets_dict:
+        logger.debug("content-managed-page: no markets in attachments")
         return rows
 
-    for event in events:
-        if not isinstance(event, dict):
+    for market_id, market in markets_dict.items():
+        if not isinstance(market, dict):
             continue
 
-        event_id = str(event.get("eventId") or event.get("id") or event.get("event_id") or "")
+        market_name = market.get("marketType") or market.get("name") or ""
+        market_type = _classify_market(market_name)
+
+        # Link back to event
+        event_id = str(market.get("eventId") or "")
+        event = events_dict.get(event_id, {})
         event_name = event.get("name") or event.get("eventName") or ""
-        start_raw = event.get("openDate") or event.get("startDate") or event.get("startTime") or ""
+        start_raw = event.get("openDate") or event.get("startDate") or ""
         try:
             event_start = (
                 datetime.fromisoformat(start_raw.replace("Z", "+00:00")).strftime("%Y-%m-%dT%H:%M:%S")
@@ -235,89 +235,152 @@ def _parse_body(body: Dict[str, Any], scraped_at: str) -> List[Dict[str, Any]]:
         except Exception:
             event_start = None
 
-        markets = event.get("markets") or event.get("marketGroups") or []
-        for market in markets:
-            if not isinstance(market, dict):
+        # Runners for this market
+        market_runner_ids = market.get("runners") or market.get("selections") or []
+        # runners may be a list of IDs or a list of dicts
+        for runner_ref in market_runner_ids:
+            if isinstance(runner_ref, dict):
+                selection_id = str(runner_ref.get("selectionId") or runner_ref.get("id") or "")
+                runner = runner_ref
+            else:
+                selection_id = str(runner_ref)
+                runner = runners_dict.get(selection_id, {})
+
+            if not isinstance(runner, dict):
                 continue
 
-            market_id = str(market.get("marketId") or market.get("id") or "")
-            market_name = market.get("marketType") or market.get("name") or ""
-            market_type = _classify_market(market_name)
+            selection_name = runner.get("runnerName") or runner.get("name") or ""
+            handicap = runner.get("handicap") or runner.get("line")
+            try:
+                handicap_f = float(handicap) if handicap is not None else None
+            except Exception:
+                handicap_f = None
 
-            runners = (
-                market.get("runners")
-                or market.get("selections")
-                or market.get("outcomes")
-                or []
+            price = runner.get("currentPrice") or runner.get("price") or {}
+            odds_dec = None
+            odds_am = None
+            if isinstance(price, dict):
+                dec = price.get("d") or price.get("decimal") or price.get("decimalOdds")
+                if dec is not None:
+                    try:
+                        odds_dec = float(dec)
+                        odds_am = _american_from_decimal(odds_dec)
+                    except Exception:
+                        pass
+            elif isinstance(price, (int, float)):
+                odds_dec = float(price)
+                odds_am = _american_from_decimal(odds_dec)
+
+            deep_link = (
+                _build_deep_link(market_id, selection_id)
+                if market_id and selection_id else None
             )
-            for runner in runners:
-                if not isinstance(runner, dict):
-                    continue
 
-                selection_id = str(runner.get("selectionId") or runner.get("id") or "")
-                selection_name = runner.get("runnerName") or runner.get("name") or ""
-                handicap = runner.get("handicap") or runner.get("line")
+            rows.append({
+                "scraped_at": scraped_at,
+                "source": "content-managed-page",
+                "event_id": event_id or None,
+                "event_name": event_name or None,
+                "event_start": event_start,
+                "market_id": market_id or None,
+                "market_name": market_name or None,
+                "market_type": market_type,
+                "selection_id": selection_id or None,
+                "selection_name": selection_name or None,
+                "handicap": handicap_f,
+                "odds_decimal": odds_dec,
+                "odds_american": odds_am,
+                "deep_link": deep_link,
+                "raw_response": raw_str,
+            })
+
+    return rows
+
+
+def _parse_market_prices(body: List[Any], scraped_at: str) -> List[Dict[str, Any]]:
+    """
+    Parse smp.ia.sportsbook.fanduel.com/.../getMarketPrices response.
+
+    Discovery confirmed body is a list. Each item likely contains
+    marketId, selectionId, and price data for live odds updates.
+    Stored as-is with deep link construction where IDs are available.
+    """
+    rows: List[Dict[str, Any]] = []
+    if not isinstance(body, list):
+        return rows
+
+    raw_str = json.dumps(body)[:64000]
+
+    for item in body:
+        if not isinstance(item, dict):
+            continue
+
+        market_id = str(item.get("marketId") or item.get("market_id") or "")
+        selection_id = str(item.get("selectionId") or item.get("selection_id") or item.get("runnerId") or "")
+        market_name = item.get("marketType") or item.get("marketName") or item.get("name") or ""
+        selection_name = item.get("runnerName") or item.get("selectionName") or item.get("name") or ""
+
+        # Price may be nested or flat
+        price_obj = item.get("price") or item.get("currentPrice") or item
+        odds_dec = None
+        odds_am = None
+        if isinstance(price_obj, dict):
+            dec = price_obj.get("d") or price_obj.get("decimal") or price_obj.get("decimalOdds")
+            if dec is not None:
                 try:
-                    handicap_f = float(handicap) if handicap is not None else None
-                except Exception:
-                    handicap_f = None
-
-                price = runner.get("currentPrice") or runner.get("price") or {}
-                odds_dec = None
-                odds_am = None
-                if isinstance(price, dict):
-                    dec = price.get("d") or price.get("decimal") or price.get("decimalOdds")
-                    if dec is not None:
-                        try:
-                            odds_dec = float(dec)
-                            odds_am = _american_from_decimal(odds_dec)
-                        except Exception:
-                            pass
-                elif isinstance(price, (int, float)):
-                    odds_dec = float(price)
+                    odds_dec = float(dec)
                     odds_am = _american_from_decimal(odds_dec)
+                except Exception:
+                    pass
+        elif isinstance(price_obj, (int, float)) and price_obj != item:
+            odds_dec = float(price_obj)
+            odds_am = _american_from_decimal(odds_dec)
 
-                deep_link = (
-                    _build_deep_link(market_id, selection_id)
-                    if market_id and selection_id else None
-                )
+        deep_link = (
+            _build_deep_link(market_id, selection_id)
+            if market_id and selection_id else None
+        )
 
-                rows.append({
-                    "scraped_at": scraped_at,
-                    "event_id": event_id or None,
-                    "event_name": event_name or None,
-                    "event_start": event_start,
-                    "market_id": market_id or None,
-                    "market_name": market_name or None,
-                    "market_type": market_type,
-                    "selection_id": selection_id or None,
-                    "selection_name": selection_name or None,
-                    "handicap": handicap_f,
-                    "odds_decimal": odds_dec,
-                    "odds_american": odds_am,
-                    "deep_link": deep_link,
-                    "raw_response": raw_str,
-                })
+        rows.append({
+            "scraped_at": scraped_at,
+            "source": "getMarketPrices",
+            "event_id": str(item.get("eventId") or ""),
+            "event_name": None,
+            "event_start": None,
+            "market_id": market_id or None,
+            "market_name": market_name or None,
+            "market_type": _classify_market(market_name),
+            "selection_id": selection_id or None,
+            "selection_name": selection_name or None,
+            "handicap": None,
+            "odds_decimal": odds_dec,
+            "odds_american": odds_am,
+            "deep_link": deep_link,
+            "raw_response": raw_str,
+        })
 
     return rows
 
 
 def _parse_captured(captured: List[Dict[str, Any]], scraped_at: str) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
-    odds_hits = 0
     for i, capture in enumerate(captured):
         url = capture.get("url", "<unknown>")
         body = capture.get("body")
         logger.info("  captured[%d]: %s", i, url)
-        if not _is_fanduel_odds_response(body):
+
+        if "content-managed-page" in url and isinstance(body, dict):
+            new_rows = _parse_content_managed_page(body, scraped_at)
+            logger.info("  → content-managed-page: %d rows", len(new_rows))
+            rows.extend(new_rows)
+        elif "getMarketPrices" in url and isinstance(body, list):
+            new_rows = _parse_market_prices(body, scraped_at)
+            logger.info("  → getMarketPrices: %d rows", len(new_rows))
+            rows.extend(new_rows)
+        else:
             logger.debug("  → skipping")
-            continue
-        odds_hits += 1
-        rows.extend(_parse_body(body, scraped_at=scraped_at))
-    logger.info(
-        "FanDuel PGA: %d captured, %d odds responses, %d rows parsed",
-        len(captured), odds_hits, len(rows),
-    )
+
+    logger.info("FanDuel PGA: %d captured, %d total rows parsed", len(captured), len(rows))
     return rows
 
 
@@ -347,8 +410,7 @@ def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
 
     if not rows:
         logger.warning(
-            "FanDuel PGA: 0 rows. Run --discover to see all XHR URLs and "
-            "update capture_patterns in SCRAPE_CONFIG."
+            "FanDuel PGA: 0 rows. Run --discover to check current XHR URLs."
         )
 
     logger.info("Parsed %d total rows for FanDuel PGA", len(rows))
@@ -417,8 +479,7 @@ def main() -> None:
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--scrape-only", action="store_true")
     group.add_argument("--load-only", action="store_true")
-    group.add_argument("--discover", action="store_true",
-                       help="Log all XHR URLs to identify correct capture_patterns")
+    group.add_argument("--discover", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 

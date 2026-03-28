@@ -7,13 +7,15 @@ outcomeId / offer data for DraftKings deep links, and writes rows to
 BigQuery table: sportsbook.raw_draftkings_pga_markets
 
 Usage:
-  # Discovery mode — logs ALL XHR URLs + finds the current event group ID
   python -m mobile_api.ingest.sportsbook.draftkings_pga_scraper --discover
-
-  # Normal scrape
   python -m mobile_api.ingest.sportsbook.draftkings_pga_scraper --scrape-only
   python -m mobile_api.ingest.sportsbook.draftkings_pga_scraper --dry-run
   python -m mobile_api.ingest.sportsbook.draftkings_pga_scraper --load-only
+
+Discovery run (2026-03-28): only api.draftkings.com fired — all analytics/geo.
+The actual odds XHRs likely come from a different domain entirely (nash, sportsbook-
+nash, or a CDN). Broadened DISCOVER_PATTERNS to catch everything so the next
+discovery run identifies the real domain.
 """
 
 from __future__ import annotations
@@ -41,25 +43,13 @@ DATASET = "sportsbook"
 TABLE = "raw_draftkings_pga_markets"
 ARTIFACT_PATH = "/tmp/draftkings_pga_rows.ndjson"
 
-# 88106 returned 404 — it's stale or wrong for the current tournament.
-# Run --discover to find the real event group ID from live captured URLs,
-# or set DK_PGA_EVENT_GROUP_ID to the value found in the URL log.
-DK_PGA_EVENT_GROUP_ID = 88106  # UPDATE after running --discover
-
-DK_OFFERS_URL = (
-    "https://api.draftkings.com/lineups/v1/eventgroups/{event_group_id}"
-    "?format=json"
-)
-
-# Also try the leagues endpoint as an alternative path
-DK_LEAGUES_URL = (
-    "https://api.draftkings.com/leagues/v1/eventgroups/{event_group_id}"
-    "?format=json"
-)
+# UPDATE after next discovery run identifies the real odds domain/path
+DK_PGA_EVENT_GROUP_ID = 88106  # may be stale — discovery will confirm
 
 SCRAPE_CONFIG = {
     "url": "https://sportsbook.draftkings.com/leagues/golf/pga-tour",
     "prime_url": "https://sportsbook.draftkings.com",
+    # UPDATE these after running --discover
     "capture_patterns": [
         "api.draftkings.com/lineups/",
         "api.draftkings.com/leagues/",
@@ -67,9 +57,15 @@ SCRAPE_CONFIG = {
     "wait_ms": 25000,
 }
 
-# Discovery uses broad pattern to catch everything from api.draftkings.com
+# Broad patterns to catch ALL network requests in discovery mode.
+# Previous run with just "api.draftkings.com" missed the odds domain entirely.
+# These patterns will catch requests to any subdomain or related service.
 DISCOVER_PATTERNS = [
-    "api.draftkings.com",
+    "draftkings.com",
+    "dkpg.",
+    "nash.",
+    "sportsbook-nash.",
+    "dk.",
 ]
 
 
@@ -110,11 +106,10 @@ def _call_proxy(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 def discover() -> None:
     """
-    Load the DraftKings PGA page with broad capture and print every intercepted
-    URL + top-level response keys. Extracts event group IDs from URLs automatically.
-    Use this output to update DK_PGA_EVENT_GROUP_ID and capture_patterns.
+    Load the DraftKings PGA page with very broad capture patterns and print
+    every intercepted URL + response shape. Also extracts event group IDs.
     """
-    logger.info("DISCOVERY MODE — capturing all api.draftkings.com XHRs")
+    logger.info("DISCOVERY MODE — capturing ALL network requests from %s", SCRAPE_CONFIG["url"])
     result = _call_proxy({
         "url": SCRAPE_CONFIG["url"],
         "prime_url": SCRAPE_CONFIG["prime_url"],
@@ -126,7 +121,6 @@ def discover() -> None:
     captured = result.get("captured_requests", [])
     logger.info("page_status=%d  total_captured=%d", result.get("status", 0), len(captured))
 
-    # Extract event group IDs from URLs automatically
     eg_pattern = re.compile(r"/eventgroups?/(\d+)")
     found_event_groups = set()
 
@@ -134,28 +128,21 @@ def discover() -> None:
     for i, capture in enumerate(captured):
         url = capture.get("url", "<unknown>")
         body = capture.get("body")
-        body_type = type(body).__name__
         top_keys = list(body.keys())[:6] if isinstance(body, dict) else "n/a"
-
         print(f"[{i:02d}] {url}")
-        print(f"      body_type={body_type}  top_keys={top_keys}")
-
+        print(f"      body_type={type(body).__name__}  top_keys={top_keys}  is_list={isinstance(body, list)}")
         m = eg_pattern.search(url)
         if m:
             found_event_groups.add(m.group(1))
-
     print("=== END DISCOVERED URLs ===\n")
 
     if found_event_groups:
-        print(f"EVENT GROUP IDs FOUND IN URLs: {sorted(found_event_groups)}")
-        print("ACTION: Update DK_PGA_EVENT_GROUP_ID with the correct ID above.")
+        print(f"EVENT GROUP IDs FOUND: {sorted(found_event_groups)}")
     else:
-        print("No event group IDs found in captured URLs.")
-        print("The page may not have fired the offers XHR within the wait window.")
-        print("Try increasing wait_ms or check if the page URL has changed.")
-
-    print("\nACTION: Update capture_patterns in SCRAPE_CONFIG with paths from")
-    print("        URLs that look like odds/offers/eventgroup responses.")
+        print("No event group IDs found.")
+        print("If total_captured is still low, the odds XHRs may be firing from")
+        print("a domain not covered by DISCOVER_PATTERNS. Check the page in")
+        print("browser DevTools (Network tab, filter XHR) to find the real domain.")
 
 
 # ---------------------------------------------------------------------------
@@ -231,7 +218,6 @@ def _parse_body(body: Dict[str, Any], scraped_at: str) -> List[Dict[str, Any]]:
 
     offer_categories = event_group.get("offerCategories", [])
     if not offer_categories:
-        logger.debug("No offerCategories in DK response")
         return rows
 
     for cat in offer_categories:
@@ -338,57 +324,6 @@ def _parse_captured(captured: List[Dict[str, Any]], scraped_at: str) -> List[Dic
 
 
 # ---------------------------------------------------------------------------
-# Direct API fallback — tries both lineups and leagues endpoints
-# ---------------------------------------------------------------------------
-
-def _fetch_direct(scraped_at: str) -> List[Dict[str, Any]]:
-    """
-    Try api.draftkings.com directly with plain requests.
-    Attempts both the lineups and leagues endpoint variants.
-    api.draftkings.com doesn't enforce browser TLS fingerprinting.
-    """
-    urls_to_try = [
-        DK_OFFERS_URL.format(event_group_id=DK_PGA_EVENT_GROUP_ID),
-        DK_LEAGUES_URL.format(event_group_id=DK_PGA_EVENT_GROUP_ID),
-    ]
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        ),
-        "Accept": "application/json",
-    }
-    for url in urls_to_try:
-        logger.info("DraftKings PGA: direct API attempt → %s", url)
-        try:
-            resp = requests.get(url, headers=headers, timeout=30)
-            if resp.status_code == 404:
-                logger.warning(
-                    "DraftKings PGA: 404 on %s — event group ID %d may be stale. "
-                    "Run --discover to find the current ID.",
-                    url, DK_PGA_EVENT_GROUP_ID,
-                )
-                continue
-            resp.raise_for_status()
-            body = resp.json()
-            if not _is_odds_response(body):
-                logger.warning("DraftKings PGA: response doesn't look like odds data")
-                continue
-            rows = _parse_body(body, scraped_at=scraped_at)
-            logger.info("DraftKings PGA: direct API returned %d rows from %s", len(rows), url)
-            return rows
-        except Exception as exc:
-            logger.warning("DraftKings PGA: direct API failed for %s: %s", url, exc)
-
-    logger.warning(
-        "DraftKings PGA: all direct API attempts failed. "
-        "Run --discover to find the current event group ID."
-    )
-    return []
-
-
-# ---------------------------------------------------------------------------
 # Scrape
 # ---------------------------------------------------------------------------
 
@@ -413,8 +348,9 @@ def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
     rows = _parse_captured(captured, scraped_at=scraped_at)
 
     if not rows:
-        logger.info("DraftKings PGA: 0 rows from browser capture — trying direct API fallback")
-        rows = _fetch_direct(scraped_at=scraped_at)
+        logger.warning(
+            "DraftKings PGA: 0 rows. Run --discover to identify the real odds domain."
+        )
 
     logger.info("Parsed %d total rows for DraftKings PGA", len(rows))
 
@@ -482,8 +418,7 @@ def main() -> None:
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--scrape-only", action="store_true")
     group.add_argument("--load-only", action="store_true")
-    group.add_argument("--discover", action="store_true",
-                       help="Log all XHR URLs and extract event group IDs")
+    group.add_argument("--discover", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 

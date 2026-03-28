@@ -393,6 +393,11 @@ def _parse_captured(captured: List[Dict[str, Any]], scraped_at: str) -> List[Dic
 
     logger.info("FanDuel PGA: odds lookup has %d (marketId, selectionId) entries", len(odds_lookup))
 
+    # Debug: log sample marketIds from the odds lookup so we can compare to layout
+    sample_keys = list(odds_lookup.keys())[:5]
+    for k in sample_keys:
+        logger.info("  odds_lookup sample: marketId=%s selectionId=%s odds=%s", k[0], k[1], odds_lookup[k])
+
     if layout_body is None:
         logger.warning("FanDuel PGA: no content-managed-page body captured")
         return []
@@ -400,6 +405,15 @@ def _parse_captured(captured: List[Dict[str, Any]], scraped_at: str) -> List[Dic
     # Pass 2: parse layout rows and enrich with odds
     raw_rows = _parse_content_managed_page(layout_body, scraped_at)
     logger.info("FanDuel PGA: content-managed-page produced %d raw rows", len(raw_rows))
+
+    # Debug: log sample market_names and market_ids from layout rows
+    seen_names = {}
+    for r in raw_rows:
+        mn = r.get("market_name", "")
+        if mn not in seen_names:
+            seen_names[mn] = r.get("market_id", "")
+    for mn, mid in list(seen_names.items())[:10]:
+        logger.info("  layout market_name=%s  market_id=%s", mn, mid)
 
     enriched: List[Dict[str, Any]] = []
     skipped_img = 0

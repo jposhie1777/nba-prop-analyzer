@@ -1,4 +1,7 @@
-FROM python:3.11-slim
+# Pin to Bookworm (Debian 12) explicitly.
+# python:3.11-slim now resolves to Trixie (Debian 13) on some architectures,
+# where several package names changed (libgdk-pixbuf2.0-0 was removed, etc.).
+FROM python:3.11-slim-bookworm
 
 # System dependencies required by Camoufox/Firefox on Debian Bookworm.
 # These mirror the apt-get installs used in the existing GitHub Actions

@@ -2,17 +2,13 @@
 DraftKings PGA Tour Market Scraper.
 
 Discovery findings (2026-03-28):
-  - The generic /leagues/golf/pga-tour page loads a shell but never fires
-    the odds XHR — markets are lazy-loaded on user interaction.
-  - sportsbook-nash.draftkings.com appeared in discovery as the Nash API host.
-  - sportsbook.draftkings.com/static/logos/provider/2/logos.json contains
-    an 'Eventgroups' list that we can use to find the current tournament ID.
-
-Strategy:
-  1. Fetch the logos manifest to discover the current PGA event group ID.
-  2. Hit the Nash API directly for that event group's markets.
-  3. Fall back to the Camoufox browser capture on the specific tournament
-     URL if the Nash API doesn't return odds data.
+  - League ID for PGA Tour: 84240 (confirmed from logos manifest + Nash URLs)
+  - Odds come from Nash sportscontent API, NOT lineups/leagues endpoints
+  - Two key Nash endpoints discovered:
+    [07] sportscontent/controldata/home/marketTypeGrid/v1/markets
+    [08] sportscontent/controldata/home/primaryMarkets/v1/markets
+  - Both return: {sports, leagues, events, markets, selections, subscriptionPartials}
+  - The scrape URL should be the PGA Tour league hub (not a specific tournament)
 
 BigQuery table: sportsbook.raw_draftkings_pga_markets
 
@@ -48,42 +44,40 @@ DATASET = "sportsbook"
 TABLE = "raw_draftkings_pga_markets"
 ARTIFACT_PATH = "/tmp/draftkings_pga_rows.ndjson"
 
-# Logos manifest — contains Eventgroups list with current tournament IDs.
-# Discovered in network capture: sportsbook.draftkings.com/static/logos/provider/2/logos.json
+# PGA Tour league ID — confirmed from discovery run 2026-03-28
+DK_PGA_LEAGUE_ID = 84240
+
+# Logos manifest — used to dynamically confirm league ID is still current
 DK_LOGOS_MANIFEST = "https://sportsbook.draftkings.com/static/logos/provider/2/logos.json"
 
-# Nash API — the actual odds backend discovered in network capture.
-# Format: /sites/{state}/api/leagues/v1/eventgroups/{id}/categories/{cat}/subcategories
+# Nash sportscontent endpoints — discovered in network capture
 DK_NASH_BASE = "https://sportsbook-nash.draftkings.com"
-DK_NASH_OFFERS = (
-    "{base}/sites/US-NJ-SB/api/leagues/v1/eventgroups/{event_group_id}"
-    "/categories?format=json"
+DK_NASH_PRIMARY_MARKETS = (
+    "{base}/sites/US-NJ-SB/api/sportscontent/controldata/home/primaryMarkets/v1/markets"
+    "?eventsQuery=%24filter%3DleagueId%20eq%20%27{league_id}%27"
+    "&marketsQuery=%24filter%3Dtags%2Fany%28t%3A%20t%20eq%20%27PrimaryMarket%27%29"
+    "&top=100&include=Events&entity=events&isBatchable=true"
 )
-
-# Standard lineups API (backup)
-DK_LINEUPS_URL = (
-    "https://api.draftkings.com/lineups/v1/eventgroups/{event_group_id}"
-    "?format=json"
+DK_NASH_ALL_MARKETS = (
+    "{base}/sites/US-NJ-SB/api/sportscontent/controldata/home/marketTypeGrid/v1/markets"
+    "?eventsQuery=%24filter%3DleagueId%20eq%20%27{league_id}%27"
+    "&include=Events&entity=events&isBatchable=true"
 )
-
-# Golf provider ID on DraftKings (stable)
-DK_GOLF_PROVIDER_ID = 2
 
 SCRAPE_CONFIG = {
-    # Navigate to the specific current Masters tournament page.
-    # The generic /leagues/golf/pga-tour shell never fires the odds XHR.
-    # Update this URL to the current tournament slug as needed.
-    "url": "https://sportsbook.draftkings.com/leagues/golf/the-masters-88573",
+    # PGA Tour league hub page — confirmed to trigger Nash sportscontent XHRs
+    "url": "https://sportsbook.draftkings.com/leagues/golf/pga-tour",
     "prime_url": "https://sportsbook.draftkings.com",
     "capture_patterns": [
         "sportsbook-nash.draftkings.com/sites/",
-        "api.draftkings.com/lineups/",
-        "api.draftkings.com/leagues/",
     ],
     "wait_ms": 25000,
 }
 
-DISCOVER_PATTERNS = ["draftkings.com"]
+DISCOVER_PATTERNS = [
+    "api.draftkings.com",
+    "sportsbook-nash.draftkings.com",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -128,30 +122,24 @@ _REQ_HEADERS = {
 
 
 # ---------------------------------------------------------------------------
-# Event group discovery via logos manifest
+# League ID discovery via logos manifest
 # ---------------------------------------------------------------------------
 
-def _discover_pga_event_group_id() -> Optional[int]:
+def _confirm_league_id() -> Optional[int]:
     """
-    Fetch the DK logos manifest and extract the current PGA Tour event group ID.
-    The manifest lists all active event groups for each sport provider.
-    Golf provider ID is 2.
+    Fetch logos manifest and confirm the PGA Tour league ID is still 84240.
+    Returns the confirmed ID or None if manifest is unavailable.
     """
     try:
         resp = requests.get(DK_LOGOS_MANIFEST, headers=_REQ_HEADERS, timeout=15)
         resp.raise_for_status()
         data = resp.json()
         event_groups = data.get("Eventgroups", [])
-        logger.info(
-            "Logos manifest: found %d event groups for provider %d",
-            len(event_groups), DK_GOLF_PROVIDER_ID,
-        )
         for eg in event_groups:
             eg_id = eg.get("EventgroupId") or eg.get("eventGroupId") or eg.get("id")
             name = eg.get("Name") or eg.get("name") or ""
-            logger.info("  EventgroupId=%s  Name=%s", eg_id, name)
-            # Return the first one — there's usually only one active PGA event
             if eg_id:
+                logger.info("Logos manifest event group: id=%s name=%s", eg_id, name)
                 return int(eg_id)
     except Exception as exc:
         logger.warning("Could not fetch logos manifest: %s", exc)
@@ -159,76 +147,56 @@ def _discover_pga_event_group_id() -> Optional[int]:
 
 
 # ---------------------------------------------------------------------------
-# Nash API fetch
+# Nash sportscontent API direct fetch
 # ---------------------------------------------------------------------------
 
-def _fetch_nash(event_group_id: int, scraped_at: str) -> List[Dict[str, Any]]:
+def _fetch_nash_direct(league_id: int, scraped_at: str) -> List[Dict[str, Any]]:
     """
-    Fetch odds from the Nash API directly.
-    sportsbook-nash.draftkings.com is DK's internal odds API, discovered
-    in the network capture log.
+    Fetch odds directly from the Nash sportscontent API.
+    This is the API confirmed by network capture — no browser TLS required.
     """
-    url = DK_NASH_OFFERS.format(
-        base=DK_NASH_BASE,
-        event_group_id=event_group_id,
-    )
-    logger.info("DraftKings PGA: Nash API → %s", url)
-    try:
-        resp = requests.get(url, headers=_REQ_HEADERS, timeout=30)
-        resp.raise_for_status()
-        body = resp.json()
-        if _is_odds_response(body):
-            rows = _parse_body(body, scraped_at=scraped_at)
-            logger.info("DraftKings PGA: Nash API returned %d rows", len(rows))
-            return rows
-        logger.warning(
-            "DraftKings PGA: Nash response doesn't look like odds data (keys: %s)",
-            list(body.keys())[:8] if isinstance(body, dict) else type(body).__name__,
-        )
-    except Exception as exc:
-        logger.warning("DraftKings PGA: Nash API failed: %s", exc)
-    return []
+    urls_to_try = [
+        DK_NASH_PRIMARY_MARKETS.format(base=DK_NASH_BASE, league_id=league_id),
+        DK_NASH_ALL_MARKETS.format(base=DK_NASH_BASE, league_id=league_id),
+    ]
 
+    for url in urls_to_try:
+        logger.info("DraftKings PGA: Nash sportscontent → %s", url[:120])
+        try:
+            resp = requests.get(url, headers=_REQ_HEADERS, timeout=30)
+            resp.raise_for_status()
+            body = resp.json()
+            if _is_nash_sportscontent_response(body):
+                rows = _parse_nash_sportscontent(body, scraped_at=scraped_at)
+                logger.info("DraftKings PGA: Nash returned %d rows from %s", len(rows), url[:80])
+                if rows:
+                    return rows
+            else:
+                logger.warning(
+                    "DraftKings PGA: Nash response doesn't look like sportscontent (keys: %s)",
+                    list(body.keys())[:8] if isinstance(body, dict) else type(body).__name__,
+                )
+        except Exception as exc:
+            logger.warning("DraftKings PGA: Nash direct fetch failed for %s: %s", url[:80], exc)
 
-def _fetch_lineups(event_group_id: int, scraped_at: str) -> List[Dict[str, Any]]:
-    """Fallback to the standard lineups API."""
-    url = DK_LINEUPS_URL.format(event_group_id=event_group_id)
-    logger.info("DraftKings PGA: lineups API → %s", url)
-    try:
-        resp = requests.get(url, headers=_REQ_HEADERS, timeout=30)
-        if resp.status_code == 404:
-            logger.warning("DraftKings PGA: lineups API 404 for event group %d", event_group_id)
-            return []
-        resp.raise_for_status()
-        body = resp.json()
-        if _is_odds_response(body):
-            rows = _parse_body(body, scraped_at=scraped_at)
-            logger.info("DraftKings PGA: lineups API returned %d rows", len(rows))
-            return rows
-    except Exception as exc:
-        logger.warning("DraftKings PGA: lineups API failed: %s", exc)
     return []
 
 
 # ---------------------------------------------------------------------------
-# Response filter
+# Response validation
 # ---------------------------------------------------------------------------
 
-def _is_odds_response(body: Any) -> bool:
+def _is_nash_sportscontent_response(body: Any) -> bool:
+    """Check for the Nash sportscontent response shape discovered in network capture."""
     if not isinstance(body, dict):
         return False
     return bool(
-        body.get("eventGroup")
-        or body.get("offerCategories")
-        or body.get("events")
-        or body.get("leagues")
-        or body.get("categories")
-        or body.get("eventGroupOffers")
+        body.get("markets") or body.get("selections") or body.get("events")
     )
 
 
 # ---------------------------------------------------------------------------
-# Parsing
+# Parsing — Nash sportscontent format
 # ---------------------------------------------------------------------------
 
 def _classify_market(name: str) -> str:
@@ -249,154 +217,153 @@ def _classify_market(name: str) -> str:
         return "matchup"
     if any(x in n for x in ["stroke", "score", "over", "under", "total", "prop"]):
         return "stroke_prop"
+    if "3 ball" in n or "3ball" in n:
+        return "matchup"
     return "other"
 
 
-def _parse_body(body: Dict[str, Any], scraped_at: str) -> List[Dict[str, Any]]:
+def _parse_nash_sportscontent(body: Dict[str, Any], scraped_at: str) -> List[Dict[str, Any]]:
+    """
+    Parse the Nash sportscontent API response.
+
+    Structure (from discovery):
+    {
+      "events": {eventId: {id, name, startDate, ...}},
+      "markets": {marketId: {id, name, eventId, marketTypeId, ...}},
+      "selections": {selectionId: {id, label, marketId, trueOdds, displayOdds, ...}},
+      "leagues": {...},
+      "sports": {...}
+    }
+    """
     rows: List[Dict[str, Any]] = []
     raw_str = json.dumps(body)[:64000]
 
-    event_group = body.get("eventGroup") or body
-    events_list = event_group.get("events", [])
+    # Nash returns dicts keyed by ID, or lists — handle both
+    raw_events = body.get("events", {})
+    raw_markets = body.get("markets", {})
+    raw_selections = body.get("selections", {})
 
-    events_by_id: Dict[str, Dict[str, Any]] = {}
-    for ev in events_list:
-        if isinstance(ev, dict):
-            eid = str(ev.get("eventId") or ev.get("id") or "")
+    # Normalize to dicts keyed by id
+    def _to_dict(raw: Any, id_field: str = "id") -> Dict[str, Any]:
+        if isinstance(raw, dict):
+            return raw
+        if isinstance(raw, list):
+            return {str(item.get(id_field, i)): item for i, item in enumerate(raw) if isinstance(item, dict)}
+        return {}
+
+    events = _to_dict(raw_events)
+    markets = _to_dict(raw_markets)
+    selections = _to_dict(raw_selections)
+
+    logger.info(
+        "DraftKings PGA: parsing %d events, %d markets, %d selections",
+        len(events), len(markets), len(selections),
+    )
+
+    # Build market → event lookup
+    market_event: Dict[str, str] = {}
+    for mid, mkt in markets.items():
+        if isinstance(mkt, dict):
+            eid = str(mkt.get("eventId") or mkt.get("event_id") or "")
             if eid:
-                events_by_id[eid] = ev
+                market_event[str(mid)] = eid
 
-    offer_categories = event_group.get("offerCategories", [])
-    if not offer_categories:
-        # Try Nash-specific structure
-        offer_categories = body.get("categories") or body.get("eventGroupOffers") or []
+    # Walk selections
+    for sel_id, sel in selections.items():
+        if not isinstance(sel, dict):
+            continue
 
-    if not offer_categories:
-        logger.debug("No offerCategories in DK response — raw keys: %s", list(body.keys())[:10])
-        # Store raw for inspection
+        selection_id = str(sel.get("id") or sel.get("selectionId") or sel_id)
+        market_id = str(sel.get("marketId") or sel.get("market_id") or "")
+        outcome_label = sel.get("label") or sel.get("name") or ""
+
+        # Odds — Nash uses trueOdds (decimal) and/or displayOdds (american string)
+        odds_dec: Optional[float] = None
+        odds_am: Optional[str] = None
+
+        true_odds = sel.get("trueOdds") or sel.get("odds") or sel.get("decimalOdds")
+        display_odds = sel.get("displayOdds") or sel.get("americanOdds") or sel.get("oddsAmerican")
+
+        if true_odds is not None:
+            try:
+                odds_dec = float(true_odds)
+            except Exception:
+                pass
+        if display_odds is not None:
+            odds_am = str(display_odds)
+            # If we have american but not decimal, derive decimal
+            if odds_dec is None:
+                try:
+                    am_int = int(str(display_odds).replace("+", ""))
+                    odds_dec = round(am_int / 100 + 1, 4) if am_int > 0 else round(100 / (-am_int) + 1, 4)
+                except Exception:
+                    pass
+
+        # Handicap/line
+        line_val = sel.get("points") or sel.get("line") or sel.get("handicap")
+        try:
+            outcome_line = float(line_val) if line_val is not None else None
+        except Exception:
+            outcome_line = None
+
+        # Market info
+        mkt = markets.get(market_id, {}) if market_id else {}
+        market_name = (mkt.get("name") or mkt.get("label") or "") if isinstance(mkt, dict) else ""
+        market_type = _classify_market(market_name)
+        market_type_id = str(mkt.get("marketTypeId") or "") if isinstance(mkt, dict) else ""
+
+        # Event info
+        event_id = market_event.get(market_id, "")
+        ev = events.get(event_id, {}) if event_id else {}
+        ev_name = (ev.get("name") or ev.get("eventName") or "") if isinstance(ev, dict) else ""
+        start_raw = (ev.get("startDate") or ev.get("startDateTime") or "") if isinstance(ev, dict) else ""
+        try:
+            event_start = (
+                datetime.fromisoformat(start_raw.replace("Z", "+00:00")).strftime("%Y-%m-%dT%H:%M:%S")
+                if start_raw else None
+            )
+        except Exception:
+            event_start = None
+
+        # Deep link
+        deep_link = f"dksb://sb/addbet/{selection_id}" if selection_id else None
+
         rows.append({
             "scraped_at": scraped_at,
-            "event_id": None,
-            "event_name": None,
-            "event_start": None,
-            "offer_id": None,
-            "offer_label": None,
-            "category_id": None,
-            "category_name": None,
-            "subcategory_id": None,
-            "subcategory_name": None,
-            "market_type": "raw",
-            "outcome_id": None,
-            "outcome_label": None,
-            "outcome_line": None,
-            "odds_american": None,
-            "odds_decimal": None,
-            "deep_link": None,
+            "event_id": event_id or None,
+            "event_name": ev_name or None,
+            "event_start": event_start,
+            "market_id": market_id or None,
+            "market_name": market_name or None,
+            "market_type_id": market_type_id or None,
+            "market_type": market_type,
+            "selection_id": selection_id or None,
+            "selection_label": outcome_label or None,
+            "outcome_line": outcome_line,
+            "odds_decimal": odds_dec,
+            "odds_american": odds_am,
+            "deep_link": deep_link,
             "raw_response": raw_str,
         })
-        return rows
-
-    for cat in offer_categories:
-        if not isinstance(cat, dict):
-            continue
-        cat_name = cat.get("name") or ""
-        cat_id = str(cat.get("offerCategoryId") or cat.get("id") or "")
-
-        for sub_desc in cat.get("offerSubcategoryDescriptors", []):
-            if not isinstance(sub_desc, dict):
-                continue
-            sub_name = sub_desc.get("name") or ""
-            sub_id = str(sub_desc.get("subcategoryId") or sub_desc.get("id") or "")
-            sub_cat = sub_desc.get("offerSubcategory", {})
-            if not isinstance(sub_cat, dict):
-                continue
-
-            market_label = f"{cat_name} - {sub_name}".strip(" -")
-            market_type = _classify_market(market_label)
-
-            for offer_group in sub_cat.get("offers", []):
-                if not isinstance(offer_group, list):
-                    continue
-                for offer in offer_group:
-                    if not isinstance(offer, dict):
-                        continue
-
-                    offer_id = str(offer.get("offerId") or "")
-                    event_id = str(offer.get("eventId") or "")
-                    offer_label = offer.get("label") or ""
-
-                    ev = events_by_id.get(event_id, {})
-                    ev_name = ev.get("name") or ""
-                    start_raw = ev.get("startDate") or ev.get("startDateTime") or ""
-                    try:
-                        event_start = (
-                            datetime.fromisoformat(start_raw.replace("Z", "+00:00")).strftime("%Y-%m-%dT%H:%M:%S")
-                            if start_raw else None
-                        )
-                    except Exception:
-                        event_start = None
-
-                    for outcome in offer.get("outcomes", []):
-                        if not isinstance(outcome, dict):
-                            continue
-
-                        outcome_id = str(outcome.get("outcomeId") or outcome.get("id") or "")
-                        outcome_label = outcome.get("label") or outcome.get("oddsType") or ""
-                        line_val = outcome.get("line")
-                        try:
-                            outcome_line = float(line_val) if line_val is not None else None
-                        except Exception:
-                            outcome_line = None
-
-                        odds_am_str = str(outcome.get("oddsAmerican") or outcome.get("odds") or "")
-                        odds_dec: Optional[float] = None
-                        try:
-                            am_int = int(odds_am_str.replace("+", ""))
-                            if am_int > 0:
-                                odds_dec = round(am_int / 100 + 1, 4)
-                            else:
-                                odds_dec = round(100 / (-am_int) + 1, 4)
-                        except Exception:
-                            pass
-
-                        rows.append({
-                            "scraped_at": scraped_at,
-                            "event_id": event_id or None,
-                            "event_name": ev_name or offer_label or None,
-                            "event_start": event_start,
-                            "offer_id": offer_id or None,
-                            "offer_label": offer_label or None,
-                            "category_id": cat_id or None,
-                            "category_name": cat_name or None,
-                            "subcategory_id": sub_id or None,
-                            "subcategory_name": sub_name or None,
-                            "market_type": market_type,
-                            "outcome_id": outcome_id or None,
-                            "outcome_label": outcome_label or None,
-                            "outcome_line": outcome_line,
-                            "odds_american": odds_am_str or None,
-                            "odds_decimal": odds_dec,
-                            "deep_link": f"dksb://sb/addbet/{outcome_id}" if outcome_id else None,
-                            "raw_response": raw_str,
-                        })
 
     return rows
 
 
 def _parse_captured(captured: List[Dict[str, Any]], scraped_at: str) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
-    odds_hits = 0
     for i, capture in enumerate(captured):
         url = capture.get("url", "<unknown>")
         body = capture.get("body")
         logger.info("  captured[%d]: %s", i, url)
-        if not _is_odds_response(body):
+        if not _is_nash_sportscontent_response(body):
+            logger.debug("  → skipping")
             continue
-        odds_hits += 1
-        rows.extend(_parse_body(body, scraped_at=scraped_at))
+        new_rows = _parse_nash_sportscontent(body, scraped_at=scraped_at)
+        logger.info("  → sportscontent: %d rows", len(new_rows))
+        rows.extend(new_rows)
     logger.info(
-        "DraftKings PGA: %d captured, %d odds responses, %d rows parsed",
-        len(captured), odds_hits, len(rows),
+        "DraftKings PGA: %d captured, %d total rows from browser capture",
+        len(captured), len(rows),
     )
     return rows
 
@@ -406,7 +373,7 @@ def _parse_captured(captured: List[Dict[str, Any]], scraped_at: str) -> List[Dic
 # ---------------------------------------------------------------------------
 
 def discover() -> None:
-    logger.info("DISCOVERY MODE — capturing ALL draftkings.com requests")
+    logger.info("DISCOVERY MODE — capturing all api/nash requests")
     result = _call_proxy({
         "url": SCRAPE_CONFIG["url"],
         "prime_url": SCRAPE_CONFIG["prime_url"],
@@ -418,8 +385,8 @@ def discover() -> None:
     captured = result.get("captured_requests", [])
     logger.info("page_status=%d  total_captured=%d", result.get("status", 0), len(captured))
 
-    eg_pattern = re.compile(r"/eventgroups?/(\d+)")
-    found_event_groups = set()
+    eg_pattern = re.compile(r"/leagues?/(\d+)")
+    found_ids = set()
 
     print("\n=== DISCOVERED URLs ===")
     for i, capture in enumerate(captured):
@@ -430,22 +397,17 @@ def discover() -> None:
         print(f"      body_type={type(body).__name__}  top_keys={top_keys}")
         m = eg_pattern.search(url)
         if m:
-            found_event_groups.add(m.group(1))
+            found_ids.add(m.group(1))
     print("=== END ===\n")
 
-    # Also try fetching event group from logos manifest
-    logger.info("Fetching logos manifest to find current PGA event group...")
-    eg_id = _discover_pga_event_group_id()
-    if eg_id:
-        found_event_groups.add(str(eg_id))
+    # Also check logos manifest
+    logger.info("Fetching logos manifest...")
+    confirmed_id = _confirm_league_id()
+    if confirmed_id:
+        found_ids.add(str(confirmed_id))
 
-    if found_event_groups:
-        print(f"EVENT GROUP IDs FOUND: {sorted(found_event_groups)}")
-        print("ACTION: Update SCRAPE_CONFIG['url'] with the tournament slug and")
-        print("        verify DK_LINEUPS_URL uses the correct event group ID.")
-    else:
-        print("No event group IDs found. Check logos manifest manually:")
-        print(f"  {DK_LOGOS_MANIFEST}")
+    if found_ids:
+        print(f"LEAGUE/EVENT GROUP IDs FOUND: {sorted(found_ids)}")
 
 
 # ---------------------------------------------------------------------------
@@ -455,25 +417,17 @@ def discover() -> None:
 def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
     scraped_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    # Step 1: Discover current event group ID from logos manifest
-    event_group_id = _discover_pga_event_group_id()
-    if event_group_id:
-        logger.info("DraftKings PGA: current event group ID = %d", event_group_id)
-    else:
-        logger.warning("DraftKings PGA: could not discover event group ID from manifest")
+    # Step 1: Confirm league ID from logos manifest
+    confirmed_id = _confirm_league_id()
+    league_id = confirmed_id or DK_PGA_LEAGUE_ID
+    logger.info("DraftKings PGA: using league ID %d", league_id)
 
-    # Step 2: Try Nash API directly (discovered in network capture)
-    rows: List[Dict[str, Any]] = []
-    if event_group_id:
-        rows = _fetch_nash(event_group_id, scraped_at=scraped_at)
+    # Step 2: Try Nash sportscontent API directly (no browser needed)
+    rows = _fetch_nash_direct(league_id, scraped_at=scraped_at)
 
-    # Step 3: Try lineups API
-    if not rows and event_group_id:
-        rows = _fetch_lineups(event_group_id, scraped_at=scraped_at)
-
-    # Step 4: Browser capture on specific tournament page
+    # Step 3: Fall back to browser capture if direct API returned nothing
     if not rows:
-        logger.info("DraftKings PGA: API calls returned 0 rows — trying browser capture")
+        logger.info("DraftKings PGA: direct API returned 0 rows — trying browser capture")
         cfg = SCRAPE_CONFIG
         result = _call_proxy({
             "url": cfg["url"],
@@ -489,7 +443,7 @@ def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
         )
         rows = _parse_captured(captured, scraped_at=scraped_at)
 
-    logger.info("Parsed %d total rows for DraftKings PGA", len(rows))
+    logger.info("DraftKings PGA: %d total rows", len(rows))
 
     if dry_run:
         for row in rows[:10]:

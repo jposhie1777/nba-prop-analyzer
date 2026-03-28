@@ -1,3 +1,5 @@
+//mobile/components/mlb/MlbMatchupDetailScreen.tsx
+
 import { ActivityIndicator, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";

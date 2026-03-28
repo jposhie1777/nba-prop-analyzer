@@ -60,16 +60,23 @@ DK_NASH_PRIMARY_MARKETS = (
     "&top=100&include=Events&entity=events&isBatchable=true"
 )
 
-# Confirmed working from browser devtools 2026-03-28
+# Subcategory endpoint — swap {subcategory_id} for each tab
 DK_NASH_LEAGUE_MARKETS = (
     "{base}/sites/US-NJ-SB/api/sportscontent/controldata/league/leagueSubcategory/v1/markets"
-    "?isBatchable=false&templateVars={league_id}%2C4508"
+    "?isBatchable=false&templateVars={league_id}%2C{subcategory_id}"
     "&eventsQuery=%24filter%3DleagueId%20eq%20%27{league_id}%27"
-    "%20AND%20clientMetadata%2FSubcategories%2Fany%28s%3A%20s%2FId%20eq%20%274508%27%29"
-    "&marketsQuery=%24filter%3DclientMetadata%2FsubCategoryId%20eq%20%274508%27"
+    "%20AND%20clientMetadata%2FSubcategories%2Fany%28s%3A%20s%2FId%20eq%20%27{subcategory_id}%27%29"
+    "&marketsQuery=%24filter%3DclientMetadata%2FsubCategoryId%20eq%20%27{subcategory_id}%27"
     "%20AND%20tags%2Fall%28t%3A%20t%20ne%20%27SportcastBetBuilder%27%29"
     "&include=Events&entity=events"
 )
+
+# Subcategory list endpoint — returns all available tabs for a league
+DK_NASH_SUBCATEGORIES = (
+    "{base}/sites/US-NJ-SB/api/sportscontent/controldata/league/v1/subcategories"
+    "?leagueId={league_id}"
+)
+
 DK_NASH_ALL_MARKETS = (
     "{base}/sites/US-NJ-SB/api/sportscontent/controldata/home/marketTypeGrid/v1/markets"
     "?eventsQuery=%24filter%3DleagueId%20eq%20%27{league_id}%27"
@@ -191,35 +198,98 @@ def _confirm_league_id() -> Optional[int]:
 # Nash sportscontent API direct fetch
 # ---------------------------------------------------------------------------
 
+def _fetch_subcategories(league_id: int) -> List[Dict[str, Any]]:
+    """
+    Fetch all available subcategory tabs for a league from Nash.
+    Returns list of {id, name} dicts, or empty list if unavailable.
+    """
+    url = DK_NASH_SUBCATEGORIES.format(base=DK_NASH_BASE, league_id=league_id)
+    logger.info("DraftKings PGA: fetching subcategories → %s", url[:120])
+    try:
+        resp = requests.get(url, headers=_REQ_HEADERS, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        # Response shape: {"subcategories": [{"id": "4508", "name": "Outrights"}, ...]}
+        subs = data.get("subcategories") or data.get("Subcategories") or []
+        if isinstance(subs, list):
+            logger.info("DraftKings PGA: found %d subcategories", len(subs))
+            for s in subs:
+                logger.info("  subcategory: id=%s name=%s",
+                            s.get("id") or s.get("Id"), s.get("name") or s.get("Name"))
+            return subs
+        # Sometimes it's a flat list of IDs or a dict
+        logger.info("DraftKings PGA: subcategory response keys: %s",
+                    list(data.keys())[:10] if isinstance(data, dict) else type(data).__name__)
+        logger.info("DraftKings PGA: subcategory raw sample: %s", str(data)[:300])
+    except Exception as exc:
+        logger.warning("DraftKings PGA: subcategory fetch failed: %s", exc)
+    return []
+
+
 def _fetch_nash_direct(league_id: int, scraped_at: str) -> List[Dict[str, Any]]:
     """
-    Fetch odds directly from the Nash sportscontent API.
-    This is the API confirmed by network capture — no browser TLS required.
+    Fetch odds from Nash sportscontent API across all subcategory tabs.
+    First discovers available subcategories, then fetches each one.
+    Falls back to primaryMarkets and marketTypeGrid if subcategory fetch fails.
     """
-    urls_to_try = [
-        DK_NASH_LEAGUE_MARKETS.format(base=DK_NASH_BASE, league_id=league_id),
+    all_rows: List[Dict[str, Any]] = []
+    seen_selection_ids: set = set()
+
+    # Step 1: discover subcategories
+    subcategories = _fetch_subcategories(league_id)
+
+    if subcategories:
+        for sub in subcategories:
+            sub_id = str(sub.get("id") or sub.get("Id") or "")
+            sub_name = sub.get("name") or sub.get("Name") or sub_id
+            if not sub_id:
+                continue
+            url = DK_NASH_LEAGUE_MARKETS.format(
+                base=DK_NASH_BASE, league_id=league_id, subcategory_id=sub_id
+            )
+            logger.info("DraftKings PGA: fetching subcategory '%s' (id=%s)", sub_name, sub_id)
+            try:
+                resp = requests.get(url, headers=_REQ_HEADERS, timeout=30)
+                resp.raise_for_status()
+                body = resp.json()
+                if _is_nash_sportscontent_response(body):
+                    rows = _parse_nash_sportscontent(body, scraped_at=scraped_at)
+                    # Deduplicate by selection_id
+                    new_rows = [r for r in rows if r.get("selection_id") not in seen_selection_ids]
+                    seen_selection_ids.update(r.get("selection_id") for r in new_rows)
+                    logger.info("  → %d rows (%d new) from subcategory '%s'",
+                                len(rows), len(new_rows), sub_name)
+                    all_rows.extend(new_rows)
+                else:
+                    logger.warning("  → unexpected response shape for subcategory '%s'", sub_name)
+            except Exception as exc:
+                logger.warning("  → failed for subcategory '%s': %s", sub_name, exc)
+
+        if all_rows:
+            logger.info("DraftKings PGA: %d total rows across %d subcategories",
+                        len(all_rows), len(subcategories))
+            return all_rows
+
+    # Step 2: fallback — subcategory discovery failed, try known subcategory 4508 + broad endpoints
+    logger.warning("DraftKings PGA: subcategory discovery returned nothing — trying fallbacks")
+    fallback_urls = [
+        DK_NASH_LEAGUE_MARKETS.format(base=DK_NASH_BASE, league_id=league_id, subcategory_id="4508"),
         DK_NASH_PRIMARY_MARKETS.format(base=DK_NASH_BASE, league_id=league_id),
         DK_NASH_ALL_MARKETS.format(base=DK_NASH_BASE, league_id=league_id),
     ]
-
-    for url in urls_to_try:
-        logger.info("DraftKings PGA: Nash sportscontent → %s", url[:120])
+    for url in fallback_urls:
+        logger.info("DraftKings PGA: Nash fallback → %s", url[:120])
         try:
             resp = requests.get(url, headers=_REQ_HEADERS, timeout=30)
             resp.raise_for_status()
             body = resp.json()
             if _is_nash_sportscontent_response(body):
                 rows = _parse_nash_sportscontent(body, scraped_at=scraped_at)
-                logger.info("DraftKings PGA: Nash returned %d rows from %s", len(rows), url[:80])
+                logger.info("DraftKings PGA: fallback returned %d rows", len(rows))
                 if rows:
                     return rows
-            else:
-                logger.warning(
-                    "DraftKings PGA: Nash response doesn't look like sportscontent (keys: %s)",
-                    list(body.keys())[:8] if isinstance(body, dict) else type(body).__name__,
-                )
         except Exception as exc:
-            logger.warning("DraftKings PGA: Nash direct fetch failed for %s: %s", url[:80], exc)
+            logger.warning("DraftKings PGA: fallback failed for %s: %s", url[:80], exc)
 
     return []
 

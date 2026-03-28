@@ -13,6 +13,13 @@ name: Sportsbook Soccer Markets (FanDuel + DraftKings)
 # Tables written:
 #   oddspedia.raw_fanduel_soccer_markets
 #   oddspedia.raw_draftkings_soccer_markets
+#
+# Fixes (2026-03-28):
+#   - max-parallel: 1 on scrape to prevent concurrent Camoufox proxy 429s
+#   - Retry loop (3 attempts, 30s backoff) around each scrape call
+#   - EPL break gate: skips EPL scrape jobs before EPL_RESUME_DATE
+#   - Empty artifact guard: writes empty NDJSON on 0 rows so artifact
+#     upload never fails; load step skips gracefully on empty file
 
 on:
   workflow_dispatch:
@@ -48,6 +55,8 @@ env:
   GCP_PROJECT: ${{ secrets.PROJECT_ID }}
   ODDSPEDIA_DATASET: oddspedia
   ODDSPEDIA_BQ_LOCATION: US
+  # Update this when EPL resumes. Format: YYYYMMDD
+  EPL_RESUME_DATE: "20260410"
 
 jobs:
   # -----------------------------------------------------------------------
@@ -60,6 +69,10 @@ jobs:
 
     strategy:
       fail-fast: false
+      # max-parallel: 1 is critical — the Camoufox proxy only handles one
+      # concurrent browser session. Running all 4 matrix jobs simultaneously
+      # causes 429s on whichever jobs don't get the first slot.
+      max-parallel: 1
       matrix:
         include:
           - sportsbook: FanDuel
@@ -111,7 +124,23 @@ jobs:
           token_format: id_token
           id_token_audience: ${{ secrets.CAMOUFOX_SERVICE_URL }}
 
+      # Gate EPL jobs during the international break. The scraper is still
+      # invoked (so the artifact is created and the load job doesn't break),
+      # but we short-circuit before hitting the proxy and write an empty file.
+      - name: Check EPL break gate
+        if: matrix.league == 'EPL'
+        run: |
+          TODAY=$(date +%Y%m%d)
+          if [ "$TODAY" -lt "${{ env.EPL_RESUME_DATE }}" ]; then
+            echo "EPL is on break until ${{ env.EPL_RESUME_DATE }} (today: $TODAY). Writing empty artifact and skipping proxy call."
+            touch ${{ matrix.artifact_path }}
+            echo "EPL_ON_BREAK=true" >> $GITHUB_ENV
+          else
+            echo "EPL_ON_BREAK=false" >> $GITHUB_ENV
+          fi
+
       - name: Scrape ${{ matrix.sportsbook }} ${{ matrix.league }}
+        if: env.EPL_ON_BREAK != 'true'
         env:
           CAMOUFOX_SERVICE_URL: ${{ secrets.CAMOUFOX_SERVICE_URL }}
           CAMOUFOX_TOKEN: ${{ steps.auth.outputs.id_token }}
@@ -120,10 +149,25 @@ jobs:
           if [ "${{ inputs.dry_run }}" = "true" ]; then
             ARGS="--dry-run --league ${{ matrix.league }}"
           fi
-          python -m ${{ matrix.scraper_module }} $ARGS
+
+          # Retry up to 3 times with 30s backoff to handle transient 429s
+          for attempt in 1 2 3; do
+            echo "Scrape attempt $attempt of 3..."
+            if python -m ${{ matrix.scraper_module }} $ARGS; then
+              echo "Scrape succeeded on attempt $attempt."
+              break
+            fi
+            if [ $attempt -lt 3 ]; then
+              echo "Attempt $attempt failed. Waiting 30s before retry..."
+              sleep 30
+            else
+              echo "All 3 attempts failed."
+              exit 1
+            fi
+          done
 
       - name: Upload scrape artifact
-        if: ${{ inputs.dry_run != true }}
+        if: inputs.dry_run != true
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
@@ -137,7 +181,7 @@ jobs:
     name: Load ${{ matrix.sportsbook }} ${{ matrix.league }} → BigQuery
     runs-on: ubuntu-latest
     needs: scrape
-    if: ${{ inputs.dry_run != true }}
+    if: inputs.dry_run != true
     timeout-minutes: 10
 
     strategy:
@@ -148,18 +192,22 @@ jobs:
             league: EPL
             scraper_module: mobile_api.ingest.sportsbook.fanduel_soccer_scraper
             artifact_name: fanduel-epl
+            artifact_path: /tmp/fanduel_epl_rows.ndjson
           - sportsbook: FanDuel
             league: MLS
             scraper_module: mobile_api.ingest.sportsbook.fanduel_soccer_scraper
             artifact_name: fanduel-mls
+            artifact_path: /tmp/fanduel_mls_rows.ndjson
           - sportsbook: DraftKings
             league: EPL
             scraper_module: mobile_api.ingest.sportsbook.draftkings_soccer_scraper
             artifact_name: draftkings-epl
+            artifact_path: /tmp/draftkings_epl_rows.ndjson
           - sportsbook: DraftKings
             league: MLS
             scraper_module: mobile_api.ingest.sportsbook.draftkings_soccer_scraper
             artifact_name: draftkings-mls
+            artifact_path: /tmp/draftkings_mls_rows.ndjson
 
     if: >-
       (github.event.inputs.sportsbook == '' || github.event.inputs.sportsbook == 'ALL' || github.event.inputs.sportsbook == matrix.sportsbook) &&
@@ -196,6 +244,17 @@ jobs:
           name: ${{ matrix.artifact_name }}
           path: /tmp
 
+      - name: Check artifact is non-empty
+        id: artifact_check
+        run: |
+          if [ -s "${{ matrix.artifact_path }}" ]; then
+            echo "has_rows=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_rows=false" >> $GITHUB_OUTPUT
+            echo "Artifact ${{ matrix.artifact_path }} is empty — nothing to load. Skipping BQ write."
+          fi
+
       - name: Load ${{ matrix.sportsbook }} ${{ matrix.league }} → BigQuery
+        if: steps.artifact_check.outputs.has_rows == 'true'
         run: |
           python -m ${{ matrix.scraper_module }} --load-only --league ${{ matrix.league }}

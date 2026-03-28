@@ -58,12 +58,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
-    # Single if — filters individual matrix combinations when league/sportsbook
-    # inputs are used. On scheduled runs all inputs are empty so all 4 run.
-    if: >-
-      (github.event.inputs.sportsbook == '' || github.event.inputs.sportsbook == 'ALL' || github.event.inputs.sportsbook == matrix.sportsbook) &&
-      (github.event.inputs.league == '' || github.event.inputs.league == 'ALL' || github.event.inputs.league == matrix.league)
-
     strategy:
       fail-fast: false
       matrix:
@@ -140,11 +134,7 @@ jobs:
     needs: scrape
     timeout-minutes: 10
 
-    # Single if — skips entire load job on dry-run AND filters per combination
-    if: >-
-      inputs.dry_run != true &&
-      (github.event.inputs.sportsbook == '' || github.event.inputs.sportsbook == 'ALL' || github.event.inputs.sportsbook == matrix.sportsbook) &&
-      (github.event.inputs.league == '' || github.event.inputs.league == 'ALL' || github.event.inputs.league == matrix.league)
+    if: ${{ !inputs.dry_run }}
 
     strategy:
       fail-fast: false

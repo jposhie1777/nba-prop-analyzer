@@ -319,7 +319,7 @@ def _parse_nash_sportscontent(body: Dict[str, Any], scraped_at: str) -> List[Dic
         market_id = str(sel.get("marketId") or sel.get("market_id") or "")
         outcome_label = sel.get("label") or sel.get("name") or ""
 
-        # Odds — Nash uses trueOdds (decimal) and/or displayOdds (american string)
+        # Odds — Nash uses trueOdds (decimal) and displayOdds (dict or string)
         odds_dec: Optional[float] = None
         odds_am: Optional[str] = None
 
@@ -331,12 +331,27 @@ def _parse_nash_sportscontent(body: Dict[str, Any], scraped_at: str) -> List[Dic
                 odds_dec = float(true_odds)
             except Exception:
                 pass
+
         if display_odds is not None:
-            odds_am = str(display_odds)
-            # If we have american but not decimal, derive decimal
-            if odds_dec is None:
+            # displayOdds may be a dict: {'american': '+190', 'decimal': '2.90', 'fractional': '19/10'}
+            if isinstance(display_odds, dict):
+                am_val = display_odds.get("american") or display_odds.get("American") or ""
+                odds_am = str(am_val) if am_val else None
+                # Also extract decimal if we don't have it yet
+                if odds_dec is None:
+                    dec_val = display_odds.get("decimal") or display_odds.get("Decimal")
+                    if dec_val is not None:
+                        try:
+                            odds_dec = float(dec_val)
+                        except Exception:
+                            pass
+            else:
+                odds_am = str(display_odds)
+
+            # Derive decimal from american if still missing
+            if odds_dec is None and odds_am:
                 try:
-                    am_int = int(str(display_odds).replace("+", ""))
+                    am_int = int(odds_am.replace("+", ""))
                     odds_dec = round(am_int / 100 + 1, 4) if am_int > 0 else round(100 / (-am_int) + 1, 4)
                 except Exception:
                     pass
@@ -358,7 +373,11 @@ def _parse_nash_sportscontent(body: Dict[str, Any], scraped_at: str) -> List[Dic
         event_id = market_event.get(market_id, "")
         ev = events.get(event_id, {}) if event_id else {}
         ev_name = (ev.get("name") or ev.get("eventName") or "") if isinstance(ev, dict) else ""
-        start_raw = (ev.get("startDate") or ev.get("startDateTime") or "") if isinstance(ev, dict) else ""
+        start_raw = (
+            ev.get("startDate") or ev.get("startDateTime") or
+            ev.get("startEventDate") or ev.get("eventDate") or
+            ev.get("StartDate") or ev.get("date") or ""
+        ) if isinstance(ev, dict) else ""
         try:
             event_start = (
                 datetime.fromisoformat(start_raw.replace("Z", "+00:00")).strftime("%Y-%m-%dT%H:%M:%S")

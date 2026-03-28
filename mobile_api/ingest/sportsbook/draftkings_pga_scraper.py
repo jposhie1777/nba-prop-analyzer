@@ -44,11 +44,9 @@ DATASET = "sportsbook"
 TABLE = "raw_draftkings_pga_markets"
 ARTIFACT_PATH = "/tmp/draftkings_pga_rows.ndjson"
 
-# PGA Tour league ID — NOTE: 84240 is MLB (confirmed wrong 2026-03-28).
-# The correct PGA Tour league ID needs to be discovered via the logos manifest
-# filtering by sport name. This fallback will be overridden by _confirm_league_id().
-# Run --discover to find the correct ID when this needs updating.
-DK_PGA_LEAGUE_ID = 84240  # placeholder — will be replaced by manifest lookup
+# PGA Tour league ID — confirmed from browser devtools 2026-03-28
+# URL: sportsbook-nash.draftkings.com/.../markets?eventsQuery=leagueId eq '91880'
+DK_PGA_LEAGUE_ID = 91880  # placeholder — will be replaced by manifest lookup
 
 # Logos manifest — used to dynamically confirm league ID is still current
 DK_LOGOS_MANIFEST = "https://sportsbook.draftkings.com/static/logos/provider/2/logos.json"
@@ -60,6 +58,17 @@ DK_NASH_PRIMARY_MARKETS = (
     "?eventsQuery=%24filter%3DleagueId%20eq%20%27{league_id}%27"
     "&marketsQuery=%24filter%3Dtags%2Fany%28t%3A%20t%20eq%20%27PrimaryMarket%27%29"
     "&top=100&include=Events&entity=events&isBatchable=true"
+)
+
+# Confirmed working from browser devtools 2026-03-28
+DK_NASH_LEAGUE_MARKETS = (
+    "{base}/sites/US-NJ-SB/api/sportscontent/controldata/league/leagueSubcategory/v1/markets"
+    "?isBatchable=false&templateVars={league_id}%2C4508"
+    "&eventsQuery=%24filter%3DleagueId%20eq%20%27{league_id}%27"
+    "%20AND%20clientMetadata%2FSubcategories%2Fany%28s%3A%20s%2FId%20eq%20%274508%27%29"
+    "&marketsQuery=%24filter%3DclientMetadata%2FsubCategoryId%20eq%20%274508%27"
+    "%20AND%20tags%2Fall%28t%3A%20t%20ne%20%27SportcastBetBuilder%27%29"
+    "&include=Events&entity=events"
 )
 DK_NASH_ALL_MARKETS = (
     "{base}/sites/US-NJ-SB/api/sportscontent/controldata/home/marketTypeGrid/v1/markets"
@@ -188,6 +197,7 @@ def _fetch_nash_direct(league_id: int, scraped_at: str) -> List[Dict[str, Any]]:
     This is the API confirmed by network capture — no browser TLS required.
     """
     urls_to_try = [
+        DK_NASH_LEAGUE_MARKETS.format(base=DK_NASH_BASE, league_id=league_id),
         DK_NASH_PRIMARY_MARKETS.format(base=DK_NASH_BASE, league_id=league_id),
         DK_NASH_ALL_MARKETS.format(base=DK_NASH_BASE, league_id=league_id),
     ]
@@ -449,16 +459,17 @@ def discover() -> None:
 def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
     scraped_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    # Step 1: Confirm league ID from logos manifest (must match golf/PGA)
+    # Step 1: Try to confirm league ID from logos manifest
     confirmed_id = _confirm_league_id()
     if confirmed_id is None:
-        logger.warning("DraftKings PGA: no golf league ID found — skipping Nash direct fetch, going straight to browser capture")
-        rows = []
+        logger.info("DraftKings PGA: manifest lookup failed — using hardcoded league ID %d", DK_PGA_LEAGUE_ID)
+        league_id = DK_PGA_LEAGUE_ID
     else:
         league_id = confirmed_id
-        logger.info("DraftKings PGA: using league ID %d", league_id)
-        # Step 2: Try Nash sportscontent API directly (no browser needed)
-        rows = _fetch_nash_direct(league_id, scraped_at=scraped_at)
+    logger.info("DraftKings PGA: using league ID %d", league_id)
+
+    # Step 2: Try Nash sportscontent API directly (no browser needed)
+    rows = _fetch_nash_direct(league_id, scraped_at=scraped_at)
 
     # Step 3: Fall back to browser capture if direct API returned nothing
     if not rows:

@@ -18,9 +18,9 @@ name: Sportsbook Soccer Markets (FanDuel + DraftKings)
 #   - max-parallel: 1 on scrape to prevent concurrent Camoufox proxy 429s
 #   - Retry loop (3 attempts, 30s backoff) around each scrape call
 #   - EPL break gate: skips EPL scrape jobs before EPL_RESUME_DATE
-#   - Empty artifact guard: writes empty NDJSON on 0 rows so artifact
-#     upload never fails; load step skips gracefully on empty file
-#   - Merged duplicate job-level `if` keys (YAML disallows duplicate keys)
+#   - Empty artifact guard: load step skips gracefully on empty file
+#   - matrix.* is not available in job-level `if`; sportsbook/league
+#     filtering is handled via an early-exit step instead
 
 on:
   workflow_dispatch:
@@ -67,10 +67,6 @@ jobs:
     name: Scrape ${{ matrix.sportsbook }} ${{ matrix.league }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Single if: combining sportsbook + league filters (YAML allows only one if: per job)
-    if: >-
-      (github.event.inputs.sportsbook == '' || github.event.inputs.sportsbook == 'ALL' || github.event.inputs.sportsbook == matrix.sportsbook) &&
-      (github.event.inputs.league == '' || github.event.inputs.league == 'ALL' || github.event.inputs.league == matrix.league)
 
     strategy:
       fail-fast: false
@@ -102,21 +98,42 @@ jobs:
             artifact_path: /tmp/draftkings_mls_rows.ndjson
 
     steps:
+      # matrix.* is unavailable in job-level `if`, so we filter here instead.
+      # Sets SKIP=true for cells that don't match the requested sportsbook/league,
+      # which all subsequent steps check before running.
+      - name: Check matrix filter
+        id: filter
+        run: |
+          SKIP=false
+          INPUT_SB="${{ github.event.inputs.sportsbook }}"
+          INPUT_LG="${{ github.event.inputs.league }}"
+          if [ -n "$INPUT_SB" ] && [ "$INPUT_SB" != "ALL" ] && [ "$INPUT_SB" != "${{ matrix.sportsbook }}" ]; then
+            SKIP=true
+          fi
+          if [ -n "$INPUT_LG" ] && [ "$INPUT_LG" != "ALL" ] && [ "$INPUT_LG" != "${{ matrix.league }}" ]; then
+            SKIP=true
+          fi
+          echo "skip=$SKIP" >> $GITHUB_OUTPUT
+
       - name: Checkout
+        if: steps.filter.outputs.skip != 'true'
         uses: actions/checkout@v4
 
       - name: Set up Python
+        if: steps.filter.outputs.skip != 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Install Python dependencies
+        if: steps.filter.outputs.skip != 'true'
         run: |
           pip install --upgrade pip
           pip install -r mobile_api/requirements.txt
           pip install requests
 
       - name: Authenticate to GCP (for identity token)
+        if: steps.filter.outputs.skip != 'true'
         id: auth
         uses: google-github-actions/auth@v2
         with:
@@ -128,7 +145,7 @@ jobs:
       # hitting the proxy and writes an empty artifact so the load job
       # downstream doesn't fail trying to download a missing artifact.
       - name: Check EPL break gate
-        if: matrix.league == 'EPL'
+        if: steps.filter.outputs.skip != 'true' && matrix.league == 'EPL'
         run: |
           TODAY=$(date +%Y%m%d)
           if [ "$TODAY" -lt "${{ env.EPL_RESUME_DATE }}" ]; then
@@ -140,7 +157,7 @@ jobs:
           fi
 
       - name: Scrape ${{ matrix.sportsbook }} ${{ matrix.league }}
-        if: env.EPL_ON_BREAK != 'true'
+        if: steps.filter.outputs.skip != 'true' && env.EPL_ON_BREAK != 'true'
         env:
           CAMOUFOX_SERVICE_URL: ${{ secrets.CAMOUFOX_SERVICE_URL }}
           CAMOUFOX_TOKEN: ${{ steps.auth.outputs.id_token }}
@@ -167,7 +184,7 @@ jobs:
           done
 
       - name: Upload scrape artifact
-        if: inputs.dry_run != true
+        if: steps.filter.outputs.skip != 'true' && inputs.dry_run != true
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
@@ -181,12 +198,8 @@ jobs:
     name: Load ${{ matrix.sportsbook }} ${{ matrix.league }} → BigQuery
     runs-on: ubuntu-latest
     needs: scrape
+    if: inputs.dry_run != true
     timeout-minutes: 10
-    # Single if: combining dry_run guard + sportsbook + league filters
-    if: >-
-      inputs.dry_run != true &&
-      (github.event.inputs.sportsbook == '' || github.event.inputs.sportsbook == 'ALL' || github.event.inputs.sportsbook == matrix.sportsbook) &&
-      (github.event.inputs.league == '' || github.event.inputs.league == 'ALL' || github.event.inputs.league == matrix.league)
 
     strategy:
       fail-fast: false
@@ -219,32 +232,53 @@ jobs:
       ODDSPEDIA_BQ_LOCATION: US
 
     steps:
+      # Same matrix filter pattern as scrape — matrix.* unavailable in job if
+      - name: Check matrix filter
+        id: filter
+        run: |
+          SKIP=false
+          INPUT_SB="${{ github.event.inputs.sportsbook }}"
+          INPUT_LG="${{ github.event.inputs.league }}"
+          if [ -n "$INPUT_SB" ] && [ "$INPUT_SB" != "ALL" ] && [ "$INPUT_SB" != "${{ matrix.sportsbook }}" ]; then
+            SKIP=true
+          fi
+          if [ -n "$INPUT_LG" ] && [ "$INPUT_LG" != "ALL" ] && [ "$INPUT_LG" != "${{ matrix.league }}" ]; then
+            SKIP=true
+          fi
+          echo "skip=$SKIP" >> $GITHUB_OUTPUT
+
       - name: Checkout
+        if: steps.filter.outputs.skip != 'true'
         uses: actions/checkout@v4
 
       - name: Set up Python
+        if: steps.filter.outputs.skip != 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Install Python dependencies
+        if: steps.filter.outputs.skip != 'true'
         run: |
           pip install --upgrade pip
           pip install -r mobile_api/requirements.txt
           pip install requests
 
       - name: Configure GCP credentials
+        if: steps.filter.outputs.skip != 'true'
         run: |
           echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
           echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
 
       - name: Download artifact
+        if: steps.filter.outputs.skip != 'true'
         uses: actions/download-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
           path: /tmp
 
       - name: Check artifact is non-empty
+        if: steps.filter.outputs.skip != 'true'
         id: artifact_check
         run: |
           if [ -s "${{ matrix.artifact_path }}" ]; then
@@ -255,6 +289,6 @@ jobs:
           fi
 
       - name: Load ${{ matrix.sportsbook }} ${{ matrix.league }} → BigQuery
-        if: steps.artifact_check.outputs.has_rows == 'true'
+        if: steps.filter.outputs.skip != 'true' && steps.artifact_check.outputs.has_rows == 'true'
         run: |
           python -m ${{ matrix.scraper_module }} --load-only --league ${{ matrix.league }}

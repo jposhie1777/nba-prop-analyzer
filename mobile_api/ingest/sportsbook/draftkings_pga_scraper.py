@@ -70,11 +70,12 @@ DK_NASH_ALL_MARKETS = (
 SCRAPE_CONFIG = {
     # PGA Tour league hub page — confirmed to trigger Nash sportscontent XHRs
     "url": "https://sportsbook.draftkings.com/leagues/golf/pga-tour",
-    "prime_url": "https://sportsbook.draftkings.com",
+    "prime_url": "https://sportsbook.draftkings.com/leagues/golf/pga-tour",
     "capture_patterns": [
         "sportsbook-nash.draftkings.com/sites/",
     ],
-    "wait_ms": 25000,
+    # Increased to 35s — sportscontent XHRs fire after layout loads
+    "wait_ms": 35000,
 }
 
 DISCOVER_PATTERNS = [
@@ -130,8 +131,8 @@ _REQ_HEADERS = {
 
 def _confirm_league_id() -> Optional[int]:
     """
-    Fetch logos manifest and find the PGA Tour league ID by filtering for
-    golf-related sport names. Logs all found event groups for debugging.
+    Fetch logos manifest and find the PGA Tour league ID.
+    Logs raw entry structure to help debug key names.
     Returns the PGA Tour league ID or None if not found.
     """
     GOLF_KEYWORDS = ("golf", "pga", "lpga", "tour championship", "masters", "open championship")
@@ -139,26 +140,39 @@ def _confirm_league_id() -> Optional[int]:
         resp = requests.get(DK_LOGOS_MANIFEST, headers=_REQ_HEADERS, timeout=15)
         resp.raise_for_status()
         data = resp.json()
+
+        # Log top-level keys to understand manifest structure
+        logger.info("Logos manifest top-level keys: %s", list(data.keys())[:10])
+
         event_groups = data.get("Eventgroups", [])
-        logger.info("Logos manifest: found %d event groups for provider 2", len(event_groups))
+        logger.info("Logos manifest: found %d event groups", len(event_groups))
+
+        # Log raw first entry so we can see the actual key names
+        if event_groups:
+            first = event_groups[0]
+            logger.info("First entry keys: %s", list(first.keys()))
+            logger.info("First entry sample: %s", str(first)[:400])
 
         golf_matches = []
         for eg in event_groups:
-            eg_id = eg.get("EventgroupId") or eg.get("eventGroupId") or eg.get("id")
-            name = eg.get("Name") or eg.get("name") or ""
-            sport = eg.get("Sport") or eg.get("sport") or ""
-            if eg_id:
-                logger.info("  EventgroupId=%s  Name=%s  Sport=%s", eg_id, name, sport)
-                combined = (name + " " + sport).lower()
-                if any(kw in combined for kw in GOLF_KEYWORDS):
-                    golf_matches.append((int(eg_id), name))
+            if not isinstance(eg, dict):
+                continue
+            # Try every plausible key variant for ID
+            eg_id = (eg.get("EventgroupId") or eg.get("eventGroupId") or
+                     eg.get("LeagueId") or eg.get("leagueId") or
+                     eg.get("id") or eg.get("Id") or eg.get("ID"))
+            # Concatenate all string values and search for golf keywords
+            all_values = " ".join(str(v) for v in eg.values() if isinstance(v, str))
+            if eg_id and any(kw in all_values.lower() for kw in GOLF_KEYWORDS):
+                logger.info("Golf match: id=%s values=%s", eg_id, all_values[:200])
+                golf_matches.append((int(eg_id), all_values[:80]))
 
         if golf_matches:
             best = golf_matches[0]
-            logger.info("PGA/Golf event group found: id=%d name=%s", best[0], best[1])
+            logger.info("PGA/Golf event group found: id=%d", best[0])
             return best[0]
 
-        logger.warning("No golf/PGA event group found in logos manifest — will use browser capture fallback")
+        logger.warning("No golf/PGA event group found in logos manifest")
     except Exception as exc:
         logger.warning("Could not fetch logos manifest: %s", exc)
     return None

@@ -297,95 +297,141 @@ def _parse_content_managed_page(body: Dict[str, Any], scraped_at: str) -> List[D
     return rows
 
 
-def _parse_market_prices(body: List[Any], scraped_at: str) -> List[Dict[str, Any]]:
+def _extract_market_prices_lookup(body: List[Any]) -> Dict[str, Any]:
     """
-    Parse smp.ia.sportsbook.fanduel.com/.../getMarketPrices response.
+    Build a lookup dict: (marketId, str(selectionId)) -> {odds_decimal, odds_american}
 
-    Discovery confirmed body is a list. Each item likely contains
-    marketId, selectionId, and price data for live odds updates.
-    Stored as-is with deep link construction where IDs are available.
+    getMarketPrices response structure (confirmed from debug logs):
+      body = list of market objects:
+        {
+          marketId: "719.160971940",
+          runnerDetails: [
+            {
+              selectionId: 13496403,
+              winRunnerOdds: {
+                trueOdds: {
+                  decimalOdds: { decimalOdds: 3.2 }
+                },
+                americanDisplayOdds: { americanOdds: 220.0 }
+              }
+            }, ...
+          ]
+        }
     """
-    rows: List[Dict[str, Any]] = []
+    lookup: Dict[str, Any] = {}
     if not isinstance(body, list):
-        return rows
+        return lookup
 
-    raw_str = json.dumps(body)[:64000]
-
-    for item in body:
-        if not isinstance(item, dict):
+    for market in body:
+        if not isinstance(market, dict):
             continue
+        market_id = str(market.get("marketId", ""))
+        for runner in market.get("runnerDetails", []):
+            if not isinstance(runner, dict):
+                continue
+            sel_id = str(runner.get("selectionId", ""))
+            if not sel_id:
+                continue
 
-        market_id = str(item.get("marketId") or item.get("market_id") or "")
-        selection_id = str(item.get("selectionId") or item.get("selection_id") or item.get("runnerId") or "")
-        market_name = item.get("marketType") or item.get("marketName") or item.get("name") or ""
-        selection_name = item.get("runnerName") or item.get("selectionName") or item.get("name") or ""
+            win_odds = runner.get("winRunnerOdds") or {}
+            true_odds = win_odds.get("trueOdds") or {}
+            dec_obj = true_odds.get("decimalOdds") or {}
+            am_obj = win_odds.get("americanDisplayOdds") or {}
 
-        # Price may be nested or flat
-        price_obj = item.get("price") or item.get("currentPrice") or item
-        odds_dec = None
-        odds_am = None
-        if isinstance(price_obj, dict):
-            dec = price_obj.get("d") or price_obj.get("decimal") or price_obj.get("decimalOdds")
-            if dec is not None:
-                try:
-                    odds_dec = float(dec)
-                    odds_am = _american_from_decimal(odds_dec)
-                except Exception:
-                    pass
-        elif isinstance(price_obj, (int, float)) and price_obj != item:
-            odds_dec = float(price_obj)
-            odds_am = _american_from_decimal(odds_dec)
+            odds_dec = None
+            odds_am = None
+            try:
+                dec_val = dec_obj.get("decimalOdds")
+                if dec_val is not None:
+                    odds_dec = float(dec_val)
+            except Exception:
+                pass
+            try:
+                am_val = am_obj.get("americanOdds")
+                if am_val is not None:
+                    am_int = int(am_val)
+                    odds_am = f"+{am_int}" if am_int >= 0 else str(am_int)
+            except Exception:
+                pass
 
-        deep_link = (
-            _build_deep_link(market_id, selection_id)
-            if market_id and selection_id else None
-        )
+            # Derive american from decimal if missing
+            if odds_dec is not None and odds_am is None:
+                odds_am = _american_from_decimal(odds_dec)
 
-        rows.append({
-            "scraped_at": scraped_at,
-            "source": "getMarketPrices",
-            "event_id": str(item.get("eventId") or ""),
-            "event_name": None,
-            "event_start": None,
-            "market_id": market_id or None,
-            "market_name": market_name or None,
-            "market_type": _classify_market(market_name),
-            "selection_id": selection_id or None,
-            "selection_name": selection_name or None,
-            "handicap": None,
-            "odds_decimal": odds_dec,
-            "odds_american": odds_am,
-            "deep_link": deep_link,
-            "raw_response": raw_str,
-        })
+            key = (market_id, sel_id)
+            # Keep first occurrence (earliest poll)
+            if key not in lookup:
+                lookup[key] = {"odds_decimal": odds_dec, "odds_american": odds_am}
 
-    return rows
+    return lookup
 
 
 def _parse_captured(captured: List[Dict[str, Any]], scraped_at: str) -> List[Dict[str, Any]]:
-    rows: List[Dict[str, Any]] = []
+    """
+    Two-pass parse:
+      Pass 1 — collect all getMarketPrices responses into a (marketId, selectionId) odds lookup
+      Pass 2 — parse content-managed-page rows, enrich with odds from lookup,
+                filter out TOP_GROUP_IMG and rows with no odds
+    """
+    # Pass 1: build odds lookup from all getMarketPrices captures
+    odds_lookup: Dict[tuple, Any] = {}
+    layout_body = None
+
     for i, capture in enumerate(captured):
         url = capture.get("url", "<unknown>")
         body = capture.get("body")
         logger.info("  captured[%d]: %s", i, url)
 
-        if "content-managed-page" in url and isinstance(body, dict):
-            new_rows = _parse_content_managed_page(body, scraped_at)
-            logger.info("  → content-managed-page: %d rows", len(new_rows))
-            rows.extend(new_rows)
-        elif "getMarketPrices" in url and isinstance(body, list):
-            logger.info("  getMarketPrices body length: %d", len(body))
-            if body:
-                logger.info("  getMarketPrices body[0] keys: %s", list(body[0].keys())[:10] if isinstance(body[0], dict) else type(body[0]).__name__)
-                logger.info("  getMarketPrices body[0] snippet: %s", str(body[0])[:500])
-            new_rows = _parse_market_prices(body, scraped_at)
-            logger.info("  → getMarketPrices: %d rows", len(new_rows))
-            rows.extend(new_rows)
-        else:
-            logger.debug("  → skipping")
+        if "getMarketPrices" in url and isinstance(body, list):
+            batch = _extract_market_prices_lookup(body)
+            new_count = sum(1 for k in batch if k not in odds_lookup)
+            odds_lookup.update({k: v for k, v in batch.items() if k not in odds_lookup})
+            logger.info("  → getMarketPrices: +%d new odds entries (total=%d)", new_count, len(odds_lookup))
+        elif "content-managed-page" in url and isinstance(body, dict):
+            layout_body = body
+            logger.info("  → content-managed-page: captured layout body")
 
-    logger.info("FanDuel PGA: %d captured, %d total rows parsed", len(captured), len(rows))
-    return rows
+    logger.info("FanDuel PGA: odds lookup has %d (marketId, selectionId) entries", len(odds_lookup))
+
+    if layout_body is None:
+        logger.warning("FanDuel PGA: no content-managed-page body captured")
+        return []
+
+    # Pass 2: parse layout rows and enrich with odds
+    raw_rows = _parse_content_managed_page(layout_body, scraped_at)
+    logger.info("FanDuel PGA: content-managed-page produced %d raw rows", len(raw_rows))
+
+    enriched: List[Dict[str, Any]] = []
+    skipped_img = 0
+    skipped_no_odds = 0
+
+    for row in raw_rows:
+        # Filter banner/image placeholder markets
+        if row.get("market_name") == "TOP_GROUP_IMG":
+            skipped_img += 1
+            continue
+
+        market_id = row.get("market_id") or ""
+        selection_id = row.get("selection_id") or ""
+        key = (market_id, selection_id)
+
+        if key in odds_lookup:
+            row["odds_decimal"] = odds_lookup[key]["odds_decimal"]
+            row["odds_american"] = odds_lookup[key]["odds_american"]
+
+        # Only keep rows that have odds OR have a real market structure
+        # (some markets like matchups may not appear in getMarketPrices)
+        if row.get("odds_decimal") is None and row.get("market_name") in (None, "", "other"):
+            skipped_no_odds += 1
+            continue
+
+        enriched.append(row)
+
+    logger.info(
+        "FanDuel PGA: %d captured, %d enriched rows (skipped %d TOP_GROUP_IMG, %d no-odds)",
+        len(captured), len(enriched), skipped_img, skipped_no_odds,
+    )
+    return enriched
 
 
 # ---------------------------------------------------------------------------

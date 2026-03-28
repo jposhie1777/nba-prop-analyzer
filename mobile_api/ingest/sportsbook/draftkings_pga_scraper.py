@@ -44,8 +44,11 @@ DATASET = "sportsbook"
 TABLE = "raw_draftkings_pga_markets"
 ARTIFACT_PATH = "/tmp/draftkings_pga_rows.ndjson"
 
-# PGA Tour league ID — confirmed from discovery run 2026-03-28
-DK_PGA_LEAGUE_ID = 84240
+# PGA Tour league ID — NOTE: 84240 is MLB (confirmed wrong 2026-03-28).
+# The correct PGA Tour league ID needs to be discovered via the logos manifest
+# filtering by sport name. This fallback will be overridden by _confirm_league_id().
+# Run --discover to find the correct ID when this needs updating.
+DK_PGA_LEAGUE_ID = 84240  # placeholder — will be replaced by manifest lookup
 
 # Logos manifest — used to dynamically confirm league ID is still current
 DK_LOGOS_MANIFEST = "https://sportsbook.draftkings.com/static/logos/provider/2/logos.json"
@@ -127,20 +130,35 @@ _REQ_HEADERS = {
 
 def _confirm_league_id() -> Optional[int]:
     """
-    Fetch logos manifest and confirm the PGA Tour league ID is still 84240.
-    Returns the confirmed ID or None if manifest is unavailable.
+    Fetch logos manifest and find the PGA Tour league ID by filtering for
+    golf-related sport names. Logs all found event groups for debugging.
+    Returns the PGA Tour league ID or None if not found.
     """
+    GOLF_KEYWORDS = ("golf", "pga", "lpga", "tour championship", "masters", "open championship")
     try:
         resp = requests.get(DK_LOGOS_MANIFEST, headers=_REQ_HEADERS, timeout=15)
         resp.raise_for_status()
         data = resp.json()
         event_groups = data.get("Eventgroups", [])
+        logger.info("Logos manifest: found %d event groups for provider 2", len(event_groups))
+
+        golf_matches = []
         for eg in event_groups:
             eg_id = eg.get("EventgroupId") or eg.get("eventGroupId") or eg.get("id")
             name = eg.get("Name") or eg.get("name") or ""
+            sport = eg.get("Sport") or eg.get("sport") or ""
             if eg_id:
-                logger.info("Logos manifest event group: id=%s name=%s", eg_id, name)
-                return int(eg_id)
+                logger.info("  EventgroupId=%s  Name=%s  Sport=%s", eg_id, name, sport)
+                combined = (name + " " + sport).lower()
+                if any(kw in combined for kw in GOLF_KEYWORDS):
+                    golf_matches.append((int(eg_id), name))
+
+        if golf_matches:
+            best = golf_matches[0]
+            logger.info("PGA/Golf event group found: id=%d name=%s", best[0], best[1])
+            return best[0]
+
+        logger.warning("No golf/PGA event group found in logos manifest — will use browser capture fallback")
     except Exception as exc:
         logger.warning("Could not fetch logos manifest: %s", exc)
     return None
@@ -417,13 +435,16 @@ def discover() -> None:
 def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
     scraped_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    # Step 1: Confirm league ID from logos manifest
+    # Step 1: Confirm league ID from logos manifest (must match golf/PGA)
     confirmed_id = _confirm_league_id()
-    league_id = confirmed_id or DK_PGA_LEAGUE_ID
-    logger.info("DraftKings PGA: using league ID %d", league_id)
-
-    # Step 2: Try Nash sportscontent API directly (no browser needed)
-    rows = _fetch_nash_direct(league_id, scraped_at=scraped_at)
+    if confirmed_id is None:
+        logger.warning("DraftKings PGA: no golf league ID found — skipping Nash direct fetch, going straight to browser capture")
+        rows = []
+    else:
+        league_id = confirmed_id
+        logger.info("DraftKings PGA: using league ID %d", league_id)
+        # Step 2: Try Nash sportscontent API directly (no browser needed)
+        rows = _fetch_nash_direct(league_id, scraped_at=scraped_at)
 
     # Step 3: Fall back to browser capture if direct API returned nothing
     if not rows:

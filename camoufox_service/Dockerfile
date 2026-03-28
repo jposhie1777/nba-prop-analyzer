@@ -27,6 +27,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgdk-pixbuf2.0-0 \
     fonts-liberation \
     ca-certificates \
+    xvfb \
+    xauth \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -41,6 +43,12 @@ RUN GITHUB_TOKEN=${GITHUB_TOKEN} python -m camoufox fetch
 
 COPY . .
 
-ENV PYTHONUNBUFFERED=1
+RUN chmod +x /app/start.sh
 
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+ENV PYTHONUNBUFFERED=1
+ENV DISPLAY=:99
+
+# start.sh launches Xvfb then uvicorn.
+# Firefox's GTK libraries require a display socket even with headless=True;
+# Xvfb provides a virtual one so no real screen is needed.
+CMD ["/app/start.sh"]

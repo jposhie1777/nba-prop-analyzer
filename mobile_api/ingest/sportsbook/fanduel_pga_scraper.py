@@ -419,9 +419,8 @@ def _parse_captured(captured: List[Dict[str, Any]], scraped_at: str) -> List[Dic
             row["odds_decimal"] = odds_lookup[key]["odds_decimal"]
             row["odds_american"] = odds_lookup[key]["odds_american"]
 
-        # Only keep rows that have odds OR have a real market structure
-        # (some markets like matchups may not appear in getMarketPrices)
-        if row.get("odds_decimal") is None and row.get("market_name") in (None, "", "other"):
+        # Option A: strict — only keep rows with actual odds
+        if row.get("odds_decimal") is None:
             skipped_no_odds += 1
             continue
 

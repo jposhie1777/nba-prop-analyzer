@@ -374,6 +374,10 @@ def _parse_captured(captured: List[Dict[str, Any]], scraped_at: str) -> List[Dic
             logger.info("  → content-managed-page: %d rows", len(new_rows))
             rows.extend(new_rows)
         elif "getMarketPrices" in url and isinstance(body, list):
+            logger.info("  getMarketPrices body length: %d", len(body))
+            if body:
+                logger.info("  getMarketPrices body[0] keys: %s", list(body[0].keys())[:10] if isinstance(body[0], dict) else type(body[0]).__name__)
+                logger.info("  getMarketPrices body[0] snippet: %s", str(body[0])[:500])
             new_rows = _parse_market_prices(body, scraped_at)
             logger.info("  → getMarketPrices: %d rows", len(new_rows))
             rows.extend(new_rows)

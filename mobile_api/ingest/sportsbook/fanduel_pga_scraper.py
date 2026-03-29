@@ -191,6 +191,27 @@ def _extract_market_ids_from_nav(data: Dict[str, Any]) -> Set[str]:
     return market_ids
 
 
+def _extract_market_names_from_nav(data: Dict[str, Any]) -> Dict[str, str]:
+    """Build externalMarketId → marketName from navigation attachments."""
+    market_names: Dict[str, str] = {}
+    for market_id, market in data.get("attachments", {}).get("markets", {}).items():
+        if not isinstance(market, dict):
+            continue
+        name = market.get("marketName") or market.get("name") or ""
+        ext_id = market.get("externalMarketId") or market_id
+        if ext_id and name:
+            market_names[str(ext_id)] = name
+        # Also index associated markets
+        for assoc in market.get("associatedMarkets", []):
+            if not isinstance(assoc, dict):
+                continue
+            aid = assoc.get("externalMarketId")
+            aname = assoc.get("marketName") or assoc.get("name") or name
+            if aid and aname:
+                market_names[str(aid)] = aname
+    return market_names
+
+
 def _extract_player_names_from_nav(data: Dict[str, Any]) -> Dict[str, str]:
     player_map: Dict[str, str] = {}
     for market in data.get("attachments", {}).get("markets", {}).values():
@@ -240,6 +261,7 @@ def _scrape_tournament_page() -> Tuple[Set[str], Dict[str, str], str, str]:
     """
     market_ids: Set[str] = set()
     player_map: Dict[str, str] = {}
+    market_name_map: Dict[str, str] = {}
     event_name = ""
     px_context = ""
 
@@ -287,11 +309,16 @@ def _scrape_tournament_page() -> Tuple[Set[str], Dict[str, str], str, str]:
             if nav_data and ("layout" in nav_data or "attachments" in nav_data):
                 nav_ids = _extract_market_ids_from_nav(nav_data)
                 nav_players = _extract_player_names_from_nav(nav_data)
+                nav_names = _extract_market_names_from_nav(nav_data)
                 market_ids.update(nav_ids)
                 player_map.update(nav_players)
+                market_name_map.update(nav_names)
                 if not event_name:
                     event_name = _extract_event_name_from_nav(nav_data)
-                logger.info("  → content-managed-page: %d marketIds, %d players", len(nav_ids), len(nav_players))
+                logger.info(
+                    "  → content-managed-page: %d marketIds, %d players, %d market names",
+                    len(nav_ids), len(nav_players), len(nav_names),
+                )
 
         # getMarketPrices — response body is a list of markets (already fetched by page)
         # Extract marketIds from the response so we know what exists
@@ -315,10 +342,10 @@ def _scrape_tournament_page() -> Tuple[Set[str], Dict[str, str], str, str]:
         )
 
     logger.info(
-        "Result: %d marketIds, %d players, event=%r, px=%s",
-        len(market_ids), len(player_map), event_name, "YES" if px_context else "NO",
+        "Result: %d marketIds, %d players, %d market names, event=%r, px=%s",
+        len(market_ids), len(player_map), len(market_name_map), event_name, "YES" if px_context else "NO",
     )
-    return market_ids, player_map, event_name, px_context
+    return market_ids, player_map, market_name_map, event_name, px_context
 
 
 # ---------------------------------------------------------------------------
@@ -359,12 +386,14 @@ def _parse_market_prices_response(
     scraped_at: str,
     event_name: str = "",
     player_map: Optional[Dict[str, str]] = None,
+    market_name_map: Optional[Dict[str, str]] = None,
 ) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     if not isinstance(body, list):
         return rows
 
     player_map = player_map or {}
+    market_name_map = market_name_map or {}
     raw_str = json.dumps(body)[:32000]
 
     for market in body:
@@ -375,7 +404,13 @@ def _parse_market_prices_response(
         turn_in_play = bool(market.get("turnInPlayEnabled", True))
         inplay = bool(market.get("inplay", False))
         market_status = market.get("marketStatus", "")
-        market_name = market.get("marketName") or market.get("name") or ""
+        # Prefer name from nav data (richer), fall back to getMarketPrices field
+        market_name = (
+            market_name_map.get(market_id)
+            or market.get("marketName")
+            or market.get("name")
+            or ""
+        )
         runners = market.get("runnerDetails", [])
 
         if not market_id or not runners:
@@ -456,6 +491,7 @@ def _fetch_market_prices(
     scraped_at: str,
     event_name: str = "",
     player_map: Optional[Dict[str, str]] = None,
+    market_name_map: Optional[Dict[str, str]] = None,
     px_context: str = "",
 ) -> List[Dict[str, Any]]:
     all_rows: List[Dict[str, Any]] = []
@@ -482,7 +518,9 @@ def _fetch_market_prices(
             )
             resp.raise_for_status()
             body = resp.json()
-            rows = _parse_market_prices_response(body, scraped_at, event_name, player_map)
+            rows = _parse_market_prices_response(
+                body, scraped_at, event_name, player_map, market_name_map
+            )
             logger.info("  → %d rows", len(rows))
             all_rows.extend(rows)
         except Exception as exc:
@@ -505,7 +543,7 @@ def discover() -> None:
     result = _call_proxy({
         "url": tournament_url,
         "prime_url": tournament_url,
-        "capture_patterns": ["fanduel.com"],  # catch everything
+        "capture_patterns": ["fanduel.com"],
         "wait_ms": 30000,
         "timeout_ms": 120000,
     })
@@ -533,15 +571,15 @@ def discover() -> None:
 def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
     scraped_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    market_ids, player_map, event_name, px_context = _scrape_tournament_page()
+    market_ids, player_map, market_name_map, event_name, px_context = _scrape_tournament_page()
 
     if not market_ids:
         logger.error("No marketIds found. Run --discover to debug XHR capture.")
         return []
 
     logger.info(
-        "Discovered %d marketIds for %r (%d players, px=%s)",
-        len(market_ids), event_name, len(player_map), "YES" if px_context else "NO",
+        "Discovered %d marketIds for %r (%d players, %d market names, px=%s)",
+        len(market_ids), event_name, len(player_map), len(market_name_map), "YES" if px_context else "NO",
     )
 
     rows = _fetch_market_prices(
@@ -549,6 +587,7 @@ def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
         scraped_at=scraped_at,
         event_name=event_name,
         player_map=player_map,
+        market_name_map=market_name_map,
         px_context=px_context,
     )
 

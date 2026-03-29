@@ -71,16 +71,26 @@ FD_MARKET_PRICES_URL = (
 # Headers for getMarketPrices POST (direct, no proxy needed)
 FD_API_HEADERS = {
     "User-Agent": (
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) "
-        "AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/130.0.0.0 Mobile/15E148 Safari/604.1"
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
     ),
     "Accept": "application/json",
     "Content-Type": "application/json",
+    "Origin": "https://sportsbook.fanduel.com",
+    "Referer": "https://sportsbook.fanduel.com/",
     "x-sportsbook-region": "NJ",
     "X-Application": "FhMFpcPWXMeyZxOx",
 }
 
 MARKET_PRICES_BATCH_SIZE = 50
+
+# Broad capture patterns — catch navigation XHR and any getMarketPrices POSTs
+# that fire on page load (gives us market IDs + px token as bonus)
+SCRAPE_CAPTURE_PATTERNS = [
+    "fanduel.com/navigation/",
+    "smp.nj.sportsbook.fanduel.com",
+    "smp.ia.sportsbook.fanduel.com",
+]
 
 # Known static selectionIds for round score over/under markets
 ROUND_SCORE_SELECTION_IDS = {
@@ -142,87 +152,149 @@ def _call_proxy(payload: Dict[str, Any]) -> Dict[str, Any]:
 # Navigation endpoint — fetched via Camoufox (bot-protected)
 # ---------------------------------------------------------------------------
 
-def _fetch_navigation(tab: str = "") -> Optional[Dict[str, Any]]:
+def _load_tournament_page() -> Tuple[Set[str], Dict[str, str], str, str]:
     """
-    Fetch the FanDuel PGA navigation JSON for a given tab via Camoufox.
+    Load the current FanDuel PGA tournament page via Camoufox.
 
-    Strategy: load the golf page URL (which triggers the navigation XHR
-    automatically on page load) and capture the /navigation/pga XHR response.
+    Uses a broad capture pattern to catch:
+      - /navigation/pga XHRs (market IDs + player names in response body)
+      - getMarketPrices POSTs (market IDs from request body, px token from request headers)
 
-    We do NOT load the navigation URL directly — Camoufox would render it as
-    HTML. Instead we load the golf page and let the browser fire the XHR.
-
-    Tab handling: FanDuel fires the navigation XHR when the tab query param
-    is in the page URL, so we load /golf?tab=<tab> to trigger the right XHR.
+    Returns: (market_ids, player_map, event_name, px_context)
     """
-    # Load the golf page with the tab param — this triggers the navigation XHR
-    if tab:
-        page_url = f"{FD_BASE_URL}/golf?tab={tab}"
-    else:
-        page_url = f"{FD_BASE_URL}/golf"
+    market_ids: Set[str] = set()
+    player_map: Dict[str, str] = {}
+    event_name = ""
+    px_context = ""
 
-    logger.info("Fetching navigation tab=%r via Camoufox golf page → %s", tab or "default", page_url)
+    tournament_url = _discover_tournament_url()
+    logger.info("Loading tournament page: %s", tournament_url)
 
-    try:
-        result = _call_proxy({
-            "url": page_url,
-            "capture_patterns": ["sportsbook.fanduel.com/navigation/pga"],
-            "wait_ms": 15000,
-            "timeout_ms": 45000,
-        })
+    result = _call_proxy({
+        "url": tournament_url,
+        "prime_url": tournament_url,
+        "capture_patterns": SCRAPE_CAPTURE_PATTERNS,
+        "wait_ms": 30000,
+        "timeout_ms": 120000,
+    })
 
-        captured = result.get("captured_requests", [])
-        page_status = result.get("status", 0)
-        logger.info(
-            "  page_status=%s  captured=%d",
-            page_status, len(captured),
-        )
+    captured = result.get("captured_requests", [])
+    logger.info("page_status=%s  captured=%d", result.get("status"), len(captured))
 
-        # Log ALL captured URLs so we can see what's firing
-        for i, cap in enumerate(captured):
-            cap_url = cap.get("url", "")
-            cap_body = cap.get("body")
-            body_type = type(cap_body).__name__
-            body_preview = ""
-            if isinstance(cap_body, str):
-                body_preview = cap_body[:80]
-            elif isinstance(cap_body, dict):
-                body_preview = str(list(cap_body.keys())[:5])
-            logger.info("  captured[%d] %s  body_type=%s  preview=%r", i, cap_url[:100], body_type, body_preview)
+    for i, cap in enumerate(captured):
+        cap_url = cap.get("url", "")
+        cap_body = cap.get("body")
+        req_headers = cap.get("request_headers") or cap.get("requestHeaders") or {}
+        body_type = type(cap_body).__name__
 
-        # Find the navigation XHR response
-        for cap in captured:
-            cap_url = cap.get("url", "")
-            if "navigation/pga" not in cap_url:
-                continue
-            cap_body = cap.get("body")
+        # Preview for debugging
+        if isinstance(cap_body, str):
+            preview = cap_body[:120]
+        elif isinstance(cap_body, dict):
+            preview = str(list(cap_body.keys())[:6])
+        elif isinstance(cap_body, list):
+            preview = f"list[{len(cap_body)}]"
+        else:
+            preview = repr(cap_body)[:80]
+        logger.info("  [%02d] %s  body=%s  preview=%r", i, cap_url[:100], body_type, preview)
 
-            # Best case: proxy already parsed it as a dict
-            if isinstance(cap_body, dict) and (
-                "layout" in cap_body or "attachments" in cap_body or "coupons" in cap_body
-            ):
-                logger.info("  → JSON dict from captured navigation XHR: %s", cap_url[:80])
-                return cap_body
+        # --- Grab px token from any request headers ---
+        if not px_context and isinstance(req_headers, dict):
+            for k, v in req_headers.items():
+                if k.lower() == "x-px-context":
+                    px_context = str(v)
+                    logger.info("  → x-px-context captured (%d chars)", len(px_context))
+                    break
 
-            # String body — try JSON parse
-            if isinstance(cap_body, str) and cap_body.strip().startswith("{"):
+        # --- Navigation XHR: extract market IDs + player names ---
+        if "navigation/pga" in cap_url or "navigation/" in cap_url:
+            nav_data = None
+            if isinstance(cap_body, dict) and ("layout" in cap_body or "attachments" in cap_body):
+                nav_data = cap_body
+            elif isinstance(cap_body, str) and cap_body.strip().startswith("{"):
                 try:
-                    parsed = json.loads(cap_body)
-                    if isinstance(parsed, dict):
-                        logger.info("  → Parsed JSON string from captured navigation XHR")
-                        return parsed
+                    nav_data = json.loads(cap_body)
                 except json.JSONDecodeError:
-                    logger.warning("  captured navigation body is not valid JSON")
+                    pass
 
-        logger.warning(
-            "  navigation tab=%r: /navigation/pga XHR not found in %d captured requests",
-            tab or "default", len(captured),
+            if nav_data:
+                nav_ids = _extract_market_ids_from_nav(nav_data) | _extract_external_market_ids_from_nav(nav_data)
+                nav_players = _extract_player_names_from_nav(nav_data)
+                market_ids.update(nav_ids)
+                player_map.update(nav_players)
+                if not event_name:
+                    event_name = _extract_event_name_from_nav(nav_data)
+                logger.info("  → nav XHR: %d marketIds, %d players", len(nav_ids), len(nav_players))
+
+        # --- getMarketPrices POST: extract market IDs from request body ---
+        if "getMarketPrices" in cap_url:
+            if isinstance(cap_body, dict) and "marketIds" in cap_body:
+                ids = [str(m) for m in cap_body["marketIds"] if m]
+                market_ids.update(ids)
+                logger.info("  → getMarketPrices POST body: %d marketIds", len(ids))
+            elif isinstance(cap_body, list):
+                # response body
+                for mkt in cap_body:
+                    if isinstance(mkt, dict) and mkt.get("marketId"):
+                        market_ids.add(str(mkt["marketId"]))
+
+    logger.info(
+        "Tournament page: %d marketIds, %d players, event=%r, px=%s",
+        len(market_ids), len(player_map), event_name, "YES" if px_context else "NO",
+    )
+    return market_ids, player_map, event_name, px_context
+
+
+def _discover_tournament_url() -> str:
+    """Discover the current tournament URL from FanDuel's golf landing page."""
+    # Try application-context API first
+    FD_APP_CONTEXT_URL = (
+        "https://api.sportsbook.fanduel.com/sbapi/application-context"
+        "?dataEntries=POPULAR_BETTING,QUICK_LINKS,AZ_BETTING,EVENT_TYPES,TEASER_COMPS"
+        "&_ak=FhMFpcPWXMeyZxOx"
+    )
+    FD_GOLF_EVENT_TYPE_ID = "3"
+    try:
+        resp = requests.get(
+            FD_APP_CONTEXT_URL,
+            headers={**FD_API_HEADERS, "Accept": "application/json"},
+            timeout=15,
         )
-        return None
-
+        resp.raise_for_status()
+        data = resp.json()
+        events = data.get("events") or {}
+        best_event = None
+        best_start = ""
+        for ev_id, ev in events.items():
+            if not isinstance(ev, dict):
+                continue
+            if str(ev.get("eventTypeId", "")) != FD_GOLF_EVENT_TYPE_ID:
+                continue
+            seo = ev.get("seoIdentifier") or ev.get("slug") or ""
+            start = ev.get("openDate") or ev.get("startTime") or ""
+            name = ev.get("eventName") or ev.get("name") or ""
+            if seo and ev_id:
+                if best_start == "" or start > best_start:
+                    best_start = start
+                    best_event = (ev_id, seo, name)
+        if best_event:
+            ev_id, seo, name = best_event
+            url = f"{FD_BASE_URL}/golf/{seo}-{ev_id}"
+            logger.info("Tournament URL: %s (%s)", url, name)
+            return url
     except Exception as exc:
-        logger.warning("  navigation fetch failed for tab=%r: %s", tab or "default", exc)
-        return None
+        logger.warning("Tournament discovery failed: %s — using fallback", exc)
+
+    return f"{FD_BASE_URL}/golf"
+
+
+def fetch_all_market_ids() -> Tuple[Set[str], Dict[str, str], str, str]:
+    """
+    Load the tournament page via Camoufox and extract all market IDs.
+
+    Returns: (market_ids, player_map, event_name, px_context)
+    """
+    return _load_tournament_page()
 
 
 def _extract_market_ids_from_nav(data: Dict[str, Any]) -> Set[str]:
@@ -230,8 +302,8 @@ def _extract_market_ids_from_nav(data: Dict[str, Any]) -> Set[str]:
     Pulls every externalMarketId out of the navigation response.
 
     They appear in two places:
-      1. layout.coupons[coupon_id].externalMarketId   (top-level single ID per coupon)
-      2. layout.coupons[coupon_id].display[*].rows[*].marketIds[]  (grouped display rows)
+      1. layout.coupons[coupon_id].externalMarketId
+      2. layout.coupons[coupon_id].display[*].rows[*].marketIds[]
     """
     market_ids: Set[str] = set()
     layout = data.get("layout", {})
@@ -240,13 +312,9 @@ def _extract_market_ids_from_nav(data: Dict[str, Any]) -> Set[str]:
     for coupon_id, coupon in coupons.items():
         if not isinstance(coupon, dict):
             continue
-
-        # Top-level externalMarketId on coupon
         ext_id = coupon.get("externalMarketId")
         if ext_id:
             market_ids.add(str(ext_id))
-
-        # display rows
         for display_item in coupon.get("display", []):
             if not isinstance(display_item, dict):
                 continue
@@ -550,12 +618,20 @@ def _fetch_market_prices(
     scraped_at: str,
     event_name: str = "",
     player_map: Optional[Dict[str, str]] = None,
+    px_context: str = "",
 ) -> List[Dict[str, Any]]:
     all_rows: List[Dict[str, Any]] = []
     batches = [
         market_ids[i:i + MARKET_PRICES_BATCH_SIZE]
         for i in range(0, len(market_ids), MARKET_PRICES_BATCH_SIZE)
     ]
+
+    headers = {**FD_API_HEADERS}
+    if px_context:
+        headers["x-px-context"] = px_context
+        logger.info("Using x-px-context token (%d chars)", len(px_context))
+    else:
+        logger.warning("No x-px-context token — requests may be blocked by PerimeterX")
 
     for i, batch in enumerate(batches):
         logger.info(
@@ -566,7 +642,7 @@ def _fetch_market_prices(
             resp = requests.post(
                 FD_MARKET_PRICES_URL,
                 json={"marketIds": batch},
-                headers=FD_API_HEADERS,
+                headers=headers,
                 timeout=30,
             )
             resp.raise_for_status()
@@ -579,7 +655,7 @@ def _fetch_market_prices(
         except Exception as exc:
             logger.warning("Batch %d failed: %s", i + 1, exc)
 
-        # Small delay between batches to be polite
+        # Small delay between batches
         if i < len(batches) - 1:
             time.sleep(0.5)
 
@@ -591,34 +667,22 @@ def _fetch_market_prices(
 # ---------------------------------------------------------------------------
 
 def discover() -> None:
-    logger.info("DISCOVERY MODE — querying all navigation tabs")
-    for tab in NAV_TABS:
-        data = _fetch_navigation(tab)
-        if not data:
-            print(f"[{tab or 'default':30s}] FAILED")
-            continue
-
-        layout_ids = _extract_market_ids_from_nav(data)
-        attach_ids = _extract_external_market_ids_from_nav(data)
-        players = _extract_player_names_from_nav(data)
-        event_name = _extract_event_name_from_nav(data)
-
-        print(
-            f"[{tab or 'default':30s}] "
-            f"layout_ids={len(layout_ids):4d}  "
-            f"attach_ids={len(attach_ids):4d}  "
-            f"players={len(players):4d}  "
-            f"event={event_name!r}"
-        )
-        time.sleep(1)
-
-    print("\nSample from default tab:")
-    data = _fetch_navigation("")
-    if data:
-        ids = _extract_market_ids_from_nav(data)
-        players = _extract_player_names_from_nav(data)
-        print(f"  First 10 marketIds: {sorted(ids)[:10]}")
-        print(f"  Sample players: {dict(list(players.items())[:10])}")
+    """
+    Discovery mode — loads the tournament page and logs all captured XHRs.
+    Useful for debugging what Camoufox is capturing.
+    """
+    logger.info("DISCOVERY MODE — loading tournament page with broad capture")
+    market_ids, player_map, event_name, px_context = _load_tournament_page()
+    print(f"\n=== DISCOVERY RESULTS ===")
+    print(f"event_name : {event_name!r}")
+    print(f"market_ids : {len(market_ids)}")
+    print(f"players    : {len(player_map)}")
+    print(f"px_context : {'YES (%d chars)' % len(px_context) if px_context else 'NO'}")
+    if market_ids:
+        print(f"sample IDs : {sorted(market_ids)[:10]}")
+    if player_map:
+        print(f"sample players: {dict(list(player_map.items())[:5])}")
+    print("=== END ===\n")
 
 
 # ---------------------------------------------------------------------------
@@ -628,25 +692,26 @@ def discover() -> None:
 def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
     scraped_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    # Step 1: fetch all market IDs and player name map from navigation endpoint
-    market_ids, player_map, event_name = fetch_all_market_ids()
+    # Step 1: load tournament page, capture market IDs + px token
+    market_ids, player_map, event_name, px_context = fetch_all_market_ids()
 
     if not market_ids:
-        logger.error("No marketIds found from navigation endpoint. Aborting.")
+        logger.error("No marketIds found from tournament page capture. Aborting.")
         return []
 
     logger.info(
-        "Discovered %d marketIds for %r (%d players in name map)",
-        len(market_ids), event_name, len(player_map),
+        "Discovered %d marketIds for %r (%d players, px=%s)",
+        len(market_ids), event_name, len(player_map), "YES" if px_context else "NO",
     )
 
-    # Step 2: fetch odds for all markets
+    # Step 2: fetch odds for all markets (direct POST, with px token if available)
     market_id_list = sorted(market_ids)
     rows = _fetch_market_prices(
         market_id_list,
         scraped_at=scraped_at,
         event_name=event_name,
         player_map=player_map,
+        px_context=px_context,
     )
 
     # Step 3: summary

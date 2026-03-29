@@ -1,29 +1,39 @@
 """
-FanDuel PGA Tour Market Scraper — v4 (capture-all-POSTs architecture)
+FanDuel PGA Tour Market Scraper — v5
 
-Architecture (confirmed from Eruda mobile network capture 2026-03-28):
+Two scrape modes:
 
-  1. Camoufox loads the current tournament page (URL discovered dynamically)
-  2. Captures ALL getMarketPrices POST requests fired by the page
-     - Extracts every marketId from each POST body
-     - Captures the x-px-context PerimeterX token from request headers
-  3. POSTs ALL discovered marketIds to getMarketPrices in one batch
-     - Uses the captured x-px-context token for auth
-  4. Classifies markets by runner count:
-       2  runners + static IDs → round_score
-       2  runners              → matchup
-       3  runners + static IDs → hole_score
-       3  runners              → three_ball
-       10+ runners, no in-play → finishing_position (top 5/10/20)
-       10+ runners, in-play    → outright_winner
-  5. Builds deep links: fanduelsportsbook://launch?deepLink=addToBetslip%3F...
-  6. Writes to BigQuery: sportsbook.raw_fanduel_pga_markets
+  Default (--scrape-only / no flag):
+    1. Camoufox loads the current tournament page
+    2. Captures ALL getMarketPrices POST requests fired by the page
+       - Extracts every marketId from each POST body
+       - Captures the x-px-context PerimeterX token from request headers
+    3. POSTs ALL discovered marketIds to getMarketPrices in one batch
+
+  From-file (--from-file):
+    1. Reads market IDs directly from markets_player_info snapshot
+    2. Discovers current tournament URL via application-context API
+    3. Uses Camoufox (lightweight) solely to capture the x-px-context token
+    4. POSTs all market IDs to getMarketPrices — no waiting for page POSTs
+
+  Both modes:
+    - Classify markets by runner count:
+        2  runners + static IDs → round_score
+        2  runners              → matchup
+        3  runners + static IDs → hole_score
+        3  runners              → three_ball
+        10+ runners, no in-play → finishing_position (top 5/10/20)
+        10+ runners, in-play    → outright_winner
+    - Build deep links: fanduelsportsbook://launch?deepLink=addToBetslip%3F...
+    - Write to BigQuery: sportsbook.raw_fanduel_pga_markets
 
 Usage:
   python -m mobile_api.ingest.sportsbook.fanduel_pga_scraper --dry-run
   python -m mobile_api.ingest.sportsbook.fanduel_pga_scraper --scrape-only
   python -m mobile_api.ingest.sportsbook.fanduel_pga_scraper --load-only
   python -m mobile_api.ingest.sportsbook.fanduel_pga_scraper --discover
+  python -m mobile_api.ingest.sportsbook.fanduel_pga_scraper --from-file
+  python -m mobile_api.ingest.sportsbook.fanduel_pga_scraper --from-file --dry-run
 """
 
 from __future__ import annotations
@@ -50,6 +60,13 @@ logger = logging.getLogger(__name__)
 DATASET = "sportsbook"
 TABLE = "raw_fanduel_pga_markets"
 ARTIFACT_PATH = "/tmp/fanduel_pga_rows.ndjson"
+
+# Path to the static markets_player_info snapshot used by --from-file mode.
+# Located 3 directories up from this file (project root).
+PLAYER_INFO_PATH = (
+    Path(__file__).resolve().parents[3]
+    / "website_responses/fanduel/pga/markets_player_info"
+)
 
 FD_BASE_URL = "https://sportsbook.fanduel.com"
 
@@ -452,6 +469,62 @@ def discover() -> None:
 
 
 # ---------------------------------------------------------------------------
+# From-file helpers
+# ---------------------------------------------------------------------------
+
+def _extract_market_ids_from_player_info(path: Path = PLAYER_INFO_PATH) -> List[str]:
+    """Parse market IDs out of the markets_player_info snapshot file."""
+    with open(path) as fh:
+        content = fh.read()
+    json_start = content.find('{"layout')
+    if json_start == -1:
+        raise ValueError(f"Could not find JSON payload in {path}")
+    data = json.loads(content[json_start:])
+    markets = data.get("attachments", {}).get("markets", {})
+    if not markets:
+        raise ValueError(f"No markets found in {path}")
+    ids = list(markets.keys())
+    logger.info("Loaded %d market IDs from %s", len(ids), path)
+    return ids
+
+
+def _fetch_px_context_via_camoufox(tournament_url: str) -> str:
+    """Load the tournament page in Camoufox solely to capture the x-px-context token."""
+    logger.info("Fetching x-px-context token via Camoufox (%s)...", tournament_url)
+    result = _call_proxy({
+        "url": tournament_url,
+        "prime_url": tournament_url,
+        "capture_patterns": SCRAPE_CONFIG["capture_patterns"],
+        "wait_ms": 10000,   # short wait — we only need the token, not all POSTs
+        "timeout_ms": 60000,
+    })
+    captured = result.get("captured_requests", [])
+    for capture in captured:
+        req_headers = (
+            capture.get("request_headers")
+            or capture.get("requestHeaders")
+            or {}
+        )
+        if isinstance(req_headers, dict):
+            for hk, hv in req_headers.items():
+                if hk.lower() == "x-px-context":
+                    logger.info("x-px-context captured (%d chars)", len(str(hv)))
+                    return str(hv)
+    logger.warning("x-px-context not found in %d captured requests", len(captured))
+    return ""
+
+
+def _event_name_from_url(tournament_url: str) -> str:
+    """Derive a human-readable event name from a tournament URL."""
+    parts = tournament_url.rstrip("/").split("/")
+    raw = parts[-1] if parts else ""
+    segs = raw.split("-")
+    if segs and segs[-1].isdigit():
+        segs = segs[:-1]
+    return " ".join(p.title() for p in segs if p)
+
+
+# ---------------------------------------------------------------------------
 # Scrape
 # ---------------------------------------------------------------------------
 
@@ -531,6 +604,76 @@ def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
+# Scrape from file
+# ---------------------------------------------------------------------------
+
+def scrape_from_file(dry_run: bool = False) -> List[Dict[str, Any]]:
+    """
+    Faster scrape path using the markets_player_info snapshot for market IDs.
+
+    Steps:
+      1. Read all market IDs from the local markets_player_info file.
+      2. Discover the current tournament URL (and event name) via application-context.
+      3. Use Camoufox (short load) to capture the x-px-context PerimeterX token.
+      4. POST all market IDs to getMarketPrices in batches.
+    """
+    scraped_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # Step 1: market IDs from static file
+    market_ids = _extract_market_ids_from_player_info()
+
+    # Step 2: discover current tournament URL + event name
+    tournament_url = _discover_tournament_url()
+    event_name = _event_name_from_url(tournament_url)
+    logger.info("Tournament: %s (%s)", event_name, tournament_url)
+
+    # Step 3: grab x-px-context token via Camoufox
+    px_context = _fetch_px_context_via_camoufox(tournament_url)
+    if not px_context:
+        logger.warning(
+            "No x-px-context captured — PerimeterX may block requests. "
+            "Proceeding without token."
+        )
+
+    # Step 4: POST all market IDs to getMarketPrices
+    logger.info("Fetching odds for %d markets...", len(market_ids))
+    rows = _fetch_market_prices(
+        market_ids,
+        px_context=px_context,
+        scraped_at=scraped_at,
+        event_name=event_name,
+    )
+
+    by_type: Dict[str, int] = {}
+    for row in rows:
+        mt = row.get("market_type", "other")
+        by_type[mt] = by_type.get(mt, 0) + 1
+
+    logger.info("FanDuel PGA (from-file): %d rows, %d market types", len(rows), len(by_type))
+    for mt, count in sorted(by_type.items(), key=lambda x: -x[1]):
+        logger.info("  %-25s %d", mt, count)
+
+    if not rows:
+        logger.warning("0 rows parsed.")
+
+    if dry_run:
+        seen: Set[str] = set()
+        for row in rows:
+            mt = row.get("market_type", "")
+            if mt not in seen:
+                seen.add(mt)
+                print(json.dumps(row, default=str))
+        return rows
+
+    Path(ARTIFACT_PATH).parent.mkdir(parents=True, exist_ok=True)
+    with open(ARTIFACT_PATH, "w") as fh:
+        for row in rows:
+            fh.write(json.dumps(row, default=str) + "\n")
+    logger.info("Wrote %d rows to %s", len(rows), ARTIFACT_PATH)
+    return rows
+
+
+# ---------------------------------------------------------------------------
 # Load
 # ---------------------------------------------------------------------------
 
@@ -577,11 +720,20 @@ def load() -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="FanDuel PGA Tour market scraper v4")
+    parser = argparse.ArgumentParser(description="FanDuel PGA Tour market scraper v5")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--scrape-only", action="store_true")
     group.add_argument("--load-only", action="store_true")
     group.add_argument("--discover", action="store_true")
+    group.add_argument(
+        "--from-file",
+        action="store_true",
+        help=(
+            "Read market IDs from markets_player_info snapshot instead of "
+            "waiting for Camoufox to capture them from page POSTs. "
+            "Camoufox is still used to obtain the x-px-context token."
+        ),
+    )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -589,6 +741,10 @@ def main() -> None:
         load()
     elif args.discover:
         discover()
+    elif args.from_file:
+        rows = scrape_from_file(dry_run=args.dry_run)
+        if not args.dry_run:
+            load()
     else:
         rows = scrape(dry_run=args.dry_run)
         if not args.scrape_only and not args.dry_run:

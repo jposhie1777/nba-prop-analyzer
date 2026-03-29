@@ -64,10 +64,47 @@ ARTIFACT_PATH = "/tmp/fanduel_pga_rows.ndjson"
 
 FD_APP_CONTEXT_URL = (
     "https://api.sportsbook.fanduel.com/sbapi/application-context"
-    "?dataEntries=EVENT_TYPES&_ak=FhMFpcPWXMeyZxOx"
+    "?dataEntries=POPULAR_BETTING,QUICK_LINKS,AZ_BETTING,EVENT_TYPES,TEASER_COMPS&_ak=FhMFpcPWXMeyZxOx"
 )
 FD_GOLF_EVENT_TYPE_ID = "3"  # Golf event type ID confirmed from discovery
 FD_BASE_URL = "https://sportsbook.fanduel.com"
+
+# Required headers for FanDuel sbapi direct calls
+FD_API_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Accept": "application/json",
+    "x-sportsbook-region": "IA",  # Iowa — required by sbapi, no geoblocking
+    "x-api-key": "FhMFpcPWXMeyZxOx",
+}
+
+
+def _extract_tournament_url_from_context(data: Dict[str, Any]) -> Optional[str]:
+    """
+    Parse current golf tournament URL from application-context response.
+    Looks in the 'events' dict for golf events (eventTypeId=3).
+    """
+    events = data.get("events") or {}
+    best_event = None
+    best_start = ""
+    for ev_id, ev in events.items():
+        if not isinstance(ev, dict):
+            continue
+        if str(ev.get("eventTypeId", "")) != FD_GOLF_EVENT_TYPE_ID:
+            continue
+        seo = ev.get("seoIdentifier") or ev.get("slug") or ""
+        start = ev.get("openDate") or ev.get("startTime") or ""
+        name = ev.get("eventName") or ev.get("name") or ""
+        if seo and ev_id:
+            if best_start == "" or start > best_start:
+                best_start = start
+                best_event = (ev_id, seo, name)
+
+    if best_event:
+        ev_id, seo, name = best_event
+        url = f"{FD_BASE_URL}/golf/{seo}-{ev_id}"
+        logger.info("FanDuel PGA: current tournament → %s (%s)", name, url)
+        return url
+    return None
 
 
 def _discover_tournament_url() -> str:
@@ -79,66 +116,26 @@ def _discover_tournament_url() -> str:
     """
     fallback = "https://sportsbook.fanduel.com/golf"
     try:
-        resp = requests.get(
-            FD_APP_CONTEXT_URL,
-            headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"},
-            timeout=15,
-        )
+        resp = requests.get(FD_APP_CONTEXT_URL, headers=FD_API_HEADERS, timeout=15)
         resp.raise_for_status()
         data = resp.json()
-
-        # EVENT_TYPES contains sport nav links including current golf events
-        event_types = data.get("EVENT_TYPES") or {}
-        events = data.get("events") or {}
-
-        # Look for golf (eventTypeId=3) competitions with active events
-        # The layout links contain competitionId → look up event names
-        layout = event_types.get("layout") or {}
-        links = layout.get("links") or {}
-
-        # Also check attachments/coupons for active golf events
-        attachments = event_types.get("attachments") or {}
-        competitions = attachments.get("competitions") or {}
-
-        # Find the most recently started golf event
-        best_event = None
-        best_start = None
-        for ev_id, ev in events.items():
-            if not isinstance(ev, dict):
-                continue
-            if str(ev.get("eventTypeId", "")) != FD_GOLF_EVENT_TYPE_ID:
-                continue
-            seo = ev.get("seoIdentifier") or ev.get("slug") or ""
-            start = ev.get("openDate") or ev.get("startTime") or ""
-            name = ev.get("eventName") or ev.get("name") or ""
-            if seo and ev_id:
-                if best_start is None or start > best_start:
-                    best_start = start
-                    best_event = (ev_id, seo, name)
-
-        if best_event:
-            ev_id, seo, name = best_event
-            url = f"{FD_BASE_URL}/golf/{seo}-{ev_id}"
-            logger.info("FanDuel PGA: current tournament → %s (%s)", name, url)
+        url = _extract_tournament_url_from_context(data)
+        if url:
             return url
-
-        # Fallback: check coupons in the content-managed-page layout for golf events
-        logger.warning("FanDuel PGA: no current golf event found in application-context — using fallback")
+        logger.warning("FanDuel PGA: no current golf event found in application-context")
     except Exception as exc:
         logger.warning("FanDuel PGA: tournament discovery failed: %s — using fallback", exc)
-
     return fallback
 
 
 SCRAPE_CONFIG = {
     "url": "https://sportsbook.fanduel.com/golf",
     "prime_url": "https://sportsbook.fanduel.com",
-    # Confirmed from discovery run [50], [54-63]
     "capture_patterns": [
         "api.sportsbook.fanduel.com/sbapi/content-managed-page",
+        "api.sportsbook.fanduel.com/sbapi/application-context",
         "smp.ia.sportsbook.fanduel.com/api/sports/fixedodds",
     ],
-    # 25s — getMarketPrices polls repeatedly; we want several cycles
     "wait_ms": 25000,
 }
 
@@ -522,15 +519,39 @@ def _parse_captured(captured: List[Dict[str, Any]], scraped_at: str) -> List[Dic
 
 def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
     cfg = SCRAPE_CONFIG
+    scraped_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    # Dynamically find the current tournament URL
+    # Phase 1: find current tournament URL
     tournament_url = _discover_tournament_url()
-    logger.info("Calling Camoufox proxy for FanDuel PGA → %s", tournament_url)
 
+    if tournament_url == "https://sportsbook.fanduel.com/golf":
+        # Direct API failed — load the sport hub first to capture application-context
+        # from the browser session, then extract the tournament URL from it
+        logger.info("FanDuel PGA: loading sport hub to discover tournament URL...")
+        hub_result = _call_proxy({
+            "url": cfg["url"],
+            "prime_url": cfg["prime_url"],
+            "capture_patterns": cfg["capture_patterns"],
+            "wait_ms": 15000,  # shorter wait — just need app-context
+            "timeout_ms": 60000,
+        })
+        for capture in hub_result.get("captured_requests", []):
+            if "application-context" in capture.get("url", "") and isinstance(capture.get("body"), dict):
+                found = _extract_tournament_url_from_context(capture["body"])
+                if found:
+                    tournament_url = found
+                    logger.info("FanDuel PGA: tournament URL from browser session: %s", tournament_url)
+                    break
+
+    # Phase 2: load the tournament page to capture market layout + prices
+    logger.info("FanDuel PGA: loading tournament page → %s", tournament_url)
     result = _call_proxy({
         "url": tournament_url,
         "prime_url": tournament_url,
-        "capture_patterns": cfg["capture_patterns"],
+        "capture_patterns": [
+            "api.sportsbook.fanduel.com/sbapi/content-managed-page",
+            "smp.ia.sportsbook.fanduel.com/api/sports/fixedodds",
+        ],
         "wait_ms": cfg["wait_ms"],
         "timeout_ms": 90000,
     })

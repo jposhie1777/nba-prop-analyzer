@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 
 DATASET = "sportsbook"
 TABLE = "raw_fanduel_soccer_markets"
-ARTIFACT_PATTERN = "/tmp/fanduel_soccer_{league}_rows.ndjson"
+ARTIFACT_PATTERN = "/tmp/fanduel_{league}_rows.ndjson"
 
 FD_BASE_URL = "https://sportsbook.fanduel.com"
 
@@ -71,6 +71,7 @@ FD_API_HEADERS = {
     "Origin": "https://sportsbook.fanduel.com",
     "Referer": "https://sportsbook.fanduel.com/",
     "X-Application": "FhMFpcPWXMeyZxOx",
+    "x-sportsbook-region": "IA",
 }
 
 MARKET_PRICES_BATCH_SIZE = 50
@@ -306,8 +307,8 @@ def _extract_market_to_event_map(data: Dict[str, Any]) -> Dict[str, str]:
 
 def _extract_events_from_nav(data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     """
-    Build event_id → {name, home_team, away_team, event_start} from nav attachments.
-    FanDuel event names use "Home v Away" format.
+    Build event_id → {name, home_team, away_team, event_start, competition_id}
+    from nav attachments. FanDuel event names use "Home v Away" format.
     """
     events: Dict[str, Dict[str, Any]] = {}
     for event_id, ev in data.get("attachments", {}).get("events", {}).items():
@@ -329,11 +330,13 @@ def _extract_events_from_nav(data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
                 ).strftime("%Y-%m-%dT%H:%M:%S")
             except Exception:
                 event_start = start_raw
+        competition_id = str(ev.get("competitionId") or ev.get("competition_id") or "")
         events[str(event_id)] = {
             "name": name,
             "home_team": home_team or None,
             "away_team": away_team or None,
             "event_start": event_start,
+            "competition_id": competition_id,
         }
     return events
 
@@ -676,12 +679,20 @@ def _fetch_market_prices(
 def _identify_near_term_events(
     event_map: Dict[str, Dict[str, Any]],
     days: int = NEAR_TERM_DAYS,
+    competition_id: str = "",
 ) -> List[str]:
-    """Return event IDs whose kickoff falls within the next `days` days (UTC)."""
+    """Return event IDs whose kickoff falls within the next `days` days (UTC).
+
+    If competition_id is provided, only events belonging to that competition
+    are included (prevents cross-sport contamination when the captured nav
+    contains events from multiple sports).
+    """
     now = datetime.now(timezone.utc)
     cutoff = now + timedelta(days=days)
     near_term: List[str] = []
     for event_id, ev in event_map.items():
+        if competition_id and ev.get("competition_id") not in ("", competition_id):
+            continue
         start_raw = ev.get("event_start")
         if not start_raw:
             continue
@@ -802,12 +813,29 @@ def scrape(league: str, dry_run: bool = False) -> List[Dict[str, Any]]:
         return []
 
     logger.info(
-        "Phase 1 complete: %d marketIds (moneylines), %d events, px=%s",
+        "Phase 1 complete: %d marketIds, %d events (total captured), px=%s",
         len(market_ids), len(event_map), "YES" if px_context else "NO",
     )
 
+    # Filter everything down to the target competition to avoid cross-sport
+    # contamination (the HOMEPAGE nav response contains events from ALL sports).
+    competition_id = LEAGUE_CONFIG[league]["competition_id"]
+    target_event_ids: Set[str] = {
+        eid for eid, ev in event_map.items()
+        if not competition_id or ev.get("competition_id") in ("", competition_id)
+    }
+    # Remove events and markets that don't belong to this league
+    event_map = {eid: ev for eid, ev in event_map.items() if eid in target_event_ids}
+    market_to_event = {mid: eid for mid, eid in market_to_event.items() if eid in target_event_ids}
+    market_ids = {mid for mid in market_ids if mid in market_to_event}
+
+    logger.info(
+        "After competition filter (id=%s): %d marketIds, %d events",
+        competition_id, len(market_ids), len(event_map),
+    )
+
     # Phase 2: fetch full market data for near-term events (next 8 days)
-    near_term = _identify_near_term_events(event_map)
+    near_term = _identify_near_term_events(event_map, competition_id=competition_id)
     logger.info(
         "Phase 2: %d near-term events (next %d days) → fetching all tabs",
         len(near_term), NEAR_TERM_DAYS,

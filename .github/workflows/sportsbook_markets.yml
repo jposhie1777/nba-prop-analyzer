@@ -192,6 +192,14 @@ jobs:
             done
           fi
 
+      # Guarantee the artifact file exists even when the scraper produced 0 rows
+      # (no fixtures scheduled, proxy timeout, etc.). Without this, upload-artifact
+      # silently skips the upload and download-artifact in the load job errors with
+      # "Artifact not found". The artifact_check step below prevents an empty BQ write.
+      - name: Ensure artifact file exists
+        if: steps.filter.outputs.skip != 'true' && inputs.dry_run != true && inputs.discover != true
+        run: touch ${{ matrix.artifact_path }}
+
       - name: Upload scrape artifact
         if: steps.filter.outputs.skip != 'true' && inputs.dry_run != true && inputs.discover != true
         uses: actions/upload-artifact@v4

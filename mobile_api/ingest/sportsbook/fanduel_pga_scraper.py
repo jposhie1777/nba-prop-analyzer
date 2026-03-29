@@ -139,6 +139,17 @@ def _discover_tournament_url() -> str:
     "wait_ms": 25000,
 }
 
+SCRAPE_CONFIG = {
+    "url": "https://sportsbook.fanduel.com/golf",
+    "prime_url": "https://sportsbook.fanduel.com",
+    "capture_patterns": [
+        "api.sportsbook.fanduel.com/sbapi/content-managed-page",
+        "smp.ia.sportsbook.fanduel.com/api/sports/fixedodds",
+    ],
+    "wait_ms": 25000,
+}
+
+
 DISCOVER_PATTERNS = [
     "fanduel.com",
     "api.",

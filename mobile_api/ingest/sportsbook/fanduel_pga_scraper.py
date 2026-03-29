@@ -146,64 +146,77 @@ def _fetch_navigation(tab: str = "") -> Optional[Dict[str, Any]]:
     """
     Fetch the FanDuel PGA navigation JSON for a given tab via Camoufox.
 
-    The navigation endpoint returns HTML to plain HTTP clients but serves
-    JSON to authenticated browser sessions. We use Camoufox to make the
-    request look like a real browser XHR and capture the JSON response body.
+    Strategy: load the golf page URL (which triggers the navigation XHR
+    automatically on page load) and capture the /navigation/pga XHR response.
 
-    The proxy payload uses `capture_patterns` to intercept the XHR that
-    the page fires for navigation data, and `extract_json_url` to pull the
-    response body of that specific request.
+    We do NOT load the navigation URL directly — Camoufox would render it as
+    HTML. Instead we load the golf page and let the browser fire the XHR.
+
+    Tab handling: FanDuel fires the navigation XHR when the tab query param
+    is in the page URL, so we load /golf?tab=<tab> to trigger the right XHR.
     """
-    url = FD_NAV_URL
+    # Load the golf page with the tab param — this triggers the navigation XHR
     if tab:
-        url = f"{FD_NAV_URL}?tab={tab}"
+        page_url = f"{FD_BASE_URL}/golf?tab={tab}"
+    else:
+        page_url = f"{FD_BASE_URL}/golf"
 
-    logger.info("Fetching navigation tab=%r via Camoufox → %s", tab or "default", url)
+    logger.info("Fetching navigation tab=%r via Camoufox golf page → %s", tab or "default", page_url)
 
     try:
         result = _call_proxy({
-            "url": url,
-            "capture_patterns": ["sportsbook.fanduel.com/navigation/"],
-            "wait_ms": 8000,
-            "timeout_ms": 30000,
-            # Tell proxy to treat this as a direct JSON fetch
-            # (load the URL as if it were an XHR, return body directly)
-            "as_json": True,
+            "url": page_url,
+            "capture_patterns": ["sportsbook.fanduel.com/navigation/pga"],
+            "wait_ms": 15000,
+            "timeout_ms": 45000,
         })
 
-        # The proxy may return the JSON body directly in result["body"]
-        # or as the first captured request's body
-        body = result.get("body")
-        if isinstance(body, dict) and ("layout" in body or "attachments" in body):
-            logger.info("  → JSON body from proxy response (keys=%s)", list(body.keys())[:6])
-            return body
-
-        # Check captured requests
         captured = result.get("captured_requests", [])
+        page_status = result.get("status", 0)
+        logger.info(
+            "  page_status=%s  captured=%d",
+            page_status, len(captured),
+        )
+
+        # Log ALL captured URLs so we can see what's firing
+        for i, cap in enumerate(captured):
+            cap_url = cap.get("url", "")
+            cap_body = cap.get("body")
+            body_type = type(cap_body).__name__
+            body_preview = ""
+            if isinstance(cap_body, str):
+                body_preview = cap_body[:80]
+            elif isinstance(cap_body, dict):
+                body_preview = str(list(cap_body.keys())[:5])
+            logger.info("  captured[%d] %s  body_type=%s  preview=%r", i, cap_url[:100], body_type, body_preview)
+
+        # Find the navigation XHR response
         for cap in captured:
             cap_url = cap.get("url", "")
-            if "navigation" in cap_url:
-                cap_body = cap.get("body")
-                if isinstance(cap_body, dict) and (
-                    "layout" in cap_body or "attachments" in cap_body
-                ):
-                    logger.info("  → JSON from captured request: %s", cap_url[:80])
-                    return cap_body
+            if "navigation/pga" not in cap_url:
+                continue
+            cap_body = cap.get("body")
 
-        # If body is a string, try parsing it
-        if isinstance(body, str) and body.strip().startswith("{"):
-            parsed = json.loads(body)
-            if isinstance(parsed, dict):
-                logger.info("  → Parsed JSON string from proxy body")
-                return parsed
+            # Best case: proxy already parsed it as a dict
+            if isinstance(cap_body, dict) and (
+                "layout" in cap_body or "attachments" in cap_body or "coupons" in cap_body
+            ):
+                logger.info("  → JSON dict from captured navigation XHR: %s", cap_url[:80])
+                return cap_body
+
+            # String body — try JSON parse
+            if isinstance(cap_body, str) and cap_body.strip().startswith("{"):
+                try:
+                    parsed = json.loads(cap_body)
+                    if isinstance(parsed, dict):
+                        logger.info("  → Parsed JSON string from captured navigation XHR")
+                        return parsed
+                except json.JSONDecodeError:
+                    logger.warning("  captured navigation body is not valid JSON")
 
         logger.warning(
-            "  navigation tab=%r: no usable JSON in proxy response "
-            "(status=%s, body_type=%s, captured=%d)",
-            tab or "default",
-            result.get("status"),
-            type(body).__name__,
-            len(captured),
+            "  navigation tab=%r: /navigation/pga XHR not found in %d captured requests",
+            tab or "default", len(captured),
         )
         return None
 
@@ -323,37 +336,64 @@ def fetch_all_market_ids() -> Tuple[Set[str], Dict[str, str], str]:
     all_player_map: Dict[str, str] = {}
     event_name = ""
 
+    def _ingest_nav_data(nav_data: Dict[str, Any], tab_hint: str) -> None:
+        nonlocal event_name
+        ids = _extract_market_ids_from_nav(nav_data) | _extract_external_market_ids_from_nav(nav_data)
+        players = _extract_player_names_from_nav(nav_data)
+        all_market_ids.update(ids)
+        all_player_map.update(players)
+        if not event_name:
+            event_name = _extract_event_name_from_nav(nav_data)
+        logger.info("  tab=%-25r  marketIds=%d  players=%d", tab_hint, len(ids), len(players))
+
+    def _parse_cap_body(cap_body: Any) -> Optional[Dict[str, Any]]:
+        if isinstance(cap_body, dict) and ("layout" in cap_body or "attachments" in cap_body):
+            return cap_body
+        if isinstance(cap_body, str) and cap_body.strip().startswith("{"):
+            try:
+                parsed = json.loads(cap_body)
+                if isinstance(parsed, dict):
+                    return parsed
+            except json.JSONDecodeError:
+                pass
+        return None
+
+    # --- Step 1: single golf page load, capture all auto-fired navigation XHRs ---
+    logger.info("Loading golf page to capture all auto-fired navigation XHRs...")
+    try:
+        result = _call_proxy({
+            "url": f"{FD_BASE_URL}/golf",
+            "capture_patterns": ["sportsbook.fanduel.com/navigation/pga"],
+            "wait_ms": 20000,
+            "timeout_ms": 60000,
+        })
+        captured = result.get("captured_requests", [])
+        logger.info("  golf page: status=%s  captured=%d", result.get("status"), len(captured))
+
+        for cap in captured:
+            cap_url = cap.get("url", "")
+            tab_hint = cap_url.split("tab=")[-1] if "tab=" in cap_url else "default"
+            nav_data = _parse_cap_body(cap.get("body"))
+            if nav_data:
+                _ingest_nav_data(nav_data, tab_hint)
+            else:
+                logger.info("  tab=%-25r  no JSON (body_type=%s  url=%s)",
+                            tab_hint, type(cap.get("body")).__name__, cap_url[:80])
+
+    except Exception as exc:
+        logger.warning("Single page load failed: %s — will rely on per-tab fetches", exc)
+
+    # --- Step 2: per-tab fetches for remaining tabs ---
+    # The golf page likely only auto-fires the default tab's navigation XHR.
+    # Load each other tab explicitly via the golf page URL with ?tab=<tab>.
     for tab in NAV_TABS:
+        if not tab:
+            continue  # default already loaded above
         data = _fetch_navigation(tab)
         if not data:
-            logger.warning("Skipping tab=%r — no data returned", tab or "default")
+            logger.warning("  tab=%r — no data returned", tab)
             continue
-
-        # Market IDs from coupon layout
-        ids_from_layout = _extract_market_ids_from_nav(data)
-
-        # Market IDs from fully-loaded attachments
-        ids_from_attachments = _extract_external_market_ids_from_nav(data)
-
-        tab_ids = ids_from_layout | ids_from_attachments
-        logger.info(
-            "Tab %-25s → layout=%d  attachments=%d  total=%d",
-            repr(tab or "default"),
-            len(ids_from_layout),
-            len(ids_from_attachments),
-            len(tab_ids),
-        )
-        all_market_ids |= tab_ids
-
-        # Player names (merge — later tabs may add more players)
-        player_map = _extract_player_names_from_nav(data)
-        all_player_map.update(player_map)
-
-        # Event name from first tab that has it
-        if not event_name:
-            event_name = _extract_event_name_from_nav(data)
-
-        # Be polite between tab requests
+        _ingest_nav_data(data, tab)
         time.sleep(2)
 
     logger.info(

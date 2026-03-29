@@ -1,39 +1,39 @@
 """
-FanDuel PGA Tour Market Scraper — v5
+FanDuel PGA Tour Market Scraper — v6
 
-Two scrape modes:
+Default scrape flow:
+  1. Discover current tournament URL via application-context API (plain GET, no auth).
+  2. Camoufox loads the tournament page and captures:
+       a. content-managed-page response  → PRIMARY source for all market IDs
+       b. x-px-context header            → PerimeterX auth token for getMarketPrices
+       c. application-context response   → event name (if not already known)
+       d. getMarketPrices POST bodies    → FALLBACK market IDs if (a) is missed
+  3. Extract market IDs from content-managed-page attachments.markets dict.
+     Falls back to market IDs captured from getMarketPrices POST bodies.
+  4. POST all market IDs to getMarketPrices in batches of 50.
+  5. Classify each market by runner count:
+       2  runners + static IDs → round_score
+       2  runners              → matchup
+       3  runners + static IDs → hole_score
+       3  runners              → three_ball
+       10+ runners, no in-play → finishing_position (top 5/10/20)
+       10+ runners, in-play    → outright_winner
+  6. Build deep links: fanduelsportsbook://launch?deepLink=addToBetslip%3F...
+  7. Write to BigQuery: sportsbook.raw_fanduel_pga_markets
 
-  Default (--scrape-only / no flag):
-    1. Camoufox loads the current tournament page
-    2. Captures ALL getMarketPrices POST requests fired by the page
-       - Extracts every marketId from each POST body
-       - Captures the x-px-context PerimeterX token from request headers
-    3. POSTs ALL discovered marketIds to getMarketPrices in one batch
-
-  From-file (--from-file):
-    1. Reads market IDs directly from markets_player_info snapshot
-    2. Discovers current tournament URL via application-context API
-    3. Uses Camoufox (lightweight) solely to capture the x-px-context token
-    4. POSTs all market IDs to getMarketPrices — no waiting for page POSTs
-
-  Both modes:
-    - Classify markets by runner count:
-        2  runners + static IDs → round_score
-        2  runners              → matchup
-        3  runners + static IDs → hole_score
-        3  runners              → three_ball
-        10+ runners, no in-play → finishing_position (top 5/10/20)
-        10+ runners, in-play    → outright_winner
-    - Build deep links: fanduelsportsbook://launch?deepLink=addToBetslip%3F...
-    - Write to BigQuery: sportsbook.raw_fanduel_pga_markets
+Emergency fallback (--from-file):
+  Reads market IDs from local markets_player_info snapshot instead of the live
+  website. Use only when Camoufox cannot capture content-managed-page (e.g.
+  network issue or layout change). Tournament URL and x-px-context are still
+  fetched dynamically.
 
 Usage:
+  python -m mobile_api.ingest.sportsbook.fanduel_pga_scraper
   python -m mobile_api.ingest.sportsbook.fanduel_pga_scraper --dry-run
   python -m mobile_api.ingest.sportsbook.fanduel_pga_scraper --scrape-only
   python -m mobile_api.ingest.sportsbook.fanduel_pga_scraper --load-only
   python -m mobile_api.ingest.sportsbook.fanduel_pga_scraper --discover
-  python -m mobile_api.ingest.sportsbook.fanduel_pga_scraper --from-file
-  python -m mobile_api.ingest.sportsbook.fanduel_pga_scraper --from-file --dry-run
+  python -m mobile_api.ingest.sportsbook.fanduel_pga_scraper --from-file [--dry-run]
 """
 
 from __future__ import annotations
@@ -99,11 +99,16 @@ SCRAPE_CONFIG = {
     "url": f"{FD_BASE_URL}/golf",
     "prime_url": f"{FD_BASE_URL}/golf",
     "capture_patterns": [
+        # PRIMARY: full market layout including all market IDs — fires early in page load
+        "api.sportsbook.fanduel.com/sbapi/content-managed-page",
+        # x-px-context token source + fallback market IDs
         "smp.ia.sportsbook.fanduel.com/api/sports/fixedodds",
         "smp.nj.sportsbook.fanduel.com/api/sports/fixedodds",
+        # event name / tournament discovery
         "api.sportsbook.fanduel.com/sbapi/application-context",
     ],
-    "wait_ms": 30000,
+    # content-managed-page fires early; 20 s is enough and keeps the daily run fast
+    "wait_ms": 20000,
 }
 
 DISCOVER_PATTERNS = ["fanduel.com", "api.", "smp."]
@@ -378,13 +383,46 @@ def _fetch_market_prices(
 # Browser capture extraction
 # ---------------------------------------------------------------------------
 
+def _extract_market_ids_from_content_managed_page(body: Dict[str, Any]) -> List[str]:
+    """
+    Parse all market IDs from a content-managed-page response body.
+    The body contains attachments.markets keyed by marketId.
+    """
+    markets = body.get("attachments", {}).get("markets", {})
+    ids = [str(k) for k in markets.keys() if k]
+    if ids:
+        logger.info("  → content-managed-page: %d market IDs", len(ids))
+    return ids
+
+
+def _extract_event_name_from_content_managed_page(body: Dict[str, Any]) -> str:
+    """
+    Try to pull a human-readable event name from content-managed-page attachments.
+    Uses the first competition name found that looks like a tournament.
+    """
+    competitions = body.get("attachments", {}).get("competitions", {})
+    for comp in competitions.values():
+        if not isinstance(comp, dict):
+            continue
+        name = comp.get("name") or comp.get("competitionName") or ""
+        if name and "pga" not in name.lower() and len(name) > 4:
+            return name
+    return ""
+
+
 def _extract_from_captures(
     captured: List[Dict[str, Any]],
 ) -> Tuple[Set[str], str, str]:
     """
+    Walk all captured requests/responses and extract:
+      - market_ids   : from content-managed-page (primary) or getMarketPrices POSTs (fallback)
+      - px_context   : x-px-context PerimeterX token from any request headers
+      - event_name   : from application-context or content-managed-page competitions
+
     Returns: (market_ids, px_context, event_name)
     """
-    market_ids: Set[str] = set()
+    content_managed_ids: List[str] = []  # primary
+    fallback_ids: Set[str] = set()       # from getMarketPrices POST bodies
     px_context = ""
     event_name = ""
 
@@ -399,28 +437,34 @@ def _extract_from_captures(
 
         logger.info("  captured[%d]: %s", i, url[:100])
 
-        # Grab x-px-context from any request headers
+        # x-px-context — grab from the headers of any captured request
         if not px_context and isinstance(req_headers, dict):
             for hk, hv in req_headers.items():
-                if hk.lower() in ("x-px-context",):
+                if hk.lower() == "x-px-context":
                     px_context = str(hv)
                     logger.info("  → x-px-context captured (%d chars)", len(px_context))
                     break
 
-        # Extract marketIds from getMarketPrices POST bodies
+        # PRIMARY: content-managed-page response body → all market IDs + optional event name
+        if "content-managed-page" in url and isinstance(body, dict):
+            ids = _extract_market_ids_from_content_managed_page(body)
+            content_managed_ids.extend(ids)
+            if not event_name:
+                event_name = _extract_event_name_from_content_managed_page(body)
+
+        # FALLBACK: getMarketPrices POST request bodies → market IDs the page already loaded
         if "getMarketPrices" in url:
             if isinstance(body, dict) and "marketIds" in body:
                 ids = [str(m) for m in body["marketIds"] if m]
-                market_ids.update(ids)
-                logger.info("  → POST body: %d marketIds", len(ids))
+                fallback_ids.update(ids)
+                logger.info("  → getMarketPrices POST body: %d marketIds", len(ids))
             elif isinstance(body, list):
-                # response body — grab marketIds from there too
                 for mkt in body:
                     if isinstance(mkt, dict) and mkt.get("marketId"):
-                        market_ids.add(str(mkt["marketId"]))
+                        fallback_ids.add(str(mkt["marketId"]))
 
-        # Extract event name from application-context
-        if "application-context" in url and isinstance(body, dict) and not event_name:
+        # Event name from application-context (most reliable source)
+        if "application-context" in url and isinstance(body, dict):
             ctx_url = _extract_tournament_url_from_context(body)
             if ctx_url:
                 parts = ctx_url.rstrip("/").split("/")
@@ -430,6 +474,20 @@ def _extract_from_captures(
                     if segs and segs[-1].isdigit():
                         segs = segs[:-1]
                     event_name = " ".join(p.title() for p in segs)
+
+    # Prefer content-managed-page market IDs; fall back to getMarketPrices POST bodies
+    if content_managed_ids:
+        market_ids = set(content_managed_ids)
+        logger.info("Market IDs source: content-managed-page (%d IDs)", len(market_ids))
+    elif fallback_ids:
+        market_ids = fallback_ids
+        logger.warning(
+            "content-managed-page not captured — using getMarketPrices POST fallback "
+            "(%d IDs). Consider running --discover to check capture patterns.",
+            len(market_ids),
+        )
+    else:
+        market_ids = set()
 
     logger.info(
         "Extraction complete: %d marketIds, px_context=%s, event=%s",
@@ -535,7 +593,7 @@ def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
     tournament_url = _discover_tournament_url()
     logger.info("Loading: %s", tournament_url)
 
-    # Step 2: Camoufox browser load — captures getMarketPrices POSTs
+    # Step 2: Camoufox browser load — captures content-managed-page + x-px-context
     result = _call_proxy({
         "url": tournament_url,
         "prime_url": tournament_url,
@@ -554,7 +612,10 @@ def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
     market_ids, px_context, event_name = _extract_from_captures(captured)
 
     if not market_ids:
-        logger.warning("No marketIds captured. Run --discover to debug.")
+        logger.warning(
+            "No market IDs captured from content-managed-page or getMarketPrices POSTs. "
+            "Run --discover to inspect captured URLs, or --from-file as emergency fallback."
+        )
         return []
 
     if not px_context:
@@ -609,12 +670,17 @@ def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
 
 def scrape_from_file(dry_run: bool = False) -> List[Dict[str, Any]]:
     """
-    Faster scrape path using the markets_player_info snapshot for market IDs.
+    Emergency fallback: read market IDs from the local markets_player_info snapshot
+    instead of the live website.
+
+    Use this only when Camoufox cannot capture the content-managed-page response
+    (e.g. a network issue or a FanDuel layout change that breaks normal capture).
+    The snapshot may not reflect newly added or removed markets until refreshed.
 
     Steps:
-      1. Read all market IDs from the local markets_player_info file.
-      2. Discover the current tournament URL (and event name) via application-context.
-      3. Use Camoufox (short load) to capture the x-px-context PerimeterX token.
+      1. Read all market IDs from website_responses/fanduel/pga/markets_player_info.
+      2. Discover the current tournament URL + event name via application-context API.
+      3. Use Camoufox (short load) solely to capture the x-px-context token.
       4. POST all market IDs to getMarketPrices in batches.
     """
     scraped_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -729,9 +795,10 @@ def main() -> None:
         "--from-file",
         action="store_true",
         help=(
-            "Read market IDs from markets_player_info snapshot instead of "
-            "waiting for Camoufox to capture them from page POSTs. "
-            "Camoufox is still used to obtain the x-px-context token."
+            "Emergency fallback: read market IDs from the local markets_player_info "
+            "snapshot instead of capturing them live from the website. Use when "
+            "Camoufox cannot capture the content-managed-page response. "
+            "Tournament URL and x-px-context are still fetched dynamically."
         ),
     )
     parser.add_argument("--dry-run", action="store_true")

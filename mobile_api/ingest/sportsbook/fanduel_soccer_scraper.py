@@ -906,9 +906,35 @@ def scrape(league: str, dry_run: bool = False) -> List[Dict[str, Any]]:
 # Load
 # ---------------------------------------------------------------------------
 
+_BQ_SCHEMA = [
+    ("scraped_at",      "TIMESTAMP"),
+    ("source",          "STRING"),
+    ("league",          "STRING"),
+    ("event_id",        "STRING"),
+    ("home_team",       "STRING"),
+    ("away_team",       "STRING"),
+    ("event_start",     "STRING"),
+    ("market_id",       "STRING"),
+    ("market_name",     "STRING"),
+    ("market_type",     "STRING"),
+    ("market_type_raw", "STRING"),
+    ("market_status",   "STRING"),
+    ("turn_in_play",    "BOOLEAN"),
+    ("inplay",          "BOOLEAN"),
+    ("selection_id",    "STRING"),
+    ("selection_name",  "STRING"),
+    ("runner_status",   "STRING"),
+    ("handicap",        "FLOAT64"),
+    ("odds_decimal",    "FLOAT64"),
+    ("odds_american",   "STRING"),
+    ("deep_link",       "STRING"),
+    ("raw_response",    "STRING"),
+]
+
+
 def load(league: str) -> None:
     from google.cloud import bigquery
-    from google.cloud.bigquery import LoadJobConfig, SourceFormat
+    from google.cloud.bigquery import LoadJobConfig, SchemaField, SourceFormat
     import io
 
     league = league.upper()
@@ -932,11 +958,13 @@ def load(league: str) -> None:
     client = bigquery.Client(project=project)
     table_id = f"{project}.{DATASET}.{TABLE}"
 
+    schema = [SchemaField(name, ftype) for name, ftype in _BQ_SCHEMA]
     ndjson_bytes = "\n".join(json.dumps(r, default=str) for r in rows).encode()
     job_config = LoadJobConfig(
         source_format=SourceFormat.NEWLINE_DELIMITED_JSON,
         write_disposition="WRITE_APPEND",
         autodetect=False,
+        schema=schema,
     )
     job = client.load_table_from_file(io.BytesIO(ndjson_bytes), table_id, job_config=job_config)
     job.result()

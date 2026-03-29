@@ -1,37 +1,21 @@
 """
-FanDuel Soccer Market Scraper.
+FanDuel Soccer Market Scraper — v3
 
-Calls the Camoufox Cloud Run proxy to load FanDuel soccer pages with real
-browser TLS fingerprinting, captures internal API responses, parses
-marketId + selectionId values for FanDuel deep links, and writes rows to
-BigQuery table: oddspedia.raw_fanduel_soccer_markets
+Architecture:
+  1. Camoufox loads the MLS or EPL competition page
+  2. Captures ALL XHRs matching broad patterns (sbapi nav + getMarketPrices)
+  3. From captured requests:
+       - Nav response body (sbapi)   → all market IDs, event info, market names, runner names
+       - getMarketPrices response    → additional market IDs
+       - Any request headers         → x-px-context token
+  4. POSTs all discovered market IDs to getMarketPrices directly (with px token)
+  5. Classifies markets, builds deep links, writes to BigQuery
 
-Usage (called by sportsbook_soccer_markets.yml workflow):
-
-  # Scrape only — write NDJSON to /tmp/fanduel_<league>_rows.ndjson
-  python -m mobile_api.ingest.sportsbook.fanduel_soccer_scraper \
-      --scrape-only --league EPL
-
-  # Load only — read from /tmp/ and insert into BigQuery
-  python -m mobile_api.ingest.sportsbook.fanduel_soccer_scraper \
-      --load-only --league EPL
-
-Environment variables required:
-  CAMOUFOX_SERVICE_URL  - Cloud Run URL, e.g. https://camoufox-proxy-xxx.run.app
-  CAMOUFOX_TOKEN        - Bearer token (GCP identity token for the service)
-  GCP_PROJECT           - GCP project ID
-  GOOGLE_APPLICATION_CREDENTIALS - path to service account JSON (load phase)
-
-Fix notes (2026-03-28):
-  - Increased wait_ms from 8000 → 15000. FanDuel's MLS page lazy-loads event
-    data after initial render; the previous 8s window closed before the main
-    events XHR fired, capturing only the empty facets/browse response.
-  - Added _is_fanduel_odds_response() guard to skip the facets/browse response
-    (which has competition metadata but results:[]) and other non-market blobs.
-  - Added direct API fallback via FanDuel's internal tab/event API for cases
-    where browser capture still misses the XHR window.
-  - load() switched to load_table_from_file + NDJSON (avoids SSL context
-    corruption seen with insert_rows_json in Camoufox environments).
+Usage:
+  python -m mobile_api.ingest.sportsbook.fanduel_soccer_scraper --league MLS --dry-run
+  python -m mobile_api.ingest.sportsbook.fanduel_soccer_scraper --league EPL --scrape-only
+  python -m mobile_api.ingest.sportsbook.fanduel_soccer_scraper --league MLS --load-only
+  python -m mobile_api.ingest.sportsbook.fanduel_soccer_scraper --league EPL --discover
 """
 
 from __future__ import annotations
@@ -41,80 +25,178 @@ import json
 import logging
 import os
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set, Tuple
 from urllib.parse import urlencode
 
 import requests
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s",
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 
-DATASET = "oddspedia"
+DATASET = "sportsbook"
 TABLE = "raw_fanduel_soccer_markets"
+ARTIFACT_PATTERN = "/tmp/fanduel_soccer_{league}_rows.ndjson"
 
-# FanDuel tab IDs for the direct API fallback.
-# Tab IDs are stable per competition; find them by inspecting:
-#   GET https://sbapi.fanduel.com/api/content-managed-page?page=SPORT&...
-#   or from the tab parameter in the page URL after navigating.
-FD_TAB_IDS: Dict[str, str] = {
-    "EPL": "61020",   # Premier League tab
-    "MLS": "101",     # MLS tab
-}
+FD_BASE_URL = "https://sportsbook.fanduel.com"
 
-# FanDuel internal event API (no auth required, same payload browser gets)
-FD_EVENTS_URL = (
-    "https://sbapi.fanduel.com/api/content-managed-page"
-    "?page=SPORT&eventTypeId=1"
-    "&_ak=FhMFpcPWXMeyZxOx"
-    "&competitionId={competition_id}"
-    "&tab=featured"
+FD_MARKET_PRICES_URL = (
+    "https://smp.ia.sportsbook.fanduel.com"
+    "/api/sports/fixedodds/readonly/v1/getMarketPrices?priceHistory=1"
 )
-FD_COMPETITION_IDS: Dict[str, str] = {
-    "EPL": "10932509",   # Premier League competition ID
-    "MLS": "141",        # MLS competition ID
+
+FD_API_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+    "Origin": "https://sportsbook.fanduel.com",
+    "Referer": "https://sportsbook.fanduel.com/",
+    "X-Application": "FhMFpcPWXMeyZxOx",
 }
+
+MARKET_PRICES_BATCH_SIZE = 50
+
+# Capture patterns:
+#   "sbapi"           → api.sportsbook.fanduel.com/sbapi/competition-page  (nav + attachments)
+#                     → api.sportsbook.fanduel.com/sbapi/event-page
+#   "getMarketPrices" → smp.*.sportsbook.fanduel.com/.../getMarketPrices   (live odds)
+CAPTURE_PATTERNS = [
+    "sbapi",
+    "getMarketPrices",
+]
 
 LEAGUE_CONFIG: Dict[str, Dict[str, Any]] = {
-    "EPL": {
-        "url": "https://sportsbook.fanduel.com/soccer/premier-league",
-        "prime_url": "https://sportsbook.fanduel.com",
-        # Tightened: only capture from known FanDuel API domains.
-        # "sportsbook.fanduel.com/api" removed — not a real endpoint pattern,
-        # FD uses sbapi.fanduel.com and sportsbook-nash.fanduel.com for XHRs.
-        "capture_patterns": [
-            "sbapi.fanduel.com",
-            "sportsbook-nash.fanduel.com",
-            "api.fanduel.com",
-        ],
-        # Increased from 8000 → 15000: FD lazy-loads events after initial render
-        "wait_ms": 15000,
-    },
     "MLS": {
-        "url": "https://sportsbook.fanduel.com/soccer/mls",
-        "prime_url": "https://sportsbook.fanduel.com",
-        "capture_patterns": [
-            "sbapi.fanduel.com",
-            "sportsbook-nash.fanduel.com",
-            "api.fanduel.com",
-        ],
-        "wait_ms": 15000,
+        "url": f"{FD_BASE_URL}/soccer/us-mls",
+        "competition_id": "141",
+    },
+    "EPL": {
+        "url": f"{FD_BASE_URL}/soccer/english-premier-league",
+        "competition_id": "10932509",
     },
 }
 
-ARTIFACT_PATTERN = "/tmp/fanduel_{league}_rows.ndjson"
+# ---------------------------------------------------------------------------
+# Soccer market classification
+# marketType string from FanDuel nav → broad bucket used in BigQuery
+# ---------------------------------------------------------------------------
+
+MARKET_TYPE_MAP: Dict[str, str] = {
+    # Moneyline / match result
+    "WIN-DRAW-WIN": "moneyline",
+    "FULL_TIME_RESULT_-_2_UP": "moneyline",
+    "DRAW_NO_BET": "moneyline",
+    "DOUBLE_CHANCE": "moneyline",
+    # Handicap / spread
+    "HANDICAP_BETTING": "handicap",
+    "ALTERNATIVE_HANDICAPS": "handicap",
+    "FIRST_HALF_HANDICAP": "handicap",
+    "HOME_TEAM_-1.5_GOALS": "handicap",
+    "HOME_TEAM_-2.5_GOALS": "handicap",
+    "HOME_TEAM_-3.5_GOALS": "handicap",
+    "AWAY_TEAM_-1.5_GOALS": "handicap",
+    "AWAY_TEAM_-2.5_GOALS": "handicap",
+    # Match totals
+    "OVER_UNDER_05": "totals",
+    "OVER_UNDER_15": "totals",
+    "OVER_UNDER_25": "totals",
+    "OVER_UNDER_35": "totals",
+    "OVER_UNDER_45": "totals",
+    "OVER_UNDER_55": "totals",
+    "OVER_UNDER_65": "totals",
+    "OVER_UNDER_75": "totals",
+    "MULTIGOL_-_MATCH": "totals",
+    "MULTIGOL_-_2ND_HALF": "totals",
+    # Both teams to score
+    "BOTH_TEAMS_TO_SCORE": "btts",
+    "BOTH_TEAMS_TO_SCORE_IN_THE_FIRST_HALF": "btts",
+    "BOTH_TEAMS_TO_SCORE_&_O/U_2.5_GOALS": "btts",
+    "RESULT_&_BOTH_TO_SCORE": "btts",
+    # Correct score
+    "CORRECT_SCORE": "correct_score",
+    "CORRECT_SCORE_COMBINATIONS": "correct_score",
+    "HALF-TIME_CORRECT_SCORE": "correct_score",
+    # Half-time markets
+    "HALF-TIME_RESULT": "halftime",
+    "HALF-TIME/FULL-TIME": "halftime",
+    "TO_WIN_EITHER_HALF": "halftime",
+    "TO_WIN_BOTH_HALVES": "halftime",
+    "HALF_WITH_MOST_GOALS": "halftime",
+    "TO_BE_WINNING_AT_HT_OR_FT": "halftime",
+    # Half-time totals
+    "1ST_HALF_OVER/UNDER_0.5_GOALS": "halftime_totals",
+    "1ST_HALF_OVER/UNDER_1.5_GOALS": "halftime_totals",
+    "1ST_HALF_OVER/UNDER_2.5_GOALS": "halftime_totals",
+    "1ST_HALF_OVER/UNDER_3.5_GOALS": "halftime_totals",
+    "1ST_HALF_OVER/UNDER_4.5_GOALS": "halftime_totals",
+    "MULTIGOL_-_1ST_HALF": "halftime_totals",
+    # Team totals
+    "HOME_TEAM_OVER/UNDER_0.5": "team_totals",
+    "HOME_TEAM_OVER/UNDER_1.5": "team_totals",
+    "HOME_TEAM_OVER/UNDER_2.5": "team_totals",
+    "HOME_TEAM_OVER/UNDER_3.5": "team_totals",
+    "HOME_TEAM_OVER/UNDER_4.5": "team_totals",
+    "AWAY_TEAM_OVER/UNDER_0.5": "team_totals",
+    "AWAY_TEAM_OVER/UNDER_1.5": "team_totals",
+    "AWAY_TEAM_OVER/UNDER_2.5": "team_totals",
+    "AWAY_TEAM_OVER/UNDER_3.5": "team_totals",
+    "MULTIGOL_-_HOME": "team_totals",
+    "MULTIGOL_-_AWAY": "team_totals",
+    "MULTIGOL_-_HOME_/_AWAY": "team_totals",
+    "NUMBER_OF_TEAM_GOALS": "team_totals",
+    "TEAM_FIRST_HALF_GOALS": "team_totals",
+    "HOME_TEAM_FIRST_HALF_OVER/UNDER_0.5": "team_totals",
+    "HOME_TEAM_FIRST_HALF_OVER/UNDER_1.5": "team_totals",
+    "HOME_TEAM_FIRST_HALF_OVER/UNDER_2.5": "team_totals",
+    "AWAY_TEAM_FIRST_HALF_OVER/UNDER_0.5": "team_totals",
+    "AWAY_TEAM_FIRST_HALF_OVER/UNDER_1.5": "team_totals",
+    "AWAY_TEAM_FIRST_HALF_OVER/UNDER_2.5": "team_totals",
+    # Team props
+    "TEAM_TO_SCORE_THE_FIRST_GOAL": "team_props",
+    "TO_SCORE_IN_BOTH_HALVES": "team_props",
+    "A_GOAL_SCORED_IN_BOTH_HALVES": "team_props",
+    "LEAD_AT_10-20-30-60_MINUTES": "team_props",
+    "WINNING_MARGIN": "team_props",
+    # Combo (result + totals)
+    "WDW_&_O/U_1.5_GOALS": "combo",
+    "WDW_&_O/U_2.5_GOALS": "combo",
+    "WDW_&_O/U_3.5_GOALS": "combo",
+    "WDW_&_O/U_4.5_GOALS": "combo",
+    # Cards / fouls / penalties
+    "PENALTY_AWARDED?": "cards_fouls",
+    # Player props (appear closer to kickoff)
+    "TO_SCORE": "player_props",
+    "ANYTIME_ASSIST": "player_props",
+    # Futures / outrights
+    "OUTRIGHT_BETTING": "futures",
+    "TOP_GOALSCORER": "futures",
+    "TOP_4_FINISH": "futures",
+    "TOP_5_FINISH": "futures",
+    "TOP_6_FINISH": "futures",
+    "TOP_HALF_FINISH": "futures",
+    "TO_BE_RELEGATED": "futures",
+    "AVOID_RELEGATION": "futures",
+    "FINISH_BOTTOM": "futures",
+    "MULTIPLE_TROPHIES": "futures",
+    "BETTING_WITHOUT": "futures",
+}
+
+
+def _classify_market(market_type_raw: str) -> str:
+    return MARKET_TYPE_MAP.get(market_type_raw, "other")
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Camoufox proxy helpers
 # ---------------------------------------------------------------------------
 
 def _get_camoufox_url() -> str:
@@ -129,25 +211,252 @@ def _get_camoufox_token() -> str:
 
 
 def _call_proxy(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """POST to the Camoufox proxy service and return the parsed JSON response."""
     service_url = _get_camoufox_url()
     token = _get_camoufox_token()
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
-
     resp = requests.post(
         f"{service_url}/fetch",
         json=payload,
         headers=headers,
-        timeout=120,
+        timeout=150,
     )
     resp.raise_for_status()
     return resp.json()
 
 
+# ---------------------------------------------------------------------------
+# Nav response parsing
+# ---------------------------------------------------------------------------
+
+def _extract_market_ids_from_nav(data: Dict[str, Any]) -> Set[str]:
+    """Return all market IDs from a competition-page / event-page nav response."""
+    market_ids: Set[str] = set()
+    for market_id, market in data.get("attachments", {}).get("markets", {}).items():
+        if not isinstance(market, dict):
+            continue
+        market_ids.add(str(market_id))
+        for assoc in market.get("associatedMarkets", []):
+            if isinstance(assoc, dict) and assoc.get("marketId"):
+                market_ids.add(str(assoc["marketId"]))
+    return market_ids
+
+
+def _extract_market_names_from_nav(data: Dict[str, Any]) -> Dict[str, str]:
+    """Build market_id → marketName from nav attachments."""
+    names: Dict[str, str] = {}
+    for market_id, market in data.get("attachments", {}).get("markets", {}).items():
+        if not isinstance(market, dict):
+            continue
+        name = market.get("marketName") or market.get("name") or ""
+        if name:
+            names[str(market_id)] = name
+    return names
+
+
+def _extract_market_type_raw_from_nav(data: Dict[str, Any]) -> Dict[str, str]:
+    """Build market_id → marketType (raw FanDuel code) from nav attachments."""
+    types: Dict[str, str] = {}
+    for market_id, market in data.get("attachments", {}).get("markets", {}).items():
+        if not isinstance(market, dict):
+            continue
+        mt = market.get("marketType") or ""
+        if mt:
+            types[str(market_id)] = mt
+    return types
+
+
+def _extract_market_to_event_map(data: Dict[str, Any]) -> Dict[str, str]:
+    """Build market_id → event_id from nav attachments."""
+    m2e: Dict[str, str] = {}
+    for market_id, market in data.get("attachments", {}).get("markets", {}).items():
+        if not isinstance(market, dict):
+            continue
+        event_id = str(market.get("eventId") or "")
+        if event_id:
+            m2e[str(market_id)] = event_id
+    return m2e
+
+
+def _extract_events_from_nav(data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """
+    Build event_id → {name, home_team, away_team, event_start} from nav attachments.
+    FanDuel event names use "Home v Away" format.
+    """
+    events: Dict[str, Dict[str, Any]] = {}
+    for event_id, ev in data.get("attachments", {}).get("events", {}).items():
+        if not isinstance(ev, dict):
+            continue
+        name = ev.get("name") or ""
+        home_team = ""
+        away_team = ""
+        if " v " in name:
+            parts = name.split(" v ", 1)
+            home_team = parts[0].strip()
+            away_team = parts[1].strip()
+        start_raw = ev.get("openDate") or ev.get("startTime") or ""
+        event_start = None
+        if start_raw:
+            try:
+                event_start = datetime.fromisoformat(
+                    start_raw.replace("Z", "+00:00")
+                ).strftime("%Y-%m-%dT%H:%M:%S")
+            except Exception:
+                event_start = start_raw
+        events[str(event_id)] = {
+            "name": name,
+            "home_team": home_team or None,
+            "away_team": away_team or None,
+            "event_start": event_start,
+        }
+    return events
+
+
+def _try_parse_json(body: Any) -> Optional[Dict[str, Any]]:
+    if isinstance(body, dict):
+        return body
+    if isinstance(body, str):
+        s = body.strip()
+        if s.startswith("{"):
+            try:
+                parsed = json.loads(s)
+                if isinstance(parsed, dict):
+                    return parsed
+            except json.JSONDecodeError:
+                pass
+    return None
+
+
+def _is_nav_response(data: Dict[str, Any]) -> bool:
+    """True if this looks like a competition-page / event-page nav payload."""
+    return (
+        isinstance(data, dict)
+        and ("layout" in data or "attachments" in data)
+        and bool(data.get("attachments", {}).get("markets"))
+    )
+
+
+# ---------------------------------------------------------------------------
+# Main page load + capture extraction
+# ---------------------------------------------------------------------------
+
+def _scrape_competition_page(
+    league: str,
+) -> Tuple[Set[str], Dict[str, Dict[str, Any]], Dict[str, str], Dict[str, str], Dict[str, str], str]:
+    """
+    Load the competition page via Camoufox and extract everything from captures.
+
+    Returns:
+        market_ids        — all discovered FanDuel market IDs
+        event_map         — event_id → {name, home_team, away_team, event_start}
+        market_name_map   — market_id → display name
+        market_type_map   — market_id → raw marketType code
+        market_to_event   — market_id → event_id
+        px_context        — x-px-context token for getMarketPrices auth
+    """
+    cfg = LEAGUE_CONFIG[league.upper()]
+    page_url = cfg["url"]
+
+    market_ids: Set[str] = set()
+    event_map: Dict[str, Dict[str, Any]] = {}
+    market_name_map: Dict[str, str] = {}
+    market_type_map: Dict[str, str] = {}
+    market_to_event: Dict[str, str] = {}
+    px_context = ""
+
+    logger.info("Loading via Camoufox: %s", page_url)
+    result = _call_proxy({
+        "url": page_url,
+        "prime_url": FD_BASE_URL,
+        "capture_patterns": CAPTURE_PATTERNS,
+        "wait_ms": 30000,
+        "timeout_ms": 120000,
+    })
+
+    page_status = result.get("status", 0)
+    captured = result.get("captured_requests", [])
+    logger.info("page_status=%s  captured=%d", page_status, len(captured))
+
+    for i, cap in enumerate(captured):
+        cap_url = cap.get("url", "")
+        cap_body = cap.get("body")
+        req_headers = cap.get("request_headers") or cap.get("requestHeaders") or {}
+
+        body_type = type(cap_body).__name__
+        if isinstance(cap_body, str):
+            preview = cap_body[:100]
+        elif isinstance(cap_body, dict):
+            preview = str(list(cap_body.keys())[:6])
+        elif isinstance(cap_body, list):
+            preview = f"list[{len(cap_body)}]"
+        else:
+            preview = repr(cap_body)[:60]
+        logger.info("  [%02d] %s  body=%s  preview=%r", i, cap_url[:120], body_type, preview)
+
+        # px token from request headers
+        if not px_context and isinstance(req_headers, dict):
+            for k, v in req_headers.items():
+                if k.lower() == "x-px-context":
+                    px_context = str(v)
+                    logger.info("  → x-px-context captured (%d chars)", len(px_context))
+                    break
+
+        # sbapi (competition-page / event-page) → nav JSON with layout + attachments
+        if "sbapi" in cap_url:
+            nav_data = _try_parse_json(cap_body)
+            if nav_data and _is_nav_response(nav_data):
+                nav_ids = _extract_market_ids_from_nav(nav_data)
+                nav_names = _extract_market_names_from_nav(nav_data)
+                nav_types = _extract_market_type_raw_from_nav(nav_data)
+                nav_m2e = _extract_market_to_event_map(nav_data)
+                nav_events = _extract_events_from_nav(nav_data)
+                market_ids.update(nav_ids)
+                market_name_map.update(nav_names)
+                market_type_map.update(nav_types)
+                market_to_event.update(nav_m2e)
+                event_map.update(nav_events)
+                logger.info(
+                    "  → sbapi nav: %d marketIds, %d events, %d market names",
+                    len(nav_ids), len(nav_events), len(nav_names),
+                )
+
+        # getMarketPrices response — extract any market IDs not already in nav
+        if "getMarketPrices" in cap_url:
+            if isinstance(cap_body, list):
+                ids = [
+                    str(mkt["marketId"])
+                    for mkt in cap_body
+                    if isinstance(mkt, dict) and mkt.get("marketId")
+                ]
+                market_ids.update(ids)
+                logger.info("  → getMarketPrices response: %d marketIds", len(ids))
+            else:
+                body_data = _try_parse_json(cap_body)
+                if isinstance(body_data, dict) and "marketIds" in body_data:
+                    ids = [str(m) for m in body_data["marketIds"] if m]
+                    market_ids.update(ids)
+                    logger.info("  → getMarketPrices POST body: %d marketIds", len(ids))
+
+    if not market_ids:
+        logger.warning(
+            "0 marketIds from %d captured requests. "
+            "Run --discover to see all XHRs fired by the page.",
+            len(captured),
+        )
+
+    logger.info(
+        "Result: %d marketIds, %d events, %d market names, px=%s",
+        len(market_ids), len(event_map), len(market_name_map), "YES" if px_context else "NO",
+    )
+    return market_ids, event_map, market_name_map, market_type_map, market_to_event, px_context
+
+
+# ---------------------------------------------------------------------------
+# Odds helpers
+# ---------------------------------------------------------------------------
+
 def _american_from_decimal(decimal: float) -> str:
-    """Convert decimal odds to American format string."""
     if decimal <= 1.0:
         return "N/A"
     if decimal >= 2.0:
@@ -155,327 +464,280 @@ def _american_from_decimal(decimal: float) -> str:
     return str(int(round(-100 / (decimal - 1))))
 
 
-def _is_fanduel_odds_response(body: Any) -> bool:
-    """
-    Return True only if this captured response looks like a FanDuel events/
-    markets payload with actual event data — not the empty facets/browse
-    response or other metadata blobs.
-
-    The facets response looks like:
-      {"facets": [...], "results": [], "attachments": {...}}
-    A real events response has non-empty "results" or an "events" list.
-    """
-    if not isinstance(body, dict):
-        return False
-
-    # Reject the empty browse/facets response
-    if "facets" in body and not body.get("results"):
-        return False
-
-    # Accept if there are events in any of the known response shapes
-    events = (
-        body.get("events")
-        or body.get("data", {}).get("events")
-        or body.get("result", {}).get("events")
-        or (body.get("attachments") or {}).get("events")
-        or (body.get("results") or [])
-    )
-    if isinstance(events, dict):
-        return len(events) > 0
-    if isinstance(events, list):
-        return len(events) > 0
-    return False
+def _build_deep_link(market_id: str, selection_id: str) -> str:
+    params = urlencode([("marketId[]", market_id), ("selectionId[]", selection_id)])
+    return f"fanduelsportsbook://launch?deepLink=addToBetslip%3F{params}"
 
 
 # ---------------------------------------------------------------------------
-# Direct API fallback
+# Parse getMarketPrices response
 # ---------------------------------------------------------------------------
 
-def _fetch_direct(league: str) -> Optional[Dict[str, Any]]:
-    """
-    Hit the FanDuel sbapi directly for event/market data.
-    Used as a fallback when the Camoufox proxy captures 0 useful responses.
-    Returns the parsed JSON body or None on failure.
-    """
-    competition_id = FD_COMPETITION_IDS.get(league.upper())
-    if not competition_id:
-        return None
-
-    url = FD_EVENTS_URL.format(competition_id=competition_id)
-    logger.info("FanDuel %s: falling back to direct API call → %s", league, url)
-    try:
-        resp = requests.get(
-            url,
-            headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/124.0.0.0 Safari/537.36"
-                ),
-                "Accept": "application/json",
-                "Origin": "https://sportsbook.fanduel.com",
-                "Referer": "https://sportsbook.fanduel.com/",
-            },
-            timeout=30,
-        )
-        resp.raise_for_status()
-        return resp.json()
-    except Exception as exc:
-        logger.warning("Direct API fallback failed for FanDuel %s: %s", league, exc)
-        return None
-
-
-# ---------------------------------------------------------------------------
-# Parsing — FanDuel API response formats
-# ---------------------------------------------------------------------------
-
-def _parse_fanduel_body(
-    body: Dict[str, Any],
-    league: str,
+def _parse_market_prices_response(
+    body: List[Any],
     scraped_at: str,
+    league: str = "",
+    event_map: Optional[Dict[str, Dict[str, Any]]] = None,
+    market_name_map: Optional[Dict[str, str]] = None,
+    market_type_map: Optional[Dict[str, str]] = None,
+    market_to_event: Optional[Dict[str, str]] = None,
 ) -> List[Dict[str, Any]]:
-    """
-    Parse a single FanDuel events/markets JSON body into flat rows.
-
-    FanDuel's internal API responses vary by tech stack version (SBTech vs
-    Nash). We try multiple parsing strategies.
-    """
     rows: List[Dict[str, Any]] = []
-    raw_str = json.dumps(body)[:64000]
-
-    if isinstance(body, list):
-        events = body
-    else:
-        events = (
-            body.get("events")
-            or body.get("data", {}).get("events")
-            or body.get("result", {}).get("events")
-            or []
-        )
-        # SBTech payload: attachments.events is a dict keyed by eventId
-        attachments_events = (body.get("attachments") or {}).get("events", {})
-        if not events and isinstance(attachments_events, dict):
-            events = list(attachments_events.values())
-        # results list (Nash)
-        if not events and body.get("results"):
-            events = body["results"]
-        if not events and isinstance(body.get("data"), list):
-            events = body["data"]
-
-    if not events:
+    if not isinstance(body, list):
         return rows
 
-    for event in events:
-        if not isinstance(event, dict):
+    event_map = event_map or {}
+    market_name_map = market_name_map or {}
+    market_type_map = market_type_map or {}
+    market_to_event = market_to_event or {}
+    raw_str = json.dumps(body)[:32000]
+
+    for market in body:
+        if not isinstance(market, dict):
             continue
 
-        event_id = str(
-            event.get("eventId")
-            or event.get("id")
-            or event.get("event_id")
-            or ""
-        )
-        home_team = (
-            event.get("homeTeamName")
-            or event.get("home", {}).get("name")
-            or (event.get("participants") or [{}])[0].get("name")
-            or ""
-        )
-        away_team = (
-            event.get("awayTeamName")
-            or event.get("away", {}).get("name")
-            or ((event.get("participants") or [{}, {}])[1:2] or [{}])[0].get("name")
-            or ""
-        )
-        start_raw = (
-            event.get("openDate")
-            or event.get("startDate")
-            or event.get("startTime")
-            or ""
-        )
-        try:
-            event_start = (
-                datetime.fromisoformat(start_raw.replace("Z", "+00:00")).strftime(
-                    "%Y-%m-%dT%H:%M:%S"
-                )
-                if start_raw
-                else None
-            )
-        except Exception:
-            event_start = None
+        market_id = str(market.get("marketId", ""))
+        if not market_id:
+            continue
 
-        markets = event.get("markets") or event.get("marketGroups") or []
-        for market in markets:
-            if not isinstance(market, dict):
+        turn_in_play = bool(market.get("turnInPlayEnabled", True))
+        inplay = bool(market.get("inplay", False))
+        market_status = market.get("marketStatus", "")
+
+        market_name = market_name_map.get(market_id) or market.get("marketName") or ""
+        market_type_raw = market_type_map.get(market_id) or ""
+        market_type = _classify_market(market_type_raw)
+
+        event_id = market_to_event.get(market_id, "")
+        ev_info = event_map.get(event_id, {})
+        home_team = ev_info.get("home_team")
+        away_team = ev_info.get("away_team")
+        event_start = ev_info.get("event_start")
+
+        runners = market.get("runnerDetails", [])
+        if not runners:
+            continue
+
+        for runner in runners:
+            if not isinstance(runner, dict):
                 continue
-            market_id = str(market.get("marketId") or market.get("id") or "")
-            market_name = market.get("marketType") or market.get("name") or ""
 
-            runners = (
-                market.get("runners")
-                or market.get("selections")
-                or market.get("outcomes")
-                or []
+            selection_id = str(runner.get("selectionId", ""))
+            selection_name = runner.get("runnerName") or ""
+            runner_status = runner.get("runnerStatus", "")
+            handicap = runner.get("handicap")
+            try:
+                handicap_f = float(handicap) if handicap is not None else None
+            except Exception:
+                handicap_f = None
+
+            win_odds = runner.get("winRunnerOdds") or {}
+            true_odds = win_odds.get("trueOdds") or {}
+            dec_obj = true_odds.get("decimalOdds") or {}
+            am_obj = win_odds.get("americanDisplayOdds") or {}
+
+            odds_dec = None
+            odds_am = None
+            try:
+                dec_val = dec_obj.get("decimalOdds")
+                if dec_val is not None:
+                    odds_dec = float(dec_val)
+            except Exception:
+                pass
+            try:
+                am_val = am_obj.get("americanOdds")
+                if am_val is not None:
+                    am_int = int(am_val)
+                    odds_am = f"+{am_int}" if am_int >= 0 else str(am_int)
+            except Exception:
+                pass
+            if odds_dec is not None and odds_am is None:
+                odds_am = _american_from_decimal(odds_dec)
+
+            deep_link = (
+                _build_deep_link(market_id, selection_id)
+                if market_id and selection_id else None
             )
-            for runner in runners:
-                if not isinstance(runner, dict):
-                    continue
-                selection_id = str(
-                    runner.get("selectionId") or runner.get("id") or ""
-                )
-                selection_name = runner.get("runnerName") or runner.get("name") or ""
-                handicap = runner.get("handicap") or runner.get("line")
-                try:
-                    handicap_f = float(handicap) if handicap is not None else None
-                except Exception:
-                    handicap_f = None
 
-                price = runner.get("currentPrice") or runner.get("price") or {}
-                odds_dec = None
-                odds_am = None
-                if isinstance(price, dict):
-                    dec = (
-                        price.get("d")
-                        or price.get("decimal")
-                        or price.get("decimalOdds")
-                    )
-                    if dec is not None:
-                        try:
-                            odds_dec = float(dec)
-                            odds_am = _american_from_decimal(odds_dec)
-                        except Exception:
-                            pass
-                elif isinstance(price, (int, float)):
-                    odds_dec = float(price)
-                    odds_am = _american_from_decimal(odds_dec)
+            rows.append({
+                "scraped_at": scraped_at,
+                "source": "getMarketPrices",
+                "league": league or None,
+                "event_id": event_id or None,
+                "home_team": home_team,
+                "away_team": away_team,
+                "event_start": event_start,
+                "market_id": market_id,
+                "market_name": market_name or None,
+                "market_type": market_type,
+                "market_type_raw": market_type_raw or None,
+                "market_status": market_status or None,
+                "turn_in_play": turn_in_play,
+                "inplay": inplay,
+                "selection_id": selection_id or None,
+                "selection_name": selection_name or None,
+                "runner_status": runner_status or None,
+                "handicap": handicap_f,
+                "odds_decimal": odds_dec,
+                "odds_american": odds_am,
+                "deep_link": deep_link,
+                "raw_response": raw_str,
+            })
 
-                name_lower = selection_name.lower()
-                if "draw" in name_lower or "tie" in name_lower:
-                    side = "draw"
-                elif home_team and home_team.lower() in name_lower:
-                    side = "home"
-                elif away_team and away_team.lower() in name_lower:
-                    side = "away"
-                elif runner.get("side"):
-                    side = runner["side"].lower()
-                else:
-                    side = None
-
-                deep_link = None
-                if market_id and selection_id:
-                    params = urlencode(
-                        [("marketId[]", market_id), ("selectionId[]", selection_id)]
-                    )
-                    deep_link = (
-                        f"fanduelsportsbook://launch?deepLink=addToBetslip%3F{params}"
-                    )
-
-                rows.append(
-                    {
-                        "scraped_at": scraped_at,
-                        "league": league,
-                        "event_id": event_id or None,
-                        "home_team": home_team or None,
-                        "away_team": away_team or None,
-                        "event_start": event_start,
-                        "market_id": market_id or None,
-                        "market_name": market_name or None,
-                        "selection_id": selection_id or None,
-                        "selection_name": selection_name or None,
-                        "outcome_side": side,
-                        "handicap": handicap_f,
-                        "odds_decimal": odds_dec,
-                        "odds_american": odds_am,
-                        "deep_link": deep_link,
-                        "raw_response": raw_str,
-                    }
-                )
-
-    return rows
-
-
-def _parse_fanduel_response(
-    captured: List[Dict[str, Any]],
-    league: str,
-    scraped_at: str,
-) -> List[Dict[str, Any]]:
-    """Walk captured XHR responses, skipping non-events payloads."""
-    rows: List[Dict[str, Any]] = []
-    odds_hits = 0
-
-    for capture in captured:
-        body = capture.get("body")
-        if not _is_fanduel_odds_response(body):
-            logger.debug(
-                "Skipping non-events FanDuel capture (keys: %s)",
-                list(body.keys()) if isinstance(body, dict) else type(body).__name__,
-            )
-            continue
-        odds_hits += 1
-        rows.extend(_parse_fanduel_body(body, league=league, scraped_at=scraped_at))
-
-    logger.info(
-        "FanDuel %s: %d captured requests, %d looked like events responses",
-        league, len(captured), odds_hits,
-    )
     return rows
 
 
 # ---------------------------------------------------------------------------
-# Scrape phase
+# getMarketPrices batched POST
+# ---------------------------------------------------------------------------
+
+def _fetch_market_prices(
+    market_ids: List[str],
+    scraped_at: str,
+    league: str = "",
+    event_map: Optional[Dict[str, Dict[str, Any]]] = None,
+    market_name_map: Optional[Dict[str, str]] = None,
+    market_type_map: Optional[Dict[str, str]] = None,
+    market_to_event: Optional[Dict[str, str]] = None,
+    px_context: str = "",
+) -> List[Dict[str, Any]]:
+    all_rows: List[Dict[str, Any]] = []
+    batches = [
+        market_ids[i:i + MARKET_PRICES_BATCH_SIZE]
+        for i in range(0, len(market_ids), MARKET_PRICES_BATCH_SIZE)
+    ]
+
+    headers = {**FD_API_HEADERS}
+    if px_context:
+        headers["x-px-context"] = px_context
+        logger.info("Using x-px-context token (%d chars)", len(px_context))
+    else:
+        logger.warning("No x-px-context — PerimeterX may block requests")
+
+    for i, batch in enumerate(batches):
+        logger.info("getMarketPrices batch %d/%d (%d ids)", i + 1, len(batches), len(batch))
+        try:
+            resp = requests.post(
+                FD_MARKET_PRICES_URL,
+                json={"marketIds": batch},
+                headers=headers,
+                timeout=30,
+            )
+            resp.raise_for_status()
+            body = resp.json()
+            rows = _parse_market_prices_response(
+                body,
+                scraped_at=scraped_at,
+                league=league,
+                event_map=event_map,
+                market_name_map=market_name_map,
+                market_type_map=market_type_map,
+                market_to_event=market_to_event,
+            )
+            logger.info("  → %d rows", len(rows))
+            all_rows.extend(rows)
+        except Exception as exc:
+            logger.warning("Batch %d failed: %s", i + 1, exc)
+        if i < len(batches) - 1:
+            time.sleep(0.5)
+
+    return all_rows
+
+
+# ---------------------------------------------------------------------------
+# Discover mode
+# ---------------------------------------------------------------------------
+
+def discover(league: str) -> None:
+    """Load the competition page with a very broad capture and log all XHRs."""
+    cfg = LEAGUE_CONFIG[league.upper()]
+    page_url = cfg["url"]
+    logger.info("DISCOVERY MODE [%s] → %s", league, page_url)
+
+    result = _call_proxy({
+        "url": page_url,
+        "prime_url": FD_BASE_URL,
+        "capture_patterns": ["fanduel.com"],
+        "wait_ms": 30000,
+        "timeout_ms": 120000,
+    })
+
+    captured = result.get("captured_requests", [])
+    logger.info("page_status=%s  total_captured=%d", result.get("status"), len(captured))
+
+    print(f"\n=== DISCOVERED XHRs [{league}] ===")
+    for i, cap in enumerate(captured):
+        url = cap.get("url", "<unknown>")
+        body = cap.get("body")
+        body_type = type(body).__name__
+        top_keys = list(body.keys())[:6] if isinstance(body, dict) else "n/a"
+        req_headers = cap.get("request_headers") or cap.get("requestHeaders") or {}
+        has_px = "x-px-context" in {k.lower() for k in req_headers.keys()}
+        print(f"[{i:02d}] {url[:120]}")
+        print(f"      body_type={body_type}  top_keys={top_keys}  has_px={has_px}")
+    print("=== END ===\n")
+
+
+# ---------------------------------------------------------------------------
+# Scrape
 # ---------------------------------------------------------------------------
 
 def scrape(league: str, dry_run: bool = False) -> List[Dict[str, Any]]:
-    cfg = LEAGUE_CONFIG.get(league.upper())
-    if not cfg:
+    league = league.upper()
+    if league not in LEAGUE_CONFIG:
         raise ValueError(f"Unknown league '{league}'. Choose from: {list(LEAGUE_CONFIG)}")
 
-    logger.info("Calling Camoufox proxy for FanDuel %s ...", league)
-    result = _call_proxy(
-        {
-            "url": cfg["url"],
-            "prime_url": cfg["prime_url"],
-            "capture_patterns": cfg["capture_patterns"],
-            "wait_ms": cfg["wait_ms"],
-            "timeout_ms": 60000,
-        }
-    )
-
-    captured = result.get("captured_requests", [])
-    logger.info(
-        "FanDuel %s: page_status=%d  captured_requests=%d",
-        league,
-        result.get("status", 0),
-        len(captured),
-    )
-
     scraped_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    rows = _parse_fanduel_response(captured, league=league, scraped_at=scraped_at)
 
-    # Fallback: if browser capture yielded no market rows, try the direct API
+    (
+        market_ids,
+        event_map,
+        market_name_map,
+        market_type_map,
+        market_to_event,
+        px_context,
+    ) = _scrape_competition_page(league)
+
+    if not market_ids:
+        logger.error("No marketIds found. Run --discover to debug XHR capture.")
+        return []
+
+    logger.info(
+        "Discovered %d marketIds for %s (%d events, %d market names, px=%s)",
+        len(market_ids), league, len(event_map), len(market_name_map), "YES" if px_context else "NO",
+    )
+
+    rows = _fetch_market_prices(
+        sorted(market_ids),
+        scraped_at=scraped_at,
+        league=league,
+        event_map=event_map,
+        market_name_map=market_name_map,
+        market_type_map=market_type_map,
+        market_to_event=market_to_event,
+        px_context=px_context,
+    )
+
+    by_type: Dict[str, int] = {}
+    for row in rows:
+        mt = row.get("market_type", "other")
+        by_type[mt] = by_type.get(mt, 0) + 1
+
+    logger.info("FanDuel %s: %d rows, %d market types", league, len(rows), len(by_type))
+    for mt, count in sorted(by_type.items(), key=lambda x: -x[1]):
+        logger.info("  %-25s %d", mt, count)
+
     if not rows:
-        logger.info(
-            "FanDuel %s: 0 market rows from browser capture — trying direct API fallback",
-            league,
-        )
-        body = _fetch_direct(league)
-        if body and _is_fanduel_odds_response(body):
-            rows = _parse_fanduel_body(body, league=league, scraped_at=scraped_at)
-            logger.info(
-                "FanDuel %s: direct API fallback returned %d rows", league, len(rows)
-            )
-        else:
-            logger.warning(
-                "FanDuel %s: direct API fallback also returned nothing "
-                "(likely no fixtures scheduled today)",
-                league,
-            )
-
-    logger.info("Parsed %d rows for FanDuel %s", len(rows), league)
+        logger.warning("0 rows parsed.")
+        return []
 
     if dry_run:
-        for row in rows[:5]:
-            print(json.dumps(row, default=str))
+        seen: Set[str] = set()
+        for row in rows:
+            mt = row.get("market_type", "")
+            if mt not in seen:
+                seen.add(mt)
+                print(json.dumps(row, default=str))
         return rows
 
     artifact = ARTIFACT_PATTERN.format(league=league.lower())
@@ -488,7 +750,7 @@ def scrape(league: str, dry_run: bool = False) -> List[Dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
-# Load phase
+# Load
 # ---------------------------------------------------------------------------
 
 def load(league: str) -> None:
@@ -496,9 +758,10 @@ def load(league: str) -> None:
     from google.cloud.bigquery import LoadJobConfig, SourceFormat
     import io
 
+    league = league.upper()
     artifact = ARTIFACT_PATTERN.format(league=league.lower())
     if not Path(artifact).exists():
-        logger.warning("No artifact at %s — nothing to load", artifact)
+        logger.warning("No artifact at %s", artifact)
         return
 
     rows = []
@@ -509,26 +772,20 @@ def load(league: str) -> None:
                 rows.append(json.loads(line))
 
     if not rows:
-        logger.info("Artifact is empty — nothing to load")
+        logger.info("Artifact empty — nothing to load")
         return
 
     project = os.environ.get("GCP_PROJECT", "graphite-flare-477419-h7")
     client = bigquery.Client(project=project)
     table_id = f"{project}.{DATASET}.{TABLE}"
 
-    # Use load_table_from_file with NDJSON to avoid SSL context issues
-    # with insert_rows_json in Cloud Run / Camoufox environments
     ndjson_bytes = "\n".join(json.dumps(r, default=str) for r in rows).encode()
     job_config = LoadJobConfig(
         source_format=SourceFormat.NEWLINE_DELIMITED_JSON,
         write_disposition="WRITE_APPEND",
         autodetect=False,
     )
-    job = client.load_table_from_file(
-        io.BytesIO(ndjson_bytes),
-        table_id,
-        job_config=job_config,
-    )
+    job = client.load_table_from_file(io.BytesIO(ndjson_bytes), table_id, job_config=job_config)
     job.result()
     if job.errors:
         logger.error("BigQuery load errors: %s", job.errors)
@@ -541,19 +798,22 @@ def load(league: str) -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="FanDuel soccer market scraper")
-    parser.add_argument("--league", default="EPL", help="EPL or MLS")
+    parser = argparse.ArgumentParser(description="FanDuel Soccer market scraper v3")
+    parser.add_argument("--league", default="MLS", help="MLS or EPL")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--scrape-only", action="store_true")
     group.add_argument("--load-only", action="store_true")
-    parser.add_argument("--dry-run", action="store_true", help="Print rows, skip BQ write")
+    group.add_argument("--discover", action="store_true")
+    parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
     if args.load_only:
         load(args.league)
+    elif args.discover:
+        discover(args.league)
     else:
         rows = scrape(args.league, dry_run=args.dry_run)
-        if not args.scrape_only and not args.dry_run:
+        if not args.scrape_only and not args.dry_run and rows:
             load(args.league)
 
 

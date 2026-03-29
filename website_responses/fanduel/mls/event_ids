@@ -1,0 +1,88 @@
+URL
+https://sportsbook.fanduel.com/soccer/us-mls
+
+Headers
+Request URL
+https://api.sportsbook.fanduel.com/ips/stats/eventIds
+Request Method
+GET
+Status Code
+200 OK
+Remote Address
+13.249.91.120:443
+Referrer Policy
+strict-origin-when-cross-origin
+access-control-allow-origin
+https://sportsbook.fanduel.com
+age
+5
+alt-svc
+h3=":443"; ma=86400
+cache-control
+public, max-age=60
+content-length
+749
+content-type
+application/json; charset=utf-8
+date
+Sun, 29 Mar 2026 16:44:26 GMT
+referrer-policy
+strict-origin-when-cross-origin
+strict-transport-security
+max-age=31536000
+vary
+Origin
+via
+1.1 1e84d8aad593d115bedca1ef2da41e60.cloudfront.net (CloudFront)
+x-amz-cf-id
+7OtyxRAljqcqPkaxwZcXSpx2VbxREZgrtApDA5thhgkrKWryAcJtVw==
+x-amz-cf-pop
+JFK52-P9
+x-cache
+Hit from cloudfront
+x-content-type-options
+nosniff
+x-frame-options
+SAMEORIGIN
+x-xss-protection
+1; mode=block
+:authority
+api.sportsbook.fanduel.com
+:method
+GET
+:path
+/ips/stats/eventIds
+:scheme
+https
+accept
+application/json
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+en-US,en;q=0.9
+origin
+https://sportsbook.fanduel.com
+priority
+u=1, i
+referer
+https://sportsbook.fanduel.com/
+sec-ch-ua
+"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"macOS"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-site
+user-agent
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36
+x-px-context
+_px3=2ef69e3ad184232220f3d27f6133a2a1f138bb4ab24070ad03e15ed044040113:pA34ozB2kPhguZ8F4Pi+oAxcW7YksigXkyEq3BzBXGkoEp1CjmUMDhA5T8jISTzX+u/Q+xSTL4bLtnhUAfbI+w==:1000:L91pqkloKLChbwGB5Wd5mN9ZSVukOQ91pU6sfQLQEyQl04UzvgDYYWw7GkUlLlCQhPkOBS7H0G0USewVNxslJoRssMgF3R/CuwzekVsnizfrdDk5lBZXWXS0+SgsCT0HNAcWDBldivEmf9XCpBXlPH3OTyprtMo7iiJRAZZ0bcV2P33UMraPEbtw2L5o9Jo23FSXV872Mb1S/50pVj4BBwzcrT749A8SELLF3lVGuTZXGTFLANOqxf2LU+h7DVV2MjQH/CZwzWzD4Zrlg6pd0p6JhWdl2ODCdWCpLM0Td77xudPaPAAxbxHSkQC/N6Dl8L8X3RWwFu+pX+2TTANoqejB+WDfvPwCV2ze0F93m6fgPfHwskgoXnMVSgmLDjCReGieZaapIyF3YOnJXW8kYDSOaJDcOO5ZqoNVNPHz/j5LjwF+6wKrm/4Wy5C7AwC9agf6yuNNDrZVgjK/JjzxxOvT479UA2A72QDh4OvjLeqi+tfqL87df2FiwJ/W3Y59;_pxvid=7eb72dd2-2b72-11f1-a9e8-d1518e2fd4cd;pxcts=7eb73745-2b72-11f1-a9e9-35abccd6014e;
+
+
+Response
+["35430225","35420799","35170671","35420800","35424635","35420819","35420818","35420816","35417103","35420807","35416339","35170575","35417099","35420805","35424631","35430244","35424640","35420815","35420814","35170578","35430229","35170581","35233844","35420803","35420817","35420808","35170559","35424632","35415057","35424636","35420801","35420810","35360156","35411474","35424641","35424639","35411488","35424638","35415034","35170545","35424634","35415040","35420796","35430234","35420809","35417102","35420812","35420797","35415018","35424630","35420811","35417100","35418614","35420798","35360157","35417101","35170670","35170577","35420813","35420804","35417098","35424637","35420806","35411491","35411478","35424633","35420802","35360155"]

@@ -2,25 +2,27 @@
 FanDuel PGA Tour Market Scraper — v5 (navigation-endpoint architecture)
 
 Architecture:
-  1. Direct GET to FanDuel navigation endpoint (no browser needed)
+  1. Camoufox fetches the FanDuel PGA navigation endpoint as a JSON XHR:
        https://sportsbook.fanduel.com/navigation/pga
-     This returns a JSON blob containing:
+     The proxy intercepts the XHR response body, which contains:
        - All externalMarketIds in layout.coupons[*].externalMarketId
        - Player selectionId → name mapping in attachments.markets[*].runners
        - Event metadata in attachments.events
   2. Extracts all externalMarketIds from the navigation response
   3. Also builds a selectionId → player_name lookup from runners data
-  4. POSTs all marketIds to getMarketPrices in batches (no PerimeterX token needed
-     since we're not scraping via browser — direct API POST still works)
+  4. POSTs all marketIds to getMarketPrices in batches DIRECTLY (no browser
+     needed for this step — PerimeterX does not block server-side POSTs)
   5. Classifies markets and builds deep links
   6. Writes to BigQuery: sportsbook.raw_fanduel_pga_markets
 
 Key advantages over v4:
-  - No Camoufox / browser dependency for market discovery
-  - No lazy-load timing issues
-  - No x-px-context header capture needed
-  - Gets ALL markets (including unloaded/collapsed ones) via navigation endpoint
+  - Single Camoufox call (just to fetch navigation JSON) instead of waiting
+    for many lazy-loaded POST captures
+  - No lazy-load timing issues — navigation JSON contains ALL market IDs
+    including collapsed/unloaded ones
+  - No x-px-context token capture needed
   - Player name lookup included in same response
+  - getMarketPrices POSTs go direct (no proxy overhead per batch)
 
 Usage:
   python -m mobile_api.ingest.sportsbook.fanduel_pga_scraper --dry-run
@@ -66,20 +68,7 @@ FD_MARKET_PRICES_URL = (
     "/api/sports/fixedodds/readonly/v1/getMarketPrices?priceHistory=0"
 )
 
-# Browser-like headers for the navigation GET (avoids 403)
-FD_NAV_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) "
-        "AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/130.0.0.0 Mobile/15E148 Safari/604.1"
-    ),
-    "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Referer": "https://sportsbook.fanduel.com/golf",
-    "x-sportsbook-region": "NJ",
-    "X-Application": "FhMFpcPWXMeyZxOx",
-}
-
-# Headers for getMarketPrices POST
+# Headers for getMarketPrices POST (direct, no proxy needed)
 FD_API_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) "
@@ -92,10 +81,6 @@ FD_API_HEADERS = {
 }
 
 MARKET_PRICES_BATCH_SIZE = 50
-
-# Retry config for navigation GET (sometimes flaky)
-NAV_MAX_RETRIES = 3
-NAV_RETRY_DELAY_S = 10
 
 # Known static selectionIds for round score over/under markets
 ROUND_SCORE_SELECTION_IDS = {
@@ -123,32 +108,108 @@ NAV_TABS = [
 
 
 # ---------------------------------------------------------------------------
-# Navigation endpoint
+# Camoufox proxy helpers
+# ---------------------------------------------------------------------------
+
+def _get_camoufox_url() -> str:
+    url = os.environ.get("CAMOUFOX_SERVICE_URL", "").rstrip("/")
+    if not url:
+        raise RuntimeError("CAMOUFOX_SERVICE_URL env var is not set")
+    return url
+
+
+def _get_camoufox_token() -> str:
+    return os.environ.get("CAMOUFOX_TOKEN", "")
+
+
+def _call_proxy(payload: Dict[str, Any]) -> Dict[str, Any]:
+    service_url = _get_camoufox_url()
+    token = _get_camoufox_token()
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    resp = requests.post(
+        f"{service_url}/fetch",
+        json=payload,
+        headers=headers,
+        timeout=150,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+# ---------------------------------------------------------------------------
+# Navigation endpoint — fetched via Camoufox (bot-protected)
 # ---------------------------------------------------------------------------
 
 def _fetch_navigation(tab: str = "") -> Optional[Dict[str, Any]]:
     """
-    Fetch the FanDuel PGA navigation JSON for a given tab.
-    Returns parsed JSON or None on failure.
+    Fetch the FanDuel PGA navigation JSON for a given tab via Camoufox.
+
+    The navigation endpoint returns HTML to plain HTTP clients but serves
+    JSON to authenticated browser sessions. We use Camoufox to make the
+    request look like a real browser XHR and capture the JSON response body.
+
+    The proxy payload uses `capture_patterns` to intercept the XHR that
+    the page fires for navigation data, and `extract_json_url` to pull the
+    response body of that specific request.
     """
     url = FD_NAV_URL
     if tab:
         url = f"{FD_NAV_URL}?tab={tab}"
 
-    for attempt in range(1, NAV_MAX_RETRIES + 1):
-        try:
-            logger.info("GET navigation tab=%r attempt=%d → %s", tab or "default", attempt, url)
-            resp = requests.get(url, headers=FD_NAV_HEADERS, timeout=20)
-            resp.raise_for_status()
-            data = resp.json()
-            logger.info("  → HTTP %d, keys=%s", resp.status_code, list(data.keys())[:6])
-            return data
-        except Exception as exc:
-            logger.warning("  navigation fetch failed (attempt %d): %s", attempt, exc)
-            if attempt < NAV_MAX_RETRIES:
-                time.sleep(NAV_RETRY_DELAY_S)
+    logger.info("Fetching navigation tab=%r via Camoufox → %s", tab or "default", url)
 
-    return None
+    try:
+        result = _call_proxy({
+            "url": url,
+            "capture_patterns": ["sportsbook.fanduel.com/navigation/"],
+            "wait_ms": 8000,
+            "timeout_ms": 30000,
+            # Tell proxy to treat this as a direct JSON fetch
+            # (load the URL as if it were an XHR, return body directly)
+            "as_json": True,
+        })
+
+        # The proxy may return the JSON body directly in result["body"]
+        # or as the first captured request's body
+        body = result.get("body")
+        if isinstance(body, dict) and ("layout" in body or "attachments" in body):
+            logger.info("  → JSON body from proxy response (keys=%s)", list(body.keys())[:6])
+            return body
+
+        # Check captured requests
+        captured = result.get("captured_requests", [])
+        for cap in captured:
+            cap_url = cap.get("url", "")
+            if "navigation" in cap_url:
+                cap_body = cap.get("body")
+                if isinstance(cap_body, dict) and (
+                    "layout" in cap_body or "attachments" in cap_body
+                ):
+                    logger.info("  → JSON from captured request: %s", cap_url[:80])
+                    return cap_body
+
+        # If body is a string, try parsing it
+        if isinstance(body, str) and body.strip().startswith("{"):
+            parsed = json.loads(body)
+            if isinstance(parsed, dict):
+                logger.info("  → Parsed JSON string from proxy body")
+                return parsed
+
+        logger.warning(
+            "  navigation tab=%r: no usable JSON in proxy response "
+            "(status=%s, body_type=%s, captured=%d)",
+            tab or "default",
+            result.get("status"),
+            type(body).__name__,
+            len(captured),
+        )
+        return None
+
+    except Exception as exc:
+        logger.warning("  navigation fetch failed for tab=%r: %s", tab or "default", exc)
+        return None
 
 
 def _extract_market_ids_from_nav(data: Dict[str, Any]) -> Set[str]:
@@ -293,7 +354,7 @@ def fetch_all_market_ids() -> Tuple[Set[str], Dict[str, str], str]:
             event_name = _extract_event_name_from_nav(data)
 
         # Be polite between tab requests
-        time.sleep(1)
+        time.sleep(2)
 
     logger.info(
         "Total: %d unique marketIds, %d players, event=%r",

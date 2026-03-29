@@ -46,6 +46,11 @@ on:
         required: false
         type: boolean
         default: false
+      from_file:
+        description: "From-file mode — read PGA market IDs from markets_player_info snapshot instead of capturing from page POSTs (faster, PGA FanDuel only)"
+        required: false
+        type: boolean
+        default: false
   schedule:
     # 6:00 AM EST daily
     - cron: "0 11 * * *"
@@ -159,13 +164,17 @@ jobs:
           # Build args
           if [ "${{ inputs.discover }}" = "true" ]; then
             ARGS="--discover"
+          elif [ "${{ inputs.from_file }}" = "true" ] && [ "${{ matrix.sport }}" = "PGA" ] && [ "${{ matrix.sportsbook }}" = "FanDuel" ]; then
+            ARGS="--from-file --scrape-only"
           elif [ "${{ matrix.sport }}" = "PGA" ]; then
             ARGS="--scrape-only"
           else
             ARGS="--scrape-only --league ${{ matrix.sport }}"
           fi
           if [ "${{ inputs.dry_run }}" = "true" ] && [ "${{ inputs.discover }}" != "true" ]; then
-            if [ "${{ matrix.sport }}" = "PGA" ]; then
+            if [ "${{ inputs.from_file }}" = "true" ] && [ "${{ matrix.sport }}" = "PGA" ] && [ "${{ matrix.sportsbook }}" = "FanDuel" ]; then
+              ARGS="--from-file --dry-run"
+            elif [ "${{ matrix.sport }}" = "PGA" ]; then
               ARGS="--dry-run"
             else
               ARGS="--dry-run --league ${{ matrix.sport }}"

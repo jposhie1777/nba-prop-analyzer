@@ -55,8 +55,8 @@ FD_APP_CONTEXT_URL = (
 FD_GOLF_EVENT_TYPE_ID = "3"
 
 FD_MARKET_PRICES_URL = (
-    "https://smp.nj.sportsbook.fanduel.com"
-    "/api/sports/fixedodds/readonly/v1/getMarketPrices?priceHistory=0"
+    "https://smp.ia.sportsbook.fanduel.com"
+    "/api/sports/fixedodds/readonly/v1/getMarketPrices?priceHistory=1"
 )
 
 FD_API_HEADERS = {
@@ -68,15 +68,17 @@ FD_API_HEADERS = {
     "Content-Type": "application/json",
     "Origin": "https://sportsbook.fanduel.com",
     "Referer": "https://sportsbook.fanduel.com/",
-    "x-sportsbook-region": "NJ",
+    "x-sportsbook-region": "IA",
     "X-Application": "FhMFpcPWXMeyZxOx",
 }
 
 MARKET_PRICES_BATCH_SIZE = 50
 
-# Capture patterns — short substrings that Camoufox matches against XHR URLs.
+# Exact substrings matching the URLs seen in --discover output:
+#   [50] api.sportsbook.fanduel.com/sbapi/content-managed-page  → layout + attachments (navigation)
+#   [54/55/58] smp.ia.sportsbook.fanduel.com/.../getMarketPrices  → market odds (list)
 CAPTURE_PATTERNS = [
-    "navigation/pga",
+    "content-managed-page",
     "getMarketPrices",
 ]
 
@@ -279,8 +281,8 @@ def _scrape_tournament_page() -> Tuple[Set[str], Dict[str, str], str, str]:
                     logger.info("  → x-px-context captured (%d chars)", len(px_context))
                     break
 
-        # Navigation XHR
-        if "navigation/pga" in cap_url or "navigation/" in cap_url:
+        # content-managed-page → this IS the navigation JSON (layout + attachments)
+        if "content-managed-page" in cap_url:
             nav_data = _try_parse_json(cap_body)
             if nav_data and ("layout" in nav_data or "attachments" in nav_data):
                 nav_ids = _extract_market_ids_from_nav(nav_data)
@@ -289,24 +291,26 @@ def _scrape_tournament_page() -> Tuple[Set[str], Dict[str, str], str, str]:
                 player_map.update(nav_players)
                 if not event_name:
                     event_name = _extract_event_name_from_nav(nav_data)
-                logger.info("  → nav: %d marketIds, %d players", len(nav_ids), len(nav_players))
+                logger.info("  → content-managed-page: %d marketIds, %d players", len(nav_ids), len(nav_players))
 
-        # getMarketPrices POST body → market IDs
+        # getMarketPrices — response body is a list of markets (already fetched by page)
+        # Extract marketIds from the response so we know what exists
         if "getMarketPrices" in cap_url:
-            body_data = _try_parse_json(cap_body)
-            if isinstance(body_data, dict) and "marketIds" in body_data:
-                ids = [str(m) for m in body_data["marketIds"] if m]
+            if isinstance(cap_body, list):
+                ids = [str(mkt["marketId"]) for mkt in cap_body if isinstance(mkt, dict) and mkt.get("marketId")]
                 market_ids.update(ids)
-                logger.info("  → getMarketPrices POST: %d marketIds", len(ids))
-            elif isinstance(cap_body, list):
-                for mkt in cap_body:
-                    if isinstance(mkt, dict) and mkt.get("marketId"):
-                        market_ids.add(str(mkt["marketId"]))
+                logger.info("  → getMarketPrices response: %d marketIds", len(ids))
+            else:
+                body_data = _try_parse_json(cap_body)
+                if isinstance(body_data, dict) and "marketIds" in body_data:
+                    ids = [str(m) for m in body_data["marketIds"] if m]
+                    market_ids.update(ids)
+                    logger.info("  → getMarketPrices POST body: %d marketIds", len(ids))
 
     if not market_ids:
         logger.warning(
             "0 marketIds from %d captured requests. "
-            "Run --discover (with capture_patterns=[\"fanduel.com\"]) to see all XHRs.",
+            "Run --discover to see all XHRs fired by the page.",
             len(captured),
         )
 

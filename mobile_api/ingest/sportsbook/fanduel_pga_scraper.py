@@ -62,7 +62,72 @@ DATASET = "sportsbook"
 TABLE = "raw_fanduel_pga_markets"
 ARTIFACT_PATH = "/tmp/fanduel_pga_rows.ndjson"
 
-SCRAPE_CONFIG = {
+FD_APP_CONTEXT_URL = (
+    "https://api.sportsbook.fanduel.com/sbapi/application-context"
+    "?dataEntries=EVENT_TYPES&_ak=FhMFpcPWXMeyZxOx"
+)
+FD_GOLF_EVENT_TYPE_ID = "3"  # Golf event type ID confirmed from discovery
+FD_BASE_URL = "https://sportsbook.fanduel.com"
+
+
+def _discover_tournament_url() -> str:
+    """
+    Dynamically find the current PGA Tour tournament URL from FanDuel's
+    application-context API. Returns tournament URL like:
+      https://sportsbook.fanduel.com/golf/texas-children%27s-houston-open-35406067
+    Falls back to the generic golf hub if discovery fails.
+    """
+    fallback = "https://sportsbook.fanduel.com/golf"
+    try:
+        resp = requests.get(
+            FD_APP_CONTEXT_URL,
+            headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        # EVENT_TYPES contains sport nav links including current golf events
+        event_types = data.get("EVENT_TYPES") or {}
+        events = data.get("events") or {}
+
+        # Look for golf (eventTypeId=3) competitions with active events
+        # The layout links contain competitionId → look up event names
+        layout = event_types.get("layout") or {}
+        links = layout.get("links") or {}
+
+        # Also check attachments/coupons for active golf events
+        attachments = event_types.get("attachments") or {}
+        competitions = attachments.get("competitions") or {}
+
+        # Find the most recently started golf event
+        best_event = None
+        best_start = None
+        for ev_id, ev in events.items():
+            if not isinstance(ev, dict):
+                continue
+            if str(ev.get("eventTypeId", "")) != FD_GOLF_EVENT_TYPE_ID:
+                continue
+            seo = ev.get("seoIdentifier") or ev.get("slug") or ""
+            start = ev.get("openDate") or ev.get("startTime") or ""
+            name = ev.get("eventName") or ev.get("name") or ""
+            if seo and ev_id:
+                if best_start is None or start > best_start:
+                    best_start = start
+                    best_event = (ev_id, seo, name)
+
+        if best_event:
+            ev_id, seo, name = best_event
+            url = f"{FD_BASE_URL}/golf/{seo}-{ev_id}"
+            logger.info("FanDuel PGA: current tournament → %s (%s)", name, url)
+            return url
+
+        # Fallback: check coupons in the content-managed-page layout for golf events
+        logger.warning("FanDuel PGA: no current golf event found in application-context — using fallback")
+    except Exception as exc:
+        logger.warning("FanDuel PGA: tournament discovery failed: %s — using fallback", exc)
+
+    return fallback
     "url": "https://sportsbook.fanduel.com/golf",
     "prime_url": "https://sportsbook.fanduel.com",
     # Confirmed from discovery run [50], [54-63]
@@ -117,10 +182,11 @@ def _call_proxy(payload: Dict[str, Any]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 def discover() -> None:
-    logger.info("DISCOVERY MODE — capturing all XHRs from %s", SCRAPE_CONFIG["url"])
+    tournament_url = _discover_tournament_url()
+    logger.info("DISCOVERY MODE — capturing all XHRs from %s", tournament_url)
     result = _call_proxy({
-        "url": SCRAPE_CONFIG["url"],
-        "prime_url": SCRAPE_CONFIG["prime_url"],
+        "url": tournament_url,
+        "prime_url": tournament_url,
         "capture_patterns": DISCOVER_PATTERNS,
         "wait_ms": SCRAPE_CONFIG["wait_ms"],
         "timeout_ms": 90000,
@@ -453,10 +519,14 @@ def _parse_captured(captured: List[Dict[str, Any]], scraped_at: str) -> List[Dic
 
 def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
     cfg = SCRAPE_CONFIG
-    logger.info("Calling Camoufox proxy for FanDuel PGA ...")
+
+    # Dynamically find the current tournament URL
+    tournament_url = _discover_tournament_url()
+    logger.info("Calling Camoufox proxy for FanDuel PGA → %s", tournament_url)
+
     result = _call_proxy({
-        "url": cfg["url"],
-        "prime_url": cfg["prime_url"],
+        "url": tournament_url,
+        "prime_url": tournament_url,
         "capture_patterns": cfg["capture_patterns"],
         "wait_ms": cfg["wait_ms"],
         "timeout_ms": 90000,

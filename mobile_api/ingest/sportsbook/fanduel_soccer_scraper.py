@@ -1,15 +1,25 @@
 """
-FanDuel Soccer Market Scraper — v3
+FanDuel Soccer Market Scraper — v4
 
 Architecture:
-  1. Camoufox loads the MLS or EPL competition page
-  2. Captures ALL XHRs matching broad patterns (sbapi nav + getMarketPrices)
-  3. From captured requests:
-       - Nav response body (sbapi)   → all market IDs, event info, market names, runner names
-       - getMarketPrices response    → additional market IDs
-       - Any request headers         → x-px-context token
-  4. POSTs all discovered market IDs to getMarketPrices directly (with px token)
-  5. Classifies markets, builds deep links, writes to BigQuery
+  Phase 1 — Camoufox loads the competition page (1 browser session):
+    - Captures sbapi nav response  → moneyline market IDs for ALL upcoming games
+    - Captures getMarketPrices     → additional market IDs
+    - Captures request headers     → x-px-context token
+    - Builds full event map        → event_id, home/away team, kickoff time
+
+  Phase 2 — Direct API calls for near-term events (next 8 days):
+    - Calls event-page API for each event × each tab (popular, goals, half,
+      team-props, cards-fouls, penalties) using the captured px token
+    - Collects all market IDs available across every tab
+
+  Phase 3 — getMarketPrices batch POST:
+    - POSTs all discovered market IDs to getMarketPrices
+    - Classifies markets, builds deep links, writes to BigQuery
+
+  Result:
+    - Moneyline for ALL upcoming games on the competition page
+    - Full market set (all tabs) for games within the next 8 days
 
 Usage:
   python -m mobile_api.ingest.sportsbook.fanduel_soccer_scraper --league MLS --dry-run
@@ -26,7 +36,7 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 from urllib.parse import urlencode
@@ -73,6 +83,21 @@ CAPTURE_PATTERNS = [
     "sbapi",
     "getMarketPrices",
 ]
+
+# Event-page API — called directly (with px token) for near-term games.
+# Tab names match what FanDuel passes as the `tab=` query parameter.
+FD_EVENT_PAGE_URL = (
+    "https://api.sportsbook.fanduel.com/sbapi/event-page"
+    "?_ak=FhMFpcPWXMeyZxOx&eventId={event_id}&tab={tab}"
+    "&useCombinedTouchdownsVirtualMarket=true&useQuickBets=true"
+)
+
+# All tabs to fetch per near-term event. Each call returns a different
+# slice of attachments.markets, so we union the results.
+EVENT_PAGE_TABS = ["popular", "goals", "half", "team-props", "cards-fouls", "penalties"]
+
+# Events kicking off within this many days get the full per-tab treatment.
+NEAR_TERM_DAYS = 8
 
 LEAGUE_CONFIG: Dict[str, Dict[str, Any]] = {
     "MLS": {
@@ -645,6 +670,80 @@ def _fetch_market_prices(
 
 
 # ---------------------------------------------------------------------------
+# Phase 2 — near-term event market fetching
+# ---------------------------------------------------------------------------
+
+def _identify_near_term_events(
+    event_map: Dict[str, Dict[str, Any]],
+    days: int = NEAR_TERM_DAYS,
+) -> List[str]:
+    """Return event IDs whose kickoff falls within the next `days` days (UTC)."""
+    now = datetime.now(timezone.utc)
+    cutoff = now + timedelta(days=days)
+    near_term: List[str] = []
+    for event_id, ev in event_map.items():
+        start_raw = ev.get("event_start")
+        if not start_raw:
+            continue
+        try:
+            # event_start is stored as "%Y-%m-%dT%H:%M:%S" (UTC, no tz suffix)
+            start_dt = datetime.fromisoformat(start_raw).replace(tzinfo=timezone.utc)
+            if now <= start_dt <= cutoff:
+                near_term.append(event_id)
+        except Exception:
+            pass
+    near_term.sort()
+    return near_term
+
+
+def _fetch_event_page_direct(
+    event_id: str,
+    px_context: str = "",
+    tabs: Optional[List[str]] = None,
+) -> Tuple[Set[str], Dict[str, str], Dict[str, str]]:
+    """
+    Call the FanDuel event-page API directly for each tab and union the results.
+
+    Returns: (market_ids, market_name_map, market_type_map)
+    Each tab's attachments.markets contains only that tab's loaded markets,
+    so iterating all tabs maximises the set of discovered market IDs.
+    """
+    tabs = tabs or EVENT_PAGE_TABS
+    market_ids: Set[str] = set()
+    market_name_map: Dict[str, str] = {}
+    market_type_map: Dict[str, str] = {}
+
+    headers = {k: v for k, v in FD_API_HEADERS.items() if k != "Content-Type"}
+    headers["Accept"] = "application/json"
+    if px_context:
+        headers["x-px-context"] = px_context
+
+    for tab in tabs:
+        url = FD_EVENT_PAGE_URL.format(event_id=event_id, tab=tab)
+        try:
+            resp = requests.get(url, headers=headers, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+            if _is_nav_response(data):
+                ids = _extract_market_ids_from_nav(data)
+                names = _extract_market_names_from_nav(data)
+                types = _extract_market_type_raw_from_nav(data)
+                market_ids.update(ids)
+                market_name_map.update(names)
+                market_type_map.update(types)
+                logger.info(
+                    "  event %s tab=%-12s → %d market IDs", event_id, tab, len(ids)
+                )
+            else:
+                logger.debug("  event %s tab=%s: not a nav response", event_id, tab)
+        except Exception as exc:
+            logger.warning("  event %s tab=%s failed: %s", event_id, tab, exc)
+        time.sleep(0.3)
+
+    return market_ids, market_name_map, market_type_map
+
+
+# ---------------------------------------------------------------------------
 # Discover mode
 # ---------------------------------------------------------------------------
 
@@ -703,8 +802,34 @@ def scrape(league: str, dry_run: bool = False) -> List[Dict[str, Any]]:
         return []
 
     logger.info(
-        "Discovered %d marketIds for %s (%d events, %d market names, px=%s)",
-        len(market_ids), league, len(event_map), len(market_name_map), "YES" if px_context else "NO",
+        "Phase 1 complete: %d marketIds (moneylines), %d events, px=%s",
+        len(market_ids), len(event_map), "YES" if px_context else "NO",
+    )
+
+    # Phase 2: fetch full market data for near-term events (next 8 days)
+    near_term = _identify_near_term_events(event_map)
+    logger.info(
+        "Phase 2: %d near-term events (next %d days) → fetching all tabs",
+        len(near_term), NEAR_TERM_DAYS,
+    )
+    for event_id in near_term:
+        ev_info = event_map.get(event_id, {})
+        logger.info(
+            "  Fetching %s (%s)",
+            ev_info.get("name", event_id), ev_info.get("event_start", "?"),
+        )
+        ev_ids, ev_names, ev_types = _fetch_event_page_direct(event_id, px_context)
+        market_ids.update(ev_ids)
+        market_name_map.update(ev_names)
+        market_type_map.update(ev_types)
+        # Register any new market IDs back to this event
+        for mid in ev_ids:
+            if mid not in market_to_event:
+                market_to_event[mid] = event_id
+
+    logger.info(
+        "Phase 2 complete: %d total marketIds across %d events",
+        len(market_ids), len(event_map),
     )
 
     rows = _fetch_market_prices(

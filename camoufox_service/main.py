@@ -3,10 +3,17 @@ Camoufox Browser Proxy Service for Cloud Run.
 
 Accepts HTTP POST /fetch requests with a target URL and optional capture
 patterns, then returns the rendered page body plus any captured XHR/fetch
-responses that matched the patterns.
+responses that matched the patterns — including the outgoing request headers
+(e.g. x-px-context PerimeterX tokens) for each captured request.
 
 This service is used to bypass SSL/TLS fingerprinting by FanDuel and
 DraftKings sportsbook APIs that block direct calls from GCP/GitHub Actions.
+
+Environment variables:
+  CAMOUFOX_PROXY   Optional residential proxy URL, e.g.
+                   http://user:pass@proxy.example.com:8080
+                   Required when the Cloud Run egress IP is blocked by the
+                   target sportsbook (FanDuel blocks GCP datacenter IPs).
 
 POST /fetch
   {
@@ -25,7 +32,12 @@ Response:
     "body": "<html>...</html>",
     "headers": {},
     "captured_requests": [
-      {"url": "...", "status": 200, "body": {...}}
+      {
+        "url": "...",
+        "status": 200,
+        "body": {...},
+        "request_headers": {"x-px-context": "...", ...}
+      }
     ]
   }
 """
@@ -64,6 +76,7 @@ class CapturedRequest(BaseModel):
     url: str
     status: int
     body: Any
+    request_headers: Dict[str, str] = {}
 
 
 class FetchResponse(BaseModel):
@@ -102,8 +115,17 @@ def fetch_url(req: FetchRequest) -> FetchResponse:
 
     captured: List[CapturedRequest] = []
 
+    # Residential proxy routes egress through a non-datacenter IP, required
+    # for sportsbooks that block GCP cloud IP ranges (e.g. FanDuel).
+    proxy_url = os.environ.get("CAMOUFOX_PROXY", "").strip() or None
+    if proxy_url:
+        logger.info("using proxy: %s", proxy_url.split("@")[-1])  # log host only, not credentials
+    camoufox_kwargs: Dict[str, Any] = {"headless": True, "geoip": True}
+    if proxy_url:
+        camoufox_kwargs["proxy"] = {"server": proxy_url}
+
     try:
-        with Camoufox(headless=True, geoip=True) as browser:
+        with Camoufox(**camoufox_kwargs) as browser:
             context = browser.new_context(
                 locale="en-US",
                 viewport={"width": 1920, "height": 1080},
@@ -130,11 +152,19 @@ def fetch_url(req: FetchRequest) -> FetchResponse:
                                 body = json.loads(raw)
                             except Exception:
                                 body = raw
+
+                        # Capture outgoing request headers (e.g. x-px-context)
+                        try:
+                            req_hdrs = dict(response.request.all_headers())
+                        except Exception:
+                            req_hdrs = {}
+
                         captured.append(
                             CapturedRequest(
                                 url=resp_url,
                                 status=response.status,
                                 body=body,
+                                request_headers=req_hdrs,
                             )
                         )
                         logger.info("captured %s  status=%d", resp_url[:120], response.status)

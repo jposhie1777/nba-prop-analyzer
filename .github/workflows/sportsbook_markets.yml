@@ -160,6 +160,7 @@ jobs:
         env:
           CAMOUFOX_SERVICE_URL: ${{ secrets.CAMOUFOX_SERVICE_URL }}
           CAMOUFOX_TOKEN: ${{ steps.auth.outputs.id_token }}
+          CAMOUFOX_PROXY: ${{ secrets.CAMOUFOX_PROXY }}
         run: |
           # Build args
           if [ "${{ inputs.discover }}" = "true" ]; then

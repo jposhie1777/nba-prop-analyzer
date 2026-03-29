@@ -1,23 +1,26 @@
 """
-FanDuel PGA Tour Market Scraper — v4 (capture-all-POSTs architecture)
+FanDuel PGA Tour Market Scraper — v5 (navigation-endpoint architecture)
 
-Architecture (confirmed from Eruda mobile network capture 2026-03-28):
-
-  1. Camoufox loads the current tournament page (URL discovered dynamically)
-  2. Captures ALL getMarketPrices POST requests fired by the page
-     - Extracts every marketId from each POST body
-     - Captures the x-px-context PerimeterX token from request headers
-  3. POSTs ALL discovered marketIds to getMarketPrices in one batch
-     - Uses the captured x-px-context token for auth
-  4. Classifies markets by runner count:
-       2  runners + static IDs → round_score
-       2  runners              → matchup
-       3  runners + static IDs → hole_score
-       3  runners              → three_ball
-       10+ runners, no in-play → finishing_position (top 5/10/20)
-       10+ runners, in-play    → outright_winner
-  5. Builds deep links: fanduelsportsbook://launch?deepLink=addToBetslip%3F...
+Architecture:
+  1. Direct GET to FanDuel navigation endpoint (no browser needed)
+       https://sportsbook.fanduel.com/navigation/pga
+     This returns a JSON blob containing:
+       - All externalMarketIds in layout.coupons[*].externalMarketId
+       - Player selectionId → name mapping in attachments.markets[*].runners
+       - Event metadata in attachments.events
+  2. Extracts all externalMarketIds from the navigation response
+  3. Also builds a selectionId → player_name lookup from runners data
+  4. POSTs all marketIds to getMarketPrices in batches (no PerimeterX token needed
+     since we're not scraping via browser — direct API POST still works)
+  5. Classifies markets and builds deep links
   6. Writes to BigQuery: sportsbook.raw_fanduel_pga_markets
+
+Key advantages over v4:
+  - No Camoufox / browser dependency for market discovery
+  - No lazy-load timing issues
+  - No x-px-context header capture needed
+  - Gets ALL markets (including unloaded/collapsed ones) via navigation endpoint
+  - Player name lookup included in same response
 
 Usage:
   python -m mobile_api.ingest.sportsbook.fanduel_pga_scraper --dry-run
@@ -33,6 +36,7 @@ import json
 import logging
 import os
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -53,43 +57,45 @@ ARTIFACT_PATH = "/tmp/fanduel_pga_rows.ndjson"
 
 FD_BASE_URL = "https://sportsbook.fanduel.com"
 
+# Navigation endpoint — returns full market structure + player name mappings
+FD_NAV_URL = "https://sportsbook.fanduel.com/navigation/pga"
+
+# getMarketPrices — takes a list of externalMarketIds, returns odds
 FD_MARKET_PRICES_URL = (
     "https://smp.nj.sportsbook.fanduel.com"
     "/api/sports/fixedodds/readonly/v1/getMarketPrices?priceHistory=0"
 )
 
-FD_APP_CONTEXT_URL = (
-    "https://api.sportsbook.fanduel.com/sbapi/application-context"
-    "?dataEntries=POPULAR_BETTING,QUICK_LINKS,AZ_BETTING,EVENT_TYPES,TEASER_COMPS"
-    "&_ak=FhMFpcPWXMeyZxOx"
-)
-FD_GOLF_EVENT_TYPE_ID = "3"
+# Browser-like headers for the navigation GET (avoids 403)
+FD_NAV_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/130.0.0.0 Mobile/15E148 Safari/604.1"
+    ),
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://sportsbook.fanduel.com/golf",
+    "x-sportsbook-region": "NJ",
+    "X-Application": "FhMFpcPWXMeyZxOx",
+}
 
+# Headers for getMarketPrices POST
 FD_API_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) "
         "AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/130.0.0.0 Mobile/15E148 Safari/604.1"
     ),
     "Accept": "application/json",
-    "x-sportsbook-region": "IA",
-    "X-Application": "FhMFpcPWXMeyZxOx",
     "Content-Type": "application/json",
+    "x-sportsbook-region": "NJ",
+    "X-Application": "FhMFpcPWXMeyZxOx",
 }
 
 MARKET_PRICES_BATCH_SIZE = 50
 
-SCRAPE_CONFIG = {
-    "url": f"{FD_BASE_URL}/golf",
-    "prime_url": f"{FD_BASE_URL}/golf",
-    "capture_patterns": [
-        "smp.ia.sportsbook.fanduel.com/api/sports/fixedodds",
-        "smp.nj.sportsbook.fanduel.com/api/sports/fixedodds",
-        "api.sportsbook.fanduel.com/sbapi/application-context",
-    ],
-    "wait_ms": 30000,
-}
-
-DISCOVER_PATTERNS = ["fanduel.com", "api.", "smp."]
+# Retry config for navigation GET (sometimes flaky)
+NAV_MAX_RETRIES = 3
+NAV_RETRY_DELAY_S = 10
 
 # Known static selectionIds for round score over/under markets
 ROUND_SCORE_SELECTION_IDS = {
@@ -103,83 +109,197 @@ HOLE_SCORE_SELECTION_IDS = {
     "61579324", "61579325", "13543690",
 }
 
-
-# ---------------------------------------------------------------------------
-# Proxy helpers
-# ---------------------------------------------------------------------------
-
-def _get_camoufox_url() -> str:
-    url = os.environ.get("CAMOUFOX_SERVICE_URL", "").rstrip("/")
-    if not url:
-        raise RuntimeError("CAMOUFOX_SERVICE_URL env var is not set")
-    return url
-
-
-def _get_camoufox_token() -> str:
-    return os.environ.get("CAMOUFOX_TOKEN", "")
-
-
-def _call_proxy(payload: Dict[str, Any]) -> Dict[str, Any]:
-    service_url = _get_camoufox_url()
-    token = _get_camoufox_token()
-    headers = {"Content-Type": "application/json"}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    resp = requests.post(
-        f"{service_url}/fetch",
-        json=payload,
-        headers=headers,
-        timeout=150,
-    )
-    resp.raise_for_status()
-    return resp.json()
+# Tabs to query on the navigation endpoint — each may expose different market sets
+NAV_TABS = [
+    "",                     # default / outright
+    "finishing-positions",
+    "matchups",
+    "round-score",
+    "3-balls",
+    "hole-scores",
+    "top-in-region",
+    "groups",
+]
 
 
 # ---------------------------------------------------------------------------
-# Tournament URL discovery
+# Navigation endpoint
 # ---------------------------------------------------------------------------
 
-def _extract_tournament_url_from_context(data: Dict[str, Any]) -> Optional[str]:
-    events = data.get("events") or {}
-    logger.info("application-context events: %d", len(events))
-    best_event = None
-    best_start = ""
-    for ev_id, ev in events.items():
-        if not isinstance(ev, dict):
-            continue
-        if str(ev.get("eventTypeId", "")) != FD_GOLF_EVENT_TYPE_ID:
-            continue
-        seo = ev.get("seoIdentifier") or ev.get("slug") or ""
-        start = ev.get("openDate") or ev.get("startTime") or ""
-        name = ev.get("eventName") or ev.get("name") or ""
-        logger.info("  golf event: id=%s name=%s seo=%s", ev_id, name, seo)
-        if seo and ev_id:
-            if best_start == "" or start > best_start:
-                best_start = start
-                best_event = (ev_id, seo, name)
-    if best_event:
-        ev_id, seo, name = best_event
-        url = f"{FD_BASE_URL}/golf/{seo}-{ev_id}"
-        logger.info("Tournament URL: %s (%s)", url, name)
-        return url
+def _fetch_navigation(tab: str = "") -> Optional[Dict[str, Any]]:
+    """
+    Fetch the FanDuel PGA navigation JSON for a given tab.
+    Returns parsed JSON or None on failure.
+    """
+    url = FD_NAV_URL
+    if tab:
+        url = f"{FD_NAV_URL}?tab={tab}"
+
+    for attempt in range(1, NAV_MAX_RETRIES + 1):
+        try:
+            logger.info("GET navigation tab=%r attempt=%d → %s", tab or "default", attempt, url)
+            resp = requests.get(url, headers=FD_NAV_HEADERS, timeout=20)
+            resp.raise_for_status()
+            data = resp.json()
+            logger.info("  → HTTP %d, keys=%s", resp.status_code, list(data.keys())[:6])
+            return data
+        except Exception as exc:
+            logger.warning("  navigation fetch failed (attempt %d): %s", attempt, exc)
+            if attempt < NAV_MAX_RETRIES:
+                time.sleep(NAV_RETRY_DELAY_S)
+
     return None
 
 
-def _discover_tournament_url() -> str:
-    fallback = f"{FD_BASE_URL}/golf"
-    try:
-        resp = requests.get(FD_APP_CONTEXT_URL, headers=FD_API_HEADERS, timeout=15)
-        resp.raise_for_status()
-        data = resp.json()
-        url = _extract_tournament_url_from_context(data)
-        if url:
-            return url
-        logger.warning("No golf event in application-context — using fallback")
-    except Exception as exc:
-        logger.warning("Tournament discovery failed: %s — using fallback", exc)
+def _extract_market_ids_from_nav(data: Dict[str, Any]) -> Set[str]:
+    """
+    Pulls every externalMarketId out of the navigation response.
 
-    # Known fallback for Houston Open 2026
-    return "https://sportsbook.fanduel.com/golf/texas-children%27s-houston-open-35406067"
+    They appear in two places:
+      1. layout.coupons[coupon_id].externalMarketId   (top-level single ID per coupon)
+      2. layout.coupons[coupon_id].display[*].rows[*].marketIds[]  (grouped display rows)
+    """
+    market_ids: Set[str] = set()
+    layout = data.get("layout", {})
+    coupons = layout.get("coupons", {})
+
+    for coupon_id, coupon in coupons.items():
+        if not isinstance(coupon, dict):
+            continue
+
+        # Top-level externalMarketId on coupon
+        ext_id = coupon.get("externalMarketId")
+        if ext_id:
+            market_ids.add(str(ext_id))
+
+        # display rows
+        for display_item in coupon.get("display", []):
+            if not isinstance(display_item, dict):
+                continue
+            for row in display_item.get("rows", []):
+                if not isinstance(row, dict):
+                    continue
+                for mid in row.get("marketIds", []):
+                    if mid:
+                        market_ids.add(str(mid))
+
+    return market_ids
+
+
+def _extract_player_names_from_nav(data: Dict[str, Any]) -> Dict[str, str]:
+    """
+    Builds a selectionId → playerName map from the runners embedded in
+    attachments.markets within the navigation response.
+
+    This is a bonus — gives us player name lookup without an extra API call.
+    """
+    player_map: Dict[str, str] = {}
+    attachments = data.get("attachments", {})
+    markets = attachments.get("markets", {})
+
+    for market_id, market in markets.items():
+        if not isinstance(market, dict):
+            continue
+        for runner in market.get("runners", []):
+            if not isinstance(runner, dict):
+                continue
+            sel_id = str(runner.get("selectionId", ""))
+            name = runner.get("runnerName", "")
+            if sel_id and name:
+                player_map[sel_id] = name
+
+    return player_map
+
+
+def _extract_event_name_from_nav(data: Dict[str, Any]) -> str:
+    """
+    Pulls the current tournament event name from attachments.events.
+    Returns the first golf event name found, or empty string.
+    """
+    attachments = data.get("attachments", {})
+    events = attachments.get("events", {})
+    for ev_id, ev in events.items():
+        if not isinstance(ev, dict):
+            continue
+        name = ev.get("name", "")
+        if name:
+            return name.strip()
+    return ""
+
+
+def _extract_external_market_ids_from_nav(data: Dict[str, Any]) -> Set[str]:
+    """
+    Also checks attachments.markets[*].associatedMarkets[*].externalMarketId
+    for any markets that were fully loaded in the navigation response.
+    """
+    market_ids: Set[str] = set()
+    attachments = data.get("attachments", {})
+    markets = attachments.get("markets", {})
+
+    for market_id, market in markets.items():
+        if not isinstance(market, dict):
+            continue
+        for assoc in market.get("associatedMarkets", []):
+            if not isinstance(assoc, dict):
+                continue
+            ext_id = assoc.get("externalMarketId")
+            if ext_id:
+                market_ids.add(str(ext_id))
+
+    return market_ids
+
+
+def fetch_all_market_ids() -> Tuple[Set[str], Dict[str, str], str]:
+    """
+    Queries all navigation tabs and merges results.
+
+    Returns:
+        market_ids  - all unique externalMarketIds found
+        player_map  - selectionId → playerName
+        event_name  - current tournament name
+    """
+    all_market_ids: Set[str] = set()
+    all_player_map: Dict[str, str] = {}
+    event_name = ""
+
+    for tab in NAV_TABS:
+        data = _fetch_navigation(tab)
+        if not data:
+            logger.warning("Skipping tab=%r — no data returned", tab or "default")
+            continue
+
+        # Market IDs from coupon layout
+        ids_from_layout = _extract_market_ids_from_nav(data)
+
+        # Market IDs from fully-loaded attachments
+        ids_from_attachments = _extract_external_market_ids_from_nav(data)
+
+        tab_ids = ids_from_layout | ids_from_attachments
+        logger.info(
+            "Tab %-25s → layout=%d  attachments=%d  total=%d",
+            repr(tab or "default"),
+            len(ids_from_layout),
+            len(ids_from_attachments),
+            len(tab_ids),
+        )
+        all_market_ids |= tab_ids
+
+        # Player names (merge — later tabs may add more players)
+        player_map = _extract_player_names_from_nav(data)
+        all_player_map.update(player_map)
+
+        # Event name from first tab that has it
+        if not event_name:
+            event_name = _extract_event_name_from_nav(data)
+
+        # Be polite between tab requests
+        time.sleep(1)
+
+    logger.info(
+        "Total: %d unique marketIds, %d players, event=%r",
+        len(all_market_ids), len(all_player_map), event_name,
+    )
+    return all_market_ids, all_player_map, event_name
 
 
 # ---------------------------------------------------------------------------
@@ -228,11 +348,13 @@ def _parse_market_prices_response(
     body: List[Any],
     scraped_at: str,
     event_name: str = "",
+    player_map: Optional[Dict[str, str]] = None,
 ) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     if not isinstance(body, list):
         return rows
 
+    player_map = player_map or {}
     raw_str = json.dumps(body)[:32000]
 
     for market in body:
@@ -243,6 +365,7 @@ def _parse_market_prices_response(
         turn_in_play = bool(market.get("turnInPlayEnabled", True))
         inplay = bool(market.get("inplay", False))
         market_status = market.get("marketStatus", "")
+        market_name = market.get("marketName") or market.get("name") or ""
         runners = market.get("runnerDetails", [])
 
         if not market_id or not runners:
@@ -255,6 +378,7 @@ def _parse_market_prices_response(
                 continue
 
             selection_id = str(runner.get("selectionId", ""))
+            runner_name = runner.get("runnerName") or player_map.get(selection_id, "")
             runner_status = runner.get("runnerStatus", "")
             handicap = runner.get("handicap")
             try:
@@ -298,11 +422,13 @@ def _parse_market_prices_response(
                 "source": "getMarketPrices",
                 "event_name": event_name or None,
                 "market_id": market_id,
+                "market_name": market_name or None,
                 "market_type": market_type,
                 "market_status": market_status or None,
                 "turn_in_play": turn_in_play,
                 "inplay": inplay,
                 "selection_id": selection_id or None,
+                "player_name": runner_name or None,
                 "runner_status": runner_status or None,
                 "handicap": handicap_f,
                 "odds_decimal": odds_dec,
@@ -315,24 +441,20 @@ def _parse_market_prices_response(
 
 
 # ---------------------------------------------------------------------------
-# Direct getMarketPrices POST
+# getMarketPrices batched POST
 # ---------------------------------------------------------------------------
 
 def _fetch_market_prices(
     market_ids: List[str],
-    px_context: str,
     scraped_at: str,
     event_name: str = "",
+    player_map: Optional[Dict[str, str]] = None,
 ) -> List[Dict[str, Any]]:
     all_rows: List[Dict[str, Any]] = []
     batches = [
         market_ids[i:i + MARKET_PRICES_BATCH_SIZE]
         for i in range(0, len(market_ids), MARKET_PRICES_BATCH_SIZE)
     ]
-
-    headers = {**FD_API_HEADERS}
-    if px_context:
-        headers["x-px-context"] = px_context
 
     for i, batch in enumerate(batches):
         logger.info(
@@ -343,112 +465,59 @@ def _fetch_market_prices(
             resp = requests.post(
                 FD_MARKET_PRICES_URL,
                 json={"marketIds": batch},
-                headers=headers,
+                headers=FD_API_HEADERS,
                 timeout=30,
             )
             resp.raise_for_status()
             body = resp.json()
-            rows = _parse_market_prices_response(body, scraped_at, event_name)
+            rows = _parse_market_prices_response(
+                body, scraped_at, event_name, player_map
+            )
             logger.info("  → %d rows", len(rows))
             all_rows.extend(rows)
         except Exception as exc:
             logger.warning("Batch %d failed: %s", i + 1, exc)
 
+        # Small delay between batches to be polite
+        if i < len(batches) - 1:
+            time.sleep(0.5)
+
     return all_rows
 
 
 # ---------------------------------------------------------------------------
-# Browser capture extraction
-# ---------------------------------------------------------------------------
-
-def _extract_from_captures(
-    captured: List[Dict[str, Any]],
-) -> Tuple[Set[str], str, str]:
-    """
-    Returns: (market_ids, px_context, event_name)
-    """
-    market_ids: Set[str] = set()
-    px_context = ""
-    event_name = ""
-
-    for i, capture in enumerate(captured):
-        url = capture.get("url", "")
-        body = capture.get("body")
-        req_headers = (
-            capture.get("request_headers")
-            or capture.get("requestHeaders")
-            or {}
-        )
-
-        logger.info("  captured[%d]: %s", i, url[:100])
-
-        # Grab x-px-context from any request headers
-        if not px_context and isinstance(req_headers, dict):
-            for hk, hv in req_headers.items():
-                if hk.lower() in ("x-px-context",):
-                    px_context = str(hv)
-                    logger.info("  → x-px-context captured (%d chars)", len(px_context))
-                    break
-
-        # Extract marketIds from getMarketPrices POST bodies
-        if "getMarketPrices" in url:
-            if isinstance(body, dict) and "marketIds" in body:
-                ids = [str(m) for m in body["marketIds"] if m]
-                market_ids.update(ids)
-                logger.info("  → POST body: %d marketIds", len(ids))
-            elif isinstance(body, list):
-                # response body — grab marketIds from there too
-                for mkt in body:
-                    if isinstance(mkt, dict) and mkt.get("marketId"):
-                        market_ids.add(str(mkt["marketId"]))
-
-        # Extract event name from application-context
-        if "application-context" in url and isinstance(body, dict) and not event_name:
-            ctx_url = _extract_tournament_url_from_context(body)
-            if ctx_url:
-                parts = ctx_url.rstrip("/").split("/")
-                if parts:
-                    raw = parts[-1]
-                    segs = raw.split("-")
-                    if segs and segs[-1].isdigit():
-                        segs = segs[:-1]
-                    event_name = " ".join(p.title() for p in segs)
-
-    logger.info(
-        "Extraction complete: %d marketIds, px_context=%s, event=%s",
-        len(market_ids),
-        "YES" if px_context else "NO",
-        event_name or "unknown",
-    )
-    return market_ids, px_context, event_name
-
-
-# ---------------------------------------------------------------------------
-# Discovery mode
+# Discover mode — print all found marketIds and player counts per tab
 # ---------------------------------------------------------------------------
 
 def discover() -> None:
-    tournament_url = _discover_tournament_url()
-    logger.info("DISCOVERY MODE → %s", tournament_url)
-    result = _call_proxy({
-        "url": tournament_url,
-        "prime_url": tournament_url,
-        "capture_patterns": DISCOVER_PATTERNS,
-        "wait_ms": SCRAPE_CONFIG["wait_ms"],
-        "timeout_ms": 120000,
-    })
-    captured = result.get("captured_requests", [])
-    logger.info("page_status=%d  total_captured=%d", result.get("status", 0), len(captured))
-    print("\n=== DISCOVERED URLs ===")
-    for i, cap in enumerate(captured):
-        url = cap.get("url", "<unknown>")
-        body = cap.get("body")
-        body_type = type(body).__name__
-        top_keys = list(body.keys())[:6] if isinstance(body, dict) else "n/a"
-        has_rh = bool(cap.get("request_headers") or cap.get("requestHeaders"))
-        print(f"[{i:02d}] {url[:120]}")
-        print(f"      body_type={body_type}  top_keys={top_keys}  has_req_headers={has_rh}")
-    print("=== END ===\n")
+    logger.info("DISCOVERY MODE — querying all navigation tabs")
+    for tab in NAV_TABS:
+        data = _fetch_navigation(tab)
+        if not data:
+            print(f"[{tab or 'default':30s}] FAILED")
+            continue
+
+        layout_ids = _extract_market_ids_from_nav(data)
+        attach_ids = _extract_external_market_ids_from_nav(data)
+        players = _extract_player_names_from_nav(data)
+        event_name = _extract_event_name_from_nav(data)
+
+        print(
+            f"[{tab or 'default':30s}] "
+            f"layout_ids={len(layout_ids):4d}  "
+            f"attach_ids={len(attach_ids):4d}  "
+            f"players={len(players):4d}  "
+            f"event={event_name!r}"
+        )
+        time.sleep(1)
+
+    print("\nSample from default tab:")
+    data = _fetch_navigation("")
+    if data:
+        ids = _extract_market_ids_from_nav(data)
+        players = _extract_player_names_from_nav(data)
+        print(f"  First 10 marketIds: {sorted(ids)[:10]}")
+        print(f"  Sample players: {dict(list(players.items())[:10])}")
 
 
 # ---------------------------------------------------------------------------
@@ -458,60 +527,40 @@ def discover() -> None:
 def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
     scraped_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    # Step 1: discover tournament URL
-    tournament_url = _discover_tournament_url()
-    logger.info("Loading: %s", tournament_url)
-
-    # Step 2: Camoufox browser load — captures getMarketPrices POSTs
-    result = _call_proxy({
-        "url": tournament_url,
-        "prime_url": tournament_url,
-        "capture_patterns": SCRAPE_CONFIG["capture_patterns"],
-        "wait_ms": SCRAPE_CONFIG["wait_ms"],
-        "timeout_ms": 120000,
-    })
-
-    captured = result.get("captured_requests", [])
-    logger.info(
-        "page_status=%d  captured_requests=%d",
-        result.get("status", 0), len(captured),
-    )
-
-    # Step 3: extract marketIds + token
-    market_ids, px_context, event_name = _extract_from_captures(captured)
+    # Step 1: fetch all market IDs and player name map from navigation endpoint
+    market_ids, player_map, event_name = fetch_all_market_ids()
 
     if not market_ids:
-        logger.warning("No marketIds captured. Run --discover to debug.")
+        logger.error("No marketIds found from navigation endpoint. Aborting.")
         return []
 
-    if not px_context:
-        logger.warning(
-            "No x-px-context captured — PerimeterX may block direct POSTs. "
-            "Check if Camoufox is forwarding request headers."
-        )
-
-    # Step 4: POST all marketIds to get full odds
-    market_id_list = sorted(market_ids)
-    logger.info("Fetching odds for %d markets...", len(market_id_list))
-    rows = _fetch_market_prices(
-        market_id_list,
-        px_context=px_context,
-        scraped_at=scraped_at,
-        event_name=event_name,
+    logger.info(
+        "Discovered %d marketIds for %r (%d players in name map)",
+        len(market_ids), event_name, len(player_map),
     )
 
-    # Step 5: log summary by market type
+    # Step 2: fetch odds for all markets
+    market_id_list = sorted(market_ids)
+    rows = _fetch_market_prices(
+        market_id_list,
+        scraped_at=scraped_at,
+        event_name=event_name,
+        player_map=player_map,
+    )
+
+    # Step 3: summary
     by_type: Dict[str, int] = {}
     for row in rows:
         mt = row.get("market_type", "other")
         by_type[mt] = by_type.get(mt, 0) + 1
 
-    logger.info("FanDuel PGA: %d rows, %d market types", len(rows), len(by_type))
+    logger.info("FanDuel PGA: %d total rows across %d market types", len(rows), len(by_type))
     for mt, count in sorted(by_type.items(), key=lambda x: -x[1]):
         logger.info("  %-25s %d", mt, count)
 
     if not rows:
-        logger.warning("0 rows parsed.")
+        logger.warning("0 rows parsed — check if getMarketPrices endpoint is accessible.")
+        return []
 
     if dry_run:
         seen: Set[str] = set()
@@ -551,7 +600,7 @@ def load() -> None:
                 rows.append(json.loads(line))
 
     if not rows:
-        logger.info("Artifact empty")
+        logger.info("Artifact empty — nothing to load")
         return
 
     project = os.environ.get("GCP_PROJECT", "graphite-flare-477419-h7")
@@ -564,7 +613,9 @@ def load() -> None:
         write_disposition="WRITE_APPEND",
         autodetect=False,
     )
-    job = client.load_table_from_file(io.BytesIO(ndjson_bytes), table_id, job_config=job_config)
+    job = client.load_table_from_file(
+        io.BytesIO(ndjson_bytes), table_id, job_config=job_config
+    )
     job.result()
     if job.errors:
         logger.error("BigQuery load errors: %s", job.errors)
@@ -577,12 +628,12 @@ def load() -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="FanDuel PGA Tour market scraper v4")
+    parser = argparse.ArgumentParser(description="FanDuel PGA Tour market scraper v5")
     group = parser.add_mutually_exclusive_group()
-    group.add_argument("--scrape-only", action="store_true")
-    group.add_argument("--load-only", action="store_true")
-    group.add_argument("--discover", action="store_true")
-    parser.add_argument("--dry-run", action="store_true")
+    group.add_argument("--scrape-only", action="store_true", help="Scrape and write artifact, skip BQ load")
+    group.add_argument("--load-only", action="store_true", help="Load existing artifact to BigQuery")
+    group.add_argument("--discover", action="store_true", help="Print market/player counts per nav tab")
+    parser.add_argument("--dry-run", action="store_true", help="Scrape and print sample rows, skip writes")
     args = parser.parse_args()
 
     if args.load_only:
@@ -591,7 +642,7 @@ def main() -> None:
         discover()
     else:
         rows = scrape(dry_run=args.dry_run)
-        if not args.scrape_only and not args.dry_run:
+        if not args.scrape_only and not args.dry_run and rows:
             load()
 
 

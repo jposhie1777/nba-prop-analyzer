@@ -163,7 +163,8 @@ jobs:
           echo "Updating CAMOUFOX_SERVICE_URL to: ${{ steps.deploy.outputs.url }}"
           gh secret set CAMOUFOX_SERVICE_URL --body "${{ steps.deploy.outputs.url }}"
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+
 
   # -----------------------------------------------------------------------
   # SMOKE TEST
@@ -256,7 +257,8 @@ jobs:
           echo "Emergency URL: ${{ steps.emergency_deploy.outputs.url }}"
           gh secret set CAMOUFOX_SERVICE_URL --body "${{ steps.emergency_deploy.outputs.url }}"
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+
 
       - name: Log emergency redeploy warning
         run: |

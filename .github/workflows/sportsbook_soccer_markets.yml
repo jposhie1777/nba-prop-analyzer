@@ -23,6 +23,8 @@ name: Sportsbook Soccer Markets (FanDuel + DraftKings)
 #     filtering is handled via an early-exit step instead
 
 on:
+  schedule:
+    - cron: "0 11 * * *"  # 6am EST (UTC-5) / 7am EDT (UTC-4) daily
   workflow_dispatch:
     inputs:
       league:

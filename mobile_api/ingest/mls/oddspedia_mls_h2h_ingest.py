@@ -1,3 +1,4 @@
+# DEPRECATED - replaced by epl_betting_analytics / mls_betting_analytics
 # mobile_api/ingest/mls/oddspedia_mls_h2h_ingest.py
 """
 Ingests head-to-head data from Oddspedia match insights pages into BigQuery.

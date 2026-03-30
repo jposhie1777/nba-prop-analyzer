@@ -1,3 +1,5 @@
+# DEPRECATED - replaced by epl_betting_analytics / mls_betting_analytics
+# Source data now flows from FanDuel via soccer_data.raw_fanduel_soccer_markets → epl_betting_analytics.
 #/workspaces/nba-prop-analyzer/mobile_api/ingest/epl/oddspedia_epl_odds_ingest.py
 """Oddspedia EPL odds → BigQuery ingest (live scrape, single flat table).
 

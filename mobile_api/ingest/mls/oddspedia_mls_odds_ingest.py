@@ -1,3 +1,5 @@
+# DEPRECATED - replaced by epl_betting_analytics / mls_betting_analytics
+# Source data now flows from FanDuel via soccer_data.raw_fanduel_soccer_markets → mls_betting_analytics.
 #mobile_api/ingest/mls/oddspedia_mls_odds_ingest.py
 """Oddspedia MLS odds → BigQuery ingest (live scrape, single flat table).
 

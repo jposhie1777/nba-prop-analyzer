@@ -141,19 +141,33 @@ def fetch_team_stats(season: int) -> List[Dict[str, Any]]:
 
 
 def fetch_standings(season: int) -> List[Dict[str, Any]]:
+    # v5 endpoint uses season = start year (e.g. 2025 for 2025/26)
     for path in (
+        f"v5/competitions/{COMPETITION_ID}/seasons/{season}/standings",
         f"v1/competitions/{COMPETITION_ID}/seasons/{season}/standings",
-        f"v1/competitions/{COMPETITION_ID}/seasons/{season}/tables",
     ):
         try:
-            payload = _get(path, {"_limit": 100})
+            payload = _get(path, {"live": "false"})
         except Exception as exc:
             logger.warning("standings endpoint failed path=%s season=%s: %s", path, season, exc)
             continue
-        if isinstance(payload, dict) and isinstance(payload.get("data"), list):
-            return payload["data"]
-    return []
 
+        if not isinstance(payload, dict):
+            continue
+
+        # v5 shape: {"tables": [{"entries": [...]}]}
+        tables = payload.get("tables")
+        if isinstance(tables, list) and tables:
+            entries = tables[0].get("entries")
+            if isinstance(entries, list):
+                logger.info("standings season=%s rows=%s (v5)", season, len(entries))
+                return entries
+
+        # v1 shape: {"data": [...]}
+        if isinstance(payload.get("data"), list):
+            return payload["data"]
+
+    return []
 
 def fetch_player_stats(season: int) -> List[Dict[str, Any]]:
     # Endpoint exists but can be unstable / schema variant by stat sort.

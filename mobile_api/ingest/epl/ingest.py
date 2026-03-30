@@ -122,7 +122,9 @@ def _write_rows(client: bigquery.Client, table: str, season: int, rows: Sequence
 
 def _season_window(current_season: int | None = None) -> list[int]:
     year = current_season or datetime.now(timezone.utc).year
-    return [year - 1, year]
+    # EPL season ID is the *start* year: 2025/26 season → ID "2025"
+    epl_year = year - 1
+    return [epl_year - 1, epl_year]
 
 
 def _build_team_rows(schedule_rows: Sequence[Dict[str, Any]]) -> list[Dict[str, Any]]:

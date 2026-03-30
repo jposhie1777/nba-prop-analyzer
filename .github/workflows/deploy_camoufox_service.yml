@@ -8,11 +8,8 @@ name: Deploy Camoufox Proxy Service
 #   1. workflow_dispatch — manual full rebuild (build + deploy + smoke test)
 #   2. schedule — daily region rotation (deploy only, reuses latest image)
 #
-# The CAMOUFOX_SERVICE_URL secret is updated automatically after every
-# deploy, so no manual secret management is ever needed.
-#
-# If the scrape detects 0 rows (blocked), it automatically redeploys to
-# an emergency region and retries once before giving up.
+# CAMOUFOX_SERVICE_URL secret is updated automatically after every deploy.
+# If smoke test fails, emergency redeploy fires to a backup region.
 
 on:
   workflow_dispatch:
@@ -49,10 +46,6 @@ env:
   IMAGE_NAME: camoufox-proxy
   ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
   IMAGE_URI: us-central1-docker.pkg.dev/graphite-flare-477419-h7/cloud-run-source-deploy/camoufox-proxy:latest
-
-permissions:
-  contents: read
-  secrets: write
 
 jobs:
   # -----------------------------------------------------------------------
@@ -115,6 +108,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build]
     if: always() && (needs.build.result == 'success' || needs.build.result == 'skipped')
+    permissions:
+      contents: write
+      secrets: write
     outputs:
       service_url: ${{ steps.deploy.outputs.url }}
       region: ${{ steps.region.outputs.name }}
@@ -204,14 +200,16 @@ jobs:
 
   # -----------------------------------------------------------------------
   # EMERGENCY REDEPLOY
-  # Triggers if smoke test fails — picks a random non-primary region,
-  # redeploys, and updates the secret so the scraper can still run.
+  # Fires if smoke test fails — picks a random backup region and redeploys
   # -----------------------------------------------------------------------
   emergency-redeploy:
     name: Emergency Redeploy
     runs-on: ubuntu-latest
     needs: [deploy, smoke-test]
-    if: failure() && needs.smoke-test.outputs.healthy == 'false'
+    if: always() && needs.smoke-test.result == 'failure'
+    permissions:
+      contents: write
+      secrets: write
 
     steps:
       - name: Authenticate to GCP
@@ -225,7 +223,6 @@ jobs:
       - name: Select emergency region
         id: emergency_region
         run: |
-          # Use backup regions outside the normal rotation
           BACKUPS=("asia-east1" "asia-northeast1" "southamerica-east1")
           IDX=$(( RANDOM % 3 ))
           REGION="${BACKUPS[$IDX]}"
@@ -257,9 +254,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Notify emergency redeploy
+      - name: Log emergency redeploy warning
         run: |
-          echo "::warning::Camoufox primary deploy failed. Emergency redeployed to ${{ steps.emergency_region.outputs.name }}. URL updated automatically."
+          echo "::warning::Primary deploy failed. Emergency redeployed to ${{ steps.emergency_region.outputs.name }}. CAMOUFOX_SERVICE_URL updated automatically."
 
   # -----------------------------------------------------------------------
   # SUMMARY

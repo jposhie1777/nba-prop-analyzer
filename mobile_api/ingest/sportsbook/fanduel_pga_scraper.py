@@ -424,6 +424,15 @@ def _american_from_decimal(decimal: float) -> str:
     return str(int(round(-100 / (decimal - 1))))
 
 
+def _american_from_decimal_int(decimal: float) -> Optional[int]:
+    """Return american odds as int to match BQ INTEGER column."""
+    if decimal <= 1.0:
+        return None
+    if decimal >= 2.0:
+        return int(round((decimal - 1) * 100))
+    return int(round(-100 / (decimal - 1)))
+
+
 def _build_deep_link(market_id: str, selection_id: str) -> str:
     params = urlencode([("marketId[]", market_id), ("selectionId[]", selection_id)])
     return f"fanduelsportsbook://launch?deepLink=addToBetslip%3F{params}"
@@ -499,29 +508,38 @@ def _parse_market_prices_response(
             try:
                 am_val = am_obj.get("americanOdds")
                 if am_val is not None:
-                    am_int = int(am_val)
-                    odds_am = f"+{am_int}" if am_int >= 0 else str(am_int)
+                    odds_am = int(am_val)
             except Exception:
                 pass
             if odds_dec is not None and odds_am is None:
-                odds_am = _american_from_decimal(odds_dec)
+                odds_am = _american_from_decimal_int(odds_dec)
 
             deep_link = (
                 _build_deep_link(market_id, selection_id)
                 if market_id and selection_id else None
             )
 
+            # Coerce IDs to numeric types to match BQ schema
+            try:
+                market_id_num = float(market_id) if market_id else None
+            except (ValueError, TypeError):
+                market_id_num = None
+            try:
+                selection_id_int = int(selection_id) if selection_id else None
+            except (ValueError, TypeError):
+                selection_id_int = None
+
             rows.append({
                 "scraped_at": scraped_at,
                 "source": "getMarketPrices",
                 "event_name": event_name or None,
-                "market_id": market_id,
+                "market_id": market_id_num,
                 "market_name": market_name or None,
                 "market_type": market_type,
                 "market_status": market_status or None,
                 "turn_in_play": turn_in_play,
                 "inplay": inplay,
-                "selection_id": selection_id or None,
+                "selection_id": selection_id_int,
                 "player_name": runner_name or None,
                 "runner_status": runner_status or None,
                 "handicap": handicap_f,
@@ -748,6 +766,9 @@ def load() -> None:
         source_format=SourceFormat.NEWLINE_DELIMITED_JSON,
         write_disposition="WRITE_APPEND",
         autodetect=True,
+        schema_update_options=[
+            bigquery.SchemaUpdateOption.ALLOW_FIELD_ADDITION,
+        ],
     )
     job = client.load_table_from_file(io.BytesIO(ndjson_bytes), table_id, job_config=job_config)
     job.result()

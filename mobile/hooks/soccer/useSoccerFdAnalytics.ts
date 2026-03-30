@@ -91,11 +91,11 @@ export type ParlayLeg = {
 };
 
 export function buildParlayLink(legs: ParlayLeg[]): string {
-  const base = "fanduelsportsbook://launch?deepLink=addToBetslip";
+  const base = "fanduelsportsbook://launch?deepLink=addToBetslip%3F";
   const params = legs
     .map(
       (leg) =>
-        `%3FmarketId%5B%5D=${leg.fd_market_id}&selectionId%5B%5D=${leg.fd_selection_id}`
+        `marketId%5B%5D=${leg.fd_market_id}&selectionId%5B%5D=${leg.fd_selection_id}`
     )
     .join("&");
   return `${base}${params}`;

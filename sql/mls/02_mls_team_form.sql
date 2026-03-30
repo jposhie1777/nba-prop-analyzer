@@ -47,7 +47,7 @@ WITH base AS (
       + CAST(red_cards AS FLOAT64)
       + CAST(yellow_red_cards AS FLOAT64)             AS total_cards
   FROM `graphite-flare-477419-h7.mls_data.fact_team_match`
-  WHERE scope = 'total'                               -- match totals only, not halftime splits
+  WHERE scope = 'match'                               -- match totals only, not halftime splits
 ),
 
 ranked AS (

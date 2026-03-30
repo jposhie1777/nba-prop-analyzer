@@ -1,5 +1,5 @@
-import { LeagueUpcomingMatchesScreen } from "@/components/soccer/LeagueUpcomingMatchesScreen";
+import { SoccerGamesScreen } from "@/app/(tabs)/soccer/games";
 
 export default function EplHome() {
-  return <LeagueUpcomingMatchesScreen league="epl" title="EPL" />;
+  return <SoccerGamesScreen league="EPL" />;
 }

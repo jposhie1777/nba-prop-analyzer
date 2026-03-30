@@ -118,14 +118,23 @@ function GameCard({ game, onPress }: { game: SoccerGame; onPress: () => void }) 
 
 // ─── Main screen ───────────────────────────────────────────────────────────────
 
-export default function SoccerGamesScreen() {
+type Props = {
+  /** Optional league filter — "EPL" or "MLS". Omit to show all leagues. */
+  league?: string;
+};
+
+export function SoccerGamesScreen({ league }: Props = {}) {
   const { colors } = useTheme();
   const router = useRouter();
   const { data, loading, error, refetch } = useSoccerGames();
 
-  // Group games by date
+  const leagueUpper = league?.toUpperCase();
+
+  // Group games by date, optionally filtered by league
   const grouped = useMemo(() => {
-    const games = data ?? [];
+    const games = (data ?? []).filter(
+      (g) => !leagueUpper || g.league?.toUpperCase() === leagueUpper
+    );
     const map = new Map<string, SoccerGame[]>();
     for (const game of games) {
       const dateKey = game.event_date ?? "unknown";
@@ -133,7 +142,7 @@ export default function SoccerGamesScreen() {
       map.get(dateKey)!.push(game);
     }
     return [...map.entries()].map(([date, items]) => ({ date, items }));
-  }, [data]);
+  }, [data, leagueUpper]);
 
   const handleGamePress = useCallback(
     (game: SoccerGame) => {
@@ -201,6 +210,10 @@ export default function SoccerGamesScreen() {
       )}
     </ScrollView>
   );
+}
+
+export default function SoccerGamesDefaultScreen() {
+  return <SoccerGamesScreen />;
 }
 
 // ─── Styles ────────────────────────────────────────────────────────────────────

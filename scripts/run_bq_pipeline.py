@@ -28,9 +28,9 @@ PIPELINES = {
         "sql/mls/03_mls_betting_analytics.sql",
     ],
     "epl": [
-        # EPL files will go here when EPL data is healthy
-        # "sql/epl/01_epl_team_form.sql",
-        # "sql/epl/02_epl_betting_analytics.sql",
+        "sql/epl/01_epl_team_name_map.sql",
+        "sql/epl/02_epl_team_form.sql",
+        "sql/epl/03_epl_betting_analytics.sql",
     ],
 }
 

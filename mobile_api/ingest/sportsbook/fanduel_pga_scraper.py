@@ -1,15 +1,16 @@
 """
-FanDuel PGA Tour Market Scraper — v5
+FanDuel PGA Tour Market Scraper — v6 (multi-tournament)
 
 Architecture:
-  1. Camoufox loads the current PGA tournament page
-  2. Captures ALL XHRs matching broad patterns (navigation + getMarketPrices)
+  1. Discovers ALL available golf events from FanDuel application-context API
+  2. For each tournament, loads its page via Camoufox and captures XHRs
   3. From captured requests:
        - Navigation response body  → all externalMarketIds + player names
        - getMarketPrices POST bodies → additional marketIds
        - Any request headers       → x-px-context token
   4. POSTs all discovered marketIds to getMarketPrices directly (with px token)
   5. Classifies markets, builds deep links, writes to BigQuery
+  6. Each row is tagged with tournament_name + tournament_slug for multi-event support
 
 Usage:
   python -m mobile_api.ingest.sportsbook.fanduel_pga_scraper --dry-run
@@ -128,7 +129,14 @@ def _call_proxy(payload: Dict[str, Any]) -> Dict[str, Any]:
 # Tournament URL discovery
 # ---------------------------------------------------------------------------
 
-def _discover_tournament_url() -> str:
+def _discover_all_tournaments() -> List[Dict[str, str]]:
+    """
+    Discover ALL available golf events from FanDuel's application-context API.
+
+    Returns a list of dicts: [{"id": "...", "slug": "...", "name": "...", "url": "...", "start": "..."}]
+    sorted by start date (nearest first).
+    """
+    tournaments: List[Dict[str, str]] = []
     try:
         resp = requests.get(
             FD_APP_CONTEXT_URL,
@@ -137,8 +145,6 @@ def _discover_tournament_url() -> str:
         )
         resp.raise_for_status()
         events = resp.json().get("events") or {}
-        best_event = None
-        best_start = ""
         for ev_id, ev in events.items():
             if not isinstance(ev, dict):
                 continue
@@ -147,17 +153,36 @@ def _discover_tournament_url() -> str:
             seo = ev.get("seoIdentifier") or ev.get("slug") or ""
             start = ev.get("openDate") or ev.get("startTime") or ""
             name = ev.get("eventName") or ev.get("name") or ""
-            if seo and ev_id and (best_start == "" or start > best_start):
-                best_start = start
-                best_event = (ev_id, seo, name)
-        if best_event:
-            ev_id, seo, name = best_event
-            url = f"{FD_BASE_URL}/golf/{seo}-{ev_id}"
-            logger.info("Tournament URL: %s (%s)", url, name)
-            return url
+            if seo and ev_id:
+                url = f"{FD_BASE_URL}/golf/{seo}-{ev_id}"
+                tournaments.append({
+                    "id": str(ev_id),
+                    "slug": seo,
+                    "name": name,
+                    "url": url,
+                    "start": start,
+                })
+        tournaments.sort(key=lambda t: t["start"])
+        for t in tournaments:
+            logger.info("Discovered tournament: %s → %s (starts %s)", t["name"], t["url"], t["start"])
     except Exception as exc:
-        logger.warning("Tournament URL discovery failed: %s", exc)
-    return FD_GOLF_URL
+        logger.warning("Tournament discovery failed: %s", exc)
+    if not tournaments:
+        logger.warning("No tournaments found, falling back to generic golf URL")
+        tournaments.append({
+            "id": "",
+            "slug": "",
+            "name": "PGA Tour",
+            "url": FD_GOLF_URL,
+            "start": "",
+        })
+    return tournaments
+
+
+def _discover_tournament_url() -> str:
+    """Legacy single-tournament helper — returns the nearest upcoming event."""
+    tournaments = _discover_all_tournaments()
+    return tournaments[0]["url"] if tournaments else FD_GOLF_URL
 
 
 # ---------------------------------------------------------------------------
@@ -253,7 +278,9 @@ def _try_parse_json(body: Any) -> Optional[Dict[str, Any]]:
 # Main page load + capture extraction
 # ---------------------------------------------------------------------------
 
-def _scrape_tournament_page() -> Tuple[Set[str], Dict[str, str], str, str]:
+def _scrape_tournament_page(
+    tournament_url: Optional[str] = None,
+) -> Tuple[Set[str], Dict[str, str], str, str]:
     """
     Load the tournament page via Camoufox and extract everything from captures.
 
@@ -265,7 +292,8 @@ def _scrape_tournament_page() -> Tuple[Set[str], Dict[str, str], str, str]:
     event_name = ""
     px_context = ""
 
-    tournament_url = _discover_tournament_url()
+    if not tournament_url:
+        tournament_url = _discover_tournament_url()
     logger.info("Loading via Camoufox: %s", tournament_url)
 
     result = _call_proxy({
@@ -352,9 +380,33 @@ def _scrape_tournament_page() -> Tuple[Set[str], Dict[str, str], str, str]:
 # Market classification
 # ---------------------------------------------------------------------------
 
-def _classify_market(runners: List[Dict], turn_in_play: bool) -> str:
+def _classify_market(runners: List[Dict], turn_in_play: bool, market_name: str = "") -> str:
     n = len(runners)
     sel_ids = {str(r.get("selectionId", "")) for r in runners}
+    name_lower = (market_name or "").lower()
+
+    # Use market name for richer classification when available
+    if name_lower:
+        if "outright" in name_lower or "to win" == name_lower.strip():
+            return "outright_winner"
+        if "top " in name_lower and ("nationality" in name_lower or "region" in name_lower or "country" in name_lower):
+            return "top_nationality"
+        if "top " in name_lower and any(x in name_lower for x in ("finish", "5", "10", "20", "40")):
+            return "top_finish"
+        if "matchup" in name_lower or "match bet" in name_lower or "head to head" in name_lower or "h2h" in name_lower:
+            return "matchup"
+        if "3 ball" in name_lower or "3-ball" in name_lower or "three ball" in name_lower:
+            return "three_ball"
+        if "round" in name_lower and ("score" in name_lower or "leader" in name_lower):
+            return "round_score"
+        if "hole" in name_lower and ("score" in name_lower or "in one" in name_lower):
+            return "hole_score"
+        if "make" in name_lower and "cut" in name_lower:
+            return "make_cut"
+        if "first round leader" in name_lower:
+            return "first_round_leader"
+
+    # Fallback to runner-count heuristic
     if n == 2:
         return "round_score" if sel_ids & ROUND_SCORE_SELECTION_IDS else "matchup"
     if n == 3:
@@ -416,7 +468,7 @@ def _parse_market_prices_response(
         if not market_id or not runners:
             continue
 
-        market_type = _classify_market(runners, turn_in_play)
+        market_type = _classify_market(runners, turn_in_play, market_name)
 
         for runner in runners:
             if not isinstance(runner, dict):
@@ -537,7 +589,13 @@ def _fetch_market_prices(
 
 def discover() -> None:
     """Load the tournament page with a very broad capture and log all XHRs."""
-    tournament_url = _discover_tournament_url()
+    tournaments = _discover_all_tournaments()
+    print(f"\n=== DISCOVERED {len(tournaments)} TOURNAMENT(S) ===")
+    for t in tournaments:
+        print(f"  {t['name']}  →  {t['url']}  (starts {t['start']})")
+    print()
+
+    tournament_url = tournaments[0]["url"] if tournaments else FD_GOLF_URL
     logger.info("DISCOVERY MODE → %s", tournament_url)
 
     result = _call_proxy({
@@ -571,54 +629,90 @@ def discover() -> None:
 def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
     scraped_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    market_ids, player_map, market_name_map, event_name, px_context = _scrape_tournament_page()
+    tournaments = _discover_all_tournaments()
+    logger.info("Found %d golf tournament(s) to scrape", len(tournaments))
 
-    if not market_ids:
-        logger.error("No marketIds found. Run --discover to debug XHR capture.")
-        return []
+    all_rows: List[Dict[str, Any]] = []
+
+    for ti, tourn in enumerate(tournaments):
+        tourn_name = tourn["name"]
+        tourn_slug = tourn["slug"]
+        tourn_url = tourn["url"]
+        logger.info(
+            "=== Tournament %d/%d: %s ===", ti + 1, len(tournaments), tourn_name,
+        )
+
+        market_ids, player_map, market_name_map, event_name, px_context = (
+            _scrape_tournament_page(tournament_url=tourn_url)
+        )
+
+        if not market_ids:
+            logger.warning("No marketIds for %s. Skipping.", tourn_name)
+            continue
+
+        # Prefer event_name from FanDuel page; fall back to app-context name
+        resolved_event_name = event_name or tourn_name
+
+        logger.info(
+            "Discovered %d marketIds for %r (%d players, %d market names, px=%s)",
+            len(market_ids), resolved_event_name, len(player_map),
+            len(market_name_map), "YES" if px_context else "NO",
+        )
+
+        rows = _fetch_market_prices(
+            sorted(market_ids),
+            scraped_at=scraped_at,
+            event_name=resolved_event_name,
+            player_map=player_map,
+            market_name_map=market_name_map,
+            px_context=px_context,
+        )
+
+        # Tag every row with tournament metadata for multi-event support
+        for row in rows:
+            row["tournament_name"] = resolved_event_name
+            row["tournament_slug"] = tourn_slug
+
+        by_type: Dict[str, int] = {}
+        for row in rows:
+            mt = row.get("market_type", "other")
+            by_type[mt] = by_type.get(mt, 0) + 1
+
+        logger.info(
+            "%s: %d rows, %d market types", resolved_event_name, len(rows), len(by_type),
+        )
+        for mt, count in sorted(by_type.items(), key=lambda x: -x[1]):
+            logger.info("  %-25s %d", mt, count)
+
+        all_rows.extend(rows)
+
+        # Brief pause between tournaments to avoid rate limits
+        if ti < len(tournaments) - 1:
+            time.sleep(2)
 
     logger.info(
-        "Discovered %d marketIds for %r (%d players, %d market names, px=%s)",
-        len(market_ids), event_name, len(player_map), len(market_name_map), "YES" if px_context else "NO",
+        "FanDuel PGA TOTAL: %d rows across %d tournament(s)", len(all_rows), len(tournaments),
     )
 
-    rows = _fetch_market_prices(
-        sorted(market_ids),
-        scraped_at=scraped_at,
-        event_name=event_name,
-        player_map=player_map,
-        market_name_map=market_name_map,
-        px_context=px_context,
-    )
-
-    by_type: Dict[str, int] = {}
-    for row in rows:
-        mt = row.get("market_type", "other")
-        by_type[mt] = by_type.get(mt, 0) + 1
-
-    logger.info("FanDuel PGA: %d rows, %d market types", len(rows), len(by_type))
-    for mt, count in sorted(by_type.items(), key=lambda x: -x[1]):
-        logger.info("  %-25s %d", mt, count)
-
-    if not rows:
-        logger.warning("0 rows parsed.")
+    if not all_rows:
+        logger.warning("0 rows parsed across all tournaments.")
         return []
 
     if dry_run:
         seen: Set[str] = set()
-        for row in rows:
-            mt = row.get("market_type", "")
-            if mt not in seen:
-                seen.add(mt)
+        for row in all_rows:
+            key = f"{row.get('tournament_name', '')}|{row.get('market_type', '')}"
+            if key not in seen:
+                seen.add(key)
                 print(json.dumps(row, default=str))
-        return rows
+        return all_rows
 
     Path(ARTIFACT_PATH).parent.mkdir(parents=True, exist_ok=True)
     with open(ARTIFACT_PATH, "w") as fh:
-        for row in rows:
+        for row in all_rows:
             fh.write(json.dumps(row, default=str) + "\n")
-    logger.info("Wrote %d rows to %s", len(rows), ARTIFACT_PATH)
-    return rows
+    logger.info("Wrote %d rows to %s", len(all_rows), ARTIFACT_PATH)
+    return all_rows
 
 
 # ---------------------------------------------------------------------------

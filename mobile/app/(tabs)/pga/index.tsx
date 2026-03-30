@@ -103,6 +103,13 @@ export default function PgaHome() {
       <Text style={[styles.sectionLabel, { color: colors.text.muted }]}>ANALYSIS MODULES</Text>
 
       <ModuleTile
+        title="FanDuel Sportsbook"
+        subtitle="All tournament odds with analytics overlay"
+        route="/(tabs)/pga/sportsbook"
+        icon="logo-usd"
+        accent="#FF6B35"
+      />
+      <ModuleTile
         title="Betting Analytics"
         subtitle="Outrights, player stats, and recent form tables"
         route="/(tabs)/pga/betting-analytics"

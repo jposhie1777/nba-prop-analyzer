@@ -1,3 +1,4 @@
+# DEPRECATED - replaced by epl_betting_analytics / mls_betting_analytics
 #mobile_api/ingest/epl/oddspedia_epl_match_info_ingest.py
 
 """

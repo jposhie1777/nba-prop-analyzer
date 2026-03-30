@@ -1,3 +1,6 @@
+# DEPRECATED - replaced by epl_betting_analytics / mls_betting_analytics
+# New endpoints: GET /soccer/games and GET /soccer/analytics (routes/soccer_fd_analytics.py)
+
 from __future__ import annotations
 
 import os

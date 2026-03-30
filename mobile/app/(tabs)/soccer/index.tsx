@@ -44,6 +44,14 @@ export default function SoccerHome() {
       </View>
 
       <Tile
+        title="EPL &amp; MLS Games + Analytics"
+        subtitle="Upcoming EPL and MLS games with FanDuel market analytics, model signals, form stats, and parlay builder."
+        route="/(tabs)/soccer/games"
+        icon="analytics-outline"
+        accent="#A78BFA"
+      />
+
+      <Tile
         title="Today's Matchup Analyzer"
         subtitle="Top recommended bets from outright winner, alternate totals, BTTS, Draw No Bet, and Double Chance markets."
         route="/(tabs)/soccer/today"

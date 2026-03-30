@@ -1,3 +1,4 @@
+# DEPRECATED - replaced by epl_betting_analytics / mls_betting_analytics
 # mobile_api/ingest/mls/oddspedia_mls_match_info_ingest.py
 """
 Ingests match info and match keys from Oddspedia getMatchInfo API into BigQuery.

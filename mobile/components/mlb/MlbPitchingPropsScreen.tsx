@@ -191,17 +191,6 @@ export function MlbPitchingPropsScreen() {
         <Pressable onPress={() => router.push("/(tabs)/mlb" as any)} style={s.navBtn}>
           <Text style={s.navBtnText}>← MLB</Text>
         </Pressable>
-        <Pressable
-          onPress={() =>
-            router.push({
-              pathname: "/(tabs)/mlb/match/[gamePk]" as any,
-              params: { gamePk: String(gamePk), homeTeam: homeTeamName, awayTeam: awayTeamName },
-            })
-          }
-          style={s.navBtn}
-        >
-          <Text style={s.navBtnText}>Home Runs</Text>
-        </Pressable>
         <Pressable onPress={() => router.push("/(tabs)/home")} style={s.navBtn}>
           <Text style={s.navBtnText}>Home</Text>
         </Pressable>
@@ -223,6 +212,17 @@ export function MlbPitchingPropsScreen() {
         <View style={s.tabActive}>
           <Text style={s.tabTextActive}>Pitching Props</Text>
         </View>
+        <Pressable
+          onPress={() =>
+            router.push({
+              pathname: "/(tabs)/mlb/lineup-matchup/[gamePk]" as any,
+              params: { gamePk: String(gamePk), homeTeam: homeTeamName, awayTeam: awayTeamName },
+            })
+          }
+          style={s.tabInactive}
+        >
+          <Text style={s.tabTextInactive}>Lineup</Text>
+        </Pressable>
       </View>
 
       {/* ── Hero / Matchup Header ── */}

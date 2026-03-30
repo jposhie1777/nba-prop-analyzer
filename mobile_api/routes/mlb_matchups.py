@@ -25,6 +25,7 @@ K_SIGNAL_VIEW = os.getenv("PROPFINDER_K_SIGNAL_VIEW", f"{PROPFINDER_DATASET}.vw_
 K_GRADES_VIEW = os.getenv("PROPFINDER_K_GRADES_VIEW", f"{PROPFINDER_DATASET}.vw_k_prop_grades")
 K_PROPS_TABLE = os.getenv("PROPFINDER_K_PROPS_TABLE", f"{PROPFINDER_DATASET}.raw_k_props")
 TEAM_K_RANKINGS_TABLE = os.getenv("PROPFINDER_TEAM_K_TABLE", f"{PROPFINDER_DATASET}.raw_team_strikeout_rankings")
+BATTING_ORDER_TABLE = os.getenv("PROPFINDER_BATTING_ORDER_TABLE", f"{PROPFINDER_DATASET}.raw_pitcher_vs_batting_order")
 HR_PICKS_TABLE = os.getenv("PROPFINDER_HR_PICKS_TABLE", f"{PROPFINDER_DATASET}.hr_picks_daily")
 PITCHER_MATCHUP_TABLE = os.getenv(
     "PROPFINDER_PITCHER_MATCHUP_TABLE",
@@ -1856,3 +1857,213 @@ def _k_confidence(proj_ks: float, line: Optional[float], signal_score: Optional[
     if edge >= 0.5 and score >= 35:
         return "MEDIUM"
     return "LOW"
+
+
+# ── Batting Order Matchup endpoint ──────────────────────────────────────────
+
+PROPFINDER_UPCOMING_URL = os.getenv(
+    "PROPFINDER_UPCOMING_URL", "https://api.propfinder.app/mlb/upcoming-games"
+)
+MLB_PEOPLE_URL = "https://statsapi.mlb.com/api/v1/people"
+
+# OPS threshold for "weak spot" — positions where pitcher is historically exploitable
+WEAK_SPOT_OPS_THRESHOLD = 0.780
+
+
+def _fetch_lineup_for_game(game_pk: int) -> Optional[Dict[str, Any]]:
+    """Fetch lineup data from propfinder upcoming-games, filtered to game_pk."""
+    try:
+        request = Request(
+            PROPFINDER_UPCOMING_URL,
+            headers={"User-Agent": "PulseSports/1.0", "Accept": "application/json"},
+        )
+        with urlopen(request, timeout=15) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except Exception:
+        return None
+    if not isinstance(data, list):
+        return None
+    for game in data:
+        if _safe_int(game.get("id")) == game_pk:
+            return game
+    return None
+
+
+def _fetch_player_names_bulk(player_ids: List[int]) -> Dict[int, str]:
+    """Batch-fetch player fullNames from MLB Stats API."""
+    if not player_ids:
+        return {}
+    ids_str = ",".join(str(pid) for pid in player_ids)
+    try:
+        url = f"{MLB_PEOPLE_URL}?personIds={ids_str}&fields=people,id,fullName"
+        request = Request(
+            url,
+            headers={"User-Agent": "PulseSports/1.0", "Accept": "application/json"},
+        )
+        with urlopen(request, timeout=10) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except Exception:
+        return {}
+    return {
+        int(p["id"]): p.get("fullName", "")
+        for p in data.get("people", [])
+        if p.get("id")
+    }
+
+
+def _is_weak_spot(ops: Optional[float]) -> bool:
+    return ops is not None and ops >= WEAK_SPOT_OPS_THRESHOLD
+
+
+@router.get("/mlb/matchups/{game_pk}/batting-order")
+def mlb_batting_order(game_pk: int):
+    """
+    Returns pitcher vs batting order position stats with confirmed lineup
+    player names mapped to each position. Flags weak spots.
+    """
+    client = get_bq_client()
+    today = _today_et_iso()
+    bo_table = _qualified_table(client, BATTING_ORDER_TABLE)
+    weather_table = _qualified_table(client, GAME_WEATHER_TABLE)
+
+    schedule = _fetch_schedule_for_game(game_pk)
+    home_team = schedule.get("home_team") if schedule else None
+    away_team = schedule.get("away_team") if schedule else None
+    home_team_id = _safe_int(schedule.get("home_team_id")) if schedule else None
+    away_team_id = _safe_int(schedule.get("away_team_id")) if schedule else None
+
+    weather_map = _fetch_game_weather_map(client, weather_table, today, [game_pk])
+    gw = weather_map.get(game_pk) or {}
+
+    # 1. Fetch batting order stats from BQ
+    bo_rows = _safe_query(
+        client,
+        f"""
+        SELECT
+          pitcher_id, pitcher_name, pitcher_hand, opp_team_id,
+          batting_order, at_bats, hits, home_runs, doubles, triples,
+          rbi, walks, strike_outs, avg, obp, slg, ops
+        FROM {bo_table}
+        WHERE run_date = @run_date
+          AND game_pk = @game_pk
+        QUALIFY ROW_NUMBER() OVER (
+          PARTITION BY pitcher_id, batting_order
+          ORDER BY ingested_at DESC
+        ) = 1
+        ORDER BY pitcher_id, batting_order
+        """,
+        [
+            bigquery.ScalarQueryParameter("run_date", "DATE", today),
+            bigquery.ScalarQueryParameter("game_pk", "INT64", game_pk),
+        ],
+    )
+
+    # 2. Fetch lineup from propfinder
+    lineup_data = _fetch_lineup_for_game(game_pk)
+    home_order_str = (lineup_data or {}).get("homeBattingOrder", "")
+    away_order_str = (lineup_data or {}).get("visitorBattingOrder", "")
+    home_lineup = [int(x) for x in home_order_str.split(",") if x.strip().isdigit()]
+    away_lineup = [int(x) for x in away_order_str.split(",") if x.strip().isdigit()]
+
+    # 3. Fetch player names
+    all_player_ids = list(set(home_lineup + away_lineup))
+    name_map = _fetch_player_names_bulk(all_player_ids)
+
+    # 4. Group by pitcher
+    pitcher_map: Dict[int, Dict[str, Any]] = {}
+    for row in bo_rows:
+        pid = _safe_int(row.get("pitcher_id"))
+        if pid is None:
+            continue
+        group = pitcher_map.setdefault(pid, {
+            "pitcher_id": pid,
+            "pitcher_name": row.get("pitcher_name"),
+            "pitcher_hand": row.get("pitcher_hand"),
+            "opp_team_id": _safe_int(row.get("opp_team_id")),
+            "positions": [],
+        })
+        ops_val = _safe_float(row.get("ops"))
+        group["positions"].append({
+            "batting_order": _safe_int(row.get("batting_order")),
+            "at_bats": _safe_int(row.get("at_bats")),
+            "hits": _safe_int(row.get("hits")),
+            "home_runs": _safe_int(row.get("home_runs")),
+            "doubles": _safe_int(row.get("doubles")),
+            "triples": _safe_int(row.get("triples")),
+            "rbi": _safe_int(row.get("rbi")),
+            "walks": _safe_int(row.get("walks")),
+            "strike_outs": _safe_int(row.get("strike_outs")),
+            "avg": _safe_float(row.get("avg")),
+            "obp": _safe_float(row.get("obp")),
+            "slg": _safe_float(row.get("slg")),
+            "ops": ops_val,
+            "is_weak_spot": _is_weak_spot(ops_val),
+            "player_id": None,
+            "player_name": None,
+        })
+
+    # 5. Map lineups to positions
+    pitchers_out: List[Dict[str, Any]] = []
+    for pitcher in pitcher_map.values():
+        opp_team_id = pitcher.get("opp_team_id")
+        # Determine which lineup faces this pitcher
+        if opp_team_id == home_team_id:
+            lineup = home_lineup
+            offense_team = home_team
+        elif opp_team_id == away_team_id:
+            lineup = away_lineup
+            offense_team = away_team
+        else:
+            lineup = []
+            offense_team = None
+
+        lineup_confirmed = len(lineup) >= 9
+        weak_spot_count = 0
+
+        for pos in pitcher["positions"]:
+            bo = pos["batting_order"]
+            if bo is not None and bo >= 1 and bo <= len(lineup):
+                pid = lineup[bo - 1]
+                pos["player_id"] = pid
+                pos["player_name"] = name_map.get(pid)
+            if pos["is_weak_spot"]:
+                weak_spot_count += 1
+
+        pitcher["offense_team"] = offense_team
+        pitcher["lineup_confirmed"] = lineup_confirmed
+        pitcher["weak_spot_count"] = weak_spot_count
+        pitcher["positions"].sort(key=lambda p: p.get("batting_order") or 0)
+        pitchers_out.append(pitcher)
+
+    game_weather = {
+        "weather_indicator": gw.get("weather_indicator"),
+        "game_temp": _safe_float(gw.get("game_temp")),
+        "wind_speed": _safe_float(gw.get("wind_speed")),
+        "wind_dir": _safe_int(gw.get("wind_dir")),
+        "wind_direction_label": _wind_direction_label(_safe_int(gw.get("wind_dir"))),
+        "precip_prob": _safe_float(gw.get("precip_prob")),
+        "ballpark_name": _clean_str(gw.get("ballpark_name")),
+        "roof_type": _clean_str(gw.get("roof_type")),
+        "weather_note": _clean_str(gw.get("weather_note")),
+    }
+    game_odds = {
+        "home_moneyline": _safe_int(gw.get("home_moneyline")),
+        "away_moneyline": _safe_int(gw.get("away_moneyline")),
+        "over_under": _safe_float(gw.get("over_under")),
+    }
+
+    return {
+        "game_pk": game_pk,
+        "run_date": today,
+        "game": {
+            "home_team": home_team,
+            "away_team": away_team,
+            "start_time_utc": schedule.get("start_time_utc") if schedule else None,
+            "venue_name": gw.get("ballpark_name") or (schedule.get("venue_name") if schedule else None),
+            "home_pitcher_name": schedule.get("home_pitcher_name") if schedule else None,
+            "away_pitcher_name": schedule.get("away_pitcher_name") if schedule else None,
+            "weather": game_weather,
+            "odds": game_odds,
+        },
+        "pitchers": pitchers_out,
+    }

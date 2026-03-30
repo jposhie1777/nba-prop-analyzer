@@ -2,7 +2,7 @@ import { ActivityIndicator, Image, Linking, Pressable, ScrollView, StyleSheet, T
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 
-import { useMlbMatchupDetail } from "@/hooks/mlb/useMlbMatchups";
+import { useMlbMatchupDetail, useMlbBattingOrder } from "@/hooks/mlb/useMlbMatchups";
 import { useTheme } from "@/store/useTheme";
 import { getMlbTeamLogo } from "@/utils/mlbLogos";
 import { BackToHomeButton } from "@/components/navigation/BackToHomeButton";
@@ -350,6 +350,24 @@ const router = useRouter();
 const params = useLocalSearchParams<{ gamePk?: string; awayTeam?: string; homeTeam?: string }>();
 const gamePk = Number(params.gamePk);
 const { data, loading, error, refetch } = useMlbMatchupDetail(Number.isFinite(gamePk) ? gamePk : null);
+const { data: boData } = useMlbBattingOrder(Number.isFinite(gamePk) ? gamePk : null);
+
+// Build weak spot lookup: pitcher_id -> Set of player_ids in weak spots
+const weakSpotMap = useMemo(() => {
+  const map = new Map<number, Set<number>>();
+  for (const pitcher of boData?.pitchers ?? []) {
+    const pid = pitcher.pitcher_id;
+    if (pid == null) continue;
+    const weakIds = new Set<number>();
+    for (const pos of pitcher.positions ?? []) {
+      if (pos.is_weak_spot && pos.player_id != null) {
+        weakIds.add(pos.player_id);
+      }
+    }
+    map.set(pid, weakIds);
+  }
+  return map;
+}, [boData]);
 
 const game = data?.game;
 const awayTeam = params.awayTeam ?? game?.away_team ?? "Away";
@@ -496,17 +514,6 @@ return (
 <Pressable onPress={() => router.push("/(tabs)/mlb" as any)} style={styles.navBtn}>
   <Text style={styles.navBtnText}>← MLB</Text>
 </Pressable>
-<Pressable
-  onPress={() =>
-    router.push({
-      pathname: "/(tabs)/mlb/pitching-props/[gamePk]" as any,
-      params: { gamePk: String(gamePk), homeTeam, awayTeam },
-    })
-  }
-  style={styles.navBtn}
->
-  <Text style={styles.navBtnText}>Pitching Props</Text>
-</Pressable>
 <Pressable onPress={() => router.push("/(tabs)/home")} style={styles.navBtn}>
   <Text style={styles.navBtnText}>Home</Text>
 </Pressable>
@@ -527,6 +534,17 @@ return (
   style={styles.tabInactive}
 >
   <Text style={styles.tabTextInactive}>Pitching Props</Text>
+</Pressable>
+<Pressable
+  onPress={() =>
+    router.push({
+      pathname: "/(tabs)/mlb/lineup-matchup/[gamePk]" as any,
+      params: { gamePk: String(gamePk), homeTeam, awayTeam },
+    })
+  }
+  style={styles.tabInactive}
+>
+  <Text style={styles.tabTextInactive}>Lineup</Text>
 </Pressable>
 </View>
 
@@ -622,19 +640,27 @@ return (
           const tone = gradeTone(batter.grade);
           const batterKey = `${String(pitcher.pitcher_id)}-${String(batter.batter_id ?? batter.batter_name ?? "")}`;
           const isSelected = selectedKeys.has(batterKey);
+          const isWeakSpot = batter.batter_id != null
+            && pitcher.pitcher_id != null
+            && (weakSpotMap.get(pitcher.pitcher_id)?.has(batter.batter_id) ?? false);
           return (
             <View
               key={`${pitcher.pitcher_id}-${batter.batter_id ?? batter.batter_name}`}
               style={[
                 styles.batterCard,
-                { borderColor: tone.border, backgroundColor: tone.bg },
+                { borderColor: isWeakSpot ? "#10B981" : tone.border, backgroundColor: isWeakSpot ? "rgba(16,185,129,0.08)" : tone.bg },
                 isSelected ? styles.batterCardSelected : null,
               ]}
             >
               <View style={styles.batterHead}>
                 <Text style={styles.batterName}>
-                  {batter.batter_name ?? "Batter"} - {formatHitterHand(batter.bat_side)}
+                  {isWeakSpot ? "🎯 " : ""}{batter.batter_name ?? "Batter"} - {formatHitterHand(batter.bat_side)}
                 </Text>
+                {isWeakSpot ? (
+                  <View style={styles.weakSpotPill}>
+                    <Text style={styles.weakSpotText}>WEAK SPOT</Text>
+                  </View>
+                ) : null}
                 <View style={[styles.gradePill, { borderColor: tone.border }]}>
                   <Text style={[styles.gradeText, { color: tone.text }]}>{normalizeGrade(batter.grade)} • {formatScore(batter.score)}</Text>
                 </View>
@@ -804,6 +830,8 @@ cell: { color: "#E5E7EB", fontSize: 11, flex: 1, textAlign: "center", paddingVer
 cellSplit: { flex: 1.5, textAlign: "left", fontWeight: "800", color: "#CBD5E1" },
 batterCard: { borderWidth: 1, borderRadius: 12, padding: 10, gap: 8 },
 batterCardSelected: { shadowColor: "#22D3EE", shadowOpacity: 0.35, shadowRadius: 8, borderWidth: 1.25 },
+weakSpotPill: { borderWidth: 1, borderColor: "#10B981", borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2, backgroundColor: "rgba(16,185,129,0.15)" },
+weakSpotText: { color: "#10B981", fontSize: 8, fontWeight: "800" },
 batterHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
 batterName: { color: "#E5E7EB", fontSize: 15, fontWeight: "700", flex: 1 },
 gradePill: {

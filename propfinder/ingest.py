@@ -113,6 +113,30 @@ RAW_K_PROPS_SCHEMA = [
     bigquery.SchemaField("ingested_at",        "TIMESTAMP"),
 ]
 
+RAW_PITCHER_VS_BATTING_ORDER_SCHEMA = [
+    bigquery.SchemaField("run_date",      "DATE"),
+    bigquery.SchemaField("game_pk",       "INTEGER"),
+    bigquery.SchemaField("pitcher_id",    "INTEGER"),
+    bigquery.SchemaField("pitcher_name",  "STRING"),
+    bigquery.SchemaField("pitcher_hand",  "STRING"),
+    bigquery.SchemaField("opp_team_id",   "INTEGER"),
+    bigquery.SchemaField("season",        "INTEGER"),
+    bigquery.SchemaField("batting_order", "INTEGER"),
+    bigquery.SchemaField("at_bats",       "INTEGER"),
+    bigquery.SchemaField("hits",          "INTEGER"),
+    bigquery.SchemaField("home_runs",     "INTEGER"),
+    bigquery.SchemaField("doubles",       "INTEGER"),
+    bigquery.SchemaField("triples",       "INTEGER"),
+    bigquery.SchemaField("rbi",           "INTEGER"),
+    bigquery.SchemaField("walks",         "INTEGER"),
+    bigquery.SchemaField("strike_outs",   "INTEGER"),
+    bigquery.SchemaField("avg",           "FLOAT"),
+    bigquery.SchemaField("obp",           "FLOAT"),
+    bigquery.SchemaField("slg",           "FLOAT"),
+    bigquery.SchemaField("ops",           "FLOAT"),
+    bigquery.SchemaField("ingested_at",   "TIMESTAMP"),
+]
+
 RAW_TEAM_STRIKEOUT_RANKINGS_SCHEMA = [
     bigquery.SchemaField("run_date",    "DATE"),
     bigquery.SchemaField("team_id",     "INTEGER"),
@@ -195,6 +219,19 @@ def ensure_tables():
         log.info("raw_hr_props table ready")
     except Exception as exc:
         log.warning("Could not create raw_hr_props: %s", exc)
+
+    # raw_pitcher_vs_batting_order
+    try:
+        bq.create_table(
+            bigquery.Table(
+                table("raw_pitcher_vs_batting_order"),
+                schema=RAW_PITCHER_VS_BATTING_ORDER_SCHEMA,
+            ),
+            exists_ok=True,
+        )
+        log.info("raw_pitcher_vs_batting_order table ready")
+    except Exception as exc:
+        log.warning("Could not create raw_pitcher_vs_batting_order: %s", exc)
 
     # raw_k_props
     try:
@@ -642,6 +679,64 @@ async def fetch_k_props(session, game_pk):
         })
 
     log.info("Fetched K props for %s pitchers in game %s", len(rows), game_pk)
+    return rows
+
+
+async def fetch_batting_order_splits(session, pitcher_id, pitcher_name, pitcher_hand, opp_team_id, game_pk):
+    """
+    Fetch pitcher stats vs each batting order position (1-9) from MLB Stats API.
+    Uses sitCodes b1-b9 for the current season.
+    """
+    data = await get(
+        session,
+        f"{MLB_API}/people/{pitcher_id}/stats",
+        params={
+            "stats": "statSplits",
+            "group": "pitching",
+            "sitCodes": "b1,b2,b3,b4,b5,b6,b7,b8,b9",
+            "season": 2025,
+        },
+    )
+    if not data or not isinstance(data, dict):
+        return []
+
+    rows = []
+    for stat_group in data.get("stats", []):
+        for split in stat_group.get("splits", []):
+            sp = split.get("split", {})
+            st = split.get("stat", {})
+            code = sp.get("code", "")
+            if not code.startswith("b"):
+                continue
+            order_num = si(code[1:])
+            if order_num is None or order_num < 1 or order_num > 9:
+                continue
+
+            rows.append({
+                "run_date":      TODAY.isoformat(),
+                "game_pk":       game_pk,
+                "pitcher_id":    pitcher_id,
+                "pitcher_name":  pitcher_name,
+                "pitcher_hand":  pitcher_hand,
+                "opp_team_id":   opp_team_id,
+                "season":        2025,
+                "batting_order": order_num,
+                "at_bats":       si(st.get("atBats")),
+                "hits":          si(st.get("hits")),
+                "home_runs":     si(st.get("homeRuns")),
+                "doubles":       si(st.get("doubles")),
+                "triples":       si(st.get("triples")),
+                "rbi":           si(st.get("rbi")),
+                "walks":         si(st.get("baseOnBalls")),
+                "strike_outs":   si(st.get("strikeOuts")),
+                "avg":           sf(st.get("avg")),
+                "obp":           sf(st.get("obp")),
+                "slg":           sf(st.get("slg")),
+                "ops":           sf(st.get("ops")),
+                "ingested_at":   NOW.isoformat(),
+            })
+
+    log.info("fetch_batting_order_splits: %s rows for pitcher %s", len(rows), pitcher_name)
     return rows
 
 
@@ -1145,10 +1240,29 @@ async def main():
             all_pitcher_rows.extend(result["splits"])
             all_pitch_log_rows.extend(result["pitch_log"])
 
+        # ── Step 6b: fetch pitcher vs batting order splits ──────────────────
+        batting_order_results = await asyncio.gather(
+            *[
+                fetch_batting_order_splits(
+                    session,
+                    job["pitcher_id"],
+                    job["pitcher_name"],
+                    "",  # hand filled by API response
+                    job["opp_team_id"],
+                    job["game_pk"],
+                )
+                for job in pitcher_jobs
+            ]
+        )
+        all_batting_order_rows = []
+        for result in batting_order_results:
+            all_batting_order_rows.extend(result)
+
         bq_insert("raw_hit_data",          all_hit_rows)
         bq_insert("raw_splits",            all_split_rows)
         bq_insert("raw_pitcher_matchup",   all_pitcher_rows)
         bq_insert("raw_pitch_log",         all_pitch_log_rows)
+        bq_insert("raw_pitcher_vs_batting_order", all_batting_order_rows)
 
         # ── Step 7: insert HR prop odds ───────────────────────────────────────
         all_props_rows = []

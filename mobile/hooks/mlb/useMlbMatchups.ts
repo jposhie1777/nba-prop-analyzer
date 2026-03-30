@@ -363,3 +363,73 @@ export function useMlbPitchingProps(gamePk?: number | null) {
     Boolean(gamePk)
   );
 }
+
+// ── Batting Order Matchup types ───────────────────────────────────────────
+
+export type BattingOrderPosition = {
+  batting_order?: number | null;
+  at_bats?: number | null;
+  hits?: number | null;
+  home_runs?: number | null;
+  doubles?: number | null;
+  triples?: number | null;
+  rbi?: number | null;
+  walks?: number | null;
+  strike_outs?: number | null;
+  avg?: number | null;
+  obp?: number | null;
+  slg?: number | null;
+  ops?: number | null;
+  is_weak_spot?: boolean;
+  player_id?: number | null;
+  player_name?: string | null;
+};
+
+export type BattingOrderPitcher = {
+  pitcher_id?: number | null;
+  pitcher_name?: string | null;
+  pitcher_hand?: string | null;
+  opp_team_id?: number | null;
+  offense_team?: string | null;
+  lineup_confirmed?: boolean;
+  weak_spot_count?: number | null;
+  positions?: BattingOrderPosition[];
+};
+
+export type MlbBattingOrderDetail = {
+  game_pk: number;
+  run_date: string;
+  game: {
+    home_team?: string | null;
+    away_team?: string | null;
+    start_time_utc?: string | null;
+    venue_name?: string | null;
+    home_pitcher_name?: string | null;
+    away_pitcher_name?: string | null;
+    weather?: {
+      weather_indicator?: string | null;
+      game_temp?: number | null;
+      wind_speed?: number | null;
+      wind_dir?: number | null;
+      wind_direction_label?: string | null;
+      precip_prob?: number | null;
+      ballpark_name?: string | null;
+      roof_type?: string | null;
+      weather_note?: string | null;
+    };
+    odds?: {
+      home_moneyline?: number | null;
+      away_moneyline?: number | null;
+      over_under?: number | null;
+    };
+  };
+  pitchers: BattingOrderPitcher[];
+};
+
+export function useMlbBattingOrder(gamePk?: number | null) {
+  return useEplQuery<MlbBattingOrderDetail>(
+    `/mlb/matchups/${gamePk ?? 0}/batting-order`,
+    undefined,
+    Boolean(gamePk)
+  );
+}

@@ -64,43 +64,46 @@ def pga_sportsbook_tournaments() -> List[Dict[str, Any]]:
     List all available tournaments from the most recent scrape run.
     Returns one entry per tournament with market counts by type.
     """
-    # tournament_name / tournament_slug are v6 columns that may not exist yet
-    # in older rows. We fall back to event_name for backward compat.
-    sql = f"""
-    WITH latest AS (
-      SELECT
-        COALESCE(tournament_name, event_name) AS tournament_name,
-        tournament_slug,
-        market_type,
-        COUNT(*)         AS selection_count,
-        MAX(scraped_at)  AS last_scraped
-      FROM `{RAW_TABLE}`
-      WHERE scraped_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 48 HOUR)
-        AND market_status IN ('ACTIVE', 'OPEN', 'SUSPENDED')
-      GROUP BY 1, 2, 3
-    )
+    # Step 1: get distinct tournaments
+    tourn_sql = f"""
     SELECT
-      tournament_name,
-      tournament_slug,
-      MAX(last_scraped)                             AS last_scraped,
-      SUM(selection_count)                          AS total_selections,
-      ARRAY_AGG(
-        STRUCT(market_type, selection_count)
-        ORDER BY selection_count DESC
-      ) AS market_types
-    FROM latest
-    GROUP BY 1, 2
-    ORDER BY MAX(last_scraped) DESC
+      COALESCE(tournament_name, event_name) AS tournament_name,
+      MAX(NULLIF(tournament_slug, ''))      AS tournament_slug,
+      MAX(scraped_at)                       AS last_scraped,
+      COUNT(*)                              AS total_selections
+    FROM `{RAW_TABLE}`
+    WHERE scraped_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 48 HOUR)
+      AND market_status IN ('ACTIVE', 'OPEN', 'SUSPENDED')
+    GROUP BY 1
+    ORDER BY last_scraped DESC
     """
-    rows = _query(sql)
+    tourns = _query(tourn_sql)
+
+    # Step 2: get market type counts per tournament
+    mt_sql = f"""
+    SELECT
+      COALESCE(tournament_name, event_name) AS tournament_name,
+      market_type,
+      COUNT(*) AS selection_count
+    FROM `{RAW_TABLE}`
+    WHERE scraped_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 48 HOUR)
+      AND market_status IN ('ACTIVE', 'OPEN', 'SUSPENDED')
+    GROUP BY 1, 2
+    ORDER BY 1, selection_count DESC
+    """
+    mt_rows = _query(mt_sql)
+
+    # Index market types by tournament name
+    mt_by_tourn: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for r in mt_rows:
+        mt_by_tourn[r["tournament_name"]].append(
+            {"type": r["market_type"], "count": r["selection_count"]}
+        )
+
     result = []
-    for row in rows:
-        market_types = row.pop("market_types", [])
-        entry = _serialise(row)
-        entry["market_types"] = [
-            {"type": mt["market_type"], "count": mt["selection_count"]}
-            for mt in (market_types or [])
-        ]
+    for t in tourns:
+        entry = _serialise(t)
+        entry["market_types"] = mt_by_tourn.get(t["tournament_name"], [])
         result.append(entry)
     return result
 

@@ -247,7 +247,6 @@ return (
 )}
 </Pressable>
 
-```
   {expanded ? (
     <View style={styles.pitchSectionBody}>
       {/* ── Pitcher Pitch Mix ── */}
@@ -341,7 +340,6 @@ return (
     </View>
   ) : null}
 </View>
-```
 
 );
 }
@@ -496,7 +494,6 @@ return (
 <BackToHomeButton />
 </View>
 
-```
   <View style={[styles.hero, { borderColor: colors.border.subtle }]}>
     <Text style={styles.eyebrow}>MLB MATCHUP ANALYTICS</Text>
     <View style={styles.slugRow}>
@@ -722,7 +719,6 @@ return (
     </View>
   ) : null}
 </ScrollView>
-```
 
 );
 }

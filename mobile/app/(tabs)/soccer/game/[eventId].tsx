@@ -59,6 +59,66 @@ function fmtKickoff(ts?: string | null): string {
 
 const MAX_PARLAY_LEGS = 12;
 
+// ─── Selection label derivation ───────────────────────────────────────────────
+// selection_name is NULL in BigQuery; derive a display label from known IDs
+// and implied probability ranking within the market.
+
+const KNOWN_FD_SELECTION_IDS: Record<string, string> = {
+  "58805": "Draw",
+  "30246": "Yes",  // BTTS Yes
+  "30247": "No",   // BTTS No
+};
+
+function deriveSelectionLabel(
+  sel: SoccerSelection,
+  market: SoccerMarket,
+  homeTeam: string,
+  awayTeam: string
+): string {
+  if (sel.selection_name) return sel.selection_name;
+
+  // Known universal FanDuel selection IDs
+  if (KNOWN_FD_SELECTION_IDS[sel.fd_selection_id]) {
+    return KNOWN_FD_SELECTION_IDS[sel.fd_selection_id];
+  }
+
+  // Sort selections by implied probability descending for rank-based labelling
+  const sorted = [...market.selections].sort(
+    (a, b) => (b.implied_probability ?? 0) - (a.implied_probability ?? 0)
+  );
+  const rank = sorted.findIndex((s) => s.fd_selection_id === sel.fd_selection_id);
+
+  const mt = (market.market_type ?? market.market_name ?? "").toLowerCase();
+
+  // Totals / over-under markets: higher prob = Under
+  if (
+    mt.includes("total") ||
+    mt.includes("over") ||
+    mt.includes("under") ||
+    mt.includes("corners") ||
+    mt.includes("cards") ||
+    mt.includes("goals")
+  ) {
+    if (rank === 0) return "Under";
+    if (rank === 1) return "Over";
+  }
+
+  // Moneyline / match result: higher prob = home team
+  if (
+    mt.includes("moneyline") ||
+    mt.includes("match_result") ||
+    mt.includes("match result") ||
+    mt.includes("1x2") ||
+    mt.includes("winner")
+  ) {
+    if (rank === 0) return homeTeam;
+    if (rank === sorted.length - 1) return awayTeam;
+  }
+
+  // Fallback: just use rank label
+  return `Option ${rank + 1}`;
+}
+
 // ─── Edge badge ───────────────────────────────────────────────────────────────
 
 function EdgeBadge({ tier }: { tier?: string | null }) {
@@ -201,6 +261,7 @@ function FormCard({
 
 function SelectionRow({
   sel,
+  displayName,
   marketId,
   inParlay,
   parlayFull,
@@ -209,6 +270,7 @@ function SelectionRow({
   colors,
 }: {
   sel: SoccerSelection;
+  displayName: string;
   marketId: string;
   inParlay: boolean;
   parlayFull: boolean;
@@ -221,7 +283,7 @@ function SelectionRow({
       <View style={{ flex: 1 }}>
         <View style={styles.selNameRow}>
           <Text style={[styles.selName, { color: colors.text.primary }]}>
-            {sel.selection_name}
+            {displayName}
             {sel.handicap != null ? ` (${sel.handicap > 0 ? "+" : ""}${sel.handicap})` : ""}
           </Text>
           <EdgeBadge tier={sel.model_edge_tier} />
@@ -282,11 +344,15 @@ function MarketCard({
   market,
   parlayLegs,
   onToggleLeg,
+  homeTeam,
+  awayTeam,
   colors,
 }: {
   market: SoccerMarket;
   parlayLegs: ParlayLeg[];
   onToggleLeg: (leg: ParlayLeg) => void;
+  homeTeam: string;
+  awayTeam: string;
   colors: any;
 }) {
   const parlayFull = parlayLegs.length >= MAX_PARLAY_LEGS;
@@ -299,10 +365,12 @@ function MarketCard({
         const inParlay = parlayLegs.some(
           (l) => l.fd_market_id === market.fd_market_id && l.fd_selection_id === sel.fd_selection_id
         );
+        const displayName = deriveSelectionLabel(sel, market, homeTeam, awayTeam);
         return (
           <SelectionRow
             key={sel.fd_selection_id ?? legId}
             sel={sel}
+            displayName={displayName}
             marketId={market.fd_market_id}
             inParlay={inParlay}
             parlayFull={parlayFull}
@@ -314,7 +382,7 @@ function MarketCard({
               onToggleLeg({
                 fd_market_id: market.fd_market_id,
                 fd_selection_id: sel.fd_selection_id,
-                selection_name: sel.selection_name ?? "",
+                selection_name: displayName,
                 market_name: market.market_name,
                 odds_american: sel.odds_american,
               })
@@ -464,6 +532,8 @@ export default function SoccerGameDetailScreen() {
                   market={market}
                   parlayLegs={parlayLegs}
                   onToggleLeg={toggleLeg}
+                  homeTeam={resolvedHome}
+                  awayTeam={resolvedAway}
                   colors={colors}
                 />
               ))}

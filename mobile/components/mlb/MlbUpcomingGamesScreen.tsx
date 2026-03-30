@@ -15,6 +15,12 @@ function scoreColor(grade?: string | null) {
   return "#64748B";
 }
 
+function windDegToArrow(deg?: number | null): string {
+  if (deg == null) return "";
+  const dirs = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"];
+  return dirs[Math.round(deg / 45) % 8];
+}
+
 function weatherColor(indicator?: string | null) {
   const w = (indicator || "").toLowerCase();
   if (w === "green") return { border: "#22C55E55", text: "#86EFAC" };
@@ -126,7 +132,7 @@ export function MlbUpcomingGamesScreen() {
             {game.game_temp != null || game.wind_speed != null ? (
               <Text style={styles.weatherLine}>
                 {game.game_temp != null ? `${Math.round(game.game_temp)}°F` : ""}
-                {game.wind_speed != null ? `  💨 ${game.wind_speed.toFixed(1)} mph` : ""}
+                {game.wind_speed != null ? `  💨 ${game.wind_speed.toFixed(1)} mph${game.wind_dir != null ? ` ${windDegToArrow(game.wind_dir)}` : ""}` : ""}
                 {game.conditions ? `  ${game.conditions}` : ""}
               </Text>
             ) : null}

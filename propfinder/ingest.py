@@ -89,6 +89,30 @@ RAW_HR_PROPS_SCHEMA = [
     bigquery.SchemaField("ingested_at",        "TIMESTAMP"),
 ]
 
+RAW_K_PROPS_SCHEMA = [
+    bigquery.SchemaField("run_date",           "DATE"),
+    bigquery.SchemaField("game_pk",            "INTEGER"),
+    bigquery.SchemaField("pitcher_id",         "INTEGER"),
+    bigquery.SchemaField("pitcher_name",       "STRING"),
+    bigquery.SchemaField("team_code",          "STRING"),
+    bigquery.SchemaField("opp_team_code",      "STRING"),
+    bigquery.SchemaField("line",               "FLOAT"),
+    bigquery.SchemaField("over_under",         "STRING"),
+    bigquery.SchemaField("best_price",         "INTEGER"),
+    bigquery.SchemaField("best_book",          "STRING"),
+    bigquery.SchemaField("pf_rating",          "FLOAT"),
+    bigquery.SchemaField("hit_rate_l10",       "STRING"),
+    bigquery.SchemaField("hit_rate_season",    "STRING"),
+    bigquery.SchemaField("hit_rate_vs_team",   "STRING"),
+    bigquery.SchemaField("avg_l10",            "FLOAT"),
+    bigquery.SchemaField("avg_home_away",      "FLOAT"),
+    bigquery.SchemaField("avg_vs_opponent",    "FLOAT"),
+    bigquery.SchemaField("streak",             "INTEGER"),
+    bigquery.SchemaField("deep_link_desktop",  "STRING"),
+    bigquery.SchemaField("deep_link_ios",      "STRING"),
+    bigquery.SchemaField("ingested_at",        "TIMESTAMP"),
+]
+
 RAW_TEAM_STRIKEOUT_RANKINGS_SCHEMA = [
     bigquery.SchemaField("run_date",    "DATE"),
     bigquery.SchemaField("team_id",     "INTEGER"),
@@ -171,6 +195,16 @@ def ensure_tables():
         log.info("raw_hr_props table ready")
     except Exception as exc:
         log.warning("Could not create raw_hr_props: %s", exc)
+
+    # raw_k_props
+    try:
+        bq.create_table(
+            bigquery.Table(table("raw_k_props"), schema=RAW_K_PROPS_SCHEMA),
+            exists_ok=True,
+        )
+        log.info("raw_k_props table ready")
+    except Exception as exc:
+        log.warning("Could not create raw_k_props: %s", exc)
 
     # raw_team_strikeout_rankings
     try:
@@ -564,6 +598,53 @@ async def fetch_props(session, game_pk):
     return props
 
 
+async def fetch_k_props(session, game_pk):
+    """
+    Fetch standard (non-alt) pitcher strikeout over/under props for a game.
+    Returns list of BQ-ready rows for raw_k_props.
+    """
+    data = await get(session, f"{BASE_URL}/mlb/props", params={"gameId": game_pk})
+    if not data or not isinstance(data, list):
+        return []
+
+    rows = []
+    for item in data:
+        if item.get("category") != "pitching_strikeouts":
+            continue
+        if item.get("isAlternate") is not None:
+            continue
+        if item.get("overUnder") != "over":
+            continue
+
+        best = item.get("bestMarket") or {}
+        rows.append({
+            "run_date":          TODAY.isoformat(),
+            "game_pk":           game_pk,
+            "pitcher_id":        si(item.get("playerId")),
+            "pitcher_name":      item.get("name", ""),
+            "team_code":         item.get("teamCode", ""),
+            "opp_team_code":     item.get("opposingTeamCode", ""),
+            "line":              sf(item.get("line")),
+            "over_under":        "over",
+            "best_price":        si(best.get("price")),
+            "best_book":         best.get("sportsbook", ""),
+            "pf_rating":         sf(item.get("pfRating")),
+            "hit_rate_l10":      item.get("hitRateL10", ""),
+            "hit_rate_season":   item.get("hitRateSeason", ""),
+            "hit_rate_vs_team":  item.get("hitRateVsTeam", ""),
+            "avg_l10":           sf(item.get("avgL10")),
+            "avg_home_away":     sf(item.get("avgHomeAway")),
+            "avg_vs_opponent":   sf(item.get("avgVsOpponent")),
+            "streak":            si(item.get("streak")),
+            "deep_link_desktop": best.get("deepLinkDesktop", ""),
+            "deep_link_ios":     best.get("deepLinkIos", ""),
+            "ingested_at":       NOW.isoformat(),
+        })
+
+    log.info("Fetched K props for %s pitchers in game %s", len(rows), game_pk)
+    return rows
+
+
 async def fetch_team_roster(session, team_id):
     data = await get(
         session,
@@ -867,7 +948,7 @@ async def main():
         pitcher_name_map = await fetch_player_names(session, all_pitcher_ids)
         log.info("Fetched names for %s pitchers", len(pitcher_name_map))
 
-        # ── Step 2c: fetch HR prop odds for each game ─────────────────────────
+        # ── Step 2c: fetch HR prop odds + K prop odds for each game ────────────
         props_results = await asyncio.gather(
             *[fetch_props(session, game["game_pk"]) for game in games]
         )
@@ -875,6 +956,14 @@ async def main():
             game["game_pk"]: result
             for game, result in zip(games, props_results)
         }
+
+        k_props_results = await asyncio.gather(
+            *[fetch_k_props(session, game["game_pk"]) for game in games]
+        )
+        all_k_props_rows = []
+        for result in k_props_results:
+            all_k_props_rows.extend(result)
+        bq_insert("raw_k_props", all_k_props_rows)
 
         # ── Step 3: build raw_game_weather rows ───────────────────────────────
         game_weather_rows = []

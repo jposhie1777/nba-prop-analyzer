@@ -222,3 +222,144 @@ export function useMlbMatchupDetail(gamePk?: number | null) {
     Boolean(gamePk)
   );
 }
+
+// ── Pitching Props types ──────────────────────────────────────────────────
+
+export type KPropAltLine = {
+  line?: number | null;
+  best_price?: number | null;
+  best_book?: string | null;
+  pf_rating?: number | null;
+  dk_price?: number | null;
+  dk_outcome_code?: string | null;
+  dk_event_id?: string | null;
+  dk_desktop?: string | null;
+  dk_ios?: string | null;
+  fd_price?: number | null;
+  fd_market_id?: string | null;
+  fd_selection_id?: string | null;
+  fd_desktop?: string | null;
+  fd_ios?: string | null;
+};
+
+export type KPropTeamK = {
+  team_name?: string | null;
+  splits?: Record<string, { rank?: number | null; value?: number | null }>;
+};
+
+export type KPropPitcher = {
+  pitcher_id?: number | null;
+  pitcher_name?: string | null;
+  pitcher_hand?: string | null;
+  offense_team?: string | null;
+  team_code?: string | null;
+  opp_team_code?: string | null;
+
+  // Signal
+  k_signal_score?: number | null;
+  k_signal_rank?: number | null;
+  proj_ks?: number | null;
+  proj_ip?: number | null;
+  proj_outs?: number | null;
+
+  // Pitcher K stats
+  ip?: number | null;
+  strikeouts?: number | null;
+  strikeouts_per_9?: number | null;
+  k_pct?: number | null;
+  strike_pct?: number | null;
+  strikeout_walk_ratio?: number | null;
+  batters_faced?: number | null;
+  whip?: number | null;
+  woba?: number | null;
+
+  // Pitcher vs-hand
+  hand_split?: string | null;
+  hand_k_per_9?: number | null;
+  hand_k_pct?: number | null;
+
+  // Arsenal
+  arsenal_whiff_rate?: number | null;
+  arsenal_k_pct?: number | null;
+  max_pitch_whiff?: number | null;
+  pitch_type_count?: number | null;
+
+  // Team K adj
+  team_k_adj?: number | null;
+
+  // Opposing team K
+  opp_team_k?: KPropTeamK;
+
+  // Standard line
+  k_line?: number | null;
+  k_best_price?: number | null;
+  k_best_book?: string | null;
+  pf_rating?: number | null;
+  hit_rate_l5?: string | null;
+  hit_rate_l10?: string | null;
+  hit_rate_season?: string | null;
+  hit_rate_vs_team?: string | null;
+  avg_l10?: number | null;
+  avg_home_away?: number | null;
+  avg_vs_opponent?: number | null;
+  streak?: number | null;
+
+  // Edge / grade
+  edge?: number | null;
+  over_grade?: string | null;
+  lean?: string | null;
+  confidence?: string | null;
+
+  // DK/FD for standard line
+  dk_price?: number | null;
+  dk_outcome_code?: string | null;
+  dk_event_id?: string | null;
+  dk_desktop?: string | null;
+  dk_ios?: string | null;
+  fd_price?: number | null;
+  fd_market_id?: string | null;
+  fd_selection_id?: string | null;
+  fd_desktop?: string | null;
+  fd_ios?: string | null;
+
+  // Alt lines
+  alt_lines?: KPropAltLine[];
+};
+
+export type MlbPitchingPropsDetail = {
+  game_pk: number;
+  run_date: string;
+  game: {
+    home_team?: string | null;
+    away_team?: string | null;
+    start_time_utc?: string | null;
+    venue_name?: string | null;
+    home_pitcher_name?: string | null;
+    away_pitcher_name?: string | null;
+    weather?: {
+      weather_indicator?: string | null;
+      game_temp?: number | null;
+      wind_speed?: number | null;
+      wind_dir?: number | null;
+      wind_direction_label?: string | null;
+      precip_prob?: number | null;
+      ballpark_name?: string | null;
+      roof_type?: string | null;
+      weather_note?: string | null;
+    };
+    odds?: {
+      home_moneyline?: number | null;
+      away_moneyline?: number | null;
+      over_under?: number | null;
+    };
+  };
+  pitchers: KPropPitcher[];
+};
+
+export function useMlbPitchingProps(gamePk?: number | null) {
+  return useEplQuery<MlbPitchingPropsDetail>(
+    `/mlb/matchups/${gamePk ?? 0}/pitching-props`,
+    undefined,
+    Boolean(gamePk)
+  );
+}

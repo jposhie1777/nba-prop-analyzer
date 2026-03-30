@@ -1,5 +1,5 @@
 import { ActivityIndicator, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 
 import { useMlbMatchupDetail } from "@/hooks/mlb/useMlbMatchups";
@@ -346,6 +346,7 @@ return (
 
 export function MlbMatchupDetailScreen() {
 const { colors } = useTheme();
+const router = useRouter();
 const params = useLocalSearchParams<{ gamePk?: string; awayTeam?: string; homeTeam?: string }>();
 const gamePk = Number(params.gamePk);
 const { data, loading, error, refetch } = useMlbMatchupDetail(Number.isFinite(gamePk) ? gamePk : null);
@@ -490,8 +491,43 @@ return book === "draftkings" ? single.draftkings : single.fanduel;
 
 return (
 <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+{/* ── Navigation ── */}
 <View style={styles.actionRow}>
-<BackToHomeButton />
+<Pressable onPress={() => router.push("/(tabs)/mlb" as any)} style={styles.navBtn}>
+  <Text style={styles.navBtnText}>← MLB</Text>
+</Pressable>
+<Pressable
+  onPress={() =>
+    router.push({
+      pathname: "/(tabs)/mlb/pitching-props/[gamePk]" as any,
+      params: { gamePk: String(gamePk), homeTeam, awayTeam },
+    })
+  }
+  style={styles.navBtn}
+>
+  <Text style={styles.navBtnText}>Pitching Props</Text>
+</Pressable>
+<Pressable onPress={() => router.push("/(tabs)/home")} style={styles.navBtn}>
+  <Text style={styles.navBtnText}>Home</Text>
+</Pressable>
+</View>
+
+{/* ── Sub-tab indicator ── */}
+<View style={styles.tabRow}>
+<View style={styles.tabActive}>
+  <Text style={styles.tabTextActive}>Home Runs</Text>
+</View>
+<Pressable
+  onPress={() =>
+    router.push({
+      pathname: "/(tabs)/mlb/pitching-props/[gamePk]" as any,
+      params: { gamePk: String(gamePk), homeTeam, awayTeam },
+    })
+  }
+  style={styles.tabInactive}
+>
+  <Text style={styles.tabTextInactive}>Pitching Props</Text>
+</Pressable>
 </View>
 
   <View style={[styles.hero, { borderColor: colors.border.subtle }]}>
@@ -727,6 +763,13 @@ const styles = StyleSheet.create({
 screen: { flex: 1, backgroundColor: "#050A18" },
 content: { padding: 16, gap: 10, paddingBottom: 40 },
 actionRow: { flexDirection: "row", gap: 8, marginBottom: 2 },
+navBtn: { borderWidth: StyleSheet.hairlineWidth, borderColor: "#334155", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: "#0F172A" },
+navBtnText: { color: "#93C5FD", fontSize: 12, fontWeight: "700" },
+tabRow: { flexDirection: "row", gap: 0, marginBottom: 4 },
+tabActive: { flex: 1, borderBottomWidth: 2, borderBottomColor: "#10B981", paddingVertical: 10, alignItems: "center" },
+tabInactive: { flex: 1, borderBottomWidth: 2, borderBottomColor: "#1E293B", paddingVertical: 10, alignItems: "center" },
+tabTextActive: { color: "#10B981", fontSize: 13, fontWeight: "800" },
+tabTextInactive: { color: "#64748B", fontSize: 13, fontWeight: "700" },
 hero: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 16, backgroundColor: "#071731", padding: 16, gap: 8 },
 eyebrow: { color: "#10B981", fontSize: 11, fontWeight: "700" },
 slugRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },

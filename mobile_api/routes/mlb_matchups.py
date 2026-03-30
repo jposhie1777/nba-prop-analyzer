@@ -21,6 +21,10 @@ MLB_SCHEDULE_URL = "https://statsapi.mlb.com/api/v1/schedule"
 PROPFINDER_MLB_PROPS_URL = os.getenv("PROPFINDER_MLB_PROPS_URL", "https://api.propfinder.app/mlb/props")
 
 PROPFINDER_DATASET = os.getenv("PROPFINDER_DATASET", "propfinder")
+K_SIGNAL_VIEW = os.getenv("PROPFINDER_K_SIGNAL_VIEW", f"{PROPFINDER_DATASET}.vw_strikeout_signal")
+K_GRADES_VIEW = os.getenv("PROPFINDER_K_GRADES_VIEW", f"{PROPFINDER_DATASET}.vw_k_prop_grades")
+K_PROPS_TABLE = os.getenv("PROPFINDER_K_PROPS_TABLE", f"{PROPFINDER_DATASET}.raw_k_props")
+TEAM_K_RANKINGS_TABLE = os.getenv("PROPFINDER_TEAM_K_TABLE", f"{PROPFINDER_DATASET}.raw_team_strikeout_rankings")
 HR_PICKS_TABLE = os.getenv("PROPFINDER_HR_PICKS_TABLE", f"{PROPFINDER_DATASET}.hr_picks_daily")
 PITCHER_MATCHUP_TABLE = os.getenv(
     "PROPFINDER_PITCHER_MATCHUP_TABLE",
@@ -1470,3 +1474,385 @@ def mlb_matchup_detail(game_pk: int):
         "grade_counts": grade_counts,
         "pitchers": pitchers_out,
     }
+
+
+# ── Pitching Props (Strikeout) endpoint ─────────────────────────────────────
+
+def _fetch_k_props_live(game_pk: int) -> List[Dict[str, Any]]:
+    """Fetch all pitching_strikeouts props (standard + alt) from propfinder API."""
+    try:
+        url = f"{PROPFINDER_MLB_PROPS_URL}?gameId={game_pk}"
+        request = Request(url, headers={"User-Agent": "PulseSports/1.0", "Accept": "application/json"})
+        with urlopen(request, timeout=15) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except Exception:
+        return []
+    if not isinstance(data, list):
+        return []
+
+    out: List[Dict[str, Any]] = []
+    for item in data:
+        if item.get("category") != "pitching_strikeouts":
+            continue
+        if item.get("overUnder") != "over":
+            continue
+
+        # Extract DK and FD deep links from markets list
+        dk_desktop = dk_ios = dk_price = dk_outcome = dk_event = None
+        fd_desktop = fd_ios = fd_price = fd_market = fd_selection = None
+        for m in item.get("markets", []):
+            book = m.get("sportsbook", "")
+            if book == "DraftKings" and dk_desktop is None:
+                dk_price = _safe_int(m.get("price"))
+                dk_desktop = m.get("deepLinkDesktop") or None
+                dk_ios = m.get("deepLinkIos") or None
+                # Parse DK outcome code from desktop URL
+                import re
+                match = re.search(r"outcomes=([^&\s]+)", dk_desktop or "")
+                if match:
+                    dk_outcome = match.group(1)
+                match2 = re.search(r"/event/(\d+)", dk_desktop or "")
+                if match2:
+                    dk_event = match2.group(1)
+            if book == "FanDuel" and fd_desktop is None:
+                fd_price = _safe_int(m.get("price"))
+                fd_desktop = m.get("deepLinkDesktop") or None
+                fd_ios = m.get("deepLinkIos") or None
+                from urllib.parse import urlparse, parse_qs as _pqs
+                parsed = urlparse(fd_desktop or "")
+                qs = _pqs(parsed.query)
+                fd_market = (qs.get("marketId") or [None])[0]
+                fd_selection = (qs.get("selectionId") or [None])[0]
+
+        best = item.get("bestMarket") or {}
+        out.append({
+            "pitcher_id": _safe_int(item.get("playerId")),
+            "pitcher_name": item.get("name"),
+            "team_code": item.get("teamCode"),
+            "opp_team_code": item.get("opposingTeamCode"),
+            "line": _safe_float(item.get("line")),
+            "is_alternate": item.get("isAlternate") is not None,
+            "is_standard": item.get("isAlternate") is None,
+            "best_price": _safe_int(best.get("price")),
+            "best_book": best.get("sportsbook"),
+            "pf_rating": _safe_float(item.get("pfRating")),
+            "hit_rate_l5": item.get("hitRateL5"),
+            "hit_rate_l10": item.get("hitRateL10"),
+            "hit_rate_season": item.get("hitRateSeason"),
+            "hit_rate_vs_team": item.get("hitRateVsTeam"),
+            "avg_l10": _safe_float(item.get("avgL10")),
+            "avg_home_away": _safe_float(item.get("avgHomeAway")),
+            "avg_vs_opponent": _safe_float(item.get("avgVsOpponent")),
+            "streak": _safe_int(item.get("streak")),
+            # DraftKings
+            "dk_price": dk_price,
+            "dk_outcome_code": dk_outcome,
+            "dk_event_id": dk_event,
+            "dk_desktop": dk_desktop,
+            "dk_ios": dk_ios,
+            # FanDuel
+            "fd_price": fd_price,
+            "fd_market_id": fd_market,
+            "fd_selection_id": fd_selection,
+            "fd_desktop": fd_desktop,
+            "fd_ios": fd_ios,
+        })
+    return out
+
+
+@router.get("/mlb/matchups/{game_pk}/pitching-props")
+def mlb_pitching_props(game_pk: int):
+    """
+    Returns pitching K prop grades for a game.
+    Combines BQ signal data with live sportsbook lines + deep links.
+    """
+    client = get_bq_client()
+    today = _today_et_iso()
+    grades_view = _qualified_table(client, K_GRADES_VIEW)
+    signal_view = _qualified_table(client, K_SIGNAL_VIEW)
+    team_k_table = _qualified_table(client, TEAM_K_RANKINGS_TABLE)
+    weather_table = _qualified_table(client, GAME_WEATHER_TABLE)
+
+    schedule = _fetch_schedule_for_game(game_pk)
+    home_team = schedule.get("home_team") if schedule else None
+    away_team = schedule.get("away_team") if schedule else None
+    home_team_id = _safe_int(schedule.get("home_team_id")) if schedule else None
+    away_team_id = _safe_int(schedule.get("away_team_id")) if schedule else None
+
+    # Fetch weather/odds for game context
+    weather_map = _fetch_game_weather_map(client, weather_table, today, [game_pk])
+    gw = weather_map.get(game_pk) or {}
+
+    # 1. Fetch K signal data from BQ view (for this game's pitchers)
+    signal_rows = _safe_query(
+        client,
+        f"""
+        SELECT *
+        FROM {signal_view}
+        WHERE game_pk = @game_pk
+        ORDER BY k_signal_rank ASC
+        """,
+        [bigquery.ScalarQueryParameter("game_pk", "INT64", game_pk)],
+    )
+
+    # 2. Fetch opposing team K rankings
+    opp_team_ids = sorted({
+        _safe_int(r.get("opp_team_id"))
+        for r in signal_rows
+        if _safe_int(r.get("opp_team_id")) is not None
+    })
+    team_k_rows = _safe_query(
+        client,
+        f"""
+        SELECT team_id, team_name, split, rank, value
+        FROM {team_k_table}
+        WHERE run_date = @run_date
+          AND category = 'strikeouts'
+          AND team_id IN UNNEST(@team_ids)
+        QUALIFY ROW_NUMBER() OVER (
+          PARTITION BY team_id, split
+          ORDER BY ingested_at DESC
+        ) = 1
+        """,
+        [
+            bigquery.ScalarQueryParameter("run_date", "DATE", today),
+            bigquery.ArrayQueryParameter("team_ids", "INT64", opp_team_ids if opp_team_ids else [0]),
+        ],
+    ) if opp_team_ids else []
+
+    # Build team K map: team_id -> { split -> { rank, value } }
+    team_k_map: Dict[int, Dict[str, Any]] = {}
+    for row in team_k_rows:
+        tid = _safe_int(row.get("team_id"))
+        if tid is None:
+            continue
+        entry = team_k_map.setdefault(tid, {"team_name": row.get("team_name"), "splits": {}})
+        entry["splits"][row.get("split", "Season")] = {
+            "rank": _safe_int(row.get("rank")),
+            "value": _safe_int(row.get("value")),
+        }
+
+    # 3. Fetch live K prop lines with DK/FD deep links
+    live_props = _fetch_k_props_live(game_pk)
+
+    # Index live props by pitcher_id
+    props_by_pitcher: Dict[int, Dict[str, Any]] = {}
+    for prop in live_props:
+        pid = prop.get("pitcher_id")
+        if pid is None:
+            continue
+        entry = props_by_pitcher.setdefault(pid, {"standard": None, "alt_lines": []})
+        if prop.get("is_standard"):
+            entry["standard"] = prop
+        else:
+            entry["alt_lines"].append(prop)
+
+    # 4. Assemble pitcher-level response
+    pitchers_out: List[Dict[str, Any]] = []
+    for sig in signal_rows:
+        pid = _safe_int(sig.get("pitcher_id"))
+        opp_tid = _safe_int(sig.get("opp_team_id"))
+        pitcher_hand = sig.get("pitcher_hand")
+
+        # Determine which team this pitcher faces (offense team)
+        offense_team = None
+        if opp_tid is not None:
+            if home_team_id is not None and opp_tid == home_team_id:
+                offense_team = home_team
+            elif away_team_id is not None and opp_tid == away_team_id:
+                offense_team = away_team
+
+        # Get live prop data
+        prop_data = props_by_pitcher.get(pid, {})
+        standard = prop_data.get("standard") or {}
+        alt_lines_raw = prop_data.get("alt_lines") or []
+
+        # Filter alt lines to those near the projection (±2 from proj_ks)
+        proj_ks = _safe_float(sig.get("proj_ks")) or 0
+        alt_lines = sorted(
+            [
+                {
+                    "line": a.get("line"),
+                    "best_price": a.get("best_price"),
+                    "best_book": a.get("best_book"),
+                    "pf_rating": a.get("pf_rating"),
+                    "dk_price": a.get("dk_price"),
+                    "dk_outcome_code": a.get("dk_outcome_code"),
+                    "dk_event_id": a.get("dk_event_id"),
+                    "dk_desktop": a.get("dk_desktop"),
+                    "dk_ios": a.get("dk_ios"),
+                    "fd_price": a.get("fd_price"),
+                    "fd_market_id": a.get("fd_market_id"),
+                    "fd_selection_id": a.get("fd_selection_id"),
+                    "fd_desktop": a.get("fd_desktop"),
+                    "fd_ios": a.get("fd_ios"),
+                }
+                for a in alt_lines_raw
+                if a.get("line") is not None
+            ],
+            key=lambda x: x.get("line") or 0,
+        )
+
+        # Team K vulnerability
+        opp_k = team_k_map.get(opp_tid, {}) if opp_tid else {}
+
+        pitchers_out.append({
+            "pitcher_id": pid,
+            "pitcher_name": sig.get("pitcher_name"),
+            "pitcher_hand": pitcher_hand,
+            "offense_team": offense_team,
+            "team_code": standard.get("team_code"),
+            "opp_team_code": standard.get("opp_team_code"),
+
+            # Signal / projection
+            "k_signal_score": _safe_float(sig.get("k_signal_score")),
+            "k_signal_rank": _safe_int(sig.get("k_signal_rank")),
+            "proj_ks": _safe_float(sig.get("proj_ks")),
+            "proj_ip": _safe_float(sig.get("proj_ip")),
+            "proj_outs": _safe_int(sig.get("proj_outs")),
+
+            # Pitcher K stats
+            "ip": _safe_float(sig.get("ip")),
+            "strikeouts": _safe_int(sig.get("strikeouts")),
+            "strikeouts_per_9": _safe_float(sig.get("strikeouts_per_9")),
+            "k_pct": _safe_float(sig.get("k_pct")),
+            "strike_pct": _safe_float(sig.get("strike_pct")),
+            "strikeout_walk_ratio": _safe_float(sig.get("strikeout_walk_ratio")),
+            "batters_faced": _safe_int(sig.get("batters_faced")),
+            "whip": _safe_float(sig.get("whip")),
+            "woba": _safe_float(sig.get("woba")),
+
+            # Pitcher vs-hand
+            "hand_split": sig.get("hand_split"),
+            "hand_k_per_9": _safe_float(sig.get("hand_k_per_9")),
+            "hand_k_pct": _safe_float(sig.get("hand_k_pct")),
+
+            # Arsenal
+            "arsenal_whiff_rate": _safe_float(sig.get("arsenal_whiff_rate")),
+            "arsenal_k_pct": _safe_float(sig.get("arsenal_k_pct")),
+            "max_pitch_whiff": _safe_float(sig.get("max_pitch_whiff")),
+            "pitch_type_count": _safe_int(sig.get("pitch_type_count")),
+
+            # Team K adjustment
+            "team_k_adj": _safe_float(sig.get("team_k_adj")),
+
+            # Opposing team K vulnerability
+            "opp_team_k": {
+                "team_name": opp_k.get("team_name"),
+                "splits": opp_k.get("splits", {}),
+            },
+
+            # Standard line
+            "k_line": _safe_float(standard.get("line")),
+            "k_best_price": _safe_int(standard.get("best_price")),
+            "k_best_book": standard.get("best_book"),
+            "pf_rating": _safe_float(standard.get("pf_rating")),
+            "hit_rate_l5": standard.get("hit_rate_l5"),
+            "hit_rate_l10": standard.get("hit_rate_l10"),
+            "hit_rate_season": standard.get("hit_rate_season"),
+            "hit_rate_vs_team": standard.get("hit_rate_vs_team"),
+            "avg_l10": _safe_float(standard.get("avg_l10")),
+            "avg_home_away": _safe_float(standard.get("avg_home_away")),
+            "avg_vs_opponent": _safe_float(standard.get("avg_vs_opponent")),
+            "streak": _safe_int(standard.get("streak")),
+
+            # Edge / grade
+            "edge": round(proj_ks - (standard.get("line") or 0), 1) if standard.get("line") else None,
+            "over_grade": _k_grade(proj_ks, _safe_float(standard.get("line"))),
+            "lean": _k_lean(proj_ks, _safe_float(standard.get("line"))),
+            "confidence": _k_confidence(proj_ks, _safe_float(standard.get("line")), _safe_float(sig.get("k_signal_score"))),
+
+            # DK/FD for standard line
+            "dk_price": _safe_int(standard.get("dk_price")),
+            "dk_outcome_code": standard.get("dk_outcome_code"),
+            "dk_event_id": standard.get("dk_event_id"),
+            "dk_desktop": standard.get("dk_desktop"),
+            "dk_ios": standard.get("dk_ios"),
+            "fd_price": _safe_int(standard.get("fd_price")),
+            "fd_market_id": standard.get("fd_market_id"),
+            "fd_selection_id": standard.get("fd_selection_id"),
+            "fd_desktop": standard.get("fd_desktop"),
+            "fd_ios": standard.get("fd_ios"),
+
+            # Alt lines
+            "alt_lines": alt_lines,
+        })
+
+    game_weather = {
+        "weather_indicator": gw.get("weather_indicator"),
+        "game_temp": _safe_float(gw.get("game_temp")),
+        "wind_speed": _safe_float(gw.get("wind_speed")),
+        "wind_dir": _safe_int(gw.get("wind_dir")),
+        "wind_direction_label": _wind_direction_label(_safe_int(gw.get("wind_dir"))),
+        "precip_prob": _safe_float(gw.get("precip_prob")),
+        "ballpark_name": _clean_str(gw.get("ballpark_name")),
+        "roof_type": _clean_str(gw.get("roof_type")),
+        "weather_note": _clean_str(gw.get("weather_note")),
+    }
+    game_odds = {
+        "home_moneyline": _safe_int(gw.get("home_moneyline")),
+        "away_moneyline": _safe_int(gw.get("away_moneyline")),
+        "over_under": _safe_float(gw.get("over_under")),
+    }
+
+    return {
+        "game_pk": game_pk,
+        "run_date": today,
+        "game": {
+            "home_team": home_team,
+            "away_team": away_team,
+            "start_time_utc": schedule.get("start_time_utc") if schedule else None,
+            "venue_name": gw.get("ballpark_name") or (schedule.get("venue_name") if schedule else None),
+            "home_pitcher_name": schedule.get("home_pitcher_name") if schedule else None,
+            "away_pitcher_name": schedule.get("away_pitcher_name") if schedule else None,
+            "weather": game_weather,
+            "odds": game_odds,
+        },
+        "pitchers": pitchers_out,
+    }
+
+
+def _k_grade(proj_ks: float, line: Optional[float]) -> str:
+    if line is None:
+        return "N/A"
+    diff = proj_ks - line
+    if diff >= 2.0:
+        return "A+"
+    if diff >= 1.5:
+        return "A"
+    if diff >= 1.0:
+        return "B+"
+    if diff >= 0.5:
+        return "B"
+    if diff >= 0.0:
+        return "C+"
+    if diff >= -0.5:
+        return "C"
+    if diff >= -1.0:
+        return "C-"
+    if diff >= -1.5:
+        return "D"
+    return "F"
+
+
+def _k_lean(proj_ks: float, line: Optional[float]) -> str:
+    if line is None:
+        return "N/A"
+    diff = proj_ks - line
+    if diff >= 0.5:
+        return "OVER"
+    if diff <= -0.5:
+        return "UNDER"
+    return "PASS"
+
+
+def _k_confidence(proj_ks: float, line: Optional[float], signal_score: Optional[float]) -> str:
+    if line is None:
+        return "LOW"
+    edge = abs(proj_ks - line)
+    score = signal_score or 0
+    if edge >= 1.0 and score >= 50:
+        return "HIGH"
+    if edge >= 0.5 and score >= 35:
+        return "MEDIUM"
+    return "LOW"

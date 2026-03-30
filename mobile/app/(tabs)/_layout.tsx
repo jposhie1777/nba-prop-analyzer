@@ -59,6 +59,7 @@ const HIDDEN_SCREENS = [
   "mls/total-goals",
   "mlb/index",
   "mlb/match/[gamePk]",
+  "mlb/pitching-props/[gamePk]",
   "first-basket",
   "game-betting",
   "injuries",

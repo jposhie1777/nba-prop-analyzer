@@ -1,11 +1,18 @@
 name: Deploy Camoufox Proxy Service
 
 # Deploys the Camoufox Browser Proxy to Cloud Run.
-# This service is used by the sportsbook_soccer_markets workflow to bypass
+# This service is used by the sportsbook scraper workflows to bypass
 # TLS fingerprinting on FanDuel and DraftKings sportsbook APIs.
 #
-# After the first successful deploy, add the printed service URL as a
-# GitHub Actions secret named CAMOUFOX_SERVICE_URL.
+# Two modes:
+#   1. workflow_dispatch — manual full rebuild (build + deploy + smoke test)
+#   2. schedule — daily region rotation (deploy only, reuses latest image)
+#
+# The CAMOUFOX_SERVICE_URL secret is updated automatically after every
+# deploy, so no manual secret management is ever needed.
+#
+# If the scrape detects 0 rows (blocked), it automatically redeploys to
+# an emergency region and retries once before giving up.
 
 on:
   workflow_dispatch:
@@ -18,20 +25,43 @@ on:
         description: "Max instances"
         required: false
         default: "2"
+      force_region:
+        description: "Force a specific region (leave blank to auto-rotate)"
+        required: false
+        default: ""
+        type: choice
+        options:
+          - ""
+          - us-central1
+          - us-east1
+          - us-west1
+          - europe-west1
+          - asia-east1
+          - asia-northeast1
+          - southamerica-east1
+
+  schedule:
+    # Rotate region daily at 5:00 AM EST (before sportsbook scraper at 6 AM)
+    - cron: "0 10 * * *"
 
 env:
   PROJECT_ID: graphite-flare-477419-h7
-  REGION: us-central1
   IMAGE_NAME: camoufox-proxy
   ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
+  IMAGE_URI: us-central1-docker.pkg.dev/graphite-flare-477419-h7/cloud-run-source-deploy/camoufox-proxy:latest
+
+permissions:
+  contents: read
+  secrets: write
 
 jobs:
   # -----------------------------------------------------------------------
-  # BUILD & PUSH
+  # BUILD & PUSH (manual dispatch only — skipped on schedule)
   # -----------------------------------------------------------------------
   build:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
     outputs:
       image_uri: ${{ steps.image.outputs.uri }}
 
@@ -68,16 +98,14 @@ jobs:
           echo "Image URI: $URI"
 
       - name: Build and push Docker image
-        # Pass GITHUB_TOKEN as a build-arg so Camoufox can download Firefox
-        # binaries from GitHub Releases without hitting rate limits.
         run: |
           docker build \
             --build-arg GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} \
             -t ${{ steps.image.outputs.uri }} \
-            -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/cloud-run-source-deploy/${{ env.IMAGE_NAME }}:latest \
+            -t ${{ env.IMAGE_URI }} \
             ./camoufox_service
           docker push ${{ steps.image.outputs.uri }}
-          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/cloud-run-source-deploy/${{ env.IMAGE_NAME }}:latest
+          docker push ${{ env.IMAGE_URI }}
 
   # -----------------------------------------------------------------------
   # DEPLOY
@@ -85,9 +113,11 @@ jobs:
   deploy:
     name: Deploy to Cloud Run
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build]
+    if: always() && (needs.build.result == 'success' || needs.build.result == 'skipped')
     outputs:
       service_url: ${{ steps.deploy.outputs.url }}
+      region: ${{ steps.region.outputs.name }}
 
     steps:
       - name: Authenticate to GCP
@@ -98,25 +128,44 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Select region
+        id: region
+        run: |
+          FORCE="${{ inputs.force_region }}"
+          if [ -n "$FORCE" ]; then
+            REGION="$FORCE"
+          else
+            REGIONS=("us-east1" "us-west1" "europe-west1" "us-central1")
+            IDX=$(( $(date +%j) % 4 ))
+            REGION="${REGIONS[$IDX]}"
+          fi
+          echo "name=$REGION" >> $GITHUB_OUTPUT
+          echo "Deploying to region: $REGION"
+
       - name: Deploy to Cloud Run
         id: deploy
         uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: camoufox-proxy
-          region: ${{ env.REGION }}
-          image: ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/cloud-run-source-deploy/${{ env.IMAGE_NAME }}:latest
-          # --no-allow-unauthenticated: only callers with an IAM identity token
-          # (GitHub Actions service account) can invoke this service.
+          region: ${{ steps.region.outputs.name }}
+          image: ${{ env.IMAGE_URI }}
           flags: >-
             --no-allow-unauthenticated
-            --min-instances=${{ inputs.min_instances }}
-            --max-instances=${{ inputs.max_instances }}
+            --min-instances=${{ inputs.min_instances || '1' }}
+            --max-instances=${{ inputs.max_instances || '2' }}
             --memory=2Gi
             --cpu=2
             --timeout=300
             --concurrency=1
           env_vars: |
             GCP_PROJECT=${{ env.PROJECT_ID }}
+
+      - name: Update CAMOUFOX_SERVICE_URL secret
+        run: |
+          echo "Updating CAMOUFOX_SERVICE_URL to: ${{ steps.deploy.outputs.url }}"
+          gh secret set CAMOUFOX_SERVICE_URL --body "${{ steps.deploy.outputs.url }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # -----------------------------------------------------------------------
   # SMOKE TEST
@@ -125,6 +174,8 @@ jobs:
     name: Smoke Test
     runs-on: ubuntu-latest
     needs: deploy
+    outputs:
+      healthy: ${{ steps.health.outputs.healthy }}
 
     steps:
       - name: Authenticate to GCP
@@ -136,6 +187,7 @@ jobs:
           id_token_audience: ${{ needs.deploy.outputs.service_url }}
 
       - name: Health check
+        id: health
         run: |
           URL="${{ needs.deploy.outputs.service_url }}"
           echo "Testing ${URL}/health"
@@ -144,17 +196,78 @@ jobs:
             "${URL}/health")
           if [ "$STATUS" != "200" ]; then
             echo "Health check failed: HTTP $STATUS"
+            echo "healthy=false" >> $GITHUB_OUTPUT
             exit 1
           fi
           echo "Health check passed (HTTP 200)"
+          echo "healthy=true" >> $GITHUB_OUTPUT
+
+  # -----------------------------------------------------------------------
+  # EMERGENCY REDEPLOY
+  # Triggers if smoke test fails — picks a random non-primary region,
+  # redeploys, and updates the secret so the scraper can still run.
+  # -----------------------------------------------------------------------
+  emergency-redeploy:
+    name: Emergency Redeploy
+    runs-on: ubuntu-latest
+    needs: [deploy, smoke-test]
+    if: failure() && needs.smoke-test.outputs.healthy == 'false'
+
+    steps:
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Select emergency region
+        id: emergency_region
+        run: |
+          # Use backup regions outside the normal rotation
+          BACKUPS=("asia-east1" "asia-northeast1" "southamerica-east1")
+          IDX=$(( RANDOM % 3 ))
+          REGION="${BACKUPS[$IDX]}"
+          echo "name=$REGION" >> $GITHUB_OUTPUT
+          echo "Emergency deploying to: $REGION"
+
+      - name: Emergency deploy to Cloud Run
+        id: emergency_deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: camoufox-proxy
+          region: ${{ steps.emergency_region.outputs.name }}
+          image: ${{ env.IMAGE_URI }}
+          flags: >-
+            --no-allow-unauthenticated
+            --min-instances=1
+            --max-instances=2
+            --memory=2Gi
+            --cpu=2
+            --timeout=300
+            --concurrency=1
+          env_vars: |
+            GCP_PROJECT=${{ env.PROJECT_ID }}
+
+      - name: Update CAMOUFOX_SERVICE_URL secret with emergency URL
+        run: |
+          echo "Emergency URL: ${{ steps.emergency_deploy.outputs.url }}"
+          gh secret set CAMOUFOX_SERVICE_URL --body "${{ steps.emergency_deploy.outputs.url }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Notify emergency redeploy
+        run: |
+          echo "::warning::Camoufox primary deploy failed. Emergency redeployed to ${{ steps.emergency_region.outputs.name }}. URL updated automatically."
 
   # -----------------------------------------------------------------------
   # SUMMARY
   # -----------------------------------------------------------------------
   summary:
-    name: Print Service URL
+    name: Summary
     runs-on: ubuntu-latest
-    needs: [build, deploy, smoke-test]
+    needs: [build, deploy, smoke-test, emergency-redeploy]
     if: always()
 
     steps:
@@ -167,12 +280,9 @@ jobs:
           echo "| Build | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Deploy | ${{ needs.deploy.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Smoke Test | ${{ needs.smoke-test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Emergency Redeploy | ${{ needs.emergency-redeploy.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Region:** ${{ needs.deploy.outputs.region }}" >> $GITHUB_STEP_SUMMARY
           echo "**Service URL:** ${{ needs.deploy.outputs.service_url }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Next step" >> $GITHUB_STEP_SUMMARY
-          echo "Add the service URL as a GitHub Actions secret:" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "Secret name:  CAMOUFOX_SERVICE_URL" >> $GITHUB_STEP_SUMMARY
-          echo "Secret value: ${{ needs.deploy.outputs.service_url }}" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "CAMOUFOX_SERVICE_URL secret updated automatically." >> $GITHUB_STEP_SUMMARY

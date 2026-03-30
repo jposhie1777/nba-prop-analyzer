@@ -1,78 +1,78 @@
-import { ActivityIndicator, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from “react-native”;
-import { useLocalSearchParams } from “expo-router”;
-import { useEffect, useMemo, useState } from “react”;
+import { ActivityIndicator, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useLocalSearchParams } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
 
-import { useMlbMatchupDetail } from “@/hooks/mlb/useMlbMatchups”;
-import { useTheme } from “@/store/useTheme”;
-import { getMlbTeamLogo } from “@/utils/mlbLogos”;
-import { BackToHomeButton } from “@/components/navigation/BackToHomeButton”;
-import { usePropBetslip } from “@/store/usePropBetslip”;
-import { useBetslipDrawer } from “@/store/useBetslipDrawer”;
-import { buildParlayLinks, getBuildPlatform, type ParlayBatterInput } from “@/utils/parlayBuilder”;
+import { useMlbMatchupDetail } from "@/hooks/mlb/useMlbMatchups";
+import { useTheme } from "@/store/useTheme";
+import { getMlbTeamLogo } from "@/utils/mlbLogos";
+import { BackToHomeButton } from "@/components/navigation/BackToHomeButton";
+import { usePropBetslip } from "@/store/usePropBetslip";
+import { useBetslipDrawer } from "@/store/useBetslipDrawer";
+import { buildParlayLinks, getBuildPlatform, type ParlayBatterInput } from "@/utils/parlayBuilder";
 
 type StatValue = number | string | null | undefined;
 
 function formatScore(score?: number | null): string {
-if (score == null || Number.isNaN(score)) return “—”;
+if (score == null || Number.isNaN(score)) return "—";
 return score.toFixed(1);
 }
 
 function formatMetric(value: StatValue, digits = 1): string {
-if (value == null) return “—”;
-if (typeof value === “string”) return value;
-if (!Number.isFinite(value)) return “—”;
+if (value == null) return "—";
+if (typeof value === "string") return value;
+if (!Number.isFinite(value)) return "—";
 return Number.isInteger(value) ? `${value}` : value.toFixed(digits);
 }
 
 function formatAmericanOdds(value?: number | null): string {
-if (value == null || Number.isNaN(value) || value === 0) return “—”;
+if (value == null || Number.isNaN(value) || value === 0) return "—";
 return value > 0 ? `+${Math.round(value)}` : `${Math.round(value)}`;
 }
 
 function formatHitterHand(batSide?: string | null): string {
-const side = (batSide ?? “”).toUpperCase();
-if (side === “L”) return “LHB”;
-if (side === “S”) return “SHB”;
-return “RHB”;
+const side = (batSide ?? "").toUpperCase();
+if (side === "L") return "LHB";
+if (side === "S") return "SHB";
+return "RHB";
 }
 
 function formatRate(value?: number | null, digits = 3): string {
-if (value == null || Number.isNaN(value)) return “—”;
+if (value == null || Number.isNaN(value)) return "—";
 return Number(value).toFixed(digits);
 }
 
 function formatPercent(value?: number | null, digits = 1): string {
-if (value == null || Number.isNaN(value)) return “—”;
+if (value == null || Number.isNaN(value)) return "—";
 return `${Number(value).toFixed(digits)}%`;
 }
 
 function normalizePitchName(value?: string | null): string {
-return (value ?? “”).trim().toLowerCase();
+return (value ?? "").trim().toLowerCase();
 }
 
-function pitcherToneByMetric(metric: “ba” | “woba” | “slg” | “iso” | “whiff_pct” | “k_pct”, value?: number | null) {
+function pitcherToneByMetric(metric: "ba" | "woba" | "slg" | "iso" | "whiff_pct" | "k_pct", value?: number | null) {
 if (value == null || Number.isNaN(value)) return styles.pitchStatNeutral;
-if (metric === “ba”) {
+if (metric === "ba") {
 if (value < 0.23) return styles.pitchStatGood;
 if (value > 0.28) return styles.pitchStatBad;
 return styles.pitchStatNeutral;
 }
-if (metric === “woba”) {
+if (metric === "woba") {
 if (value < 0.29) return styles.pitchStatGood;
 if (value > 0.35) return styles.pitchStatBad;
 return styles.pitchStatNeutral;
 }
-if (metric === “slg”) {
+if (metric === "slg") {
 if (value < 0.38) return styles.pitchStatGood;
 if (value > 0.48) return styles.pitchStatBad;
 return styles.pitchStatNeutral;
 }
-if (metric === “iso”) {
+if (metric === "iso") {
 if (value < 0.14) return styles.pitchStatGood;
 if (value > 0.2) return styles.pitchStatBad;
 return styles.pitchStatNeutral;
 }
-if (metric === “whiff_pct” || metric === “k_pct”) {
+if (metric === "whiff_pct" || metric === "k_pct") {
 if (value > 25) return styles.pitchStatGood;
 if (value < 15) return styles.pitchStatBad;
 return styles.pitchStatNeutral;
@@ -80,29 +80,29 @@ return styles.pitchStatNeutral;
 return styles.pitchStatNeutral;
 }
 
-function hitterToneByMetric(metric: “ba” | “slg” | “iso” | “ev” | “barrel_pct”, value?: number | null) {
+function hitterToneByMetric(metric: "ba" | "slg" | "iso" | "ev" | "barrel_pct", value?: number | null) {
 if (value == null || Number.isNaN(value)) return styles.pitchStatNeutral;
-if (metric === “ba”) {
+if (metric === "ba") {
 if (value > 0.28) return styles.pitchStatGood;
 if (value < 0.23) return styles.pitchStatBad;
 return styles.pitchStatNeutral;
 }
-if (metric === “slg”) {
+if (metric === "slg") {
 if (value > 0.48) return styles.pitchStatGood;
 if (value < 0.38) return styles.pitchStatBad;
 return styles.pitchStatNeutral;
 }
-if (metric === “iso”) {
+if (metric === "iso") {
 if (value > 0.2) return styles.pitchStatGood;
 if (value < 0.14) return styles.pitchStatBad;
 return styles.pitchStatNeutral;
 }
-if (metric === “ev”) {
+if (metric === "ev") {
 if (value > 92) return styles.pitchStatGood;
 if (value < 87) return styles.pitchStatBad;
 return styles.pitchStatNeutral;
 }
-if (metric === “barrel_pct”) {
+if (metric === "barrel_pct") {
 if (value > 12) return styles.pitchStatGood;
 if (value < 6) return styles.pitchStatBad;
 return styles.pitchStatNeutral;
@@ -110,35 +110,35 @@ return styles.pitchStatNeutral;
 return styles.pitchStatNeutral;
 }
 
-function normalizeGrade(grade?: string | null): “IDEAL” | “FAVORABLE” | “AVERAGE” | “AVOID” {
-const g = (grade ?? “”).toUpperCase();
-if (g === “IDEAL”) return “IDEAL”;
-if (g === “FAVORABLE”) return “FAVORABLE”;
-if (g === “AVOID”) return “AVOID”;
-return “AVERAGE”;
+function normalizeGrade(grade?: string | null): "IDEAL" | "FAVORABLE" | "AVERAGE" | "AVOID" {
+const g = (grade ?? "").toUpperCase();
+if (g === "IDEAL") return "IDEAL";
+if (g === "FAVORABLE") return "FAVORABLE";
+if (g === "AVOID") return "AVOID";
+return "AVERAGE";
 }
 
 function gradeTone(grade?: string | null) {
 const g = normalizeGrade(grade);
-if (g === “IDEAL”) return { border: “#10B981”, bg: “rgba(16,185,129,0.12)”, text: “#A7F3D0” };
-if (g === “FAVORABLE”) return { border: “#22D3EE”, bg: “rgba(34,211,238,0.12)”, text: “#CFFAFE” };
-if (g === “AVOID”) return { border: “#EF4444”, bg: “rgba(239,68,68,0.12)”, text: “#FECACA” };
-return { border: “#F59E0B”, bg: “rgba(245,158,11,0.12)”, text: “#FDE68A” };
+if (g === "IDEAL") return { border: "#10B981", bg: "rgba(16,185,129,0.12)", text: "#A7F3D0" };
+if (g === "FAVORABLE") return { border: "#22D3EE", bg: "rgba(34,211,238,0.12)", text: "#CFFAFE" };
+if (g === "AVOID") return { border: "#EF4444", bg: "rgba(239,68,68,0.12)", text: "#FECACA" };
+return { border: "#F59E0B", bg: "rgba(245,158,11,0.12)", text: "#FDE68A" };
 }
 
-function metricTier(metric: “iso” | “slg” | “l15_ev” | “l15_barrel” | “l25_ev” | “l25_barrel”, value?: number | null) {
-if (value == null || Number.isNaN(value)) return “default”;
-if (metric === “iso”) return value >= 0.2 ? “elite” : “default”;
-if (metric === “slg”) return value >= 0.5 ? “elite” : “default”;
-if (metric === “l15_ev”) return value >= 98 ? “elite” : “default”;
-if (metric === “l15_barrel”) return value >= 20 ? “elite” : “default”;
-if (metric === “l25_ev”) return value >= 91 ? “elite” : “default”;
-if (metric === “l25_barrel”) return value >= 10 ? “elite” : “default”;
-return “default”;
+function metricTier(metric: "iso" | "slg" | "l15_ev" | "l15_barrel" | "l25_ev" | "l25_barrel", value?: number | null) {
+if (value == null || Number.isNaN(value)) return "default";
+if (metric === "iso") return value >= 0.2 ? "elite" : "default";
+if (metric === "slg") return value >= 0.5 ? "elite" : "default";
+if (metric === "l15_ev") return value >= 98 ? "elite" : "default";
+if (metric === "l15_barrel") return value >= 20 ? "elite" : "default";
+if (metric === "l25_ev") return value >= 91 ? "elite" : "default";
+if (metric === "l25_barrel") return value >= 10 ? "elite" : "default";
+return "default";
 }
 
-function metricTone(metric: “iso” | “slg” | “l15_ev” | “l15_barrel” | “l25_ev” | “l25_barrel”, value?: number | null) {
-return metricTier(metric, value) === “elite” ? styles.metricElite : styles.metricDefault;
+function metricTone(metric: "iso" | "slg" | "l15_ev" | "l15_barrel" | "l25_ev" | "l25_barrel", value?: number | null) {
+return metricTier(metric, value) === "elite" ? styles.metricElite : styles.metricDefault;
 }
 
 function dedupeBatters<T extends { batter_id?: number | null; batter_name?: string | null; score?: number | null }>(
@@ -197,16 +197,16 @@ pitcher: any;
 const [expanded, setExpanded] = useState(false);
 
 // Auto-derive the correct hand keys from the data
-// Pitcher mix: show pitches thrown to this batter’s handedness
-const batterHand = (batter.bat_side ?? “R”).toUpperCase();
-const pitcherMixKey = batterHand === “L” ? “vs_lhb” : “vs_rhb”;
-const pitcherMixLabel = batterHand === “L” ? “vs LHB” : “vs RHB”;
+// Pitcher mix: show pitches thrown to this batter's handedness
+const batterHand = (batter.bat_side ?? "R").toUpperCase();
+const pitcherMixKey = batterHand === "L" ? "vs_lhb" : "vs_rhb";
+const pitcherMixLabel = batterHand === "L" ? "vs LHB" : "vs RHB";
 
-// Hitter stats: show how this batter hits vs this pitcher’s handedness
-const pitcherHandRaw = (pitcher.pitcher_hand ?? “R”).toUpperCase();
-const pitcherHandChar = pitcherHandRaw.startsWith(“L”) ? “L” : “R”;
-const hitterStatsKey = pitcherHandChar === “L” ? “vs_lhp” : “vs_rhp”;
-const hitterStatsLabel = pitcherHandChar === “L” ? “vs LHP” : “vs RHP”;
+// Hitter stats: show how this batter hits vs this pitcher's handedness
+const pitcherHandRaw = (pitcher.pitcher_hand ?? "R").toUpperCase();
+const pitcherHandChar = pitcherHandRaw.startsWith("L") ? "L" : "R";
+const hitterStatsKey = pitcherHandChar === "L" ? "vs_lhp" : "vs_rhp";
+const hitterStatsLabel = pitcherHandChar === "L" ? "vs LHP" : "vs RHP";
 
 const pitcherRows: any[] = batter.pitcher_pitch_mix?.[pitcherMixKey] ?? [];
 
@@ -232,7 +232,7 @@ return (
 <View style={styles.pitchSection}>
 <Pressable style={styles.pitchSectionToggle} onPress={() => setExpanded((v) => !v)}>
 <View style={styles.pitchSectionToggleLeft}>
-<Text style={styles.pitchSectionToggleIcon}>{expanded ? “▾” : “▸”}</Text>
+<Text style={styles.pitchSectionToggleIcon}>{expanded ? "▾" : "▸"}</Text>
 <Text style={styles.pitchSectionToggleLabel}>Pitch Breakdown</Text>
 <Text style={styles.pitchSectionToggleSub}>
 {pitcherMixLabel} · {hitterStatsLabel}
@@ -242,7 +242,7 @@ return (
 <Text style={styles.pitchSectionNoData}>No data</Text>
 ) : (
 <Text style={styles.pitchSectionCount}>
-{pitcherRows.length} pitch{pitcherRows.length !== 1 ? “es” : “”}
+{pitcherRows.length} pitch{pitcherRows.length !== 1 ? "es" : ""}
 </Text>
 )}
 </Pressable>
@@ -353,8 +353,8 @@ const gamePk = Number(params.gamePk);
 const { data, loading, error, refetch } = useMlbMatchupDetail(Number.isFinite(gamePk) ? gamePk : null);
 
 const game = data?.game;
-const awayTeam = params.awayTeam ?? game?.away_team ?? “Away”;
-const homeTeam = params.homeTeam ?? game?.home_team ?? “Home”;
+const awayTeam = params.awayTeam ?? game?.away_team ?? "Away";
+const homeTeam = params.homeTeam ?? game?.home_team ?? "Home";
 const topCount = (data?.grade_counts?.IDEAL ?? 0) + (data?.grade_counts?.FAVORABLE ?? 0);
 const awayLogo = getMlbTeamLogo(awayTeam);
 const homeLogo = getMlbTeamLogo(homeTeam);
@@ -376,7 +376,7 @@ for (const pitcher of data?.pitchers ?? []) {
 const batters = dedupeBatters(pitcher.batters ?? []).slice(0, 12);
 for (const batter of batters) {
 const key = `${String(pitcher.pitcher_id)}-${String(batter.batter_id ?? batter.batter_name ?? "")}`;
-out.push({ key, batter, pitcher, teamName: pitcher.offense_team ?? “Team” });
+out.push({ key, batter, pitcher, teamName: pitcher.offense_team ?? "Team" });
 }
 }
 return out;
@@ -415,13 +415,13 @@ function addBatterToMlbSlip(batter: any, pitcher: any) {
 addToBetslip({
 id: makeMlbSlipId(batter),
 player_id: Number(batter.batter_id ?? 0),
-player: batter.batter_name ?? “Batter”,
-market: “MLB 1+ HR”,
-side: “over”,
+player: batter.batter_name ?? "Batter",
+market: "MLB 1+ HR",
+side: "over",
 line: 0.5,
 odds: Number(batter.hr_odds_best_price ?? 100),
 matchup: `${pitcher.offense_team ?? ""} vs ${pitcher.pitcher_name ?? ""}`,
-sport: “mlb”,
+sport: "mlb",
 bookmaker: null,
 dk_event_id: batter.dk_event_id ?? null,
 dk_outcome_code: batter.dk_outcome_code ?? null,
@@ -464,14 +464,14 @@ setSelectedKeys(next);
 
 function openUrl(url?: string | null) {
 if (!url) return;
-if (platform === “desktop” && typeof globalThis.open === “function”) {
-globalThis.open(url, “_blank”);
+if (platform === "desktop" && typeof globalThis.open === "function") {
+globalThis.open(url, "_blank");
 return;
 }
 Linking.openURL(url).catch(() => {});
 }
 
-function singleLegLink(batter: any, book: “draftkings” | “fanduel”): string | null {
+function singleLegLink(batter: any, book: "draftkings" | "fanduel"): string | null {
 const single = buildParlayLinks(
 [
 {
@@ -487,7 +487,7 @@ fd_selection_id: batter.fd_selection_id ?? null,
 ],
 platform
 );
-return book === “draftkings” ? single.draftkings : single.fanduel;
+return book === "draftkings" ? single.draftkings : single.fanduel;
 }
 
 return (
@@ -728,190 +728,190 @@ return (
 }
 
 const styles = StyleSheet.create({
-screen: { flex: 1, backgroundColor: “#050A18” },
+screen: { flex: 1, backgroundColor: "#050A18" },
 content: { padding: 16, gap: 10, paddingBottom: 40 },
-actionRow: { flexDirection: “row”, gap: 8, marginBottom: 2 },
-hero: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 16, backgroundColor: “#071731”, padding: 16, gap: 8 },
-eyebrow: { color: “#10B981”, fontSize: 11, fontWeight: “700” },
-slugRow: { flexDirection: “row”, alignItems: “center”, justifyContent: “space-between”, gap: 12 },
-heroTeamCol: { flex: 1.25, alignItems: “center”, gap: 6 },
-heroCenterCol: { flex: 1.8, alignItems: “center”, gap: 3 },
-heroLogo: { width: 36, height: 36, borderRadius: 18, backgroundColor: “#111827” },
-heroTeamName: { color: “#E5E7EB”, fontSize: 14, fontWeight: “800”, textAlign: “center” },
-slugTime: { color: “#F8FAFC”, fontSize: 18, fontWeight: “800” },
-slugMeta: { color: “#A7C0E8”, fontSize: 11 },
-slugTop: { color: “#34D399”, fontSize: 11, fontWeight: “700” },
-tagRow: { flexDirection: “row”, flexWrap: “wrap”, gap: 8, marginTop: 4 },
+actionRow: { flexDirection: "row", gap: 8, marginBottom: 2 },
+hero: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 16, backgroundColor: "#071731", padding: 16, gap: 8 },
+eyebrow: { color: "#10B981", fontSize: 11, fontWeight: "700" },
+slugRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+heroTeamCol: { flex: 1.25, alignItems: "center", gap: 6 },
+heroCenterCol: { flex: 1.8, alignItems: "center", gap: 3 },
+heroLogo: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#111827" },
+heroTeamName: { color: "#E5E7EB", fontSize: 14, fontWeight: "800", textAlign: "center" },
+slugTime: { color: "#F8FAFC", fontSize: 18, fontWeight: "800" },
+slugMeta: { color: "#A7C0E8", fontSize: 11 },
+slugTop: { color: "#34D399", fontSize: 11, fontWeight: "700" },
+tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
 pill: {
 borderWidth: StyleSheet.hairlineWidth,
-borderColor: “#334155”,
+borderColor: "#334155",
 borderRadius: 999,
-backgroundColor: “#0F172A”,
+backgroundColor: "#0F172A",
 paddingHorizontal: 10,
 paddingVertical: 6,
 },
-pillText: { color: “#BFDBFE”, fontSize: 11, fontWeight: “700” },
-panel: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, backgroundColor: “#0B1529”, padding: 12, gap: 8 },
-sectionEyebrow: { color: “#64748B”, fontSize: 11, fontWeight: “700” },
-sectionTitle: { color: “#E5E7EB”, fontSize: 18, fontWeight: “800” },
-sectionSub: { color: “#94A3B8”, fontSize: 12 },
-pitcherCard: { borderWidth: StyleSheet.hairlineWidth, borderColor: “#374151”, borderRadius: 12, backgroundColor: “#111827”, padding: 10, gap: 8 },
-pitcherName: { color: “#E5E7EB”, fontSize: 15, fontWeight: “800” },
+pillText: { color: "#BFDBFE", fontSize: 11, fontWeight: "700" },
+panel: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, backgroundColor: "#0B1529", padding: 12, gap: 8 },
+sectionEyebrow: { color: "#64748B", fontSize: 11, fontWeight: "700" },
+sectionTitle: { color: "#E5E7EB", fontSize: 18, fontWeight: "800" },
+sectionSub: { color: "#94A3B8", fontSize: 12 },
+pitcherCard: { borderWidth: StyleSheet.hairlineWidth, borderColor: "#374151", borderRadius: 12, backgroundColor: "#111827", padding: 10, gap: 8 },
+pitcherName: { color: "#E5E7EB", fontSize: 15, fontWeight: "800" },
 tableWrap: { gap: 2 },
-tableHeaderRow: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: “#334155”, paddingBottom: 4, marginBottom: 2 },
-tableRow: { flexDirection: “row”, alignItems: “center” },
-headerCell: { color: “#94A3B8”, fontSize: 10, fontWeight: “800”, flex: 1, textAlign: “center” },
-cell: { color: “#E5E7EB”, fontSize: 11, flex: 1, textAlign: “center”, paddingVertical: 3 },
-cellSplit: { flex: 1.5, textAlign: “left”, fontWeight: “800”, color: “#CBD5E1” },
+tableHeaderRow: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#334155", paddingBottom: 4, marginBottom: 2 },
+tableRow: { flexDirection: "row", alignItems: "center" },
+headerCell: { color: "#94A3B8", fontSize: 10, fontWeight: "800", flex: 1, textAlign: "center" },
+cell: { color: "#E5E7EB", fontSize: 11, flex: 1, textAlign: "center", paddingVertical: 3 },
+cellSplit: { flex: 1.5, textAlign: "left", fontWeight: "800", color: "#CBD5E1" },
 batterCard: { borderWidth: 1, borderRadius: 12, padding: 10, gap: 8 },
-batterCardSelected: { shadowColor: “#22D3EE”, shadowOpacity: 0.35, shadowRadius: 8, borderWidth: 1.25 },
-batterHead: { flexDirection: “row”, alignItems: “center”, justifyContent: “space-between”, gap: 8 },
-batterName: { color: “#E5E7EB”, fontSize: 15, fontWeight: “700”, flex: 1 },
+batterCardSelected: { shadowColor: "#22D3EE", shadowOpacity: 0.35, shadowRadius: 8, borderWidth: 1.25 },
+batterHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+batterName: { color: "#E5E7EB", fontSize: 15, fontWeight: "700", flex: 1 },
 gradePill: {
 borderWidth: StyleSheet.hairlineWidth,
 borderRadius: 999,
-backgroundColor: “rgba(15,23,42,0.7)”,
+backgroundColor: "rgba(15,23,42,0.7)",
 paddingHorizontal: 10,
 paddingVertical: 4,
 },
-gradeText: { fontSize: 11, fontWeight: “800” },
+gradeText: { fontSize: 11, fontWeight: "800" },
 metricsTable: {
 borderWidth: StyleSheet.hairlineWidth,
-borderColor: “#334155”,
+borderColor: "#334155",
 borderRadius: 8,
-overflow: “hidden”,
+overflow: "hidden",
 },
-metricsHeaderRow: { flexDirection: “row”, backgroundColor: “#0F172A” },
-metricsHeaderCell: { flex: 1, color: “#94A3B8”, fontSize: 10, fontWeight: “700”, textAlign: “center”, paddingVertical: 6 },
-metricsValueRow: { flexDirection: “row”, backgroundColor: “rgba(15,23,42,0.25)” },
-metricsValueCell: { flex: 1, fontSize: 12, fontWeight: “700”, textAlign: “center”, paddingVertical: 8 },
-metricDefault: { color: “#E2E8F0” },
-metricElite: { color: “#34D399” },
+metricsHeaderRow: { flexDirection: "row", backgroundColor: "#0F172A" },
+metricsHeaderCell: { flex: 1, color: "#94A3B8", fontSize: 10, fontWeight: "700", textAlign: "center", paddingVertical: 6 },
+metricsValueRow: { flexDirection: "row", backgroundColor: "rgba(15,23,42,0.25)" },
+metricsValueCell: { flex: 1, fontSize: 12, fontWeight: "700", textAlign: "center", paddingVertical: 8 },
+metricDefault: { color: "#E2E8F0" },
+metricElite: { color: "#34D399" },
 
 // ── Pitch analysis collapsible section ──
 pitchSection: {
 borderWidth: StyleSheet.hairlineWidth,
-borderColor: “#334155”,
+borderColor: "#334155",
 borderRadius: 8,
-backgroundColor: “rgba(15,23,42,0.28)”,
-overflow: “hidden”,
+backgroundColor: "rgba(15,23,42,0.28)",
+overflow: "hidden",
 },
 pitchSectionToggle: {
-flexDirection: “row”,
-alignItems: “center”,
-justifyContent: “space-between”,
+flexDirection: "row",
+alignItems: "center",
+justifyContent: "space-between",
 paddingHorizontal: 10,
 paddingVertical: 9,
 },
-pitchSectionToggleLeft: { flexDirection: “row”, alignItems: “center”, gap: 6, flex: 1 },
-pitchSectionToggleIcon: { color: “#64748B”, fontSize: 12, width: 12 },
-pitchSectionToggleLabel: { color: “#CBD5E1”, fontSize: 12, fontWeight: “700” },
-pitchSectionToggleSub: { color: “#64748B”, fontSize: 11 },
-pitchSectionNoData: { color: “#475569”, fontSize: 10 },
-pitchSectionCount: { color: “#475569”, fontSize: 10 },
+pitchSectionToggleLeft: { flexDirection: "row", alignItems: "center", gap: 6, flex: 1 },
+pitchSectionToggleIcon: { color: "#64748B", fontSize: 12, width: 12 },
+pitchSectionToggleLabel: { color: "#CBD5E1", fontSize: 12, fontWeight: "700" },
+pitchSectionToggleSub: { color: "#64748B", fontSize: 11 },
+pitchSectionNoData: { color: "#475569", fontSize: 10 },
+pitchSectionCount: { color: "#475569", fontSize: 10 },
 pitchSectionBody: {
 borderTopWidth: StyleSheet.hairlineWidth,
-borderTopColor: “#1E293B”,
+borderTopColor: "#1E293B",
 paddingHorizontal: 8,
 paddingVertical: 10,
 gap: 8,
 },
-pitchSubHead: { color: “#94A3B8”, fontSize: 11, fontWeight: “700” },
-pitchSubHeadSub: { color: “#475569”, fontSize: 10, fontWeight: “400” },
+pitchSubHead: { color: "#94A3B8", fontSize: 11, fontWeight: "700" },
+pitchSubHeadSub: { color: "#475569", fontSize: 10, fontWeight: "400" },
 pitchDivider: {
 height: StyleSheet.hairlineWidth,
-backgroundColor: “#1E293B”,
+backgroundColor: "#1E293B",
 marginVertical: 4,
 },
 
-pitchEmpty: { color: “#94A3B8”, fontSize: 11, paddingVertical: 8 },
+pitchEmpty: { color: "#94A3B8", fontSize: 11, paddingVertical: 8 },
 pitchTableHeader: {
-flexDirection: “row”,
-backgroundColor: “#0F172A”,
+flexDirection: "row",
+backgroundColor: "#0F172A",
 borderBottomWidth: StyleSheet.hairlineWidth,
-borderBottomColor: “#334155”,
+borderBottomColor: "#334155",
 },
 pitchTableRow: {
-flexDirection: “row”,
+flexDirection: "row",
 borderBottomWidth: StyleSheet.hairlineWidth,
-borderBottomColor: “rgba(51,65,85,0.65)”,
-backgroundColor: “rgba(15,23,42,0.22)”,
+borderBottomColor: "rgba(51,65,85,0.65)",
+backgroundColor: "rgba(15,23,42,0.22)",
 },
 pitchTableHeadCell: {
 width: 56,
-color: “#94A3B8”,
+color: "#94A3B8",
 fontSize: 9,
-fontWeight: “800”,
-textAlign: “center”,
+fontWeight: "800",
+textAlign: "center",
 paddingVertical: 6,
 },
 pitchTableCell: {
 width: 56,
-color: “#E2E8F0”,
+color: "#E2E8F0",
 fontSize: 10,
-fontWeight: “700”,
-textAlign: “center”,
+fontWeight: "700",
+textAlign: "center",
 paddingVertical: 6,
 },
-pitchTypeCol: { width: 108, textAlign: “left”, paddingLeft: 6 },
-pitchStatGood: { color: “#34D399” },
-pitchStatBad: { color: “#F87171” },
-pitchStatNeutral: { color: “#E2E8F0” },
+pitchTypeCol: { width: 108, textAlign: "left", paddingLeft: 6 },
+pitchStatGood: { color: "#34D399" },
+pitchStatBad: { color: "#F87171" },
+pitchStatNeutral: { color: "#E2E8F0" },
 
-betRow: { flexDirection: “row”, gap: 8, alignItems: “center” },
+betRow: { flexDirection: "row", gap: 8, alignItems: "center" },
 selectBtn: {
 flex: 1,
 borderWidth: StyleSheet.hairlineWidth,
-borderColor: “#334155”,
+borderColor: "#334155",
 borderRadius: 10,
 paddingVertical: 8,
 paddingHorizontal: 10,
-backgroundColor: “#0F172A”,
+backgroundColor: "#0F172A",
 },
-selectBtnText: { color: “#C7D2FE”, fontSize: 12, fontWeight: “700”, textAlign: “center” },
-betPriceText: { color: “#86EFAC”, fontSize: 12, fontWeight: “800”, minWidth: 90, textAlign: “right” },
+selectBtnText: { color: "#C7D2FE", fontSize: 12, fontWeight: "700", textAlign: "center" },
+betPriceText: { color: "#86EFAC", fontSize: 12, fontWeight: "800", minWidth: 90, textAlign: "right" },
 bookBtn: {
 flex: 1,
 borderWidth: StyleSheet.hairlineWidth,
-borderColor: “#334155”,
+borderColor: "#334155",
 borderRadius: 10,
-backgroundColor: “#111827”,
+backgroundColor: "#111827",
 paddingVertical: 9,
-alignItems: “center”,
+alignItems: "center",
 },
 bookBtnDisabled: { opacity: 0.45 },
-bookBtnText: { color: “#E5E7EB”, fontSize: 12, fontWeight: “800” },
+bookBtnText: { color: "#E5E7EB", fontSize: 12, fontWeight: "800" },
 parlayBar: {
 borderWidth: StyleSheet.hairlineWidth,
-borderColor: “#334155”,
+borderColor: "#334155",
 borderRadius: 14,
-backgroundColor: “rgba(2,6,23,0.98)”,
+backgroundColor: "rgba(2,6,23,0.98)",
 padding: 12,
 gap: 8,
 marginTop: 8,
 },
-parlayTopRow: { flexDirection: “row”, justifyContent: “space-between”, alignItems: “center” },
-parlayTitle: { color: “#E2E8F0”, fontSize: 14, fontWeight: “800” },
-parlayClear: { color: “#94A3B8”, fontSize: 16, fontWeight: “900” },
-parlayOddsText: { color: “#86EFAC”, fontSize: 13, fontWeight: “800” },
-parlayBtnRow: { flexDirection: “row”, gap: 8 },
+parlayTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+parlayTitle: { color: "#E2E8F0", fontSize: 14, fontWeight: "800" },
+parlayClear: { color: "#94A3B8", fontSize: 16, fontWeight: "900" },
+parlayOddsText: { color: "#86EFAC", fontSize: 13, fontWeight: "800" },
+parlayBtnRow: { flexDirection: "row", gap: 8 },
 parlayBtn: {
 flex: 1,
 borderWidth: StyleSheet.hairlineWidth,
-borderColor: “#334155”,
+borderColor: "#334155",
 borderRadius: 10,
-backgroundColor: “#0F172A”,
+backgroundColor: "#0F172A",
 paddingVertical: 10,
-alignItems: “center”,
+alignItems: "center",
 },
-parlayBtnText: { color: “#E5E7EB”, fontSize: 12, fontWeight: “800” },
-parlayNote: { color: “#94A3B8”, fontSize: 10 },
+parlayBtnText: { color: "#E5E7EB", fontSize: 12, fontWeight: "800" },
+parlayNote: { color: "#94A3B8", fontSize: 10 },
 parlaySummary: { gap: 4 },
-parlayLegText: { color: “#C7D2FE”, fontSize: 11 },
-errorBox: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, backgroundColor: “#1F2937”, padding: 12 },
-errorTitle: { color: “#FCA5A5”, fontWeight: “700” },
-errorText: { color: “#FECACA”, marginTop: 4, fontSize: 12 },
-errorRetry: { color: “#E5E7EB”, marginTop: 8, fontSize: 12 },
-emptyTitle: { color: “#E5E7EB”, fontWeight: “700” },
-emptySub: { color: “#A7C0E8”, marginTop: 6, fontSize: 12 },
+parlayLegText: { color: "#C7D2FE", fontSize: 11 },
+errorBox: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, backgroundColor: "#1F2937", padding: 12 },
+errorTitle: { color: "#FCA5A5", fontWeight: "700" },
+errorText: { color: "#FECACA", marginTop: 4, fontSize: 12 },
+errorRetry: { color: "#E5E7EB", marginTop: 8, fontSize: 12 },
+emptyTitle: { color: "#E5E7EB", fontWeight: "700" },
+emptySub: { color: "#A7C0E8", marginTop: 6, fontSize: 12 },
 });

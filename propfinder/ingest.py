@@ -1,9 +1,13 @@
-#propfinder/ingest.py
-
 """
 ingest.py - PropFinder data ingestion pipeline
 Fetches today's MLB games, lineups, batter hit-data, splits, and pitcher matchup data.
 Writes raw data to BigQuery propfinder dataset.
+
+v5 changes:
+- fetch_teams() added for all-MLB strikeout K rankings (raw_team_strikeout_rankings)
+- raw_pitcher_matchup gains 6 strikeout columns:
+    strikeouts, strikeouts_per_9, strikeout_walk_ratio, k_pct, strike_pct, batters_faced
+- fetch_teams() called once per run in main() after weather_notes
 
 v4 changes:
 - fetch_today_games + fetch_lineup replaced by fetch_upcoming_games (propfinder API)
@@ -41,6 +45,8 @@ bq = bigquery.Client(project=PROJECT)
 def table(name):
     return f"{PROJECT}.{DATASET}.{name}"
 
+
+# ── Schemas ───────────────────────────────────────────────────────────────────
 
 RAW_GAME_WEATHER_SCHEMA = [
     bigquery.SchemaField("run_date",          "DATE"),
@@ -83,6 +89,18 @@ RAW_HR_PROPS_SCHEMA = [
     bigquery.SchemaField("ingested_at",        "TIMESTAMP"),
 ]
 
+RAW_TEAM_STRIKEOUT_RANKINGS_SCHEMA = [
+    bigquery.SchemaField("run_date",    "DATE"),
+    bigquery.SchemaField("team_id",     "INTEGER"),
+    bigquery.SchemaField("team_code",   "STRING"),
+    bigquery.SchemaField("team_name",   "STRING"),
+    bigquery.SchemaField("category",    "STRING"),
+    bigquery.SchemaField("split",       "STRING"),
+    bigquery.SchemaField("rank",        "INTEGER"),
+    bigquery.SchemaField("value",       "INTEGER"),
+    bigquery.SchemaField("ingested_at", "TIMESTAMP"),
+]
+
 NEW_HR_PICKS_FIELDS = [
     bigquery.SchemaField("weather_indicator",  "STRING"),
     bigquery.SchemaField("game_temp",          "FLOAT"),
@@ -105,9 +123,22 @@ NEW_HR_PICKS_FIELDS = [
     bigquery.SchemaField("fd_selection_id",    "STRING"),
 ]
 
+# New columns added idempotently to raw_pitcher_matchup
+NEW_PITCHER_MATCHUP_FIELDS = [
+    bigquery.SchemaField("strikeouts",           "INTEGER"),
+    bigquery.SchemaField("strikeouts_per_9",     "FLOAT"),
+    bigquery.SchemaField("strikeout_walk_ratio", "FLOAT"),
+    bigquery.SchemaField("k_pct",                "FLOAT"),
+    bigquery.SchemaField("strike_pct",           "FLOAT"),
+    bigquery.SchemaField("batters_faced",        "INTEGER"),
+]
+
+
+# ── Table management ──────────────────────────────────────────────────────────
 
 def ensure_tables():
     """Create tables if missing; add new columns idempotently."""
+
     # raw_game_weather
     try:
         bq.create_table(
@@ -119,7 +150,7 @@ def ensure_tables():
         log.error("Failed to create raw_game_weather: %s", exc)
         raise
 
-    # raw_game_weather — add ballpark_azimuth if missing
+    # raw_game_weather — add any missing columns
     try:
         gw_table = bq.get_table(table("raw_game_weather"))
         existing = {f.name for f in gw_table.schema}
@@ -131,7 +162,7 @@ def ensure_tables():
     except Exception as exc:
         log.warning("Could not update raw_game_weather schema: %s", exc)
 
-    # raw_hr_props — create if missing
+    # raw_hr_props
     try:
         bq.create_table(
             bigquery.Table(table("raw_hr_props"), schema=RAW_HR_PROPS_SCHEMA),
@@ -140,6 +171,20 @@ def ensure_tables():
         log.info("raw_hr_props table ready")
     except Exception as exc:
         log.warning("Could not create raw_hr_props: %s", exc)
+
+    # raw_team_strikeout_rankings
+    try:
+        bq.create_table(
+            bigquery.Table(
+                table("raw_team_strikeout_rankings"),
+                schema=RAW_TEAM_STRIKEOUT_RANKINGS_SCHEMA,
+            ),
+            exists_ok=True,
+        )
+        log.info("raw_team_strikeout_rankings table ready")
+    except Exception as exc:
+        log.error("Failed to create raw_team_strikeout_rankings: %s", exc)
+        raise
 
     # hr_picks_daily — add new columns idempotently
     try:
@@ -153,6 +198,24 @@ def ensure_tables():
     except Exception as exc:
         log.warning("Could not update hr_picks_daily schema: %s", exc)
 
+    # raw_pitcher_matchup — add strikeout columns idempotently
+    try:
+        pm_table = bq.get_table(table("raw_pitcher_matchup"))
+        existing = {f.name for f in pm_table.schema}
+        to_add = [f for f in NEW_PITCHER_MATCHUP_FIELDS if f.name not in existing]
+        if to_add:
+            pm_table.schema = list(pm_table.schema) + to_add
+            bq.update_table(pm_table, ["schema"])
+            log.info(
+                "Added %s columns to raw_pitcher_matchup: %s",
+                len(to_add),
+                [f.name for f in to_add],
+            )
+    except Exception as exc:
+        log.warning("Could not update raw_pitcher_matchup schema: %s", exc)
+
+
+# ── HTTP helpers ──────────────────────────────────────────────────────────────
 
 async def get(session, url, params=None):
     try:
@@ -212,6 +275,8 @@ def extract_position_abbr(player):
     return str(abbr).upper()
 
 
+# ── BQ insert ─────────────────────────────────────────────────────────────────
+
 def bq_insert(table_name, rows):
     if not rows:
         log.info("No rows for %s", table_name)
@@ -249,7 +314,7 @@ def bq_insert(table_name, rows):
                 inserted += len(chunk)
                 chunk_ok = True
                 break
-            except Exception as exc:  # network/transient retry guard
+            except Exception as exc:
                 last_error = exc
                 if attempt < INSERT_MAX_ATTEMPTS:
                     sleep_s = 2 ** (attempt - 1)
@@ -274,6 +339,8 @@ def bq_insert(table_name, rows):
     log.info("Inserted %s rows -> %s (%s chunks)", inserted, table_name, chunks)
 
 
+# ── Fetch functions ───────────────────────────────────────────────────────────
+
 def _find_game_weather(weather_data, game_epoch):
     """Return the weatherData entry whose dateTimeEpoch is closest to game_epoch."""
     if not weather_data:
@@ -283,7 +350,6 @@ def _find_game_weather(weather_data, game_epoch):
 
 async def fetch_upcoming_games(session):
     """
-    Replaces fetch_today_games + fetch_lineup.
     Calls /mlb/upcoming-games, filters to TODAY, extracts game info
     including batting orders, weather, and odds.
     """
@@ -301,7 +367,6 @@ async def fetch_upcoming_games(session):
         except ValueError:
             continue
 
-        # Filter by ET slate date so late-night west-coast starts are included.
         game_local_date = (
             game_dt.astimezone(SLATE_TZ).date()
             if game_dt.tzinfo
@@ -316,14 +381,13 @@ async def fetch_upcoming_games(session):
 
         game_epoch = int(game_dt.timestamp())
 
-        home_team = item.get("homeTeam") or {}
+        home_team    = item.get("homeTeam") or {}
         visitor_team = item.get("visitorTeam") or {}
-        ballpark = item.get("ballpark") or {}
+        ballpark     = item.get("ballpark") or {}
         weather_data = item.get("weatherData") or []
         game_weather = _find_game_weather(weather_data, game_epoch)
 
-        # Parse batting orders from comma-separated player ID strings
-        home_order_str = item.get("homeBattingOrder") or ""
+        home_order_str    = item.get("homeBattingOrder") or ""
         visitor_order_str = item.get("visitorBattingOrder") or ""
         home_batting_order = [
             int(x) for x in home_order_str.split(",") if x.strip().isdigit()
@@ -332,50 +396,44 @@ async def fetch_upcoming_games(session):
             int(x) for x in visitor_order_str.split(",") if x.strip().isdigit()
         ]
 
-        # Moneyline odds (string like "-117" or "105")
         home_ml_str = item.get("homeTeamOdds")
         away_ml_str = item.get("visitorTeamOdds")
 
-        games.append(
-            {
-                "game_pk": game_pk,
-                "game_date": game_date_str,
-                "game_epoch": game_epoch,
-                "home_team_id": si(home_team.get("id")),
-                "home_team_name": home_team.get("fullName", ""),
-                "home_team_code": home_team.get("code", ""),
-                "away_team_id": si(visitor_team.get("id")),
-                "away_team_name": visitor_team.get("fullName", ""),
-                "away_team_code": visitor_team.get("code", ""),
-                "home_pitcher_id": si(item.get("homePitcherId")),
-                "away_pitcher_id": si(item.get("visitorPitcherId")),
-                "home_batting_order": home_batting_order,
-                "away_batting_order": away_batting_order,
-                "weather_indicator": item.get("weatherIndicator", ""),
-                "home_moneyline": si(home_ml_str) if home_ml_str else None,
-                "away_moneyline": si(away_ml_str) if away_ml_str else None,
-                "over_under": sf(item.get("gameRunLine")),
-                "ballpark_name": ballpark.get("name", ""),
-                "roof_type": ballpark.get("roofType", ""),
-                "ballpark_azimuth": si(ballpark.get("azimuthAngle")),
-                # Game-hour weather snapshot
-                "game_temp": sf(game_weather.get("temp")),
-                "wind_speed": sf(game_weather.get("windSpeed")),
-                "wind_dir": si(game_weather.get("windDir")),
-                "wind_gust": sf(game_weather.get("windGust")),
-                "precip_prob": sf(game_weather.get("precipProb")),
-                "conditions": game_weather.get("conditions", ""),
-            }
-        )
+        games.append({
+            "game_pk":            game_pk,
+            "game_date":          game_date_str,
+            "game_epoch":         game_epoch,
+            "home_team_id":       si(home_team.get("id")),
+            "home_team_name":     home_team.get("fullName", ""),
+            "home_team_code":     home_team.get("code", ""),
+            "away_team_id":       si(visitor_team.get("id")),
+            "away_team_name":     visitor_team.get("fullName", ""),
+            "away_team_code":     visitor_team.get("code", ""),
+            "home_pitcher_id":    si(item.get("homePitcherId")),
+            "away_pitcher_id":    si(item.get("visitorPitcherId")),
+            "home_batting_order": home_batting_order,
+            "away_batting_order": away_batting_order,
+            "weather_indicator":  item.get("weatherIndicator", ""),
+            "home_moneyline":     si(home_ml_str) if home_ml_str else None,
+            "away_moneyline":     si(away_ml_str) if away_ml_str else None,
+            "over_under":         sf(item.get("gameRunLine")),
+            "ballpark_name":      ballpark.get("name", ""),
+            "roof_type":          ballpark.get("roofType", ""),
+            "ballpark_azimuth":   si(ballpark.get("azimuthAngle")),
+            "game_temp":          sf(game_weather.get("temp")),
+            "wind_speed":         sf(game_weather.get("windSpeed")),
+            "wind_dir":           si(game_weather.get("windDir")),
+            "wind_gust":          sf(game_weather.get("windGust")),
+            "precip_prob":        sf(game_weather.get("precipProb")),
+            "conditions":         game_weather.get("conditions", ""),
+        })
 
     log.info("Found %s games for %s from upcoming-games endpoint", len(games), TODAY)
     return games
 
 
 async def fetch_weather_notes(session):
-    """
-    Calls /mlb/weather-notes. Returns dict keyed by gameId.
-    """
+    """Calls /mlb/weather-notes. Returns dict keyed by gameId."""
     data = await get(session, f"{BASE_URL}/mlb/weather-notes")
     if not data or not isinstance(data, list):
         return {}
@@ -387,10 +445,50 @@ async def fetch_weather_notes(session):
             continue
         notes[game_id] = {
             "content": item.get("content", ""),
-            "author": item.get("authorName", ""),
+            "author":  item.get("authorName", ""),
         }
     log.info("Fetched %s weather notes", len(notes))
     return notes
+
+
+async def fetch_teams(session):
+    """
+    Calls /mlb/teams — returns all 30 MLB teams with strikeout K-count
+    rankings across splits (Season, L15 Days, L30 Days, Home, Away,
+    vs LHP, vs RHP).
+
+    Returns list of BQ-ready rows for raw_team_strikeout_rankings.
+    """
+    data = await get(session, f"{BASE_URL}/mlb/teams")
+    if not data or not isinstance(data, list):
+        log.warning("fetch_teams: no data returned")
+        return []
+
+    rows = []
+    for team in data:
+        team_id   = si(team.get("id"))
+        team_code = team.get("code", "")
+        team_name = team.get("fullName", "")
+
+        for ranking in team.get("rankings", []):
+            rows.append({
+                "run_date":    TODAY.isoformat(),
+                "team_id":     team_id,
+                "team_code":   team_code,
+                "team_name":   team_name,
+                "category":    ranking.get("category", "strikeouts"),
+                "split":       ranking.get("split", ""),
+                "rank":        si(ranking.get("rank")),
+                "value":       si(ranking.get("value")),
+                "ingested_at": NOW.isoformat(),
+            })
+
+    log.info(
+        "fetch_teams: %s ranking rows across %s teams",
+        len(rows),
+        len(data),
+    )
+    return rows
 
 
 def _parse_dk_link(url):
@@ -445,21 +543,21 @@ async def fetch_props(session, game_pk):
             continue
         best = item.get("bestMarket") or {}
         desktop_link = best.get("deepLinkDesktop") or ""
-        ios_link = best.get("deepLinkIos") or best.get("deepLinkMobile") or ""
+        ios_link     = best.get("deepLinkIos") or best.get("deepLinkMobile") or ""
 
         dk_event_id, dk_outcome_code = _parse_dk_link(desktop_link)
         fd_market_id, fd_selection_id = _parse_fd_link(desktop_link)
 
         props[player_id] = {
-            "player_name": item.get("playerName") or "",
+            "player_name":        item.get("playerName") or "",
             "hr_odds_best_price": si(best.get("price")),
-            "hr_odds_best_book": best.get("bookmaker") or best.get("book") or "",
-            "deep_link_desktop": desktop_link,
-            "deep_link_ios": ios_link,
-            "dk_outcome_code": dk_outcome_code or "",
-            "dk_event_id": dk_event_id or "",
-            "fd_market_id": fd_market_id or "",
-            "fd_selection_id": fd_selection_id or "",
+            "hr_odds_best_book":  best.get("bookmaker") or best.get("book") or "",
+            "deep_link_desktop":  desktop_link,
+            "deep_link_ios":      ios_link,
+            "dk_outcome_code":    dk_outcome_code or "",
+            "dk_event_id":        dk_event_id or "",
+            "fd_market_id":       fd_market_id or "",
+            "fd_selection_id":    fd_selection_id or "",
         }
 
     log.info("Fetched HR props for %s players in game %s", len(props), game_pk)
@@ -479,8 +577,7 @@ async def fetch_team_roster(session, team_id):
     hitter_ids = []
     for player in roster:
         player_id = extract_player_id((player or {}).get("person") or player)
-        position = extract_position_abbr(player or {})
-        # Exclude pitcher-only entries for roster fallback hitter scraping.
+        position  = extract_position_abbr(player or {})
         if player_id is None or position == "P":
             continue
         hitter_ids.append(player_id)
@@ -502,30 +599,28 @@ async def fetch_hit_data(session, batter_id, game_pk, batter_team_id):
         if launch_speed is None:
             continue
 
-        rows.append(
-            {
-                "run_date": TODAY.isoformat(),
-                "game_pk": game_pk,
-                "batter_id": batter_id,
-                "batter_team_id": batter_team_id,
-                "batter_name": event.get("batterName", ""),
-                "bat_side": event.get("batSide", ""),
-                "pitcher_id": si(event.get("pitcherId")),
-                "pitcher_name": event.get("pitcherName", ""),
-                "pitch_hand": event.get("pitchHand", ""),
-                "pitch_type": event.get("pitchType", ""),
-                "result": event.get("result", ""),
-                "launch_speed": launch_speed,
-                "launch_angle": sf(event.get("launchAngle")),
-                "total_distance": sf(event.get("totalDistance")),
-                "trajectory": event.get("trajectory", ""),
-                "is_barrel": bool(event.get("isBarrel")),
-                "hr_in_n_parks": si(event.get("hrInNParks", 0)),
-                "event_date": event.get("date", "")[:10],
-                "season": si(event.get("season")),
-                "ingested_at": NOW.isoformat(),
-            }
-        )
+        rows.append({
+            "run_date":       TODAY.isoformat(),
+            "game_pk":        game_pk,
+            "batter_id":      batter_id,
+            "batter_team_id": batter_team_id,
+            "batter_name":    event.get("batterName", ""),
+            "bat_side":       event.get("batSide", ""),
+            "pitcher_id":     si(event.get("pitcherId")),
+            "pitcher_name":   event.get("pitcherName", ""),
+            "pitch_hand":     event.get("pitchHand", ""),
+            "pitch_type":     event.get("pitchType", ""),
+            "result":         event.get("result", ""),
+            "launch_speed":   launch_speed,
+            "launch_angle":   sf(event.get("launchAngle")),
+            "total_distance": sf(event.get("totalDistance")),
+            "trajectory":     event.get("trajectory", ""),
+            "is_barrel":      bool(event.get("isBarrel")),
+            "hr_in_n_parks":  si(event.get("hrInNParks", 0)),
+            "event_date":     event.get("date", "")[:10],
+            "season":         si(event.get("season")),
+            "ingested_at":    NOW.isoformat(),
+        })
     return rows
 
 
@@ -552,33 +647,31 @@ async def fetch_splits(session, batter_id, batter_name):
         if code not in SPLITS_WANTED:
             continue
 
-        stat = split_row.get("stat", {})
-        at_bats = si(stat.get("atBats", 0)) or 0
+        stat      = split_row.get("stat", {})
+        at_bats   = si(stat.get("atBats", 0)) or 0
         home_runs = si(stat.get("homeRuns", 0)) or 0
-        doubles = si(stat.get("doubles", 0)) or 0
-        triples = si(stat.get("triples", 0)) or 0
+        doubles   = si(stat.get("doubles", 0)) or 0
+        triples   = si(stat.get("triples", 0)) or 0
 
-        rows.append(
-            {
-                "run_date": TODAY.isoformat(),
-                "batter_id": batter_id,
-                "batter_name": batter_name,
-                "split_code": code,
-                "split_name": split_row.get("splitName", ""),
-                "season": str(split_row.get("season", "")),
-                "avg": parse_split_float(stat.get("avg")),
-                "obp": parse_split_float(stat.get("obp")),
-                "slg": parse_split_float(stat.get("slg")),
-                "ops": parse_split_float(stat.get("ops")),
-                "home_runs": home_runs,
-                "at_bats": at_bats,
-                "hits": si(stat.get("hits", 0)),
-                "doubles": doubles,
-                "triples": triples,
-                "strike_outs": si(stat.get("strikeOuts", 0)),
-                "ingested_at": NOW.isoformat(),
-            }
-        )
+        rows.append({
+            "run_date":    TODAY.isoformat(),
+            "batter_id":   batter_id,
+            "batter_name": batter_name,
+            "split_code":  code,
+            "split_name":  split_row.get("splitName", ""),
+            "season":      str(split_row.get("season", "")),
+            "avg":         parse_split_float(stat.get("avg")),
+            "obp":         parse_split_float(stat.get("obp")),
+            "slg":         parse_split_float(stat.get("slg")),
+            "ops":         parse_split_float(stat.get("ops")),
+            "home_runs":   home_runs,
+            "at_bats":     at_bats,
+            "hits":        si(stat.get("hits", 0)),
+            "doubles":     doubles,
+            "triples":     triples,
+            "strike_outs": si(stat.get("strikeOuts", 0)),
+            "ingested_at": NOW.isoformat(),
+        })
     return rows
 
 
@@ -609,63 +702,71 @@ async def fetch_pitcher_matchup(session, pitcher_id, opp_team_id, game_pk, pitch
             continue
 
         split_key = split_row.get("split", "Season")
-        metrics = metric_map.get(split_key, metric_map.get("Season", {}))
+        metrics   = metric_map.get(split_key, metric_map.get("Season", {}))
 
-        barrel_pct = pct_from_metric(metrics.get("seasonBarrel"))
+        barrel_pct   = pct_from_metric(metrics.get("seasonBarrel"))
         hard_hit_pct = pct_from_metric(metrics.get("seasonHardHitPercentage"))
-        fb_pct = pct_from_metric(metrics.get("flyballPercentage"))
+        fb_pct       = pct_from_metric(metrics.get("flyballPercentage"))
 
-        hr_n = si(split_row.get("homeRuns")) or 0
-        air_outs = si(split_row.get("airOuts")) or 0
+        hr_n      = si(split_row.get("homeRuns")) or 0
+        air_outs  = si(split_row.get("airOuts")) or 0
         hr_fb_pct = round((hr_n / air_outs) * 100, 2) if air_outs > 0 else 0.0
 
-        split_rows.append(
-            {
-                "run_date": TODAY.isoformat(),
-                "game_pk": game_pk,
-                "pitcher_id": pitcher_id,
-                "pitcher_name": pitcher_name,
-                "pitcher_hand": pitcher_hand,
-                "opp_team_id": opp_team_id,
-                "split": split_key,
-                "ip": sf(split_row.get("ip")),
-                "home_runs": hr_n,
-                "hr_per_9": sf(split_row.get("homeRunsPer9Inn")),
-                "barrel_pct": round(barrel_pct, 4),
-                "hard_hit_pct": round(hard_hit_pct, 4),
-                "fb_pct": round(fb_pct, 4),
-                "hr_fb_pct": hr_fb_pct,
-                "whip": sf(split_row.get("whip")),
-                "woba": sf(split_row.get("woba")),
-                "ingested_at": NOW.isoformat(),
-            }
-        )
+        # Strikeout fields
+        batters_faced = si(split_row.get("battersFaced")) or 0
+        strikeouts    = si(split_row.get("strikeOuts")) or 0
+        k_pct         = round((strikeouts / batters_faced) * 100, 4) if batters_faced > 0 else 0.0
+
+        split_rows.append({
+            "run_date":             TODAY.isoformat(),
+            "game_pk":              game_pk,
+            "pitcher_id":           pitcher_id,
+            "pitcher_name":         pitcher_name,
+            "pitcher_hand":         pitcher_hand,
+            "opp_team_id":          opp_team_id,
+            "split":                split_key,
+            "ip":                   sf(split_row.get("ip")),
+            "home_runs":            hr_n,
+            "hr_per_9":             sf(split_row.get("homeRunsPer9Inn")),
+            "barrel_pct":           round(barrel_pct, 4),
+            "hard_hit_pct":         round(hard_hit_pct, 4),
+            "fb_pct":               round(fb_pct, 4),
+            "hr_fb_pct":            hr_fb_pct,
+            "whip":                 sf(split_row.get("whip")),
+            "woba":                 sf(split_row.get("woba")),
+            # strikeout fields
+            "strikeouts":           strikeouts,
+            "strikeouts_per_9":     sf(split_row.get("strikeoutsPer9Inn")),
+            "strikeout_walk_ratio": sf(split_row.get("strikeoutWalkRatio")),
+            "k_pct":                k_pct,
+            "strike_pct":           sf(split_row.get("strikePercentage")),
+            "batters_faced":        batters_faced,
+            "ingested_at":          NOW.isoformat(),
+        })
 
     pitch_log_rows = []
     for pitch in data.get("pitchLog", []):
         if si(pitch.get("season")) != 2025:
             continue
 
-        pitch_log_rows.append(
-            {
-                "run_date": TODAY.isoformat(),
-                "game_pk": game_pk,
-                "pitcher_id": pitcher_id,
-                "batter_hand": pitch.get("type", ""),
-                "pitch_code": pitch.get("pitchCode", ""),
-                "pitch_name": pitch.get("pitchName", ""),
-                "season": 2025,
-                "count": si(pitch.get("count")),
-                "percentage": sf(pitch.get("percentage")),
-                "home_runs": si(pitch.get("homeRuns")),
-                "woba": sf(pitch.get("wOBA")),
-                "slg": sf(pitch.get("slg")),
-                "iso": sf(pitch.get("iso")),
-                "whiff": sf(pitch.get("whiff")),
-                "k_percent": sf(pitch.get("kPercent")),
-                "ingested_at": NOW.isoformat(),
-            }
-        )
+        pitch_log_rows.append({
+            "run_date":   TODAY.isoformat(),
+            "game_pk":    game_pk,
+            "pitcher_id": pitcher_id,
+            "batter_hand":pitch.get("type", ""),
+            "pitch_code": pitch.get("pitchCode", ""),
+            "pitch_name": pitch.get("pitchName", ""),
+            "season":     2025,
+            "count":      si(pitch.get("count")),
+            "percentage": sf(pitch.get("percentage")),
+            "home_runs":  si(pitch.get("homeRuns")),
+            "woba":       sf(pitch.get("wOBA")),
+            "slg":        sf(pitch.get("slg")),
+            "iso":        sf(pitch.get("iso")),
+            "whiff":      sf(pitch.get("whiff")),
+            "k_percent":  sf(pitch.get("kPercent")),
+            "ingested_at":NOW.isoformat(),
+        })
 
     return {"splits": split_rows, "pitch_log": pitch_log_rows}
 
@@ -702,7 +803,7 @@ def load_recent_team_batter_rank(team_ids, lookback_days=365):
 
     by_team = {}
     for row in rows:
-        team_id = si(row["batter_team_id"])
+        team_id   = si(row["batter_team_id"])
         batter_id = si(row["batter_id"])
         if team_id is None or batter_id is None:
             continue
@@ -722,8 +823,9 @@ def rank_roster_players(team_id, roster_players, ranked_history):
     if not roster_ordered:
         return []
 
-    history_rank = {
-        batter_id: idx for idx, batter_id in enumerate(ranked_history.get(team_id, []))
+    history_rank  = {
+        batter_id: idx
+        for idx, batter_id in enumerate(ranked_history.get(team_id, []))
     }
     roster_index = {batter_id: idx for idx, batter_id in enumerate(roster_ordered)}
     return sorted(
@@ -731,9 +833,11 @@ def rank_roster_players(team_id, roster_players, ranked_history):
         key=lambda batter_id: (
             history_rank.get(batter_id, 10**9),
             roster_index[batter_id],
-        )
+        ),
     )
 
+
+# ── Main ──────────────────────────────────────────────────────────────────────
 
 async def main():
     log.info("Starting PropFinder ingest for %s", TODAY)
@@ -741,6 +845,7 @@ async def main():
 
     connector = aiohttp.TCPConnector(limit=20)
     async with aiohttp.ClientSession(connector=connector) as session:
+
         # ── Step 1: fetch today's games + weather + odds ──────────────────────
         games = await fetch_upcoming_games(session)
         if not games:
@@ -750,6 +855,10 @@ async def main():
         # ── Step 2: fetch expert weather notes ────────────────────────────────
         weather_notes = await fetch_weather_notes(session)
 
+        # ── Step 2a: fetch all-team strikeout K rankings ──────────────────────
+        team_ranking_rows = await fetch_teams(session)
+        bq_insert("raw_team_strikeout_rankings", team_ranking_rows)
+
         # ── Step 2b: look up real pitcher names from MLB Stats API ────────────
         all_pitcher_ids = unique_ints(
             [game["home_pitcher_id"] for game in games if game.get("home_pitcher_id")]
@@ -758,43 +867,43 @@ async def main():
         pitcher_name_map = await fetch_player_names(session, all_pitcher_ids)
         log.info("Fetched names for %s pitchers", len(pitcher_name_map))
 
-        # ── Step 2c: fetch HR prop odds for each game ──────────────────────────
+        # ── Step 2c: fetch HR prop odds for each game ─────────────────────────
         props_results = await asyncio.gather(
             *[fetch_props(session, game["game_pk"]) for game in games]
         )
-        # props_by_game: dict[game_pk, dict[player_id, {...}]]
-        props_by_game = {game["game_pk"]: result for game, result in zip(games, props_results)}
+        props_by_game = {
+            game["game_pk"]: result
+            for game, result in zip(games, props_results)
+        }
 
         # ── Step 3: build raw_game_weather rows ───────────────────────────────
         game_weather_rows = []
         for game in games:
             note = weather_notes.get(game["game_pk"], {})
-            game_weather_rows.append(
-                {
-                    "run_date": TODAY.isoformat(),
-                    "game_pk": game["game_pk"],
-                    "game_date": game["game_date"],
-                    "home_team_id": game["home_team_id"],
-                    "home_team_name": game["home_team_name"],
-                    "away_team_id": game["away_team_id"],
-                    "away_team_name": game["away_team_name"],
-                    "weather_indicator": game["weather_indicator"],
-                    "game_temp": game["game_temp"],
-                    "wind_speed": game["wind_speed"],
-                    "wind_dir": game["wind_dir"],
-                    "wind_gust": game["wind_gust"],
-                    "precip_prob": game["precip_prob"],
-                    "conditions": game["conditions"],
-                    "ballpark_name": game["ballpark_name"],
-                    "roof_type": game["roof_type"],
-                    "ballpark_azimuth": game.get("ballpark_azimuth"),
-                    "home_moneyline": game["home_moneyline"],
-                    "away_moneyline": game["away_moneyline"],
-                    "over_under": game["over_under"],
-                    "weather_note": note.get("content", ""),
-                    "ingested_at": NOW.isoformat(),
-                }
-            )
+            game_weather_rows.append({
+                "run_date":          TODAY.isoformat(),
+                "game_pk":           game["game_pk"],
+                "game_date":         game["game_date"],
+                "home_team_id":      game["home_team_id"],
+                "home_team_name":    game["home_team_name"],
+                "away_team_id":      game["away_team_id"],
+                "away_team_name":    game["away_team_name"],
+                "weather_indicator": game["weather_indicator"],
+                "game_temp":         game["game_temp"],
+                "wind_speed":        game["wind_speed"],
+                "wind_dir":          game["wind_dir"],
+                "wind_gust":         game["wind_gust"],
+                "precip_prob":       game["precip_prob"],
+                "conditions":        game["conditions"],
+                "ballpark_name":     game["ballpark_name"],
+                "roof_type":         game["roof_type"],
+                "ballpark_azimuth":  game.get("ballpark_azimuth"),
+                "home_moneyline":    game["home_moneyline"],
+                "away_moneyline":    game["away_moneyline"],
+                "over_under":        game["over_under"],
+                "weather_note":      note.get("content", ""),
+                "ingested_at":       NOW.isoformat(),
+            })
 
         bq_insert("raw_game_weather", game_weather_rows)
 
@@ -806,21 +915,23 @@ async def main():
         roster_results = await asyncio.gather(
             *[fetch_team_roster(session, team_id) for team_id in team_ids]
         )
-        roster_by_team = {team_id: players for team_id, players in zip(team_ids, roster_results)}
+        roster_by_team        = {
+            team_id: players
+            for team_id, players in zip(team_ids, roster_results)
+        }
         ranked_history_by_team = load_recent_team_batter_rank(team_ids)
 
-        batter_jobs = []
-        batter_seen = set()
+        batter_jobs  = []
+        batter_seen  = set()
         pitcher_jobs = []
 
         for game in games:
-            game_pk = game["game_pk"]
+            game_pk      = game["game_pk"]
             home_players = list(unique_ints(game["home_batting_order"]))
             away_players = list(unique_ints(game["away_batting_order"]))
-            home_source = "lineup" if home_players else "fallback"
-            away_source = "lineup" if away_players else "fallback"
+            home_source  = "lineup" if home_players else "fallback"
+            away_source  = "lineup" if away_players else "fallback"
 
-            # Roster/history fallback if batting order is empty
             if not home_players:
                 home_players = rank_roster_players(
                     game["home_team_id"],
@@ -857,7 +968,6 @@ async def main():
                     away_source,
                 )
 
-            # Home batters face the away pitcher
             for batter_id in home_players:
                 batter_id_int = si(batter_id)
                 if batter_id_int is None:
@@ -866,10 +976,12 @@ async def main():
                 if key in batter_seen:
                     continue
                 batter_seen.add(key)
-                batter_jobs.append(
-                    {"batter_id": batter_id_int, "game_pk": game_pk, "batter_team_id": game["home_team_id"]}
-                )
-            # Away batters face the home pitcher
+                batter_jobs.append({
+                    "batter_id":      batter_id_int,
+                    "game_pk":        game_pk,
+                    "batter_team_id": game["home_team_id"],
+                })
+
             for batter_id in away_players:
                 batter_id_int = si(batter_id)
                 if batter_id_int is None:
@@ -878,41 +990,45 @@ async def main():
                 if key in batter_seen:
                     continue
                 batter_seen.add(key)
-                batter_jobs.append(
-                    {"batter_id": batter_id_int, "game_pk": game_pk, "batter_team_id": game["away_team_id"]}
-                )
+                batter_jobs.append({
+                    "batter_id":      batter_id_int,
+                    "game_pk":        game_pk,
+                    "batter_team_id": game["away_team_id"],
+                })
 
             if game["home_pitcher_id"]:
-                pitcher_jobs.append(
-                    {
-                        "pitcher_id": game["home_pitcher_id"],
-                        "pitcher_name": pitcher_name_map.get(game["home_pitcher_id"], f"Pitcher {game['home_pitcher_id']}"),
-                        "opp_team_id": game["away_team_id"],
-                        "game_pk": game_pk,
-                    }
-                )
+                pitcher_jobs.append({
+                    "pitcher_id":   game["home_pitcher_id"],
+                    "pitcher_name": pitcher_name_map.get(
+                        game["home_pitcher_id"],
+                        f"Pitcher {game['home_pitcher_id']}",
+                    ),
+                    "opp_team_id":  game["away_team_id"],
+                    "game_pk":      game_pk,
+                })
             if game["away_pitcher_id"]:
-                pitcher_jobs.append(
-                    {
-                        "pitcher_id": game["away_pitcher_id"],
-                        "pitcher_name": pitcher_name_map.get(game["away_pitcher_id"], f"Pitcher {game['away_pitcher_id']}"),
-                        "opp_team_id": game["home_team_id"],
-                        "game_pk": game_pk,
-                    }
-                )
+                pitcher_jobs.append({
+                    "pitcher_id":   game["away_pitcher_id"],
+                    "pitcher_name": pitcher_name_map.get(
+                        game["away_pitcher_id"],
+                        f"Pitcher {game['away_pitcher_id']}",
+                    ),
+                    "opp_team_id":  game["home_team_id"],
+                    "game_pk":      game_pk,
+                })
 
         log.info("Batter jobs: %s | Pitcher jobs: %s", len(batter_jobs), len(pitcher_jobs))
 
         # ── Step 5: fetch batter hit-data + splits ────────────────────────────
-        all_hit_rows = []
+        all_hit_rows   = []
         all_split_rows = []
 
         async def fetch_batter(job):
-            hit_rows = await fetch_hit_data(
+            hit_rows    = await fetch_hit_data(
                 session, job["batter_id"], job["game_pk"], job["batter_team_id"]
             )
             batter_name = hit_rows[0]["batter_name"] if hit_rows else str(job["batter_id"])
-            split_rows = await fetch_splits(session, job["batter_id"], batter_name)
+            split_rows  = await fetch_splits(session, job["batter_id"], batter_name)
             return hit_rows, split_rows
 
         batter_results = await asyncio.gather(*[fetch_batter(job) for job in batter_jobs])
@@ -921,7 +1037,7 @@ async def main():
             all_split_rows.extend(split_rows)
 
         # ── Step 6: fetch pitcher matchup data ────────────────────────────────
-        all_pitcher_rows = []
+        all_pitcher_rows   = []
         all_pitch_log_rows = []
 
         pitcher_results = await asyncio.gather(
@@ -940,32 +1056,30 @@ async def main():
             all_pitcher_rows.extend(result["splits"])
             all_pitch_log_rows.extend(result["pitch_log"])
 
-        bq_insert("raw_hit_data", all_hit_rows)
-        bq_insert("raw_splits", all_split_rows)
-        bq_insert("raw_pitcher_matchup", all_pitcher_rows)
-        bq_insert("raw_pitch_log", all_pitch_log_rows)
+        bq_insert("raw_hit_data",          all_hit_rows)
+        bq_insert("raw_splits",            all_split_rows)
+        bq_insert("raw_pitcher_matchup",   all_pitcher_rows)
+        bq_insert("raw_pitch_log",         all_pitch_log_rows)
 
-        # ── Step 7: insert HR prop odds ────────────────────────────────────────
+        # ── Step 7: insert HR prop odds ───────────────────────────────────────
         all_props_rows = []
         for game_pk_key, player_props in props_by_game.items():
             for player_id, p in player_props.items():
-                all_props_rows.append(
-                    {
-                        "run_date": TODAY.isoformat(),
-                        "game_pk": game_pk_key,
-                        "player_id": player_id,
-                        "player_name": p["player_name"],
-                        "hr_odds_best_price": p["hr_odds_best_price"],
-                        "hr_odds_best_book": p["hr_odds_best_book"],
-                        "deep_link_desktop": p["deep_link_desktop"],
-                        "deep_link_ios": p["deep_link_ios"],
-                        "dk_outcome_code": p["dk_outcome_code"],
-                        "dk_event_id": p["dk_event_id"],
-                        "fd_market_id": p["fd_market_id"],
-                        "fd_selection_id": p["fd_selection_id"],
-                        "ingested_at": NOW.isoformat(),
-                    }
-                )
+                all_props_rows.append({
+                    "run_date":           TODAY.isoformat(),
+                    "game_pk":            game_pk_key,
+                    "player_id":          player_id,
+                    "player_name":        p["player_name"],
+                    "hr_odds_best_price": p["hr_odds_best_price"],
+                    "hr_odds_best_book":  p["hr_odds_best_book"],
+                    "deep_link_desktop":  p["deep_link_desktop"],
+                    "deep_link_ios":      p["deep_link_ios"],
+                    "dk_outcome_code":    p["dk_outcome_code"],
+                    "dk_event_id":        p["dk_event_id"],
+                    "fd_market_id":       p["fd_market_id"],
+                    "fd_selection_id":    p["fd_selection_id"],
+                    "ingested_at":        NOW.isoformat(),
+                })
         bq_insert("raw_hr_props", all_props_rows)
 
         log.info("Ingest complete.")

@@ -42,12 +42,7 @@ parsed AS (
 with_dates AS (
   SELECT
     p.*,
-    m.scheduled_time,
-    m.home_team_id,
-    m.away_team_id,
-    m.home_score,
-    m.away_score,
-    -- Derived flags
+    p.ingested_at                                     AS scheduled_time,
     CASE WHEN p.goals_for > p.goals_against THEN 1 ELSE 0 END   AS is_win,
     CASE WHEN p.goals_for = p.goals_against THEN 1 ELSE 0 END   AS is_draw,
     CASE WHEN p.goals_for < p.goals_against THEN 1 ELSE 0 END   AS is_loss,
@@ -61,10 +56,8 @@ with_dates AS (
          THEN 1 ELSE 0 END                                      AS over_35,
     COALESCE(p.yellow_cards, 0) + COALESCE(p.red_cards, 0)      AS total_cards
   FROM parsed p
-  LEFT JOIN `graphite-flare-477419-h7.epl_data.matches_flat` m
-    ON p.match_id = m.match_id
-  WHERE m.status = 'STATUS_FULL_TIME'
-    OR m.home_score IS NOT NULL   -- include completed matches
+  -- No join to matches_flat — different ID systems don't overlap
+  -- ingested_at is used as match date proxy (stats are ingested after each match)
 ),
 
 -- Rank each team's games most recent first

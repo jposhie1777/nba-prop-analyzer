@@ -2,14 +2,13 @@ name: BQ Analytics Pipeline
 
 on:
   schedule:
-    - cron: '0 10 * * *'   # Daily at 10am UTC (6am ET)
-  workflow_dispatch:        # Manual trigger anytime
+    - cron: '0 10 * * *'
+  workflow_dispatch:
 
 jobs:
   run-mls-analytics:
     name: MLS Analytics
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -25,7 +24,7 @@ jobs:
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          credentials_json: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
 
       - name: Run MLS pipeline
         run: python scripts/run_bq_pipeline.py --league mls

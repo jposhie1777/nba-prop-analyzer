@@ -110,7 +110,6 @@ jobs:
     if: always() && (needs.build.result == 'success' || needs.build.result == 'skipped')
     permissions:
       contents: write
-      secrets: write
     outputs:
       service_url: ${{ steps.deploy.outputs.url }}
       region: ${{ steps.region.outputs.name }}
@@ -209,7 +208,6 @@ jobs:
     if: always() && needs.smoke-test.result == 'failure'
     permissions:
       contents: write
-      secrets: write
 
     steps:
       - name: Authenticate to GCP

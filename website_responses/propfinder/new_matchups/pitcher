@@ -1,0 +1,110 @@
+URL
+https://propfinder.app/mlb/cheatsheets/team-vs-pitcher
+
+Headers
+Request URL
+https://api.propfinder.app/mlb/pitchers?teamIds=144
+Request Method
+GET
+Status Code
+200 OK
+Remote Address
+174.138.117.121:443
+Referrer Policy
+strict-origin-when-cross-origin
+access-control-allow-credentials
+true
+access-control-allow-origin
+https://propfinder.app
+cache-control
+no-cache, private
+connection
+keep-alive
+content-encoding
+br
+content-type
+application/json; charset=utf-8
+date
+Tue, 31 Mar 2026 19:50:03 GMT
+server
+nginx/1.24.0 (Ubuntu)
+transfer-encoding
+chunked
+vary
+Accept-Encoding
+vary
+Origin
+accept
+application/json, text/plain, */*
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+en-US,en;q=0.9
+connection
+keep-alive
+cookie
+_twpid=tw.1772658401620.801666034677599077; accessToken=eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJJZCI6ImU5MTNkMDMzLWExOTYtNDA2NS05YzRjLTE5YzQxOWY4NmFhZiIsInN1YiI6ImJlbnZyYW5hQGJvdHRsZWtpbmcuY29tIiwiZW1haWwiOiJiZW52cmFuYUBib3R0bGVraW5nLmNvbSIsImp0aSI6ImI4ZjE1MTlkLWVhMzYtNDY1MC1hYWY0LTI1MWNlYTIxMjA3ZCIsInJvbGUiOiJVc2VyIiwic3ViX3N0YXR1cyI6ImFjdGl2ZSIsInN1Yl9lbmQiOiIyMDI2LTA0LTA5VDIwOjE5OjIyLjAwMDAwMDBaIiwic3ViX3BsYW4iOiJwcm9kX1NBZzhzMWNrN3lVMU1hIiwiaXNfYWN0aXZlIjoiVHJ1ZSIsIm5iZiI6MTc3NDk4NjMyNiwiZXhwIjoxNzc1MjQ1NTI2LCJpYXQiOjE3NzQ5ODYzMjYsImlzcyI6Imh0dHBzOi8vcHJvcGZpbmRlci5hcHAvYXBpIiwiYXVkIjoiaHR0cHM6Ly9wcm9wZmluZGVyLmFwcC8ifQ.8V6Nadv92odCGTap0OQmv8jD3SWnpxm4TpAeL7troEWGdyuv8_AxQxR3Bk6tnRjoZQoAN-5R-p3Yi6JA7iC3ZQ; refreshToken=9KrNAAtBo1J9PrHzv3Q0P7vi%2FyRt8uQJuK5dUtDFXBc%3D; ph_phc_dc4vNdlAxTBKoLNWanDLdgELGiVDtb02sTJHSfTfvC_posthog=%7B%22%24device_id%22%3A%22019a3fe8-2918-70b0-a46c-7a6909f877d5%22%2C%22distinct_id%22%3A%22019a3fe8-2918-70b0-a46c-7a6909f877d5%22%2C%22%24sesid%22%3A%5B1774986528739%2C%22019d456d-f2df-7355-8ca0-39c84ea936e6%22%2C1774986326738%5D%2C%22%24initial_person_info%22%3A%7B%22r%22%3A%22%24direct%22%2C%22u%22%3A%22https%3A%2F%2Fpropfinder.app%2FNBA%22%7D%2C%22%24user_state%22%3A%22anonymous%22%7D
+host
+api.propfinder.app
+origin
+https://propfinder.app
+referer
+https://propfinder.app/
+sec-ch-ua
+"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-site
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36
+
+Preview
+0
+: 
+{id: 607481, firstName: "Aaron", lastName: "Bummer", fullName: "Aaron Bummer", name: "Aaron Bummer",…}
+1
+: 
+{id: 628452, firstName: "Raisel", lastName: "Iglesias", fullName: "Raisel Iglesias",…}
+2
+: 
+{id: 663158, firstName: "Robert", lastName: "Suarez", fullName: "Robert Suarez", name: "Robert Suarez",…}
+3
+: 
+{id: 693821, firstName: "Bryce", lastName: "Elder", fullName: "Bryce Elder", name: "Bryce Elder",…}
+4
+: 
+{id: 656550, firstName: "Harrison", lastName: "Holmes", fullName: "Grant Holmes", name: "Grant Holmes",…}
+5
+: 
+{id: 606303, firstName: "Joel", lastName: "Payamps", fullName: "Joel Payamps", name: "Joel Payamps",…}
+6
+: 
+{id: 625643, firstName: "Reynaldo", lastName: "Lopez", fullName: "Reynaldo Lopez",…}
+7
+: 
+{id: 669276, firstName: "Dylan", lastName: "Lee", fullName: "Dylan Lee", name: "Dylan Lee",…}
+8
+: 
+{id: 674370, firstName: "Osvaldo", lastName: "Bido", fullName: "Osvaldo Bido", name: "Osvaldo Bido",…}
+9
+: 
+{id: 519242, firstName: "Christopher", lastName: "Sale", fullName: "Chris Sale", name: "Chris Sale",…}
+10
+: 
+{id: 641755, firstName: "Tyler", lastName: "Kinley", fullName: "Tyler Kinley", name: "Tyler Kinley",…}
+11
+: 
+{id: 660761, firstName: "Jose", lastName: "Suarez", fullName: "Jose Suarez", name: "Jose Suarez",…}
+12
+: 
+{id: 527048, firstName: "Martin", lastName: "Perez", fullName: "Martin Perez", name: "Martin Perez",…}
+
+Response
+[{"id":607481,"firstName":"Aaron","lastName":"Bummer","fullName":"Aaron Bummer","name":"Aaron Bummer","jerseyNumber":49,"pitchingType":"LHP","status":"A","teamId":144,"team":{"id":144,"code":"ATL","location":"Atlanta","firstYearOfPlay":1871,"leagueId":104,"leagueName":"National League","divisionId":204,"divisionName":"National League East","shortName":"Atlanta","fullName":"Atlanta Braves","clubName":"Braves","rankings":[]},"lastPlayed":"2026-03-30T04:00:00Z"},{"id":628452,"firstName":"Raisel","lastName":"Iglesias","fullName":"Raisel Iglesias","name":"Raisel Iglesias","jerseyNumber":26,"pitchingType":"RHP","status":"A","teamId":144,"team":{"id":144,"code":"ATL","location":"Atlanta","firstYearOfPlay":1871,"leagueId":104,"leagueName":"National League","divisionId":204,"divisionName":"National League East","shortName":"Atlanta","fullName":"Atlanta Braves","clubName":"Braves","rankings":[]},"lastPlayed":"2026-03-30T04:00:00Z"},{"id":663158,"firstName":"Robert","lastName":"Suarez","fullName":"Robert Suarez","name":"Robert Suarez","jerseyNumber":75,"pitchingType":"RHP","status":"A","teamId":144,"team":{"id":144,"code":"ATL","location":"Atlanta","firstYearOfPlay":1871,"leagueId":104,"leagueName":"National League","divisionId":204,"divisionName":"National League East","shortName":"Atlanta","fullName":"Atlanta Braves","clubName":"Braves","rankings":[]},"lastPlayed":"2026-03-30T04:00:00Z"},{"id":693821,"firstName":"Bryce","lastName":"Elder","fullName":"Bryce Elder","name":"Bryce Elder","jerseyNumber":55,"pitchingType":"RHP","status":"A","teamId":144,"team":{"id":144,"code":"ATL","location":"Atlanta","firstYearOfPlay":1871,"leagueId":104,"leagueName":"National League","divisionId":204,"divisionName":"National League East","shortName":"Atlanta","fullName":"Atlanta Braves","clubName":"Braves","rankings":[]},"lastPlayed":"2026-03-30T04:00:00Z"},{"id":656550,"firstName":"Harrison","lastName":"Holmes","fullName":"Grant Holmes","name":"Grant Holmes","jerseyNumber":66,"pitchingType":"RHP","status":"A","teamId":144,"team":{"id":144,"code":"ATL","location":"Atlanta","firstYearOfPlay":1871,"leagueId":104,"leagueName":"National League","divisionId":204,"divisionName":"National League East","shortName":"Atlanta","fullName":"Atlanta Braves","clubName":"Braves","rankings":[]},"lastPlayed":"2026-03-29T04:00:00Z"},{"id":606303,"firstName":"Joel","lastName":"Payamps","fullName":"Joel Payamps","name":"Joel Payamps","jerseyNumber":31,"pitchingType":"RHP","status":"A","teamId":144,"team":{"id":144,"code":"ATL","location":"Atlanta","firstYearOfPlay":1871,"leagueId":104,"leagueName":"National League","divisionId":204,"divisionName":"National League East","shortName":"Atlanta","fullName":"Atlanta Braves","clubName":"Braves","rankings":[]},"lastPlayed":"2026-03-28T04:00:00Z"},{"id":625643,"firstName":"Reynaldo","lastName":"Lopez","fullName":"Reynaldo Lopez","name":"Reynaldo Lopez","jerseyNumber":40,"pitchingType":"RHP","status":"A","teamId":144,"team":{"id":144,"code":"ATL","location":"Atlanta","firstYearOfPlay":1871,"leagueId":104,"leagueName":"National League","divisionId":204,"divisionName":"National League East","shortName":"Atlanta","fullName":"Atlanta Braves","clubName":"Braves","rankings":[]},"lastPlayed":"2026-03-28T04:00:00Z"},{"id":669276,"firstName":"Dylan","lastName":"Lee","fullName":"Dylan Lee","name":"Dylan Lee","jerseyNumber":52,"pitchingType":"LHP","status":"A","teamId":144,"team":{"id":144,"code":"ATL","location":"Atlanta","firstYearOfPlay":1871,"leagueId":104,"leagueName":"National League","divisionId":204,"divisionName":"National League East","shortName":"Atlanta","fullName":"Atlanta Braves","clubName":"Braves","rankings":[]},"lastPlayed":"2026-03-28T04:00:00Z"},{"id":674370,"firstName":"Osvaldo","lastName":"Bido","fullName":"Osvaldo Bido","name":"Osvaldo Bido","jerseyNumber":45,"pitchingType":"RHP","status":"A","teamId":144,"team":{"id":144,"code":"ATL","location":"Atlanta","firstYearOfPlay":1871,"leagueId":104,"leagueName":"National League","divisionId":204,"divisionName":"National League East","shortName":"Atlanta","fullName":"Atlanta Braves","clubName":"Braves","rankings":[]},"lastPlayed":"2026-03-28T04:00:00Z"},{"id":519242,"firstName":"Christopher","lastName":"Sale","fullName":"Chris Sale","name":"Chris Sale","jerseyNumber":51,"pitchingType":"LHP","status":"A","teamId":144,"team":{"id":144,"code":"ATL","location":"Atlanta","firstYearOfPlay":1871,"leagueId":104,"leagueName":"National League","divisionId":204,"divisionName":"National League East","shortName":"Atlanta","fullName":"Atlanta Braves","clubName":"Braves","rankings":[]},"lastPlayed":"2026-03-27T04:00:00Z"},{"id":641755,"firstName":"Tyler","lastName":"Kinley","fullName":"Tyler Kinley","name":"Tyler Kinley","jerseyNumber":40,"pitchingType":"RHP","status":"A","teamId":144,"team":{"id":144,"code":"ATL","location":"Atlanta","firstYearOfPlay":1871,"leagueId":104,"leagueName":"National League","divisionId":204,"divisionName":"National League East","shortName":"Atlanta","fullName":"Atlanta Braves","clubName":"Braves","rankings":[]},"lastPlayed":"2026-03-27T04:00:00Z"},{"id":660761,"firstName":"Jose","lastName":"Suarez","fullName":"Jose Suarez","name":"Jose Suarez","jerseyNumber":54,"pitchingType":"LHP","status":"A","teamId":144,"team":{"id":144,"code":"ATL","location":"Atlanta","firstYearOfPlay":1871,"leagueId":104,"leagueName":"National League","divisionId":204,"divisionName":"National League East","shortName":"Atlanta","fullName":"Atlanta Braves","clubName":"Braves","rankings":[]},"lastPlayed":"2025-09-27T04:00:00Z"},{"id":527048,"firstName":"Martin","lastName":"Perez","fullName":"Martin Perez","name":"Martin Perez","jerseyNumber":54,"pitchingType":"LHP","status":"A","teamId":144,"team":{"id":144,"code":"ATL","location":"Atlanta","firstYearOfPlay":1871,"leagueId":104,"leagueName":"National League","divisionId":204,"divisionName":"National League East","shortName":"Atlanta","fullName":"Atlanta Braves","clubName":"Braves","rankings":[]},"lastPlayed":"2025-09-17T04:00:00Z"}]

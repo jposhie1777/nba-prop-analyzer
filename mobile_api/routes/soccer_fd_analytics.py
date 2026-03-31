@@ -41,20 +41,73 @@ def _query(
     return [dict(row) for row in job.result()]
 
 
-_LOGO_BASE = "https://raw.githubusercontent.com/luukhopman/football-logos/master/logos"
-_LEAGUE_LOGO_PATH: Dict[str, str] = {
-    "EPL": "England%20-%20Premier%20League",
-    "MLS": "USA%20-%20MLS",
-}
-
-
 def _logo_url(league: str, team_name: str) -> Optional[str]:
+    """Return an ESPN CDN logo URL for a soccer team. Falls back to None."""
     if not team_name:
         return None
-    path = _LEAGUE_LOGO_PATH.get(league.upper())
-    if not path:
-        return None
-    return f"{_LOGO_BASE}/{path}/{quote(team_name)}.png"
+    # ESPN team logo IDs — mapped from FanDuel team names
+    key = team_name.lower().strip()
+    espn_id = _TEAM_ESPN_ID.get(key)
+    if espn_id:
+        return f"https://a.espncdn.com/i/teamlogos/soccer/500/{espn_id}.png"
+    return None
+
+
+# FanDuel team name (lowercased) → ESPN team logo ID
+_TEAM_ESPN_ID: Dict[str, str] = {
+    # MLS
+    "atlanta utd": "18418", "atlanta united": "18418",
+    "austin fc": "20906", "austin": "20906",
+    "cf montreal": "9720", "cf montréal": "9720",
+    "charlotte fc": "21300", "charlotte": "21300",
+    "chicago fire": "182", "chicago": "182",
+    "colorado": "184", "colorado rapids": "184",
+    "columbus": "183", "columbus crew": "183",
+    "d.c. united": "193", "dc united": "193",
+    "fc cincinnati": "18267", "cincinnati": "18267",
+    "fc dallas": "185", "dallas": "185",
+    "houston dynamo": "6077", "houston": "6077",
+    "inter miami cf": "20232", "inter miami": "20232", "miami": "20232",
+    "la galaxy": "187",
+    "lafc": "18966", "los angeles fc": "18966",
+    "minnesota utd": "17362", "minnesota united": "17362", "minnesota": "17362",
+    "nashville sc": "18986", "nashville": "18986",
+    "new england": "189", "new england revolution": "189",
+    "new york city fc": "17606", "nycfc": "17606",
+    "new york red bulls": "190", "ny red bulls": "190",
+    "orlando city": "12011", "orlando": "12011",
+    "philadelphia": "10739", "philadelphia union": "10739",
+    "portland timbers": "9723", "portland": "9723",
+    "real salt lake": "4771", "salt lake": "4771",
+    "san diego fc": "22529", "san diego": "22529",
+    "san jose": "191", "san jose earthquakes": "191",
+    "seattle sounders": "9726", "seattle": "9726",
+    "kansas city": "186", "sporting kc": "186", "sporting kansas city": "186",
+    "st louis city sc": "21812", "st. louis city sc": "21812", "st louis": "21812",
+    "toronto fc": "7318", "toronto": "7318",
+    "vancouver whitecaps": "9727", "vancouver": "9727",
+    # EPL
+    "arsenal": "359", "arsenal fc": "359",
+    "aston villa": "362",
+    "bournemouth": "349", "afc bournemouth": "349",
+    "brentford": "337", "brentford fc": "337",
+    "brighton": "331", "brighton & hove albion": "331",
+    "chelsea": "363", "chelsea fc": "363",
+    "crystal palace": "384",
+    "everton": "368", "everton fc": "368",
+    "fulham": "370", "fulham fc": "370",
+    "ipswich": "373", "ipswich town": "373",
+    "leicester": "375", "leicester city": "375",
+    "liverpool": "364", "liverpool fc": "364",
+    "man city": "382", "manchester city": "382",
+    "man utd": "360", "manchester utd": "360", "manchester united": "360",
+    "newcastle": "361", "newcastle utd": "361", "newcastle united": "361",
+    "nottingham forest": "393", "nott'm forest": "393",
+    "southampton": "376",
+    "tottenham": "367", "tottenham hotspur": "367", "spurs": "367",
+    "west ham": "371", "west ham utd": "371", "west ham united": "371",
+    "wolves": "380", "wolverhampton": "380", "wolverhampton wanderers": "380",
+}
 
 
 @router.get("/soccer/games")

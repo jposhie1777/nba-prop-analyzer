@@ -457,8 +457,8 @@ def scrape(league: str, dry_run: bool = False) -> List[Dict[str, Any]]:
     market_event_map: Dict[str, str] = {}
     all_event_map: Dict[str, Dict[str, Any]] = {}
     runner_name_map: Dict[str, str] = {}
-    captured_prices: List[Dict[str, Any]] = []  # raw getMarketPrices response bodies
-    # Track competitionId per market for filtering (markets have competitionId directly)
+    nav_market_list: List[Dict[str, Any]] = []  # raw nav market dicts for league
+    # Track competitionId per market for filtering
     market_competition: Dict[str, str] = {}
     event_competition: Dict[str, str] = {}
 
@@ -509,13 +509,11 @@ def scrape(league: str, dry_run: bool = False) -> List[Dict[str, Any]]:
                 len(nav_ids), len(nav_events), len(nav_names), len(nav_runners),
             )
 
-        # getMarketPrices — capture market IDs AND response bodies for direct parsing
+        # getMarketPrices — log for debugging but not needed for parsing
+        # (soccer odds come directly from nav market runners)
         if "getMarketPrices" in cap_url:
             if isinstance(cap_body, list):
-                ids = [str(m["marketId"]) for m in cap_body if isinstance(m, dict) and m.get("marketId")]
-                all_market_ids.update(ids)
-                captured_prices.extend(cap_body)
-                logger.info("  → getMarketPrices response: %d markets", len(ids))
+                logger.info("  → getMarketPrices response: %d markets (not used for soccer)", len(cap_body))
 
     # Filter markets by competitionId (markets have competitionId directly)
     league_market_ids = {
@@ -530,13 +528,36 @@ def scrape(league: str, dry_run: bool = False) -> List[Dict[str, Any]]:
             league_market_ids.add(mid)
     event_map = all_event_map  # keep all events for metadata lookup
 
+    # Build nav_market_list: raw nav market dicts for the target league.
+    # Nav runners use 'runners' key with winRunnerOdds — same structure as
+    # getMarketPrices 'runnerDetails', so _parse_market_prices_response can parse them.
+    # We just need to rename 'runners' → 'runnerDetails'.
+    for cap in captured:
+        cap_url = cap.get("url", "")
+        cap_body = cap.get("body")
+        if "content-managed-page" not in cap_url:
+            continue
+        nav_data = _try_parse_json(cap_body)
+        if not nav_data:
+            continue
+        for mk in nav_data.get("attachments", {}).get("markets", {}).values():
+            if not isinstance(mk, dict):
+                continue
+            mid = str(mk.get("marketId", ""))
+            if mid in league_market_ids:
+                # Rename 'runners' to 'runnerDetails' for parser compatibility
+                mk_copy = dict(mk)
+                if "runners" in mk_copy and "runnerDetails" not in mk_copy:
+                    mk_copy["runnerDetails"] = mk_copy.pop("runners")
+                nav_market_list.append(mk_copy)
+
     logger.info(
-        "FanDuel %s: %d/%d markets match competition filter, %d league events, %d market names",
+        "FanDuel %s: %d/%d markets match competition filter, %d league events, %d nav markets with odds",
         league, len(league_market_ids), len(all_market_ids),
-        len(league_event_ids), len(market_name_map),
+        len(league_event_ids), len(nav_market_list),
     )
 
-    if not league_market_ids and not captured_prices:
+    if not league_market_ids:
         logger.warning(
             "FanDuel %s: 0 marketIds after competition filter (comp_ids=%s). "
             "Possible causes: no fixtures, or competition IDs changed.",
@@ -544,25 +565,12 @@ def scrape(league: str, dry_run: bool = False) -> List[Dict[str, Any]]:
         )
         return []
 
-    # Phase 2: Parse odds from captured getMarketPrices responses.
-    # Soccer market IDs use the same format as getMarketPrices marketId
-    # (e.g. '719.xxx'), so we can parse directly from captured data
-    # rather than re-fetching (which returns empty for soccer).
-    # Filter captured markets to only league-relevant ones.
-    league_prices = [
-        m for m in captured_prices
-        if isinstance(m, dict) and str(m.get("marketId", "")) in league_market_ids
-    ]
-    # Also include markets whose IDs match nav data for this league
-    if not league_prices:
-        # Fallback: include all captured prices and filter by event post-parse
-        league_prices = captured_prices
-
-    logger.info("FanDuel %s: parsing %d captured markets (from %d total captured)",
-                league, len(league_prices), len(captured_prices))
-
+    # Phase 2: Parse odds from nav market data.
+    # Soccer nav markets include full runner details with winRunnerOdds,
+    # so we can parse directly without needing getMarketPrices.
+    # Build market list in the same format _parse_market_prices_response expects.
     rows = _parse_market_prices_response(
-        league_prices,
+        nav_market_list,
         scraped_at=scraped_at,
         league=league,
         event_map=event_map,

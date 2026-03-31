@@ -1,13 +1,12 @@
-name: Sportsbook Markets (FanDuel + DraftKings)
+name: Sportsbook Markets (FanDuel)
 
-# Scrapes betting markets from FanDuel and DraftKings via the Camoufox
-# Cloud Run proxy, then loads results into BigQuery.
+# Scrapes betting markets from FanDuel via the Camoufox Cloud Run proxy,
+# then loads results into BigQuery.
 #
 # Sports covered:
 #   - PGA Tour  → sportsbook.raw_fanduel_pga_markets
-#               → sportsbook.raw_draftkings_pga_markets
-#   - EPL       → sportsbook.raw_fanduel_soccer_markets  (seasonal gate)
-#   - MLS       → sportsbook.raw_draftkings_soccer_markets (seasonal gate)
+#   - EPL       → oddspedia.raw_fanduel_soccer_markets
+#   - MLS       → oddspedia.raw_fanduel_soccer_markets
 #
 # Prerequisites (GitHub Actions secrets):
 #   GOOGLE_APPLICATION_CREDENTIALS_JSON  - GCP service account JSON
@@ -27,15 +26,6 @@ on:
           - PGA
           - EPL
           - MLS
-      sportsbook:
-        description: "Sportsbook (FanDuel, DraftKings, or ALL)"
-        required: false
-        default: "ALL"
-        type: choice
-        options:
-          - ALL
-          - FanDuel
-          - DraftKings
       dry_run:
         description: "Dry run — scrape and print rows, skip BigQuery writes"
         required: false
@@ -60,7 +50,7 @@ jobs:
   # SCRAPE
   # -------------------------------------------------------------------------
   scrape:
-    name: Scrape ${{ matrix.sportsbook }} ${{ matrix.sport }}
+    name: Scrape FanDuel ${{ matrix.sport }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -70,40 +60,19 @@ jobs:
       matrix:
         include:
           - sport: PGA
-            sportsbook: FanDuel
             scraper_module: mobile_api.ingest.sportsbook.fanduel_pga_scraper
             artifact_name: fanduel-pga
             artifact_path: /tmp/fanduel_pga_rows.ndjson
 
-          - sport: PGA
-            sportsbook: DraftKings
-            scraper_module: mobile_api.ingest.sportsbook.draftkings_pga_scraper
-            artifact_name: draftkings-pga
-            artifact_path: /tmp/draftkings_pga_rows.ndjson
-
           - sport: EPL
-            sportsbook: FanDuel
             scraper_module: mobile_api.ingest.sportsbook.fanduel_soccer_scraper
             artifact_name: fanduel-epl
             artifact_path: /tmp/fanduel_epl_rows.ndjson
 
-          - sport: EPL
-            sportsbook: DraftKings
-            scraper_module: mobile_api.ingest.sportsbook.draftkings_soccer_scraper
-            artifact_name: draftkings-epl
-            artifact_path: /tmp/draftkings_epl_rows.ndjson
-
           - sport: MLS
-            sportsbook: FanDuel
             scraper_module: mobile_api.ingest.sportsbook.fanduel_soccer_scraper
             artifact_name: fanduel-mls
             artifact_path: /tmp/fanduel_mls_rows.ndjson
-
-          - sport: MLS
-            sportsbook: DraftKings
-            scraper_module: mobile_api.ingest.sportsbook.draftkings_soccer_scraper
-            artifact_name: draftkings-mls
-            artifact_path: /tmp/draftkings_mls_rows.ndjson
 
     steps:
       - name: Check matrix filter
@@ -111,15 +80,11 @@ jobs:
         run: |
           SKIP=false
           INPUT_SPORT="${{ github.event.inputs.sport }}"
-          INPUT_SB="${{ github.event.inputs.sportsbook }}"
           # Discovery mode only runs PGA scrapers
           if [ "${{ inputs.discover }}" = "true" ] && [ "${{ matrix.sport }}" != "PGA" ]; then
             SKIP=true
           fi
           if [ -n "$INPUT_SPORT" ] && [ "$INPUT_SPORT" != "ALL" ] && [ "$INPUT_SPORT" != "${{ matrix.sport }}" ]; then
-            SKIP=true
-          fi
-          if [ -n "$INPUT_SB" ] && [ "$INPUT_SB" != "ALL" ] && [ "$INPUT_SB" != "${{ matrix.sportsbook }}" ]; then
             SKIP=true
           fi
           echo "skip=$SKIP" >> $GITHUB_OUTPUT
@@ -150,7 +115,7 @@ jobs:
           token_format: id_token
           id_token_audience: ${{ secrets.CAMOUFOX_SERVICE_URL }}
 
-      - name: Scrape ${{ matrix.sportsbook }} ${{ matrix.sport }}
+      - name: Scrape FanDuel ${{ matrix.sport }}
         if: steps.filter.outputs.skip != 'true'
         env:
           CAMOUFOX_SERVICE_URL: ${{ secrets.CAMOUFOX_SERVICE_URL }}
@@ -204,7 +169,7 @@ jobs:
   # LOAD
   # -------------------------------------------------------------------------
   load:
-    name: Load ${{ matrix.sportsbook }} ${{ matrix.sport }} → BigQuery
+    name: Load FanDuel ${{ matrix.sport }} → BigQuery
     runs-on: ubuntu-latest
     needs: scrape
     if: inputs.dry_run != true && inputs.discover != true
@@ -215,40 +180,19 @@ jobs:
       matrix:
         include:
           - sport: PGA
-            sportsbook: FanDuel
             scraper_module: mobile_api.ingest.sportsbook.fanduel_pga_scraper
             artifact_name: fanduel-pga
             artifact_path: /tmp/fanduel_pga_rows.ndjson
 
-          - sport: PGA
-            sportsbook: DraftKings
-            scraper_module: mobile_api.ingest.sportsbook.draftkings_pga_scraper
-            artifact_name: draftkings-pga
-            artifact_path: /tmp/draftkings_pga_rows.ndjson
-
           - sport: EPL
-            sportsbook: FanDuel
             scraper_module: mobile_api.ingest.sportsbook.fanduel_soccer_scraper
             artifact_name: fanduel-epl
             artifact_path: /tmp/fanduel_epl_rows.ndjson
 
-          - sport: EPL
-            sportsbook: DraftKings
-            scraper_module: mobile_api.ingest.sportsbook.draftkings_soccer_scraper
-            artifact_name: draftkings-epl
-            artifact_path: /tmp/draftkings_epl_rows.ndjson
-
           - sport: MLS
-            sportsbook: FanDuel
             scraper_module: mobile_api.ingest.sportsbook.fanduel_soccer_scraper
             artifact_name: fanduel-mls
             artifact_path: /tmp/fanduel_mls_rows.ndjson
-
-          - sport: MLS
-            sportsbook: DraftKings
-            scraper_module: mobile_api.ingest.sportsbook.draftkings_soccer_scraper
-            artifact_name: draftkings-mls
-            artifact_path: /tmp/draftkings_mls_rows.ndjson
 
     env:
       GCP_PROJECT: ${{ secrets.PROJECT_ID }}
@@ -261,11 +205,7 @@ jobs:
         run: |
           SKIP=false
           INPUT_SPORT="${{ github.event.inputs.sport }}"
-          INPUT_SB="${{ github.event.inputs.sportsbook }}"
           if [ -n "$INPUT_SPORT" ] && [ "$INPUT_SPORT" != "ALL" ] && [ "$INPUT_SPORT" != "${{ matrix.sport }}" ]; then
-            SKIP=true
-          fi
-          if [ -n "$INPUT_SB" ] && [ "$INPUT_SB" != "ALL" ] && [ "$INPUT_SB" != "${{ matrix.sportsbook }}" ]; then
             SKIP=true
           fi
           echo "skip=$SKIP" >> $GITHUB_OUTPUT
@@ -311,7 +251,7 @@ jobs:
             echo "Artifact is empty — skipping BQ write."
           fi
 
-      - name: Load ${{ matrix.sportsbook }} ${{ matrix.sport }} → BigQuery
+      - name: Load FanDuel ${{ matrix.sport }} → BigQuery
         if: steps.filter.outputs.skip != 'true' && steps.artifact_check.outputs.has_rows == 'true'
         run: |
           if [ "${{ matrix.sport }}" = "PGA" ]; then

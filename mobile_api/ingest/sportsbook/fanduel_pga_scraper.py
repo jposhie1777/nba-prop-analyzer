@@ -131,30 +131,51 @@ def _call_proxy(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 def _discover_all_tournaments() -> List[Dict[str, str]]:
     """
-    Discover ALL available golf events from FanDuel's application-context API.
+    Discover ALL available golf tournaments from FanDuel.
 
-    Returns a list of dicts: [{"id": "...", "slug": "...", "name": "...", "url": "...", "start": "..."}]
-    sorted by start date (nearest first).
+    Strategy:
+      1. Load the /golf landing page via Camoufox — captures the
+         content-managed-page navigation response which lists ALL
+         tournament tabs/events as attachments.
+      2. Fall back to the application-context API if Camoufox fails.
+
+    Returns a list of dicts sorted by start date (nearest first).
     """
     tournaments: List[Dict[str, str]] = []
+
+    # --- Strategy 1: Load golf landing page and extract events from nav ---
     try:
-        resp = requests.get(
-            FD_APP_CONTEXT_URL,
-            headers={**FD_API_HEADERS, "Accept": "application/json"},
-            timeout=15,
-        )
-        resp.raise_for_status()
-        events = resp.json().get("events") or {}
-        for ev_id, ev in events.items():
-            if not isinstance(ev, dict):
+        logger.info("Discovering tournaments via golf landing page...")
+        result = _call_proxy({
+            "url": FD_GOLF_URL,
+            "prime_url": FD_GOLF_URL,
+            "capture_patterns": ["content-managed-page"],
+            "wait_ms": 15000,
+            "timeout_ms": 60000,
+        })
+        captured = result.get("captured_requests", [])
+        for cap in captured:
+            cap_url = cap.get("url", "")
+            if "content-managed-page" not in cap_url:
                 continue
-            if str(ev.get("eventTypeId", "")) != FD_GOLF_EVENT_TYPE_ID:
+            nav_data = _try_parse_json(cap.get("body"))
+            if not nav_data:
                 continue
-            seo = ev.get("seoIdentifier") or ev.get("slug") or ""
-            start = ev.get("openDate") or ev.get("startTime") or ""
-            name = ev.get("eventName") or ev.get("name") or ""
-            if seo and ev_id:
-                url = f"{FD_BASE_URL}/golf/{seo}-{ev_id}"
+            # Extract events from attachments — each tournament is an event
+            events = nav_data.get("attachments", {}).get("events", {})
+            for ev_id, ev in events.items():
+                if not isinstance(ev, dict):
+                    continue
+                name = ev.get("name") or ev.get("eventName") or ""
+                seo = ev.get("seoIdentifier") or ev.get("slug") or ""
+                start = ev.get("openDate") or ev.get("startTime") or ""
+                if not name:
+                    continue
+                # Build the URL — FanDuel pattern is /golf/{seo-slug}-{eventId}
+                if seo:
+                    url = f"{FD_BASE_URL}/golf/{seo}-{ev_id}"
+                else:
+                    url = f"{FD_BASE_URL}/golf"
                 tournaments.append({
                     "id": str(ev_id),
                     "slug": seo,
@@ -162,11 +183,74 @@ def _discover_all_tournaments() -> List[Dict[str, str]]:
                     "url": url,
                     "start": start,
                 })
-        tournaments.sort(key=lambda t: t["start"])
-        for t in tournaments:
-            logger.info("Discovered tournament: %s → %s (starts %s)", t["name"], t["url"], t["start"])
+            # Also check for tab-style navigation in layout
+            tabs = nav_data.get("layout", {}).get("tabs", [])
+            if isinstance(tabs, list):
+                for tab in tabs:
+                    if not isinstance(tab, dict):
+                        continue
+                    tab_url = tab.get("url") or tab.get("path") or ""
+                    tab_name = tab.get("name") or tab.get("title") or ""
+                    if tab_url and tab_name and "/golf/" in str(tab_url):
+                        full_url = tab_url if tab_url.startswith("http") else f"{FD_BASE_URL}{tab_url}"
+                        # Avoid duplicates
+                        if not any(t["url"] == full_url for t in tournaments):
+                            tournaments.append({
+                                "id": "",
+                                "slug": tab_name.lower().replace(" ", "-"),
+                                "name": tab_name,
+                                "url": full_url,
+                                "start": "",
+                            })
+        if tournaments:
+            logger.info("Landing page discovery found %d tournament(s)", len(tournaments))
     except Exception as exc:
-        logger.warning("Tournament discovery failed: %s", exc)
+        logger.warning("Landing page discovery failed: %s", exc)
+
+    # --- Strategy 2: Fall back to application-context API ---
+    if not tournaments:
+        logger.info("Falling back to application-context API...")
+        try:
+            resp = requests.get(
+                FD_APP_CONTEXT_URL,
+                headers={**FD_API_HEADERS, "Accept": "application/json"},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            events = resp.json().get("events") or {}
+            for ev_id, ev in events.items():
+                if not isinstance(ev, dict):
+                    continue
+                if str(ev.get("eventTypeId", "")) != FD_GOLF_EVENT_TYPE_ID:
+                    continue
+                seo = ev.get("seoIdentifier") or ev.get("slug") or ""
+                start = ev.get("openDate") or ev.get("startTime") or ""
+                name = ev.get("eventName") or ev.get("name") or ""
+                if seo and ev_id:
+                    url = f"{FD_BASE_URL}/golf/{seo}-{ev_id}"
+                    tournaments.append({
+                        "id": str(ev_id),
+                        "slug": seo,
+                        "name": name,
+                        "url": url,
+                        "start": start,
+                    })
+        except Exception as exc:
+            logger.warning("Application-context API failed: %s", exc)
+
+    # Deduplicate by name
+    seen_names: Set[str] = set()
+    unique: List[Dict[str, str]] = []
+    for t in tournaments:
+        if t["name"] not in seen_names:
+            seen_names.add(t["name"])
+            unique.append(t)
+    tournaments = unique
+
+    tournaments.sort(key=lambda t: t.get("start", ""))
+    for t in tournaments:
+        logger.info("Discovered tournament: %s → %s (starts %s)", t["name"], t["url"], t["start"])
+
     if not tournaments:
         logger.warning("No tournaments found, falling back to generic golf URL")
         tournaments.append({

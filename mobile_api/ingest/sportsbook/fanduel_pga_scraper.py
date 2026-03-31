@@ -137,21 +137,20 @@ def _slug_from_name(name: str) -> str:
 
 
 def _scrape_golf_landing() -> Tuple[
-    List[Dict[str, str]], Set[str], Dict[str, str], Dict[str, str], str
+    List[Dict[str, str]], Dict[str, Dict[str, Any]], Set[str], str
 ]:
     """
     Load fanduel.com/golf ONCE via Camoufox and extract:
       - All tournament events (with names, IDs, start dates)
-      - All market IDs visible on the landing page
-      - Player name map, market name map
+      - Per-event market data (market_ids, player_map, market_name_map) keyed by eventId
+      - All market IDs (union across events, for fallback)
       - px_context token for subsequent API calls
 
-    Returns: (tournaments, market_ids, player_map, market_name_map, px_context)
+    Returns: (tournaments, per_event_data, all_market_ids, px_context)
     """
     tournaments: List[Dict[str, str]] = []
-    market_ids: Set[str] = set()
-    player_map: Dict[str, str] = {}
-    market_name_map: Dict[str, str] = {}
+    all_market_ids: Set[str] = set()
+    per_event_data: Dict[str, Dict[str, Any]] = {}
     px_context = ""
 
     logger.info("Loading golf landing page via Camoufox: %s", FD_GOLF_URL)
@@ -186,13 +185,19 @@ def _scrape_golf_landing() -> Tuple[
             if not nav_data or ("layout" not in nav_data and "attachments" not in nav_data):
                 continue
 
-            # Extract market IDs + player names (same as tournament page)
+            # Extract all market IDs (flat, for fallback)
             nav_ids = _extract_market_ids_from_nav(nav_data)
-            nav_players = _extract_player_names_from_nav(nav_data)
-            nav_names = _extract_market_names_from_nav(nav_data)
-            market_ids.update(nav_ids)
-            player_map.update(nav_players)
-            market_name_map.update(nav_names)
+            all_market_ids.update(nav_ids)
+
+            # Extract per-event data (market_ids, player_map, market_name_map per tournament)
+            event_data = _extract_per_event_data(nav_data)
+            for eid, bucket in event_data.items():
+                if eid in per_event_data:
+                    per_event_data[eid]["market_ids"].update(bucket["market_ids"])
+                    per_event_data[eid]["player_map"].update(bucket["player_map"])
+                    per_event_data[eid]["market_name_map"].update(bucket["market_name_map"])
+                else:
+                    per_event_data[eid] = bucket
 
             # Extract tournament events
             events = nav_data.get("attachments", {}).get("events", {})
@@ -215,20 +220,20 @@ def _scrape_golf_landing() -> Tuple[
                 })
 
             logger.info(
-                "  → nav: %d events, %d marketIds, %d players, %d market names",
-                len(events), len(nav_ids), len(nav_players), len(nav_names),
+                "  → nav: %d events, %d marketIds total, %d events with per-event data",
+                len(events), len(nav_ids), len(event_data),
             )
 
         # getMarketPrices responses — capture additional market IDs
         if "getMarketPrices" in cap_url:
             if isinstance(cap_body, list):
                 ids = [str(m["marketId"]) for m in cap_body if isinstance(m, dict) and m.get("marketId")]
-                market_ids.update(ids)
+                all_market_ids.update(ids)
             else:
                 body_data = _try_parse_json(cap_body)
                 if isinstance(body_data, dict) and "marketIds" in body_data:
                     ids = [str(m) for m in body_data["marketIds"] if m]
-                    market_ids.update(ids)
+                    all_market_ids.update(ids)
 
     # Deduplicate tournaments by name
     seen: Set[str] = set()
@@ -239,16 +244,21 @@ def _scrape_golf_landing() -> Tuple[
             unique.append(t)
     tournaments = sorted(unique, key=lambda t: t.get("start", ""))
     for t in tournaments:
-        logger.info("Discovered tournament: %s → %s (starts %s)", t["name"], t["url"], t["start"])
+        evt_count = len(per_event_data.get(t["id"], {}).get("market_ids", set()))
+        logger.info(
+            "Discovered tournament: %s → %s (starts %s, %d market IDs)",
+            t["name"], t["url"], t["start"], evt_count,
+        )
 
     if not tournaments:
         logger.warning("No tournaments found on landing page")
 
     logger.info(
-        "Landing page result: %d tournaments, %d marketIds, %d players, px=%s",
-        len(tournaments), len(market_ids), len(player_map), "YES" if px_context else "NO",
+        "Landing page result: %d tournaments, %d total marketIds, %d per-event buckets, px=%s",
+        len(tournaments), len(all_market_ids), len(per_event_data),
+        "YES" if px_context else "NO",
     )
-    return tournaments, market_ids, player_map, market_name_map, px_context
+    return tournaments, per_event_data, all_market_ids, px_context
 
 
 # ---------------------------------------------------------------------------
@@ -301,6 +311,59 @@ def _extract_market_names_from_nav(data: Dict[str, Any]) -> Dict[str, str]:
             if aid and aname:
                 market_names[str(aid)] = aname
     return market_names
+
+
+def _extract_per_event_data(data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """
+    Extract market IDs, player names, and market names grouped by eventId.
+
+    Returns: { eventId: { "market_ids": set, "player_map": dict, "market_name_map": dict } }
+    """
+    per_event: Dict[str, Dict[str, Any]] = {}
+
+    for market_id, market in data.get("attachments", {}).get("markets", {}).items():
+        if not isinstance(market, dict):
+            continue
+
+        event_id = str(market.get("eventId") or "")
+        if not event_id:
+            continue
+
+        if event_id not in per_event:
+            per_event[event_id] = {
+                "market_ids": set(),
+                "player_map": {},
+                "market_name_map": {},
+            }
+        bucket = per_event[event_id]
+
+        ext_id = str(market.get("externalMarketId") or market_id)
+        if ext_id:
+            bucket["market_ids"].add(ext_id)
+
+        name = market.get("marketName") or market.get("name") or ""
+        if ext_id and name:
+            bucket["market_name_map"][ext_id] = name
+
+        for assoc in market.get("associatedMarkets", []):
+            if not isinstance(assoc, dict):
+                continue
+            aid = str(assoc.get("externalMarketId") or "")
+            if aid:
+                bucket["market_ids"].add(aid)
+                aname = assoc.get("marketName") or assoc.get("name") or name
+                if aname:
+                    bucket["market_name_map"][aid] = aname
+
+        for runner in market.get("runners", []):
+            if not isinstance(runner, dict):
+                continue
+            sel_id = str(runner.get("selectionId", ""))
+            rname = runner.get("runnerName", "")
+            if sel_id and rname:
+                bucket["player_map"][sel_id] = rname
+
+    return per_event
 
 
 def _extract_player_names_from_nav(data: Dict[str, Any]) -> Dict[str, str]:
@@ -449,16 +512,17 @@ def _scrape_tournament_page(
 def _classify_market(runners: List[Dict], turn_in_play: bool, market_name: str = "") -> str:
     n = len(runners)
     sel_ids = {str(r.get("selectionId", "")) for r in runners}
-    name_lower = (market_name or "").lower()
+    name_lower = (market_name or "").lower().strip()
 
     # Use market name for richer classification when available
     if name_lower:
-        if "outright" in name_lower or "to win" == name_lower.strip():
-            return "outright_winner"
+        # Top finish MUST be checked BEFORE outright — "Top 5" contains "to win" in some variants
         if "top " in name_lower and ("nationality" in name_lower or "region" in name_lower or "country" in name_lower):
             return "top_nationality"
         if "top " in name_lower and any(x in name_lower for x in ("finish", "5", "10", "20", "40")):
             return "top_finish"
+        if "outright" in name_lower or "to win" in name_lower or "winner" in name_lower:
+            return "outright_winner"
         if "matchup" in name_lower or "match bet" in name_lower or "head to head" in name_lower or "h2h" in name_lower:
             return "matchup"
         if "3 ball" in name_lower or "3-ball" in name_lower or "three ball" in name_lower:
@@ -478,6 +542,10 @@ def _classify_market(runners: List[Dict], turn_in_play: bool, market_name: str =
     if n == 3:
         return "hole_score" if sel_ids & HOLE_SCORE_SELECTION_IDS else "three_ball"
     if n >= 4:
+        # Without a market name, we can't distinguish outright from top-finish.
+        # Use "unknown_large" so it doesn't silently merge with real outright data.
+        if not name_lower:
+            return "unknown_large"
         return "finishing_position" if not turn_in_play else "outright_winner"
     return "other"
 
@@ -723,9 +791,8 @@ def discover() -> None:
 def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
     scraped_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    # Step 1: Load golf landing page — discovers tournaments + gets market IDs
-    #         for the default tournament + px_context for API calls
-    tournaments, landing_market_ids, landing_players, landing_names, px_context = (
+    # Step 1: Load golf landing page — discovers tournaments + per-event market data
+    tournaments, per_event_data, all_landing_ids, px_context = (
         _scrape_golf_landing()
     )
 
@@ -741,19 +808,25 @@ def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
         tourn_name = tourn["name"]
         tourn_slug = tourn["slug"]
         tourn_url = tourn["url"]
+        tourn_id = tourn["id"]
         logger.info(
             "=== Tournament %d/%d: %s ===", ti + 1, len(tournaments), tourn_name,
         )
 
-        if ti == 0 and landing_market_ids:
-            # First tournament: use market IDs from the landing page (already loaded)
-            market_ids = landing_market_ids
-            player_map = landing_players
-            market_name_map = landing_names
+        # Check if the landing page has per-event data for this tournament
+        evt_data = per_event_data.get(tourn_id)
+        if evt_data and evt_data.get("market_ids"):
+            # Use per-event market IDs from the landing page (properly scoped)
+            market_ids = evt_data["market_ids"]
+            player_map = evt_data["player_map"]
+            market_name_map = evt_data["market_name_map"]
             event_name = tourn_name
-            logger.info("Using %d marketIds from landing page capture", len(market_ids))
+            logger.info(
+                "Using %d marketIds from landing page for event %s (id=%s)",
+                len(market_ids), tourn_name, tourn_id,
+            )
         else:
-            # Additional tournaments: load their specific page
+            # No per-event data from landing page — load the specific tournament page
             for attempt in range(1, 3):
                 market_ids, player_map, market_name_map, event_name, new_px = (
                     _scrape_tournament_page(tournament_url=tourn_url)

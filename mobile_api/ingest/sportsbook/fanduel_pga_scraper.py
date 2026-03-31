@@ -813,10 +813,15 @@ def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
             "=== Tournament %d/%d: %s ===", ti + 1, len(tournaments), tourn_name,
         )
 
-        # Check if the landing page has per-event data for this tournament
+        # Check if the landing page has sufficient per-event data for this tournament.
+        # The landing page only shows a preview — the featured tournament gets many
+        # markets but others may only get 1-2.  Use a minimum threshold.
+        MIN_LANDING_MARKETS = 10
         evt_data = per_event_data.get(tourn_id)
-        if evt_data and evt_data.get("market_ids"):
-            # Use per-event market IDs from the landing page (properly scoped)
+        landing_count = len(evt_data["market_ids"]) if evt_data else 0
+
+        if evt_data and landing_count >= MIN_LANDING_MARKETS:
+            # Landing page has enough markets — use per-event data (no extra page load)
             market_ids = evt_data["market_ids"]
             player_map = evt_data["player_map"]
             market_name_map = evt_data["market_name_map"]
@@ -826,13 +831,26 @@ def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
                 len(market_ids), tourn_name, tourn_id,
             )
         else:
-            # No per-event data from landing page — load the specific tournament page
+            # Not enough data from landing page — load the specific tournament page
+            if landing_count:
+                logger.info(
+                    "Landing page only has %d marketIds for %s (need >=%d), loading tournament page...",
+                    landing_count, tourn_name, MIN_LANDING_MARKETS,
+                )
             for attempt in range(1, 3):
-                market_ids, player_map, market_name_map, event_name, new_px = (
+                market_ids_raw, player_map, market_name_map, event_name, new_px = (
                     _scrape_tournament_page(tournament_url=tourn_url)
                 )
                 if new_px and not px_context:
                     px_context = new_px
+                # Merge landing page per-event data with tournament page data
+                # (landing page names/players can supplement the tournament page)
+                if evt_data:
+                    for k, v in evt_data["player_map"].items():
+                        player_map.setdefault(k, v)
+                    for k, v in evt_data["market_name_map"].items():
+                        market_name_map.setdefault(k, v)
+                market_ids = market_ids_raw
                 if market_ids:
                     break
                 logger.warning(

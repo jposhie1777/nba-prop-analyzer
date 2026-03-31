@@ -132,51 +132,35 @@ def _call_proxy(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 def _discover_all_tournaments() -> List[Dict[str, str]]:
     """
-    Discover ALL available golf tournaments from FanDuel.
-
-    Strategy:
-      1. Load the /golf landing page via Camoufox — captures the
-         content-managed-page navigation response which lists ALL
-         tournament tabs/events as attachments.
-      2. Fall back to the application-context API if Camoufox fails.
+    Discover ALL available golf tournaments from FanDuel's application-context
+    API (no browser needed — lightweight JSON call).
 
     Returns a list of dicts sorted by start date (nearest first).
     """
     tournaments: List[Dict[str, str]] = []
 
-    # --- Strategy 1: Load golf landing page and extract events from nav ---
     try:
-        logger.info("Discovering tournaments via golf landing page...")
-        result = _call_proxy({
-            "url": FD_GOLF_URL,
-            "prime_url": FD_PRIME_URL,
-            "capture_patterns": ["content-managed-page"],
-            "wait_ms": 15000,
-            "timeout_ms": 60000,
-        })
-        captured = result.get("captured_requests", [])
-        for cap in captured:
-            cap_url = cap.get("url", "")
-            if "content-managed-page" not in cap_url:
+        logger.info("Discovering tournaments via application-context API...")
+        resp = requests.get(
+            FD_APP_CONTEXT_URL,
+            headers={**FD_API_HEADERS, "Accept": "application/json"},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        # Extract golf events from the events map
+        events = data.get("events") or {}
+        for ev_id, ev in events.items():
+            if not isinstance(ev, dict):
                 continue
-            nav_data = _try_parse_json(cap.get("body"))
-            if not nav_data:
+            if str(ev.get("eventTypeId", "")) != FD_GOLF_EVENT_TYPE_ID:
                 continue
-            # Extract events from attachments — each tournament is an event
-            events = nav_data.get("attachments", {}).get("events", {})
-            for ev_id, ev in events.items():
-                if not isinstance(ev, dict):
-                    continue
-                name = ev.get("name") or ev.get("eventName") or ""
-                seo = ev.get("seoIdentifier") or ev.get("slug") or ""
-                start = ev.get("openDate") or ev.get("startTime") or ""
-                if not name:
-                    continue
-                # Build the URL — FanDuel pattern is /golf/{seo-slug}-{eventId}
-                if seo:
-                    url = f"{FD_BASE_URL}/golf/{seo}-{ev_id}"
-                else:
-                    url = f"{FD_BASE_URL}/golf"
+            seo = ev.get("seoIdentifier") or ev.get("slug") or ""
+            start = ev.get("openDate") or ev.get("startTime") or ""
+            name = ev.get("eventName") or ev.get("name") or ""
+            if seo and ev_id:
+                url = f"{FD_BASE_URL}/golf/{seo}-{ev_id}"
                 tournaments.append({
                     "id": str(ev_id),
                     "slug": seo,
@@ -184,60 +168,30 @@ def _discover_all_tournaments() -> List[Dict[str, str]]:
                     "url": url,
                     "start": start,
                 })
-            # Also check for tab-style navigation in layout
-            tabs = nav_data.get("layout", {}).get("tabs", [])
-            if isinstance(tabs, list):
-                for tab in tabs:
-                    if not isinstance(tab, dict):
-                        continue
-                    tab_url = tab.get("url") or tab.get("path") or ""
-                    tab_name = tab.get("name") or tab.get("title") or ""
-                    if tab_url and tab_name and "/golf/" in str(tab_url):
-                        full_url = tab_url if tab_url.startswith("http") else f"{FD_BASE_URL}{tab_url}"
-                        # Avoid duplicates
-                        if not any(t["url"] == full_url for t in tournaments):
-                            tournaments.append({
-                                "id": "",
-                                "slug": tab_name.lower().replace(" ", "-"),
-                                "name": tab_name,
-                                "url": full_url,
-                                "start": "",
-                            })
-        if tournaments:
-            logger.info("Landing page discovery found %d tournament(s)", len(tournaments))
-    except Exception as exc:
-        logger.warning("Landing page discovery failed: %s", exc)
 
-    # --- Strategy 2: Fall back to application-context API ---
-    if not tournaments:
-        logger.info("Falling back to application-context API...")
-        try:
-            resp = requests.get(
-                FD_APP_CONTEXT_URL,
-                headers={**FD_API_HEADERS, "Accept": "application/json"},
-                timeout=15,
-            )
-            resp.raise_for_status()
-            events = resp.json().get("events") or {}
-            for ev_id, ev in events.items():
-                if not isinstance(ev, dict):
+        # Also check navigation / quickLinks for additional tournament URLs
+        for section_key in ("QUICK_LINKS", "AZ_BETTING"):
+            section = data.get(section_key)
+            if not isinstance(section, (list, dict)):
+                continue
+            items = section if isinstance(section, list) else section.get("items", [])
+            for item in (items if isinstance(items, list) else []):
+                if not isinstance(item, dict):
                     continue
-                if str(ev.get("eventTypeId", "")) != FD_GOLF_EVENT_TYPE_ID:
-                    continue
-                seo = ev.get("seoIdentifier") or ev.get("slug") or ""
-                start = ev.get("openDate") or ev.get("startTime") or ""
-                name = ev.get("eventName") or ev.get("name") or ""
-                if seo and ev_id:
-                    url = f"{FD_BASE_URL}/golf/{seo}-{ev_id}"
-                    tournaments.append({
-                        "id": str(ev_id),
-                        "slug": seo,
-                        "name": name,
-                        "url": url,
-                        "start": start,
-                    })
-        except Exception as exc:
-            logger.warning("Application-context API failed: %s", exc)
+                link = item.get("url") or item.get("path") or ""
+                label = item.get("name") or item.get("label") or ""
+                if "/golf/" in str(link) and label:
+                    full_url = link if link.startswith("http") else f"{FD_BASE_URL}{link}"
+                    if not any(t["url"] == full_url for t in tournaments):
+                        tournaments.append({
+                            "id": "",
+                            "slug": label.lower().replace(" ", "-"),
+                            "name": label,
+                            "url": full_url,
+                            "start": "",
+                        })
+    except Exception as exc:
+        logger.warning("Tournament discovery failed: %s", exc)
 
     # Deduplicate by name
     seen_names: Set[str] = set()
@@ -383,7 +337,7 @@ def _scrape_tournament_page(
 
     result = _call_proxy({
         "url": tournament_url,
-        "prime_url": FD_PRIME_URL,
+        "prime_url": tournament_url,
         "capture_patterns": CAPTURE_PATTERNS,
         "wait_ms": 30000,
         "timeout_ms": 120000,
@@ -703,7 +657,7 @@ def discover() -> None:
 
     result = _call_proxy({
         "url": tournament_url,
-        "prime_url": FD_PRIME_URL,
+        "prime_url": tournament_url,
         "capture_patterns": ["fanduel.com"],
         "wait_ms": 30000,
         "timeout_ms": 120000,
@@ -745,12 +699,22 @@ def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
             "=== Tournament %d/%d: %s ===", ti + 1, len(tournaments), tourn_name,
         )
 
-        market_ids, player_map, market_name_map, event_name, px_context = (
-            _scrape_tournament_page(tournament_url=tourn_url)
-        )
+        # Retry once on failure (403 / empty capture)
+        for attempt in range(1, 3):
+            market_ids, player_map, market_name_map, event_name, px_context = (
+                _scrape_tournament_page(tournament_url=tourn_url)
+            )
+            if market_ids:
+                break
+            logger.warning(
+                "Attempt %d: No marketIds for %s. %s",
+                attempt, tourn_name,
+                "Retrying in 15s..." if attempt < 2 else "Skipping.",
+            )
+            if attempt < 2:
+                time.sleep(15)
 
         if not market_ids:
-            logger.warning("No marketIds for %s. Skipping.", tourn_name)
             continue
 
         # Prefer event_name from FanDuel page; fall back to app-context name
@@ -789,9 +753,10 @@ def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
 
         all_rows.extend(rows)
 
-        # Brief pause between tournaments to avoid rate limits
+        # Longer pause between tournaments — PX needs time to cool down
         if ti < len(tournaments) - 1:
-            time.sleep(2)
+            logger.info("Waiting 10s before next tournament...")
+            time.sleep(10)
 
     logger.info(
         "FanDuel PGA TOTAL: %d rows across %d tournament(s)", len(all_rows), len(tournaments),

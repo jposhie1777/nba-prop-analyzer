@@ -18,4 +18,3 @@ export const useTheme = create<ThemeState>((set) => ({
       colors: themes[theme],
     }),
 }));
-iclai

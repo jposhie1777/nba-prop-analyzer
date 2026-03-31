@@ -87,26 +87,24 @@ LEAGUE_CONFIG: Dict[str, Dict[str, Any]] = {
     "EPL": {
         "url": "https://sportsbook.fanduel.com/soccer/premier-league",
         "prime_url": "https://sportsbook.fanduel.com",
-        # Tightened: only capture from known FanDuel API domains.
-        # "sportsbook.fanduel.com/api" removed — not a real endpoint pattern,
-        # FD uses sbapi.fanduel.com and sportsbook-nash.fanduel.com for XHRs.
         "capture_patterns": [
-            "sbapi.fanduel.com",
+            "content-managed-page",   # sport-agnostic nav endpoint (same as PGA)
+            "getMarketPrices",        # market odds endpoint
+            "sbapi.fanduel.com",      # keep as fallback
             "sportsbook-nash.fanduel.com",
-            "api.fanduel.com",
         ],
-        # Increased from 8000 → 15000: FD lazy-loads events after initial render
-        "wait_ms": 15000,
+        "wait_ms": 20000,  # bump slightly — soccer lazy-loads later than golf
     },
     "MLS": {
         "url": "https://sportsbook.fanduel.com/soccer/mls",
         "prime_url": "https://sportsbook.fanduel.com",
         "capture_patterns": [
+            "content-managed-page",
+            "getMarketPrices",
             "sbapi.fanduel.com",
             "sportsbook-nash.fanduel.com",
-            "api.fanduel.com",
         ],
-        "wait_ms": 15000,
+        "wait_ms": 20000,
     },
 }
 
@@ -429,24 +427,13 @@ def scrape(league: str, dry_run: bool = False) -> List[Dict[str, Any]]:
     scraped_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     rows = _parse_fanduel_response(captured, league=league, scraped_at=scraped_at)
 
-    # Fallback: if browser capture yielded no market rows, try the direct API
     if not rows:
-        logger.info(
-            "FanDuel %s: 0 market rows from browser capture — trying direct API fallback",
+        logger.warning(
+            "FanDuel %s: 0 market rows parsed. Possible causes: "
+            "international break / no fixtures, or capture patterns need updating. "
+            "Direct API fallback removed — SSL context unsafe after Camoufox call.",
             league,
         )
-        body = _fetch_direct(league)
-        if body and _is_fanduel_odds_response(body):
-            rows = _parse_fanduel_body(body, league=league, scraped_at=scraped_at)
-            logger.info(
-                "FanDuel %s: direct API fallback returned %d rows", league, len(rows)
-            )
-        else:
-            logger.warning(
-                "FanDuel %s: direct API fallback also returned nothing "
-                "(likely no fixtures scheduled today)",
-                league,
-            )
 
     logger.info("Parsed %d rows for FanDuel %s", len(rows), league)
 
@@ -462,7 +449,6 @@ def scrape(league: str, dry_run: bool = False) -> List[Dict[str, Any]]:
             fh.write(json.dumps(row, default=str) + "\n")
     logger.info("Wrote %d rows to %s", len(rows), artifact)
     return rows
-
 
 # ---------------------------------------------------------------------------
 # Load phase

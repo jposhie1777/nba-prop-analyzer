@@ -14,10 +14,12 @@ export function AutoSortableTable<T>({
   data,
   columns,
   defaultSort,
+  onRowPress,
 }: {
   data: T[];
   columns: ColumnConfig[];
   defaultSort: keyof T;
+  onRowPress?: (row: T) => void;
 }) {
   const { colors } = useTheme();
 
@@ -44,10 +46,9 @@ export function AutoSortableTable<T>({
       ====================================================== */}
       <ScrollView
         horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ minWidth: "100%" }}
+        showsHorizontalScrollIndicator={true}
       >
-        <View>
+        <View style={{ minWidth: "100%" }}>
           {/* ======================================================
               HEADER
           ====================================================== */}
@@ -68,7 +69,10 @@ export function AutoSortableTable<T>({
                 <Pressable
                   key={col.key}
                   onPress={() => toggleSort(col.key as keyof T)}
-                  style={{ width: col.width }}
+                  style={{
+                    minWidth: col.width,
+                    paddingRight: 12,
+                  }}
                 >
                   <Text
                     style={{
@@ -78,7 +82,6 @@ export function AutoSortableTable<T>({
                         ? colors.accent.primary
                         : colors.text.secondary,
                     }}
-                    numberOfLines={1}
                   >
                     {col.label}
                     {isActive
@@ -102,8 +105,7 @@ export function AutoSortableTable<T>({
             contentContainerStyle={{ paddingBottom: 12 }}
             renderItem={({ item, index }) => {
               const isEven = index % 2 === 0;
-
-              return (
+              const row = (
                 <View
                   style={{
                     flexDirection: "row",
@@ -126,11 +128,11 @@ export function AutoSortableTable<T>({
                       <Text
                         key={col.key}
                         style={{
-                          width: col.width,
+                          minWidth: col.width,
+                          paddingRight: 12,
                           fontSize: 12,
                           color: colors.text.primary,
                         }}
-                        numberOfLines={1}
                       >
                         {value ?? "—"}
                       </Text>
@@ -138,6 +140,15 @@ export function AutoSortableTable<T>({
                   })}
                 </View>
               );
+
+              if (onRowPress) {
+                return (
+                  <Pressable onPress={() => onRowPress(item)}>
+                    {row}
+                  </Pressable>
+                );
+              }
+              return row;
             }}
           />
         </View>

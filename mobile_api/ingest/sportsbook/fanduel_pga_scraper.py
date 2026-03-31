@@ -100,31 +100,10 @@ HOLE_SCORE_SELECTION_IDS = {
 # Camoufox proxy helpers
 # ---------------------------------------------------------------------------
 
-def _get_camoufox_url() -> str:
-    url = os.environ.get("CAMOUFOX_SERVICE_URL", "").rstrip("/")
-    if not url:
-        raise RuntimeError("CAMOUFOX_SERVICE_URL env var is not set")
-    return url
-
-
-def _get_camoufox_token() -> str:
-    return os.environ.get("CAMOUFOX_TOKEN", "")
-
-
-def _call_proxy(payload: Dict[str, Any]) -> Dict[str, Any]:
-    service_url = _get_camoufox_url()
-    token = _get_camoufox_token()
-    headers = {"Content-Type": "application/json"}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    resp = requests.post(
-        f"{service_url}/fetch",
-        json=payload,
-        headers=headers,
-        timeout=150,
-    )
-    resp.raise_for_status()
-    return resp.json()
+from mobile_api.ingest.sportsbook.camoufox_client import (
+    call_proxy as _call_proxy,
+    get_camoufox_url as _get_camoufox_url,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -791,7 +770,7 @@ def discover() -> None:
 def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
     scraped_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    # Step 1: Load golf landing page — discovers tournaments + per-event market data
+    # Step 1: Load golf landing page — discovers tournaments + per-event preview data
     tournaments, per_event_data, all_landing_ids, px_context = (
         _scrape_golf_landing()
     )
@@ -813,53 +792,19 @@ def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
             "=== Tournament %d/%d: %s ===", ti + 1, len(tournaments), tourn_name,
         )
 
-        # Check if the landing page has sufficient per-event data for this tournament.
-        # The landing page only shows a preview — the featured tournament gets many
-        # markets but others may only get 1-2.  Use a minimum threshold.
-        MIN_LANDING_MARKETS = 10
+        # Use per-event data (landing page preview + full page data if loaded)
         evt_data = per_event_data.get(tourn_id)
         landing_count = len(evt_data["market_ids"]) if evt_data else 0
 
-        if evt_data and landing_count >= MIN_LANDING_MARKETS:
-            # Landing page has enough markets — use per-event data (no extra page load)
+        if evt_data and landing_count > 0:
             market_ids = evt_data["market_ids"]
             player_map = evt_data["player_map"]
             market_name_map = evt_data["market_name_map"]
             event_name = tourn_name
             logger.info(
-                "Using %d marketIds from landing page for event %s (id=%s)",
+                "Using %d marketIds for event %s (id=%s)",
                 len(market_ids), tourn_name, tourn_id,
             )
-        else:
-            # Not enough data from landing page — load the specific tournament page
-            if landing_count:
-                logger.info(
-                    "Landing page only has %d marketIds for %s (need >=%d), loading tournament page...",
-                    landing_count, tourn_name, MIN_LANDING_MARKETS,
-                )
-            for attempt in range(1, 3):
-                market_ids_raw, player_map, market_name_map, event_name, new_px = (
-                    _scrape_tournament_page(tournament_url=tourn_url)
-                )
-                if new_px and not px_context:
-                    px_context = new_px
-                # Merge landing page per-event data with tournament page data
-                # (landing page names/players can supplement the tournament page)
-                if evt_data:
-                    for k, v in evt_data["player_map"].items():
-                        player_map.setdefault(k, v)
-                    for k, v in evt_data["market_name_map"].items():
-                        market_name_map.setdefault(k, v)
-                market_ids = market_ids_raw
-                if market_ids:
-                    break
-                logger.warning(
-                    "Attempt %d: No marketIds for %s. %s",
-                    attempt, tourn_name,
-                    "Retrying in 15s..." if attempt < 2 else "Skipping.",
-                )
-                if attempt < 2:
-                    time.sleep(15)
 
         if not market_ids:
             logger.warning("No marketIds for %s — skipping.", tourn_name)

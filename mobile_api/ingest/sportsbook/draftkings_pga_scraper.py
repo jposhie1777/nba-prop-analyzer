@@ -104,31 +104,10 @@ DISCOVER_PATTERNS = [
 # Proxy helpers
 # ---------------------------------------------------------------------------
 
-def _get_camoufox_url() -> str:
-    url = os.environ.get("CAMOUFOX_SERVICE_URL", "").rstrip("/")
-    if not url:
-        raise RuntimeError("CAMOUFOX_SERVICE_URL env var is not set")
-    return url
-
-
-def _get_camoufox_token() -> str:
-    return os.environ.get("CAMOUFOX_TOKEN", "")
-
-
-def _call_proxy(payload: Dict[str, Any]) -> Dict[str, Any]:
-    service_url = _get_camoufox_url()
-    token = _get_camoufox_token()
-    headers = {"Content-Type": "application/json"}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    resp = requests.post(
-        f"{service_url}/fetch",
-        json=payload,
-        headers=headers,
-        timeout=120,
-    )
-    resp.raise_for_status()
-    return resp.json()
+from mobile_api.ingest.sportsbook.camoufox_client import (
+    call_proxy as _call_proxy,
+    get_camoufox_url as _get_camoufox_url,
+)
 
 
 _REQ_HEADERS = {

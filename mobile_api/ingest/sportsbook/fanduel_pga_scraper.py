@@ -514,6 +514,8 @@ def _classify_market(runners: List[Dict], turn_in_play: bool, market_name: str =
             return "make_cut"
         if "first round leader" in name_lower:
             return "first_round_leader"
+        if re.match(r"^group\s+[a-z0-9]", name_lower) or "golf specials" in name_lower:
+            return "finishing_position"
 
     # Fallback to runner-count heuristic
     if n == 2:

@@ -47,6 +47,7 @@ ARTIFACT_PATH = "/tmp/fanduel_pga_rows.ndjson"
 
 FD_BASE_URL = "https://sportsbook.fanduel.com"
 FD_GOLF_URL = f"{FD_BASE_URL}/golf"
+FD_PRIME_URL = FD_BASE_URL  # homepage warms up PerimeterX cookies
 
 FD_APP_CONTEXT_URL = (
     "https://api.sportsbook.fanduel.com/sbapi/application-context"
@@ -148,7 +149,7 @@ def _discover_all_tournaments() -> List[Dict[str, str]]:
         logger.info("Discovering tournaments via golf landing page...")
         result = _call_proxy({
             "url": FD_GOLF_URL,
-            "prime_url": FD_GOLF_URL,
+            "prime_url": FD_PRIME_URL,
             "capture_patterns": ["content-managed-page"],
             "wait_ms": 15000,
             "timeout_ms": 60000,
@@ -382,7 +383,7 @@ def _scrape_tournament_page(
 
     result = _call_proxy({
         "url": tournament_url,
-        "prime_url": tournament_url,
+        "prime_url": FD_PRIME_URL,
         "capture_patterns": CAPTURE_PATTERNS,
         "wait_ms": 30000,
         "timeout_ms": 120000,
@@ -702,7 +703,7 @@ def discover() -> None:
 
     result = _call_proxy({
         "url": tournament_url,
-        "prime_url": tournament_url,
+        "prime_url": FD_PRIME_URL,
         "capture_patterns": ["fanduel.com"],
         "wait_ms": 30000,
         "timeout_ms": 120000,

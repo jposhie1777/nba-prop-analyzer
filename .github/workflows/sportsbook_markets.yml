@@ -5,6 +5,7 @@ name: Sportsbook Markets (FanDuel)
 #
 # Sports covered:
 #   - PGA Tour  → sportsbook.raw_fanduel_pga_markets
+#   - ATP       → sportsbook.raw_fanduel_atp_markets
 #   - EPL       → oddspedia.raw_fanduel_soccer_markets
 #   - MLS       → oddspedia.raw_fanduel_soccer_markets
 #
@@ -17,13 +18,14 @@ on:
   workflow_dispatch:
     inputs:
       sport:
-        description: "Sport to scrape (PGA, EPL, MLS, or ALL)"
+        description: "Sport to scrape (PGA, ATP, EPL, MLS, or ALL)"
         required: false
         default: "ALL"
         type: choice
         options:
           - ALL
           - PGA
+          - ATP
           - EPL
           - MLS
       dry_run:
@@ -63,6 +65,11 @@ jobs:
             scraper_module: mobile_api.ingest.sportsbook.fanduel_pga_scraper
             artifact_name: fanduel-pga
             artifact_path: /tmp/fanduel_pga_rows.ndjson
+
+          - sport: ATP
+            scraper_module: mobile_api.ingest.sportsbook.fanduel_atp_scraper
+            artifact_name: fanduel-atp
+            artifact_path: /tmp/fanduel_atp_rows.ndjson
 
           - sport: EPL
             scraper_module: mobile_api.ingest.sportsbook.fanduel_soccer_scraper
@@ -122,15 +129,16 @@ jobs:
           CAMOUFOX_TOKEN: ${{ steps.auth.outputs.id_token }}
         run: |
           # Build args
+          # PGA and ATP do not take a --league flag
           if [ "${{ inputs.discover }}" = "true" ]; then
             ARGS="--discover"
-          elif [ "${{ matrix.sport }}" = "PGA" ]; then
+          elif [ "${{ matrix.sport }}" = "PGA" ] || [ "${{ matrix.sport }}" = "ATP" ]; then
             ARGS="--scrape-only"
           else
             ARGS="--scrape-only --league ${{ matrix.sport }}"
           fi
           if [ "${{ inputs.dry_run }}" = "true" ] && [ "${{ inputs.discover }}" != "true" ]; then
-            if [ "${{ matrix.sport }}" = "PGA" ]; then
+            if [ "${{ matrix.sport }}" = "PGA" ] || [ "${{ matrix.sport }}" = "ATP" ]; then
               ARGS="--dry-run"
             else
               ARGS="--dry-run --league ${{ matrix.sport }}"
@@ -183,6 +191,11 @@ jobs:
             scraper_module: mobile_api.ingest.sportsbook.fanduel_pga_scraper
             artifact_name: fanduel-pga
             artifact_path: /tmp/fanduel_pga_rows.ndjson
+
+          - sport: ATP
+            scraper_module: mobile_api.ingest.sportsbook.fanduel_atp_scraper
+            artifact_name: fanduel-atp
+            artifact_path: /tmp/fanduel_atp_rows.ndjson
 
           - sport: EPL
             scraper_module: mobile_api.ingest.sportsbook.fanduel_soccer_scraper
@@ -254,7 +267,8 @@ jobs:
       - name: Load FanDuel ${{ matrix.sport }} → BigQuery
         if: steps.filter.outputs.skip != 'true' && steps.artifact_check.outputs.has_rows == 'true'
         run: |
-          if [ "${{ matrix.sport }}" = "PGA" ]; then
+          # PGA and ATP do not take a --league flag
+          if [ "${{ matrix.sport }}" = "PGA" ] || [ "${{ matrix.sport }}" = "ATP" ]; then
             python -m ${{ matrix.scraper_module }} --load-only
           else
             python -m ${{ matrix.scraper_module }} --load-only --league ${{ matrix.sport }}

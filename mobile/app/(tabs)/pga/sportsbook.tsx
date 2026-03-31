@@ -343,6 +343,7 @@ export default function PgaSportsbook() {
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.tabBar}
+        style={{ flexGrow: 0 }}
       >
         {marketTypeTabs.map((mt) => {
           const active = mt === effectiveTab;

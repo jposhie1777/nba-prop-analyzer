@@ -64,17 +64,17 @@ MARKET_PRICES_BATCH_SIZE = 50
 
 CAPTURE_PATTERNS = ["content-managed-page", "getMarketPrices"]
 
-LEAGUE_CONFIG: Dict[str, Dict[str, Any]] = {
-    "EPL": {
-        "url": "https://sportsbook.fanduel.com/soccer/premier-league",
-        "prime_url": "https://sportsbook.fanduel.com",
-        "wait_ms": 40000,
-    },
-    "MLS": {
-        "url": "https://sportsbook.fanduel.com/soccer/mls",
-        "prime_url": "https://sportsbook.fanduel.com",
-        "wait_ms": 40000,
-    },
+# Load the sport-level /soccer page (uses content-managed-page + getMarketPrices).
+# League-specific URLs (/soccer/mls, /soccer/premier-league) use a different
+# facet/search API that returns empty data — so we load /soccer and filter by
+# competition name from event metadata.
+FD_SOCCER_URL = "https://sportsbook.fanduel.com/soccer"
+
+# FanDuel competition IDs for filtering events by league.
+# Found via discovery: attachments.competitions in content-managed-page response.
+LEAGUE_COMPETITION_IDS: Dict[str, Set[str]] = {
+    "EPL": {"10932509"},       # English Premier League
+    "MLS": {"141"},            # US MLS
 }
 
 # ---------------------------------------------------------------------------
@@ -431,31 +431,36 @@ def _fetch_market_prices(
 # ---------------------------------------------------------------------------
 
 def scrape(league: str, dry_run: bool = False) -> List[Dict[str, Any]]:
-    cfg = LEAGUE_CONFIG.get(league.upper())
-    if not cfg:
-        raise ValueError(f"Unknown league '{league}'. Choose from: {list(LEAGUE_CONFIG)}")
+    league = league.upper()
+    comp_ids = LEAGUE_COMPETITION_IDS.get(league)
+    if comp_ids is None:
+        raise ValueError(f"Unknown league '{league}'. Choose from: {list(LEAGUE_COMPETITION_IDS)}")
 
     scraped_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    # Phase 1: Load league page via Camoufox, capture nav + market prices
-    logger.info("Loading FanDuel %s via Camoufox: %s", league, cfg["url"])
+    # Phase 1: Load /soccer sport page via Camoufox.
+    # League-specific URLs use facet/search which returns empty data.
+    # The sport page uses content-managed-page with ALL soccer events.
+    logger.info("Loading FanDuel Soccer via Camoufox: %s", FD_SOCCER_URL)
     result = _call_proxy({
-        "url": cfg["url"],
-        "prime_url": cfg["prime_url"],
+        "url": FD_SOCCER_URL,
+        "prime_url": "https://sportsbook.fanduel.com",
         "capture_patterns": CAPTURE_PATTERNS,
-        "wait_ms": cfg["wait_ms"],
+        "wait_ms": 40000,
         "timeout_ms": 120000,
     })
 
     page_status = result.get("status", 0)
     captured = result.get("captured_requests", [])
-    logger.info("FanDuel %s: page_status=%s, captured=%d requests", league, page_status, len(captured))
+    logger.info("FanDuel Soccer: page_status=%s, captured=%d requests", page_status, len(captured))
 
-    market_ids: Set[str] = set()
+    all_market_ids: Set[str] = set()
     market_name_map: Dict[str, str] = {}
     market_event_map: Dict[str, str] = {}
-    event_map: Dict[str, Dict[str, Any]] = {}
+    all_event_map: Dict[str, Dict[str, Any]] = {}
     runner_name_map: Dict[str, str] = {}
+    # Track competitionId per event for filtering
+    event_competition: Dict[str, str] = {}
 
     for i, cap in enumerate(captured):
         cap_url = cap.get("url", "")
@@ -483,11 +488,16 @@ def scrape(league: str, dry_run: bool = False) -> List[Dict[str, Any]]:
             nav_events = _extract_events(nav_data)
             nav_runners = _extract_runner_names_from_nav(nav_data)
 
-            market_ids.update(nav_ids)
+            all_market_ids.update(nav_ids)
             market_name_map.update(nav_names)
             market_event_map.update(nav_mkt_events)
-            event_map.update(nav_events)
+            all_event_map.update(nav_events)
             runner_name_map.update(nav_runners)
+
+            # Extract competitionId per event for league filtering
+            for ev_id, ev in nav_data.get("attachments", {}).get("events", {}).items():
+                if isinstance(ev, dict) and ev.get("competitionId"):
+                    event_competition[str(ev_id)] = str(ev["competitionId"])
 
             logger.info(
                 "  → content-managed-page: %d marketIds, %d events, %d market names, %d runners",
@@ -498,31 +508,44 @@ def scrape(league: str, dry_run: bool = False) -> List[Dict[str, Any]]:
         if "getMarketPrices" in cap_url:
             if isinstance(cap_body, list):
                 ids = [str(m["marketId"]) for m in cap_body if isinstance(m, dict) and m.get("marketId")]
-                market_ids.update(ids)
+                all_market_ids.update(ids)
                 logger.info("  → getMarketPrices response: %d marketIds", len(ids))
             else:
                 body_data = _try_parse_json(cap_body)
                 if isinstance(body_data, dict) and "marketIds" in body_data:
                     ids = [str(m) for m in body_data["marketIds"] if m]
-                    market_ids.update(ids)
+                    all_market_ids.update(ids)
                     logger.info("  → getMarketPrices POST body: %d marketIds", len(ids))
 
+    # Filter to events belonging to the target league
+    league_event_ids = {
+        eid for eid, cid in event_competition.items() if cid in comp_ids
+    }
+    # Filter market IDs to only those linked to league events
+    league_market_ids = {
+        mid for mid, eid in market_event_map.items() if eid in league_event_ids
+    }
+    # Also keep markets from getMarketPrices captures that we can't filter
+    # (they'll be filtered out in post-processing if no event match)
+    event_map = {eid: all_event_map[eid] for eid in league_event_ids if eid in all_event_map}
+
     logger.info(
-        "FanDuel %s: %d marketIds, %d events, %d market names",
-        league, len(market_ids), len(event_map), len(market_name_map),
+        "FanDuel %s: %d/%d events match competition filter, %d/%d marketIds, %d market names",
+        league, len(league_event_ids), len(all_event_map),
+        len(league_market_ids), len(all_market_ids), len(market_name_map),
     )
 
-    if not market_ids:
+    if not league_market_ids:
         logger.warning(
-            "FanDuel %s: 0 marketIds captured. Possible causes: "
-            "international break / no fixtures, PX blocking, or page structure changed.",
-            league,
+            "FanDuel %s: 0 marketIds after competition filter (comp_ids=%s). "
+            "Possible causes: no fixtures, or competition IDs changed.",
+            league, comp_ids,
         )
         return []
 
     # Phase 2: POST to getMarketPrices for full odds
     rows = _fetch_market_prices(
-        sorted(market_ids),
+        sorted(league_market_ids),
         scraped_at=scraped_at,
         league=league,
         event_map=event_map,
@@ -598,6 +621,36 @@ def load(league: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Discover mode
+# ---------------------------------------------------------------------------
+
+def discover(league: str) -> None:
+    """Load the soccer page with broad capture patterns and log all XHRs."""
+    logger.info("DISCOVERY MODE → %s (filtering for %s)", FD_SOCCER_URL, league)
+    result = _call_proxy({
+        "url": FD_SOCCER_URL,
+        "prime_url": "https://sportsbook.fanduel.com",
+        "capture_patterns": ["fanduel.com"],
+        "wait_ms": 40000,
+        "timeout_ms": 120000,
+    })
+
+    captured = result.get("captured_requests", [])
+    logger.info("page_status=%s  total_captured=%d", result.get("status"), len(captured))
+
+    print(f"\n=== DISCOVERED XHRs for {league} ===")
+    for i, cap in enumerate(captured):
+        url = cap.get("url", "<unknown>")
+        body = cap.get("body")
+        body_type = type(body).__name__
+        top_keys = list(body.keys())[:6] if isinstance(body, dict) else "n/a"
+        body_len = len(body) if isinstance(body, (str, list)) else "n/a"
+        print(f"[{i:02d}] {url[:140]}")
+        print(f"      body_type={body_type}  top_keys={top_keys}  len={body_len}")
+    print("=== END ===\n")
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -607,11 +660,14 @@ def main() -> None:
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--scrape-only", action="store_true")
     group.add_argument("--load-only", action="store_true")
+    group.add_argument("--discover", action="store_true")
     parser.add_argument("--dry-run", action="store_true", help="Print rows, skip BQ write")
     args = parser.parse_args()
 
     if args.load_only:
         load(args.league)
+    elif args.discover:
+        discover(args.league)
     else:
         rows = scrape(args.league, dry_run=args.dry_run)
         if not args.scrape_only and not args.dry_run and rows:

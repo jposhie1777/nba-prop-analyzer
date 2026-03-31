@@ -87,23 +87,13 @@ LEAGUE_CONFIG: Dict[str, Dict[str, Any]] = {
     "EPL": {
         "url": "https://sportsbook.fanduel.com/soccer/premier-league",
         "prime_url": "https://sportsbook.fanduel.com",
-        "capture_patterns": [
-            "content-managed-page",   # sport-agnostic nav endpoint (same as PGA)
-            "getMarketPrices",        # market odds endpoint
-            "sbapi.fanduel.com",      # keep as fallback
-            "sportsbook-nash.fanduel.com",
-        ],
-        "wait_ms": 20000,  # bump slightly — soccer lazy-loads later than golf
+        "capture_patterns": ["fanduel.com"],  # TEMPORARY: broad discovery
+        "wait_ms": 20000,
     },
     "MLS": {
         "url": "https://sportsbook.fanduel.com/soccer/mls",
         "prime_url": "https://sportsbook.fanduel.com",
-        "capture_patterns": [
-            "content-managed-page",
-            "getMarketPrices",
-            "sbapi.fanduel.com",
-            "sportsbook-nash.fanduel.com",
-        ],
+        "capture_patterns": ["fanduel.com"],  # TEMPORARY: broad discovery
         "wait_ms": 20000,
     },
 }
@@ -377,6 +367,14 @@ def _parse_fanduel_response(
     """Walk captured XHR responses, skipping non-events payloads."""
     rows: List[Dict[str, Any]] = []
     odds_hits = 0
+
+    # TEMPORARY: log all captured URLs to identify correct patterns
+    for i, cap in enumerate(captured):
+        url = cap.get("url", "")
+        body = cap.get("body")
+        body_type = type(body).__name__
+        top_keys = list(body.keys())[:5] if isinstance(body, dict) else "n/a"
+        logger.info("  [%02d] %s  body=%s  keys=%s", i, url[:120], body_type, top_keys)
 
     for capture in captured:
         body = capture.get("body")

@@ -25,6 +25,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import sys
 import time
 from datetime import datetime, timezone
@@ -130,98 +131,124 @@ def _call_proxy(payload: Dict[str, Any]) -> Dict[str, Any]:
 # Tournament URL discovery
 # ---------------------------------------------------------------------------
 
-def _discover_all_tournaments() -> List[Dict[str, str]]:
-    """
-    Discover ALL available golf tournaments from FanDuel's application-context
-    API (no browser needed — lightweight JSON call).
+def _slug_from_name(name: str) -> str:
+    """Generate a FanDuel-style URL slug from a tournament name."""
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
-    Returns a list of dicts sorted by start date (nearest first).
+
+def _scrape_golf_landing() -> Tuple[
+    List[Dict[str, str]], Set[str], Dict[str, str], Dict[str, str], str
+]:
+    """
+    Load fanduel.com/golf ONCE via Camoufox and extract:
+      - All tournament events (with names, IDs, start dates)
+      - All market IDs visible on the landing page
+      - Player name map, market name map
+      - px_context token for subsequent API calls
+
+    Returns: (tournaments, market_ids, player_map, market_name_map, px_context)
     """
     tournaments: List[Dict[str, str]] = []
+    market_ids: Set[str] = set()
+    player_map: Dict[str, str] = {}
+    market_name_map: Dict[str, str] = {}
+    px_context = ""
 
-    try:
-        logger.info("Discovering tournaments via application-context API...")
-        resp = requests.get(
-            FD_APP_CONTEXT_URL,
-            headers={**FD_API_HEADERS, "Accept": "application/json"},
-            timeout=15,
-        )
-        resp.raise_for_status()
-        data = resp.json()
+    logger.info("Loading golf landing page via Camoufox: %s", FD_GOLF_URL)
+    result = _call_proxy({
+        "url": FD_GOLF_URL,
+        "prime_url": FD_GOLF_URL,
+        "capture_patterns": CAPTURE_PATTERNS,
+        "wait_ms": 30000,
+        "timeout_ms": 120000,
+    })
 
-        # Extract golf events from the events map
-        events = data.get("events") or {}
-        for ev_id, ev in events.items():
-            if not isinstance(ev, dict):
+    page_status = result.get("status", 0)
+    captured = result.get("captured_requests", [])
+    logger.info("Landing page: status=%s, captured=%d requests", page_status, len(captured))
+
+    for cap in captured:
+        cap_url = cap.get("url", "")
+        cap_body = cap.get("body")
+        req_headers = cap.get("request_headers") or cap.get("requestHeaders") or {}
+
+        # Capture px token
+        if not px_context and isinstance(req_headers, dict):
+            for k, v in req_headers.items():
+                if k.lower() == "x-px-context":
+                    px_context = str(v)
+                    logger.info("  → x-px-context captured (%d chars)", len(px_context))
+                    break
+
+        # content-managed-page → navigation JSON with events + markets
+        if "content-managed-page" in cap_url:
+            nav_data = _try_parse_json(cap_body)
+            if not nav_data or ("layout" not in nav_data and "attachments" not in nav_data):
                 continue
-            if str(ev.get("eventTypeId", "")) != FD_GOLF_EVENT_TYPE_ID:
-                continue
-            seo = ev.get("seoIdentifier") or ev.get("slug") or ""
-            start = ev.get("openDate") or ev.get("startTime") or ""
-            name = ev.get("eventName") or ev.get("name") or ""
-            if seo and ev_id:
-                url = f"{FD_BASE_URL}/golf/{seo}-{ev_id}"
+
+            # Extract market IDs + player names (same as tournament page)
+            nav_ids = _extract_market_ids_from_nav(nav_data)
+            nav_players = _extract_player_names_from_nav(nav_data)
+            nav_names = _extract_market_names_from_nav(nav_data)
+            market_ids.update(nav_ids)
+            player_map.update(nav_players)
+            market_name_map.update(nav_names)
+
+            # Extract tournament events
+            events = nav_data.get("attachments", {}).get("events", {})
+            for ev_id, ev in events.items():
+                if not isinstance(ev, dict):
+                    continue
+                name = (ev.get("name") or ev.get("eventName") or "").strip()
+                seo = ev.get("seoIdentifier") or ev.get("slug") or ""
+                start = ev.get("openDate") or ev.get("startTime") or ""
+                if not name:
+                    continue
+                slug = seo or _slug_from_name(name)
+                url = f"{FD_BASE_URL}/golf/{slug}-{ev_id}"
                 tournaments.append({
                     "id": str(ev_id),
-                    "slug": seo,
+                    "slug": slug,
                     "name": name,
                     "url": url,
                     "start": start,
                 })
 
-        # Also check navigation / quickLinks for additional tournament URLs
-        for section_key in ("QUICK_LINKS", "AZ_BETTING"):
-            section = data.get(section_key)
-            if not isinstance(section, (list, dict)):
-                continue
-            items = section if isinstance(section, list) else section.get("items", [])
-            for item in (items if isinstance(items, list) else []):
-                if not isinstance(item, dict):
-                    continue
-                link = item.get("url") or item.get("path") or ""
-                label = item.get("name") or item.get("label") or ""
-                if "/golf/" in str(link) and label:
-                    full_url = link if link.startswith("http") else f"{FD_BASE_URL}{link}"
-                    if not any(t["url"] == full_url for t in tournaments):
-                        tournaments.append({
-                            "id": "",
-                            "slug": label.lower().replace(" ", "-"),
-                            "name": label,
-                            "url": full_url,
-                            "start": "",
-                        })
-    except Exception as exc:
-        logger.warning("Tournament discovery failed: %s", exc)
+            logger.info(
+                "  → nav: %d events, %d marketIds, %d players, %d market names",
+                len(events), len(nav_ids), len(nav_players), len(nav_names),
+            )
 
-    # Deduplicate by name
-    seen_names: Set[str] = set()
+        # getMarketPrices responses — capture additional market IDs
+        if "getMarketPrices" in cap_url:
+            if isinstance(cap_body, list):
+                ids = [str(m["marketId"]) for m in cap_body if isinstance(m, dict) and m.get("marketId")]
+                market_ids.update(ids)
+            else:
+                body_data = _try_parse_json(cap_body)
+                if isinstance(body_data, dict) and "marketIds" in body_data:
+                    ids = [str(m) for m in body_data["marketIds"] if m]
+                    market_ids.update(ids)
+
+    # Deduplicate tournaments by name
+    seen: Set[str] = set()
     unique: List[Dict[str, str]] = []
     for t in tournaments:
-        if t["name"] not in seen_names:
-            seen_names.add(t["name"])
+        if t["name"] not in seen:
+            seen.add(t["name"])
             unique.append(t)
-    tournaments = unique
-
-    tournaments.sort(key=lambda t: t.get("start", ""))
+    tournaments = sorted(unique, key=lambda t: t.get("start", ""))
     for t in tournaments:
         logger.info("Discovered tournament: %s → %s (starts %s)", t["name"], t["url"], t["start"])
 
     if not tournaments:
-        logger.warning("No tournaments found, falling back to generic golf URL")
-        tournaments.append({
-            "id": "",
-            "slug": "",
-            "name": "PGA Tour",
-            "url": FD_GOLF_URL,
-            "start": "",
-        })
-    return tournaments
+        logger.warning("No tournaments found on landing page")
 
-
-def _discover_tournament_url() -> str:
-    """Legacy single-tournament helper — returns the nearest upcoming event."""
-    tournaments = _discover_all_tournaments()
-    return tournaments[0]["url"] if tournaments else FD_GOLF_URL
+    logger.info(
+        "Landing page result: %d tournaments, %d marketIds, %d players, px=%s",
+        len(tournaments), len(market_ids), len(player_map), "YES" if px_context else "NO",
+    )
+    return tournaments, market_ids, player_map, market_name_map, px_context
 
 
 # ---------------------------------------------------------------------------
@@ -332,7 +359,7 @@ def _scrape_tournament_page(
     px_context = ""
 
     if not tournament_url:
-        tournament_url = _discover_tournament_url()
+        tournament_url = FD_GOLF_URL
     logger.info("Loading via Camoufox: %s", tournament_url)
 
     result = _call_proxy({
@@ -645,23 +672,33 @@ def _fetch_market_prices(
 # ---------------------------------------------------------------------------
 
 def discover() -> None:
-    """Load the tournament page with a very broad capture and log all XHRs."""
-    tournaments = _discover_all_tournaments()
-    print(f"\n=== DISCOVERED {len(tournaments)} TOURNAMENT(S) ===")
-    for t in tournaments:
-        print(f"  {t['name']}  →  {t['url']}  (starts {t['start']})")
-    print()
-
-    tournament_url = tournaments[0]["url"] if tournaments else FD_GOLF_URL
-    logger.info("DISCOVERY MODE → %s", tournament_url)
+    """Load the golf landing page with a very broad capture and log all XHRs."""
+    logger.info("DISCOVERY MODE → %s", FD_GOLF_URL)
 
     result = _call_proxy({
-        "url": tournament_url,
-        "prime_url": tournament_url,
+        "url": FD_GOLF_URL,
+        "prime_url": FD_GOLF_URL,
         "capture_patterns": ["fanduel.com"],
         "wait_ms": 30000,
         "timeout_ms": 120000,
     })
+
+    # Also extract tournaments from nav data
+    for cap in result.get("captured_requests", []):
+        if "content-managed-page" in cap.get("url", ""):
+            nav_data = _try_parse_json(cap.get("body"))
+            if nav_data:
+                events = nav_data.get("attachments", {}).get("events", {})
+                print(f"\n=== DISCOVERED {len(events)} TOURNAMENT(S) ===")
+                for ev_id, ev in events.items():
+                    if isinstance(ev, dict):
+                        name = ev.get("name", "")
+                        seo = ev.get("seoIdentifier", "")
+                        slug = seo or _slug_from_name(name)
+                        start = (ev.get("openDate") or "")[:10]
+                        url = f"{FD_BASE_URL}/golf/{slug}-{ev_id}"
+                        print(f"  {name:40s} → {url}  (starts {start})")
+                print()
 
     captured = result.get("captured_requests", [])
     logger.info("page_status=%s  total_captured=%d", result.get("status"), len(captured))
@@ -686,7 +723,16 @@ def discover() -> None:
 def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
     scraped_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    tournaments = _discover_all_tournaments()
+    # Step 1: Load golf landing page — discovers tournaments + gets market IDs
+    #         for the default tournament + px_context for API calls
+    tournaments, landing_market_ids, landing_players, landing_names, px_context = (
+        _scrape_golf_landing()
+    )
+
+    if not tournaments:
+        logger.error("No tournaments found. Run --discover to debug.")
+        return []
+
     logger.info("Found %d golf tournament(s) to scrape", len(tournaments))
 
     all_rows: List[Dict[str, Any]] = []
@@ -699,25 +745,35 @@ def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
             "=== Tournament %d/%d: %s ===", ti + 1, len(tournaments), tourn_name,
         )
 
-        # Retry once on failure (403 / empty capture)
-        for attempt in range(1, 3):
-            market_ids, player_map, market_name_map, event_name, px_context = (
-                _scrape_tournament_page(tournament_url=tourn_url)
-            )
-            if market_ids:
-                break
-            logger.warning(
-                "Attempt %d: No marketIds for %s. %s",
-                attempt, tourn_name,
-                "Retrying in 15s..." if attempt < 2 else "Skipping.",
-            )
-            if attempt < 2:
-                time.sleep(15)
+        if ti == 0 and landing_market_ids:
+            # First tournament: use market IDs from the landing page (already loaded)
+            market_ids = landing_market_ids
+            player_map = landing_players
+            market_name_map = landing_names
+            event_name = tourn_name
+            logger.info("Using %d marketIds from landing page capture", len(market_ids))
+        else:
+            # Additional tournaments: load their specific page
+            for attempt in range(1, 3):
+                market_ids, player_map, market_name_map, event_name, new_px = (
+                    _scrape_tournament_page(tournament_url=tourn_url)
+                )
+                if new_px and not px_context:
+                    px_context = new_px
+                if market_ids:
+                    break
+                logger.warning(
+                    "Attempt %d: No marketIds for %s. %s",
+                    attempt, tourn_name,
+                    "Retrying in 15s..." if attempt < 2 else "Skipping.",
+                )
+                if attempt < 2:
+                    time.sleep(15)
 
         if not market_ids:
+            logger.warning("No marketIds for %s — skipping.", tourn_name)
             continue
 
-        # Prefer event_name from FanDuel page; fall back to app-context name
         resolved_event_name = event_name or tourn_name
 
         logger.info(

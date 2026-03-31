@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from "react";
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -76,8 +77,14 @@ function GameCard({ game, onPress }: { game: SoccerGame; onPress: () => void }) 
       {/* Header */}
       <View style={styles.cardHeader}>
         <View style={styles.teamsRow}>
+          {game.home_logo ? (
+            <Image source={{ uri: game.home_logo }} style={styles.teamLogo} />
+          ) : null}
           <Text style={[styles.teamName, { color: colors.text.primary }]}>{game.home_team}</Text>
           <Text style={[styles.vsText, { color: colors.text.muted }]}>vs</Text>
+          {game.away_logo ? (
+            <Image source={{ uri: game.away_logo }} style={styles.teamLogo} />
+          ) : null}
           <Text style={[styles.teamName, { color: colors.text.primary }]}>{game.away_team}</Text>
         </View>
         <LeagueBadge league={game.league} />
@@ -263,6 +270,7 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     flex: 1,
   },
+  teamLogo: { width: 22, height: 22, borderRadius: 4 },
   teamName: { fontWeight: "800", fontSize: 15 },
   vsText: { fontSize: 12, fontWeight: "600" },
 

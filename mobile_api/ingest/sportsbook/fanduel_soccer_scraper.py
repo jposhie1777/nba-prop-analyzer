@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 # Config
 # ---------------------------------------------------------------------------
 
-DATASET = "oddspedia"
+DATASET = "soccer_data"
 TABLE = "raw_fanduel_soccer_markets"
 ARTIFACT_PATTERN = "/tmp/fanduel_{league}_rows.ndjson"
 
@@ -293,6 +293,9 @@ def _parse_market_prices_response(
             or market.get("name")
             or ""
         )
+        market_status = market.get("marketStatus", "")
+        turn_in_play = bool(market.get("turnInPlayEnabled", False))
+        inplay = bool(market.get("inplay", False))
         runners = market.get("runnerDetails", [])
 
         if not market_id or not runners:
@@ -358,8 +361,11 @@ def _parse_market_prices_response(
                 if market_id and selection_id else None
             )
 
+            runner_status = runner.get("runnerStatus", "")
+
             rows.append({
                 "scraped_at": scraped_at,
+                "source": "getMarketPrices",
                 "league": league,
                 "event_id": event_id or None,
                 "home_team": home_team,
@@ -367,8 +373,14 @@ def _parse_market_prices_response(
                 "event_start": event_start,
                 "market_id": market_id or None,
                 "market_name": market_name or None,
+                "market_type": market_name or None,
+                "market_type_raw": market_name or None,
+                "market_status": market_status or None,
+                "turn_in_play": turn_in_play,
+                "inplay": inplay,
                 "selection_id": selection_id or None,
                 "selection_name": selection_name or None,
+                "runner_status": runner_status or None,
                 "outcome_side": side,
                 "handicap": handicap_f,
                 "odds_decimal": odds_dec,
@@ -606,7 +618,10 @@ def load(league: str) -> None:
     job_config = LoadJobConfig(
         source_format=SourceFormat.NEWLINE_DELIMITED_JSON,
         write_disposition="WRITE_APPEND",
-        autodetect=False,
+        autodetect=True,
+        schema_update_options=[
+            bigquery.SchemaUpdateOption.ALLOW_FIELD_ADDITION,
+        ],
     )
     job = client.load_table_from_file(
         io.BytesIO(ndjson_bytes),

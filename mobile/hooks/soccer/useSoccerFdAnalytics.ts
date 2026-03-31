@@ -12,6 +12,8 @@ export type SoccerGame = {
   game: string;
   home_team: string;
   away_team: string;
+  home_logo?: string | null;
+  away_logo?: string | null;
   model_expected_total_goals?: number | null;
   model_xg_total?: number | null;
   model_btts_probability?: number | null;

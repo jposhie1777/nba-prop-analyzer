@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from collections import defaultdict
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Query
 from google.cloud import bigquery
@@ -38,6 +39,22 @@ def _query(
         job_config=bigquery.QueryJobConfig(query_parameters=params),
     )
     return [dict(row) for row in job.result()]
+
+
+_LOGO_BASE = "https://raw.githubusercontent.com/luukhopman/football-logos/master/logos"
+_LEAGUE_LOGO_PATH: Dict[str, str] = {
+    "EPL": "England%20-%20Premier%20League",
+    "MLS": "USA%20-%20MLS",
+}
+
+
+def _logo_url(league: str, team_name: str) -> Optional[str]:
+    if not team_name:
+        return None
+    path = _LEAGUE_LOGO_PATH.get(league.upper())
+    if not path:
+        return None
+    return f"{_LOGO_BASE}/{path}/{quote(team_name)}.png"
 
 
 @router.get("/soccer/games")
@@ -92,8 +109,13 @@ def soccer_games() -> List[Dict[str, Any]]:
     ORDER BY event_start_ts ASC
     """
     rows = _query(sql, [])
-    # Serialise non-JSON-native types (DATE, TIMESTAMP, etc.)
-    return [_serialise_row(r) for r in rows]
+    result = []
+    for r in rows:
+        row = _serialise_row(r)
+        row["home_logo"] = _logo_url(row.get("league", ""), row.get("home_team", ""))
+        row["away_logo"] = _logo_url(row.get("league", ""), row.get("away_team", ""))
+        result.append(row)
+    return result
 
 
 @router.get("/soccer/analytics")

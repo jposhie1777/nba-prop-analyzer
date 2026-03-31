@@ -132,71 +132,58 @@ def _try_parse_json(body: Any) -> Optional[Dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 def _extract_market_ids_from_nav(data: Dict[str, Any]) -> Set[str]:
-    """Extract all externalMarketIds from layout coupons + attachments."""
+    """Extract all marketIds from nav attachments.
+    Soccer uses marketId (e.g. '719.xxx'), not externalMarketId like golf."""
     market_ids: Set[str] = set()
-    coupons = data.get("layout", {}).get("coupons", {})
-    for coupon in coupons.values():
-        if not isinstance(coupon, dict):
-            continue
-        ext_id = coupon.get("externalMarketId")
-        if ext_id:
-            market_ids.add(str(ext_id))
-        for display_item in coupon.get("display", []):
-            if not isinstance(display_item, dict):
-                continue
-            for row in display_item.get("rows", []):
-                if not isinstance(row, dict):
-                    continue
-                for mid in row.get("marketIds", []):
-                    if mid:
-                        market_ids.add(str(mid))
     for market in data.get("attachments", {}).get("markets", {}).values():
         if not isinstance(market, dict):
             continue
-        ext_id = market.get("externalMarketId")
-        if ext_id:
-            market_ids.add(str(ext_id))
+        mid = market.get("marketId") or market.get("externalMarketId")
+        if mid:
+            market_ids.add(str(mid))
         for assoc in market.get("associatedMarkets", []):
-            if isinstance(assoc, dict) and assoc.get("externalMarketId"):
-                market_ids.add(str(assoc["externalMarketId"]))
+            if isinstance(assoc, dict):
+                aid = assoc.get("marketId") or assoc.get("externalMarketId")
+                if aid:
+                    market_ids.add(str(aid))
     return market_ids
 
 
 def _extract_market_names_from_nav(data: Dict[str, Any]) -> Dict[str, str]:
-    """Build externalMarketId → marketName from navigation attachments."""
+    """Build marketId → marketName from navigation attachments."""
     market_names: Dict[str, str] = {}
-    for market_id, market in data.get("attachments", {}).get("markets", {}).items():
+    for market in data.get("attachments", {}).get("markets", {}).values():
         if not isinstance(market, dict):
             continue
+        mid = str(market.get("marketId") or market.get("externalMarketId") or "")
         name = market.get("marketName") or market.get("name") or ""
-        ext_id = market.get("externalMarketId") or market_id
-        if ext_id and name:
-            market_names[str(ext_id)] = name
+        if mid and name:
+            market_names[mid] = name
         for assoc in market.get("associatedMarkets", []):
             if not isinstance(assoc, dict):
                 continue
-            aid = assoc.get("externalMarketId")
+            aid = str(assoc.get("marketId") or assoc.get("externalMarketId") or "")
             aname = assoc.get("marketName") or assoc.get("name") or name
             if aid and aname:
-                market_names[str(aid)] = aname
+                market_names[aid] = aname
     return market_names
 
 
 def _extract_market_event_map(data: Dict[str, Any]) -> Dict[str, str]:
-    """Build externalMarketId → eventId from nav attachments.markets."""
+    """Build marketId → eventId from nav attachments.markets."""
     mapping: Dict[str, str] = {}
-    for market_id, market in data.get("attachments", {}).get("markets", {}).items():
+    for market in data.get("attachments", {}).get("markets", {}).values():
         if not isinstance(market, dict):
             continue
         event_id = str(market.get("eventId") or "")
         if not event_id:
             continue
-        ext_id = str(market.get("externalMarketId") or market_id)
-        if ext_id:
-            mapping[ext_id] = event_id
+        mid = str(market.get("marketId") or market.get("externalMarketId") or "")
+        if mid:
+            mapping[mid] = event_id
         for assoc in market.get("associatedMarkets", []):
             if isinstance(assoc, dict):
-                aid = str(assoc.get("externalMarketId") or "")
+                aid = str(assoc.get("marketId") or assoc.get("externalMarketId") or "")
                 if aid:
                     mapping[aid] = event_id
     return mapping
@@ -367,7 +354,7 @@ def _parse_market_prices_response(
                 "scraped_at": scraped_at,
                 "source": "getMarketPrices",
                 "league": league,
-                "event_id": event_id or None,
+                "event_id": str(event_id) if event_id else None,
                 "home_team": home_team,
                 "away_team": away_team,
                 "event_start": event_start,
@@ -381,10 +368,9 @@ def _parse_market_prices_response(
                 "selection_id": selection_id or None,
                 "selection_name": selection_name or None,
                 "runner_status": runner_status or None,
-                "outcome_side": side,
                 "handicap": handicap_f,
                 "odds_decimal": odds_dec,
-                "odds_american": odds_am,
+                "odds_american": str(odds_am) if odds_am is not None else None,
                 "deep_link": deep_link,
                 "raw_response": raw_str,
             })
@@ -471,7 +457,9 @@ def scrape(league: str, dry_run: bool = False) -> List[Dict[str, Any]]:
     market_event_map: Dict[str, str] = {}
     all_event_map: Dict[str, Dict[str, Any]] = {}
     runner_name_map: Dict[str, str] = {}
-    # Track competitionId per event for filtering
+    captured_prices: List[Dict[str, Any]] = []  # raw getMarketPrices response bodies
+    # Track competitionId per market for filtering (markets have competitionId directly)
+    market_competition: Dict[str, str] = {}
     event_competition: Dict[str, str] = {}
 
     for i, cap in enumerate(captured):
@@ -506,48 +494,49 @@ def scrape(league: str, dry_run: bool = False) -> List[Dict[str, Any]]:
             all_event_map.update(nav_events)
             runner_name_map.update(nav_runners)
 
-            # Extract competitionId per event for league filtering
+            # Extract competitionId per event and per market for league filtering
             for ev_id, ev in nav_data.get("attachments", {}).get("events", {}).items():
                 if isinstance(ev, dict) and ev.get("competitionId"):
                     event_competition[str(ev_id)] = str(ev["competitionId"])
+            for mk in nav_data.get("attachments", {}).get("markets", {}).values():
+                if isinstance(mk, dict) and mk.get("competitionId"):
+                    mid = str(mk.get("marketId") or "")
+                    if mid:
+                        market_competition[mid] = str(mk["competitionId"])
 
             logger.info(
                 "  → content-managed-page: %d marketIds, %d events, %d market names, %d runners",
                 len(nav_ids), len(nav_events), len(nav_names), len(nav_runners),
             )
 
-        # getMarketPrices — capture additional market IDs from responses
+        # getMarketPrices — capture market IDs AND response bodies for direct parsing
         if "getMarketPrices" in cap_url:
             if isinstance(cap_body, list):
                 ids = [str(m["marketId"]) for m in cap_body if isinstance(m, dict) and m.get("marketId")]
                 all_market_ids.update(ids)
-                logger.info("  → getMarketPrices response: %d marketIds", len(ids))
-            else:
-                body_data = _try_parse_json(cap_body)
-                if isinstance(body_data, dict) and "marketIds" in body_data:
-                    ids = [str(m) for m in body_data["marketIds"] if m]
-                    all_market_ids.update(ids)
-                    logger.info("  → getMarketPrices POST body: %d marketIds", len(ids))
+                captured_prices.extend(cap_body)
+                logger.info("  → getMarketPrices response: %d markets", len(ids))
 
-    # Filter to events belonging to the target league
+    # Filter markets by competitionId (markets have competitionId directly)
+    league_market_ids = {
+        mid for mid, cid in market_competition.items() if cid in comp_ids
+    }
+    # Also include markets linked to league events as fallback
     league_event_ids = {
         eid for eid, cid in event_competition.items() if cid in comp_ids
     }
-    # Filter market IDs to only those linked to league events
-    league_market_ids = {
-        mid for mid, eid in market_event_map.items() if eid in league_event_ids
-    }
-    # Also keep markets from getMarketPrices captures that we can't filter
-    # (they'll be filtered out in post-processing if no event match)
-    event_map = {eid: all_event_map[eid] for eid in league_event_ids if eid in all_event_map}
+    for mid, eid in market_event_map.items():
+        if eid in league_event_ids:
+            league_market_ids.add(mid)
+    event_map = all_event_map  # keep all events for metadata lookup
 
     logger.info(
-        "FanDuel %s: %d/%d events match competition filter, %d/%d marketIds, %d market names",
-        league, len(league_event_ids), len(all_event_map),
-        len(league_market_ids), len(all_market_ids), len(market_name_map),
+        "FanDuel %s: %d/%d markets match competition filter, %d league events, %d market names",
+        league, len(league_market_ids), len(all_market_ids),
+        len(league_event_ids), len(market_name_map),
     )
 
-    if not league_market_ids:
+    if not league_market_ids and not captured_prices:
         logger.warning(
             "FanDuel %s: 0 marketIds after competition filter (comp_ids=%s). "
             "Possible causes: no fixtures, or competition IDs changed.",
@@ -555,9 +544,25 @@ def scrape(league: str, dry_run: bool = False) -> List[Dict[str, Any]]:
         )
         return []
 
-    # Phase 2: POST to getMarketPrices for full odds
-    rows = _fetch_market_prices(
-        sorted(league_market_ids),
+    # Phase 2: Parse odds from captured getMarketPrices responses.
+    # Soccer market IDs use the same format as getMarketPrices marketId
+    # (e.g. '719.xxx'), so we can parse directly from captured data
+    # rather than re-fetching (which returns empty for soccer).
+    # Filter captured markets to only league-relevant ones.
+    league_prices = [
+        m for m in captured_prices
+        if isinstance(m, dict) and str(m.get("marketId", "")) in league_market_ids
+    ]
+    # Also include markets whose IDs match nav data for this league
+    if not league_prices:
+        # Fallback: include all captured prices and filter by event post-parse
+        league_prices = captured_prices
+
+    logger.info("FanDuel %s: parsing %d captured markets (from %d total captured)",
+                league, len(league_prices), len(captured_prices))
+
+    rows = _parse_market_prices_response(
+        league_prices,
         scraped_at=scraped_at,
         league=league,
         event_map=event_map,
@@ -566,10 +571,11 @@ def scrape(league: str, dry_run: bool = False) -> List[Dict[str, Any]]:
         runner_name_map=runner_name_map,
     )
 
+
     logger.info("FanDuel %s: %d total rows", league, len(rows))
 
     if not rows:
-        logger.warning("FanDuel %s: 0 rows parsed from %d marketIds.", league, len(market_ids))
+        logger.warning("FanDuel %s: 0 rows parsed from %d marketIds.", league, len(league_market_ids))
 
     if dry_run:
         for row in rows[:10]:
@@ -618,10 +624,7 @@ def load(league: str) -> None:
     job_config = LoadJobConfig(
         source_format=SourceFormat.NEWLINE_DELIMITED_JSON,
         write_disposition="WRITE_APPEND",
-        autodetect=True,
-        schema_update_options=[
-            bigquery.SchemaUpdateOption.ALLOW_FIELD_ADDITION,
-        ],
+        autodetect=False,
     )
     job = client.load_table_from_file(
         io.BytesIO(ndjson_bytes),

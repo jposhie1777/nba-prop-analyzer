@@ -1,0 +1,12 @@
+{
+  "name": "NBA Prop Analyzer",
+  "customizations": {
+    "codespaces": {
+      "permissions": {
+        "actions": "write",
+        "contents": "write",
+        "workflows": "write"
+      }
+    }
+  }
+}

@@ -11,5 +11,6 @@ __pycache__/
 *.pyc
 *.pyo
 *.json
+!.devcontainer/devcontainer.json
 secrets/
 goat-streamlit-key.json

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 from urllib.parse import parse_qs, urlencode, urlsplit
@@ -1171,102 +1172,75 @@ def mlb_matchup_detail(game_pk: int):
     home_team_id = _safe_int(schedule.get("home_team_id")) if schedule else None
     away_team_id = _safe_int(schedule.get("away_team_id")) if schedule else None
     run_date = _resolve_latest_run_date_for_game(client, hr_table, game_pk, today)
-    weather_map = _fetch_game_weather_map(client, weather_table, run_date, [game_pk])
+
+    # Run weather, pitcher splits, and picks in parallel
+    def _get_weather():
+        return _fetch_game_weather_map(client, weather_table, run_date, [game_pk])
+
+    def _get_pitcher_splits():
+        return _safe_query(
+            client,
+            f"""
+            SELECT
+              CAST(game_pk AS INT64) AS game_pk,
+              pitcher_id, pitcher_name, pitcher_hand, opp_team_id, split,
+              ip, home_runs, hr_per_9, barrel_pct, hard_hit_pct,
+              fb_pct, hr_fb_pct, whip, woba
+            FROM {pitcher_table}
+            WHERE run_date = @run_date
+              AND CAST(game_pk AS INT64) = @game_pk
+              AND split IN ('Season', 'vsLHB', 'vsRHB')
+            QUALIFY ROW_NUMBER() OVER (
+              PARTITION BY pitcher_id, split
+              ORDER BY ingested_at DESC NULLS LAST
+            ) = 1
+            ORDER BY pitcher_name ASC, split ASC
+            """,
+            [
+                bigquery.ScalarQueryParameter("run_date", "DATE", run_date),
+                bigquery.ScalarQueryParameter("game_pk", "INT64", game_pk),
+            ],
+        )
+
+    def _get_picks():
+        return _safe_query(
+            client,
+            f"""
+            SELECT
+              CAST(game_pk AS INT64) AS game_pk,
+              batter_id, batter_name, bat_side,
+              pitcher_id, pitcher_name, pitcher_hand,
+              score, grade, why, flags,
+              iso, slg, l15_ev, l15_barrel_pct,
+              season_ev, season_barrel_pct, l15_hard_hit_pct, hr_fb_pct,
+              p_hr9_vs_hand, p_hr_fb_pct, p_barrel_pct, p_fb_pct,
+              p_hard_hit_pct, p_iso_allowed,
+              weather_indicator, game_temp, wind_speed, wind_dir,
+              precip_prob, ballpark_name, roof_type, weather_note,
+              home_moneyline, away_moneyline, over_under,
+              hr_odds_best_price, hr_odds_best_book,
+              deep_link_desktop, deep_link_ios,
+              dk_outcome_code, dk_event_id, fd_market_id, fd_selection_id
+            FROM {hr_table}
+            WHERE run_date = @run_date
+              AND CAST(game_pk AS INT64) = @game_pk
+            ORDER BY score DESC, batter_name ASC
+            """,
+            [
+                bigquery.ScalarQueryParameter("run_date", "DATE", run_date),
+                bigquery.ScalarQueryParameter("game_pk", "INT64", game_pk),
+            ],
+        )
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        fut_weather = pool.submit(_get_weather)
+        fut_splits = pool.submit(_get_pitcher_splits)
+        fut_picks = pool.submit(_get_picks)
+
+    weather_map = fut_weather.result()
     gw = weather_map.get(game_pk)
-
-    pitcher_splits = _safe_query(
-        client,
-        f"""
-        SELECT
-          CAST(game_pk AS INT64) AS game_pk,
-          pitcher_id,
-          pitcher_name,
-          pitcher_hand,
-          opp_team_id,
-          split,
-          ip,
-          home_runs,
-          hr_per_9,
-          barrel_pct,
-          hard_hit_pct,
-          fb_pct,
-          hr_fb_pct,
-          whip,
-          woba
-        FROM {pitcher_table}
-        WHERE run_date = @run_date
-          AND CAST(game_pk AS INT64) = @game_pk
-          AND split IN ('Season', 'vsLHB', 'vsRHB')
-        QUALIFY ROW_NUMBER() OVER (
-          PARTITION BY pitcher_id, split
-          ORDER BY ingested_at DESC NULLS LAST
-        ) = 1
-        ORDER BY pitcher_name ASC, split ASC
-        """,
-        [
-            bigquery.ScalarQueryParameter("run_date", "DATE", run_date),
-            bigquery.ScalarQueryParameter("game_pk", "INT64", game_pk),
-        ],
-    )
-
-    picks = _safe_query(
-        client,
-        f"""
-        SELECT
-          CAST(game_pk AS INT64) AS game_pk,
-          batter_id,
-          batter_name,
-          bat_side,
-          pitcher_id,
-          pitcher_name,
-          pitcher_hand,
-          score,
-          grade,
-          why,
-          flags,
-          iso,
-          slg,
-          l15_ev,
-          l15_barrel_pct,
-          season_ev,
-          season_barrel_pct,
-          l15_hard_hit_pct,
-          hr_fb_pct,
-          p_hr9_vs_hand,
-          p_hr_fb_pct,
-          p_barrel_pct,
-          p_fb_pct,
-          p_hard_hit_pct,
-          p_iso_allowed,
-          weather_indicator,
-          game_temp,
-          wind_speed,
-          wind_dir,
-          precip_prob,
-          ballpark_name,
-          roof_type,
-          weather_note,
-          home_moneyline,
-          away_moneyline,
-          over_under,
-          hr_odds_best_price,
-          hr_odds_best_book,
-          deep_link_desktop,
-          deep_link_ios,
-          dk_outcome_code,
-          dk_event_id,
-          fd_market_id,
-          fd_selection_id
-        FROM {hr_table}
-        WHERE run_date = @run_date
-          AND CAST(game_pk AS INT64) = @game_pk
-        ORDER BY score DESC, batter_name ASC
-        """,
-        [
-            bigquery.ScalarQueryParameter("run_date", "DATE", run_date),
-            bigquery.ScalarQueryParameter("game_pk", "INT64", game_pk),
-        ],
-    )
+    pitcher_splits = fut_splits.result()
+    picks = fut_picks.result()
 
     if not picks:
         pitcher_ids = sorted({_safe_int(row.get("pitcher_id")) for row in pitcher_splits if _safe_int(row.get("pitcher_id")) is not None})
@@ -1371,29 +1345,28 @@ def mlb_matchup_detail(game_pk: int):
             if bid is not None
         }
     )
-    pitcher_pitch_mix_map = _fetch_pitcher_pitch_mix_map(
-        client,
-        pitch_log_table,
-        hit_data_table,
-        run_date,
-        game_pk,
-        pitcher_ids_for_pitch_tables,
-    )
-    batter_vs_pitches_map = _fetch_batter_vs_pitches_map(
-        client,
-        hit_data_table,
-        run_date,
-        game_pk,
-        batter_ids_for_pitch_tables,
-    )
-    bvp_career_map = _fetch_bvp_career_map(
-        client,
-        hit_data_table,
-        run_date,
-        game_pk,
-        batter_ids_for_pitch_tables,
-        pitcher_ids_for_pitch_tables,
-    )
+    # Run independent BQ queries in parallel
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        fut_mix = pool.submit(
+            _fetch_pitcher_pitch_mix_map,
+            client, pitch_log_table, hit_data_table,
+            run_date, game_pk, pitcher_ids_for_pitch_tables,
+        )
+        fut_bvp_pitches = pool.submit(
+            _fetch_batter_vs_pitches_map,
+            client, hit_data_table,
+            run_date, game_pk, batter_ids_for_pitch_tables,
+        )
+        fut_bvp_career = pool.submit(
+            _fetch_bvp_career_map,
+            client, hit_data_table,
+            run_date, game_pk,
+            batter_ids_for_pitch_tables, pitcher_ids_for_pitch_tables,
+        )
+
+    pitcher_pitch_mix_map = fut_mix.result()
+    batter_vs_pitches_map = fut_bvp_pitches.result()
+    bvp_career_map = fut_bvp_career.result()
 
     grade_counts = {"IDEAL": 0, "FAVORABLE": 0, "AVERAGE": 0, "AVOID": 0}
     pitcher_groups: Dict[str, Dict[str, Any]] = {}

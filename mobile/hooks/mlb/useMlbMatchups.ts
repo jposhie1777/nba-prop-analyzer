@@ -149,6 +149,7 @@ export type MlbBatterPick = {
       dist?: number | null;
       trajectory?: string | null;
       result?: string | null;
+      hr_parks?: number | null;
     }[];
   } | null;
 };

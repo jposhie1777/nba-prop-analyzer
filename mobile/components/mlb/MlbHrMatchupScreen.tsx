@@ -257,12 +257,15 @@ function BattedBallProfile({ batter }: { batter: MlbBatterPick }) {
               <Text style={s.logHeaderCell}>ANGLE</Text>
               <Text style={s.logHeaderCell}>DIST</Text>
               <Text style={[s.logHeaderCell, s.logTrajCol]}>TRAJ</Text>
+              <Text style={[s.logHeaderCell, s.logResultCol]}>RESULT</Text>
+              <Text style={s.logHeaderCell}>PARKS</Text>
             </View>
             {log.map((row, idx) => {
               const ev = row.ev;
               const evStyle = ev != null && ev >= 95 ? s.cellGreen : null;
               const angleVal = row.angle;
               const angleLaunch = angleVal != null && angleVal >= 10 && angleVal <= 30;
+              const isHr = (row.result ?? "").toLowerCase() === "home_run";
               return (
                 <View key={`log-${idx}`} style={s.logRow}>
                   <Text style={[s.logCell, s.logDateCol]}>{row.date ?? "—"}</Text>
@@ -271,6 +274,8 @@ function BattedBallProfile({ batter }: { batter: MlbBatterPick }) {
                   <Text style={[s.logCell, angleLaunch ? s.cellGreen : null]}>{angleVal != null ? angleVal.toFixed(1) : "—"}</Text>
                   <Text style={s.logCell}>{row.dist != null ? row.dist.toFixed(0) : "—"}</Text>
                   <Text style={[s.logCell, s.logTrajCol]}>{formatTrajectory(row.trajectory)}</Text>
+                  <Text style={[s.logCell, s.logResultCol, isHr ? s.cellGreen : null]}>{formatResult(row.result)}</Text>
+                  <Text style={[s.logCell, (row.hr_parks ?? 0) >= 20 ? s.cellGreen : null]}>{row.hr_parks != null ? `${row.hr_parks}/30` : "—"}</Text>
                 </View>
               );
             })}
@@ -284,6 +289,11 @@ function BattedBallProfile({ batter }: { batter: MlbBatterPick }) {
 function formatTrajectory(traj?: string | null): string {
   if (!traj) return "—";
   return traj.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatResult(result?: string | null): string {
+  if (!result) return "—";
+  return result.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 // ── Single batter row ───────────────────────────────────────────────────────
@@ -866,6 +876,7 @@ const s = StyleSheet.create({
   logDateCol: { width: 72, textAlign: "left", paddingLeft: 4 },
   logPitchCol: { width: 90, textAlign: "left", paddingLeft: 4 },
   logTrajCol: { width: 80, textAlign: "left", paddingLeft: 4 },
+  logResultCol: { width: 76, textAlign: "left", paddingLeft: 4 },
   logRow: {
     flexDirection: "row",
     borderBottomWidth: StyleSheet.hairlineWidth,

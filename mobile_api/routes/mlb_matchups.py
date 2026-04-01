@@ -943,110 +943,138 @@ def _fetch_bvp_career_map(
     return out
 
 
+PROPFINDER_HIT_DATA_URL = "https://api.propfinder.app/mlb/hit-data"
+
+
+def _spray_direction(landing_pos_x: Optional[float], bat_side: str) -> Optional[str]:
+    """Determine pull/straight/oppo from landingPosX and bat side."""
+    if landing_pos_x is None:
+        return None
+    side = bat_side.upper()
+    # Positive X = right field, Negative X = left field
+    if side == "R":
+        if landing_pos_x < -40:
+            return "pull"
+        if landing_pos_x > 40:
+            return "oppo"
+        return "straight"
+    elif side == "L":
+        if landing_pos_x > 40:
+            return "pull"
+        if landing_pos_x < -40:
+            return "oppo"
+        return "straight"
+    return None
+
+
+def _fetch_single_batter_hits(batter_id: int) -> List[Dict[str, Any]]:
+    """Fetch all hit data for a batter from propfinder API."""
+    try:
+        url = f"{PROPFINDER_HIT_DATA_URL}?playerId={batter_id}&group=hitting"
+        request = Request(
+            url,
+            headers={"User-Agent": "PulseSports/1.0", "Accept": "application/json"},
+        )
+        with urlopen(request, timeout=10) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _build_batted_ball_data(
+    events: List[Dict[str, Any]],
+    bat_side: str,
+) -> Dict[str, Any]:
+    """Build profile + log from raw hit events."""
+    total = len(events)
+    if total == 0:
+        return {"profile": None, "log": []}
+
+    barrels = sum(1 for e in events if e.get("isBarrel"))
+    hard_hits = sum(1 for e in events if (_safe_float(e.get("launchSpeed")) or 0) >= 95)
+
+    traj_counts: Dict[str, int] = {}
+    spray_counts = {"pull": 0, "straight": 0, "oppo": 0}
+    for e in events:
+        t = (e.get("trajectory") or "").lower().strip()
+        if t:
+            traj_counts[t] = traj_counts.get(t, 0) + 1
+        direction = _spray_direction(_safe_float(e.get("landingPosX")), bat_side)
+        if direction:
+            spray_counts[direction] += 1
+
+    fb = traj_counts.get("fly_ball", 0)
+    gb = traj_counts.get("ground_ball", 0)
+    ld = traj_counts.get("line_drive", 0)
+    pu = traj_counts.get("popup", 0)
+    hr_count = sum(1 for e in events if (e.get("result") or "").lower() == "home_run")
+    spray_total = spray_counts["pull"] + spray_counts["straight"] + spray_counts["oppo"]
+
+    profile = {
+        "barrel_pct": round((barrels / total) * 100, 1) if total > 0 else None,
+        "hh_pct": round((hard_hits / total) * 100, 1) if total > 0 else None,
+        "fb_pct": round((fb / total) * 100, 1) if total > 0 else None,
+        "gb_pct": round((gb / total) * 100, 1) if total > 0 else None,
+        "ld_pct": round((ld / total) * 100, 1) if total > 0 else None,
+        "pu_pct": round((pu / total) * 100, 1) if total > 0 else None,
+        "hr_fb_pct": round((hr_count / fb) * 100, 1) if fb > 0 else None,
+        "pull_pct": round((spray_counts["pull"] / spray_total) * 100, 1) if spray_total > 0 else None,
+        "str_pct": round((spray_counts["straight"] / spray_total) * 100, 1) if spray_total > 0 else None,
+        "oppo_pct": round((spray_counts["oppo"] / spray_total) * 100, 1) if spray_total > 0 else None,
+        "total_batted": total,
+    }
+
+    log = []
+    for e in sorted(events, key=lambda x: x.get("date", ""), reverse=True):
+        log.append({
+            "date": (e.get("date") or "")[:10],
+            "pitch": _clean_str(e.get("pitchType")),
+            "ev": _safe_float(e.get("launchSpeed")),
+            "angle": _safe_float(e.get("launchAngle")),
+            "dist": _safe_float(e.get("totalDistance")),
+            "trajectory": _clean_str(e.get("trajectory")),
+            "result": _clean_str(e.get("result")),
+            "hr_parks": _safe_int(e.get("hrInNParks")),
+        })
+
+    return {"profile": profile, "log": log}
+
+
 def _fetch_bvp_batted_ball_map(
-    client: bigquery.Client,
-    hit_data_table_qualified: str,
-    run_date: str,
-    game_pk: int,
     batter_pitcher_pairs: List[tuple],
+    batter_sides: Dict[int, str],
 ) -> Dict[str, Dict[str, Any]]:
     """
-    Fetch per-at-bat hit log + batted ball profile for each batter-pitcher pair.
-    Returns dict keyed by 'batter_id:pitcher_id' with {profile: {...}, log: [...]}.
+    Fetch batted ball profiles from propfinder API for all batter-pitcher pairs.
+    Returns dict keyed by 'batter_id:pitcher_id'.
     """
     if not batter_pitcher_pairs:
         return {}
 
-    batter_ids = sorted({int(b) for b, _ in batter_pitcher_pairs})
-    pitcher_ids = sorted({int(p) for _, p in batter_pitcher_pairs})
+    # Group pairs by batter to avoid duplicate API calls
+    batter_to_pitchers: Dict[int, List[int]] = {}
+    for bid, pid in batter_pitcher_pairs:
+        batter_to_pitchers.setdefault(bid, []).append(pid)
 
-    rows = _safe_query(
-        client,
-        f"""
-        SELECT
-          CAST(batter_id AS INT64) AS batter_id,
-          CAST(pitcher_id AS INT64) AS pitcher_id,
-          CAST(event_date AS STRING) AS event_date,
-          CAST(pitch_type AS STRING) AS pitch_type,
-          CAST(launch_speed AS FLOAT64) AS ev,
-          CAST(launch_angle AS FLOAT64) AS angle,
-          CAST(total_distance AS FLOAT64) AS dist,
-          CAST(trajectory AS STRING) AS trajectory,
-          CAST(result AS STRING) AS result,
-          CAST(is_barrel AS BOOL) AS is_barrel
-        FROM {hit_data_table_qualified}
-        WHERE run_date = @run_date
-          AND CAST(game_pk AS INT64) = @game_pk
-          AND CAST(batter_id AS INT64) IN UNNEST(@batter_ids)
-          AND CAST(pitcher_id AS INT64) IN UNNEST(@pitcher_ids)
-        ORDER BY event_date DESC
-        """,
-        [
-            bigquery.ScalarQueryParameter("run_date", "DATE", run_date),
-            bigquery.ScalarQueryParameter("game_pk", "INT64", game_pk),
-            bigquery.ArrayQueryParameter("batter_ids", "INT64", batter_ids),
-            bigquery.ArrayQueryParameter("pitcher_ids", "INT64", pitcher_ids),
-        ],
-    )
+    # Fetch all batter hit data in parallel
+    batter_hits: Dict[int, List[Dict[str, Any]]] = {}
 
-    # Group rows by batter:pitcher
-    grouped: Dict[str, list] = {}
-    for row in rows:
-        bid = _safe_int(row.get("batter_id"))
-        pid = _safe_int(row.get("pitcher_id"))
-        if bid is None or pid is None:
-            continue
-        key = f"{bid}:{pid}"
-        grouped.setdefault(key, []).append(row)
+    def _fetch_batter(batter_id: int):
+        batter_hits[batter_id] = _fetch_single_batter_hits(batter_id)
 
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        pool.map(_fetch_batter, batter_to_pitchers.keys())
+
+    # Build profiles for each batter-pitcher pair
     out: Dict[str, Dict[str, Any]] = {}
-    for key, hit_rows in grouped.items():
-        total = len(hit_rows)
-        barrels = sum(1 for r in hit_rows if r.get("is_barrel"))
-        hard_hits = sum(1 for r in hit_rows if (_safe_float(r.get("ev")) or 0) >= 95)
-        traj_counts: Dict[str, int] = {}
-        for r in hit_rows:
-            t = (r.get("trajectory") or "").lower().strip()
-            if t:
-                traj_counts[t] = traj_counts.get(t, 0) + 1
-
-        fb = traj_counts.get("fly_ball", 0)
-        gb = traj_counts.get("ground_ball", 0)
-        ld = traj_counts.get("line_drive", 0)
-        pu = traj_counts.get("popup", 0)
-        hr_count = sum(1 for r in hit_rows if (r.get("result") or "").lower() == "home_run")
-
-        # Spray: pull / straight / oppo based on landing position isn't in our data,
-        # but we can approximate from trajectory + result patterns.
-        # For now use None; could be added with landingPosX data later.
-        profile = {
-            "barrel_pct": round((barrels / total) * 100, 1) if total > 0 else None,
-            "hh_pct": round((hard_hits / total) * 100, 1) if total > 0 else None,
-            "fb_pct": round((fb / total) * 100, 1) if total > 0 else None,
-            "gb_pct": round((gb / total) * 100, 1) if total > 0 else None,
-            "ld_pct": round((ld / total) * 100, 1) if total > 0 else None,
-            "pu_pct": round((pu / total) * 100, 1) if total > 0 else None,
-            "hr_fb_pct": round((hr_count / fb) * 100, 1) if fb > 0 else None,
-            "pull_pct": None,
-            "str_pct": None,
-            "oppo_pct": None,
-            "total_batted": total,
-        }
-
-        log = [
-            {
-                "date": _clean_str(r.get("event_date")),
-                "pitch": _clean_str(r.get("pitch_type")),
-                "ev": _safe_float(r.get("ev")),
-                "angle": _safe_float(r.get("angle")),
-                "dist": _safe_float(r.get("dist")),
-                "trajectory": _clean_str(r.get("trajectory")),
-                "result": _clean_str(r.get("result")),
-            }
-            for r in hit_rows
-        ]
-
-        out[key] = {"profile": profile, "log": log}
+    for bid, pitcher_ids in batter_to_pitchers.items():
+        all_events = batter_hits.get(bid, [])
+        bat_side = batter_sides.get(bid, "R")
+        for pid in pitcher_ids:
+            filtered = [e for e in all_events if _safe_int(e.get("pitcherId")) == pid]
+            if filtered:
+                out[f"{bid}:{pid}"] = _build_batted_ball_data(filtered, bat_side)
 
     return out
 
@@ -1498,10 +1526,15 @@ def mlb_matchup_detail(game_pk: int):
             _fetch_bvp_career_map,
             bvp_pairs,
         )
+        # Build bat_side lookup for spray direction
+        batter_sides: Dict[int, str] = {}
+        for pick in picks:
+            bid = _safe_int(pick.get("batter_id"))
+            if bid is not None:
+                batter_sides[bid] = (pick.get("bat_side") or "R").upper()
         fut_bvp_batted = pool.submit(
             _fetch_bvp_batted_ball_map,
-            client, hit_data_table,
-            run_date, game_pk, bvp_pairs,
+            bvp_pairs, batter_sides,
         )
 
     pitcher_pitch_mix_map = fut_mix.result()

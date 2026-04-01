@@ -207,6 +207,8 @@ function BatterRow({
   onToggleExpand: () => void;
 }) {
   const tone = gradeTone(batter.grade);
+  const bvp = batter.bvp_career;
+  const hasBvp = bvp != null && (bvp.pa ?? 0) > 0;
 
   return (
     <View style={s.batterRowWrap}>
@@ -233,16 +235,43 @@ function BatterRow({
             <Text style={[s.statCell, greenTone("barrel_pct", stats.barrel_pct_l15)]}>{fmtPct(stats.barrel_pct_l15)}</Text>
             <Text style={[s.statCell, greenTone("hh_pct", stats.hh_pct)]}>{fmtPct(stats.hh_pct)}</Text>
             <Text style={[s.statCell, greenTone("slg", stats.slg)]}>{fmt(stats.slg)}</Text>
-            <Text style={[s.statCell, greenTone("woba", stats.woba)]}>{fmt(stats.woba)}</Text>
-            <Text style={[s.statCell, greenTone("obp", stats.obp)]}>{fmt(stats.obp)}</Text>
           </View>
         </ScrollView>
       </View>
 
-      {/* Expanded area placeholder */}
+      {/* Expanded: Career BvP */}
       {expanded ? (
         <View style={s.expandedArea}>
-          <Text style={s.expandedPlaceholder}>Expanded detail coming soon</Text>
+          <Text style={s.expandedTitle}>Career vs Pitcher</Text>
+          {hasBvp ? (
+            <View style={s.bvpWrap}>
+              <View style={s.bvpSummary}>
+                <Text style={s.bvpSummaryText}>
+                  {bvp!.hits ?? 0}-{bvp!.pa ?? 0} · {bvp!.hr ?? 0} HR
+                </Text>
+              </View>
+              <View style={s.bvpTable}>
+                <View style={s.bvpHeaderRow}>
+                  <Text style={s.bvpHeaderCell}>AVG</Text>
+                  <Text style={s.bvpHeaderCell}>ISO</Text>
+                  <Text style={s.bvpHeaderCell}>SLG</Text>
+                  <Text style={s.bvpHeaderCell}>OBP</Text>
+                  <Text style={s.bvpHeaderCell}>K%</Text>
+                  <Text style={s.bvpHeaderCell}>BB%</Text>
+                </View>
+                <View style={s.bvpValueRow}>
+                  <Text style={[s.bvpValueCell, greenTone("avg", bvp!.avg)]}>{fmt(bvp!.avg)}</Text>
+                  <Text style={[s.bvpValueCell, greenTone("iso", bvp!.iso)]}>{fmt(bvp!.iso)}</Text>
+                  <Text style={[s.bvpValueCell, greenTone("slg", bvp!.slg)]}>{fmt(bvp!.slg)}</Text>
+                  <Text style={[s.bvpValueCell, greenTone("obp", bvp!.obp)]}>{fmt(bvp!.obp)}</Text>
+                  <Text style={s.bvpValueCell}>{fmtPct(bvp!.k_pct)}</Text>
+                  <Text style={s.bvpValueCell}>{fmtPct(bvp!.bb_pct)}</Text>
+                </View>
+              </View>
+            </View>
+          ) : (
+            <Text style={s.bvpEmpty}>No career data vs this pitcher</Text>
+          )}
         </View>
       ) : null}
     </View>
@@ -328,8 +357,6 @@ function HandednessSection({
             <Text style={s.headerCell}>BRL%</Text>
             <Text style={s.headerCell}>HH%</Text>
             <Text style={s.headerCell}>SLG</Text>
-            <Text style={s.headerCell}>WOBA</Text>
-            <Text style={s.headerCell}>OBP</Text>
           </View>
         </ScrollView>
       </View>
@@ -672,13 +699,42 @@ const s = StyleSheet.create({
 
   // Expanded
   expandedArea: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 8,
     backgroundColor: "rgba(15,23,42,0.4)",
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "#1E293B",
+    gap: 6,
   },
-  expandedPlaceholder: { color: "#64748B", fontSize: 11, fontStyle: "italic" },
+  expandedTitle: { color: "#94A3B8", fontSize: 10, fontWeight: "800" },
+  bvpWrap: { gap: 4 },
+  bvpSummary: { flexDirection: "row", gap: 8 },
+  bvpSummaryText: { color: "#CBD5E1", fontSize: 11, fontWeight: "700" },
+  bvpTable: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#334155",
+    borderRadius: 6,
+    overflow: "hidden",
+  },
+  bvpHeaderRow: { flexDirection: "row", backgroundColor: "#0F172A" },
+  bvpHeaderCell: {
+    flex: 1,
+    color: "#64748B",
+    fontSize: 9,
+    fontWeight: "800",
+    textAlign: "center",
+    paddingVertical: 5,
+  },
+  bvpValueRow: { flexDirection: "row", backgroundColor: "rgba(15,23,42,0.25)" },
+  bvpValueCell: {
+    flex: 1,
+    color: "#E2E8F0",
+    fontSize: 11,
+    fontWeight: "700",
+    textAlign: "center",
+    paddingVertical: 6,
+  },
+  bvpEmpty: { color: "#475569", fontSize: 11, fontStyle: "italic" },
 
   // Error / empty
   errorBox: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, backgroundColor: "#1F2937", padding: 12 },

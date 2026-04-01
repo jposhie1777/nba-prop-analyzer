@@ -116,6 +116,17 @@ export type MlbBatterPick = {
     vs_lhp: MlbBatterVsPitchRow[];
     vs_rhp: MlbBatterVsPitchRow[];
   };
+  bvp_career?: {
+    pa?: number | null;
+    hits?: number | null;
+    hr?: number | null;
+    avg?: number | null;
+    iso?: number | null;
+    slg?: number | null;
+    obp?: number | null;
+    k_pct?: number | null;
+    bb_pct?: number | null;
+  } | null;
 };
 
 export type MlbPitcherGroup = {

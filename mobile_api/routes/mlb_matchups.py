@@ -838,6 +838,99 @@ def _fetch_batter_vs_pitches_map(
     return out
 
 
+def _fetch_bvp_career_map(
+    client: bigquery.Client,
+    hit_data_table_qualified: str,
+    run_date: str,
+    game_pk: int,
+    batter_ids: List[int],
+    pitcher_ids: List[int],
+) -> Dict[str, Dict[str, Any]]:
+    """
+    Aggregate career batter-vs-specific-pitcher stats from raw_hit_data.
+    Returns dict keyed by 'batter_id:pitcher_id'.
+    """
+    batter_ids = sorted({int(bid) for bid in batter_ids if bid is not None})
+    pitcher_ids = sorted({int(pid) for pid in pitcher_ids if pid is not None})
+    if not batter_ids or not pitcher_ids:
+        return {}
+
+    rows = _safe_query(
+        client,
+        f"""
+        SELECT
+          CAST(batter_id AS INT64) AS batter_id,
+          CAST(pitcher_id AS INT64) AS pitcher_id,
+          COUNT(1) AS pa,
+          SUM(CASE WHEN LOWER(CAST(result AS STRING)) IN ('single','double','triple','home_run') THEN 1 ELSE 0 END) AS hits,
+          SUM(CASE WHEN LOWER(CAST(result AS STRING)) = 'home_run' THEN 1 ELSE 0 END) AS hr,
+          AVG(
+            CASE WHEN LOWER(CAST(result AS STRING)) IN ('single','double','triple','home_run') THEN 1.0 ELSE 0.0 END
+          ) AS avg,
+          AVG(
+            CASE LOWER(CAST(result AS STRING))
+              WHEN 'double' THEN 1.0
+              WHEN 'triple' THEN 2.0
+              WHEN 'home_run' THEN 3.0
+              ELSE 0.0
+            END
+          ) AS iso,
+          AVG(
+            CASE LOWER(CAST(result AS STRING))
+              WHEN 'single' THEN 1.0
+              WHEN 'double' THEN 2.0
+              WHEN 'triple' THEN 3.0
+              WHEN 'home_run' THEN 4.0
+              ELSE 0.0
+            END
+          ) AS slg,
+          SAFE_DIVIDE(
+            SUM(CASE WHEN LOWER(CAST(result AS STRING)) IN ('single','double','triple','home_run','walk','hit_by_pitch') THEN 1 ELSE 0 END),
+            NULLIF(COUNT(1), 0)
+          ) AS obp,
+          SAFE_DIVIDE(
+            SUM(CASE WHEN LOWER(CAST(result AS STRING)) IN ('strikeout','strikeout_double_play') THEN 1 ELSE 0 END) * 100.0,
+            NULLIF(COUNT(1), 0)
+          ) AS k_pct,
+          SAFE_DIVIDE(
+            SUM(CASE WHEN LOWER(CAST(result AS STRING)) = 'walk' THEN 1 ELSE 0 END) * 100.0,
+            NULLIF(COUNT(1), 0)
+          ) AS bb_pct
+        FROM {hit_data_table_qualified}
+        WHERE run_date = @run_date
+          AND CAST(game_pk AS INT64) = @game_pk
+          AND CAST(batter_id AS INT64) IN UNNEST(@batter_ids)
+          AND CAST(pitcher_id AS INT64) IN UNNEST(@pitcher_ids)
+        GROUP BY batter_id, pitcher_id
+        """,
+        [
+            bigquery.ScalarQueryParameter("run_date", "DATE", run_date),
+            bigquery.ScalarQueryParameter("game_pk", "INT64", game_pk),
+            bigquery.ArrayQueryParameter("batter_ids", "INT64", batter_ids),
+            bigquery.ArrayQueryParameter("pitcher_ids", "INT64", pitcher_ids),
+        ],
+    )
+
+    out: Dict[str, Dict[str, Any]] = {}
+    for row in rows:
+        bid = _safe_int(row.get("batter_id"))
+        pid = _safe_int(row.get("pitcher_id"))
+        if bid is None or pid is None:
+            continue
+        out[f"{bid}:{pid}"] = {
+            "pa": _safe_int(row.get("pa")) or 0,
+            "hits": _safe_int(row.get("hits")) or 0,
+            "hr": _safe_int(row.get("hr")) or 0,
+            "avg": _safe_float(row.get("avg")),
+            "iso": _safe_float(row.get("iso")),
+            "slg": _safe_float(row.get("slg")),
+            "obp": _safe_float(row.get("obp")),
+            "k_pct": _safe_float(row.get("k_pct")),
+            "bb_pct": _safe_float(row.get("bb_pct")),
+        }
+    return out
+
+
 def _fetch_game_weather_map(
     client: bigquery.Client,
     weather_table_qualified: str,
@@ -1293,6 +1386,14 @@ def mlb_matchup_detail(game_pk: int):
         game_pk,
         batter_ids_for_pitch_tables,
     )
+    bvp_career_map = _fetch_bvp_career_map(
+        client,
+        hit_data_table,
+        run_date,
+        game_pk,
+        batter_ids_for_pitch_tables,
+        pitcher_ids_for_pitch_tables,
+    )
 
     grade_counts = {"IDEAL": 0, "FAVORABLE": 0, "AVERAGE": 0, "AVOID": 0}
     pitcher_groups: Dict[str, Dict[str, Any]] = {}
@@ -1413,6 +1514,9 @@ def mlb_matchup_detail(game_pk: int):
                     "vs_lhp": list(batter_vs_rows.get("L", [])),
                     "vs_rhp": list(batter_vs_rows.get("R", [])),
                 },
+                "bvp_career": bvp_career_map.get(
+                    f"{batter_id}:{pitcher_id}", None
+                ),
             }
         )
 

@@ -943,6 +943,114 @@ def _fetch_bvp_career_map(
     return out
 
 
+def _fetch_bvp_batted_ball_map(
+    client: bigquery.Client,
+    hit_data_table_qualified: str,
+    run_date: str,
+    game_pk: int,
+    batter_pitcher_pairs: List[tuple],
+) -> Dict[str, Dict[str, Any]]:
+    """
+    Fetch per-at-bat hit log + batted ball profile for each batter-pitcher pair.
+    Returns dict keyed by 'batter_id:pitcher_id' with {profile: {...}, log: [...]}.
+    """
+    if not batter_pitcher_pairs:
+        return {}
+
+    batter_ids = sorted({int(b) for b, _ in batter_pitcher_pairs})
+    pitcher_ids = sorted({int(p) for _, p in batter_pitcher_pairs})
+
+    rows = _safe_query(
+        client,
+        f"""
+        SELECT
+          CAST(batter_id AS INT64) AS batter_id,
+          CAST(pitcher_id AS INT64) AS pitcher_id,
+          CAST(event_date AS STRING) AS event_date,
+          CAST(pitch_type AS STRING) AS pitch_type,
+          CAST(launch_speed AS FLOAT64) AS ev,
+          CAST(launch_angle AS FLOAT64) AS angle,
+          CAST(total_distance AS FLOAT64) AS dist,
+          CAST(trajectory AS STRING) AS trajectory,
+          CAST(result AS STRING) AS result,
+          CAST(is_barrel AS BOOL) AS is_barrel
+        FROM {hit_data_table_qualified}
+        WHERE run_date = @run_date
+          AND CAST(game_pk AS INT64) = @game_pk
+          AND CAST(batter_id AS INT64) IN UNNEST(@batter_ids)
+          AND CAST(pitcher_id AS INT64) IN UNNEST(@pitcher_ids)
+        ORDER BY event_date DESC
+        """,
+        [
+            bigquery.ScalarQueryParameter("run_date", "DATE", run_date),
+            bigquery.ScalarQueryParameter("game_pk", "INT64", game_pk),
+            bigquery.ArrayQueryParameter("batter_ids", "INT64", batter_ids),
+            bigquery.ArrayQueryParameter("pitcher_ids", "INT64", pitcher_ids),
+        ],
+    )
+
+    # Group rows by batter:pitcher
+    grouped: Dict[str, list] = {}
+    for row in rows:
+        bid = _safe_int(row.get("batter_id"))
+        pid = _safe_int(row.get("pitcher_id"))
+        if bid is None or pid is None:
+            continue
+        key = f"{bid}:{pid}"
+        grouped.setdefault(key, []).append(row)
+
+    out: Dict[str, Dict[str, Any]] = {}
+    for key, hit_rows in grouped.items():
+        total = len(hit_rows)
+        barrels = sum(1 for r in hit_rows if r.get("is_barrel"))
+        hard_hits = sum(1 for r in hit_rows if (_safe_float(r.get("ev")) or 0) >= 95)
+        traj_counts: Dict[str, int] = {}
+        for r in hit_rows:
+            t = (r.get("trajectory") or "").lower().strip()
+            if t:
+                traj_counts[t] = traj_counts.get(t, 0) + 1
+
+        fb = traj_counts.get("fly_ball", 0)
+        gb = traj_counts.get("ground_ball", 0)
+        ld = traj_counts.get("line_drive", 0)
+        pu = traj_counts.get("popup", 0)
+        hr_count = sum(1 for r in hit_rows if (r.get("result") or "").lower() == "home_run")
+
+        # Spray: pull / straight / oppo based on landing position isn't in our data,
+        # but we can approximate from trajectory + result patterns.
+        # For now use None; could be added with landingPosX data later.
+        profile = {
+            "barrel_pct": round((barrels / total) * 100, 1) if total > 0 else None,
+            "hh_pct": round((hard_hits / total) * 100, 1) if total > 0 else None,
+            "fb_pct": round((fb / total) * 100, 1) if total > 0 else None,
+            "gb_pct": round((gb / total) * 100, 1) if total > 0 else None,
+            "ld_pct": round((ld / total) * 100, 1) if total > 0 else None,
+            "pu_pct": round((pu / total) * 100, 1) if total > 0 else None,
+            "hr_fb_pct": round((hr_count / fb) * 100, 1) if fb > 0 else None,
+            "pull_pct": None,
+            "str_pct": None,
+            "oppo_pct": None,
+            "total_batted": total,
+        }
+
+        log = [
+            {
+                "date": _clean_str(r.get("event_date")),
+                "pitch": _clean_str(r.get("pitch_type")),
+                "ev": _safe_float(r.get("ev")),
+                "angle": _safe_float(r.get("angle")),
+                "dist": _safe_float(r.get("dist")),
+                "trajectory": _clean_str(r.get("trajectory")),
+                "result": _clean_str(r.get("result")),
+            }
+            for r in hit_rows
+        ]
+
+        out[key] = {"profile": profile, "log": log}
+
+    return out
+
+
 def _fetch_game_weather_map(
     client: bigquery.Client,
     weather_table_qualified: str,
@@ -1375,7 +1483,7 @@ def mlb_matchup_detail(game_pk: int):
     })
 
     # Run independent queries in parallel (BQ + MLB API)
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    with ThreadPoolExecutor(max_workers=5) as pool:
         fut_mix = pool.submit(
             _fetch_pitcher_pitch_mix_map,
             client, pitch_log_table, hit_data_table,
@@ -1390,10 +1498,16 @@ def mlb_matchup_detail(game_pk: int):
             _fetch_bvp_career_map,
             bvp_pairs,
         )
+        fut_bvp_batted = pool.submit(
+            _fetch_bvp_batted_ball_map,
+            client, hit_data_table,
+            run_date, game_pk, bvp_pairs,
+        )
 
     pitcher_pitch_mix_map = fut_mix.result()
     batter_vs_pitches_map = fut_bvp_pitches.result()
     bvp_career_map = fut_bvp_career.result()
+    bvp_batted_map = fut_bvp_batted.result()
 
     grade_counts = {"IDEAL": 0, "FAVORABLE": 0, "AVERAGE": 0, "AVOID": 0}
     pitcher_groups: Dict[str, Dict[str, Any]] = {}
@@ -1515,6 +1629,9 @@ def mlb_matchup_detail(game_pk: int):
                     "vs_rhp": list(batter_vs_rows.get("R", [])),
                 },
                 "bvp_career": bvp_career_map.get(
+                    f"{batter_id}:{pitcher_id}", None
+                ),
+                "bvp_batted_ball": bvp_batted_map.get(
                     f"{batter_id}:{pitcher_id}", None
                 ),
             }

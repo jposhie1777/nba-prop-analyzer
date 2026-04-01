@@ -193,6 +193,99 @@ function PitchToggle({
   );
 }
 
+// ── Mini progress bar ───────────────────────────────────────────────────────
+
+function MiniBar({ label, value, max = 100, color = "#10B981" }: { label: string; value?: number | null; max?: number; color?: string }) {
+  const pct = value != null && Number.isFinite(value) ? Math.min(value / max, 1) : 0;
+  return (
+    <View style={s.miniBarWrap}>
+      <Text style={s.miniBarLabel}>{label}</Text>
+      <View style={s.miniBarTrack}>
+        <View style={[s.miniBarFill, { width: `${Math.round(pct * 100)}%`, backgroundColor: color }]} />
+      </View>
+      <Text style={s.miniBarValue}>{value != null && Number.isFinite(value) ? `${value.toFixed(1)}%` : "—"}</Text>
+    </View>
+  );
+}
+
+// ── Batted ball profile + hit log ───────────────────────────────────────────
+
+function BattedBallProfile({ batter }: { batter: MlbBatterPick }) {
+  const bb = batter.bvp_batted_ball;
+  if (!bb) return null;
+
+  const profile = bb.profile;
+  const log = bb.log ?? [];
+  const hasProfile = profile != null && (profile.total_batted ?? 0) > 0;
+
+  if (!hasProfile && log.length === 0) return null;
+
+  return (
+    <View style={s.bbWrap}>
+      <Text style={s.expandedTitle}>
+        Batted Ball History{profile?.total_batted ? ` (${profile.total_batted} batted)` : ""}
+      </Text>
+
+      {/* Mini bars */}
+      {hasProfile ? (
+        <View style={s.bbBarsContainer}>
+          <View style={s.bbBarsRow}>
+            <MiniBar label="Barrel%" value={profile!.barrel_pct} max={25} color="#10B981" />
+            <MiniBar label="HH%" value={profile!.hh_pct} max={60} color="#10B981" />
+            <MiniBar label="FB%" value={profile!.fb_pct} max={60} color="#60A5FA" />
+            <MiniBar label="GB%" value={profile!.gb_pct} max={60} color="#F59E0B" />
+            <MiniBar label="LD%" value={profile!.ld_pct} max={40} color="#34D399" />
+          </View>
+          <View style={s.bbBarsRow}>
+            <MiniBar label="PU%" value={profile!.pu_pct} max={30} color="#94A3B8" />
+            <MiniBar label="HR/FB%" value={profile!.hr_fb_pct} max={30} color="#F87171" />
+            <MiniBar label="Pull%" value={profile!.pull_pct} max={60} color="#A78BFA" />
+            <MiniBar label="Str%" value={profile!.str_pct} max={50} color="#A78BFA" />
+            <MiniBar label="Oppo%" value={profile!.oppo_pct} max={40} color="#A78BFA" />
+          </View>
+        </View>
+      ) : null}
+
+      {/* Hit log table */}
+      {log.length > 0 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View>
+            <View style={s.logHeaderRow}>
+              <Text style={[s.logHeaderCell, s.logDateCol]}>DATE</Text>
+              <Text style={[s.logHeaderCell, s.logPitchCol]}>PITCH</Text>
+              <Text style={s.logHeaderCell}>EV</Text>
+              <Text style={s.logHeaderCell}>ANGLE</Text>
+              <Text style={s.logHeaderCell}>DIST</Text>
+              <Text style={[s.logHeaderCell, s.logTrajCol]}>TRAJ</Text>
+            </View>
+            {log.map((row, idx) => {
+              const ev = row.ev;
+              const evStyle = ev != null && ev >= 95 ? s.cellGreen : null;
+              const angleVal = row.angle;
+              const angleLaunch = angleVal != null && angleVal >= 10 && angleVal <= 30;
+              return (
+                <View key={`log-${idx}`} style={s.logRow}>
+                  <Text style={[s.logCell, s.logDateCol]}>{row.date ?? "—"}</Text>
+                  <Text style={[s.logCell, s.logPitchCol]}>{row.pitch ?? "—"}</Text>
+                  <Text style={[s.logCell, evStyle]}>{ev != null ? ev.toFixed(1) : "—"}</Text>
+                  <Text style={[s.logCell, angleLaunch ? s.cellGreen : null]}>{angleVal != null ? angleVal.toFixed(1) : "—"}</Text>
+                  <Text style={s.logCell}>{row.dist != null ? row.dist.toFixed(0) : "—"}</Text>
+                  <Text style={[s.logCell, s.logTrajCol]}>{formatTrajectory(row.trajectory)}</Text>
+                </View>
+              );
+            })}
+          </View>
+        </ScrollView>
+      ) : null}
+    </View>
+  );
+}
+
+function formatTrajectory(traj?: string | null): string {
+  if (!traj) return "—";
+  return traj.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 // ── Single batter row ───────────────────────────────────────────────────────
 
 function BatterRow({
@@ -239,9 +332,10 @@ function BatterRow({
         </ScrollView>
       </View>
 
-      {/* Expanded: Career BvP */}
+      {/* Expanded: Career BvP + Batted Ball Profile + Hit Log */}
       {expanded ? (
         <View style={s.expandedArea}>
+          {/* ── Career BvP stats ── */}
           <Text style={s.expandedTitle}>Career vs Pitcher</Text>
           {hasBvp ? (
             <View style={s.bvpWrap}>
@@ -272,6 +366,9 @@ function BatterRow({
           ) : (
             <Text style={s.bvpEmpty}>No career data vs this pitcher</Text>
           )}
+
+          {/* ── Batted Ball Profile ── */}
+          <BattedBallProfile batter={batter} />
         </View>
       ) : null}
     </View>
@@ -735,6 +832,53 @@ const s = StyleSheet.create({
     paddingVertical: 6,
   },
   bvpEmpty: { color: "#475569", fontSize: 11, fontStyle: "italic" },
+
+  // Batted ball profile
+  bbWrap: { gap: 6, marginTop: 6 },
+  bbBarsContainer: { gap: 6 },
+  bbBarsRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  miniBarWrap: { width: 90, gap: 2 },
+  miniBarLabel: { color: "#64748B", fontSize: 8, fontWeight: "800" },
+  miniBarTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#1E293B",
+    overflow: "hidden",
+  },
+  miniBarFill: { height: 6, borderRadius: 3 },
+  miniBarValue: { color: "#CBD5E1", fontSize: 9, fontWeight: "700" },
+
+  // Hit log table
+  logHeaderRow: {
+    flexDirection: "row",
+    backgroundColor: "#0F172A",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#334155",
+  },
+  logHeaderCell: {
+    width: 52,
+    color: "#64748B",
+    fontSize: 8,
+    fontWeight: "800",
+    textAlign: "center",
+    paddingVertical: 5,
+  },
+  logDateCol: { width: 72, textAlign: "left", paddingLeft: 4 },
+  logPitchCol: { width: 90, textAlign: "left", paddingLeft: 4 },
+  logTrajCol: { width: 80, textAlign: "left", paddingLeft: 4 },
+  logRow: {
+    flexDirection: "row",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(51,65,85,0.5)",
+  },
+  logCell: {
+    width: 52,
+    color: "#E2E8F0",
+    fontSize: 10,
+    fontWeight: "600",
+    textAlign: "center",
+    paddingVertical: 5,
+  },
 
   // Error / empty
   errorBox: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, backgroundColor: "#1F2937", padding: 12 },

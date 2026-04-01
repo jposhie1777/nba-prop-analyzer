@@ -127,6 +127,30 @@ export type MlbBatterPick = {
     k_pct?: number | null;
     bb_pct?: number | null;
   } | null;
+  bvp_batted_ball?: {
+    profile?: {
+      barrel_pct?: number | null;
+      hh_pct?: number | null;
+      fb_pct?: number | null;
+      gb_pct?: number | null;
+      ld_pct?: number | null;
+      pu_pct?: number | null;
+      hr_fb_pct?: number | null;
+      pull_pct?: number | null;
+      str_pct?: number | null;
+      oppo_pct?: number | null;
+      total_batted?: number | null;
+    } | null;
+    log?: {
+      date?: string | null;
+      pitch?: string | null;
+      ev?: number | null;
+      angle?: number | null;
+      dist?: number | null;
+      trajectory?: string | null;
+      result?: string | null;
+    }[];
+  } | null;
 };
 
 export type MlbPitcherGroup = {

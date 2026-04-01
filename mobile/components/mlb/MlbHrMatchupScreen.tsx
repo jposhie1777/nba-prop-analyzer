@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   useMlbMatchupDetail,
+  useMlbBattingOrder,
   type MlbBatterPick,
   type MlbPitcherGroup,
   type MlbPitchMixRow,
@@ -308,6 +309,7 @@ function BatterRow({
   onToggleExpand,
   selected,
   onToggleSelect,
+  isWeakSpot,
 }: {
   batter: MlbBatterPick;
   stats: AggregatedStats;
@@ -315,6 +317,7 @@ function BatterRow({
   onToggleExpand: () => void;
   selected: boolean;
   onToggleSelect: () => void;
+  isWeakSpot: boolean;
 }) {
   const tone = gradeTone(batter.grade);
   const bvp = batter.bvp_career;
@@ -322,7 +325,11 @@ function BatterRow({
   const hasFd = !!(batter.fd_market_id && batter.fd_selection_id);
 
   return (
-    <View style={[s.batterRowWrap, selected ? s.batterRowSelected : null]}>
+    <View style={[
+      s.batterRowWrap,
+      selected ? s.batterRowSelected : null,
+      isWeakSpot ? s.batterRowWeakSpot : null,
+    ]}>
       <View style={s.batterRow}>
         {/* Select box */}
         <Pressable
@@ -342,9 +349,11 @@ function BatterRow({
           </View>
           <View style={s.nameWrap}>
             <Text style={s.batterName} numberOfLines={1}>
-              {batter.batter_name ?? "—"}
+              {isWeakSpot ? "🎯 " : ""}{batter.batter_name ?? "—"}
             </Text>
-            <Text style={s.batterMeta}>{handLabel(batter.bat_side)}</Text>
+            <Text style={s.batterMeta}>
+              {handLabel(batter.bat_side)}{isWeakSpot ? " · WEAK SPOT" : ""}
+            </Text>
           </View>
         </Pressable>
 
@@ -412,6 +421,7 @@ function HandednessSection({
   pitcherHand,
   selectedKeys,
   onToggleSelect,
+  weakSpotIds,
 }: {
   label: string;
   batters: MlbBatterPick[];
@@ -419,6 +429,7 @@ function HandednessSection({
   pitcherHand: string;
   selectedKeys: Set<string>;
   onToggleSelect: (key: string) => void;
+  weakSpotIds: Set<number>;
 }) {
   // All pitches selected by default
   const [selectedPitches, setSelectedPitches] = useState<Set<string>>(
@@ -506,6 +517,7 @@ function HandednessSection({
             onToggleExpand={() => toggleExpand(batterId)}
             selected={selectedKeys.has(batterId)}
             onToggleSelect={() => onToggleSelect(batterId)}
+            isWeakSpot={batter.batter_id != null && weakSpotIds.has(batter.batter_id)}
           />
         );
       })}
@@ -521,7 +533,25 @@ export function MlbHrMatchupScreen() {
   const params = useLocalSearchParams<{ gamePk?: string; awayTeam?: string; homeTeam?: string }>();
   const gamePk = Number(params.gamePk);
   const { data, loading, error, refetch } = useMlbMatchupDetail(Number.isFinite(gamePk) ? gamePk : null);
+  const { data: boData } = useMlbBattingOrder(Number.isFinite(gamePk) ? gamePk : null);
   const platform = getBuildPlatform();
+
+  // Build weak spot lookup: pitcher_id -> Set of batter player_ids
+  const weakSpotMap = useMemo(() => {
+    const map = new Map<number, Set<number>>();
+    for (const pitcher of boData?.pitchers ?? []) {
+      const pid = pitcher.pitcher_id;
+      if (pid == null) continue;
+      const weakIds = new Set<number>();
+      for (const pos of pitcher.positions ?? []) {
+        if (pos.is_weak_spot && pos.player_id != null) {
+          weakIds.add(pos.player_id);
+        }
+      }
+      map.set(pid, weakIds);
+    }
+    return map;
+  }, [boData]);
 
   const game = data?.game;
   const awayTeam = params.awayTeam ?? game?.away_team ?? "Away";
@@ -746,6 +776,7 @@ export function MlbHrMatchupScreen() {
               pitcherHand={pitcherHandRaw}
               selectedKeys={selectedKeys}
               onToggleSelect={toggleSelect}
+              weakSpotIds={weakSpotMap.get(pitcher.pitcher_id ?? -1) ?? new Set()}
             />
 
             <HandednessSection
@@ -755,6 +786,7 @@ export function MlbHrMatchupScreen() {
               pitcherHand={pitcherHandRaw}
               selectedKeys={selectedKeys}
               onToggleSelect={toggleSelect}
+              weakSpotIds={weakSpotMap.get(pitcher.pitcher_id ?? -1) ?? new Set()}
             />
 
             {!batters.length ? (
@@ -937,6 +969,10 @@ const s = StyleSheet.create({
   },
   batterRowSelected: {
     backgroundColor: "rgba(16,185,129,0.06)",
+  },
+  batterRowWeakSpot: {
+    borderLeftWidth: 2,
+    borderLeftColor: "#10B981",
   },
   batterRow: {
     flexDirection: "row",

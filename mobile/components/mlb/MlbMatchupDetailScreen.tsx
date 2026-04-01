@@ -527,13 +527,24 @@ return (
 <Pressable
   onPress={() =>
     router.push({
+      pathname: "/(tabs)/mlb/hr-matchup/[gamePk]" as any,
+      params: { gamePk: String(gamePk), homeTeam, awayTeam },
+    })
+  }
+  style={styles.tabInactive}
+>
+  <Text style={styles.tabTextInactive}>HR Matchup</Text>
+</Pressable>
+<Pressable
+  onPress={() =>
+    router.push({
       pathname: "/(tabs)/mlb/pitching-props/[gamePk]" as any,
       params: { gamePk: String(gamePk), homeTeam, awayTeam },
     })
   }
   style={styles.tabInactive}
 >
-  <Text style={styles.tabTextInactive}>Pitching Props</Text>
+  <Text style={styles.tabTextInactive}>Pitching</Text>
 </Pressable>
 <Pressable
   onPress={() =>

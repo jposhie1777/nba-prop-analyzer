@@ -70,13 +70,19 @@ export function MlbLineupMatchupScreen() {
           <Text style={s.tabTextInactive}>Home Runs</Text>
         </Pressable>
         <Pressable
+          onPress={() => router.push({ pathname: "/(tabs)/mlb/hr-matchup/[gamePk]" as any, params: { gamePk: String(gamePk), homeTeam: homeTeamName, awayTeam: awayTeamName } })}
+          style={s.tabInactive}
+        >
+          <Text style={s.tabTextInactive}>HR Matchup</Text>
+        </Pressable>
+        <Pressable
           onPress={() => router.push({ pathname: "/(tabs)/mlb/pitching-props/[gamePk]" as any, params: { gamePk: String(gamePk), homeTeam: homeTeamName, awayTeam: awayTeamName } })}
           style={s.tabInactive}
         >
-          <Text style={s.tabTextInactive}>Pitching Props</Text>
+          <Text style={s.tabTextInactive}>Pitching</Text>
         </Pressable>
         <View style={s.tabActive}>
-          <Text style={s.tabTextActive}>Lineup Matchup</Text>
+          <Text style={s.tabTextActive}>Lineup</Text>
         </View>
       </View>
 

@@ -228,7 +228,7 @@ function BattedBallProfile({ batter }: { batter: MlbBatterPick }) {
         Batted Ball History{profile?.total_batted ? ` (${profile.total_batted} batted)` : ""}
       </Text>
 
-      {/* Mini bars */}
+      {/* Mini bars - Line 1: batted ball types, Line 2: spray direction */}
       {hasProfile ? (
         <View style={s.bbBarsContainer}>
           <View style={s.bbBarsRow}>
@@ -237,10 +237,10 @@ function BattedBallProfile({ batter }: { batter: MlbBatterPick }) {
             <MiniBar label="FB%" value={profile!.fb_pct} max={60} color="#60A5FA" />
             <MiniBar label="GB%" value={profile!.gb_pct} max={60} color="#F59E0B" />
             <MiniBar label="LD%" value={profile!.ld_pct} max={40} color="#34D399" />
-          </View>
-          <View style={s.bbBarsRow}>
             <MiniBar label="PU%" value={profile!.pu_pct} max={30} color="#94A3B8" />
             <MiniBar label="HR/FB%" value={profile!.hr_fb_pct} max={30} color="#F87171" />
+          </View>
+          <View style={s.bbBarsRow}>
             <MiniBar label="Pull%" value={profile!.pull_pct} max={60} color="#A78BFA" />
             <MiniBar label="Str%" value={profile!.str_pct} max={50} color="#A78BFA" />
             <MiniBar label="Oppo%" value={profile!.oppo_pct} max={40} color="#A78BFA" />
@@ -591,7 +591,8 @@ export function MlbHrMatchupScreen() {
   }
 
   return (
-    <ScrollView style={s.screen} contentContainerStyle={s.content}>
+  <View style={s.screen}>
+    <ScrollView style={s.scrollView} contentContainerStyle={s.content}>
       {/* ── Navigation ── */}
       <View style={s.navRow}>
         <Pressable onPress={() => router.push("/(tabs)/mlb" as any)} style={s.navBtn}>
@@ -749,52 +750,54 @@ export function MlbHrMatchupScreen() {
         </View>
       ) : null}
 
-      {/* ── Floating parlay bar ── */}
-      {selectedBatters.length >= 1 ? (
-        <View style={s.parlayBar}>
-          <View style={s.parlayTopRow}>
-            <Text style={s.parlayTitle}>
-              {selectedBatters.length} batter{selectedBatters.length !== 1 ? "s" : ""} selected
-            </Text>
-            <Pressable onPress={() => setSelectedKeys(new Set())}>
-              <Text style={s.parlayClear}>✕</Text>
-            </Pressable>
-          </View>
-
-          <View style={s.parlayLegs}>
-            {selectedBatters.map((b) => (
-              <Text key={String(b.batter_id)} style={s.parlayLegText}>
-                • {b.batter_name ?? "Batter"} — 1+ HR {fmtOdds(b.hr_odds_best_price)}
-              </Text>
-            ))}
-          </View>
-
-          <View style={s.parlayBtnRow}>
-            {selectedBatters.length === 1 ? (
-              <Pressable
-                style={[s.parlayBtn, !fdLink ? s.parlayBtnDisabled : null]}
-                disabled={!fdLink}
-                onPress={() => openSingleFd(selectedBatters[0])}
-              >
-                <Text style={s.parlayBtnText}>Bet FanDuel</Text>
-              </Pressable>
-            ) : (
-              <Pressable
-                style={[s.parlayBtn, !fdLink ? s.parlayBtnDisabled : null]}
-                disabled={!fdLink}
-                onPress={openFdLink}
-              >
-                <Text style={s.parlayBtnText}>
-                  Parlay on FanDuel ({selectedBatters.length} legs)
-                </Text>
-              </Pressable>
-            )}
-          </View>
-
-          <Text style={s.parlayNote}>Parlay availability subject to sportsbook approval.</Text>
-        </View>
-      ) : null}
     </ScrollView>
+
+    {/* ── Fixed bottom parlay bar ── */}
+    {selectedBatters.length >= 1 ? (
+      <View style={s.parlayBar}>
+        <View style={s.parlayTopRow}>
+          <Text style={s.parlayTitle}>
+            {selectedBatters.length} batter{selectedBatters.length !== 1 ? "s" : ""} selected
+          </Text>
+          <Pressable onPress={() => setSelectedKeys(new Set())}>
+            <Text style={s.parlayClear}>✕</Text>
+          </Pressable>
+        </View>
+
+        <View style={s.parlayLegs}>
+          {selectedBatters.map((b) => (
+            <Text key={String(b.batter_id)} style={s.parlayLegText}>
+              • {b.batter_name ?? "Batter"} — 1+ HR {fmtOdds(b.hr_odds_best_price)}
+            </Text>
+          ))}
+        </View>
+
+        <View style={s.parlayBtnRow}>
+          {selectedBatters.length === 1 ? (
+            <Pressable
+              style={[s.parlayBtn, !fdLink ? s.parlayBtnDisabled : null]}
+              disabled={!fdLink}
+              onPress={() => openSingleFd(selectedBatters[0])}
+            >
+              <Text style={s.parlayBtnText}>Bet FanDuel</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              style={[s.parlayBtn, !fdLink ? s.parlayBtnDisabled : null]}
+              disabled={!fdLink}
+              onPress={openFdLink}
+            >
+              <Text style={s.parlayBtnText}>
+                Parlay on FanDuel ({selectedBatters.length} legs)
+              </Text>
+            </Pressable>
+          )}
+        </View>
+
+        <Text style={s.parlayNote}>Parlay availability subject to sportsbook approval.</Text>
+      </View>
+    ) : null}
+  </View>
   );
 }
 
@@ -804,6 +807,7 @@ const STAT_CELL_W = 58;
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#050A18" },
+  scrollView: { flex: 1 },
   content: { padding: 16, gap: 10, paddingBottom: 40 },
 
   // Nav
@@ -1004,9 +1008,9 @@ const s = StyleSheet.create({
 
   // Batted ball profile
   bbWrap: { gap: 6, marginTop: 6 },
-  bbBarsContainer: { gap: 6 },
-  bbBarsRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
-  miniBarWrap: { width: 90, gap: 2 },
+  bbBarsContainer: { gap: 4 },
+  bbBarsRow: { flexDirection: "row", gap: 4 },
+  miniBarWrap: { flex: 1, minWidth: 38, gap: 1 },
   miniBarLabel: { color: "#64748B", fontSize: 8, fontWeight: "800" },
   miniBarTrack: {
     height: 6,
@@ -1052,13 +1056,11 @@ const s = StyleSheet.create({
 
   // Parlay bar
   parlayBar: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#10B981",
-    borderRadius: 14,
+    borderTopWidth: 1,
+    borderTopColor: "#10B981",
     backgroundColor: "rgba(2,6,23,0.98)",
     padding: 12,
     gap: 8,
-    marginTop: 8,
   },
   parlayTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   parlayTitle: { color: "#E2E8F0", fontSize: 14, fontWeight: "800" },

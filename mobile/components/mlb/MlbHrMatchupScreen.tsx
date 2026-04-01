@@ -20,7 +20,8 @@ import {
 } from "@/hooks/mlb/useMlbMatchups";
 import { useTheme } from "@/store/useTheme";
 import { getMlbTeamLogo } from "@/utils/mlbLogos";
-import { buildFanDuelParlay, getBuildPlatform, type ParlayBatterInput } from "@/utils/parlayBuilder";
+import { usePropBetslip, type PropSlipItem } from "@/store/usePropBetslip";
+import { buildFanDuelParlay, getBuildPlatform } from "@/utils/parlayBuilder";
 
 // ── Formatting helpers ──────────────────────────────────────────────────────
 
@@ -528,60 +529,80 @@ export function MlbHrMatchupScreen() {
   const awayLogo = getMlbTeamLogo(awayTeam);
   const homeLogo = getMlbTeamLogo(homeTeam);
 
-  // ── Betslip selection state ──
-  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  // ── Global betslip (persists across games) ──
+  const slipItems = usePropBetslip((st) => st.items);
+  const addToSlip = usePropBetslip((st) => st.add);
+  const removeFromSlip = usePropBetslip((st) => st.remove);
+  const clearSlip = usePropBetslip((st) => st.clear);
 
-  // Build a lookup from batterId -> batter pick for selected batters
-  const allBatters = useMemo(() => {
-    const map = new Map<string, MlbBatterPick>();
-    for (const pitcher of data?.pitchers ?? []) {
-      for (const batter of pitcher.batters ?? []) {
-        const key = String(batter.batter_id ?? batter.batter_name ?? "");
-        if (!map.has(key)) map.set(key, batter);
+  // Derive which batterIds on THIS screen are in the global slip
+  const selectedKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const item of slipItems) {
+      if (item.sport === "mlb" && item.market === "MLB 1+ HR") {
+        keys.add(String(item.player_id));
       }
     }
-    return map;
-  }, [data?.pitchers]);
+    return keys;
+  }, [slipItems]);
 
-  const selectedBatters = useMemo(
-    () => Array.from(selectedKeys).map((k) => allBatters.get(k)).filter(Boolean) as MlbBatterPick[],
-    [selectedKeys, allBatters]
-  );
+  function makeSlipId(batter: MlbBatterPick): string {
+    return `mlb-hr-${String(batter.batter_id ?? batter.batter_name ?? "")}`;
+  }
 
+  function toggleSelect(batterId: string) {
+    // Find the batter in our data
+    let found: MlbBatterPick | null = null;
+    for (const pitcher of data?.pitchers ?? []) {
+      for (const b of pitcher.batters ?? []) {
+        if (String(b.batter_id ?? b.batter_name ?? "") === batterId) {
+          found = b;
+          break;
+        }
+      }
+      if (found) break;
+    }
+    if (!found) return;
+
+    const slipId = makeSlipId(found);
+    if (slipItems.some((i) => i.id === slipId)) {
+      removeFromSlip(slipId);
+    } else if (slipItems.length < 10) {
+      addToSlip({
+        id: slipId,
+        player_id: Number(found.batter_id ?? 0),
+        player: found.batter_name ?? "Batter",
+        market: "MLB 1+ HR",
+        side: "over",
+        line: 0.5,
+        odds: Number(found.hr_odds_best_price ?? 100),
+        sport: "mlb",
+        bookmaker: null,
+        fd_market_id: found.fd_market_id ?? null,
+        fd_selection_id: found.fd_selection_id ?? null,
+      });
+    }
+  }
+
+  // Build FD link from ALL slip items (cross-game)
   const fdLink = useMemo(() => {
-    if (selectedBatters.length === 0) return null;
+    const mlbItems = slipItems.filter((i) => i.sport === "mlb" && i.market === "MLB 1+ HR");
+    if (mlbItems.length === 0) return null;
     return buildFanDuelParlay(
-      selectedBatters.map((b) => ({
-        fd_market_id: b.fd_market_id ?? null,
-        fd_selection_id: b.fd_selection_id ?? null,
+      mlbItems.map((i) => ({
+        fd_market_id: i.fd_market_id ?? null,
+        fd_selection_id: i.fd_selection_id ?? null,
       })),
       platform
     );
-  }, [selectedBatters, platform]);
+  }, [slipItems, platform]);
 
-  function toggleSelect(batterId: string) {
-    setSelectedKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(batterId)) next.delete(batterId);
-      else if (next.size < 10) next.add(batterId);
-      return next;
-    });
-  }
+  const mlbSlipItems = useMemo(
+    () => slipItems.filter((i) => i.sport === "mlb" && i.market === "MLB 1+ HR"),
+    [slipItems]
+  );
 
-  function openFdLink() {
-    if (!fdLink) return;
-    if (platform === "desktop" && typeof globalThis.open === "function") {
-      globalThis.open(fdLink, "_blank");
-      return;
-    }
-    Linking.openURL(fdLink).catch(() => {});
-  }
-
-  function openSingleFd(batter: MlbBatterPick) {
-    const url = buildFanDuelParlay(
-      [{ fd_market_id: batter.fd_market_id ?? null, fd_selection_id: batter.fd_selection_id ?? null }],
-      platform
-    );
+  function openUrl(url?: string | null) {
     if (!url) return;
     if (platform === "desktop" && typeof globalThis.open === "function") {
       globalThis.open(url, "_blank");
@@ -753,45 +774,35 @@ export function MlbHrMatchupScreen() {
     </ScrollView>
 
     {/* ── Fixed bottom parlay bar ── */}
-    {selectedBatters.length >= 1 ? (
+    {mlbSlipItems.length >= 1 ? (
       <View style={s.parlayBar}>
         <View style={s.parlayTopRow}>
           <Text style={s.parlayTitle}>
-            {selectedBatters.length} batter{selectedBatters.length !== 1 ? "s" : ""} selected
+            {mlbSlipItems.length} batter{mlbSlipItems.length !== 1 ? "s" : ""} selected
           </Text>
-          <Pressable onPress={() => setSelectedKeys(new Set())}>
+          <Pressable onPress={clearSlip}>
             <Text style={s.parlayClear}>✕</Text>
           </Pressable>
         </View>
 
         <View style={s.parlayLegs}>
-          {selectedBatters.map((b) => (
-            <Text key={String(b.batter_id)} style={s.parlayLegText}>
-              • {b.batter_name ?? "Batter"} — 1+ HR {fmtOdds(b.hr_odds_best_price)}
+          {mlbSlipItems.map((item) => (
+            <Text key={item.id} style={s.parlayLegText}>
+              • {item.player} — 1+ HR {fmtOdds(item.odds)}
             </Text>
           ))}
         </View>
 
         <View style={s.parlayBtnRow}>
-          {selectedBatters.length === 1 ? (
-            <Pressable
-              style={[s.parlayBtn, !fdLink ? s.parlayBtnDisabled : null]}
-              disabled={!fdLink}
-              onPress={() => openSingleFd(selectedBatters[0])}
-            >
-              <Text style={s.parlayBtnText}>Bet FanDuel</Text>
-            </Pressable>
-          ) : (
-            <Pressable
-              style={[s.parlayBtn, !fdLink ? s.parlayBtnDisabled : null]}
-              disabled={!fdLink}
-              onPress={openFdLink}
-            >
-              <Text style={s.parlayBtnText}>
-                Parlay on FanDuel ({selectedBatters.length} legs)
-              </Text>
-            </Pressable>
-          )}
+          <Pressable
+            style={[s.parlayBtn, !fdLink ? s.parlayBtnDisabled : null]}
+            disabled={!fdLink}
+            onPress={() => openUrl(fdLink)}
+          >
+            <Text style={s.parlayBtnText}>
+              {mlbSlipItems.length === 1 ? "Bet FanDuel" : `Parlay on FanDuel (${mlbSlipItems.length} legs)`}
+            </Text>
+          </Pressable>
         </View>
 
         <Text style={s.parlayNote}>Parlay availability subject to sportsbook approval.</Text>

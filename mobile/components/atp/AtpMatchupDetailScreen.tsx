@@ -8,12 +8,17 @@ import {
   AtpOddsBoardRow,
   useAtpMatchupDetail,
 } from "@/hooks/atp/useAtpMatchups";
+import {
+  AtpMatchProjection,
+  useAtpProjections,
+} from "@/hooks/atp/useAtpProjections";
 import { useAtpBetslip } from "@/store/useAtpBetslip";
 import { useAtpBetslipDrawer } from "@/store/useAtpBetslipDrawer";
 import { useTheme } from "@/store/useTheme";
 import { BackToHomeButton } from "@/components/navigation/BackToHomeButton";
 
 type SectionKey =
+  | "projections"
   | "oddsBoard"
   | "h2hStats"
   | "h2hSummary"
@@ -242,6 +247,7 @@ export function AtpMatchupDetailScreen() {
   const openDrawer = useAtpBetslipDrawer((s) => s.open);
 
   const [expanded, setExpanded] = useState<Record<SectionKey, boolean>>({
+    projections: true,
     oddsBoard: true,
     h2hStats: true,
     h2hSummary: true,
@@ -264,6 +270,27 @@ export function AtpMatchupDetailScreen() {
   const awayRank = params.awayRank ?? matchup.away_rank ?? null;
   const homeHeadshotUrl = params.homeHeadshotUrl ?? matchup.home_headshot_url ?? null;
   const awayHeadshotUrl = params.awayHeadshotUrl ?? matchup.away_headshot_url ?? null;
+  // Projections: fetch all and find match by player names
+  const { data: allProjections } = useAtpProjections();
+  const projection = useMemo(() => {
+    if (!allProjections || !homePlayer || !awayPlayer) return null;
+    const hLower = homePlayer.toLowerCase();
+    const aLower = awayPlayer.toLowerCase();
+    return (
+      allProjections.find(
+        (p) =>
+          p.player_home.toLowerCase().includes(hLower.split(" ").pop() ?? "") &&
+          p.player_away.toLowerCase().includes(aLower.split(" ").pop() ?? "")
+      ) ??
+      allProjections.find(
+        (p) =>
+          p.player_away.toLowerCase().includes(hLower.split(" ").pop() ?? "") &&
+          p.player_home.toLowerCase().includes(aLower.split(" ").pop() ?? "")
+      ) ??
+      null
+    );
+  }, [allProjections, homePlayer, awayPlayer]);
+
   const playerHistory = data?.player_match_history;
   const homeHistory = playerHistory?.home ?? null;
   const awayHistory = playerHistory?.away ?? null;
@@ -481,6 +508,206 @@ export function AtpMatchupDetailScreen() {
           <Text style={styles.errorText}>{error}</Text>
           <Text style={styles.errorRetry}>Tap to retry</Text>
         </Pressable>
+      ) : null}
+
+      {/* Projections panel — shown even while matchup detail loads */}
+      {projection ? (
+        <View style={[styles.panel, { borderColor: colors.border.subtle }]}>
+          <Pressable onPress={() => toggleSection("projections")} style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Projections</Text>
+            <Text style={styles.sectionToggle}>{sectionChevron("projections")}</Text>
+          </Pressable>
+          {expanded.projections ? (
+            <View style={{ gap: 10 }}>
+              {/* Best Edge Banner */}
+              {projection.best_edge ? (
+                <View style={[pStyles.edgeBanner, {
+                  backgroundColor: projection.best_edge.label === "Strong Edge" ? "#14532D" :
+                    projection.best_edge.label === "Edge" ? "#1E3A5F" : "#1E293B",
+                }]}>
+                  <Text style={pStyles.edgeBannerLabel}>{projection.best_edge.label}</Text>
+                  <Text style={pStyles.edgeBannerPlayer}>{projection.best_edge.player}</Text>
+                  <Text style={pStyles.edgeBannerDetail}>
+                    {projection.best_edge.market} {(projection.best_edge.edge * 100).toFixed(1)}% edge
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Surface + Form */}
+              <View style={pStyles.metaRow}>
+                <Text style={pStyles.metaLabel}>Surface</Text>
+                <Text style={pStyles.metaValue}>{projection.surface.charAt(0).toUpperCase() + projection.surface.slice(1)}</Text>
+              </View>
+              <View style={pStyles.metaRow}>
+                <Text style={pStyles.metaLabel}>Form Score</Text>
+                <View style={{ flexDirection: "row", gap: 12 }}>
+                  <Text style={pStyles.metaValue}>
+                    {projection.player_home.split(" ").pop()} {projection.home_form_score != null ? (projection.home_form_score * 100).toFixed(0) : "—"}
+                  </Text>
+                  <Text style={pStyles.metaValue}>
+                    {projection.player_away.split(" ").pop()} {projection.away_form_score != null ? (projection.away_form_score * 100).toFixed(0) : "—"}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Moneyline */}
+              <Text style={styles.groupTitle}>Moneyline</Text>
+              <View style={pStyles.projRow}>
+                <View style={pStyles.projCell}>
+                  <Text style={pStyles.projPlayerName}>{projection.player_home.split(" ").pop()}</Text>
+                  <Text style={pStyles.projProb}>{(projection.moneyline.home_win_prob * 100).toFixed(0)}%</Text>
+                  <Text style={pStyles.projOdds}>
+                    Proj {projection.moneyline.home_projected_american > 0 ? "+" : ""}{projection.moneyline.home_projected_american}
+                  </Text>
+                  {projection.moneyline.home_fd_american != null ? (
+                    <Text style={pStyles.projFd}>
+                      FD {projection.moneyline.home_fd_american > 0 ? "+" : ""}{projection.moneyline.home_fd_american}
+                    </Text>
+                  ) : null}
+                  {projection.moneyline.home_edge != null ? (
+                    <Text style={[pStyles.projEdge, {
+                      color: projection.moneyline.home_edge > 0.03 ? "#86EFAC" :
+                        projection.moneyline.home_edge < -0.03 ? "#FCA5A5" : "#94A3B8"
+                    }]}>
+                      {(projection.moneyline.home_edge * 100).toFixed(1)}%
+                    </Text>
+                  ) : null}
+                </View>
+                <View style={pStyles.projCell}>
+                  <Text style={pStyles.projPlayerName}>{projection.player_away.split(" ").pop()}</Text>
+                  <Text style={pStyles.projProb}>{(projection.moneyline.away_win_prob * 100).toFixed(0)}%</Text>
+                  <Text style={pStyles.projOdds}>
+                    Proj {projection.moneyline.away_projected_american > 0 ? "+" : ""}{projection.moneyline.away_projected_american}
+                  </Text>
+                  {projection.moneyline.away_fd_american != null ? (
+                    <Text style={pStyles.projFd}>
+                      FD {projection.moneyline.away_fd_american > 0 ? "+" : ""}{projection.moneyline.away_fd_american}
+                    </Text>
+                  ) : null}
+                  {projection.moneyline.away_edge != null ? (
+                    <Text style={[pStyles.projEdge, {
+                      color: projection.moneyline.away_edge > 0.03 ? "#86EFAC" :
+                        projection.moneyline.away_edge < -0.03 ? "#FCA5A5" : "#94A3B8"
+                    }]}>
+                      {(projection.moneyline.away_edge * 100).toFixed(1)}%
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+
+              {/* Total Games */}
+              {projection.total_games ? (
+                <>
+                  <Text style={styles.groupTitle}>Total Games</Text>
+                  <View style={pStyles.metaRow}>
+                    <Text style={pStyles.metaLabel}>Projected Total</Text>
+                    <Text style={[pStyles.metaValue, { fontSize: 15, fontWeight: "800" }]}>
+                      {projection.total_games.projected_total}
+                    </Text>
+                  </View>
+                  {projection.total_games.edges.length > 0 ? (
+                    <View style={{ gap: 4 }}>
+                      {projection.total_games.edges.slice(0, 4).map((e, i) => (
+                        <View key={i} style={pStyles.edgeRow}>
+                          <Text style={pStyles.edgeDirection}>
+                            {e.direction} {e.line}
+                          </Text>
+                          <Text style={pStyles.edgeOdds}>
+                            {e.odds_american > 0 ? "+" : ""}{e.odds_american}
+                          </Text>
+                          <Text style={[pStyles.edgeValue, { color: "#86EFAC" }]}>
+                            +{e.edge_games}g
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                </>
+              ) : null}
+
+              {/* Set Spread */}
+              {projection.set_spread ? (
+                <>
+                  <Text style={styles.groupTitle}>Set Spread</Text>
+                  <View style={pStyles.metaRow}>
+                    <Text style={pStyles.metaLabel}>Straight Sets</Text>
+                    <Text style={pStyles.metaValue}>
+                      {(projection.set_spread.straight_sets_prob * 100).toFixed(0)}%
+                    </Text>
+                  </View>
+                  <View style={pStyles.projRow}>
+                    <View style={pStyles.projCellCompact}>
+                      <Text style={pStyles.projPlayerName}>{projection.player_home.split(" ").pop()} -1.5</Text>
+                      <Text style={pStyles.projProb}>{(projection.set_spread.home_straight_sets_prob * 100).toFixed(0)}%</Text>
+                      {projection.set_spread.home_minus_1_5_fd_american != null ? (
+                        <>
+                          <Text style={pStyles.projFd}>
+                            FD {projection.set_spread.home_minus_1_5_fd_american > 0 ? "+" : ""}{projection.set_spread.home_minus_1_5_fd_american}
+                          </Text>
+                          <Text style={[pStyles.projEdge, {
+                            color: (projection.set_spread.home_minus_1_5_edge ?? 0) > 0.03 ? "#86EFAC" :
+                              (projection.set_spread.home_minus_1_5_edge ?? 0) < -0.03 ? "#FCA5A5" : "#94A3B8"
+                          }]}>
+                            {((projection.set_spread.home_minus_1_5_edge ?? 0) * 100).toFixed(1)}%
+                          </Text>
+                        </>
+                      ) : null}
+                    </View>
+                    <View style={pStyles.projCellCompact}>
+                      <Text style={pStyles.projPlayerName}>{projection.player_away.split(" ").pop()} -1.5</Text>
+                      <Text style={pStyles.projProb}>{(projection.set_spread.away_straight_sets_prob * 100).toFixed(0)}%</Text>
+                      {projection.set_spread.away_minus_1_5_fd_american != null ? (
+                        <>
+                          <Text style={pStyles.projFd}>
+                            FD {projection.set_spread.away_minus_1_5_fd_american > 0 ? "+" : ""}{projection.set_spread.away_minus_1_5_fd_american}
+                          </Text>
+                          <Text style={[pStyles.projEdge, {
+                            color: (projection.set_spread.away_minus_1_5_edge ?? 0) > 0.03 ? "#86EFAC" :
+                              (projection.set_spread.away_minus_1_5_edge ?? 0) < -0.03 ? "#FCA5A5" : "#94A3B8"
+                          }]}>
+                            {((projection.set_spread.away_minus_1_5_edge ?? 0) * 100).toFixed(1)}%
+                          </Text>
+                        </>
+                      ) : null}
+                    </View>
+                  </View>
+                </>
+              ) : null}
+
+              {/* Game Spread */}
+              {projection.game_spread ? (
+                <>
+                  <Text style={styles.groupTitle}>Game Spread</Text>
+                  <View style={pStyles.metaRow}>
+                    <Text style={pStyles.metaLabel}>Projected Spread</Text>
+                    <Text style={pStyles.metaValue}>
+                      {projection.player_home.split(" ").pop()}{" "}
+                      {projection.game_spread.projected_home_spread > 0 ? "+" : ""}
+                      {projection.game_spread.projected_home_spread}
+                    </Text>
+                  </View>
+                  {projection.game_spread.edges.length > 0 ? (
+                    <View style={{ gap: 4 }}>
+                      {projection.game_spread.edges.slice(0, 4).map((e, i) => (
+                        <View key={i} style={pStyles.edgeRow}>
+                          <Text style={pStyles.edgeDirection} numberOfLines={1}>
+                            {e.player.split(" ").pop()} {e.line > 0 ? "+" : ""}{e.line}
+                          </Text>
+                          <Text style={pStyles.edgeOdds}>
+                            {e.odds_american > 0 ? "+" : ""}{e.odds_american}
+                          </Text>
+                          <Text style={[pStyles.edgeValue, { color: "#86EFAC" }]}>
+                            +{e.edge_games}g
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                </>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
       ) : null}
 
       {data ? (
@@ -1056,4 +1283,63 @@ const styles = StyleSheet.create({
   errorTitle: { color: "#FCA5A5", fontWeight: "700" },
   errorText: { color: "#FECACA", fontSize: 12 },
   errorRetry: { color: "#E5E7EB", marginTop: 4, fontSize: 12 },
+});
+
+const pStyles = StyleSheet.create({
+  edgeBanner: {
+    borderRadius: 10,
+    padding: 10,
+    alignItems: "center",
+    gap: 2,
+  },
+  edgeBannerLabel: { color: "#86EFAC", fontSize: 11, fontWeight: "800", letterSpacing: 1 },
+  edgeBannerPlayer: { color: "#F0FDF4", fontSize: 15, fontWeight: "800" },
+  edgeBannerDetail: { color: "#BBF7D0", fontSize: 12, fontWeight: "600" },
+  metaRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 2,
+  },
+  metaLabel: { color: "#94A3B8", fontSize: 12, fontWeight: "600" },
+  metaValue: { color: "#E2E8F0", fontSize: 13, fontWeight: "700" },
+  projRow: { flexDirection: "row", gap: 8 },
+  projCell: {
+    flex: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#334155",
+    borderRadius: 10,
+    backgroundColor: "#0F172A",
+    padding: 10,
+    alignItems: "center",
+    gap: 2,
+  },
+  projCellCompact: {
+    flex: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#334155",
+    borderRadius: 10,
+    backgroundColor: "#0F172A",
+    padding: 8,
+    alignItems: "center",
+    gap: 1,
+  },
+  projPlayerName: { color: "#A7C0E8", fontSize: 11, fontWeight: "700" },
+  projProb: { color: "#E2E8F0", fontSize: 18, fontWeight: "800" },
+  projOdds: { color: "#93C5FD", fontSize: 12, fontWeight: "700" },
+  projFd: { color: "#94A3B8", fontSize: 11, fontWeight: "600" },
+  projEdge: { fontSize: 13, fontWeight: "800" },
+  edgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#0F172A",
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    gap: 8,
+  },
+  edgeDirection: { color: "#E2E8F0", fontSize: 12, fontWeight: "700", flex: 1 },
+  edgeOdds: { color: "#94A3B8", fontSize: 12, fontWeight: "600", width: 50, textAlign: "right" },
+  edgeValue: { fontSize: 12, fontWeight: "800", width: 40, textAlign: "right" },
 });

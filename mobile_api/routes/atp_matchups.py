@@ -33,6 +33,10 @@ WEBSITE_HAWKEYE_MATCH_STATS_TABLE = os.getenv(
     "ATP_WEBSITE_HAWKEYE_MATCH_STATS_TABLE",
     "atp_data.website_hawkeye_match_stats",
 )
+FANDUEL_ATP_TABLE = os.getenv(
+    "FANDUEL_ATP_MARKETS_TABLE",
+    "sportsbook.raw_fanduel_atp_markets",
+)
 
 
 def _split_table_ref(table_ref: str) -> tuple[str | None, str, str]:
@@ -268,6 +272,74 @@ def _fetch_upcoming_rows(limit: int, lookahead_days: int) -> List[Dict[str, Any]
             bigquery.ScalarQueryParameter("limit", "INT64", limit),
         ],
     )
+
+
+def _fetch_upcoming_from_fanduel(limit: int, lookahead_days: int) -> List[Dict[str, Any]]:
+    """Fallback: build upcoming-matches list from FanDuel ATP markets data."""
+    sql = f"""
+    WITH events AS (
+      SELECT
+        CAST(event_id AS INT64) AS match_id,
+        player_home AS home_team,
+        player_away AS away_team,
+        event_name AS matchup,
+        tournament_name,
+        CAST(event_start AS TIMESTAMP) AS start_time_utc,
+        ROW_NUMBER() OVER (
+          PARTITION BY event_id
+          ORDER BY scraped_at DESC
+        ) AS rn
+      FROM `{FANDUEL_ATP_TABLE}`
+      WHERE event_start IS NOT NULL
+        AND player_home IS NOT NULL
+        AND player_away IS NOT NULL
+        AND market_name = 'Moneyline'
+        AND event_name NOT LIKE '%/%'
+    )
+    SELECT
+      match_id,
+      home_team,
+      away_team,
+      matchup,
+      tournament_name,
+      start_time_utc,
+      CAST(NULL AS STRING) AS round_name,
+      CAST(NULL AS STRING) AS home_rank,
+      CAST(NULL AS STRING) AS away_rank,
+      CAST(NULL AS TIMESTAMP) AS match_date_utc
+    FROM events
+    WHERE rn = 1
+      AND DATE(start_time_utc) BETWEEN DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY) AND DATE_ADD(CURRENT_DATE(), INTERVAL @lookahead_days DAY)
+    ORDER BY start_time_utc ASC, matchup ASC
+    LIMIT @limit
+    """
+    return _safe_query(
+        sql,
+        [
+            bigquery.ScalarQueryParameter("lookahead_days", "INT64", lookahead_days),
+            bigquery.ScalarQueryParameter("limit", "INT64", limit),
+        ],
+    )
+
+
+def _fetch_fanduel_match_row(event_id: int) -> Optional[Dict[str, Any]]:
+    """Fetch a single match from FanDuel by event_id (used as match_id fallback)."""
+    sql = f"""
+    SELECT
+      CAST(event_id AS INT64) AS match_id,
+      player_home AS home_team,
+      player_away AS away_team,
+      event_name AS matchup,
+      tournament_name,
+      CAST(event_start AS TIMESTAMP) AS start_time_utc
+    FROM `{FANDUEL_ATP_TABLE}`
+    WHERE CAST(event_id AS INT64) = @event_id
+      AND market_name = 'Moneyline'
+    ORDER BY scraped_at DESC
+    LIMIT 1
+    """
+    rows = _safe_query(sql, [bigquery.ScalarQueryParameter("event_id", "INT64", event_id)])
+    return rows[0] if rows else None
 
 
 def _normalize_atp_outcome(value: Any) -> Optional[str]:
@@ -1429,6 +1501,8 @@ def atp_matchups_upcoming(
 ):
     rows = _fetch_upcoming_rows(limit=limit, lookahead_days=lookahead_days)
     if not rows:
+        rows = _fetch_upcoming_from_fanduel(limit=limit, lookahead_days=lookahead_days)
+    if not rows:
         return []
 
     names: List[str] = []
@@ -1463,6 +1537,8 @@ def atp_matchups_upcoming(
 @router.get("/matchups/{match_id}")
 def atp_matchup_detail(match_id: int):
     upcoming_row = _fetch_upcoming_match_row(match_id)
+    if not upcoming_row:
+        upcoming_row = _fetch_fanduel_match_row(match_id)
     weather_row = _fetch_match_weather_row(match_id)
 
     names = [
@@ -1518,3 +1594,26 @@ def atp_matchup_detail(match_id: int):
         "odds_board": odds_board,
         "odds_updated_at": odds_updated_at,
     }
+
+
+# ---------------------------------------------------------------------------
+# Projections endpoint
+# ---------------------------------------------------------------------------
+
+@router.get("/projections")
+def get_atp_projections(
+    event_id: Optional[str] = Query(None, description="FanDuel event ID (optional, returns all if omitted)"),
+):
+    """
+    ATP match projections with edges vs FanDuel odds.
+
+    Combines player analytics (form, surface, H2H, ranking) with live
+    FanDuel market odds to produce projections for:
+      - Moneyline (win probability + edge)
+      - Total Games (projected total vs FanDuel lines)
+      - Set Spread (straight sets probability)
+      - Game Spread (projected spread vs FanDuel lines)
+    """
+    from atp.projections import build_projections
+
+    return build_projections(event_id=event_id)

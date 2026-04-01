@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from threading import Lock
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, urlencode, urlsplit
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
@@ -16,6 +18,37 @@ from google.cloud import bigquery
 from bq import get_bq_client
 
 router = APIRouter(tags=["MLB Matchups"])
+
+# ── Simple in-memory TTL cache ───────────────────────────────────────────────
+# Keyed by (endpoint, args). Each entry: (timestamp, data).
+# Evicts on read if stale. No background thread needed.
+
+_cache: Dict[str, Tuple[float, Any]] = {}
+_cache_lock = Lock()
+CACHE_TTL_SECONDS = 120  # 2 minutes
+
+
+def _cache_get(key: str) -> Any:
+    with _cache_lock:
+        entry = _cache.get(key)
+        if entry is None:
+            return None
+        ts, data = entry
+        if time.monotonic() - ts > CACHE_TTL_SECONDS:
+            del _cache[key]
+            return None
+        return data
+
+
+def _cache_set(key: str, data: Any) -> None:
+    now = time.monotonic()
+    with _cache_lock:
+        _cache[key] = (now, data)
+        # Lazy eviction: drop stale entries when cache grows large
+        if len(_cache) > 200:
+            stale = [k for k, (ts, _) in _cache.items() if now - ts > CACHE_TTL_SECONDS]
+            for k in stale:
+                del _cache[k]
 
 NY_TZ = ZoneInfo("America/New_York")
 MLB_SCHEDULE_URL = "https://statsapi.mlb.com/api/v1/schedule"
@@ -1045,6 +1078,11 @@ def _resolve_latest_run_date(
 def mlb_matchups_upcoming(
     limit: int = Query(default=20, ge=1, le=100),
 ):
+    cache_key = f"upcoming:{limit}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     schedule_rows = _fetch_schedule_for_today()
     if not schedule_rows:
         return []
@@ -1109,6 +1147,7 @@ def mlb_matchups_upcoming(
                 "ballpark_azimuth": _safe_int(gw.get("ballpark_azimuth")) if gw else None,
             }
         )
+    _cache_set(cache_key, rows)
     return rows
 
 
@@ -1159,6 +1198,11 @@ def mlb_matchups_upcoming_debug():
 
 @router.get("/mlb/matchups/{game_pk}")
 def mlb_matchup_detail(game_pk: int):
+    cache_key = f"matchup:{game_pk}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     client = get_bq_client()
     today = _today_et_iso()
     hr_table = _qualified_table(client, HR_PICKS_TABLE)
@@ -1536,7 +1580,7 @@ def mlb_matchup_detail(game_pk: int):
     game_weather["wind_dir"] = wind_dir
     game_weather["wind_direction_label"] = _wind_direction_label(wind_dir)
 
-    return {
+    result = {
         "game_pk": game_pk,
         "run_date": run_date,
         "game": {
@@ -1552,6 +1596,8 @@ def mlb_matchup_detail(game_pk: int):
         "grade_counts": grade_counts,
         "pitchers": pitchers_out,
     }
+    _cache_set(cache_key, result)
+    return result
 
 
 # ── Pitching Props (Strikeout) endpoint ─────────────────────────────────────
@@ -1644,6 +1690,11 @@ def mlb_pitching_props(game_pk: int):
     Returns pitching K prop grades for a game.
     Combines BQ signal data with live sportsbook lines + deep links.
     """
+    cache_key = f"kprops:{game_pk}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     client = get_bq_client()
     today = _today_et_iso()
     grades_view = _qualified_table(client, K_GRADES_VIEW)
@@ -1873,7 +1924,7 @@ def mlb_pitching_props(game_pk: int):
         "over_under": _safe_float(gw.get("over_under")),
     }
 
-    return {
+    result = {
         "game_pk": game_pk,
         "run_date": today,
         "game": {
@@ -1888,6 +1939,8 @@ def mlb_pitching_props(game_pk: int):
         },
         "pitchers": pitchers_out,
     }
+    _cache_set(cache_key, result)
+    return result
 
 
 def _k_grade(proj_ks: float, line: Optional[float]) -> str:

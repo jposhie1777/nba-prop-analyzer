@@ -1,6 +1,7 @@
 import {
   ActivityIndicator,
   Image,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -8,7 +9,7 @@ import {
   View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   useMlbMatchupDetail,
@@ -19,6 +20,7 @@ import {
 } from "@/hooks/mlb/useMlbMatchups";
 import { useTheme } from "@/store/useTheme";
 import { getMlbTeamLogo } from "@/utils/mlbLogos";
+import { buildFanDuelParlay, getBuildPlatform, type ParlayBatterInput } from "@/utils/parlayBuilder";
 
 // ── Formatting helpers ──────────────────────────────────────────────────────
 
@@ -303,20 +305,35 @@ function BatterRow({
   stats,
   expanded,
   onToggleExpand,
+  selected,
+  onToggleSelect,
 }: {
   batter: MlbBatterPick;
   stats: AggregatedStats;
   expanded: boolean;
   onToggleExpand: () => void;
+  selected: boolean;
+  onToggleSelect: () => void;
 }) {
   const tone = gradeTone(batter.grade);
   const bvp = batter.bvp_career;
   const hasBvp = bvp != null && (bvp.pa ?? 0) > 0;
+  const hasFd = !!(batter.fd_market_id && batter.fd_selection_id);
 
   return (
-    <View style={s.batterRowWrap}>
+    <View style={[s.batterRowWrap, selected ? s.batterRowSelected : null]}>
       <View style={s.batterRow}>
-        {/* Chevron + player info (fixed left) */}
+        {/* Select box */}
+        <Pressable
+          style={[s.selectBox, selected ? s.selectBoxActive : null, !hasFd ? s.selectBoxDisabled : null]}
+          onPress={hasFd ? onToggleSelect : undefined}
+        >
+          <Text style={[s.selectBoxText, selected ? s.selectBoxTextActive : null]}>
+            {selected ? "✓" : "+"}
+          </Text>
+        </Pressable>
+
+        {/* Chevron + player info */}
         <Pressable style={s.batterInfoCol} onPress={onToggleExpand}>
           <Text style={s.chevron}>{expanded ? "▾" : "▸"}</Text>
           <View style={[s.gradeChip, { backgroundColor: tone.bg, borderColor: tone.border }]}>
@@ -392,11 +409,15 @@ function HandednessSection({
   batters,
   pitcherMix,
   pitcherHand,
+  selectedKeys,
+  onToggleSelect,
 }: {
   label: string;
   batters: MlbBatterPick[];
   pitcherMix: MlbPitchMixRow[];
   pitcherHand: string;
+  selectedKeys: Set<string>;
+  onToggleSelect: (key: string) => void;
 }) {
   // All pitches selected by default
   const [selectedPitches, setSelectedPitches] = useState<Set<string>>(
@@ -482,6 +503,8 @@ function HandednessSection({
             stats={stats}
             expanded={expandedIds.has(batterId)}
             onToggleExpand={() => toggleExpand(batterId)}
+            selected={selectedKeys.has(batterId)}
+            onToggleSelect={() => onToggleSelect(batterId)}
           />
         );
       })}
@@ -497,12 +520,75 @@ export function MlbHrMatchupScreen() {
   const params = useLocalSearchParams<{ gamePk?: string; awayTeam?: string; homeTeam?: string }>();
   const gamePk = Number(params.gamePk);
   const { data, loading, error, refetch } = useMlbMatchupDetail(Number.isFinite(gamePk) ? gamePk : null);
+  const platform = getBuildPlatform();
 
   const game = data?.game;
   const awayTeam = params.awayTeam ?? game?.away_team ?? "Away";
   const homeTeam = params.homeTeam ?? game?.home_team ?? "Home";
   const awayLogo = getMlbTeamLogo(awayTeam);
   const homeLogo = getMlbTeamLogo(homeTeam);
+
+  // ── Betslip selection state ──
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+
+  // Build a lookup from batterId -> batter pick for selected batters
+  const allBatters = useMemo(() => {
+    const map = new Map<string, MlbBatterPick>();
+    for (const pitcher of data?.pitchers ?? []) {
+      for (const batter of pitcher.batters ?? []) {
+        const key = String(batter.batter_id ?? batter.batter_name ?? "");
+        if (!map.has(key)) map.set(key, batter);
+      }
+    }
+    return map;
+  }, [data?.pitchers]);
+
+  const selectedBatters = useMemo(
+    () => Array.from(selectedKeys).map((k) => allBatters.get(k)).filter(Boolean) as MlbBatterPick[],
+    [selectedKeys, allBatters]
+  );
+
+  const fdLink = useMemo(() => {
+    if (selectedBatters.length === 0) return null;
+    return buildFanDuelParlay(
+      selectedBatters.map((b) => ({
+        fd_market_id: b.fd_market_id ?? null,
+        fd_selection_id: b.fd_selection_id ?? null,
+      })),
+      platform
+    );
+  }, [selectedBatters, platform]);
+
+  function toggleSelect(batterId: string) {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(batterId)) next.delete(batterId);
+      else if (next.size < 10) next.add(batterId);
+      return next;
+    });
+  }
+
+  function openFdLink() {
+    if (!fdLink) return;
+    if (platform === "desktop" && typeof globalThis.open === "function") {
+      globalThis.open(fdLink, "_blank");
+      return;
+    }
+    Linking.openURL(fdLink).catch(() => {});
+  }
+
+  function openSingleFd(batter: MlbBatterPick) {
+    const url = buildFanDuelParlay(
+      [{ fd_market_id: batter.fd_market_id ?? null, fd_selection_id: batter.fd_selection_id ?? null }],
+      platform
+    );
+    if (!url) return;
+    if (platform === "desktop" && typeof globalThis.open === "function") {
+      globalThis.open(url, "_blank");
+      return;
+    }
+    Linking.openURL(url).catch(() => {});
+  }
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
@@ -636,6 +722,8 @@ export function MlbHrMatchupScreen() {
               batters={rhBatters}
               pitcherMix={mixVsRhb}
               pitcherHand={pitcherHandRaw}
+              selectedKeys={selectedKeys}
+              onToggleSelect={toggleSelect}
             />
 
             <HandednessSection
@@ -643,6 +731,8 @@ export function MlbHrMatchupScreen() {
               batters={lhBatters}
               pitcherMix={mixVsLhb}
               pitcherHand={pitcherHandRaw}
+              selectedKeys={selectedKeys}
+              onToggleSelect={toggleSelect}
             />
 
             {!batters.length ? (
@@ -656,6 +746,52 @@ export function MlbHrMatchupScreen() {
         <View style={[s.panel, { borderColor: colors.border.subtle }]}>
           <Text style={s.emptyTitle}>No MLB model data for this game yet.</Text>
           <Text style={s.emptyText}>Data will populate once the model run completes.</Text>
+        </View>
+      ) : null}
+
+      {/* ── Floating parlay bar ── */}
+      {selectedBatters.length >= 1 ? (
+        <View style={s.parlayBar}>
+          <View style={s.parlayTopRow}>
+            <Text style={s.parlayTitle}>
+              {selectedBatters.length} batter{selectedBatters.length !== 1 ? "s" : ""} selected
+            </Text>
+            <Pressable onPress={() => setSelectedKeys(new Set())}>
+              <Text style={s.parlayClear}>✕</Text>
+            </Pressable>
+          </View>
+
+          <View style={s.parlayLegs}>
+            {selectedBatters.map((b) => (
+              <Text key={String(b.batter_id)} style={s.parlayLegText}>
+                • {b.batter_name ?? "Batter"} — 1+ HR {fmtOdds(b.hr_odds_best_price)}
+              </Text>
+            ))}
+          </View>
+
+          <View style={s.parlayBtnRow}>
+            {selectedBatters.length === 1 ? (
+              <Pressable
+                style={[s.parlayBtn, !fdLink ? s.parlayBtnDisabled : null]}
+                disabled={!fdLink}
+                onPress={() => openSingleFd(selectedBatters[0])}
+              >
+                <Text style={s.parlayBtnText}>Bet FanDuel</Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                style={[s.parlayBtn, !fdLink ? s.parlayBtnDisabled : null]}
+                disabled={!fdLink}
+                onPress={openFdLink}
+              >
+                <Text style={s.parlayBtnText}>
+                  Parlay on FanDuel ({selectedBatters.length} legs)
+                </Text>
+              </Pressable>
+            )}
+          </View>
+
+          <Text style={s.parlayNote}>Parlay availability subject to sportsbook approval.</Text>
         </View>
       ) : null}
     </ScrollView>
@@ -749,7 +885,7 @@ const s = StyleSheet.create({
     paddingBottom: 4,
     marginBottom: 2,
   },
-  headerInfoCol: { width: 130, paddingLeft: 4 },
+  headerInfoCol: { width: 136, paddingLeft: 26 },
   headerText: { color: "#64748B", fontSize: 9, fontWeight: "800" },
   headerCell: {
     width: STAT_CELL_W,
@@ -759,10 +895,33 @@ const s = StyleSheet.create({
     textAlign: "center",
   },
 
+  // Select box
+  selectBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: "#334155",
+    backgroundColor: "#0F172A",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 2,
+  },
+  selectBoxActive: {
+    borderColor: "#10B981",
+    backgroundColor: "rgba(16,185,129,0.2)",
+  },
+  selectBoxDisabled: { opacity: 0.3 },
+  selectBoxText: { color: "#64748B", fontSize: 12, fontWeight: "800" },
+  selectBoxTextActive: { color: "#10B981" },
+
   // Batter row
   batterRowWrap: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "rgba(51,65,85,0.5)",
+  },
+  batterRowSelected: {
+    backgroundColor: "rgba(16,185,129,0.06)",
   },
   batterRow: {
     flexDirection: "row",
@@ -770,7 +929,7 @@ const s = StyleSheet.create({
     minHeight: 36,
   },
   batterInfoCol: {
-    width: 130,
+    width: 110,
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
@@ -890,6 +1049,35 @@ const s = StyleSheet.create({
     textAlign: "center",
     paddingVertical: 5,
   },
+
+  // Parlay bar
+  parlayBar: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#10B981",
+    borderRadius: 14,
+    backgroundColor: "rgba(2,6,23,0.98)",
+    padding: 12,
+    gap: 8,
+    marginTop: 8,
+  },
+  parlayTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  parlayTitle: { color: "#E2E8F0", fontSize: 14, fontWeight: "800" },
+  parlayClear: { color: "#94A3B8", fontSize: 16, fontWeight: "900", paddingHorizontal: 4 },
+  parlayLegs: { gap: 2 },
+  parlayLegText: { color: "#C7D2FE", fontSize: 11 },
+  parlayBtnRow: { flexDirection: "row", gap: 8 },
+  parlayBtn: {
+    flex: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#10B981",
+    borderRadius: 10,
+    backgroundColor: "rgba(16,185,129,0.12)",
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  parlayBtnDisabled: { opacity: 0.4, borderColor: "#334155" },
+  parlayBtnText: { color: "#A7F3D0", fontSize: 13, fontWeight: "800" },
+  parlayNote: { color: "#64748B", fontSize: 9 },
 
   // Error / empty
   errorBox: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, backgroundColor: "#1F2937", padding: 12 },

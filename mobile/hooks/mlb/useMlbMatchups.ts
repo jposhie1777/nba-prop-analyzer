@@ -108,6 +108,10 @@ export type MlbBatterPick = {
   hr_odds_best_book?: string | null;
   deep_link_desktop?: string | null;
   deep_link_ios?: string | null;
+  dk_outcome_code?: string | null;
+  dk_event_id?: string | null;
+  fd_market_id?: string | null;
+  fd_selection_id?: string | null;
   pitcher_pitch_mix?: {
     vs_lhb: MlbPitchMixRow[];
     vs_rhb: MlbPitchMixRow[];

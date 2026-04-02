@@ -1310,6 +1310,19 @@ def mlb_matchups_upcoming_debug():
     }
 
 
+# NOTE: literal path routes MUST be declared before {game_pk} so FastAPI
+# matches them first instead of trying to parse "cheat-sheet"/"nrfi" as int.
+
+@router.get("/mlb/matchups/cheat-sheet")
+def _cheat_sheet_route():
+    return mlb_hr_cheat_sheet()
+
+
+@router.get("/mlb/matchups/nrfi")
+def _nrfi_route():
+    return mlb_nrfi_matchups()
+
+
 @router.get("/mlb/matchups/{game_pk}")
 def mlb_matchup_detail(game_pk: int):
     cache_key = f"matchup:{game_pk}"
@@ -2350,7 +2363,6 @@ def _grade_bucket(grade: Optional[str]) -> str:
     return "C"
 
 
-@router.get("/mlb/matchups/cheat-sheet")
 def mlb_hr_cheat_sheet():
     """
     Returns all HR picks for today across ALL games, grouped by letter grade.
@@ -2674,7 +2686,6 @@ def _format_nrfi_team(team: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-@router.get("/mlb/matchups/nrfi")
 def mlb_nrfi_matchups():
     """
     Returns today's NRFI/YRFI matchup data from propfinder,

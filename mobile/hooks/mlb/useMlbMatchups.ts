@@ -473,3 +473,112 @@ export function useMlbBattingOrder(gamePk?: number | null) {
     Boolean(gamePk)
   );
 }
+
+// ── HR Cheat Sheet types ─────────────────────────────────────────────────
+
+export type CheatSheetBatter = {
+  batter_id?: number | null;
+  batter_name?: string | null;
+  bat_side?: string | null;
+  score?: number | null;
+  grade?: string | null;
+  why?: string | null;
+  flags?: string[];
+  iso?: number | null;
+  slg?: number | null;
+  l15_ev?: number | null;
+  l15_barrel_pct?: number | null;
+  season_ev?: number | null;
+  season_barrel_pct?: number | null;
+  l15_hard_hit_pct?: number | null;
+  hr_fb_pct?: number | null;
+  p_hr9_vs_hand?: number | null;
+  hr_odds_best_price?: number | null;
+  hr_odds_best_book?: string | null;
+  dk_outcome_code?: string | null;
+  dk_event_id?: string | null;
+  fd_market_id?: string | null;
+  fd_selection_id?: string | null;
+  is_weak_spot?: boolean;
+  pitcher_id?: number | null;
+  pitcher_name?: string | null;
+  pitcher_hand?: string | null;
+  // Game context
+  game_pk?: number | null;
+  home_team?: string | null;
+  away_team?: string | null;
+  start_time_utc?: string | null;
+  venue_name?: string | null;
+  weather_indicator?: string | null;
+  game_temp?: number | null;
+};
+
+export type MlbHrCheatSheet = {
+  run_date: string;
+  grades: {
+    "A+": CheatSheetBatter[];
+    A: CheatSheetBatter[];
+    B: CheatSheetBatter[];
+    C: CheatSheetBatter[];
+    D: CheatSheetBatter[];
+  };
+  grade_counts: {
+    "A+": number;
+    A: number;
+    B: number;
+    C: number;
+    D: number;
+  };
+};
+
+export function useMlbHrCheatSheet() {
+  return useEplQuery<MlbHrCheatSheet>("/mlb/matchups/cheat-sheet");
+}
+
+// ── NRFI / YRFI types ───────────────────────────────────────────────────
+
+export type NrfiTeam = {
+  team_id?: number | null;
+  team_code?: string | null;
+  team_name?: string | null;
+  pitcher_id?: number | null;
+  pitcher_name?: string | null;
+  team_nrfi?: number;
+  team_yrfi?: number;
+  team_games_played?: number;
+  team_nrfi_pct?: number | null;
+  team_nrfi_record?: string | null;
+  team_l10_nrfi?: number;
+  team_l10_yrfi?: number;
+  team_l10_record?: string | null;
+  team_streak?: string | null;
+  pitcher_nrfi?: number;
+  pitcher_yrfi?: number;
+  pitcher_games_started?: number;
+  pitcher_nrfi_pct?: number | null;
+  pitcher_nrfi_record?: string | null;
+  pitcher_streak?: string | null;
+};
+
+export type NrfiMatchup = {
+  game_id?: number | null;
+  game_date?: string | null;
+  nrfi_score?: number | null;
+  home_team: NrfiTeam;
+  away_team: NrfiTeam;
+  // FanDuel deep link data
+  fd_market_id?: string | null;
+  nrfi_selection_id?: string | null;
+  nrfi_odds?: number | null;
+  yrfi_selection_id?: string | null;
+  yrfi_odds?: number | null;
+};
+
+export type MlbNrfiData = {
+  matchups: NrfiMatchup[];
+  count: number;
+};
+
+export function useMlbNrfi() {
+  return useEplQuery<MlbNrfiData>("/mlb/matchups/nrfi");
+}

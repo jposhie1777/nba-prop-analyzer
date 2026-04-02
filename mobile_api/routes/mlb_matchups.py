@@ -2330,3 +2330,425 @@ def mlb_batting_order(game_pk: int):
         },
         "pitchers": pitchers_out,
     }
+
+
+# ── HR Cheat Sheet ─────────────────────────────────────────────────────────
+
+
+def _grade_bucket(grade: Optional[str]) -> str:
+    """Normalize grade string to bucket key: A+, A, B, C, D."""
+    g = (grade or "").upper().strip()
+    if g == "IDEAL":
+        return "A+"
+    if g == "FAVORABLE":
+        return "A"
+    if g == "AVERAGE":
+        return "B"
+    if g == "AVOID":
+        return "D"
+    # Catch-all for anything unexpected
+    return "C"
+
+
+@router.get("/mlb/matchups/cheat-sheet")
+def mlb_hr_cheat_sheet():
+    """
+    Returns all HR picks for today across ALL games, grouped by letter grade.
+    Each batter includes game context (teams, start time, venue) so the frontend
+    can organize by game within each grade section.
+    """
+    cache_key = "cheat-sheet"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    client = get_bq_client()
+    today = _today_et_iso()
+    hr_table = _qualified_table(client, HR_PICKS_TABLE)
+    weather_table = _qualified_table(client, GAME_WEATHER_TABLE)
+    run_date = _resolve_latest_run_date(client, hr_table, today)
+
+    # Fetch schedule + all picks in parallel
+    schedule_rows = _fetch_schedule_for_today()
+    schedule_map: Dict[int, Dict[str, Any]] = {}
+    for g in schedule_rows:
+        gpk = _safe_int(g.get("game_pk"))
+        if gpk is not None:
+            schedule_map[gpk] = g
+
+    picks = _safe_query(
+        client,
+        f"""
+        SELECT
+          CAST(game_pk AS INT64) AS game_pk,
+          batter_id, batter_name, bat_side,
+          pitcher_id, pitcher_name, pitcher_hand,
+          score, grade, why, flags,
+          iso, slg, l15_ev, l15_barrel_pct,
+          season_ev, season_barrel_pct, l15_hard_hit_pct, hr_fb_pct,
+          p_hr9_vs_hand, p_hr_fb_pct, p_barrel_pct, p_fb_pct,
+          p_hard_hit_pct, p_iso_allowed,
+          weather_indicator, game_temp, wind_speed, wind_dir,
+          precip_prob, ballpark_name, roof_type, weather_note,
+          home_moneyline, away_moneyline, over_under,
+          hr_odds_best_price, hr_odds_best_book,
+          deep_link_desktop, deep_link_ios,
+          dk_outcome_code, dk_event_id, fd_market_id, fd_selection_id
+        FROM {hr_table}
+        WHERE run_date = @run_date
+        ORDER BY score DESC, batter_name ASC
+        """,
+        [bigquery.ScalarQueryParameter("run_date", "DATE", run_date)],
+    )
+
+    # Fetch weather for all game_pks
+    all_game_pks = sorted({_safe_int(p.get("game_pk")) for p in picks if _safe_int(p.get("game_pk")) is not None})
+    weather_map = _fetch_game_weather_map(client, weather_table, run_date, all_game_pks) if all_game_pks else {}
+
+    # Backfill sportsbook links per-game
+    picks_by_game: Dict[int, List[Dict[str, Any]]] = {}
+    for pick in picks:
+        gpk = _safe_int(pick.get("game_pk"))
+        if gpk is not None:
+            picks_by_game.setdefault(gpk, []).append(pick)
+
+    merged_picks: List[Dict[str, Any]] = []
+    for gpk, game_picks in picks_by_game.items():
+        enriched = _merge_props_fallback_into_picks(game_picks, gpk)
+        merged_picks.extend(enriched)
+
+    # Fetch batting order data for weak spot detection
+    # Build a map: game_pk -> {pitcher_id -> Set[player_id]} for weak spots
+    weak_spot_map: Dict[int, Dict[int, set]] = {}
+    for gpk in all_game_pks:
+        try:
+            bo_result = mlb_batting_order(gpk)
+            pitcher_weak: Dict[int, set] = {}
+            for pitcher in bo_result.get("pitchers", []):
+                pid = pitcher.get("pitcher_id")
+                if pid is None:
+                    continue
+                weak_ids: set = set()
+                for pos in pitcher.get("positions", []):
+                    if pos.get("is_weak_spot") and pos.get("player_id") is not None:
+                        weak_ids.add(pos["player_id"])
+                if weak_ids:
+                    pitcher_weak[pid] = weak_ids
+            if pitcher_weak:
+                weak_spot_map[gpk] = pitcher_weak
+        except Exception:
+            pass
+
+    # Build output grouped by grade
+    grade_groups: Dict[str, List[Dict[str, Any]]] = {
+        "A+": [], "A": [], "B": [], "C": [], "D": [],
+    }
+
+    # Deduplicate batters (same batter can appear in multiple pitcher groups)
+    seen_batters: set = set()
+
+    for pick in merged_picks:
+        batter_id = _safe_int(pick.get("batter_id"))
+        game_pk_val = _safe_int(pick.get("game_pk"))
+        dedup_key = f"{batter_id}:{game_pk_val}"
+        if dedup_key in seen_batters:
+            continue
+        seen_batters.add(dedup_key)
+
+        bucket = _grade_bucket(pick.get("grade"))
+        sched = schedule_map.get(game_pk_val, {}) if game_pk_val else {}
+        gw = weather_map.get(game_pk_val) if game_pk_val else None
+
+        # Check weak spot
+        pitcher_id = _safe_int(pick.get("pitcher_id"))
+        is_weak_spot = False
+        if game_pk_val and pitcher_id and batter_id:
+            game_weak = weak_spot_map.get(game_pk_val, {})
+            pitcher_weak_ids = game_weak.get(pitcher_id, set())
+            is_weak_spot = batter_id in pitcher_weak_ids
+
+        grade_groups[bucket].append({
+            "batter_id": batter_id,
+            "batter_name": pick.get("batter_name"),
+            "bat_side": pick.get("bat_side"),
+            "score": _safe_float(pick.get("score")),
+            "grade": pick.get("grade"),
+            "why": pick.get("why"),
+            "flags": _parse_flags(pick.get("flags")),
+            "iso": _safe_float(pick.get("iso")),
+            "slg": _safe_float(pick.get("slg")),
+            "l15_ev": _safe_float(pick.get("l15_ev")),
+            "l15_barrel_pct": _safe_float(pick.get("l15_barrel_pct")),
+            "season_ev": _safe_float(pick.get("season_ev")),
+            "season_barrel_pct": _safe_float(pick.get("season_barrel_pct")),
+            "l15_hard_hit_pct": _safe_float(pick.get("l15_hard_hit_pct")),
+            "hr_fb_pct": _safe_float(pick.get("hr_fb_pct")),
+            "p_hr9_vs_hand": _safe_float(pick.get("p_hr9_vs_hand")),
+            "hr_odds_best_price": _safe_int(pick.get("hr_odds_best_price")),
+            "hr_odds_best_book": _clean_str(pick.get("hr_odds_best_book")),
+            "dk_outcome_code": _clean_str(pick.get("dk_outcome_code")),
+            "dk_event_id": _clean_str(pick.get("dk_event_id")),
+            "fd_market_id": _clean_str(pick.get("fd_market_id")),
+            "fd_selection_id": _clean_str(pick.get("fd_selection_id")),
+            "is_weak_spot": is_weak_spot,
+            "pitcher_id": pitcher_id,
+            "pitcher_name": pick.get("pitcher_name"),
+            "pitcher_hand": pick.get("pitcher_hand"),
+            # Game context
+            "game_pk": game_pk_val,
+            "home_team": sched.get("home_team"),
+            "away_team": sched.get("away_team"),
+            "start_time_utc": sched.get("start_time_utc"),
+            "venue_name": (gw.get("ballpark_name") if gw else None) or sched.get("venue_name"),
+            "weather_indicator": (gw.get("weather_indicator") if gw else None) or _clean_str(pick.get("weather_indicator")),
+            "game_temp": _safe_float(gw.get("game_temp") if gw else pick.get("game_temp")),
+        })
+
+    # Sort each grade group by start_time_utc (earliest first), then score desc
+    for bucket in grade_groups.values():
+        bucket.sort(key=lambda b: (b.get("start_time_utc") or "9999", -(b.get("score") or 0)))
+
+    result = {
+        "run_date": run_date,
+        "grades": grade_groups,
+        "grade_counts": {k: len(v) for k, v in grade_groups.items()},
+    }
+    _cache_set(cache_key, result)
+    return result
+
+
+# ── NRFI / YRFI ────────────────────────────────────────────────────────────
+
+PROPFINDER_NRFI_URL = os.getenv(
+    "PROPFINDER_NRFI_URL", "https://api.propfinder.app/mlb/nrfi/matchups"
+)
+
+FD_MLB_EVENT_TYPE_ID = "7511"  # FanDuel MLB event type
+FD_API_BASE = "https://sbapi.pa.sportsbook.fanduel.com/api"
+FD_API_KEY = os.getenv("FD_API_KEY", "FhMFpcPWXMeyZxOx")
+NRFI_MARKET_TYPE = "OVER/UNDER_0.5_RUNS_1ST_INNINGS"
+
+
+def _fetch_nrfi_matchups() -> List[Dict[str, Any]]:
+    """Fetch today's NRFI matchup data from propfinder API."""
+    try:
+        request = Request(
+            PROPFINDER_NRFI_URL,
+            headers={"User-Agent": "PulseSports/1.0", "Accept": "application/json"},
+        )
+        with urlopen(request, timeout=15) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        return data if isinstance(data, list) else []
+    except Exception as exc:
+        print(f"[NRFI] fetch error: {exc}")
+        return []
+
+
+def _fetch_fd_mlb_events() -> Dict[int, Dict[str, Any]]:
+    """Fetch FanDuel MLB events list. Returns map of eventId -> event dict."""
+    try:
+        url = (
+            f"{FD_API_BASE}/content-managed-page"
+            f"?page=SPORT&eventTypeId={FD_MLB_EVENT_TYPE_ID}&_ak={FD_API_KEY}"
+        )
+        request = Request(url, headers={
+            "User-Agent": "PulseSports/1.0",
+            "Accept": "application/json",
+        })
+        with urlopen(request, timeout=10) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        events = data.get("attachments", {}).get("events", {})
+        return {int(eid): ev for eid, ev in events.items()}
+    except Exception as exc:
+        print(f"[FD] events fetch error: {exc}")
+        return {}
+
+
+def _fetch_fd_nrfi_market(event_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Fetch the 1st Inning O/U 0.5 Runs market for a FanDuel event.
+    Returns {market_id, nrfi_selection_id, nrfi_odds, yrfi_selection_id, yrfi_odds}
+    or None if not found.
+    """
+    try:
+        url = (
+            f"{FD_API_BASE}/event-page"
+            f"?eventId={event_id}&tab=popular&_ak={FD_API_KEY}"
+        )
+        request = Request(url, headers={
+            "User-Agent": "PulseSports/1.0",
+            "Accept": "application/json",
+        })
+        with urlopen(request, timeout=10) as response:
+            data = json.loads(response.read().decode("utf-8"))
+
+        markets = data.get("attachments", {}).get("markets", {})
+        for market_id, market in markets.items():
+            mtype = (market.get("marketType") or "").upper()
+            if NRFI_MARKET_TYPE in mtype:
+                runners = market.get("runners", [])
+                nrfi_sel = None
+                yrfi_sel = None
+                for runner in runners:
+                    name = (runner.get("runnerName") or "").lower()
+                    sel_id = runner.get("selectionId")
+                    odds_data = runner.get("winRunnerOdds", {})
+                    american = odds_data.get("americanDisplayOdds", {}).get("americanOddsInt")
+                    if name == "under":
+                        nrfi_sel = {"selection_id": sel_id, "odds": american}
+                    elif name == "over":
+                        yrfi_sel = {"selection_id": sel_id, "odds": american}
+                if nrfi_sel and yrfi_sel:
+                    return {
+                        "fd_market_id": str(market_id),
+                        "nrfi_selection_id": str(nrfi_sel["selection_id"]),
+                        "nrfi_odds": nrfi_sel["odds"],
+                        "yrfi_selection_id": str(yrfi_sel["selection_id"]),
+                        "yrfi_odds": yrfi_sel["odds"],
+                    }
+    except Exception as exc:
+        print(f"[FD] market fetch error for event {event_id}: {exc}")
+    return None
+
+
+def _match_fd_event(
+    fd_events: Dict[int, Dict[str, Any]],
+    home_team_name: str,
+    away_team_name: str,
+    game_date: Optional[str],
+) -> Optional[int]:
+    """Match a propfinder game to a FanDuel event by team names in event name."""
+    home_lower = (home_team_name or "").lower()
+    away_lower = (away_team_name or "").lower()
+    if not home_lower or not away_lower:
+        return None
+    for eid, ev in fd_events.items():
+        ev_name = (ev.get("name") or "").lower()
+        if home_lower.split()[-1] in ev_name and away_lower.split()[-1] in ev_name:
+            return eid
+    return None
+
+
+def _format_nrfi_record(team: Dict[str, Any]) -> str:
+    """Format NRFI-YRFI record like '3-0 (100%)'."""
+    nrfi = team.get("teamNrfi") or 0
+    yrfi = team.get("teamYrfi") or 0
+    pct = team.get("teamNrfiPct")
+    pct_str = f" ({pct:.0f}%)" if pct is not None else ""
+    return f"{nrfi}-{yrfi}{pct_str}"
+
+
+def _format_pitcher_nrfi_record(team: Dict[str, Any]) -> str:
+    """Format pitcher NRFI-YRFI record."""
+    nrfi = team.get("pitcherNrfi") or 0
+    yrfi = team.get("pitcherYrfi") or 0
+    pct = team.get("pitcherNrfiPct")
+    pct_str = f" ({pct:.0f}%)" if pct is not None else ""
+    return f"{nrfi}-{yrfi}{pct_str}"
+
+
+def _format_nrfi_team(team: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "team_id": team.get("teamId"),
+        "team_code": team.get("teamCode"),
+        "team_name": team.get("teamName"),
+        "pitcher_id": team.get("pitcherId"),
+        "pitcher_name": team.get("pitcherName"),
+        # Team records
+        "team_nrfi": team.get("teamNrfi") or 0,
+        "team_yrfi": team.get("teamYrfi") or 0,
+        "team_games_played": team.get("teamGamesPlayed") or 0,
+        "team_nrfi_pct": team.get("teamNrfiPct"),
+        "team_nrfi_record": _format_nrfi_record(team),
+        "team_l10_nrfi": team.get("teamLast10Nrfi") or 0,
+        "team_l10_yrfi": team.get("teamLast10Yrfi") or 0,
+        "team_l10_record": f"{team.get('teamLast10Nrfi', 0)}-{team.get('teamLast10Yrfi', 0)}",
+        "team_streak": team.get("teamStreak") or "",
+        # Pitcher records
+        "pitcher_nrfi": team.get("pitcherNrfi") or 0,
+        "pitcher_yrfi": team.get("pitcherYrfi") or 0,
+        "pitcher_games_started": team.get("pitcherGamesStarted") or 0,
+        "pitcher_nrfi_pct": team.get("pitcherNrfiPct"),
+        "pitcher_nrfi_record": _format_pitcher_nrfi_record(team),
+        "pitcher_streak": team.get("pitcherStreak") or "",
+    }
+
+
+@router.get("/mlb/matchups/nrfi")
+def mlb_nrfi_matchups():
+    """
+    Returns today's NRFI/YRFI matchup data from propfinder,
+    enriched with FanDuel market/selection IDs and odds,
+    sorted by NRFI score descending.
+    """
+    cache_key = "nrfi-matchups"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    # Fetch propfinder NRFI data and FanDuel events in parallel
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        fut_nrfi = pool.submit(_fetch_nrfi_matchups)
+        fut_fd_events = pool.submit(_fetch_fd_mlb_events)
+
+    raw = fut_nrfi.result()
+    fd_events = fut_fd_events.result()
+
+    # Build matchups and match to FanDuel events
+    matchups = []
+    fd_event_ids: List[tuple] = []  # [(matchup_index, fd_event_id)]
+
+    for idx, game in enumerate(raw):
+        home = game.get("homeTeam") or {}
+        away = game.get("awayTeam") or {}
+        home_name = home.get("teamName", "")
+        away_name = away.get("teamName", "")
+
+        fd_event_id = _match_fd_event(fd_events, home_name, away_name, game.get("gameDate"))
+
+        matchups.append({
+            "game_id": game.get("gameId"),
+            "game_date": game.get("gameDate"),
+            "nrfi_score": game.get("combinedNrfiScore"),
+            "home_team": _format_nrfi_team(home),
+            "away_team": _format_nrfi_team(away),
+            # FD fields (filled in below)
+            "fd_market_id": None,
+            "nrfi_selection_id": None,
+            "nrfi_odds": None,
+            "yrfi_selection_id": None,
+            "yrfi_odds": None,
+        })
+
+        if fd_event_id is not None:
+            fd_event_ids.append((idx, fd_event_id))
+
+    # Fetch FanDuel NRFI markets for matched events in parallel
+    if fd_event_ids:
+        with ThreadPoolExecutor(max_workers=min(len(fd_event_ids), 10)) as pool:
+            futures = {
+                pool.submit(_fetch_fd_nrfi_market, eid): idx
+                for idx, eid in fd_event_ids
+            }
+            for fut in futures:
+                idx = futures[fut]
+                try:
+                    fd_data = fut.result()
+                    if fd_data:
+                        matchups[idx]["fd_market_id"] = fd_data["fd_market_id"]
+                        matchups[idx]["nrfi_selection_id"] = fd_data["nrfi_selection_id"]
+                        matchups[idx]["nrfi_odds"] = fd_data["nrfi_odds"]
+                        matchups[idx]["yrfi_selection_id"] = fd_data["yrfi_selection_id"]
+                        matchups[idx]["yrfi_odds"] = fd_data["yrfi_odds"]
+                except Exception:
+                    pass
+
+    # Sort by nrfi_score descending (best NRFI bets first)
+    matchups.sort(key=lambda m: m.get("nrfi_score") or 0, reverse=True)
+
+    result = {
+        "matchups": matchups,
+        "count": len(matchups),
+    }
+    _cache_set(cache_key, result)
+    return result

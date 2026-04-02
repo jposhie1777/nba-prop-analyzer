@@ -1,0 +1,733 @@
+import { useCallback, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+
+import {
+  useMlbHrCheatSheet,
+  type CheatSheetBatter,
+} from "@/hooks/mlb/useMlbMatchups";
+import { useTheme } from "@/store/useTheme";
+import { usePropBetslip, type PropSlipItem } from "@/store/usePropBetslip";
+import { buildFanDuelParlay, getBuildPlatform } from "@/utils/parlayBuilder";
+import { getMlbTeamLogo } from "@/utils/mlbLogos";
+import { formatET } from "@/lib/time/formatET";
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function fmt(value?: number | null, digits = 3): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return value.toFixed(digits);
+}
+
+function fmtPct(value?: number | null, digits = 1): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `${value.toFixed(digits)}%`;
+}
+
+function fmtOdds(value?: number | null): string {
+  if (value == null || !Number.isFinite(value) || value === 0) return "—";
+  return value > 0 ? `+${Math.round(value)}` : `${Math.round(value)}`;
+}
+
+function handLabel(side?: string | null): string {
+  const s = (side ?? "").toUpperCase();
+  if (s === "L") return "LHB";
+  if (s === "S") return "SHB";
+  return "RHB";
+}
+
+type GradeKey = "A+" | "A" | "B" | "C" | "D";
+
+const GRADE_CONFIG: Record<GradeKey, { label: string; border: string; bg: string; text: string }> = {
+  "A+": { label: "A+  IDEAL", border: "#10B981", bg: "rgba(16,185,129,0.12)", text: "#A7F3D0" },
+  A: { label: "A  FAVORABLE", border: "#22D3EE", bg: "rgba(34,211,238,0.12)", text: "#CFFAFE" },
+  B: { label: "B  AVERAGE", border: "#F59E0B", bg: "rgba(245,158,11,0.12)", text: "#FDE68A" },
+  C: { label: "C  BELOW AVG", border: "#F97316", bg: "rgba(249,115,22,0.12)", text: "#FED7AA" },
+  D: { label: "D  AVOID", border: "#EF4444", bg: "rgba(239,68,68,0.12)", text: "#FECACA" },
+};
+
+const VISIBLE_GRADES: GradeKey[] = ["A+", "A", "B", "C"];
+
+function greenTone(metric: string, value?: number | null) {
+  if (value == null || !Number.isFinite(value)) return null;
+  switch (metric) {
+    case "iso": if (value > 0.2) return st.cellGreen; break;
+    case "slg": if (value > 0.48) return st.cellGreen; break;
+    case "barrel_pct": if (value > 12) return st.cellGreen; break;
+    case "hh_pct": if (value > 38) return st.cellGreen; break;
+    case "ev": if (value > 90) return st.cellGreen; break;
+  }
+  return null;
+}
+
+// ── Group batters by game within a grade ───────────────────────────────────
+
+type GameGroup = {
+  game_pk: number;
+  home_team: string;
+  away_team: string;
+  start_time_utc: string | null;
+  venue_name: string | null;
+  batters: CheatSheetBatter[];
+};
+
+function groupByGame(batters: CheatSheetBatter[]): GameGroup[] {
+  const map = new Map<number, GameGroup>();
+  for (const b of batters) {
+    const gpk = b.game_pk ?? 0;
+    let group = map.get(gpk);
+    if (!group) {
+      group = {
+        game_pk: gpk,
+        home_team: b.home_team ?? "Home",
+        away_team: b.away_team ?? "Away",
+        start_time_utc: b.start_time_utc ?? null,
+        venue_name: b.venue_name ?? null,
+        batters: [],
+      };
+      map.set(gpk, group);
+    }
+    group.batters.push(b);
+  }
+  // Sort by start time ascending
+  return Array.from(map.values()).sort(
+    (a, b) => (a.start_time_utc ?? "9999").localeCompare(b.start_time_utc ?? "9999")
+  );
+}
+
+// ── Batter row ─────────────────────────────────────────────────────────────
+
+function CheatSheetBatterRow({
+  batter,
+  selected,
+  onToggleSelect,
+  expanded,
+  onToggleExpand,
+}: {
+  batter: CheatSheetBatter;
+  selected: boolean;
+  onToggleSelect: () => void;
+  expanded: boolean;
+  onToggleExpand: () => void;
+}) {
+  const hasFd = !!(batter.fd_market_id && batter.fd_selection_id);
+  const config = GRADE_CONFIG[(batter.grade === "IDEAL" ? "A+" : batter.grade === "FAVORABLE" ? "A" : batter.grade === "AVOID" ? "D" : batter.grade === "AVERAGE" ? "B" : "C") as GradeKey];
+
+  return (
+    <View
+      style={[
+        st.batterRowWrap,
+        selected ? st.batterRowSelected : null,
+        batter.is_weak_spot ? st.batterRowWeakSpot : null,
+      ]}
+    >
+      <View style={st.batterRow}>
+        {/* Select box */}
+        <Pressable
+          style={[st.selectBox, selected ? st.selectBoxActive : null, !hasFd ? st.selectBoxDisabled : null]}
+          onPress={hasFd ? onToggleSelect : undefined}
+        >
+          <Text style={[st.selectBoxText, selected ? st.selectBoxTextActive : null]}>
+            {selected ? "✓" : "+"}
+          </Text>
+        </Pressable>
+
+        {/* Chevron + player info */}
+        <Pressable style={st.batterInfoCol} onPress={onToggleExpand}>
+          <Text style={st.chevron}>{expanded ? "▾" : "▸"}</Text>
+          <View style={[st.gradeChip, { backgroundColor: config.bg, borderColor: config.border }]}>
+            <Text style={[st.gradeChipText, { color: config.text }]}>
+              {batter.grade === "IDEAL" ? "A+" : batter.grade === "FAVORABLE" ? "A" : batter.grade === "AVOID" ? "D" : "B"}
+            </Text>
+          </View>
+          <View style={st.nameWrap}>
+            <Text style={st.batterName} numberOfLines={1}>
+              {batter.is_weak_spot ? "🎯 " : ""}{batter.batter_name ?? "—"}
+            </Text>
+            <Text style={st.batterMeta}>
+              {handLabel(batter.bat_side)}
+              {batter.is_weak_spot ? " · WEAK SPOT" : ""}
+              {batter.pitcher_name ? ` · vs ${batter.pitcher_name}` : ""}
+            </Text>
+          </View>
+        </Pressable>
+
+        {/* Key stats */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={st.statsScroll}>
+          <View style={st.statsRow}>
+            <Text style={[st.statCell, greenTone("iso", batter.iso)]}>{fmt(batter.iso)}</Text>
+            <Text style={[st.statCell, greenTone("barrel_pct", batter.l15_barrel_pct)]}>{fmtPct(batter.l15_barrel_pct)}</Text>
+            <Text style={[st.statCell, greenTone("hh_pct", batter.l15_hard_hit_pct)]}>{fmtPct(batter.l15_hard_hit_pct)}</Text>
+            <Text style={[st.statCell, greenTone("slg", batter.slg)]}>{fmt(batter.slg)}</Text>
+          </View>
+        </ScrollView>
+      </View>
+
+      {/* Expanded detail */}
+      {expanded ? (
+        <View style={st.expandedArea}>
+          <View style={st.expandedRow}>
+            <View style={st.expandedStat}>
+              <Text style={st.expandedLabel}>SCORE</Text>
+              <Text style={st.expandedValue}>{batter.score?.toFixed(1) ?? "—"}</Text>
+            </View>
+            <View style={st.expandedStat}>
+              <Text style={st.expandedLabel}>L15 EV</Text>
+              <Text style={[st.expandedValue, greenTone("ev", batter.l15_ev)]}>{batter.l15_ev?.toFixed(1) ?? "—"}</Text>
+            </View>
+            <View style={st.expandedStat}>
+              <Text style={st.expandedLabel}>SZN EV</Text>
+              <Text style={[st.expandedValue, greenTone("ev", batter.season_ev)]}>{batter.season_ev?.toFixed(1) ?? "—"}</Text>
+            </View>
+            <View style={st.expandedStat}>
+              <Text style={st.expandedLabel}>SZN BRL%</Text>
+              <Text style={[st.expandedValue, greenTone("barrel_pct", batter.season_barrel_pct)]}>{fmtPct(batter.season_barrel_pct)}</Text>
+            </View>
+            <View style={st.expandedStat}>
+              <Text style={st.expandedLabel}>HR/FB%</Text>
+              <Text style={st.expandedValue}>{fmtPct(batter.hr_fb_pct)}</Text>
+            </View>
+          </View>
+          <View style={st.expandedRow}>
+            <View style={st.expandedStat}>
+              <Text style={st.expandedLabel}>P HR/9</Text>
+              <Text style={st.expandedValue}>{batter.p_hr9_vs_hand?.toFixed(2) ?? "—"}</Text>
+            </View>
+            <View style={st.expandedStat}>
+              <Text style={st.expandedLabel}>ODDS</Text>
+              <Text style={st.expandedValue}>{fmtOdds(batter.hr_odds_best_price)}</Text>
+            </View>
+            <View style={st.expandedStat}>
+              <Text style={st.expandedLabel}>BOOK</Text>
+              <Text style={st.expandedValue}>{batter.hr_odds_best_book ?? "—"}</Text>
+            </View>
+          </View>
+          {batter.why ? (
+            <Text style={st.whyText}>{batter.why}</Text>
+          ) : null}
+          {batter.flags && batter.flags.length > 0 ? (
+            <View style={st.flagsRow}>
+              {batter.flags.map((f, i) => (
+                <View key={i} style={st.flagPill}>
+                  <Text style={st.flagText}>{f}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+// ── Game header within a grade section ─────────────────────────────────────
+
+function GameHeader({ group }: { group: GameGroup }) {
+  const awayLogo = getMlbTeamLogo(group.away_team) ?? undefined;
+  const homeLogo = getMlbTeamLogo(group.home_team) ?? undefined;
+
+  return (
+    <View style={st.gameHeader}>
+      <View style={st.gameHeaderTeams}>
+        {awayLogo ? <Image source={{ uri: awayLogo }} style={st.gameHeaderLogo} /> : null}
+        <Text style={st.gameHeaderTeamText}>{group.away_team}</Text>
+        <Text style={st.gameHeaderAt}>@</Text>
+        {homeLogo ? <Image source={{ uri: homeLogo }} style={st.gameHeaderLogo} /> : null}
+        <Text style={st.gameHeaderTeamText}>{group.home_team}</Text>
+      </View>
+      <Text style={st.gameHeaderTime}>
+        {formatET(group.start_time_utc)} ET
+        {group.venue_name ? ` · ${group.venue_name}` : ""}
+      </Text>
+    </View>
+  );
+}
+
+// ── Grade section (collapsible) ────────────────────────────────────────────
+
+function GradeSection({
+  gradeKey,
+  batters,
+  selectedKeys,
+  onToggleSelect,
+  expandedIds,
+  onToggleExpand,
+}: {
+  gradeKey: GradeKey;
+  batters: CheatSheetBatter[];
+  selectedKeys: Set<string>;
+  onToggleSelect: (batterId: string) => void;
+  expandedIds: Set<string>;
+  onToggleExpand: (batterId: string) => void;
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  const config = GRADE_CONFIG[gradeKey];
+  const gameGroups = useMemo(() => groupByGame(batters), [batters]);
+
+  if (batters.length === 0) return null;
+
+  return (
+    <View style={[st.gradeSection, { borderColor: config.border }]}>
+      <Pressable style={st.gradeSectionHeader} onPress={() => setCollapsed((c) => !c)}>
+        <View style={[st.gradeBadge, { backgroundColor: config.bg, borderColor: config.border }]}>
+          <Text style={[st.gradeBadgeText, { color: config.text }]}>{gradeKey}</Text>
+        </View>
+        <Text style={[st.gradeSectionTitle, { color: config.text }]}>{config.label}</Text>
+        <Text style={st.gradeSectionCount}>{batters.length}</Text>
+        <Text style={st.gradeSectionChevron}>{collapsed ? "▸" : "▾"}</Text>
+      </Pressable>
+
+      {!collapsed ? (
+        <View style={st.gradeSectionBody}>
+          {/* Column headers */}
+          <View style={st.headerRow}>
+            <View style={st.headerInfoCol}>
+              <Text style={st.headerText}>PLAYER</Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={st.statsScroll}>
+              <View style={st.statsRow}>
+                <Text style={st.headerCell}>ISO</Text>
+                <Text style={st.headerCell}>BRL%</Text>
+                <Text style={st.headerCell}>HH%</Text>
+                <Text style={st.headerCell}>SLG</Text>
+              </View>
+            </ScrollView>
+          </View>
+
+          {gameGroups.map((group) => (
+            <View key={group.game_pk}>
+              <GameHeader group={group} />
+              {group.batters.map((batter) => {
+                const batterId = String(batter.batter_id ?? batter.batter_name ?? "");
+                return (
+                  <CheatSheetBatterRow
+                    key={`${group.game_pk}-${batterId}`}
+                    batter={batter}
+                    selected={selectedKeys.has(batterId)}
+                    onToggleSelect={() => onToggleSelect(batterId)}
+                    expanded={expandedIds.has(`${group.game_pk}-${batterId}`)}
+                    onToggleExpand={() => onToggleExpand(`${group.game_pk}-${batterId}`)}
+                  />
+                );
+              })}
+            </View>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+// ── Main cheat sheet screen ────────────────────────────────────────────────
+
+export function MlbHrCheatSheetScreen() {
+  const { colors } = useTheme();
+  const { data, loading, error, refetch } = useMlbHrCheatSheet();
+  const platform = getBuildPlatform();
+
+  // Global betslip
+  const slipItems = usePropBetslip((s) => s.items);
+  const addToSlip = usePropBetslip((s) => s.add);
+  const removeFromSlip = usePropBetslip((s) => s.remove);
+  const clearSlip = usePropBetslip((s) => s.clear);
+
+  const selectedKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const item of slipItems) {
+      if (item.sport === "mlb" && item.market === "MLB 1+ HR") {
+        keys.add(String(item.player_id));
+      }
+    }
+    return keys;
+  }, [slipItems]);
+
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  const toggleExpand = useCallback((id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  // Find batter across all grades for toggle
+  const allBatters = useMemo(() => {
+    if (!data?.grades) return [];
+    return [
+      ...(data.grades["A+"] ?? []),
+      ...(data.grades.A ?? []),
+      ...(data.grades.B ?? []),
+      ...(data.grades.C ?? []),
+      ...(data.grades.D ?? []),
+    ];
+  }, [data]);
+
+  const toggleSelect = useCallback(
+    (batterId: string) => {
+      const found = allBatters.find(
+        (b) => String(b.batter_id ?? b.batter_name ?? "") === batterId
+      );
+      if (!found) return;
+
+      const slipId = `mlb-hr-${batterId}`;
+      if (slipItems.some((i) => i.id === slipId)) {
+        removeFromSlip(slipId);
+      } else if (slipItems.length < 10) {
+        addToSlip({
+          id: slipId,
+          player_id: Number(found.batter_id ?? 0),
+          player: found.batter_name ?? "Batter",
+          market: "MLB 1+ HR",
+          side: "over",
+          line: 0.5,
+          odds: Number(found.hr_odds_best_price ?? 100),
+          sport: "mlb",
+          bookmaker: null,
+          fd_market_id: found.fd_market_id ?? null,
+          fd_selection_id: found.fd_selection_id ?? null,
+        });
+      }
+    },
+    [allBatters, slipItems, addToSlip, removeFromSlip]
+  );
+
+  const mlbSlipItems = useMemo(
+    () => slipItems.filter((i) => i.sport === "mlb" && i.market === "MLB 1+ HR"),
+    [slipItems]
+  );
+
+  const fdLink = useMemo(() => {
+    if (mlbSlipItems.length === 0) return null;
+    return buildFanDuelParlay(
+      mlbSlipItems.map((i) => ({
+        fd_market_id: i.fd_market_id ?? null,
+        fd_selection_id: i.fd_selection_id ?? null,
+      })),
+      platform
+    );
+  }, [mlbSlipItems, platform]);
+
+  function openUrl(url?: string | null) {
+    if (!url) return;
+    if (platform === "desktop" && typeof globalThis.open === "function") {
+      globalThis.open(url, "_blank");
+      return;
+    }
+    Linking.openURL(url).catch(() => {});
+  }
+
+  return (
+    <View style={st.screen}>
+      <ScrollView style={st.scrollView} contentContainerStyle={st.content}>
+        <View style={[st.hero, { borderColor: colors.border.subtle }]}>
+          <Text style={st.eyebrow}>MLB HR CHEAT SHEET</Text>
+          <Text style={st.h1}>Home Run Picks by Grade</Text>
+          <Text style={st.sub}>
+            All batters across today&apos;s games organized by model grade. Tap to expand, select to build parlays.
+          </Text>
+          {data?.grade_counts ? (
+            <View style={st.countsRow}>
+              {VISIBLE_GRADES.map((g) => {
+                const cfg = GRADE_CONFIG[g];
+                const count = data.grade_counts[g] ?? 0;
+                return (
+                  <View key={g} style={[st.countPill, { borderColor: cfg.border }]}>
+                    <Text style={[st.countPillText, { color: cfg.text }]}>
+                      {g}: {count}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          ) : null}
+        </View>
+
+        {loading ? <ActivityIndicator color="#93C5FD" /> : null}
+
+        {error ? (
+          <Pressable onPress={refetch} style={[st.errorBox, { borderColor: colors.border.subtle }]}>
+            <Text style={st.errorTitle}>Failed to load cheat sheet.</Text>
+            <Text style={st.errorText}>{error}</Text>
+            <Text style={st.errorRetry}>Tap to retry</Text>
+          </Pressable>
+        ) : null}
+
+        {data?.grades
+          ? VISIBLE_GRADES.map((gradeKey) => (
+              <GradeSection
+                key={gradeKey}
+                gradeKey={gradeKey}
+                batters={data.grades[gradeKey] ?? []}
+                selectedKeys={selectedKeys}
+                onToggleSelect={toggleSelect}
+                expandedIds={expandedIds}
+                onToggleExpand={toggleExpand}
+              />
+            ))
+          : null}
+
+        {!loading && !error && data && Object.values(data.grade_counts ?? {}).every((c) => c === 0) ? (
+          <View style={[st.emptyCard, { borderColor: colors.border.subtle }]}>
+            <Text style={st.emptyTitle}>No HR picks available today.</Text>
+            <Text style={st.emptyText}>Picks will populate once the model run completes.</Text>
+          </View>
+        ) : null}
+      </ScrollView>
+
+      {/* Fixed bottom parlay bar */}
+      {mlbSlipItems.length >= 1 ? (
+        <View style={st.parlayBar}>
+          <View style={st.parlayTopRow}>
+            <Text style={st.parlayTitle}>
+              {mlbSlipItems.length} batter{mlbSlipItems.length !== 1 ? "s" : ""} selected
+            </Text>
+            <Pressable onPress={clearSlip}>
+              <Text style={st.parlayClear}>✕</Text>
+            </Pressable>
+          </View>
+          <View style={st.parlayLegs}>
+            {mlbSlipItems.map((item) => (
+              <Text key={item.id} style={st.parlayLegText}>
+                • {item.player} — 1+ HR {fmtOdds(item.odds)}
+              </Text>
+            ))}
+          </View>
+          <View style={st.parlayBtnRow}>
+            <Pressable
+              style={[st.parlayBtn, !fdLink ? st.parlayBtnDisabled : null]}
+              disabled={!fdLink}
+              onPress={() => openUrl(fdLink)}
+            >
+              <Text style={st.parlayBtnText}>
+                {mlbSlipItems.length === 1 ? "Bet FanDuel" : `Parlay on FanDuel (${mlbSlipItems.length} legs)`}
+              </Text>
+            </Pressable>
+          </View>
+          <Text style={st.parlayNote}>Parlay availability subject to sportsbook approval.</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+// ── Styles ──────────────────────────────────────────────────────────────────
+
+const STAT_CELL_W = 54;
+
+const st = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: "#050A18" },
+  scrollView: { flex: 1 },
+  content: { padding: 16, gap: 10, paddingBottom: 40 },
+
+  // Hero
+  hero: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 16,
+    backgroundColor: "#071731",
+    padding: 16,
+    gap: 6,
+    marginBottom: 4,
+  },
+  eyebrow: { color: "#10B981", fontSize: 11, fontWeight: "700" },
+  h1: { color: "#E9F2FF", fontSize: 22, fontWeight: "800", marginTop: 4 },
+  sub: { color: "#A7C0E8", fontSize: 12, lineHeight: 17 },
+  countsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 },
+  countPill: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: "#0F172A",
+  },
+  countPillText: { fontSize: 11, fontWeight: "800" },
+
+  // Grade section
+  gradeSection: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 14,
+    backgroundColor: "#0B1529",
+    overflow: "hidden",
+  },
+  gradeSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    gap: 8,
+  },
+  gradeBadge: {
+    borderWidth: 1,
+    borderRadius: 6,
+    width: 28,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  gradeBadgeText: { fontSize: 11, fontWeight: "900" },
+  gradeSectionTitle: { flex: 1, fontSize: 13, fontWeight: "800" },
+  gradeSectionCount: { color: "#94A3B8", fontSize: 12, fontWeight: "700" },
+  gradeSectionChevron: { color: "#64748B", fontSize: 14, width: 16, textAlign: "center" },
+  gradeSectionBody: { paddingHorizontal: 8, paddingBottom: 8, gap: 2 },
+
+  // Game header
+  gameHeader: {
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    marginTop: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#1E293B",
+  },
+  gameHeaderTeams: { flexDirection: "row", alignItems: "center", gap: 5 },
+  gameHeaderLogo: { width: 18, height: 18, borderRadius: 9, backgroundColor: "#111827" },
+  gameHeaderTeamText: { color: "#CBD5E1", fontSize: 11, fontWeight: "800" },
+  gameHeaderAt: { color: "#475569", fontSize: 10, fontWeight: "700" },
+  gameHeaderTime: { color: "#64748B", fontSize: 10, marginTop: 2 },
+
+  // Header row
+  headerRow: {
+    flexDirection: "row",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#334155",
+    paddingBottom: 4,
+    marginBottom: 2,
+  },
+  headerInfoCol: { width: 136, paddingLeft: 26 },
+  headerText: { color: "#64748B", fontSize: 9, fontWeight: "800" },
+  headerCell: {
+    width: STAT_CELL_W,
+    color: "#64748B",
+    fontSize: 9,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+
+  // Select box
+  selectBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: "#334155",
+    backgroundColor: "#0F172A",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 2,
+  },
+  selectBoxActive: { borderColor: "#10B981", backgroundColor: "rgba(16,185,129,0.2)" },
+  selectBoxDisabled: { opacity: 0.3 },
+  selectBoxText: { color: "#64748B", fontSize: 12, fontWeight: "800" },
+  selectBoxTextActive: { color: "#10B981" },
+
+  // Batter row
+  batterRowWrap: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(51,65,85,0.5)",
+  },
+  batterRowSelected: { backgroundColor: "rgba(16,185,129,0.06)" },
+  batterRowWeakSpot: { borderLeftWidth: 2, borderLeftColor: "#10B981" },
+  batterRow: { flexDirection: "row", alignItems: "center", minHeight: 36 },
+  batterInfoCol: {
+    width: 130,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingLeft: 2,
+    paddingVertical: 4,
+  },
+  chevron: { color: "#64748B", fontSize: 11, width: 14 },
+  gradeChip: {
+    borderWidth: 1,
+    borderRadius: 4,
+    width: 22,
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  gradeChipText: { fontSize: 9, fontWeight: "900" },
+  nameWrap: { flex: 1, gap: 0 },
+  batterName: { color: "#E5E7EB", fontSize: 11, fontWeight: "700" },
+  batterMeta: { color: "#64748B", fontSize: 8, fontWeight: "600" },
+
+  // Stats
+  statsScroll: { flex: 1 },
+  statsRow: { flexDirection: "row" },
+  statCell: {
+    width: STAT_CELL_W,
+    color: "#E2E8F0",
+    fontSize: 11,
+    fontWeight: "700",
+    textAlign: "center",
+    paddingVertical: 6,
+  },
+  cellGreen: { color: "#34D399" },
+
+  // Expanded
+  expandedArea: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: "rgba(15,23,42,0.4)",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#1E293B",
+    gap: 6,
+  },
+  expandedRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  expandedStat: { gap: 1 },
+  expandedLabel: { color: "#64748B", fontSize: 8, fontWeight: "800" },
+  expandedValue: { color: "#E2E8F0", fontSize: 11, fontWeight: "700" },
+  whyText: { color: "#94A3B8", fontSize: 10, fontStyle: "italic", marginTop: 2 },
+  flagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 2 },
+  flagPill: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#334155",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: "#0F172A",
+  },
+  flagText: { color: "#93C5FD", fontSize: 9, fontWeight: "700" },
+
+  // Parlay bar
+  parlayBar: {
+    borderTopWidth: 1,
+    borderTopColor: "#10B981",
+    backgroundColor: "rgba(2,6,23,0.98)",
+    padding: 12,
+    gap: 8,
+  },
+  parlayTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  parlayTitle: { color: "#E2E8F0", fontSize: 14, fontWeight: "800" },
+  parlayClear: { color: "#94A3B8", fontSize: 16, fontWeight: "900", paddingHorizontal: 4 },
+  parlayLegs: { gap: 2 },
+  parlayLegText: { color: "#C7D2FE", fontSize: 11 },
+  parlayBtnRow: { flexDirection: "row", gap: 8 },
+  parlayBtn: {
+    flex: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#10B981",
+    borderRadius: 10,
+    backgroundColor: "rgba(16,185,129,0.12)",
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  parlayBtnDisabled: { opacity: 0.4, borderColor: "#334155" },
+  parlayBtnText: { color: "#A7F3D0", fontSize: 13, fontWeight: "800" },
+  parlayNote: { color: "#64748B", fontSize: 9 },
+
+  // Error / empty
+  errorBox: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, backgroundColor: "#1F2937", padding: 12 },
+  errorTitle: { color: "#FCA5A5", fontWeight: "700" },
+  errorText: { color: "#FECACA", marginTop: 4, fontSize: 12 },
+  errorRetry: { color: "#E5E7EB", marginTop: 8, fontSize: 12 },
+  emptyCard: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, backgroundColor: "#0B1529", padding: 16 },
+  emptyTitle: { color: "#E5E7EB", fontWeight: "700" },
+  emptyText: { color: "#A7C0E8", marginTop: 6, fontSize: 12 },
+});

@@ -20,7 +20,11 @@ from typing import Dict, List, Optional
 from google.api_core.exceptions import BadRequest
 from google.cloud import bigquery
 
-from .pga_stats_scraper import fetch_stat_overview, stat_players_to_records
+from .pga_stats_scraper import (
+    fetch_stat_overview,
+    fetch_all_extra_stats,
+    stat_players_to_records,
+)
 
 DATASET = os.getenv("PGA_DATASET", "pga_data")
 TABLE = os.getenv("PGA_STATS_TABLE", "player_stats")
@@ -89,8 +93,32 @@ def ingest_stats(
     result = fetch_stat_overview(tour_code=tour_code, year=year)
     records = stat_players_to_records(result, run_ts=ts)
 
+    # Fetch extra stats not included in statOverview (SG:ATG, SG:T2G, etc.)
+    extra_players = fetch_all_extra_stats(tour_code=tour_code, year=year)
+    extra_records = [
+        {
+            "run_ts": ts,
+            "ingested_at": ts,
+            "tour_code": p.tour_code,
+            "year": p.year,
+            "stat_id": p.stat_id,
+            "stat_name": p.stat_name,
+            "tour_avg": p.tour_avg,
+            "player_id": p.player_id,
+            "player_name": p.player_name,
+            "stat_title": p.stat_title,
+            "stat_value": p.stat_value,
+            "rank": p.rank,
+            "country": p.country,
+            "country_flag": p.country_flag,
+        }
+        for p in extra_players
+    ]
+    records.extend(extra_records)
+
     rows_fetched = len(records)
-    print(f"[stats] Fetched {rows_fetched} stat-player rows for {tour_code}/{year}.")
+    print(f"[stats] Fetched {rows_fetched} stat-player rows for {tour_code}/{year} "
+          f"({len(extra_records)} from extra stat details).")
 
     if dry_run or not records:
         return {"rows_fetched": rows_fetched, "rows_inserted": 0}

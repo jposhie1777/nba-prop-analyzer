@@ -82,6 +82,42 @@ query StatOverview($tourCode: TourCode!, $year: Int!) {
 """.strip()
 
 
+STAT_DETAILS_QUERY = """
+query StatDetails($tourCode: TourCode!, $statId: String!, $year: Int!) {
+  statDetails(tourCode: $tourCode, statId: $statId, year: $year) {
+    tourCode
+    year
+    statId
+    statTitle
+    tourAvg
+    rows {
+      ... on StatDetailsPlayer {
+        playerId
+        playerName
+        country
+        countryFlag
+        rank
+        stats {
+          statName
+          statValue
+        }
+      }
+    }
+  }
+}
+""".strip()
+
+# Stat IDs not returned by statOverview but available via statDetails
+EXTRA_STAT_IDS = {
+    "02569": "SG: Around the Green",
+    "02674": "SG: Tee-to-Green",
+    "117": "Putts per GIR",
+    "142": "Par 3 Scoring Average",
+    "144": "Par 5 Scoring Average",
+    "160": "Bounce Back",
+}
+
+
 # ---------------------------------------------------------------------------
 # Data model
 # ---------------------------------------------------------------------------
@@ -260,6 +296,101 @@ def fetch_stat_overview(
                 continue
             raise
     raise RuntimeError(f"Exceeded {retries} retries. Last error: {last_exc}")
+
+
+def fetch_stat_details(
+    stat_id: str,
+    tour_code: str = "R",
+    year: int = 2025,
+    *,
+    api_key: str = DEFAULT_API_KEY,
+    retries: int = 3,
+) -> List[StatPlayerRow]:
+    """
+    Fetch a single stat leaderboard via the statDetails query.
+
+    Returns a list of :class:`StatPlayerRow` for the given stat.
+    """
+    backoff = 2
+    last_exc: Optional[Exception] = None
+    for attempt in range(retries):
+        try:
+            data = _post_graphql(
+                STAT_DETAILS_QUERY,
+                {"tourCode": tour_code, "statId": stat_id, "year": year},
+                api_key=api_key,
+            )
+            detail = data.get("statDetails") or {}
+            stat_title = str(detail.get("statTitle") or EXTRA_STAT_IDS.get(stat_id, stat_id))
+            tour_avg = detail.get("tourAvg")
+            players: List[StatPlayerRow] = []
+            for row in detail.get("rows") or []:
+                # Skip tour average rows (StatDetailTourAvg union member)
+                if not row.get("playerId"):
+                    continue
+                # statValue is inside the nested stats array
+                stat_value = ""
+                row_stats = row.get("stats") or []
+                if row_stats:
+                    stat_value = str(row_stats[0].get("statValue") or "")
+                players.append(
+                    StatPlayerRow(
+                        stat_id=stat_id,
+                        stat_name=stat_title,
+                        player_id=str(row.get("playerId") or ""),
+                        player_name=str(row.get("playerName") or ""),
+                        stat_title=stat_title,
+                        stat_value=stat_value,
+                        rank=_safe_int(row.get("rank")) or 0,
+                        country=row.get("country"),
+                        country_flag=row.get("countryFlag"),
+                        tour_avg=tour_avg,
+                        tour_code=tour_code,
+                        year=year,
+                    )
+                )
+            return players
+        except requests.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else 0
+            if status in (429, 500, 502, 503, 504):
+                last_exc = exc
+                time.sleep(backoff)
+                backoff *= 2
+                continue
+            raise
+        except Exception as exc:
+            last_exc = exc
+            if attempt < retries - 1:
+                time.sleep(backoff)
+                backoff *= 2
+                continue
+            raise
+    raise RuntimeError(f"Exceeded {retries} retries for stat {stat_id}. Last error: {last_exc}")
+
+
+def fetch_all_extra_stats(
+    tour_code: str = "R",
+    year: int = 2025,
+    *,
+    api_key: str = DEFAULT_API_KEY,
+) -> List[StatPlayerRow]:
+    """Fetch all extra stats (not in statOverview) via individual statDetails queries."""
+    all_players: List[StatPlayerRow] = []
+    for stat_id, stat_name in EXTRA_STAT_IDS.items():
+        print(f"[stats] Fetching stat detail: {stat_name} ({stat_id})")
+        try:
+            players = fetch_stat_details(
+                stat_id=stat_id,
+                tour_code=tour_code,
+                year=year,
+                api_key=api_key,
+            )
+            print(f"[stats]   → {len(players)} players")
+            all_players.extend(players)
+        except Exception as exc:
+            print(f"[stats]   → FAILED: {exc}")
+        time.sleep(0.5)
+    return all_players
 
 
 def fetch_stat_overview_raw(

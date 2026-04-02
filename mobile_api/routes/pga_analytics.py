@@ -30,6 +30,9 @@ from pga.bq import (
     fetch_betting_3ball,
     fetch_player_skill_stats,
     fetch_recent_player_form,
+    fetch_tournament_weather,
+    fetch_course_profile,
+    fetch_course_fit_for_tournament,
 )
 from pga.client import PgaApiError, fetch_one_page, fetch_paginated
 from pga.utils import parse_iso_datetime
@@ -872,6 +875,70 @@ def pga_betting_3ball(
             "tournament_id": tournament_id or (rows[0]["tournament_id"] if rows else None),
             "count": len(rows),
             "rows": rows,
+        }
+    except Exception as err:
+        _handle_error(err)
+
+
+# ── Weather ──────────────────────────────────────────────────────────────────
+
+
+@router.get("/analytics/weather")
+def pga_weather(
+    tournament_id: Optional[str] = None,
+    forecast_type: Optional[str] = None,
+):
+    """Return tournament weather forecast (hourly + daily)."""
+    try:
+        params: Dict[str, Any] = {}
+        if tournament_id:
+            params["tournament_id"] = tournament_id
+        if forecast_type:
+            params["forecast_type"] = forecast_type
+        rows = fetch_tournament_weather(params)
+        hourly = [r for r in rows if r.get("forecast_type") == "hourly"]
+        daily = [r for r in rows if r.get("forecast_type") == "daily"]
+        return {
+            "tournament_id": tournament_id or (rows[0]["tournament_id"] if rows else None),
+            "hourly": hourly,
+            "daily": daily,
+        }
+    except Exception as err:
+        _handle_error(err)
+
+
+# ── Course Profile & Fit ─────────────────────────────────────────────────────
+
+
+@router.get("/analytics/course-traits")
+def pga_course_traits(
+    course_name: Optional[str] = None,
+):
+    """Return course profile with key traits and recommended stats for analysis."""
+    try:
+        params: Dict[str, Any] = {}
+        if course_name:
+            params["course_name"] = course_name
+        rows = fetch_course_profile(params)
+        return {
+            "count": len(rows),
+            "profiles": rows,
+        }
+    except Exception as err:
+        _handle_error(err)
+
+
+@router.get("/analytics/course-fit-players")
+def pga_course_fit_players(
+    course_name: str = Query(..., description="Course name to look up (partial match)"),
+):
+    """Return player course fit data — how each player performs at a specific course vs their baseline."""
+    try:
+        rows = fetch_course_fit_for_tournament({"course_name": course_name})
+        return {
+            "course_name": course_name,
+            "count": len(rows),
+            "players": rows,
         }
     except Exception as err:
         _handle_error(err)

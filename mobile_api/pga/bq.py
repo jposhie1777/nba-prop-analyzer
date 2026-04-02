@@ -11,7 +11,7 @@ from bq import get_bq_client
 
 DATASET = os.getenv("PGA_DATASET", "pga_data")
 PLAYERS_TABLE = os.getenv("PGA_PLAYERS_TABLE", "players_active")
-ROUND_SCORES_TABLE = os.getenv("PGA_ROUND_SCORES_TABLE", "tournament_round_scores")
+ROUND_SCORES_TABLE = os.getenv("PGA_ROUND_SCORES_TABLE", "website_player_scorecard")
 PAIRINGS_VIEW = os.getenv("PGA_PAIRINGS_VIEW", "v_pairings_latest")
 
 
@@ -550,8 +550,8 @@ def fetch_tournament_round_scores(params: Optional[Dict[str, Any]] = None) -> Li
     project = client.project
 
     season = params.get("season")
-    tournament_ids = _normalize_int_list(params.get("tournament_ids"))
-    player_ids = _normalize_int_list(params.get("player_ids"))
+    tournament_ids = params.get("tournament_ids")
+    player_ids = params.get("player_ids")
     round_numbers = _normalize_int_list(params.get("round_numbers"))
 
     table = f"`{project}.{DATASET}.{ROUND_SCORES_TABLE}`"
@@ -564,15 +564,17 @@ def fetch_tournament_round_scores(params: Optional[Dict[str, Any]] = None) -> Li
         query_params.append(bigquery.ScalarQueryParameter("season", "INT64", int(season)))
 
     if tournament_ids:
+        str_ids = [str(t) for t in tournament_ids]
         conditions.append("tournament_id IN UNNEST(@tournament_ids)")
         query_params.append(
-            bigquery.ArrayQueryParameter("tournament_ids", "INT64", tournament_ids)
+            bigquery.ArrayQueryParameter("tournament_ids", "STRING", str_ids)
         )
 
     if player_ids:
+        str_ids = [str(p) for p in player_ids]
         conditions.append("player_id IN UNNEST(@player_ids)")
         query_params.append(
-            bigquery.ArrayQueryParameter("player_ids", "INT64", player_ids)
+            bigquery.ArrayQueryParameter("player_ids", "STRING", str_ids)
         )
 
     if round_numbers:
@@ -584,31 +586,48 @@ def fetch_tournament_round_scores(params: Optional[Dict[str, Any]] = None) -> Li
     where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
     query = f"""
-    WITH latest AS (
-      SELECT * EXCEPT(row_num)
-      FROM (
+    WITH deduped AS (
+      SELECT * EXCEPT(_rn) FROM (
         SELECT *,
           ROW_NUMBER() OVER (
-            PARTITION BY tournament_id, player_id, round_number
+            PARTITION BY tournament_id, player_id
             ORDER BY run_ts DESC
-          ) AS row_num
+          ) AS _rn
         FROM {table}
+      ) WHERE _rn = 1
+    ),
+    unpivoted AS (
+      SELECT
+        season,
+        tournament_id,
+        tournament_name,
+        course_name,
+        tournament_date AS tournament_start_date,
+        player_id,
+        player_display_name,
+        position,
+        to_par,
+        round_number,
+        round_score
+      FROM deduped
+      UNPIVOT (
+        round_score FOR round_number IN (r1 AS 1, r2 AS 2, r3 AS 3, r4 AS 4)
       )
-      WHERE row_num = 1
     )
     SELECT
       season,
       tournament_id,
       tournament_name,
+      course_name,
       tournament_start_date,
       round_number,
-      round_date,
+      CAST(NULL AS STRING) AS round_date,
       player_id,
       player_display_name,
       round_score,
-      par_relative_score,
-      total_score
-    FROM latest
+      CAST(NULL AS INT64) AS par_relative_score,
+      CAST(NULL AS INT64) AS total_score
+    FROM unpivoted
     {where_clause}
     ORDER BY round_number
     """
@@ -622,6 +641,7 @@ def fetch_tournament_round_scores(params: Optional[Dict[str, Any]] = None) -> Li
                 "tournament_id": row.get("tournament_id"),
                 "tournament_name": row.get("tournament_name"),
                 "tournament_start_date": _iso(row.get("tournament_start_date")),
+                "course_name": row.get("course_name"),
                 "round_number": row.get("round_number"),
                 "round_date": _iso(row.get("round_date")),
                 "player_id": row.get("player_id"),
@@ -1084,6 +1104,8 @@ def fetch_player_skill_stats(params: Optional[Dict[str, Any]] = None) -> List[Di
       sg_off_tee,
       sg_approach,
       sg_putting,
+      sg_around_green,
+      sg_tee_to_green,
       driving_distance,
       driving_accuracy,
       gir_pct,
@@ -1091,7 +1113,13 @@ def fetch_player_skill_stats(params: Optional[Dict[str, Any]] = None) -> List[Di
       putting_avg,
       putts_per_round,
       scoring_avg,
-      birdie_avg
+      birdie_avg,
+      par3_scoring_avg,
+      par4_scoring_avg,
+      par5_scoring_avg,
+      bounce_back_pct,
+      putts_per_gir,
+      proximity_to_hole
     FROM {table}
     ORDER BY sg_total DESC NULLS LAST
     """
@@ -1105,6 +1133,8 @@ def fetch_player_skill_stats(params: Optional[Dict[str, Any]] = None) -> List[Di
             "sg_off_tee": row.get("sg_off_tee"),
             "sg_approach": row.get("sg_approach"),
             "sg_putting": row.get("sg_putting"),
+            "sg_around_green": row.get("sg_around_green"),
+            "sg_tee_to_green": row.get("sg_tee_to_green"),
             "driving_distance": row.get("driving_distance"),
             "driving_accuracy": row.get("driving_accuracy"),
             "gir_pct": row.get("gir_pct"),
@@ -1113,6 +1143,12 @@ def fetch_player_skill_stats(params: Optional[Dict[str, Any]] = None) -> List[Di
             "putts_per_round": row.get("putts_per_round"),
             "scoring_avg": row.get("scoring_avg"),
             "birdie_avg": row.get("birdie_avg"),
+            "par3_scoring_avg": row.get("par3_scoring_avg"),
+            "par4_scoring_avg": row.get("par4_scoring_avg"),
+            "par5_scoring_avg": row.get("par5_scoring_avg"),
+            "bounce_back_pct": row.get("bounce_back_pct"),
+            "putts_per_gir": row.get("putts_per_gir"),
+            "proximity_to_hole": row.get("proximity_to_hole"),
         }
         for row in rows
     ]
@@ -1470,3 +1506,144 @@ def fetch_course_holes(params: Optional[Dict[str, Any]] = None) -> List[Dict[str
             }
         )
     return payload
+
+
+def fetch_tournament_weather(params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """Query pga_data.tournament_weather for the latest forecast."""
+    params = params or {}
+    client = get_bq_client()
+    project = client.project
+    table = f"`{project}.{DATASET}.tournament_weather`"
+
+    tournament_id = params.get("tournament_id")
+    forecast_type = params.get("forecast_type")
+
+    conditions: List[str] = []
+    query_params: List[bigquery.QueryParameter] = []
+
+    if tournament_id:
+        conditions.append("tournament_id = @tournament_id")
+        query_params.append(bigquery.ScalarQueryParameter("tournament_id", "STRING", str(tournament_id)))
+
+    if forecast_type:
+        conditions.append("forecast_type = @forecast_type")
+        query_params.append(bigquery.ScalarQueryParameter("forecast_type", "STRING", forecast_type))
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    query = f"""
+    WITH latest AS (
+      SELECT * EXCEPT(_rn) FROM (
+        SELECT *, ROW_NUMBER() OVER (
+          PARTITION BY tournament_id, forecast_type, time_label
+          ORDER BY run_ts DESC
+        ) AS _rn
+        FROM {table}
+      ) WHERE _rn = 1
+    )
+    SELECT * FROM latest
+    {where_clause}
+    ORDER BY forecast_type, time_label
+    """
+
+    try:
+        rows = _run_query(client, query, query_params)
+    except Exception:
+        return []
+    return [
+        {
+            "tournament_id": row.get("tournament_id"),
+            "forecast_type": row.get("forecast_type"),
+            "time_label": row.get("time_label"),
+            "condition": row.get("condition"),
+            "wind_direction": row.get("wind_direction"),
+            "wind_speed_mph": row.get("wind_speed_mph"),
+            "wind_speed_kph": row.get("wind_speed_kph"),
+            "humidity_pct": row.get("humidity_pct"),
+            "precipitation_pct": row.get("precipitation_pct"),
+            "temp_f": row.get("temp_f"),
+            "temp_c": row.get("temp_c"),
+            "min_temp_f": row.get("min_temp_f"),
+            "max_temp_f": row.get("max_temp_f"),
+        }
+        for row in rows
+    ]
+
+
+def fetch_course_profile(params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """Query pga_data.course_profiles for course analytics traits."""
+    params = params or {}
+    client = get_bq_client()
+    project = client.project
+    table = f"`{project}.{DATASET}.course_profiles`"
+
+    course_name = params.get("course_name")
+    conditions: List[str] = []
+    query_params: List[bigquery.QueryParameter] = []
+
+    if course_name:
+        conditions.append("LOWER(course_name) LIKE @course_name")
+        query_params.append(bigquery.ScalarQueryParameter("course_name", "STRING", f"%{course_name.lower()}%"))
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    query = f"SELECT * FROM {table} {where_clause}"
+
+    try:
+        rows = _run_query(client, query, query_params)
+    except Exception:
+        return []
+
+    import json as _json
+    return [
+        {
+            "course_name": row.get("course_name"),
+            "tournament_name": row.get("tournament_name"),
+            "primary_traits": _json.loads(row.get("primary_traits") or "[]"),
+            "secondary_traits": _json.loads(row.get("secondary_traits") or "[]"),
+            "key_stats": _json.loads(row.get("key_stats") or "[]"),
+            "notes": row.get("notes"),
+        }
+        for row in rows
+    ]
+
+
+def fetch_course_fit_for_tournament(params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """Query website_course_fit for players at a specific course."""
+    params = params or {}
+    client = get_bq_client()
+    project = client.project
+    table = f"`{project}.{DATASET}.website_course_fit`"
+
+    course_name = params.get("course_name")
+    conditions: List[str] = []
+    query_params: List[bigquery.QueryParameter] = []
+
+    if course_name:
+        conditions.append("LOWER(course_name) LIKE @course_name")
+        query_params.append(bigquery.ScalarQueryParameter("course_name", "STRING", f"%{course_name.lower()}%"))
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    query = f"""
+    SELECT
+      player_id, player_display_name, course_name,
+      rounds_played, avg_course_score, avg_round_score, course_delta
+    FROM {table}
+    {where_clause}
+    ORDER BY course_delta ASC NULLS LAST
+    """
+
+    rows = _run_query(client, query, query_params)
+    return [
+        {
+            "player_id": row.get("player_id"),
+            "player_display_name": row.get("player_display_name"),
+            "course_name": row.get("course_name"),
+            "rounds_played": row.get("rounds_played"),
+            "avg_course_score": row.get("avg_course_score"),
+            "avg_round_score": row.get("avg_round_score"),
+            "course_delta": row.get("course_delta"),
+        }
+        for row in rows
+    ]

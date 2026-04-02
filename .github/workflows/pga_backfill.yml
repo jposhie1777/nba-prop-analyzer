@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       years:
-        description: "How many seasons to backfill (default 5)"
+        description: "How many seasons to backfill (default 8)"
         required: false
-        default: "5"
+        default: "8"
       start_season:
         description: "Optional start season (YYYY)"
         required: false
@@ -102,3 +102,7 @@ jobs:
 
           echo "Running: python -m mobile_api.ingest.pga.player_scorecard_ingest $ARGS"
           python -m mobile_api.ingest.pga.player_scorecard_ingest $ARGS
+
+      - name: Rebuild derived analytics tables
+        run: |
+          python -m mobile_api.ingest.pga.pga_derived_tables

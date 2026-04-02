@@ -160,7 +160,7 @@ def _season_range() -> List[int]:
     end = os.getenv("PGA_END_SEASON")
     if start and end:
         return list(range(int(start), int(end) + 1))
-    years_back = int(os.getenv("PGA_BACKFILL_YEARS", "5"))
+    years_back = int(os.getenv("PGA_BACKFILL_YEARS", "8"))
     current = datetime.utcnow().year
     return [current - offset for offset in range(years_back)]
 

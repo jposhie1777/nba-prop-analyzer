@@ -45,6 +45,12 @@ jobs:
           echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > gcp.json
           echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp.json" >> $GITHUB_ENV
 
+      - name: Refresh active players list
+        run: |
+          YEAR=$(date +%Y)
+          TOUR="${{ inputs.tour || 'R' }}"
+          python -m mobile_api.ingest.pga.website_players_stats_ingest --year $YEAR --tour $TOUR
+
       - name: Ingest round scores
         run: |
           ARGS=""
@@ -84,3 +90,11 @@ jobs:
             echo "Note: --date override provided; tournament auto-detection used (date not forwarded to scorecard ingest)"
           fi
           python -m mobile_api.ingest.pga.player_scorecard_ingest $ARGS
+
+      - name: Ingest tournament weather
+        run: |
+          python -m mobile_api.ingest.pga.pga_weather_ingest
+
+      - name: Rebuild derived analytics tables
+        run: |
+          python -m mobile_api.ingest.pga.pga_derived_tables

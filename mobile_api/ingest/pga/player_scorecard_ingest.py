@@ -462,7 +462,7 @@ def run_backfill(
         if start and end:
             seasons = list(range(int(start), int(end) + 1))
         else:
-            years_back = int(os.getenv("PGA_BACKFILL_YEARS", "5"))
+            years_back = int(os.getenv("PGA_BACKFILL_YEARS", "8"))
             current = datetime.datetime.utcnow().year
             seasons = [current - i for i in range(years_back)]
 

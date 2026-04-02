@@ -26,10 +26,47 @@ RECENT_FORM_TABLE = f"{PROJECT}.pga_data.website_player_recent_form"
 COURSE_FIT_TABLE = f"{PROJECT}.pga_data.website_course_fit"
 BETTING_PROFILE_TABLE = f"{PROJECT}.pga_data.website_player_betting_profile"
 
+# ── Orphan tournament consolidation ──────────────────────────────────────────
+# FanDuel lists sub-markets (3 Balls, Make/Miss Cut, etc.) as separate
+# "tournament" entries rather than embedding them in the main PGA weekly event.
+# We consolidate them back at query time.
+
+_ORPHAN_NAMES = frozenset({
+    "3 Balls", "Make/Miss Cut", "Player Round Scores", "Specials", "Top Region",
+})
+
+
+def _is_pga_tournament(name: str) -> bool:
+    """Return True if *name* looks like a PGA Tour weekly event."""
+    return name.startswith("PGA ") and any(c.isdigit() for c in name)
+
+
+def _remap_market_type(source_tourn: str, mtype: str, mname: str) -> str:
+    """Assign the correct market_type after orphan consolidation."""
+    # Orphan tournament overrides
+    if source_tourn == "Top Region":
+        return "top_nationality"
+    if source_tourn == "Specials":
+        return "specials"
+    if source_tourn == "Player Round Scores":
+        return "player_round_score"
+    # 3 Balls / Make/Miss Cut already have correct types (three_ball / make_cut)
+
+    # Main-tournament sub-categorisation
+    if mtype == "outright_winner" and mname in {
+        "Big Guns v The Field", "Three Chances to Win", "Two Chances to Win",
+    }:
+        return "specials"
+    if mtype == "finishing_position":
+        return "finish_specials"
+    if mtype == "round_score":
+        return "round_leader" if mname == "1st Round Leader" else "specials"
+    return mtype
+
 
 def _query(
     sql: str,
-    params: Optional[List[bigquery.ScalarQueryParameter]] = None,
+    params: Optional[List[Any]] = None,
 ) -> List[Dict[str, Any]]:
     client = get_bq_client()
     job = client.query(
@@ -105,6 +142,29 @@ def pga_sportsbook_tournaments() -> List[Dict[str, Any]]:
         entry = _serialise(t)
         entry["market_types"] = mt_by_tourn.get(t["tournament_name"], [])
         result.append(entry)
+
+    # ── Consolidate orphan tournaments into the main PGA event ─────────
+    main_pga = next(
+        (t["tournament_name"] for t in result if _is_pga_tournament(t.get("tournament_name", ""))),
+        None,
+    )
+    if main_pga:
+        main_entry = next(t for t in result if t["tournament_name"] == main_pga)
+        for t in list(result):
+            if t.get("tournament_name", "") not in _ORPHAN_NAMES:
+                continue
+            main_entry["total_selections"] += t.get("total_selections", 0)
+            for mt in t.get("market_types", []):
+                remapped = _remap_market_type(t["tournament_name"], mt["type"], "")
+                existing = next(
+                    (m for m in main_entry["market_types"] if m["type"] == remapped), None
+                )
+                if existing:
+                    existing["count"] += mt["count"]
+                else:
+                    main_entry["market_types"].append({"type": remapped, "count": mt["count"]})
+        result = [t for t in result if t.get("tournament_name", "") not in _ORPHAN_NAMES]
+
     return result
 
 
@@ -120,9 +180,19 @@ def pga_sportsbook_markets(
     """
     Returns all FanDuel odds for a tournament, grouped by market_type,
     enriched with player analytics from pga_data.
+
+    For PGA weekly events the response also includes selections from orphan
+    FanDuel "tournaments" (3 Balls, Make/Miss Cut, etc.) with remapped
+    market_type values so each bet category gets its own tab.
     """
-    params = [
-        bigquery.ScalarQueryParameter("tournament", "STRING", tournament),
+    # Expand tournament list to include orphan sub-markets for PGA events
+    is_pga = _is_pga_tournament(tournament)
+    tournament_names = [tournament]
+    if is_pga:
+        tournament_names.extend(sorted(_ORPHAN_NAMES))
+
+    params: List[Any] = [
+        bigquery.ArrayQueryParameter("tournament_names", "STRING", tournament_names),
     ]
 
     market_filter = ""
@@ -133,11 +203,14 @@ def pga_sportsbook_markets(
         )
 
     sql = f"""
-    WITH latest_scrape AS (
-      SELECT MAX(scraped_at) AS ts
+    WITH latest_per_tourn AS (
+      SELECT
+        COALESCE(tournament_name, event_name) AS tn,
+        MAX(scraped_at) AS ts
       FROM `{RAW_TABLE}`
-      WHERE COALESCE(tournament_name, event_name) = @tournament
+      WHERE COALESCE(tournament_name, event_name) IN UNNEST(@tournament_names)
         AND scraped_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 48 HOUR)
+      GROUP BY 1
     ),
     raw AS (
       SELECT
@@ -152,11 +225,13 @@ def pga_sportsbook_markets(
         r.handicap,
         r.deep_link,
         r.scraped_at,
-        COALESCE(r.tournament_name, r.event_name) AS tournament_name
-      FROM `{RAW_TABLE}` r, latest_scrape ls
-      WHERE COALESCE(r.tournament_name, r.event_name) = @tournament
-        AND r.scraped_at = ls.ts
-        AND r.market_status IN ('ACTIVE', 'OPEN', 'SUSPENDED')
+        COALESCE(r.tournament_name, r.event_name) AS tournament_name,
+        COALESCE(r.tournament_name, r.event_name) AS source_tournament
+      FROM `{RAW_TABLE}` r
+      JOIN latest_per_tourn lpt
+        ON COALESCE(r.tournament_name, r.event_name) = lpt.tn
+       AND r.scraped_at = lpt.ts
+      WHERE r.market_status IN ('ACTIVE', 'OPEN', 'SUSPENDED')
         {market_filter}
     )
     SELECT
@@ -210,6 +285,15 @@ def pga_sportsbook_markets(
             "count": 0,
             "market_groups": {},
         }
+
+    # Remap market types for consolidated orphan data
+    if is_pga:
+        for row in rows:
+            row["market_type"] = _remap_market_type(
+                row.get("source_tournament", ""),
+                row.get("market_type", "other"),
+                row.get("market_name", ""),
+            )
 
     # Group rows by market_type → market_name
     grouped: Dict[str, Dict[str, List[Dict[str, Any]]]] = defaultdict(

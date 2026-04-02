@@ -89,12 +89,16 @@ type MarketsResponse = {
 const MARKET_TYPE_LABELS: Record<string, string> = {
   outright_winner: "Outright Winner",
   top_finish: "Top Finish",
-  finishing_position: "Top Finish",
   matchup: "Matchups",
   three_ball: "3-Ball",
-  top_nationality: "Top Nationality",
   make_cut: "Make/Miss Cut",
-  first_round_leader: "Round Leader",
+  round_leader: "Round Leader",
+  player_round_score: "Round Scores",
+  top_nationality: "Top Region",
+  finish_specials: "Golf Specials",
+  specials: "Specials",
+  // Legacy fallbacks
+  finishing_position: "Finish Position",
   round_score: "Round Score",
   hole_score: "Hole Score",
   other: "Other",
@@ -103,12 +107,15 @@ const MARKET_TYPE_LABELS: Record<string, string> = {
 const MARKET_TYPE_ORDER = [
   "outright_winner",
   "top_finish",
-  "finishing_position",
   "matchup",
   "three_ball",
-  "top_nationality",
   "make_cut",
-  "first_round_leader",
+  "round_leader",
+  "player_round_score",
+  "top_nationality",
+  "finish_specials",
+  "specials",
+  "finishing_position",
   "round_score",
   "hole_score",
   "other",
@@ -117,62 +124,102 @@ const MARKET_TYPE_ORDER = [
 // ─── Column configs per market type ───────────────────────────────────────────
 
 const OUTRIGHT_COLUMNS: ColumnConfig[] = [
-  { key: "player_name", label: "Player", width: 140, isNumeric: false },
-  { key: "odds_american", label: "Odds", width: 68, isNumeric: true, formatter: fmtOdds },
-  { key: "sg_total", label: "SG Tot", width: 60, isNumeric: true, formatter: (v) => fmt(v, 2) },
-  { key: "sg_approach", label: "SG App", width: 60, isNumeric: true, formatter: (v) => fmt(v, 2) },
-  { key: "sg_putting", label: "SG Putt", width: 60, isNumeric: true, formatter: (v) => fmt(v, 2) },
-  { key: "scoring_avg", label: "Scr Avg", width: 64, isNumeric: true, formatter: (v) => fmt(v, 1) },
-  { key: "l5_finish_avg", label: "L5 Fin", width: 56, isNumeric: true, formatter: (v) => fmt(v, 1) },
-  { key: "cut_rate_l5", label: "Cut%", width: 52, isNumeric: true, formatter: fmtPct },
-  { key: "top10_rate_l5", label: "T10%", width: 52, isNumeric: true, formatter: fmtPct },
-  { key: "form_trend_3", label: "Trend", width: 52, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "player_name", label: "Player", width: 120, isNumeric: false },
+  { key: "odds_american", label: "Odds", width: 58, isNumeric: true, formatter: fmtOdds },
+  { key: "sg_total", label: "SG Tot", width: 54, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "sg_approach", label: "SG App", width: 54, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "sg_putting", label: "SG Putt", width: 54, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "scoring_avg", label: "Avg", width: 50, isNumeric: true, formatter: (v) => fmt(v, 1) },
+  { key: "l5_finish_avg", label: "L5 Fin", width: 50, isNumeric: true, formatter: (v) => fmt(v, 1) },
+  { key: "cut_rate_l5", label: "Cut%", width: 48, isNumeric: true, formatter: fmtPct },
+  { key: "top10_rate_l5", label: "T10%", width: 48, isNumeric: true, formatter: fmtPct },
+  { key: "form_trend_3", label: "Trend", width: 48, isNumeric: true, formatter: (v) => fmt(v, 2) },
 ];
 
 const TOP_FINISH_COLUMNS: ColumnConfig[] = [
-  { key: "player_name", label: "Player", width: 140, isNumeric: false },
-  { key: "market_name", label: "Market", width: 90, isNumeric: false },
-  { key: "odds_american", label: "Odds", width: 68, isNumeric: true, formatter: fmtOdds },
-  { key: "sg_total", label: "SG Tot", width: 60, isNumeric: true, formatter: (v) => fmt(v, 2) },
-  { key: "l5_finish_avg", label: "L5 Fin", width: 56, isNumeric: true, formatter: (v) => fmt(v, 1) },
-  { key: "top10_rate_l5", label: "T10%", width: 52, isNumeric: true, formatter: fmtPct },
-  { key: "cut_rate_l5", label: "Cut%", width: 52, isNumeric: true, formatter: fmtPct },
-  { key: "weighted_l5_score", label: "L5 Wt", width: 56, isNumeric: true, formatter: (v) => fmt(v, 1) },
+  { key: "player_name", label: "Player", width: 120, isNumeric: false },
+  { key: "market_name", label: "Market", width: 80, isNumeric: false },
+  { key: "odds_american", label: "Odds", width: 58, isNumeric: true, formatter: fmtOdds },
+  { key: "sg_total", label: "SG Tot", width: 54, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "l5_finish_avg", label: "L5 Fin", width: 50, isNumeric: true, formatter: (v) => fmt(v, 1) },
+  { key: "top10_rate_l5", label: "T10%", width: 48, isNumeric: true, formatter: fmtPct },
+  { key: "cut_rate_l5", label: "Cut%", width: 48, isNumeric: true, formatter: fmtPct },
+  { key: "weighted_l5_score", label: "L5 Wt", width: 50, isNumeric: true, formatter: (v) => fmt(v, 1) },
 ];
 
 const MATCHUP_COLUMNS: ColumnConfig[] = [
-  { key: "player_name", label: "Player", width: 140, isNumeric: false },
-  { key: "market_name", label: "Matchup", width: 120, isNumeric: false },
-  { key: "odds_american", label: "Odds", width: 68, isNumeric: true, formatter: fmtOdds },
-  { key: "handicap", label: "Line", width: 52, isNumeric: true, formatter: (v) => fmt(v, 1) },
-  { key: "sg_total", label: "SG Tot", width: 60, isNumeric: true, formatter: (v) => fmt(v, 2) },
-  { key: "l5_finish_avg", label: "L5 Fin", width: 56, isNumeric: true, formatter: (v) => fmt(v, 1) },
-  { key: "form_trend_3", label: "Trend", width: 52, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "player_name", label: "Player", width: 120, isNumeric: false },
+  { key: "market_name", label: "Matchup", width: 100, isNumeric: false },
+  { key: "odds_american", label: "Odds", width: 58, isNumeric: true, formatter: fmtOdds },
+  { key: "handicap", label: "Line", width: 48, isNumeric: true, formatter: (v) => fmt(v, 1) },
+  { key: "sg_total", label: "SG Tot", width: 54, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "l5_finish_avg", label: "L5 Fin", width: 50, isNumeric: true, formatter: (v) => fmt(v, 1) },
+  { key: "form_trend_3", label: "Trend", width: 48, isNumeric: true, formatter: (v) => fmt(v, 2) },
 ];
 
 const THREE_BALL_COLUMNS: ColumnConfig[] = [
-  { key: "player_name", label: "Player", width: 140, isNumeric: false },
-  { key: "market_name", label: "Group", width: 120, isNumeric: false },
-  { key: "odds_american", label: "Odds", width: 68, isNumeric: true, formatter: fmtOdds },
-  { key: "sg_total", label: "SG Tot", width: 60, isNumeric: true, formatter: (v) => fmt(v, 2) },
-  { key: "sg_approach", label: "SG App", width: 60, isNumeric: true, formatter: (v) => fmt(v, 2) },
-  { key: "l5_finish_avg", label: "L5 Fin", width: 56, isNumeric: true, formatter: (v) => fmt(v, 1) },
+  { key: "player_name", label: "Player", width: 120, isNumeric: false },
+  { key: "market_name", label: "Group", width: 100, isNumeric: false },
+  { key: "odds_american", label: "Odds", width: 58, isNumeric: true, formatter: fmtOdds },
+  { key: "sg_total", label: "SG Tot", width: 54, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "sg_approach", label: "SG App", width: 54, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "l5_finish_avg", label: "L5 Fin", width: 50, isNumeric: true, formatter: (v) => fmt(v, 1) },
+];
+
+const ROUND_LEADER_COLUMNS: ColumnConfig[] = [
+  { key: "player_name", label: "Player", width: 120, isNumeric: false },
+  { key: "odds_american", label: "Odds", width: 58, isNumeric: true, formatter: fmtOdds },
+  { key: "sg_total", label: "SG Tot", width: 54, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "scoring_avg", label: "Avg", width: 50, isNumeric: true, formatter: (v) => fmt(v, 1) },
+  { key: "l5_finish_avg", label: "L5 Fin", width: 50, isNumeric: true, formatter: (v) => fmt(v, 1) },
+  { key: "cut_rate_l5", label: "Cut%", width: 48, isNumeric: true, formatter: fmtPct },
+];
+
+const PLAYER_ROUND_SCORE_COLUMNS: ColumnConfig[] = [
+  { key: "player_name", label: "Player", width: 120, isNumeric: false },
+  { key: "market_name", label: "Market", width: 90, isNumeric: false },
+  { key: "odds_american", label: "Odds", width: 58, isNumeric: true, formatter: fmtOdds },
+  { key: "sg_total", label: "SG Tot", width: 54, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "l5_finish_avg", label: "L5 Fin", width: 50, isNumeric: true, formatter: (v) => fmt(v, 1) },
+];
+
+const TOP_NATIONALITY_COLUMNS: ColumnConfig[] = [
+  { key: "player_name", label: "Player", width: 120, isNumeric: false },
+  { key: "market_name", label: "Region", width: 90, isNumeric: false },
+  { key: "odds_american", label: "Odds", width: 58, isNumeric: true, formatter: fmtOdds },
+  { key: "sg_total", label: "SG Tot", width: 54, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "l5_finish_avg", label: "L5 Fin", width: 50, isNumeric: true, formatter: (v) => fmt(v, 1) },
+  { key: "cut_rate_l5", label: "Cut%", width: 48, isNumeric: true, formatter: fmtPct },
+];
+
+const SPECIALS_COLUMNS: ColumnConfig[] = [
+  { key: "player_name", label: "Player", width: 120, isNumeric: false },
+  { key: "market_name", label: "Market", width: 100, isNumeric: false },
+  { key: "odds_american", label: "Odds", width: 58, isNumeric: true, formatter: fmtOdds },
+  { key: "sg_total", label: "SG Tot", width: 54, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "l5_finish_avg", label: "L5 Fin", width: 50, isNumeric: true, formatter: (v) => fmt(v, 1) },
 ];
 
 const GENERIC_COLUMNS: ColumnConfig[] = [
-  { key: "player_name", label: "Player", width: 140, isNumeric: false },
-  { key: "market_name", label: "Market", width: 120, isNumeric: false },
-  { key: "odds_american", label: "Odds", width: 68, isNumeric: true, formatter: fmtOdds },
-  { key: "sg_total", label: "SG Tot", width: 60, isNumeric: true, formatter: (v) => fmt(v, 2) },
-  { key: "l5_finish_avg", label: "L5 Fin", width: 56, isNumeric: true, formatter: (v) => fmt(v, 1) },
-  { key: "cut_rate_l5", label: "Cut%", width: 52, isNumeric: true, formatter: fmtPct },
+  { key: "player_name", label: "Player", width: 120, isNumeric: false },
+  { key: "market_name", label: "Market", width: 100, isNumeric: false },
+  { key: "odds_american", label: "Odds", width: 58, isNumeric: true, formatter: fmtOdds },
+  { key: "sg_total", label: "SG Tot", width: 54, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "l5_finish_avg", label: "L5 Fin", width: 50, isNumeric: true, formatter: (v) => fmt(v, 1) },
+  { key: "cut_rate_l5", label: "Cut%", width: 48, isNumeric: true, formatter: fmtPct },
 ];
 
 function columnsForType(mt: string): ColumnConfig[] {
   if (mt === "outright_winner") return OUTRIGHT_COLUMNS;
-  if (mt === "top_finish" || mt === "finishing_position") return TOP_FINISH_COLUMNS;
+  if (mt === "top_finish") return TOP_FINISH_COLUMNS;
   if (mt === "matchup") return MATCHUP_COLUMNS;
   if (mt === "three_ball") return THREE_BALL_COLUMNS;
+  if (mt === "round_leader") return ROUND_LEADER_COLUMNS;
+  if (mt === "player_round_score") return PLAYER_ROUND_SCORE_COLUMNS;
+  if (mt === "top_nationality") return TOP_NATIONALITY_COLUMNS;
+  if (mt === "specials" || mt === "finish_specials") return SPECIALS_COLUMNS;
+  if (mt === "make_cut") return GENERIC_COLUMNS;
+  if (mt === "finishing_position") return TOP_FINISH_COLUMNS;
   return GENERIC_COLUMNS;
 }
 
@@ -216,7 +263,7 @@ function TournamentCard({
         <Ionicons name="chevron-forward" size={18} color={colors.text.muted} />
       </View>
       <View style={styles.marketBadgeRow}>
-        {tournament.market_types.slice(0, 5).map((mt) => (
+        {tournament.market_types.slice(0, 8).map((mt) => (
           <View
             key={mt.type}
             style={[styles.marketBadge, { backgroundColor: "rgba(74,222,128,0.12)" }]}
@@ -284,7 +331,7 @@ export default function PgaSportsbook() {
   if (!selectedTournament) {
     return (
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <Stack.Screen options={{ title: "PGA Sportsbook" }} />
+        <Stack.Screen options={{ title: "PGA" }} />
 
         <View style={[styles.hero, { borderColor: colors.border.subtle }]}>
           <View style={styles.heroGlow} />
@@ -382,6 +429,7 @@ export default function PgaSportsbook() {
           <AutoSortableTable
             data={tableData}
             columns={columnsForType(effectiveTab)}
+            defaultSort="odds_american"
             onRowPress={(row) => {
               if (row.deep_link) Linking.openURL(row.deep_link);
             }}

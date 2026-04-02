@@ -69,24 +69,24 @@ export function buildDraftKingsParlay(
 
 export function buildFanDuelParlay(
   batters: Array<Pick<ParlayBatterInput, "fd_market_id" | "fd_selection_id">>,
-  platform: BuildPlatform = "desktop"
+  platform: BuildPlatform = "desktop",
+  fdState?: string
 ): string | null {
   const legs = normalizedFdLegs(batters as ParlayBatterInput[]);
   if (!legs?.length) return null;
+
+  const st = (fdState ?? "").toLowerCase().trim();
+  const statePrefix = st ? `${st}.` : "";
   const base =
     platform === "ios" || platform === "android"
       ? "fanduelsportsbook://account.sportsbook.fanduel.com/sportsbook/addToBetslip"
-      : "https://sportsbook.fanduel.com/addToBetslip";
+      : `https://${statePrefix}sportsbook.fanduel.com/addToBetslip`;
 
-  if (legs.length === 1) {
-    const leg = legs[0];
-    return `${base}?marketId=${encodeURIComponent(leg.fd_market_id)}&selectionId=${encodeURIComponent(leg.fd_selection_id)}`;
-  }
-
+  // Use indexed array notation (marketId[0], selectionId[0]) which FanDuel requires
   const query = legs
     .map(
-      (leg) =>
-        `marketId[]=${encodeURIComponent(leg.fd_market_id)}&selectionId[]=${encodeURIComponent(leg.fd_selection_id)}`
+      (leg, i) =>
+        `marketId[${i}]=${encodeURIComponent(leg.fd_market_id)}&selectionId[${i}]=${encodeURIComponent(leg.fd_selection_id)}`
     )
     .join("&");
   return `${base}?${query}`;

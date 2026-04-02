@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -13,6 +13,7 @@ import {
 import { useMlbNrfi, type NrfiMatchup, type NrfiTeam } from "@/hooks/mlb/useMlbMatchups";
 import { useTheme } from "@/store/useTheme";
 import { usePropBetslip } from "@/store/usePropBetslip";
+import { useUserSettings, FD_STATES } from "@/store/useUserSettings";
 import { buildFanDuelParlay, getBuildPlatform } from "@/utils/parlayBuilder";
 import { getMlbTeamLogo } from "@/utils/mlbLogos";
 import { formatET } from "@/lib/time/formatET";
@@ -200,8 +201,16 @@ function NrfiMatchupCard({
 
 export function MlbNrfiScreen() {
   const { colors } = useTheme();
-  const { data, loading, error, refetch } = useMlbNrfi();
+  const fdState = useUserSettings((s) => s.fdState);
+  const setFdState = useUserSettings((s) => s.setFdState);
+  const hydrate = useUserSettings((s) => s.hydrate);
+  const hydrated = useUserSettings((s) => s._hydrated);
+  const { data, loading, error, refetch } = useMlbNrfi(fdState);
   const platform = getBuildPlatform();
+  const [showStatePicker, setShowStatePicker] = useState(false);
+
+  // Hydrate settings on mount
+  useEffect(() => { hydrate(); }, [hydrate]);
 
   // Global betslip
   const slipItems = usePropBetslip((s) => s.items);
@@ -296,15 +305,15 @@ export function MlbNrfiScreen() {
 
   const fdUrl = useMemo(() => {
     if (nrfiYrfiSlipItems.length === 0) return null;
-    // Build proper FanDuel betslip deep link
     return buildFanDuelParlay(
       nrfiYrfiSlipItems.map((i) => ({
         fd_market_id: i.fd_market_id ?? null,
         fd_selection_id: i.fd_selection_id ?? null,
       })),
-      platform
+      platform,
+      fdState
     );
-  }, [nrfiYrfiSlipItems, platform]);
+  }, [nrfiYrfiSlipItems, platform, fdState]);
 
   const matchups = data?.matchups ?? [];
 
@@ -317,6 +326,32 @@ export function MlbNrfiScreen() {
           <Text style={st.sub}>
             No Run First Inning trends by team, pitcher, and today&apos;s matchups. Sorted by NRFI score. Tap NRFI or YRFI to add to betslip.
           </Text>
+
+          {/* State picker row */}
+          <Pressable style={st.stateRow} onPress={() => setShowStatePicker(!showStatePicker)}>
+            <Text style={st.stateLabel}>FanDuel State:</Text>
+            <Text style={st.stateValue}>
+              {FD_STATES.find((s) => s.code === fdState)?.label ?? fdState.toUpperCase()}
+            </Text>
+            <Text style={st.stateChevron}>{showStatePicker ? "▲" : "▼"}</Text>
+          </Pressable>
+
+          {showStatePicker ? (
+            <View style={st.stateGrid}>
+              {FD_STATES.map((s) => (
+                <Pressable
+                  key={s.code}
+                  style={[st.stateChip, fdState === s.code ? st.stateChipActive : null]}
+                  onPress={() => { setFdState(s.code); setShowStatePicker(false); }}
+                >
+                  <Text style={[st.stateChipText, fdState === s.code ? st.stateChipTextActive : null]}>
+                    {s.code.toUpperCase()}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+
           {matchups.length > 0 ? (
             <Text style={st.countText}>{matchups.length} matchups today</Text>
           ) : null}
@@ -415,6 +450,42 @@ const st = StyleSheet.create({
   h1: { color: "#E9F2FF", fontSize: 22, fontWeight: "800", marginTop: 4 },
   sub: { color: "#A7C0E8", fontSize: 12, lineHeight: 17 },
   countText: { color: "#93C5FD", fontSize: 11, fontWeight: "700", marginTop: 4 },
+
+  // State picker
+  stateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: "rgba(16,185,129,0.08)",
+    borderRadius: 8,
+    alignSelf: "flex-start",
+  },
+  stateLabel: { color: "#64748B", fontSize: 11, fontWeight: "600" },
+  stateValue: { color: "#10B981", fontSize: 11, fontWeight: "800" },
+  stateChevron: { color: "#64748B", fontSize: 9 },
+  stateGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 6,
+  },
+  stateChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: "#0F172A",
+    borderWidth: 1,
+    borderColor: "#1E293B",
+  },
+  stateChipActive: {
+    backgroundColor: "rgba(16,185,129,0.15)",
+    borderColor: "#10B981",
+  },
+  stateChipText: { color: "#64748B", fontSize: 11, fontWeight: "700" },
+  stateChipTextActive: { color: "#10B981" },
 
   // Card
   card: {

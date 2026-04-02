@@ -1319,8 +1319,8 @@ def _cheat_sheet_route():
 
 
 @router.get("/mlb/matchups/nrfi")
-def _nrfi_route():
-    return mlb_nrfi_matchups()
+def _nrfi_route(state: str = "nj"):
+    return mlb_nrfi_matchups(state=state)
 
 
 @router.get("/mlb/matchups/{game_pk}")
@@ -2536,9 +2536,20 @@ PROPFINDER_NRFI_URL = os.getenv(
 )
 
 FD_MLB_EVENT_TYPE_ID = "7511"  # FanDuel MLB event type
-FD_API_BASE = "https://sbapi.pa.sportsbook.fanduel.com/api"
 FD_API_KEY = os.getenv("FD_API_KEY", "FhMFpcPWXMeyZxOx")
 NRFI_MARKET_TYPE = "OVER/UNDER_0.5_RUNS_1ST_INNINGS"
+
+# FanDuel state-specific API bases – market/selection IDs differ per state
+FD_VALID_STATES = {
+    "nj", "pa", "il", "az", "co", "mi", "va", "in", "tn", "ny",
+    "dc", "wv", "ky", "ia", "ct", "la", "md", "ma", "oh", "nc", "vt",
+}
+
+def _fd_api_base(state: str = "nj") -> str:
+    s = (state or "nj").lower().strip()
+    if s not in FD_VALID_STATES:
+        s = "nj"
+    return f"https://sbapi.{s}.sportsbook.fanduel.com/api"
 
 
 def _fetch_nrfi_matchups() -> List[Dict[str, Any]]:
@@ -2556,11 +2567,12 @@ def _fetch_nrfi_matchups() -> List[Dict[str, Any]]:
         return []
 
 
-def _fetch_fd_mlb_events() -> Dict[int, Dict[str, Any]]:
+def _fetch_fd_mlb_events(state: str = "nj") -> Dict[int, Dict[str, Any]]:
     """Fetch FanDuel MLB events list. Returns map of eventId -> event dict."""
     try:
+        base = _fd_api_base(state)
         url = (
-            f"{FD_API_BASE}/content-managed-page"
+            f"{base}/content-managed-page"
             f"?page=SPORT&eventTypeId={FD_MLB_EVENT_TYPE_ID}&_ak={FD_API_KEY}"
         )
         request = Request(url, headers={
@@ -2576,15 +2588,16 @@ def _fetch_fd_mlb_events() -> Dict[int, Dict[str, Any]]:
         return {}
 
 
-def _fetch_fd_nrfi_market(event_id: int) -> Optional[Dict[str, Any]]:
+def _fetch_fd_nrfi_market(event_id: int, state: str = "nj") -> Optional[Dict[str, Any]]:
     """
     Fetch the 1st Inning O/U 0.5 Runs market for a FanDuel event.
     Returns {market_id, nrfi_selection_id, nrfi_odds, yrfi_selection_id, yrfi_odds}
     or None if not found.
     """
     try:
+        base = _fd_api_base(state)
         url = (
-            f"{FD_API_BASE}/event-page"
+            f"{base}/event-page"
             f"?eventId={event_id}&tab=popular&_ak={FD_API_KEY}"
         )
         request = Request(url, headers={
@@ -2686,13 +2699,14 @@ def _format_nrfi_team(team: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def mlb_nrfi_matchups():
+def mlb_nrfi_matchups(state: str = "nj"):
     """
     Returns today's NRFI/YRFI matchup data from propfinder,
     enriched with FanDuel market/selection IDs and odds,
     sorted by NRFI score descending.
     """
-    cache_key = "nrfi-matchups"
+    st = (state or "nj").lower().strip()
+    cache_key = f"nrfi-matchups:{st}"
     cached = _cache_get(cache_key)
     if cached is not None:
         return cached
@@ -2700,7 +2714,7 @@ def mlb_nrfi_matchups():
     # Fetch propfinder NRFI data and FanDuel events in parallel
     with ThreadPoolExecutor(max_workers=2) as pool:
         fut_nrfi = pool.submit(_fetch_nrfi_matchups)
-        fut_fd_events = pool.submit(_fetch_fd_mlb_events)
+        fut_fd_events = pool.submit(_fetch_fd_mlb_events, st)
 
     raw = fut_nrfi.result()
     fd_events = fut_fd_events.result()
@@ -2738,7 +2752,7 @@ def mlb_nrfi_matchups():
     if fd_event_ids:
         with ThreadPoolExecutor(max_workers=min(len(fd_event_ids), 10)) as pool:
             futures = {
-                pool.submit(_fetch_fd_nrfi_market, eid): idx
+                pool.submit(_fetch_fd_nrfi_market, eid, st): idx
                 for idx, eid in fd_event_ids
             }
             for fut in futures:
@@ -2760,6 +2774,7 @@ def mlb_nrfi_matchups():
     result = {
         "matchups": matchups,
         "count": len(matchups),
+        "fd_state": st,
     }
     _cache_set(cache_key, result)
     return result

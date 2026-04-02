@@ -577,8 +577,10 @@ export type NrfiMatchup = {
 export type MlbNrfiData = {
   matchups: NrfiMatchup[];
   count: number;
+  fd_state?: string;
 };
 
-export function useMlbNrfi() {
-  return useEplQuery<MlbNrfiData>("/mlb/matchups/nrfi");
+export function useMlbNrfi(fdState: string = "nj") {
+  const params = useMemo(() => ({ state: fdState }), [fdState]);
+  return useEplQuery<MlbNrfiData>("/mlb/matchups/nrfi", params);
 }

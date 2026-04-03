@@ -250,6 +250,247 @@ function selectionToSlipItem(row: Selection): PropSlipItem {
   };
 }
 
+// ─── Group Comparison (Matchup / 3-Ball) ─────────────────────────────────────
+
+type GroupStat = { label: string; value: string };
+
+function statRows(sel: Selection, marketType: string): GroupStat[] {
+  if (marketType === "matchup") {
+    return [
+      { label: "SG Tot", value: fmt(sel.sg_total, 2) },
+      { label: "L5 Fin", value: fmt(sel.l5_finish_avg, 1) },
+      { label: "Trend", value: fmt(sel.form_trend_3, 2) },
+      { label: "Cut%", value: fmtPct(sel.cut_rate_l5) },
+    ];
+  }
+  // three_ball
+  return [
+    { label: "SG Tot", value: fmt(sel.sg_total, 2) },
+    { label: "SG App", value: fmt(sel.sg_approach, 2) },
+    { label: "L5 Fin", value: fmt(sel.l5_finish_avg, 1) },
+    { label: "Cut%", value: fmtPct(sel.cut_rate_l5) },
+  ];
+}
+
+function bestIndex(sels: Selection[], key: keyof Selection, lower = false): number {
+  let best = -1;
+  let bestVal = lower ? Infinity : -Infinity;
+  for (let i = 0; i < sels.length; i++) {
+    const v = sels[i][key] as number | null;
+    if (v == null) continue;
+    if (lower ? v < bestVal : v > bestVal) {
+      bestVal = v;
+      best = i;
+    }
+  }
+  return best;
+}
+
+function GroupCard({
+  market,
+  marketType,
+  selectedKeys,
+  onToggle,
+  onPlayerPress,
+}: {
+  market: { market_name: string; selections: Selection[] };
+  marketType: string;
+  selectedKeys: Set<string>;
+  onToggle: (key: string, row: Selection) => void;
+  onPlayerPress: (row: Selection) => void;
+}) {
+  const { colors } = useTheme();
+  const sels = market.selections;
+  const bestOddsIdx = bestIndex(sels, "odds_american", false);
+  const bestSgIdx = bestIndex(sels, "sg_total", false);
+  const bestFinIdx = bestIndex(sels, "l5_finish_avg", true);
+
+  return (
+    <View
+      style={[
+        gStyles.card,
+        { borderColor: colors.border.subtle, backgroundColor: "#0B1529" },
+      ]}
+    >
+      <Text style={[gStyles.cardTitle, { color: colors.text.muted }]}>
+        {market.market_name}
+      </Text>
+
+      <View style={gStyles.playersRow}>
+        {sels.map((sel, i) => {
+          const key = selectionKey(sel);
+          const selected = selectedKeys.has(key);
+          const stats = statRows(sel, marketType);
+
+          return (
+            <Pressable
+              key={key}
+              onPress={() => onPlayerPress(sel)}
+              style={[
+                gStyles.playerCol,
+                {
+                  borderColor: selected ? "#4ADE80" : colors.border.subtle,
+                  backgroundColor: selected ? "rgba(74,222,128,0.08)" : "#0F1D32",
+                },
+                sels.length === 2 && { flex: 1 },
+                sels.length === 3 && { flex: 1 },
+              ]}
+            >
+              {/* Checkbox + Name */}
+              <View style={gStyles.nameRow}>
+                <Pressable onPress={() => onToggle(key, sel)} hitSlop={8}>
+                  <Text style={{ fontSize: 14, color: selected ? "#4ADE80" : colors.text.muted }}>
+                    {selected ? "\u2611" : "\u2610"}
+                  </Text>
+                </Pressable>
+                <Text
+                  numberOfLines={1}
+                  style={[gStyles.playerName, { color: colors.text.primary }]}
+                >
+                  {sel.player_name}
+                </Text>
+              </View>
+
+              {/* Odds */}
+              <Text
+                style={[
+                  gStyles.odds,
+                  { color: i === bestOddsIdx ? "#4ADE80" : colors.text.secondary },
+                ]}
+              >
+                {fmtOdds(sel.odds_american)}
+              </Text>
+
+              {/* Handicap for matchups */}
+              {marketType === "matchup" && sel.handicap != null && (
+                <Text style={[gStyles.handicap, { color: colors.text.muted }]}>
+                  Line: {fmt(sel.handicap, 1)}
+                </Text>
+              )}
+
+              {/* Stats */}
+              {stats.map((st) => (
+                <View key={st.label} style={gStyles.statRow}>
+                  <Text style={[gStyles.statLabel, { color: colors.text.muted }]}>
+                    {st.label}
+                  </Text>
+                  <Text
+                    style={[
+                      gStyles.statValue,
+                      {
+                        color:
+                          (st.label === "SG Tot" && i === bestSgIdx) ||
+                          (st.label === "L5 Fin" && i === bestFinIdx)
+                            ? "#4ADE80"
+                            : colors.text.primary,
+                      },
+                    ]}
+                  >
+                    {st.value}
+                  </Text>
+                </View>
+              ))}
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function GroupComparisonView({
+  markets,
+  marketType,
+  selectedKeys,
+  onToggle,
+  onPlayerPress,
+}: {
+  markets: { market_name: string; selection_count: number; selections: Selection[] }[];
+  marketType: string;
+  selectedKeys: Set<string>;
+  onToggle: (key: string, row: Selection) => void;
+  onPlayerPress: (row: Selection) => void;
+}) {
+  return (
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={{ padding: 12, paddingBottom: 24, gap: 10 }}
+      showsVerticalScrollIndicator={false}
+    >
+      {markets.map((m) => (
+        <GroupCard
+          key={m.market_name}
+          market={m}
+          marketType={marketType}
+          selectedKeys={selectedKeys}
+          onToggle={onToggle}
+          onPlayerPress={onPlayerPress}
+        />
+      ))}
+    </ScrollView>
+  );
+}
+
+const gStyles = StyleSheet.create({
+  card: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 14,
+    padding: 12,
+    overflow: "hidden",
+  },
+  cardTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  playersRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  playerCol: {
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 10,
+    gap: 4,
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 2,
+  },
+  playerName: {
+    fontSize: 13,
+    fontWeight: "800",
+    flex: 1,
+  },
+  odds: {
+    fontSize: 20,
+    fontWeight: "900",
+    textAlign: "center",
+    marginVertical: 4,
+  },
+  handicap: {
+    fontSize: 11,
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  statRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 2,
+  },
+  statLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  statValue: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+});
+
 // ─── Tournament Card ──────────────────────────────────────────────────────────
 
 function TournamentCard({
@@ -519,17 +760,28 @@ export default function PgaSportsbook() {
       )}
       {!marketsLoading && effectiveTab && tableData.length > 0 && (
         <View style={{ flex: 1, paddingBottom: selectedKeys.size > 0 ? 80 : 0 }}>
-          <AutoSortableTable
-            data={tableData}
-            columns={columnsForType(effectiveTab)}
-            defaultSort="odds_american"
-            autoWidth
-            selectable
-            selectedKeys={selectedKeys}
-            onToggle={handleToggle}
-            rowKey={selectionKey}
-            onRowPress={handleRowPress}
-          />
+          {(effectiveTab === "matchup" || effectiveTab === "three_ball") &&
+           marketsData?.market_groups[effectiveTab] ? (
+            <GroupComparisonView
+              markets={marketsData.market_groups[effectiveTab].markets}
+              marketType={effectiveTab}
+              selectedKeys={selectedKeys}
+              onToggle={handleToggle}
+              onPlayerPress={handleRowPress}
+            />
+          ) : (
+            <AutoSortableTable
+              data={tableData}
+              columns={columnsForType(effectiveTab)}
+              defaultSort="odds_american"
+              autoWidth
+              selectable
+              selectedKeys={selectedKeys}
+              onToggle={handleToggle}
+              rowKey={selectionKey}
+              onRowPress={handleRowPress}
+            />
+          )}
         </View>
       )}
       {!marketsLoading && effectiveTab && tableData.length === 0 && (

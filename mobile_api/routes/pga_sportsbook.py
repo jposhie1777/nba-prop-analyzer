@@ -258,25 +258,25 @@ def pga_sportsbook_markets(
         SELECT player_display_name, round_score,
           ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY tournament_date DESC, round_num) AS rn
         FROM (
-          SELECT player_id, player_display_name, tournament_date,
+          SELECT DISTINCT player_id, player_display_name, tournament_date,
             r1 AS round_score, 1 AS round_num FROM `{SCORECARD_TABLE}` WHERE r1 IS NOT NULL
           UNION ALL
-          SELECT player_id, player_display_name, tournament_date,
+          SELECT DISTINCT player_id, player_display_name, tournament_date,
             r2, 2 FROM `{SCORECARD_TABLE}` WHERE r2 IS NOT NULL
           UNION ALL
-          SELECT player_id, player_display_name, tournament_date,
+          SELECT DISTINCT player_id, player_display_name, tournament_date,
             r3, 3 FROM `{SCORECARD_TABLE}` WHERE r3 IS NOT NULL
           UNION ALL
-          SELECT player_id, player_display_name, tournament_date,
+          SELECT DISTINCT player_id, player_display_name, tournament_date,
             r4, 4 FROM `{SCORECARD_TABLE}` WHERE r4 IS NOT NULL
         )
       )
       WHERE rn <= 5
       GROUP BY player_display_name
     ),
-    -- Current tournament scores (if available)
+    -- Current tournament scores (if available) — DISTINCT to avoid dupe scorecard rows
     current_tourn AS (
-      SELECT player_display_name, position, to_par, r1, r2, r3, r4, total_strokes
+      SELECT DISTINCT player_display_name, position, to_par, r1, r2, r3, r4, total_strokes
       FROM `{SCORECARD_TABLE}`
       WHERE season = EXTRACT(YEAR FROM CURRENT_DATE())
         AND tournament_date = (

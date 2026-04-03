@@ -64,6 +64,42 @@ def _remap_market_type(source_tourn: str, mtype: str, mname: str) -> str:
     return mtype
 
 
+# ── Player name normalisation ─────────────────────────────────────────────────
+# FanDuel strips diacriticals and sometimes merges/splits name parts.
+# We normalise both sides of every JOIN to maximise matches.
+
+def _norm_col(col: str) -> str:
+    """Return a SQL expression that lowercases, trims, and strips common
+    diacriticals from *col* so FanDuel names match PGA Tour names.
+    LOWER runs first so replacements only need lowercase variants."""
+    inner = f"LOWER(TRIM({col}))"
+    for src, dst in [("å", "a"), ("ø", "o"), ("ö", "o"), ("é", "e"),
+                     ("ü", "u"), ("ñ", "n"), ("è", "e"), ("á", "a"),
+                     ("í", "i"), ("ó", "o"), ("ú", "u")]:
+        inner = f"REPLACE({inner},'{src}','{dst}')"
+    return inner
+
+
+# Explicit aliases for names that differ beyond diacriticals
+_FD_TO_PGA_ALIASES: Dict[str, str] = {
+    "minwoo lee": "min woo lee",
+    "byeong hun an": "byeong-hun an",
+    "jj spaun": "j.j. spaun",
+    "si woo kim": "si woo kim",
+    "cam davis": "cameron davis",
+}
+
+
+def _alias_cte() -> str:
+    """Return a CTE that maps FanDuel player names to PGA Tour equivalents."""
+    if not _FD_TO_PGA_ALIASES:
+        return "name_alias AS (SELECT CAST(NULL AS STRING) fd, CAST(NULL AS STRING) pga WHERE FALSE)"
+    unions = " UNION ALL ".join(
+        f"SELECT '{fd}' fd, '{pga}' pga" for fd, pga in _FD_TO_PGA_ALIASES.items()
+    )
+    return f"name_alias AS ({unions})"
+
+
 def _query(
     sql: str,
     params: Optional[List[Any]] = None,
@@ -202,8 +238,15 @@ def pga_sportsbook_markets(
             bigquery.ScalarQueryParameter("market_type", "STRING", market_type),
         )
 
+    # Build normalised-join SQL expression
+    fd_norm = _norm_col("COALESCE(na.pga, raw.player_name)")
+    sk_norm = _norm_col("sk.player_name")
+    rf_norm = _norm_col("rf.player_display_name")
+    bp_norm = _norm_col("bp.player_display_name")
+
     sql = f"""
-    WITH latest_per_tourn AS (
+    WITH {_alias_cte()},
+    latest_per_tourn AS (
       SELECT
         COALESCE(tournament_name, event_name) AS tn,
         MAX(scraped_at) AS ts
@@ -268,12 +311,13 @@ def pga_sportsbook_markets(
       bp.season_total_score_avg,
       bp.season_finish_avg
     FROM raw
+    LEFT JOIN name_alias na ON LOWER(TRIM(raw.player_name)) = na.fd
     LEFT JOIN `{SKILL_STATS_TABLE}` sk
-      ON LOWER(TRIM(raw.player_name)) = LOWER(TRIM(sk.player_name))
+      ON {fd_norm} = {sk_norm}
     LEFT JOIN `{RECENT_FORM_TABLE}` rf
-      ON LOWER(TRIM(raw.player_name)) = LOWER(TRIM(rf.player_display_name))
+      ON {fd_norm} = {rf_norm}
     LEFT JOIN `{BETTING_PROFILE_TABLE}` bp
-      ON LOWER(TRIM(raw.player_name)) = LOWER(TRIM(bp.player_display_name))
+      ON {fd_norm} = {bp_norm}
     ORDER BY raw.market_type, raw.market_name, raw.odds_decimal ASC NULLS LAST
     """
     rows = _query(sql, params)

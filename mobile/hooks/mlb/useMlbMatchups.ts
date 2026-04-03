@@ -535,6 +535,84 @@ export function useMlbHrCheatSheet() {
   return useEplQuery<MlbHrCheatSheet>("/mlb/matchups/cheat-sheet");
 }
 
+// ── Cheat-sheet batter detail (lazy loaded on expand) ───────────────────
+
+export type CheatSheetBatterDetail = {
+  batter_id: number;
+  pitcher_id: number;
+  game_pk: number;
+  bat_side: string;
+  bvp_career?: {
+    pa?: number | null;
+    hits?: number | null;
+    hr?: number | null;
+    avg?: number | null;
+    iso?: number | null;
+    slg?: number | null;
+    obp?: number | null;
+    k_pct?: number | null;
+    bb_pct?: number | null;
+  } | null;
+  bvp_batted_ball?: {
+    profile?: {
+      barrel_pct?: number | null;
+      hh_pct?: number | null;
+      fb_pct?: number | null;
+      gb_pct?: number | null;
+      ld_pct?: number | null;
+      pu_pct?: number | null;
+      hr_fb_pct?: number | null;
+      pull_pct?: number | null;
+      str_pct?: number | null;
+      oppo_pct?: number | null;
+      total_batted?: number | null;
+    } | null;
+    log?: {
+      date?: string | null;
+      pitch?: string | null;
+      ev?: number | null;
+      angle?: number | null;
+      dist?: number | null;
+      trajectory?: string | null;
+      result?: string | null;
+      hr_parks?: number | null;
+    }[];
+  } | null;
+  pitcher_splits?: Record<string, {
+    ip?: number | null;
+    home_runs?: number | null;
+    hr_per_9?: number | null;
+    barrel_pct?: number | null;
+    hard_hit_pct?: number | null;
+    fb_pct?: number | null;
+    hr_fb_pct?: number | null;
+    whip?: number | null;
+    woba?: number | null;
+  }> | null;
+};
+
+export function useMlbCheatSheetBatterDetail(
+  batterId?: number | null,
+  pitcherId?: number | null,
+  gamePk?: number | null,
+  batSide?: string | null,
+) {
+  const params = useMemo(
+    () => ({
+      batter_id: batterId ?? 0,
+      pitcher_id: pitcherId ?? 0,
+      game_pk: gamePk ?? 0,
+      bat_side: batSide ?? "R",
+    }),
+    [batterId, pitcherId, gamePk, batSide],
+  );
+  return useEplQuery<CheatSheetBatterDetail>(
+    "/mlb/matchups/cheat-sheet/batter-detail",
+    params,
+    Boolean(batterId && pitcherId && gamePk),
+  );
+}
+
 // ── NRFI / YRFI types ───────────────────────────────────────────────────
 
 export type NrfiTeam = {

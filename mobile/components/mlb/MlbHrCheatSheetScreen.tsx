@@ -12,7 +12,9 @@ import {
 
 import {
   useMlbHrCheatSheet,
+  useMlbCheatSheetBatterDetail,
   type CheatSheetBatter,
+  type CheatSheetBatterDetail,
 } from "@/hooks/mlb/useMlbMatchups";
 import { useTheme } from "@/store/useTheme";
 import { usePropBetslip, type PropSlipItem } from "@/store/usePropBetslip";
@@ -64,8 +66,36 @@ function greenTone(metric: string, value?: number | null) {
     case "barrel_pct": if (value > 12) return st.cellGreen; break;
     case "hh_pct": if (value > 38) return st.cellGreen; break;
     case "ev": if (value > 90) return st.cellGreen; break;
+    case "avg": if (value > 0.28) return st.cellGreen; break;
+    case "obp": if (value > 0.35) return st.cellGreen; break;
+    case "woba": if (value > 0.35) return st.cellGreen; break;
   }
   return null;
+}
+
+function formatTrajectory(traj?: string | null): string {
+  if (!traj) return "—";
+  return traj.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatResult(result?: string | null): string {
+  if (!result) return "—";
+  return result.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// ── Mini bar component ────────────────────────────────────────────────────
+
+function MiniBar({ label, value, max = 100, color = "#10B981" }: { label: string; value?: number | null; max?: number; color?: string }) {
+  const pct = value != null && Number.isFinite(value) ? Math.min(value / max, 1) : 0;
+  return (
+    <View style={st.miniBarWrap}>
+      <Text style={st.miniBarLabel}>{label}</Text>
+      <View style={st.miniBarTrack}>
+        <View style={[st.miniBarFill, { width: `${Math.round(pct * 100)}%`, backgroundColor: color }]} />
+      </View>
+      <Text style={st.miniBarValue}>{value != null && Number.isFinite(value) ? `${value.toFixed(1)}%` : "—"}</Text>
+    </View>
+  );
 }
 
 // ── Group batters by game within a grade ───────────────────────────────────
@@ -105,6 +135,197 @@ function groupByGame(batters: CheatSheetBatter[]): GameGroup[] {
 
 // ── Batter row ─────────────────────────────────────────────────────────────
 
+function ExpandedBatterDetail({
+  batter,
+  detail,
+  loading,
+}: {
+  batter: CheatSheetBatter;
+  detail: CheatSheetBatterDetail | null;
+  loading: boolean;
+}) {
+  const bvp = detail?.bvp_career;
+  const hasBvp = bvp != null && (bvp.pa ?? 0) > 0;
+  const bb = detail?.bvp_batted_ball;
+  const profile = bb?.profile;
+  const log = bb?.log ?? [];
+  const hasProfile = profile != null && (profile.total_batted ?? 0) > 0;
+  const splits = detail?.pitcher_splits;
+  const batSide = (batter.bat_side ?? "R").toUpperCase();
+  const splitKey = batSide === "L" ? "vsLHB" : "vsRHB";
+  const vsSplit = splits?.[splitKey];
+
+  return (
+    <View style={st.expandedArea}>
+      {/* Quick stats row */}
+      <View style={st.expandedRow}>
+        <View style={st.expandedStat}>
+          <Text style={st.expandedLabel}>SCORE</Text>
+          <Text style={st.expandedValue}>{batter.score?.toFixed(1) ?? "—"}</Text>
+        </View>
+        <View style={st.expandedStat}>
+          <Text style={st.expandedLabel}>L15 EV</Text>
+          <Text style={[st.expandedValue, greenTone("ev", batter.l15_ev)]}>{batter.l15_ev?.toFixed(1) ?? "—"}</Text>
+        </View>
+        <View style={st.expandedStat}>
+          <Text style={st.expandedLabel}>SZN EV</Text>
+          <Text style={[st.expandedValue, greenTone("ev", batter.season_ev)]}>{batter.season_ev?.toFixed(1) ?? "—"}</Text>
+        </View>
+        <View style={st.expandedStat}>
+          <Text style={st.expandedLabel}>ODDS</Text>
+          <Text style={st.expandedValue}>{fmtOdds(batter.hr_odds_best_price)}</Text>
+        </View>
+        <View style={st.expandedStat}>
+          <Text style={st.expandedLabel}>BOOK</Text>
+          <Text style={st.expandedValue}>{batter.hr_odds_best_book ?? "—"}</Text>
+        </View>
+      </View>
+
+      {loading ? (
+        <ActivityIndicator color="#93C5FD" size="small" style={{ marginVertical: 8 }} />
+      ) : null}
+
+      {/* Career vs Pitcher */}
+      {!loading && detail ? (
+        <>
+          <Text style={st.sectionTitle}>Career vs Pitcher</Text>
+          {hasBvp ? (
+            <View style={st.bvpWrap}>
+              <Text style={st.bvpSummaryText}>
+                {bvp!.hits ?? 0}-{bvp!.pa ?? 0} · {bvp!.hr ?? 0} HR
+              </Text>
+              <View style={st.bvpTable}>
+                <View style={st.bvpHeaderRow}>
+                  <Text style={st.bvpHeaderCell}>AVG</Text>
+                  <Text style={st.bvpHeaderCell}>ISO</Text>
+                  <Text style={st.bvpHeaderCell}>SLG</Text>
+                  <Text style={st.bvpHeaderCell}>OBP</Text>
+                  <Text style={st.bvpHeaderCell}>K%</Text>
+                  <Text style={st.bvpHeaderCell}>BB%</Text>
+                </View>
+                <View style={st.bvpValueRow}>
+                  <Text style={[st.bvpValueCell, greenTone("avg", bvp!.avg)]}>{fmt(bvp!.avg)}</Text>
+                  <Text style={[st.bvpValueCell, greenTone("iso", bvp!.iso)]}>{fmt(bvp!.iso)}</Text>
+                  <Text style={[st.bvpValueCell, greenTone("slg", bvp!.slg)]}>{fmt(bvp!.slg)}</Text>
+                  <Text style={[st.bvpValueCell, greenTone("obp", bvp!.obp)]}>{fmt(bvp!.obp)}</Text>
+                  <Text style={st.bvpValueCell}>{fmtPct(bvp!.k_pct)}</Text>
+                  <Text style={st.bvpValueCell}>{fmtPct(bvp!.bb_pct)}</Text>
+                </View>
+              </View>
+            </View>
+          ) : (
+            <Text style={st.bvpEmptyText}>No career data vs this pitcher</Text>
+          )}
+
+          {/* Batted Ball History */}
+          {(hasProfile || log.length > 0) ? (
+            <View style={st.bbWrap}>
+              <Text style={st.sectionTitle}>
+                Batted Ball History{profile?.total_batted ? ` (${profile.total_batted} batted)` : ""}
+              </Text>
+              {hasProfile ? (
+                <View style={st.bbBarsContainer}>
+                  <View style={st.bbBarsRow}>
+                    <MiniBar label="Barrel%" value={profile!.barrel_pct} max={25} color="#10B981" />
+                    <MiniBar label="HH%" value={profile!.hh_pct} max={60} color="#10B981" />
+                    <MiniBar label="FB%" value={profile!.fb_pct} max={60} color="#60A5FA" />
+                    <MiniBar label="GB%" value={profile!.gb_pct} max={60} color="#F59E0B" />
+                    <MiniBar label="LD%" value={profile!.ld_pct} max={40} color="#34D399" />
+                    <MiniBar label="PU%" value={profile!.pu_pct} max={30} color="#94A3B8" />
+                    <MiniBar label="HR/FB%" value={profile!.hr_fb_pct} max={30} color="#F87171" />
+                  </View>
+                  <View style={st.bbBarsRow}>
+                    <MiniBar label="Pull%" value={profile!.pull_pct} max={60} color="#A78BFA" />
+                    <MiniBar label="Str%" value={profile!.str_pct} max={50} color="#A78BFA" />
+                    <MiniBar label="Oppo%" value={profile!.oppo_pct} max={40} color="#A78BFA" />
+                  </View>
+                </View>
+              ) : null}
+              {log.length > 0 ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View>
+                    <View style={st.logHeaderRow}>
+                      <Text style={[st.logHeaderCell, st.logDateCol]}>DATE</Text>
+                      <Text style={[st.logHeaderCell, st.logPitchCol]}>PITCH</Text>
+                      <Text style={st.logHeaderCell}>EV</Text>
+                      <Text style={st.logHeaderCell}>ANGLE</Text>
+                      <Text style={st.logHeaderCell}>DIST</Text>
+                      <Text style={[st.logHeaderCell, st.logTrajCol]}>TRAJ</Text>
+                      <Text style={[st.logHeaderCell, st.logResultCol]}>RESULT</Text>
+                      <Text style={st.logHeaderCell}>PARKS</Text>
+                    </View>
+                    {log.map((row, idx) => {
+                      const ev = row.ev;
+                      const evStyle = ev != null && ev >= 95 ? st.cellGreen : null;
+                      const angleVal = row.angle;
+                      const angleLaunch = angleVal != null && angleVal >= 10 && angleVal <= 30;
+                      const isHr = (row.result ?? "").toLowerCase() === "home_run";
+                      return (
+                        <View key={`log-${idx}`} style={st.logRow}>
+                          <Text style={[st.logCell, st.logDateCol]}>{row.date ?? "—"}</Text>
+                          <Text style={[st.logCell, st.logPitchCol]}>{row.pitch ?? "—"}</Text>
+                          <Text style={[st.logCell, evStyle]}>{ev != null ? ev.toFixed(1) : "—"}</Text>
+                          <Text style={[st.logCell, angleLaunch ? st.cellGreen : null]}>{angleVal != null ? angleVal.toFixed(1) : "—"}</Text>
+                          <Text style={st.logCell}>{row.dist != null ? row.dist.toFixed(0) : "—"}</Text>
+                          <Text style={[st.logCell, st.logTrajCol]}>{formatTrajectory(row.trajectory)}</Text>
+                          <Text style={[st.logCell, st.logResultCol, isHr ? st.cellGreen : null]}>{formatResult(row.result)}</Text>
+                          <Text style={[st.logCell, (row.hr_parks ?? 0) >= 20 ? st.cellGreen : null]}>{row.hr_parks != null ? `${row.hr_parks}/30` : "—"}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* Pitcher Stats vs Handedness */}
+          {vsSplit ? (
+            <View style={st.pitcherSplitWrap}>
+              <Text style={st.sectionTitle}>
+                {batter.pitcher_name ?? "Pitcher"} vs {batSide === "L" ? "LHB" : "RHB"}
+              </Text>
+              <View style={st.bvpTable}>
+                <View style={st.bvpHeaderRow}>
+                  <Text style={st.bvpHeaderCell}>HR/9</Text>
+                  <Text style={st.bvpHeaderCell}>BRL%</Text>
+                  <Text style={st.bvpHeaderCell}>HH%</Text>
+                  <Text style={st.bvpHeaderCell}>FB%</Text>
+                  <Text style={st.bvpHeaderCell}>HR/FB%</Text>
+                  <Text style={st.bvpHeaderCell}>WHIP</Text>
+                  <Text style={st.bvpHeaderCell}>wOBA</Text>
+                </View>
+                <View style={st.bvpValueRow}>
+                  <Text style={st.bvpValueCell}>{vsSplit.hr_per_9?.toFixed(2) ?? "—"}</Text>
+                  <Text style={st.bvpValueCell}>{fmtPct(vsSplit.barrel_pct)}</Text>
+                  <Text style={st.bvpValueCell}>{fmtPct(vsSplit.hard_hit_pct)}</Text>
+                  <Text style={st.bvpValueCell}>{fmtPct(vsSplit.fb_pct)}</Text>
+                  <Text style={st.bvpValueCell}>{fmtPct(vsSplit.hr_fb_pct)}</Text>
+                  <Text style={st.bvpValueCell}>{vsSplit.whip?.toFixed(2) ?? "—"}</Text>
+                  <Text style={[st.bvpValueCell, greenTone("woba", vsSplit.woba)]}>{fmt(vsSplit.woba)}</Text>
+                </View>
+              </View>
+            </View>
+          ) : null}
+        </>
+      ) : null}
+
+      {batter.why ? (
+        <Text style={st.whyText}>{batter.why}</Text>
+      ) : null}
+      {batter.flags && batter.flags.length > 0 ? (
+        <View style={st.flagsRow}>
+          {batter.flags.map((f, i) => (
+            <View key={i} style={st.flagPill}>
+              <Text style={st.flagText}>{f}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 function CheatSheetBatterRow({
   batter,
   selected,
@@ -120,6 +341,14 @@ function CheatSheetBatterRow({
 }) {
   const hasFd = !!(batter.fd_market_id && batter.fd_selection_id);
   const config = GRADE_CONFIG[(batter.grade === "IDEAL" ? "A+" : batter.grade === "FAVORABLE" ? "A" : batter.grade === "AVOID" ? "D" : batter.grade === "AVERAGE" ? "B" : "C") as GradeKey];
+
+  // Lazy-load detail data only when expanded
+  const { data: detail, loading: detailLoading } = useMlbCheatSheetBatterDetail(
+    expanded ? batter.batter_id : null,
+    expanded ? batter.pitcher_id : null,
+    expanded ? batter.game_pk : null,
+    expanded ? batter.bat_side : null,
+  );
 
   return (
     <View
@@ -171,58 +400,9 @@ function CheatSheetBatterRow({
         </ScrollView>
       </View>
 
-      {/* Expanded detail */}
+      {/* Expanded detail - lazy loaded */}
       {expanded ? (
-        <View style={st.expandedArea}>
-          <View style={st.expandedRow}>
-            <View style={st.expandedStat}>
-              <Text style={st.expandedLabel}>SCORE</Text>
-              <Text style={st.expandedValue}>{batter.score?.toFixed(1) ?? "—"}</Text>
-            </View>
-            <View style={st.expandedStat}>
-              <Text style={st.expandedLabel}>L15 EV</Text>
-              <Text style={[st.expandedValue, greenTone("ev", batter.l15_ev)]}>{batter.l15_ev?.toFixed(1) ?? "—"}</Text>
-            </View>
-            <View style={st.expandedStat}>
-              <Text style={st.expandedLabel}>SZN EV</Text>
-              <Text style={[st.expandedValue, greenTone("ev", batter.season_ev)]}>{batter.season_ev?.toFixed(1) ?? "—"}</Text>
-            </View>
-            <View style={st.expandedStat}>
-              <Text style={st.expandedLabel}>SZN BRL%</Text>
-              <Text style={[st.expandedValue, greenTone("barrel_pct", batter.season_barrel_pct)]}>{fmtPct(batter.season_barrel_pct)}</Text>
-            </View>
-            <View style={st.expandedStat}>
-              <Text style={st.expandedLabel}>HR/FB%</Text>
-              <Text style={st.expandedValue}>{fmtPct(batter.hr_fb_pct)}</Text>
-            </View>
-          </View>
-          <View style={st.expandedRow}>
-            <View style={st.expandedStat}>
-              <Text style={st.expandedLabel}>P HR/9</Text>
-              <Text style={st.expandedValue}>{batter.p_hr9_vs_hand?.toFixed(2) ?? "—"}</Text>
-            </View>
-            <View style={st.expandedStat}>
-              <Text style={st.expandedLabel}>ODDS</Text>
-              <Text style={st.expandedValue}>{fmtOdds(batter.hr_odds_best_price)}</Text>
-            </View>
-            <View style={st.expandedStat}>
-              <Text style={st.expandedLabel}>BOOK</Text>
-              <Text style={st.expandedValue}>{batter.hr_odds_best_book ?? "—"}</Text>
-            </View>
-          </View>
-          {batter.why ? (
-            <Text style={st.whyText}>{batter.why}</Text>
-          ) : null}
-          {batter.flags && batter.flags.length > 0 ? (
-            <View style={st.flagsRow}>
-              {batter.flags.map((f, i) => (
-                <View key={i} style={st.flagPill}>
-                  <Text style={st.flagText}>{f}</Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
-        </View>
+        <ExpandedBatterDetail batter={batter} detail={detail} loading={detailLoading} />
       ) : null}
     </View>
   );
@@ -694,6 +874,84 @@ const st = StyleSheet.create({
     backgroundColor: "#0F172A",
   },
   flagText: { color: "#93C5FD", fontSize: 9, fontWeight: "700" },
+
+  // Section title
+  sectionTitle: { color: "#94A3B8", fontSize: 10, fontWeight: "800", marginTop: 4 },
+
+  // Career BvP
+  bvpWrap: { gap: 4 },
+  bvpSummaryText: { color: "#CBD5E1", fontSize: 11, fontWeight: "700" },
+  bvpEmptyText: { color: "#64748B", fontSize: 10, fontStyle: "italic" },
+  bvpTable: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#334155",
+    borderRadius: 6,
+    overflow: "hidden",
+  },
+  bvpHeaderRow: { flexDirection: "row", backgroundColor: "#0F172A" },
+  bvpHeaderCell: {
+    flex: 1,
+    color: "#64748B",
+    fontSize: 9,
+    fontWeight: "800",
+    textAlign: "center",
+    paddingVertical: 4,
+  },
+  bvpValueRow: { flexDirection: "row", backgroundColor: "rgba(15,23,42,0.25)" },
+  bvpValueCell: {
+    flex: 1,
+    color: "#E2E8F0",
+    fontSize: 11,
+    fontWeight: "700",
+    textAlign: "center",
+    paddingVertical: 5,
+  },
+
+  // Batted Ball
+  bbWrap: { gap: 6, marginTop: 2 },
+  bbBarsContainer: { gap: 4 },
+  bbBarsRow: { flexDirection: "row", gap: 4 },
+  miniBarWrap: { flex: 1, minWidth: 38, gap: 1 },
+  miniBarLabel: { color: "#64748B", fontSize: 8, fontWeight: "800" },
+  miniBarTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "rgba(51,65,85,0.4)",
+    overflow: "hidden",
+  },
+  miniBarFill: { height: 6, borderRadius: 3 },
+  miniBarValue: { color: "#CBD5E1", fontSize: 9, fontWeight: "700" },
+
+  // Hit log
+  logHeaderRow: {
+    flexDirection: "row",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#334155",
+    paddingBottom: 3,
+    marginBottom: 2,
+  },
+  logHeaderCell: {
+    width: 48,
+    color: "#64748B",
+    fontSize: 8,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  logRow: { flexDirection: "row", paddingVertical: 2 },
+  logCell: {
+    width: 48,
+    color: "#CBD5E1",
+    fontSize: 9,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  logDateCol: { width: 72 },
+  logPitchCol: { width: 56 },
+  logTrajCol: { width: 64 },
+  logResultCol: { width: 68 },
+
+  // Pitcher splits
+  pitcherSplitWrap: { gap: 4, marginTop: 2 },
 
   // Parlay bar
   parlayBar: {

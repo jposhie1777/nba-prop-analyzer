@@ -23,9 +23,10 @@ router = APIRouter(tags=["MLB Matchups"])
 # Keyed by (endpoint, args). Each entry: (timestamp, data).
 # Evicts on read if stale. No background thread needed.
 
-_cache: Dict[str, Tuple[float, Any]] = {}
+_cache: Dict[str, Tuple[float, float, Any]] = {}  # key -> (timestamp, ttl, data)
 _cache_lock = Lock()
-CACHE_TTL_SECONDS = 120  # 2 minutes
+CACHE_TTL_SECONDS = 120  # 2 minutes (default)
+CACHE_TTL_LONG = 600  # 10 minutes (for batter detail / cheat-sheet)
 
 
 def _cache_get(key: str) -> Any:
@@ -33,20 +34,20 @@ def _cache_get(key: str) -> Any:
         entry = _cache.get(key)
         if entry is None:
             return None
-        ts, data = entry
-        if time.monotonic() - ts > CACHE_TTL_SECONDS:
+        ts, ttl, data = entry
+        if time.monotonic() - ts > ttl:
             del _cache[key]
             return None
         return data
 
 
-def _cache_set(key: str, data: Any) -> None:
+def _cache_set(key: str, data: Any, ttl: float = CACHE_TTL_SECONDS) -> None:
     now = time.monotonic()
     with _cache_lock:
-        _cache[key] = (now, data)
+        _cache[key] = (now, ttl, data)
         # Lazy eviction: drop stale entries when cache grows large
         if len(_cache) > 200:
-            stale = [k for k, (ts, _) in _cache.items() if now - ts > CACHE_TTL_SECONDS]
+            stale = [k for k, (ts, t, _) in _cache.items() if now - ts > t]
             for k in stale:
                 del _cache[k]
 
@@ -1318,6 +1319,16 @@ def _cheat_sheet_route():
     return mlb_hr_cheat_sheet()
 
 
+@router.get("/mlb/matchups/cheat-sheet/batter-detail")
+def _cheat_sheet_batter_detail_route(
+    batter_id: int = Query(...),
+    pitcher_id: int = Query(...),
+    game_pk: int = Query(...),
+    bat_side: str = Query("R"),
+):
+    return mlb_cheat_sheet_batter_detail(batter_id, pitcher_id, game_pk, bat_side)
+
+
 @router.get("/mlb/matchups/nrfi")
 def _nrfi_route(state: str = "nj"):
     return mlb_nrfi_matchups(state=state)
@@ -2525,7 +2536,106 @@ def mlb_hr_cheat_sheet():
         "grades": grade_groups,
         "grade_counts": {k: len(v) for k, v in grade_groups.items()},
     }
-    _cache_set(cache_key, result)
+    _cache_set(cache_key, result, CACHE_TTL_LONG)
+    return result
+
+
+# ── Cheat-sheet batter detail (lazy-loaded on expand) ─────────────────────
+
+def mlb_cheat_sheet_batter_detail(
+    batter_id: int, pitcher_id: int, game_pk: int, bat_side: str = "R",
+) -> Dict[str, Any]:
+    """
+    Returns detailed matchup data for a single batter-pitcher pair:
+    - Career BvP stats (AVG, ISO, SLG, OBP, K%, BB%)
+    - Batted ball history (profile bars + hit log)
+    - Pitcher season splits vs the batter's handedness
+    Designed to be called lazily when a user expands a row on the cheat sheet.
+    """
+    cache_key = f"cs-detail:{batter_id}:{pitcher_id}:{game_pk}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    side = bat_side.upper()
+    if side not in ("L", "R", "S"):
+        side = "R"
+    # Switch hitters treated as RHB vs LHP, LHB vs RHP — default to opposite of pitcher
+    # For splits lookup, we need the pitcher's hand. We'll fetch it from BQ.
+
+    client = get_bq_client()
+    today = _today_et_iso()
+    pitcher_table = _qualified_table(client, PITCHER_MATCHUP_TABLE)
+    run_date = _resolve_latest_run_date(
+        client, _qualified_table(client, HR_PICKS_TABLE), today,
+    )
+
+    batter_sides: Dict[int, str] = {batter_id: side}
+
+    # Run all lookups in parallel
+    def _get_bvp_career():
+        return _fetch_single_bvp(batter_id, pitcher_id)
+
+    def _get_batted_ball():
+        return _fetch_bvp_batted_ball_map(
+            [(batter_id, pitcher_id)], batter_sides,
+        ).get(f"{batter_id}:{pitcher_id}")
+
+    def _get_pitcher_splits():
+        # Fetch pitcher splits vs batter's handedness + Season
+        split_key = f"vs{'LHB' if side == 'L' else 'RHB'}"
+        rows = _safe_query(
+            client,
+            f"""
+            SELECT split, ip, home_runs, hr_per_9, barrel_pct, hard_hit_pct,
+                   fb_pct, hr_fb_pct, whip, woba
+            FROM {pitcher_table}
+            WHERE run_date = @run_date
+              AND CAST(game_pk AS INT64) = @game_pk
+              AND CAST(pitcher_id AS INT64) = @pitcher_id
+              AND split IN ('Season', @split_key)
+            QUALIFY ROW_NUMBER() OVER (
+              PARTITION BY split ORDER BY ingested_at DESC NULLS LAST
+            ) = 1
+            """,
+            [
+                bigquery.ScalarQueryParameter("run_date", "DATE", run_date),
+                bigquery.ScalarQueryParameter("game_pk", "INT64", game_pk),
+                bigquery.ScalarQueryParameter("pitcher_id", "INT64", pitcher_id),
+                bigquery.ScalarQueryParameter("split_key", "STRING", split_key),
+            ],
+        )
+        splits: Dict[str, Dict[str, Any]] = {}
+        for row in rows:
+            sname = row.get("split") or "Season"
+            splits[sname] = {
+                "ip": _safe_float(row.get("ip")),
+                "home_runs": _safe_int(row.get("home_runs")),
+                "hr_per_9": _safe_float(row.get("hr_per_9")),
+                "barrel_pct": _safe_float(row.get("barrel_pct")),
+                "hard_hit_pct": _safe_float(row.get("hard_hit_pct")),
+                "fb_pct": _safe_float(row.get("fb_pct")),
+                "hr_fb_pct": _safe_float(row.get("hr_fb_pct")),
+                "whip": _safe_float(row.get("whip")),
+                "woba": _safe_float(row.get("woba")),
+            }
+        return splits
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        fut_career = pool.submit(_get_bvp_career)
+        fut_batted = pool.submit(_get_batted_ball)
+        fut_splits = pool.submit(_get_pitcher_splits)
+
+    result = {
+        "batter_id": batter_id,
+        "pitcher_id": pitcher_id,
+        "game_pk": game_pk,
+        "bat_side": side,
+        "bvp_career": fut_career.result(),
+        "bvp_batted_ball": fut_batted.result(),
+        "pitcher_splits": fut_splits.result(),
+    }
+    _cache_set(cache_key, result, CACHE_TTL_LONG)
     return result
 
 

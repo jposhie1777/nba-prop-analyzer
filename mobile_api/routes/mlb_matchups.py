@@ -2572,6 +2572,73 @@ def mlb_hr_cheat_sheet():
 
 # ── Cheat-sheet batter detail (lazy-loaded on expand) ─────────────────────
 
+
+def _fetch_pitcher_pitch_types(
+    client: bigquery.Client,
+    pitch_log_table_qualified: str,
+    run_date: str,
+    game_pk: int,
+    pitcher_id: int,
+) -> List[str]:
+    """Return the distinct pitch names for a pitcher from the pitch log."""
+    rows = _safe_query(
+        client,
+        f"""
+        SELECT DISTINCT CAST(pitch_name AS STRING) AS pitch_name
+        FROM {pitch_log_table_qualified}
+        WHERE run_date = @run_date
+          AND CAST(game_pk AS INT64) = @game_pk
+          AND CAST(pitcher_id AS INT64) = @pitcher_id
+          AND COALESCE(CAST(pitch_name AS STRING), '') != ''
+        """,
+        [
+            bigquery.ScalarQueryParameter("run_date", "DATE", run_date),
+            bigquery.ScalarQueryParameter("game_pk", "INT64", game_pk),
+            bigquery.ScalarQueryParameter("pitcher_id", "INT64", pitcher_id),
+        ],
+    )
+    return [r.get("pitch_name") for r in rows if r.get("pitch_name")]
+
+
+def _fetch_pitcher_pitch_types_batch(
+    client: bigquery.Client,
+    pitch_log_table_qualified: str,
+    run_date: str,
+    game_pks: List[int],
+    pitcher_ids: List[int],
+) -> Dict[str, List[str]]:
+    """Return distinct pitch names keyed by 'pitcher_id:game_pk'."""
+    if not pitcher_ids or not game_pks:
+        return {}
+    rows = _safe_query(
+        client,
+        f"""
+        SELECT CAST(pitcher_id AS INT64) AS pitcher_id,
+               CAST(game_pk AS INT64) AS game_pk,
+               CAST(pitch_name AS STRING) AS pitch_name
+        FROM {pitch_log_table_qualified}
+        WHERE run_date = @run_date
+          AND CAST(game_pk AS INT64) IN UNNEST(@game_pks)
+          AND CAST(pitcher_id AS INT64) IN UNNEST(@pitcher_ids)
+          AND COALESCE(CAST(pitch_name AS STRING), '') != ''
+        GROUP BY pitcher_id, game_pk, pitch_name
+        """,
+        [
+            bigquery.ScalarQueryParameter("run_date", "DATE", run_date),
+            bigquery.ArrayQueryParameter("game_pks", "INT64", game_pks),
+            bigquery.ArrayQueryParameter("pitcher_ids", "INT64", pitcher_ids),
+        ],
+    )
+    out: Dict[str, List[str]] = {}
+    for r in rows:
+        pid = _safe_int(r.get("pitcher_id"))
+        gpk = _safe_int(r.get("game_pk"))
+        pn = r.get("pitch_name")
+        if pid is not None and gpk is not None and pn:
+            out.setdefault(f"{pid}:{gpk}", []).append(pn)
+    return out
+
+
 def mlb_cheat_sheet_batter_detail(
     batter_id: int, pitcher_id: int, game_pk: int, bat_side: str = "R",
 ) -> Dict[str, Any]:
@@ -2596,25 +2663,35 @@ def mlb_cheat_sheet_batter_detail(
     client = get_bq_client()
     today = _today_et_iso()
     pitcher_table = _qualified_table(client, PITCHER_MATCHUP_TABLE)
+    pitch_log_table = _qualified_table(client, PITCH_LOG_TABLE)
     run_date = _resolve_latest_run_date(
         client, _qualified_table(client, HR_PICKS_TABLE), today,
     )
-
-    batter_sides: Dict[int, str] = {batter_id: side}
 
     # Run all lookups in parallel
     def _get_bvp_career():
         return _fetch_single_bvp(batter_id, pitcher_id)
 
-    def _get_batted_ball():
-        # Show ALL recent batted ball events for the batter (not filtered by pitcher)
+    def _get_batted_ball_and_pitch_types():
+        # Fetch batter events + pitcher pitch types in parallel
         all_events = _fetch_single_batter_hits(batter_id)
+        pitch_types = _fetch_pitcher_pitch_types(
+            client, pitch_log_table, run_date, game_pk, pitcher_id,
+        )
         if not all_events:
-            return None
-        return _build_batted_ball_data(all_events, side)
+            return None, pitch_types
+        # Filter to only pitches in the opposing pitcher's mix
+        if pitch_types:
+            normalized_types = {pt.strip().lower() for pt in pitch_types}
+            filtered = [
+                e for e in all_events
+                if (_clean_str(e.get("pitchType")) or "").strip().lower() in normalized_types
+            ]
+        else:
+            filtered = all_events
+        return _build_batted_ball_data(filtered, side) if filtered else None, pitch_types
 
     def _get_pitcher_splits():
-        # Fetch pitcher splits vs batter's handedness + Season
         split_key = f"vs{'LHB' if side == 'L' else 'RHB'}"
         rows = _safe_query(
             client,
@@ -2655,8 +2732,10 @@ def mlb_cheat_sheet_batter_detail(
 
     with ThreadPoolExecutor(max_workers=3) as pool:
         fut_career = pool.submit(_get_bvp_career)
-        fut_batted = pool.submit(_get_batted_ball)
+        fut_batted = pool.submit(_get_batted_ball_and_pitch_types)
         fut_splits = pool.submit(_get_pitcher_splits)
+
+    batted_ball_data, _pitch_types = fut_batted.result()
 
     result = {
         "batter_id": batter_id,
@@ -2664,7 +2743,7 @@ def mlb_cheat_sheet_batter_detail(
         "game_pk": game_pk,
         "bat_side": side,
         "bvp_career": fut_career.result(),
-        "bvp_batted_ball": fut_batted.result(),
+        "bvp_batted_ball": batted_ball_data,
         "pitcher_splits": fut_splits.result(),
     }
     _cache_set(cache_key, result, CACHE_TTL_LONG)
@@ -2715,49 +2794,41 @@ def mlb_cheat_sheet_batch_detail(
     if not to_fetch:
         return {"details": results}
 
-    # Pre-resolve run_date and pitcher_table once
+    # Pre-resolve run_date and tables once
     client = get_bq_client()
     today = _today_et_iso()
     pitcher_table = _qualified_table(client, PITCHER_MATCHUP_TABLE)
+    pitch_log_table = _qualified_table(client, PITCH_LOG_TABLE)
     hr_table = _qualified_table(client, HR_PICKS_TABLE)
     run_date = _resolve_latest_run_date(client, hr_table, today)
 
     # Batch fetch BvP career for all pairs
     bvp_pairs = [(p["batter_id"], p["pitcher_id"]) for p in to_fetch]
     batter_ids = list({p["batter_id"] for p in to_fetch})
-
-    # Batch fetch batted ball data (one API call per unique batter)
     batter_sides = {p["batter_id"]: p["bat_side"] for p in to_fetch}
-
-    # Batch fetch pitcher splits — one BQ query for all pitchers/games
-    pitcher_game_sides: List[Dict[str, Any]] = []
-    for p in to_fetch:
-        side = p["bat_side"]
-        split_key = f"vs{'LHB' if side == 'L' else 'RHB'}"
-        pitcher_game_sides.append({
-            "pitcher_id": p["pitcher_id"],
-            "game_pk": p["game_pk"],
-            "split_key": split_key,
-        })
+    all_pitcher_ids = sorted({p["pitcher_id"] for p in to_fetch})
+    all_game_pks = sorted({p["game_pk"] for p in to_fetch})
 
     def _batch_bvp_career():
         return _fetch_bvp_career_map(bvp_pairs)
 
-    def _batch_batted_ball():
-        # Fetch all unique batter hit data in parallel
-        out: Dict[int, Dict[str, Any]] = {}
+    def _batch_raw_batted_ball():
+        # Fetch raw hit events per batter (unfiltered — filtering happens after)
+        out: Dict[int, List[Dict[str, Any]]] = {}
         def _fetch_one(bid: int):
             events = _fetch_single_batter_hits(bid)
             if events:
-                out[bid] = _build_batted_ball_data(events, batter_sides.get(bid, "R"))
+                out[bid] = events
         with ThreadPoolExecutor(max_workers=10) as pool:
             pool.map(_fetch_one, batter_ids)
         return out
 
+    def _batch_pitcher_pitch_types():
+        return _fetch_pitcher_pitch_types_batch(
+            client, pitch_log_table, run_date, all_game_pks, all_pitcher_ids,
+        )
+
     def _batch_pitcher_splits():
-        # Single BQ query for all pitchers/game_pks/splits needed
-        all_pitcher_ids = sorted({p["pitcher_id"] for p in to_fetch})
-        all_game_pks = sorted({p["game_pk"] for p in to_fetch})
         all_split_keys = sorted({f"vs{'LHB' if p['bat_side'] == 'L' else 'RHB'}" for p in to_fetch})
         rows = _safe_query(
             client,
@@ -2783,7 +2854,6 @@ def mlb_cheat_sheet_batch_detail(
                 bigquery.ArrayQueryParameter("splits", "STRING", ["Season"] + all_split_keys),
             ],
         )
-        # Index: (pitcher_id, game_pk) -> {split_name -> stats}
         out: Dict[str, Dict[str, Dict[str, Any]]] = {}
         for row in rows:
             pid = _safe_int(row.get("pitcher_id"))
@@ -2803,13 +2873,15 @@ def mlb_cheat_sheet_batch_detail(
             }
         return out
 
-    with ThreadPoolExecutor(max_workers=3) as pool:
+    with ThreadPoolExecutor(max_workers=4) as pool:
         fut_career = pool.submit(_batch_bvp_career)
-        fut_batted = pool.submit(_batch_batted_ball)
+        fut_raw_batted = pool.submit(_batch_raw_batted_ball)
+        fut_pitch_types = pool.submit(_batch_pitcher_pitch_types)
         fut_splits = pool.submit(_batch_pitcher_splits)
 
     career_map = fut_career.result()
-    batted_map = fut_batted.result()
+    raw_batted_map = fut_raw_batted.result()
+    pitch_types_map = fut_pitch_types.result()
     splits_map = fut_splits.result()
 
     for p in to_fetch:
@@ -2818,16 +2890,29 @@ def mlb_cheat_sheet_batch_detail(
         gpk = p["game_pk"]
         side = p["bat_side"]
         key = f"{bid}:{pid}:{gpk}"
+
+        # Filter batted ball events by pitcher's pitch mix
+        raw_events = raw_batted_map.get(bid, [])
+        pitch_types = pitch_types_map.get(f"{pid}:{gpk}", [])
+        if raw_events and pitch_types:
+            normalized_types = {pt.strip().lower() for pt in pitch_types}
+            filtered = [
+                e for e in raw_events
+                if (_clean_str(e.get("pitchType")) or "").strip().lower() in normalized_types
+            ]
+        else:
+            filtered = raw_events
+        batted_ball = _build_batted_ball_data(filtered, side) if filtered else None
+
         detail = {
             "batter_id": bid,
             "pitcher_id": pid,
             "game_pk": gpk,
             "bat_side": side,
             "bvp_career": career_map.get(f"{bid}:{pid}"),
-            "bvp_batted_ball": batted_map.get(bid),
+            "bvp_batted_ball": batted_ball,
             "pitcher_splits": splits_map.get(f"{pid}:{gpk}"),
         }
-        # Cache individually so single-batter requests are instant
         cache_key = f"cs-detail:{bid}:{pid}:{gpk}"
         _cache_set(cache_key, detail, CACHE_TTL_LONG)
         results[key] = detail

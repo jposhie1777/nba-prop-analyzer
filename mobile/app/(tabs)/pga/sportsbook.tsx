@@ -14,6 +14,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/store/useTheme";
 import { usePgaQuery } from "@/hooks/pga/usePgaQuery";
 import { AutoSortableTable } from "@/components/table/AutoSortableTable";
+import { PropBetslipDrawer } from "@/components/prop/PropBetslipDrawer";
+import { usePropBetslip, PropSlipItem } from "@/store/usePropBetslip";
+import { useBetslipDrawer } from "@/store/useBetslipDrawer";
+import { useUserSettings } from "@/store/useUserSettings";
+import { buildFanDuelParlay, getBuildPlatform } from "@/utils/parlayBuilder";
 import type { ColumnConfig } from "@/types/schema";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -47,6 +52,7 @@ type Selection = {
   market_name: string;
   market_type: string;
   player_name: string;
+  selection_id: number;
   odds_decimal: number | null;
   odds_american: number | null;
   handicap: number | null;
@@ -124,89 +130,89 @@ const MARKET_TYPE_ORDER = [
 // ─── Column configs per market type ───────────────────────────────────────────
 
 const OUTRIGHT_COLUMNS: ColumnConfig[] = [
-  { key: "player_name", label: "Player", width: 120, isNumeric: false },
-  { key: "odds_american", label: "Odds", width: 58, isNumeric: true, formatter: fmtOdds },
-  { key: "sg_total", label: "SG Tot", width: 54, isNumeric: true, formatter: (v) => fmt(v, 2) },
-  { key: "sg_approach", label: "SG App", width: 54, isNumeric: true, formatter: (v) => fmt(v, 2) },
-  { key: "sg_putting", label: "SG Putt", width: 54, isNumeric: true, formatter: (v) => fmt(v, 2) },
-  { key: "scoring_avg", label: "Avg", width: 50, isNumeric: true, formatter: (v) => fmt(v, 1) },
-  { key: "l5_finish_avg", label: "L5 Fin", width: 50, isNumeric: true, formatter: (v) => fmt(v, 1) },
-  { key: "cut_rate_l5", label: "Cut%", width: 48, isNumeric: true, formatter: fmtPct },
-  { key: "top10_rate_l5", label: "T10%", width: 48, isNumeric: true, formatter: fmtPct },
-  { key: "form_trend_3", label: "Trend", width: 48, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "player_name", label: "Player", width: 110, isNumeric: false },
+  { key: "odds_american", label: "Odds", width: 52, isNumeric: true, formatter: fmtOdds },
+  { key: "sg_total", label: "SG Tot", width: 50, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "sg_approach", label: "SG App", width: 50, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "sg_putting", label: "SG Putt", width: 50, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "scoring_avg", label: "Avg", width: 46, isNumeric: true, formatter: (v) => fmt(v, 1) },
+  { key: "l5_finish_avg", label: "L5 Fin", width: 46, isNumeric: true, formatter: (v) => fmt(v, 1) },
+  { key: "cut_rate_l5", label: "Cut%", width: 46, isNumeric: true, formatter: fmtPct },
+  { key: "top10_rate_l5", label: "T10%", width: 46, isNumeric: true, formatter: fmtPct },
+  { key: "form_trend_3", label: "Trend", width: 46, isNumeric: true, formatter: (v) => fmt(v, 2) },
 ];
 
 const TOP_FINISH_COLUMNS: ColumnConfig[] = [
-  { key: "player_name", label: "Player", width: 120, isNumeric: false },
-  { key: "market_name", label: "Market", width: 80, isNumeric: false },
-  { key: "odds_american", label: "Odds", width: 58, isNumeric: true, formatter: fmtOdds },
-  { key: "sg_total", label: "SG Tot", width: 54, isNumeric: true, formatter: (v) => fmt(v, 2) },
-  { key: "l5_finish_avg", label: "L5 Fin", width: 50, isNumeric: true, formatter: (v) => fmt(v, 1) },
-  { key: "top10_rate_l5", label: "T10%", width: 48, isNumeric: true, formatter: fmtPct },
-  { key: "cut_rate_l5", label: "Cut%", width: 48, isNumeric: true, formatter: fmtPct },
-  { key: "weighted_l5_score", label: "L5 Wt", width: 50, isNumeric: true, formatter: (v) => fmt(v, 1) },
+  { key: "player_name", label: "Player", width: 110, isNumeric: false },
+  { key: "market_name", label: "Market", width: 70, isNumeric: false },
+  { key: "odds_american", label: "Odds", width: 52, isNumeric: true, formatter: fmtOdds },
+  { key: "sg_total", label: "SG Tot", width: 50, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "l5_finish_avg", label: "L5 Fin", width: 46, isNumeric: true, formatter: (v) => fmt(v, 1) },
+  { key: "top10_rate_l5", label: "T10%", width: 46, isNumeric: true, formatter: fmtPct },
+  { key: "cut_rate_l5", label: "Cut%", width: 46, isNumeric: true, formatter: fmtPct },
+  { key: "weighted_l5_score", label: "L5 Wt", width: 46, isNumeric: true, formatter: (v) => fmt(v, 1) },
 ];
 
 const MATCHUP_COLUMNS: ColumnConfig[] = [
-  { key: "player_name", label: "Player", width: 120, isNumeric: false },
-  { key: "market_name", label: "Matchup", width: 100, isNumeric: false },
-  { key: "odds_american", label: "Odds", width: 58, isNumeric: true, formatter: fmtOdds },
-  { key: "handicap", label: "Line", width: 48, isNumeric: true, formatter: (v) => fmt(v, 1) },
-  { key: "sg_total", label: "SG Tot", width: 54, isNumeric: true, formatter: (v) => fmt(v, 2) },
-  { key: "l5_finish_avg", label: "L5 Fin", width: 50, isNumeric: true, formatter: (v) => fmt(v, 1) },
-  { key: "form_trend_3", label: "Trend", width: 48, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "player_name", label: "Player", width: 110, isNumeric: false },
+  { key: "market_name", label: "Matchup", width: 90, isNumeric: false },
+  { key: "odds_american", label: "Odds", width: 52, isNumeric: true, formatter: fmtOdds },
+  { key: "handicap", label: "Line", width: 44, isNumeric: true, formatter: (v) => fmt(v, 1) },
+  { key: "sg_total", label: "SG Tot", width: 50, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "l5_finish_avg", label: "L5 Fin", width: 46, isNumeric: true, formatter: (v) => fmt(v, 1) },
+  { key: "form_trend_3", label: "Trend", width: 46, isNumeric: true, formatter: (v) => fmt(v, 2) },
 ];
 
 const THREE_BALL_COLUMNS: ColumnConfig[] = [
-  { key: "player_name", label: "Player", width: 120, isNumeric: false },
-  { key: "market_name", label: "Group", width: 100, isNumeric: false },
-  { key: "odds_american", label: "Odds", width: 58, isNumeric: true, formatter: fmtOdds },
-  { key: "sg_total", label: "SG Tot", width: 54, isNumeric: true, formatter: (v) => fmt(v, 2) },
-  { key: "sg_approach", label: "SG App", width: 54, isNumeric: true, formatter: (v) => fmt(v, 2) },
-  { key: "l5_finish_avg", label: "L5 Fin", width: 50, isNumeric: true, formatter: (v) => fmt(v, 1) },
+  { key: "player_name", label: "Player", width: 110, isNumeric: false },
+  { key: "market_name", label: "Group", width: 90, isNumeric: false },
+  { key: "odds_american", label: "Odds", width: 52, isNumeric: true, formatter: fmtOdds },
+  { key: "sg_total", label: "SG Tot", width: 50, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "sg_approach", label: "SG App", width: 50, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "l5_finish_avg", label: "L5 Fin", width: 46, isNumeric: true, formatter: (v) => fmt(v, 1) },
 ];
 
 const ROUND_LEADER_COLUMNS: ColumnConfig[] = [
-  { key: "player_name", label: "Player", width: 120, isNumeric: false },
-  { key: "odds_american", label: "Odds", width: 58, isNumeric: true, formatter: fmtOdds },
-  { key: "sg_total", label: "SG Tot", width: 54, isNumeric: true, formatter: (v) => fmt(v, 2) },
-  { key: "scoring_avg", label: "Avg", width: 50, isNumeric: true, formatter: (v) => fmt(v, 1) },
-  { key: "l5_finish_avg", label: "L5 Fin", width: 50, isNumeric: true, formatter: (v) => fmt(v, 1) },
-  { key: "cut_rate_l5", label: "Cut%", width: 48, isNumeric: true, formatter: fmtPct },
+  { key: "player_name", label: "Player", width: 110, isNumeric: false },
+  { key: "odds_american", label: "Odds", width: 52, isNumeric: true, formatter: fmtOdds },
+  { key: "sg_total", label: "SG Tot", width: 50, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "scoring_avg", label: "Avg", width: 46, isNumeric: true, formatter: (v) => fmt(v, 1) },
+  { key: "l5_finish_avg", label: "L5 Fin", width: 46, isNumeric: true, formatter: (v) => fmt(v, 1) },
+  { key: "cut_rate_l5", label: "Cut%", width: 46, isNumeric: true, formatter: fmtPct },
 ];
 
 const PLAYER_ROUND_SCORE_COLUMNS: ColumnConfig[] = [
-  { key: "player_name", label: "Player", width: 120, isNumeric: false },
-  { key: "market_name", label: "Market", width: 90, isNumeric: false },
-  { key: "odds_american", label: "Odds", width: 58, isNumeric: true, formatter: fmtOdds },
-  { key: "sg_total", label: "SG Tot", width: 54, isNumeric: true, formatter: (v) => fmt(v, 2) },
-  { key: "l5_finish_avg", label: "L5 Fin", width: 50, isNumeric: true, formatter: (v) => fmt(v, 1) },
+  { key: "player_name", label: "Player", width: 110, isNumeric: false },
+  { key: "market_name", label: "Market", width: 80, isNumeric: false },
+  { key: "odds_american", label: "Odds", width: 52, isNumeric: true, formatter: fmtOdds },
+  { key: "sg_total", label: "SG Tot", width: 50, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "l5_finish_avg", label: "L5 Fin", width: 46, isNumeric: true, formatter: (v) => fmt(v, 1) },
 ];
 
 const TOP_NATIONALITY_COLUMNS: ColumnConfig[] = [
-  { key: "player_name", label: "Player", width: 120, isNumeric: false },
-  { key: "market_name", label: "Region", width: 90, isNumeric: false },
-  { key: "odds_american", label: "Odds", width: 58, isNumeric: true, formatter: fmtOdds },
-  { key: "sg_total", label: "SG Tot", width: 54, isNumeric: true, formatter: (v) => fmt(v, 2) },
-  { key: "l5_finish_avg", label: "L5 Fin", width: 50, isNumeric: true, formatter: (v) => fmt(v, 1) },
-  { key: "cut_rate_l5", label: "Cut%", width: 48, isNumeric: true, formatter: fmtPct },
+  { key: "player_name", label: "Player", width: 110, isNumeric: false },
+  { key: "market_name", label: "Region", width: 80, isNumeric: false },
+  { key: "odds_american", label: "Odds", width: 52, isNumeric: true, formatter: fmtOdds },
+  { key: "sg_total", label: "SG Tot", width: 50, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "l5_finish_avg", label: "L5 Fin", width: 46, isNumeric: true, formatter: (v) => fmt(v, 1) },
+  { key: "cut_rate_l5", label: "Cut%", width: 46, isNumeric: true, formatter: fmtPct },
 ];
 
 const SPECIALS_COLUMNS: ColumnConfig[] = [
-  { key: "player_name", label: "Player", width: 120, isNumeric: false },
-  { key: "market_name", label: "Market", width: 100, isNumeric: false },
-  { key: "odds_american", label: "Odds", width: 58, isNumeric: true, formatter: fmtOdds },
-  { key: "sg_total", label: "SG Tot", width: 54, isNumeric: true, formatter: (v) => fmt(v, 2) },
-  { key: "l5_finish_avg", label: "L5 Fin", width: 50, isNumeric: true, formatter: (v) => fmt(v, 1) },
+  { key: "player_name", label: "Player", width: 110, isNumeric: false },
+  { key: "market_name", label: "Market", width: 90, isNumeric: false },
+  { key: "odds_american", label: "Odds", width: 52, isNumeric: true, formatter: fmtOdds },
+  { key: "sg_total", label: "SG Tot", width: 50, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "l5_finish_avg", label: "L5 Fin", width: 46, isNumeric: true, formatter: (v) => fmt(v, 1) },
 ];
 
 const GENERIC_COLUMNS: ColumnConfig[] = [
-  { key: "player_name", label: "Player", width: 120, isNumeric: false },
-  { key: "market_name", label: "Market", width: 100, isNumeric: false },
-  { key: "odds_american", label: "Odds", width: 58, isNumeric: true, formatter: fmtOdds },
-  { key: "sg_total", label: "SG Tot", width: 54, isNumeric: true, formatter: (v) => fmt(v, 2) },
-  { key: "l5_finish_avg", label: "L5 Fin", width: 50, isNumeric: true, formatter: (v) => fmt(v, 1) },
-  { key: "cut_rate_l5", label: "Cut%", width: 48, isNumeric: true, formatter: fmtPct },
+  { key: "player_name", label: "Player", width: 110, isNumeric: false },
+  { key: "market_name", label: "Market", width: 90, isNumeric: false },
+  { key: "odds_american", label: "Odds", width: 52, isNumeric: true, formatter: fmtOdds },
+  { key: "sg_total", label: "SG Tot", width: 50, isNumeric: true, formatter: (v) => fmt(v, 2) },
+  { key: "l5_finish_avg", label: "L5 Fin", width: 46, isNumeric: true, formatter: (v) => fmt(v, 1) },
+  { key: "cut_rate_l5", label: "Cut%", width: 46, isNumeric: true, formatter: fmtPct },
 ];
 
 function columnsForType(mt: string): ColumnConfig[] {
@@ -221,6 +227,27 @@ function columnsForType(mt: string): ColumnConfig[] {
   if (mt === "make_cut") return GENERIC_COLUMNS;
   if (mt === "finishing_position") return TOP_FINISH_COLUMNS;
   return GENERIC_COLUMNS;
+}
+
+// ─── Selection key helpers ───────────────────────────────────────────────────
+
+function selectionKey(row: Selection): string {
+  return `pga-${row.market_id}-${row.selection_id}`;
+}
+
+function selectionToSlipItem(row: Selection): PropSlipItem {
+  return {
+    id: selectionKey(row),
+    player_id: row.selection_id ?? 0,
+    player: row.player_name,
+    market: row.market_name,
+    side: "over",
+    line: row.handicap ?? 0,
+    odds: row.odds_american ?? 0,
+    sport: "pga",
+    fd_market_id: String(row.market_id ?? ""),
+    fd_selection_id: String(row.selection_id ?? ""),
+  };
 }
 
 // ─── Tournament Card ──────────────────────────────────────────────────────────
@@ -285,6 +312,59 @@ export default function PgaSportsbook() {
   const [selectedTournament, setSelectedTournament] = useState<string | null>(null);
   const [activeMarketType, setActiveMarketType] = useState<string | null>(null);
 
+  // Betslip stores
+  const { items: betslipItems, add: addToBetslip, remove: removeFromBetslip } = usePropBetslip();
+  const { open: openDrawer } = useBetslipDrawer();
+  const { fdState } = useUserSettings();
+  const platform = getBuildPlatform();
+
+  // Selected keys from betslip (PGA items only)
+  const selectedKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const item of betslipItems) {
+      if (item.sport === "pga") keys.add(item.id);
+    }
+    return keys;
+  }, [betslipItems]);
+
+  // Toggle selection
+  const handleToggle = useCallback(
+    (key: string, row: Selection) => {
+      if (selectedKeys.has(key)) {
+        removeFromBetslip(key);
+      } else {
+        addToBetslip(selectionToSlipItem(row));
+        openDrawer();
+      }
+    },
+    [selectedKeys, addToBetslip, removeFromBetslip, openDrawer],
+  );
+
+  // Open FanDuel NJ deep link for a single selection
+  const handleRowPress = useCallback(
+    (row: Selection) => {
+      if (!row.market_id || !row.selection_id) {
+        if (row.deep_link) Linking.openURL(row.deep_link);
+        return;
+      }
+      const link = buildFanDuelParlay(
+        [{ fd_market_id: String(row.market_id), fd_selection_id: String(row.selection_id) }],
+        platform,
+        fdState,
+      );
+      if (link) {
+        if (platform === "desktop" && typeof globalThis.open === "function") {
+          globalThis.open(link, "_blank");
+        } else {
+          Linking.openURL(link).catch(() => {});
+        }
+      } else if (row.deep_link) {
+        Linking.openURL(row.deep_link);
+      }
+    },
+    [platform, fdState],
+  );
+
   // Fetch tournament list
   const {
     data: tournaments,
@@ -301,7 +381,7 @@ export default function PgaSportsbook() {
   } = usePgaQuery<MarketsResponse>(
     "/pga/sportsbook/markets",
     { tournament: selectedTournament ?? "" },
-    !!selectedTournament
+    !!selectedTournament,
   );
 
   // Sorted market type tabs for the selected tournament
@@ -309,14 +389,15 @@ export default function PgaSportsbook() {
     if (!marketsData?.market_groups) return [];
     const keys = Object.keys(marketsData.market_groups);
     return MARKET_TYPE_ORDER.filter((mt) => keys.includes(mt)).concat(
-      keys.filter((k) => !MARKET_TYPE_ORDER.includes(k))
+      keys.filter((k) => !MARKET_TYPE_ORDER.includes(k)),
     );
   }, [marketsData]);
 
   // Auto-select first market type when tournament loads
-  const effectiveTab = activeMarketType && marketTypeTabs.includes(activeMarketType)
-    ? activeMarketType
-    : marketTypeTabs[0] ?? null;
+  const effectiveTab =
+    activeMarketType && marketTypeTabs.includes(activeMarketType)
+      ? activeMarketType
+      : marketTypeTabs[0] ?? null;
 
   // Flatten selections for the active tab
   const tableData = useMemo(() => {
@@ -385,6 +466,15 @@ export default function PgaSportsbook() {
         <Text style={styles.backText}>All Tournaments</Text>
       </Pressable>
 
+      {/* Selection count badge */}
+      {selectedKeys.size > 0 && (
+        <View style={styles.selectionBanner}>
+          <Text style={styles.selectionBannerText}>
+            {selectedKeys.size} bet{selectedKeys.size !== 1 ? "s" : ""} selected
+          </Text>
+        </View>
+      )}
+
       {/* Market type tabs */}
       <ScrollView
         horizontal
@@ -400,7 +490,10 @@ export default function PgaSportsbook() {
               onPress={() => setActiveMarketType(mt)}
               style={[
                 styles.tab,
-                active && { backgroundColor: colors.accent.primary, borderColor: colors.accent.primary },
+                active && {
+                  backgroundColor: colors.accent.primary,
+                  borderColor: colors.accent.primary,
+                },
                 !active && { borderColor: colors.border.subtle },
               ]}
             >
@@ -425,14 +518,17 @@ export default function PgaSportsbook() {
         <Text style={[styles.errorText, { color: "#F87171" }]}>{marketsError}</Text>
       )}
       {!marketsLoading && effectiveTab && tableData.length > 0 && (
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, paddingBottom: selectedKeys.size > 0 ? 80 : 0 }}>
           <AutoSortableTable
             data={tableData}
             columns={columnsForType(effectiveTab)}
             defaultSort="odds_american"
-            onRowPress={(row) => {
-              if (row.deep_link) Linking.openURL(row.deep_link);
-            }}
+            autoWidth
+            selectable
+            selectedKeys={selectedKeys}
+            onToggle={handleToggle}
+            rowKey={selectionKey}
+            onRowPress={handleRowPress}
           />
         </View>
       )}
@@ -441,6 +537,8 @@ export default function PgaSportsbook() {
           No selections available for this market type.
         </Text>
       )}
+
+      <PropBetslipDrawer />
     </View>
   );
 }
@@ -524,6 +622,20 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   backText: { color: "#90B3E9", fontSize: 14, fontWeight: "600" },
+  selectionBanner: {
+    marginHorizontal: 12,
+    marginTop: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    backgroundColor: "rgba(74,222,128,0.15)",
+    borderRadius: 8,
+    alignSelf: "flex-start",
+  },
+  selectionBannerText: {
+    color: "#4ADE80",
+    fontSize: 11,
+    fontWeight: "700",
+  },
   tabBar: { paddingHorizontal: 12, paddingVertical: 4, gap: 5 },
   tab: {
     borderWidth: 1,

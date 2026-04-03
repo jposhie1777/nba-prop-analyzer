@@ -15,10 +15,16 @@ import { useBetslipDrawer } from "@/store/useBetslipDrawer";
 import { useTheme } from "@/store/useTheme";
 import { usePropBetslip } from "@/store/usePropBetslip";
 import { useParlayTracker } from "@/store/useParlayTracker";
+import { useUserSettings } from "@/store/useUserSettings";
 import { normalizeMarket } from "@/utils/normalizeMarket";
-import { buildParlayLinks, getBuildPlatform } from "@/utils/parlayBuilder";
+import { buildParlayLinks, buildFanDuelParlay, getBuildPlatform } from "@/utils/parlayBuilder";
 
 const GAMBLY_URL = "https://www.gambly.com/gambly-bot";
+
+function fmtOddsDrawer(v: number | null | undefined): string {
+  if (v == null) return "\u2014";
+  return v > 0 ? `+${v}` : String(v);
+}
 const STAKE = 10;
 
 /* ======================================================
@@ -43,6 +49,7 @@ function decimalToAmerican(decimal: number) {
 export function PropBetslipDrawer() {
   const { colors } = useTheme();
   const { items, remove, clear } = usePropBetslip();
+  const { fdState } = useUserSettings();
 
   const [expanded, setExpanded] = useState(false);
   const { isOpen, close, toggle } = useBetslipDrawer();
@@ -116,6 +123,24 @@ export function PropBetslipDrawer() {
       platform
     );
   }, [mlbHrItems, platform]);
+
+  // ── PGA parlay ──
+  const pgaItems = useMemo(
+    () => items.filter((item) => item.sport === "pga"),
+    [items]
+  );
+
+  const pgaParlayLink = useMemo(() => {
+    if (pgaItems.length < 1) return null;
+    return buildFanDuelParlay(
+      pgaItems.map((item) => ({
+        fd_market_id: item.fd_market_id ?? null,
+        fd_selection_id: item.fd_selection_id ?? null,
+      })),
+      platform,
+      fdState,
+    );
+  }, [pgaItems, platform, fdState]);
 
   const { track } = useParlayTracker();
 
@@ -425,6 +450,37 @@ export function PropBetslipDrawer() {
               ]}
             >
               <Text style={styles.sportsbookBtnText}>Open FD Parlay</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
+      {pgaItems.length >= 1 ? (
+        <View style={styles.sportsbookWrap}>
+          <Text style={styles.sportsbookTitle}>
+            PGA FanDuel {pgaItems.length >= 2 ? "Parlay" : "Bet"} ({pgaItems.length} leg{pgaItems.length !== 1 ? "s" : ""})
+          </Text>
+          <Text style={styles.sportsbookSub}>
+            {fdState.toUpperCase()} \u00B7{" "}
+            {pgaItems.length >= 2 && parlayOdds != null
+              ? `Combined: ${parlayOdds > 0 ? `+${parlayOdds}` : parlayOdds}`
+              : pgaItems.length === 1
+              ? `${pgaItems[0].player} ${fmtOddsDrawer(pgaItems[0].odds)}`
+              : ""}
+          </Text>
+          <View style={styles.sportsbookRow}>
+            <Pressable
+              onPress={() => openLink(pgaParlayLink)}
+              disabled={!pgaParlayLink}
+              style={[
+                styles.sportsbookBtn,
+                { backgroundColor: "#1A4B8C" },
+                !pgaParlayLink && styles.sportsbookBtnDisabled,
+              ]}
+            >
+              <Text style={styles.sportsbookBtnText}>
+                Open FanDuel{pgaItems.length >= 2 ? " Parlay" : ""}
+              </Text>
             </Pressable>
           </View>
         </View>

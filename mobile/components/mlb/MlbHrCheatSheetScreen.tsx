@@ -13,6 +13,7 @@ import {
 import {
   useMlbHrCheatSheet,
   useMlbCheatSheetBatterDetail,
+  useCheatSheetBatchPreFetch,
   type CheatSheetBatter,
   type CheatSheetBatterDetail,
 } from "@/hooks/mlb/useMlbMatchups";
@@ -551,6 +552,9 @@ export function MlbHrCheatSheetScreen() {
       ...(data.grades.D ?? []),
     ];
   }, [data]);
+
+  // Pre-warm server cache for all batter details in background
+  useCheatSheetBatchPreFetch(allBatters.length > 0 ? allBatters : null);
 
   const toggleSelect = useCallback(
     (batterId: string) => {

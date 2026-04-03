@@ -1,6 +1,7 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import { useEplQuery } from "@/hooks/epl/useEplQuery";
+import { API_BASE, CLOUD_API_BASE } from "@/lib/config";
 
 export type MlbUpcomingGame = {
   game_pk: number;
@@ -611,6 +612,49 @@ export function useMlbCheatSheetBatterDetail(
     params,
     Boolean(batterId && pitcherId && gamePk),
   );
+}
+
+/**
+ * Fire-and-forget POST to pre-warm the server cache for all batter details.
+ * Call once after the cheat sheet loads. Subsequent individual GET requests
+ * will hit the warm server cache and return instantly.
+ */
+export function useCheatSheetBatchPreFetch(batters: CheatSheetBatter[] | null) {
+  const hasFired = useRef(false);
+
+  useEffect(() => {
+    if (!batters || batters.length === 0 || hasFired.current) return;
+    hasFired.current = true;
+
+    const payload = batters
+      .filter((b) => b.batter_id && b.pitcher_id && b.game_pk)
+      .map((b) => ({
+        batter_id: b.batter_id,
+        pitcher_id: b.pitcher_id,
+        game_pk: b.game_pk,
+        bat_side: b.bat_side ?? "R",
+      }));
+
+    if (payload.length === 0) return;
+
+    // Fire-and-forget POST to all fallback bases
+    const bases = [API_BASE, CLOUD_API_BASE];
+    if (typeof window !== "undefined" && window.location?.origin) {
+      bases.push(`${window.location.origin}/api`);
+    }
+    const uniqueBases = Array.from(new Set(bases));
+
+    for (const base of uniqueBases) {
+      const url = `${base.replace(/\/+$/, "")}/mlb/matchups/cheat-sheet/batch-detail`;
+      fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "omit",
+        body: JSON.stringify({ batters: payload }),
+      }).catch(() => {});
+      break; // Only need to hit one base successfully
+    }
+  }, [batters]);
 }
 
 // ── NRFI / YRFI types ───────────────────────────────────────────────────

@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Body, Query
 from google.cloud import bigquery
 
 from bq import get_bq_client
@@ -324,11 +324,17 @@ def _parse_fanduel_link(url: Any) -> tuple[Optional[str], Optional[str]]:
     return _clean_str(market_id), _clean_str(selection_id)
 
 
-def _load_live_hr_props_context(game_pk: int) -> Dict[int, Dict[str, Any]]:
+def _fetch_all_live_hr_props() -> Dict[int, Dict[int, Dict[str, Any]]]:
     """
-    Fallback context from live /mlb/props for batters in a game.
-    Keyed by batter_id. Only tracks 1+ HR over rows.
+    Fetch the full propfinder props list ONCE and parse it into a nested dict:
+    game_pk -> batter_id -> sportsbook fields.
+    Cached so repeated calls within the same request cycle are free.
     """
+    cache_key = "live-hr-props-all"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     url = f"{PROPFINDER_MLB_PROPS_URL}?date={_today_et_iso()}"
     request = Request(
         url,
@@ -341,15 +347,18 @@ def _load_live_hr_props_context(game_pk: int) -> Dict[int, Dict[str, Any]]:
         with urlopen(request, timeout=20) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except Exception:
+        _cache_set(cache_key, {}, CACHE_TTL_SECONDS)
         return {}
     if not isinstance(payload, list):
+        _cache_set(cache_key, {}, CACHE_TTL_SECONDS)
         return {}
 
-    by_batter: Dict[int, Dict[str, Any]] = {}
+    by_game: Dict[int, Dict[int, Dict[str, Any]]] = {}
     for row in payload:
         if not isinstance(row, dict):
             continue
-        if _safe_int(row.get("gameId")) != game_pk:
+        gpk = _safe_int(row.get("gameId"))
+        if gpk is None:
             continue
         category = str(row.get("category") or "").lower().replace("_", "")
         if "homerun" not in category:
@@ -403,7 +412,7 @@ def _load_live_hr_props_context(game_pk: int) -> Dict[int, Dict[str, Any]]:
                 fd_market_id = fd_market_id or market_id
                 fd_selection_id = fd_selection_id or selection_id
 
-        by_batter[batter_id] = {
+        by_game.setdefault(gpk, {})[batter_id] = {
             "hr_odds_best_price": best_price,
             "hr_odds_best_book": best_book,
             "deep_link_desktop": best_desktop,
@@ -413,7 +422,18 @@ def _load_live_hr_props_context(game_pk: int) -> Dict[int, Dict[str, Any]]:
             "fd_market_id": fd_market_id,
             "fd_selection_id": fd_selection_id,
         }
-    return by_batter
+
+    _cache_set(cache_key, by_game, CACHE_TTL_SECONDS)
+    return by_game
+
+
+def _load_live_hr_props_context(game_pk: int) -> Dict[int, Dict[str, Any]]:
+    """
+    Fallback context from live /mlb/props for batters in a game.
+    Keyed by batter_id. Uses cached full payload.
+    """
+    all_props = _fetch_all_live_hr_props()
+    return all_props.get(game_pk, {})
 
 
 def _merge_props_fallback_into_picks(picks: List[Dict[str, Any]], game_pk: int) -> List[Dict[str, Any]]:
@@ -1327,6 +1347,11 @@ def _cheat_sheet_batter_detail_route(
     bat_side: str = Query("R"),
 ):
     return mlb_cheat_sheet_batter_detail(batter_id, pitcher_id, game_pk, bat_side)
+
+
+@router.post("/mlb/matchups/cheat-sheet/batch-detail")
+def _cheat_sheet_batch_detail_route(body: Dict[str, Any] = Body(...)):
+    return mlb_cheat_sheet_batch_detail(body.get("batters", []))
 
 
 @router.get("/mlb/matchups/nrfi")
@@ -2440,10 +2465,11 @@ def mlb_hr_cheat_sheet():
         enriched = _merge_props_fallback_into_picks(game_picks, gpk)
         merged_picks.extend(enriched)
 
-    # Fetch batting order data for weak spot detection
+    # Fetch batting order data for weak spot detection — in PARALLEL
     # Build a map: game_pk -> {pitcher_id -> Set[player_id]} for weak spots
     weak_spot_map: Dict[int, Dict[int, set]] = {}
-    for gpk in all_game_pks:
+
+    def _fetch_weak_spots(gpk: int) -> Tuple[int, Dict[int, set]]:
         try:
             bo_result = mlb_batting_order(gpk)
             pitcher_weak: Dict[int, set] = {}
@@ -2457,10 +2483,14 @@ def mlb_hr_cheat_sheet():
                         weak_ids.add(pos["player_id"])
                 if weak_ids:
                     pitcher_weak[pid] = weak_ids
+            return gpk, pitcher_weak
+        except Exception:
+            return gpk, {}
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for gpk, pitcher_weak in pool.map(_fetch_weak_spots, all_game_pks):
             if pitcher_weak:
                 weak_spot_map[gpk] = pitcher_weak
-        except Exception:
-            pass
 
     # Build output grouped by grade
     grade_groups: Dict[str, List[Dict[str, Any]]] = {
@@ -2577,9 +2607,11 @@ def mlb_cheat_sheet_batter_detail(
         return _fetch_single_bvp(batter_id, pitcher_id)
 
     def _get_batted_ball():
-        return _fetch_bvp_batted_ball_map(
-            [(batter_id, pitcher_id)], batter_sides,
-        ).get(f"{batter_id}:{pitcher_id}")
+        # Show ALL recent batted ball events for the batter (not filtered by pitcher)
+        all_events = _fetch_single_batter_hits(batter_id)
+        if not all_events:
+            return None
+        return _build_batted_ball_data(all_events, side)
 
     def _get_pitcher_splits():
         # Fetch pitcher splits vs batter's handedness + Season
@@ -2637,6 +2669,170 @@ def mlb_cheat_sheet_batter_detail(
     }
     _cache_set(cache_key, result, CACHE_TTL_LONG)
     return result
+
+
+def mlb_cheat_sheet_batch_detail(
+    batters: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """
+    Pre-fetch detail data for ALL batters in the cheat sheet in a single call.
+    Accepts a list of {batter_id, pitcher_id, game_pk, bat_side}.
+    Fetches all data in parallel, caches each individually so subsequent
+    single-batter calls are instant cache hits.
+    Returns a map keyed by 'batter_id:pitcher_id:game_pk'.
+    """
+    if not batters:
+        return {"details": {}}
+
+    # Deduplicate
+    unique: Dict[str, Dict[str, Any]] = {}
+    for b in batters:
+        bid = _safe_int(b.get("batter_id"))
+        pid = _safe_int(b.get("pitcher_id"))
+        gpk = _safe_int(b.get("game_pk"))
+        if bid is None or pid is None or gpk is None:
+            continue
+        key = f"{bid}:{pid}:{gpk}"
+        if key not in unique:
+            unique[key] = {
+                "batter_id": bid,
+                "pitcher_id": pid,
+                "game_pk": gpk,
+                "bat_side": (b.get("bat_side") or "R").upper(),
+            }
+
+    # Check cache for each, collect uncached
+    results: Dict[str, Any] = {}
+    to_fetch: List[Dict[str, Any]] = []
+    for key, params in unique.items():
+        cache_key = f"cs-detail:{params['batter_id']}:{params['pitcher_id']}:{params['game_pk']}"
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            results[key] = cached
+        else:
+            to_fetch.append(params)
+
+    if not to_fetch:
+        return {"details": results}
+
+    # Pre-resolve run_date and pitcher_table once
+    client = get_bq_client()
+    today = _today_et_iso()
+    pitcher_table = _qualified_table(client, PITCHER_MATCHUP_TABLE)
+    hr_table = _qualified_table(client, HR_PICKS_TABLE)
+    run_date = _resolve_latest_run_date(client, hr_table, today)
+
+    # Batch fetch BvP career for all pairs
+    bvp_pairs = [(p["batter_id"], p["pitcher_id"]) for p in to_fetch]
+    batter_ids = list({p["batter_id"] for p in to_fetch})
+
+    # Batch fetch batted ball data (one API call per unique batter)
+    batter_sides = {p["batter_id"]: p["bat_side"] for p in to_fetch}
+
+    # Batch fetch pitcher splits — one BQ query for all pitchers/games
+    pitcher_game_sides: List[Dict[str, Any]] = []
+    for p in to_fetch:
+        side = p["bat_side"]
+        split_key = f"vs{'LHB' if side == 'L' else 'RHB'}"
+        pitcher_game_sides.append({
+            "pitcher_id": p["pitcher_id"],
+            "game_pk": p["game_pk"],
+            "split_key": split_key,
+        })
+
+    def _batch_bvp_career():
+        return _fetch_bvp_career_map(bvp_pairs)
+
+    def _batch_batted_ball():
+        # Fetch all unique batter hit data in parallel
+        out: Dict[int, Dict[str, Any]] = {}
+        def _fetch_one(bid: int):
+            events = _fetch_single_batter_hits(bid)
+            if events:
+                out[bid] = _build_batted_ball_data(events, batter_sides.get(bid, "R"))
+        with ThreadPoolExecutor(max_workers=10) as pool:
+            pool.map(_fetch_one, batter_ids)
+        return out
+
+    def _batch_pitcher_splits():
+        # Single BQ query for all pitchers/game_pks/splits needed
+        all_pitcher_ids = sorted({p["pitcher_id"] for p in to_fetch})
+        all_game_pks = sorted({p["game_pk"] for p in to_fetch})
+        all_split_keys = sorted({f"vs{'LHB' if p['bat_side'] == 'L' else 'RHB'}" for p in to_fetch})
+        rows = _safe_query(
+            client,
+            f"""
+            SELECT CAST(pitcher_id AS INT64) AS pitcher_id,
+                   CAST(game_pk AS INT64) AS game_pk,
+                   split, ip, home_runs, hr_per_9, barrel_pct, hard_hit_pct,
+                   fb_pct, hr_fb_pct, whip, woba
+            FROM {pitcher_table}
+            WHERE run_date = @run_date
+              AND CAST(game_pk AS INT64) IN UNNEST(@game_pks)
+              AND CAST(pitcher_id AS INT64) IN UNNEST(@pitcher_ids)
+              AND split IN UNNEST(@splits)
+            QUALIFY ROW_NUMBER() OVER (
+              PARTITION BY pitcher_id, game_pk, split
+              ORDER BY ingested_at DESC NULLS LAST
+            ) = 1
+            """,
+            [
+                bigquery.ScalarQueryParameter("run_date", "DATE", run_date),
+                bigquery.ArrayQueryParameter("game_pks", "INT64", all_game_pks),
+                bigquery.ArrayQueryParameter("pitcher_ids", "INT64", all_pitcher_ids),
+                bigquery.ArrayQueryParameter("splits", "STRING", ["Season"] + all_split_keys),
+            ],
+        )
+        # Index: (pitcher_id, game_pk) -> {split_name -> stats}
+        out: Dict[str, Dict[str, Dict[str, Any]]] = {}
+        for row in rows:
+            pid = _safe_int(row.get("pitcher_id"))
+            gpk = _safe_int(row.get("game_pk"))
+            sname = row.get("split") or "Season"
+            idx_key = f"{pid}:{gpk}"
+            out.setdefault(idx_key, {})[sname] = {
+                "ip": _safe_float(row.get("ip")),
+                "home_runs": _safe_int(row.get("home_runs")),
+                "hr_per_9": _safe_float(row.get("hr_per_9")),
+                "barrel_pct": _safe_float(row.get("barrel_pct")),
+                "hard_hit_pct": _safe_float(row.get("hard_hit_pct")),
+                "fb_pct": _safe_float(row.get("fb_pct")),
+                "hr_fb_pct": _safe_float(row.get("hr_fb_pct")),
+                "whip": _safe_float(row.get("whip")),
+                "woba": _safe_float(row.get("woba")),
+            }
+        return out
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        fut_career = pool.submit(_batch_bvp_career)
+        fut_batted = pool.submit(_batch_batted_ball)
+        fut_splits = pool.submit(_batch_pitcher_splits)
+
+    career_map = fut_career.result()
+    batted_map = fut_batted.result()
+    splits_map = fut_splits.result()
+
+    for p in to_fetch:
+        bid = p["batter_id"]
+        pid = p["pitcher_id"]
+        gpk = p["game_pk"]
+        side = p["bat_side"]
+        key = f"{bid}:{pid}:{gpk}"
+        detail = {
+            "batter_id": bid,
+            "pitcher_id": pid,
+            "game_pk": gpk,
+            "bat_side": side,
+            "bvp_career": career_map.get(f"{bid}:{pid}"),
+            "bvp_batted_ball": batted_map.get(bid),
+            "pitcher_splits": splits_map.get(f"{pid}:{gpk}"),
+        }
+        # Cache individually so single-batter requests are instant
+        cache_key = f"cs-detail:{bid}:{pid}:{gpk}"
+        _cache_set(cache_key, detail, CACHE_TTL_LONG)
+        results[key] = detail
+
+    return {"details": results}
 
 
 # ── NRFI / YRFI ────────────────────────────────────────────────────────────

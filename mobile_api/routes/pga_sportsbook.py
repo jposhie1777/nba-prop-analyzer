@@ -25,6 +25,7 @@ SKILL_STATS_TABLE = f"{PROJECT}.pga_data.website_player_skill_stats"
 RECENT_FORM_TABLE = f"{PROJECT}.pga_data.website_player_recent_form"
 COURSE_FIT_TABLE = f"{PROJECT}.pga_data.website_course_fit"
 BETTING_PROFILE_TABLE = f"{PROJECT}.pga_data.website_player_betting_profile"
+SCORECARD_TABLE = f"{PROJECT}.pga_data.website_player_scorecard"
 
 # ── Orphan tournament consolidation ──────────────────────────────────────────
 # FanDuel lists sub-markets (3 Balls, Make/Miss Cut, etc.) as separate
@@ -244,8 +245,45 @@ def pga_sportsbook_markets(
     rf_norm = _norm_col("rf.player_display_name")
     bp_norm = _norm_col("bp.player_display_name")
 
+    l5_norm = _norm_col("l5r.player_display_name")
+    ct_norm = _norm_col("ct.player_display_name")
+
     sql = f"""
     WITH {_alias_cte()},
+    -- Last 5 individual round scores per player
+    l5_rounds AS (
+      SELECT player_display_name,
+        STRING_AGG(CAST(round_score AS STRING), ',' ORDER BY rn) AS l5_round_scores
+      FROM (
+        SELECT player_display_name, round_score,
+          ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY tournament_date DESC, round_num) AS rn
+        FROM (
+          SELECT player_id, player_display_name, tournament_date,
+            r1 AS round_score, 1 AS round_num FROM `{SCORECARD_TABLE}` WHERE r1 IS NOT NULL
+          UNION ALL
+          SELECT player_id, player_display_name, tournament_date,
+            r2, 2 FROM `{SCORECARD_TABLE}` WHERE r2 IS NOT NULL
+          UNION ALL
+          SELECT player_id, player_display_name, tournament_date,
+            r3, 3 FROM `{SCORECARD_TABLE}` WHERE r3 IS NOT NULL
+          UNION ALL
+          SELECT player_id, player_display_name, tournament_date,
+            r4, 4 FROM `{SCORECARD_TABLE}` WHERE r4 IS NOT NULL
+        )
+      )
+      WHERE rn <= 5
+      GROUP BY player_display_name
+    ),
+    -- Current tournament scores (if available)
+    current_tourn AS (
+      SELECT player_display_name, position, to_par, r1, r2, r3, r4, total_strokes
+      FROM `{SCORECARD_TABLE}`
+      WHERE season = EXTRACT(YEAR FROM CURRENT_DATE())
+        AND tournament_date = (
+          SELECT MAX(tournament_date) FROM `{SCORECARD_TABLE}`
+          WHERE season = EXTRACT(YEAR FROM CURRENT_DATE())
+        )
+    ),
     latest_per_tourn AS (
       SELECT
         COALESCE(tournament_name, event_name) AS tn,
@@ -309,7 +347,16 @@ def pga_sportsbook_markets(
       rf.score_stddev,
       -- Betting profile
       bp.season_total_score_avg,
-      bp.season_finish_avg
+      bp.season_finish_avg,
+      -- Last 5 round scores
+      l5r.l5_round_scores,
+      -- Current tournament
+      ct.position  AS current_position,
+      ct.to_par    AS current_to_par,
+      ct.r1        AS current_r1,
+      ct.r2        AS current_r2,
+      ct.r3        AS current_r3,
+      ct.r4        AS current_r4
     FROM raw
     LEFT JOIN name_alias na ON LOWER(TRIM(raw.player_name)) = na.fd
     LEFT JOIN `{SKILL_STATS_TABLE}` sk
@@ -318,6 +365,10 @@ def pga_sportsbook_markets(
       ON {fd_norm} = {rf_norm}
     LEFT JOIN `{BETTING_PROFILE_TABLE}` bp
       ON {fd_norm} = {bp_norm}
+    LEFT JOIN l5_rounds l5r
+      ON {fd_norm} = {l5_norm}
+    LEFT JOIN current_tourn ct
+      ON {fd_norm} = {ct_norm}
     ORDER BY raw.market_type, raw.market_name, raw.odds_decimal ASC NULLS LAST
     """
     rows = _query(sql, params)

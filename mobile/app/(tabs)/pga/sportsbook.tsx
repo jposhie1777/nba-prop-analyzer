@@ -71,6 +71,13 @@ type Selection = {
   form_trend_3: number | null;
   days_since_last_event: number | null;
   score_stddev: number | null;
+  l5_round_scores: string | null;
+  current_position: string | null;
+  current_to_par: string | null;
+  current_r1: number | null;
+  current_r2: number | null;
+  current_r3: number | null;
+  current_r4: number | null;
 };
 
 type MarketGroup = {
@@ -263,13 +270,29 @@ function statRows(sel: Selection, marketType: string): GroupStat[] {
       { label: "Cut%", value: fmtPct(sel.cut_rate_l5) },
     ];
   }
-  // three_ball
+  // three_ball — fewer stats so cards stay compact at 3-wide
   return [
     { label: "SG Tot", value: fmt(sel.sg_total, 2) },
-    { label: "SG App", value: fmt(sel.sg_approach, 2) },
     { label: "L5 Fin", value: fmt(sel.l5_finish_avg, 1) },
     { label: "Cut%", value: fmtPct(sel.cut_rate_l5) },
   ];
+}
+
+function fmtRounds(csv: string | null): string {
+  if (!csv) return "\u2014";
+  return csv.split(",").join(", ");
+}
+
+function fmtCurrentScore(sel: Selection): string | null {
+  const parts: string[] = [];
+  if (sel.current_r1 != null) parts.push(String(sel.current_r1));
+  if (sel.current_r2 != null) parts.push(String(sel.current_r2));
+  if (sel.current_r3 != null) parts.push(String(sel.current_r3));
+  if (sel.current_r4 != null) parts.push(String(sel.current_r4));
+  if (!parts.length) return null;
+  const pos = sel.current_position ?? "";
+  const par = sel.current_to_par ?? "";
+  return `${parts.join("-")} (${par}) ${pos}`.trim();
 }
 
 function bestIndex(sels: Selection[], key: keyof Selection, lower = false): number {
@@ -301,6 +324,7 @@ function GroupCard({
 }) {
   const { colors } = useTheme();
   const sels = market.selections;
+  const is3 = sels.length >= 3;
   const bestOddsIdx = bestIndex(sels, "odds_american", false);
   const bestSgIdx = bestIndex(sels, "sg_total", false);
   const bestFinIdx = bestIndex(sels, "l5_finish_avg", true);
@@ -321,6 +345,7 @@ function GroupCard({
           const key = selectionKey(sel);
           const selected = selectedKeys.has(key);
           const stats = statRows(sel, marketType);
+          const currentScore = fmtCurrentScore(sel);
 
           return (
             <Pressable
@@ -329,23 +354,26 @@ function GroupCard({
               style={[
                 gStyles.playerCol,
                 {
+                  flex: 1,
+                  width: 0, // force flex shrink on RN
                   borderColor: selected ? "#4ADE80" : colors.border.subtle,
                   backgroundColor: selected ? "rgba(74,222,128,0.08)" : "#0F1D32",
                 },
-                sels.length === 2 && { flex: 1 },
-                sels.length === 3 && { flex: 1 },
               ]}
             >
               {/* Checkbox + Name */}
               <View style={gStyles.nameRow}>
                 <Pressable onPress={() => onToggle(key, sel)} hitSlop={8}>
-                  <Text style={{ fontSize: 14, color: selected ? "#4ADE80" : colors.text.muted }}>
+                  <Text style={{ fontSize: is3 ? 12 : 14, color: selected ? "#4ADE80" : colors.text.muted }}>
                     {selected ? "\u2611" : "\u2610"}
                   </Text>
                 </Pressable>
                 <Text
                   numberOfLines={1}
-                  style={[gStyles.playerName, { color: colors.text.primary }]}
+                  style={[
+                    gStyles.playerName,
+                    { color: colors.text.primary, fontSize: is3 ? 11 : 13 },
+                  ]}
                 >
                   {sel.player_name}
                 </Text>
@@ -355,7 +383,10 @@ function GroupCard({
               <Text
                 style={[
                   gStyles.odds,
-                  { color: i === bestOddsIdx ? "#4ADE80" : colors.text.secondary },
+                  {
+                    fontSize: is3 ? 16 : 20,
+                    color: i === bestOddsIdx ? "#4ADE80" : colors.text.secondary,
+                  },
                 ]}
               >
                 {fmtOdds(sel.odds_american)}
@@ -368,16 +399,40 @@ function GroupCard({
                 </Text>
               )}
 
+              {/* Current tournament score */}
+              {currentScore && (
+                <Text
+                  numberOfLines={1}
+                  style={[gStyles.roundScores, { color: "#60A5FA" }]}
+                >
+                  Now: {currentScore}
+                </Text>
+              )}
+
+              {/* Last 5 round scores */}
+              <Text
+                numberOfLines={1}
+                style={[gStyles.roundScores, { color: colors.text.muted }]}
+              >
+                L5: {fmtRounds(sel.l5_round_scores)}
+              </Text>
+
               {/* Stats */}
               {stats.map((st) => (
                 <View key={st.label} style={gStyles.statRow}>
-                  <Text style={[gStyles.statLabel, { color: colors.text.muted }]}>
+                  <Text
+                    style={[
+                      gStyles.statLabel,
+                      { color: colors.text.muted, fontSize: is3 ? 10 : 11 },
+                    ]}
+                  >
                     {st.label}
                   </Text>
                   <Text
                     style={[
                       gStyles.statValue,
                       {
+                        fontSize: is3 ? 10 : 11,
                         color:
                           (st.label === "SG Tot" && i === bestSgIdx) ||
                           (st.label === "L5 Fin" && i === bestFinIdx)
@@ -446,13 +501,13 @@ const gStyles = StyleSheet.create({
   },
   playersRow: {
     flexDirection: "row",
-    gap: 8,
+    gap: 6,
   },
   playerCol: {
     borderWidth: 1,
     borderRadius: 10,
-    padding: 10,
-    gap: 4,
+    padding: 8,
+    gap: 3,
   },
   nameRow: {
     flexDirection: "row",
@@ -480,6 +535,12 @@ const gStyles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     paddingVertical: 2,
+  },
+  roundScores: {
+    fontSize: 10,
+    fontWeight: "600",
+    textAlign: "center",
+    marginVertical: 2,
   },
   statLabel: {
     fontSize: 11,

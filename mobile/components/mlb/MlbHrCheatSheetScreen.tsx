@@ -149,7 +149,8 @@ function ExpandedBatterDetail({
   const hasBvp = bvp != null && (bvp.pa ?? 0) > 0;
   const bb = detail?.bvp_batted_ball;
   const profile = bb?.profile;
-  const log = bb?.log ?? [];
+  const fullLog = bb?.log ?? [];
+  const log = fullLog.slice(0, 20);
   const hasProfile = profile != null && (profile.total_batted ?? 0) > 0;
   const splits = detail?.pitcher_splits;
   const batSide = (batter.bat_side ?? "R").toUpperCase();
@@ -222,7 +223,7 @@ function ExpandedBatterDetail({
           {(hasProfile || log.length > 0) ? (
             <View style={st.bbWrap}>
               <Text style={st.sectionTitle}>
-                Batted Ball History{profile?.total_batted ? ` (${profile.total_batted} batted)` : ""}
+                Batted Ball History{fullLog.length > 20 ? ` (last 20 of ${fullLog.length})` : fullLog.length > 0 ? ` (${fullLog.length} batted)` : profile?.total_batted ? ` (${profile.total_batted} batted)` : ""}
               </Text>
               {hasProfile ? (
                 <View style={st.bbBarsContainer}>
@@ -255,25 +256,35 @@ function ExpandedBatterDetail({
                       <Text style={[st.logHeaderCell, st.logResultCol]}>RESULT</Text>
                       <Text style={st.logHeaderCell}>PARKS</Text>
                     </View>
-                    {log.map((row, idx) => {
-                      const ev = row.ev;
-                      const evStyle = ev != null && ev >= 95 ? st.cellGreen : null;
-                      const angleVal = row.angle;
-                      const angleLaunch = angleVal != null && angleVal >= 10 && angleVal <= 30;
-                      const isHr = (row.result ?? "").toLowerCase() === "home_run";
-                      return (
-                        <View key={`log-${idx}`} style={st.logRow}>
-                          <Text style={[st.logCell, st.logDateCol]}>{row.date ?? "—"}</Text>
-                          <Text style={[st.logCell, st.logPitchCol]}>{row.pitch ?? "—"}</Text>
-                          <Text style={[st.logCell, evStyle]}>{ev != null ? ev.toFixed(1) : "—"}</Text>
-                          <Text style={[st.logCell, angleLaunch ? st.cellGreen : null]}>{angleVal != null ? angleVal.toFixed(1) : "—"}</Text>
-                          <Text style={st.logCell}>{row.dist != null ? row.dist.toFixed(0) : "—"}</Text>
-                          <Text style={[st.logCell, st.logTrajCol]}>{formatTrajectory(row.trajectory)}</Text>
-                          <Text style={[st.logCell, st.logResultCol, isHr ? st.cellGreen : null]}>{formatResult(row.result)}</Text>
-                          <Text style={[st.logCell, (row.hr_parks ?? 0) >= 20 ? st.cellGreen : null]}>{row.hr_parks != null ? `${row.hr_parks}/30` : "—"}</Text>
-                        </View>
-                      );
-                    })}
+                    <ScrollView
+                      style={st.logScrollContainer}
+                      nestedScrollEnabled
+                      showsVerticalScrollIndicator
+                      indicatorStyle="white"
+                    >
+                      {log.map((row, idx) => {
+                        const ev = row.ev;
+                        const evStyle = ev != null && ev >= 95 ? st.cellGreen : null;
+                        const angleVal = row.angle;
+                        const angleLaunch = angleVal != null && angleVal >= 10 && angleVal <= 30;
+                        const isHr = (row.result ?? "").toLowerCase() === "home_run";
+                        return (
+                          <View key={`log-${idx}`} style={st.logRow}>
+                            <Text style={[st.logCell, st.logDateCol]}>{row.date ?? "—"}</Text>
+                            <Text style={[st.logCell, st.logPitchCol]}>{row.pitch ?? "—"}</Text>
+                            <Text style={[st.logCell, evStyle]}>{ev != null ? ev.toFixed(1) : "—"}</Text>
+                            <Text style={[st.logCell, angleLaunch ? st.cellGreen : null]}>{angleVal != null ? angleVal.toFixed(1) : "—"}</Text>
+                            <Text style={st.logCell}>{row.dist != null ? row.dist.toFixed(0) : "—"}</Text>
+                            <Text style={[st.logCell, st.logTrajCol]}>{formatTrajectory(row.trajectory)}</Text>
+                            <Text style={[st.logCell, st.logResultCol, isHr ? st.cellGreen : null]}>{formatResult(row.result)}</Text>
+                            <Text style={[st.logCell, (row.hr_parks ?? 0) >= 20 ? st.cellGreen : null]}>{row.hr_parks != null ? `${row.hr_parks}/30` : "—"}</Text>
+                          </View>
+                        );
+                      })}
+                    </ScrollView>
+                    {log.length > 10 ? (
+                      <Text style={st.logScrollHint}>↓ Scroll for more</Text>
+                    ) : null}
                   </View>
                 </ScrollView>
               ) : null}
@@ -941,6 +952,8 @@ const st = StyleSheet.create({
     fontWeight: "800",
     textAlign: "center",
   },
+  logScrollContainer: { maxHeight: 170 },
+  logScrollHint: { color: "#64748B", fontSize: 9, textAlign: "center", marginTop: 2 },
   logRow: { flexDirection: "row", paddingVertical: 2 },
   logCell: {
     width: 48,

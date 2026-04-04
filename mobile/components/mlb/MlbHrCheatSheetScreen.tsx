@@ -377,43 +377,35 @@ function CheatSheetBatterCard({
         </View>
       </Pressable>
 
-      {/* Big stat numbers */}
+      {/* All stats on one line */}
       <View style={st.cardStatsRow}>
-        <View style={st.cardBigStat}>
-          <Text style={[st.cardBigNum, greenTone("iso", batter.iso)]}>{fmt(batter.iso)}</Text>
-          <Text style={st.cardBigLabel}>ISO</Text>
+        <View style={st.cardStat}>
+          <Text style={[st.cardStatNum, greenTone("iso", batter.iso)]}>{fmt(batter.iso)}</Text>
+          <Text style={st.cardStatLabel}>ISO</Text>
         </View>
-        <View style={st.cardBigStat}>
-          <Text style={[st.cardBigNum, greenTone("slg", batter.slg)]}>{fmt(batter.slg)}</Text>
-          <Text style={st.cardBigLabel}>SLG</Text>
+        <View style={st.cardStat}>
+          <Text style={[st.cardStatNum, greenTone("slg", batter.slg)]}>{fmt(batter.slg)}</Text>
+          <Text style={st.cardStatLabel}>SLG</Text>
         </View>
-        <View style={st.cardBigStat}>
-          <Text style={[st.cardBigNum, greenTone("ev", batter.l15_ev)]}>{batter.l15_ev?.toFixed(1) ?? "—"}</Text>
-          <Text style={st.cardBigLabel}>L15 EV</Text>
+        <View style={st.cardStat}>
+          <Text style={[st.cardStatNum, greenTone("barrel_pct", batter.l15_barrel_pct)]}>{fmtPct(batter.l15_barrel_pct)}</Text>
+          <Text style={st.cardStatLabel}>BRL%</Text>
         </View>
-        <View style={st.cardBigStat}>
-          <Text style={st.cardBigNum}>{batter.score?.toFixed(1) ?? "—"}</Text>
-          <Text style={st.cardBigLabel}>SCORE</Text>
+        <View style={st.cardStat}>
+          <Text style={[st.cardStatNum, greenTone("hh_pct", batter.l15_hard_hit_pct)]}>{fmtPct(batter.l15_hard_hit_pct)}</Text>
+          <Text style={st.cardStatLabel}>HH%</Text>
         </View>
-      </View>
-
-      {/* Secondary stats row */}
-      <View style={st.cardSecondaryRow}>
-        <View style={st.cardSmStat}>
-          <Text style={[st.cardSmNum, greenTone("barrel_pct", batter.l15_barrel_pct)]}>{fmtPct(batter.l15_barrel_pct)}</Text>
-          <Text style={st.cardSmLabel}>Barrel%</Text>
+        <View style={st.cardStat}>
+          <Text style={[st.cardStatNum, greenTone("ev", batter.l15_ev)]}>{batter.l15_ev?.toFixed(1) ?? "—"}</Text>
+          <Text style={st.cardStatLabel}>L15 EV</Text>
         </View>
-        <View style={st.cardSmStat}>
-          <Text style={[st.cardSmNum, greenTone("hh_pct", batter.l15_hard_hit_pct)]}>{fmtPct(batter.l15_hard_hit_pct)}</Text>
-          <Text style={st.cardSmLabel}>HH%</Text>
+        <View style={st.cardStat}>
+          <Text style={st.cardStatNum}>{fmtPct(batter.hr_fb_pct)}</Text>
+          <Text style={st.cardStatLabel}>HR/FB</Text>
         </View>
-        <View style={st.cardSmStat}>
-          <Text style={st.cardSmNum}>{fmtPct(batter.hr_fb_pct)}</Text>
-          <Text style={st.cardSmLabel}>HR/FB%</Text>
-        </View>
-        <View style={st.cardSmStat}>
-          <Text style={[st.cardSmNum, greenTone("ev", batter.season_ev)]}>{batter.season_ev?.toFixed(1) ?? "—"}</Text>
-          <Text style={st.cardSmLabel}>SZN EV</Text>
+        <View style={st.cardStat}>
+          <Text style={st.cardStatNum}>{batter.score?.toFixed(1) ?? "—"}</Text>
+          <Text style={st.cardStatLabel}>SCORE</Text>
         </View>
       </View>
 
@@ -918,11 +910,11 @@ const st = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#1E293B",
   },
-  gameHeaderTeams: { flexDirection: "row", alignItems: "center", gap: 5 },
-  gameHeaderLogo: { width: 18, height: 18, borderRadius: 9, backgroundColor: "#111827" },
-  gameHeaderTeamText: { color: "#CBD5E1", fontSize: 11, fontWeight: "800" },
-  gameHeaderAt: { color: "#475569", fontSize: 10, fontWeight: "700" },
-  gameHeaderTime: { color: "#64748B", fontSize: 10, marginTop: 2 },
+  gameHeaderTeams: { flexDirection: "row", alignItems: "center", gap: 6 },
+  gameHeaderLogo: { width: 24, height: 24, borderRadius: 12, backgroundColor: "#111827" },
+  gameHeaderTeamText: { color: "#CBD5E1", fontSize: 14, fontWeight: "800" },
+  gameHeaderAt: { color: "#475569", fontSize: 12, fontWeight: "700" },
+  gameHeaderTime: { color: "#64748B", fontSize: 11, marginTop: 3 },
 
   // Batter card
   card: {
@@ -967,19 +959,12 @@ const st = StyleSheet.create({
   cardChevron: { color: "#64748B", fontSize: 12, width: 16, textAlign: "center" },
   cardStatsRow: {
     flexDirection: "row",
-    gap: 16,
-    marginTop: 4,
+    justifyContent: "space-between",
+    marginTop: 2,
   },
-  cardBigStat: { alignItems: "center" },
-  cardBigNum: { color: "#F8FAFC", fontSize: 16, fontWeight: "800" },
-  cardBigLabel: { color: "#64748B", fontSize: 9, fontWeight: "700" },
-  cardSecondaryRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  cardSmStat: { alignItems: "center", flex: 1 },
-  cardSmNum: { color: "#CBD5E1", fontSize: 12, fontWeight: "700" },
-  cardSmLabel: { color: "#64748B", fontSize: 8, fontWeight: "700" },
+  cardStat: { alignItems: "center", flex: 1 },
+  cardStatNum: { color: "#E2E8F0", fontSize: 12, fontWeight: "800" },
+  cardStatLabel: { color: "#64748B", fontSize: 8, fontWeight: "700" },
   cardFlagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
   cardFlag: { color: "#F59E0B", fontSize: 9, fontWeight: "700" },
   cardSelectBtn: {

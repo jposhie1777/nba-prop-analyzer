@@ -322,18 +322,6 @@ function ExpandedBatterDetail({
         </>
       ) : null}
 
-      {batter.why ? (
-        <Text style={st.whyText}>{batter.why}</Text>
-      ) : null}
-      {batter.flags && batter.flags.length > 0 ? (
-        <View style={st.flagsRow}>
-          {batter.flags.map((f, i) => (
-            <View key={i} style={st.flagPill}>
-              <Text style={st.flagText}>{f}</Text>
-            </View>
-          ))}
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -427,15 +415,6 @@ function CheatSheetBatterCard({
           <Text style={st.cardSmLabel}>SZN EV</Text>
         </View>
       </View>
-
-      {/* Flags */}
-      {(batter.flags?.length ?? 0) > 0 ? (
-        <View style={st.cardFlagsRow}>
-          {batter.flags!.map((flag, i) => (
-            <Text key={i} style={st.cardFlag} numberOfLines={1}>{flag}</Text>
-          ))}
-        </View>
-      ) : null}
 
       {/* Select / parlay button */}
       <Pressable

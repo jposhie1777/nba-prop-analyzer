@@ -201,17 +201,6 @@ export function MlbPitchingPropsScreen() {
         <Pressable
           onPress={() =>
             router.push({
-              pathname: "/(tabs)/mlb/match/[gamePk]" as any,
-              params: { gamePk: String(gamePk), homeTeam: homeTeamName, awayTeam: awayTeamName },
-            })
-          }
-          style={s.tabInactive}
-        >
-          <Text style={s.tabTextInactive}>Home Runs</Text>
-        </Pressable>
-        <Pressable
-          onPress={() =>
-            router.push({
               pathname: "/(tabs)/mlb/hr-matchup/[gamePk]" as any,
               params: { gamePk: String(gamePk), homeTeam: homeTeamName, awayTeam: awayTeamName },
             })

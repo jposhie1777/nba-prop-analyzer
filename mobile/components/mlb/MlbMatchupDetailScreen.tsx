@@ -521,9 +521,6 @@ return (
 
 {/* ── Sub-tab indicator ── */}
 <View style={styles.tabRow}>
-<View style={styles.tabActive}>
-  <Text style={styles.tabTextActive}>Home Runs</Text>
-</View>
 <Pressable
   onPress={() =>
     router.push({

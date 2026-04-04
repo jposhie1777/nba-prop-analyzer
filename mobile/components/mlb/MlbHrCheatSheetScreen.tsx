@@ -338,7 +338,7 @@ function ExpandedBatterDetail({
   );
 }
 
-function CheatSheetBatterRow({
+function CheatSheetBatterCard({
   batter,
   selected,
   onToggleSelect,
@@ -353,6 +353,7 @@ function CheatSheetBatterRow({
 }) {
   const hasFd = !!(batter.fd_market_id && batter.fd_selection_id);
   const config = GRADE_CONFIG[(batter.grade === "IDEAL" ? "A+" : batter.grade === "FAVORABLE" ? "A" : batter.grade === "AVOID" ? "D" : batter.grade === "AVERAGE" ? "B" : "C") as GradeKey];
+  const gradeLabel = batter.grade === "IDEAL" ? "Ideal Target" : batter.grade === "FAVORABLE" ? "Favorable" : batter.grade === "AVOID" ? "Avoid" : "Average";
 
   // Lazy-load detail data only when expanded
   const { data: detail, loading: detailLoading } = useMlbCheatSheetBatterDetail(
@@ -363,54 +364,88 @@ function CheatSheetBatterRow({
   );
 
   return (
-    <View
-      style={[
-        st.batterRowWrap,
-        selected ? st.batterRowSelected : null,
-        batter.is_weak_spot ? st.batterRowWeakSpot : null,
-      ]}
-    >
-      <View style={st.batterRow}>
-        {/* Select box */}
-        <Pressable
-          style={[st.selectBox, selected ? st.selectBoxActive : null, !hasFd ? st.selectBoxDisabled : null]}
-          onPress={hasFd ? onToggleSelect : undefined}
-        >
-          <Text style={[st.selectBoxText, selected ? st.selectBoxTextActive : null]}>
-            {selected ? "✓" : "+"}
+    <View style={[st.card, selected ? st.cardSelected : null, batter.is_weak_spot ? st.cardWeakSpot : null]}>
+      {/* Header: name + hand + odds + grade pill */}
+      <Pressable onPress={onToggleExpand} style={st.cardHeader}>
+        <View style={st.cardNameRow}>
+          <Text style={st.cardName} numberOfLines={1}>
+            {batter.is_weak_spot ? "🎯 " : ""}{batter.batter_name ?? "—"}
           </Text>
-        </Pressable>
+          <Text style={st.cardHand}>{handLabel(batter.bat_side)}</Text>
+          <Text style={st.cardOdds}>{fmtOdds(batter.hr_odds_best_price)}</Text>
+        </View>
+        <View style={st.cardSubRow}>
+          <View style={[st.gradePill, { backgroundColor: config.bg, borderColor: config.border }]}>
+            <Text style={[st.gradePillText, { color: config.text }]}>{gradeLabel}</Text>
+          </View>
+          {batter.hr_odds_best_book ? (
+            <Text style={st.cardBook}>{batter.hr_odds_best_book}</Text>
+          ) : null}
+          {batter.pitcher_name ? (
+            <Text style={st.cardVs}>vs {batter.pitcher_name}</Text>
+          ) : null}
+          <Text style={st.cardChevron}>{expanded ? "▾" : "▸"}</Text>
+        </View>
+      </Pressable>
 
-        {/* Chevron + player info */}
-        <Pressable style={st.batterInfoCol} onPress={onToggleExpand}>
-          <Text style={st.chevron}>{expanded ? "▾" : "▸"}</Text>
-          <View style={[st.gradeChip, { backgroundColor: config.bg, borderColor: config.border }]}>
-            <Text style={[st.gradeChipText, { color: config.text }]}>
-              {batter.grade === "IDEAL" ? "A+" : batter.grade === "FAVORABLE" ? "A" : batter.grade === "AVOID" ? "D" : "B"}
-            </Text>
-          </View>
-          <View style={st.nameWrap}>
-            <Text style={st.batterName} numberOfLines={1}>
-              {batter.is_weak_spot ? "🎯 " : ""}{batter.batter_name ?? "—"}
-            </Text>
-            <Text style={st.batterMeta}>
-              {handLabel(batter.bat_side)}
-              {batter.is_weak_spot ? " · WEAK SPOT" : ""}
-              {batter.pitcher_name ? ` · vs ${batter.pitcher_name}` : ""}
-            </Text>
-          </View>
-        </Pressable>
-
-        {/* Key stats */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={st.statsScroll}>
-          <View style={st.statsRow}>
-            <Text style={[st.statCell, greenTone("iso", batter.iso)]}>{fmt(batter.iso)}</Text>
-            <Text style={[st.statCell, greenTone("barrel_pct", batter.l15_barrel_pct)]}>{fmtPct(batter.l15_barrel_pct)}</Text>
-            <Text style={[st.statCell, greenTone("hh_pct", batter.l15_hard_hit_pct)]}>{fmtPct(batter.l15_hard_hit_pct)}</Text>
-            <Text style={[st.statCell, greenTone("slg", batter.slg)]}>{fmt(batter.slg)}</Text>
-          </View>
-        </ScrollView>
+      {/* Big stat numbers */}
+      <View style={st.cardStatsRow}>
+        <View style={st.cardBigStat}>
+          <Text style={[st.cardBigNum, greenTone("iso", batter.iso)]}>{fmt(batter.iso)}</Text>
+          <Text style={st.cardBigLabel}>ISO</Text>
+        </View>
+        <View style={st.cardBigStat}>
+          <Text style={[st.cardBigNum, greenTone("slg", batter.slg)]}>{fmt(batter.slg)}</Text>
+          <Text style={st.cardBigLabel}>SLG</Text>
+        </View>
+        <View style={st.cardBigStat}>
+          <Text style={[st.cardBigNum, greenTone("ev", batter.l15_ev)]}>{batter.l15_ev?.toFixed(1) ?? "—"}</Text>
+          <Text style={st.cardBigLabel}>L15 EV</Text>
+        </View>
+        <View style={st.cardBigStat}>
+          <Text style={st.cardBigNum}>{batter.score?.toFixed(1) ?? "—"}</Text>
+          <Text style={st.cardBigLabel}>SCORE</Text>
+        </View>
       </View>
+
+      {/* Secondary stats row */}
+      <View style={st.cardSecondaryRow}>
+        <View style={st.cardSmStat}>
+          <Text style={[st.cardSmNum, greenTone("barrel_pct", batter.l15_barrel_pct)]}>{fmtPct(batter.l15_barrel_pct)}</Text>
+          <Text style={st.cardSmLabel}>Barrel%</Text>
+        </View>
+        <View style={st.cardSmStat}>
+          <Text style={[st.cardSmNum, greenTone("hh_pct", batter.l15_hard_hit_pct)]}>{fmtPct(batter.l15_hard_hit_pct)}</Text>
+          <Text style={st.cardSmLabel}>HH%</Text>
+        </View>
+        <View style={st.cardSmStat}>
+          <Text style={st.cardSmNum}>{fmtPct(batter.hr_fb_pct)}</Text>
+          <Text style={st.cardSmLabel}>HR/FB%</Text>
+        </View>
+        <View style={st.cardSmStat}>
+          <Text style={[st.cardSmNum, greenTone("ev", batter.season_ev)]}>{batter.season_ev?.toFixed(1) ?? "—"}</Text>
+          <Text style={st.cardSmLabel}>SZN EV</Text>
+        </View>
+      </View>
+
+      {/* Flags */}
+      {(batter.flags?.length ?? 0) > 0 ? (
+        <View style={st.cardFlagsRow}>
+          {batter.flags!.map((flag, i) => (
+            <Text key={i} style={st.cardFlag} numberOfLines={1}>{flag}</Text>
+          ))}
+        </View>
+      ) : null}
+
+      {/* Select / parlay button */}
+      <Pressable
+        style={[st.cardSelectBtn, selected ? st.cardSelectBtnActive : null, !hasFd ? st.cardSelectBtnDisabled : null]}
+        onPress={hasFd ? onToggleSelect : undefined}
+      >
+        <Text style={[st.cardSelectBtnText, selected ? st.cardSelectBtnTextActive : null]}>
+          {selected ? "✓ Selected" : "+ Add to Parlay"}
+        </Text>
+      </Pressable>
 
       {/* Expanded detail - lazy loaded */}
       {expanded ? (
@@ -479,28 +514,13 @@ function GradeSection({
 
       {!collapsed ? (
         <View style={st.gradeSectionBody}>
-          {/* Column headers */}
-          <View style={st.headerRow}>
-            <View style={st.headerInfoCol}>
-              <Text style={st.headerText}>PLAYER</Text>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={st.statsScroll}>
-              <View style={st.statsRow}>
-                <Text style={st.headerCell}>ISO</Text>
-                <Text style={st.headerCell}>BRL%</Text>
-                <Text style={st.headerCell}>HH%</Text>
-                <Text style={st.headerCell}>SLG</Text>
-              </View>
-            </ScrollView>
-          </View>
-
           {gameGroups.map((group) => (
             <View key={group.game_pk}>
               <GameHeader group={group} />
               {group.batters.map((batter) => {
                 const batterId = String(batter.batter_id ?? batter.batter_name ?? "");
                 return (
-                  <CheatSheetBatterRow
+                  <CheatSheetBatterCard
                     key={`${group.game_pk}-${batterId}`}
                     batter={batter}
                     selected={selectedKeys.has(batterId)}
@@ -717,8 +737,6 @@ export function MlbHrCheatSheetScreen() {
 
 // ── Styles ──────────────────────────────────────────────────────────────────
 
-const STAT_CELL_W = 54;
-
 const st = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#050A18" },
   scrollView: { flex: 1 },
@@ -771,7 +789,7 @@ const st = StyleSheet.create({
   gradeSectionTitle: { flex: 1, fontSize: 13, fontWeight: "800" },
   gradeSectionCount: { color: "#94A3B8", fontSize: 12, fontWeight: "700" },
   gradeSectionChevron: { color: "#64748B", fontSize: 14, width: 16, textAlign: "center" },
-  gradeSectionBody: { paddingHorizontal: 8, paddingBottom: 8, gap: 2 },
+  gradeSectionBody: { paddingHorizontal: 8, paddingBottom: 8, gap: 8 },
 
   // Game header
   gameHeader: {
@@ -787,82 +805,80 @@ const st = StyleSheet.create({
   gameHeaderAt: { color: "#475569", fontSize: 10, fontWeight: "700" },
   gameHeaderTime: { color: "#64748B", fontSize: 10, marginTop: 2 },
 
-  // Header row
-  headerRow: {
+  // Batter card
+  card: {
+    borderWidth: 1,
+    borderColor: "#1E293B",
+    borderRadius: 12,
+    backgroundColor: "#0F172A",
+    padding: 12,
+    gap: 6,
+  },
+  cardSelected: {
+    borderColor: "#10B981",
+    backgroundColor: "rgba(16,185,129,0.06)",
+  },
+  cardWeakSpot: {
+    borderLeftWidth: 3,
+    borderLeftColor: "#10B981",
+  },
+  cardHeader: { gap: 3 },
+  cardNameRow: {
     flexDirection: "row",
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#334155",
-    paddingBottom: 4,
-    marginBottom: 2,
+    alignItems: "center",
+    gap: 6,
   },
-  headerInfoCol: { width: 136, paddingLeft: 26 },
-  headerText: { color: "#64748B", fontSize: 9, fontWeight: "800" },
-  headerCell: {
-    width: STAT_CELL_W,
-    color: "#64748B",
-    fontSize: 9,
-    fontWeight: "800",
-    textAlign: "center",
+  cardName: { color: "#E5E7EB", fontSize: 14, fontWeight: "800", flex: 1 },
+  cardHand: { color: "#64748B", fontSize: 11, fontWeight: "700" },
+  cardOdds: { color: "#F59E0B", fontSize: 13, fontWeight: "800" },
+  cardSubRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
-
-  // Select box
-  selectBox: {
-    width: 22,
-    height: 22,
-    borderRadius: 4,
+  gradePill: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  gradePillText: { fontSize: 9, fontWeight: "800" },
+  cardBook: { color: "#64748B", fontSize: 9, fontWeight: "600" },
+  cardVs: { color: "#94A3B8", fontSize: 10, fontWeight: "600", flex: 1 },
+  cardChevron: { color: "#64748B", fontSize: 12, width: 16, textAlign: "center" },
+  cardStatsRow: {
+    flexDirection: "row",
+    gap: 16,
+    marginTop: 4,
+  },
+  cardBigStat: { alignItems: "center" },
+  cardBigNum: { color: "#F8FAFC", fontSize: 22, fontWeight: "900" },
+  cardBigLabel: { color: "#64748B", fontSize: 9, fontWeight: "700" },
+  cardSecondaryRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  cardSmStat: { alignItems: "center", flex: 1 },
+  cardSmNum: { color: "#CBD5E1", fontSize: 13, fontWeight: "800" },
+  cardSmLabel: { color: "#64748B", fontSize: 8, fontWeight: "700" },
+  cardFlagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
+  cardFlag: { color: "#F59E0B", fontSize: 9, fontWeight: "700" },
+  cardSelectBtn: {
     borderWidth: 1,
     borderColor: "#334155",
-    backgroundColor: "#0F172A",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 2,
-  },
-  selectBoxActive: { borderColor: "#10B981", backgroundColor: "rgba(16,185,129,0.2)" },
-  selectBoxDisabled: { opacity: 0.3 },
-  selectBoxText: { color: "#64748B", fontSize: 12, fontWeight: "800" },
-  selectBoxTextActive: { color: "#10B981" },
-
-  // Batter row
-  batterRowWrap: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(51,65,85,0.5)",
-  },
-  batterRowSelected: { backgroundColor: "rgba(16,185,129,0.06)" },
-  batterRowWeakSpot: { borderLeftWidth: 2, borderLeftColor: "#10B981" },
-  batterRow: { flexDirection: "row", alignItems: "center", minHeight: 36 },
-  batterInfoCol: {
-    width: 130,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingLeft: 2,
-    paddingVertical: 4,
-  },
-  chevron: { color: "#64748B", fontSize: 11, width: 14 },
-  gradeChip: {
-    borderWidth: 1,
-    borderRadius: 4,
-    width: 22,
-    height: 18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  gradeChipText: { fontSize: 9, fontWeight: "900" },
-  nameWrap: { flex: 1, gap: 0 },
-  batterName: { color: "#E5E7EB", fontSize: 11, fontWeight: "700" },
-  batterMeta: { color: "#64748B", fontSize: 8, fontWeight: "600" },
-
-  // Stats
-  statsScroll: { flex: 1 },
-  statsRow: { flexDirection: "row" },
-  statCell: {
-    width: STAT_CELL_W,
-    color: "#E2E8F0",
-    fontSize: 11,
-    fontWeight: "700",
-    textAlign: "center",
+    borderRadius: 6,
     paddingVertical: 6,
+    alignItems: "center",
+    backgroundColor: "#0B1529",
   },
+  cardSelectBtnActive: {
+    borderColor: "#10B981",
+    backgroundColor: "rgba(16,185,129,0.15)",
+  },
+  cardSelectBtnDisabled: { opacity: 0.3 },
+  cardSelectBtnText: { color: "#64748B", fontSize: 11, fontWeight: "700" },
+  cardSelectBtnTextActive: { color: "#10B981" },
+
   cellGreen: { color: "#34D399" },
 
   // Expanded

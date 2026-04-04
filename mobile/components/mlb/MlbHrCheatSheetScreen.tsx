@@ -187,9 +187,39 @@ function ExpandedBatterDetail({
         <ActivityIndicator color="#93C5FD" size="small" style={{ marginVertical: 8 }} />
       ) : null}
 
-      {/* Career vs Pitcher */}
+      {/* Detail sections */}
       {!loading && detail ? (
         <>
+          {/* Pitcher Stats vs Handedness — first */}
+          {vsSplit ? (
+            <View style={st.pitcherSplitWrap}>
+              <Text style={st.sectionTitle}>
+                {batter.pitcher_name ?? "Pitcher"} vs {batSide === "L" ? "LHB" : "RHB"}
+              </Text>
+              <View style={st.bvpTable}>
+                <View style={st.bvpHeaderRow}>
+                  <Text style={st.bvpHeaderCell}>HR/9</Text>
+                  <Text style={st.bvpHeaderCell}>BRL%</Text>
+                  <Text style={st.bvpHeaderCell}>HH%</Text>
+                  <Text style={st.bvpHeaderCell}>FB%</Text>
+                  <Text style={st.bvpHeaderCell}>HR/FB%</Text>
+                  <Text style={st.bvpHeaderCell}>WHIP</Text>
+                  <Text style={st.bvpHeaderCell}>wOBA</Text>
+                </View>
+                <View style={st.bvpValueRow}>
+                  <Text style={st.bvpValueCell}>{vsSplit.hr_per_9?.toFixed(2) ?? "—"}</Text>
+                  <Text style={st.bvpValueCell}>{fmtPct(vsSplit.barrel_pct)}</Text>
+                  <Text style={st.bvpValueCell}>{fmtPct(vsSplit.hard_hit_pct)}</Text>
+                  <Text style={st.bvpValueCell}>{fmtPct(vsSplit.fb_pct)}</Text>
+                  <Text style={st.bvpValueCell}>{fmtPct(vsSplit.hr_fb_pct)}</Text>
+                  <Text style={st.bvpValueCell}>{vsSplit.whip?.toFixed(2) ?? "—"}</Text>
+                  <Text style={[st.bvpValueCell, greenTone("woba", vsSplit.woba)]}>{fmt(vsSplit.woba)}</Text>
+                </View>
+              </View>
+            </View>
+          ) : null}
+
+          {/* Career vs Pitcher */}
           <Text style={st.sectionTitle}>Career vs Pitcher</Text>
           {hasBvp ? (
             <View style={st.bvpWrap}>
@@ -288,35 +318,6 @@ function ExpandedBatterDetail({
                   </View>
                 </ScrollView>
               ) : null}
-            </View>
-          ) : null}
-
-          {/* Pitcher Stats vs Handedness */}
-          {vsSplit ? (
-            <View style={st.pitcherSplitWrap}>
-              <Text style={st.sectionTitle}>
-                {batter.pitcher_name ?? "Pitcher"} vs {batSide === "L" ? "LHB" : "RHB"}
-              </Text>
-              <View style={st.bvpTable}>
-                <View style={st.bvpHeaderRow}>
-                  <Text style={st.bvpHeaderCell}>HR/9</Text>
-                  <Text style={st.bvpHeaderCell}>BRL%</Text>
-                  <Text style={st.bvpHeaderCell}>HH%</Text>
-                  <Text style={st.bvpHeaderCell}>FB%</Text>
-                  <Text style={st.bvpHeaderCell}>HR/FB%</Text>
-                  <Text style={st.bvpHeaderCell}>WHIP</Text>
-                  <Text style={st.bvpHeaderCell}>wOBA</Text>
-                </View>
-                <View style={st.bvpValueRow}>
-                  <Text style={st.bvpValueCell}>{vsSplit.hr_per_9?.toFixed(2) ?? "—"}</Text>
-                  <Text style={st.bvpValueCell}>{fmtPct(vsSplit.barrel_pct)}</Text>
-                  <Text style={st.bvpValueCell}>{fmtPct(vsSplit.hard_hit_pct)}</Text>
-                  <Text style={st.bvpValueCell}>{fmtPct(vsSplit.fb_pct)}</Text>
-                  <Text style={st.bvpValueCell}>{fmtPct(vsSplit.hr_fb_pct)}</Text>
-                  <Text style={st.bvpValueCell}>{vsSplit.whip?.toFixed(2) ?? "—"}</Text>
-                  <Text style={[st.bvpValueCell, greenTone("woba", vsSplit.woba)]}>{fmt(vsSplit.woba)}</Text>
-                </View>
-              </View>
             </View>
           ) : null}
         </>

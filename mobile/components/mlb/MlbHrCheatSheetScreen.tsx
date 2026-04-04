@@ -567,6 +567,53 @@ export function MlbHrCheatSheetScreen() {
   // Pre-warm server cache for all batter details in background
   useCheatSheetBatchPreFetch(allBatters.length > 0 ? allBatters : null);
 
+  // Game selector: build unique games sorted by start time
+  const uniqueGames = useMemo(() => {
+    const map = new Map<number, { game_pk: number; away_team: string; home_team: string; start_time_utc: string | null }>();
+    for (const b of allBatters) {
+      const gpk = b.game_pk ?? 0;
+      if (gpk && !map.has(gpk)) {
+        map.set(gpk, {
+          game_pk: gpk,
+          away_team: b.away_team ?? "Away",
+          home_team: b.home_team ?? "Home",
+          start_time_utc: b.start_time_utc ?? null,
+        });
+      }
+    }
+    return Array.from(map.values()).sort(
+      (a, b) => (a.start_time_utc ?? "9999").localeCompare(b.start_time_utc ?? "9999")
+    );
+  }, [allBatters]);
+
+  const [selectedGamePks, setSelectedGamePks] = useState<Set<number>>(new Set());
+  const [gameFilterOpen, setGameFilterOpen] = useState(false);
+
+  const toggleGamePk = useCallback((gpk: number) => {
+    setSelectedGamePks((prev) => {
+      const next = new Set(prev);
+      if (next.has(gpk)) next.delete(gpk);
+      else next.add(gpk);
+      return next;
+    });
+  }, []);
+
+  // Filter batters by selected games (empty = show all)
+  const filteredBatters = useMemo(() => {
+    if (selectedGamePks.size === 0) return allBatters;
+    return allBatters.filter((b) => b.game_pk != null && selectedGamePks.has(b.game_pk));
+  }, [allBatters, selectedGamePks]);
+
+  // Build filtered grade buckets
+  const filteredGrades = useMemo(() => {
+    const grades: Record<string, CheatSheetBatter[]> = { "A+": [], A: [], B: [], C: [], D: [] };
+    for (const b of filteredBatters) {
+      const g = b.grade === "IDEAL" ? "A+" : b.grade === "FAVORABLE" ? "A" : b.grade === "AVOID" ? "D" : b.grade === "AVERAGE" ? "B" : "C";
+      grades[g].push(b);
+    }
+    return grades;
+  }, [filteredBatters]);
+
   const toggleSelect = useCallback(
     (batterId: string) => {
       const found = allBatters.find(
@@ -647,6 +694,45 @@ export function MlbHrCheatSheetScreen() {
           ) : null}
         </View>
 
+        {/* Game selector */}
+        {uniqueGames.length > 1 ? (
+          <View style={st.gameFilter}>
+            <Pressable style={st.gameFilterToggle} onPress={() => setGameFilterOpen((o) => !o)}>
+              <Text style={st.gameFilterLabel}>
+                {selectedGamePks.size === 0
+                  ? `All Games (${uniqueGames.length})`
+                  : `${selectedGamePks.size} of ${uniqueGames.length} Games`}
+              </Text>
+              <Text style={st.gameFilterChevron}>{gameFilterOpen ? "▾" : "▸"}</Text>
+            </Pressable>
+            {gameFilterOpen ? (
+              <View style={st.gameFilterList}>
+                {selectedGamePks.size > 0 ? (
+                  <Pressable style={st.gameFilterClear} onPress={() => setSelectedGamePks(new Set())}>
+                    <Text style={st.gameFilterClearText}>Clear filter (show all)</Text>
+                  </Pressable>
+                ) : null}
+                {uniqueGames.map((g) => {
+                  const active = selectedGamePks.has(g.game_pk);
+                  return (
+                    <Pressable key={g.game_pk} style={st.gameFilterItem} onPress={() => toggleGamePk(g.game_pk)}>
+                      <View style={[st.gameFilterCheck, active ? st.gameFilterCheckActive : null]}>
+                        <Text style={[st.gameFilterCheckText, active ? st.gameFilterCheckTextActive : null]}>
+                          {active ? "✓" : ""}
+                        </Text>
+                      </View>
+                      <Text style={[st.gameFilterTeams, active ? st.gameFilterTeamsActive : null]}>
+                        {g.away_team} @ {g.home_team}
+                      </Text>
+                      <Text style={st.gameFilterTime}>{formatET(g.start_time_utc)} ET</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
         {loading ? <ActivityIndicator color="#93C5FD" /> : null}
 
         {error ? (
@@ -662,7 +748,7 @@ export function MlbHrCheatSheetScreen() {
               <GradeSection
                 key={gradeKey}
                 gradeKey={gradeKey}
-                batters={data.grades[gradeKey] ?? []}
+                batters={filteredGrades[gradeKey] ?? []}
                 selectedKeys={selectedKeys}
                 onToggleSelect={toggleSelect}
                 expandedIds={expandedIds}
@@ -743,6 +829,59 @@ const st = StyleSheet.create({
     backgroundColor: "#0F172A",
   },
   countPillText: { fontSize: 11, fontWeight: "800" },
+
+  // Game filter
+  gameFilter: {
+    borderWidth: 1,
+    borderColor: "#1E293B",
+    borderRadius: 10,
+    backgroundColor: "#0B1529",
+    overflow: "hidden",
+  },
+  gameFilterToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  gameFilterLabel: { color: "#93C5FD", fontSize: 12, fontWeight: "800" },
+  gameFilterChevron: { color: "#64748B", fontSize: 14 },
+  gameFilterList: { paddingHorizontal: 8, paddingBottom: 8, gap: 2 },
+  gameFilterClear: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    marginBottom: 4,
+  },
+  gameFilterClearText: { color: "#64748B", fontSize: 10, fontWeight: "700", fontStyle: "italic" },
+  gameFilterItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(51,65,85,0.3)",
+  },
+  gameFilterCheck: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: "#334155",
+    backgroundColor: "#0F172A",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  gameFilterCheckActive: {
+    borderColor: "#10B981",
+    backgroundColor: "rgba(16,185,129,0.2)",
+  },
+  gameFilterCheckText: { color: "#64748B", fontSize: 11, fontWeight: "800" },
+  gameFilterCheckTextActive: { color: "#10B981" },
+  gameFilterTeams: { color: "#CBD5E1", fontSize: 12, fontWeight: "700", flex: 1 },
+  gameFilterTeamsActive: { color: "#E5E7EB" },
+  gameFilterTime: { color: "#64748B", fontSize: 10, fontWeight: "600" },
 
   // Grade section
   gradeSection: {
